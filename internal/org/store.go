@@ -49,4 +49,16 @@ type Store interface {
 	AddProjectMember(ctx context.Context, projectGRN, memberGRN grn.GRN) error
 	RemoveProjectMember(ctx context.Context, projectGRN, memberGRN grn.GRN) error
 	ListProjectMembers(ctx context.Context, projectGRN grn.GRN) ([]grn.GRN, error)
+
+	// Membership — org-scoped, carries a Role.
+	AddMember(ctx context.Context, m *Membership) error
+	GetMember(ctx context.Context, orgGRN, userGRN grn.GRN) (*Membership, error)
+	ListMembers(ctx context.Context, orgGRN grn.GRN) ([]*Membership, error)
+	RemoveMember(ctx context.Context, orgGRN, userGRN grn.GRN) error
+	ListOrgsByMember(ctx context.Context, userGRN grn.GRN, f ListFilter) ([]*Organization, error)
+
+	// Invitation — pending until accepted, single-use.
+	CreateInvitation(ctx context.Context, inv *Invitation) error
+	GetInvitation(ctx context.Context, token string) (*Invitation, error)
+	AcceptInvitation(ctx context.Context, token string, userGRN grn.GRN) (*Invitation, error)
 }

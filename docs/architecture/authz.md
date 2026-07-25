@@ -22,10 +22,12 @@ Policies are IAM-style documents (see
 ```
 
 - `Effect`: `Allow` | `Deny`.
-- `Action`: `<service_type>:<verb>` strings; `*` and `org:*` wildcards.
-  Constants are owned by the defining domain (`internal/org`,
-  `internal/user`, …). The engine matches strings only.
-- `Resource`: GRN patterns. `grn:acme:*` scopes to an org.
+- `Action`: `<service_type>:<verb>` strings; `*` and `?` wildcards may
+  appear anywhere and repeat (`org:*`, `*`). Constants are owned by
+  the defining domain (`internal/org`, `internal/user`, …). The engine
+  matches strings only.
+- `Resource`: GRN patterns with the same wildcard rules
+  (`grn:acme:*` scopes to an org).
 - `Condition`: reserved; not evaluated in the MVP.
 
 ## Evaluation
@@ -54,7 +56,9 @@ invalidate the org's cache (Postgres `LISTEN`/`NOTIFY`).
 | `Checker` | collect + evaluate | `RoleStore`, `Evaluator` |
 
 The api server never imports this package; it calls the engine over
-gRPC. The in-process `Evaluator` remains for tests and local dev.
+gRPC (`Check` / `Explain` in `proto/gaon/authz/v1`) and supplies the
+statements collected for the subject. The in-process `Evaluator`
+remains for tests and local dev.
 
 ## Roles vs policies
 

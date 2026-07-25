@@ -74,3 +74,31 @@ func TestStatement_Matches(t *testing.T) {
 	s = authz.Statement{Effect: authz.EffectAllow, Action: []string{"org:read"}, Resource: []string{"grn:root:default:org:acme"}}
 	assert.False(t, s.Matches("org:read", "grn:root:default:org:other"))
 }
+
+func TestStatement_MatchesFullPatterns(t *testing.T) {
+	cases := []struct {
+		name    string
+		pattern string
+		value   string
+		want    bool
+	}{
+		{"star crosses segments", "grn:acme:*", "grn:acme:default:user:alice", true},
+		{"star matches empty run", "grn:acme:*", "grn:acme:", true},
+		{"mid-pattern star", "grn:*:user:alice", "grn:acme:default:user:alice", true},
+		{"mid-pattern star mismatch", "grn:*:user:alice", "grn:acme:default:agent:alice", false},
+		{"multiple stars", "grn:*:default:*:alice", "grn:acme:default:user:alice", true},
+		{"question mark one char", "org:updat?", "org:update", true},
+		{"question mark needs a char", "org:updat?", "org:updat", false},
+		{"question mark not two chars", "grn:acme:default:org:a?me", "grn:acme:default:org:acme", true},
+		{"star then literal suffix", "grn:*alice", "grn:acme:default:user:alice", true},
+		{"star then literal suffix mismatch", "grn:*bob", "grn:acme:default:user:alice", false},
+		{"exact", "org:read", "org:read", true},
+		{"exact mismatch", "org:read", "org:write", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			s := authz.Statement{Effect: authz.EffectAllow, Action: []string{c.pattern}, Resource: []string{"*"}}
+			assert.Equal(t, c.want, s.Matches(c.value, "grn:root:default:org:acme"))
+		})
+	}
+}

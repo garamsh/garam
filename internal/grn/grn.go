@@ -4,13 +4,14 @@
 //
 //	grn:<organization>:<project>:<service_type>:<identifier>
 //
-// Examples:
+// The organization and project segments identify the owning resources
+// (ADR-0001). Examples:
 //
-//	grn:garam:default:user:alice
-//	grn:garam:default:agent:bot-1
-//	grn:garam:default:group:eng
-//	grn:garam:default:project:frontend
-//	grn:garam:default:org:acme
+//	grn:acme:default:user:alice
+//	grn:acme:default:agent:bot-1
+//	grn:acme:default:group:eng
+//	grn:acme:default:project:frontend
+//	grn:root:default:org:acme
 package grn
 
 import (
@@ -22,6 +23,15 @@ import (
 const (
 	prefix        = "grn"
 	segmentsTotal = 5
+)
+
+// Reserved owner segments (ADR-0001).
+const (
+	// RootOwner owns root-level resources such as organizations. It
+	// may not be used as a real organization identifier.
+	RootOwner = "root"
+	// DefaultProject marks org-level (project-less) ownership.
+	DefaultProject = "default"
 )
 
 // GRN is a value-type resource identifier. Identity is by value; two

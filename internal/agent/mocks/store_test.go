@@ -65,7 +65,7 @@ type MockStore_AddOrganization_Call struct {
 //   - ctx context.Context
 //   - agentGRN grn.GRN
 //   - orgGRN grn.GRN
-func (_e *MockStore_Expecter) AddOrganization(ctx interface{}, agentGRN interface{}, orgGRN interface{}) *MockStore_AddOrganization_Call {
+func (_e *MockStore_Expecter) AddOrganization(ctx any, agentGRN any, orgGRN any) *MockStore_AddOrganization_Call {
 	return &MockStore_AddOrganization_Call{Call: _e.mock.On("AddOrganization", ctx, agentGRN, orgGRN)}
 }
 
@@ -127,7 +127,7 @@ type MockStore_Create_Call struct {
 // Create is a helper method to define mock.On call
 //   - ctx context.Context
 //   - a *agent.Agent
-func (_e *MockStore_Expecter) Create(ctx interface{}, a interface{}) *MockStore_Create_Call {
+func (_e *MockStore_Expecter) Create(ctx any, a any) *MockStore_Create_Call {
 	return &MockStore_Create_Call{Call: _e.mock.On("Create", ctx, a)}
 }
 
@@ -184,7 +184,7 @@ type MockStore_Delete_Call struct {
 // Delete is a helper method to define mock.On call
 //   - ctx context.Context
 //   - g grn.GRN
-func (_e *MockStore_Expecter) Delete(ctx interface{}, g interface{}) *MockStore_Delete_Call {
+func (_e *MockStore_Expecter) Delete(ctx any, g any) *MockStore_Delete_Call {
 	return &MockStore_Delete_Call{Call: _e.mock.On("Delete", ctx, g)}
 }
 
@@ -252,7 +252,7 @@ type MockStore_Get_Call struct {
 // Get is a helper method to define mock.On call
 //   - ctx context.Context
 //   - g grn.GRN
-func (_e *MockStore_Expecter) Get(ctx interface{}, g interface{}) *MockStore_Get_Call {
+func (_e *MockStore_Expecter) Get(ctx any, g any) *MockStore_Get_Call {
 	return &MockStore_Get_Call{Call: _e.mock.On("Get", ctx, g)}
 }
 
@@ -320,7 +320,7 @@ type MockStore_List_Call struct {
 // List is a helper method to define mock.On call
 //   - ctx context.Context
 //   - f agent.ListFilter
-func (_e *MockStore_Expecter) List(ctx interface{}, f interface{}) *MockStore_List_Call {
+func (_e *MockStore_Expecter) List(ctx any, f any) *MockStore_List_Call {
 	return &MockStore_List_Call{Call: _e.mock.On("List", ctx, f)}
 }
 
@@ -378,7 +378,7 @@ type MockStore_RemoveOrganization_Call struct {
 //   - ctx context.Context
 //   - agentGRN grn.GRN
 //   - orgGRN grn.GRN
-func (_e *MockStore_Expecter) RemoveOrganization(ctx interface{}, agentGRN interface{}, orgGRN interface{}) *MockStore_RemoveOrganization_Call {
+func (_e *MockStore_Expecter) RemoveOrganization(ctx any, agentGRN any, orgGRN any) *MockStore_RemoveOrganization_Call {
 	return &MockStore_RemoveOrganization_Call{Call: _e.mock.On("RemoveOrganization", ctx, agentGRN, orgGRN)}
 }
 
@@ -452,7 +452,7 @@ type MockStore_Update_Call struct {
 //   - ctx context.Context
 //   - g grn.GRN
 //   - p agent.Patch
-func (_e *MockStore_Expecter) Update(ctx interface{}, g interface{}, p interface{}) *MockStore_Update_Call {
+func (_e *MockStore_Expecter) Update(ctx any, g any, p any) *MockStore_Update_Call {
 	return &MockStore_Update_Call{Call: _e.mock.On("Update", ctx, g, p)}
 }
 

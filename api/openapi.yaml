@@ -1,0 +1,407 @@
+openapi: 3.1.0
+info:
+  title: gaon API
+  version: 0.1.0
+  description: >-
+    Authentication and organization permission APIs for gaon.
+    Authentication is cookie-based: the OAuth callback sets a
+    `gaon_session` cookie that all other endpoints require.
+tags:
+  - name: auth
+    description: Sign-in, sign-out, and the current identity.
+  - name: org
+    description: Organizations, memberships, and invitations.
+paths:
+  /auth/login/{provider}:
+    get:
+      operationId: login
+      tags: [auth]
+      summary: Start the OAuth authorization code flow.
+      description: >-
+        Redirects to the provider's authorization URL. Sets short-lived
+        cookies carrying the OIDC state and PKCE verifier, which the
+        callback validates.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/provider'
+      responses:
+        '302':
+          description: Redirect to the provider's consent screen.
+          headers:
+            Location:
+              schema:
+                type: string
+        '404':
+          $ref: '#/components/responses/Error'
+  /auth/callback/{provider}:
+    get:
+      operationId: oauthCallback
+      tags: [auth]
+      summary: Complete the OAuth authorization code flow.
+      description: >-
+        Exchanges the code for tokens, verifies the ID token, upserts
+        the user, creates a session, and sets the `gaon_session`
+        cookie. Redirects to `/` on success.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/provider'
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to `/` with the session cookie set.
+          headers:
+            Location:
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Revoke the current session and clear the cookie.
+      responses:
+        '204':
+          description: Session revoked.
+        '401':
+          $ref: '#/components/responses/Error'
+  /me:
+    get:
+      operationId: me
+      tags: [auth]
+      summary: Return the signed-in user.
+      responses:
+        '200':
+          description: The current user.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Error'
+  /orgs:
+    post:
+      operationId: createOrg
+      tags: [org]
+      summary: Create an organization.
+      description: The creator becomes the org's first `owner`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationCreate'
+      responses:
+        '201':
+          description: Organization created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+    get:
+      operationId: listOrgs
+      tags: [org]
+      summary: List organizations the caller belongs to.
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+      responses:
+        '200':
+          description: The caller's organizations.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Organization'
+        '401':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}:
+    get:
+      operationId: getOrg
+      tags: [org]
+      summary: Get an organization. Requires the `member` role.
+      parameters:
+        - $ref: '#/components/parameters/org'
+      responses:
+        '200':
+          description: The organization.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    patch:
+      operationId: updateOrg
+      tags: [org]
+      summary: Update an organization. Requires the `admin` role.
+      parameters:
+        - $ref: '#/components/parameters/org'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrganizationPatch'
+      responses:
+        '200':
+          description: The updated organization.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deleteOrg
+      tags: [org]
+      summary: Delete an organization. Requires the `owner` role.
+      parameters:
+        - $ref: '#/components/parameters/org'
+      responses:
+        '204':
+          description: Organization deleted.
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/members:
+    get:
+      operationId: listOrgMembers
+      tags: [org]
+      summary: List members of an organization. Requires the `member` role.
+      parameters:
+        - $ref: '#/components/parameters/org'
+      responses:
+        '200':
+          description: Members with their roles.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Member'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/invitations:
+    post:
+      operationId: createInvitation
+      tags: [org]
+      summary: Create an invitation. Requires the `admin` role.
+      description: >-
+        Returns an invitation token. A signed-in user who presents the
+        token to `/invitations/{token}/accept` joins the org with the
+        role chosen here.
+      parameters:
+        - $ref: '#/components/parameters/org'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InvitationCreate'
+      responses:
+        '201':
+          description: Invitation created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invitation'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /invitations/{token}/accept:
+    post:
+      operationId: acceptInvitation
+      tags: [org]
+      summary: Accept an invitation.
+      description: >-
+        The signed-in user joins the invitation's org with the
+        invitation's role. Expired or already-accepted tokens are
+        rejected.
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The resulting membership.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+components:
+  parameters:
+    provider:
+      name: provider
+      in: path
+      required: true
+      description: Authentication provider name (`google`).
+      schema:
+        type: string
+    org:
+      name: org
+      in: path
+      required: true
+      description: Organization identifier (the last GRN segment).
+      schema:
+        type: string
+    limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+      description: Maximum entries to return; 0 means no limit.
+    offset:
+      name: offset
+      in: query
+      schema:
+        type: integer
+        minimum: 0
+        default: 0
+  schemas:
+    User:
+      type: object
+      required: [grn, nickname]
+      properties:
+        grn:
+          type: string
+          example: grn:garam:default:user:117421510527410544321
+        nickname:
+          type: string
+    Organization:
+      type: object
+      required: [grn, name, createdAt]
+      properties:
+        grn:
+          type: string
+          example: grn:garam:default:org:acme
+        name:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    OrganizationCreate:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+    OrganizationPatch:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+    Role:
+      type: string
+      enum: [owner, admin, member]
+    Member:
+      type: object
+      required: [userGrn, role, since]
+      properties:
+        userGrn:
+          type: string
+        role:
+          $ref: '#/components/schemas/Role'
+        since:
+          type: string
+          format: date-time
+    InvitationCreate:
+      type: object
+      required: [role]
+      properties:
+        role:
+          type: string
+          enum: [admin, member]
+          description: Owners are not transferable by invitation.
+        expiresInHours:
+          type: integer
+          minimum: 1
+          maximum: 720
+          default: 168
+    Invitation:
+      type: object
+      required: [token, orgGrn, role, expiresAt]
+      properties:
+        token:
+          type: string
+          description: Bearer token; presented to the accept endpoint.
+        orgGrn:
+          type: string
+        role:
+          $ref: '#/components/schemas/Role'
+        expiresAt:
+          type: string
+          format: date-time
+    Error:
+      type: object
+      required: [kind, message]
+      properties:
+        kind:
+          type: string
+          description: errorx kind, e.g. `not_found`, `permission_denied`.
+        message:
+          type: string
+  responses:
+    Error:
+      description: Error response.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: gaon_session
+security:
+  - sessionCookie: []

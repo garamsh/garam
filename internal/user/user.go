@@ -8,11 +8,15 @@ package user
 import (
 	"time"
 
+	"github.com/garamsh/gaon/internal/errorx"
 	"github.com/garamsh/gaon/internal/grn"
 )
 
 // ServiceType is the canonical GRN service-type for users.
 const ServiceType = "user"
+
+// ErrUserNotFound is returned when a user lookup misses.
+var ErrUserNotFound = errorx.New(errorx.KindNotFound, "user not found")
 
 // User is a human account.
 type User struct {

@@ -43,6 +43,7 @@ Operating procedures for AI agents working on this repository.
 
 - [ai/pm-playbook.md](./ai/pm-playbook.md) — PM agent procedure
 - [ai/worker-guide.md](./ai/worker-guide.md) — worker agent procedure
+- [ai/qa-guide.md](./ai/qa-guide.md) — QA agent procedure
 - [ai/documentation-rules.md](./ai/documentation-rules.md) — how `docs/`
   and GitHub artifacts are written
 - [ai/BOOTSTRAP.md](./ai/BOOTSTRAP.md) — one-time project initialization

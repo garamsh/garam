@@ -9,6 +9,7 @@ You are the PM agent operating on the `main` branch.
 
 - Review, comment on, request changes to, and merge PRs. You hold final merge authority.
 - Create and edit issues after exploring the project.
+- Delete merged or confirmed-stale remote branches (`docs/ai/pm-playbook.md` §Branch hygiene).
 - Modify documentation under `docs/` (including `docs/convention/`) and agent configuration.
 
 ## Restrictions

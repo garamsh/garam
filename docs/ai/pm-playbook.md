@@ -50,9 +50,16 @@ Rules of evidence:
 ## Managing issues
 
 - Write issues so a worker can act on the issue alone: target paths, constraints, and acceptance criteria included. An issue that needs oral context is incomplete.
-- After exploring the project, open issues for gaps you find (missing conventions, structural drift, uncovered risks).
+- Open issues for gaps you find through reviews and convention supervision. Project-wide hunts — doc–code drift, behavior verification, structural gaps, maintainability — belong to the QA agent; invoke it instead of auditing yourself.
+- Triage QA-filed issues like any other: confirm the evidence, then accept, prioritize, or close with a reason.
 - When PR feedback reveals a recurring problem, edit or create an issue so the fix is tracked once, not repeated per-PR.
 - Issues state the goal and acceptance criteria, not the implementation.
+
+## Branch hygiene
+
+- After merging a PR, delete the remote head branch (unnecessary if the repo has *Automatically delete head branches* enabled).
+- Periodically prune: `git fetch --prune`, then review `git branch -r --merged main` and delete merged leftovers.
+- Never delete a branch with an open PR or an active worker. For a stale-looking branch, ask on the linked issue or PR and delete only after confirmation.
 
 ## Coordinating concurrent work
 

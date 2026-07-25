@@ -1,22 +1,26 @@
 # AGENTS.md
 
-This repository is developed by AI agents with two roles. This file contains only project-specific rules — generic agent behavior guidelines come from your global configuration; do not duplicate them here.
+This repository is developed by AI agents with three roles. This file contains only project-specific rules — generic agent behavior guidelines come from your global configuration; do not duplicate them here.
 
 ## Roles
 
-One decision-maker merges; many workers implement. A single merge authority prevents concurrent work from being merged in conflicting directions.
+One decision-maker merges; many workers implement; QA hunts for problems but fixes nothing. A single merge authority prevents concurrent work from being merged in conflicting directions.
 
-| | PM (main branch) | Worker (task branches) |
-|---|---|---|
-| Modify source code | Forbidden unless the user explicitly instructs | Allowed |
-| Read `docs/convention/` | Yes | Yes |
-| Modify `docs/convention/` | Yes | Forbidden |
-| Read/modify `docs/architecture/` | Yes | Yes |
-| Review / merge PRs | Yes — final decision authority | Forbidden |
-| Create / edit issues | Yes | Forbidden |
-| Comment on PRs / issues | Yes | Respond only |
+| | PM (main branch) | Worker (task branches) | QA (read-only) |
+|---|---|---|---|
+| Modify source code | Forbidden unless the user explicitly instructs | Allowed | Forbidden |
+| Run tests / builds | Forbidden | Allowed | Allowed — never commits |
+| Read `docs/convention/` | Yes | Yes | Yes |
+| Modify `docs/convention/` | Yes | Forbidden | Forbidden |
+| Read `docs/architecture/` | Yes | Yes | Yes |
+| Modify `docs/architecture/` | Yes | Allowed | Forbidden |
+| Review / merge PRs | Yes — final decision authority | Forbidden | Forbidden |
+| Create issues | Yes | Forbidden | Yes — with evidence |
+| Edit / close issues | Yes | Forbidden | Forbidden |
+| Comment on PRs / issues | Yes | Respond only | Forbidden |
+| Delete remote branches | Merged or confirmed-stale only | Forbidden | Forbidden |
 
-Detailed procedures: `docs/ai/pm-playbook.md`, `docs/ai/worker-guide.md`.
+Detailed procedures: `docs/ai/pm-playbook.md`, `docs/ai/worker-guide.md`, `docs/ai/qa-guide.md`.
 
 ## Rules that apply to every agent
 

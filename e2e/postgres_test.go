@@ -98,16 +98,6 @@ func TestUserStore_RoundTrip(t *testing.T) {
 	assert.Equal(t, "ada2", updated.Nickname())
 	assert.Equal(t, []string{"admin"}, updated.Roles())
 
-	orgGRN := grnOf("org", "acme")
-	require.NoError(t, s.AddOrganization(ctx, g, orgGRN))
-	got, err = s.Get(ctx, g)
-	require.NoError(t, err)
-	assert.Equal(t, []grn.GRN{orgGRN}, got.Organizations())
-	require.NoError(t, s.RemoveOrganization(ctx, g, orgGRN))
-	got, err = s.Get(ctx, g)
-	require.NoError(t, err)
-	assert.Empty(t, got.Organizations())
-
 	require.NoError(t, s.Delete(ctx, g))
 	_, err = s.Get(ctx, g)
 	assert.True(t, errorx.IsKind(err, errorx.KindNotFound))

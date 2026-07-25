@@ -73,8 +73,6 @@ func (s *PostgresStore) ListOrgs(ctx context.Context, f ListFilter) ([]*Organiza
 }
 
 // UpdateOrg applies a Patch and returns the updated Organization.
-// Patch.Roles and Patch.Policies are ignored: org-level grants are
-// authz persistence (roadmap P2) and have no columns yet.
 func (s *PostgresStore) UpdateOrg(ctx context.Context, g grn.GRN, p Patch) (*Organization, error) {
 	row, err := s.q.UpdateOrg(ctx, db.UpdateOrgParams{
 		Grn:       g.String(),
@@ -143,8 +141,8 @@ func (s *PostgresStore) ListGroups(ctx context.Context, f ListFilter) ([]*Group,
 	return groups, nil
 }
 
-// UpdateGroup applies a Patch and returns the updated Group.
-func (s *PostgresStore) UpdateGroup(ctx context.Context, g grn.GRN, p Patch) (*Group, error) {
+// UpdateGroup applies a GroupPatch and returns the updated Group.
+func (s *PostgresStore) UpdateGroup(ctx context.Context, g grn.GRN, p GroupPatch) (*Group, error) {
 	row, err := s.q.UpdateGroup(ctx, db.UpdateGroupParams{
 		Grn:       g.String(),
 		Name:      text(p.Name),
@@ -241,8 +239,8 @@ func (s *PostgresStore) ListProjects(ctx context.Context, f ListFilter) ([]*Proj
 	return projects, nil
 }
 
-// UpdateProject applies a Patch and returns the updated Project.
-func (s *PostgresStore) UpdateProject(ctx context.Context, g grn.GRN, p Patch) (*Project, error) {
+// UpdateProject applies a ProjectPatch and returns the updated Project.
+func (s *PostgresStore) UpdateProject(ctx context.Context, g grn.GRN, p ProjectPatch) (*Project, error) {
 	row, err := s.q.UpdateProject(ctx, db.UpdateProjectParams{
 		Grn:       g.String(),
 		Name:      text(p.Name),

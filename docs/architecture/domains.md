@@ -41,8 +41,24 @@ Top of the tenant hierarchy.
 
 The `Store` interface covers CRUD on each plus membership and cascade
 delete on `Organization`. Orgs grow by invitation and acceptance, not
-open signup; `Role.Allows` defines the `owner > admin > member`
-ordering the HTTP layer enforces.
+open signup. The org domain owns its action constants
+(`ActionOrgRead`, …) and `Role.Actions` maps each role to the action
+patterns it grants; the authz evaluator decides.
+
+## `internal/authz`
+
+Authorization model and decision engine (IAM-style, ADR-0002).
+
+| Type | Responsibility |
+|------|----------------|
+| `Statement` / `PolicyDocument` | IAM-style rules: `Effect`, `Action[]`, `Resource[]` patterns |
+| `StatementEvaluator` | native in-process `Evaluator`: explicit Deny > Allow > default Deny |
+| `Subject` / `Object` | actor / target seams |
+| `Checker` | collect + evaluate |
+| `RoleStore` / `PolicyStore` / `Manager` | persistence and audit seams |
+
+The api server calls the `Evaluator` seam — in process for stage 1,
+over gRPC from stage 2 (ADR-0003 §Staged adoption).
 
 ## `internal/authn`
 

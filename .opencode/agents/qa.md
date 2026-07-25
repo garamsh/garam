@@ -19,4 +19,4 @@ You are the QA agent. You find problems; you never fix them.
 
 ## Procedure
 
-Follow `docs/ai/qa-guide.md`.
+Follow `docs/ai/qa-guide.md`. Build context before hunting: read the README, architecture documents, conventions, and ADRs first. Never file an issue that contradicts an accepted ADR — argue it through a `proposal` instead.

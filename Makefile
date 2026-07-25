@@ -1,6 +1,8 @@
 OAPI_CODEGEN := go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.8.0
 SQLC := go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
 MOCKERY := go run github.com/vektra/mockery/v3@v3.7.2
+BUF := go run github.com/bufbuild/buf/cmd/buf@v1.72.0
+GOIMPORTS := go run golang.org/x/tools/cmd/goimports@v0.48.0
 
 TEST_DATABASE_URL ?= postgres://gaon:gaon@localhost:55432/gaon?sslmode=disable
 
@@ -8,10 +10,11 @@ TEST_DATABASE_URL ?= postgres://gaon:gaon@localhost:55432/gaon?sslmode=disable
 
 lint:
 	go vet ./...
+	$(BUF) lint
 
 format:
 	gofmt -l .
-	go run golang.org/x/tools/cmd/goimports@v0.48.0 -l .
+	$(GOIMPORTS) -l .
 
 test:
 	go test ./...
@@ -23,11 +26,13 @@ mock:
 	$(MOCKERY)
 
 # gen regenerates everything derived from a source of truth: the
-# OpenAPI server, sqlc queries, and mocks.
+# OpenAPI server, sqlc queries, protobuf code, and mocks.
 gen:
 	$(OAPI_CODEGEN) --config api/oapi-codegen.yaml api/openapi.yaml
 	$(SQLC) generate
 	$(MOCKERY)
+	$(BUF) generate
+	$(GOIMPORTS) -w proto/gen
 
 # check-gen fails when committed generated code is stale.
 check-gen: gen

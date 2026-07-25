@@ -23,8 +23,8 @@ collaborate on a shared plan.
 - Notifications or messaging.
 - The agent domain (still being planned; code untouched, no API or
   persistence).
-- The authz gRPC transport and policy persistence (roadmap P2); stage 1
-  runs the native evaluator in process (ADR-0003 §Staged adoption).
+- authz policy persistence and versioning (roadmap P2); the gRPC
+  engine evaluates caller-supplied statements (ADR-0003).
 - OAuth providers beyond Google.
 
 ## Module boundaries
@@ -32,6 +32,7 @@ collaborate on a shared plan.
 ```
 github.com/garamsh/gaon
 ├── api/          # OpenAPI spec (source of truth) + generated server
+├── proto/        # authz gRPC service definition + buf-generated code
 ├── cmd/gaon/     # thin entrypoint for the cobra CLI
 ├── migrations/   # SQL migrations (golang-migrate); sqlc schema source
 ├── e2e/          # store round-trips against real Postgres
@@ -41,7 +42,7 @@ github.com/garamsh/gaon
 │   ├── cli/      # cobra commands + wiring (serve api | serve authz | migrate)
 │   ├── api/      # handlers implementing the generated ServerInterface
 │   ├── authn/    # OIDC provider abstraction, sessions
-│   ├── authz/    # policy engine: model, evaluator, stores
+│   ├── authz/    # policy engine: model, evaluator, stores, gRPC server
 │   ├── org/      # organizations, groups, projects, memberships, invitations
 │   ├── user/     # human identities
 │   └── agent/    # autonomous identities (planning)
@@ -51,9 +52,10 @@ github.com/garamsh/gaon
 `grn` and `errorx` are the only shared packages. Domains cooperate
 through `grn.GRN`, never through each other's concrete types. `api`
 sees several domains at once and enforces authentication (session
-cookie) at the boundary; org-role checks go through the
-`authz.Evaluator` seam — in process for stage 1, over gRPC from stage
-2 (ADR-0003). `proto/` lands with the gRPC transport in P2.
+cookie) at the boundary; org-role checks go through the `Evaluator`
+seam, implemented by the authz gRPC client (ADR-0003 stage 2).
+`internal/api` and `internal/authz` never import each other; the wire
+contract is `proto/gaon/authz/v1`.
 
 ## Core abstractions
 
@@ -101,5 +103,6 @@ cookie) at the boundary; org-role checks go through the
   where they exist).
 - **Storage-agnostic** — Postgres, SQLite, Redis plug into the same
   `Store` interface without domain code changes.
-- **Reproducible generation** — oapi-codegen, sqlc, and mockery output
-  is committed; CI regenerates and fails on drift (`make check-gen`).
+- **Reproducible generation** — oapi-codegen, sqlc, buf, and mockery
+  output is committed; CI regenerates and fails on drift
+  (`make check-gen`).

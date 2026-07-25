@@ -1,7 +1,5 @@
 package authz
 
-import "strings"
-
 // Effect is a statement's outcome when it matches.
 type Effect string
 
@@ -11,9 +9,9 @@ const (
 )
 
 // Statement is one IAM-style rule (ADR-0002). Action and Resource
-// entries are patterns: "*" matches everything, a trailing "*"
-// wildcard matches by prefix (`org:*`, `grn:acme:*`), anything else
-// must match exactly.
+// entries are patterns: "*" matches any (possibly empty) run of
+// characters, "?" matches exactly one; wildcards may appear anywhere
+// and repeat. Anything else must match literally.
 type Statement struct {
 	Sid      string
 	Effect   Effect
@@ -44,11 +42,27 @@ func matchAny(patterns []string, value string) bool {
 }
 
 func matchPattern(pattern, value string) bool {
-	if pattern == value {
-		return true
+	px, vx := 0, 0
+	star, starV := -1, 0
+	for vx < len(value) {
+		switch {
+		case px < len(pattern) && (pattern[px] == '?' || pattern[px] == value[vx]):
+			px++
+			vx++
+		case px < len(pattern) && pattern[px] == '*':
+			star = px
+			starV = vx
+			px++
+		case star != -1:
+			px = star + 1
+			starV++
+			vx = starV
+		default:
+			return false
+		}
 	}
-	if strings.HasSuffix(pattern, "*") {
-		return strings.HasPrefix(value, strings.TrimSuffix(pattern, "*"))
+	for px < len(pattern) && pattern[px] == '*' {
+		px++
 	}
-	return false
+	return px == len(pattern)
 }

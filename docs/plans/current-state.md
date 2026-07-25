@@ -33,11 +33,16 @@
   Postgres. `make check-gen` keeps generated code (oapi-codegen, sqlc,
   mockery) honest in CI. The `agent` domain stayed untouched.
 
+- **authz gRPC transport** (ADR-0003 stage 2, issue #22) — `gaon serve
+  authz` runs the engine as a separate gRPC process (`Check` /
+  `Explain` in `proto/gaon/authz/v1`, buf codegen checked by
+  `make check-gen`); the api server authorizes through the gRPC client
+  behind its own `Evaluator` seam and no longer imports
+  `internal/authz`. Statement patterns gained full wildcard semantics
+  (`*` and `?` anywhere in the pattern).
+
 ## Open
 
-- **authz gRPC transport** (P2) — stage 1 runs the native evaluator in
-  process; the gRPC server/client and the full no-import rule land in
-  P2 (ADR-0003 §Staged adoption).
 - **authz landing** (P1) — the authz implementation WIP is preserved
   outside the repo (`~/gaon-authz-wip/`); it needs the file split
   required by `docs/convention/go.md` before landing.

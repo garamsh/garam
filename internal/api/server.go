@@ -1,7 +1,8 @@
 // Package api implements the OpenAPI ServerInterface generated into
 // the top-level api package (imported as apigen). Handlers enforce
 // authentication via the session cookie and org-scoped authorization
-// through the authz evaluator seam.
+// through the Evaluator seam, which the authz gRPC client implements
+// (ADR-0003); this package never imports the engine.
 package api
 
 import (
@@ -28,6 +29,7 @@ type Server struct {
 	orgs      org.Store
 	sessions  authn.SessionStore
 	providers map[string]authn.Provider
+	evaluator Evaluator
 	cfg       Config
 }
 
@@ -36,10 +38,10 @@ var _ apigen.ServerInterface = (*Server)(nil)
 
 // NewServer constructs the API server. providers are keyed by their
 // Name; unknown provider paths 404 without the providers knowing.
-func NewServer(users user.Store, orgs org.Store, sessions authn.SessionStore, providers []authn.Provider, cfg Config) *Server {
+func NewServer(users user.Store, orgs org.Store, sessions authn.SessionStore, providers []authn.Provider, evaluator Evaluator, cfg Config) *Server {
 	byName := make(map[string]authn.Provider, len(providers))
 	for _, p := range providers {
 		byName[p.Name()] = p
 	}
-	return &Server{users: users, orgs: orgs, sessions: sessions, providers: byName, cfg: cfg}
+	return &Server{users: users, orgs: orgs, sessions: sessions, providers: byName, evaluator: evaluator, cfg: cfg}
 }

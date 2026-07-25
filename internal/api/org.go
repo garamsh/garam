@@ -4,7 +4,6 @@ import (
 	"net/http"
 
 	apigen "github.com/garamsh/gaon/api"
-	"github.com/garamsh/gaon/internal/authz"
 	"github.com/garamsh/gaon/internal/errorx"
 	"github.com/garamsh/gaon/internal/grn"
 	"github.com/garamsh/gaon/internal/org"
@@ -171,8 +170,8 @@ func (s *Server) ListOrgMembers(w http.ResponseWriter, r *http.Request, orgSlug 
 
 // authorize enforces that the user holds a membership in orgGRN whose
 // role allows the action. The membership role selects the IAM-style
-// statement set; the authz evaluator seam decides. Non-members and
-// denied actions both yield 403.
+// statement set; the authz engine decides through the Evaluator seam.
+// Non-members and denied actions both yield 403.
 func (s *Server) authorize(r *http.Request, orgGRN grn.GRN, u *user.User, action string) error {
 	m, err := s.orgs.GetMember(r.Context(), orgGRN, u.GRN())
 	if errorx.IsKind(err, errorx.KindNotFound) {
@@ -181,18 +180,21 @@ func (s *Server) authorize(r *http.Request, orgGRN grn.GRN, u *user.User, action
 	if err != nil {
 		return err
 	}
-	statements := []authz.Statement{{
-		Sid:      "org-role-" + string(m.Role()),
-		Effect:   authz.EffectAllow,
-		Action:   m.Role().Actions(),
-		Resource: []string{orgGRN.String()},
-	}}
-	decision := authz.NewStatementEvaluator(statements).Evaluate(r.Context(), authz.Context{
-		Subject: subject{u},
-		Object:  object{orgGRN},
+	allowed, err := s.evaluator.Evaluate(r.Context(), EvalInput{
+		Subject: u.GRN(),
+		Object:  orgGRN,
 		Action:  action,
+		Statements: []Statement{{
+			Sid:      "org-role-" + string(m.Role()),
+			Effect:   EffectAllow,
+			Action:   m.Role().Actions(),
+			Resource: []string{orgGRN.String()},
+		}},
 	})
-	if decision != authz.DecisionAllow {
+	if err != nil {
+		return err
+	}
+	if !allowed {
 		return errorx.New(errorx.KindPermissionDenied, "insufficient role")
 	}
 	return nil

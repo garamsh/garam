@@ -7,6 +7,8 @@
 //	GAON_DATABASE_URL     postgres connection string (required)
 //	GAON_MIGRATIONS_DIR   migrations directory (default "migrations")
 //	GAON_HTTP_ADDR        api listen address (default ":8080")
+//	GAON_GRPC_ADDR        authz listen address (default ":9090")
+//	GAON_AUTHZ_ADDR       authz engine address for serve api (default "localhost:9090")
 //	GAON_SESSION_TTL      session lifetime (default "168h")
 //	GAON_COOKIE_SECURE    "true" to mark cookies Secure (default true)
 //	GOOGLE_CLIENT_ID      Google OAuth client ID (required for serve api)

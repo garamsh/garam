@@ -1,11 +1,14 @@
 package cli
 
 import (
+	"net"
 	"net/http"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spf13/cobra"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	apigen "github.com/garamsh/gaon/api"
 	"github.com/garamsh/gaon/internal/api"
@@ -14,11 +17,11 @@ import (
 	"github.com/garamsh/gaon/internal/errorx"
 	"github.com/garamsh/gaon/internal/org"
 	"github.com/garamsh/gaon/internal/user"
+	authzv1 "github.com/garamsh/gaon/proto/gen/gaon/authz/v1"
 )
 
 // newServeAPICommand constructs `gaon serve api`: the OpenAPI HTTP
-// backend. Stage 1 runs the authz evaluator in process (ADR-0003
-// §Staged adoption); the gRPC engine replaces it in stage 2.
+// backend. It reaches the authz engine over gRPC (ADR-0003 stage 2).
 func newServeAPICommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "api",
@@ -51,6 +54,17 @@ func serveAPI(cmd *cobra.Command) error {
 		return errorx.Wrap(err, "google provider")
 	}
 
+	// Insecure transport: both processes run inside one trust
+	// boundary; TLS between them is future work.
+	conn, err := grpc.NewClient(
+		envOr("GAON_AUTHZ_ADDR", "localhost:9090"),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		return errorx.Wrap(err, "authz client", errorx.KindInvalidArgument)
+	}
+	defer func() { _ = conn.Close() }()
+
 	ttl, err := time.ParseDuration(envOr("GAON_SESSION_TTL", "168h"))
 	if err != nil {
 		return errorx.Wrap(err, "GAON_SESSION_TTL", errorx.KindInvalidArgument)
@@ -60,6 +74,7 @@ func serveAPI(cmd *cobra.Command) error {
 		org.NewPostgresStore(pool),
 		authn.NewPostgresSessionStore(pool),
 		[]authn.Provider{google},
+		api.NewGRPCEvaluator(conn),
 		api.Config{
 			SessionTTL:   ttl,
 			CookieSecure: envOr("GAON_COOKIE_SECURE", "true") == "true",
@@ -71,17 +86,29 @@ func serveAPI(cmd *cobra.Command) error {
 	return http.ListenAndServe(addr, apigen.Handler(srv))
 }
 
-// newServeAuthzCommand constructs `gaon serve authz`. The gRPC
-// transport lands in stage 2 (ADR-0003); for now the command proves
-// the wiring by constructing the in-process native evaluator.
+// newServeAuthzCommand constructs `gaon serve authz`: the gRPC policy
+// engine, run as a separate process from the api server (ADR-0003).
 func newServeAuthzCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "authz",
-		Short: "Serve the policy engine (gRPC transport lands in P2)",
+		Short: "Serve the policy engine over gRPC",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			_ = authz.NewStatementEvaluator(nil)
-			cmd.Println("authz runs in-process in stage 1; the gRPC transport lands in P2")
-			return nil
+			return serveAuthz(cmd)
 		},
 	}
+}
+
+func serveAuthz(cmd *cobra.Command) error {
+	addr := envOr("GAON_GRPC_ADDR", ":9090")
+	lis, err := net.Listen("tcp", addr)
+	if err != nil {
+		return errorx.Wrap(err, "authz listen", errorx.KindUnavailable)
+	}
+	srv := grpc.NewServer()
+	authzv1.RegisterAuthzServiceServer(srv, authz.NewGRPCServer())
+	cmd.Printf("serving authz on %s\n", addr)
+	if err := srv.Serve(lis); err != nil {
+		return errorx.Wrap(err, "authz serve", errorx.KindInternal)
+	}
+	return nil
 }

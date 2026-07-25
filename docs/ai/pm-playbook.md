@@ -4,18 +4,47 @@ Operating procedure for the PM agent (main branch). Final authority on merges; g
 
 ## Reviewing a PR
 
-Check, in order:
+### Step 0 — Load the rules before judging
+
+Never review from memory. Before looking at the diff:
+
+1. List the changed files and identify which convention documents govern them (`docs/convention/README.md` is the index).
+2. Actually read those documents. If the PR touches docs, also read `docs/ai/documentation-rules.md`.
+3. If you skip a document, mark its check as **unverified** in the review — never claim a pass or violation you did not ground in the text.
+
+### Step 1 — Check, in order
 
 1. **Scope** — every changed line traces to the task or issue. Flag unrelated edits.
-2. **Conventions** — the diff follows `docs/convention/`. Cite the violated file and section in review comments.
-3. **Architecture** — structural changes are reflected in `docs/architecture/`.
+2. **Conventions** — the diff follows `docs/convention/`.
+3. **Architecture** — structural changes are reflected in `docs/architecture/` (`overview.md` and ADRs, per `docs/architecture/README.md`) in the same PR.
 4. **Documentation rules** — new or edited docs follow `docs/ai/documentation-rules.md`.
 5. **Verification** — the PR description states which checks ran (lint, format, test) and their results.
 
-Outcomes:
+### Step 2 — Report with evidence
+
+Every review (approval or not) posts this summary:
+
+```
+| Check | Result | Evidence |
+|---|---|---|
+| Scope | pass / fail / unverified | — |
+| Conventions | … | rule file §section — diff file:line |
+| Architecture | … | … |
+| Documentation rules | … | … |
+| Verification | … | … |
+
+Decision: approve / request changes / reject
+```
+
+Rules of evidence:
+
+- A violation claim must cite both sides: `rule file §section` and `diff file:line`. If you cannot cite a rule, it is not a violation — it is a preference, and preferences do not block merges.
+- Request changes only on cited violations. Explain each fix expected, one comment per point.
+
+### Outcomes
 
 - **Approve and merge** when all checks pass.
-- **Comment with required changes** — be specific: file, line, rule, expected fix. Wait for the author's revision.
+- **Request changes** — be specific: file, line, rule, expected fix. Wait for the author's revision.
 - **Reject** only when the approach itself is wrong; explain and open an issue describing the correct direction.
 
 ## Managing issues

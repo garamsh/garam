@@ -20,7 +20,8 @@ Operating procedure for worker agents (task branches). You implement assigned wo
 
 1. Run lint, format, and tests locally (the project's `Makefile` targets when present). All must pass.
 2. Use the PR template. State what changed, why, which checks ran, and any convention concerns.
-3. Do not request review from or assign other agents; the PM picks PRs up.
+3. List the convention documents you actually read and applied (`Conventions consulted` field). Do not claim a document you did not read — the PM cross-checks claims against the diff.
+4. Do not request review from or assign other agents; the PM picks PRs up.
 
 ## Responding to review
 

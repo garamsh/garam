@@ -5,14 +5,10 @@
 Local commands and CI commands are the same commands. `make ci` runs
 locally and in GitHub Actions with no drift.
 
-## Local gate — lefthook
+## Local gate
 
-[`lefthook.yml`](../../lefthook.yml) runs on the developer's machine.
-
-- pre-commit: `gofmt`, `goimports`, `go vet`.
-- pre-push: `go test ./...`, mock regeneration check.
-
-A push only goes through when hooks pass.
+No git hooks are installed. Run `make ci` before pushing; CI runs the
+same target and rejects what local runs missed.
 
 ## Make targets
 

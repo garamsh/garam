@@ -49,7 +49,8 @@ and move the explanation to a docstring on a named function or type.
 `// TODO(<owner>): <text>` — owner is a GitHub handle or email.
 `FIXME` and `XXX` are discouraged; convert or fix on sight.
 
-Open TODOs also appear in `plans/backlog.md`.
+Open TODOs are tracked in the backlog section of
+[`docs/plans/current-state.md`](../plans/current-state.md).
 
 ## Language
 

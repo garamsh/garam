@@ -20,20 +20,24 @@
 - `authz_test.go` exercising every interface and the `Checker` path.
 - Mockery v3 setup (`.mockery.yaml`) generating Store mocks.
 - Documentation under `docs/`.
+- CI plumbing: `Makefile`, `.github/workflows/ci.yml`. Git hooks
+  (lefthook) evaluated and not adopted.
 
 ## Open
 
-- **Domain memory implementations** (P0) — interfaces declared, no
-  in-memory `Store` impls for `org` / `user` / `agent` yet, so
-  end-to-end domain tests are blocked.
+- **MVP** (roadmap) — Postgres-backed `Store` impls and the
+  OpenAPI-first HTTP API for `org` / `user` / `agent` are not started.
+  In-memory domain stores were dropped in favor of going straight to
+  Postgres.
+- **authz landing** (P1) — the authz implementation above exists only
+  uncommitted on `develop`; it needs the file split required by
+  `docs/convention/go.md` before landing.
 - **Subject/Object adapters** (P1) — `User` and `Agent` lack
   `Type() string`; adapter functions or method additions needed before
   the `Checker` can be exercised on real domain types.
-- **Persistent stores** (P2) — no Postgres implementation yet.
-- **Transport** (P3) — no HTTP / gRPC layer.
-- **Workflow core** (P4) — domain not created.
-- **CI / hooks** (P5) — no `.github/workflows/`, no `lefthook.yml`,
-  no `Makefile`.
+- **authz persistence & policy versioning** (P2) — no Postgres
+  implementation yet.
+- **Workflow core** (P3) — domain not created.
 
 ## Known corrections applied
 
@@ -50,8 +54,5 @@
 Pulled from `// TODO` lines and review notes. Each item gets its own
 PLAN.md when picked up.
 
-- Add domain memory impls + tests.
 - Add `User` / `Agent` adapter functions for `authz.Subject` /
   `authz.Object`.
-- Decide on HTTP router (chi vs stdlib) at P3 time.
-- Add `Makefile`, `lefthook.yml`, `.github/workflows/ci.yml`.

@@ -68,7 +68,8 @@ concern.
   request was allowed or denied.
 - **Transport-agnostic errors** — `errorx` flows over HTTP, gRPC, CLI
   without translation at the source.
-- **Testable in isolation** — every domain has an interface and an
-  in-memory implementation usable from unit tests.
+- **Testable in isolation** — every domain exposes an interface; unit
+  tests substitute at module boundaries (mocks, in-memory test doubles
+  where they exist).
 - **Storage-agnostic** — Postgres, SQLite, Redis plug into the same
   `Store` interface without domain code changes.

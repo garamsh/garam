@@ -18,7 +18,7 @@ decisions are recorded here.
 │   └── <crosscutting>/     # only when ≥3 domains depend on it
 ├── docs/
 ├── go.mod / go.sum
-└── Makefile / lefthook.yml
+└── Makefile
 ```
 
 Banned folder/file names at any level: `model.go`, `utils/`, `helpers/`,

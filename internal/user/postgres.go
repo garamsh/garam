@@ -34,9 +34,9 @@ func (s *PostgresStore) Create(ctx context.Context, u *User) error {
 	err := s.q.CreateUser(ctx, db.CreateUserParams{
 		Grn:           u.grn.String(),
 		Nickname:      u.nickname,
-		Roles:         u.roles,
-		Policies:      u.policies,
-		Organizations: grnStrings(u.organizations),
+		Roles:         strs(u.roles),
+		Policies:      strs(u.policies),
+		Organizations: strs(grnStrings(u.organizations)),
 		CreatedAt:     stamp(u.createdAt),
 		UpdatedAt:     stamp(u.updatedAt),
 	})
@@ -179,6 +179,15 @@ func grnStrings(gs []grn.GRN) []string {
 		out[i] = g.String()
 	}
 	return out
+}
+
+// strs normalizes a nil slice to empty: pgx encodes a nil slice as
+// NULL, which the NOT NULL array columns reject.
+func strs(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
 }
 
 // stamp converts a time.Time to a valid pgtype.Timestamptz.

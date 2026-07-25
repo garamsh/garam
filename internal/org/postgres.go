@@ -106,8 +106,8 @@ func (s *PostgresStore) CreateGroup(ctx context.Context, g *Group) error {
 		Grn:       g.grn.String(),
 		OrgGrn:    g.orgGRN.String(),
 		Name:      g.name,
-		Roles:     g.roles,
-		Policies:  g.policies,
+		Roles:     strs(g.roles),
+		Policies:  strs(g.policies),
 		CreatedAt: stamp(g.createdAt),
 		UpdatedAt: stamp(g.updatedAt),
 	})
@@ -203,8 +203,8 @@ func (s *PostgresStore) CreateProject(ctx context.Context, p *Project) error {
 		Grn:       p.grn.String(),
 		OrgGrn:    p.orgGRN.String(),
 		Name:      p.name,
-		Roles:     p.roles,
-		Policies:  p.policies,
+		Roles:     strs(p.roles),
+		Policies:  strs(p.policies),
 		CreatedAt: stamp(p.createdAt),
 		UpdatedAt: stamp(p.updatedAt),
 	})
@@ -559,6 +559,15 @@ func classify(err error, op string, notFound, conflict error) error {
 // stamp converts a time.Time to a valid pgtype.Timestamptz.
 func stamp(t time.Time) pgtype.Timestamptz {
 	return pgtype.Timestamptz{Time: t, Valid: true}
+}
+
+// strs normalizes a nil slice to empty: pgx encodes a nil slice as
+// NULL, which the NOT NULL array columns reject.
+func strs(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
 }
 
 // text converts a *string patch field to a nullable text.

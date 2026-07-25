@@ -11,35 +11,18 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const addUserOrganization = `-- name: AddUserOrganization :exec
-UPDATE users SET organizations = array_append(organizations, $1::text), updated_at = $2
-WHERE grn = $3 AND NOT ($1::text = ANY (organizations))
-`
-
-type AddUserOrganizationParams struct {
-	OrgGrn    string
-	UpdatedAt pgtype.Timestamptz
-	UserGrn   string
-}
-
-func (q *Queries) AddUserOrganization(ctx context.Context, arg AddUserOrganizationParams) error {
-	_, err := q.db.Exec(ctx, addUserOrganization, arg.OrgGrn, arg.UpdatedAt, arg.UserGrn)
-	return err
-}
-
 const createUser = `-- name: CreateUser :exec
-INSERT INTO users (grn, nickname, roles, policies, organizations, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
+INSERT INTO users (grn, nickname, roles, policies, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6)
 `
 
 type CreateUserParams struct {
-	Grn           string
-	Nickname      string
-	Roles         []string
-	Policies      []string
-	Organizations []string
-	CreatedAt     pgtype.Timestamptz
-	UpdatedAt     pgtype.Timestamptz
+	Grn       string
+	Nickname  string
+	Roles     []string
+	Policies  []string
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) error {
@@ -48,7 +31,6 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) error {
 		arg.Nickname,
 		arg.Roles,
 		arg.Policies,
-		arg.Organizations,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)
@@ -68,7 +50,7 @@ func (q *Queries) DeleteUser(ctx context.Context, grn string) (int64, error) {
 }
 
 const getUser = `-- name: GetUser :one
-SELECT grn, nickname, roles, policies, organizations, created_at, updated_at FROM users WHERE grn = $1
+SELECT grn, nickname, roles, policies, created_at, updated_at FROM users WHERE grn = $1
 `
 
 func (q *Queries) GetUser(ctx context.Context, grn string) (User, error) {
@@ -79,7 +61,6 @@ func (q *Queries) GetUser(ctx context.Context, grn string) (User, error) {
 		&i.Nickname,
 		&i.Roles,
 		&i.Policies,
-		&i.Organizations,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -87,7 +68,7 @@ func (q *Queries) GetUser(ctx context.Context, grn string) (User, error) {
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT grn, nickname, roles, policies, organizations, created_at, updated_at FROM users
+SELECT grn, nickname, roles, policies, created_at, updated_at FROM users
 ORDER BY grn
 LIMIT $2 OFFSET $1
 `
@@ -111,7 +92,6 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 			&i.Nickname,
 			&i.Roles,
 			&i.Policies,
-			&i.Organizations,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -125,40 +105,22 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 	return items, nil
 }
 
-const removeUserOrganization = `-- name: RemoveUserOrganization :exec
-UPDATE users SET organizations = array_remove(organizations, $1::text), updated_at = $2
-WHERE grn = $3
-`
-
-type RemoveUserOrganizationParams struct {
-	OrgGrn    string
-	UpdatedAt pgtype.Timestamptz
-	UserGrn   string
-}
-
-func (q *Queries) RemoveUserOrganization(ctx context.Context, arg RemoveUserOrganizationParams) error {
-	_, err := q.db.Exec(ctx, removeUserOrganization, arg.OrgGrn, arg.UpdatedAt, arg.UserGrn)
-	return err
-}
-
 const updateUser = `-- name: UpdateUser :one
 UPDATE users SET
-    nickname      = coalesce($1, nickname),
-    roles         = coalesce($2::text[], roles),
-    policies      = coalesce($3::text[], policies),
-    organizations = coalesce($4::text[], organizations),
-    updated_at    = $5
-WHERE grn = $6
-RETURNING grn, nickname, roles, policies, organizations, created_at, updated_at
+    nickname   = coalesce($1, nickname),
+    roles      = coalesce($2::text[], roles),
+    policies   = coalesce($3::text[], policies),
+    updated_at = $4
+WHERE grn = $5
+RETURNING grn, nickname, roles, policies, created_at, updated_at
 `
 
 type UpdateUserParams struct {
-	Nickname      pgtype.Text
-	Roles         []string
-	Policies      []string
-	Organizations []string
-	UpdatedAt     pgtype.Timestamptz
-	Grn           string
+	Nickname  pgtype.Text
+	Roles     []string
+	Policies  []string
+	UpdatedAt pgtype.Timestamptz
+	Grn       string
 }
 
 func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error) {
@@ -166,7 +128,6 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		arg.Nickname,
 		arg.Roles,
 		arg.Policies,
-		arg.Organizations,
 		arg.UpdatedAt,
 		arg.Grn,
 	)
@@ -176,7 +137,6 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		&i.Nickname,
 		&i.Roles,
 		&i.Policies,
-		&i.Organizations,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

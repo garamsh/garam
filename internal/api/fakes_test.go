@@ -98,13 +98,6 @@ func (s *fakeUserStore) Get(_ context.Context, g grn.GRN) (*user.User, error) {
 	return u, nil
 }
 
-func (s *fakeUserStore) AddOrganization(_ context.Context, userGRN, _ grn.GRN) error {
-	if _, err := s.Get(context.Background(), userGRN); err != nil {
-		return err
-	}
-	return nil
-}
-
 // fakeSessionStore is an in-memory authn.SessionStore double.
 type fakeSessionStore struct {
 	mu   sync.Mutex

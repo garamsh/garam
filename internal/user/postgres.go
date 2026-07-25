@@ -32,13 +32,12 @@ func NewPostgresStore(pool *pgxpool.Pool) *PostgresStore {
 // Create persists a new User.
 func (s *PostgresStore) Create(ctx context.Context, u *User) error {
 	err := s.q.CreateUser(ctx, db.CreateUserParams{
-		Grn:           u.grn.String(),
-		Nickname:      u.nickname,
-		Roles:         strs(u.roles),
-		Policies:      strs(u.policies),
-		Organizations: strs(grnStrings(u.organizations)),
-		CreatedAt:     stamp(u.createdAt),
-		UpdatedAt:     stamp(u.updatedAt),
+		Grn:       u.grn.String(),
+		Nickname:  u.nickname,
+		Roles:     strs(u.roles),
+		Policies:  strs(u.policies),
+		CreatedAt: stamp(u.createdAt),
+		UpdatedAt: stamp(u.updatedAt),
 	})
 	return classify(err, "create", nil)
 }
@@ -75,12 +74,11 @@ func (s *PostgresStore) List(ctx context.Context, f ListFilter) ([]*User, error)
 // Update applies a Patch and returns the updated User.
 func (s *PostgresStore) Update(ctx context.Context, g grn.GRN, p Patch) (*User, error) {
 	row, err := s.q.UpdateUser(ctx, db.UpdateUserParams{
-		Grn:           g.String(),
-		Nickname:      text(p.Nickname),
-		Roles:         p.Roles,
-		Policies:      p.Policies,
-		Organizations: grnStrings(p.Organizations),
-		UpdatedAt:     stamp(time.Now().UTC()),
+		Grn:       g.String(),
+		Nickname:  text(p.Nickname),
+		Roles:     p.Roles,
+		Policies:  p.Policies,
+		UpdatedAt: stamp(time.Now().UTC()),
 	})
 	if err != nil {
 		return nil, classify(err, "update", ErrUserNotFound)
@@ -100,32 +98,6 @@ func (s *PostgresStore) Delete(ctx context.Context, g grn.GRN) error {
 	return nil
 }
 
-// AddOrganization records membership of the user in the org.
-func (s *PostgresStore) AddOrganization(ctx context.Context, userGRN, orgGRN grn.GRN) error {
-	if _, err := s.Get(ctx, userGRN); err != nil {
-		return err
-	}
-	err := s.q.AddUserOrganization(ctx, db.AddUserOrganizationParams{
-		UserGrn:   userGRN.String(),
-		OrgGrn:    orgGRN.String(),
-		UpdatedAt: stamp(time.Now().UTC()),
-	})
-	return classify(err, "add organization", nil)
-}
-
-// RemoveOrganization drops membership of the user in the org.
-func (s *PostgresStore) RemoveOrganization(ctx context.Context, userGRN, orgGRN grn.GRN) error {
-	if _, err := s.Get(ctx, userGRN); err != nil {
-		return err
-	}
-	err := s.q.RemoveUserOrganization(ctx, db.RemoveUserOrganizationParams{
-		UserGrn:   userGRN.String(),
-		OrgGrn:    orgGRN.String(),
-		UpdatedAt: stamp(time.Now().UTC()),
-	})
-	return classify(err, "remove organization", nil)
-}
-
 // rowToUser converts a sqlc row into the domain aggregate. A stored
 // value that no longer parses is data corruption, hence internal.
 func rowToUser(row db.User) (*User, error) {
@@ -133,22 +105,13 @@ func rowToUser(row db.User) (*User, error) {
 	if err != nil {
 		return nil, errorx.Wrap(err, "user row grn", errorx.KindInternal)
 	}
-	orgs := make([]grn.GRN, 0, len(row.Organizations))
-	for _, s := range row.Organizations {
-		og, err := grn.Parse(s)
-		if err != nil {
-			return nil, errorx.Wrap(err, "user row organization", errorx.KindInternal)
-		}
-		orgs = append(orgs, og)
-	}
 	return &User{
-		grn:           g,
-		nickname:      row.Nickname,
-		organizations: orgs,
-		roles:         row.Roles,
-		policies:      row.Policies,
-		createdAt:     row.CreatedAt.Time,
-		updatedAt:     row.UpdatedAt.Time,
+		grn:       g,
+		nickname:  row.Nickname,
+		roles:     row.Roles,
+		policies:  row.Policies,
+		createdAt: row.CreatedAt.Time,
+		updatedAt: row.UpdatedAt.Time,
 	}, nil
 }
 
@@ -168,21 +131,7 @@ func classify(err error, op string, notFound error) error {
 	return errorx.Wrap(err, "user store: "+op)
 }
 
-// grnStrings renders GRNs for text[] columns. Nil stays nil so a nil
-// Patch slice leaves the column unchanged.
-func grnStrings(gs []grn.GRN) []string {
-	if gs == nil {
-		return nil
-	}
-	out := make([]string, len(gs))
-	for i, g := range gs {
-		out[i] = g.String()
-	}
-	return out
-}
-
-// strs normalizes a nil slice to empty: pgx encodes a nil slice as
-// NULL, which the NOT NULL array columns reject.
+// strs normalizes a nil slice to empty: pgx encodes a nil slice as// NULL, which the NOT NULL array columns reject.
 func strs(s []string) []string {
 	if s == nil {
 		return []string{}

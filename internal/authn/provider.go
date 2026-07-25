@@ -11,8 +11,9 @@ type Provider interface {
 	// Name is the provider key used in API paths, e.g. "google".
 	Name() string
 	// AuthCodeURL returns the provider authorization URL for the given
-	// OIDC state and PKCE S256 challenge.
-	AuthCodeURL(state, challenge string) string
+	// OIDC state and PKCE code verifier; the provider derives the S256
+	// challenge.
+	AuthCodeURL(state, verifier string) string
 	// Exchange trades an authorization code for the verified Identity.
 	// verifier is the PKCE code verifier generated alongside state.
 	Exchange(ctx context.Context, code, verifier string) (*Identity, error)

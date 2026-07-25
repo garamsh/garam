@@ -2,8 +2,6 @@ package httpapi
 
 import (
 	"crypto/rand"
-	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"net/http"
 	"time"
@@ -43,7 +41,7 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request, provider api.Prov
 	}
 	s.setCookie(w, stateCookie, state, oauthFlowTTL)
 	s.setCookie(w, verifierCookie, verifier, oauthFlowTTL)
-	http.Redirect(w, r, p.AuthCodeURL(state, s256(verifier)), http.StatusFound)
+	http.Redirect(w, r, p.AuthCodeURL(state, verifier), http.StatusFound)
 }
 
 // OauthCallback completes the flow: it validates state, exchanges the
@@ -187,10 +185,4 @@ func randomHex(n int) (string, error) {
 		return "", errorx.Wrap(err, "random")
 	}
 	return hex.EncodeToString(b[:]), nil
-}
-
-// s256 is the PKCE S256 challenge for a verifier.
-func s256(verifier string) string {
-	sum := sha256.Sum256([]byte(verifier))
-	return base64.RawURLEncoding.EncodeToString(sum[:])
 }

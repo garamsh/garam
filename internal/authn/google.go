@@ -52,10 +52,10 @@ func NewGoogleProvider(ctx context.Context, cfg GoogleConfig) (Provider, error) 
 // Name returns the provider key used in API paths.
 func (g *googleProvider) Name() string { return "google" }
 
-// AuthCodeURL returns the Google authorization URL with a PKCE S256
-// challenge.
-func (g *googleProvider) AuthCodeURL(state, challenge string) string {
-	return g.oauth2.AuthCodeURL(state, oauth2.S256ChallengeOption(challenge))
+// AuthCodeURL returns the Google authorization URL with the PKCE S256
+// challenge derived from the verifier.
+func (g *googleProvider) AuthCodeURL(state, verifier string) string {
+	return g.oauth2.AuthCodeURL(state, oauth2.S256ChallengeOption(verifier))
 }
 
 // Exchange trades the authorization code for tokens and verifies the

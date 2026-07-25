@@ -1,0 +1,67 @@
+syntax = "proto3";
+
+package gaon.authz.v1;
+
+// AuthzService is the policy engine's wire contract (ADR-0003). The
+// caller collects the statements that apply to the subject; the engine
+// matches strings only and never imports a domain.
+service AuthzService {
+  // Check answers whether the subject may perform the action on the
+  // object under the given statements.
+  rpc Check(CheckRequest) returns (CheckResponse);
+
+  // Explain answers the same question and reports which statements
+  // matched and which produced the final decision.
+  rpc Explain(ExplainRequest) returns (ExplainResponse);
+}
+
+// Effect is a statement's outcome when it matches (ADR-0002).
+enum Effect {
+  EFFECT_UNSPECIFIED = 0;
+  EFFECT_ALLOW = 1;
+  EFFECT_DENY = 2;
+}
+
+// Statement is one IAM-style rule. Action and Resource entries are
+// patterns: "*" matches any run of characters, "?" exactly one.
+message Statement {
+  string sid = 1;
+  Effect effect = 2;
+  repeated string action = 3;
+  repeated string resource = 4;
+}
+
+// CheckRequest is one authorization question: may the subject perform
+// the action on the object, given the statements collected for it.
+message CheckRequest {
+  string subject_grn = 1;
+  string object_grn = 2;
+  string action = 3;
+  repeated Statement statements = 4;
+}
+
+message CheckResponse {
+  // allowed is the final decision: explicit Deny wins, otherwise any
+  // matching Allow permits. The zero value is deny.
+  bool allowed = 1;
+}
+
+// ExplainRequest mirrors CheckRequest.
+message ExplainRequest {
+  string subject_grn = 1;
+  string object_grn = 2;
+  string action = 3;
+  repeated Statement statements = 4;
+}
+
+message ExplainResponse {
+  bool allowed = 1;
+  repeated StatementTrace traces = 2;
+}
+
+// StatementTrace records one statement's contribution to a check.
+message StatementTrace {
+  string sid = 1;
+  bool matched = 2;
+  Effect effect = 3;
+}

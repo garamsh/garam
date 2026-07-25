@@ -12,8 +12,11 @@ workflow last. Each tier depends only on the tier below it.
   call sites.
 - `org` gains an `Invitation` aggregate: orgs grow by invitation and
   acceptance, not open signup. Minimal org roles (`owner`, `admin`,
-  `member`) on membership, enforced directly — the Rego authz engine
-  wires in at P1.
+  `member`) on membership, expressed as IAM-style policy statements
+  and enforced by the authz service (ADR-0002).
+- Single cobra CLI (`cmd/gaon`): `serve api` (OpenAPI HTTP) and
+  `serve authz` (gRPC policy engine) run as independent packages
+  (ADR-0003).
 - The `agent` domain is excluded (still being planned); its code stays
   untouched.
 - Postgres-backed `Store` implementations via sqlc. No in-memory

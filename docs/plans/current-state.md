@@ -26,9 +26,10 @@
 ## Open
 
 - **MVP** (roadmap, issue #12) — Google OAuth sign-in (`internal/authn`),
-  invitation-based orgs, org-scoped roles, Postgres-backed stores, and
-  the OpenAPI-first HTTP API. Not started. The `agent` domain is
-  excluded from the MVP (still being planned).
+  invitation-based orgs, org roles enforced by the authz gRPC service
+  (IAM-style policies, ADR-0002/0003), Postgres-backed stores, and the
+  OpenAPI-first HTTP API. Not started. The `agent` domain is excluded
+  from the MVP (still being planned).
 - **authz landing** (P1) — the authz implementation WIP is preserved
   outside the repo (`~/gaon-authz-wip/`); it needs the file split
   required by `docs/convention/go.md` before landing.

@@ -6,7 +6,7 @@
 
 - Module name: `github.com/garamsh/gaon`.
 - GRN value type with `New` / `Parse` / `Validate` / `String` /
-  `IsZero` and tests. Organization segment fixed to `garam`.
+  `IsZero` and tests. Org/project segments identify owning resources (ADR-0001).
 - `errorx` package with gRPC-aligned kinds, `New` / `Wrap` / `IsKind`
   / `KindOf`, and tests.
 - Domain interfaces declared: `org.Store`, `user.Store`,

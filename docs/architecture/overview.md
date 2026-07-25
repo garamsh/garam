@@ -39,7 +39,7 @@ collaborate on a shared plan.
 - `internal/cli/` — cobra commands + wiring (`serve api` | `serve authz` | `migrate`).
 - `internal/api/` — handlers implementing the generated ServerInterface.
 - `internal/authn/` — OIDC provider abstraction, sessions.
-- `internal/authz/` — policy engine: model, evaluator, stores, gRPC server.
+- `internal/authz/` — policy engine: model, evaluator, gRPC server.
 - `internal/org/` — organizations, groups, projects, memberships, invitations.
 - `internal/user/` — human identities.
 - `internal/agent/` — autonomous identities (planning).
@@ -70,8 +70,6 @@ contract is `proto/gaon/authz/v1`.
 | `authz.Subject` | `internal/authz` | actor interface |
 | `authz.Object` | `internal/authz` | target interface |
 | `authz.Evaluator` | `internal/authz` | policy evaluator (native, IAM-style) |
-| `authz.Checker` | `internal/authz` | role enrich + evaluate |
-| `authz.Manager` | `internal/authz` | grant/revoke + audit |
 
 ## Decisions
 
@@ -88,8 +86,8 @@ contract is `proto/gaon/authz/v1`.
 
 ## Non-functional goals
 
-- **Deterministic decisions** — `Manager.Explain` can reproduce why a
-  request was allowed or denied.
+- **Deterministic decisions** — the engine's `Explain` RPC can
+  reproduce why a request was allowed or denied.
 - **Transport-agnostic errors** — `errorx` flows over HTTP, gRPC, CLI
   without translation at the source; the HTTP mapping lives in
   `internal/api`.

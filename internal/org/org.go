@@ -47,8 +47,9 @@ func NewOrganization(g grn.GRN, name string) *Organization {
 	return &Organization{grn: g, name: name, createdAt: now, updatedAt: now}
 }
 
-func (o *Organization) GRN() grn.GRN { return o.grn }
-func (o *Organization) Name() string { return o.name }
+func (o *Organization) GRN() grn.GRN         { return o.grn }
+func (o *Organization) Name() string         { return o.name }
+func (o *Organization) CreatedAt() time.Time { return o.createdAt }
 
 // Kind reports the resource kind for authz purposes.
 func (o *Organization) Kind() string { return ServiceTypeOrg }

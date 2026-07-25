@@ -20,7 +20,7 @@ lint:
 
 format:
 	gofmt -l .
-	goimports -l .
+	go run golang.org/x/tools/cmd/goimports@v0.48.0 -l .
 
 test:
 	go test ./...
@@ -31,7 +31,19 @@ build:
 mock:
 	mockery
 
-ci: format lint test build
+gen:
+	# regenerate oapi-codegen, sqlc, mockery output (pinned tool versions)
+
+check-gen: gen
+	# fail when committed generated code is stale
+
+db-up / db-down:
+	# dockerised dev Postgres
+
+e2e:
+	# store round-trips against real Postgres (needs db-up)
+
+ci: format lint test build check-gen
 ```
 
 ## GitHub Actions

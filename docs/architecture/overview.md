@@ -57,7 +57,7 @@ concern.
 
 | Decision | Reason | Where |
 |----------|--------|-------|
-| GRN organization = `garam` | Company identity for the org segment. Revise if multitenancy arrives. | [grn-model.md](./grn-model.md) |
+| GRN org/project = owning resource identifiers | Tenancy is structural; reserved `root` owns organizations. | [grn-model.md](./grn-model.md), [ADR-0001](./adr/0001-grn-segments.md) |
 | Rego package = `gaon.authz` | Policy namespace follows the service codename, not the org segment. | [authz.md](./authz.md) |
 | `Evaluator` is an interface | Swap Rego / in-process / hardcoded without touching call sites. | [authz.md](./authz.md) |
 | Store interfaces live next to their domain | Implementation swap at the package boundary. | [domains.md](./domains.md) |

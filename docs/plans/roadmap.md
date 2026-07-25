@@ -3,25 +3,34 @@
 gaon is built bottom-up: identity first, authorization second,
 workflow last. Each tier depends only on the tier below it.
 
-## MVP — Identity skeleton + API
+## MVP — Authentication + org permissions
 
 - GRN value type, `errorx`, domain types and `Store` interfaces for
-  `org` / `user` / `agent` (done on `develop`).
+  `org` / `user` / `agent` (done).
+- `internal/authn/` — OAuth provider abstraction (OIDC) with Google as
+  the first provider; more providers plug in later without touching
+  call sites.
+- `org` gains an `Invitation` aggregate: orgs grow by invitation and
+  acceptance, not open signup. Minimal org roles (`owner`, `admin`,
+  `member`) on membership, enforced directly — the Rego authz engine
+  wires in at P1.
+- The `agent` domain is excluded (still being planned); its code stays
+  untouched.
 - Postgres-backed `Store` implementations via sqlc. No in-memory
-  domain stores — persistence goes straight to Postgres. (The `authz`
-  package keeps its in-memory stores as test doubles only.)
+  domain stores. (The `authz` package keeps its in-memory stores as
+  test doubles only.)
 - OpenAPI spec as the source of truth for the HTTP API; server code
   generated from the spec (oapi-codegen, stdlib `net/http`). A thin
   `cmd/` binary wires handlers to the stores.
 - Migrations under `migrations/` (golang-migrate). Dockerised Postgres
   for dev; integration tests against real Postgres.
-- Output: HTTP CRUD for org/user/agent backed by Postgres, `make ci`
-  green.
+- Output: Google sign-in, org create/invite/accept, role-enforced
+  org-scoped APIs, `make ci` green.
 
 ## P1 — authz landing + adapters
 
-- Land the authz implementation (written, uncommitted on `develop`)
-  with the file split required by `docs/convention/go.md`.
+- Land the authz implementation (written, preserved outside the repo
+  as WIP) with the file split required by `docs/convention/go.md`.
 - `User.AsSubject() authz.Subject` and `Agent.AsSubject()` adapter
   functions, plus `AsObject()` where needed.
 - Domain types stay free of authz method clutter.

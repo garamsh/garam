@@ -68,15 +68,16 @@ responsibilities.
 
 | Domain | Interface | postgres | memory | other |
 |--------|-----------|----------|--------|-------|
-| org | ✅ (`store.go`) | ❌ | ❌ | — |
-| user | ✅ (`store.go`) | ❌ | ❌ | — |
-| agent | ✅ (`store.go`) | ❌ | ❌ | — |
+| org | ✅ (`store.go`) | ❌ | not planned | — |
+| user | ✅ (`store.go`) | ❌ | not planned | — |
+| agent | ✅ (`store.go`) | ❌ | not planned | — |
 | authz.RoleStore | ✅ (`role.go`) | ❌ | ✅ (`NewMemoryRoleStore`) | — |
 | authz.PolicyStore | ✅ (`policy_store.go`) | ❌ | ✅ (`NewMemoryPolicyStore`) | — |
 | authz.Manager | ✅ (`manager.go`) | ❌ | ✅ (`NewMemoryManager`) | — |
 
-The `authz` package already has in-memory implementations for its own
-use (testing, dev). Domain `memory.go` files are planned in
+The `authz` package keeps in-memory implementations as test doubles
+(testing, dev). Domain stores go straight to Postgres — no domain
+`memory.go` files are planned. See
 [`../plans/roadmap.md`](../plans/roadmap.md).
 
 ## Known gap

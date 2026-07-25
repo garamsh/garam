@@ -1,8 +1,6 @@
 package cli
 
 import (
-	"errors"
-	"fmt"
 	"net/http"
 	"time"
 
@@ -13,6 +11,7 @@ import (
 	"github.com/garamsh/gaon/internal/api"
 	"github.com/garamsh/gaon/internal/authn"
 	"github.com/garamsh/gaon/internal/authz"
+	"github.com/garamsh/gaon/internal/errorx"
 	"github.com/garamsh/gaon/internal/org"
 	"github.com/garamsh/gaon/internal/user"
 )
@@ -35,11 +34,11 @@ func serveAPI(cmd *cobra.Command) error {
 
 	databaseURL := envOr("GAON_DATABASE_URL", "")
 	if databaseURL == "" {
-		return errors.New("GAON_DATABASE_URL is required")
+		return errorx.New(errorx.KindInvalidArgument, "GAON_DATABASE_URL is required")
 	}
 	pool, err := pgxpool.New(ctx, databaseURL)
 	if err != nil {
-		return fmt.Errorf("postgres: %w", err)
+		return errorx.Wrap(err, "postgres", errorx.KindUnavailable)
 	}
 	defer pool.Close()
 
@@ -49,12 +48,12 @@ func serveAPI(cmd *cobra.Command) error {
 		RedirectURL:  envOr("GOOGLE_REDIRECT_URL", ""),
 	})
 	if err != nil {
-		return fmt.Errorf("google provider: %w", err)
+		return errorx.Wrap(err, "google provider")
 	}
 
 	ttl, err := time.ParseDuration(envOr("GAON_SESSION_TTL", "168h"))
 	if err != nil {
-		return fmt.Errorf("GAON_SESSION_TTL: %w", err)
+		return errorx.Wrap(err, "GAON_SESSION_TTL", errorx.KindInvalidArgument)
 	}
 	srv := api.NewServer(
 		user.NewPostgresStore(pool),

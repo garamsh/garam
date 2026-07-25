@@ -2,12 +2,13 @@ package cli
 
 import (
 	"errors"
-	"fmt"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/spf13/cobra"
+
+	"github.com/garamsh/gaon/internal/errorx"
 )
 
 // newMigrateCommand constructs `gaon migrate`: apply all pending
@@ -19,16 +20,16 @@ func newMigrateCommand() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			databaseURL := envOr("GAON_DATABASE_URL", "")
 			if databaseURL == "" {
-				return errors.New("GAON_DATABASE_URL is required")
+				return errorx.New(errorx.KindInvalidArgument, "GAON_DATABASE_URL is required")
 			}
 			dir := envOr("GAON_MIGRATIONS_DIR", "migrations")
 			m, err := migrate.New("file://"+dir, databaseURL)
 			if err != nil {
-				return fmt.Errorf("migrations: %w", err)
+				return errorx.Wrap(err, "migrations")
 			}
 			defer func() { _, _ = m.Close() }()
 			if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
-				return fmt.Errorf("migrations: %w", err)
+				return errorx.Wrap(err, "migrations")
 			}
 			cmd.Println("migrations applied")
 			return nil

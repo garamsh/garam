@@ -39,3 +39,14 @@ aligned with gRPC status codes.
   between `internal/api` and `internal/authz` is a violation.
 - Adding a domain means adding its action constants and, optionally,
   registering them at the composition root — no engine change.
+
+## Staged adoption
+
+- **Stage 1 (MVP).** `cmd/gaon` exposes `serve api` and `serve authz`
+  from day one, but the api server may use the in-process native
+  evaluator, importing `internal/authz` for the `Evaluator` seam and
+  its implementation. Business-logic independence still applies: no
+  handler logic in `authz`, no policy logic in `api`.
+- **Stage 2 (P2).** The gRPC server and client land; the api server's
+  import of `internal/authz` is replaced by the gRPC client and the
+  full no-import rule takes effect. Tracked in the P2 authz issue.

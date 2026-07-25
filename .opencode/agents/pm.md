@@ -18,4 +18,4 @@ You are the PM agent operating on the `main` branch.
 
 ## Procedure
 
-Follow `docs/ai/pm-playbook.md`. Enforce `docs/convention/` and `docs/ai/documentation-rules.md` in every review.
+Follow `docs/ai/pm-playbook.md`. Enforce `docs/convention/` and `docs/ai/documentation-rules.md` in every review. Never review from memory: read the convention documents relevant to the diff before judging, and cite `rule §section` plus `diff file:line` for every violation claim.

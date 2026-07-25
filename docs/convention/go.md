@@ -56,7 +56,7 @@ Three groups separated by blank lines: stdlib, third-party, internal.
 import (
     "context"
 
-    "github.com/open-policy-agent/opa/v1/rego"
+    "google.golang.org/grpc"
 
     "github.com/garamsh/gaon/internal/errorx"
     "github.com/garamsh/gaon/internal/grn"

@@ -1,0 +1,6 @@
+# Conventions are owned by the PM; worker changes to these paths require PM review.
+/docs/convention/ @garamsh
+/docs/ai/ @garamsh
+/.opencode/ @garamsh
+/.claude/ @garamsh
+/.github/ @garamsh

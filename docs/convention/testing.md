@@ -14,8 +14,8 @@
 | Layer | Scope | Mocks | Where |
 |-------|-------|-------|-------|
 | Unit | one function or type | replace at module boundaries (DB, HTTP, time, FS) | `<domain>/<file>_test.go` |
-| Integration | modules cooperating | external systems only; SUT is real | `tests/integration/` (planned) |
-| E2E | built binary against real infra | none | `e2e/` (planned) |
+| Integration | modules cooperating | external systems only; SUT is real | not yet used |
+| E2E | built binary against real infra | none | `e2e/` |
 
 No testcontainers in integration. Real services are an e2e concern.
 

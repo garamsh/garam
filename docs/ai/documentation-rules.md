@@ -4,21 +4,11 @@ Applies to every file under `docs/` and to GitHub artifacts (issues, PRs, commen
 
 ## Layout
 
-```
-docs/
-├── README.md
-├── convention/       # rules every contributor follows; PM-owned
-│   └── *.md
-├── architecture/     # current system shape and the decisions behind it
-│   ├── *.md
-│   └── adr/          # one file per decision
-├── plans/            # active work, then archived
-│   ├── README.md
-│   ├── roadmap.md
-│   ├── current-state.md
-│   └── archive/      # completed plans, kept for reference
-└── ai/               # agent-only procedures; never deleted
-```
+- `README.md` — index of everything below.
+- `convention/` — rules every contributor follows; PM-owned.
+- `architecture/` — current system shape and the decisions behind it; `adr/` holds one file per decision.
+- `plans/` — active work, then archived; `archive/` keeps completed plans for reference.
+- `ai/` — agent-only procedures; never deleted.
 
 Roles:
 

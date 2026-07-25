@@ -14,7 +14,7 @@ Operating procedure for worker agents (task branches). You implement assigned wo
 - Keep the diff surgical: no drive-by refactors, no reformatting untouched code, no unrequested features.
 - Follow `docs/convention/` exactly. If a convention seems wrong for this case, implement per convention anyway and note the problem in the PR description — the PM decides.
 - Write or update tests per `docs/convention/testing.md`.
-- If your change alters module structure, update `docs/architecture/` accordingly, following `docs/ai/documentation-rules.md`.
+- If your change alters module structure, update `docs/architecture/` accordingly, following `docs/convention/documentation.md`.
 
 ## Opening the PR
 
@@ -25,8 +25,7 @@ Operating procedure for worker agents (task branches). You implement assigned wo
 
 ## Responding to review
 
-- Address every comment or explain why you should not. Do not silently ignore feedback.
-- Push fixes as new commits to the same branch; do not open a replacement PR.
+Follow the response rules in `docs/convention/review.md`: address or rebut every point, push fixes to the same branch.
 
 ## Limits
 

@@ -11,13 +11,18 @@ Rules every contributor follows. PR review checks against this index. The PM own
 ## Stack-neutral
 
 - [comments.md](./comments.md) — docstrings, inline comments, TODO
+- [style.md](./style.md) — naming and pattern consistency in code
 - [runtime-safety.md](./runtime-safety.md) — types, boundaries, error handling
 - [testing.md](./testing.md) — test layers, naming, mocking
-- [git.md](./git.md) — branches, commits, PR titles
+- [git.md](./git.md) — branches, commits, PR titles, merging
+- [review.md](./review.md) — what makes a review valid; how authors respond
+- [documentation.md](./documentation.md) — what makes documentation valid
 - [planning.md](./planning.md) — PLAN.md structure for non-trivial work
 - [ci.md](./ci.md) — local ↔ CI parity, pre-commit hooks
 
-Documentation rules live in [docs/ai/documentation-rules.md](../ai/documentation-rules.md).
+## Independence
+
+Each convention file is self-contained: reading it alone is enough to apply its rules. Cross-references may mark scope boundaries but never hold required content. No rule appears in two files.
 
 ## Precedence
 

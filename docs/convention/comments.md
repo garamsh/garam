@@ -15,6 +15,14 @@ constraint, deliberate trade-off.
 One sentence usually. Past two or three sentences, refactor the code
 and move the explanation to a docstring on a named function or type.
 
+## Voice
+
+Write comments in declarative or imperative mood, stating facts:
+`returns the cached token`, `retries once on timeout`. Never narrate
+("this will now…"), apologize ("unfortunately we have to…"), or
+justify the author's choices ("I chose this because…") — rationale
+belongs in the commit message or an ADR.
+
 ## Format
 
 - Doc comments start with the declared name.

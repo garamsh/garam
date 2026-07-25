@@ -1,6 +1,6 @@
-# Documentation Rules
+# Documentation Conventions
 
-Applies to every file under `docs/` and to GitHub artifacts (issues, PRs, comments). Violations are grounds for PR rejection.
+What makes documentation valid in this project. Applies to every file under `docs/` and to GitHub artifacts (issues, PRs, comments). Violations are grounds for PR rejection. For review artifacts specifically, `review.md` adds stricter rules.
 
 ## Layout
 
@@ -15,7 +15,7 @@ Roles:
 - **convention/** — "we write code like this." Enforced in review.
 - **architecture/** — "the system looks like this, and here is why." Decisions rarely change; new ADRs are appended.
 - **plans/** — "we are working on this now." Moved to `archive/` when the work ships or is dropped.
-- **ai/** — operating procedures for agents (bootstrap, PM playbook, worker guide, this file).
+- **ai/** — operating procedures for agents (bootstrap, PM/worker/QA guides, this file's predecessor).
 
 ## Keep it maintainable
 

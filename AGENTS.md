@@ -20,12 +20,12 @@ One decision-maker merges; many workers implement; QA hunts for problems but fix
 | Comment on PRs / issues | Yes | Respond only | Forbidden |
 | Delete remote branches | Merged or confirmed-stale only | Forbidden | Forbidden |
 
-Detailed procedures: `docs/ai/pm-playbook.md`, `docs/ai/worker-guide.md`, `docs/ai/qa-guide.md`.
+Detailed procedures: `docs/ai/pm-guide.md`, `docs/ai/worker-guide.md`, `docs/ai/qa-guide.md`.
 
 ## Rules that apply to every agent
 
 - Follow `docs/convention/` for all code. Conventions beat personal preference.
-- Follow `docs/ai/documentation-rules.md` for all documentation.
+- Follow `docs/convention/documentation.md` for all documentation.
 - Never commit secrets. Never push directly to `main`; all changes land via PR.
 - Keep diffs surgical: every changed line traces to the assigned task.
 - Match the user's language in conversation; code, comments, and documents are written in English.

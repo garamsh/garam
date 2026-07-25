@@ -12,9 +12,12 @@ Rules every contributor follows. PR review checks against these.
 - [errors.md](./convention/errors.md)
 - [naming.md](./convention/naming.md)
 - [comments.md](./convention/comments.md)
+- [style.md](./convention/style.md)
 - [runtime-safety.md](./convention/runtime-safety.md)
 - [testing.md](./convention/testing.md)
 - [git.md](./convention/git.md)
+- [review.md](./convention/review.md)
+- [documentation.md](./convention/documentation.md)
 - [planning.md](./convention/planning.md)
 - [ci.md](./convention/ci.md)
 
@@ -41,11 +44,9 @@ Active work, milestones, and current state.
 
 Operating procedures for AI agents working on this repository.
 
-- [ai/pm-playbook.md](./ai/pm-playbook.md) — PM agent procedure
+- [ai/pm-guide.md](./ai/pm-guide.md) — PM agent procedure
 - [ai/worker-guide.md](./ai/worker-guide.md) — worker agent procedure
 - [ai/qa-guide.md](./ai/qa-guide.md) — QA agent procedure
-- [ai/documentation-rules.md](./ai/documentation-rules.md) — how `docs/`
-  and GitHub artifacts are written
 - [ai/BOOTSTRAP.md](./ai/BOOTSTRAP.md) — one-time project initialization
   (complete)
 

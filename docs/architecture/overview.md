@@ -29,25 +29,20 @@ collaborate on a shared plan.
 
 ## Module boundaries
 
-```
-github.com/garamsh/gaon
-├── api/          # OpenAPI spec (source of truth) + generated server
-├── proto/        # authz gRPC service definition + buf-generated code
-├── cmd/gaon/     # thin entrypoint for the cobra CLI
-├── migrations/   # SQL migrations (golang-migrate); sqlc schema source
-├── e2e/          # store round-trips against real Postgres
-├── internal/
-│   ├── grn/      # identifier — shared primitive
-│   ├── errorx/   # typed errors — shared primitive
-│   ├── cli/      # cobra commands + wiring (serve api | serve authz | migrate)
-│   ├── api/      # handlers implementing the generated ServerInterface
-│   ├── authn/    # OIDC provider abstraction, sessions
-│   ├── authz/    # policy engine: model, evaluator, stores, gRPC server
-│   ├── org/      # organizations, groups, projects, memberships, invitations
-│   ├── user/     # human identities
-│   └── agent/    # autonomous identities (planning)
-└── (docs/)
-```
+- `api/` — OpenAPI spec (source of truth) + generated server.
+- `proto/` — authz gRPC service definition + buf-generated code.
+- `cmd/gaon/` — thin entrypoint for the cobra CLI.
+- `migrations/` — SQL migrations (golang-migrate); sqlc schema source.
+- `e2e/` — store round-trips against real Postgres.
+- `internal/grn/` — identifier; shared primitive.
+- `internal/errorx/` — typed errors; shared primitive.
+- `internal/cli/` — cobra commands + wiring (`serve api` | `serve authz` | `migrate`).
+- `internal/api/` — handlers implementing the generated ServerInterface.
+- `internal/authn/` — OIDC provider abstraction, sessions.
+- `internal/authz/` — policy engine: model, evaluator, stores, gRPC server.
+- `internal/org/` — organizations, groups, projects, memberships, invitations.
+- `internal/user/` — human identities.
+- `internal/agent/` — autonomous identities (planning).
 
 `grn` and `errorx` are the only shared packages. Domains cooperate
 through `grn.GRN`, never through each other's concrete types. `api`

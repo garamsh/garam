@@ -3,10 +3,10 @@
 gaon is built bottom-up: identity first, authorization second,
 workflow last. Each tier depends only on the tier below it.
 
-## MVP — Authentication + org permissions
+## MVP — Authentication + org permissions (done)
 
 - GRN value type, `errorx`, domain types and `Store` interfaces for
-  `org` / `user` / `agent` (done).
+  `org` / `user` / `agent`.
 - `internal/authn/` — OAuth provider abstraction (OIDC) with Google as
   the first provider; more providers plug in later without touching
   call sites.
@@ -17,34 +17,32 @@ workflow last. Each tier depends only on the tier below it.
 - Single cobra CLI (`cmd/gaon`): `serve api` (OpenAPI HTTP) and
   `serve authz` (gRPC policy engine) run as independent packages
   (ADR-0003).
-- The `agent` domain is excluded (still being planned); its code stays
-  untouched.
+- The `agent` domain stayed excluded (still being planned).
 - Postgres-backed `Store` implementations via sqlc. No in-memory
-  domain stores. (The `authz` package keeps its in-memory stores as
-  test doubles only.)
+  domain stores.
 - OpenAPI spec as the source of truth for the HTTP API; server code
-  generated from the spec (oapi-codegen, stdlib `net/http`). A thin
-  `cmd/` binary wires handlers to the stores.
+  generated from the spec (oapi-codegen, stdlib `net/http`).
 - Migrations under `migrations/` (golang-migrate). Dockerised Postgres
-  for dev; integration tests against real Postgres.
-- Output: Google sign-in, org create/invite/accept, role-enforced
-  org-scoped APIs, `make ci` green.
+  for dev; e2e store round-trips against real Postgres.
 
-## P1 — authz landing + adapters
+## P1 — authz engine (done)
 
-- Land the authz implementation (written, preserved outside the repo
-  as WIP) with the file split required by `docs/convention/go.md`.
-- `User.AsSubject() authz.Subject` and `Agent.AsSubject()` adapter
-  functions, plus `AsObject()` where needed.
-- Domain types stay free of authz method clutter.
-- Output: `chk.Allow(ctx, user.AsSubject(u), doc.AsObject(d), "doc:read")`
-  compiles and runs.
+- IAM-style `Statement` model and native `StatementEvaluator`
+  (ADR-0002); org roles evaluated as statements.
+- gRPC transport (ADR-0003 stage 2): `gaon serve authz` runs the
+  engine as a separate process; the api server authorizes through the
+  gRPC client only.
+- Full wildcard semantics (`*`, `?`) in statement patterns.
 
 ## P2 — authz persistence & policy versioning
 
-- `postgres.go` for `authz.RoleStore` and `PolicyStore`.
-- `policies` + append-only `policy_versions` tables; evaluation over a
-  compiled policy set, invalidated on change.
+- Postgres `policies` + append-only `policy_versions` (ADR-0002);
+  policies become org-managed data instead of caller-supplied
+  statement sets.
+- Evaluation over a per-org parsed statement set, cached in the
+  engine and invalidated on policy change (`LISTEN`/`NOTIFY`).
+- Policy lifecycle APIs on the authz service (CRUD, activate, roll
+  back); audit of every change.
 - Output: permission state survives restarts; every policy change is
   versioned and auditable.
 

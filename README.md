@@ -27,5 +27,5 @@ CI and local run the same commands (`make ci`). See
 
 ## Development model
 
-This repository is developed by AI agents under two roles (PM and
-worker). See [AGENTS.md](./AGENTS.md) for the role matrix and rules.
+This repository is developed by AI agents under three roles (PM,
+worker, QA). See [AGENTS.md](./AGENTS.md) for the role matrix and rules.

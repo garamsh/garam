@@ -12,10 +12,11 @@
 - Domain interfaces declared: `org.Store`, `user.Store`,
   `agent.Store`, plus aggregate types `Organization`, `Group`,
   `Project`, `User`, `Agent`.
-- `authz` interfaces: `Subject`, `Object`, `RoleStore`, `PolicyStore`,
-  `Evaluator`, `Manager`, `Checker`. (Implementations — Rego
-  evaluator, in-memory stores, tests — are written but unlanded; they
-  sit in the WIP backup and land under P1.)
+- `authz` engine: IAM-style `Statement` model and native
+  `StatementEvaluator` (ADR-0002), served over gRPC (ADR-0003).
+  Legacy interfaces (`Subject`, `Object`, `Checker`, `Manager`,
+  `RoleStore`, `PolicyStore`) remain but are unused — removal tracked
+  in issue #28.
 - Mockery v3 setup (`.mockery.yaml`) generating Store mocks.
 - Documentation under `docs/`.
 - CI plumbing: `Makefile`, `.github/workflows/ci.yml`. Git hooks
@@ -43,14 +44,12 @@
 
 ## Open
 
-- **authz landing** (P1) — the authz implementation WIP is preserved
-  outside the repo (`~/gaon-authz-wip/`); it needs the file split
-  required by `docs/convention/go.md` before landing.
-- **Subject/Object adapters** (P1) — `User` and `Agent` lack
-  `Type() string`; adapter functions or method additions needed before
-  the `Checker` can be exercised on real domain types.
-- **authz persistence & policy versioning** (P2) — no Postgres
-  implementation yet.
+- **Dead authz code removal** (#28) — legacy interfaces and their
+  mocks have no implementations or references.
+- **Membership duplication + org.Patch cleanup** (#23).
+- **authz persistence & policy versioning** (P2) — policies are
+  caller-supplied today; Postgres `policies` + append-only
+  `policy_versions` (ADR-0002) not started.
 - **Workflow core** (P3) — domain not created.
 
 ## Known corrections applied
@@ -68,5 +67,4 @@
 Pulled from `// TODO` lines and review notes. Each item gets its own
 PLAN.md when picked up.
 
-- Add `User` / `Agent` adapter functions for `authz.Subject` /
-  `authz.Object`.
+- Configurable dev-DB port for parallel worktrees (#33).

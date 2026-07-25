@@ -5,21 +5,17 @@ decisions are recorded here.
 
 ## Layout
 
-```
-<module>/
-├── cmd/<binary>/main.go
-├── internal/
-│   ├── <domain>/
-│   │   ├── <domain>.go     # aggregate, sentinel errors
-│   │   ├── service.go      # Service interface + impl + NewService
-│   │   ├── store.go        # Store interface
-│   │   ├── postgres.go | memory.go | redis.go   # impl
-│   │   └── mocks/          # mockery v3 output
-│   └── <crosscutting>/     # only when ≥3 domains depend on it
-├── docs/
-├── go.mod / go.sum
-└── Makefile
-```
+- `cmd/<binary>/main.go` — thin entrypoint; the only place that
+  constructs concrete types.
+- `internal/<domain>/` — one package per domain:
+  - `<domain>.go` — aggregate types, sentinel errors.
+  - `service.go` — `Service` interface + impl + `NewService`, when the
+    domain has behavior coordinating dependencies.
+  - `store.go` — `Store` interface.
+  - `postgres.go` (or another vendor-named file) — implementation.
+  - `mocks/` — mockery v3 output.
+- `internal/<crosscutting>/` — only when ≥3 domains depend on it.
+- `docs/`, `go.mod` / `go.sum`, `Makefile`.
 
 Banned folder/file names at any level: `model.go`, `utils/`, `helpers/`,
 `common/`, `ext/`, `adapter/`, `driver/`, `platform/`, `infra/`,

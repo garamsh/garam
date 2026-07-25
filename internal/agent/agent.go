@@ -8,7 +8,7 @@ package agent
 import (
 	"time"
 
-	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/gaon/internal/grn"
 )
 
 // ServiceType is the canonical GRN service-type for agents.

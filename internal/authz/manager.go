@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/gaon/internal/grn"
 )
 
 // ChangeAction enumerates the kinds of permission-state changes that

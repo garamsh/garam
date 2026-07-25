@@ -7,7 +7,7 @@ package authz_test
 import (
 	"context"
 
-	"github.com/garamsh/garam/internal/authz"
+	"github.com/garamsh/gaon/internal/authz"
 	mock "github.com/stretchr/testify/mock"
 )
 

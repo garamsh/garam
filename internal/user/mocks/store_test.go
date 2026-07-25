@@ -7,8 +7,8 @@ package user_test
 import (
 	"context"
 
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/user"
+	"github.com/garamsh/gaon/internal/grn"
+	"github.com/garamsh/gaon/internal/user"
 	mock "github.com/stretchr/testify/mock"
 )
 

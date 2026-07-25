@@ -7,8 +7,8 @@ package org_test
 import (
 	"context"
 
-	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/org"
+	"github.com/garamsh/gaon/internal/grn"
+	"github.com/garamsh/gaon/internal/org"
 	mock "github.com/stretchr/testify/mock"
 )
 

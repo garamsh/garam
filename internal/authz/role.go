@@ -3,7 +3,7 @@ package authz
 import (
 	"context"
 
-	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/gaon/internal/grn"
 )
 
 // RoleAssignment records which roles a subject holds at a given scope.

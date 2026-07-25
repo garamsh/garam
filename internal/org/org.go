@@ -8,7 +8,7 @@ package org
 import (
 	"time"
 
-	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/gaon/internal/grn"
 )
 
 // ServiceType* are the canonical GRN service-type prefixes used by

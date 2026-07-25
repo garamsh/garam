@@ -3,7 +3,7 @@ package org
 import (
 	"context"
 
-	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/gaon/internal/grn"
 )
 
 // ListFilter scopes a List call. Limit of 0 means "no limit".

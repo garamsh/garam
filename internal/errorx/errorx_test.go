@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/gaon/internal/errorx"
 )
 
 func TestNew(t *testing.T) {

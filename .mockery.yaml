@@ -7,16 +7,16 @@ filename: "{{.InterfaceName | firstLower}}_test.go"
 pkgname: "{{.SrcPackageName}}_test"
 structname: "Mock{{.InterfaceName}}"
 packages:
-  github.com/garamsh/garam/internal/org:
+  github.com/garamsh/gaon/internal/org:
     interfaces:
       Store: {}
-  github.com/garamsh/garam/internal/user:
+  github.com/garamsh/gaon/internal/user:
     interfaces:
       Store: {}
-  github.com/garamsh/garam/internal/agent:
+  github.com/garamsh/gaon/internal/agent:
     interfaces:
       Store: {}
-  github.com/garamsh/garam/internal/authz:
+  github.com/garamsh/gaon/internal/authz:
     interfaces:
       RoleStore: {}
       PolicyStore: {}

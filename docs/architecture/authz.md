@@ -1,113 +1,83 @@
 # Authorization
 
-Two layers: **role-based enrichment** and **Rego evaluation**. Roles
-live in data, policies live in code-shaped rules.
+Org-scoped permission decisions, served by an independent gRPC policy
+engine (`gaon serve authz`, see [ADR-0003](./adr/0003-single-cli-topology.md)).
+Policies are IAM-style documents (see
+[ADR-0002](./adr/0002-iam-style-policy-model.md)).
+
+## Policy document
+
+```json
+{
+  "Version": "2026-07-25",
+  "Statement": [
+    {
+      "Sid": "AllowOrgRead",
+      "Effect": "Allow",
+      "Action": ["org:read", "project:list"],
+      "Resource": ["grn:acme:*"]
+    }
+  ]
+}
+```
+
+- `Effect`: `Allow` | `Deny`.
+- `Action`: `<service_type>:<verb>` strings; `*` and `org:*` wildcards.
+  Constants are owned by the defining domain (`internal/org`,
+  `internal/user`, …). The engine matches strings only.
+- `Resource`: GRN patterns. `grn:acme:*` scopes to an org.
+- `Condition`: reserved; not evaluated in the MVP.
+
+## Evaluation
 
 ```
-Checker.Allow(...)
-  1. load subject's roles (RoleStore)
-  2. keep only object-scoped roles
-  3. delegate to Evaluator.Evaluate(Context)
-  4. return DecisionAllow | DecisionDeny
+Checker.Allow(subject, object, action)
+  1. collect statements: subject's attached policies (via roles/groups)
+     + policies attached to the subject directly
+  2. any matching Deny statement?          → DecisionDeny
+  3. else any matching Allow statement?    → DecisionAllow
+  4. else                                  → DecisionDeny (default)
 ```
+
+Matching = action pattern ∩ resource pattern both match. The per-org
+statement set is parsed once and cached in the engine; policy writes
+invalidate the org's cache (Postgres `LISTEN`/`NOTIFY`).
 
 ## Components
 
 | Component | Responsibility | Depends on |
 |-----------|----------------|------------|
+| `PolicyStore` | policy documents + append-only versions | Postgres |
 | `RoleStore` | subject × role × scope persistence | `grn.GRN` |
-| `PolicyStore` | named Rego source storage | string id |
-| `Manager` | grant/revoke lifecycle + audit log | `RoleStore` |
-| `Checker` | role enrich + evaluate | `RoleStore`, `Evaluator` |
-| `Evaluator` (Rego) | `Context` → `Decision` | OPA `rego` |
+| `Evaluator` | statement-set → `Decision` (native Go) | — |
+| `Manager` | grant/revoke/attach lifecycle + audit log | stores |
+| `Checker` | collect + evaluate | `RoleStore`, `Evaluator` |
 
-## Interfaces
-
-```go
-type Subject interface {
-    GRN() grn.GRN
-    Type() string
-    Roles() []string
-    Policies() []string
-}
-
-type Object interface {
-    GRN() grn.GRN
-    Type() string
-}
-
-type Decision int  // DecisionAllow | DecisionDeny
-
-type Context struct {
-    Subject Subject
-    Object  Object
-    Action  string             // "doc:read", "doc:write", ...
-    Env     map[string]string  // request context (IP, time, ...)
-}
-
-type Evaluator interface {
-    Evaluate(ctx context.Context, c Context) Decision
-}
-```
-
-## Rego policy
-
-- Package: `gaon.authz`
-- Query: `data.gaon.authz.allow`
-- Input: a projection of `Context`
-
-  ```rego
-  package gaon.authz
-
-  default allow := false
-
-  allow if {
-      some role in input.subject.roles
-      role == "admin"
-  }
-  ```
-
-- Policies live in `internal/authz/policies/<name>.rego`. Starter:
-  [`authz.rego`](../../internal/authz/policies/authz.rego).
-
-The package is `gaon.authz`, not `garam.authz`. See
-[grn-model.md §5](./grn-model.md#rego-package-is-gaonauthz) for the
-split between data origin and code home.
+The api server never imports this package; it calls the engine over
+gRPC. The in-process `Evaluator` remains for tests and local dev.
 
 ## Roles vs policies
 
 | Concept | Storage | Update cadence | Where it runs |
 |---------|---------|----------------|---------------|
-| Role | `RoleStore` (subject × role × scope) | frequent (during a workflow) | enrichment of the subject before evaluation |
-| Policy | `PolicyStore` (Rego source) | rare; audited | compiled and cached, queried per request |
+| Role | `RoleStore` (subject × role × scope) | frequent | collects the policies that apply to a subject |
+| Policy | `PolicyStore` (document + versions) | rare; audited | parsed, cached per org, evaluated per request |
 
-Roles are data. Policies are rules. They look similar in Rego but use
-different update channels — keep them separate.
+Roles are data. Policies are rules. Keep them on separate update
+channels.
 
 ## Explain
 
-`Manager.Explain(subject, object, action)` walks the grant/revoke
-changelog for the subject-object pair, emits one `DecisionTrace` per
-change, and reports whether any grant produced the allow. The point
-is reproducibility: a denied request must come with a follow-up
-explanation.
-
-## Current usage (in-memory)
-
-```go
-ev, _ := authz.NewRegoEvaluator(ctx, defaultPolicySource)
-roles := authz.NewMemoryRoleStore()
-mgr  := authz.NewMemoryManager(roles)
-chk  := authz.NewChecker(roles, ev)
-
-ok, err := chk.Allow(ctx, subject, object, "doc:read")
-```
+`Manager.Explain(subject, object, action)` reports which statements
+matched and which produced the final decision. A denied request must
+be reproducible after the fact.
 
 ## Constraints
 
-- `Evaluator` today is Rego only. Other implementations (in-process
-  rule tables, hard-coded) plug into the same interface when added.
-- Policy cache is in-process. Multi-instance deployments will need a
-  shared cache or a policy reload signal.
+- Resource-based policies (attaching a policy to a resource) are
+  deferred; identity-based only.
+- `Condition` is parsed but not evaluated in the MVP.
+- The earlier Rego/OPA direction is superseded (ADR-0002); preserved
+  WIP is reference only.
 - Domain types do not satisfy `authz.Subject` / `authz.Object` yet —
   adapters are planned.

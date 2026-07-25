@@ -8,32 +8,37 @@ collaborate on a shared plan.
 
 - Identities for users and agents, including organization membership.
 - Org / group / project structure.
-- Authorization decisions, expressed as Rego policies.
+- Authorization decisions, expressed as IAM-style policy documents.
 - One identifier system across every resource (GRN).
 
 ## Out of scope (today)
 
 - Workflow execution engine, scheduler, queue.
 - Notifications or messaging.
-- HTTP / RPC transport.
 - Persistent store implementations (only interfaces today).
 
 ## Module boundaries
 
 ```
 github.com/garamsh/gaon
+├── cmd/gaon/     # single cobra CLI: serve api | serve authz | migrate
+├── proto/        # .proto sources, buf codegen
 ├── internal/
-│   ├── grn/        # identifier — every domain depends on it
-│   ├── errorx/     # typed errors — every domain depends on it
-│   ├── org/        # organizations, groups, projects
-│   ├── user/       # human identities
-│   ├── agent/      # autonomous identities
-│   └── authz/      # subject/object, roles, policies, decisions
-└── (cmd/, docs/)
+│   ├── grn/      # identifier — shared primitive
+│   ├── errorx/   # typed errors — shared primitive
+│   ├── cli/      # cobra commands + wiring
+│   ├── api/      # OpenAPI HTTP server (generated handlers)
+│   ├── authn/    # OIDC provider abstraction, sessions
+│   ├── authz/    # policy engine: model, stores, evaluator, gRPC server
+│   ├── org/      # organizations, groups, projects, invitations
+│   ├── user/     # human identities
+│   └── agent/    # autonomous identities (planning)
+└── (docs/)
 ```
 
-`grn` and `errorx` sit at the inner ring. Nothing else imports each
-other; cross-cutting promotion only happens when ≥3 domains share the
+`grn` and `errorx` are the only shared packages. `api` and `authz`
+never import each other — the api server reaches the engine over gRPC
+(ADR-0003). Cross-cutting promotion only when ≥3 domains share the
 concern.
 
 ## Core abstractions
@@ -49,7 +54,7 @@ concern.
 | `org.Project` | `internal/org` | unit of work |
 | `authz.Subject` | `internal/authz` | actor interface |
 | `authz.Object` | `internal/authz` | target interface |
-| `authz.Evaluator` | `internal/authz` | policy evaluator (Rego) |
+| `authz.Evaluator` | `internal/authz` | policy evaluator (native, IAM-style) |
 | `authz.Checker` | `internal/authz` | role enrich + evaluate |
 | `authz.Manager` | `internal/authz` | grant/revoke + audit |
 
@@ -58,8 +63,9 @@ concern.
 | Decision | Reason | Where |
 |----------|--------|-------|
 | GRN org/project = owning resource identifiers | Tenancy is structural; reserved `root` owns organizations. | [grn-model.md](./grn-model.md), [ADR-0001](./adr/0001-grn-segments.md) |
-| Rego package = `gaon.authz` | Policy namespace follows the service codename, not the org segment. | [authz.md](./authz.md) |
-| `Evaluator` is an interface | Swap Rego / in-process / hardcoded without touching call sites. | [authz.md](./authz.md) |
+| Policies are IAM-style documents, native evaluator | Deterministic deny-overrides; no runtime dependency. | [authz.md](./authz.md), [ADR-0002](./adr/0002-iam-style-policy-model.md) |
+| Single cobra CLI, independent api/authz packages | One binary, two processes; engine reached over gRPC only. | [ADR-0003](./adr/0003-single-cli-topology.md) |
+| `Evaluator` is an interface | Swap in-process / gRPC-client without touching call sites. | [authz.md](./authz.md) |
 | Store interfaces live next to their domain | Implementation swap at the package boundary. | [domains.md](./domains.md) |
 
 ## Non-functional goals

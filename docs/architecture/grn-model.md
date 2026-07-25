@@ -55,17 +55,12 @@ when adding or renaming a type.
 Lowercase letters, digits, `-`. Length ≤ 64. Slug over UUID. Never
 expose a transient ID where a stable one is expected.
 
-## Rego package is `gaon.authz`
+## Rego package note (historical)
 
-The data identifier namespace (GRN org segments) and the policy
-language namespace are intentionally different:
-
-- Data: `grn:acme:...`
-- Policy package: `package gaon.authz`
-- Policy query: `data.gaon.authz.allow`
-
-GRN points at the data's owner. The Rego package points at the code's
-home. See [authz.md](./authz.md).
+An earlier design compiled Rego policies under `package gaon.authz`.
+That direction is superseded by IAM-style policy documents
+([ADR-0002](./adr/0002-iam-style-policy-model.md)); no Rego package
+exists.
 
 ## API
 

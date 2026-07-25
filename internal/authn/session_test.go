@@ -27,7 +27,7 @@ func TestHashToken_Deterministic(t *testing.T) {
 }
 
 func TestSession_Expired(t *testing.T) {
-	g := grn.New("garam", "default", "user", "ada")
+	g := grn.New("acme", "default", "user", "ada")
 	s := authn.NewSession(g, time.Hour)
 	assert.False(t, s.Expired(time.Now()))
 	assert.True(t, s.Expired(time.Now().Add(2*time.Hour)))

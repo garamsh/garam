@@ -59,7 +59,11 @@ func truncate(t *testing.T, p *pgxpool.Pool) {
 }
 
 func grnOf(serviceType, id string) grn.GRN {
-	return grn.New("garam", "default", serviceType, id)
+	owner := "acme"
+	if serviceType == "org" {
+		owner = "root"
+	}
+	return grn.New(owner, "default", serviceType, id)
 }
 
 func TestUserStore_RoundTrip(t *testing.T) {

@@ -23,3 +23,4 @@ Format: `<type>: <imperative summary>`
 
 - Title follows the commit format: `<type>: <imperative summary>`.
 - Body follows `.github/PULL_REQUEST_TEMPLATE.md`.
+- PRs are squash-merged; the squashed commit message follows the PR title. Keep the branch's intermediate commit history clean enough to review, but do not rewrite it to be pretty.

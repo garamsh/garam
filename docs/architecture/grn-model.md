@@ -10,14 +10,31 @@ grn:<organization>:<project>:<service_type>:<identifier>
 ```
 
 Five colon-separated segments. Anything that does not start with
-`grn:` (e.g. `arn:...`) is not a GRN.
+`grn:` (e.g. `arn:...`) is not a GRN. The `grn` prefix already names
+the vendor (Garam); no segment repeats it.
 
 | Segment | Meaning | Constraint |
 |---------|---------|------------|
-| `organization` | company or tenant | fixed to `garam` for now |
-| `project` | unit of work | non-empty string |
+| `organization` | owning Organization identifier | slug; `root` is reserved |
+| `project` | owning Project identifier | slug; `default` when org-level |
 | `service_type` | resource kind (`user`, `org`, …) | see catalogue below |
-| `identifier` | unique id within the type | non-empty string |
+| `identifier` | unique id within the type | slug, see below |
+
+## Ownership
+
+The organization and project segments identify the resources that own
+the addressed resource — tenancy is structural, not a flag.
+
+- `grn:acme:frontend:user:alice` — user alice, owned by project
+  `frontend` of org `acme`.
+- `grn:acme:default:agent:bot-1` — org-level resource: project segment
+  is `default`.
+- `grn:root:default:org:acme` — organizations are owned by the
+  reserved root owner `root`. `root` may not be used as a real
+  organization identifier.
+
+Segment values (organization, project, identifier) follow the
+identifier rules below.
 
 ## service_type catalogue
 
@@ -26,41 +43,35 @@ when adding or renaming a type.
 
 | service_type | Domain | Example |
 |--------------|--------|---------|
-| `user` | person identity | `grn:garam:default:user:alice` |
-| `agent` | autonomous actor | `grn:garam:default:agent:bot-1` |
-| `org` | organization | `grn:garam:default:org:acme` |
-| `group` | user/agent bundle | `grn:garam:default:group:eng` |
-| `project` | unit of work | `grn:garam:default:project:frontend` |
-| `doc` | permissioned document (planned) | `grn:garam:default:doc:readme` |
+| `user` | person identity | `grn:acme:default:user:alice` |
+| `agent` | autonomous actor | `grn:acme:default:agent:bot-1` |
+| `org` | organization | `grn:root:default:org:acme` |
+| `group` | user/agent bundle | `grn:acme:default:group:eng` |
+| `project` | unit of work | `grn:acme:default:project:frontend` |
+| `doc` | permissioned document (planned) | `grn:acme:frontend:doc:readme` |
 
 ## identifier
 
 Lowercase letters, digits, `-`. Length ≤ 64. Slug over UUID. Never
 expose a transient ID where a stable one is expected.
 
-## Why `garam` is fixed
-
-The Go module path (`github.com/garamsh/gaon`) and the company name
-align, so the org segment doubles as a company marker. Multitenancy
-is a separate decision and would force a config-driven segment.
-
 ## Rego package is `gaon.authz`
 
-The data identifier uses `garam`; the policy language namespace uses
-`gaon`. They are intentionally different:
+The data identifier namespace (GRN org segments) and the policy
+language namespace are intentionally different:
 
-- Data: `grn:garam:...`
+- Data: `grn:acme:...`
 - Policy package: `package gaon.authz`
 - Policy query: `data.gaon.authz.allow`
 
-GRN points at the data's origin. The Rego package points at the
-code's home. See [authz.md](./authz.md) §3.
+GRN points at the data's owner. The Rego package points at the code's
+home. See [authz.md](./authz.md).
 
 ## API
 
 ```go
-g := grn.New("garam", "default", "user", "alice")
-s := g.String()                 // "grn:garam:default:user:alice"
+g := grn.New("acme", "frontend", "user", "alice")
+s := g.String()                 // "grn:acme:frontend:user:alice"
 
 g, err := grn.Parse(s)
 err := g.Validate()

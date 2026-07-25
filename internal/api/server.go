@@ -1,12 +1,13 @@
-// Package httpapi implements the OpenAPI ServerInterface generated
-// into the api package. Handlers enforce authentication via the
-// session cookie and org-scoped authorization via membership roles.
-package httpapi
+// Package api implements the OpenAPI ServerInterface generated into
+// the top-level api package (imported as apigen). Handlers enforce
+// authentication via the session cookie and org-scoped authorization
+// through the authz evaluator seam.
+package api
 
 import (
 	"time"
 
-	"github.com/garamsh/gaon/api"
+	apigen "github.com/garamsh/gaon/api"
 	"github.com/garamsh/gaon/internal/authn"
 	"github.com/garamsh/gaon/internal/org"
 	"github.com/garamsh/gaon/internal/user"
@@ -21,7 +22,7 @@ type Config struct {
 	CookieSecure bool
 }
 
-// Server implements api.ServerInterface.
+// Server implements apigen.ServerInterface.
 type Server struct {
 	users     user.Store
 	orgs      org.Store
@@ -31,7 +32,7 @@ type Server struct {
 }
 
 // Compile-time check that Server satisfies the generated interface.
-var _ api.ServerInterface = (*Server)(nil)
+var _ apigen.ServerInterface = (*Server)(nil)
 
 // NewServer constructs the API server. providers are keyed by their
 // Name; unknown provider paths 404 without the providers knowing.

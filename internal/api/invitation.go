@@ -1,10 +1,10 @@
-package httpapi
+package api
 
 import (
 	"net/http"
 	"time"
 
-	"github.com/garamsh/gaon/api"
+	apigen "github.com/garamsh/gaon/api"
 	"github.com/garamsh/gaon/internal/errorx"
 	"github.com/garamsh/gaon/internal/org"
 )
@@ -14,7 +14,7 @@ const defaultInvitationTTL = 7 * 24 * time.Hour
 
 // CreateInvitation issues a single-use invitation token. Requires the
 // admin role in the org.
-func (s *Server) CreateInvitation(w http.ResponseWriter, r *http.Request, orgSlug api.Org) {
+func (s *Server) CreateInvitation(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org) {
 	u, err := s.currentUser(r)
 	if err != nil {
 		writeError(w, err)
@@ -25,7 +25,7 @@ func (s *Server) CreateInvitation(w http.ResponseWriter, r *http.Request, orgSlu
 		writeError(w, err)
 		return
 	}
-	var body api.InvitationCreate
+	var body apigen.InvitationCreate
 	if err := decodeJSON(r, &body); err != nil {
 		writeError(w, err)
 		return
@@ -57,10 +57,10 @@ func (s *Server) CreateInvitation(w http.ResponseWriter, r *http.Request, orgSlu
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, api.Invitation{
+	writeJSON(w, http.StatusCreated, apigen.Invitation{
 		Token:     inv.Token(),
 		OrgGrn:    inv.Organization().String(),
-		Role:      api.Role(inv.Role()),
+		Role:      apigen.Role(inv.Role()),
 		ExpiresAt: inv.ExpiresAt(),
 	})
 }

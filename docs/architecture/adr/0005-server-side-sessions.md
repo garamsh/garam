@@ -1,4 +1,4 @@
-# ADR 0002: Sessions are server-side rows keyed by token hash
+# ADR 0005: Sessions are server-side rows keyed by token hash
 
 > Status: accepted
 > Date: 2026-07-25

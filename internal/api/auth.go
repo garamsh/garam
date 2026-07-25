@@ -1,4 +1,4 @@
-package httpapi
+package api
 
 import (
 	"crypto/rand"
@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/garamsh/gaon/api"
+	apigen "github.com/garamsh/gaon/api"
 	"github.com/garamsh/gaon/internal/authn"
 	"github.com/garamsh/gaon/internal/errorx"
 	"github.com/garamsh/gaon/internal/grn"
@@ -23,7 +23,7 @@ const (
 )
 
 // Login starts the OAuth authorization code flow with PKCE.
-func (s *Server) Login(w http.ResponseWriter, r *http.Request, provider api.Provider) {
+func (s *Server) Login(w http.ResponseWriter, r *http.Request, provider apigen.Provider) {
 	p, ok := s.providers[provider]
 	if !ok {
 		writeError(w, errorx.New(errorx.KindNotFound, "unknown provider"))
@@ -46,7 +46,7 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request, provider api.Prov
 
 // OauthCallback completes the flow: it validates state, exchanges the
 // code, upserts the user, and issues a session cookie.
-func (s *Server) OauthCallback(w http.ResponseWriter, r *http.Request, provider api.Provider, params api.OauthCallbackParams) {
+func (s *Server) OauthCallback(w http.ResponseWriter, r *http.Request, provider apigen.Provider, params apigen.OauthCallbackParams) {
 	p, ok := s.providers[provider]
 	if !ok {
 		writeError(w, errorx.New(errorx.KindNotFound, "unknown provider"))
@@ -109,7 +109,7 @@ func (s *Server) Me(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, api.User{Grn: u.GRN().String(), Nickname: u.Nickname()})
+	writeJSON(w, http.StatusOK, apigen.User{Grn: u.GRN().String(), Nickname: u.Nickname()})
 }
 
 // upsertUser returns the user for the identity, creating it on first

@@ -1,4 +1,4 @@
-# ADR 0003: Invitations are token-keyed, not GRN-addressed
+# ADR 0006: Invitations are token-keyed, not GRN-addressed
 
 > Status: accepted
 > Date: 2026-07-25

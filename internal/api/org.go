@@ -1,9 +1,9 @@
-package httpapi
+package api
 
 import (
 	"net/http"
 
-	"github.com/garamsh/gaon/api"
+	apigen "github.com/garamsh/gaon/api"
 	"github.com/garamsh/gaon/internal/errorx"
 	"github.com/garamsh/gaon/internal/grn"
 	"github.com/garamsh/gaon/internal/org"
@@ -16,7 +16,7 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	var body api.OrganizationCreate
+	var body apigen.OrganizationCreate
 	if err := decodeJSON(r, &body); err != nil {
 		writeError(w, err)
 		return
@@ -48,7 +48,7 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 }
 
 // ListOrgs lists the caller's organizations.
-func (s *Server) ListOrgs(w http.ResponseWriter, r *http.Request, params api.ListOrgsParams) {
+func (s *Server) ListOrgs(w http.ResponseWriter, r *http.Request, params apigen.ListOrgsParams) {
 	u, err := s.currentUser(r)
 	if err != nil {
 		writeError(w, err)
@@ -66,7 +66,7 @@ func (s *Server) ListOrgs(w http.ResponseWriter, r *http.Request, params api.Lis
 		writeError(w, err)
 		return
 	}
-	out := make([]api.Organization, 0, len(orgs))
+	out := make([]apigen.Organization, 0, len(orgs))
 	for _, o := range orgs {
 		out = append(out, orgToAPI(o))
 	}
@@ -74,7 +74,7 @@ func (s *Server) ListOrgs(w http.ResponseWriter, r *http.Request, params api.Lis
 }
 
 // GetOrg returns an organization the caller belongs to.
-func (s *Server) GetOrg(w http.ResponseWriter, r *http.Request, orgSlug api.Org) {
+func (s *Server) GetOrg(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org) {
 	u, err := s.currentUser(r)
 	if err != nil {
 		writeError(w, err)
@@ -94,7 +94,7 @@ func (s *Server) GetOrg(w http.ResponseWriter, r *http.Request, orgSlug api.Org)
 }
 
 // UpdateOrg renames an organization. Requires the admin role.
-func (s *Server) UpdateOrg(w http.ResponseWriter, r *http.Request, orgSlug api.Org) {
+func (s *Server) UpdateOrg(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org) {
 	u, err := s.currentUser(r)
 	if err != nil {
 		writeError(w, err)
@@ -105,7 +105,7 @@ func (s *Server) UpdateOrg(w http.ResponseWriter, r *http.Request, orgSlug api.O
 		writeError(w, err)
 		return
 	}
-	var body api.OrganizationPatch
+	var body apigen.OrganizationPatch
 	if err := decodeJSON(r, &body); err != nil {
 		writeError(w, err)
 		return
@@ -123,7 +123,7 @@ func (s *Server) UpdateOrg(w http.ResponseWriter, r *http.Request, orgSlug api.O
 }
 
 // DeleteOrg removes an organization. Requires the owner role.
-func (s *Server) DeleteOrg(w http.ResponseWriter, r *http.Request, orgSlug api.Org) {
+func (s *Server) DeleteOrg(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org) {
 	u, err := s.currentUser(r)
 	if err != nil {
 		writeError(w, err)
@@ -143,7 +143,7 @@ func (s *Server) DeleteOrg(w http.ResponseWriter, r *http.Request, orgSlug api.O
 
 // ListOrgMembers lists an organization's members. Requires the member
 // role.
-func (s *Server) ListOrgMembers(w http.ResponseWriter, r *http.Request, orgSlug api.Org) {
+func (s *Server) ListOrgMembers(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org) {
 	u, err := s.currentUser(r)
 	if err != nil {
 		writeError(w, err)
@@ -159,7 +159,7 @@ func (s *Server) ListOrgMembers(w http.ResponseWriter, r *http.Request, orgSlug 
 		writeError(w, err)
 		return
 	}
-	out := make([]api.Member, 0, len(members))
+	out := make([]apigen.Member, 0, len(members))
 	for _, m := range members {
 		out = append(out, memberToAPI(m))
 	}
@@ -187,18 +187,18 @@ func orgGRN(slug string) grn.GRN {
 	return grn.New("garam", "default", org.ServiceTypeOrg, slug)
 }
 
-func orgToAPI(o *org.Organization) api.Organization {
-	return api.Organization{
+func orgToAPI(o *org.Organization) apigen.Organization {
+	return apigen.Organization{
 		Grn:       o.GRN().String(),
 		Name:      o.Name(),
 		CreatedAt: o.CreatedAt(),
 	}
 }
 
-func memberToAPI(m *org.Membership) api.Member {
-	return api.Member{
+func memberToAPI(m *org.Membership) apigen.Member {
+	return apigen.Member{
 		UserGrn: m.User().String(),
-		Role:    api.Role(m.Role()),
+		Role:    apigen.Role(m.Role()),
 		Since:   m.CreatedAt(),
 	}
 }

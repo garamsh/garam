@@ -25,9 +25,9 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/garamsh/gaon/api"
+	apigen "github.com/garamsh/gaon/api"
 	"github.com/garamsh/gaon/internal/authn"
-	"github.com/garamsh/gaon/internal/httpapi"
+	"github.com/garamsh/gaon/internal/api"
 	"github.com/garamsh/gaon/internal/org"
 	"github.com/garamsh/gaon/internal/user"
 )
@@ -67,12 +67,12 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("GAON_SESSION_TTL: %w", err)
 	}
-	srv := httpapi.NewServer(
+	srv := api.NewServer(
 		user.NewPostgresStore(pool),
 		org.NewPostgresStore(pool),
 		authn.NewPostgresSessionStore(pool),
 		[]authn.Provider{google},
-		httpapi.Config{
+		api.Config{
 			SessionTTL:   ttl,
 			CookieSecure: envOr("GAON_COOKIE_SECURE", "true") == "true",
 		},
@@ -80,7 +80,7 @@ func run() error {
 
 	addr := envOr("GAON_HTTP_ADDR", ":8080")
 	log.Printf("listening on %s", addr)
-	return http.ListenAndServe(addr, api.Handler(srv))
+	return http.ListenAndServe(addr, apigen.Handler(srv))
 }
 
 // migrateUp applies all pending migrations.

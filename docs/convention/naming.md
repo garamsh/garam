@@ -14,8 +14,9 @@ Do not say "garam project" — that mixes the company with the product.
 `grn:<organization>:<project>:<service_type>:<identifier>`. Full
 format: [`../architecture/grn-model.md`](../architecture/grn-model.md).
 
-Organization is fixed to `garam` for the product's lifetime. The other
-three segments are per-resource.
+Organization and project segments identify the owning resources;
+`root` is reserved as the owner of organizations themselves. See
+[grn-model.md](../architecture/grn-model.md).
 
 ### service_type catalogue
 

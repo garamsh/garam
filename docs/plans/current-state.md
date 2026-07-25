@@ -6,7 +6,7 @@
 
 - Module name: `github.com/garamsh/gaon`.
 - GRN value type with `New` / `Parse` / `Validate` / `String` /
-  `IsZero` and tests. Organization segment fixed to `garam`.
+  `IsZero` and tests. Org/project segments identify owning resources (ADR-0001).
 - `errorx` package with gRPC-aligned kinds, `New` / `Wrap` / `IsKind`
   / `KindOf`, and tests.
 - Domain interfaces declared: `org.Store`, `user.Store`,
@@ -25,15 +25,19 @@
 - **MVP** (roadmap, issue #12) — Google OIDC sign-in via
   `internal/authn` (provider abstraction + server-side sessions),
   invitation-based orgs with roles (`owner` / `admin` / `member`)
-  enforced at the HTTP layer, OpenAPI-first API (`api/openapi.yaml` +
+  enforced through the `authz.Evaluator` seam (in-process native
+  evaluator, ADR-0003 stage 1), OpenAPI-first API (`api/openapi.yaml` +
   generated server), sqlc-backed Postgres stores for `user`, `org`,
-  and `authn` sessions, migrations, `cmd/gaon` wiring, and e2e store
-  round-trips against real Postgres. `make check-gen` keeps generated
-  code (oapi-codegen, sqlc, mockery) honest in CI. The `agent` domain
-  stayed untouched.
+  and `authn` sessions, migrations, cobra CLI (`serve api` /
+  `serve authz` / `migrate`), and e2e store round-trips against real
+  Postgres. `make check-gen` keeps generated code (oapi-codegen, sqlc,
+  mockery) honest in CI. The `agent` domain stayed untouched.
 
 ## Open
 
+- **authz gRPC transport** (P2) — stage 1 runs the native evaluator in
+  process; the gRPC server/client and the full no-import rule land in
+  P2 (ADR-0003 §Staged adoption).
 - **authz landing** (P1) — the authz implementation WIP is preserved
   outside the repo (`~/gaon-authz-wip/`); it needs the file split
   required by `docs/convention/go.md` before landing.

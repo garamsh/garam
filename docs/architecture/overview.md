@@ -10,10 +10,11 @@ collaborate on a shared plan.
 - Org / group / project structure.
 - Google OIDC sign-in with a provider abstraction; server-side sessions.
 - Invitation-based org membership with org roles (`owner`, `admin`,
-  `member`) enforced on org-scoped HTTP APIs.
+  `member`) enforced on org-scoped HTTP APIs through the authz
+  evaluator seam.
 - An OpenAPI-first HTTP API; server code is generated from the spec.
 - Postgres-backed stores (sqlc) with migrations.
-- Authorization decisions, expressed as Rego policies (interfaces).
+- Authorization decisions, expressed as IAM-style policy documents.
 - One identifier system across every resource (GRN).
 
 ## Out of scope (today)
@@ -22,8 +23,8 @@ collaborate on a shared plan.
 - Notifications or messaging.
 - The agent domain (still being planned; code untouched, no API or
   persistence).
-- The Rego authz engine wiring and policy persistence (roadmap P1/P2);
-  the MVP enforces org roles directly at the HTTP layer.
+- The authz gRPC transport and policy persistence (roadmap P2); stage 1
+  runs the native evaluator in process (ADR-0003 §Staged adoption).
 - OAuth providers beyond Google.
 
 ## Module boundaries
@@ -31,26 +32,28 @@ collaborate on a shared plan.
 ```
 github.com/garamsh/gaon
 ├── api/          # OpenAPI spec (source of truth) + generated server
-├── cmd/gaon/     # thin binary: wires stores, providers, handlers
+├── cmd/gaon/     # thin entrypoint for the cobra CLI
 ├── migrations/   # SQL migrations (golang-migrate); sqlc schema source
 ├── e2e/          # store round-trips against real Postgres
 ├── internal/
-│   ├── grn/      # identifier — every domain depends on it
-│   ├── errorx/   # typed errors — every domain depends on it
+│   ├── grn/      # identifier — shared primitive
+│   ├── errorx/   # typed errors — shared primitive
+│   ├── cli/      # cobra commands + wiring (serve api | serve authz | migrate)
+│   ├── api/      # handlers implementing the generated ServerInterface
+│   ├── authn/    # OIDC provider abstraction, sessions
+│   ├── authz/    # policy engine: model, evaluator, stores
 │   ├── org/      # organizations, groups, projects, memberships, invitations
 │   ├── user/     # human identities
-│   ├── agent/    # autonomous identities
-│   ├── authn/    # OAuth providers (OIDC) + sessions
-│   ├── authz/    # subject/object, roles, policies, decisions
-│   └── httpapi/  # handlers implementing the generated ServerInterface
+│   └── agent/    # autonomous identities (planning)
 └── (docs/)
 ```
 
-`grn` and `errorx` sit at the inner ring. Domains cooperate through
-`grn.GRN`, never through each other's concrete types. `httpapi` is the
-only package that sees several domains at once; it enforces
-authentication (session cookie) and org roles at the transport
-boundary.
+`grn` and `errorx` are the only shared packages. Domains cooperate
+through `grn.GRN`, never through each other's concrete types. `api`
+sees several domains at once and enforces authentication (session
+cookie) at the boundary; org-role checks go through the
+`authz.Evaluator` seam — in process for stage 1, over gRPC from stage
+2 (ADR-0003). `proto/` lands with the gRPC transport in P2.
 
 ## Core abstractions
 
@@ -69,7 +72,7 @@ boundary.
 | `authn.Session` | `internal/authn` | authenticated browser session |
 | `authz.Subject` | `internal/authz` | actor interface |
 | `authz.Object` | `internal/authz` | target interface |
-| `authz.Evaluator` | `internal/authz` | policy evaluator (Rego) |
+| `authz.Evaluator` | `internal/authz` | policy evaluator (native, IAM-style) |
 | `authz.Checker` | `internal/authz` | role enrich + evaluate |
 | `authz.Manager` | `internal/authz` | grant/revoke + audit |
 
@@ -77,13 +80,14 @@ boundary.
 
 | Decision | Reason | Where |
 |----------|--------|-------|
-| GRN organization = `garam` | Company identity for the org segment. Revise if multitenancy arrives. | [grn-model.md](./grn-model.md) |
-| Rego package = `gaon.authz` | Policy namespace follows the service codename, not the org segment. | [authz.md](./authz.md) |
-| `Evaluator` is an interface | Swap Rego / in-process / hardcoded without touching call sites. | [authz.md](./authz.md) |
+| GRN org/project = owning resource identifiers | Tenancy is structural; reserved `root` owns organizations. | [grn-model.md](./grn-model.md), [ADR-0001](./adr/0001-grn-segments.md) |
+| Policies are IAM-style documents, native evaluator | Deterministic deny-overrides; no runtime dependency. | [authz.md](./authz.md), [ADR-0002](./adr/0002-iam-style-policy-model.md) |
+| Single cobra CLI, independent api/authz packages | One binary, two processes; engine reached over gRPC only. | [ADR-0003](./adr/0003-single-cli-topology.md) |
+| `Evaluator` is an interface | Swap in-process / gRPC-client without touching call sites. | [authz.md](./authz.md) |
 | Store interfaces live next to their domain | Implementation swap at the package boundary. | [domains.md](./domains.md) |
-| OpenAPI spec is the API source of truth | Handlers implement a generated interface; drift fails CI. | [adr/0001-openapi-first-api.md](./adr/0001-openapi-first-api.md) |
-| Sessions are server-side rows | Logout must revoke; opaque tokens, only hashes persisted. | [adr/0002-server-side-sessions.md](./adr/0002-server-side-sessions.md) |
-| Invitations are token-keyed, not GRN-addressed | The bearer token is the identifier; no new GRN service_type. | [adr/0003-invitation-tokens.md](./adr/0003-invitation-tokens.md) |
+| OpenAPI spec is the API source of truth | Handlers implement a generated interface; drift fails CI. | [adr/0004-openapi-first-api.md](./adr/0004-openapi-first-api.md) |
+| Sessions are server-side rows | Logout must revoke; opaque tokens, only hashes persisted. | [adr/0005-server-side-sessions.md](./adr/0005-server-side-sessions.md) |
+| Invitations are token-keyed, not GRN-addressed | The bearer token is the identifier; no new GRN service_type. | [adr/0006-invitation-tokens.md](./adr/0006-invitation-tokens.md) |
 
 ## Non-functional goals
 
@@ -91,7 +95,7 @@ boundary.
   request was allowed or denied.
 - **Transport-agnostic errors** — `errorx` flows over HTTP, gRPC, CLI
   without translation at the source; the HTTP mapping lives in
-  `internal/httpapi`.
+  `internal/api`.
 - **Testable in isolation** — every domain exposes an interface; unit
   tests substitute at module boundaries (mocks, in-memory test doubles
   where they exist).

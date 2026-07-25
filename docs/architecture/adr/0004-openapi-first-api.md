@@ -1,4 +1,4 @@
-# ADR 0001: OpenAPI spec is the HTTP API source of truth
+# ADR 0004: OpenAPI spec is the HTTP API source of truth
 
 > Status: accepted
 > Date: 2026-07-25
@@ -14,7 +14,7 @@ client bugs.
 `api/openapi.yaml` (OpenAPI 3.1) is written and reviewed before
 handler code. oapi-codegen generates the `ServerInterface` and models
 (stdlib `net/http`, no router dependency) into `api/server.gen.go`;
-`internal/httpapi` implements the interface. `make check-gen`
+`internal/api` implements the interface. `make check-gen`
 regenerates in CI and fails on drift. The same mechanism covers sqlc
 and mockery output.
 

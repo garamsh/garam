@@ -1,4 +1,4 @@
-package httpapi_test
+package api_test
 
 import (
 	"context"
@@ -12,10 +12,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/gaon/api"
+	apigen "github.com/garamsh/gaon/api"
 	"github.com/garamsh/gaon/internal/authn"
 	"github.com/garamsh/gaon/internal/grn"
-	"github.com/garamsh/gaon/internal/httpapi"
+	"github.com/garamsh/gaon/internal/api"
 	"github.com/garamsh/gaon/internal/org"
 	"github.com/garamsh/gaon/internal/user"
 )
@@ -37,8 +37,8 @@ func newFixture(t *testing.T) *fixture {
 		sessions: newFakeSessionStore(),
 		provider: &fakeProvider{name: "google"},
 	}
-	srv := httpapi.NewServer(f.users, f.orgs, f.sessions, []authn.Provider{f.provider}, httpapi.Config{SessionTTL: time.Hour})
-	f.handler = api.Handler(srv)
+	srv := api.NewServer(f.users, f.orgs, f.sessions, []authn.Provider{f.provider}, api.Config{SessionTTL: time.Hour})
+	f.handler = apigen.Handler(srv)
 	return f
 }
 
@@ -148,7 +148,7 @@ func TestLoginCallbackMeLogout_RoundTrip(t *testing.T) {
 	// Me returns the upserted user.
 	rec = f.do(t, "GET", "/me", "", session)
 	require.Equal(t, http.StatusOK, rec.Code)
-	me := decodeBody[api.User](t, rec)
+	me := decodeBody[apigen.User](t, rec)
 	assert.Equal(t, "Ada", me.Nickname)
 	assert.Equal(t, "grn:garam:default:user:123", me.Grn)
 
@@ -170,7 +170,7 @@ func createOrg(t *testing.T, f *fixture, owner *http.Cookie, name string) string
 	t.Helper()
 	rec := f.do(t, "POST", "/orgs", `{"name":"`+name+`"}`, owner)
 	require.Equal(t, http.StatusCreated, rec.Code)
-	body := decodeBody[api.Organization](t, rec)
+	body := decodeBody[apigen.Organization](t, rec)
 	g, err := grn.Parse(body.Grn)
 	require.NoError(t, err)
 	return g.Identifier
@@ -188,12 +188,12 @@ func TestOrgFlow_RoleEnforcement(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 	rec = f.do(t, "PATCH", "/orgs/"+slug, `{"name":"acme2"}`, owner)
 	require.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, "acme2", decodeBody[api.Organization](t, rec).Name)
+	assert.Equal(t, "acme2", decodeBody[apigen.Organization](t, rec).Name)
 
 	// Stranger is forbidden, and the error kind says why.
 	rec = f.do(t, "GET", "/orgs/"+slug, "", stranger)
 	require.Equal(t, http.StatusForbidden, rec.Code)
-	assert.Equal(t, "permission_denied", decodeBody[api.Error](t, rec).Kind)
+	assert.Equal(t, "permission_denied", decodeBody[apigen.Error](t, rec).Kind)
 
 	// A plain member can read but not update or delete.
 	member := f.sessionCookieFor(t, "member-sub", "Member")
@@ -211,7 +211,7 @@ func TestOrgFlow_RoleEnforcement(t *testing.T) {
 	// Membership list shows both members.
 	rec = f.do(t, "GET", "/orgs/"+slug+"/members", "", member)
 	require.Equal(t, http.StatusOK, rec.Code)
-	assert.Len(t, decodeBody[[]api.Member](t, rec), 2)
+	assert.Len(t, decodeBody[[]apigen.Member](t, rec), 2)
 
 	// Only the owner can delete.
 	rec = f.do(t, "DELETE", "/orgs/"+slug, "", owner)
@@ -230,7 +230,7 @@ func TestListOrgs_OnlyMine(t *testing.T) {
 
 	rec := f.do(t, "GET", "/orgs", "", alice)
 	require.Equal(t, http.StatusOK, rec.Code)
-	orgs := decodeBody[[]api.Organization](t, rec)
+	orgs := decodeBody[[]apigen.Organization](t, rec)
 	require.Len(t, orgs, 1)
 	assert.Equal(t, "alice-org", orgs[0].Name)
 }
@@ -257,15 +257,15 @@ func TestInvitationFlow_Lifecycle(t *testing.T) {
 
 	rec = f.do(t, "POST", "/orgs/"+slug+"/invitations", `{"role":"member"}`, owner)
 	require.Equal(t, http.StatusCreated, rec.Code)
-	token := decodeBody[api.Invitation](t, rec).Token
+	token := decodeBody[apigen.Invitation](t, rec).Token
 	require.NotEmpty(t, token)
 
 	// The invitee accepts and joins with the invitation role.
 	invitee := f.sessionCookieFor(t, "invitee-sub", "Invitee")
 	rec = f.do(t, "POST", "/invitations/"+token+"/accept", "", invitee)
 	require.Equal(t, http.StatusOK, rec.Code)
-	m := decodeBody[api.Member](t, rec)
-	assert.Equal(t, api.RoleMember, m.Role)
+	m := decodeBody[apigen.Member](t, rec)
+	assert.Equal(t, apigen.RoleMember, m.Role)
 	assert.Equal(t, "grn:garam:default:user:invitee-sub", m.UserGrn)
 
 	// Used tokens are rejected.
@@ -288,5 +288,5 @@ func TestAcceptInvitation_Expired(t *testing.T) {
 
 	rec := f.do(t, "POST", "/invitations/expired-tok/accept", "", invitee)
 	require.Equal(t, http.StatusConflict, rec.Code)
-	assert.Equal(t, "failed_precondition", decodeBody[api.Error](t, rec).Kind)
+	assert.Equal(t, "failed_precondition", decodeBody[apigen.Error](t, rec).Kind)
 }

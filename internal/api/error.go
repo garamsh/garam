@@ -1,10 +1,10 @@
-package httpapi
+package api
 
 import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/garamsh/gaon/api"
+	apigen "github.com/garamsh/gaon/api"
 	"github.com/garamsh/gaon/internal/errorx"
 )
 
@@ -13,7 +13,7 @@ import (
 // transport-agnostic, this function is the mapping point.
 func writeError(w http.ResponseWriter, err error) {
 	status := statusOf(errorx.KindOf(err))
-	body := api.Error{Kind: errorx.KindOf(err).String(), Message: err.Error()}
+	body := apigen.Error{Kind: errorx.KindOf(err).String(), Message: err.Error()}
 	if status == http.StatusInternalServerError {
 		// Do not leak internals on 5xx.
 		body.Message = "internal error"

@@ -74,7 +74,7 @@ type MockPolicyStore_Get_Call struct {
 // Get is a helper method to define mock.On call
 //   - ctx context.Context
 //   - id string
-func (_e *MockPolicyStore_Expecter) Get(ctx interface{}, id interface{}) *MockPolicyStore_Get_Call {
+func (_e *MockPolicyStore_Expecter) Get(ctx any, id any) *MockPolicyStore_Get_Call {
 	return &MockPolicyStore_Get_Call{Call: _e.mock.On("Get", ctx, id)}
 }
 
@@ -141,7 +141,7 @@ type MockPolicyStore_List_Call struct {
 
 // List is a helper method to define mock.On call
 //   - ctx context.Context
-func (_e *MockPolicyStore_Expecter) List(ctx interface{}) *MockPolicyStore_List_Call {
+func (_e *MockPolicyStore_Expecter) List(ctx any) *MockPolicyStore_List_Call {
 	return &MockPolicyStore_List_Call{Call: _e.mock.On("List", ctx)}
 }
 

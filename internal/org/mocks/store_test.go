@@ -39,6 +39,80 @@ func (_m *MockStore) EXPECT() *MockStore_Expecter {
 	return &MockStore_Expecter{mock: &_m.Mock}
 }
 
+// AcceptInvitation provides a mock function for the type MockStore
+func (_mock *MockStore) AcceptInvitation(ctx context.Context, token string, userGRN grn.GRN) (*org.Invitation, error) {
+	ret := _mock.Called(ctx, token, userGRN)
+
+	if len(ret) == 0 {
+		panic("no return value specified for AcceptInvitation")
+	}
+
+	var r0 *org.Invitation
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, grn.GRN) (*org.Invitation, error)); ok {
+		return returnFunc(ctx, token, userGRN)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, grn.GRN) *org.Invitation); ok {
+		r0 = returnFunc(ctx, token, userGRN)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*org.Invitation)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, grn.GRN) error); ok {
+		r1 = returnFunc(ctx, token, userGRN)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_AcceptInvitation_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'AcceptInvitation'
+type MockStore_AcceptInvitation_Call struct {
+	*mock.Call
+}
+
+// AcceptInvitation is a helper method to define mock.On call
+//   - ctx context.Context
+//   - token string
+//   - userGRN grn.GRN
+func (_e *MockStore_Expecter) AcceptInvitation(ctx any, token any, userGRN any) *MockStore_AcceptInvitation_Call {
+	return &MockStore_AcceptInvitation_Call{Call: _e.mock.On("AcceptInvitation", ctx, token, userGRN)}
+}
+
+func (_c *MockStore_AcceptInvitation_Call) Run(run func(ctx context.Context, token string, userGRN grn.GRN)) *MockStore_AcceptInvitation_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 grn.GRN
+		if args[2] != nil {
+			arg2 = args[2].(grn.GRN)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_AcceptInvitation_Call) Return(invitation *org.Invitation, err error) *MockStore_AcceptInvitation_Call {
+	_c.Call.Return(invitation, err)
+	return _c
+}
+
+func (_c *MockStore_AcceptInvitation_Call) RunAndReturn(run func(ctx context.Context, token string, userGRN grn.GRN) (*org.Invitation, error)) *MockStore_AcceptInvitation_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // AddGroupMember provides a mock function for the type MockStore
 func (_mock *MockStore) AddGroupMember(ctx context.Context, groupGRN grn.GRN, memberGRN grn.GRN) error {
 	ret := _mock.Called(ctx, groupGRN, memberGRN)
@@ -65,7 +139,7 @@ type MockStore_AddGroupMember_Call struct {
 //   - ctx context.Context
 //   - groupGRN grn.GRN
 //   - memberGRN grn.GRN
-func (_e *MockStore_Expecter) AddGroupMember(ctx interface{}, groupGRN interface{}, memberGRN interface{}) *MockStore_AddGroupMember_Call {
+func (_e *MockStore_Expecter) AddGroupMember(ctx any, groupGRN any, memberGRN any) *MockStore_AddGroupMember_Call {
 	return &MockStore_AddGroupMember_Call{Call: _e.mock.On("AddGroupMember", ctx, groupGRN, memberGRN)}
 }
 
@@ -102,6 +176,63 @@ func (_c *MockStore_AddGroupMember_Call) RunAndReturn(run func(ctx context.Conte
 	return _c
 }
 
+// AddMember provides a mock function for the type MockStore
+func (_mock *MockStore) AddMember(ctx context.Context, m *org.Membership) error {
+	ret := _mock.Called(ctx, m)
+
+	if len(ret) == 0 {
+		panic("no return value specified for AddMember")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *org.Membership) error); ok {
+		r0 = returnFunc(ctx, m)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_AddMember_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'AddMember'
+type MockStore_AddMember_Call struct {
+	*mock.Call
+}
+
+// AddMember is a helper method to define mock.On call
+//   - ctx context.Context
+//   - m *org.Membership
+func (_e *MockStore_Expecter) AddMember(ctx any, m any) *MockStore_AddMember_Call {
+	return &MockStore_AddMember_Call{Call: _e.mock.On("AddMember", ctx, m)}
+}
+
+func (_c *MockStore_AddMember_Call) Run(run func(ctx context.Context, m *org.Membership)) *MockStore_AddMember_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 *org.Membership
+		if args[1] != nil {
+			arg1 = args[1].(*org.Membership)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_AddMember_Call) Return(err error) *MockStore_AddMember_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_AddMember_Call) RunAndReturn(run func(ctx context.Context, m *org.Membership) error) *MockStore_AddMember_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // AddProjectMember provides a mock function for the type MockStore
 func (_mock *MockStore) AddProjectMember(ctx context.Context, projectGRN grn.GRN, memberGRN grn.GRN) error {
 	ret := _mock.Called(ctx, projectGRN, memberGRN)
@@ -128,7 +259,7 @@ type MockStore_AddProjectMember_Call struct {
 //   - ctx context.Context
 //   - projectGRN grn.GRN
 //   - memberGRN grn.GRN
-func (_e *MockStore_Expecter) AddProjectMember(ctx interface{}, projectGRN interface{}, memberGRN interface{}) *MockStore_AddProjectMember_Call {
+func (_e *MockStore_Expecter) AddProjectMember(ctx any, projectGRN any, memberGRN any) *MockStore_AddProjectMember_Call {
 	return &MockStore_AddProjectMember_Call{Call: _e.mock.On("AddProjectMember", ctx, projectGRN, memberGRN)}
 }
 
@@ -190,7 +321,7 @@ type MockStore_CreateGroup_Call struct {
 // CreateGroup is a helper method to define mock.On call
 //   - ctx context.Context
 //   - g *org.Group
-func (_e *MockStore_Expecter) CreateGroup(ctx interface{}, g interface{}) *MockStore_CreateGroup_Call {
+func (_e *MockStore_Expecter) CreateGroup(ctx any, g any) *MockStore_CreateGroup_Call {
 	return &MockStore_CreateGroup_Call{Call: _e.mock.On("CreateGroup", ctx, g)}
 }
 
@@ -222,6 +353,63 @@ func (_c *MockStore_CreateGroup_Call) RunAndReturn(run func(ctx context.Context,
 	return _c
 }
 
+// CreateInvitation provides a mock function for the type MockStore
+func (_mock *MockStore) CreateInvitation(ctx context.Context, inv *org.Invitation) error {
+	ret := _mock.Called(ctx, inv)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CreateInvitation")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *org.Invitation) error); ok {
+		r0 = returnFunc(ctx, inv)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_CreateInvitation_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateInvitation'
+type MockStore_CreateInvitation_Call struct {
+	*mock.Call
+}
+
+// CreateInvitation is a helper method to define mock.On call
+//   - ctx context.Context
+//   - inv *org.Invitation
+func (_e *MockStore_Expecter) CreateInvitation(ctx any, inv any) *MockStore_CreateInvitation_Call {
+	return &MockStore_CreateInvitation_Call{Call: _e.mock.On("CreateInvitation", ctx, inv)}
+}
+
+func (_c *MockStore_CreateInvitation_Call) Run(run func(ctx context.Context, inv *org.Invitation)) *MockStore_CreateInvitation_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 *org.Invitation
+		if args[1] != nil {
+			arg1 = args[1].(*org.Invitation)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_CreateInvitation_Call) Return(err error) *MockStore_CreateInvitation_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_CreateInvitation_Call) RunAndReturn(run func(ctx context.Context, inv *org.Invitation) error) *MockStore_CreateInvitation_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CreateOrg provides a mock function for the type MockStore
 func (_mock *MockStore) CreateOrg(ctx context.Context, o *org.Organization) error {
 	ret := _mock.Called(ctx, o)
@@ -247,7 +435,7 @@ type MockStore_CreateOrg_Call struct {
 // CreateOrg is a helper method to define mock.On call
 //   - ctx context.Context
 //   - o *org.Organization
-func (_e *MockStore_Expecter) CreateOrg(ctx interface{}, o interface{}) *MockStore_CreateOrg_Call {
+func (_e *MockStore_Expecter) CreateOrg(ctx any, o any) *MockStore_CreateOrg_Call {
 	return &MockStore_CreateOrg_Call{Call: _e.mock.On("CreateOrg", ctx, o)}
 }
 
@@ -304,7 +492,7 @@ type MockStore_CreateProject_Call struct {
 // CreateProject is a helper method to define mock.On call
 //   - ctx context.Context
 //   - p *org.Project
-func (_e *MockStore_Expecter) CreateProject(ctx interface{}, p interface{}) *MockStore_CreateProject_Call {
+func (_e *MockStore_Expecter) CreateProject(ctx any, p any) *MockStore_CreateProject_Call {
 	return &MockStore_CreateProject_Call{Call: _e.mock.On("CreateProject", ctx, p)}
 }
 
@@ -361,7 +549,7 @@ type MockStore_DeleteGroup_Call struct {
 // DeleteGroup is a helper method to define mock.On call
 //   - ctx context.Context
 //   - g grn.GRN
-func (_e *MockStore_Expecter) DeleteGroup(ctx interface{}, g interface{}) *MockStore_DeleteGroup_Call {
+func (_e *MockStore_Expecter) DeleteGroup(ctx any, g any) *MockStore_DeleteGroup_Call {
 	return &MockStore_DeleteGroup_Call{Call: _e.mock.On("DeleteGroup", ctx, g)}
 }
 
@@ -418,7 +606,7 @@ type MockStore_DeleteOrg_Call struct {
 // DeleteOrg is a helper method to define mock.On call
 //   - ctx context.Context
 //   - g grn.GRN
-func (_e *MockStore_Expecter) DeleteOrg(ctx interface{}, g interface{}) *MockStore_DeleteOrg_Call {
+func (_e *MockStore_Expecter) DeleteOrg(ctx any, g any) *MockStore_DeleteOrg_Call {
 	return &MockStore_DeleteOrg_Call{Call: _e.mock.On("DeleteOrg", ctx, g)}
 }
 
@@ -475,7 +663,7 @@ type MockStore_DeleteProject_Call struct {
 // DeleteProject is a helper method to define mock.On call
 //   - ctx context.Context
 //   - g grn.GRN
-func (_e *MockStore_Expecter) DeleteProject(ctx interface{}, g interface{}) *MockStore_DeleteProject_Call {
+func (_e *MockStore_Expecter) DeleteProject(ctx any, g any) *MockStore_DeleteProject_Call {
 	return &MockStore_DeleteProject_Call{Call: _e.mock.On("DeleteProject", ctx, g)}
 }
 
@@ -543,7 +731,7 @@ type MockStore_GetGroup_Call struct {
 // GetGroup is a helper method to define mock.On call
 //   - ctx context.Context
 //   - g grn.GRN
-func (_e *MockStore_Expecter) GetGroup(ctx interface{}, g interface{}) *MockStore_GetGroup_Call {
+func (_e *MockStore_Expecter) GetGroup(ctx any, g any) *MockStore_GetGroup_Call {
 	return &MockStore_GetGroup_Call{Call: _e.mock.On("GetGroup", ctx, g)}
 }
 
@@ -571,6 +759,148 @@ func (_c *MockStore_GetGroup_Call) Return(group *org.Group, err error) *MockStor
 }
 
 func (_c *MockStore_GetGroup_Call) RunAndReturn(run func(ctx context.Context, g grn.GRN) (*org.Group, error)) *MockStore_GetGroup_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetInvitation provides a mock function for the type MockStore
+func (_mock *MockStore) GetInvitation(ctx context.Context, token string) (*org.Invitation, error) {
+	ret := _mock.Called(ctx, token)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetInvitation")
+	}
+
+	var r0 *org.Invitation
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (*org.Invitation, error)); ok {
+		return returnFunc(ctx, token)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) *org.Invitation); ok {
+		r0 = returnFunc(ctx, token)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*org.Invitation)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = returnFunc(ctx, token)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_GetInvitation_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetInvitation'
+type MockStore_GetInvitation_Call struct {
+	*mock.Call
+}
+
+// GetInvitation is a helper method to define mock.On call
+//   - ctx context.Context
+//   - token string
+func (_e *MockStore_Expecter) GetInvitation(ctx any, token any) *MockStore_GetInvitation_Call {
+	return &MockStore_GetInvitation_Call{Call: _e.mock.On("GetInvitation", ctx, token)}
+}
+
+func (_c *MockStore_GetInvitation_Call) Run(run func(ctx context.Context, token string)) *MockStore_GetInvitation_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_GetInvitation_Call) Return(invitation *org.Invitation, err error) *MockStore_GetInvitation_Call {
+	_c.Call.Return(invitation, err)
+	return _c
+}
+
+func (_c *MockStore_GetInvitation_Call) RunAndReturn(run func(ctx context.Context, token string) (*org.Invitation, error)) *MockStore_GetInvitation_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetMember provides a mock function for the type MockStore
+func (_mock *MockStore) GetMember(ctx context.Context, orgGRN grn.GRN, userGRN grn.GRN) (*org.Membership, error) {
+	ret := _mock.Called(ctx, orgGRN, userGRN)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetMember")
+	}
+
+	var r0 *org.Membership
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, grn.GRN) (*org.Membership, error)); ok {
+		return returnFunc(ctx, orgGRN, userGRN)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, grn.GRN) *org.Membership); ok {
+		r0 = returnFunc(ctx, orgGRN, userGRN)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*org.Membership)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, grn.GRN, grn.GRN) error); ok {
+		r1 = returnFunc(ctx, orgGRN, userGRN)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_GetMember_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetMember'
+type MockStore_GetMember_Call struct {
+	*mock.Call
+}
+
+// GetMember is a helper method to define mock.On call
+//   - ctx context.Context
+//   - orgGRN grn.GRN
+//   - userGRN grn.GRN
+func (_e *MockStore_Expecter) GetMember(ctx any, orgGRN any, userGRN any) *MockStore_GetMember_Call {
+	return &MockStore_GetMember_Call{Call: _e.mock.On("GetMember", ctx, orgGRN, userGRN)}
+}
+
+func (_c *MockStore_GetMember_Call) Run(run func(ctx context.Context, orgGRN grn.GRN, userGRN grn.GRN)) *MockStore_GetMember_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 grn.GRN
+		if args[1] != nil {
+			arg1 = args[1].(grn.GRN)
+		}
+		var arg2 grn.GRN
+		if args[2] != nil {
+			arg2 = args[2].(grn.GRN)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_GetMember_Call) Return(membership *org.Membership, err error) *MockStore_GetMember_Call {
+	_c.Call.Return(membership, err)
+	return _c
+}
+
+func (_c *MockStore_GetMember_Call) RunAndReturn(run func(ctx context.Context, orgGRN grn.GRN, userGRN grn.GRN) (*org.Membership, error)) *MockStore_GetMember_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -611,7 +941,7 @@ type MockStore_GetOrg_Call struct {
 // GetOrg is a helper method to define mock.On call
 //   - ctx context.Context
 //   - g grn.GRN
-func (_e *MockStore_Expecter) GetOrg(ctx interface{}, g interface{}) *MockStore_GetOrg_Call {
+func (_e *MockStore_Expecter) GetOrg(ctx any, g any) *MockStore_GetOrg_Call {
 	return &MockStore_GetOrg_Call{Call: _e.mock.On("GetOrg", ctx, g)}
 }
 
@@ -679,7 +1009,7 @@ type MockStore_GetProject_Call struct {
 // GetProject is a helper method to define mock.On call
 //   - ctx context.Context
 //   - g grn.GRN
-func (_e *MockStore_Expecter) GetProject(ctx interface{}, g interface{}) *MockStore_GetProject_Call {
+func (_e *MockStore_Expecter) GetProject(ctx any, g any) *MockStore_GetProject_Call {
 	return &MockStore_GetProject_Call{Call: _e.mock.On("GetProject", ctx, g)}
 }
 
@@ -747,7 +1077,7 @@ type MockStore_ListGroupMembers_Call struct {
 // ListGroupMembers is a helper method to define mock.On call
 //   - ctx context.Context
 //   - groupGRN grn.GRN
-func (_e *MockStore_Expecter) ListGroupMembers(ctx interface{}, groupGRN interface{}) *MockStore_ListGroupMembers_Call {
+func (_e *MockStore_Expecter) ListGroupMembers(ctx any, groupGRN any) *MockStore_ListGroupMembers_Call {
 	return &MockStore_ListGroupMembers_Call{Call: _e.mock.On("ListGroupMembers", ctx, groupGRN)}
 }
 
@@ -815,7 +1145,7 @@ type MockStore_ListGroups_Call struct {
 // ListGroups is a helper method to define mock.On call
 //   - ctx context.Context
 //   - f org.ListFilter
-func (_e *MockStore_Expecter) ListGroups(ctx interface{}, f interface{}) *MockStore_ListGroups_Call {
+func (_e *MockStore_Expecter) ListGroups(ctx any, f any) *MockStore_ListGroups_Call {
 	return &MockStore_ListGroups_Call{Call: _e.mock.On("ListGroups", ctx, f)}
 }
 
@@ -843,6 +1173,74 @@ func (_c *MockStore_ListGroups_Call) Return(groups []*org.Group, err error) *Moc
 }
 
 func (_c *MockStore_ListGroups_Call) RunAndReturn(run func(ctx context.Context, f org.ListFilter) ([]*org.Group, error)) *MockStore_ListGroups_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListMembers provides a mock function for the type MockStore
+func (_mock *MockStore) ListMembers(ctx context.Context, orgGRN grn.GRN) ([]*org.Membership, error) {
+	ret := _mock.Called(ctx, orgGRN)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListMembers")
+	}
+
+	var r0 []*org.Membership
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN) ([]*org.Membership, error)); ok {
+		return returnFunc(ctx, orgGRN)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN) []*org.Membership); ok {
+		r0 = returnFunc(ctx, orgGRN)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]*org.Membership)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, grn.GRN) error); ok {
+		r1 = returnFunc(ctx, orgGRN)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_ListMembers_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListMembers'
+type MockStore_ListMembers_Call struct {
+	*mock.Call
+}
+
+// ListMembers is a helper method to define mock.On call
+//   - ctx context.Context
+//   - orgGRN grn.GRN
+func (_e *MockStore_Expecter) ListMembers(ctx any, orgGRN any) *MockStore_ListMembers_Call {
+	return &MockStore_ListMembers_Call{Call: _e.mock.On("ListMembers", ctx, orgGRN)}
+}
+
+func (_c *MockStore_ListMembers_Call) Run(run func(ctx context.Context, orgGRN grn.GRN)) *MockStore_ListMembers_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 grn.GRN
+		if args[1] != nil {
+			arg1 = args[1].(grn.GRN)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_ListMembers_Call) Return(memberships []*org.Membership, err error) *MockStore_ListMembers_Call {
+	_c.Call.Return(memberships, err)
+	return _c
+}
+
+func (_c *MockStore_ListMembers_Call) RunAndReturn(run func(ctx context.Context, orgGRN grn.GRN) ([]*org.Membership, error)) *MockStore_ListMembers_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -883,7 +1281,7 @@ type MockStore_ListOrgs_Call struct {
 // ListOrgs is a helper method to define mock.On call
 //   - ctx context.Context
 //   - f org.ListFilter
-func (_e *MockStore_Expecter) ListOrgs(ctx interface{}, f interface{}) *MockStore_ListOrgs_Call {
+func (_e *MockStore_Expecter) ListOrgs(ctx any, f any) *MockStore_ListOrgs_Call {
 	return &MockStore_ListOrgs_Call{Call: _e.mock.On("ListOrgs", ctx, f)}
 }
 
@@ -911,6 +1309,80 @@ func (_c *MockStore_ListOrgs_Call) Return(organizations []*org.Organization, err
 }
 
 func (_c *MockStore_ListOrgs_Call) RunAndReturn(run func(ctx context.Context, f org.ListFilter) ([]*org.Organization, error)) *MockStore_ListOrgs_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListOrgsByMember provides a mock function for the type MockStore
+func (_mock *MockStore) ListOrgsByMember(ctx context.Context, userGRN grn.GRN, f org.ListFilter) ([]*org.Organization, error) {
+	ret := _mock.Called(ctx, userGRN, f)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListOrgsByMember")
+	}
+
+	var r0 []*org.Organization
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, org.ListFilter) ([]*org.Organization, error)); ok {
+		return returnFunc(ctx, userGRN, f)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, org.ListFilter) []*org.Organization); ok {
+		r0 = returnFunc(ctx, userGRN, f)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]*org.Organization)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, grn.GRN, org.ListFilter) error); ok {
+		r1 = returnFunc(ctx, userGRN, f)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_ListOrgsByMember_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListOrgsByMember'
+type MockStore_ListOrgsByMember_Call struct {
+	*mock.Call
+}
+
+// ListOrgsByMember is a helper method to define mock.On call
+//   - ctx context.Context
+//   - userGRN grn.GRN
+//   - f org.ListFilter
+func (_e *MockStore_Expecter) ListOrgsByMember(ctx any, userGRN any, f any) *MockStore_ListOrgsByMember_Call {
+	return &MockStore_ListOrgsByMember_Call{Call: _e.mock.On("ListOrgsByMember", ctx, userGRN, f)}
+}
+
+func (_c *MockStore_ListOrgsByMember_Call) Run(run func(ctx context.Context, userGRN grn.GRN, f org.ListFilter)) *MockStore_ListOrgsByMember_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 grn.GRN
+		if args[1] != nil {
+			arg1 = args[1].(grn.GRN)
+		}
+		var arg2 org.ListFilter
+		if args[2] != nil {
+			arg2 = args[2].(org.ListFilter)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_ListOrgsByMember_Call) Return(organizations []*org.Organization, err error) *MockStore_ListOrgsByMember_Call {
+	_c.Call.Return(organizations, err)
+	return _c
+}
+
+func (_c *MockStore_ListOrgsByMember_Call) RunAndReturn(run func(ctx context.Context, userGRN grn.GRN, f org.ListFilter) ([]*org.Organization, error)) *MockStore_ListOrgsByMember_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -951,7 +1423,7 @@ type MockStore_ListProjectMembers_Call struct {
 // ListProjectMembers is a helper method to define mock.On call
 //   - ctx context.Context
 //   - projectGRN grn.GRN
-func (_e *MockStore_Expecter) ListProjectMembers(ctx interface{}, projectGRN interface{}) *MockStore_ListProjectMembers_Call {
+func (_e *MockStore_Expecter) ListProjectMembers(ctx any, projectGRN any) *MockStore_ListProjectMembers_Call {
 	return &MockStore_ListProjectMembers_Call{Call: _e.mock.On("ListProjectMembers", ctx, projectGRN)}
 }
 
@@ -1019,7 +1491,7 @@ type MockStore_ListProjects_Call struct {
 // ListProjects is a helper method to define mock.On call
 //   - ctx context.Context
 //   - f org.ListFilter
-func (_e *MockStore_Expecter) ListProjects(ctx interface{}, f interface{}) *MockStore_ListProjects_Call {
+func (_e *MockStore_Expecter) ListProjects(ctx any, f any) *MockStore_ListProjects_Call {
 	return &MockStore_ListProjects_Call{Call: _e.mock.On("ListProjects", ctx, f)}
 }
 
@@ -1077,7 +1549,7 @@ type MockStore_RemoveGroupMember_Call struct {
 //   - ctx context.Context
 //   - groupGRN grn.GRN
 //   - memberGRN grn.GRN
-func (_e *MockStore_Expecter) RemoveGroupMember(ctx interface{}, groupGRN interface{}, memberGRN interface{}) *MockStore_RemoveGroupMember_Call {
+func (_e *MockStore_Expecter) RemoveGroupMember(ctx any, groupGRN any, memberGRN any) *MockStore_RemoveGroupMember_Call {
 	return &MockStore_RemoveGroupMember_Call{Call: _e.mock.On("RemoveGroupMember", ctx, groupGRN, memberGRN)}
 }
 
@@ -1114,6 +1586,69 @@ func (_c *MockStore_RemoveGroupMember_Call) RunAndReturn(run func(ctx context.Co
 	return _c
 }
 
+// RemoveMember provides a mock function for the type MockStore
+func (_mock *MockStore) RemoveMember(ctx context.Context, orgGRN grn.GRN, userGRN grn.GRN) error {
+	ret := _mock.Called(ctx, orgGRN, userGRN)
+
+	if len(ret) == 0 {
+		panic("no return value specified for RemoveMember")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, grn.GRN) error); ok {
+		r0 = returnFunc(ctx, orgGRN, userGRN)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_RemoveMember_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RemoveMember'
+type MockStore_RemoveMember_Call struct {
+	*mock.Call
+}
+
+// RemoveMember is a helper method to define mock.On call
+//   - ctx context.Context
+//   - orgGRN grn.GRN
+//   - userGRN grn.GRN
+func (_e *MockStore_Expecter) RemoveMember(ctx any, orgGRN any, userGRN any) *MockStore_RemoveMember_Call {
+	return &MockStore_RemoveMember_Call{Call: _e.mock.On("RemoveMember", ctx, orgGRN, userGRN)}
+}
+
+func (_c *MockStore_RemoveMember_Call) Run(run func(ctx context.Context, orgGRN grn.GRN, userGRN grn.GRN)) *MockStore_RemoveMember_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 grn.GRN
+		if args[1] != nil {
+			arg1 = args[1].(grn.GRN)
+		}
+		var arg2 grn.GRN
+		if args[2] != nil {
+			arg2 = args[2].(grn.GRN)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_RemoveMember_Call) Return(err error) *MockStore_RemoveMember_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_RemoveMember_Call) RunAndReturn(run func(ctx context.Context, orgGRN grn.GRN, userGRN grn.GRN) error) *MockStore_RemoveMember_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // RemoveProjectMember provides a mock function for the type MockStore
 func (_mock *MockStore) RemoveProjectMember(ctx context.Context, projectGRN grn.GRN, memberGRN grn.GRN) error {
 	ret := _mock.Called(ctx, projectGRN, memberGRN)
@@ -1140,7 +1675,7 @@ type MockStore_RemoveProjectMember_Call struct {
 //   - ctx context.Context
 //   - projectGRN grn.GRN
 //   - memberGRN grn.GRN
-func (_e *MockStore_Expecter) RemoveProjectMember(ctx interface{}, projectGRN interface{}, memberGRN interface{}) *MockStore_RemoveProjectMember_Call {
+func (_e *MockStore_Expecter) RemoveProjectMember(ctx any, projectGRN any, memberGRN any) *MockStore_RemoveProjectMember_Call {
 	return &MockStore_RemoveProjectMember_Call{Call: _e.mock.On("RemoveProjectMember", ctx, projectGRN, memberGRN)}
 }
 
@@ -1214,7 +1749,7 @@ type MockStore_UpdateGroup_Call struct {
 //   - ctx context.Context
 //   - g grn.GRN
 //   - p org.Patch
-func (_e *MockStore_Expecter) UpdateGroup(ctx interface{}, g interface{}, p interface{}) *MockStore_UpdateGroup_Call {
+func (_e *MockStore_Expecter) UpdateGroup(ctx any, g any, p any) *MockStore_UpdateGroup_Call {
 	return &MockStore_UpdateGroup_Call{Call: _e.mock.On("UpdateGroup", ctx, g, p)}
 }
 
@@ -1288,7 +1823,7 @@ type MockStore_UpdateOrg_Call struct {
 //   - ctx context.Context
 //   - g grn.GRN
 //   - p org.Patch
-func (_e *MockStore_Expecter) UpdateOrg(ctx interface{}, g interface{}, p interface{}) *MockStore_UpdateOrg_Call {
+func (_e *MockStore_Expecter) UpdateOrg(ctx any, g any, p any) *MockStore_UpdateOrg_Call {
 	return &MockStore_UpdateOrg_Call{Call: _e.mock.On("UpdateOrg", ctx, g, p)}
 }
 
@@ -1362,7 +1897,7 @@ type MockStore_UpdateProject_Call struct {
 //   - ctx context.Context
 //   - g grn.GRN
 //   - p org.Patch
-func (_e *MockStore_Expecter) UpdateProject(ctx interface{}, g interface{}, p interface{}) *MockStore_UpdateProject_Call {
+func (_e *MockStore_Expecter) UpdateProject(ctx any, g any, p any) *MockStore_UpdateProject_Call {
 	return &MockStore_UpdateProject_Call{Call: _e.mock.On("UpdateProject", ctx, g, p)}
 }
 

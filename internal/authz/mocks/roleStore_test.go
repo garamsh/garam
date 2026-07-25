@@ -64,7 +64,7 @@ type MockRoleStore_Assign_Call struct {
 // Assign is a helper method to define mock.On call
 //   - ctx context.Context
 //   - a authz.RoleAssignment
-func (_e *MockRoleStore_Expecter) Assign(ctx interface{}, a interface{}) *MockRoleStore_Assign_Call {
+func (_e *MockRoleStore_Expecter) Assign(ctx any, a any) *MockRoleStore_Assign_Call {
 	return &MockRoleStore_Assign_Call{Call: _e.mock.On("Assign", ctx, a)}
 }
 
@@ -132,7 +132,7 @@ type MockRoleStore_RolesOf_Call struct {
 // RolesOf is a helper method to define mock.On call
 //   - ctx context.Context
 //   - subjectGRN grn.GRN
-func (_e *MockRoleStore_Expecter) RolesOf(ctx interface{}, subjectGRN interface{}) *MockRoleStore_RolesOf_Call {
+func (_e *MockRoleStore_Expecter) RolesOf(ctx any, subjectGRN any) *MockRoleStore_RolesOf_Call {
 	return &MockRoleStore_RolesOf_Call{Call: _e.mock.On("RolesOf", ctx, subjectGRN)}
 }
 
@@ -201,7 +201,7 @@ type MockRoleStore_RolesOn_Call struct {
 //   - ctx context.Context
 //   - scope grn.GRN
 //   - role string
-func (_e *MockRoleStore_Expecter) RolesOn(ctx interface{}, scope interface{}, role interface{}) *MockRoleStore_RolesOn_Call {
+func (_e *MockRoleStore_Expecter) RolesOn(ctx any, scope any, role any) *MockRoleStore_RolesOn_Call {
 	return &MockRoleStore_RolesOn_Call{Call: _e.mock.On("RolesOn", ctx, scope, role)}
 }
 
@@ -263,7 +263,7 @@ type MockRoleStore_Unassign_Call struct {
 // Unassign is a helper method to define mock.On call
 //   - ctx context.Context
 //   - a authz.RoleAssignment
-func (_e *MockRoleStore_Expecter) Unassign(ctx interface{}, a interface{}) *MockRoleStore_Unassign_Call {
+func (_e *MockRoleStore_Expecter) Unassign(ctx any, a any) *MockRoleStore_Unassign_Call {
 	return &MockRoleStore_Unassign_Call{Call: _e.mock.On("Unassign", ctx, a)}
 }
 

@@ -4,9 +4,11 @@ import (
 	"net/http"
 
 	apigen "github.com/garamsh/gaon/api"
+	"github.com/garamsh/gaon/internal/authz"
 	"github.com/garamsh/gaon/internal/errorx"
 	"github.com/garamsh/gaon/internal/grn"
 	"github.com/garamsh/gaon/internal/org"
+	"github.com/garamsh/gaon/internal/user"
 )
 
 // CreateOrg creates an organization and makes the caller its owner.
@@ -30,7 +32,8 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	g := grn.New("garam", "default", org.ServiceTypeOrg, id)
+	// Organizations are owned by the reserved root owner (ADR-0001).
+	g := grn.New(grn.RootOwner, grn.DefaultProject, org.ServiceTypeOrg, id)
 	o := org.NewOrganization(g, body.Name)
 	if err := s.orgs.CreateOrg(r.Context(), o); err != nil {
 		writeError(w, err)
@@ -81,7 +84,7 @@ func (s *Server) GetOrg(w http.ResponseWriter, r *http.Request, orgSlug apigen.O
 		return
 	}
 	g := orgGRN(orgSlug)
-	if err := s.requireRole(r, g, u.GRN(), org.RoleMember); err != nil {
+	if err := s.authorize(r, g, u, org.ActionOrgRead); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -101,7 +104,7 @@ func (s *Server) UpdateOrg(w http.ResponseWriter, r *http.Request, orgSlug apige
 		return
 	}
 	g := orgGRN(orgSlug)
-	if err := s.requireRole(r, g, u.GRN(), org.RoleAdmin); err != nil {
+	if err := s.authorize(r, g, u, org.ActionOrgUpdate); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -130,7 +133,7 @@ func (s *Server) DeleteOrg(w http.ResponseWriter, r *http.Request, orgSlug apige
 		return
 	}
 	g := orgGRN(orgSlug)
-	if err := s.requireRole(r, g, u.GRN(), org.RoleOwner); err != nil {
+	if err := s.authorize(r, g, u, org.ActionOrgDelete); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -150,7 +153,7 @@ func (s *Server) ListOrgMembers(w http.ResponseWriter, r *http.Request, orgSlug 
 		return
 	}
 	g := orgGRN(orgSlug)
-	if err := s.requireRole(r, g, u.GRN(), org.RoleMember); err != nil {
+	if err := s.authorize(r, g, u, org.ActionOrgMemberList); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -166,17 +169,30 @@ func (s *Server) ListOrgMembers(w http.ResponseWriter, r *http.Request, orgSlug 
 	writeJSON(w, http.StatusOK, out)
 }
 
-// requireRole enforces that userGRN holds at least the required role
-// in orgGRN. Non-members and insufficient roles both yield 403.
-func (s *Server) requireRole(r *http.Request, orgGRN, userGRN grn.GRN, required org.Role) error {
-	m, err := s.orgs.GetMember(r.Context(), orgGRN, userGRN)
+// authorize enforces that the user holds a membership in orgGRN whose
+// role allows the action. The membership role selects the IAM-style
+// statement set; the authz evaluator seam decides. Non-members and
+// denied actions both yield 403.
+func (s *Server) authorize(r *http.Request, orgGRN grn.GRN, u *user.User, action string) error {
+	m, err := s.orgs.GetMember(r.Context(), orgGRN, u.GRN())
 	if errorx.IsKind(err, errorx.KindNotFound) {
 		return errorx.New(errorx.KindPermissionDenied, "not a member of this org")
 	}
 	if err != nil {
 		return err
 	}
-	if !m.Role().Allows(required) {
+	statements := []authz.Statement{{
+		Sid:      "org-role-" + string(m.Role()),
+		Effect:   authz.EffectAllow,
+		Action:   m.Role().Actions(),
+		Resource: []string{orgGRN.String()},
+	}}
+	decision := authz.NewStatementEvaluator(statements).Evaluate(r.Context(), authz.Context{
+		Subject: subject{u},
+		Object:  object{orgGRN},
+		Action:  action,
+	})
+	if decision != authz.DecisionAllow {
 		return errorx.New(errorx.KindPermissionDenied, "insufficient role")
 	}
 	return nil
@@ -184,7 +200,7 @@ func (s *Server) requireRole(r *http.Request, orgGRN, userGRN grn.GRN, required 
 
 // orgGRN builds the GRN for an org identifier from an API path.
 func orgGRN(slug string) grn.GRN {
-	return grn.New("garam", "default", org.ServiceTypeOrg, slug)
+	return grn.New(grn.RootOwner, grn.DefaultProject, org.ServiceTypeOrg, slug)
 }
 
 func orgToAPI(o *org.Organization) apigen.Organization {

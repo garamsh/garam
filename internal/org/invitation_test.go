@@ -23,8 +23,8 @@ func TestNewInvitationToken_Format(t *testing.T) {
 }
 
 func TestInvitation_Lifecycle(t *testing.T) {
-	orgGRN := grn.New("garam", "default", "org", "acme")
-	creator := grn.New("garam", "default", "user", "ada")
+	orgGRN := grn.New("root", "default", "org", "acme")
+	creator := grn.New("acme", "default", "user", "ada")
 	expires := time.Now().Add(time.Hour)
 
 	inv := org.NewInvitation("tok", orgGRN, org.RoleMember, creator, expires)

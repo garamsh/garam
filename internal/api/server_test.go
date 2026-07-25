@@ -13,9 +13,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	apigen "github.com/garamsh/gaon/api"
+	"github.com/garamsh/gaon/internal/api"
 	"github.com/garamsh/gaon/internal/authn"
 	"github.com/garamsh/gaon/internal/grn"
-	"github.com/garamsh/gaon/internal/api"
 	"github.com/garamsh/gaon/internal/org"
 	"github.com/garamsh/gaon/internal/user"
 )
@@ -66,7 +66,7 @@ func (f *fixture) do(t *testing.T, method, path, body string, cookies ...*http.C
 // sessionCookieFor seeds a signed-in user and returns its cookie.
 func (f *fixture) sessionCookieFor(t *testing.T, subject, nickname string) *http.Cookie {
 	t.Helper()
-	g := grn.New("garam", "default", user.ServiceType, subject)
+	g := grn.New("root", "default", user.ServiceType, subject)
 	require.NoError(t, f.users.Create(testCtx(t), user.New(g, nickname)))
 	token, err := authn.NewToken()
 	require.NoError(t, err)
@@ -150,7 +150,7 @@ func TestLoginCallbackMeLogout_RoundTrip(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 	me := decodeBody[apigen.User](t, rec)
 	assert.Equal(t, "Ada", me.Nickname)
-	assert.Equal(t, "grn:garam:default:user:123", me.Grn)
+	assert.Equal(t, "grn:root:default:user:123", me.Grn)
 
 	// Logout revokes the session.
 	rec = f.do(t, "POST", "/auth/logout", "", session)
@@ -197,8 +197,8 @@ func TestOrgFlow_RoleEnforcement(t *testing.T) {
 
 	// A plain member can read but not update or delete.
 	member := f.sessionCookieFor(t, "member-sub", "Member")
-	orgGRN := grn.New("garam", "default", org.ServiceTypeOrg, slug)
-	memberGRN := grn.New("garam", "default", user.ServiceType, "member-sub")
+	orgGRN := grn.New("root", "default", org.ServiceTypeOrg, slug)
+	memberGRN := grn.New("root", "default", user.ServiceType, "member-sub")
 	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRN, memberGRN, org.RoleMember)))
 
 	rec = f.do(t, "GET", "/orgs/"+slug, "", member)
@@ -248,8 +248,8 @@ func TestInvitationFlow_Lifecycle(t *testing.T) {
 
 	// Members cannot invite; owners (admin+) can.
 	member := f.sessionCookieFor(t, "member-sub", "Member")
-	orgGRN := grn.New("garam", "default", org.ServiceTypeOrg, slug)
-	memberGRN := grn.New("garam", "default", user.ServiceType, "member-sub")
+	orgGRN := grn.New("root", "default", org.ServiceTypeOrg, slug)
+	memberGRN := grn.New("root", "default", user.ServiceType, "member-sub")
 	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRN, memberGRN, org.RoleMember)))
 
 	rec := f.do(t, "POST", "/orgs/"+slug+"/invitations", `{"role":"member"}`, member)
@@ -266,7 +266,7 @@ func TestInvitationFlow_Lifecycle(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 	m := decodeBody[apigen.Member](t, rec)
 	assert.Equal(t, apigen.RoleMember, m.Role)
-	assert.Equal(t, "grn:garam:default:user:invitee-sub", m.UserGrn)
+	assert.Equal(t, "grn:root:default:user:invitee-sub", m.UserGrn)
 
 	// Used tokens are rejected.
 	rec = f.do(t, "POST", "/invitations/"+token+"/accept", "", invitee)
@@ -281,8 +281,8 @@ func TestAcceptInvitation_Expired(t *testing.T) {
 	f := newFixture(t)
 	invitee := f.sessionCookieFor(t, "invitee-sub", "Invitee")
 
-	orgGRN := grn.New("garam", "default", org.ServiceTypeOrg, "acme")
-	creator := grn.New("garam", "default", user.ServiceType, "owner-sub")
+	orgGRN := grn.New("root", "default", org.ServiceTypeOrg, "acme")
+	creator := grn.New("root", "default", user.ServiceType, "owner-sub")
 	expired := org.NewInvitation("expired-tok", orgGRN, org.RoleMember, creator, time.Now().Add(-time.Hour))
 	require.NoError(t, f.orgs.CreateInvitation(testCtx(t), expired))
 

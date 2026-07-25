@@ -23,19 +23,27 @@ func ParseRole(s string) (Role, error) {
 	return "", errorx.New(errorx.KindInvalidArgument, "org: unknown role")
 }
 
-// Allows reports whether r grants at least the required role.
-func (r Role) Allows(required Role) bool {
-	return r.rank() >= required.rank()
-}
+// Org-scoped action constants. Domains own their actions (ADR-0003);
+// the authz engine matches the strings only.
+const (
+	ActionOrgRead       = "org:read"
+	ActionOrgUpdate     = "org:update"
+	ActionOrgDelete     = "org:delete"
+	ActionOrgMemberList = "org:member-list"
+	ActionOrgInvite     = "org:invite"
+)
 
-func (r Role) rank() int {
+// Actions returns the action patterns the role grants on an org. The
+// patterns feed IAM-style Allow statements; the evaluator resolves
+// wildcards.
+func (r Role) Actions() []string {
 	switch r {
 	case RoleOwner:
-		return 3
+		return []string{"org:*"}
 	case RoleAdmin:
-		return 2
+		return []string{ActionOrgRead, ActionOrgUpdate, ActionOrgMemberList, ActionOrgInvite}
 	case RoleMember:
-		return 1
+		return []string{ActionOrgRead, ActionOrgMemberList}
 	}
-	return 0
+	return nil
 }

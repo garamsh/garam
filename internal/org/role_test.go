@@ -24,24 +24,13 @@ func TestParseRole_Unknown(t *testing.T) {
 	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
 }
 
-func TestRoleAllows_Ordering(t *testing.T) {
-	cases := []struct {
-		held, required org.Role
-		allowed        bool
-	}{
-		{org.RoleOwner, org.RoleOwner, true},
-		{org.RoleOwner, org.RoleAdmin, true},
-		{org.RoleOwner, org.RoleMember, true},
-		{org.RoleAdmin, org.RoleOwner, false},
-		{org.RoleAdmin, org.RoleAdmin, true},
-		{org.RoleAdmin, org.RoleMember, true},
-		{org.RoleMember, org.RoleOwner, false},
-		{org.RoleMember, org.RoleAdmin, false},
-		{org.RoleMember, org.RoleMember, true},
-	}
-	for _, c := range cases {
-		t.Run(string(c.held)+"/"+string(c.required), func(t *testing.T) {
-			assert.Equal(t, c.allowed, c.held.Allows(c.required))
-		})
-	}
+func TestRoleActions_GrantSets(t *testing.T) {
+	assert.Equal(t, []string{"org:*"}, org.RoleOwner.Actions())
+	assert.Equal(t,
+		[]string{org.ActionOrgRead, org.ActionOrgUpdate, org.ActionOrgMemberList, org.ActionOrgInvite},
+		org.RoleAdmin.Actions())
+	assert.Equal(t,
+		[]string{org.ActionOrgRead, org.ActionOrgMemberList},
+		org.RoleMember.Actions())
+	assert.Empty(t, org.Role("").Actions())
 }

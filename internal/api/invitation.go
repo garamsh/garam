@@ -21,7 +21,7 @@ func (s *Server) CreateInvitation(w http.ResponseWriter, r *http.Request, orgSlu
 		return
 	}
 	g := orgGRN(orgSlug)
-	if err := s.requireRole(r, g, u.GRN(), org.RoleAdmin); err != nil {
+	if err := s.authorize(r, g, u, org.ActionOrgInvite); err != nil {
 		writeError(w, err)
 		return
 	}

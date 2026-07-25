@@ -1,0 +1,22 @@
+all: false
+template: testify
+formatter: goimports
+log-level: info
+dir: "{{.InterfaceDir}}/mocks"
+filename: "{{.InterfaceName | firstLower}}_test.go"
+pkgname: "{{.SrcPackageName}}_test"
+structname: "Mock{{.InterfaceName}}"
+packages:
+  github.com/garamsh/gaon/internal/org:
+    interfaces:
+      Store: {}
+  github.com/garamsh/gaon/internal/user:
+    interfaces:
+      Store: {}
+  github.com/garamsh/gaon/internal/agent:
+    interfaces:
+      Store: {}
+  github.com/garamsh/gaon/internal/authz:
+    interfaces:
+      RoleStore: {}
+      PolicyStore: {}

@@ -5,7 +5,7 @@ lint:
 
 format:
 	gofmt -l .
-	goimports -l .
+	go run golang.org/x/tools/cmd/goimports@v0.48.0 -l .
 
 test:
 	go test ./...

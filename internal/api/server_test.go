@@ -22,22 +22,24 @@ import (
 
 // fixture wires a Server to in-memory doubles.
 type fixture struct {
-	handler  http.Handler
-	users    *fakeUserStore
-	orgs     *fakeOrgStore
-	sessions *fakeSessionStore
-	provider *fakeProvider
+	handler   http.Handler
+	users     *fakeUserStore
+	orgs      *fakeOrgStore
+	sessions  *fakeSessionStore
+	provider  *fakeProvider
+	evaluator *fakeEvaluator
 }
 
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
 	f := &fixture{
-		users:    newFakeUserStore(),
-		orgs:     newFakeOrgStore(),
-		sessions: newFakeSessionStore(),
-		provider: &fakeProvider{name: "google"},
+		users:     newFakeUserStore(),
+		orgs:      newFakeOrgStore(),
+		sessions:  newFakeSessionStore(),
+		provider:  &fakeProvider{name: "google"},
+		evaluator: &fakeEvaluator{},
 	}
-	srv := api.NewServer(f.users, f.orgs, f.sessions, []authn.Provider{f.provider}, api.Config{SessionTTL: time.Hour})
+	srv := api.NewServer(f.users, f.orgs, f.sessions, []authn.Provider{f.provider}, f.evaluator, api.Config{SessionTTL: time.Hour})
 	f.handler = apigen.Handler(srv)
 	return f
 }

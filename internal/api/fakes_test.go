@@ -2,8 +2,10 @@ package api_test
 
 import (
 	"context"
+	"strings"
 	"sync"
 
+	"github.com/garamsh/gaon/internal/api"
 	"github.com/garamsh/gaon/internal/authn"
 	"github.com/garamsh/gaon/internal/grn"
 	"github.com/garamsh/gaon/internal/org"
@@ -26,6 +28,44 @@ func (p *fakeProvider) AuthCodeURL(state, verifier string) string {
 
 func (p *fakeProvider) Exchange(_ context.Context, _, _ string) (*authn.Identity, error) {
 	return p.identity, p.err
+}
+
+// fakeEvaluator substitutes the authz engine at the Evaluator
+// boundary. err short-circuits; otherwise the double mimics the
+// engine's IAM semantics: a matching Deny wins, else any matching
+// Allow permits. Patterns are exact or trailing-"*" prefix, which
+// covers every pattern the api package constructs.
+type fakeEvaluator struct {
+	err error
+}
+
+func (e *fakeEvaluator) Evaluate(_ context.Context, in api.EvalInput) (bool, error) {
+	if e.err != nil {
+		return false, e.err
+	}
+	allowed := false
+	for _, s := range in.Statements {
+		if !matchesAny(s.Action, in.Action) || !matchesAny(s.Resource, in.Object.String()) {
+			continue
+		}
+		if s.Effect == api.EffectDeny {
+			return false, nil
+		}
+		allowed = true
+	}
+	return allowed, nil
+}
+
+func matchesAny(patterns []string, value string) bool {
+	for _, p := range patterns {
+		if p == value {
+			return true
+		}
+		if strings.HasSuffix(p, "*") && strings.HasPrefix(value, strings.TrimSuffix(p, "*")) {
+			return true
+		}
+	}
+	return false
 }
 
 // fakeUserStore is an in-memory user.Store double. Unimplemented

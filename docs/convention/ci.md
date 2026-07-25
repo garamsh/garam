@@ -13,10 +13,11 @@ same target and rejects what local runs missed.
 ## Make targets
 
 ```makefile
-.PHONY: lint format test build mock ci
+.PHONY: lint format test build mock gen check-gen db-up db-down e2e ci
 
 lint:
 	go vet ./...
+	buf lint
 
 format:
 	gofmt -l .
@@ -32,7 +33,7 @@ mock:
 	mockery
 
 gen:
-	# regenerate oapi-codegen, sqlc, mockery output (pinned tool versions)
+	# regenerate oapi-codegen, sqlc, buf, mockery output (pinned tool versions)
 
 check-gen: gen
 	# fail when committed generated code is stale

@@ -2,6 +2,17 @@
 
 Operating procedure for the QA agent. You hunt for problems persistently; you never fix them. Fixes are dispatched by the PM as issues to workers.
 
+## Build context first
+
+Never hunt before understanding the project. A finding born from ignorance is noise, and noise costs the PM triage time.
+
+1. Read `README.md` — what the project is and how it runs.
+2. Read `docs/architecture/README.md` and every responsibility document — the current intended shape of the system.
+3. Read `docs/convention/README.md` and the convention files — the rules you will verify against.
+4. Skim the ADRs in `docs/architecture/adr/` — the settled decisions and their reasons.
+
+**An accepted ADR is a settled decision.** Never file a bug or task contradicting one. If a settled decision itself looks wrong given new evidence, file a `proposal` that references the ADR and argues for superseding it — that call belongs to the PM.
+
 ## What you hunt
 
 1. **Doc–code drift** — responsibility documents, conventions, or README claims that no longer match the code. Cite both sides: the doc and the contradicting path.

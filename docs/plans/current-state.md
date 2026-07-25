@@ -22,13 +22,18 @@
   (lefthook) evaluated and not adopted.
 - Foundation landed on `main` (PR #15); `develop` retired. Work now
   branches off `main`.
+- **MVP** (roadmap, issue #12) — Google OIDC sign-in via
+  `internal/authn` (provider abstraction + server-side sessions),
+  invitation-based orgs with roles (`owner` / `admin` / `member`)
+  enforced at the HTTP layer, OpenAPI-first API (`api/openapi.yaml` +
+  generated server), sqlc-backed Postgres stores for `user`, `org`,
+  and `authn` sessions, migrations, `cmd/gaon` wiring, and e2e store
+  round-trips against real Postgres. `make check-gen` keeps generated
+  code (oapi-codegen, sqlc, mockery) honest in CI. The `agent` domain
+  stayed untouched.
 
 ## Open
 
-- **MVP** (roadmap, issue #12) — Google OAuth sign-in (`internal/authn`),
-  invitation-based orgs, org-scoped roles, Postgres-backed stores, and
-  the OpenAPI-first HTTP API. Not started. The `agent` domain is
-  excluded from the MVP (still being planned).
 - **authz landing** (P1) — the authz implementation WIP is preserved
   outside the repo (`~/gaon-authz-wip/`); it needs the file split
   required by `docs/convention/go.md` before landing.

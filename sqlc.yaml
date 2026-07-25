@@ -1,0 +1,26 @@
+version: "2"
+sql:
+  - engine: postgresql
+    schema: migrations/000001_init.up.sql
+    queries: internal/user/queries.sql
+    gen:
+      go:
+        package: db
+        out: internal/user/db
+        sql_package: pgx/v5
+  - engine: postgresql
+    schema: migrations/000001_init.up.sql
+    queries: internal/org/queries.sql
+    gen:
+      go:
+        package: db
+        out: internal/org/db
+        sql_package: pgx/v5
+  - engine: postgresql
+    schema: migrations/000001_init.up.sql
+    queries: internal/authn/queries.sql
+    gen:
+      go:
+        package: db
+        out: internal/authn/db
+        sql_package: pgx/v5

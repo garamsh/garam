@@ -32,6 +32,13 @@ Decision: approve / request changes / reject
 - Tag every requested change **blocker** or **nit**.
 - A nit never blocks a merge. A blocker always states the expected fix direction — "wrong" without "do this instead" is noise.
 
+## Single-account setups
+
+When the PM and authors share one GitHub account, GitHub rejects `approve` on one's own PR (comment and request-changes still work). In that setup:
+
+- **The merge is the approval.** Post the evidence table as a `comment` review, then merge immediately.
+- Request-changes reviews work normally — use them as usual.
+
 ## Responding to a review (author)
 
 - Address every blocker, or rebut it by citing a rule or path that supports your approach. Silent ignoring is not allowed.

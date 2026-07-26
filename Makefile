@@ -4,7 +4,10 @@ MOCKERY := go run github.com/vektra/mockery/v3@v3.7.2
 BUF := go run github.com/bufbuild/buf/cmd/buf@v1.72.0
 GOIMPORTS := go run golang.org/x/tools/cmd/goimports@v0.48.0
 
-TEST_DATABASE_URL ?= postgres://gaon:gaon@localhost:55432/gaon?sslmode=disable
+# Host port for the dev Postgres container. Override per worktree
+# (e.g. GAON_DB_PORT=55440 make db-up e2e) to run worktrees in parallel.
+GAON_DB_PORT ?= 55432
+TEST_DATABASE_URL ?= postgres://gaon:gaon@localhost:$(GAON_DB_PORT)/gaon?sslmode=disable
 
 .PHONY: lint format test build mock gen check-gen e2e db-up db-down ci
 

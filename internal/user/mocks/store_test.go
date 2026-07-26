@@ -39,69 +39,6 @@ func (_m *MockStore) EXPECT() *MockStore_Expecter {
 	return &MockStore_Expecter{mock: &_m.Mock}
 }
 
-// AddOrganization provides a mock function for the type MockStore
-func (_mock *MockStore) AddOrganization(ctx context.Context, userGRN grn.GRN, orgGRN grn.GRN) error {
-	ret := _mock.Called(ctx, userGRN, orgGRN)
-
-	if len(ret) == 0 {
-		panic("no return value specified for AddOrganization")
-	}
-
-	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, grn.GRN) error); ok {
-		r0 = returnFunc(ctx, userGRN, orgGRN)
-	} else {
-		r0 = ret.Error(0)
-	}
-	return r0
-}
-
-// MockStore_AddOrganization_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'AddOrganization'
-type MockStore_AddOrganization_Call struct {
-	*mock.Call
-}
-
-// AddOrganization is a helper method to define mock.On call
-//   - ctx context.Context
-//   - userGRN grn.GRN
-//   - orgGRN grn.GRN
-func (_e *MockStore_Expecter) AddOrganization(ctx any, userGRN any, orgGRN any) *MockStore_AddOrganization_Call {
-	return &MockStore_AddOrganization_Call{Call: _e.mock.On("AddOrganization", ctx, userGRN, orgGRN)}
-}
-
-func (_c *MockStore_AddOrganization_Call) Run(run func(ctx context.Context, userGRN grn.GRN, orgGRN grn.GRN)) *MockStore_AddOrganization_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
-		}
-		var arg1 grn.GRN
-		if args[1] != nil {
-			arg1 = args[1].(grn.GRN)
-		}
-		var arg2 grn.GRN
-		if args[2] != nil {
-			arg2 = args[2].(grn.GRN)
-		}
-		run(
-			arg0,
-			arg1,
-			arg2,
-		)
-	})
-	return _c
-}
-
-func (_c *MockStore_AddOrganization_Call) Return(err error) *MockStore_AddOrganization_Call {
-	_c.Call.Return(err)
-	return _c
-}
-
-func (_c *MockStore_AddOrganization_Call) RunAndReturn(run func(ctx context.Context, userGRN grn.GRN, orgGRN grn.GRN) error) *MockStore_AddOrganization_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
 // Create provides a mock function for the type MockStore
 func (_mock *MockStore) Create(ctx context.Context, u *user.User) error {
 	ret := _mock.Called(ctx, u)
@@ -348,69 +285,6 @@ func (_c *MockStore_List_Call) Return(users []*user.User, err error) *MockStore_
 }
 
 func (_c *MockStore_List_Call) RunAndReturn(run func(ctx context.Context, f user.ListFilter) ([]*user.User, error)) *MockStore_List_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// RemoveOrganization provides a mock function for the type MockStore
-func (_mock *MockStore) RemoveOrganization(ctx context.Context, userGRN grn.GRN, orgGRN grn.GRN) error {
-	ret := _mock.Called(ctx, userGRN, orgGRN)
-
-	if len(ret) == 0 {
-		panic("no return value specified for RemoveOrganization")
-	}
-
-	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, grn.GRN) error); ok {
-		r0 = returnFunc(ctx, userGRN, orgGRN)
-	} else {
-		r0 = ret.Error(0)
-	}
-	return r0
-}
-
-// MockStore_RemoveOrganization_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RemoveOrganization'
-type MockStore_RemoveOrganization_Call struct {
-	*mock.Call
-}
-
-// RemoveOrganization is a helper method to define mock.On call
-//   - ctx context.Context
-//   - userGRN grn.GRN
-//   - orgGRN grn.GRN
-func (_e *MockStore_Expecter) RemoveOrganization(ctx any, userGRN any, orgGRN any) *MockStore_RemoveOrganization_Call {
-	return &MockStore_RemoveOrganization_Call{Call: _e.mock.On("RemoveOrganization", ctx, userGRN, orgGRN)}
-}
-
-func (_c *MockStore_RemoveOrganization_Call) Run(run func(ctx context.Context, userGRN grn.GRN, orgGRN grn.GRN)) *MockStore_RemoveOrganization_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
-		}
-		var arg1 grn.GRN
-		if args[1] != nil {
-			arg1 = args[1].(grn.GRN)
-		}
-		var arg2 grn.GRN
-		if args[2] != nil {
-			arg2 = args[2].(grn.GRN)
-		}
-		run(
-			arg0,
-			arg1,
-			arg2,
-		)
-	})
-	return _c
-}
-
-func (_c *MockStore_RemoveOrganization_Call) Return(err error) *MockStore_RemoveOrganization_Call {
-	_c.Call.Return(err)
-	return _c
-}
-
-func (_c *MockStore_RemoveOrganization_Call) RunAndReturn(run func(ctx context.Context, userGRN grn.GRN, orgGRN grn.GRN) error) *MockStore_RemoveOrganization_Call {
 	_c.Call.Return(run)
 	return _c
 }

@@ -71,11 +71,10 @@ type Session struct {
 }
 
 type User struct {
-	Grn           string
-	Nickname      string
-	Roles         []string
-	Policies      []string
-	Organizations []string
-	CreatedAt     pgtype.Timestamptz
-	UpdatedAt     pgtype.Timestamptz
+	Grn       string
+	Nickname  string
+	Roles     []string
+	Policies  []string
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
 }

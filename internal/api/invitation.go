@@ -97,9 +97,5 @@ func (s *Server) AcceptInvitation(w http.ResponseWriter, r *http.Request, token 
 		writeError(w, err)
 		return
 	}
-	if err := s.users.AddOrganization(r.Context(), u.GRN(), inv.Organization()); err != nil {
-		writeError(w, err)
-		return
-	}
 	writeJSON(w, http.StatusOK, memberToAPI(m))
 }

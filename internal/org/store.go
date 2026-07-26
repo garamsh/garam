@@ -12,8 +12,23 @@ type ListFilter struct {
 	Limit  int
 }
 
-// Patch holds partial-update fields. Nil entries are unchanged.
+// Patch holds Organization partial-update fields. Nil entries are
+// unchanged.
 type Patch struct {
+	Name *string
+}
+
+// GroupPatch holds Group partial-update fields. Nil entries are
+// unchanged.
+type GroupPatch struct {
+	Name     *string
+	Roles    []string
+	Policies []string
+}
+
+// ProjectPatch holds Project partial-update fields. Nil entries are
+// unchanged.
+type ProjectPatch struct {
 	Name     *string
 	Roles    []string
 	Policies []string
@@ -34,7 +49,7 @@ type Store interface {
 	CreateGroup(ctx context.Context, g *Group) error
 	GetGroup(ctx context.Context, g grn.GRN) (*Group, error)
 	ListGroups(ctx context.Context, f ListFilter) ([]*Group, error)
-	UpdateGroup(ctx context.Context, g grn.GRN, p Patch) (*Group, error)
+	UpdateGroup(ctx context.Context, g grn.GRN, p GroupPatch) (*Group, error)
 	DeleteGroup(ctx context.Context, g grn.GRN) error
 	AddGroupMember(ctx context.Context, groupGRN, memberGRN grn.GRN) error
 	RemoveGroupMember(ctx context.Context, groupGRN, memberGRN grn.GRN) error
@@ -44,7 +59,7 @@ type Store interface {
 	CreateProject(ctx context.Context, p *Project) error
 	GetProject(ctx context.Context, g grn.GRN) (*Project, error)
 	ListProjects(ctx context.Context, f ListFilter) ([]*Project, error)
-	UpdateProject(ctx context.Context, g grn.GRN, p Patch) (*Project, error)
+	UpdateProject(ctx context.Context, g grn.GRN, p ProjectPatch) (*Project, error)
 	DeleteProject(ctx context.Context, g grn.GRN) error
 	AddProjectMember(ctx context.Context, projectGRN, memberGRN grn.GRN) error
 	RemoveProjectMember(ctx context.Context, projectGRN, memberGRN grn.GRN) error

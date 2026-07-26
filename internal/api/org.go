@@ -42,10 +42,6 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	if err := s.users.AddOrganization(r.Context(), u.GRN(), g); err != nil {
-		writeError(w, err)
-		return
-	}
 	writeJSON(w, http.StatusCreated, orgToAPI(o))
 }
 

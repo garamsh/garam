@@ -1,10 +1,9 @@
 CREATE TABLE users (
-    grn           text PRIMARY KEY,
-    nickname      text NOT NULL,
-    roles         text[] NOT NULL DEFAULT '{}',
-    policies      text[] NOT NULL DEFAULT '{}',
-    organizations text[] NOT NULL DEFAULT '{}',
-    created_at    timestamptz NOT NULL,
+    grn        text PRIMARY KEY,
+    nickname   text NOT NULL,
+    roles      text[] NOT NULL DEFAULT '{}',
+    policies   text[] NOT NULL DEFAULT '{}',
+    created_at timestamptz NOT NULL,
     updated_at    timestamptz NOT NULL
 );
 

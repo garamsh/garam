@@ -1713,7 +1713,7 @@ func (_c *MockStore_RemoveProjectMember_Call) RunAndReturn(run func(ctx context.
 }
 
 // UpdateGroup provides a mock function for the type MockStore
-func (_mock *MockStore) UpdateGroup(ctx context.Context, g grn.GRN, p org.Patch) (*org.Group, error) {
+func (_mock *MockStore) UpdateGroup(ctx context.Context, g grn.GRN, p org.GroupPatch) (*org.Group, error) {
 	ret := _mock.Called(ctx, g, p)
 
 	if len(ret) == 0 {
@@ -1722,17 +1722,17 @@ func (_mock *MockStore) UpdateGroup(ctx context.Context, g grn.GRN, p org.Patch)
 
 	var r0 *org.Group
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, org.Patch) (*org.Group, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, org.GroupPatch) (*org.Group, error)); ok {
 		return returnFunc(ctx, g, p)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, org.Patch) *org.Group); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, org.GroupPatch) *org.Group); ok {
 		r0 = returnFunc(ctx, g, p)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*org.Group)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, grn.GRN, org.Patch) error); ok {
+	if returnFunc, ok := ret.Get(1).(func(context.Context, grn.GRN, org.GroupPatch) error); ok {
 		r1 = returnFunc(ctx, g, p)
 	} else {
 		r1 = ret.Error(1)
@@ -1748,12 +1748,12 @@ type MockStore_UpdateGroup_Call struct {
 // UpdateGroup is a helper method to define mock.On call
 //   - ctx context.Context
 //   - g grn.GRN
-//   - p org.Patch
+//   - p org.GroupPatch
 func (_e *MockStore_Expecter) UpdateGroup(ctx any, g any, p any) *MockStore_UpdateGroup_Call {
 	return &MockStore_UpdateGroup_Call{Call: _e.mock.On("UpdateGroup", ctx, g, p)}
 }
 
-func (_c *MockStore_UpdateGroup_Call) Run(run func(ctx context.Context, g grn.GRN, p org.Patch)) *MockStore_UpdateGroup_Call {
+func (_c *MockStore_UpdateGroup_Call) Run(run func(ctx context.Context, g grn.GRN, p org.GroupPatch)) *MockStore_UpdateGroup_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -1763,9 +1763,9 @@ func (_c *MockStore_UpdateGroup_Call) Run(run func(ctx context.Context, g grn.GR
 		if args[1] != nil {
 			arg1 = args[1].(grn.GRN)
 		}
-		var arg2 org.Patch
+		var arg2 org.GroupPatch
 		if args[2] != nil {
-			arg2 = args[2].(org.Patch)
+			arg2 = args[2].(org.GroupPatch)
 		}
 		run(
 			arg0,
@@ -1781,7 +1781,7 @@ func (_c *MockStore_UpdateGroup_Call) Return(group *org.Group, err error) *MockS
 	return _c
 }
 
-func (_c *MockStore_UpdateGroup_Call) RunAndReturn(run func(ctx context.Context, g grn.GRN, p org.Patch) (*org.Group, error)) *MockStore_UpdateGroup_Call {
+func (_c *MockStore_UpdateGroup_Call) RunAndReturn(run func(ctx context.Context, g grn.GRN, p org.GroupPatch) (*org.Group, error)) *MockStore_UpdateGroup_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -1861,7 +1861,7 @@ func (_c *MockStore_UpdateOrg_Call) RunAndReturn(run func(ctx context.Context, g
 }
 
 // UpdateProject provides a mock function for the type MockStore
-func (_mock *MockStore) UpdateProject(ctx context.Context, g grn.GRN, p org.Patch) (*org.Project, error) {
+func (_mock *MockStore) UpdateProject(ctx context.Context, g grn.GRN, p org.ProjectPatch) (*org.Project, error) {
 	ret := _mock.Called(ctx, g, p)
 
 	if len(ret) == 0 {
@@ -1870,17 +1870,17 @@ func (_mock *MockStore) UpdateProject(ctx context.Context, g grn.GRN, p org.Patc
 
 	var r0 *org.Project
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, org.Patch) (*org.Project, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, org.ProjectPatch) (*org.Project, error)); ok {
 		return returnFunc(ctx, g, p)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, org.Patch) *org.Project); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, org.ProjectPatch) *org.Project); ok {
 		r0 = returnFunc(ctx, g, p)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*org.Project)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, grn.GRN, org.Patch) error); ok {
+	if returnFunc, ok := ret.Get(1).(func(context.Context, grn.GRN, org.ProjectPatch) error); ok {
 		r1 = returnFunc(ctx, g, p)
 	} else {
 		r1 = ret.Error(1)
@@ -1896,12 +1896,12 @@ type MockStore_UpdateProject_Call struct {
 // UpdateProject is a helper method to define mock.On call
 //   - ctx context.Context
 //   - g grn.GRN
-//   - p org.Patch
+//   - p org.ProjectPatch
 func (_e *MockStore_Expecter) UpdateProject(ctx any, g any, p any) *MockStore_UpdateProject_Call {
 	return &MockStore_UpdateProject_Call{Call: _e.mock.On("UpdateProject", ctx, g, p)}
 }
 
-func (_c *MockStore_UpdateProject_Call) Run(run func(ctx context.Context, g grn.GRN, p org.Patch)) *MockStore_UpdateProject_Call {
+func (_c *MockStore_UpdateProject_Call) Run(run func(ctx context.Context, g grn.GRN, p org.ProjectPatch)) *MockStore_UpdateProject_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -1911,9 +1911,9 @@ func (_c *MockStore_UpdateProject_Call) Run(run func(ctx context.Context, g grn.
 		if args[1] != nil {
 			arg1 = args[1].(grn.GRN)
 		}
-		var arg2 org.Patch
+		var arg2 org.ProjectPatch
 		if args[2] != nil {
-			arg2 = args[2].(org.Patch)
+			arg2 = args[2].(org.ProjectPatch)
 		}
 		run(
 			arg0,
@@ -1929,7 +1929,7 @@ func (_c *MockStore_UpdateProject_Call) Return(project *org.Project, err error) 
 	return _c
 }
 
-func (_c *MockStore_UpdateProject_Call) RunAndReturn(run func(ctx context.Context, g grn.GRN, p org.Patch) (*org.Project, error)) *MockStore_UpdateProject_Call {
+func (_c *MockStore_UpdateProject_Call) RunAndReturn(run func(ctx context.Context, g grn.GRN, p org.ProjectPatch) (*org.Project, error)) *MockStore_UpdateProject_Call {
 	_c.Call.Return(run)
 	return _c
 }

@@ -82,12 +82,13 @@ Human identity.
 |-------|---------|
 | `grn.GRN` | user identifier (`service_type = "user"`) |
 | `nickname` | display name, not enforced unique |
-| `organizations` | orgs the user belongs to |
 | `roles` | directly assigned roles |
 | `policies` | directly assigned policies |
 
-A user can belong to multiple orgs. Roles and policies on the user are
-direct grants; group-derived grants resolve at check time.
+A user can belong to multiple orgs; membership is recorded only in the
+org domain (`Membership` / `org_members`), never duplicated on the
+user. Roles and policies on the user are direct grants; group-derived
+grants resolve at check time.
 
 ## `internal/agent`
 

@@ -16,7 +16,11 @@ packages:
   github.com/garamsh/gaon/internal/agent:
     interfaces:
       Store: {}
-  github.com/garamsh/gaon/internal/authz:
+  github.com/garamsh/gaon/internal/api:
     interfaces:
-      RoleStore: {}
-      PolicyStore: {}
+      Evaluator:
+        config:
+          # Imported by internal/api's tests, so it must build as a
+          # regular package; test-only files cannot be imported.
+          filename: "evaluator.go"
+          pkgname: "mocks"

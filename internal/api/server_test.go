@@ -5,15 +5,18 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	apigen "github.com/garamsh/gaon/api"
 	"github.com/garamsh/gaon/internal/api"
+	"github.com/garamsh/gaon/internal/api/mocks"
 	"github.com/garamsh/gaon/internal/authn"
 	"github.com/garamsh/gaon/internal/grn"
 	"github.com/garamsh/gaon/internal/org"
@@ -27,7 +30,7 @@ type fixture struct {
 	orgs      *fakeOrgStore
 	sessions  *fakeSessionStore
 	provider  *fakeProvider
-	evaluator *fakeEvaluator
+	evaluator *mocks.MockEvaluator
 }
 
 func newFixture(t *testing.T) *fixture {
@@ -37,11 +40,26 @@ func newFixture(t *testing.T) *fixture {
 		orgs:      newFakeOrgStore(),
 		sessions:  newFakeSessionStore(),
 		provider:  &fakeProvider{name: "google"},
-		evaluator: &fakeEvaluator{},
+		evaluator: mocks.NewMockEvaluator(t),
 	}
 	srv := api.NewServer(f.users, f.orgs, f.sessions, []authn.Provider{f.provider}, f.evaluator, api.Config{SessionTTL: time.Hour})
 	f.handler = apigen.Handler(srv)
 	return f
+}
+
+// permission pairs a subject with an action the evaluator permits.
+type permission struct {
+	subject grn.GRN
+	action  string
+}
+
+// permit stubs the Evaluator seam: only the listed subject × action
+// pairs are allowed; every other question is denied.
+func (f *fixture) permit(perms ...permission) {
+	f.evaluator.EXPECT().Evaluate(mock.Anything, mock.Anything).
+		RunAndReturn(func(_ context.Context, in api.EvalInput) (bool, error) {
+			return slices.Contains(perms, permission{in.Subject, in.Action}), nil
+		})
 }
 
 // do issues a request and returns the recorder.
@@ -184,6 +202,15 @@ func TestOrgFlow_RoleEnforcement(t *testing.T) {
 	stranger := f.sessionCookieFor(t, "stranger-sub", "Stranger")
 
 	slug := createOrg(t, f, owner, "acme")
+	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
+	memberGRN := grn.New("root", "default", user.ServiceType, "member-sub")
+	f.permit(
+		permission{ownerGRN, org.ActionOrgRead},
+		permission{ownerGRN, org.ActionOrgUpdate},
+		permission{ownerGRN, org.ActionOrgDelete},
+		permission{memberGRN, org.ActionOrgRead},
+		permission{memberGRN, org.ActionOrgMemberList},
+	)
 
 	// Owner reads and renames.
 	rec := f.do(t, "GET", "/orgs/"+slug, "", owner)
@@ -200,7 +227,6 @@ func TestOrgFlow_RoleEnforcement(t *testing.T) {
 	// A plain member can read but not update or delete.
 	member := f.sessionCookieFor(t, "member-sub", "Member")
 	orgGRN := grn.New("root", "default", org.ServiceTypeOrg, slug)
-	memberGRN := grn.New("root", "default", user.ServiceType, "member-sub")
 	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRN, memberGRN, org.RoleMember)))
 
 	rec = f.do(t, "GET", "/orgs/"+slug, "", member)
@@ -253,6 +279,7 @@ func TestInvitationFlow_Lifecycle(t *testing.T) {
 	orgGRN := grn.New("root", "default", org.ServiceTypeOrg, slug)
 	memberGRN := grn.New("root", "default", user.ServiceType, "member-sub")
 	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRN, memberGRN, org.RoleMember)))
+	f.permit(permission{grn.New("root", "default", user.ServiceType, "owner-sub"), org.ActionOrgInvite})
 
 	rec := f.do(t, "POST", "/orgs/"+slug+"/invitations", `{"role":"member"}`, member)
 	assert.Equal(t, http.StatusForbidden, rec.Code)

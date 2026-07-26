@@ -55,9 +55,7 @@ over gRPC (ADR-0003 stage 2).
 | `GRPCServer` | Check/Explain over `proto/gaon/authz/v1` |
 
 The api server authorizes through the gRPC client; the engine matches
-strings only and never imports a domain. Legacy interfaces
-(`Checker`, `Manager`, `RoleStore`, `PolicyStore`) are unused and
-tracked for removal in issue #28.
+strings only and never imports a domain.
 
 ## `internal/authn`
 

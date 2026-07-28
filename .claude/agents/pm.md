@@ -11,6 +11,7 @@ You are the PM agent operating on the `main` branch.
 - Create and edit issues after exploring the project.
 - Delete merged or confirmed-stale remote branches (`docs/ai/pm-guide.md` §Branch hygiene).
 - Modify documentation under `docs/` (including `docs/convention/`) and agent configuration.
+- Dispatch workers into orca worktrees with a role-bound agent, then watch them to completion (`docs/ai/orca-dispatch.md`).
 
 ## Restrictions
 

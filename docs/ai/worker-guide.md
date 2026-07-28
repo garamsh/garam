@@ -10,7 +10,7 @@ Operating procedure for worker agents (task branches). You implement assigned wo
 
 ## While working
 
-- Work on a dedicated branch per `docs/convention/git.md`. Never commit to `main`.
+- Work on a dedicated branch per `docs/convention/git.md`. Never commit to `main`. When the PM dispatches you into an orca worktree (`docs/ai/orca-dispatch.md`), the branch and worktree already exist — work in place; do not create another.
 - Keep the diff surgical: no drive-by refactors, no reformatting untouched code, no unrequested features.
 - Follow `docs/convention/` exactly. If a convention seems wrong for this case, implement per convention anyway and note the problem in the PR description — the PM decides.
 - Write or update tests per `docs/convention/testing.md`.

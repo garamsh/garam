@@ -1,0 +1,239 @@
+package api
+
+import (
+	"net/http"
+
+	apigen "github.com/garamsh/gaon/api"
+	"github.com/garamsh/gaon/internal/errorx"
+	"github.com/garamsh/gaon/internal/grn"
+	"github.com/garamsh/gaon/internal/org"
+)
+
+// CreateGroup creates a group in the org. Requires the admin role.
+func (s *Server) CreateGroup(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org) {
+	u, err := s.currentUser(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.authorize(r, orgGRN(orgSlug), u, org.ActionGroupCreate); err != nil {
+		writeError(w, err)
+		return
+	}
+	var body apigen.GroupCreate
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, err)
+		return
+	}
+	if body.Name == "" {
+		writeError(w, errorx.New(errorx.KindInvalidArgument, "name is required"))
+		return
+	}
+	id, err := randomHex(8)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	gr := org.NewGroup(groupGRN(orgSlug, id), body.Name, orgGRN(orgSlug))
+	if err := s.orgs.CreateGroup(r.Context(), gr); err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, groupToAPI(gr))
+}
+
+// ListGroups lists the org's groups. Requires the member role.
+func (s *Server) ListGroups(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, params apigen.ListGroupsParams) {
+	u, err := s.currentUser(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.authorize(r, orgGRN(orgSlug), u, org.ActionGroupRead); err != nil {
+		writeError(w, err)
+		return
+	}
+	var f org.ListFilter
+	if params.Limit != nil {
+		f.Limit = *params.Limit
+	}
+	if params.Offset != nil {
+		f.Offset = *params.Offset
+	}
+	groups, err := s.orgs.ListGroups(r.Context(), orgGRN(orgSlug), f)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	out := make([]apigen.Group, 0, len(groups))
+	for _, gr := range groups {
+		out = append(out, groupToAPI(gr))
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// GetGroup returns a group of the org. Requires the member role.
+func (s *Server) GetGroup(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, groupSlug apigen.GroupSlug) {
+	u, err := s.currentUser(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.authorize(r, orgGRN(orgSlug), u, org.ActionGroupRead); err != nil {
+		writeError(w, err)
+		return
+	}
+	gr, err := s.orgs.GetGroup(r.Context(), groupGRN(orgSlug, groupSlug))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, groupToAPI(gr))
+}
+
+// UpdateGroup renames a group. Requires the admin role.
+func (s *Server) UpdateGroup(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, groupSlug apigen.GroupSlug) {
+	u, err := s.currentUser(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.authorize(r, orgGRN(orgSlug), u, org.ActionGroupUpdate); err != nil {
+		writeError(w, err)
+		return
+	}
+	var body apigen.GroupPatch
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, err)
+		return
+	}
+	if body.Name != nil && *body.Name == "" {
+		writeError(w, errorx.New(errorx.KindInvalidArgument, "name must not be empty"))
+		return
+	}
+	gr, err := s.orgs.UpdateGroup(r.Context(), groupGRN(orgSlug, groupSlug), org.GroupPatch{Name: body.Name})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, groupToAPI(gr))
+}
+
+// DeleteGroup removes a group. Requires the admin role.
+func (s *Server) DeleteGroup(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, groupSlug apigen.GroupSlug) {
+	u, err := s.currentUser(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.authorize(r, orgGRN(orgSlug), u, org.ActionGroupDelete); err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.orgs.DeleteGroup(r.Context(), groupGRN(orgSlug, groupSlug)); err != nil {
+		writeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ListGroupMembers lists a group's members. Requires the member role.
+func (s *Server) ListGroupMembers(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, groupSlug apigen.GroupSlug) {
+	u, err := s.currentUser(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.authorize(r, orgGRN(orgSlug), u, org.ActionGroupMemberList); err != nil {
+		writeError(w, err)
+		return
+	}
+	g := groupGRN(orgSlug, groupSlug)
+	// A missing group must 404 rather than list as empty.
+	if _, err := s.orgs.GetGroup(r.Context(), g); err != nil {
+		writeError(w, err)
+		return
+	}
+	members, err := s.orgs.ListGroupMembers(r.Context(), g)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, memberRefs(members))
+}
+
+// AddGroupMember adds a member to a group. Requires the admin role.
+func (s *Server) AddGroupMember(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, groupSlug apigen.GroupSlug) {
+	u, err := s.currentUser(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.authorize(r, orgGRN(orgSlug), u, org.ActionGroupMemberAdd); err != nil {
+		writeError(w, err)
+		return
+	}
+	var body apigen.MemberRef
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, err)
+		return
+	}
+	member, err := grn.Parse(body.MemberGrn)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.orgs.AddGroupMember(r.Context(), groupGRN(orgSlug, groupSlug), member); err != nil {
+		writeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// RemoveGroupMember removes a member from a group. Requires the admin
+// role.
+func (s *Server) RemoveGroupMember(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, groupSlug apigen.GroupSlug, memberGrn apigen.MemberGrn) {
+	u, err := s.currentUser(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.authorize(r, orgGRN(orgSlug), u, org.ActionGroupMemberRemove); err != nil {
+		writeError(w, err)
+		return
+	}
+	member, err := grn.Parse(memberGrn)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.orgs.RemoveGroupMember(r.Context(), groupGRN(orgSlug, groupSlug), member); err != nil {
+		writeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// groupGRN builds the GRN of a group owned by the org. The org
+// segment scopes the identifier, so a group of another org is not
+// addressable through that org's paths.
+func groupGRN(orgSlug, groupSlug string) grn.GRN {
+	return grn.New(orgSlug, grn.DefaultProject, org.ServiceTypeGroup, groupSlug)
+}
+
+func groupToAPI(g *org.Group) apigen.Group {
+	return apigen.Group{
+		Grn:    g.GRN().String(),
+		Name:   g.Name(),
+		OrgGrn: g.Organization().String(),
+	}
+}
+
+// memberRefs renders group or project member GRNs for the wire.
+func memberRefs(members []grn.GRN) []apigen.MemberRef {
+	out := make([]apigen.MemberRef, 0, len(members))
+	for _, m := range members {
+		out = append(out, apigen.MemberRef{MemberGrn: m.String()})
+	}
+	return out
+}

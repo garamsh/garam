@@ -25,12 +25,19 @@ func TestParseRole_Unknown(t *testing.T) {
 }
 
 func TestRoleActions_GrantSets(t *testing.T) {
-	assert.Equal(t, []string{"org:*"}, org.RoleOwner.Actions())
+	assert.Equal(t, []string{"org:*", "group:*", "project:*"}, org.RoleOwner.Actions())
 	assert.Equal(t,
-		[]string{org.ActionOrgRead, org.ActionOrgUpdate, org.ActionOrgMemberList, org.ActionOrgInvite},
+		[]string{
+			org.ActionOrgRead, org.ActionOrgUpdate, org.ActionOrgMemberList, org.ActionOrgInvite,
+			"group:*", "project:*",
+		},
 		org.RoleAdmin.Actions())
 	assert.Equal(t,
-		[]string{org.ActionOrgRead, org.ActionOrgMemberList},
+		[]string{
+			org.ActionOrgRead, org.ActionOrgMemberList,
+			org.ActionGroupRead, org.ActionGroupMemberList,
+			org.ActionProjectRead, org.ActionProjectMemberList,
+		},
 		org.RoleMember.Actions())
 	assert.Empty(t, org.Role("").Actions())
 }

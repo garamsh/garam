@@ -2,9 +2,12 @@ package api_test
 
 import (
 	"context"
+	"slices"
+	"strings"
 	"sync"
 
 	"github.com/garamsh/gaon/internal/authn"
+	"github.com/garamsh/gaon/internal/errorx"
 	"github.com/garamsh/gaon/internal/grn"
 	"github.com/garamsh/gaon/internal/org"
 	"github.com/garamsh/gaon/internal/user"
@@ -92,23 +95,31 @@ func (s *fakeSessionStore) Delete(_ context.Context, token string) error {
 	return nil
 }
 
-// fakeOrgStore is an in-memory org.Store double for the org,
-// membership, and invitation methods the API exercises.
+// fakeOrgStore is an in-memory org.Store double for the org, group,
+// project, membership, and invitation methods the API exercises.
 type fakeOrgStore struct {
 	org.Store
-	mu          sync.Mutex
-	orgs        map[string]*org.Organization
-	members     map[string]*org.Membership
-	invitations map[string]*org.Invitation
-	accepted    map[string]bool
+	mu             sync.Mutex
+	orgs           map[string]*org.Organization
+	groups         map[string]*org.Group
+	groupMembers   map[string][]grn.GRN
+	projects       map[string]*org.Project
+	projectMembers map[string][]grn.GRN
+	members        map[string]*org.Membership
+	invitations    map[string]*org.Invitation
+	accepted       map[string]bool
 }
 
 func newFakeOrgStore() *fakeOrgStore {
 	return &fakeOrgStore{
-		orgs:        map[string]*org.Organization{},
-		members:     map[string]*org.Membership{},
-		invitations: map[string]*org.Invitation{},
-		accepted:    map[string]bool{},
+		orgs:           map[string]*org.Organization{},
+		groups:         map[string]*org.Group{},
+		groupMembers:   map[string][]grn.GRN{},
+		projects:       map[string]*org.Project{},
+		projectMembers: map[string][]grn.GRN{},
+		members:        map[string]*org.Membership{},
+		invitations:    map[string]*org.Invitation{},
+		accepted:       map[string]bool{},
 	}
 }
 
@@ -167,6 +178,178 @@ func (s *fakeOrgStore) ListOrgsByMember(_ context.Context, userGRN grn.GRN, _ or
 		}
 	}
 	return out, nil
+}
+
+func (s *fakeOrgStore) CreateGroup(_ context.Context, g *org.Group) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.groups[g.GRN().String()] = g
+	return nil
+}
+
+func (s *fakeOrgStore) GetGroup(_ context.Context, g grn.GRN) (*org.Group, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	gr, ok := s.groups[g.String()]
+	if !ok {
+		return nil, org.ErrGroupNotFound
+	}
+	return gr, nil
+}
+
+func (s *fakeOrgStore) ListGroups(_ context.Context, orgGRN grn.GRN, _ org.ListFilter) ([]*org.Group, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := []*org.Group{}
+	for _, gr := range s.groups {
+		if gr.Organization() == orgGRN {
+			out = append(out, gr)
+		}
+	}
+	slices.SortFunc(out, func(a, b *org.Group) int {
+		return strings.Compare(a.GRN().String(), b.GRN().String())
+	})
+	return out, nil
+}
+
+func (s *fakeOrgStore) UpdateGroup(_ context.Context, g grn.GRN, p org.GroupPatch) (*org.Group, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	gr, ok := s.groups[g.String()]
+	if !ok {
+		return nil, org.ErrGroupNotFound
+	}
+	name := gr.Name()
+	if p.Name != nil {
+		name = *p.Name
+	}
+	updated := org.NewGroup(g, name, gr.Organization())
+	s.groups[g.String()] = updated
+	return updated, nil
+}
+
+func (s *fakeOrgStore) DeleteGroup(_ context.Context, g grn.GRN) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.groups[g.String()]; !ok {
+		return org.ErrGroupNotFound
+	}
+	delete(s.groups, g.String())
+	delete(s.groupMembers, g.String())
+	return nil
+}
+
+func (s *fakeOrgStore) AddGroupMember(_ context.Context, groupGRN, memberGRN grn.GRN) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.groups[groupGRN.String()]; !ok {
+		return org.ErrGroupNotFound
+	}
+	if slices.Contains(s.groupMembers[groupGRN.String()], memberGRN) {
+		return errorx.New(errorx.KindAlreadyExists, "group member already exists")
+	}
+	s.groupMembers[groupGRN.String()] = append(s.groupMembers[groupGRN.String()], memberGRN)
+	return nil
+}
+
+func (s *fakeOrgStore) RemoveGroupMember(_ context.Context, groupGRN, memberGRN grn.GRN) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	k := groupGRN.String()
+	s.groupMembers[k] = slices.DeleteFunc(s.groupMembers[k], func(m grn.GRN) bool { return m == memberGRN })
+	return nil
+}
+
+func (s *fakeOrgStore) ListGroupMembers(_ context.Context, groupGRN grn.GRN) ([]grn.GRN, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.groupMembers[groupGRN.String()]), nil
+}
+
+func (s *fakeOrgStore) CreateProject(_ context.Context, p *org.Project) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.projects[p.GRN().String()] = p
+	return nil
+}
+
+func (s *fakeOrgStore) GetProject(_ context.Context, g grn.GRN) (*org.Project, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, ok := s.projects[g.String()]
+	if !ok {
+		return nil, org.ErrProjectNotFound
+	}
+	return p, nil
+}
+
+func (s *fakeOrgStore) ListProjects(_ context.Context, orgGRN grn.GRN, _ org.ListFilter) ([]*org.Project, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := []*org.Project{}
+	for _, p := range s.projects {
+		if p.Organization() == orgGRN {
+			out = append(out, p)
+		}
+	}
+	slices.SortFunc(out, func(a, b *org.Project) int {
+		return strings.Compare(a.GRN().String(), b.GRN().String())
+	})
+	return out, nil
+}
+
+func (s *fakeOrgStore) UpdateProject(_ context.Context, g grn.GRN, patch org.ProjectPatch) (*org.Project, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	p, ok := s.projects[g.String()]
+	if !ok {
+		return nil, org.ErrProjectNotFound
+	}
+	name := p.Name()
+	if patch.Name != nil {
+		name = *patch.Name
+	}
+	updated := org.NewProject(g, name, p.Organization())
+	s.projects[g.String()] = updated
+	return updated, nil
+}
+
+func (s *fakeOrgStore) DeleteProject(_ context.Context, g grn.GRN) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.projects[g.String()]; !ok {
+		return org.ErrProjectNotFound
+	}
+	delete(s.projects, g.String())
+	delete(s.projectMembers, g.String())
+	return nil
+}
+
+func (s *fakeOrgStore) AddProjectMember(_ context.Context, projectGRN, memberGRN grn.GRN) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.projects[projectGRN.String()]; !ok {
+		return org.ErrProjectNotFound
+	}
+	if slices.Contains(s.projectMembers[projectGRN.String()], memberGRN) {
+		return errorx.New(errorx.KindAlreadyExists, "project member already exists")
+	}
+	s.projectMembers[projectGRN.String()] = append(s.projectMembers[projectGRN.String()], memberGRN)
+	return nil
+}
+
+func (s *fakeOrgStore) RemoveProjectMember(_ context.Context, projectGRN, memberGRN grn.GRN) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	k := projectGRN.String()
+	s.projectMembers[k] = slices.DeleteFunc(s.projectMembers[k], func(m grn.GRN) bool { return m == memberGRN })
+	return nil
+}
+
+func (s *fakeOrgStore) ListProjectMembers(_ context.Context, projectGRN grn.GRN) ([]grn.GRN, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return slices.Clone(s.projectMembers[projectGRN.String()]), nil
 }
 
 func (s *fakeOrgStore) AddMember(_ context.Context, m *org.Membership) error {

@@ -1,19 +1,20 @@
 # Comment Conventions
 
-## When
+## When to comment
 
-Skip comments when the code is self-evident. Prefer absence over noise.
-Add a comment where it would otherwise take the reader a minute to
-re-derive.
+Add a comment where it helps a reader. Skip where the code is
+self-evident. When in doubt, prefer to omit; an absent comment is
+easier to add later than an absent explanation is to remember.
 
-**Required docstring:** every exported type, function, method, constant.
-**Helpful inline:** non-obvious invariant, ordering constraint, external
-constraint, deliberate trade-off.
+## Brevity
 
-## How short
+When you do comment, write the shortest version that conveys the
+essential point. One short sentence beats a paragraph.
 
-One sentence usually. Past two or three sentences, refactor the code
-and move the explanation to a docstring on a named function or type.
+Long comments drift out of sync with the code they explain; short ones
+age well. If a comment needs more than 2–3 sentences, refactor the
+code first — extract the explanation into a doc comment on a named
+function or type where readers can find it.
 
 ## Voice
 
@@ -23,44 +24,34 @@ Write comments in declarative or imperative mood, stating facts:
 justify the author's choices ("I chose this because…") — rationale
 belongs in the commit message or an ADR.
 
-## Format
+## Inline vs doc comments
 
-- Doc comments start with the declared name.
+**Inline** (inside function bodies) — earn their place when they flag a
+non-obvious invariant, an ordering constraint, or an external
+constraint a future reader would otherwise re-derive incorrectly. They
+go above the line, not at the end.
 
-  ```go
-  // AssignRole attaches role r to subject on scope.
-  func AssignRole(...) error
+**Doc comments** (above types, functions, modules) — required for every
+exported name. Go style: the comment starts with the declared name.
 
-  // Subject is anything that can act.
-  type Subject interface { ... }
-  ```
-
-- One line when possible. Continuation lines are indented.
-
-  ```go
-  // NewChecker wires a Checker to the given role store and evaluator.
-  // Both are required.
-  func NewChecker(...)
-  ```
-
-- Inline comments go above the line, not at the end.
+```go
+// AssignRole attaches role r to subject on scope.
+func AssignRole(...) error
+```
 
 ## Forbidden
 
-- Paraphrasing the next line.
-- Narrating a loop or branch.
-- Section dividers (`// constructor`, `// getters`).
-- Walls of text above a function.
+- **Paraphrasing** (`// increment counter` above `i++`)
+- **Narrating** (`// loop through users` above a for-loop)
+- **Section dividers** (`// constructor` / `// getters` / `// setters`)
+- **Wall-of-text** above a function — one line at the top of the body,
+  or a doc comment on the type/module, is enough
 
-## TODO
+## TODOs
 
-`// TODO(<owner>): <text>` — owner is a GitHub handle or email.
-`FIXME` and `XXX` are discouraged; convert or fix on sight.
-
-Open TODOs are tracked in the backlog section of
-[`docs/plans/current-state.md`](../plans/current-state.md).
+`// TODO(name): …` with an owner (GitHub handle or email). `FIXME` /
+`XXX` decay — prefer TODO.
 
 ## Language
 
-English. All comments, identifiers, and docs. Localisation is a
-per-project exception, not the default.
+English. All comments, identifiers, and docs.

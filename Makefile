@@ -15,9 +15,11 @@ lint:
 	go vet ./...
 	$(BUF) lint
 
+# gofmt and goimports list offending files but exit 0, so the gate is a
+# non-empty-output check.
 format:
-	gofmt -l .
-	$(GOIMPORTS) -l .
+	@out="$$(gofmt -l .)"; test -z "$$out" || { echo "gofmt: $$out"; exit 1; }
+	@out="$$($(GOIMPORTS) -l .)"; test -z "$$out" || { echo "goimports: $$out"; exit 1; }
 
 test:
 	go test ./...

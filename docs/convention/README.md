@@ -12,6 +12,7 @@ Rules every contributor follows. PR review checks against this index. The PM own
 
 - [comments.md](./comments.md) — docstrings, inline comments, TODO
 - [style.md](./style.md) — naming and pattern consistency in code
+- [simplicity.md](./simplicity.md) — clarity over complexity; consolidation judgment
 - [runtime-safety.md](./runtime-safety.md) — types, boundaries, error handling
 - [testing.md](./testing.md) — test layers, naming, mocking
 - [git.md](./git.md) — branches, commits, PR titles, merging

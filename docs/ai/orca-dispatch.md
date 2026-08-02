@@ -1,82 +1,37 @@
-# Orca Dispatch Guide
+# Orca Dispatch
 
-How the PM creates orca worktrees and dispatches role-bound agents into them. Orca gives each task an isolated worktree, a persistent terminal the PM can watch, and a link to its issue.
+How the PM dispatches workers into Orca worktrees. Applies only when the environment provides the Orca CLI; skip this document otherwise. On Linux outside Orca-managed terminals the executable is `orca-ide` (bare `orca` is the GNOME screen reader); inside Orca terminals it is `orca`.
 
-## Contents
+## Dispatch sequence
 
-- When to use
-- Prerequisites
-- Binding the role
-- Running unattended
-- Dispatching a worker
-- Watching a worker
-- After the PR
-- Parallel work
-- Limits
+```bash
+orca-ide worktree create --name <task-name> --no-parent \
+  --agent <id> --prompt "<task brief>" --json
+# → capture result.startupTerminal.handle — this is the only agent handle
 
-## When to use
+orca-ide terminal wait --terminal <handle> --for tui-idle --timeout-ms 60000 --json
+orca-ide terminal read --terminal <handle> --json
+```
 
-Use orca to run a worker on an issue as a persistent, observable process rather than an ephemeral in-session helper. The worktree survives the PM session, stays visible in the Orca app, and is tied to its issue. Prefer it whenever the PM assigns implementation work (see `pm-guide.md` §Managing issues).
+- Always pass `--agent` and `--prompt` together. An agent without a prompt starts and idles forever.
+- The brief must be self-contained (task, constraints, paths) — the worker has no other context.
+- **A dispatch is not done until `terminal read` shows the agent working.** "Worktree created" is not "work started."
 
-Dispatch is gated on a human. The PM opens and refines the issue on its own, but creates no worktree and launches no worker until a human confirms the issue. This gate keeps a human in control of what work actually starts.
+## If the worker sits idle
 
-## Prerequisites
+1. `terminal read` — confirm whether the prompt text appears in the terminal.
+2. Prompt missing or agent waiting at an empty prompt: `terminal wait --for tui-idle`, then `terminal send --terminal <handle> --text "<brief>" --enter`.
+3. Never create a second terminal or worktree to "retry" — fix the delivery in the existing handle. If the handle reports `terminal_handle_stale`, reacquire with `terminal list --worktree id:<repoId>::<path>`.
 
-- The orca CLI is installed and the project is registered as an orca repo (`orca repo list`).
-- The agent tool the worker will run is installed (`which claude`, `which opencode`). Only installed tools can be launched.
-- `orca agent-context --json` is the authoritative command schema. Consult it for exact flags rather than trusting this guide's examples verbatim — orca commands evolve.
+## Tracking and completion
 
-## Binding the role
+- Watch progress: `orca-ide worktree ps --json` (status, comment, agent state), or `terminal read` for detail.
+- Workers update their own card: `worktree set --worktree active --comment "..." --workspace-status in-progress`.
+- After the worker's PR is merged: `orca-ide worktree rm --worktree id:<repoId>::<path> --force --json`.
 
-Orca's own `--agent <id>` selects the *tool* (`claude`, `opencode`, `codex`, `cursor`, `claude-teams`), not the project role. Launching with it alone produces a role-less agent. Bind the role with the tool's own `--agent <role>` flag, which loads the matching role definition.
+## Anti-patterns
 
-| Tool | Role-bound launch command | Role definition |
-|---|---|---|
-| Claude Code | `claude --agent <role>` | `.claude/agents/<role>.md` |
-| opencode | `opencode --agent <role>` | `.opencode/agents/<role>.md` |
-
-Roles are `pm`, `worker`, `qa`. For Claude, `--settings '{"outputStyle":"<Name>"}'` (names live in `.claude/output-styles/`) is an equivalent way to lock the same role. A launched agent that reports the wrong role — or none — was not bound correctly; fix the flag before sending work.
-
-## Running unattended
-
-A dispatched worker runs with no human at its terminal, so launch it headless: one command that carries the task, binds the worker role, bypasses permission prompts, runs to completion, and exits. Do not launch an interactive session and then send the prompt as a second step — the extra step is fragile and is the usual cause of a worker that never starts.
-
-Orca has no autonomy or headless flag of its own; its `--agent` only selects the tool. All of it comes from the tool's own flags, passed through `orca terminal create --command`:
-
-| Tool | Headless, role-bound, autonomous launch |
-|---|---|
-| Claude Code | `claude --agent worker --permission-mode bypassPermissions -p '<prompt>'` |
-| opencode | `opencode run --agent worker --auto '<prompt>'` |
-
-Keep `<prompt>` free of single quotes (the whole command is already single-quoted inside `--command`). Permission bypass is acceptable only because the worker runs in an isolated worktree on a task branch, never on `main`.
-
-## Dispatching a worker
-
-1. Open the issue with goal and acceptance criteria (`pm-guide.md` §Managing issues). The worker acts from the issue alone.
-2. Wait for a human to confirm the issue. Do not create a worktree or launch a worker before confirmation.
-3. Create the worktree in orca, linked to the confirmed issue and based on `main`:
-   `orca worktree create --repo name:<repo> --name <slug> --base-branch main --issue <N> --json`.
-   Pass `--repo` explicitly (`name:<repo>` or `id:<id>`); do not pass orca's `--agent` here. Read the worktree path from the result.
-4. Dispatch the worker headless in one command (§Running unattended) and capture the handle. Keep the prompt short — name the issue and point to the guides; the worker reads the issue itself:
-   `orca terminal create --worktree path:<worktree-path> --command "claude --agent worker --permission-mode bypassPermissions -p 'Work GitHub issue #<N> as the worker: run gh issue view <N>, implement it per docs/ai/worker-guide.md and docs/convention/, then commit, push, and open a PR with gh. You are already on the correct branch and worktree.'" --json`.
-
-The worker reads the issue, works on its branch, opens a PR, and exits; it does not create another branch or worktree.
-
-## Watching a worker
-
-- `orca terminal wait --terminal <handle> --for exit` — block until the headless worker finishes. Its exit ends the dispatch.
-- `orca terminal read --terminal <handle> [--cursor <n>]` — read output, including the final PR URL. A headless worker prints little until it finishes; pass the previous `nextCursor` for incremental reads. Read the raw text output, not `--json`, when you just want to eyeball progress.
-- To steer a worker instead of running it to completion, launch it interactively (omit `-p`) and drive it with `orca terminal send --terminal <handle> --text "<message>" [--interrupt] --enter`.
-
-## After the PR
-
-Review and merge per `pm-guide.md`. Branch hygiene extends to orca: after merging, remove the worktree with `orca worktree rm --worktree path:<worktree-path>`. Never remove a worktree whose worker is still running or whose PR is open (`pm-guide.md` §Branch hygiene).
-
-## Parallel work
-
-For a task that benefits from parallel decomposition, `orca claude-teams` runs Claude Code with native team panes (must be started inside an orca terminal). Keep concurrently active workers on disjoint modules (`pm-guide.md` §Coordinating concurrent work).
-
-## Limits
-
-- Do not hardcode absolute worktree paths in procedures; discover them with `orca worktree list` and address worktrees by selector (`name:`, `path:`, `id:`, `active`).
-- A worker launched this way is still a worker: it obeys `worker-guide.md` and may not merge, manage issues, or edit `docs/convention/`, `docs/ai/`, or agent configuration.
+- Bare `worktree create` then `terminal create --command <agent>` — leaves a fallback shell and invites lost input; use `--agent` instead.
+- `terminal send` before the TUI is ready — input is lost; wait for `tui-idle` first.
+- Sending to both an old and a replacement handle — one handle at a time.
+- Creating a worktree per attempt when delivery failed — diagnose the existing one.

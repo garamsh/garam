@@ -13,6 +13,7 @@ Rules every contributor follows. PR review checks against these.
 - [naming.md](./convention/naming.md)
 - [comments.md](./convention/comments.md)
 - [style.md](./convention/style.md)
+- [simplicity.md](./convention/simplicity.md)
 - [runtime-safety.md](./convention/runtime-safety.md)
 - [testing.md](./convention/testing.md)
 - [git.md](./convention/git.md)

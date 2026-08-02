@@ -2,7 +2,8 @@
 //
 // An Agent is an autonomous identity that acts on behalf of a User or
 // an Organization. Like Users, Agents have their own roles and
-// policies and may belong to multiple Organizations.
+// policies; org membership is recorded in the org domain (Membership),
+// not duplicated on the Agent aggregate.
 package agent
 
 import (
@@ -16,13 +17,12 @@ const ServiceType = "agent"
 
 // Agent is an autonomous identity.
 type Agent struct {
-	grn           grn.GRN
-	name          string
-	organizations []grn.GRN
-	roles         []string
-	policies      []string
-	createdAt     time.Time
-	updatedAt     time.Time
+	grn       grn.GRN
+	name      string
+	roles     []string
+	policies  []string
+	createdAt time.Time
+	updatedAt time.Time
 }
 
 // New constructs an Agent.
@@ -31,11 +31,10 @@ func New(g grn.GRN, name string) *Agent {
 	return &Agent{grn: g, name: name, createdAt: now, updatedAt: now}
 }
 
-func (a *Agent) GRN() grn.GRN             { return a.grn }
-func (a *Agent) Name() string             { return a.name }
-func (a *Agent) Organizations() []grn.GRN { return a.organizations }
-func (a *Agent) Roles() []string          { return a.roles }
-func (a *Agent) Policies() []string       { return a.policies }
+func (a *Agent) GRN() grn.GRN       { return a.grn }
+func (a *Agent) Name() string       { return a.name }
+func (a *Agent) Roles() []string    { return a.roles }
+func (a *Agent) Policies() []string { return a.policies }
 
 // Kind reports the resource kind for authz purposes.
 func (a *Agent) Kind() string { return ServiceType }

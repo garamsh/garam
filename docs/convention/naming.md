@@ -30,6 +30,7 @@ in [`grn-model.md`](../architecture/grn-model.md).
 | `org` | organization | `internal/org` |
 | `group` | user/agent bundle | `internal/org` |
 | `project` | unit of work | `internal/org` |
+| `policy` | stored policy document | `internal/authz` |
 | `doc` | permissioned document (planned) | TBD |
 
 ### identifier

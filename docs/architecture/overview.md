@@ -33,7 +33,7 @@ collaborate on a shared plan.
 - `proto/` — authz gRPC service definition + buf-generated code.
 - `cmd/gaon/` — thin entrypoint for the cobra CLI.
 - `migrations/` — SQL migrations (golang-migrate); sqlc schema source.
-- `e2e/` — store round-trips against real Postgres.
+- `tests/e2e/` — store round-trips against real Postgres.
 - `internal/grn/` — identifier; shared primitive.
 - `internal/errorx/` — typed errors; shared primitive.
 - `internal/cli/` — cobra commands + wiring (`serve api` | `serve authz` | `migrate`).

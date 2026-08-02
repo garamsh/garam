@@ -29,12 +29,17 @@ func (s *Server) CreateGroup(w http.ResponseWriter, r *http.Request, orgSlug api
 		writeError(w, errorx.New(errorx.KindInvalidArgument, "name is required"))
 		return
 	}
+	roles, err := scopedRoles(body.Roles)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	id, err := randomHex(8)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	gr := org.NewGroup(groupGRN(orgSlug, id), body.Name, orgGRN(orgSlug))
+	gr := org.NewGroup(groupGRN(orgSlug, id), body.Name, orgGRN(orgSlug), roles...)
 	if err := s.orgs.CreateGroup(r.Context(), gr); err != nil {
 		writeError(w, err)
 		return
@@ -111,7 +116,12 @@ func (s *Server) UpdateGroup(w http.ResponseWriter, r *http.Request, orgSlug api
 		writeError(w, errorx.New(errorx.KindInvalidArgument, "name must not be empty"))
 		return
 	}
-	gr, err := s.orgs.UpdateGroup(r.Context(), groupGRN(orgSlug, groupSlug), org.GroupPatch{Name: body.Name})
+	roles, err := scopedRoles(body.Roles)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	gr, err := s.orgs.UpdateGroup(r.Context(), groupGRN(orgSlug, groupSlug), org.GroupPatch{Name: body.Name, Roles: roles})
 	if err != nil {
 		writeError(w, err)
 		return
@@ -226,7 +236,35 @@ func groupToAPI(g *org.Group) apigen.Group {
 		Grn:    g.GRN().String(),
 		Name:   g.Name(),
 		OrgGrn: g.Organization().String(),
+		Roles:  rolesToAPI(g.Roles()),
 	}
+}
+
+// scopedRoles validates the roles a group or project grants its own
+// members and renders them for the domain. A nil field leaves the
+// roles unchanged; an empty array clears them.
+func scopedRoles(roles *apigen.ScopedRoles) ([]string, error) {
+	if roles == nil {
+		return nil, nil
+	}
+	out := make([]string, 0, len(*roles))
+	for _, r := range *roles {
+		role, err := org.ParseRole(string(r))
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, string(role))
+	}
+	return out, nil
+}
+
+// rolesToAPI renders group or project roles for the wire.
+func rolesToAPI(roles []string) apigen.ScopedRoles {
+	out := make(apigen.ScopedRoles, 0, len(roles))
+	for _, r := range roles {
+		out = append(out, apigen.Role(r))
+	}
+	return out
 }
 
 // memberRefs renders group or project member GRNs for the wire.

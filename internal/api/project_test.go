@@ -116,3 +116,57 @@ func TestProjectMembers_Lifecycle(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.Empty(t, decodeBody[[]apigen.MemberRef](t, rec))
 }
+
+func TestProjectRoles_AssignedOverHTTP(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+
+	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
+	f.permit(
+		permission{ownerGRN, org.ActionProjectCreate},
+		permission{ownerGRN, org.ActionProjectUpdate},
+	)
+
+	rec := f.do(t, "POST", "/orgs/"+slug+"/projects", `{"name":"web","roles":["admin"]}`, owner)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	created := decodeBody[apigen.Project](t, rec)
+	assert.Equal(t, apigen.ScopedRoles{apigen.Role(org.RoleAdmin)}, created.Roles)
+	g, err := grn.Parse(created.Grn)
+	require.NoError(t, err)
+	path := "/orgs/" + slug + "/projects/" + g.Identifier
+
+	// A patch without roles leaves them as they are.
+	rec = f.do(t, "PATCH", path, `{"name":"frontend"}`, owner)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, apigen.ScopedRoles{apigen.Role(org.RoleAdmin)}, decodeBody[apigen.Project](t, rec).Roles)
+
+	rec = f.do(t, "PATCH", path, `{"roles":["member"]}`, owner)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, apigen.ScopedRoles{apigen.Role(org.RoleMember)}, decodeBody[apigen.Project](t, rec).Roles)
+
+	// An empty array clears them.
+	rec = f.do(t, "PATCH", path, `{"roles":[]}`, owner)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Empty(t, decodeBody[apigen.Project](t, rec).Roles)
+}
+
+func TestProjectRoles_RejectUnknownRole(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+
+	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
+	f.permit(
+		permission{ownerGRN, org.ActionProjectCreate},
+		permission{ownerGRN, org.ActionProjectUpdate},
+	)
+
+	rec := f.do(t, "POST", "/orgs/"+slug+"/projects", `{"name":"web","roles":["root"]}`, owner)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "invalid_argument", decodeBody[apigen.Error](t, rec).Kind)
+
+	project := createProject(t, f, owner, slug, "web")
+	rec = f.do(t, "PATCH", "/orgs/"+slug+"/projects/"+project, `{"roles":["root"]}`, owner)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}

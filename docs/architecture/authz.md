@@ -42,8 +42,11 @@ Evaluator.Evaluate(context, Context)
 The caller collects the subject's statements (via roles/groups and
 direct attachments) and hands them to the engine; the engine matches
 strings only. Matching = action pattern ∩ resource pattern both match.
-The per-org statement set is parsed once and cached in the engine;
-policy writes invalidate the org's cache (Postgres `LISTEN`/`NOTIFY`).
+
+> Planned (roadmap P2, issue #56): the per-org statement set will be
+> parsed once and cached in the engine, with policy writes
+> invalidating the org's cache (Postgres `LISTEN`/`NOTIFY`). Today the
+> api server builds the statement set per request from org roles.
 
 ## Components
 

@@ -8,6 +8,8 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -28,6 +30,31 @@ import (
 
 var migrateOnce sync.Once
 
+// migrationsDir returns the repo-root `migrations/` directory. It walks
+// up from this source file until it finds go.mod, so the suite keeps
+// working wherever the test directory is moved to.
+func migrationsDir(t *testing.T) string {
+	t.Helper()
+	_, file, _, ok := runtime.Caller(0)
+	require.True(t, ok, "cannot locate the test source file")
+	for dir := filepath.Dir(file); ; {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return filepath.Join(dir, "migrations")
+		}
+		parent := filepath.Dir(dir)
+		require.NotEqual(t, dir, parent, "no go.mod above %s", file)
+		dir = parent
+	}
+}
+
+// TestMigrationsDir_Resolves guards the migration source path: it runs
+// without a database, so `make ci` catches a broken path before e2e does.
+func TestMigrationsDir_Resolves(t *testing.T) {
+	entries, err := os.ReadDir(migrationsDir(t))
+	require.NoError(t, err)
+	assert.NotEmpty(t, entries)
+}
+
 // pool connects to the test database or skips the test.
 func pool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
@@ -36,7 +63,7 @@ func pool(t *testing.T) *pgxpool.Pool {
 		t.Skip("GAON_TEST_DATABASE_URL not set; skipping e2e")
 	}
 	migrateOnce.Do(func() {
-		m, err := migrate.New("file://../migrations", url)
+		m, err := migrate.New("file://"+migrationsDir(t), url)
 		require.NoError(t, err)
 		err = m.Up()
 		if err != nil && !errors.Is(err, migrate.ErrNoChange) {

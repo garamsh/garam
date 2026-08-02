@@ -14,15 +14,24 @@ import (
 	"google.golang.org/grpc/test/bufconn"
 
 	"github.com/garamsh/gaon/internal/authz"
+	"github.com/garamsh/gaon/internal/grn"
 	authzv1 "github.com/garamsh/gaon/proto/gen/gaon/authz/v1"
 )
 
+// staticPolicies is a PolicySource over a fixed per-org statement set,
+// standing in for the cache the engine reads in production.
+type staticPolicies map[grn.GRN][]authz.Statement
+
+func (p staticPolicies) OrgStatements(_ context.Context, orgGRN grn.GRN) ([]authz.Statement, error) {
+	return p[orgGRN], nil
+}
+
 // newAuthzClient serves the real engine over an in-memory listener.
-func newAuthzClient(t *testing.T) authzv1.AuthzServiceClient {
+func newAuthzClient(t *testing.T, policies staticPolicies) authzv1.AuthzServiceClient {
 	t.Helper()
 	lis := bufconn.Listen(1024 * 1024)
 	srv := grpc.NewServer()
-	authzv1.RegisterAuthzServiceServer(srv, authz.NewGRPCServer())
+	authzv1.RegisterAuthzServiceServer(srv, authz.NewGRPCServer(policies))
 	go func() { _ = srv.Serve(lis) }()
 	t.Cleanup(srv.Stop)
 	conn, err := grpc.NewClient(
@@ -56,7 +65,7 @@ func checkRequest(statements ...*authzv1.Statement) *authzv1.CheckRequest {
 }
 
 func TestGRPCServer_Check(t *testing.T) {
-	client := newAuthzClient(t)
+	client := newAuthzClient(t, staticPolicies{})
 
 	cases := []struct {
 		name       string
@@ -97,7 +106,7 @@ func TestGRPCServer_Check(t *testing.T) {
 }
 
 func TestGRPCServer_CheckInvalidInput(t *testing.T) {
-	client := newAuthzClient(t)
+	client := newAuthzClient(t, staticPolicies{})
 
 	cases := []struct {
 		name   string
@@ -121,7 +130,7 @@ func TestGRPCServer_CheckInvalidInput(t *testing.T) {
 }
 
 func TestGRPCServer_Explain(t *testing.T) {
-	client := newAuthzClient(t)
+	client := newAuthzClient(t, staticPolicies{})
 
 	resp, err := client.Explain(context.Background(), &authzv1.ExplainRequest{
 		SubjectGrn: "grn:root:default:user:alice",
@@ -145,4 +154,95 @@ func TestGRPCServer_Explain(t *testing.T) {
 	assert.False(t, traces["wrong-action"].GetMatched())
 	assert.True(t, traces["deny-delete"].GetMatched())
 	assert.Equal(t, authzv1.Effect_EFFECT_DENY, traces["deny-delete"].GetEffect())
+}
+
+func orgGRN(id string) grn.GRN {
+	return grn.New(grn.RootOwner, grn.DefaultProject, "org", id)
+}
+
+func TestGRPCServer_CheckPersistedPolicies(t *testing.T) {
+	acme := orgGRN("acme")
+	allowUpdate := authz.Statement{
+		Sid:      "persisted-allow",
+		Effect:   authz.EffectAllow,
+		Action:   []string{"org:update"},
+		Resource: []string{"grn:root:default:org:acme", "grn:acme:*"},
+	}
+	denyUpdate := authz.Statement{
+		Sid:      "persisted-deny",
+		Effect:   authz.EffectDeny,
+		Action:   []string{"org:update"},
+		Resource: []string{"grn:root:default:org:acme", "grn:acme:*"},
+	}
+	callerAllow := allowStatement("org-role-owner", []string{"org:*"}, []string{"grn:root:default:org:acme", "grn:acme:*"})
+
+	cases := []struct {
+		name      string
+		policies  staticPolicies
+		object    string
+		statement *authzv1.Statement
+		want      bool
+	}{
+		{
+			"persisted allow decides without caller statements",
+			staticPolicies{acme: {allowUpdate}},
+			"grn:root:default:org:acme",
+			nil,
+			true,
+		},
+		{
+			"persisted deny overrides a caller allow",
+			staticPolicies{acme: {denyUpdate}},
+			"grn:root:default:org:acme",
+			callerAllow,
+			false,
+		},
+		{
+			"another org's policies do not apply",
+			staticPolicies{orgGRN("other"): {allowUpdate}},
+			"grn:root:default:org:acme",
+			nil,
+			false,
+		},
+		{
+			"a resource under the org resolves to the org's policies",
+			staticPolicies{acme: {denyUpdate}},
+			"grn:acme:default:group:eng",
+			callerAllow,
+			false,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			req := checkRequest()
+			req.ObjectGrn = c.object
+			if c.statement != nil {
+				req.Statements = []*authzv1.Statement{c.statement}
+			}
+			resp, err := newAuthzClient(t, c.policies).Check(context.Background(), req)
+			require.NoError(t, err)
+			assert.Equal(t, c.want, resp.GetAllowed())
+		})
+	}
+}
+
+func TestGRPCServer_ExplainTracesPersistedStatements(t *testing.T) {
+	client := newAuthzClient(t, staticPolicies{orgGRN("acme"): {{
+		Sid:      "persisted-deny",
+		Effect:   authz.EffectDeny,
+		Action:   []string{"org:update"},
+		Resource: []string{"grn:root:default:org:acme"},
+	}}})
+
+	resp, err := client.Explain(context.Background(), &authzv1.ExplainRequest{
+		SubjectGrn: "grn:root:default:user:alice",
+		ObjectGrn:  "grn:root:default:org:acme",
+		Action:     "org:update",
+		Statements: []*authzv1.Statement{allowStatement("org-role-owner", []string{"org:*"}, []string{"grn:root:default:org:acme"})},
+	})
+	require.NoError(t, err)
+	assert.False(t, resp.GetAllowed())
+	require.Len(t, resp.GetTraces(), 2)
+	assert.Equal(t, "persisted-deny", resp.GetTraces()[0].GetSid())
+	assert.True(t, resp.GetTraces()[0].GetMatched())
 }

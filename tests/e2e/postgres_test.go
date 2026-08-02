@@ -149,9 +149,21 @@ func TestOrgStore_RoundTripWithCascade(t *testing.T) {
 	assert.Equal(t, "acme2", renamed.Name())
 
 	groupGRN := grnOf("group", "eng")
-	require.NoError(t, s.CreateGroup(ctx, org.NewGroup(groupGRN, "eng", orgGRN)))
+	require.NoError(t, s.CreateGroup(ctx, org.NewGroup(groupGRN, "eng", orgGRN, string(org.RoleMember))))
 	projectGRN := grnOf("project", "web")
-	require.NoError(t, s.CreateProject(ctx, org.NewProject(projectGRN, "web", orgGRN)))
+	require.NoError(t, s.CreateProject(ctx, org.NewProject(projectGRN, "web", orgGRN, string(org.RoleMember))))
+
+	// The roles column survives the round-trip and still resolves to
+	// the actions the scoped check reads.
+	gotGroup, err := s.GetGroup(ctx, groupGRN)
+	require.NoError(t, err)
+	assert.Equal(t, []string{string(org.RoleMember)}, gotGroup.Roles())
+	assert.Contains(t, org.ActionsFor(gotGroup.Roles()), org.ActionGroupRead)
+
+	gotProject, err := s.GetProject(ctx, projectGRN)
+	require.NoError(t, err)
+	assert.Equal(t, []string{string(org.RoleMember)}, gotProject.Roles())
+	assert.Contains(t, org.ActionsFor(gotProject.Roles()), org.ActionProjectRead)
 
 	userGRN := grnOf("user", "ada")
 	require.NoError(t, user.NewPostgresStore(p).Create(ctx, user.New(userGRN, "ada")))
@@ -166,6 +178,30 @@ func TestOrgStore_RoundTripWithCascade(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, groups, 1)
 	assert.Equal(t, orgGRN, groups[0].Organization())
+	assert.Equal(t, []string{string(org.RoleMember)}, groups[0].Roles())
+
+	// A patch without roles keeps the stored ones (the coalesce
+	// branch); one carrying roles replaces the whole set, and an empty
+	// slice clears it rather than reading as "unchanged".
+	patchedGroup, err := s.UpdateGroup(ctx, groupGRN, org.GroupPatch{Name: ptr("eng2")})
+	require.NoError(t, err)
+	assert.Equal(t, "eng2", patchedGroup.Name())
+	assert.Equal(t, []string{string(org.RoleMember)}, patchedGroup.Roles())
+
+	patchedGroup, err = s.UpdateGroup(ctx, groupGRN, org.GroupPatch{Roles: []string{string(org.RoleAdmin)}})
+	require.NoError(t, err)
+	assert.Equal(t, []string{string(org.RoleAdmin)}, patchedGroup.Roles())
+	assert.Contains(t, org.ActionsFor(patchedGroup.Roles()), org.ActionOrgUpdate)
+
+	patchedProject, err := s.UpdateProject(ctx, projectGRN, org.ProjectPatch{Name: ptr("web2")})
+	require.NoError(t, err)
+	assert.Equal(t, "web2", patchedProject.Name())
+	assert.Equal(t, []string{string(org.RoleMember)}, patchedProject.Roles())
+
+	patchedProject, err = s.UpdateProject(ctx, projectGRN, org.ProjectPatch{Roles: []string{}})
+	require.NoError(t, err)
+	assert.Empty(t, patchedProject.Roles())
+	assert.Empty(t, org.ActionsFor(patchedProject.Roles()))
 
 	// Deleting the org cascades to groups and projects.
 	require.NoError(t, s.DeleteOrg(ctx, orgGRN))

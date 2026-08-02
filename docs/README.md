@@ -11,6 +11,8 @@ Rules every contributor follows. PR review checks against these.
 - [go.md](./convention/go.md)
 - [errors.md](./convention/errors.md)
 - [naming.md](./convention/naming.md)
+- [stack-nextjs.md](./convention/stack-nextjs.md)
+- [stack-tailwind.md](./convention/stack-tailwind.md)
 - [comments.md](./convention/comments.md)
 - [style.md](./convention/style.md)
 - [simplicity.md](./convention/simplicity.md)

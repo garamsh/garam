@@ -8,6 +8,11 @@ Rules every contributor follows. PR review checks against this index. The PM own
 - [errors.md](./errors.md) — error kinds, sentinels, wrapping
 - [naming.md](./naming.md) — identifiers, GRN, abbreviations
 
+## Stack-specific (Web)
+
+- [stack-nextjs.md](./stack-nextjs.md) — Next.js App Router layout, components, testing
+- [stack-tailwind.md](./stack-tailwind.md) — Tailwind v4 composition, tokens, idioms
+
 ## Stack-neutral
 
 - [comments.md](./comments.md) — docstrings, inline comments, TODO

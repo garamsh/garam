@@ -15,9 +15,11 @@ lint:
 	go vet ./...
 	$(BUF) lint
 
+# gofmt and goimports list offending files but exit 0, so the gate is a
+# non-empty-output check.
 format:
-	gofmt -l .
-	$(GOIMPORTS) -l .
+	@out="$$(gofmt -l .)"; test -z "$$out" || { echo "gofmt: $$out"; exit 1; }
+	@out="$$($(GOIMPORTS) -l .)"; test -z "$$out" || { echo "goimports: $$out"; exit 1; }
 
 test:
 	go test ./...
@@ -37,9 +39,12 @@ gen:
 	$(BUF) generate
 	$(GOIMPORTS) -w proto/gen
 
-# check-gen fails when committed generated code is stale.
+# check-gen fails when committed generated code is stale. The diff is
+# scoped to generated paths so unrelated working-tree edits do not fail it.
+GEN_PATHS := api/server.gen.go internal/*/db proto/gen internal/*/mocks
+
 check-gen: gen
-	git diff --exit-code
+	git diff --exit-code -- $(GEN_PATHS)
 
 db-up:
 	docker compose up -d --wait

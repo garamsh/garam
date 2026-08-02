@@ -18,7 +18,7 @@ decisions are recorded here.
 - `api/` — OpenAPI spec + generated server (ADR-0004).
 - `proto/` — `.proto` sources + generated code (ADR-0003).
 - `migrations/` — SQL migrations; the schema source.
-- `e2e/` — black-box tests against real infra (testing.md §Layers).
+- `tests/e2e/` — black-box tests against real infra (testing.md §Layers).
 - `docs/`, `go.mod` / `go.sum`, `Makefile`.
 
 Non-domain packages under `internal/` (`api`, `authz`, `cli`, `grn`,

@@ -13,6 +13,10 @@ tags:
     description: >-
       Organizations, memberships, invitations, and the groups and
       projects an organization contains.
+  - name: policy
+    description: >-
+      The versioned policy documents an organization evaluates, and the
+      subjects they are attached to.
 paths:
   /auth/login/{provider}:
     get:
@@ -587,6 +591,264 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
+  /orgs/{org}/policies:
+    post:
+      operationId: createPolicy
+      tags: [policy]
+      summary: Create a policy in an organization. Requires the `admin` role.
+      description: >-
+        Stores the document as the policy's first version. The policy
+        is a draft until it is activated.
+      parameters:
+        - $ref: '#/components/parameters/org'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyCreate'
+      responses:
+        '201':
+          description: Policy created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Policy'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    get:
+      operationId: listPolicies
+      tags: [policy]
+      summary: List an organization's policies. Requires the `admin` role.
+      parameters:
+        - $ref: '#/components/parameters/org'
+      responses:
+        '200':
+          description: The organization's policies, in ascending GRN order.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Policy'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/policies/{policy}/versions:
+    get:
+      operationId: listPolicyVersions
+      tags: [policy]
+      summary: List a policy's versions. Requires the `admin` role.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/policy'
+      responses:
+        '200':
+          description: The policy's versions, oldest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PolicyVersion'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: addPolicyVersion
+      tags: [policy]
+      summary: Append a version to a policy. Requires the `admin` role.
+      description: >-
+        Versions are append-only. The policy keeps evaluating its
+        default version until a rollback moves the pointer.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/policy'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyVersionCreate'
+      responses:
+        '201':
+          description: Version appended.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyVersion'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/policies/{policy}/activate:
+    post:
+      operationId: activatePolicy
+      tags: [policy]
+      summary: Activate a policy. Requires the `admin` role.
+      description: An active policy contributes its default version to checks.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/policy'
+      responses:
+        '200':
+          description: The activated policy.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Policy'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/policies/{policy}/archive:
+    post:
+      operationId: archivePolicy
+      tags: [policy]
+      summary: Archive a policy. Requires the `admin` role.
+      description: >-
+        The policy and its versions are retained; it stops contributing
+        statements to checks.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/policy'
+      responses:
+        '200':
+          description: The archived policy.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Policy'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/policies/{policy}/rollback:
+    post:
+      operationId: rollbackPolicy
+      tags: [policy]
+      summary: Point a policy at an earlier version. Requires the `admin` role.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/policy'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyRollback'
+      responses:
+        '200':
+          description: The policy at its new default version.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Policy'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/policies/{policy}/attachments:
+    get:
+      operationId: listPolicyAttachments
+      tags: [policy]
+      summary: List a policy's attachments. Requires the `admin` role.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/policy'
+      responses:
+        '200':
+          description: The attachments, in ascending subject GRN order.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PolicyAttachment'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: attachPolicy
+      tags: [policy]
+      summary: Attach a policy to a subject. Requires the `admin` role.
+      description: >-
+        The policy then applies to that user or group instead of to the
+        whole organization. A policy with no attachment applies
+        organization-wide.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/policy'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PolicyAttachmentCreate'
+      responses:
+        '201':
+          description: Policy attached.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyAttachment'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/policies/{policy}/attachments/{subject}:
+    delete:
+      operationId: detachPolicy
+      tags: [policy]
+      summary: Detach a policy from a subject. Requires the `admin` role.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/policy'
+        - $ref: '#/components/parameters/subject'
+      responses:
+        '204':
+          description: Policy detached.
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
   /orgs/{org}/invitations:
     post:
       operationId: createInvitation
@@ -685,6 +947,22 @@ components:
       required: true
       description: Member GRN of a user or agent.
       x-go-name: MemberGrn
+      schema:
+        type: string
+    policy:
+      name: policy
+      in: path
+      required: true
+      description: Policy identifier (the last GRN segment).
+      x-go-name: PolicySlug
+      schema:
+        type: string
+    subject:
+      name: subject
+      in: path
+      required: true
+      description: Subject GRN a policy is attached to.
+      x-go-name: SubjectGrn
       schema:
         type: string
     limit:
@@ -854,6 +1132,109 @@ components:
         expiresAt:
           type: string
           format: date-time
+    PolicyDocument:
+      type: object
+      description: >-
+        An IAM-style policy document: a `Version` string and a
+        `Statement` list of `Sid` / `Effect` / `Action` / `Resource`
+        entries. The authz engine owns the model and validates the
+        document on write, so it travels this API opaquely.
+      x-go-type: json.RawMessage
+      example:
+        Version: '2026-07-25'
+        Statement:
+          - Sid: AllowOrgRead
+            Effect: Allow
+            Action: [org:read]
+            Resource: ['grn:acme:*']
+    PolicyStatus:
+      type: string
+      description: >-
+        A policy's lifecycle state. Only an `active` policy contributes
+        statements to a check.
+      enum: [draft, active, archived]
+    Policy:
+      type: object
+      required: [grn, orgGrn, name, status, defaultVersion, createdAt, updatedAt]
+      properties:
+        grn:
+          type: string
+          example: grn:acme:default:policy:9f2ac1b40d8e7a35
+        orgGrn:
+          type: string
+        name:
+          type: string
+        status:
+          $ref: '#/components/schemas/PolicyStatus'
+        defaultVersion:
+          type: integer
+          minimum: 1
+          description: The version evaluated while the policy is active.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    PolicyCreate:
+      type: object
+      required: [name, document]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        document:
+          $ref: '#/components/schemas/PolicyDocument'
+    PolicyVersion:
+      type: object
+      required: [policyGrn, version, document, createdBy, createdAt]
+      properties:
+        policyGrn:
+          type: string
+        version:
+          type: integer
+          minimum: 1
+        document:
+          $ref: '#/components/schemas/PolicyDocument'
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    PolicyVersionCreate:
+      type: object
+      required: [document]
+      properties:
+        document:
+          $ref: '#/components/schemas/PolicyDocument'
+    PolicyRollback:
+      type: object
+      required: [version]
+      properties:
+        version:
+          type: integer
+          minimum: 1
+          description: An existing version of the policy.
+    PolicyAttachment:
+      type: object
+      required: [policyGrn, subjectGrn, createdAt]
+      properties:
+        policyGrn:
+          type: string
+        subjectGrn:
+          type: string
+          example: grn:acme:default:group:eng
+        createdAt:
+          type: string
+          format: date-time
+    PolicyAttachmentCreate:
+      type: object
+      required: [subjectGrn]
+      description: The user or group the policy applies to.
+      properties:
+        subjectGrn:
+          type: string
+          example: grn:acme:default:group:eng
     Error:
       type: object
       required: [kind, message]

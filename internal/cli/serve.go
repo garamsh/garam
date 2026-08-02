@@ -75,6 +75,7 @@ func serveAPI(cmd *cobra.Command) error {
 		authn.NewPostgresSessionStore(pool),
 		[]authn.Provider{google},
 		api.NewGRPCEvaluator(conn),
+		api.NewGRPCPolicyManager(conn),
 		api.Config{
 			SessionTTL:   ttl,
 			CookieSecure: envOr("GAON_COOKIE_SECURE", "true") == "true",

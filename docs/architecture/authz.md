@@ -114,6 +114,23 @@ create, append a version, list policies and versions, activate,
 archive, roll back, attach, detach, and list attachments. Documents are
 validated at the write boundary, so a stored document always parses.
 
+## Managing policies over HTTP
+
+Org admins reach that lifecycle under `/orgs/{org}/policies`
+(`api/openapi.yaml`). The api server passes each call through the
+`PolicyManager` seam — the gRPC client to `PolicyService` — so it never
+imports the engine and never parses a document: a document that does
+not parse comes back as `invalid_argument` and leaves as 400.
+
+Policy management is authorized like any other action. The
+`policy:create`, `policy:read`, `policy:update`, `policy:attach`, and
+`policy:detach` constants live in `internal/org`, because the api
+server enforces them and may not import the engine that stores
+policies. `owner` and `admin` grant `policy:*`; `member` grants none,
+so reading a policy is an admin action. The addressed policy's GRN is
+the object of the check, and its organization segment is the org in the
+path, so a policy of another org is not addressable.
+
 ## Policy attachment
 
 An active policy is attached to subjects — users and groups — through

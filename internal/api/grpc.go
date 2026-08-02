@@ -38,10 +38,16 @@ func (e *GRPCEvaluator) Evaluate(ctx context.Context, in EvalInput) (bool, error
 		SubjectGroups: grnsToProto(in.SubjectGroups),
 	})
 	if err != nil {
-		st, _ := status.FromError(err)
-		return false, errorx.New(kindOf(st.Code()), st.Message())
+		return false, statusError(err)
 	}
 	return resp.GetAllowed(), nil
+}
+
+// statusError renders a gRPC error as an errorx error; status codes
+// carry kinds by name (ADR-0003).
+func statusError(err error) error {
+	st, _ := status.FromError(err)
+	return errorx.New(kindOf(st.Code()), st.Message())
 }
 
 func statementsToProto(in []Statement) []*authzv1.Statement {

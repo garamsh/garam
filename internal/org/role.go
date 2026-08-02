@@ -49,6 +49,15 @@ const (
 	ActionProjectMemberList   = "project:member-list"
 	ActionProjectMemberAdd    = "project:member-add"
 	ActionProjectMemberRemove = "project:member-remove"
+
+	// Policy management actions. The org owns them because policies
+	// are org-managed data and the api server may not import the
+	// engine that stores them (ADR-0003).
+	ActionPolicyCreate = "policy:create"
+	ActionPolicyRead   = "policy:read"
+	ActionPolicyUpdate = "policy:update"
+	ActionPolicyAttach = "policy:attach"
+	ActionPolicyDetach = "policy:detach"
 )
 
 // Actions returns the action patterns the role grants on an org and
@@ -57,11 +66,11 @@ const (
 func (r Role) Actions() []string {
 	switch r {
 	case RoleOwner:
-		return []string{"org:*", "group:*", "project:*"}
+		return []string{"org:*", "group:*", "project:*", "policy:*"}
 	case RoleAdmin:
 		return []string{
 			ActionOrgRead, ActionOrgUpdate, ActionOrgMemberList, ActionOrgInvite,
-			"group:*", "project:*",
+			"group:*", "project:*", "policy:*",
 		}
 	case RoleMember:
 		return []string{

@@ -31,6 +31,7 @@ type fixture struct {
 	sessions  *fakeSessionStore
 	provider  *fakeProvider
 	evaluator *mocks.MockEvaluator
+	policies  *mocks.MockPolicyManager
 }
 
 func newFixture(t *testing.T) *fixture {
@@ -41,8 +42,9 @@ func newFixture(t *testing.T) *fixture {
 		sessions:  newFakeSessionStore(),
 		provider:  &fakeProvider{name: "google"},
 		evaluator: mocks.NewMockEvaluator(t),
+		policies:  mocks.NewMockPolicyManager(t),
 	}
-	srv := api.NewServer(f.users, f.orgs, f.sessions, []authn.Provider{f.provider}, f.evaluator, api.Config{SessionTTL: time.Hour})
+	srv := api.NewServer(f.users, f.orgs, f.sessions, []authn.Provider{f.provider}, f.evaluator, f.policies, api.Config{SessionTTL: time.Hour})
 	f.handler = apigen.Handler(srv)
 	return f
 }

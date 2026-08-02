@@ -20,6 +20,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/garamsh/gaon/internal/authn"
 	"github.com/garamsh/gaon/internal/authz"
@@ -84,7 +86,7 @@ func truncate(t *testing.T, p *pgxpool.Pool) {
 	t.Helper()
 	_, err := p.Exec(context.Background(), `TRUNCATE users, orgs, groups, projects,
 		group_members, project_members, org_members, invitations, sessions,
-		policies, policy_versions CASCADE`)
+		policies, policy_versions, policy_attachments CASCADE`)
 	require.NoError(t, err)
 }
 
@@ -363,33 +365,34 @@ func TestPolicyStore_LifecycleRoundTrip(t *testing.T) {
 	assert.Equal(t, "read-only", policies[0].Name())
 
 	// A draft contributes nothing until it is activated.
-	docs, err := s.ActiveDocuments(ctx, orgGRN)
+	active, err := s.ActivePolicies(ctx, orgGRN)
 	require.NoError(t, err)
-	assert.Empty(t, docs)
+	assert.Empty(t, active)
 
 	activated, err := s.SetPolicyStatus(ctx, g, authz.PolicyStatusActive)
 	require.NoError(t, err)
 	assert.Equal(t, authz.PolicyStatusActive, activated.Status())
-	docs, err = s.ActiveDocuments(ctx, orgGRN)
+	active, err = s.ActivePolicies(ctx, orgGRN)
 	require.NoError(t, err)
-	require.Len(t, docs, 1)
-	assert.Equal(t, "v1", docs[0].Statement[0].Sid)
+	require.Len(t, active, 1)
+	assert.Equal(t, "v1", active[0].Document.Statement[0].Sid)
+	assert.Empty(t, active[0].Subjects, "an unattached policy applies org-wide")
 
 	// Appending a version leaves the default pointer alone.
 	v2, err := s.AddPolicyVersion(ctx, g, policyDoc("v2", authz.EffectDeny), author)
 	require.NoError(t, err)
 	assert.Equal(t, 2, v2.Version())
-	docs, err = s.ActiveDocuments(ctx, orgGRN)
+	active, err = s.ActivePolicies(ctx, orgGRN)
 	require.NoError(t, err)
-	assert.Equal(t, "v1", docs[0].Statement[0].Sid)
+	assert.Equal(t, "v1", active[0].Document.Statement[0].Sid)
 
 	rolled, err := s.SetPolicyDefaultVersion(ctx, g, 2)
 	require.NoError(t, err)
 	assert.Equal(t, 2, rolled.DefaultVersion())
-	docs, err = s.ActiveDocuments(ctx, orgGRN)
+	active, err = s.ActivePolicies(ctx, orgGRN)
 	require.NoError(t, err)
-	assert.Equal(t, "v2", docs[0].Statement[0].Sid)
-	assert.Equal(t, authz.EffectDeny, docs[0].Statement[0].Effect)
+	assert.Equal(t, "v2", active[0].Document.Statement[0].Sid)
+	assert.Equal(t, authz.EffectDeny, active[0].Document.Statement[0].Effect)
 
 	versions, err := s.ListPolicyVersions(ctx, g)
 	require.NoError(t, err)
@@ -426,7 +429,7 @@ func TestPolicyService_ArchiveRoundTrip(t *testing.T) {
 
 	_, err = srv.ActivatePolicy(ctx, &authzv1.ActivatePolicyRequest{PolicyGrn: policyGRN})
 	require.NoError(t, err)
-	statements, err := cache.OrgStatements(ctx, orgGRN)
+	statements, err := cache.Statements(ctx, orgGRN, nil)
 	require.NoError(t, err)
 	require.Len(t, statements, 1)
 
@@ -434,7 +437,7 @@ func TestPolicyService_ArchiveRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, authzv1.PolicyStatus_POLICY_STATUS_ARCHIVED, archived.GetPolicy().GetStatus())
 
-	statements, err = cache.OrgStatements(ctx, orgGRN)
+	statements, err = cache.Statements(ctx, orgGRN, nil)
 	require.NoError(t, err)
 	assert.Empty(t, statements)
 
@@ -477,7 +480,7 @@ func TestPolicyCache_InvalidatedByNotify(t *testing.T) {
 	cache := authz.NewPolicyCache(s)
 	go func() { _ = authz.ListenPolicyChanges(ctx, p, cache) }()
 
-	before, err := cache.OrgStatements(ctx, orgGRN)
+	before, err := cache.Statements(ctx, orgGRN, nil)
 	require.NoError(t, err)
 	require.Empty(t, before)
 
@@ -495,7 +498,7 @@ func TestPolicyCache_InvalidatedByNotify(t *testing.T) {
 	assert.Eventually(t, func() bool {
 		_, err := p.Exec(ctx, `SELECT pg_notify($1, $2)`, authz.PolicyChannel, orgGRN.String())
 		require.NoError(t, err)
-		got, err := cache.OrgStatements(ctx, orgGRN)
+		got, err := cache.Statements(ctx, orgGRN, nil)
 		return err == nil && len(got) == 1
 	}, 5*time.Second, 20*time.Millisecond, "the notify listener should drop the org's cached statements")
 }
@@ -522,4 +525,158 @@ func TestPolicyWrite_Notifies(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, authz.PolicyChannel, n.Channel)
 	assert.Equal(t, orgGRN.String(), n.Payload)
+
+	// An attachment write changes what the policy applies to, so it
+	// announces the same org.
+	_, err = s.AttachPolicy(ctx, g, grnOf("user", "ada"))
+	require.NoError(t, err)
+	n, err = conn.Conn().WaitForNotification(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, orgGRN.String(), n.Payload)
+}
+
+// TestPolicyAttachments_RoundTrip drives attachment over the real
+// store: an attached policy reaches the subject it names and the
+// group it names, an archived one reaches nobody, and detaching the
+// last attachment returns the policy to an org-wide grant.
+func TestPolicyAttachments_RoundTrip(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := authz.NewPostgresStore(p)
+	cache := authz.NewPolicyCache(s)
+	srv := authz.NewPolicyGRPCServer(s, cache)
+	orgGRN := newPolicyOrg(t, p)
+	ada, bob, eng := grnOf("user", "ada"), grnOf("user", "bob"), grnOf("group", "eng")
+
+	created, err := srv.CreatePolicy(ctx, &authzv1.CreatePolicyRequest{
+		OrgGrn:    orgGRN.String(),
+		Name:      "read-only",
+		Document:  `{"Version":"2026-07-25","Statement":[{"Sid":"v1","Effect":"Allow","Action":["org:read"],"Resource":["grn:acme:*"]}]}`,
+		CreatedBy: ada.String(),
+	})
+	require.NoError(t, err)
+	policyGRN := created.GetPolicy().GetGrn()
+	_, err = srv.ActivatePolicy(ctx, &authzv1.ActivatePolicyRequest{PolicyGrn: policyGRN})
+	require.NoError(t, err)
+
+	// Unattached, the policy applies to every subject of the org.
+	statements, err := cache.Statements(ctx, orgGRN, []grn.GRN{bob})
+	require.NoError(t, err)
+	require.Len(t, statements, 1)
+
+	_, err = srv.AttachPolicy(ctx, &authzv1.AttachPolicyRequest{PolicyGrn: policyGRN, SubjectGrn: ada.String()})
+	require.NoError(t, err)
+	statements, err = cache.Statements(ctx, orgGRN, []grn.GRN{ada})
+	require.NoError(t, err)
+	require.Len(t, statements, 1)
+	statements, err = cache.Statements(ctx, orgGRN, []grn.GRN{bob})
+	require.NoError(t, err)
+	assert.Empty(t, statements, "an attached policy stops applying org-wide")
+
+	// A group attachment reaches the members the caller reports.
+	_, err = srv.AttachPolicy(ctx, &authzv1.AttachPolicyRequest{PolicyGrn: policyGRN, SubjectGrn: eng.String()})
+	require.NoError(t, err)
+	statements, err = cache.Statements(ctx, orgGRN, []grn.GRN{bob, eng})
+	require.NoError(t, err)
+	require.Len(t, statements, 1)
+
+	attachments, err := srv.ListPolicyAttachments(ctx, &authzv1.ListPolicyAttachmentsRequest{PolicyGrn: policyGRN})
+	require.NoError(t, err)
+	assert.Len(t, attachments.GetAttachments(), 2)
+
+	// An archived policy is not evaluated even where it is attached.
+	_, err = srv.ArchivePolicy(ctx, &authzv1.ArchivePolicyRequest{PolicyGrn: policyGRN})
+	require.NoError(t, err)
+	statements, err = cache.Statements(ctx, orgGRN, []grn.GRN{ada, eng})
+	require.NoError(t, err)
+	assert.Empty(t, statements)
+	_, err = srv.ActivatePolicy(ctx, &authzv1.ActivatePolicyRequest{PolicyGrn: policyGRN})
+	require.NoError(t, err)
+
+	for _, subject := range []grn.GRN{ada, eng} {
+		_, err = srv.DetachPolicy(ctx, &authzv1.DetachPolicyRequest{PolicyGrn: policyGRN, SubjectGrn: subject.String()})
+		require.NoError(t, err)
+	}
+	statements, err = cache.Statements(ctx, orgGRN, []grn.GRN{bob})
+	require.NoError(t, err)
+	require.Len(t, statements, 1)
+
+	_, err = srv.DetachPolicy(ctx, &authzv1.DetachPolicyRequest{PolicyGrn: policyGRN, SubjectGrn: ada.String()})
+	assert.Equal(t, codes.NotFound, status.Code(err))
+}
+
+// TestPolicyAttachment_StaysInsideItsOrg covers the schema's
+// org-consistency rule: an org-owned subject from another org cannot
+// carry the policy out of its org.
+func TestPolicyAttachment_StaysInsideItsOrg(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := authz.NewPostgresStore(p)
+	orgGRN := newPolicyOrg(t, p)
+
+	g, err := authz.NewPolicyGRN(orgGRN)
+	require.NoError(t, err)
+	_, err = s.CreatePolicy(ctx, authz.NewPolicy(g, orgGRN, "read-only"), policyDoc("v1", authz.EffectAllow), grnOf("user", "ada"))
+	require.NoError(t, err)
+
+	_, err = s.AttachPolicy(ctx, g, grn.New("other", "default", "group", "eng"))
+	assert.True(t, errorx.IsKind(err, errorx.KindFailedPrecondition))
+
+	// A root-owned identity exists above every org and is admitted.
+	_, err = s.AttachPolicy(ctx, g, grn.New(grn.RootOwner, "default", "user", "ada"))
+	require.NoError(t, err)
+
+	_, err = s.AttachPolicy(ctx, grn.New("acme", "default", authz.ServiceTypePolicy, "missing"), grnOf("user", "ada"))
+	assert.True(t, errorx.IsKind(err, errorx.KindNotFound))
+}
+
+// TestPolicyAttachment_DenyOverridesAcrossSources covers the union the
+// engine evaluates: a policy attached to the subject's group denies
+// what the caller's role statements allow.
+func TestPolicyAttachment_DenyOverridesAcrossSources(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := authz.NewPostgresStore(p)
+	cache := authz.NewPolicyCache(s)
+	orgGRN := newPolicyOrg(t, p)
+	ada, eng := grnOf("user", "ada"), grnOf("group", "eng")
+
+	denyRead := authz.PolicyDocument{
+		Version: "2026-07-25",
+		Statement: []authz.Statement{{
+			Sid:      "deny-read",
+			Effect:   authz.EffectDeny,
+			Action:   []string{"project:read"},
+			Resource: []string{"grn:acme:*"},
+		}},
+	}
+	g, err := authz.NewPolicyGRN(orgGRN)
+	require.NoError(t, err)
+	_, err = s.CreatePolicy(ctx, authz.NewPolicy(g, orgGRN, "no-read"), denyRead, ada)
+	require.NoError(t, err)
+	_, err = s.SetPolicyStatus(ctx, g, authz.PolicyStatusActive)
+	require.NoError(t, err)
+	_, err = s.AttachPolicy(ctx, g, eng)
+	require.NoError(t, err)
+
+	req := &authzv1.CheckRequest{
+		SubjectGrn: ada.String(),
+		ObjectGrn:  grnOf("project", "web").String(),
+		Action:     "project:read",
+		Statements: []*authzv1.Statement{{
+			Sid:      "org-role-owner",
+			Effect:   authzv1.Effect_EFFECT_ALLOW,
+			Action:   []string{"project:*"},
+			Resource: []string{"grn:acme:*"},
+		}},
+	}
+	engine := authz.NewGRPCServer(cache)
+	resp, err := engine.Check(ctx, req)
+	require.NoError(t, err)
+	assert.True(t, resp.GetAllowed(), "the attachment does not reach a subject outside the group")
+
+	req.SubjectGroups = []string{eng.String()}
+	resp, err = engine.Check(ctx, req)
+	require.NoError(t, err)
+	assert.False(t, resp.GetAllowed(), "a group-attached deny overrides the caller's allow")
 }

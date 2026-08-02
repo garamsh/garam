@@ -398,12 +398,7 @@ func TestPolicyCache_InvalidatedByNotify(t *testing.T) {
 	orgGRN := newPolicyOrg(t, p)
 
 	cache := authz.NewPolicyCache(s)
-	listening := make(chan struct{})
-	go func() {
-		close(listening)
-		_ = authz.ListenPolicyChanges(ctx, p, cache)
-	}()
-	<-listening
+	go func() { _ = authz.ListenPolicyChanges(ctx, p, cache) }()
 
 	before, err := cache.OrgStatements(ctx, orgGRN)
 	require.NoError(t, err)
@@ -416,8 +411,38 @@ func TestPolicyCache_InvalidatedByNotify(t *testing.T) {
 	_, err = s.SetPolicyStatus(ctx, g, authz.PolicyStatusActive)
 	require.NoError(t, err)
 
+	// The listener registers its LISTEN concurrently with the writes
+	// above, so the announcement is repeated until it has one to
+	// receive. TestPolicyWrite_Notifies covers the write's own
+	// announcement.
 	assert.Eventually(t, func() bool {
+		_, err := p.Exec(ctx, `SELECT pg_notify($1, $2)`, authz.PolicyChannel, orgGRN.String())
+		require.NoError(t, err)
 		got, err := cache.OrgStatements(ctx, orgGRN)
 		return err == nil && len(got) == 1
 	}, 5*time.Second, 20*time.Millisecond, "the notify listener should drop the org's cached statements")
+}
+
+func TestPolicyWrite_Notifies(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	p := pool(t)
+	s := authz.NewPostgresStore(p)
+	orgGRN := newPolicyOrg(t, p)
+
+	conn, err := p.Acquire(ctx)
+	require.NoError(t, err)
+	defer conn.Release()
+	_, err = conn.Exec(ctx, "LISTEN "+authz.PolicyChannel)
+	require.NoError(t, err)
+
+	g, err := authz.NewPolicyGRN(orgGRN)
+	require.NoError(t, err)
+	_, err = s.CreatePolicy(ctx, authz.NewPolicy(g, orgGRN, "read-only"), policyDoc("v1", authz.EffectAllow), grnOf("user", "ada"))
+	require.NoError(t, err)
+
+	n, err := conn.Conn().WaitForNotification(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, authz.PolicyChannel, n.Channel)
+	assert.Equal(t, orgGRN.String(), n.Payload)
 }

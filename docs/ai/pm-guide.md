@@ -63,6 +63,7 @@ Assign implementation work by running a worker in an orca worktree, not by editi
 
 - Scope tasks and issues so concurrently active workers touch disjoint modules. If two tasks must overlap, sequence them — do not run them in parallel.
 - When reviewing, check for collisions with other open PRs before merging.
+- When the environment provides Orca, dispatch workers into worktrees per `docs/ai/orca-dispatch.md`. A dispatch is verified by reading the worker's terminal, not by the create call succeeding.
 
 ## Maintaining conventions
 

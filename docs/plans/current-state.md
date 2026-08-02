@@ -14,9 +14,8 @@
   `Project`, `User`, `Agent`.
 - `authz` engine: IAM-style `Statement` model and native
   `StatementEvaluator` (ADR-0002), served over gRPC (ADR-0003).
-  Legacy interfaces (`Subject`, `Object`, `Checker`, `Manager`,
-  `RoleStore`, `PolicyStore`) remain but are unused — removal tracked
-  in issue #28.
+  The `Object` seam remains and carries the evaluated target; the
+  unused `Subject` seam was removed (issue #47).
 - Mockery v3 setup (`.mockery.yaml`) generating Store mocks.
 - Documentation under `docs/`.
 - CI plumbing: `Makefile`, `.github/workflows/ci.yml`. Git hooks

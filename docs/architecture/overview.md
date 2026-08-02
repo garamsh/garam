@@ -67,7 +67,6 @@ contract is `proto/gaon/authz/v1`.
 | `org.Invitation` | `internal/org` | single-use token into an org |
 | `authn.Provider` | `internal/authn` | OIDC provider (Google first) |
 | `authn.Session` | `internal/authn` | authenticated browser session |
-| `authz.Subject` | `internal/authz` | actor interface |
 | `authz.Object` | `internal/authz` | target interface |
 | `authz.Evaluator` | `internal/authz` | policy evaluator (native, IAM-style) |
 

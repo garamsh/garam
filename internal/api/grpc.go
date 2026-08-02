@@ -8,6 +8,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/garamsh/gaon/internal/errorx"
+	"github.com/garamsh/gaon/internal/grn"
 	authzv1 "github.com/garamsh/gaon/proto/gen/gaon/authz/v1"
 )
 
@@ -30,10 +31,11 @@ func NewGRPCEvaluator(conn grpc.ClientConnInterface) *GRPCEvaluator {
 // point is this transport.
 func (e *GRPCEvaluator) Evaluate(ctx context.Context, in EvalInput) (bool, error) {
 	resp, err := e.client.Check(ctx, &authzv1.CheckRequest{
-		SubjectGrn: in.Subject.String(),
-		ObjectGrn:  in.Object.String(),
-		Action:     in.Action,
-		Statements: statementsToProto(in.Statements),
+		SubjectGrn:    in.Subject.String(),
+		ObjectGrn:     in.Object.String(),
+		Action:        in.Action,
+		Statements:    statementsToProto(in.Statements),
+		SubjectGroups: grnsToProto(in.SubjectGroups),
 	})
 	if err != nil {
 		st, _ := status.FromError(err)
@@ -51,6 +53,14 @@ func statementsToProto(in []Statement) []*authzv1.Statement {
 			Action:   s.Action,
 			Resource: s.Resource,
 		})
+	}
+	return out
+}
+
+func grnsToProto(in []grn.GRN) []string {
+	out := make([]string, 0, len(in))
+	for _, g := range in {
+		out = append(out, g.String())
 	}
 	return out
 }

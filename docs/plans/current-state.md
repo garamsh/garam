@@ -39,12 +39,17 @@
   lifecycle RPCs, per-org `PolicyCache` with `LISTEN`/`NOTIFY`
   invalidation, hybrid statement collection (ADR-0007). e2e 10/10
   against Postgres 17.
+- **Policy attachments** (#89) — `policy_attachments` binds an active
+  policy to a user or group (ADR-0008); attach/detach/list RPCs, org
+  consistency and cache invalidation enforced in the schema, and
+  `CheckRequest.subject_groups` carries the subject's groups. An
+  unattached active policy still grants org-wide.
 
 ## Open
 
 - **Dead code cleanup** (#76) — in flight.
-- **Policy attachment to subjects** — an active policy grants org-wide
-  until identity-based attachment lands (ADR-0002, ADR-0007).
+- **Resource-based policies** — statements name no `Principal`;
+  attachment is identity-based only (ADR-0008).
 - **Per-org direct roles** — direct user roles currently apply in
   every org the subject belongs to; scoping them needs subject × role
   × scope persistence.

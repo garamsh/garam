@@ -43,17 +43,17 @@ func TestPolicyGRPCServer_CreatePolicyRejectsBadInput(t *testing.T) {
 func TestPolicyGRPCServer_ActivateInvalidatesTheOrgCache(t *testing.T) {
 	acme := orgGRN("acme")
 	store := mocks.NewMockStore(t)
-	store.EXPECT().ActiveDocuments(mock.Anything, acme).
+	store.EXPECT().ActivePolicies(mock.Anything, acme).
 		Return(nil, nil).Once()
 	store.EXPECT().SetPolicyStatus(mock.Anything, mock.Anything, authz.PolicyStatusActive).
 		Return(authz.NewPolicy(policyGRN(t, acme), acme, "read-only"), nil).Once()
-	store.EXPECT().ActiveDocuments(mock.Anything, acme).
-		Return([]authz.PolicyDocument{policyDocument("activated", authz.EffectAllow)}, nil).Once()
+	store.EXPECT().ActivePolicies(mock.Anything, acme).
+		Return([]authz.ActivePolicy{orgWidePolicy("activated", authz.EffectAllow)}, nil).Once()
 
 	cache := authz.NewPolicyCache(store)
 	srv := authz.NewPolicyGRPCServer(store, cache)
 
-	before, err := cache.OrgStatements(context.Background(), acme)
+	before, err := cache.Statements(context.Background(), acme, nil)
 	require.NoError(t, err)
 	assert.Empty(t, before)
 
@@ -62,7 +62,7 @@ func TestPolicyGRPCServer_ActivateInvalidatesTheOrgCache(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	after, err := cache.OrgStatements(context.Background(), acme)
+	after, err := cache.Statements(context.Background(), acme, nil)
 	require.NoError(t, err)
 	require.Len(t, after, 1)
 	assert.Equal(t, "activated", after[0].Sid)
@@ -71,17 +71,17 @@ func TestPolicyGRPCServer_ActivateInvalidatesTheOrgCache(t *testing.T) {
 func TestPolicyGRPCServer_ArchiveInvalidatesTheOrgCache(t *testing.T) {
 	acme := orgGRN("acme")
 	store := mocks.NewMockStore(t)
-	store.EXPECT().ActiveDocuments(mock.Anything, acme).
-		Return([]authz.PolicyDocument{policyDocument("active", authz.EffectAllow)}, nil).Once()
+	store.EXPECT().ActivePolicies(mock.Anything, acme).
+		Return([]authz.ActivePolicy{orgWidePolicy("active", authz.EffectAllow)}, nil).Once()
 	store.EXPECT().SetPolicyStatus(mock.Anything, mock.Anything, authz.PolicyStatusArchived).
 		Return(authz.NewPolicy(policyGRN(t, acme), acme, "read-only"), nil).Once()
-	store.EXPECT().ActiveDocuments(mock.Anything, acme).
+	store.EXPECT().ActivePolicies(mock.Anything, acme).
 		Return(nil, nil).Once()
 
 	cache := authz.NewPolicyCache(store)
 	srv := authz.NewPolicyGRPCServer(store, cache)
 
-	before, err := cache.OrgStatements(context.Background(), acme)
+	before, err := cache.Statements(context.Background(), acme, nil)
 	require.NoError(t, err)
 	require.Len(t, before, 1)
 
@@ -90,7 +90,7 @@ func TestPolicyGRPCServer_ArchiveInvalidatesTheOrgCache(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	after, err := cache.OrgStatements(context.Background(), acme)
+	after, err := cache.Statements(context.Background(), acme, nil)
 	require.NoError(t, err)
 	assert.Empty(t, after)
 }
@@ -123,6 +123,103 @@ func TestPolicyGRPCServer_RollbackRejectsAndReportsMissing(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.Equal(t, codes.NotFound, status.Code(err))
+}
+
+func TestPolicyGRPCServer_AttachInvalidatesTheOrgCache(t *testing.T) {
+	acme := orgGRN("acme")
+	g, ada := policyGRN(t, acme), subjectGRN("ada")
+	store := mocks.NewMockStore(t)
+	store.EXPECT().ActivePolicies(mock.Anything, acme).
+		Return([]authz.ActivePolicy{orgWidePolicy("org-wide", authz.EffectAllow)}, nil).Once()
+	store.EXPECT().GetPolicy(mock.Anything, g).
+		Return(authz.NewPolicy(g, acme, "read-only"), nil).Once()
+	store.EXPECT().AttachPolicy(mock.Anything, g, ada).
+		Return(&authz.PolicyAttachment{}, nil).Once()
+	store.EXPECT().ActivePolicies(mock.Anything, acme).
+		Return([]authz.ActivePolicy{attachedPolicy("ada-only", authz.EffectAllow, ada)}, nil).Once()
+
+	cache := authz.NewPolicyCache(store)
+	srv := authz.NewPolicyGRPCServer(store, cache)
+
+	before, err := cache.Statements(context.Background(), acme, nil)
+	require.NoError(t, err)
+	require.Len(t, before, 1)
+
+	_, err = srv.AttachPolicy(context.Background(), &authzv1.AttachPolicyRequest{
+		PolicyGrn:  g.String(),
+		SubjectGrn: ada.String(),
+	})
+	require.NoError(t, err)
+
+	// The reloaded policy now reaches its subject and nobody else.
+	after, err := cache.Statements(context.Background(), acme, []grn.GRN{ada})
+	require.NoError(t, err)
+	require.Len(t, after, 1)
+	assert.Equal(t, "ada-only", after[0].Sid)
+
+	others, err := cache.Statements(context.Background(), acme, []grn.GRN{subjectGRN("bob")})
+	require.NoError(t, err)
+	assert.Empty(t, others)
+}
+
+func TestPolicyGRPCServer_DetachReportsMissing(t *testing.T) {
+	acme := orgGRN("acme")
+	g, ada := policyGRN(t, acme), subjectGRN("ada")
+	store := mocks.NewMockStore(t)
+	store.EXPECT().GetPolicy(mock.Anything, g).
+		Return(authz.NewPolicy(g, acme, "read-only"), nil).Once()
+	store.EXPECT().DetachPolicy(mock.Anything, g, ada).
+		Return(authz.ErrAttachmentNotFound).Once()
+
+	srv := authz.NewPolicyGRPCServer(store, authz.NewPolicyCache(store))
+	_, err := srv.DetachPolicy(context.Background(), &authzv1.DetachPolicyRequest{
+		PolicyGrn:  g.String(),
+		SubjectGrn: ada.String(),
+	})
+	require.Error(t, err)
+	assert.Equal(t, codes.NotFound, status.Code(err))
+}
+
+func TestPolicyGRPCServer_AttachmentRejectsBadGRN(t *testing.T) {
+	store := mocks.NewMockStore(t)
+	srv := authz.NewPolicyGRPCServer(store, authz.NewPolicyCache(store))
+
+	cases := map[string]*authzv1.AttachPolicyRequest{
+		"bad policy grn":  {PolicyGrn: "nope", SubjectGrn: "grn:root:default:user:ada"},
+		"bad subject grn": {PolicyGrn: "grn:acme:default:policy:p1", SubjectGrn: "nope"},
+	}
+	for name, req := range cases {
+		t.Run(name, func(t *testing.T) {
+			_, err := srv.AttachPolicy(context.Background(), req)
+			require.Error(t, err)
+			assert.Equal(t, codes.InvalidArgument, status.Code(err))
+		})
+	}
+}
+
+func TestPolicyGRPCServer_ListPolicyAttachments(t *testing.T) {
+	acme := orgGRN("acme")
+	g, ada := policyGRN(t, acme), subjectGRN("ada")
+	store := mocks.NewMockStore(t)
+	store.EXPECT().GetPolicy(mock.Anything, g).
+		Return(authz.NewPolicy(g, acme, "read-only"), nil).Once()
+	store.EXPECT().AttachPolicy(mock.Anything, g, ada).
+		Return(&authz.PolicyAttachment{}, nil).Once()
+	store.EXPECT().ListPolicyAttachments(mock.Anything, g).
+		Return([]*authz.PolicyAttachment{{}}, nil).Once()
+
+	srv := authz.NewPolicyGRPCServer(store, authz.NewPolicyCache(store))
+	_, err := srv.AttachPolicy(context.Background(), &authzv1.AttachPolicyRequest{
+		PolicyGrn:  g.String(),
+		SubjectGrn: ada.String(),
+	})
+	require.NoError(t, err)
+
+	resp, err := srv.ListPolicyAttachments(context.Background(), &authzv1.ListPolicyAttachmentsRequest{
+		PolicyGrn: g.String(),
+	})
+	require.NoError(t, err)
+	assert.Len(t, resp.GetAttachments(), 1)
 }
 
 func policyGRN(t *testing.T, orgGRN grn.GRN) grn.GRN {

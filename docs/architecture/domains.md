@@ -40,7 +40,9 @@ Top of the tenant hierarchy.
 
 The `Store` interface covers CRUD on each plus membership and cascade
 delete on `Organization`; group and project listing is scoped to one
-organization. Orgs grow by invitation and acceptance, not open signup.
+organization, in both directions — the groups of an org, and the
+groups of the org a member belongs to, which a check sends to the
+engine to resolve group-attached policies (ADR-0008). Orgs grow by invitation and acceptance, not open signup.
 The org domain owns its action constants (`ActionOrgRead`,
 `ActionGroupRead`, `ActionProjectRead`, …) and `Role.Actions` maps each
 role to the action patterns it grants; `ActionsFor` does the same for
@@ -62,8 +64,9 @@ evaluates.
 | `StatementEvaluator` | native in-process `Evaluator`: explicit Deny > Allow > default Deny |
 | `GRPCServer` | Check/Explain over `proto/gaon/authz/v1` |
 | `Policy` / `PolicyVersion` | a versioned org rule set and its immutable revisions |
-| `Store` / `PostgresStore` | persists policies and their append-only versions |
-| `PolicyCache` | an org's active statements, dropped on write and on `NOTIFY` |
+| `PolicyAttachment` | binds a policy to the user or group it applies to (ADR-0008) |
+| `Store` / `PostgresStore` | persists policies, their append-only versions, and attachments |
+| `PolicyCache` | an org's active policies and attachments, dropped on write and on `NOTIFY` |
 | `PolicyGRPCServer` | the policy lifecycle over `proto/gaon/authz/v1` |
 
 The api server authorizes through the gRPC client; the engine matches
@@ -101,9 +104,9 @@ A user can belong to multiple orgs; membership is recorded only in the
 org domain (`Membership` / `org_members`), never duplicated on the
 user. Roles on the user are direct grants, collected by the api server
 alongside group- and project-derived grants at check time
-([authz.md](./authz.md)). Policies on the user are stored but not yet
-evaluated — an active policy grants org-wide and subject-level
-attachment is future work (ADR-0007).
+([authz.md](./authz.md)). The `policies` field is stored but not
+evaluated: a policy reaches a subject through an attachment the authz
+engine owns (ADR-0008), not through this list.
 
 ## `internal/agent`
 

@@ -54,6 +54,9 @@ type Store interface {
 	AddGroupMember(ctx context.Context, groupGRN, memberGRN grn.GRN) error
 	RemoveGroupMember(ctx context.Context, groupGRN, memberGRN grn.GRN) error
 	ListGroupMembers(ctx context.Context, groupGRN grn.GRN) ([]grn.GRN, error)
+	// ListGroupsByMember returns the org's Groups the member belongs
+	// to; a check reads it to resolve group-attached policies.
+	ListGroupsByMember(ctx context.Context, orgGRN, memberGRN grn.GRN) ([]grn.GRN, error)
 
 	// Project
 	CreateProject(ctx context.Context, p *Project) error

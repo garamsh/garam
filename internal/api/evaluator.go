@@ -26,11 +26,14 @@ type Statement struct {
 
 // EvalInput is one authorization question: may Subject perform Action
 // on Object, given the Statements the caller collected for it.
+// SubjectGroups names the groups Subject belongs to, so the engine can
+// find the policies attached to them (ADR-0008).
 type EvalInput struct {
-	Subject    grn.GRN
-	Object     grn.GRN
-	Action     string
-	Statements []Statement
+	Subject       grn.GRN
+	Object        grn.GRN
+	Action        string
+	SubjectGroups []grn.GRN
+	Statements    []Statement
 }
 
 // Evaluator is the authorization seam between the api server and the

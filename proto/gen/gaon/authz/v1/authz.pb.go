@@ -152,7 +152,11 @@ type CheckRequest struct {
 	// statements carry the caller's role-derived grants (ADR-0007). The
 	// engine unions them with the policies persisted for the object's
 	// org; either side alone may decide.
-	Statements    []*Statement `protobuf:"bytes,4,rep,name=statements,proto3" json:"statements,omitempty"`
+	Statements []*Statement `protobuf:"bytes,4,rep,name=statements,proto3" json:"statements,omitempty"`
+	// subject_groups are the GRNs of the groups the subject belongs to
+	// (ADR-0008). Group membership is org data the caller resolves; the
+	// engine uses it only to find the policies attached to the subject.
+	SubjectGroups []string `protobuf:"bytes,5,rep,name=subject_groups,json=subjectGroups,proto3" json:"subject_groups,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -215,6 +219,13 @@ func (x *CheckRequest) GetStatements() []*Statement {
 	return nil
 }
 
+func (x *CheckRequest) GetSubjectGroups() []string {
+	if x != nil {
+		return x.SubjectGroups
+	}
+	return nil
+}
+
 type CheckResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// allowed is the final decision: explicit Deny wins, otherwise any
@@ -268,6 +279,7 @@ type ExplainRequest struct {
 	ObjectGrn     string                 `protobuf:"bytes,2,opt,name=object_grn,json=objectGrn,proto3" json:"object_grn,omitempty"`
 	Action        string                 `protobuf:"bytes,3,opt,name=action,proto3" json:"action,omitempty"`
 	Statements    []*Statement           `protobuf:"bytes,4,rep,name=statements,proto3" json:"statements,omitempty"`
+	SubjectGroups []string               `protobuf:"bytes,5,rep,name=subject_groups,json=subjectGroups,proto3" json:"subject_groups,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -326,6 +338,13 @@ func (x *ExplainRequest) GetAction() string {
 func (x *ExplainRequest) GetStatements() []*Statement {
 	if x != nil {
 		return x.Statements
+	}
+	return nil
+}
+
+func (x *ExplainRequest) GetSubjectGroups() []string {
+	if x != nil {
+		return x.SubjectGroups
 	}
 	return nil
 }
@@ -452,7 +471,7 @@ const file_gaon_authz_v1_authz_proto_rawDesc = "" +
 	"\x03sid\x18\x01 \x01(\tR\x03sid\x12-\n" +
 	"\x06effect\x18\x02 \x01(\x0e2\x15.gaon.authz.v1.EffectR\x06effect\x12\x16\n" +
 	"\x06action\x18\x03 \x03(\tR\x06action\x12\x1a\n" +
-	"\bresource\x18\x04 \x03(\tR\bresource\"\xa0\x01\n" +
+	"\bresource\x18\x04 \x03(\tR\bresource\"\xc7\x01\n" +
 	"\fCheckRequest\x12\x1f\n" +
 	"\vsubject_grn\x18\x01 \x01(\tR\n" +
 	"subjectGrn\x12\x1d\n" +
@@ -461,9 +480,10 @@ const file_gaon_authz_v1_authz_proto_rawDesc = "" +
 	"\x06action\x18\x03 \x01(\tR\x06action\x128\n" +
 	"\n" +
 	"statements\x18\x04 \x03(\v2\x18.gaon.authz.v1.StatementR\n" +
-	"statements\")\n" +
+	"statements\x12%\n" +
+	"\x0esubject_groups\x18\x05 \x03(\tR\rsubjectGroups\")\n" +
 	"\rCheckResponse\x12\x18\n" +
-	"\aallowed\x18\x01 \x01(\bR\aallowed\"\xa2\x01\n" +
+	"\aallowed\x18\x01 \x01(\bR\aallowed\"\xc9\x01\n" +
 	"\x0eExplainRequest\x12\x1f\n" +
 	"\vsubject_grn\x18\x01 \x01(\tR\n" +
 	"subjectGrn\x12\x1d\n" +
@@ -472,7 +492,8 @@ const file_gaon_authz_v1_authz_proto_rawDesc = "" +
 	"\x06action\x18\x03 \x01(\tR\x06action\x128\n" +
 	"\n" +
 	"statements\x18\x04 \x03(\v2\x18.gaon.authz.v1.StatementR\n" +
-	"statements\"b\n" +
+	"statements\x12%\n" +
+	"\x0esubject_groups\x18\x05 \x03(\tR\rsubjectGroups\"b\n" +
 	"\x0fExplainResponse\x12\x18\n" +
 	"\aallowed\x18\x01 \x01(\bR\aallowed\x125\n" +
 	"\x06traces\x18\x02 \x03(\v2\x1d.gaon.authz.v1.StatementTraceR\x06traces\"k\n" +

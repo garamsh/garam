@@ -11,29 +11,39 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const activePolicyDocuments = `-- name: ActivePolicyDocuments :many
-SELECT v.document
+const activePolicies = `-- name: ActivePolicies :many
+SELECT v.document,
+       coalesce(array_agg(a.subject_grn) FILTER (WHERE a.subject_grn IS NOT NULL), '{}')::text[] AS subject_grns
 FROM policies p
 JOIN policy_versions v ON v.policy_grn = p.grn AND v.version = p.default_version
+LEFT JOIN policy_attachments a ON a.policy_grn = p.grn
 WHERE p.org_grn = $1 AND p.status = 'active'
+GROUP BY p.grn, v.document
 ORDER BY p.grn
 `
 
-// ActivePolicyDocuments returns the document each active policy of the
-// org currently evaluates: its default version, and nothing else.
-func (q *Queries) ActivePolicyDocuments(ctx context.Context, orgGrn string) ([][]byte, error) {
-	rows, err := q.db.Query(ctx, activePolicyDocuments, orgGrn)
+type ActivePoliciesRow struct {
+	Document    []byte
+	SubjectGrns []string
+}
+
+// ActivePolicies returns what each active policy of the org currently
+// evaluates: its default version's document, and the subjects it is
+// attached to. An empty subject list means the policy applies org-wide
+// (ADR-0008).
+func (q *Queries) ActivePolicies(ctx context.Context, orgGrn string) ([]ActivePoliciesRow, error) {
+	rows, err := q.db.Query(ctx, activePolicies, orgGrn)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items [][]byte
+	var items []ActivePoliciesRow
 	for rows.Next() {
-		var document []byte
-		if err := rows.Scan(&document); err != nil {
+		var i ActivePoliciesRow
+		if err := rows.Scan(&i.Document, &i.SubjectGrns); err != nil {
 			return nil, err
 		}
-		items = append(items, document)
+		items = append(items, i)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -74,6 +84,25 @@ func (q *Queries) AddPolicyVersion(ctx context.Context, arg AddPolicyVersionPara
 		&i.CreatedBy,
 		&i.CreatedAt,
 	)
+	return i, err
+}
+
+const attachPolicy = `-- name: AttachPolicy :one
+INSERT INTO policy_attachments (policy_grn, subject_grn, created_at)
+VALUES ($1, $2, $3)
+RETURNING policy_grn, subject_grn, created_at
+`
+
+type AttachPolicyParams struct {
+	PolicyGrn  string
+	SubjectGrn string
+	CreatedAt  pgtype.Timestamptz
+}
+
+func (q *Queries) AttachPolicy(ctx context.Context, arg AttachPolicyParams) (PolicyAttachment, error) {
+	row := q.db.QueryRow(ctx, attachPolicy, arg.PolicyGrn, arg.SubjectGrn, arg.CreatedAt)
+	var i PolicyAttachment
+	err := row.Scan(&i.PolicyGrn, &i.SubjectGrn, &i.CreatedAt)
 	return i, err
 }
 
@@ -147,6 +176,23 @@ func (q *Queries) CreatePolicy(ctx context.Context, arg CreatePolicyParams) (Pol
 	return i, err
 }
 
+const detachPolicy = `-- name: DetachPolicy :execrows
+DELETE FROM policy_attachments WHERE policy_grn = $1 AND subject_grn = $2
+`
+
+type DetachPolicyParams struct {
+	PolicyGrn  string
+	SubjectGrn string
+}
+
+func (q *Queries) DetachPolicy(ctx context.Context, arg DetachPolicyParams) (int64, error) {
+	result, err := q.db.Exec(ctx, detachPolicy, arg.PolicyGrn, arg.SubjectGrn)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getPolicy = `-- name: GetPolicy :one
 SELECT grn, org_grn, name, status, default_version, created_at, updated_at FROM policies WHERE grn = $1
 `
@@ -210,6 +256,30 @@ func (q *Queries) ListPolicies(ctx context.Context, orgGrn string) ([]Policy, er
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPolicyAttachments = `-- name: ListPolicyAttachments :many
+SELECT policy_grn, subject_grn, created_at FROM policy_attachments WHERE policy_grn = $1 ORDER BY subject_grn
+`
+
+func (q *Queries) ListPolicyAttachments(ctx context.Context, policyGrn string) ([]PolicyAttachment, error) {
+	rows, err := q.db.Query(ctx, listPolicyAttachments, policyGrn)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PolicyAttachment
+	for rows.Next() {
+		var i PolicyAttachment
+		if err := rows.Scan(&i.PolicyGrn, &i.SubjectGrn, &i.CreatedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

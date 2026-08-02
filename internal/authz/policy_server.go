@@ -169,6 +169,74 @@ func (s *PolicyGRPCServer) RollbackPolicy(ctx context.Context, req *authzv1.Roll
 	return &authzv1.RollbackPolicyResponse{Policy: policyToProto(p)}, nil
 }
 
+// AttachPolicy binds the policy to a subject, narrowing it from an
+// org-wide grant to that subject and the members of that group
+// (ADR-0008).
+func (s *PolicyGRPCServer) AttachPolicy(ctx context.Context, req *authzv1.AttachPolicyRequest) (*authzv1.AttachPolicyResponse, error) {
+	g, subject, err := parseAttachment(req.GetPolicyGrn(), req.GetSubjectGrn())
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	p, err := s.store.GetPolicy(ctx, g)
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	a, err := s.store.AttachPolicy(ctx, g, subject)
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	s.cache.Invalidate(p.Organization())
+	return &authzv1.AttachPolicyResponse{Attachment: attachmentToProto(a)}, nil
+}
+
+// DetachPolicy removes one attachment. A policy left with none applies
+// org-wide again.
+func (s *PolicyGRPCServer) DetachPolicy(ctx context.Context, req *authzv1.DetachPolicyRequest) (*authzv1.DetachPolicyResponse, error) {
+	g, subject, err := parseAttachment(req.GetPolicyGrn(), req.GetSubjectGrn())
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	p, err := s.store.GetPolicy(ctx, g)
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	if err := s.store.DetachPolicy(ctx, g, subject); err != nil {
+		return nil, grpcError(err)
+	}
+	s.cache.Invalidate(p.Organization())
+	return &authzv1.DetachPolicyResponse{}, nil
+}
+
+// ListPolicyAttachments lists a policy's attachments.
+func (s *PolicyGRPCServer) ListPolicyAttachments(ctx context.Context, req *authzv1.ListPolicyAttachmentsRequest) (*authzv1.ListPolicyAttachmentsResponse, error) {
+	g, err := grn.Parse(req.GetPolicyGrn())
+	if err != nil {
+		return nil, grpcError(errorx.Wrap(err, "policy_grn"))
+	}
+	attachments, err := s.store.ListPolicyAttachments(ctx, g)
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	out := make([]*authzv1.PolicyAttachment, 0, len(attachments))
+	for _, a := range attachments {
+		out = append(out, attachmentToProto(a))
+	}
+	return &authzv1.ListPolicyAttachmentsResponse{Attachments: out}, nil
+}
+
+// parseAttachment parses the pair every attachment RPC addresses.
+func parseAttachment(policyGRN, subjectGRN string) (grn.GRN, grn.GRN, error) {
+	g, err := grn.Parse(policyGRN)
+	if err != nil {
+		return grn.GRN{}, grn.GRN{}, errorx.Wrap(err, "policy_grn")
+	}
+	subject, err := grn.Parse(subjectGRN)
+	if err != nil {
+		return grn.GRN{}, grn.GRN{}, errorx.Wrap(err, "subject_grn")
+	}
+	return g, subject, nil
+}
+
 func policyToProto(p *Policy) *authzv1.Policy {
 	return &authzv1.Policy{
 		Grn:            p.GRN().String(),
@@ -193,6 +261,14 @@ func policyVersionToProto(v *PolicyVersion) (*authzv1.PolicyVersion, error) {
 		CreatedBy: v.CreatedBy().String(),
 		CreatedAt: timestamppb.New(v.CreatedAt()),
 	}, nil
+}
+
+func attachmentToProto(a *PolicyAttachment) *authzv1.PolicyAttachment {
+	return &authzv1.PolicyAttachment{
+		PolicyGrn:  a.Policy().String(),
+		SubjectGrn: a.Subject().String(),
+		CreatedAt:  timestamppb.New(a.CreatedAt()),
+	}
 }
 
 func policyStatusToProto(s PolicyStatus) authzv1.PolicyStatus {

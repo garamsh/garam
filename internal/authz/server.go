@@ -32,7 +32,7 @@ func NewGRPCServer(policies PolicySource) *GRPCServer {
 // Check evaluates the applicable statements and returns the final
 // decision: explicit Deny wins, otherwise any matching Allow permits.
 func (s *GRPCServer) Check(ctx context.Context, req *authzv1.CheckRequest) (*authzv1.CheckResponse, error) {
-	in, err := parseInput(req.GetSubjectGrn(), req.GetObjectGrn(), req.GetAction(), req.GetStatements())
+	in, err := parseInput(req.GetSubjectGrn(), req.GetObjectGrn(), req.GetAction(), req.GetSubjectGroups(), req.GetStatements())
 	if err != nil {
 		return nil, grpcError(err)
 	}
@@ -50,7 +50,7 @@ func (s *GRPCServer) Check(ctx context.Context, req *authzv1.CheckRequest) (*aut
 // Explain evaluates the same input and reports every statement's
 // contribution, so a denied request is reproducible after the fact.
 func (s *GRPCServer) Explain(ctx context.Context, req *authzv1.ExplainRequest) (*authzv1.ExplainResponse, error) {
-	in, err := parseInput(req.GetSubjectGrn(), req.GetObjectGrn(), req.GetAction(), req.GetStatements())
+	in, err := parseInput(req.GetSubjectGrn(), req.GetObjectGrn(), req.GetAction(), req.GetSubjectGroups(), req.GetStatements())
 	if err != nil {
 		return nil, grpcError(err)
 	}
@@ -84,10 +84,12 @@ func (s *GRPCServer) Explain(ctx context.Context, req *authzv1.ExplainRequest) (
 // it carries no other domain knowledge (ADR-0007).
 const serviceTypeOrg = "org"
 
-// applicable unions the object org's persisted policy statements with
-// the role-derived statements the caller supplied (ADR-0007).
+// applicable unions the persisted policy statements that reach the
+// subject — org-wide, attached to it, or attached to one of its groups
+// (ADR-0008) — with the role-derived statements the caller supplied
+// (ADR-0007).
 func (s *GRPCServer) applicable(ctx context.Context, in checkInput) ([]Statement, error) {
-	stored, err := s.policies.OrgStatements(ctx, orgGRNOf(in.object))
+	stored, err := s.policies.Statements(ctx, orgGRNOf(in.object), in.subjects)
 	if err != nil {
 		return nil, err
 	}
@@ -106,18 +108,31 @@ func orgGRNOf(object grn.GRN) grn.GRN {
 	return grn.New(grn.RootOwner, grn.DefaultProject, serviceTypeOrg, object.Organization)
 }
 
-// checkInput is a parsed Check/Explain request.
+// checkInput is a parsed Check/Explain request. subjects holds the
+// GRNs a policy attachment may name for this request: the subject
+// itself and the groups it belongs to.
 type checkInput struct {
 	object     grn.GRN
 	action     string
+	subjects   []grn.GRN
 	statements []Statement
 }
 
 // parseInput validates the wire request once at the transport
 // boundary; downstream code trusts the parsed values.
-func parseInput(subjectGRN, objectGRN, action string, stmts []*authzv1.Statement) (checkInput, error) {
-	if _, err := grn.Parse(subjectGRN); err != nil {
+func parseInput(subjectGRN, objectGRN, action string, subjectGroups []string, stmts []*authzv1.Statement) (checkInput, error) {
+	subject, err := grn.Parse(subjectGRN)
+	if err != nil {
 		return checkInput{}, errorx.Wrap(err, "subject_grn")
+	}
+	subjects := make([]grn.GRN, 0, len(subjectGroups)+1)
+	subjects = append(subjects, subject)
+	for _, raw := range subjectGroups {
+		g, err := grn.Parse(raw)
+		if err != nil {
+			return checkInput{}, errorx.Wrap(err, "subject_groups")
+		}
+		subjects = append(subjects, g)
 	}
 	object, err := grn.Parse(objectGRN)
 	if err != nil {
@@ -142,7 +157,7 @@ func parseInput(subjectGRN, objectGRN, action string, stmts []*authzv1.Statement
 			Resource: p.GetResource(),
 		})
 	}
-	return checkInput{object: object, action: action, statements: statements}, nil
+	return checkInput{object: object, action: action, subjects: subjects, statements: statements}, nil
 }
 
 func effectFromProto(e authzv1.Effect) (Effect, error) {

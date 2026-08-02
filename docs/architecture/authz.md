@@ -56,8 +56,8 @@ from either wins.
 
 The engine scopes a request to the org that owns the object: an org's
 identifier is the organization segment of every resource beneath it
-(ADR-0001). Persisted policies apply to their whole org — attaching a
-policy to an individual subject is future work (ADR-0002).
+(ADR-0001). Which of that org's policies apply then depends on their
+attachments (§Policy attachment).
 
 ### Role-derived statements
 
@@ -83,9 +83,9 @@ group grant nor a direct role admits a non-member of the org.
 
 Roles stored on the user itself are direct grants and carry the org
 role's scope, so a direct role applies in every org the subject
-belongs to. Policies stored on the user are not collected: an active
-policy grants org-wide, and attaching one to a single subject is
-future work (ADR-0007).
+belongs to. Policies are not collected here at all — the engine owns
+them and resolves them from the subject and the groups the request
+carries (§Policy attachment).
 
 ## Policy persistence
 
@@ -111,8 +111,33 @@ invalidation still holds.
 
 Lifecycle is served by `PolicyService` in `proto/gaon/authz/v1`:
 create, append a version, list policies and versions, activate,
-archive, and roll back. Documents are validated at the write boundary, so a stored
-document always parses.
+archive, roll back, attach, detach, and list attachments. Documents are
+validated at the write boundary, so a stored document always parses.
+
+## Policy attachment
+
+An active policy is attached to subjects — users and groups — through
+`policy_attachments` ([ADR-0008](./adr/0008-identity-based-policy-attachments.md)).
+
+| Attachment | Applies to |
+|------------|------------|
+| none | every subject of the policy's org |
+| a user GRN | that user |
+| a group GRN | the members the request reports for that subject |
+
+A check therefore evaluates four sources: the org's unattached active
+policies, the policies attached to the subject, the policies attached
+to a group the subject belongs to, and the caller's role-derived
+statements. Deny-overrides applies across all four.
+
+The api server resolves the subject's groups from the org tables and
+sends them as `subject_groups` on `Check` / `Explain`; the engine
+matches those GRNs against attachments without knowing what a group
+is. An attachment stays inside the policy's org, enforced by a schema
+trigger; a root-owned identity such as a user cannot name an org in its
+GRN, so org membership stays the api server's precondition. Attachment
+writes announce the org on `gaon_policy_change` like any other policy
+write.
 
 ## Components
 
@@ -122,8 +147,9 @@ document always parses.
 | `Evaluator` | statement-set → `Decision` | — |
 | `StatementEvaluator` | native in-process `Evaluator` | — |
 | `Policy` / `PolicyVersion` | stored policy and its revisions | — |
-| `Store` / `PostgresStore` | policy persistence | `migrations/` |
-| `PolicyCache` | per-org parsed statement set | `Store` |
+| `PolicyAttachment` | binds a policy to a subject (ADR-0008) | — |
+| `Store` / `PostgresStore` | policy and attachment persistence | `migrations/` |
+| `PolicyCache` | per-org parsed policies and their attachments | `Store` |
 | `GRPCServer` | `Check` / `Explain` RPCs | `PolicyCache` |
 | `PolicyGRPCServer` | policy lifecycle RPCs | `Store`, `PolicyCache` |
 
@@ -154,8 +180,7 @@ reproducible after the fact.
 ## Constraints
 
 - Resource-based policies (attaching a policy to a resource) are
-  deferred; identity-based only. Attaching a policy to a single
-  subject is deferred too — an active policy grants org-wide.
+  deferred; identity-based only (ADR-0008).
 - `Condition` is parsed but not evaluated in the MVP.
 - The earlier Rego/OPA direction is superseded (ADR-0002); preserved
   WIP is reference only.

@@ -58,6 +58,12 @@ type Policy struct {
 	UpdatedAt      pgtype.Timestamptz
 }
 
+type PolicyAttachment struct {
+	PolicyGrn  string
+	SubjectGrn string
+	CreatedAt  pgtype.Timestamptz
+}
+
 type PolicyVersion struct {
 	PolicyGrn string
 	Version   int32

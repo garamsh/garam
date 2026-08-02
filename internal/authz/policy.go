@@ -12,9 +12,11 @@ import (
 
 // Policy sentinel errors.
 var (
-	ErrPolicyNotFound        = errorx.New(errorx.KindNotFound, "policy not found")
-	ErrPolicyVersionNotFound = errorx.New(errorx.KindNotFound, "policy version not found")
-	ErrPolicyAlreadyExists   = errorx.New(errorx.KindAlreadyExists, "policy already exists")
+	ErrPolicyNotFound          = errorx.New(errorx.KindNotFound, "policy not found")
+	ErrPolicyVersionNotFound   = errorx.New(errorx.KindNotFound, "policy version not found")
+	ErrPolicyAlreadyExists     = errorx.New(errorx.KindAlreadyExists, "policy already exists")
+	ErrAttachmentNotFound      = errorx.New(errorx.KindNotFound, "policy attachment not found")
+	ErrAttachmentAlreadyExists = errorx.New(errorx.KindAlreadyExists, "policy attachment already exists")
 )
 
 // ServiceTypePolicy is the GRN service type of a stored policy.
@@ -87,6 +89,27 @@ func (v *PolicyVersion) Version() int             { return v.version }
 func (v *PolicyVersion) Document() PolicyDocument { return v.document }
 func (v *PolicyVersion) CreatedBy() grn.GRN       { return v.createdBy }
 func (v *PolicyVersion) CreatedAt() time.Time     { return v.createdAt }
+
+// PolicyAttachment binds a policy to the subject it applies to
+// (ADR-0008). A subject is a user or a group of the policy's org; the
+// engine matches its GRN as a string and never resolves it.
+type PolicyAttachment struct {
+	policyGRN  grn.GRN
+	subjectGRN grn.GRN
+	createdAt  time.Time
+}
+
+func (a *PolicyAttachment) Policy() grn.GRN      { return a.policyGRN }
+func (a *PolicyAttachment) Subject() grn.GRN     { return a.subjectGRN }
+func (a *PolicyAttachment) CreatedAt() time.Time { return a.createdAt }
+
+// ActivePolicy is one active policy's contribution to evaluation: the
+// document it evaluates and the subjects it is attached to. No
+// attachment means the policy applies org-wide (ADR-0008).
+type ActivePolicy struct {
+	Document PolicyDocument
+	Subjects []grn.GRN
+}
 
 // firstPolicyVersion is the version a policy is created with; versions
 // are append-only and numbered from it.

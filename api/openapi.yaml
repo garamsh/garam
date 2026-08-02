@@ -10,7 +10,9 @@ tags:
   - name: auth
     description: Sign-in, sign-out, and the current identity.
   - name: org
-    description: Organizations, memberships, and invitations.
+    description: >-
+      Organizations, memberships, invitations, and the groups and
+      projects an organization contains.
 paths:
   /auth/login/{provider}:
     get:
@@ -215,6 +217,376 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
+  /orgs/{org}/groups:
+    post:
+      operationId: createGroup
+      tags: [org]
+      summary: Create a group in an organization. Requires the `admin` role.
+      parameters:
+        - $ref: '#/components/parameters/org'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GroupCreate'
+      responses:
+        '201':
+          description: Group created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    get:
+      operationId: listGroups
+      tags: [org]
+      summary: List an organization's groups. Requires the `member` role.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+      responses:
+        '200':
+          description: The organization's groups.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Group'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/groups/{group}:
+    get:
+      operationId: getGroup
+      tags: [org]
+      summary: Get a group. Requires the `member` role.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/group'
+      responses:
+        '200':
+          description: The group.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    patch:
+      operationId: updateGroup
+      tags: [org]
+      summary: Rename a group. Requires the `admin` role.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/group'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GroupPatch'
+      responses:
+        '200':
+          description: The updated group.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deleteGroup
+      tags: [org]
+      summary: Delete a group. Requires the `admin` role.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/group'
+      responses:
+        '204':
+          description: Group deleted.
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/groups/{group}/members:
+    get:
+      operationId: listGroupMembers
+      tags: [org]
+      summary: List a group's members. Requires the `member` role.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/group'
+      responses:
+        '200':
+          description: The group's members.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MemberRef'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: addGroupMember
+      tags: [org]
+      summary: Add a member to a group. Requires the `admin` role.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/group'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemberRef'
+      responses:
+        '204':
+          description: Member added.
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/groups/{group}/members/{member}:
+    delete:
+      operationId: removeGroupMember
+      tags: [org]
+      summary: Remove a member from a group. Requires the `admin` role.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/group'
+        - $ref: '#/components/parameters/member'
+      responses:
+        '204':
+          description: Member removed.
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/projects:
+    post:
+      operationId: createProject
+      tags: [org]
+      summary: Create a project in an organization. Requires the `admin` role.
+      parameters:
+        - $ref: '#/components/parameters/org'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectCreate'
+      responses:
+        '201':
+          description: Project created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    get:
+      operationId: listProjects
+      tags: [org]
+      summary: List an organization's projects. Requires the `member` role.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+      responses:
+        '200':
+          description: The organization's projects.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Project'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/projects/{project}:
+    get:
+      operationId: getProject
+      tags: [org]
+      summary: Get a project. Requires the `member` role.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/project'
+      responses:
+        '200':
+          description: The project.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    patch:
+      operationId: updateProject
+      tags: [org]
+      summary: Rename a project. Requires the `admin` role.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/project'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectPatch'
+      responses:
+        '200':
+          description: The updated project.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deleteProject
+      tags: [org]
+      summary: Delete a project. Requires the `admin` role.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/project'
+      responses:
+        '204':
+          description: Project deleted.
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/projects/{project}/members:
+    get:
+      operationId: listProjectMembers
+      tags: [org]
+      summary: List a project's members. Requires the `member` role.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/project'
+      responses:
+        '200':
+          description: The project's members.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MemberRef'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    post:
+      operationId: addProjectMember
+      tags: [org]
+      summary: Add a member to a project. Requires the `admin` role.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/project'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemberRef'
+      responses:
+        '204':
+          description: Member added.
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/projects/{project}/members/{member}:
+    delete:
+      operationId: removeProjectMember
+      tags: [org]
+      summary: Remove a member from a project. Requires the `admin` role.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/project'
+        - $ref: '#/components/parameters/member'
+      responses:
+        '204':
+          description: Member removed.
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
   /orgs/{org}/invitations:
     post:
       operationId: createInvitation
@@ -291,6 +663,30 @@ components:
       description: Organization identifier (the last GRN segment).
       schema:
         type: string
+    group:
+      name: group
+      in: path
+      required: true
+      description: Group identifier (the last GRN segment).
+      x-go-name: GroupSlug
+      schema:
+        type: string
+    project:
+      name: project
+      in: path
+      required: true
+      description: Project identifier (the last GRN segment).
+      x-go-name: ProjectSlug
+      schema:
+        type: string
+    member:
+      name: member
+      in: path
+      required: true
+      description: Member GRN of a user or agent.
+      x-go-name: MemberGrn
+      schema:
+        type: string
     limit:
       name: limit
       in: query
@@ -341,6 +737,62 @@ components:
         name:
           type: string
           minLength: 1
+    Group:
+      type: object
+      required: [grn, name, orgGrn]
+      properties:
+        grn:
+          type: string
+          example: grn:acme:default:group:eng
+        name:
+          type: string
+        orgGrn:
+          type: string
+    GroupCreate:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+    GroupPatch:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+    Project:
+      type: object
+      required: [grn, name, orgGrn]
+      properties:
+        grn:
+          type: string
+          example: grn:acme:default:project:frontend
+        name:
+          type: string
+        orgGrn:
+          type: string
+    ProjectCreate:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+    ProjectPatch:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+    MemberRef:
+      type: object
+      required: [memberGrn]
+      description: A group or project member, addressed by GRN.
+      properties:
+        memberGrn:
+          type: string
+          example: grn:acme:default:user:alice
     Role:
       type: string
       enum: [owner, admin, member]

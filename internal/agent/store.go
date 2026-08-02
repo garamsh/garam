@@ -13,8 +13,7 @@ type Patch struct {
 	Policies []string
 }
 
-// Store persists Agent aggregates. Org membership is owned by the org
-// domain (org.Store membership methods), not duplicated here.
+// Store persists Agent aggregates.
 type Store interface {
 	Create(ctx context.Context, a *Agent) error
 	Get(ctx context.Context, g grn.GRN) (*Agent, error)

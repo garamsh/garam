@@ -14,67 +14,53 @@
   `Project`, `User`, `Agent`.
 - `authz` engine: IAM-style `Statement` model and native
   `StatementEvaluator` (ADR-0002), served over gRPC (ADR-0003).
-  The `Object` seam remains and carries the evaluated target; the
-  unused `Subject` seam was removed (issue #47).
-- Mockery v3 setup (`.mockery.yaml`) generating Store mocks.
+- Mockery v3 setup generating **importable** mocks (PR #62).
 - Documentation under `docs/`.
-- CI plumbing: `Makefile`, `.github/workflows/ci.yml`. Git hooks
-  (lefthook) evaluated and not adopted.
+- CI plumbing: `Makefile` with working format/check-gen gates (PR #71),
+  `.github/workflows/ci.yml`. Git hooks (lefthook) not adopted.
 - Foundation landed on `main` (PR #15); `develop` retired. Work now
   branches off `main`.
-- **MVP** (roadmap, issue #12) — Google OIDC sign-in via
-  `internal/authn` (provider abstraction + server-side sessions),
-  invitation-based orgs with roles (`owner` / `admin` / `member`)
-  enforced through the `authz.Evaluator` seam (in-process native
-  evaluator, ADR-0003 stage 1), OpenAPI-first API (`api/openapi.yaml` +
-  generated server), sqlc-backed Postgres stores for `user`, `org`,
-  and `authn` sessions, migrations, cobra CLI (`serve api` /
-  `serve authz` / `migrate`), and e2e store round-trips against real
-  Postgres. `make check-gen` keeps generated code (oapi-codegen, sqlc,
-  mockery) honest in CI. The `agent` domain stayed untouched.
-
-- **authz gRPC transport** (ADR-0003 stage 2, issue #22) — `gaon serve
-  authz` runs the engine as a separate gRPC process (`Check` /
-  `Explain` in `proto/gaon/authz/v1`, buf codegen checked by
-  `make check-gen`); the api server authorizes through the gRPC client
-  behind its own `Evaluator` seam and no longer imports
-  `internal/authz`. Statement patterns gained full wildcard semantics
-  (`*` and `?` anywhere in the pattern).
-
-- **authz policy persistence** (P2, issue #56) — `policies` and
-  append-only `policy_versions` in Postgres (ADR-0002), sqlc-backed
-  `authz.Store`, and a per-org `PolicyCache` invalidated directly on
-  local writes and over `LISTEN`/`NOTIFY` otherwise. `PolicyService`
-  (`proto/gaon/authz/v1`) serves create / add version / list /
-  activate / rollback. `Check` and `Explain` evaluate the union of the
-  org's persisted statements and the caller's role-derived ones
-  (ADR-0007), so the api server's collection is unchanged.
-  `gaon serve authz` now requires `GAON_DATABASE_URL`.
+- **MVP** (issue #12) — Google OIDC sign-in, invitation-based orgs,
+  org roles enforced through the `authz.Evaluator` seam, OpenAPI-first
+  API, sqlc-backed Postgres stores, cobra CLI (`serve api` /
+  `serve authz` / `migrate`).
+- **authz gRPC transport** (ADR-0003 stage 2) — `gaon serve authz`
+  runs the engine as a separate gRPC process; the api server never
+  imports `internal/authz`.
+- **Group/project structure** (#54, #63) — CRUD + membership over the
+  OpenAPI API, org-scoped listing, spec-first.
+- **Scoped permission evaluation** (#55, #72, #78) — group and project
+  roles resolve at check time via `scopedStatements`; roles are
+  assignable over HTTP; deny-overrides holds across scopes.
+- **User direct roles** (#75, #82) — collected at check time
+  (org-wide scope; per-org direct roles need role persistence, future).
+- **authz policy persistence** (P2, #56, #79) — `policies` +
+  append-only `policy_versions` (trigger-enforced), `PolicyService`
+  lifecycle RPCs, per-org `PolicyCache` with `LISTEN`/`NOTIFY`
+  invalidation, hybrid statement collection (ADR-0007). e2e 10/10
+  against Postgres 17.
 
 ## Open
 
-- **Dead authz code removal** (#28) — legacy interfaces and their
-  mocks have no implementations or references.
-- **Membership duplication + org.Patch cleanup** (#23).
+- **Dead code cleanup** (#76) — in flight.
 - **Policy attachment to subjects** — an active policy grants org-wide
   until identity-based attachment lands (ADR-0002, ADR-0007).
-- **`policy` service_type is missing from `docs/convention/naming.md`**
-  — the catalogue is PM-owned; `grn-model.md` has the row.
+- **Per-org direct roles** — direct user roles currently apply in
+  every org the subject belongs to; scoping them needs subject × role
+  × scope persistence.
 - **Workflow core** (P3) — domain not created.
 
 ## Known corrections applied
 
 - Module path renamed `garam` → `gaon`; all imports updated.
-- Rego package renamed `garam.authz` → `gaon.authz`; comments and
-  query path updated.
-- GRN organization segment restored to `garam` after a mistaken
-  rename to `gaon`.
-- `internal/authz/rego.go` doc comment path fixed
-  (`testdata/policy.rego` → `policies/authz.rego`).
+- Rego direction superseded by IAM-style documents (ADR-0002); the
+  legacy authz interfaces were removed (#28, #40, #47, #59).
+- e2e moved to `tests/e2e/` with a root-relative migrations path
+  (#53, #58, #64, #70).
 
 ## Backlog
 
 Pulled from `// TODO` lines and review notes. Each item gets its own
 PLAN.md when picked up.
 
-- Configurable dev-DB port for parallel worktrees (#33).
+- Nothing open beyond the issues above.

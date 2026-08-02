@@ -48,6 +48,7 @@ Operating procedures for AI agents working on this repository.
 - [ai/worker-guide.md](./ai/worker-guide.md) — worker agent procedure
 - [ai/qa-guide.md](./ai/qa-guide.md) — QA agent procedure
 - [ai/orca-dispatch.md](./ai/orca-dispatch.md) — PM worker dispatch into orca worktrees
+- [ai/adoption.md](./ai/adoption.md) — applying and updating the harness template
 - [ai/BOOTSTRAP.md](./ai/BOOTSTRAP.md) — one-time project initialization
   (complete)
 

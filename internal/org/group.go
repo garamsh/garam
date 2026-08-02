@@ -18,10 +18,11 @@ type Group struct {
 	updatedAt time.Time
 }
 
-// NewGroup constructs a Group tied to the given Organization GRN.
-func NewGroup(g grn.GRN, name string, orgGRN grn.GRN) *Group {
+// NewGroup constructs a Group tied to the given Organization GRN. The
+// optional roles are the ones the Group grants its members.
+func NewGroup(g grn.GRN, name string, orgGRN grn.GRN, roles ...string) *Group {
 	now := time.Now().UTC()
-	return &Group{grn: g, name: name, orgGRN: orgGRN, createdAt: now, updatedAt: now}
+	return &Group{grn: g, name: name, orgGRN: orgGRN, roles: roles, createdAt: now, updatedAt: now}
 }
 
 func (g *Group) GRN() grn.GRN          { return g.grn }

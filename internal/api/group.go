@@ -79,7 +79,7 @@ func (s *Server) GetGroup(w http.ResponseWriter, r *http.Request, orgSlug apigen
 		writeError(w, err)
 		return
 	}
-	if err := s.authorize(r, orgGRN(orgSlug), u, org.ActionGroupRead); err != nil {
+	if err := s.authorizeOn(r, orgGRN(orgSlug), groupGRN(orgSlug, groupSlug), u, org.ActionGroupRead); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -98,7 +98,7 @@ func (s *Server) UpdateGroup(w http.ResponseWriter, r *http.Request, orgSlug api
 		writeError(w, err)
 		return
 	}
-	if err := s.authorize(r, orgGRN(orgSlug), u, org.ActionGroupUpdate); err != nil {
+	if err := s.authorizeOn(r, orgGRN(orgSlug), groupGRN(orgSlug, groupSlug), u, org.ActionGroupUpdate); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -126,7 +126,7 @@ func (s *Server) DeleteGroup(w http.ResponseWriter, r *http.Request, orgSlug api
 		writeError(w, err)
 		return
 	}
-	if err := s.authorize(r, orgGRN(orgSlug), u, org.ActionGroupDelete); err != nil {
+	if err := s.authorizeOn(r, orgGRN(orgSlug), groupGRN(orgSlug, groupSlug), u, org.ActionGroupDelete); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -144,7 +144,7 @@ func (s *Server) ListGroupMembers(w http.ResponseWriter, r *http.Request, orgSlu
 		writeError(w, err)
 		return
 	}
-	if err := s.authorize(r, orgGRN(orgSlug), u, org.ActionGroupMemberList); err != nil {
+	if err := s.authorizeOn(r, orgGRN(orgSlug), groupGRN(orgSlug, groupSlug), u, org.ActionGroupMemberList); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -169,7 +169,7 @@ func (s *Server) AddGroupMember(w http.ResponseWriter, r *http.Request, orgSlug 
 		writeError(w, err)
 		return
 	}
-	if err := s.authorize(r, orgGRN(orgSlug), u, org.ActionGroupMemberAdd); err != nil {
+	if err := s.authorizeOn(r, orgGRN(orgSlug), groupGRN(orgSlug, groupSlug), u, org.ActionGroupMemberAdd); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -198,7 +198,7 @@ func (s *Server) RemoveGroupMember(w http.ResponseWriter, r *http.Request, orgSl
 		writeError(w, err)
 		return
 	}
-	if err := s.authorize(r, orgGRN(orgSlug), u, org.ActionGroupMemberRemove); err != nil {
+	if err := s.authorizeOn(r, orgGRN(orgSlug), groupGRN(orgSlug, groupSlug), u, org.ActionGroupMemberRemove); err != nil {
 		writeError(w, err)
 		return
 	}

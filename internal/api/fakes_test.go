@@ -223,7 +223,11 @@ func (s *fakeOrgStore) UpdateGroup(_ context.Context, g grn.GRN, p org.GroupPatc
 	if p.Name != nil {
 		name = *p.Name
 	}
-	updated := org.NewGroup(g, name, gr.Organization())
+	roles := gr.Roles()
+	if p.Roles != nil {
+		roles = p.Roles
+	}
+	updated := org.NewGroup(g, name, gr.Organization(), roles...)
 	s.groups[g.String()] = updated
 	return updated, nil
 }
@@ -309,7 +313,11 @@ func (s *fakeOrgStore) UpdateProject(_ context.Context, g grn.GRN, patch org.Pro
 	if patch.Name != nil {
 		name = *patch.Name
 	}
-	updated := org.NewProject(g, name, p.Organization())
+	roles := p.Roles()
+	if patch.Roles != nil {
+		roles = patch.Roles
+	}
+	updated := org.NewProject(g, name, p.Organization(), roles...)
 	s.projects[g.String()] = updated
 	return updated, nil
 }

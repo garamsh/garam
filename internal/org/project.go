@@ -19,9 +19,10 @@ type Project struct {
 }
 
 // NewProject constructs a Project tied to the given Organization GRN.
-func NewProject(g grn.GRN, name string, orgGRN grn.GRN) *Project {
+// The optional roles are the ones the Project grants its members.
+func NewProject(g grn.GRN, name string, orgGRN grn.GRN, roles ...string) *Project {
 	now := time.Now().UTC()
-	return &Project{grn: g, name: name, orgGRN: orgGRN, createdAt: now, updatedAt: now}
+	return &Project{grn: g, name: name, orgGRN: orgGRN, roles: roles, createdAt: now, updatedAt: now}
 }
 
 func (p *Project) GRN() grn.GRN          { return p.grn }

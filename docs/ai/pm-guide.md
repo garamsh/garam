@@ -20,7 +20,6 @@ Never review from memory. Before looking at the diff:
 
 1. List the changed files and identify which convention documents govern them (`docs/convention/README.md` is the index).
 2. Actually read those documents. If the PR touches docs, also read `docs/convention/documentation.md`.
-3. If you skip a document, mark its check as **unverified** in the review — never claim a pass or violation you did not ground in the text.
 
 ### Step 1 — Check, in order
 
@@ -43,11 +42,9 @@ Submit the review per `docs/convention/review.md`: formal review state, evidence
 
 ## Managing issues
 
-- Write issues so a worker can act on the issue alone: target paths, constraints, and acceptance criteria included. An issue that needs oral context is incomplete.
-- Open issues for gaps you find through reviews and convention supervision. Project-wide hunts — doc–code drift, behavior verification, structural gaps, maintainability — belong to the QA agent; invoke it instead of auditing yourself.
-- Triage QA-filed issues like any other: confirm the evidence, then accept, prioritize, or close with a reason.
-- When PR feedback reveals a recurring problem, edit or create an issue so the fix is tracked once, not repeated per-PR.
-- Issues state the goal and acceptance criteria, not the implementation.
+- Write issues so a worker can act on the issue alone: goal and acceptance criteria, target paths, constraints — never the implementation, never oral context.
+- Open issues for gaps you find through reviews and convention supervision. Project-wide hunts — doc–code drift, behavior verification, structural gaps, maintainability — belong to the QA agent; invoke it, then triage its issues: confirm the evidence, accept, prioritize, or close with a reason.
+- When PR feedback reveals a recurring problem, track it in one issue instead of repeating comments per-PR.
 
 ## Dispatching workers
 
@@ -63,7 +60,7 @@ Assign implementation work by running a worker in an orca worktree, not by editi
 
 - Scope tasks and issues so concurrently active workers touch disjoint modules. If two tasks must overlap, sequence them — do not run them in parallel.
 - When reviewing, check for collisions with other open PRs before merging.
-- When the environment provides Orca, dispatch workers into worktrees per `docs/ai/orca-dispatch.md`. A dispatch is verified by reading the worker's terminal, not by the create call succeeding.
+- On every wake, sweep before anything else: open PRs awaiting your review, unread orchestration mail (`orca-ide orchestration check --json`), and stuck worktrees (`orca-ide worktree ps --json`). Work continues through follow-up rounds — after reviewing, leave direction as an issue/PR comment and re-dispatch the same worker.
 
 ## Maintaining conventions
 

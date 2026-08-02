@@ -3,7 +3,7 @@ package api
 import (
 	"context"
 
-	"github.com/garamsh/gaon/internal/grn"
+	"github.com/garamsh/garam/internal/grn"
 )
 
 // Effect is a statement's outcome when it matches (ADR-0002). It

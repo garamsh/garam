@@ -17,8 +17,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/gaon/internal/authn"
-	"github.com/garamsh/gaon/internal/errorx"
+	"github.com/garamsh/garam/internal/authn"
+	"github.com/garamsh/garam/internal/errorx"
 )
 
 // fakeIssuer is a minimal OIDC issuer: discovery, JWKS, and a token

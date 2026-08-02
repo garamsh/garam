@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	apigen "github.com/garamsh/gaon/api"
-	"github.com/garamsh/gaon/internal/errorx"
+	apigen "github.com/garamsh/garam/api"
+	"github.com/garamsh/garam/internal/errorx"
 )
 
 // writeError renders an errorx error as the spec's Error body. The

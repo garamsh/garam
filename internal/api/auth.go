@@ -6,17 +6,17 @@ import (
 	"net/http"
 	"time"
 
-	apigen "github.com/garamsh/gaon/api"
-	"github.com/garamsh/gaon/internal/authn"
-	"github.com/garamsh/gaon/internal/errorx"
-	"github.com/garamsh/gaon/internal/grn"
-	"github.com/garamsh/gaon/internal/user"
+	apigen "github.com/garamsh/garam/api"
+	"github.com/garamsh/garam/internal/authn"
+	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/user"
 )
 
 const (
-	sessionCookie  = "gaon_session"
-	stateCookie    = "gaon_oauth_state"
-	verifierCookie = "gaon_oauth_verifier"
+	sessionCookie  = "garam_session"
+	stateCookie    = "garam_oauth_state"
+	verifierCookie = "garam_oauth_verifier"
 
 	// oauthFlowTTL bounds the login redirect round trip.
 	oauthFlowTTL = 10 * time.Minute

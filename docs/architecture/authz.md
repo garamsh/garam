@@ -1,7 +1,7 @@
 # Authorization
 
 Org-scoped permission decisions, served by an independent gRPC policy
-engine (`gaon serve authz`, see [ADR-0003](./adr/0003-single-cli-topology.md)).
+engine (`garam serve authz`, see [ADR-0003](./adr/0003-single-cli-topology.md)).
 Policies are IAM-style documents (see
 [ADR-0002](./adr/0002-iam-style-policy-model.md)).
 
@@ -104,12 +104,12 @@ pointer, and versions disappear only with the policy that owns them.
 The engine parses each org's active documents once and caches the
 resulting statement set. Writes made through the engine drop the org's
 entry directly. Writes made by any other process announce the org on
-the Postgres `LISTEN`/`NOTIFY` channel `gaon_policy_change`, which a
+the Postgres `LISTEN`/`NOTIFY` channel `garam_policy_change`, which a
 schema trigger raises and the engine's listener consumes; if that
-listener stops, `gaon serve authz` reports it and single-process
+listener stops, `garam serve authz` reports it and single-process
 invalidation still holds.
 
-Lifecycle is served by `PolicyService` in `proto/gaon/authz/v1`:
+Lifecycle is served by `PolicyService` in `proto/garam/authz/v1`:
 create, append a version, list policies and versions, activate,
 archive, roll back, attach, detach, and list attachments. Documents are
 validated at the write boundary, so a stored document always parses.
@@ -153,7 +153,7 @@ matches those GRNs against attachments without knowing what a group
 is. An attachment stays inside the policy's org, enforced by a schema
 trigger; a root-owned identity such as a user cannot name an org in its
 GRN, so org membership stays the api server's precondition. Attachment
-writes announce the org on `gaon_policy_change` like any other policy
+writes announce the org on `garam_policy_change` like any other policy
 write.
 
 ## Components
@@ -174,7 +174,7 @@ Role persistence (subject × role × scope) stays roadmap; roles remain
 org data resolved by the api server.
 
 The api server never imports this package; it calls the engine over
-gRPC (`Check` / `Explain` in `proto/gaon/authz/v1`) and supplies the
+gRPC (`Check` / `Explain` in `proto/garam/authz/v1`) and supplies the
 role-derived statements it collected. The in-process `Evaluator`
 remains for tests and local dev.
 

@@ -17,7 +17,7 @@ package grn
 import (
 	"strings"
 
-	"github.com/garamsh/gaon/internal/errorx"
+	"github.com/garamsh/garam/internal/errorx"
 )
 
 const (

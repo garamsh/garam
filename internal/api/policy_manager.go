@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/garamsh/gaon/internal/grn"
+	"github.com/garamsh/garam/internal/grn"
 )
 
 // PolicyStatus is a stored policy's lifecycle state. It mirrors the

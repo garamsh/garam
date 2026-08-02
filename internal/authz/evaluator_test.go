@@ -6,8 +6,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/garamsh/gaon/internal/authz"
-	"github.com/garamsh/gaon/internal/grn"
+	"github.com/garamsh/garam/internal/authz"
+	"github.com/garamsh/garam/internal/grn"
 )
 
 type testObject struct{ g grn.GRN }

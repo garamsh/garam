@@ -3,7 +3,7 @@ package user
 import (
 	"context"
 
-	"github.com/garamsh/gaon/internal/grn"
+	"github.com/garamsh/garam/internal/grn"
 )
 
 // Patch holds partial-update fields. Nil entries are unchanged.

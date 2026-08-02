@@ -7,8 +7,8 @@ package mocks
 import (
 	"context"
 
-	"github.com/garamsh/gaon/internal/grn"
-	"github.com/garamsh/gaon/internal/user"
+	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/user"
 	mock "github.com/stretchr/testify/mock"
 )
 

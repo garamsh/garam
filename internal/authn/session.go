@@ -7,8 +7,8 @@ import (
 	"encoding/hex"
 	"time"
 
-	"github.com/garamsh/gaon/internal/errorx"
-	"github.com/garamsh/gaon/internal/grn"
+	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/internal/grn"
 )
 
 // Session is an authenticated browser session for a user.

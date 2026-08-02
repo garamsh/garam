@@ -12,8 +12,8 @@ aligned with gRPC status codes.
 
 ## Decision
 
-- One cobra CLI at `cmd/gaon`: `gaon serve api` (OpenAPI HTTP
-  backend), `gaon serve authz` (gRPC policy engine), `gaon migrate`
+- One cobra CLI at `cmd/garam`: `garam serve api` (OpenAPI HTTP
+  backend), `garam serve authz` (gRPC policy engine), `garam migrate`
   (DB migrations). Same image, two processes, scaled independently.
 - Package independence: `internal/api/` and `internal/authz/` never
   import each other. Shared code is limited to `internal/grn` and
@@ -42,7 +42,7 @@ aligned with gRPC status codes.
 
 ## Staged adoption
 
-- **Stage 1 (MVP).** `cmd/gaon` exposes `serve api` and `serve authz`
+- **Stage 1 (MVP).** `cmd/garam` exposes `serve api` and `serve authz`
   from day one, but the api server may use the in-process native
   evaluator, importing `internal/authz` for the `Evaluator` seam and
   its implementation. Business-logic independence still applies: no

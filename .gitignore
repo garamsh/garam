@@ -15,7 +15,7 @@ Thumbs.db
 *.log
 
 # Go
-/gaon
+/garam
 *.test
 *.out
 /vendor/

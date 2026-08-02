@@ -1,11 +1,11 @@
 openapi: 3.1.0
 info:
-  title: gaon API
+  title: garam API
   version: 0.1.0
   description: >-
-    Authentication and organization permission APIs for gaon.
+    Authentication and organization permission APIs for garam.
     Authentication is cookie-based: the OAuth callback sets a
-    `gaon_session` cookie that all other endpoints require.
+    `garam_session` cookie that all other endpoints require.
 tags:
   - name: auth
     description: Sign-in, sign-out, and the current identity.
@@ -46,7 +46,7 @@ paths:
       summary: Complete the OAuth authorization code flow.
       description: >-
         Exchanges the code for tokens, verifies the ID token, upserts
-        the user, creates a session, and sets the `gaon_session`
+        the user, creates a session, and sets the `garam_session`
         cookie. Redirects to `/` on success.
       security: []
       parameters:
@@ -1255,6 +1255,6 @@ components:
     sessionCookie:
       type: apiKey
       in: cookie
-      name: gaon_session
+      name: garam_session
 security:
   - sessionCookie: []

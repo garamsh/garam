@@ -9,19 +9,19 @@ filename: "{{.InterfaceName | firstLower}}.go"
 pkgname: "mocks"
 structname: "Mock{{.InterfaceName}}"
 packages:
-  github.com/garamsh/gaon/internal/org:
+  github.com/garamsh/garam/internal/org:
     interfaces:
       Store: {}
-  github.com/garamsh/gaon/internal/user:
+  github.com/garamsh/garam/internal/user:
     interfaces:
       Store: {}
-  github.com/garamsh/gaon/internal/agent:
+  github.com/garamsh/garam/internal/agent:
     interfaces:
       Store: {}
-  github.com/garamsh/gaon/internal/api:
+  github.com/garamsh/garam/internal/api:
     interfaces:
       Evaluator: {}
       PolicyManager: {}
-  github.com/garamsh/gaon/internal/authz:
+  github.com/garamsh/garam/internal/authz:
     interfaces:
       Store: {}

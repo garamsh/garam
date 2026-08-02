@@ -1,6 +1,6 @@
 # GRN Model
 
-Garam Resource Names — one identifier for every resource in gaon.
+Garam Resource Names — one identifier for every resource in garam.
 Implementation: [`internal/grn/grn.go`](../../internal/grn/grn.go).
 
 ## Format
@@ -58,7 +58,7 @@ expose a transient ID where a stable one is expected.
 
 ## Rego package note (historical)
 
-An earlier design compiled Rego policies under `package gaon.authz`.
+An earlier design compiled Rego policies under `package garam.authz`.
 That direction is superseded by IAM-style policy documents
 ([ADR-0002](./adr/0002-iam-style-policy-model.md)); no Rego package
 exists.

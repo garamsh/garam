@@ -10,12 +10,12 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	apigen "github.com/garamsh/gaon/api"
-	"github.com/garamsh/gaon/internal/api"
-	"github.com/garamsh/gaon/internal/errorx"
-	"github.com/garamsh/gaon/internal/grn"
-	"github.com/garamsh/gaon/internal/org"
-	"github.com/garamsh/gaon/internal/user"
+	apigen "github.com/garamsh/garam/api"
+	"github.com/garamsh/garam/internal/api"
+	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/org"
+	"github.com/garamsh/garam/internal/user"
 )
 
 const policyDocument = `{"Version":"2026-07-25","Statement":[{"Sid":"AllowOrgRead","Effect":"Allow","Action":["org:read"],"Resource":["grn:acme:*"]}]}`

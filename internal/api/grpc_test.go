@@ -13,10 +13,10 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 
-	"github.com/garamsh/gaon/internal/api"
-	"github.com/garamsh/gaon/internal/errorx"
-	"github.com/garamsh/gaon/internal/grn"
-	authzv1 "github.com/garamsh/gaon/proto/gen/gaon/authz/v1"
+	"github.com/garamsh/garam/internal/api"
+	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/internal/grn"
+	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
 )
 
 // stubAuthzServer is a canned AuthzService double for client tests.

@@ -3,7 +3,7 @@ package authz
 import (
 	"context"
 
-	"github.com/garamsh/gaon/internal/grn"
+	"github.com/garamsh/garam/internal/grn"
 )
 
 // Store persists policies and their append-only versions (ADR-0002).

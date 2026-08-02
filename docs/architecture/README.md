@@ -18,7 +18,7 @@ Current architecture of the system and the decisions behind it. This file is the
 
 Responsibility documents:
 
-- [overview.md](./overview.md) — what gaon is and is not; module list
+- [overview.md](./overview.md) — what garam is and is not; module list
 - [domains.md](./domains.md) — the domain packages and their responsibilities
 - [grn-model.md](./grn-model.md) — the GRN resource naming model
 - [authz.md](./authz.md) — the authorization model

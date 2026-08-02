@@ -1,4 +1,4 @@
-# gaon
+# garam
 
 Workflow management core: identity, organization, and authorization
 for people and autonomous agents collaborating on shared work.
@@ -7,13 +7,13 @@ Documentation lives in [`docs/`](./docs/).
 
 - [docs/README.md](./docs/README.md) — start here
 - [docs/architecture/overview.md](./docs/architecture/overview.md) —
-  what gaon is and is not
+  what garam is and is not
 - [docs/plans/roadmap.md](./docs/plans/roadmap.md) — where it is going
 - [docs/convention/](./docs/convention/) — how we write code here
 
 ## Module path
 
-`github.com/garamsh/gaon`
+`github.com/garamsh/garam`
 
 ## Build and test
 

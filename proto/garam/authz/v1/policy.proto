@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package gaon.authz.v1;
+package garam.authz.v1;
 
 import "google/protobuf/timestamp.proto";
 

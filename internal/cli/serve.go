@@ -10,17 +10,17 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	apigen "github.com/garamsh/gaon/api"
-	"github.com/garamsh/gaon/internal/api"
-	"github.com/garamsh/gaon/internal/authn"
-	"github.com/garamsh/gaon/internal/authz"
-	"github.com/garamsh/gaon/internal/errorx"
-	"github.com/garamsh/gaon/internal/org"
-	"github.com/garamsh/gaon/internal/user"
-	authzv1 "github.com/garamsh/gaon/proto/gen/gaon/authz/v1"
+	apigen "github.com/garamsh/garam/api"
+	"github.com/garamsh/garam/internal/api"
+	"github.com/garamsh/garam/internal/authn"
+	"github.com/garamsh/garam/internal/authz"
+	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/internal/org"
+	"github.com/garamsh/garam/internal/user"
+	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
 )
 
-// newServeAPICommand constructs `gaon serve api`: the OpenAPI HTTP
+// newServeAPICommand constructs `garam serve api`: the OpenAPI HTTP
 // backend. It reaches the authz engine over gRPC (ADR-0003 stage 2).
 func newServeAPICommand() *cobra.Command {
 	return &cobra.Command{
@@ -35,9 +35,9 @@ func newServeAPICommand() *cobra.Command {
 func serveAPI(cmd *cobra.Command) error {
 	ctx := cmd.Context()
 
-	databaseURL := envOr("GAON_DATABASE_URL", "")
+	databaseURL := envOr("GARAM_DATABASE_URL", "")
 	if databaseURL == "" {
-		return errorx.New(errorx.KindInvalidArgument, "GAON_DATABASE_URL is required")
+		return errorx.New(errorx.KindInvalidArgument, "GARAM_DATABASE_URL is required")
 	}
 	pool, err := pgxpool.New(ctx, databaseURL)
 	if err != nil {
@@ -57,7 +57,7 @@ func serveAPI(cmd *cobra.Command) error {
 	// Insecure transport: both processes run inside one trust
 	// boundary; TLS between them is future work.
 	conn, err := grpc.NewClient(
-		envOr("GAON_AUTHZ_ADDR", "localhost:9090"),
+		envOr("GARAM_AUTHZ_ADDR", "localhost:9090"),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {
@@ -65,9 +65,9 @@ func serveAPI(cmd *cobra.Command) error {
 	}
 	defer func() { _ = conn.Close() }()
 
-	ttl, err := time.ParseDuration(envOr("GAON_SESSION_TTL", "168h"))
+	ttl, err := time.ParseDuration(envOr("GARAM_SESSION_TTL", "168h"))
 	if err != nil {
-		return errorx.Wrap(err, "GAON_SESSION_TTL", errorx.KindInvalidArgument)
+		return errorx.Wrap(err, "GARAM_SESSION_TTL", errorx.KindInvalidArgument)
 	}
 	srv := api.NewServer(
 		user.NewPostgresStore(pool),
@@ -78,16 +78,16 @@ func serveAPI(cmd *cobra.Command) error {
 		api.NewGRPCPolicyManager(conn),
 		api.Config{
 			SessionTTL:   ttl,
-			CookieSecure: envOr("GAON_COOKIE_SECURE", "true") == "true",
+			CookieSecure: envOr("GARAM_COOKIE_SECURE", "true") == "true",
 		},
 	)
 
-	addr := envOr("GAON_HTTP_ADDR", ":8080")
+	addr := envOr("GARAM_HTTP_ADDR", ":8080")
 	cmd.Printf("serving api on %s\n", addr)
 	return http.ListenAndServe(addr, apigen.Handler(srv))
 }
 
-// newServeAuthzCommand constructs `gaon serve authz`: the gRPC policy
+// newServeAuthzCommand constructs `garam serve authz`: the gRPC policy
 // engine, run as a separate process from the api server (ADR-0003).
 func newServeAuthzCommand() *cobra.Command {
 	return &cobra.Command{
@@ -102,9 +102,9 @@ func newServeAuthzCommand() *cobra.Command {
 func serveAuthz(cmd *cobra.Command) error {
 	ctx := cmd.Context()
 
-	databaseURL := envOr("GAON_DATABASE_URL", "")
+	databaseURL := envOr("GARAM_DATABASE_URL", "")
 	if databaseURL == "" {
-		return errorx.New(errorx.KindInvalidArgument, "GAON_DATABASE_URL is required")
+		return errorx.New(errorx.KindInvalidArgument, "GARAM_DATABASE_URL is required")
 	}
 	pool, err := pgxpool.New(ctx, databaseURL)
 	if err != nil {
@@ -122,7 +122,7 @@ func serveAuthz(cmd *cobra.Command) error {
 		}
 	}()
 
-	addr := envOr("GAON_GRPC_ADDR", ":9090")
+	addr := envOr("GARAM_GRPC_ADDR", ":9090")
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		return errorx.Wrap(err, "authz listen", errorx.KindUnavailable)

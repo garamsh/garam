@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package gaon.authz.v1;
+package garam.authz.v1;
 
 // AuthzService is the policy engine's wire contract (ADR-0003). The
 // engine evaluates the union of the caller's role-derived statements

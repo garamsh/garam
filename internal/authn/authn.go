@@ -8,7 +8,7 @@
 package authn
 
 import (
-	"github.com/garamsh/gaon/internal/errorx"
+	"github.com/garamsh/garam/internal/errorx"
 )
 
 // ErrSessionNotFound is returned when a session token is unknown or

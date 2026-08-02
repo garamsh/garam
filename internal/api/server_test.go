@@ -14,13 +14,13 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	apigen "github.com/garamsh/gaon/api"
-	"github.com/garamsh/gaon/internal/api"
-	"github.com/garamsh/gaon/internal/api/mocks"
-	"github.com/garamsh/gaon/internal/authn"
-	"github.com/garamsh/gaon/internal/grn"
-	"github.com/garamsh/gaon/internal/org"
-	"github.com/garamsh/gaon/internal/user"
+	apigen "github.com/garamsh/garam/api"
+	"github.com/garamsh/garam/internal/api"
+	"github.com/garamsh/garam/internal/api/mocks"
+	"github.com/garamsh/garam/internal/authn"
+	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/org"
+	"github.com/garamsh/garam/internal/user"
 )
 
 // fixture wires a Server to in-memory doubles.
@@ -93,7 +93,7 @@ func (f *fixture) sessionCookieFor(t *testing.T, subject, nickname string) *http
 	token, err := authn.NewToken()
 	require.NoError(t, err)
 	require.NoError(t, f.sessions.Create(testCtx(t), token, authn.NewSession(g, time.Hour)))
-	return &http.Cookie{Name: "gaon_session", Value: token}
+	return &http.Cookie{Name: "garam_session", Value: token}
 }
 
 func testCtx(t *testing.T) context.Context {
@@ -117,9 +117,9 @@ func TestLogin_Redirects(t *testing.T) {
 	var state, verifier bool
 	for _, c := range rec.Result().Cookies() {
 		switch c.Name {
-		case "gaon_oauth_state":
+		case "garam_oauth_state":
 			state = true
-		case "gaon_oauth_verifier":
+		case "garam_oauth_verifier":
 			verifier = true
 		}
 	}
@@ -150,7 +150,7 @@ func TestLoginCallbackMeLogout_RoundTrip(t *testing.T) {
 	var state string
 	for _, c := range rec.Result().Cookies() {
 		cookies = append(cookies, c)
-		if c.Name == "gaon_oauth_state" {
+		if c.Name == "garam_oauth_state" {
 			state = c.Value
 		}
 	}
@@ -161,7 +161,7 @@ func TestLoginCallbackMeLogout_RoundTrip(t *testing.T) {
 	require.Equal(t, http.StatusFound, rec.Code)
 	var session *http.Cookie
 	for _, c := range rec.Result().Cookies() {
-		if c.Name == "gaon_session" {
+		if c.Name == "garam_session" {
 			session = c
 		}
 	}

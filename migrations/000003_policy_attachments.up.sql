@@ -41,7 +41,7 @@ BEGIN
     SELECT p.org_grn INTO org_grn FROM policies p
     WHERE p.grn = coalesce(NEW.policy_grn, OLD.policy_grn);
     IF org_grn IS NOT NULL THEN
-        PERFORM pg_notify('gaon_policy_change', org_grn);
+        PERFORM pg_notify('garam_policy_change', org_grn);
     END IF;
     RETURN NULL;
 END;

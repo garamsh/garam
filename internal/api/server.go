@@ -8,10 +8,10 @@ package api
 import (
 	"time"
 
-	apigen "github.com/garamsh/gaon/api"
-	"github.com/garamsh/gaon/internal/authn"
-	"github.com/garamsh/gaon/internal/org"
-	"github.com/garamsh/gaon/internal/user"
+	apigen "github.com/garamsh/garam/api"
+	"github.com/garamsh/garam/internal/authn"
+	"github.com/garamsh/garam/internal/org"
+	"github.com/garamsh/garam/internal/user"
 )
 
 // Config tunes the HTTP layer.

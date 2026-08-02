@@ -3,7 +3,7 @@ managed:
   enabled: true
   override:
     - file_option: go_package_prefix
-      value: github.com/garamsh/gaon/proto/gen
+      value: github.com/garamsh/garam/proto/gen
 plugins:
   - local: [go, run, google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11]
     out: proto/gen

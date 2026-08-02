@@ -4,7 +4,7 @@
 
 ## Done
 
-- Module name: `github.com/garamsh/gaon`.
+- Module name: `github.com/garamsh/garam`.
 - GRN value type with `New` / `Parse` / `Validate` / `String` /
   `IsZero` and tests. Org/project segments identify owning resources (ADR-0001).
 - `errorx` package with gRPC-aligned kinds, `New` / `Wrap` / `IsKind`
@@ -24,7 +24,7 @@
   org roles enforced through the `authz.Evaluator` seam, OpenAPI-first
   API, sqlc-backed Postgres stores, cobra CLI (`serve api` /
   `serve authz` / `migrate`).
-- **authz gRPC transport** (ADR-0003 stage 2) — `gaon serve authz`
+- **authz gRPC transport** (ADR-0003 stage 2) — `garam serve authz`
   runs the engine as a separate gRPC process; the api server never
   imports `internal/authz`.
 - **Group/project structure** (#54, #63) — CRUD + membership over the
@@ -57,7 +57,11 @@
 
 ## Known corrections applied
 
-- Module path renamed `garam` → `gaon`; all imports updated.
+- Module path renamed back to `garam` (#96) after a spell under an
+  interim name (see git history). The project is named `garam`
+  throughout: module path, CLI (`cmd/garam`), proto package
+  `garam.authz.v1`, `GARAM_*` environment variables, session cookies,
+  and the `garam_policy_change` NOTIFY channel.
 - Rego direction superseded by IAM-style documents (ADR-0002); the
   legacy authz interfaces were removed (#28, #40, #47, #59).
 - e2e moved to `tests/e2e/` with a root-relative migrations path

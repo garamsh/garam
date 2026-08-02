@@ -10,10 +10,10 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/garamsh/gaon/internal/authz"
-	"github.com/garamsh/gaon/internal/authz/mocks"
-	"github.com/garamsh/gaon/internal/grn"
-	authzv1 "github.com/garamsh/gaon/proto/gen/gaon/authz/v1"
+	"github.com/garamsh/garam/internal/authz"
+	"github.com/garamsh/garam/internal/authz/mocks"
+	"github.com/garamsh/garam/internal/grn"
+	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
 )
 
 const validDocument = `{"Version":"2026-07-25","Statement":[{"Sid":"s1","Effect":"Allow","Action":["org:read"],"Resource":["grn:acme:*"]}]}`

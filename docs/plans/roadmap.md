@@ -34,16 +34,18 @@ workflow last. Each tier depends only on the tier below it.
   gRPC client only.
 - Full wildcard semantics (`*`, `?`) in statement patterns.
 
-## P2 — authz persistence & policy versioning
+## P2 — authz persistence & policy versioning (done)
 
 - Postgres `policies` + append-only `policy_versions` (ADR-0002);
-  policies become org-managed data instead of caller-supplied
-  statement sets.
+  policies became org-managed data the engine owns.
 - Evaluation over a per-org parsed statement set, cached in the
   engine and invalidated on policy change (`LISTEN`/`NOTIFY`).
-- Policy lifecycle APIs on the authz service (CRUD, activate, roll
-  back); audit of every change.
-- Output: permission state survives restarts; every policy change is
+- Policy lifecycle RPCs on the authz service (create, add version,
+  list, activate, roll back); every version records its author.
+- Statement collection stayed hybrid rather than moving fully
+  engine-side: role-derived statements remain caller-supplied and the
+  engine unions them with the org's persisted policies (ADR-0007).
+- Output: policy state survives restarts; every policy change is
   versioned and auditable.
 
 ## P3 — Workflow core

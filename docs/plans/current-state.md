@@ -41,14 +41,25 @@
   `internal/authz`. Statement patterns gained full wildcard semantics
   (`*` and `?` anywhere in the pattern).
 
+- **authz policy persistence** (P2, issue #56) — `policies` and
+  append-only `policy_versions` in Postgres (ADR-0002), sqlc-backed
+  `authz.Store`, and a per-org `PolicyCache` invalidated directly on
+  local writes and over `LISTEN`/`NOTIFY` otherwise. `PolicyService`
+  (`proto/gaon/authz/v1`) serves create / add version / list /
+  activate / rollback. `Check` and `Explain` evaluate the union of the
+  org's persisted statements and the caller's role-derived ones
+  (ADR-0007), so the api server's collection is unchanged.
+  `gaon serve authz` now requires `GAON_DATABASE_URL`.
+
 ## Open
 
 - **Dead authz code removal** (#28) — legacy interfaces and their
   mocks have no implementations or references.
 - **Membership duplication + org.Patch cleanup** (#23).
-- **authz persistence & policy versioning** (P2) — policies are
-  caller-supplied today; Postgres `policies` + append-only
-  `policy_versions` (ADR-0002) not started.
+- **Policy attachment to subjects** — an active policy grants org-wide
+  until identity-based attachment lands (ADR-0002, ADR-0007).
+- **`policy` service_type is missing from `docs/convention/naming.md`**
+  — the catalogue is PM-owned; `grn-model.md` has the row.
 - **Workflow core** (P3) — domain not created.
 
 ## Known corrections applied

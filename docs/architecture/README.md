@@ -31,6 +31,7 @@ ADRs:
 - [0004](./adr/0004-openapi-first-api.md) — OpenAPI spec as source of truth
 - [0005](./adr/0005-server-side-sessions.md) — server-side sessions
 - [0006](./adr/0006-invitation-tokens.md) — invitation tokens
+- [0007](./adr/0007-hybrid-statement-collection.md) — hybrid statement collection
 
 ## Rules for edits
 

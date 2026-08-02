@@ -39,16 +39,27 @@ Evaluator.Evaluate(context, Context)
   3. else                                  → DecisionDeny (default)
 ```
 
-The caller collects the subject's statements (via roles/groups and
-direct attachments) and hands them to the engine; the engine matches
-strings only. Matching = action pattern ∩ resource pattern both match.
-
-> Planned (roadmap P2, issue #56): the per-org statement set will be
-> parsed once and cached in the engine, with policy writes
-> invalidating the org's cache (Postgres `LISTEN`/`NOTIFY`). Today the
-> api server builds the statement set per request from org roles.
+The engine matches strings only. Matching = action pattern ∩ resource
+pattern both match.
 
 ## Statement collection
+
+Evaluation input has two origins and the engine unions them
+([ADR-0007](./adr/0007-hybrid-statement-collection.md)). Deny-overrides
+applies across the union: either origin alone can allow, and a Deny
+from either wins.
+
+| Origin | Owner | Resolved |
+|--------|-------|----------|
+| role-derived statements | api server | per request, from org tables |
+| persisted policy statements | authz engine | from the org's cache |
+
+The engine scopes a request to the org that owns the object: an org's
+identifier is the organization segment of every resource beneath it
+(ADR-0001). Persisted policies apply to their whole org — attaching a
+policy to an individual subject is future work (ADR-0002).
+
+### Role-derived statements
 
 The api server checks each request against the resource it targets —
 the org, or the group or project addressed by the path — and collects
@@ -67,6 +78,33 @@ administers everything the org owns. Unknown role names grant nothing.
 Org membership stays the precondition for every check — a group grant
 never admits a non-member of the org.
 
+## Policy persistence
+
+Policies are org-managed data in Postgres (ADR-0002): `policies`
+carries the metadata, status, and default-version pointer;
+`policy_versions` is append-only, enforced by a schema trigger. A
+stored version is never rewritten — activation and rollback move the
+pointer, and versions disappear only with the policy that owns them.
+
+| State | Meaning |
+|-------|---------|
+| `draft` | stored, evaluated by nothing |
+| `active` | contributes its default version's statements to checks |
+| `archived` | retained, no longer evaluated |
+
+The engine parses each org's active documents once and caches the
+resulting statement set. Writes made through the engine drop the org's
+entry directly. Writes made by any other process announce the org on
+the Postgres `LISTEN`/`NOTIFY` channel `gaon_policy_change`, which a
+schema trigger raises and the engine's listener consumes; if that
+listener stops, `gaon serve authz` reports it and single-process
+invalidation still holds.
+
+Lifecycle is served by `PolicyService` in `proto/gaon/authz/v1`:
+create, append a version, list policies and versions, activate, and
+roll back. Documents are validated at the write boundary, so a stored
+document always parses.
+
 ## Components
 
 | Component | Responsibility | Depends on |
@@ -74,23 +112,26 @@ never admits a non-member of the org.
 | `Statement` / `PolicyDocument` | IAM-style rule model (ADR-0002) | — |
 | `Evaluator` | statement-set → `Decision` | — |
 | `StatementEvaluator` | native in-process `Evaluator` | — |
-| `GRPCServer` | `Check` / `Explain` RPCs | `proto/gaon/authz/v1` |
+| `Policy` / `PolicyVersion` | stored policy and its revisions | — |
+| `Store` / `PostgresStore` | policy persistence | `migrations/` |
+| `PolicyCache` | per-org parsed statement set | `Store` |
+| `GRPCServer` | `Check` / `Explain` RPCs | `PolicyCache` |
+| `PolicyGRPCServer` | policy lifecycle RPCs | `Store`, `PolicyCache` |
 
-Policy persistence (`PolicyDocument` + append-only versions) and role
-persistence (subject × role × scope) are roadmap; the engine today
-evaluates caller-supplied statements only.
+Role persistence (subject × role × scope) stays roadmap; roles remain
+org data resolved by the api server.
 
 The api server never imports this package; it calls the engine over
 gRPC (`Check` / `Explain` in `proto/gaon/authz/v1`) and supplies the
-statements collected for the subject. The in-process `Evaluator`
+role-derived statements it collected. The in-process `Evaluator`
 remains for tests and local dev.
 
 ## Roles vs policies
 
 | Concept | Storage | Update cadence | Where it runs |
 |---------|---------|----------------|---------------|
-| Role | Postgres (planned) | frequent | collects the policies that apply to a subject |
-| Policy | Postgres (planned, roadmap P2) | rare; audited | parsed, cached per org, evaluated per request |
+| Role | Postgres, `org` tables | frequent | api server collects the statements a role grants |
+| Policy | Postgres, engine tables | rare; audited | parsed, cached per org, evaluated per request |
 
 Roles are data. Policies are rules. Keep them on separate update
 channels.
@@ -98,13 +139,14 @@ channels.
 ## Explain
 
 The `Explain` RPC reports which statements matched and which produced
-the final decision. A denied request must be reproducible after the
-fact.
+the final decision, across both origins. A denied request must be
+reproducible after the fact.
 
 ## Constraints
 
 - Resource-based policies (attaching a policy to a resource) are
-  deferred; identity-based only.
+  deferred; identity-based only. Attaching a policy to a single
+  subject is deferred too — an active policy grants org-wide.
 - `Condition` is parsed but not evaluated in the MVP.
 - The earlier Rego/OPA direction is superseded (ADR-0002); preserved
   WIP is reference only.

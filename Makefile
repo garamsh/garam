@@ -39,9 +39,12 @@ gen:
 	$(BUF) generate
 	$(GOIMPORTS) -w proto/gen
 
-# check-gen fails when committed generated code is stale.
+# check-gen fails when committed generated code is stale. The diff is
+# scoped to generated paths so unrelated working-tree edits do not fail it.
+GEN_PATHS := api/server.gen.go internal/*/db proto/gen internal/*/mocks
+
 check-gen: gen
-	git diff --exit-code
+	git diff --exit-code -- $(GEN_PATHS)
 
 db-up:
 	docker compose up -d --wait

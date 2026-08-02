@@ -2,8 +2,8 @@
 //
 // An Agent is an autonomous identity that acts on behalf of a User or
 // an Organization. Like Users, Agents have their own roles and
-// policies; org membership is recorded in the org domain (Membership),
-// not duplicated on the Agent aggregate.
+// policies. Agent org membership is not modeled yet: org.Membership
+// ties a user to an Organization.
 package agent
 
 import (

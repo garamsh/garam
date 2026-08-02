@@ -49,6 +49,6 @@ db-down:
 
 # e2e runs the store round-trips against real Postgres (see db-up).
 e2e:
-	GAON_TEST_DATABASE_URL='$(TEST_DATABASE_URL)' go test -count=1 ./e2e/...
+	GAON_TEST_DATABASE_URL='$(TEST_DATABASE_URL)' go test -count=1 ./tests/e2e/...
 
 ci: format lint test build check-gen

@@ -39,24 +39,24 @@ func (_m *MockStore) EXPECT() *MockStore_Expecter {
 	return &MockStore_Expecter{mock: &_m.Mock}
 }
 
-// ActiveDocuments provides a mock function for the type MockStore
-func (_mock *MockStore) ActiveDocuments(ctx context.Context, orgGRN grn.GRN) ([]authz.PolicyDocument, error) {
+// ActivePolicies provides a mock function for the type MockStore
+func (_mock *MockStore) ActivePolicies(ctx context.Context, orgGRN grn.GRN) ([]authz.ActivePolicy, error) {
 	ret := _mock.Called(ctx, orgGRN)
 
 	if len(ret) == 0 {
-		panic("no return value specified for ActiveDocuments")
+		panic("no return value specified for ActivePolicies")
 	}
 
-	var r0 []authz.PolicyDocument
+	var r0 []authz.ActivePolicy
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN) ([]authz.PolicyDocument, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN) ([]authz.ActivePolicy, error)); ok {
 		return returnFunc(ctx, orgGRN)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN) []authz.PolicyDocument); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN) []authz.ActivePolicy); ok {
 		r0 = returnFunc(ctx, orgGRN)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]authz.PolicyDocument)
+			r0 = ret.Get(0).([]authz.ActivePolicy)
 		}
 	}
 	if returnFunc, ok := ret.Get(1).(func(context.Context, grn.GRN) error); ok {
@@ -67,19 +67,19 @@ func (_mock *MockStore) ActiveDocuments(ctx context.Context, orgGRN grn.GRN) ([]
 	return r0, r1
 }
 
-// MockStore_ActiveDocuments_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ActiveDocuments'
-type MockStore_ActiveDocuments_Call struct {
+// MockStore_ActivePolicies_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ActivePolicies'
+type MockStore_ActivePolicies_Call struct {
 	*mock.Call
 }
 
-// ActiveDocuments is a helper method to define mock.On call
+// ActivePolicies is a helper method to define mock.On call
 //   - ctx context.Context
 //   - orgGRN grn.GRN
-func (_e *MockStore_Expecter) ActiveDocuments(ctx any, orgGRN any) *MockStore_ActiveDocuments_Call {
-	return &MockStore_ActiveDocuments_Call{Call: _e.mock.On("ActiveDocuments", ctx, orgGRN)}
+func (_e *MockStore_Expecter) ActivePolicies(ctx any, orgGRN any) *MockStore_ActivePolicies_Call {
+	return &MockStore_ActivePolicies_Call{Call: _e.mock.On("ActivePolicies", ctx, orgGRN)}
 }
 
-func (_c *MockStore_ActiveDocuments_Call) Run(run func(ctx context.Context, orgGRN grn.GRN)) *MockStore_ActiveDocuments_Call {
+func (_c *MockStore_ActivePolicies_Call) Run(run func(ctx context.Context, orgGRN grn.GRN)) *MockStore_ActivePolicies_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -97,12 +97,12 @@ func (_c *MockStore_ActiveDocuments_Call) Run(run func(ctx context.Context, orgG
 	return _c
 }
 
-func (_c *MockStore_ActiveDocuments_Call) Return(policyDocuments []authz.PolicyDocument, err error) *MockStore_ActiveDocuments_Call {
-	_c.Call.Return(policyDocuments, err)
+func (_c *MockStore_ActivePolicies_Call) Return(activePolicys []authz.ActivePolicy, err error) *MockStore_ActivePolicies_Call {
+	_c.Call.Return(activePolicys, err)
 	return _c
 }
 
-func (_c *MockStore_ActiveDocuments_Call) RunAndReturn(run func(ctx context.Context, orgGRN grn.GRN) ([]authz.PolicyDocument, error)) *MockStore_ActiveDocuments_Call {
+func (_c *MockStore_ActivePolicies_Call) RunAndReturn(run func(ctx context.Context, orgGRN grn.GRN) ([]authz.ActivePolicy, error)) *MockStore_ActivePolicies_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -187,6 +187,80 @@ func (_c *MockStore_AddPolicyVersion_Call) RunAndReturn(run func(ctx context.Con
 	return _c
 }
 
+// AttachPolicy provides a mock function for the type MockStore
+func (_mock *MockStore) AttachPolicy(ctx context.Context, policyGRN grn.GRN, subjectGRN grn.GRN) (*authz.PolicyAttachment, error) {
+	ret := _mock.Called(ctx, policyGRN, subjectGRN)
+
+	if len(ret) == 0 {
+		panic("no return value specified for AttachPolicy")
+	}
+
+	var r0 *authz.PolicyAttachment
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, grn.GRN) (*authz.PolicyAttachment, error)); ok {
+		return returnFunc(ctx, policyGRN, subjectGRN)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, grn.GRN) *authz.PolicyAttachment); ok {
+		r0 = returnFunc(ctx, policyGRN, subjectGRN)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*authz.PolicyAttachment)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, grn.GRN, grn.GRN) error); ok {
+		r1 = returnFunc(ctx, policyGRN, subjectGRN)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_AttachPolicy_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'AttachPolicy'
+type MockStore_AttachPolicy_Call struct {
+	*mock.Call
+}
+
+// AttachPolicy is a helper method to define mock.On call
+//   - ctx context.Context
+//   - policyGRN grn.GRN
+//   - subjectGRN grn.GRN
+func (_e *MockStore_Expecter) AttachPolicy(ctx any, policyGRN any, subjectGRN any) *MockStore_AttachPolicy_Call {
+	return &MockStore_AttachPolicy_Call{Call: _e.mock.On("AttachPolicy", ctx, policyGRN, subjectGRN)}
+}
+
+func (_c *MockStore_AttachPolicy_Call) Run(run func(ctx context.Context, policyGRN grn.GRN, subjectGRN grn.GRN)) *MockStore_AttachPolicy_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 grn.GRN
+		if args[1] != nil {
+			arg1 = args[1].(grn.GRN)
+		}
+		var arg2 grn.GRN
+		if args[2] != nil {
+			arg2 = args[2].(grn.GRN)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_AttachPolicy_Call) Return(policyAttachment *authz.PolicyAttachment, err error) *MockStore_AttachPolicy_Call {
+	_c.Call.Return(policyAttachment, err)
+	return _c
+}
+
+func (_c *MockStore_AttachPolicy_Call) RunAndReturn(run func(ctx context.Context, policyGRN grn.GRN, subjectGRN grn.GRN) (*authz.PolicyAttachment, error)) *MockStore_AttachPolicy_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CreatePolicy provides a mock function for the type MockStore
 func (_mock *MockStore) CreatePolicy(ctx context.Context, p *authz.Policy, doc authz.PolicyDocument, createdBy grn.GRN) (*authz.Policy, error) {
 	ret := _mock.Called(ctx, p, doc, createdBy)
@@ -263,6 +337,69 @@ func (_c *MockStore_CreatePolicy_Call) Return(policy *authz.Policy, err error) *
 }
 
 func (_c *MockStore_CreatePolicy_Call) RunAndReturn(run func(ctx context.Context, p *authz.Policy, doc authz.PolicyDocument, createdBy grn.GRN) (*authz.Policy, error)) *MockStore_CreatePolicy_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// DetachPolicy provides a mock function for the type MockStore
+func (_mock *MockStore) DetachPolicy(ctx context.Context, policyGRN grn.GRN, subjectGRN grn.GRN) error {
+	ret := _mock.Called(ctx, policyGRN, subjectGRN)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DetachPolicy")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, grn.GRN) error); ok {
+		r0 = returnFunc(ctx, policyGRN, subjectGRN)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockStore_DetachPolicy_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DetachPolicy'
+type MockStore_DetachPolicy_Call struct {
+	*mock.Call
+}
+
+// DetachPolicy is a helper method to define mock.On call
+//   - ctx context.Context
+//   - policyGRN grn.GRN
+//   - subjectGRN grn.GRN
+func (_e *MockStore_Expecter) DetachPolicy(ctx any, policyGRN any, subjectGRN any) *MockStore_DetachPolicy_Call {
+	return &MockStore_DetachPolicy_Call{Call: _e.mock.On("DetachPolicy", ctx, policyGRN, subjectGRN)}
+}
+
+func (_c *MockStore_DetachPolicy_Call) Run(run func(ctx context.Context, policyGRN grn.GRN, subjectGRN grn.GRN)) *MockStore_DetachPolicy_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 grn.GRN
+		if args[1] != nil {
+			arg1 = args[1].(grn.GRN)
+		}
+		var arg2 grn.GRN
+		if args[2] != nil {
+			arg2 = args[2].(grn.GRN)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_DetachPolicy_Call) Return(err error) *MockStore_DetachPolicy_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockStore_DetachPolicy_Call) RunAndReturn(run func(ctx context.Context, policyGRN grn.GRN, subjectGRN grn.GRN) error) *MockStore_DetachPolicy_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -399,6 +536,74 @@ func (_c *MockStore_ListPolicies_Call) Return(policys []*authz.Policy, err error
 }
 
 func (_c *MockStore_ListPolicies_Call) RunAndReturn(run func(ctx context.Context, orgGRN grn.GRN) ([]*authz.Policy, error)) *MockStore_ListPolicies_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListPolicyAttachments provides a mock function for the type MockStore
+func (_mock *MockStore) ListPolicyAttachments(ctx context.Context, policyGRN grn.GRN) ([]*authz.PolicyAttachment, error) {
+	ret := _mock.Called(ctx, policyGRN)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListPolicyAttachments")
+	}
+
+	var r0 []*authz.PolicyAttachment
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN) ([]*authz.PolicyAttachment, error)); ok {
+		return returnFunc(ctx, policyGRN)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN) []*authz.PolicyAttachment); ok {
+		r0 = returnFunc(ctx, policyGRN)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]*authz.PolicyAttachment)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, grn.GRN) error); ok {
+		r1 = returnFunc(ctx, policyGRN)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_ListPolicyAttachments_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListPolicyAttachments'
+type MockStore_ListPolicyAttachments_Call struct {
+	*mock.Call
+}
+
+// ListPolicyAttachments is a helper method to define mock.On call
+//   - ctx context.Context
+//   - policyGRN grn.GRN
+func (_e *MockStore_Expecter) ListPolicyAttachments(ctx any, policyGRN any) *MockStore_ListPolicyAttachments_Call {
+	return &MockStore_ListPolicyAttachments_Call{Call: _e.mock.On("ListPolicyAttachments", ctx, policyGRN)}
+}
+
+func (_c *MockStore_ListPolicyAttachments_Call) Run(run func(ctx context.Context, policyGRN grn.GRN)) *MockStore_ListPolicyAttachments_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 grn.GRN
+		if args[1] != nil {
+			arg1 = args[1].(grn.GRN)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_ListPolicyAttachments_Call) Return(policyAttachments []*authz.PolicyAttachment, err error) *MockStore_ListPolicyAttachments_Call {
+	_c.Call.Return(policyAttachments, err)
+	return _c
+}
+
+func (_c *MockStore_ListPolicyAttachments_Call) RunAndReturn(run func(ctx context.Context, policyGRN grn.GRN) ([]*authz.PolicyAttachment, error)) *MockStore_ListPolicyAttachments_Call {
 	_c.Call.Return(run)
 	return _c
 }

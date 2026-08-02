@@ -1183,6 +1183,80 @@ func (_c *MockStore_ListGroups_Call) RunAndReturn(run func(ctx context.Context, 
 	return _c
 }
 
+// ListGroupsByMember provides a mock function for the type MockStore
+func (_mock *MockStore) ListGroupsByMember(ctx context.Context, orgGRN grn.GRN, memberGRN grn.GRN) ([]grn.GRN, error) {
+	ret := _mock.Called(ctx, orgGRN, memberGRN)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListGroupsByMember")
+	}
+
+	var r0 []grn.GRN
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, grn.GRN) ([]grn.GRN, error)); ok {
+		return returnFunc(ctx, orgGRN, memberGRN)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, grn.GRN) []grn.GRN); ok {
+		r0 = returnFunc(ctx, orgGRN, memberGRN)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]grn.GRN)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, grn.GRN, grn.GRN) error); ok {
+		r1 = returnFunc(ctx, orgGRN, memberGRN)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStore_ListGroupsByMember_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListGroupsByMember'
+type MockStore_ListGroupsByMember_Call struct {
+	*mock.Call
+}
+
+// ListGroupsByMember is a helper method to define mock.On call
+//   - ctx context.Context
+//   - orgGRN grn.GRN
+//   - memberGRN grn.GRN
+func (_e *MockStore_Expecter) ListGroupsByMember(ctx any, orgGRN any, memberGRN any) *MockStore_ListGroupsByMember_Call {
+	return &MockStore_ListGroupsByMember_Call{Call: _e.mock.On("ListGroupsByMember", ctx, orgGRN, memberGRN)}
+}
+
+func (_c *MockStore_ListGroupsByMember_Call) Run(run func(ctx context.Context, orgGRN grn.GRN, memberGRN grn.GRN)) *MockStore_ListGroupsByMember_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 grn.GRN
+		if args[1] != nil {
+			arg1 = args[1].(grn.GRN)
+		}
+		var arg2 grn.GRN
+		if args[2] != nil {
+			arg2 = args[2].(grn.GRN)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStore_ListGroupsByMember_Call) Return(gRNs []grn.GRN, err error) *MockStore_ListGroupsByMember_Call {
+	_c.Call.Return(gRNs, err)
+	return _c
+}
+
+func (_c *MockStore_ListGroupsByMember_Call) RunAndReturn(run func(ctx context.Context, orgGRN grn.GRN, memberGRN grn.GRN) ([]grn.GRN, error)) *MockStore_ListGroupsByMember_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListMembers provides a mock function for the type MockStore
 func (_mock *MockStore) ListMembers(ctx context.Context, orgGRN grn.GRN) ([]*org.Membership, error) {
 	ret := _mock.Called(ctx, orgGRN)

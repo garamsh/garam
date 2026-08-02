@@ -26,7 +26,15 @@ type Store interface {
 	// version, or fails with ErrPolicyVersionNotFound.
 	SetPolicyDefaultVersion(ctx context.Context, g grn.GRN, version int) (*Policy, error)
 
-	// ActiveDocuments returns the document every active policy of the
-	// org currently evaluates.
-	ActiveDocuments(ctx context.Context, orgGRN grn.GRN) ([]PolicyDocument, error)
+	// AttachPolicy binds the policy to a subject of the same org
+	// (ADR-0008), narrowing it from an org-wide grant to that subject.
+	AttachPolicy(ctx context.Context, policyGRN, subjectGRN grn.GRN) (*PolicyAttachment, error)
+	// DetachPolicy removes one attachment, or fails with
+	// ErrAttachmentNotFound.
+	DetachPolicy(ctx context.Context, policyGRN, subjectGRN grn.GRN) error
+	ListPolicyAttachments(ctx context.Context, policyGRN grn.GRN) ([]*PolicyAttachment, error)
+
+	// ActivePolicies returns what every active policy of the org
+	// currently evaluates, with the subjects it is attached to.
+	ActivePolicies(ctx context.Context, orgGRN grn.GRN) ([]ActivePolicy, error)
 }

@@ -251,6 +251,21 @@ func (s *fakeOrgStore) DeleteGroup(_ context.Context, g grn.GRN) error {
 	return nil
 }
 
+func (s *fakeOrgStore) ListGroupsByMember(_ context.Context, orgGRN, memberGRN grn.GRN) ([]grn.GRN, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := []grn.GRN{}
+	for key, members := range s.groupMembers {
+		gr, ok := s.groups[key]
+		if !ok || gr.Organization() != orgGRN || !slices.Contains(members, memberGRN) {
+			continue
+		}
+		out = append(out, gr.GRN())
+	}
+	slices.SortFunc(out, func(a, b grn.GRN) int { return strings.Compare(a.String(), b.String()) })
+	return out, nil
+}
+
 func (s *fakeOrgStore) AddGroupMember(_ context.Context, groupGRN, memberGRN grn.GRN) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

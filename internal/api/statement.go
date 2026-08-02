@@ -42,8 +42,8 @@ func (s *Server) scopedStatements(r *http.Request, orgGRN grn.GRN, m *org.Member
 // role, so they apply within whichever org the subject is acting in —
 // org membership stays the precondition. Unknown role names grant
 // nothing. Policies attached to the subject are not collected here:
-// an active policy grants org-wide and subject-level attachment is
-// future work (ADR-0007).
+// the engine owns them and resolves them from the subject and its
+// groups (ADR-0008).
 func userStatements(orgGRN grn.GRN, u *user.User) []Statement {
 	actions := org.ActionsFor(u.Roles())
 	if len(actions) == 0 {

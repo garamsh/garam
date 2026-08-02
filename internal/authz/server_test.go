@@ -19,11 +19,17 @@ import (
 )
 
 // staticPolicies is a PolicySource over a fixed per-org statement set,
-// standing in for the cache the engine reads in production.
+// standing in for the cache the engine reads in production. Statements
+// keyed by a subject GRN stand for a policy attached to that subject.
 type staticPolicies map[grn.GRN][]authz.Statement
 
-func (p staticPolicies) OrgStatements(_ context.Context, orgGRN grn.GRN) ([]authz.Statement, error) {
-	return p[orgGRN], nil
+func (p staticPolicies) Statements(_ context.Context, orgGRN grn.GRN, subjects []grn.GRN) ([]authz.Statement, error) {
+	var statements []authz.Statement
+	statements = append(statements, p[orgGRN]...)
+	for _, s := range subjects {
+		statements = append(statements, p[s]...)
+	}
+	return statements, nil
 }
 
 // newAuthzClient serves the real engine over an in-memory listener.
@@ -117,6 +123,7 @@ func TestGRPCServer_CheckInvalidInput(t *testing.T) {
 		{"empty action", func(r *authzv1.CheckRequest) { r.Action = "" }},
 		{"unspecified effect", func(r *authzv1.CheckRequest) { r.Statements[0].Effect = authzv1.Effect_EFFECT_UNSPECIFIED }},
 		{"empty patterns", func(r *authzv1.CheckRequest) { r.Statements[0].Action = nil }},
+		{"bad subject group grn", func(r *authzv1.CheckRequest) { r.SubjectGroups = []string{"nope"} }},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -218,6 +225,53 @@ func TestGRPCServer_CheckPersistedPolicies(t *testing.T) {
 			req.ObjectGrn = c.object
 			if c.statement != nil {
 				req.Statements = []*authzv1.Statement{c.statement}
+			}
+			resp, err := newAuthzClient(t, c.policies).Check(context.Background(), req)
+			require.NoError(t, err)
+			assert.Equal(t, c.want, resp.GetAllowed())
+		})
+	}
+}
+
+// TestGRPCServer_CheckAttachedPolicies covers the attachment sources a
+// check unions (ADR-0008): the subject itself and the groups it is
+// reported to belong to. Deny-overrides holds across them.
+func TestGRPCServer_CheckAttachedPolicies(t *testing.T) {
+	alice := grn.New(grn.RootOwner, grn.DefaultProject, "user", "alice")
+	eng := grn.New("acme", grn.DefaultProject, "group", "eng")
+	allowUpdate := authz.Statement{
+		Sid:      "attached-allow",
+		Effect:   authz.EffectAllow,
+		Action:   []string{"org:update"},
+		Resource: []string{"grn:root:default:org:acme"},
+	}
+	denyUpdate := authz.Statement{
+		Sid:      "attached-deny",
+		Effect:   authz.EffectDeny,
+		Action:   []string{"org:update"},
+		Resource: []string{"grn:root:default:org:acme"},
+	}
+	callerAllow := allowStatement("org-role-owner", []string{"org:*"}, []string{"grn:root:default:org:acme"})
+
+	cases := []struct {
+		name     string
+		policies staticPolicies
+		groups   []string
+		caller   *authzv1.Statement
+		want     bool
+	}{
+		{"attached to the subject", staticPolicies{alice: {allowUpdate}}, nil, nil, true},
+		{"attached to the subject's group", staticPolicies{eng: {allowUpdate}}, []string{eng.String()}, nil, true},
+		{"attached to a group the subject is not in", staticPolicies{eng: {allowUpdate}}, nil, nil, false},
+		{"a group deny overrides a caller allow", staticPolicies{eng: {denyUpdate}}, []string{eng.String()}, callerAllow, false},
+		{"a subject deny overrides a caller allow", staticPolicies{alice: {denyUpdate}}, nil, callerAllow, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			req := checkRequest()
+			req.SubjectGroups = c.groups
+			if c.caller != nil {
+				req.Statements = []*authzv1.Statement{c.caller}
 			}
 			resp, err := newAuthzClient(t, c.policies).Check(context.Background(), req)
 			require.NoError(t, err)

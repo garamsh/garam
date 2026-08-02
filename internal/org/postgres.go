@@ -196,6 +196,19 @@ func (s *PostgresStore) ListGroupMembers(ctx context.Context, groupGRN grn.GRN) 
 	return parseGRNs(rows, "group member row")
 }
 
+// ListGroupsByMember returns the GRNs of the org's Groups the member
+// belongs to.
+func (s *PostgresStore) ListGroupsByMember(ctx context.Context, orgGRN, memberGRN grn.GRN) ([]grn.GRN, error) {
+	rows, err := s.q.ListGroupsByMember(ctx, db.ListGroupsByMemberParams{
+		OrgGrn:    orgGRN.String(),
+		MemberGrn: memberGRN.String(),
+	})
+	if err != nil {
+		return nil, classify(err, "list groups by member", nil, nil)
+	}
+	return parseGRNs(rows, "group row")
+}
+
 // CreateProject persists a new Project.
 func (s *PostgresStore) CreateProject(ctx context.Context, p *Project) error {
 	err := s.q.CreateProject(ctx, db.CreateProjectParams{

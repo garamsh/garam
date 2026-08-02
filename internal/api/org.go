@@ -172,8 +172,10 @@ func (s *Server) authorize(r *http.Request, orgGRN grn.GRN, u *user.User, action
 // authorizeOn enforces the action on target, a resource of orgGRN.
 // Membership in the org is the precondition; the statements collected
 // for the subject then decide through the Evaluator seam, so a role
-// held on the target group or project counts. Non-members and denied
-// actions both yield 403.
+// held on the target group or project counts. The subject's groups
+// travel with the question so the engine can apply the policies
+// attached to them (ADR-0008). Non-members and denied actions both
+// yield 403.
 func (s *Server) authorizeOn(r *http.Request, orgGRN, target grn.GRN, u *user.User, action string) error {
 	m, err := s.orgs.GetMember(r.Context(), orgGRN, u.GRN())
 	if errorx.IsKind(err, errorx.KindNotFound) {
@@ -186,11 +188,16 @@ func (s *Server) authorizeOn(r *http.Request, orgGRN, target grn.GRN, u *user.Us
 	if err != nil {
 		return err
 	}
+	groups, err := s.orgs.ListGroupsByMember(r.Context(), orgGRN, u.GRN())
+	if err != nil {
+		return err
+	}
 	allowed, err := s.evaluator.Evaluate(r.Context(), EvalInput{
-		Subject:    u.GRN(),
-		Object:     target,
-		Action:     action,
-		Statements: statements,
+		Subject:       u.GRN(),
+		Object:        target,
+		Action:        action,
+		SubjectGroups: groups,
+		Statements:    statements,
 	})
 	if err != nil {
 		return err

@@ -168,22 +168,77 @@ func (s *PostgresStore) SetPolicyDefaultVersion(ctx context.Context, g grn.GRN, 
 	return rowToPolicy(row)
 }
 
-// ActiveDocuments returns the document each active policy of the org
-// evaluates at its default version.
-func (s *PostgresStore) ActiveDocuments(ctx context.Context, orgGRN grn.GRN) ([]PolicyDocument, error) {
-	rows, err := s.q.ActivePolicyDocuments(ctx, orgGRN.String())
+// AttachPolicy binds the policy to a subject. The schema rejects an
+// attachment that leaves the policy's org.
+func (s *PostgresStore) AttachPolicy(ctx context.Context, policyGRN, subjectGRN grn.GRN) (*PolicyAttachment, error) {
+	row, err := s.q.AttachPolicy(ctx, db.AttachPolicyParams{
+		PolicyGrn:  policyGRN.String(),
+		SubjectGrn: subjectGRN.String(),
+		CreatedAt:  stamp(time.Now().UTC()),
+	})
 	if err != nil {
-		return nil, classify(err, "list active policy documents", nil, nil)
+		return nil, classify(err, "attach policy", ErrPolicyNotFound, ErrAttachmentAlreadyExists)
 	}
-	docs := make([]PolicyDocument, 0, len(rows))
-	for _, raw := range rows {
-		doc, err := ParsePolicyDocument(raw)
+	return rowToAttachment(row)
+}
+
+// DetachPolicy removes one attachment.
+func (s *PostgresStore) DetachPolicy(ctx context.Context, policyGRN, subjectGRN grn.GRN) error {
+	rows, err := s.q.DetachPolicy(ctx, db.DetachPolicyParams{
+		PolicyGrn:  policyGRN.String(),
+		SubjectGrn: subjectGRN.String(),
+	})
+	if err != nil {
+		return classify(err, "detach policy", nil, nil)
+	}
+	if rows == 0 {
+		return ErrAttachmentNotFound
+	}
+	return nil
+}
+
+// ListPolicyAttachments returns a policy's attachments ordered by
+// subject GRN.
+func (s *PostgresStore) ListPolicyAttachments(ctx context.Context, policyGRN grn.GRN) ([]*PolicyAttachment, error) {
+	rows, err := s.q.ListPolicyAttachments(ctx, policyGRN.String())
+	if err != nil {
+		return nil, classify(err, "list policy attachments", nil, nil)
+	}
+	attachments := make([]*PolicyAttachment, 0, len(rows))
+	for _, row := range rows {
+		a, err := rowToAttachment(row)
+		if err != nil {
+			return nil, err
+		}
+		attachments = append(attachments, a)
+	}
+	return attachments, nil
+}
+
+// ActivePolicies returns what each active policy of the org evaluates
+// at its default version, with the subjects it is attached to.
+func (s *PostgresStore) ActivePolicies(ctx context.Context, orgGRN grn.GRN) ([]ActivePolicy, error) {
+	rows, err := s.q.ActivePolicies(ctx, orgGRN.String())
+	if err != nil {
+		return nil, classify(err, "list active policies", nil, nil)
+	}
+	active := make([]ActivePolicy, 0, len(rows))
+	for _, row := range rows {
+		doc, err := ParsePolicyDocument(row.Document)
 		if err != nil {
 			return nil, errorx.Wrap(err, "authz store: stored document")
 		}
-		docs = append(docs, doc)
+		subjects := make([]grn.GRN, 0, len(row.SubjectGrns))
+		for _, raw := range row.SubjectGrns {
+			g, err := grn.Parse(raw)
+			if err != nil {
+				return nil, errorx.Wrap(err, "authz store: attachment subject grn")
+			}
+			subjects = append(subjects, g)
+		}
+		active = append(active, ActivePolicy{Document: doc, Subjects: subjects})
 	}
-	return docs, nil
+	return active, nil
 }
 
 func rowToPolicy(row db.Policy) (*Policy, error) {
@@ -232,8 +287,25 @@ func rowToPolicyVersion(row db.PolicyVersion) (*PolicyVersion, error) {
 	}, nil
 }
 
-// classify maps driver errors to errorx kinds. The append-only trigger
-// raises a plain exception, which is a caller mistake, not an outage.
+func rowToAttachment(row db.PolicyAttachment) (*PolicyAttachment, error) {
+	policyGRN, err := grn.Parse(row.PolicyGrn)
+	if err != nil {
+		return nil, errorx.Wrap(err, "authz store: policy grn")
+	}
+	subjectGRN, err := grn.Parse(row.SubjectGrn)
+	if err != nil {
+		return nil, errorx.Wrap(err, "authz store: attachment subject grn")
+	}
+	return &PolicyAttachment{
+		policyGRN:  policyGRN,
+		subjectGRN: subjectGRN,
+		createdAt:  row.CreatedAt.Time,
+	}, nil
+}
+
+// classify maps driver errors to errorx kinds. The append-only and
+// same-org triggers raise a plain exception, which is a caller
+// mistake, not an outage.
 func classify(err error, op string, notFound, conflict error) error {
 	if err == nil {
 		return nil

@@ -7,11 +7,13 @@ collaborate on a shared plan.
 ## In scope
 
 - Identities for users and agents, including organization membership.
-- Org / group / project structure.
+- Org / group / project structure; groups and projects are created,
+  read, updated, deleted, and populated with members over the HTTP API
+  under their organization's paths.
 - Google OIDC sign-in with a provider abstraction; server-side sessions.
 - Invitation-based org membership with org roles (`owner`, `admin`,
-  `member`) enforced on org-scoped HTTP APIs through the authz
-  evaluator seam.
+  `member`) enforced on org-scoped HTTP APIs — including the group and
+  project endpoints — through the authz evaluator seam.
 - An OpenAPI-first HTTP API; server code is generated from the spec.
 - Postgres-backed stores (sqlc) with migrations.
 - Authorization decisions, expressed as IAM-style policy documents.

@@ -38,10 +38,14 @@ Top of the tenant hierarchy.
 | `Invitation` | single-use, expiring bearer token that admits a user into an org with a fixed role |
 
 The `Store` interface covers CRUD on each plus membership and cascade
-delete on `Organization`. Orgs grow by invitation and acceptance, not
-open signup. The org domain owns its action constants
-(`ActionOrgRead`, …) and `Role.Actions` maps each role to the action
-patterns it grants; the authz evaluator decides.
+delete on `Organization`; group and project listing is scoped to one
+organization. Orgs grow by invitation and acceptance, not open signup.
+The org domain owns its action constants (`ActionOrgRead`,
+`ActionGroupRead`, `ActionProjectRead`, …) and `Role.Actions` maps each
+role to the action patterns it grants; the authz evaluator decides.
+Groups and projects are addressed under their organization's HTTP
+paths, and their GRNs carry the owning org in the organization
+segment.
 
 ## `internal/authz`
 

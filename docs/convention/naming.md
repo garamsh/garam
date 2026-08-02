@@ -3,11 +3,11 @@
 ## Project vs company vs module
 
 - Company: `garam`
-- Project / module name: `gaon`
-- Service codename: `gaon`
-- Go module path: `github.com/garamsh/gaon`
+- Project / module name: `garam`
+- Go module path: `github.com/garamsh/garam`
 
-Do not say "garam project" — that mixes the company with the product.
+The project and the company share the name `garam`; the repository and
+module path distinguish the code (`garamsh/garam`).
 
 ## GRN
 

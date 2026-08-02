@@ -13,7 +13,6 @@ type Group struct {
 	orgGRN    grn.GRN
 	roles     []string
 	policies  []string
-	members   []grn.GRN
 	createdAt time.Time
 	updatedAt time.Time
 }
@@ -29,8 +28,3 @@ func (g *Group) GRN() grn.GRN          { return g.grn }
 func (g *Group) Name() string          { return g.name }
 func (g *Group) Organization() grn.GRN { return g.orgGRN }
 func (g *Group) Roles() []string       { return g.roles }
-func (g *Group) Policies() []string    { return g.policies }
-func (g *Group) Members() []grn.GRN    { return g.members }
-
-// Kind reports the resource kind for authz purposes.
-func (g *Group) Kind() string { return ServiceTypeGroup }

@@ -1110,8 +1110,8 @@ func (_c *MockStore_ListGroupMembers_Call) RunAndReturn(run func(ctx context.Con
 }
 
 // ListGroups provides a mock function for the type MockStore
-func (_mock *MockStore) ListGroups(ctx context.Context, f org.ListFilter) ([]*org.Group, error) {
-	ret := _mock.Called(ctx, f)
+func (_mock *MockStore) ListGroups(ctx context.Context, orgGRN grn.GRN, f org.ListFilter) ([]*org.Group, error) {
+	ret := _mock.Called(ctx, orgGRN, f)
 
 	if len(ret) == 0 {
 		panic("no return value specified for ListGroups")
@@ -1119,18 +1119,18 @@ func (_mock *MockStore) ListGroups(ctx context.Context, f org.ListFilter) ([]*or
 
 	var r0 []*org.Group
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, org.ListFilter) ([]*org.Group, error)); ok {
-		return returnFunc(ctx, f)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, org.ListFilter) ([]*org.Group, error)); ok {
+		return returnFunc(ctx, orgGRN, f)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, org.ListFilter) []*org.Group); ok {
-		r0 = returnFunc(ctx, f)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, org.ListFilter) []*org.Group); ok {
+		r0 = returnFunc(ctx, orgGRN, f)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]*org.Group)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, org.ListFilter) error); ok {
-		r1 = returnFunc(ctx, f)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, grn.GRN, org.ListFilter) error); ok {
+		r1 = returnFunc(ctx, orgGRN, f)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -1144,24 +1144,30 @@ type MockStore_ListGroups_Call struct {
 
 // ListGroups is a helper method to define mock.On call
 //   - ctx context.Context
+//   - orgGRN grn.GRN
 //   - f org.ListFilter
-func (_e *MockStore_Expecter) ListGroups(ctx any, f any) *MockStore_ListGroups_Call {
-	return &MockStore_ListGroups_Call{Call: _e.mock.On("ListGroups", ctx, f)}
+func (_e *MockStore_Expecter) ListGroups(ctx any, orgGRN any, f any) *MockStore_ListGroups_Call {
+	return &MockStore_ListGroups_Call{Call: _e.mock.On("ListGroups", ctx, orgGRN, f)}
 }
 
-func (_c *MockStore_ListGroups_Call) Run(run func(ctx context.Context, f org.ListFilter)) *MockStore_ListGroups_Call {
+func (_c *MockStore_ListGroups_Call) Run(run func(ctx context.Context, orgGRN grn.GRN, f org.ListFilter)) *MockStore_ListGroups_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 org.ListFilter
+		var arg1 grn.GRN
 		if args[1] != nil {
-			arg1 = args[1].(org.ListFilter)
+			arg1 = args[1].(grn.GRN)
+		}
+		var arg2 org.ListFilter
+		if args[2] != nil {
+			arg2 = args[2].(org.ListFilter)
 		}
 		run(
 			arg0,
 			arg1,
+			arg2,
 		)
 	})
 	return _c
@@ -1172,7 +1178,7 @@ func (_c *MockStore_ListGroups_Call) Return(groups []*org.Group, err error) *Moc
 	return _c
 }
 
-func (_c *MockStore_ListGroups_Call) RunAndReturn(run func(ctx context.Context, f org.ListFilter) ([]*org.Group, error)) *MockStore_ListGroups_Call {
+func (_c *MockStore_ListGroups_Call) RunAndReturn(run func(ctx context.Context, orgGRN grn.GRN, f org.ListFilter) ([]*org.Group, error)) *MockStore_ListGroups_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -1456,8 +1462,8 @@ func (_c *MockStore_ListProjectMembers_Call) RunAndReturn(run func(ctx context.C
 }
 
 // ListProjects provides a mock function for the type MockStore
-func (_mock *MockStore) ListProjects(ctx context.Context, f org.ListFilter) ([]*org.Project, error) {
-	ret := _mock.Called(ctx, f)
+func (_mock *MockStore) ListProjects(ctx context.Context, orgGRN grn.GRN, f org.ListFilter) ([]*org.Project, error) {
+	ret := _mock.Called(ctx, orgGRN, f)
 
 	if len(ret) == 0 {
 		panic("no return value specified for ListProjects")
@@ -1465,18 +1471,18 @@ func (_mock *MockStore) ListProjects(ctx context.Context, f org.ListFilter) ([]*
 
 	var r0 []*org.Project
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, org.ListFilter) ([]*org.Project, error)); ok {
-		return returnFunc(ctx, f)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, org.ListFilter) ([]*org.Project, error)); ok {
+		return returnFunc(ctx, orgGRN, f)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, org.ListFilter) []*org.Project); ok {
-		r0 = returnFunc(ctx, f)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, org.ListFilter) []*org.Project); ok {
+		r0 = returnFunc(ctx, orgGRN, f)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]*org.Project)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, org.ListFilter) error); ok {
-		r1 = returnFunc(ctx, f)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, grn.GRN, org.ListFilter) error); ok {
+		r1 = returnFunc(ctx, orgGRN, f)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -1490,24 +1496,30 @@ type MockStore_ListProjects_Call struct {
 
 // ListProjects is a helper method to define mock.On call
 //   - ctx context.Context
+//   - orgGRN grn.GRN
 //   - f org.ListFilter
-func (_e *MockStore_Expecter) ListProjects(ctx any, f any) *MockStore_ListProjects_Call {
-	return &MockStore_ListProjects_Call{Call: _e.mock.On("ListProjects", ctx, f)}
+func (_e *MockStore_Expecter) ListProjects(ctx any, orgGRN any, f any) *MockStore_ListProjects_Call {
+	return &MockStore_ListProjects_Call{Call: _e.mock.On("ListProjects", ctx, orgGRN, f)}
 }
 
-func (_c *MockStore_ListProjects_Call) Run(run func(ctx context.Context, f org.ListFilter)) *MockStore_ListProjects_Call {
+func (_c *MockStore_ListProjects_Call) Run(run func(ctx context.Context, orgGRN grn.GRN, f org.ListFilter)) *MockStore_ListProjects_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 org.ListFilter
+		var arg1 grn.GRN
 		if args[1] != nil {
-			arg1 = args[1].(org.ListFilter)
+			arg1 = args[1].(grn.GRN)
+		}
+		var arg2 org.ListFilter
+		if args[2] != nil {
+			arg2 = args[2].(org.ListFilter)
 		}
 		run(
 			arg0,
 			arg1,
+			arg2,
 		)
 	})
 	return _c
@@ -1518,7 +1530,7 @@ func (_c *MockStore_ListProjects_Call) Return(projects []*org.Project, err error
 	return _c
 }
 
-func (_c *MockStore_ListProjects_Call) RunAndReturn(run func(ctx context.Context, f org.ListFilter) ([]*org.Project, error)) *MockStore_ListProjects_Call {
+func (_c *MockStore_ListProjects_Call) RunAndReturn(run func(ctx context.Context, orgGRN grn.GRN, f org.ListFilter) ([]*org.Project, error)) *MockStore_ListProjects_Call {
 	_c.Call.Return(run)
 	return _c
 }

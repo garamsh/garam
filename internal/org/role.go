@@ -31,19 +31,42 @@ const (
 	ActionOrgDelete     = "org:delete"
 	ActionOrgMemberList = "org:member-list"
 	ActionOrgInvite     = "org:invite"
+
+	ActionGroupCreate       = "group:create"
+	ActionGroupRead         = "group:read"
+	ActionGroupUpdate       = "group:update"
+	ActionGroupDelete       = "group:delete"
+	ActionGroupMemberList   = "group:member-list"
+	ActionGroupMemberAdd    = "group:member-add"
+	ActionGroupMemberRemove = "group:member-remove"
+
+	ActionProjectCreate       = "project:create"
+	ActionProjectRead         = "project:read"
+	ActionProjectUpdate       = "project:update"
+	ActionProjectDelete       = "project:delete"
+	ActionProjectMemberList   = "project:member-list"
+	ActionProjectMemberAdd    = "project:member-add"
+	ActionProjectMemberRemove = "project:member-remove"
 )
 
-// Actions returns the action patterns the role grants on an org. The
-// patterns feed IAM-style Allow statements; the evaluator resolves
-// wildcards.
+// Actions returns the action patterns the role grants on an org and
+// on the groups and projects it contains. The patterns feed IAM-style
+// Allow statements; the evaluator resolves wildcards.
 func (r Role) Actions() []string {
 	switch r {
 	case RoleOwner:
-		return []string{"org:*"}
+		return []string{"org:*", "group:*", "project:*"}
 	case RoleAdmin:
-		return []string{ActionOrgRead, ActionOrgUpdate, ActionOrgMemberList, ActionOrgInvite}
+		return []string{
+			ActionOrgRead, ActionOrgUpdate, ActionOrgMemberList, ActionOrgInvite,
+			"group:*", "project:*",
+		}
 	case RoleMember:
-		return []string{ActionOrgRead, ActionOrgMemberList}
+		return []string{
+			ActionOrgRead, ActionOrgMemberList,
+			ActionGroupRead, ActionGroupMemberList,
+			ActionProjectRead, ActionProjectMemberList,
+		}
 	}
 	return nil
 }

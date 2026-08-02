@@ -350,17 +350,19 @@ func (q *Queries) ListGroupMembers(ctx context.Context, groupGrn string) ([]stri
 
 const listGroups = `-- name: ListGroups :many
 SELECT grn, org_grn, name, roles, policies, created_at, updated_at FROM groups
+WHERE org_grn = $1
 ORDER BY grn
-LIMIT $2 OFFSET $1
+LIMIT $3 OFFSET $2
 `
 
 type ListGroupsParams struct {
+	OrgGrn    string
 	RowOffset int32
 	RowLimit  pgtype.Int4
 }
 
 func (q *Queries) ListGroups(ctx context.Context, arg ListGroupsParams) ([]Group, error) {
-	rows, err := q.db.Query(ctx, listGroups, arg.RowOffset, arg.RowLimit)
+	rows, err := q.db.Query(ctx, listGroups, arg.OrgGrn, arg.RowOffset, arg.RowLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -517,17 +519,19 @@ func (q *Queries) ListProjectMembers(ctx context.Context, projectGrn string) ([]
 
 const listProjects = `-- name: ListProjects :many
 SELECT grn, org_grn, name, roles, policies, created_at, updated_at FROM projects
+WHERE org_grn = $1
 ORDER BY grn
-LIMIT $2 OFFSET $1
+LIMIT $3 OFFSET $2
 `
 
 type ListProjectsParams struct {
+	OrgGrn    string
 	RowOffset int32
 	RowLimit  pgtype.Int4
 }
 
 func (q *Queries) ListProjects(ctx context.Context, arg ListProjectsParams) ([]Project, error) {
-	rows, err := q.db.Query(ctx, listProjects, arg.RowOffset, arg.RowLimit)
+	rows, err := q.db.Query(ctx, listProjects, arg.OrgGrn, arg.RowOffset, arg.RowLimit)
 	if err != nil {
 		return nil, err
 	}

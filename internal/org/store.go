@@ -48,7 +48,7 @@ type Store interface {
 	// Group
 	CreateGroup(ctx context.Context, g *Group) error
 	GetGroup(ctx context.Context, g grn.GRN) (*Group, error)
-	ListGroups(ctx context.Context, f ListFilter) ([]*Group, error)
+	ListGroups(ctx context.Context, orgGRN grn.GRN, f ListFilter) ([]*Group, error)
 	UpdateGroup(ctx context.Context, g grn.GRN, p GroupPatch) (*Group, error)
 	DeleteGroup(ctx context.Context, g grn.GRN) error
 	AddGroupMember(ctx context.Context, groupGRN, memberGRN grn.GRN) error
@@ -58,7 +58,7 @@ type Store interface {
 	// Project
 	CreateProject(ctx context.Context, p *Project) error
 	GetProject(ctx context.Context, g grn.GRN) (*Project, error)
-	ListProjects(ctx context.Context, f ListFilter) ([]*Project, error)
+	ListProjects(ctx context.Context, orgGRN grn.GRN, f ListFilter) ([]*Project, error)
 	UpdateProject(ctx context.Context, g grn.GRN, p ProjectPatch) (*Project, error)
 	DeleteProject(ctx context.Context, g grn.GRN) error
 	AddProjectMember(ctx context.Context, projectGRN, memberGRN grn.GRN) error

@@ -121,9 +121,10 @@ func (s *PostgresStore) GetGroup(ctx context.Context, g grn.GRN) (*Group, error)
 	return rowToGroup(row)
 }
 
-// ListGroups returns Groups ordered by GRN.
-func (s *PostgresStore) ListGroups(ctx context.Context, f ListFilter) ([]*Group, error) {
+// ListGroups returns the Organization's Groups ordered by GRN.
+func (s *PostgresStore) ListGroups(ctx context.Context, orgGRN grn.GRN, f ListFilter) ([]*Group, error) {
 	rows, err := s.q.ListGroups(ctx, db.ListGroupsParams{
+		OrgGrn:    orgGRN.String(),
 		RowOffset: int32(f.Offset),
 		RowLimit:  limit(f.Limit),
 	})
@@ -219,9 +220,10 @@ func (s *PostgresStore) GetProject(ctx context.Context, g grn.GRN) (*Project, er
 	return rowToProject(row)
 }
 
-// ListProjects returns Projects ordered by GRN.
-func (s *PostgresStore) ListProjects(ctx context.Context, f ListFilter) ([]*Project, error) {
+// ListProjects returns the Organization's Projects ordered by GRN.
+func (s *PostgresStore) ListProjects(ctx context.Context, orgGRN grn.GRN, f ListFilter) ([]*Project, error) {
 	rows, err := s.q.ListProjects(ctx, db.ListProjectsParams{
+		OrgGrn:    orgGRN.String(),
 		RowOffset: int32(f.Offset),
 		RowLimit:  limit(f.Limit),
 	})

@@ -133,7 +133,7 @@ func TestOrgStore_RoundTripWithCascade(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []grn.GRN{userGRN}, members)
 
-	groups, err := s.ListGroups(ctx, org.ListFilter{})
+	groups, err := s.ListGroups(ctx, orgGRN, org.ListFilter{})
 	require.NoError(t, err)
 	assert.Len(t, groups, 1)
 	assert.Equal(t, orgGRN, groups[0].Organization())

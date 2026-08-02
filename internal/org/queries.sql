@@ -29,6 +29,7 @@ SELECT * FROM groups WHERE grn = $1;
 
 -- name: ListGroups :many
 SELECT * FROM groups
+WHERE org_grn = sqlc.arg('org_grn')
 ORDER BY grn
 LIMIT sqlc.narg('row_limit') OFFSET sqlc.arg('row_offset');
 
@@ -62,6 +63,7 @@ SELECT * FROM projects WHERE grn = $1;
 
 -- name: ListProjects :many
 SELECT * FROM projects
+WHERE org_grn = sqlc.arg('org_grn')
 ORDER BY grn
 LIMIT sqlc.narg('row_limit') OFFSET sqlc.arg('row_offset');
 

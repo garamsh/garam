@@ -1,5 +1,5 @@
-// Package e2e_test exercises the Postgres store implementations
-// against a real database. Set GAON_TEST_DATABASE_URL (e.g. via
+// Package e2e_test exercises the Postgres store implementations, and
+// the services layered over them, against a real database. Set GAON_TEST_DATABASE_URL (e.g. via
 // `make e2e`, which starts the docker-compose Postgres) to run them;
 // without it every test skips.
 package e2e_test
@@ -27,6 +27,7 @@ import (
 	"github.com/garamsh/gaon/internal/grn"
 	"github.com/garamsh/gaon/internal/org"
 	"github.com/garamsh/gaon/internal/user"
+	authzv1 "github.com/garamsh/gaon/proto/gen/gaon/authz/v1"
 )
 
 var migrateOnce sync.Once
@@ -401,6 +402,46 @@ func TestPolicyStore_LifecycleRoundTrip(t *testing.T) {
 	assert.True(t, errorx.IsKind(err, errorx.KindNotFound))
 	_, err = s.AddPolicyVersion(ctx, grn.New("acme", "default", authz.ServiceTypePolicy, "missing"), policyDoc("x", authz.EffectAllow), author)
 	assert.True(t, errorx.IsKind(err, errorx.KindNotFound))
+}
+
+// TestPolicyService_ArchiveRoundTrip drives the lifecycle service over
+// the real store: activate, then archive, and the org keeps nothing to
+// evaluate.
+func TestPolicyService_ArchiveRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := authz.NewPostgresStore(p)
+	cache := authz.NewPolicyCache(s)
+	srv := authz.NewPolicyGRPCServer(s, cache)
+	orgGRN := newPolicyOrg(t, p)
+
+	created, err := srv.CreatePolicy(ctx, &authzv1.CreatePolicyRequest{
+		OrgGrn:    orgGRN.String(),
+		Name:      "read-only",
+		Document:  `{"Version":"2026-07-25","Statement":[{"Sid":"v1","Effect":"Allow","Action":["org:read"],"Resource":["grn:acme:*"]}]}`,
+		CreatedBy: grnOf("user", "ada").String(),
+	})
+	require.NoError(t, err)
+	policyGRN := created.GetPolicy().GetGrn()
+
+	_, err = srv.ActivatePolicy(ctx, &authzv1.ActivatePolicyRequest{PolicyGrn: policyGRN})
+	require.NoError(t, err)
+	statements, err := cache.OrgStatements(ctx, orgGRN)
+	require.NoError(t, err)
+	require.Len(t, statements, 1)
+
+	archived, err := srv.ArchivePolicy(ctx, &authzv1.ArchivePolicyRequest{PolicyGrn: policyGRN})
+	require.NoError(t, err)
+	assert.Equal(t, authzv1.PolicyStatus_POLICY_STATUS_ARCHIVED, archived.GetPolicy().GetStatus())
+
+	statements, err = cache.OrgStatements(ctx, orgGRN)
+	require.NoError(t, err)
+	assert.Empty(t, statements)
+
+	// The policy and its versions survive the transition.
+	versions, err := srv.ListPolicyVersions(ctx, &authzv1.ListPolicyVersionsRequest{PolicyGrn: policyGRN})
+	require.NoError(t, err)
+	assert.Len(t, versions.GetVersions(), 1)
 }
 
 func TestPolicyVersions_AppendOnly(t *testing.T) {

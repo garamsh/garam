@@ -137,6 +137,21 @@ func (s *PolicyGRPCServer) ActivatePolicy(ctx context.Context, req *authzv1.Acti
 	return &authzv1.ActivatePolicyResponse{Policy: policyToProto(p)}, nil
 }
 
+// ArchivePolicy retires the policy: it and its versions stay stored,
+// but it stops contributing statements to checks.
+func (s *PolicyGRPCServer) ArchivePolicy(ctx context.Context, req *authzv1.ArchivePolicyRequest) (*authzv1.ArchivePolicyResponse, error) {
+	g, err := grn.Parse(req.GetPolicyGrn())
+	if err != nil {
+		return nil, grpcError(errorx.Wrap(err, "policy_grn"))
+	}
+	p, err := s.store.SetPolicyStatus(ctx, g, PolicyStatusArchived)
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	s.cache.Invalidate(p.Organization())
+	return &authzv1.ArchivePolicyResponse{Policy: policyToProto(p)}, nil
+}
+
 // RollbackPolicy points the policy at an earlier stored version.
 func (s *PolicyGRPCServer) RollbackPolicy(ctx context.Context, req *authzv1.RollbackPolicyRequest) (*authzv1.RollbackPolicyResponse, error) {
 	g, err := grn.Parse(req.GetPolicyGrn())

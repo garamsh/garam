@@ -68,6 +68,42 @@ func TestPolicyGRPCServer_ActivateInvalidatesTheOrgCache(t *testing.T) {
 	assert.Equal(t, "activated", after[0].Sid)
 }
 
+func TestPolicyGRPCServer_ArchiveInvalidatesTheOrgCache(t *testing.T) {
+	acme := orgGRN("acme")
+	store := mocks.NewMockStore(t)
+	store.EXPECT().ActiveDocuments(mock.Anything, acme).
+		Return([]authz.PolicyDocument{policyDocument("active", authz.EffectAllow)}, nil).Once()
+	store.EXPECT().SetPolicyStatus(mock.Anything, mock.Anything, authz.PolicyStatusArchived).
+		Return(authz.NewPolicy(policyGRN(t, acme), acme, "read-only"), nil).Once()
+	store.EXPECT().ActiveDocuments(mock.Anything, acme).
+		Return(nil, nil).Once()
+
+	cache := authz.NewPolicyCache(store)
+	srv := authz.NewPolicyGRPCServer(store, cache)
+
+	before, err := cache.OrgStatements(context.Background(), acme)
+	require.NoError(t, err)
+	require.Len(t, before, 1)
+
+	_, err = srv.ArchivePolicy(context.Background(), &authzv1.ArchivePolicyRequest{
+		PolicyGrn: "grn:acme:default:policy:p1",
+	})
+	require.NoError(t, err)
+
+	after, err := cache.OrgStatements(context.Background(), acme)
+	require.NoError(t, err)
+	assert.Empty(t, after)
+}
+
+func TestPolicyGRPCServer_ArchiveRejectsBadGRN(t *testing.T) {
+	store := mocks.NewMockStore(t)
+	srv := authz.NewPolicyGRPCServer(store, authz.NewPolicyCache(store))
+
+	_, err := srv.ArchivePolicy(context.Background(), &authzv1.ArchivePolicyRequest{PolicyGrn: "nope"})
+	require.Error(t, err)
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
 func TestPolicyGRPCServer_RollbackRejectsAndReportsMissing(t *testing.T) {
 	store := mocks.NewMockStore(t)
 	srv := authz.NewPolicyGRPCServer(store, authz.NewPolicyCache(store))

@@ -40,6 +40,8 @@ collaborate on a shared plan.
 - `cmd/garam/` — thin entrypoint for the cobra CLI.
 - `migrations/` — SQL migrations (golang-migrate); sqlc schema source.
 - `tests/e2e/` — store round-trips against real Postgres.
+- `web/` — Next.js frontend; reaches the API through a same-origin
+  `/api/*` rewrite (ADR-0009). Its own toolchain and gate (`make web-ci`).
 - `internal/grn/` — identifier; shared primitive.
 - `internal/errorx/` — typed errors; shared primitive.
 - `internal/cli/` — cobra commands + wiring (`serve api` | `serve authz` | `migrate`).

@@ -44,11 +44,27 @@ SELECT * FROM policy_versions WHERE policy_grn = $1 AND version = $2;
 -- name: ListPolicyVersions :many
 SELECT * FROM policy_versions WHERE policy_grn = $1 ORDER BY version;
 
--- ActivePolicyDocuments returns the document each active policy of the
--- org currently evaluates: its default version, and nothing else.
--- name: ActivePolicyDocuments :many
-SELECT v.document
+-- name: AttachPolicy :one
+INSERT INTO policy_attachments (policy_grn, subject_grn, created_at)
+VALUES ($1, $2, $3)
+RETURNING *;
+
+-- name: DetachPolicy :execrows
+DELETE FROM policy_attachments WHERE policy_grn = $1 AND subject_grn = $2;
+
+-- name: ListPolicyAttachments :many
+SELECT * FROM policy_attachments WHERE policy_grn = $1 ORDER BY subject_grn;
+
+-- ActivePolicies returns what each active policy of the org currently
+-- evaluates: its default version's document, and the subjects it is
+-- attached to. An empty subject list means the policy applies org-wide
+-- (ADR-0008).
+-- name: ActivePolicies :many
+SELECT v.document,
+       coalesce(array_agg(a.subject_grn) FILTER (WHERE a.subject_grn IS NOT NULL), '{}')::text[] AS subject_grns
 FROM policies p
 JOIN policy_versions v ON v.policy_grn = p.grn AND v.version = p.default_version
+LEFT JOIN policy_attachments a ON a.policy_grn = p.grn
 WHERE p.org_grn = $1 AND p.status = 'active'
+GROUP BY p.grn, v.document
 ORDER BY p.grn;

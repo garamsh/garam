@@ -54,6 +54,12 @@ DELETE FROM group_members WHERE group_grn = $1 AND member_grn = $2;
 -- name: ListGroupMembers :many
 SELECT member_grn FROM group_members WHERE group_grn = $1 ORDER BY member_grn;
 
+-- name: ListGroupsByMember :many
+SELECT g.grn FROM groups g
+JOIN group_members m ON m.group_grn = g.grn
+WHERE g.org_grn = sqlc.arg('org_grn') AND m.member_grn = sqlc.arg('member_grn')
+ORDER BY g.grn;
+
 -- name: CreateProject :exec
 INSERT INTO projects (grn, org_grn, name, roles, policies, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7);

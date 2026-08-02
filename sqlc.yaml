@@ -28,6 +28,7 @@ sql:
     schema:
       - migrations/000001_init.up.sql
       - migrations/000002_policies.up.sql
+      - migrations/000003_policy_attachments.up.sql
     queries: internal/authz/queries.sql
     gen:
       go:

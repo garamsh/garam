@@ -79,7 +79,7 @@ func (s *Server) GetProject(w http.ResponseWriter, r *http.Request, orgSlug apig
 		writeError(w, err)
 		return
 	}
-	if err := s.authorize(r, orgGRN(orgSlug), u, org.ActionProjectRead); err != nil {
+	if err := s.authorizeOn(r, orgGRN(orgSlug), projectGRN(orgSlug, projectSlug), u, org.ActionProjectRead); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -98,7 +98,7 @@ func (s *Server) UpdateProject(w http.ResponseWriter, r *http.Request, orgSlug a
 		writeError(w, err)
 		return
 	}
-	if err := s.authorize(r, orgGRN(orgSlug), u, org.ActionProjectUpdate); err != nil {
+	if err := s.authorizeOn(r, orgGRN(orgSlug), projectGRN(orgSlug, projectSlug), u, org.ActionProjectUpdate); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -126,7 +126,7 @@ func (s *Server) DeleteProject(w http.ResponseWriter, r *http.Request, orgSlug a
 		writeError(w, err)
 		return
 	}
-	if err := s.authorize(r, orgGRN(orgSlug), u, org.ActionProjectDelete); err != nil {
+	if err := s.authorizeOn(r, orgGRN(orgSlug), projectGRN(orgSlug, projectSlug), u, org.ActionProjectDelete); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -145,7 +145,7 @@ func (s *Server) ListProjectMembers(w http.ResponseWriter, r *http.Request, orgS
 		writeError(w, err)
 		return
 	}
-	if err := s.authorize(r, orgGRN(orgSlug), u, org.ActionProjectMemberList); err != nil {
+	if err := s.authorizeOn(r, orgGRN(orgSlug), projectGRN(orgSlug, projectSlug), u, org.ActionProjectMemberList); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -171,7 +171,7 @@ func (s *Server) AddProjectMember(w http.ResponseWriter, r *http.Request, orgSlu
 		writeError(w, err)
 		return
 	}
-	if err := s.authorize(r, orgGRN(orgSlug), u, org.ActionProjectMemberAdd); err != nil {
+	if err := s.authorizeOn(r, orgGRN(orgSlug), projectGRN(orgSlug, projectSlug), u, org.ActionProjectMemberAdd); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -200,7 +200,7 @@ func (s *Server) RemoveProjectMember(w http.ResponseWriter, r *http.Request, org
 		writeError(w, err)
 		return
 	}
-	if err := s.authorize(r, orgGRN(orgSlug), u, org.ActionProjectMemberRemove); err != nil {
+	if err := s.authorizeOn(r, orgGRN(orgSlug), projectGRN(orgSlug, projectSlug), u, org.ActionProjectMemberRemove); err != nil {
 		writeError(w, err)
 		return
 	}

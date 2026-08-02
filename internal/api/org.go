@@ -164,11 +164,17 @@ func (s *Server) ListOrgMembers(w http.ResponseWriter, r *http.Request, orgSlug 
 	writeJSON(w, http.StatusOK, out)
 }
 
-// authorize enforces that the user holds a membership in orgGRN whose
-// role allows the action. The membership role selects the IAM-style
-// statement set; the authz engine decides through the Evaluator seam.
-// Non-members and denied actions both yield 403.
+// authorize enforces the action on the org itself.
 func (s *Server) authorize(r *http.Request, orgGRN grn.GRN, u *user.User, action string) error {
+	return s.authorizeOn(r, orgGRN, orgGRN, u, action)
+}
+
+// authorizeOn enforces the action on target, a resource of orgGRN.
+// Membership in the org is the precondition; the statements collected
+// for the subject then decide through the Evaluator seam, so a role
+// held on the target group or project counts. Non-members and denied
+// actions both yield 403.
+func (s *Server) authorizeOn(r *http.Request, orgGRN, target grn.GRN, u *user.User, action string) error {
 	m, err := s.orgs.GetMember(r.Context(), orgGRN, u.GRN())
 	if errorx.IsKind(err, errorx.KindNotFound) {
 		return errorx.New(errorx.KindPermissionDenied, "not a member of this org")
@@ -176,16 +182,15 @@ func (s *Server) authorize(r *http.Request, orgGRN grn.GRN, u *user.User, action
 	if err != nil {
 		return err
 	}
+	statements, err := s.scopedStatements(r, orgGRN, m, target, u.GRN())
+	if err != nil {
+		return err
+	}
 	allowed, err := s.evaluator.Evaluate(r.Context(), EvalInput{
-		Subject: u.GRN(),
-		Object:  orgGRN,
-		Action:  action,
-		Statements: []Statement{{
-			Sid:      "org-role-" + string(m.Role()),
-			Effect:   EffectAllow,
-			Action:   m.Role().Actions(),
-			Resource: []string{orgGRN.String()},
-		}},
+		Subject:    u.GRN(),
+		Object:     target,
+		Action:     action,
+		Statements: statements,
 	})
 	if err != nil {
 		return err

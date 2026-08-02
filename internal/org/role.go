@@ -1,6 +1,8 @@
 package org
 
 import (
+	"slices"
+
 	"github.com/garamsh/gaon/internal/errorx"
 )
 
@@ -69,4 +71,24 @@ func (r Role) Actions() []string {
 		}
 	}
 	return nil
+}
+
+// ActionsFor returns the union of the action patterns granted by the
+// named roles, in the order the names appear. Groups and Projects
+// carry role names as data, so an unknown name contributes nothing
+// rather than failing the check.
+func ActionsFor(names []string) []string {
+	var actions []string
+	for _, n := range names {
+		r, err := ParseRole(n)
+		if err != nil {
+			continue
+		}
+		for _, a := range r.Actions() {
+			if !slices.Contains(actions, a) {
+				actions = append(actions, a)
+			}
+		}
+	}
+	return actions
 }

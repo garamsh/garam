@@ -41,3 +41,17 @@ func TestRoleActions_GrantSets(t *testing.T) {
 		org.RoleMember.Actions())
 	assert.Empty(t, org.Role("").Actions())
 }
+
+func TestActionsFor_UnionsKnownRoles(t *testing.T) {
+	assert.Equal(t,
+		[]string{
+			org.ActionOrgRead, org.ActionOrgMemberList,
+			org.ActionGroupRead, org.ActionGroupMemberList,
+			org.ActionProjectRead, org.ActionProjectMemberList,
+			org.ActionOrgUpdate, org.ActionOrgInvite,
+			"group:*", "project:*",
+		},
+		org.ActionsFor([]string{"member", "admin"}))
+	assert.Empty(t, org.ActionsFor([]string{"superuser"}))
+	assert.Empty(t, org.ActionsFor(nil))
+}

@@ -48,6 +48,25 @@ strings only. Matching = action pattern ∩ resource pattern both match.
 > invalidating the org's cache (Postgres `LISTEN`/`NOTIFY`). Today the
 > api server builds the statement set per request from org roles.
 
+## Statement collection
+
+The api server checks each request against the resource it targets —
+the org, or the group or project addressed by the path — and collects
+the statements that apply to that resource:
+
+| Origin | Action patterns | Resource patterns |
+|--------|-----------------|-------------------|
+| org membership role | `Role.Actions()` | the org GRN and `grn:<org>:*` |
+| target group's roles, when the subject is a member | `org.ActionsFor(group.Roles())` | the group GRN |
+| target project's roles, when the subject is a member | `org.ActionsFor(project.Roles())` | the project GRN |
+
+Group and project roles reuse the org role vocabulary (`owner`,
+`admin`, `member`) and are narrowed by resource: a group `admin`
+administers that group and nothing else, while an org `admin`
+administers everything the org owns. Unknown role names grant nothing.
+Org membership stays the precondition for every check — a group grant
+never admits a non-member of the org.
+
 ## Components
 
 | Component | Responsibility | Depends on |

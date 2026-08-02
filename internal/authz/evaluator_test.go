@@ -37,6 +37,18 @@ func TestStatementEvaluator_ExplicitDenyWins(t *testing.T) {
 	assert.Equal(t, authz.DecisionAllow, got)
 }
 
+func TestStatementEvaluator_ScopedDenyOverridesOrgWideAllow(t *testing.T) {
+	statements := []authz.Statement{
+		{Sid: "org-role-owner", Effect: authz.EffectAllow, Action: []string{"group:*"}, Resource: []string{"grn:acme:*"}},
+		{Sid: "deny-eng", Effect: authz.EffectDeny, Action: []string{"group:delete"}, Resource: []string{"grn:acme:default:group:eng"}},
+	}
+	assert.Equal(t, authz.DecisionDeny, evaluate(statements, "group:delete", "grn:acme:default:group:eng"))
+
+	// The deny is scoped: sibling groups and other actions stand.
+	assert.Equal(t, authz.DecisionAllow, evaluate(statements, "group:delete", "grn:acme:default:group:ops"))
+	assert.Equal(t, authz.DecisionAllow, evaluate(statements, "group:update", "grn:acme:default:group:eng"))
+}
+
 func TestStatementEvaluator_DefaultDeny(t *testing.T) {
 	statements := []authz.Statement{
 		{Sid: "allow", Effect: authz.EffectAllow, Action: []string{"org:read"}, Resource: []string{"grn:root:default:org:acme"}},

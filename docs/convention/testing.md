@@ -64,4 +64,4 @@ Time → inject a clock. Network → `httptest.NewServer`. Filesystem →
   Internal tests only with a genuine white-box seam; still assert on
   behavior.
 - Integration: `tests/integration/` (not yet used).
-- E2E: top-level `e2e/`. Never inside `internal/`.
+- E2E: `tests/e2e/`. Never inside `internal/`.

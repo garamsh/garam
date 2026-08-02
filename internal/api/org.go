@@ -182,7 +182,7 @@ func (s *Server) authorizeOn(r *http.Request, orgGRN, target grn.GRN, u *user.Us
 	if err != nil {
 		return err
 	}
-	statements, err := s.scopedStatements(r, orgGRN, m, target, u.GRN())
+	statements, err := s.scopedStatements(r, orgGRN, m, target, u)
 	if err != nil {
 		return err
 	}

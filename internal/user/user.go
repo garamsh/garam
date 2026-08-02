@@ -2,8 +2,10 @@
 //
 // A User is identified by its GRN. Org membership is recorded in the
 // org domain (Membership); the User aggregate does not duplicate it.
-// Roles and Policies are stored directly on the User for fast lookup;
-// group-derived access is resolved at check time.
+// Roles are stored directly on the User for fast lookup; the api
+// server collects them, along with group- and project-derived access,
+// at check time. Policies are stored but not yet evaluated: attaching
+// a policy to a single subject is future work (ADR-0007).
 package user
 
 import (
@@ -29,10 +31,11 @@ type User struct {
 	updatedAt time.Time
 }
 
-// New constructs a User.
-func New(g grn.GRN, nickname string) *User {
+// New constructs a User. The optional roles are the ones granted
+// directly to the User.
+func New(g grn.GRN, nickname string, roles ...string) *User {
 	now := time.Now().UTC()
-	return &User{grn: g, nickname: nickname, createdAt: now, updatedAt: now}
+	return &User{grn: g, nickname: nickname, roles: roles, createdAt: now, updatedAt: now}
 }
 
 func (u *User) GRN() grn.GRN       { return u.grn }

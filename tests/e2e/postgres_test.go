@@ -6,6 +6,7 @@ package e2e_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -326,13 +327,19 @@ func ptr[T any](v T) *T { return &v }
 // policyDoc builds a one-statement document whose Sid identifies the
 // version it belongs to.
 func policyDoc(sid string, effect authz.Effect) authz.PolicyDocument {
+	return statementDoc(sid, effect, "org:read", "grn:acme:*")
+}
+
+// statementDoc builds a one-statement document over an explicit action
+// and resource pattern.
+func statementDoc(sid string, effect authz.Effect, action, resource string) authz.PolicyDocument {
 	return authz.PolicyDocument{
 		Version: "2026-07-25",
 		Statement: []authz.Statement{{
 			Sid:      sid,
 			Effect:   effect,
-			Action:   []string{"org:read"},
-			Resource: []string{"grn:acme:*"},
+			Action:   []string{action},
+			Resource: []string{resource},
 		}},
 	}
 }
@@ -679,4 +686,162 @@ func TestPolicyAttachment_DenyOverridesAcrossSources(t *testing.T) {
 	resp, err = engine.Check(ctx, req)
 	require.NoError(t, err)
 	assert.False(t, resp.GetAllowed(), "a group-attached deny overrides the caller's allow")
+}
+
+// TestOrgIsolation_GrantsNeverCrossOrgs asserts the org boundary end to
+// end: nothing org A persists — a policy, a subject or group
+// attachment, a cached statement — changes a decision about org B's
+// resources, and nothing org B persists changes one about org A's.
+// Both orgs' policies name every org in their resource pattern, so the
+// only thing keeping them apart is the org scoping of the lookup.
+func TestOrgIsolation_GrantsNeverCrossOrgs(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	store := authz.NewPostgresStore(p)
+	cache := authz.NewPolicyCache(store)
+	policies := authz.NewPolicyGRPCServer(store, cache)
+	engine := authz.NewGRPCServer(cache)
+
+	orgs := org.NewPostgresStore(p)
+	acme, globex := orgRootGRN("acme"), orgRootGRN("globex")
+	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(acme, "acme")))
+	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(globex, "globex")))
+
+	adaA, webA := scopedGRN("acme", "user", "ada"), scopedGRN("acme", "project", "web")
+	adaB, engB := scopedGRN("globex", "user", "ada"), scopedGRN("globex", "group", "eng")
+	webB := scopedGRN("globex", "project", "web")
+
+	allowA := activePolicy(t, policies, acme, "allow-read", statementDoc("allow-read", authz.EffectAllow, "project:read", "grn:*:*"))
+	attachPolicy(t, policies, allowA, adaA)
+	denyB := activePolicy(t, policies, globex, "deny-read", statementDoc("deny-read", authz.EffectDeny, "project:read", "grn:*:*"))
+	attachPolicy(t, policies, denyB, engB)
+
+	t.Run("persisted policies stay in their org", func(t *testing.T) {
+		active, err := store.ActivePolicies(ctx, acme)
+		require.NoError(t, err)
+		require.Len(t, active, 1)
+		assert.Equal(t, "allow-read", active[0].Document.Statement[0].Sid)
+
+		active, err = store.ActivePolicies(ctx, globex)
+		require.NoError(t, err)
+		require.Len(t, active, 1)
+		assert.Equal(t, "deny-read", active[0].Document.Statement[0].Sid)
+
+		// Org A's subject is unknown to org B's statement lookup.
+		statements, err := cache.Statements(ctx, globex, []grn.GRN{adaA})
+		require.NoError(t, err)
+		assert.Empty(t, statements)
+	})
+
+	t.Run("a subject attachment decides nothing across the boundary", func(t *testing.T) {
+		assert.True(t, checkRead(t, engine, adaA, webA, nil), "org A's attached allow reaches org A's resource")
+		assert.False(t, checkRead(t, engine, adaA, webB, nil), "org A's attached allow does not reach org B's resource")
+	})
+
+	t.Run("a group attachment decides nothing across the boundary", func(t *testing.T) {
+		assert.False(t, checkRead(t, engine, adaB, webB, []grn.GRN{engB}, roleAllow("globex")),
+			"org B's group-attached deny overrides a role allow inside org B")
+		assert.True(t, checkRead(t, engine, adaB, webA, []grn.GRN{engB}, roleAllow("acme")),
+			"org B's group-attached deny does not reach org A's resource")
+	})
+
+	t.Run("role statements stay inside the org that granted them", func(t *testing.T) {
+		assert.False(t, checkRead(t, engine, adaB, webB, nil, roleAllow("acme")),
+			"a role allow scoped to org A grants nothing on org B's resource")
+	})
+
+	t.Run("a write in one org leaves the other org's cache intact", func(t *testing.T) {
+		// Both orgs are cached by now: the checks above filled them.
+		require.True(t, checkRead(t, engine, adaA, webB, nil, roleAllow("globex")))
+
+		// Unattached, this policy denies every subject of org A.
+		activePolicy(t, policies, acme, "deny-all", statementDoc("deny-all", authz.EffectDeny, "project:read", "grn:*:*"))
+
+		assert.False(t, checkRead(t, engine, adaA, webA, nil), "org A's new deny drops org A's cached allow")
+		assert.True(t, checkRead(t, engine, adaA, webB, nil, roleAllow("globex")),
+			"org A's new deny changes no decision about org B's resource")
+	})
+
+	t.Run("a cross-org attachment is rejected", func(t *testing.T) {
+		_, err := policies.AttachPolicy(ctx, &authzv1.AttachPolicyRequest{PolicyGrn: allowA, SubjectGrn: engB.String()})
+		assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+
+		attachments, err := policies.ListPolicyAttachments(ctx, &authzv1.ListPolicyAttachmentsRequest{PolicyGrn: allowA})
+		require.NoError(t, err)
+		assert.Len(t, attachments.GetAttachments(), 1, "the rejected attachment was not stored")
+	})
+}
+
+// orgRootGRN returns the root-owned GRN of the named organization.
+func orgRootGRN(name string) grn.GRN {
+	return grn.New(grn.RootOwner, grn.DefaultProject, "org", name)
+}
+
+// scopedGRN names a resource owned by an arbitrary org, where grnOf is
+// fixed to "acme".
+func scopedGRN(orgName, serviceType, id string) grn.GRN {
+	return grn.New(orgName, grn.DefaultProject, serviceType, id)
+}
+
+// activePolicy creates and activates a policy in orgGRN through the
+// lifecycle service, so the cache is dropped the way a production write
+// drops it. It returns the policy GRN in wire form.
+func activePolicy(t *testing.T, srv *authz.PolicyGRPCServer, orgGRN grn.GRN, name string, doc authz.PolicyDocument) string {
+	t.Helper()
+	ctx := context.Background()
+	raw, err := json.Marshal(doc)
+	require.NoError(t, err)
+	created, err := srv.CreatePolicy(ctx, &authzv1.CreatePolicyRequest{
+		OrgGrn:    orgGRN.String(),
+		Name:      name,
+		Document:  string(raw),
+		CreatedBy: scopedGRN(orgGRN.Identifier, "user", "ada").String(),
+	})
+	require.NoError(t, err)
+	policyGRN := created.GetPolicy().GetGrn()
+	_, err = srv.ActivatePolicy(ctx, &authzv1.ActivatePolicyRequest{PolicyGrn: policyGRN})
+	require.NoError(t, err)
+	return policyGRN
+}
+
+// attachPolicy attaches policyGRN to subject through the lifecycle
+// service.
+func attachPolicy(t *testing.T, srv *authz.PolicyGRPCServer, policyGRN string, subject grn.GRN) {
+	t.Helper()
+	_, err := srv.AttachPolicy(context.Background(), &authzv1.AttachPolicyRequest{
+		PolicyGrn:  policyGRN,
+		SubjectGrn: subject.String(),
+	})
+	require.NoError(t, err)
+}
+
+// roleAllow is the role-derived allow the api server passes for a
+// caller, scoped to the org whose roles granted it (ADR-0007).
+func roleAllow(orgName string) *authzv1.Statement {
+	return &authzv1.Statement{
+		Sid:      "role-" + orgName,
+		Effect:   authzv1.Effect_EFFECT_ALLOW,
+		Action:   []string{"project:*"},
+		Resource: []string{"grn:" + orgName + ":*"},
+	}
+}
+
+// checkRead asks the engine whether subject may read object, carrying
+// the groups the caller belongs to and its role-derived statements.
+// Every isolation case turns on the org segments, so the action is
+// fixed to project:read.
+func checkRead(t *testing.T, engine *authz.GRPCServer, subject, object grn.GRN, groups []grn.GRN, roles ...*authzv1.Statement) bool {
+	t.Helper()
+	req := &authzv1.CheckRequest{
+		SubjectGrn: subject.String(),
+		ObjectGrn:  object.String(),
+		Action:     "project:read",
+		Statements: roles,
+	}
+	for _, g := range groups {
+		req.SubjectGroups = append(req.SubjectGroups, g.String())
+	}
+	resp, err := engine.Check(context.Background(), req)
+	require.NoError(t, err)
+	return resp.GetAllowed()
 }

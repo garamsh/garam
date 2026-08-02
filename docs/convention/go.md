@@ -15,7 +15,16 @@ decisions are recorded here.
   - `postgres.go` (or another vendor-named file) — implementation.
   - `mocks/` — mockery v3 output.
 - `internal/<crosscutting>/` — only when ≥3 domains depend on it.
+- `api/` — OpenAPI spec + generated server (ADR-0004).
+- `proto/` — `.proto` sources + generated code (ADR-0003).
+- `migrations/` — SQL migrations; the schema source.
+- `e2e/` — black-box tests against real infra (testing.md §Layers).
 - `docs/`, `go.mod` / `go.sum`, `Makefile`.
+
+Non-domain packages under `internal/` (`api`, `authz`, `cli`, `grn`,
+`errorx`) follow their ADR-defined shapes, not the domain layout
+above: `api` and `authz` are independent services (ADR-0003), `cli`
+is the composition root, `grn`/`errorx` are shared primitives.
 
 Banned folder/file names at any level: `model.go`, `utils/`, `helpers/`,
 `common/`, `ext/`, `adapter/`, `driver/`, `platform/`, `infra/`,

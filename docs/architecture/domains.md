@@ -44,8 +44,10 @@ organization, in both directions — the groups of an org, and the
 groups of the org a member belongs to, which a check sends to the
 engine to resolve group-attached policies (ADR-0008). Orgs grow by invitation and acceptance, not open signup.
 The org domain owns its action constants (`ActionOrgRead`,
-`ActionGroupRead`, `ActionProjectRead`, …) and `Role.Actions` maps each
-role to the action patterns it grants; `ActionsFor` does the same for
+`ActionGroupRead`, `ActionProjectRead`, `ActionPolicyCreate`, …) —
+including the policy management actions, which the api server enforces
+without importing the engine that stores policies — and `Role.Actions`
+maps each role to the action patterns it grants; `ActionsFor` does the same for
 the role names a `Group` or `Project` carries as data. The authz
 evaluator decides. Groups and projects are addressed under their
 organization's HTTP paths, and their GRNs carry the owning org in the
@@ -69,8 +71,10 @@ evaluates.
 | `PolicyCache` | an org's active policies and attachments, dropped on write and on `NOTIFY` |
 | `PolicyGRPCServer` | the policy lifecycle over `proto/gaon/authz/v1` |
 
-The api server authorizes through the gRPC client; the engine matches
-strings only and never imports a domain. Lifecycle, caching, and
+The api server authorizes through the gRPC client and manages policies
+through the `PolicyManager` seam over the same connection
+([authz.md](./authz.md) §Managing policies over HTTP); the engine
+matches strings only and never imports a domain. Lifecycle, caching, and
 invalidation are described in [authz.md](./authz.md) §Policy
 persistence.
 

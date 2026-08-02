@@ -21,6 +21,7 @@ packages:
   github.com/garamsh/gaon/internal/api:
     interfaces:
       Evaluator: {}
+      PolicyManager: {}
   github.com/garamsh/gaon/internal/authz:
     interfaces:
       Store: {}

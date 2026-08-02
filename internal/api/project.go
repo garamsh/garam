@@ -29,12 +29,17 @@ func (s *Server) CreateProject(w http.ResponseWriter, r *http.Request, orgSlug a
 		writeError(w, errorx.New(errorx.KindInvalidArgument, "name is required"))
 		return
 	}
+	roles, err := scopedRoles(body.Roles)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	id, err := randomHex(8)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	p := org.NewProject(projectGRN(orgSlug, id), body.Name, orgGRN(orgSlug))
+	p := org.NewProject(projectGRN(orgSlug, id), body.Name, orgGRN(orgSlug), roles...)
 	if err := s.orgs.CreateProject(r.Context(), p); err != nil {
 		writeError(w, err)
 		return
@@ -111,7 +116,12 @@ func (s *Server) UpdateProject(w http.ResponseWriter, r *http.Request, orgSlug a
 		writeError(w, errorx.New(errorx.KindInvalidArgument, "name must not be empty"))
 		return
 	}
-	p, err := s.orgs.UpdateProject(r.Context(), projectGRN(orgSlug, projectSlug), org.ProjectPatch{Name: body.Name})
+	roles, err := scopedRoles(body.Roles)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	p, err := s.orgs.UpdateProject(r.Context(), projectGRN(orgSlug, projectSlug), org.ProjectPatch{Name: body.Name, Roles: roles})
 	if err != nil {
 		writeError(w, err)
 		return
@@ -228,5 +238,6 @@ func projectToAPI(p *org.Project) apigen.Project {
 		Grn:    p.GRN().String(),
 		Name:   p.Name(),
 		OrgGrn: p.Organization().String(),
+		Roles:  rolesToAPI(p.Roles()),
 	}
 }

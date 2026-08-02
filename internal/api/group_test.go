@@ -131,3 +131,57 @@ func TestGroups_RequireOrgMembership(t *testing.T) {
 	rec = f.do(t, "GET", "/orgs/"+slug+"/groups", "")
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }
+
+func TestGroupRoles_AssignedOverHTTP(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+
+	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
+	f.permit(
+		permission{ownerGRN, org.ActionGroupCreate},
+		permission{ownerGRN, org.ActionGroupUpdate},
+	)
+
+	rec := f.do(t, "POST", "/orgs/"+slug+"/groups", `{"name":"eng","roles":["admin"]}`, owner)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	created := decodeBody[apigen.Group](t, rec)
+	assert.Equal(t, apigen.ScopedRoles{apigen.Role(org.RoleAdmin)}, created.Roles)
+	g, err := grn.Parse(created.Grn)
+	require.NoError(t, err)
+	path := "/orgs/" + slug + "/groups/" + g.Identifier
+
+	// A patch without roles leaves them as they are.
+	rec = f.do(t, "PATCH", path, `{"name":"platform"}`, owner)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, apigen.ScopedRoles{apigen.Role(org.RoleAdmin)}, decodeBody[apigen.Group](t, rec).Roles)
+
+	rec = f.do(t, "PATCH", path, `{"roles":["member"]}`, owner)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, apigen.ScopedRoles{apigen.Role(org.RoleMember)}, decodeBody[apigen.Group](t, rec).Roles)
+
+	// An empty array clears them.
+	rec = f.do(t, "PATCH", path, `{"roles":[]}`, owner)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Empty(t, decodeBody[apigen.Group](t, rec).Roles)
+}
+
+func TestGroupRoles_RejectUnknownRole(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+
+	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
+	f.permit(
+		permission{ownerGRN, org.ActionGroupCreate},
+		permission{ownerGRN, org.ActionGroupUpdate},
+	)
+
+	rec := f.do(t, "POST", "/orgs/"+slug+"/groups", `{"name":"eng","roles":["root"]}`, owner)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "invalid_argument", decodeBody[apigen.Error](t, rec).Kind)
+
+	group := createGroup(t, f, owner, slug, "eng")
+	rec = f.do(t, "PATCH", "/orgs/"+slug+"/groups/"+group, `{"roles":["root"]}`, owner)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}

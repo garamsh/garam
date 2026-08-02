@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	apigen "github.com/garamsh/gaon/api"
 	"github.com/garamsh/gaon/internal/api"
 	"github.com/garamsh/gaon/internal/authz"
 	"github.com/garamsh/gaon/internal/grn"
@@ -124,5 +125,38 @@ func TestScopedPermissions_GroupWithoutRolesGrantsNothing(t *testing.T) {
 	rec := f.do(t, "GET", "/orgs/"+slug+"/groups/eng", "", alice)
 	assert.Equal(t, http.StatusOK, rec.Code)
 	rec = f.do(t, "PATCH", "/orgs/"+slug+"/groups/eng", `{"name":"renamed"}`, alice)
+	assert.Equal(t, http.StatusForbidden, rec.Code)
+}
+
+// TestScopedPermissions_RolesAssignedOverHTTP proves the scoped grant
+// is reachable through the API alone: a group created over HTTP with
+// roles grants them to its members.
+func TestScopedPermissions_RolesAssignedOverHTTP(t *testing.T) {
+	f := newFixture(t)
+	f.enforce()
+
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	alice := f.sessionCookieFor(t, "alice-sub", "Alice")
+	slug := createOrg(t, f, owner, "acme")
+	orgGRN := grn.New("root", "default", org.ServiceTypeOrg, slug)
+	aliceGRN := grn.New("root", "default", user.ServiceType, "alice-sub")
+	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRN, aliceGRN, org.RoleMember)))
+
+	rec := f.do(t, "POST", "/orgs/"+slug+"/groups", `{"name":"eng","roles":["admin"]}`, owner)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	g, err := grn.Parse(decodeBody[apigen.Group](t, rec).Grn)
+	require.NoError(t, err)
+	path := "/orgs/" + slug + "/groups/" + g.Identifier
+
+	rec = f.do(t, "POST", path+"/members", `{"memberGrn":"`+aliceGRN.String()+`"}`, owner)
+	require.Equal(t, http.StatusNoContent, rec.Code)
+
+	rec = f.do(t, "PATCH", path, `{"name":"platform"}`, alice)
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	// Clearing the roles takes the grant away again.
+	rec = f.do(t, "PATCH", path, `{"roles":[]}`, owner)
+	require.Equal(t, http.StatusOK, rec.Code)
+	rec = f.do(t, "PATCH", path, `{"name":"eng"}`, alice)
 	assert.Equal(t, http.StatusForbidden, rec.Code)
 }

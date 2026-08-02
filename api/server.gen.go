@@ -65,16 +65,25 @@ type Group struct {
 	Grn    string `json:"grn"`
 	Name   string `json:"name"`
 	OrgGrn string `json:"orgGrn"`
+
+	// Roles Roles a group or project grants its own members, scoped to that group or project alone. Omitting the field on a patch leaves the roles unchanged; an empty array clears them.
+	Roles ScopedRoles `json:"roles"`
 }
 
 // GroupCreate defines model for GroupCreate.
 type GroupCreate struct {
 	Name string `json:"name"`
+
+	// Roles Roles a group or project grants its own members, scoped to that group or project alone. Omitting the field on a patch leaves the roles unchanged; an empty array clears them.
+	Roles *ScopedRoles `json:"roles,omitempty"`
 }
 
 // GroupPatch defines model for GroupPatch.
 type GroupPatch struct {
 	Name *string `json:"name,omitempty"`
+
+	// Roles Roles a group or project grants its own members, scoped to that group or project alone. Omitting the field on a patch leaves the roles unchanged; an empty array clears them.
+	Roles *ScopedRoles `json:"roles,omitempty"`
 }
 
 // Invitation defines model for Invitation.
@@ -132,20 +141,32 @@ type Project struct {
 	Grn    string `json:"grn"`
 	Name   string `json:"name"`
 	OrgGrn string `json:"orgGrn"`
+
+	// Roles Roles a group or project grants its own members, scoped to that group or project alone. Omitting the field on a patch leaves the roles unchanged; an empty array clears them.
+	Roles ScopedRoles `json:"roles"`
 }
 
 // ProjectCreate defines model for ProjectCreate.
 type ProjectCreate struct {
 	Name string `json:"name"`
+
+	// Roles Roles a group or project grants its own members, scoped to that group or project alone. Omitting the field on a patch leaves the roles unchanged; an empty array clears them.
+	Roles *ScopedRoles `json:"roles,omitempty"`
 }
 
 // ProjectPatch defines model for ProjectPatch.
 type ProjectPatch struct {
 	Name *string `json:"name,omitempty"`
+
+	// Roles Roles a group or project grants its own members, scoped to that group or project alone. Omitting the field on a patch leaves the roles unchanged; an empty array clears them.
+	Roles *ScopedRoles `json:"roles,omitempty"`
 }
 
 // Role defines model for Role.
 type Role string
+
+// ScopedRoles Roles a group or project grants its own members, scoped to that group or project alone. Omitting the field on a patch leaves the roles unchanged; an empty array clears them.
+type ScopedRoles = []Role
 
 // User defines model for User.
 type User struct {

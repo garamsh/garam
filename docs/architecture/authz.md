@@ -61,7 +61,9 @@ the statements that apply to that resource:
 | target project's roles, when the subject is a member | `org.ActionsFor(project.Roles())` | the project GRN |
 
 Group and project roles reuse the org role vocabulary (`owner`,
-`admin`, `member`) and are narrowed by resource: a group `admin`
+`admin`, `member`), are assigned through the `roles` field of the
+group and project create and patch endpoints, and are narrowed by
+resource: a group `admin`
 administers that group and nothing else, while an org `admin`
 administers everything the org owns. Unknown role names grant nothing.
 Org membership stays the precondition for every check — a group grant

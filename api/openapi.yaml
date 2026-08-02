@@ -739,7 +739,7 @@ components:
           minLength: 1
     Group:
       type: object
-      required: [grn, name, orgGrn]
+      required: [grn, name, orgGrn, roles]
       properties:
         grn:
           type: string
@@ -748,6 +748,8 @@ components:
           type: string
         orgGrn:
           type: string
+        roles:
+          $ref: '#/components/schemas/ScopedRoles'
     GroupCreate:
       type: object
       required: [name]
@@ -755,15 +757,19 @@ components:
         name:
           type: string
           minLength: 1
+        roles:
+          $ref: '#/components/schemas/ScopedRoles'
     GroupPatch:
       type: object
       properties:
         name:
           type: string
           minLength: 1
+        roles:
+          $ref: '#/components/schemas/ScopedRoles'
     Project:
       type: object
-      required: [grn, name, orgGrn]
+      required: [grn, name, orgGrn, roles]
       properties:
         grn:
           type: string
@@ -772,6 +778,8 @@ components:
           type: string
         orgGrn:
           type: string
+        roles:
+          $ref: '#/components/schemas/ScopedRoles'
     ProjectCreate:
       type: object
       required: [name]
@@ -779,12 +787,16 @@ components:
         name:
           type: string
           minLength: 1
+        roles:
+          $ref: '#/components/schemas/ScopedRoles'
     ProjectPatch:
       type: object
       properties:
         name:
           type: string
           minLength: 1
+        roles:
+          $ref: '#/components/schemas/ScopedRoles'
     MemberRef:
       type: object
       required: [memberGrn]
@@ -796,6 +808,14 @@ components:
     Role:
       type: string
       enum: [owner, admin, member]
+    ScopedRoles:
+      type: array
+      description: >-
+        Roles a group or project grants its own members, scoped to that
+        group or project alone. Omitting the field on a patch leaves the
+        roles unchanged; an empty array clears them.
+      items:
+        $ref: '#/components/schemas/Role'
     Member:
       type: object
       required: [userGrn, role, since]

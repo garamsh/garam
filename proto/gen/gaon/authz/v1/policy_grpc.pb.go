@@ -20,13 +20,16 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	PolicyService_CreatePolicy_FullMethodName       = "/gaon.authz.v1.PolicyService/CreatePolicy"
-	PolicyService_AddPolicyVersion_FullMethodName   = "/gaon.authz.v1.PolicyService/AddPolicyVersion"
-	PolicyService_ListPolicies_FullMethodName       = "/gaon.authz.v1.PolicyService/ListPolicies"
-	PolicyService_ListPolicyVersions_FullMethodName = "/gaon.authz.v1.PolicyService/ListPolicyVersions"
-	PolicyService_ActivatePolicy_FullMethodName     = "/gaon.authz.v1.PolicyService/ActivatePolicy"
-	PolicyService_ArchivePolicy_FullMethodName      = "/gaon.authz.v1.PolicyService/ArchivePolicy"
-	PolicyService_RollbackPolicy_FullMethodName     = "/gaon.authz.v1.PolicyService/RollbackPolicy"
+	PolicyService_CreatePolicy_FullMethodName          = "/gaon.authz.v1.PolicyService/CreatePolicy"
+	PolicyService_AddPolicyVersion_FullMethodName      = "/gaon.authz.v1.PolicyService/AddPolicyVersion"
+	PolicyService_ListPolicies_FullMethodName          = "/gaon.authz.v1.PolicyService/ListPolicies"
+	PolicyService_ListPolicyVersions_FullMethodName    = "/gaon.authz.v1.PolicyService/ListPolicyVersions"
+	PolicyService_ActivatePolicy_FullMethodName        = "/gaon.authz.v1.PolicyService/ActivatePolicy"
+	PolicyService_ArchivePolicy_FullMethodName         = "/gaon.authz.v1.PolicyService/ArchivePolicy"
+	PolicyService_RollbackPolicy_FullMethodName        = "/gaon.authz.v1.PolicyService/RollbackPolicy"
+	PolicyService_AttachPolicy_FullMethodName          = "/gaon.authz.v1.PolicyService/AttachPolicy"
+	PolicyService_DetachPolicy_FullMethodName          = "/gaon.authz.v1.PolicyService/DetachPolicy"
+	PolicyService_ListPolicyAttachments_FullMethodName = "/gaon.authz.v1.PolicyService/ListPolicyAttachments"
 )
 
 // PolicyServiceClient is the client API for PolicyService service.
@@ -53,6 +56,15 @@ type PolicyServiceClient interface {
 	ArchivePolicy(ctx context.Context, in *ArchivePolicyRequest, opts ...grpc.CallOption) (*ArchivePolicyResponse, error)
 	// RollbackPolicy points the policy at an existing earlier version.
 	RollbackPolicy(ctx context.Context, in *RollbackPolicyRequest, opts ...grpc.CallOption) (*RollbackPolicyResponse, error)
+	// AttachPolicy binds the policy to a subject, so it applies to that
+	// subject instead of to the whole org (ADR-0008).
+	AttachPolicy(ctx context.Context, in *AttachPolicyRequest, opts ...grpc.CallOption) (*AttachPolicyResponse, error)
+	// DetachPolicy removes one attachment. A policy left with none
+	// applies org-wide again.
+	DetachPolicy(ctx context.Context, in *DetachPolicyRequest, opts ...grpc.CallOption) (*DetachPolicyResponse, error)
+	// ListPolicyAttachments lists a policy's attachments in ascending
+	// subject GRN order.
+	ListPolicyAttachments(ctx context.Context, in *ListPolicyAttachmentsRequest, opts ...grpc.CallOption) (*ListPolicyAttachmentsResponse, error)
 }
 
 type policyServiceClient struct {
@@ -133,6 +145,36 @@ func (c *policyServiceClient) RollbackPolicy(ctx context.Context, in *RollbackPo
 	return out, nil
 }
 
+func (c *policyServiceClient) AttachPolicy(ctx context.Context, in *AttachPolicyRequest, opts ...grpc.CallOption) (*AttachPolicyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AttachPolicyResponse)
+	err := c.cc.Invoke(ctx, PolicyService_AttachPolicy_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *policyServiceClient) DetachPolicy(ctx context.Context, in *DetachPolicyRequest, opts ...grpc.CallOption) (*DetachPolicyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DetachPolicyResponse)
+	err := c.cc.Invoke(ctx, PolicyService_DetachPolicy_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *policyServiceClient) ListPolicyAttachments(ctx context.Context, in *ListPolicyAttachmentsRequest, opts ...grpc.CallOption) (*ListPolicyAttachmentsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListPolicyAttachmentsResponse)
+	err := c.cc.Invoke(ctx, PolicyService_ListPolicyAttachments_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PolicyServiceServer is the server API for PolicyService service.
 // All implementations must embed UnimplementedPolicyServiceServer
 // for forward compatibility.
@@ -157,6 +199,15 @@ type PolicyServiceServer interface {
 	ArchivePolicy(context.Context, *ArchivePolicyRequest) (*ArchivePolicyResponse, error)
 	// RollbackPolicy points the policy at an existing earlier version.
 	RollbackPolicy(context.Context, *RollbackPolicyRequest) (*RollbackPolicyResponse, error)
+	// AttachPolicy binds the policy to a subject, so it applies to that
+	// subject instead of to the whole org (ADR-0008).
+	AttachPolicy(context.Context, *AttachPolicyRequest) (*AttachPolicyResponse, error)
+	// DetachPolicy removes one attachment. A policy left with none
+	// applies org-wide again.
+	DetachPolicy(context.Context, *DetachPolicyRequest) (*DetachPolicyResponse, error)
+	// ListPolicyAttachments lists a policy's attachments in ascending
+	// subject GRN order.
+	ListPolicyAttachments(context.Context, *ListPolicyAttachmentsRequest) (*ListPolicyAttachmentsResponse, error)
 	mustEmbedUnimplementedPolicyServiceServer()
 }
 
@@ -187,6 +238,15 @@ func (UnimplementedPolicyServiceServer) ArchivePolicy(context.Context, *ArchiveP
 }
 func (UnimplementedPolicyServiceServer) RollbackPolicy(context.Context, *RollbackPolicyRequest) (*RollbackPolicyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RollbackPolicy not implemented")
+}
+func (UnimplementedPolicyServiceServer) AttachPolicy(context.Context, *AttachPolicyRequest) (*AttachPolicyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AttachPolicy not implemented")
+}
+func (UnimplementedPolicyServiceServer) DetachPolicy(context.Context, *DetachPolicyRequest) (*DetachPolicyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DetachPolicy not implemented")
+}
+func (UnimplementedPolicyServiceServer) ListPolicyAttachments(context.Context, *ListPolicyAttachmentsRequest) (*ListPolicyAttachmentsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListPolicyAttachments not implemented")
 }
 func (UnimplementedPolicyServiceServer) mustEmbedUnimplementedPolicyServiceServer() {}
 func (UnimplementedPolicyServiceServer) testEmbeddedByValue()                       {}
@@ -335,6 +395,60 @@ func _PolicyService_RollbackPolicy_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PolicyService_AttachPolicy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AttachPolicyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PolicyServiceServer).AttachPolicy(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PolicyService_AttachPolicy_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PolicyServiceServer).AttachPolicy(ctx, req.(*AttachPolicyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PolicyService_DetachPolicy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DetachPolicyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PolicyServiceServer).DetachPolicy(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PolicyService_DetachPolicy_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PolicyServiceServer).DetachPolicy(ctx, req.(*DetachPolicyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PolicyService_ListPolicyAttachments_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListPolicyAttachmentsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PolicyServiceServer).ListPolicyAttachments(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PolicyService_ListPolicyAttachments_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PolicyServiceServer).ListPolicyAttachments(ctx, req.(*ListPolicyAttachmentsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PolicyService_ServiceDesc is the grpc.ServiceDesc for PolicyService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -369,6 +483,18 @@ var PolicyService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RollbackPolicy",
 			Handler:    _PolicyService_RollbackPolicy_Handler,
+		},
+		{
+			MethodName: "AttachPolicy",
+			Handler:    _PolicyService_AttachPolicy_Handler,
+		},
+		{
+			MethodName: "DetachPolicy",
+			Handler:    _PolicyService_DetachPolicy_Handler,
+		},
+		{
+			MethodName: "ListPolicyAttachments",
+			Handler:    _PolicyService_ListPolicyAttachments_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

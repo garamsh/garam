@@ -30,6 +30,18 @@ service PolicyService {
 
   // RollbackPolicy points the policy at an existing earlier version.
   rpc RollbackPolicy(RollbackPolicyRequest) returns (RollbackPolicyResponse);
+
+  // AttachPolicy binds the policy to a subject, so it applies to that
+  // subject instead of to the whole org (ADR-0008).
+  rpc AttachPolicy(AttachPolicyRequest) returns (AttachPolicyResponse);
+
+  // DetachPolicy removes one attachment. A policy left with none
+  // applies org-wide again.
+  rpc DetachPolicy(DetachPolicyRequest) returns (DetachPolicyResponse);
+
+  // ListPolicyAttachments lists a policy's attachments in ascending
+  // subject GRN order.
+  rpc ListPolicyAttachments(ListPolicyAttachmentsRequest) returns (ListPolicyAttachmentsResponse);
 }
 
 // PolicyStatus is a policy's lifecycle state. Only ACTIVE policies
@@ -125,4 +137,37 @@ message RollbackPolicyRequest {
 
 message RollbackPolicyResponse {
   Policy policy = 1;
+}
+
+// PolicyAttachment binds a policy to the subject it applies to
+// (ADR-0008). The subject is a user or a group of the policy's org;
+// the engine matches its GRN as a string.
+message PolicyAttachment {
+  string policy_grn = 1;
+  string subject_grn = 2;
+  google.protobuf.Timestamp created_at = 3;
+}
+
+message AttachPolicyRequest {
+  string policy_grn = 1;
+  string subject_grn = 2;
+}
+
+message AttachPolicyResponse {
+  PolicyAttachment attachment = 1;
+}
+
+message DetachPolicyRequest {
+  string policy_grn = 1;
+  string subject_grn = 2;
+}
+
+message DetachPolicyResponse {}
+
+message ListPolicyAttachmentsRequest {
+  string policy_grn = 1;
+}
+
+message ListPolicyAttachmentsResponse {
+  repeated PolicyAttachment attachments = 1;
 }

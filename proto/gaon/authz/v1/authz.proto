@@ -42,6 +42,10 @@ message CheckRequest {
   // engine unions them with the policies persisted for the object's
   // org; either side alone may decide.
   repeated Statement statements = 4;
+  // subject_groups are the GRNs of the groups the subject belongs to
+  // (ADR-0008). Group membership is org data the caller resolves; the
+  // engine uses it only to find the policies attached to the subject.
+  repeated string subject_groups = 5;
 }
 
 message CheckResponse {
@@ -56,6 +60,7 @@ message ExplainRequest {
   string object_grn = 2;
   string action = 3;
   repeated Statement statements = 4;
+  repeated string subject_groups = 5;
 }
 
 message ExplainResponse {

@@ -42,7 +42,7 @@ type PolicyServiceClient interface {
 	// AddPolicyVersion appends a version. The default version is
 	// unchanged until a rollback moves the pointer.
 	AddPolicyVersion(ctx context.Context, in *AddPolicyVersionRequest, opts ...grpc.CallOption) (*AddPolicyVersionResponse, error)
-	// ListPolicies lists an org's policies, newest GRN order.
+	// ListPolicies lists an org's policies in ascending GRN order.
 	ListPolicies(ctx context.Context, in *ListPoliciesRequest, opts ...grpc.CallOption) (*ListPoliciesResponse, error)
 	// ListPolicyVersions lists a policy's versions, oldest first.
 	ListPolicyVersions(ctx context.Context, in *ListPolicyVersionsRequest, opts ...grpc.CallOption) (*ListPolicyVersionsResponse, error)
@@ -146,7 +146,7 @@ type PolicyServiceServer interface {
 	// AddPolicyVersion appends a version. The default version is
 	// unchanged until a rollback moves the pointer.
 	AddPolicyVersion(context.Context, *AddPolicyVersionRequest) (*AddPolicyVersionResponse, error)
-	// ListPolicies lists an org's policies, newest GRN order.
+	// ListPolicies lists an org's policies in ascending GRN order.
 	ListPolicies(context.Context, *ListPoliciesRequest) (*ListPoliciesResponse, error)
 	// ListPolicyVersions lists a policy's versions, oldest first.
 	ListPolicyVersions(context.Context, *ListPolicyVersionsRequest) (*ListPolicyVersionsResponse, error)

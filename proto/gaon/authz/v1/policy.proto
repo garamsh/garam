@@ -15,7 +15,7 @@ service PolicyService {
   // unchanged until a rollback moves the pointer.
   rpc AddPolicyVersion(AddPolicyVersionRequest) returns (AddPolicyVersionResponse);
 
-  // ListPolicies lists an org's policies, newest GRN order.
+  // ListPolicies lists an org's policies in ascending GRN order.
   rpc ListPolicies(ListPoliciesRequest) returns (ListPoliciesResponse);
 
   // ListPolicyVersions lists a policy's versions, oldest first.

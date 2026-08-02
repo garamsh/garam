@@ -86,5 +86,5 @@ fact.
 - `Condition` is parsed but not evaluated in the MVP.
 - The earlier Rego/OPA direction is superseded (ADR-0002); preserved
   WIP is reference only.
-- Domain types do not satisfy `authz.Subject` / `authz.Object` yet —
-  adapters are planned.
+- Domain types do not satisfy `authz.Object`; the engine adapts a
+  parsed GRN at the transport boundary.

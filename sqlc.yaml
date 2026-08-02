@@ -24,3 +24,13 @@ sql:
         package: db
         out: internal/authn/db
         sql_package: pgx/v5
+  - engine: postgresql
+    schema:
+      - migrations/000001_init.up.sql
+      - migrations/000002_policies.up.sql
+    queries: internal/authz/queries.sql
+    gen:
+      go:
+        package: db
+        out: internal/authz/db
+        sql_package: pgx/v5

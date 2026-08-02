@@ -143,13 +143,16 @@ func (x *Statement) GetResource() []string {
 }
 
 // CheckRequest is one authorization question: may the subject perform
-// the action on the object, given the statements collected for it.
+// the action on the object.
 type CheckRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SubjectGrn    string                 `protobuf:"bytes,1,opt,name=subject_grn,json=subjectGrn,proto3" json:"subject_grn,omitempty"`
-	ObjectGrn     string                 `protobuf:"bytes,2,opt,name=object_grn,json=objectGrn,proto3" json:"object_grn,omitempty"`
-	Action        string                 `protobuf:"bytes,3,opt,name=action,proto3" json:"action,omitempty"`
-	Statements    []*Statement           `protobuf:"bytes,4,rep,name=statements,proto3" json:"statements,omitempty"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	SubjectGrn string                 `protobuf:"bytes,1,opt,name=subject_grn,json=subjectGrn,proto3" json:"subject_grn,omitempty"`
+	ObjectGrn  string                 `protobuf:"bytes,2,opt,name=object_grn,json=objectGrn,proto3" json:"object_grn,omitempty"`
+	Action     string                 `protobuf:"bytes,3,opt,name=action,proto3" json:"action,omitempty"`
+	// statements carry the caller's role-derived grants (ADR-0007). The
+	// engine unions them with the policies persisted for the object's
+	// org; either side alone may decide.
+	Statements    []*Statement `protobuf:"bytes,4,rep,name=statements,proto3" json:"statements,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }

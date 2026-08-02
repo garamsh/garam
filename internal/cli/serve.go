@@ -99,13 +99,36 @@ func newServeAuthzCommand() *cobra.Command {
 }
 
 func serveAuthz(cmd *cobra.Command) error {
+	ctx := cmd.Context()
+
+	databaseURL := envOr("GAON_DATABASE_URL", "")
+	if databaseURL == "" {
+		return errorx.New(errorx.KindInvalidArgument, "GAON_DATABASE_URL is required")
+	}
+	pool, err := pgxpool.New(ctx, databaseURL)
+	if err != nil {
+		return errorx.Wrap(err, "postgres", errorx.KindUnavailable)
+	}
+	defer pool.Close()
+
+	store := authz.NewPostgresStore(pool)
+	cache := authz.NewPolicyCache(store)
+	// Writes made here invalidate the cache directly; the listener
+	// covers writes made by any other process.
+	go func() {
+		if err := authz.ListenPolicyChanges(ctx, pool, cache); err != nil {
+			cmd.PrintErrf("authz: policy change listener stopped: %v\n", err)
+		}
+	}()
+
 	addr := envOr("GAON_GRPC_ADDR", ":9090")
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		return errorx.Wrap(err, "authz listen", errorx.KindUnavailable)
 	}
 	srv := grpc.NewServer()
-	authzv1.RegisterAuthzServiceServer(srv, authz.NewGRPCServer())
+	authzv1.RegisterAuthzServiceServer(srv, authz.NewGRPCServer(cache))
+	authzv1.RegisterPolicyServiceServer(srv, authz.NewPolicyGRPCServer(store, cache))
 	cmd.Printf("serving authz on %s\n", addr)
 	if err := srv.Serve(lis); err != nil {
 		return errorx.Wrap(err, "authz serve", errorx.KindInternal)

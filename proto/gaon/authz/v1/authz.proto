@@ -3,11 +3,12 @@ syntax = "proto3";
 package gaon.authz.v1;
 
 // AuthzService is the policy engine's wire contract (ADR-0003). The
-// caller collects the statements that apply to the subject; the engine
-// matches strings only and never imports a domain.
+// engine evaluates the union of the caller's role-derived statements
+// and the org's persisted policies (ADR-0007); it matches strings only
+// and never imports a domain.
 service AuthzService {
   // Check answers whether the subject may perform the action on the
-  // object under the given statements.
+  // object.
   rpc Check(CheckRequest) returns (CheckResponse);
 
   // Explain answers the same question and reports which statements
@@ -32,11 +33,14 @@ message Statement {
 }
 
 // CheckRequest is one authorization question: may the subject perform
-// the action on the object, given the statements collected for it.
+// the action on the object.
 message CheckRequest {
   string subject_grn = 1;
   string object_grn = 2;
   string action = 3;
+  // statements carry the caller's role-derived grants (ADR-0007). The
+  // engine unions them with the policies persisted for the object's
+  // org; either side alone may decide.
   repeated Statement statements = 4;
 }
 

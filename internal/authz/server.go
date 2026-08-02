@@ -12,28 +12,35 @@ import (
 )
 
 // GRPCServer serves the policy engine over gRPC (ADR-0003 stage 2).
-// The caller supplies the statements collected for the subject; the
-// server matches strings only and never imports a domain.
+// It evaluates the union of the caller's role-derived statements and
+// the object org's persisted policies (ADR-0007); it matches strings
+// only and never imports a domain.
 type GRPCServer struct {
 	authzv1.UnimplementedAuthzServiceServer
+	policies PolicySource
 }
 
 // Compile-time check that GRPCServer satisfies the generated service.
 var _ authzv1.AuthzServiceServer = (*GRPCServer)(nil)
 
-// NewGRPCServer constructs the authz gRPC service.
-func NewGRPCServer() *GRPCServer {
-	return &GRPCServer{}
+// NewGRPCServer constructs the authz gRPC service over the org
+// statement cache.
+func NewGRPCServer(policies PolicySource) *GRPCServer {
+	return &GRPCServer{policies: policies}
 }
 
-// Check evaluates the request's statements and returns the final
+// Check evaluates the applicable statements and returns the final
 // decision: explicit Deny wins, otherwise any matching Allow permits.
 func (s *GRPCServer) Check(ctx context.Context, req *authzv1.CheckRequest) (*authzv1.CheckResponse, error) {
 	in, err := parseInput(req.GetSubjectGrn(), req.GetObjectGrn(), req.GetAction(), req.GetStatements())
 	if err != nil {
 		return nil, grpcError(err)
 	}
-	d := NewStatementEvaluator(in.statements).Evaluate(ctx, Context{
+	statements, err := s.applicable(ctx, in)
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	d := NewStatementEvaluator(statements).Evaluate(ctx, Context{
 		Object: grnObject{in.object},
 		Action: in.action,
 	})
@@ -42,14 +49,18 @@ func (s *GRPCServer) Check(ctx context.Context, req *authzv1.CheckRequest) (*aut
 
 // Explain evaluates the same input and reports every statement's
 // contribution, so a denied request is reproducible after the fact.
-func (s *GRPCServer) Explain(_ context.Context, req *authzv1.ExplainRequest) (*authzv1.ExplainResponse, error) {
+func (s *GRPCServer) Explain(ctx context.Context, req *authzv1.ExplainRequest) (*authzv1.ExplainResponse, error) {
 	in, err := parseInput(req.GetSubjectGrn(), req.GetObjectGrn(), req.GetAction(), req.GetStatements())
 	if err != nil {
 		return nil, grpcError(err)
 	}
-	traces := make([]*authzv1.StatementTrace, 0, len(in.statements))
+	statements, err := s.applicable(ctx, in)
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	traces := make([]*authzv1.StatementTrace, 0, len(statements))
 	denied, allowed := false, false
-	for _, st := range in.statements {
+	for _, st := range statements {
 		matched := st.Matches(in.action, in.object.String())
 		traces = append(traces, &authzv1.StatementTrace{
 			Sid:     st.Sid,
@@ -66,6 +77,33 @@ func (s *GRPCServer) Explain(_ context.Context, req *authzv1.ExplainRequest) (*a
 		}
 	}
 	return &authzv1.ExplainResponse{Allowed: allowed && !denied, Traces: traces}, nil
+}
+
+// serviceTypeOrg is the GRN service type of an organization. The
+// engine needs it to scope a request to the org whose policies apply;
+// it carries no other domain knowledge (ADR-0007).
+const serviceTypeOrg = "org"
+
+// applicable unions the object org's persisted policy statements with
+// the role-derived statements the caller supplied (ADR-0007).
+func (s *GRPCServer) applicable(ctx context.Context, in checkInput) ([]Statement, error) {
+	stored, err := s.policies.OrgStatements(ctx, orgGRNOf(in.object))
+	if err != nil {
+		return nil, err
+	}
+	statements := make([]Statement, 0, len(stored)+len(in.statements))
+	statements = append(statements, stored...)
+	return append(statements, in.statements...), nil
+}
+
+// orgGRNOf returns the GRN of the org that owns the object. Orgs are
+// root-owned, so an org's identifier is the organization segment of
+// every resource beneath it (ADR-0001).
+func orgGRNOf(object grn.GRN) grn.GRN {
+	if object.ServiceType == serviceTypeOrg {
+		return object
+	}
+	return grn.New(grn.RootOwner, grn.DefaultProject, serviceTypeOrg, object.Organization)
 }
 
 // checkInput is a parsed Check/Explain request.

@@ -22,6 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/gaon/internal/authn"
+	"github.com/garamsh/gaon/internal/authz"
 	"github.com/garamsh/gaon/internal/errorx"
 	"github.com/garamsh/gaon/internal/grn"
 	"github.com/garamsh/gaon/internal/org"
@@ -81,7 +82,8 @@ func pool(t *testing.T) *pgxpool.Pool {
 func truncate(t *testing.T, p *pgxpool.Pool) {
 	t.Helper()
 	_, err := p.Exec(context.Background(), `TRUNCATE users, orgs, groups, projects,
-		group_members, project_members, org_members, invitations, sessions CASCADE`)
+		group_members, project_members, org_members, invitations, sessions,
+		policies, policy_versions CASCADE`)
 	require.NoError(t, err)
 }
 
@@ -281,3 +283,166 @@ func TestSessionStore_RoundTrip(t *testing.T) {
 }
 
 func ptr[T any](v T) *T { return &v }
+
+// policyDoc builds a one-statement document whose Sid identifies the
+// version it belongs to.
+func policyDoc(sid string, effect authz.Effect) authz.PolicyDocument {
+	return authz.PolicyDocument{
+		Version: "2026-07-25",
+		Statement: []authz.Statement{{
+			Sid:      sid,
+			Effect:   effect,
+			Action:   []string{"org:read"},
+			Resource: []string{"grn:acme:*"},
+		}},
+	}
+}
+
+// newPolicyOrg creates the org a policy hangs off and returns its GRN.
+func newPolicyOrg(t *testing.T, p *pgxpool.Pool) grn.GRN {
+	t.Helper()
+	orgGRN := grnOf("org", "acme")
+	require.NoError(t, org.NewPostgresStore(p).CreateOrg(context.Background(), org.NewOrganization(orgGRN, "acme")))
+	return orgGRN
+}
+
+func TestPolicyStore_LifecycleRoundTrip(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := authz.NewPostgresStore(p)
+	orgGRN := newPolicyOrg(t, p)
+	author := grnOf("user", "ada")
+
+	g, err := authz.NewPolicyGRN(orgGRN)
+	require.NoError(t, err)
+	created, err := s.CreatePolicy(ctx, authz.NewPolicy(g, orgGRN, "read-only"), policyDoc("v1", authz.EffectAllow), author)
+	require.NoError(t, err)
+	assert.Equal(t, authz.PolicyStatusDraft, created.Status())
+	assert.Equal(t, 1, created.DefaultVersion())
+
+	policies, err := s.ListPolicies(ctx, orgGRN)
+	require.NoError(t, err)
+	require.Len(t, policies, 1)
+	assert.Equal(t, "read-only", policies[0].Name())
+
+	// A draft contributes nothing until it is activated.
+	docs, err := s.ActiveDocuments(ctx, orgGRN)
+	require.NoError(t, err)
+	assert.Empty(t, docs)
+
+	activated, err := s.SetPolicyStatus(ctx, g, authz.PolicyStatusActive)
+	require.NoError(t, err)
+	assert.Equal(t, authz.PolicyStatusActive, activated.Status())
+	docs, err = s.ActiveDocuments(ctx, orgGRN)
+	require.NoError(t, err)
+	require.Len(t, docs, 1)
+	assert.Equal(t, "v1", docs[0].Statement[0].Sid)
+
+	// Appending a version leaves the default pointer alone.
+	v2, err := s.AddPolicyVersion(ctx, g, policyDoc("v2", authz.EffectDeny), author)
+	require.NoError(t, err)
+	assert.Equal(t, 2, v2.Version())
+	docs, err = s.ActiveDocuments(ctx, orgGRN)
+	require.NoError(t, err)
+	assert.Equal(t, "v1", docs[0].Statement[0].Sid)
+
+	rolled, err := s.SetPolicyDefaultVersion(ctx, g, 2)
+	require.NoError(t, err)
+	assert.Equal(t, 2, rolled.DefaultVersion())
+	docs, err = s.ActiveDocuments(ctx, orgGRN)
+	require.NoError(t, err)
+	assert.Equal(t, "v2", docs[0].Statement[0].Sid)
+	assert.Equal(t, authz.EffectDeny, docs[0].Statement[0].Effect)
+
+	versions, err := s.ListPolicyVersions(ctx, g)
+	require.NoError(t, err)
+	require.Len(t, versions, 2)
+	assert.Equal(t, author, versions[0].CreatedBy())
+
+	_, err = s.SetPolicyDefaultVersion(ctx, g, 99)
+	assert.True(t, errorx.IsKind(err, errorx.KindNotFound))
+	_, err = s.GetPolicy(ctx, grn.New("acme", "default", authz.ServiceTypePolicy, "missing"))
+	assert.True(t, errorx.IsKind(err, errorx.KindNotFound))
+	_, err = s.AddPolicyVersion(ctx, grn.New("acme", "default", authz.ServiceTypePolicy, "missing"), policyDoc("x", authz.EffectAllow), author)
+	assert.True(t, errorx.IsKind(err, errorx.KindNotFound))
+}
+
+func TestPolicyVersions_AppendOnly(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := authz.NewPostgresStore(p)
+	orgGRN := newPolicyOrg(t, p)
+
+	g, err := authz.NewPolicyGRN(orgGRN)
+	require.NoError(t, err)
+	_, err = s.CreatePolicy(ctx, authz.NewPolicy(g, orgGRN, "read-only"), policyDoc("v1", authz.EffectAllow), grnOf("user", "ada"))
+	require.NoError(t, err)
+
+	_, err = p.Exec(ctx, `UPDATE policy_versions SET document = '{}'::jsonb WHERE policy_grn = $1`, g.String())
+	assert.Error(t, err, "a stored version must not be rewritten")
+	_, err = p.Exec(ctx, `DELETE FROM policy_versions WHERE policy_grn = $1`, g.String())
+	assert.Error(t, err, "a stored version must not be deleted on its own")
+
+	// Versions do disappear with the policy that owns them.
+	require.NoError(t, org.NewPostgresStore(p).DeleteOrg(ctx, orgGRN))
+	var count int
+	require.NoError(t, p.QueryRow(ctx, `SELECT count(*) FROM policy_versions`).Scan(&count))
+	assert.Zero(t, count)
+}
+
+func TestPolicyCache_InvalidatedByNotify(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	p := pool(t)
+	s := authz.NewPostgresStore(p)
+	orgGRN := newPolicyOrg(t, p)
+
+	cache := authz.NewPolicyCache(s)
+	go func() { _ = authz.ListenPolicyChanges(ctx, p, cache) }()
+
+	before, err := cache.OrgStatements(ctx, orgGRN)
+	require.NoError(t, err)
+	require.Empty(t, before)
+
+	g, err := authz.NewPolicyGRN(orgGRN)
+	require.NoError(t, err)
+	_, err = s.CreatePolicy(ctx, authz.NewPolicy(g, orgGRN, "read-only"), policyDoc("v1", authz.EffectAllow), grnOf("user", "ada"))
+	require.NoError(t, err)
+	_, err = s.SetPolicyStatus(ctx, g, authz.PolicyStatusActive)
+	require.NoError(t, err)
+
+	// The listener registers its LISTEN concurrently with the writes
+	// above, so the announcement is repeated until it has one to
+	// receive. TestPolicyWrite_Notifies covers the write's own
+	// announcement.
+	assert.Eventually(t, func() bool {
+		_, err := p.Exec(ctx, `SELECT pg_notify($1, $2)`, authz.PolicyChannel, orgGRN.String())
+		require.NoError(t, err)
+		got, err := cache.OrgStatements(ctx, orgGRN)
+		return err == nil && len(got) == 1
+	}, 5*time.Second, 20*time.Millisecond, "the notify listener should drop the org's cached statements")
+}
+
+func TestPolicyWrite_Notifies(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	p := pool(t)
+	s := authz.NewPostgresStore(p)
+	orgGRN := newPolicyOrg(t, p)
+
+	conn, err := p.Acquire(ctx)
+	require.NoError(t, err)
+	defer conn.Release()
+	_, err = conn.Exec(ctx, "LISTEN "+authz.PolicyChannel)
+	require.NoError(t, err)
+
+	g, err := authz.NewPolicyGRN(orgGRN)
+	require.NoError(t, err)
+	_, err = s.CreatePolicy(ctx, authz.NewPolicy(g, orgGRN, "read-only"), policyDoc("v1", authz.EffectAllow), grnOf("user", "ada"))
+	require.NoError(t, err)
+
+	n, err := conn.Conn().WaitForNotification(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, authz.PolicyChannel, n.Channel)
+	assert.Equal(t, orgGRN.String(), n.Payload)
+}

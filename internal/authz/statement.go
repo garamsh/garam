@@ -20,7 +20,8 @@ type Statement struct {
 }
 
 // PolicyDocument is a versioned statement list (ADR-0002). Condition
-// is reserved and not evaluated in the MVP.
+// is reserved and not evaluated in the MVP. The field names are the
+// document's JSON keys; [ParsePolicyDocument] is the parse boundary.
 type PolicyDocument struct {
 	Version   string
 	Statement []Statement

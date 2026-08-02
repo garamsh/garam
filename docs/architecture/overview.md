@@ -17,6 +17,9 @@ collaborate on a shared plan.
 - An OpenAPI-first HTTP API; server code is generated from the spec.
 - Postgres-backed stores (sqlc) with migrations.
 - Authorization decisions, expressed as IAM-style policy documents.
+- Org-managed policy documents: stored, versioned append-only,
+  activated and rolled back over the authz service, and cached per org
+  in the engine.
 - One identifier system across every resource (GRN).
 
 ## Out of scope (today)
@@ -25,8 +28,9 @@ collaborate on a shared plan.
 - Notifications or messaging.
 - The agent domain (still being planned; code untouched, no API or
   persistence).
-- authz policy persistence and versioning (roadmap P2); the gRPC
-  engine evaluates caller-supplied statements (ADR-0003).
+- Attaching a policy to an individual subject or resource; an active
+  policy grants org-wide (ADR-0002, ADR-0007).
+- Policy management over the HTTP API; the lifecycle is gRPC-only.
 - OAuth providers beyond Google.
 
 ## Module boundaries
@@ -41,7 +45,8 @@ collaborate on a shared plan.
 - `internal/cli/` — cobra commands + wiring (`serve api` | `serve authz` | `migrate`).
 - `internal/api/` — handlers implementing the generated ServerInterface.
 - `internal/authn/` — OIDC provider abstraction, sessions.
-- `internal/authz/` — policy engine: model, evaluator, gRPC server.
+- `internal/authz/` — policy engine: model, evaluator, policy store
+  and per-org cache, gRPC servers.
 - `internal/org/` — organizations, groups, projects, memberships, invitations.
 - `internal/user/` — human identities.
 - `internal/agent/` — autonomous identities (planning).
@@ -71,6 +76,8 @@ contract is `proto/gaon/authz/v1`.
 | `authn.Session` | `internal/authn` | authenticated browser session |
 | `authz.Object` | `internal/authz` | target interface |
 | `authz.Evaluator` | `internal/authz` | policy evaluator (native, IAM-style) |
+| `authz.Policy` | `internal/authz` | stored policy, versioned append-only |
+| `authz.PolicyCache` | `internal/authz` | per-org parsed statement set |
 
 ## Decisions
 
@@ -79,6 +86,7 @@ contract is `proto/gaon/authz/v1`.
 | GRN org/project = owning resource identifiers | Tenancy is structural; reserved `root` owns organizations. | [grn-model.md](./grn-model.md), [ADR-0001](./adr/0001-grn-segments.md) |
 | Policies are IAM-style documents, native evaluator | Deterministic deny-overrides; no runtime dependency. | [authz.md](./authz.md), [ADR-0002](./adr/0002-iam-style-policy-model.md) |
 | Single cobra CLI, independent api/authz packages | One binary, two processes; engine reached over gRPC only. | [ADR-0003](./adr/0003-single-cli-topology.md) |
+| Statements come from two origins, unioned | Org tables stay the source of truth for roles; the engine stays domain-free. | [authz.md](./authz.md), [ADR-0007](./adr/0007-hybrid-statement-collection.md) |
 | `Evaluator` is an interface | Swap in-process / gRPC-client without touching call sites. | [authz.md](./authz.md) |
 | Store interfaces live next to their domain | Implementation swap at the package boundary. | [domains.md](./domains.md) |
 | OpenAPI spec is the API source of truth | Handlers implement a generated interface; drift fails CI. | [adr/0004-openapi-first-api.md](./adr/0004-openapi-first-api.md) |

@@ -20,7 +20,7 @@ What makes a PR review valid, and how authors respond. Applies to every review a
 Decision: approve / request changes / reject
 ```
 
-- A check you did not verify is marked `unverified` — never guessed.
+- A check you did not verify is marked `unverified` — never guessed. Skipping a check is allowed; hiding the skip is not. A review full of `unverified` rows tells the reader the review did not really happen.
 
 ## Citing violations
 

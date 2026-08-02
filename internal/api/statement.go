@@ -4,10 +4,10 @@ import (
 	"net/http"
 	"slices"
 
-	"github.com/garamsh/gaon/internal/errorx"
-	"github.com/garamsh/gaon/internal/grn"
-	"github.com/garamsh/gaon/internal/org"
-	"github.com/garamsh/gaon/internal/user"
+	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/org"
+	"github.com/garamsh/garam/internal/user"
 )
 
 // scopedStatements collects the statements that apply to the subject

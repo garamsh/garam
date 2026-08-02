@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        (unknown)
-// source: gaon/authz/v1/authz.proto
+// source: garam/authz/v1/authz.proto
 
 package authzv1
 
@@ -56,11 +56,11 @@ func (x Effect) String() string {
 }
 
 func (Effect) Descriptor() protoreflect.EnumDescriptor {
-	return file_gaon_authz_v1_authz_proto_enumTypes[0].Descriptor()
+	return file_garam_authz_v1_authz_proto_enumTypes[0].Descriptor()
 }
 
 func (Effect) Type() protoreflect.EnumType {
-	return &file_gaon_authz_v1_authz_proto_enumTypes[0]
+	return &file_garam_authz_v1_authz_proto_enumTypes[0]
 }
 
 func (x Effect) Number() protoreflect.EnumNumber {
@@ -69,7 +69,7 @@ func (x Effect) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use Effect.Descriptor instead.
 func (Effect) EnumDescriptor() ([]byte, []int) {
-	return file_gaon_authz_v1_authz_proto_rawDescGZIP(), []int{0}
+	return file_garam_authz_v1_authz_proto_rawDescGZIP(), []int{0}
 }
 
 // Statement is one IAM-style rule. Action and Resource entries are
@@ -77,7 +77,7 @@ func (Effect) EnumDescriptor() ([]byte, []int) {
 type Statement struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Sid           string                 `protobuf:"bytes,1,opt,name=sid,proto3" json:"sid,omitempty"`
-	Effect        Effect                 `protobuf:"varint,2,opt,name=effect,proto3,enum=gaon.authz.v1.Effect" json:"effect,omitempty"`
+	Effect        Effect                 `protobuf:"varint,2,opt,name=effect,proto3,enum=garam.authz.v1.Effect" json:"effect,omitempty"`
 	Action        []string               `protobuf:"bytes,3,rep,name=action,proto3" json:"action,omitempty"`
 	Resource      []string               `protobuf:"bytes,4,rep,name=resource,proto3" json:"resource,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -86,7 +86,7 @@ type Statement struct {
 
 func (x *Statement) Reset() {
 	*x = Statement{}
-	mi := &file_gaon_authz_v1_authz_proto_msgTypes[0]
+	mi := &file_garam_authz_v1_authz_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -98,7 +98,7 @@ func (x *Statement) String() string {
 func (*Statement) ProtoMessage() {}
 
 func (x *Statement) ProtoReflect() protoreflect.Message {
-	mi := &file_gaon_authz_v1_authz_proto_msgTypes[0]
+	mi := &file_garam_authz_v1_authz_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -111,7 +111,7 @@ func (x *Statement) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Statement.ProtoReflect.Descriptor instead.
 func (*Statement) Descriptor() ([]byte, []int) {
-	return file_gaon_authz_v1_authz_proto_rawDescGZIP(), []int{0}
+	return file_garam_authz_v1_authz_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *Statement) GetSid() string {
@@ -163,7 +163,7 @@ type CheckRequest struct {
 
 func (x *CheckRequest) Reset() {
 	*x = CheckRequest{}
-	mi := &file_gaon_authz_v1_authz_proto_msgTypes[1]
+	mi := &file_garam_authz_v1_authz_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -175,7 +175,7 @@ func (x *CheckRequest) String() string {
 func (*CheckRequest) ProtoMessage() {}
 
 func (x *CheckRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gaon_authz_v1_authz_proto_msgTypes[1]
+	mi := &file_garam_authz_v1_authz_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -188,7 +188,7 @@ func (x *CheckRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckRequest.ProtoReflect.Descriptor instead.
 func (*CheckRequest) Descriptor() ([]byte, []int) {
-	return file_gaon_authz_v1_authz_proto_rawDescGZIP(), []int{1}
+	return file_garam_authz_v1_authz_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *CheckRequest) GetSubjectGrn() string {
@@ -237,7 +237,7 @@ type CheckResponse struct {
 
 func (x *CheckResponse) Reset() {
 	*x = CheckResponse{}
-	mi := &file_gaon_authz_v1_authz_proto_msgTypes[2]
+	mi := &file_garam_authz_v1_authz_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -249,7 +249,7 @@ func (x *CheckResponse) String() string {
 func (*CheckResponse) ProtoMessage() {}
 
 func (x *CheckResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gaon_authz_v1_authz_proto_msgTypes[2]
+	mi := &file_garam_authz_v1_authz_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -262,7 +262,7 @@ func (x *CheckResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CheckResponse.ProtoReflect.Descriptor instead.
 func (*CheckResponse) Descriptor() ([]byte, []int) {
-	return file_gaon_authz_v1_authz_proto_rawDescGZIP(), []int{2}
+	return file_garam_authz_v1_authz_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *CheckResponse) GetAllowed() bool {
@@ -286,7 +286,7 @@ type ExplainRequest struct {
 
 func (x *ExplainRequest) Reset() {
 	*x = ExplainRequest{}
-	mi := &file_gaon_authz_v1_authz_proto_msgTypes[3]
+	mi := &file_garam_authz_v1_authz_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -298,7 +298,7 @@ func (x *ExplainRequest) String() string {
 func (*ExplainRequest) ProtoMessage() {}
 
 func (x *ExplainRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gaon_authz_v1_authz_proto_msgTypes[3]
+	mi := &file_garam_authz_v1_authz_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -311,7 +311,7 @@ func (x *ExplainRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExplainRequest.ProtoReflect.Descriptor instead.
 func (*ExplainRequest) Descriptor() ([]byte, []int) {
-	return file_gaon_authz_v1_authz_proto_rawDescGZIP(), []int{3}
+	return file_garam_authz_v1_authz_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *ExplainRequest) GetSubjectGrn() string {
@@ -359,7 +359,7 @@ type ExplainResponse struct {
 
 func (x *ExplainResponse) Reset() {
 	*x = ExplainResponse{}
-	mi := &file_gaon_authz_v1_authz_proto_msgTypes[4]
+	mi := &file_garam_authz_v1_authz_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -371,7 +371,7 @@ func (x *ExplainResponse) String() string {
 func (*ExplainResponse) ProtoMessage() {}
 
 func (x *ExplainResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gaon_authz_v1_authz_proto_msgTypes[4]
+	mi := &file_garam_authz_v1_authz_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -384,7 +384,7 @@ func (x *ExplainResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExplainResponse.ProtoReflect.Descriptor instead.
 func (*ExplainResponse) Descriptor() ([]byte, []int) {
-	return file_gaon_authz_v1_authz_proto_rawDescGZIP(), []int{4}
+	return file_garam_authz_v1_authz_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *ExplainResponse) GetAllowed() bool {
@@ -406,14 +406,14 @@ type StatementTrace struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Sid           string                 `protobuf:"bytes,1,opt,name=sid,proto3" json:"sid,omitempty"`
 	Matched       bool                   `protobuf:"varint,2,opt,name=matched,proto3" json:"matched,omitempty"`
-	Effect        Effect                 `protobuf:"varint,3,opt,name=effect,proto3,enum=gaon.authz.v1.Effect" json:"effect,omitempty"`
+	Effect        Effect                 `protobuf:"varint,3,opt,name=effect,proto3,enum=garam.authz.v1.Effect" json:"effect,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *StatementTrace) Reset() {
 	*x = StatementTrace{}
-	mi := &file_gaon_authz_v1_authz_proto_msgTypes[5]
+	mi := &file_garam_authz_v1_authz_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -425,7 +425,7 @@ func (x *StatementTrace) String() string {
 func (*StatementTrace) ProtoMessage() {}
 
 func (x *StatementTrace) ProtoReflect() protoreflect.Message {
-	mi := &file_gaon_authz_v1_authz_proto_msgTypes[5]
+	mi := &file_garam_authz_v1_authz_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -438,7 +438,7 @@ func (x *StatementTrace) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StatementTrace.ProtoReflect.Descriptor instead.
 func (*StatementTrace) Descriptor() ([]byte, []int) {
-	return file_gaon_authz_v1_authz_proto_rawDescGZIP(), []int{5}
+	return file_garam_authz_v1_authz_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *StatementTrace) GetSid() string {
@@ -462,88 +462,88 @@ func (x *StatementTrace) GetEffect() Effect {
 	return Effect_EFFECT_UNSPECIFIED
 }
 
-var File_gaon_authz_v1_authz_proto protoreflect.FileDescriptor
+var File_garam_authz_v1_authz_proto protoreflect.FileDescriptor
 
-const file_gaon_authz_v1_authz_proto_rawDesc = "" +
+const file_garam_authz_v1_authz_proto_rawDesc = "" +
 	"\n" +
-	"\x19gaon/authz/v1/authz.proto\x12\rgaon.authz.v1\"\x80\x01\n" +
+	"\x1agaram/authz/v1/authz.proto\x12\x0egaram.authz.v1\"\x81\x01\n" +
 	"\tStatement\x12\x10\n" +
-	"\x03sid\x18\x01 \x01(\tR\x03sid\x12-\n" +
-	"\x06effect\x18\x02 \x01(\x0e2\x15.gaon.authz.v1.EffectR\x06effect\x12\x16\n" +
+	"\x03sid\x18\x01 \x01(\tR\x03sid\x12.\n" +
+	"\x06effect\x18\x02 \x01(\x0e2\x16.garam.authz.v1.EffectR\x06effect\x12\x16\n" +
 	"\x06action\x18\x03 \x03(\tR\x06action\x12\x1a\n" +
-	"\bresource\x18\x04 \x03(\tR\bresource\"\xc7\x01\n" +
+	"\bresource\x18\x04 \x03(\tR\bresource\"\xc8\x01\n" +
 	"\fCheckRequest\x12\x1f\n" +
 	"\vsubject_grn\x18\x01 \x01(\tR\n" +
 	"subjectGrn\x12\x1d\n" +
 	"\n" +
 	"object_grn\x18\x02 \x01(\tR\tobjectGrn\x12\x16\n" +
-	"\x06action\x18\x03 \x01(\tR\x06action\x128\n" +
+	"\x06action\x18\x03 \x01(\tR\x06action\x129\n" +
 	"\n" +
-	"statements\x18\x04 \x03(\v2\x18.gaon.authz.v1.StatementR\n" +
+	"statements\x18\x04 \x03(\v2\x19.garam.authz.v1.StatementR\n" +
 	"statements\x12%\n" +
 	"\x0esubject_groups\x18\x05 \x03(\tR\rsubjectGroups\")\n" +
 	"\rCheckResponse\x12\x18\n" +
-	"\aallowed\x18\x01 \x01(\bR\aallowed\"\xc9\x01\n" +
+	"\aallowed\x18\x01 \x01(\bR\aallowed\"\xca\x01\n" +
 	"\x0eExplainRequest\x12\x1f\n" +
 	"\vsubject_grn\x18\x01 \x01(\tR\n" +
 	"subjectGrn\x12\x1d\n" +
 	"\n" +
 	"object_grn\x18\x02 \x01(\tR\tobjectGrn\x12\x16\n" +
-	"\x06action\x18\x03 \x01(\tR\x06action\x128\n" +
+	"\x06action\x18\x03 \x01(\tR\x06action\x129\n" +
 	"\n" +
-	"statements\x18\x04 \x03(\v2\x18.gaon.authz.v1.StatementR\n" +
+	"statements\x18\x04 \x03(\v2\x19.garam.authz.v1.StatementR\n" +
 	"statements\x12%\n" +
-	"\x0esubject_groups\x18\x05 \x03(\tR\rsubjectGroups\"b\n" +
+	"\x0esubject_groups\x18\x05 \x03(\tR\rsubjectGroups\"c\n" +
 	"\x0fExplainResponse\x12\x18\n" +
-	"\aallowed\x18\x01 \x01(\bR\aallowed\x125\n" +
-	"\x06traces\x18\x02 \x03(\v2\x1d.gaon.authz.v1.StatementTraceR\x06traces\"k\n" +
+	"\aallowed\x18\x01 \x01(\bR\aallowed\x126\n" +
+	"\x06traces\x18\x02 \x03(\v2\x1e.garam.authz.v1.StatementTraceR\x06traces\"l\n" +
 	"\x0eStatementTrace\x12\x10\n" +
 	"\x03sid\x18\x01 \x01(\tR\x03sid\x12\x18\n" +
-	"\amatched\x18\x02 \x01(\bR\amatched\x12-\n" +
-	"\x06effect\x18\x03 \x01(\x0e2\x15.gaon.authz.v1.EffectR\x06effect*C\n" +
+	"\amatched\x18\x02 \x01(\bR\amatched\x12.\n" +
+	"\x06effect\x18\x03 \x01(\x0e2\x16.garam.authz.v1.EffectR\x06effect*C\n" +
 	"\x06Effect\x12\x16\n" +
 	"\x12EFFECT_UNSPECIFIED\x10\x00\x12\x10\n" +
 	"\fEFFECT_ALLOW\x10\x01\x12\x0f\n" +
-	"\vEFFECT_DENY\x10\x022\x9c\x01\n" +
-	"\fAuthzService\x12B\n" +
-	"\x05Check\x12\x1b.gaon.authz.v1.CheckRequest\x1a\x1c.gaon.authz.v1.CheckResponse\x12H\n" +
-	"\aExplain\x12\x1d.gaon.authz.v1.ExplainRequest\x1a\x1e.gaon.authz.v1.ExplainResponseB\xae\x01\n" +
-	"\x11com.gaon.authz.v1B\n" +
-	"AuthzProtoP\x01Z7github.com/garamsh/gaon/proto/gen/gaon/authz/v1;authzv1\xa2\x02\x03GAX\xaa\x02\rGaon.Authz.V1\xca\x02\rGaon\\Authz\\V1\xe2\x02\x19Gaon\\Authz\\V1\\GPBMetadata\xea\x02\x0fGaon::Authz::V1b\x06proto3"
+	"\vEFFECT_DENY\x10\x022\xa0\x01\n" +
+	"\fAuthzService\x12D\n" +
+	"\x05Check\x12\x1c.garam.authz.v1.CheckRequest\x1a\x1d.garam.authz.v1.CheckResponse\x12J\n" +
+	"\aExplain\x12\x1e.garam.authz.v1.ExplainRequest\x1a\x1f.garam.authz.v1.ExplainResponseB\xb5\x01\n" +
+	"\x12com.garam.authz.v1B\n" +
+	"AuthzProtoP\x01Z9github.com/garamsh/garam/proto/gen/garam/authz/v1;authzv1\xa2\x02\x03GAX\xaa\x02\x0eGaram.Authz.V1\xca\x02\x0eGaram\\Authz\\V1\xe2\x02\x1aGaram\\Authz\\V1\\GPBMetadata\xea\x02\x10Garam::Authz::V1b\x06proto3"
 
 var (
-	file_gaon_authz_v1_authz_proto_rawDescOnce sync.Once
-	file_gaon_authz_v1_authz_proto_rawDescData []byte
+	file_garam_authz_v1_authz_proto_rawDescOnce sync.Once
+	file_garam_authz_v1_authz_proto_rawDescData []byte
 )
 
-func file_gaon_authz_v1_authz_proto_rawDescGZIP() []byte {
-	file_gaon_authz_v1_authz_proto_rawDescOnce.Do(func() {
-		file_gaon_authz_v1_authz_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_gaon_authz_v1_authz_proto_rawDesc), len(file_gaon_authz_v1_authz_proto_rawDesc)))
+func file_garam_authz_v1_authz_proto_rawDescGZIP() []byte {
+	file_garam_authz_v1_authz_proto_rawDescOnce.Do(func() {
+		file_garam_authz_v1_authz_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_garam_authz_v1_authz_proto_rawDesc), len(file_garam_authz_v1_authz_proto_rawDesc)))
 	})
-	return file_gaon_authz_v1_authz_proto_rawDescData
+	return file_garam_authz_v1_authz_proto_rawDescData
 }
 
-var file_gaon_authz_v1_authz_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_gaon_authz_v1_authz_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
-var file_gaon_authz_v1_authz_proto_goTypes = []any{
-	(Effect)(0),             // 0: gaon.authz.v1.Effect
-	(*Statement)(nil),       // 1: gaon.authz.v1.Statement
-	(*CheckRequest)(nil),    // 2: gaon.authz.v1.CheckRequest
-	(*CheckResponse)(nil),   // 3: gaon.authz.v1.CheckResponse
-	(*ExplainRequest)(nil),  // 4: gaon.authz.v1.ExplainRequest
-	(*ExplainResponse)(nil), // 5: gaon.authz.v1.ExplainResponse
-	(*StatementTrace)(nil),  // 6: gaon.authz.v1.StatementTrace
+var file_garam_authz_v1_authz_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_garam_authz_v1_authz_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_garam_authz_v1_authz_proto_goTypes = []any{
+	(Effect)(0),             // 0: garam.authz.v1.Effect
+	(*Statement)(nil),       // 1: garam.authz.v1.Statement
+	(*CheckRequest)(nil),    // 2: garam.authz.v1.CheckRequest
+	(*CheckResponse)(nil),   // 3: garam.authz.v1.CheckResponse
+	(*ExplainRequest)(nil),  // 4: garam.authz.v1.ExplainRequest
+	(*ExplainResponse)(nil), // 5: garam.authz.v1.ExplainResponse
+	(*StatementTrace)(nil),  // 6: garam.authz.v1.StatementTrace
 }
-var file_gaon_authz_v1_authz_proto_depIdxs = []int32{
-	0, // 0: gaon.authz.v1.Statement.effect:type_name -> gaon.authz.v1.Effect
-	1, // 1: gaon.authz.v1.CheckRequest.statements:type_name -> gaon.authz.v1.Statement
-	1, // 2: gaon.authz.v1.ExplainRequest.statements:type_name -> gaon.authz.v1.Statement
-	6, // 3: gaon.authz.v1.ExplainResponse.traces:type_name -> gaon.authz.v1.StatementTrace
-	0, // 4: gaon.authz.v1.StatementTrace.effect:type_name -> gaon.authz.v1.Effect
-	2, // 5: gaon.authz.v1.AuthzService.Check:input_type -> gaon.authz.v1.CheckRequest
-	4, // 6: gaon.authz.v1.AuthzService.Explain:input_type -> gaon.authz.v1.ExplainRequest
-	3, // 7: gaon.authz.v1.AuthzService.Check:output_type -> gaon.authz.v1.CheckResponse
-	5, // 8: gaon.authz.v1.AuthzService.Explain:output_type -> gaon.authz.v1.ExplainResponse
+var file_garam_authz_v1_authz_proto_depIdxs = []int32{
+	0, // 0: garam.authz.v1.Statement.effect:type_name -> garam.authz.v1.Effect
+	1, // 1: garam.authz.v1.CheckRequest.statements:type_name -> garam.authz.v1.Statement
+	1, // 2: garam.authz.v1.ExplainRequest.statements:type_name -> garam.authz.v1.Statement
+	6, // 3: garam.authz.v1.ExplainResponse.traces:type_name -> garam.authz.v1.StatementTrace
+	0, // 4: garam.authz.v1.StatementTrace.effect:type_name -> garam.authz.v1.Effect
+	2, // 5: garam.authz.v1.AuthzService.Check:input_type -> garam.authz.v1.CheckRequest
+	4, // 6: garam.authz.v1.AuthzService.Explain:input_type -> garam.authz.v1.ExplainRequest
+	3, // 7: garam.authz.v1.AuthzService.Check:output_type -> garam.authz.v1.CheckResponse
+	5, // 8: garam.authz.v1.AuthzService.Explain:output_type -> garam.authz.v1.ExplainResponse
 	7, // [7:9] is the sub-list for method output_type
 	5, // [5:7] is the sub-list for method input_type
 	5, // [5:5] is the sub-list for extension type_name
@@ -551,27 +551,27 @@ var file_gaon_authz_v1_authz_proto_depIdxs = []int32{
 	0, // [0:5] is the sub-list for field type_name
 }
 
-func init() { file_gaon_authz_v1_authz_proto_init() }
-func file_gaon_authz_v1_authz_proto_init() {
-	if File_gaon_authz_v1_authz_proto != nil {
+func init() { file_garam_authz_v1_authz_proto_init() }
+func file_garam_authz_v1_authz_proto_init() {
+	if File_garam_authz_v1_authz_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_gaon_authz_v1_authz_proto_rawDesc), len(file_gaon_authz_v1_authz_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_garam_authz_v1_authz_proto_rawDesc), len(file_garam_authz_v1_authz_proto_rawDesc)),
 			NumEnums:      1,
 			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_gaon_authz_v1_authz_proto_goTypes,
-		DependencyIndexes: file_gaon_authz_v1_authz_proto_depIdxs,
-		EnumInfos:         file_gaon_authz_v1_authz_proto_enumTypes,
-		MessageInfos:      file_gaon_authz_v1_authz_proto_msgTypes,
+		GoTypes:           file_garam_authz_v1_authz_proto_goTypes,
+		DependencyIndexes: file_garam_authz_v1_authz_proto_depIdxs,
+		EnumInfos:         file_garam_authz_v1_authz_proto_enumTypes,
+		MessageInfos:      file_garam_authz_v1_authz_proto_msgTypes,
 	}.Build()
-	File_gaon_authz_v1_authz_proto = out.File
-	file_gaon_authz_v1_authz_proto_goTypes = nil
-	file_gaon_authz_v1_authz_proto_depIdxs = nil
+	File_garam_authz_v1_authz_proto = out.File
+	file_garam_authz_v1_authz_proto_goTypes = nil
+	file_garam_authz_v1_authz_proto_depIdxs = nil
 }

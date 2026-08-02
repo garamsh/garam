@@ -10,9 +10,9 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/garamsh/gaon/internal/errorx"
-	"github.com/garamsh/gaon/internal/grn"
-	"github.com/garamsh/gaon/internal/org/db"
+	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/org/db"
 )
 
 // PostgresStore implements Store against PostgreSQL. The queries are

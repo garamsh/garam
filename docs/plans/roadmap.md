@@ -1,6 +1,6 @@
 # Roadmap
 
-gaon is built bottom-up: identity first, authorization second,
+garam is built bottom-up: identity first, authorization second,
 workflow last. Each tier depends only on the tier below it.
 
 ## MVP — Authentication + org permissions (done)
@@ -14,7 +14,7 @@ workflow last. Each tier depends only on the tier below it.
   acceptance, not open signup. Minimal org roles (`owner`, `admin`,
   `member`) on membership, expressed as IAM-style policy statements
   and enforced by the authz service (ADR-0002).
-- Single cobra CLI (`cmd/gaon`): `serve api` (OpenAPI HTTP) and
+- Single cobra CLI (`cmd/garam`): `serve api` (OpenAPI HTTP) and
   `serve authz` (gRPC policy engine) run as independent packages
   (ADR-0003).
 - The `agent` domain stayed excluded (still being planned).
@@ -29,7 +29,7 @@ workflow last. Each tier depends only on the tier below it.
 
 - IAM-style `Statement` model and native `StatementEvaluator`
   (ADR-0002); org roles evaluated as statements.
-- gRPC transport (ADR-0003 stage 2): `gaon serve authz` runs the
+- gRPC transport (ADR-0003 stage 2): `garam serve authz` runs the
   engine as a separate process; the api server authorizes through the
   gRPC client only.
 - Full wildcard semantics (`*`, `?`) in statement patterns.

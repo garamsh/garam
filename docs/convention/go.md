@@ -63,8 +63,8 @@ import (
 
     "google.golang.org/grpc"
 
-    "github.com/garamsh/gaon/internal/errorx"
-    "github.com/garamsh/gaon/internal/grn"
+    "github.com/garamsh/garam/internal/errorx"
+    "github.com/garamsh/garam/internal/grn"
 )
 ```
 

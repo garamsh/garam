@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.2
 // - protoc             (unknown)
-// source: gaon/authz/v1/policy.proto
+// source: garam/authz/v1/policy.proto
 
 package authzv1
 
@@ -20,16 +20,16 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	PolicyService_CreatePolicy_FullMethodName          = "/gaon.authz.v1.PolicyService/CreatePolicy"
-	PolicyService_AddPolicyVersion_FullMethodName      = "/gaon.authz.v1.PolicyService/AddPolicyVersion"
-	PolicyService_ListPolicies_FullMethodName          = "/gaon.authz.v1.PolicyService/ListPolicies"
-	PolicyService_ListPolicyVersions_FullMethodName    = "/gaon.authz.v1.PolicyService/ListPolicyVersions"
-	PolicyService_ActivatePolicy_FullMethodName        = "/gaon.authz.v1.PolicyService/ActivatePolicy"
-	PolicyService_ArchivePolicy_FullMethodName         = "/gaon.authz.v1.PolicyService/ArchivePolicy"
-	PolicyService_RollbackPolicy_FullMethodName        = "/gaon.authz.v1.PolicyService/RollbackPolicy"
-	PolicyService_AttachPolicy_FullMethodName          = "/gaon.authz.v1.PolicyService/AttachPolicy"
-	PolicyService_DetachPolicy_FullMethodName          = "/gaon.authz.v1.PolicyService/DetachPolicy"
-	PolicyService_ListPolicyAttachments_FullMethodName = "/gaon.authz.v1.PolicyService/ListPolicyAttachments"
+	PolicyService_CreatePolicy_FullMethodName          = "/garam.authz.v1.PolicyService/CreatePolicy"
+	PolicyService_AddPolicyVersion_FullMethodName      = "/garam.authz.v1.PolicyService/AddPolicyVersion"
+	PolicyService_ListPolicies_FullMethodName          = "/garam.authz.v1.PolicyService/ListPolicies"
+	PolicyService_ListPolicyVersions_FullMethodName    = "/garam.authz.v1.PolicyService/ListPolicyVersions"
+	PolicyService_ActivatePolicy_FullMethodName        = "/garam.authz.v1.PolicyService/ActivatePolicy"
+	PolicyService_ArchivePolicy_FullMethodName         = "/garam.authz.v1.PolicyService/ArchivePolicy"
+	PolicyService_RollbackPolicy_FullMethodName        = "/garam.authz.v1.PolicyService/RollbackPolicy"
+	PolicyService_AttachPolicy_FullMethodName          = "/garam.authz.v1.PolicyService/AttachPolicy"
+	PolicyService_DetachPolicy_FullMethodName          = "/garam.authz.v1.PolicyService/DetachPolicy"
+	PolicyService_ListPolicyAttachments_FullMethodName = "/garam.authz.v1.PolicyService/ListPolicyAttachments"
 )
 
 // PolicyServiceClient is the client API for PolicyService service.
@@ -453,7 +453,7 @@ func _PolicyService_ListPolicyAttachments_Handler(srv interface{}, ctx context.C
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var PolicyService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "gaon.authz.v1.PolicyService",
+	ServiceName: "garam.authz.v1.PolicyService",
 	HandlerType: (*PolicyServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -498,5 +498,5 @@ var PolicyService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "gaon/authz/v1/policy.proto",
+	Metadata: "garam/authz/v1/policy.proto",
 }

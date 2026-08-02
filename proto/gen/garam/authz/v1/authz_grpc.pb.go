@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.2
 // - protoc             (unknown)
-// source: gaon/authz/v1/authz.proto
+// source: garam/authz/v1/authz.proto
 
 package authzv1
 
@@ -20,8 +20,8 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AuthzService_Check_FullMethodName   = "/gaon.authz.v1.AuthzService/Check"
-	AuthzService_Explain_FullMethodName = "/gaon.authz.v1.AuthzService/Explain"
+	AuthzService_Check_FullMethodName   = "/garam.authz.v1.AuthzService/Check"
+	AuthzService_Explain_FullMethodName = "/garam.authz.v1.AuthzService/Explain"
 )
 
 // AuthzServiceClient is the client API for AuthzService service.
@@ -161,7 +161,7 @@ func _AuthzService_Explain_Handler(srv interface{}, ctx context.Context, dec fun
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var AuthzService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "gaon.authz.v1.AuthzService",
+	ServiceName: "garam.authz.v1.AuthzService",
 	HandlerType: (*AuthzServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -174,5 +174,5 @@ var AuthzService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "gaon/authz/v1/authz.proto",
+	Metadata: "garam/authz/v1/authz.proto",
 }

@@ -5,9 +5,9 @@ BUF := go run github.com/bufbuild/buf/cmd/buf@v1.72.0
 GOIMPORTS := go run golang.org/x/tools/cmd/goimports@v0.48.0
 
 # Host port for the dev Postgres container. Override per worktree
-# (e.g. GAON_DB_PORT=55440 make db-up e2e) to run worktrees in parallel.
-GAON_DB_PORT ?= 55432
-TEST_DATABASE_URL ?= postgres://gaon:gaon@localhost:$(GAON_DB_PORT)/gaon?sslmode=disable
+# (e.g. GARAM_DB_PORT=55440 make db-up e2e) to run worktrees in parallel.
+GARAM_DB_PORT ?= 55432
+TEST_DATABASE_URL ?= postgres://garam:garam@localhost:$(GARAM_DB_PORT)/garam?sslmode=disable
 
 .PHONY: lint format test build mock gen check-gen e2e db-up db-down ci
 
@@ -54,6 +54,6 @@ db-down:
 
 # e2e runs the store round-trips against real Postgres (see db-up).
 e2e:
-	GAON_TEST_DATABASE_URL='$(TEST_DATABASE_URL)' go test -count=1 ./tests/e2e/...
+	GARAM_TEST_DATABASE_URL='$(TEST_DATABASE_URL)' go test -count=1 ./tests/e2e/...
 
 ci: format lint test build check-gen

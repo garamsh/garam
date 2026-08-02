@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        (unknown)
-// source: gaon/authz/v1/policy.proto
+// source: garam/authz/v1/policy.proto
 
 package authzv1
 
@@ -61,11 +61,11 @@ func (x PolicyStatus) String() string {
 }
 
 func (PolicyStatus) Descriptor() protoreflect.EnumDescriptor {
-	return file_gaon_authz_v1_policy_proto_enumTypes[0].Descriptor()
+	return file_garam_authz_v1_policy_proto_enumTypes[0].Descriptor()
 }
 
 func (PolicyStatus) Type() protoreflect.EnumType {
-	return &file_gaon_authz_v1_policy_proto_enumTypes[0]
+	return &file_garam_authz_v1_policy_proto_enumTypes[0]
 }
 
 func (x PolicyStatus) Number() protoreflect.EnumNumber {
@@ -74,7 +74,7 @@ func (x PolicyStatus) Number() protoreflect.EnumNumber {
 
 // Deprecated: Use PolicyStatus.Descriptor instead.
 func (PolicyStatus) EnumDescriptor() ([]byte, []int) {
-	return file_gaon_authz_v1_policy_proto_rawDescGZIP(), []int{0}
+	return file_garam_authz_v1_policy_proto_rawDescGZIP(), []int{0}
 }
 
 // Policy is a versioned, org-managed rule set.
@@ -83,7 +83,7 @@ type Policy struct {
 	Grn    string                 `protobuf:"bytes,1,opt,name=grn,proto3" json:"grn,omitempty"`
 	OrgGrn string                 `protobuf:"bytes,2,opt,name=org_grn,json=orgGrn,proto3" json:"org_grn,omitempty"`
 	Name   string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
-	Status PolicyStatus           `protobuf:"varint,4,opt,name=status,proto3,enum=gaon.authz.v1.PolicyStatus" json:"status,omitempty"`
+	Status PolicyStatus           `protobuf:"varint,4,opt,name=status,proto3,enum=garam.authz.v1.PolicyStatus" json:"status,omitempty"`
 	// default_version is the version evaluated while the policy is
 	// active.
 	DefaultVersion int32                  `protobuf:"varint,5,opt,name=default_version,json=defaultVersion,proto3" json:"default_version,omitempty"`
@@ -95,7 +95,7 @@ type Policy struct {
 
 func (x *Policy) Reset() {
 	*x = Policy{}
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[0]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -107,7 +107,7 @@ func (x *Policy) String() string {
 func (*Policy) ProtoMessage() {}
 
 func (x *Policy) ProtoReflect() protoreflect.Message {
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[0]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -120,7 +120,7 @@ func (x *Policy) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Policy.ProtoReflect.Descriptor instead.
 func (*Policy) Descriptor() ([]byte, []int) {
-	return file_gaon_authz_v1_policy_proto_rawDescGZIP(), []int{0}
+	return file_garam_authz_v1_policy_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *Policy) GetGrn() string {
@@ -188,7 +188,7 @@ type PolicyVersion struct {
 
 func (x *PolicyVersion) Reset() {
 	*x = PolicyVersion{}
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[1]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -200,7 +200,7 @@ func (x *PolicyVersion) String() string {
 func (*PolicyVersion) ProtoMessage() {}
 
 func (x *PolicyVersion) ProtoReflect() protoreflect.Message {
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[1]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -213,7 +213,7 @@ func (x *PolicyVersion) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PolicyVersion.ProtoReflect.Descriptor instead.
 func (*PolicyVersion) Descriptor() ([]byte, []int) {
-	return file_gaon_authz_v1_policy_proto_rawDescGZIP(), []int{1}
+	return file_garam_authz_v1_policy_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *PolicyVersion) GetPolicyGrn() string {
@@ -263,7 +263,7 @@ type CreatePolicyRequest struct {
 
 func (x *CreatePolicyRequest) Reset() {
 	*x = CreatePolicyRequest{}
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[2]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -275,7 +275,7 @@ func (x *CreatePolicyRequest) String() string {
 func (*CreatePolicyRequest) ProtoMessage() {}
 
 func (x *CreatePolicyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[2]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -288,7 +288,7 @@ func (x *CreatePolicyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreatePolicyRequest.ProtoReflect.Descriptor instead.
 func (*CreatePolicyRequest) Descriptor() ([]byte, []int) {
-	return file_gaon_authz_v1_policy_proto_rawDescGZIP(), []int{2}
+	return file_garam_authz_v1_policy_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *CreatePolicyRequest) GetOrgGrn() string {
@@ -328,7 +328,7 @@ type CreatePolicyResponse struct {
 
 func (x *CreatePolicyResponse) Reset() {
 	*x = CreatePolicyResponse{}
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[3]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -340,7 +340,7 @@ func (x *CreatePolicyResponse) String() string {
 func (*CreatePolicyResponse) ProtoMessage() {}
 
 func (x *CreatePolicyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[3]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -353,7 +353,7 @@ func (x *CreatePolicyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreatePolicyResponse.ProtoReflect.Descriptor instead.
 func (*CreatePolicyResponse) Descriptor() ([]byte, []int) {
-	return file_gaon_authz_v1_policy_proto_rawDescGZIP(), []int{3}
+	return file_garam_authz_v1_policy_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *CreatePolicyResponse) GetPolicy() *Policy {
@@ -374,7 +374,7 @@ type AddPolicyVersionRequest struct {
 
 func (x *AddPolicyVersionRequest) Reset() {
 	*x = AddPolicyVersionRequest{}
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[4]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -386,7 +386,7 @@ func (x *AddPolicyVersionRequest) String() string {
 func (*AddPolicyVersionRequest) ProtoMessage() {}
 
 func (x *AddPolicyVersionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[4]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -399,7 +399,7 @@ func (x *AddPolicyVersionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddPolicyVersionRequest.ProtoReflect.Descriptor instead.
 func (*AddPolicyVersionRequest) Descriptor() ([]byte, []int) {
-	return file_gaon_authz_v1_policy_proto_rawDescGZIP(), []int{4}
+	return file_garam_authz_v1_policy_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *AddPolicyVersionRequest) GetPolicyGrn() string {
@@ -432,7 +432,7 @@ type AddPolicyVersionResponse struct {
 
 func (x *AddPolicyVersionResponse) Reset() {
 	*x = AddPolicyVersionResponse{}
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[5]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -444,7 +444,7 @@ func (x *AddPolicyVersionResponse) String() string {
 func (*AddPolicyVersionResponse) ProtoMessage() {}
 
 func (x *AddPolicyVersionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[5]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -457,7 +457,7 @@ func (x *AddPolicyVersionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddPolicyVersionResponse.ProtoReflect.Descriptor instead.
 func (*AddPolicyVersionResponse) Descriptor() ([]byte, []int) {
-	return file_gaon_authz_v1_policy_proto_rawDescGZIP(), []int{5}
+	return file_garam_authz_v1_policy_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *AddPolicyVersionResponse) GetVersion() *PolicyVersion {
@@ -476,7 +476,7 @@ type ListPoliciesRequest struct {
 
 func (x *ListPoliciesRequest) Reset() {
 	*x = ListPoliciesRequest{}
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[6]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -488,7 +488,7 @@ func (x *ListPoliciesRequest) String() string {
 func (*ListPoliciesRequest) ProtoMessage() {}
 
 func (x *ListPoliciesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[6]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -501,7 +501,7 @@ func (x *ListPoliciesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPoliciesRequest.ProtoReflect.Descriptor instead.
 func (*ListPoliciesRequest) Descriptor() ([]byte, []int) {
-	return file_gaon_authz_v1_policy_proto_rawDescGZIP(), []int{6}
+	return file_garam_authz_v1_policy_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ListPoliciesRequest) GetOrgGrn() string {
@@ -520,7 +520,7 @@ type ListPoliciesResponse struct {
 
 func (x *ListPoliciesResponse) Reset() {
 	*x = ListPoliciesResponse{}
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[7]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -532,7 +532,7 @@ func (x *ListPoliciesResponse) String() string {
 func (*ListPoliciesResponse) ProtoMessage() {}
 
 func (x *ListPoliciesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[7]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -545,7 +545,7 @@ func (x *ListPoliciesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPoliciesResponse.ProtoReflect.Descriptor instead.
 func (*ListPoliciesResponse) Descriptor() ([]byte, []int) {
-	return file_gaon_authz_v1_policy_proto_rawDescGZIP(), []int{7}
+	return file_garam_authz_v1_policy_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ListPoliciesResponse) GetPolicies() []*Policy {
@@ -564,7 +564,7 @@ type ListPolicyVersionsRequest struct {
 
 func (x *ListPolicyVersionsRequest) Reset() {
 	*x = ListPolicyVersionsRequest{}
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[8]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -576,7 +576,7 @@ func (x *ListPolicyVersionsRequest) String() string {
 func (*ListPolicyVersionsRequest) ProtoMessage() {}
 
 func (x *ListPolicyVersionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[8]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -589,7 +589,7 @@ func (x *ListPolicyVersionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPolicyVersionsRequest.ProtoReflect.Descriptor instead.
 func (*ListPolicyVersionsRequest) Descriptor() ([]byte, []int) {
-	return file_gaon_authz_v1_policy_proto_rawDescGZIP(), []int{8}
+	return file_garam_authz_v1_policy_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ListPolicyVersionsRequest) GetPolicyGrn() string {
@@ -608,7 +608,7 @@ type ListPolicyVersionsResponse struct {
 
 func (x *ListPolicyVersionsResponse) Reset() {
 	*x = ListPolicyVersionsResponse{}
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[9]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -620,7 +620,7 @@ func (x *ListPolicyVersionsResponse) String() string {
 func (*ListPolicyVersionsResponse) ProtoMessage() {}
 
 func (x *ListPolicyVersionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[9]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -633,7 +633,7 @@ func (x *ListPolicyVersionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPolicyVersionsResponse.ProtoReflect.Descriptor instead.
 func (*ListPolicyVersionsResponse) Descriptor() ([]byte, []int) {
-	return file_gaon_authz_v1_policy_proto_rawDescGZIP(), []int{9}
+	return file_garam_authz_v1_policy_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ListPolicyVersionsResponse) GetVersions() []*PolicyVersion {
@@ -652,7 +652,7 @@ type ActivatePolicyRequest struct {
 
 func (x *ActivatePolicyRequest) Reset() {
 	*x = ActivatePolicyRequest{}
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[10]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -664,7 +664,7 @@ func (x *ActivatePolicyRequest) String() string {
 func (*ActivatePolicyRequest) ProtoMessage() {}
 
 func (x *ActivatePolicyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[10]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -677,7 +677,7 @@ func (x *ActivatePolicyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ActivatePolicyRequest.ProtoReflect.Descriptor instead.
 func (*ActivatePolicyRequest) Descriptor() ([]byte, []int) {
-	return file_gaon_authz_v1_policy_proto_rawDescGZIP(), []int{10}
+	return file_garam_authz_v1_policy_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ActivatePolicyRequest) GetPolicyGrn() string {
@@ -696,7 +696,7 @@ type ActivatePolicyResponse struct {
 
 func (x *ActivatePolicyResponse) Reset() {
 	*x = ActivatePolicyResponse{}
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[11]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -708,7 +708,7 @@ func (x *ActivatePolicyResponse) String() string {
 func (*ActivatePolicyResponse) ProtoMessage() {}
 
 func (x *ActivatePolicyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[11]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -721,7 +721,7 @@ func (x *ActivatePolicyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ActivatePolicyResponse.ProtoReflect.Descriptor instead.
 func (*ActivatePolicyResponse) Descriptor() ([]byte, []int) {
-	return file_gaon_authz_v1_policy_proto_rawDescGZIP(), []int{11}
+	return file_garam_authz_v1_policy_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *ActivatePolicyResponse) GetPolicy() *Policy {
@@ -740,7 +740,7 @@ type ArchivePolicyRequest struct {
 
 func (x *ArchivePolicyRequest) Reset() {
 	*x = ArchivePolicyRequest{}
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[12]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -752,7 +752,7 @@ func (x *ArchivePolicyRequest) String() string {
 func (*ArchivePolicyRequest) ProtoMessage() {}
 
 func (x *ArchivePolicyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[12]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -765,7 +765,7 @@ func (x *ArchivePolicyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ArchivePolicyRequest.ProtoReflect.Descriptor instead.
 func (*ArchivePolicyRequest) Descriptor() ([]byte, []int) {
-	return file_gaon_authz_v1_policy_proto_rawDescGZIP(), []int{12}
+	return file_garam_authz_v1_policy_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *ArchivePolicyRequest) GetPolicyGrn() string {
@@ -784,7 +784,7 @@ type ArchivePolicyResponse struct {
 
 func (x *ArchivePolicyResponse) Reset() {
 	*x = ArchivePolicyResponse{}
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[13]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -796,7 +796,7 @@ func (x *ArchivePolicyResponse) String() string {
 func (*ArchivePolicyResponse) ProtoMessage() {}
 
 func (x *ArchivePolicyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[13]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -809,7 +809,7 @@ func (x *ArchivePolicyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ArchivePolicyResponse.ProtoReflect.Descriptor instead.
 func (*ArchivePolicyResponse) Descriptor() ([]byte, []int) {
-	return file_gaon_authz_v1_policy_proto_rawDescGZIP(), []int{13}
+	return file_garam_authz_v1_policy_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ArchivePolicyResponse) GetPolicy() *Policy {
@@ -829,7 +829,7 @@ type RollbackPolicyRequest struct {
 
 func (x *RollbackPolicyRequest) Reset() {
 	*x = RollbackPolicyRequest{}
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[14]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -841,7 +841,7 @@ func (x *RollbackPolicyRequest) String() string {
 func (*RollbackPolicyRequest) ProtoMessage() {}
 
 func (x *RollbackPolicyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[14]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -854,7 +854,7 @@ func (x *RollbackPolicyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RollbackPolicyRequest.ProtoReflect.Descriptor instead.
 func (*RollbackPolicyRequest) Descriptor() ([]byte, []int) {
-	return file_gaon_authz_v1_policy_proto_rawDescGZIP(), []int{14}
+	return file_garam_authz_v1_policy_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *RollbackPolicyRequest) GetPolicyGrn() string {
@@ -880,7 +880,7 @@ type RollbackPolicyResponse struct {
 
 func (x *RollbackPolicyResponse) Reset() {
 	*x = RollbackPolicyResponse{}
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[15]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -892,7 +892,7 @@ func (x *RollbackPolicyResponse) String() string {
 func (*RollbackPolicyResponse) ProtoMessage() {}
 
 func (x *RollbackPolicyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[15]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -905,7 +905,7 @@ func (x *RollbackPolicyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RollbackPolicyResponse.ProtoReflect.Descriptor instead.
 func (*RollbackPolicyResponse) Descriptor() ([]byte, []int) {
-	return file_gaon_authz_v1_policy_proto_rawDescGZIP(), []int{15}
+	return file_garam_authz_v1_policy_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *RollbackPolicyResponse) GetPolicy() *Policy {
@@ -929,7 +929,7 @@ type PolicyAttachment struct {
 
 func (x *PolicyAttachment) Reset() {
 	*x = PolicyAttachment{}
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[16]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -941,7 +941,7 @@ func (x *PolicyAttachment) String() string {
 func (*PolicyAttachment) ProtoMessage() {}
 
 func (x *PolicyAttachment) ProtoReflect() protoreflect.Message {
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[16]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -954,7 +954,7 @@ func (x *PolicyAttachment) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PolicyAttachment.ProtoReflect.Descriptor instead.
 func (*PolicyAttachment) Descriptor() ([]byte, []int) {
-	return file_gaon_authz_v1_policy_proto_rawDescGZIP(), []int{16}
+	return file_garam_authz_v1_policy_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *PolicyAttachment) GetPolicyGrn() string {
@@ -988,7 +988,7 @@ type AttachPolicyRequest struct {
 
 func (x *AttachPolicyRequest) Reset() {
 	*x = AttachPolicyRequest{}
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[17]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1000,7 +1000,7 @@ func (x *AttachPolicyRequest) String() string {
 func (*AttachPolicyRequest) ProtoMessage() {}
 
 func (x *AttachPolicyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[17]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1013,7 +1013,7 @@ func (x *AttachPolicyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AttachPolicyRequest.ProtoReflect.Descriptor instead.
 func (*AttachPolicyRequest) Descriptor() ([]byte, []int) {
-	return file_gaon_authz_v1_policy_proto_rawDescGZIP(), []int{17}
+	return file_garam_authz_v1_policy_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *AttachPolicyRequest) GetPolicyGrn() string {
@@ -1039,7 +1039,7 @@ type AttachPolicyResponse struct {
 
 func (x *AttachPolicyResponse) Reset() {
 	*x = AttachPolicyResponse{}
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[18]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1051,7 +1051,7 @@ func (x *AttachPolicyResponse) String() string {
 func (*AttachPolicyResponse) ProtoMessage() {}
 
 func (x *AttachPolicyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[18]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1064,7 +1064,7 @@ func (x *AttachPolicyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AttachPolicyResponse.ProtoReflect.Descriptor instead.
 func (*AttachPolicyResponse) Descriptor() ([]byte, []int) {
-	return file_gaon_authz_v1_policy_proto_rawDescGZIP(), []int{18}
+	return file_garam_authz_v1_policy_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *AttachPolicyResponse) GetAttachment() *PolicyAttachment {
@@ -1084,7 +1084,7 @@ type DetachPolicyRequest struct {
 
 func (x *DetachPolicyRequest) Reset() {
 	*x = DetachPolicyRequest{}
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[19]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1096,7 +1096,7 @@ func (x *DetachPolicyRequest) String() string {
 func (*DetachPolicyRequest) ProtoMessage() {}
 
 func (x *DetachPolicyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[19]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1109,7 +1109,7 @@ func (x *DetachPolicyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DetachPolicyRequest.ProtoReflect.Descriptor instead.
 func (*DetachPolicyRequest) Descriptor() ([]byte, []int) {
-	return file_gaon_authz_v1_policy_proto_rawDescGZIP(), []int{19}
+	return file_garam_authz_v1_policy_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *DetachPolicyRequest) GetPolicyGrn() string {
@@ -1134,7 +1134,7 @@ type DetachPolicyResponse struct {
 
 func (x *DetachPolicyResponse) Reset() {
 	*x = DetachPolicyResponse{}
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[20]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1146,7 +1146,7 @@ func (x *DetachPolicyResponse) String() string {
 func (*DetachPolicyResponse) ProtoMessage() {}
 
 func (x *DetachPolicyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[20]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1159,7 +1159,7 @@ func (x *DetachPolicyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DetachPolicyResponse.ProtoReflect.Descriptor instead.
 func (*DetachPolicyResponse) Descriptor() ([]byte, []int) {
-	return file_gaon_authz_v1_policy_proto_rawDescGZIP(), []int{20}
+	return file_garam_authz_v1_policy_proto_rawDescGZIP(), []int{20}
 }
 
 type ListPolicyAttachmentsRequest struct {
@@ -1171,7 +1171,7 @@ type ListPolicyAttachmentsRequest struct {
 
 func (x *ListPolicyAttachmentsRequest) Reset() {
 	*x = ListPolicyAttachmentsRequest{}
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[21]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1183,7 +1183,7 @@ func (x *ListPolicyAttachmentsRequest) String() string {
 func (*ListPolicyAttachmentsRequest) ProtoMessage() {}
 
 func (x *ListPolicyAttachmentsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[21]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1196,7 +1196,7 @@ func (x *ListPolicyAttachmentsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPolicyAttachmentsRequest.ProtoReflect.Descriptor instead.
 func (*ListPolicyAttachmentsRequest) Descriptor() ([]byte, []int) {
-	return file_gaon_authz_v1_policy_proto_rawDescGZIP(), []int{21}
+	return file_garam_authz_v1_policy_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ListPolicyAttachmentsRequest) GetPolicyGrn() string {
@@ -1215,7 +1215,7 @@ type ListPolicyAttachmentsResponse struct {
 
 func (x *ListPolicyAttachmentsResponse) Reset() {
 	*x = ListPolicyAttachmentsResponse{}
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[22]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1227,7 +1227,7 @@ func (x *ListPolicyAttachmentsResponse) String() string {
 func (*ListPolicyAttachmentsResponse) ProtoMessage() {}
 
 func (x *ListPolicyAttachmentsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_gaon_authz_v1_policy_proto_msgTypes[22]
+	mi := &file_garam_authz_v1_policy_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1240,7 +1240,7 @@ func (x *ListPolicyAttachmentsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPolicyAttachmentsResponse.ProtoReflect.Descriptor instead.
 func (*ListPolicyAttachmentsResponse) Descriptor() ([]byte, []int) {
-	return file_gaon_authz_v1_policy_proto_rawDescGZIP(), []int{22}
+	return file_garam_authz_v1_policy_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *ListPolicyAttachmentsResponse) GetAttachments() []*PolicyAttachment {
@@ -1250,16 +1250,16 @@ func (x *ListPolicyAttachmentsResponse) GetAttachments() []*PolicyAttachment {
 	return nil
 }
 
-var File_gaon_authz_v1_policy_proto protoreflect.FileDescriptor
+var File_garam_authz_v1_policy_proto protoreflect.FileDescriptor
 
-const file_gaon_authz_v1_policy_proto_rawDesc = "" +
+const file_garam_authz_v1_policy_proto_rawDesc = "" +
 	"\n" +
-	"\x1agaon/authz/v1/policy.proto\x12\rgaon.authz.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x9b\x02\n" +
+	"\x1bgaram/authz/v1/policy.proto\x12\x0egaram.authz.v1\x1a\x1fgoogle/protobuf/timestamp.proto\"\x9c\x02\n" +
 	"\x06Policy\x12\x10\n" +
 	"\x03grn\x18\x01 \x01(\tR\x03grn\x12\x17\n" +
 	"\aorg_grn\x18\x02 \x01(\tR\x06orgGrn\x12\x12\n" +
-	"\x04name\x18\x03 \x01(\tR\x04name\x123\n" +
-	"\x06status\x18\x04 \x01(\x0e2\x1b.gaon.authz.v1.PolicyStatusR\x06status\x12'\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x124\n" +
+	"\x06status\x18\x04 \x01(\x0e2\x1c.garam.authz.v1.PolicyStatusR\x06status\x12'\n" +
 	"\x0fdefault_version\x18\x05 \x01(\x05R\x0edefaultVersion\x129\n" +
 	"\n" +
 	"created_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
@@ -1279,42 +1279,42 @@ const file_gaon_authz_v1_policy_proto_rawDesc = "" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1a\n" +
 	"\bdocument\x18\x03 \x01(\tR\bdocument\x12\x1d\n" +
 	"\n" +
-	"created_by\x18\x04 \x01(\tR\tcreatedBy\"E\n" +
-	"\x14CreatePolicyResponse\x12-\n" +
-	"\x06policy\x18\x01 \x01(\v2\x15.gaon.authz.v1.PolicyR\x06policy\"s\n" +
+	"created_by\x18\x04 \x01(\tR\tcreatedBy\"F\n" +
+	"\x14CreatePolicyResponse\x12.\n" +
+	"\x06policy\x18\x01 \x01(\v2\x16.garam.authz.v1.PolicyR\x06policy\"s\n" +
 	"\x17AddPolicyVersionRequest\x12\x1d\n" +
 	"\n" +
 	"policy_grn\x18\x01 \x01(\tR\tpolicyGrn\x12\x1a\n" +
 	"\bdocument\x18\x02 \x01(\tR\bdocument\x12\x1d\n" +
 	"\n" +
-	"created_by\x18\x03 \x01(\tR\tcreatedBy\"R\n" +
-	"\x18AddPolicyVersionResponse\x126\n" +
-	"\aversion\x18\x01 \x01(\v2\x1c.gaon.authz.v1.PolicyVersionR\aversion\".\n" +
+	"created_by\x18\x03 \x01(\tR\tcreatedBy\"S\n" +
+	"\x18AddPolicyVersionResponse\x127\n" +
+	"\aversion\x18\x01 \x01(\v2\x1d.garam.authz.v1.PolicyVersionR\aversion\".\n" +
 	"\x13ListPoliciesRequest\x12\x17\n" +
-	"\aorg_grn\x18\x01 \x01(\tR\x06orgGrn\"I\n" +
-	"\x14ListPoliciesResponse\x121\n" +
-	"\bpolicies\x18\x01 \x03(\v2\x15.gaon.authz.v1.PolicyR\bpolicies\":\n" +
+	"\aorg_grn\x18\x01 \x01(\tR\x06orgGrn\"J\n" +
+	"\x14ListPoliciesResponse\x122\n" +
+	"\bpolicies\x18\x01 \x03(\v2\x16.garam.authz.v1.PolicyR\bpolicies\":\n" +
 	"\x19ListPolicyVersionsRequest\x12\x1d\n" +
 	"\n" +
-	"policy_grn\x18\x01 \x01(\tR\tpolicyGrn\"V\n" +
-	"\x1aListPolicyVersionsResponse\x128\n" +
-	"\bversions\x18\x01 \x03(\v2\x1c.gaon.authz.v1.PolicyVersionR\bversions\"6\n" +
+	"policy_grn\x18\x01 \x01(\tR\tpolicyGrn\"W\n" +
+	"\x1aListPolicyVersionsResponse\x129\n" +
+	"\bversions\x18\x01 \x03(\v2\x1d.garam.authz.v1.PolicyVersionR\bversions\"6\n" +
 	"\x15ActivatePolicyRequest\x12\x1d\n" +
 	"\n" +
-	"policy_grn\x18\x01 \x01(\tR\tpolicyGrn\"G\n" +
-	"\x16ActivatePolicyResponse\x12-\n" +
-	"\x06policy\x18\x01 \x01(\v2\x15.gaon.authz.v1.PolicyR\x06policy\"5\n" +
+	"policy_grn\x18\x01 \x01(\tR\tpolicyGrn\"H\n" +
+	"\x16ActivatePolicyResponse\x12.\n" +
+	"\x06policy\x18\x01 \x01(\v2\x16.garam.authz.v1.PolicyR\x06policy\"5\n" +
 	"\x14ArchivePolicyRequest\x12\x1d\n" +
 	"\n" +
-	"policy_grn\x18\x01 \x01(\tR\tpolicyGrn\"F\n" +
-	"\x15ArchivePolicyResponse\x12-\n" +
-	"\x06policy\x18\x01 \x01(\v2\x15.gaon.authz.v1.PolicyR\x06policy\"P\n" +
+	"policy_grn\x18\x01 \x01(\tR\tpolicyGrn\"G\n" +
+	"\x15ArchivePolicyResponse\x12.\n" +
+	"\x06policy\x18\x01 \x01(\v2\x16.garam.authz.v1.PolicyR\x06policy\"P\n" +
 	"\x15RollbackPolicyRequest\x12\x1d\n" +
 	"\n" +
 	"policy_grn\x18\x01 \x01(\tR\tpolicyGrn\x12\x18\n" +
-	"\aversion\x18\x02 \x01(\x05R\aversion\"G\n" +
-	"\x16RollbackPolicyResponse\x12-\n" +
-	"\x06policy\x18\x01 \x01(\v2\x15.gaon.authz.v1.PolicyR\x06policy\"\x8d\x01\n" +
+	"\aversion\x18\x02 \x01(\x05R\aversion\"H\n" +
+	"\x16RollbackPolicyResponse\x12.\n" +
+	"\x06policy\x18\x01 \x01(\v2\x16.garam.authz.v1.PolicyR\x06policy\"\x8d\x01\n" +
 	"\x10PolicyAttachment\x12\x1d\n" +
 	"\n" +
 	"policy_grn\x18\x01 \x01(\tR\tpolicyGrn\x12\x1f\n" +
@@ -1326,10 +1326,10 @@ const file_gaon_authz_v1_policy_proto_rawDesc = "" +
 	"\n" +
 	"policy_grn\x18\x01 \x01(\tR\tpolicyGrn\x12\x1f\n" +
 	"\vsubject_grn\x18\x02 \x01(\tR\n" +
-	"subjectGrn\"W\n" +
-	"\x14AttachPolicyResponse\x12?\n" +
+	"subjectGrn\"X\n" +
+	"\x14AttachPolicyResponse\x12@\n" +
 	"\n" +
-	"attachment\x18\x01 \x01(\v2\x1f.gaon.authz.v1.PolicyAttachmentR\n" +
+	"attachment\x18\x01 \x01(\v2 .garam.authz.v1.PolicyAttachmentR\n" +
 	"attachment\"U\n" +
 	"\x13DetachPolicyRequest\x12\x1d\n" +
 	"\n" +
@@ -1339,103 +1339,103 @@ const file_gaon_authz_v1_policy_proto_rawDesc = "" +
 	"\x14DetachPolicyResponse\"=\n" +
 	"\x1cListPolicyAttachmentsRequest\x12\x1d\n" +
 	"\n" +
-	"policy_grn\x18\x01 \x01(\tR\tpolicyGrn\"b\n" +
-	"\x1dListPolicyAttachmentsResponse\x12A\n" +
-	"\vattachments\x18\x01 \x03(\v2\x1f.gaon.authz.v1.PolicyAttachmentR\vattachments*|\n" +
+	"policy_grn\x18\x01 \x01(\tR\tpolicyGrn\"c\n" +
+	"\x1dListPolicyAttachmentsResponse\x12B\n" +
+	"\vattachments\x18\x01 \x03(\v2 .garam.authz.v1.PolicyAttachmentR\vattachments*|\n" +
 	"\fPolicyStatus\x12\x1d\n" +
 	"\x19POLICY_STATUS_UNSPECIFIED\x10\x00\x12\x17\n" +
 	"\x13POLICY_STATUS_DRAFT\x10\x01\x12\x18\n" +
 	"\x14POLICY_STATUS_ACTIVE\x10\x02\x12\x1a\n" +
-	"\x16POLICY_STATUS_ARCHIVED\x10\x032\xd1\a\n" +
-	"\rPolicyService\x12W\n" +
-	"\fCreatePolicy\x12\".gaon.authz.v1.CreatePolicyRequest\x1a#.gaon.authz.v1.CreatePolicyResponse\x12c\n" +
-	"\x10AddPolicyVersion\x12&.gaon.authz.v1.AddPolicyVersionRequest\x1a'.gaon.authz.v1.AddPolicyVersionResponse\x12W\n" +
-	"\fListPolicies\x12\".gaon.authz.v1.ListPoliciesRequest\x1a#.gaon.authz.v1.ListPoliciesResponse\x12i\n" +
-	"\x12ListPolicyVersions\x12(.gaon.authz.v1.ListPolicyVersionsRequest\x1a).gaon.authz.v1.ListPolicyVersionsResponse\x12]\n" +
-	"\x0eActivatePolicy\x12$.gaon.authz.v1.ActivatePolicyRequest\x1a%.gaon.authz.v1.ActivatePolicyResponse\x12Z\n" +
-	"\rArchivePolicy\x12#.gaon.authz.v1.ArchivePolicyRequest\x1a$.gaon.authz.v1.ArchivePolicyResponse\x12]\n" +
-	"\x0eRollbackPolicy\x12$.gaon.authz.v1.RollbackPolicyRequest\x1a%.gaon.authz.v1.RollbackPolicyResponse\x12W\n" +
-	"\fAttachPolicy\x12\".gaon.authz.v1.AttachPolicyRequest\x1a#.gaon.authz.v1.AttachPolicyResponse\x12W\n" +
-	"\fDetachPolicy\x12\".gaon.authz.v1.DetachPolicyRequest\x1a#.gaon.authz.v1.DetachPolicyResponse\x12r\n" +
-	"\x15ListPolicyAttachments\x12+.gaon.authz.v1.ListPolicyAttachmentsRequest\x1a,.gaon.authz.v1.ListPolicyAttachmentsResponseB\xaf\x01\n" +
-	"\x11com.gaon.authz.v1B\vPolicyProtoP\x01Z7github.com/garamsh/gaon/proto/gen/gaon/authz/v1;authzv1\xa2\x02\x03GAX\xaa\x02\rGaon.Authz.V1\xca\x02\rGaon\\Authz\\V1\xe2\x02\x19Gaon\\Authz\\V1\\GPBMetadata\xea\x02\x0fGaon::Authz::V1b\x06proto3"
+	"\x16POLICY_STATUS_ARCHIVED\x10\x032\xe5\a\n" +
+	"\rPolicyService\x12Y\n" +
+	"\fCreatePolicy\x12#.garam.authz.v1.CreatePolicyRequest\x1a$.garam.authz.v1.CreatePolicyResponse\x12e\n" +
+	"\x10AddPolicyVersion\x12'.garam.authz.v1.AddPolicyVersionRequest\x1a(.garam.authz.v1.AddPolicyVersionResponse\x12Y\n" +
+	"\fListPolicies\x12#.garam.authz.v1.ListPoliciesRequest\x1a$.garam.authz.v1.ListPoliciesResponse\x12k\n" +
+	"\x12ListPolicyVersions\x12).garam.authz.v1.ListPolicyVersionsRequest\x1a*.garam.authz.v1.ListPolicyVersionsResponse\x12_\n" +
+	"\x0eActivatePolicy\x12%.garam.authz.v1.ActivatePolicyRequest\x1a&.garam.authz.v1.ActivatePolicyResponse\x12\\\n" +
+	"\rArchivePolicy\x12$.garam.authz.v1.ArchivePolicyRequest\x1a%.garam.authz.v1.ArchivePolicyResponse\x12_\n" +
+	"\x0eRollbackPolicy\x12%.garam.authz.v1.RollbackPolicyRequest\x1a&.garam.authz.v1.RollbackPolicyResponse\x12Y\n" +
+	"\fAttachPolicy\x12#.garam.authz.v1.AttachPolicyRequest\x1a$.garam.authz.v1.AttachPolicyResponse\x12Y\n" +
+	"\fDetachPolicy\x12#.garam.authz.v1.DetachPolicyRequest\x1a$.garam.authz.v1.DetachPolicyResponse\x12t\n" +
+	"\x15ListPolicyAttachments\x12,.garam.authz.v1.ListPolicyAttachmentsRequest\x1a-.garam.authz.v1.ListPolicyAttachmentsResponseB\xb6\x01\n" +
+	"\x12com.garam.authz.v1B\vPolicyProtoP\x01Z9github.com/garamsh/garam/proto/gen/garam/authz/v1;authzv1\xa2\x02\x03GAX\xaa\x02\x0eGaram.Authz.V1\xca\x02\x0eGaram\\Authz\\V1\xe2\x02\x1aGaram\\Authz\\V1\\GPBMetadata\xea\x02\x10Garam::Authz::V1b\x06proto3"
 
 var (
-	file_gaon_authz_v1_policy_proto_rawDescOnce sync.Once
-	file_gaon_authz_v1_policy_proto_rawDescData []byte
+	file_garam_authz_v1_policy_proto_rawDescOnce sync.Once
+	file_garam_authz_v1_policy_proto_rawDescData []byte
 )
 
-func file_gaon_authz_v1_policy_proto_rawDescGZIP() []byte {
-	file_gaon_authz_v1_policy_proto_rawDescOnce.Do(func() {
-		file_gaon_authz_v1_policy_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_gaon_authz_v1_policy_proto_rawDesc), len(file_gaon_authz_v1_policy_proto_rawDesc)))
+func file_garam_authz_v1_policy_proto_rawDescGZIP() []byte {
+	file_garam_authz_v1_policy_proto_rawDescOnce.Do(func() {
+		file_garam_authz_v1_policy_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_garam_authz_v1_policy_proto_rawDesc), len(file_garam_authz_v1_policy_proto_rawDesc)))
 	})
-	return file_gaon_authz_v1_policy_proto_rawDescData
+	return file_garam_authz_v1_policy_proto_rawDescData
 }
 
-var file_gaon_authz_v1_policy_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_gaon_authz_v1_policy_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
-var file_gaon_authz_v1_policy_proto_goTypes = []any{
-	(PolicyStatus)(0),                     // 0: gaon.authz.v1.PolicyStatus
-	(*Policy)(nil),                        // 1: gaon.authz.v1.Policy
-	(*PolicyVersion)(nil),                 // 2: gaon.authz.v1.PolicyVersion
-	(*CreatePolicyRequest)(nil),           // 3: gaon.authz.v1.CreatePolicyRequest
-	(*CreatePolicyResponse)(nil),          // 4: gaon.authz.v1.CreatePolicyResponse
-	(*AddPolicyVersionRequest)(nil),       // 5: gaon.authz.v1.AddPolicyVersionRequest
-	(*AddPolicyVersionResponse)(nil),      // 6: gaon.authz.v1.AddPolicyVersionResponse
-	(*ListPoliciesRequest)(nil),           // 7: gaon.authz.v1.ListPoliciesRequest
-	(*ListPoliciesResponse)(nil),          // 8: gaon.authz.v1.ListPoliciesResponse
-	(*ListPolicyVersionsRequest)(nil),     // 9: gaon.authz.v1.ListPolicyVersionsRequest
-	(*ListPolicyVersionsResponse)(nil),    // 10: gaon.authz.v1.ListPolicyVersionsResponse
-	(*ActivatePolicyRequest)(nil),         // 11: gaon.authz.v1.ActivatePolicyRequest
-	(*ActivatePolicyResponse)(nil),        // 12: gaon.authz.v1.ActivatePolicyResponse
-	(*ArchivePolicyRequest)(nil),          // 13: gaon.authz.v1.ArchivePolicyRequest
-	(*ArchivePolicyResponse)(nil),         // 14: gaon.authz.v1.ArchivePolicyResponse
-	(*RollbackPolicyRequest)(nil),         // 15: gaon.authz.v1.RollbackPolicyRequest
-	(*RollbackPolicyResponse)(nil),        // 16: gaon.authz.v1.RollbackPolicyResponse
-	(*PolicyAttachment)(nil),              // 17: gaon.authz.v1.PolicyAttachment
-	(*AttachPolicyRequest)(nil),           // 18: gaon.authz.v1.AttachPolicyRequest
-	(*AttachPolicyResponse)(nil),          // 19: gaon.authz.v1.AttachPolicyResponse
-	(*DetachPolicyRequest)(nil),           // 20: gaon.authz.v1.DetachPolicyRequest
-	(*DetachPolicyResponse)(nil),          // 21: gaon.authz.v1.DetachPolicyResponse
-	(*ListPolicyAttachmentsRequest)(nil),  // 22: gaon.authz.v1.ListPolicyAttachmentsRequest
-	(*ListPolicyAttachmentsResponse)(nil), // 23: gaon.authz.v1.ListPolicyAttachmentsResponse
+var file_garam_authz_v1_policy_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_garam_authz_v1_policy_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
+var file_garam_authz_v1_policy_proto_goTypes = []any{
+	(PolicyStatus)(0),                     // 0: garam.authz.v1.PolicyStatus
+	(*Policy)(nil),                        // 1: garam.authz.v1.Policy
+	(*PolicyVersion)(nil),                 // 2: garam.authz.v1.PolicyVersion
+	(*CreatePolicyRequest)(nil),           // 3: garam.authz.v1.CreatePolicyRequest
+	(*CreatePolicyResponse)(nil),          // 4: garam.authz.v1.CreatePolicyResponse
+	(*AddPolicyVersionRequest)(nil),       // 5: garam.authz.v1.AddPolicyVersionRequest
+	(*AddPolicyVersionResponse)(nil),      // 6: garam.authz.v1.AddPolicyVersionResponse
+	(*ListPoliciesRequest)(nil),           // 7: garam.authz.v1.ListPoliciesRequest
+	(*ListPoliciesResponse)(nil),          // 8: garam.authz.v1.ListPoliciesResponse
+	(*ListPolicyVersionsRequest)(nil),     // 9: garam.authz.v1.ListPolicyVersionsRequest
+	(*ListPolicyVersionsResponse)(nil),    // 10: garam.authz.v1.ListPolicyVersionsResponse
+	(*ActivatePolicyRequest)(nil),         // 11: garam.authz.v1.ActivatePolicyRequest
+	(*ActivatePolicyResponse)(nil),        // 12: garam.authz.v1.ActivatePolicyResponse
+	(*ArchivePolicyRequest)(nil),          // 13: garam.authz.v1.ArchivePolicyRequest
+	(*ArchivePolicyResponse)(nil),         // 14: garam.authz.v1.ArchivePolicyResponse
+	(*RollbackPolicyRequest)(nil),         // 15: garam.authz.v1.RollbackPolicyRequest
+	(*RollbackPolicyResponse)(nil),        // 16: garam.authz.v1.RollbackPolicyResponse
+	(*PolicyAttachment)(nil),              // 17: garam.authz.v1.PolicyAttachment
+	(*AttachPolicyRequest)(nil),           // 18: garam.authz.v1.AttachPolicyRequest
+	(*AttachPolicyResponse)(nil),          // 19: garam.authz.v1.AttachPolicyResponse
+	(*DetachPolicyRequest)(nil),           // 20: garam.authz.v1.DetachPolicyRequest
+	(*DetachPolicyResponse)(nil),          // 21: garam.authz.v1.DetachPolicyResponse
+	(*ListPolicyAttachmentsRequest)(nil),  // 22: garam.authz.v1.ListPolicyAttachmentsRequest
+	(*ListPolicyAttachmentsResponse)(nil), // 23: garam.authz.v1.ListPolicyAttachmentsResponse
 	(*timestamppb.Timestamp)(nil),         // 24: google.protobuf.Timestamp
 }
-var file_gaon_authz_v1_policy_proto_depIdxs = []int32{
-	0,  // 0: gaon.authz.v1.Policy.status:type_name -> gaon.authz.v1.PolicyStatus
-	24, // 1: gaon.authz.v1.Policy.created_at:type_name -> google.protobuf.Timestamp
-	24, // 2: gaon.authz.v1.Policy.updated_at:type_name -> google.protobuf.Timestamp
-	24, // 3: gaon.authz.v1.PolicyVersion.created_at:type_name -> google.protobuf.Timestamp
-	1,  // 4: gaon.authz.v1.CreatePolicyResponse.policy:type_name -> gaon.authz.v1.Policy
-	2,  // 5: gaon.authz.v1.AddPolicyVersionResponse.version:type_name -> gaon.authz.v1.PolicyVersion
-	1,  // 6: gaon.authz.v1.ListPoliciesResponse.policies:type_name -> gaon.authz.v1.Policy
-	2,  // 7: gaon.authz.v1.ListPolicyVersionsResponse.versions:type_name -> gaon.authz.v1.PolicyVersion
-	1,  // 8: gaon.authz.v1.ActivatePolicyResponse.policy:type_name -> gaon.authz.v1.Policy
-	1,  // 9: gaon.authz.v1.ArchivePolicyResponse.policy:type_name -> gaon.authz.v1.Policy
-	1,  // 10: gaon.authz.v1.RollbackPolicyResponse.policy:type_name -> gaon.authz.v1.Policy
-	24, // 11: gaon.authz.v1.PolicyAttachment.created_at:type_name -> google.protobuf.Timestamp
-	17, // 12: gaon.authz.v1.AttachPolicyResponse.attachment:type_name -> gaon.authz.v1.PolicyAttachment
-	17, // 13: gaon.authz.v1.ListPolicyAttachmentsResponse.attachments:type_name -> gaon.authz.v1.PolicyAttachment
-	3,  // 14: gaon.authz.v1.PolicyService.CreatePolicy:input_type -> gaon.authz.v1.CreatePolicyRequest
-	5,  // 15: gaon.authz.v1.PolicyService.AddPolicyVersion:input_type -> gaon.authz.v1.AddPolicyVersionRequest
-	7,  // 16: gaon.authz.v1.PolicyService.ListPolicies:input_type -> gaon.authz.v1.ListPoliciesRequest
-	9,  // 17: gaon.authz.v1.PolicyService.ListPolicyVersions:input_type -> gaon.authz.v1.ListPolicyVersionsRequest
-	11, // 18: gaon.authz.v1.PolicyService.ActivatePolicy:input_type -> gaon.authz.v1.ActivatePolicyRequest
-	13, // 19: gaon.authz.v1.PolicyService.ArchivePolicy:input_type -> gaon.authz.v1.ArchivePolicyRequest
-	15, // 20: gaon.authz.v1.PolicyService.RollbackPolicy:input_type -> gaon.authz.v1.RollbackPolicyRequest
-	18, // 21: gaon.authz.v1.PolicyService.AttachPolicy:input_type -> gaon.authz.v1.AttachPolicyRequest
-	20, // 22: gaon.authz.v1.PolicyService.DetachPolicy:input_type -> gaon.authz.v1.DetachPolicyRequest
-	22, // 23: gaon.authz.v1.PolicyService.ListPolicyAttachments:input_type -> gaon.authz.v1.ListPolicyAttachmentsRequest
-	4,  // 24: gaon.authz.v1.PolicyService.CreatePolicy:output_type -> gaon.authz.v1.CreatePolicyResponse
-	6,  // 25: gaon.authz.v1.PolicyService.AddPolicyVersion:output_type -> gaon.authz.v1.AddPolicyVersionResponse
-	8,  // 26: gaon.authz.v1.PolicyService.ListPolicies:output_type -> gaon.authz.v1.ListPoliciesResponse
-	10, // 27: gaon.authz.v1.PolicyService.ListPolicyVersions:output_type -> gaon.authz.v1.ListPolicyVersionsResponse
-	12, // 28: gaon.authz.v1.PolicyService.ActivatePolicy:output_type -> gaon.authz.v1.ActivatePolicyResponse
-	14, // 29: gaon.authz.v1.PolicyService.ArchivePolicy:output_type -> gaon.authz.v1.ArchivePolicyResponse
-	16, // 30: gaon.authz.v1.PolicyService.RollbackPolicy:output_type -> gaon.authz.v1.RollbackPolicyResponse
-	19, // 31: gaon.authz.v1.PolicyService.AttachPolicy:output_type -> gaon.authz.v1.AttachPolicyResponse
-	21, // 32: gaon.authz.v1.PolicyService.DetachPolicy:output_type -> gaon.authz.v1.DetachPolicyResponse
-	23, // 33: gaon.authz.v1.PolicyService.ListPolicyAttachments:output_type -> gaon.authz.v1.ListPolicyAttachmentsResponse
+var file_garam_authz_v1_policy_proto_depIdxs = []int32{
+	0,  // 0: garam.authz.v1.Policy.status:type_name -> garam.authz.v1.PolicyStatus
+	24, // 1: garam.authz.v1.Policy.created_at:type_name -> google.protobuf.Timestamp
+	24, // 2: garam.authz.v1.Policy.updated_at:type_name -> google.protobuf.Timestamp
+	24, // 3: garam.authz.v1.PolicyVersion.created_at:type_name -> google.protobuf.Timestamp
+	1,  // 4: garam.authz.v1.CreatePolicyResponse.policy:type_name -> garam.authz.v1.Policy
+	2,  // 5: garam.authz.v1.AddPolicyVersionResponse.version:type_name -> garam.authz.v1.PolicyVersion
+	1,  // 6: garam.authz.v1.ListPoliciesResponse.policies:type_name -> garam.authz.v1.Policy
+	2,  // 7: garam.authz.v1.ListPolicyVersionsResponse.versions:type_name -> garam.authz.v1.PolicyVersion
+	1,  // 8: garam.authz.v1.ActivatePolicyResponse.policy:type_name -> garam.authz.v1.Policy
+	1,  // 9: garam.authz.v1.ArchivePolicyResponse.policy:type_name -> garam.authz.v1.Policy
+	1,  // 10: garam.authz.v1.RollbackPolicyResponse.policy:type_name -> garam.authz.v1.Policy
+	24, // 11: garam.authz.v1.PolicyAttachment.created_at:type_name -> google.protobuf.Timestamp
+	17, // 12: garam.authz.v1.AttachPolicyResponse.attachment:type_name -> garam.authz.v1.PolicyAttachment
+	17, // 13: garam.authz.v1.ListPolicyAttachmentsResponse.attachments:type_name -> garam.authz.v1.PolicyAttachment
+	3,  // 14: garam.authz.v1.PolicyService.CreatePolicy:input_type -> garam.authz.v1.CreatePolicyRequest
+	5,  // 15: garam.authz.v1.PolicyService.AddPolicyVersion:input_type -> garam.authz.v1.AddPolicyVersionRequest
+	7,  // 16: garam.authz.v1.PolicyService.ListPolicies:input_type -> garam.authz.v1.ListPoliciesRequest
+	9,  // 17: garam.authz.v1.PolicyService.ListPolicyVersions:input_type -> garam.authz.v1.ListPolicyVersionsRequest
+	11, // 18: garam.authz.v1.PolicyService.ActivatePolicy:input_type -> garam.authz.v1.ActivatePolicyRequest
+	13, // 19: garam.authz.v1.PolicyService.ArchivePolicy:input_type -> garam.authz.v1.ArchivePolicyRequest
+	15, // 20: garam.authz.v1.PolicyService.RollbackPolicy:input_type -> garam.authz.v1.RollbackPolicyRequest
+	18, // 21: garam.authz.v1.PolicyService.AttachPolicy:input_type -> garam.authz.v1.AttachPolicyRequest
+	20, // 22: garam.authz.v1.PolicyService.DetachPolicy:input_type -> garam.authz.v1.DetachPolicyRequest
+	22, // 23: garam.authz.v1.PolicyService.ListPolicyAttachments:input_type -> garam.authz.v1.ListPolicyAttachmentsRequest
+	4,  // 24: garam.authz.v1.PolicyService.CreatePolicy:output_type -> garam.authz.v1.CreatePolicyResponse
+	6,  // 25: garam.authz.v1.PolicyService.AddPolicyVersion:output_type -> garam.authz.v1.AddPolicyVersionResponse
+	8,  // 26: garam.authz.v1.PolicyService.ListPolicies:output_type -> garam.authz.v1.ListPoliciesResponse
+	10, // 27: garam.authz.v1.PolicyService.ListPolicyVersions:output_type -> garam.authz.v1.ListPolicyVersionsResponse
+	12, // 28: garam.authz.v1.PolicyService.ActivatePolicy:output_type -> garam.authz.v1.ActivatePolicyResponse
+	14, // 29: garam.authz.v1.PolicyService.ArchivePolicy:output_type -> garam.authz.v1.ArchivePolicyResponse
+	16, // 30: garam.authz.v1.PolicyService.RollbackPolicy:output_type -> garam.authz.v1.RollbackPolicyResponse
+	19, // 31: garam.authz.v1.PolicyService.AttachPolicy:output_type -> garam.authz.v1.AttachPolicyResponse
+	21, // 32: garam.authz.v1.PolicyService.DetachPolicy:output_type -> garam.authz.v1.DetachPolicyResponse
+	23, // 33: garam.authz.v1.PolicyService.ListPolicyAttachments:output_type -> garam.authz.v1.ListPolicyAttachmentsResponse
 	24, // [24:34] is the sub-list for method output_type
 	14, // [14:24] is the sub-list for method input_type
 	14, // [14:14] is the sub-list for extension type_name
@@ -1443,27 +1443,27 @@ var file_gaon_authz_v1_policy_proto_depIdxs = []int32{
 	0,  // [0:14] is the sub-list for field type_name
 }
 
-func init() { file_gaon_authz_v1_policy_proto_init() }
-func file_gaon_authz_v1_policy_proto_init() {
-	if File_gaon_authz_v1_policy_proto != nil {
+func init() { file_garam_authz_v1_policy_proto_init() }
+func file_garam_authz_v1_policy_proto_init() {
+	if File_garam_authz_v1_policy_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_gaon_authz_v1_policy_proto_rawDesc), len(file_gaon_authz_v1_policy_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_garam_authz_v1_policy_proto_rawDesc), len(file_garam_authz_v1_policy_proto_rawDesc)),
 			NumEnums:      1,
 			NumMessages:   23,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_gaon_authz_v1_policy_proto_goTypes,
-		DependencyIndexes: file_gaon_authz_v1_policy_proto_depIdxs,
-		EnumInfos:         file_gaon_authz_v1_policy_proto_enumTypes,
-		MessageInfos:      file_gaon_authz_v1_policy_proto_msgTypes,
+		GoTypes:           file_garam_authz_v1_policy_proto_goTypes,
+		DependencyIndexes: file_garam_authz_v1_policy_proto_depIdxs,
+		EnumInfos:         file_garam_authz_v1_policy_proto_enumTypes,
+		MessageInfos:      file_garam_authz_v1_policy_proto_msgTypes,
 	}.Build()
-	File_gaon_authz_v1_policy_proto = out.File
-	file_gaon_authz_v1_policy_proto_goTypes = nil
-	file_gaon_authz_v1_policy_proto_depIdxs = nil
+	File_garam_authz_v1_policy_proto = out.File
+	file_garam_authz_v1_policy_proto_goTypes = nil
+	file_garam_authz_v1_policy_proto_depIdxs = nil
 }

@@ -6,11 +6,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/garamsh/gaon/internal/authn"
-	"github.com/garamsh/gaon/internal/errorx"
-	"github.com/garamsh/gaon/internal/grn"
-	"github.com/garamsh/gaon/internal/org"
-	"github.com/garamsh/gaon/internal/user"
+	"github.com/garamsh/garam/internal/authn"
+	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/org"
+	"github.com/garamsh/garam/internal/user"
 )
 
 // fakeProvider proves the provider abstraction: a second provider is a

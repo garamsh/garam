@@ -14,7 +14,7 @@
 |---|---|---|---|---|
 | **Unit** | single function/type in isolation | replace at module boundaries (DB, HTTP, time, FS) | direct call | none |
 | **Integration** | modules cooperating | external systems substituted; SUT is real | `httptest.NewServer` | mocked |
-| **E2E** | built binary against real infra | nothing | real client | **real** — dockerised Postgres (`make db-up`), gated on `GAON_TEST_DATABASE_URL` |
+| **E2E** | built binary against real infra | nothing | real client | **real** — dockerised Postgres (`make db-up`), gated on `GARAM_TEST_DATABASE_URL` |
 
 The app is *not yet a built binary* in integration. **No testcontainers
 in integration** — real Postgres for an integration test is e2e.

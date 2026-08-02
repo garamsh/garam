@@ -1,5 +1,5 @@
 // Package e2e_test exercises the Postgres store implementations, and
-// the services layered over them, against a real database. Set GAON_TEST_DATABASE_URL (e.g. via
+// the services layered over them, against a real database. Set GARAM_TEST_DATABASE_URL (e.g. via
 // `make e2e`, which starts the docker-compose Postgres) to run them;
 // without it every test skips.
 package e2e_test
@@ -24,13 +24,13 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/garamsh/gaon/internal/authn"
-	"github.com/garamsh/gaon/internal/authz"
-	"github.com/garamsh/gaon/internal/errorx"
-	"github.com/garamsh/gaon/internal/grn"
-	"github.com/garamsh/gaon/internal/org"
-	"github.com/garamsh/gaon/internal/user"
-	authzv1 "github.com/garamsh/gaon/proto/gen/gaon/authz/v1"
+	"github.com/garamsh/garam/internal/authn"
+	"github.com/garamsh/garam/internal/authz"
+	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/org"
+	"github.com/garamsh/garam/internal/user"
+	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
 )
 
 var migrateOnce sync.Once
@@ -63,9 +63,9 @@ func TestMigrationsDir_Resolves(t *testing.T) {
 // pool connects to the test database or skips the test.
 func pool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
-	url := os.Getenv("GAON_TEST_DATABASE_URL")
+	url := os.Getenv("GARAM_TEST_DATABASE_URL")
 	if url == "" {
-		t.Skip("GAON_TEST_DATABASE_URL not set; skipping e2e")
+		t.Skip("GARAM_TEST_DATABASE_URL not set; skipping e2e")
 	}
 	migrateOnce.Do(func() {
 		m, err := migrate.New("file://"+migrationsDir(t), url)

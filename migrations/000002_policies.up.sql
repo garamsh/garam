@@ -40,7 +40,7 @@ CREATE TRIGGER policy_versions_append_only
 -- org's parsed statement set, whichever process performed the write.
 CREATE FUNCTION policies_notify_change() RETURNS trigger AS $$
 BEGIN
-    PERFORM pg_notify('gaon_policy_change', coalesce(NEW.org_grn, OLD.org_grn));
+    PERFORM pg_notify('garam_policy_change', coalesce(NEW.org_grn, OLD.org_grn));
     RETURN NULL;
 END;
 $$ LANGUAGE plpgsql;

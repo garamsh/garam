@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/gaon/internal/grn"
-	"github.com/garamsh/gaon/internal/org"
+	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/org"
 )
 
 func TestNewInvitationToken_Format(t *testing.T) {

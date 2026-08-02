@@ -6,9 +6,9 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/garamsh/gaon/internal/errorx"
-	"github.com/garamsh/gaon/internal/grn"
-	authzv1 "github.com/garamsh/gaon/proto/gen/gaon/authz/v1"
+	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/internal/grn"
+	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
 )
 
 // GRPCPolicyManager is the PolicyManager seam over gRPC (ADR-0003

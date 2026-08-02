@@ -33,7 +33,7 @@ and has no runtime dependency.
 ## Consequences
 
 - The policy engine has no external dependency in the request path.
-- The preserved Rego WIP (`~/gaon-authz-wip/`) becomes reference
+- The preserved Rego WIP (`~/garam-authz-wip/`) becomes reference
   material, not a landing candidate in its current shape.
 - The policy document JSON schema must be documented in
   `docs/architecture/authz.md` and validated at write time.

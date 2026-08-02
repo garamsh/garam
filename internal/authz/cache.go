@@ -6,13 +6,13 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/garamsh/gaon/internal/errorx"
-	"github.com/garamsh/gaon/internal/grn"
+	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/internal/grn"
 )
 
 // PolicyChannel is the Postgres LISTEN/NOTIFY channel on which policy
 // writes announce the org whose cached statements went stale.
-const PolicyChannel = "gaon_policy_change"
+const PolicyChannel = "garam_policy_change"
 
 // PolicySource yields the statements an org's active policies grant a
 // set of subjects. Check and Explain read through it, so the engine

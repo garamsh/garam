@@ -8,9 +8,9 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/gaon/internal/authz"
-	"github.com/garamsh/gaon/internal/authz/mocks"
-	"github.com/garamsh/gaon/internal/grn"
+	"github.com/garamsh/garam/internal/authz"
+	"github.com/garamsh/garam/internal/authz/mocks"
+	"github.com/garamsh/garam/internal/grn"
 )
 
 func policyDocument(sid string, effect authz.Effect) authz.PolicyDocument {

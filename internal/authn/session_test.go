@@ -7,8 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/gaon/internal/authn"
-	"github.com/garamsh/gaon/internal/grn"
+	"github.com/garamsh/garam/internal/authn"
+	"github.com/garamsh/garam/internal/grn"
 )
 
 func TestNewToken_Unique(t *testing.T) {

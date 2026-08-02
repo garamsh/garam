@@ -8,21 +8,21 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/spf13/cobra"
 
-	"github.com/garamsh/gaon/internal/errorx"
+	"github.com/garamsh/garam/internal/errorx"
 )
 
-// newMigrateCommand constructs `gaon migrate`: apply all pending
+// newMigrateCommand constructs `garam migrate`: apply all pending
 // database migrations.
 func newMigrateCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "migrate",
 		Short: "Apply pending database migrations",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			databaseURL := envOr("GAON_DATABASE_URL", "")
+			databaseURL := envOr("GARAM_DATABASE_URL", "")
 			if databaseURL == "" {
-				return errorx.New(errorx.KindInvalidArgument, "GAON_DATABASE_URL is required")
+				return errorx.New(errorx.KindInvalidArgument, "GARAM_DATABASE_URL is required")
 			}
-			dir := envOr("GAON_MIGRATIONS_DIR", "migrations")
+			dir := envOr("GARAM_MIGRATIONS_DIR", "migrations")
 			m, err := migrate.New("file://"+dir, databaseURL)
 			if err != nil {
 				return errorx.Wrap(err, "migrations")

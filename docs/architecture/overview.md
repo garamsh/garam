@@ -1,6 +1,6 @@
 # Architecture Overview
 
-gaon is the core of a workflow management product: identity,
+garam is the core of a workflow management product: identity,
 organization, and authorization for people and autonomous agents that
 collaborate on a shared plan.
 
@@ -37,7 +37,7 @@ collaborate on a shared plan.
 
 - `api/` — OpenAPI spec (source of truth) + generated server.
 - `proto/` — authz gRPC service definition + buf-generated code.
-- `cmd/gaon/` — thin entrypoint for the cobra CLI.
+- `cmd/garam/` — thin entrypoint for the cobra CLI.
 - `migrations/` — SQL migrations (golang-migrate); sqlc schema source.
 - `tests/e2e/` — store round-trips against real Postgres.
 - `internal/grn/` — identifier; shared primitive.
@@ -57,7 +57,7 @@ sees several domains at once and enforces authentication (session
 cookie) at the boundary; org-role checks go through the `Evaluator`
 seam, implemented by the authz gRPC client (ADR-0003 stage 2).
 `internal/api` and `internal/authz` never import each other; the wire
-contract is `proto/gaon/authz/v1`.
+contract is `proto/garam/authz/v1`.
 
 ## Core abstractions
 

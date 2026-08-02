@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"time"
 
-	apigen "github.com/garamsh/gaon/api"
-	"github.com/garamsh/gaon/internal/errorx"
-	"github.com/garamsh/gaon/internal/org"
+	apigen "github.com/garamsh/garam/api"
+	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/internal/org"
 )
 
 // defaultInvitationTTL applies when the request omits expiresInHours.

@@ -9,9 +9,9 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/garamsh/gaon/internal/authn/db"
-	"github.com/garamsh/gaon/internal/errorx"
-	"github.com/garamsh/gaon/internal/grn"
+	"github.com/garamsh/garam/internal/authn/db"
+	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/internal/grn"
 )
 
 // PostgresSessionStore implements SessionStore against PostgreSQL.

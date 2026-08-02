@@ -36,7 +36,7 @@ A policy is attached to subjects through `policy_attachments
   the union.
 - Attachments live in the same per-org cache entry as the policies they
   belong to, and an attachment write invalidates that entry over the
-  existing `gaon_policy_change` channel.
+  existing `garam_policy_change` channel.
 - An attachment stays inside the policy's org, enforced by the schema.
   An org-owned subject carries the org identifier in its organization
   segment ([ADR-0001](./0001-grn-segments.md)), so the segments must

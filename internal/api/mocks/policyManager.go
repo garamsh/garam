@@ -8,8 +8,8 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/garamsh/gaon/internal/api"
-	"github.com/garamsh/gaon/internal/grn"
+	"github.com/garamsh/garam/internal/api"
+	"github.com/garamsh/garam/internal/grn"
 	mock "github.com/stretchr/testify/mock"
 )
 

@@ -3,7 +3,7 @@ package org
 import (
 	"slices"
 
-	"github.com/garamsh/gaon/internal/errorx"
+	"github.com/garamsh/garam/internal/errorx"
 )
 
 // Role is the org-level permission carried by a Membership. Roles are

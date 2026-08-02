@@ -6,7 +6,7 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"golang.org/x/oauth2"
 
-	"github.com/garamsh/gaon/internal/errorx"
+	"github.com/garamsh/garam/internal/errorx"
 )
 
 // GoogleConfig configures the Google provider. Issuer defaults to

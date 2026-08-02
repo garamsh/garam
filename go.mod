@@ -1,4 +1,4 @@
-module github.com/garamsh/gaon
+module github.com/garamsh/garam
 
 go 1.26.5
 

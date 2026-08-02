@@ -1,4 +1,4 @@
-# gaon — docs
+# garam — docs
 
 Start here. Every document is in English, Markdown, and lives next to
 the code it describes.

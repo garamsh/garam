@@ -11,9 +11,9 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/garamsh/gaon/internal/authz/db"
-	"github.com/garamsh/gaon/internal/errorx"
-	"github.com/garamsh/gaon/internal/grn"
+	"github.com/garamsh/garam/internal/authz/db"
+	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/internal/grn"
 )
 
 // PostgresStore implements Store against PostgreSQL. The queries are

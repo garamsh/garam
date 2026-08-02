@@ -42,6 +42,3 @@ func (u *User) GRN() grn.GRN       { return u.grn }
 func (u *User) Nickname() string   { return u.nickname }
 func (u *User) Roles() []string    { return u.roles }
 func (u *User) Policies() []string { return u.policies }
-
-// Kind reports the resource kind for authz purposes.
-func (u *User) Kind() string { return ServiceType }

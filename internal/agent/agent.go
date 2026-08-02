@@ -35,6 +35,3 @@ func (a *Agent) GRN() grn.GRN       { return a.grn }
 func (a *Agent) Name() string       { return a.name }
 func (a *Agent) Roles() []string    { return a.roles }
 func (a *Agent) Policies() []string { return a.policies }
-
-// Kind reports the resource kind for authz purposes.
-func (a *Agent) Kind() string { return ServiceType }

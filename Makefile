@@ -9,7 +9,10 @@ GOIMPORTS := go run golang.org/x/tools/cmd/goimports@v0.48.0
 GARAM_DB_PORT ?= 55432
 TEST_DATABASE_URL ?= postgres://garam:garam@localhost:$(GARAM_DB_PORT)/garam?sslmode=disable
 
+PNPM := pnpm --dir web
+
 .PHONY: lint format test build mock gen check-gen e2e db-up db-down ci
+.PHONY: web-install web-lint web-test web-build web-gen web-check-gen web-e2e web-ci
 
 lint:
 	go vet ./...
@@ -57,3 +60,37 @@ e2e:
 	GARAM_TEST_DATABASE_URL='$(TEST_DATABASE_URL)' go test -count=1 ./tests/e2e/...
 
 ci: format lint test build check-gen
+
+# ---------------------------------------------------------------------
+# web/ — the Next.js frontend (ADR-0009). It keeps its own toolchain and
+# lockfile; `web-ci` is the gate CI runs alongside `ci`.
+# ---------------------------------------------------------------------
+
+web-install:
+	$(PNPM) install --frozen-lockfile
+
+web-lint:
+	$(PNPM) lint
+	$(PNPM) typecheck
+
+web-test:
+	$(PNPM) test
+
+web-build:
+	$(PNPM) build
+
+# web-gen regenerates the API types the frontend consumes from the
+# OpenAPI spec, which stays the contract's source of truth.
+web-gen:
+	$(PNPM) gen:api
+
+web-check-gen: web-gen
+	git diff --exit-code -- web/src/types/api.ts
+
+# web-e2e drives the built app in a real browser against a running
+# backend. It needs `db-up`, `garam migrate`, `garam serve authz` and
+# `garam serve api` first — see the web section of the README.
+web-e2e:
+	$(PNPM) e2e
+
+web-ci: web-lint web-test web-build web-check-gen

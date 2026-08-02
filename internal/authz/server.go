@@ -108,7 +108,6 @@ func orgGRNOf(object grn.GRN) grn.GRN {
 
 // checkInput is a parsed Check/Explain request.
 type checkInput struct {
-	subject    grn.GRN
 	object     grn.GRN
 	action     string
 	statements []Statement
@@ -117,8 +116,7 @@ type checkInput struct {
 // parseInput validates the wire request once at the transport
 // boundary; downstream code trusts the parsed values.
 func parseInput(subjectGRN, objectGRN, action string, stmts []*authzv1.Statement) (checkInput, error) {
-	subject, err := grn.Parse(subjectGRN)
-	if err != nil {
+	if _, err := grn.Parse(subjectGRN); err != nil {
 		return checkInput{}, errorx.Wrap(err, "subject_grn")
 	}
 	object, err := grn.Parse(objectGRN)
@@ -144,7 +142,7 @@ func parseInput(subjectGRN, objectGRN, action string, stmts []*authzv1.Statement
 			Resource: p.GetResource(),
 		})
 	}
-	return checkInput{subject: subject, object: object, action: action, statements: statements}, nil
+	return checkInput{object: object, action: action, statements: statements}, nil
 }
 
 func effectFromProto(e authzv1.Effect) (Effect, error) {

@@ -14,7 +14,6 @@ const (
 type Context struct {
 	Object Object
 	Action string
-	Env    map[string]string
 }
 
 // Evaluator evaluates the statements applicable to a request and

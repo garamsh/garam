@@ -110,8 +110,8 @@ listener stops, `gaon serve authz` reports it and single-process
 invalidation still holds.
 
 Lifecycle is served by `PolicyService` in `proto/gaon/authz/v1`:
-create, append a version, list policies and versions, activate, and
-roll back. Documents are validated at the write boundary, so a stored
+create, append a version, list policies and versions, activate,
+archive, and roll back. Documents are validated at the write boundary, so a stored
 document always parses.
 
 ## Components

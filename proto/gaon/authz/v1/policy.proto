@@ -15,7 +15,7 @@ service PolicyService {
   // unchanged until a rollback moves the pointer.
   rpc AddPolicyVersion(AddPolicyVersionRequest) returns (AddPolicyVersionResponse);
 
-  // ListPolicies lists an org's policies, newest GRN order.
+  // ListPolicies lists an org's policies in ascending GRN order.
   rpc ListPolicies(ListPoliciesRequest) returns (ListPoliciesResponse);
 
   // ListPolicyVersions lists a policy's versions, oldest first.
@@ -23,6 +23,10 @@ service PolicyService {
 
   // ActivatePolicy makes a draft policy count in evaluation.
   rpc ActivatePolicy(ActivatePolicyRequest) returns (ActivatePolicyResponse);
+
+  // ArchivePolicy retires a policy: it is retained with its versions
+  // and stops contributing statements to checks.
+  rpc ArchivePolicy(ArchivePolicyRequest) returns (ArchivePolicyResponse);
 
   // RollbackPolicy points the policy at an existing earlier version.
   rpc RollbackPolicy(RollbackPolicyRequest) returns (RollbackPolicyResponse);
@@ -103,6 +107,14 @@ message ActivatePolicyRequest {
 }
 
 message ActivatePolicyResponse {
+  Policy policy = 1;
+}
+
+message ArchivePolicyRequest {
+  string policy_grn = 1;
+}
+
+message ArchivePolicyResponse {
   Policy policy = 1;
 }
 

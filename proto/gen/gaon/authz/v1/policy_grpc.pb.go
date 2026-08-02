@@ -25,6 +25,7 @@ const (
 	PolicyService_ListPolicies_FullMethodName       = "/gaon.authz.v1.PolicyService/ListPolicies"
 	PolicyService_ListPolicyVersions_FullMethodName = "/gaon.authz.v1.PolicyService/ListPolicyVersions"
 	PolicyService_ActivatePolicy_FullMethodName     = "/gaon.authz.v1.PolicyService/ActivatePolicy"
+	PolicyService_ArchivePolicy_FullMethodName      = "/gaon.authz.v1.PolicyService/ArchivePolicy"
 	PolicyService_RollbackPolicy_FullMethodName     = "/gaon.authz.v1.PolicyService/RollbackPolicy"
 )
 
@@ -41,12 +42,15 @@ type PolicyServiceClient interface {
 	// AddPolicyVersion appends a version. The default version is
 	// unchanged until a rollback moves the pointer.
 	AddPolicyVersion(ctx context.Context, in *AddPolicyVersionRequest, opts ...grpc.CallOption) (*AddPolicyVersionResponse, error)
-	// ListPolicies lists an org's policies, newest GRN order.
+	// ListPolicies lists an org's policies in ascending GRN order.
 	ListPolicies(ctx context.Context, in *ListPoliciesRequest, opts ...grpc.CallOption) (*ListPoliciesResponse, error)
 	// ListPolicyVersions lists a policy's versions, oldest first.
 	ListPolicyVersions(ctx context.Context, in *ListPolicyVersionsRequest, opts ...grpc.CallOption) (*ListPolicyVersionsResponse, error)
 	// ActivatePolicy makes a draft policy count in evaluation.
 	ActivatePolicy(ctx context.Context, in *ActivatePolicyRequest, opts ...grpc.CallOption) (*ActivatePolicyResponse, error)
+	// ArchivePolicy retires a policy: it is retained with its versions
+	// and stops contributing statements to checks.
+	ArchivePolicy(ctx context.Context, in *ArchivePolicyRequest, opts ...grpc.CallOption) (*ArchivePolicyResponse, error)
 	// RollbackPolicy points the policy at an existing earlier version.
 	RollbackPolicy(ctx context.Context, in *RollbackPolicyRequest, opts ...grpc.CallOption) (*RollbackPolicyResponse, error)
 }
@@ -109,6 +113,16 @@ func (c *policyServiceClient) ActivatePolicy(ctx context.Context, in *ActivatePo
 	return out, nil
 }
 
+func (c *policyServiceClient) ArchivePolicy(ctx context.Context, in *ArchivePolicyRequest, opts ...grpc.CallOption) (*ArchivePolicyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ArchivePolicyResponse)
+	err := c.cc.Invoke(ctx, PolicyService_ArchivePolicy_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *policyServiceClient) RollbackPolicy(ctx context.Context, in *RollbackPolicyRequest, opts ...grpc.CallOption) (*RollbackPolicyResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RollbackPolicyResponse)
@@ -132,12 +146,15 @@ type PolicyServiceServer interface {
 	// AddPolicyVersion appends a version. The default version is
 	// unchanged until a rollback moves the pointer.
 	AddPolicyVersion(context.Context, *AddPolicyVersionRequest) (*AddPolicyVersionResponse, error)
-	// ListPolicies lists an org's policies, newest GRN order.
+	// ListPolicies lists an org's policies in ascending GRN order.
 	ListPolicies(context.Context, *ListPoliciesRequest) (*ListPoliciesResponse, error)
 	// ListPolicyVersions lists a policy's versions, oldest first.
 	ListPolicyVersions(context.Context, *ListPolicyVersionsRequest) (*ListPolicyVersionsResponse, error)
 	// ActivatePolicy makes a draft policy count in evaluation.
 	ActivatePolicy(context.Context, *ActivatePolicyRequest) (*ActivatePolicyResponse, error)
+	// ArchivePolicy retires a policy: it is retained with its versions
+	// and stops contributing statements to checks.
+	ArchivePolicy(context.Context, *ArchivePolicyRequest) (*ArchivePolicyResponse, error)
 	// RollbackPolicy points the policy at an existing earlier version.
 	RollbackPolicy(context.Context, *RollbackPolicyRequest) (*RollbackPolicyResponse, error)
 	mustEmbedUnimplementedPolicyServiceServer()
@@ -164,6 +181,9 @@ func (UnimplementedPolicyServiceServer) ListPolicyVersions(context.Context, *Lis
 }
 func (UnimplementedPolicyServiceServer) ActivatePolicy(context.Context, *ActivatePolicyRequest) (*ActivatePolicyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ActivatePolicy not implemented")
+}
+func (UnimplementedPolicyServiceServer) ArchivePolicy(context.Context, *ArchivePolicyRequest) (*ArchivePolicyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ArchivePolicy not implemented")
 }
 func (UnimplementedPolicyServiceServer) RollbackPolicy(context.Context, *RollbackPolicyRequest) (*RollbackPolicyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RollbackPolicy not implemented")
@@ -279,6 +299,24 @@ func _PolicyService_ActivatePolicy_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PolicyService_ArchivePolicy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ArchivePolicyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PolicyServiceServer).ArchivePolicy(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PolicyService_ArchivePolicy_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PolicyServiceServer).ArchivePolicy(ctx, req.(*ArchivePolicyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PolicyService_RollbackPolicy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RollbackPolicyRequest)
 	if err := dec(in); err != nil {
@@ -323,6 +361,10 @@ var PolicyService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ActivatePolicy",
 			Handler:    _PolicyService_ActivatePolicy_Handler,
+		},
+		{
+			MethodName: "ArchivePolicy",
+			Handler:    _PolicyService_ArchivePolicy_Handler,
 		},
 		{
 			MethodName: "RollbackPolicy",

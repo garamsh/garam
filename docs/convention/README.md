@@ -18,7 +18,6 @@ Rules every contributor follows. PR review checks against this index. The PM own
 - [git.md](./git.md) — branches, commits, PR titles, merging
 - [review.md](./review.md) — what makes a review valid; how authors respond
 - [documentation.md](./documentation.md) — what makes documentation valid
-- [planning.md](./planning.md) — PLAN.md structure for non-trivial work
 - [ci.md](./ci.md) — local ↔ CI parity, pre-commit hooks
 
 ## Independence

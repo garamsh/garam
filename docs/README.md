@@ -19,7 +19,6 @@ Rules every contributor follows. PR review checks against these.
 - [git.md](./convention/git.md)
 - [review.md](./convention/review.md)
 - [documentation.md](./convention/documentation.md)
-- [planning.md](./convention/planning.md)
 - [ci.md](./convention/ci.md)
 
 ## Architecture

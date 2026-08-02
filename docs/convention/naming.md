@@ -21,7 +21,7 @@ Organization and project segments identify the owning resources;
 ### service_type catalogue
 
 Add or change entries in both the catalogue below and the same table
-in `naming.md`.
+in [`grn-model.md`](../architecture/grn-model.md).
 
 | service_type | Meaning | Code |
 |--------------|---------|------|

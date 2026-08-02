@@ -10,10 +10,11 @@ Each `internal/<domain>/` package contains:
 - `store.go` — `Store` interface.
 - `postgres.go` — sqlc-backed implementation (`internal/<domain>/db/` holds the generated queries).
 - `*_test.go` — tests.
-- `mocks/` — mockery v3 output.
+- `mocks/` — mockery v3 output, for interfaces tests actually consume (testing.md §Mocking strategy).
 
 Domains cooperate through `grn.GRN`, never through each other's
-concrete types.
+concrete types. The `agent` domain is planning-stage: it has the
+aggregate and `Store` interface but no persistence yet.
 
 ## `internal/grn`
 

@@ -20,4 +20,4 @@ Module's existing conventions > project conventions > personal taste. "My way is
 ## Boundaries
 
 - No style-only diffs. Restyling existing code to your taste is a scope violation; changing the established style project-wide is a `proposal` issue, not a drive-by edit.
-- Comments are governed by `code-comments.md`, not this file.
+- Comments are governed by `comments.md`, not this file.

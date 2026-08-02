@@ -2,7 +2,7 @@
 // github.com/vektra/mockery
 // template: testify
 
-package agent_test
+package mocks
 
 import (
 	"context"

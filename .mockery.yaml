@@ -3,8 +3,10 @@ template: testify
 formatter: goimports
 log-level: info
 dir: "{{.InterfaceDir}}/mocks"
-filename: "{{.InterfaceName | firstLower}}_test.go"
-pkgname: "{{.SrcPackageName}}_test"
+# Mocks live in importable packages: Go cannot import a package made
+# only of _test.go files.
+filename: "{{.InterfaceName | firstLower}}.go"
+pkgname: "mocks"
 structname: "Mock{{.InterfaceName}}"
 packages:
   github.com/garamsh/gaon/internal/org:
@@ -18,9 +20,4 @@ packages:
       Store: {}
   github.com/garamsh/gaon/internal/api:
     interfaces:
-      Evaluator:
-        config:
-          # Imported by internal/api's tests, so it must build as a
-          # regular package; test-only files cannot be imported.
-          filename: "evaluator.go"
-          pkgname: "mocks"
+      Evaluator: {}

@@ -1,0 +1,116 @@
+syntax = "proto3";
+
+package gaon.authz.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// PolicyService manages the org-scoped policy documents the engine
+// owns (ADR-0002). Versions are append-only; activation and rollback
+// move the default-version pointer.
+service PolicyService {
+  // CreatePolicy stores a new draft policy with its first version.
+  rpc CreatePolicy(CreatePolicyRequest) returns (CreatePolicyResponse);
+
+  // AddPolicyVersion appends a version. The default version is
+  // unchanged until a rollback moves the pointer.
+  rpc AddPolicyVersion(AddPolicyVersionRequest) returns (AddPolicyVersionResponse);
+
+  // ListPolicies lists an org's policies, newest GRN order.
+  rpc ListPolicies(ListPoliciesRequest) returns (ListPoliciesResponse);
+
+  // ListPolicyVersions lists a policy's versions, oldest first.
+  rpc ListPolicyVersions(ListPolicyVersionsRequest) returns (ListPolicyVersionsResponse);
+
+  // ActivatePolicy makes a draft policy count in evaluation.
+  rpc ActivatePolicy(ActivatePolicyRequest) returns (ActivatePolicyResponse);
+
+  // RollbackPolicy points the policy at an existing earlier version.
+  rpc RollbackPolicy(RollbackPolicyRequest) returns (RollbackPolicyResponse);
+}
+
+// PolicyStatus is a policy's lifecycle state. Only ACTIVE policies
+// contribute statements to a check.
+enum PolicyStatus {
+  POLICY_STATUS_UNSPECIFIED = 0;
+  POLICY_STATUS_DRAFT = 1;
+  POLICY_STATUS_ACTIVE = 2;
+  POLICY_STATUS_ARCHIVED = 3;
+}
+
+// Policy is a versioned, org-managed rule set.
+message Policy {
+  string grn = 1;
+  string org_grn = 2;
+  string name = 3;
+  PolicyStatus status = 4;
+  // default_version is the version evaluated while the policy is
+  // active.
+  int32 default_version = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+}
+
+// PolicyVersion is one immutable revision of a policy's document.
+message PolicyVersion {
+  string policy_grn = 1;
+  int32 version = 2;
+  // document is the policy document JSON (ADR-0002): a Version string
+  // and a Statement list.
+  string document = 3;
+  string created_by = 4;
+  google.protobuf.Timestamp created_at = 5;
+}
+
+message CreatePolicyRequest {
+  string org_grn = 1;
+  string name = 2;
+  string document = 3;
+  string created_by = 4;
+}
+
+message CreatePolicyResponse {
+  Policy policy = 1;
+}
+
+message AddPolicyVersionRequest {
+  string policy_grn = 1;
+  string document = 2;
+  string created_by = 3;
+}
+
+message AddPolicyVersionResponse {
+  PolicyVersion version = 1;
+}
+
+message ListPoliciesRequest {
+  string org_grn = 1;
+}
+
+message ListPoliciesResponse {
+  repeated Policy policies = 1;
+}
+
+message ListPolicyVersionsRequest {
+  string policy_grn = 1;
+}
+
+message ListPolicyVersionsResponse {
+  repeated PolicyVersion versions = 1;
+}
+
+message ActivatePolicyRequest {
+  string policy_grn = 1;
+}
+
+message ActivatePolicyResponse {
+  Policy policy = 1;
+}
+
+message RollbackPolicyRequest {
+  string policy_grn = 1;
+  int32 version = 2;
+}
+
+message RollbackPolicyResponse {
+  Policy policy = 1;
+}

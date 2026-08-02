@@ -29,11 +29,12 @@ const (
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
 // AuthzService is the policy engine's wire contract (ADR-0003). The
-// caller collects the statements that apply to the subject; the engine
-// matches strings only and never imports a domain.
+// engine evaluates the union of the caller's role-derived statements
+// and the org's persisted policies (ADR-0007); it matches strings only
+// and never imports a domain.
 type AuthzServiceClient interface {
 	// Check answers whether the subject may perform the action on the
-	// object under the given statements.
+	// object.
 	Check(ctx context.Context, in *CheckRequest, opts ...grpc.CallOption) (*CheckResponse, error)
 	// Explain answers the same question and reports which statements
 	// matched and which produced the final decision.
@@ -73,11 +74,12 @@ func (c *authzServiceClient) Explain(ctx context.Context, in *ExplainRequest, op
 // for forward compatibility.
 //
 // AuthzService is the policy engine's wire contract (ADR-0003). The
-// caller collects the statements that apply to the subject; the engine
-// matches strings only and never imports a domain.
+// engine evaluates the union of the caller's role-derived statements
+// and the org's persisted policies (ADR-0007); it matches strings only
+// and never imports a domain.
 type AuthzServiceServer interface {
 	// Check answers whether the subject may perform the action on the
-	// object under the given statements.
+	// object.
 	Check(context.Context, *CheckRequest) (*CheckResponse, error)
 	// Explain answers the same question and reports which statements
 	// matched and which produced the final decision.

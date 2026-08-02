@@ -88,12 +88,15 @@ Human identity.
 | `grn.GRN` | user identifier (`service_type = "user"`) |
 | `nickname` | display name, not enforced unique |
 | `roles` | directly assigned roles |
-| `policies` | directly assigned policies |
+| `policies` | directly assigned policies; not yet evaluated |
 
 A user can belong to multiple orgs; membership is recorded only in the
 org domain (`Membership` / `org_members`), never duplicated on the
-user. Roles and policies on the user are direct grants; group-derived
-grants resolve at check time.
+user. Roles on the user are direct grants, collected by the api server
+alongside group- and project-derived grants at check time
+([authz.md](./authz.md)). Policies on the user are stored but not yet
+evaluated — an active policy grants org-wide and subject-level
+attachment is future work (ADR-0007).
 
 ## `internal/agent`
 

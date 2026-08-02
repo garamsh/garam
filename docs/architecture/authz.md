@@ -68,6 +68,7 @@ the statements that apply to that resource:
 | Origin | Action patterns | Resource patterns |
 |--------|-----------------|-------------------|
 | org membership role | `Role.Actions()` | the org GRN and `grn:<org>:*` |
+| subject's direct roles | `org.ActionsFor(user.Roles())` | the org GRN and `grn:<org>:*` |
 | target group's roles, when the subject is a member | `org.ActionsFor(group.Roles())` | the group GRN |
 | target project's roles, when the subject is a member | `org.ActionsFor(project.Roles())` | the project GRN |
 
@@ -77,8 +78,14 @@ group and project create and patch endpoints, and are narrowed by
 resource: a group `admin`
 administers that group and nothing else, while an org `admin`
 administers everything the org owns. Unknown role names grant nothing.
-Org membership stays the precondition for every check — a group grant
-never admits a non-member of the org.
+Org membership stays the precondition for every check — neither a
+group grant nor a direct role admits a non-member of the org.
+
+Roles stored on the user itself are direct grants and carry the org
+role's scope, so a direct role applies in every org the subject
+belongs to. Policies stored on the user are not collected: an active
+policy grants org-wide, and attaching one to a single subject is
+future work (ADR-0007).
 
 ## Policy persistence
 

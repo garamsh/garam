@@ -7,32 +7,54 @@ import (
 	"github.com/garamsh/gaon/internal/errorx"
 	"github.com/garamsh/gaon/internal/grn"
 	"github.com/garamsh/gaon/internal/org"
+	"github.com/garamsh/gaon/internal/user"
 )
 
 // scopedStatements collects the statements that apply to the subject
-// when acting on target: the org membership role, granted over the org
-// and everything it owns, plus the roles the target group or project
-// grants its own members. Group- and project-derived grants resolve
-// here, at check time.
-func (s *Server) scopedStatements(r *http.Request, orgGRN grn.GRN, m *org.Membership, target, subject grn.GRN) ([]Statement, error) {
+// when acting on target: the org membership role and the subject's own
+// direct roles, granted over the org and everything it owns, plus the
+// roles the target group or project grants its own members. Direct,
+// group-, and project-derived grants all resolve here, at check time.
+func (s *Server) scopedStatements(r *http.Request, orgGRN grn.GRN, m *org.Membership, target grn.GRN, u *user.User) ([]Statement, error) {
 	statements := []Statement{{
 		Sid:      "org-role-" + string(m.Role()),
 		Effect:   EffectAllow,
 		Action:   m.Role().Actions(),
 		Resource: []string{orgGRN.String(), orgScope(orgGRN)},
 	}}
+	statements = append(statements, userStatements(orgGRN, u)...)
 	var derived []Statement
 	var err error
 	switch target.ServiceType {
 	case org.ServiceTypeGroup:
-		derived, err = s.groupStatements(r, target, subject)
+		derived, err = s.groupStatements(r, target, u.GRN())
 	case org.ServiceTypeProject:
-		derived, err = s.projectStatements(r, target, subject)
+		derived, err = s.projectStatements(r, target, u.GRN())
 	}
 	if err != nil {
 		return nil, err
 	}
 	return append(statements, derived...), nil
+}
+
+// userStatements returns what the roles stored on the subject grant.
+// They are direct grants: they carry the same scope as the membership
+// role, so they apply within whichever org the subject is acting in —
+// org membership stays the precondition. Unknown role names grant
+// nothing. Policies attached to the subject are not collected here:
+// an active policy grants org-wide and subject-level attachment is
+// future work (ADR-0007).
+func userStatements(orgGRN grn.GRN, u *user.User) []Statement {
+	actions := org.ActionsFor(u.Roles())
+	if len(actions) == 0 {
+		return nil
+	}
+	return []Statement{{
+		Sid:      "user-role-" + u.GRN().Identifier,
+		Effect:   EffectAllow,
+		Action:   actions,
+		Resource: []string{orgGRN.String(), orgScope(orgGRN)},
+	}}
 }
 
 // groupStatements returns what the group grants the subject as one of

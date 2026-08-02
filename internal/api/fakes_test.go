@@ -61,6 +61,14 @@ func (s *fakeUserStore) Get(_ context.Context, g grn.GRN) (*user.User, error) {
 	return u, nil
 }
 
+// grantRoles replaces the stored user with one carrying the given
+// direct roles; login creates users without any.
+func (s *fakeUserStore) grantRoles(g grn.GRN, roles ...string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.byID[g.String()] = user.New(g, s.byID[g.String()].Nickname(), roles...)
+}
+
 // fakeSessionStore is an in-memory authn.SessionStore double.
 type fakeSessionStore struct {
 	mu   sync.Mutex

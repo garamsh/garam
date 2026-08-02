@@ -43,10 +43,12 @@ delete on `Organization`; group and project listing is scoped to one
 organization. Orgs grow by invitation and acceptance, not open signup.
 The org domain owns its action constants (`ActionOrgRead`,
 `ActionGroupRead`, `ActionProjectRead`, …) and `Role.Actions` maps each
-role to the action patterns it grants; the authz evaluator decides.
-Groups and projects are addressed under their organization's HTTP
-paths, and their GRNs carry the owning org in the organization
-segment.
+role to the action patterns it grants; `ActionsFor` does the same for
+the role names a `Group` or `Project` carries as data. The authz
+evaluator decides. Groups and projects are addressed under their
+organization's HTTP paths, and their GRNs carry the owning org in the
+organization segment, so a group or project role is scoped to that
+resource alone (authz.md §Statement collection).
 
 ## `internal/authz`
 

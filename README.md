@@ -25,6 +25,17 @@ go test  ./...
 CI and local run the same commands (`make ci`). See
 [docs/convention/ci.md](./docs/convention/ci.md).
 
+## Local stack
+
+[`deploy/local/`](./deploy/local/) runs everything — Postgres,
+migrations, authz, api, and the frontend behind `--profile web` — in
+containers. See [deploy/local/README.md](./deploy/local/README.md).
+
+```sh
+cp deploy/local/.env.example deploy/local/.env
+docker compose -f deploy/local/docker-compose.yml up --build
+```
+
 ## Web frontend
 
 The Next.js app lives in [`web/`](./web/) and talks to the Go backend

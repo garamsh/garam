@@ -42,6 +42,8 @@ collaborate on a shared plan.
 - `tests/e2e/` — store round-trips against real Postgres.
 - `web/` — Next.js frontend; reaches the API through a same-origin
   `/api/*` rewrite (ADR-0009). Its own toolchain and gate (`make web-ci`).
+- `deploy/local/` — Docker Compose stack running Postgres, migrations,
+  authz, api and (profile-gated) web on one machine.
 - `internal/grn/` — identifier; shared primitive.
 - `internal/errorx/` — typed errors; shared primitive.
 - `internal/cli/` — cobra commands + wiring (`serve api` | `serve authz` | `migrate`).

@@ -1,0 +1,9 @@
+# Build context for deploy/local/Dockerfile: the Go sources, migrations
+# and manifests only.
+.git
+.github
+docs
+web
+deploy
+tests/e2e
+*.md

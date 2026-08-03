@@ -1,7 +1,13 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+} from "@/components/ui/card";
 import { getSession } from "@/features/auth/api/get-session";
 import { GoogleSignInButton } from "@/features/auth/components/google-sign-in-button";
 
@@ -12,16 +18,24 @@ export default async function LoginPage() {
     redirect("/console");
   }
   return (
-    <Card className="w-full max-w-sm">
-      <CardHeader>
-        <h1 className="font-heading text-2xl font-semibold">Sign in to garam</h1>
-        <p className="text-sm text-muted-foreground">
-          Use the Google account your organization invited.
+    <Card className="w-full max-w-sm [--card-spacing:--spacing(6)]">
+      <CardHeader className="gap-2">
+        <h1 className="font-heading text-2xl font-semibold tracking-tight">
+          Sign in to garam
+        </h1>
+        <p className="text-sm text-pretty text-muted-foreground">
+          Use the Google account your organization invited. Accounts are created
+          by invitation, not by signup.
         </p>
       </CardHeader>
       <CardContent className="flex justify-center">
         <GoogleSignInButton />
       </CardContent>
+      <CardFooter className="justify-center text-xs text-muted-foreground">
+        <Link href="/" className="transition-colors hover:text-foreground">
+          Back to the home page
+        </Link>
+      </CardFooter>
     </Card>
   );
 }

@@ -15,6 +15,32 @@ test.describe("signed out", () => {
     ).toBeVisible();
   });
 
+  test("navigates the landing sections from the header", async ({ page }) => {
+    await page.goto("/");
+
+    const nav = page.getByRole("navigation", { name: "Sections" });
+    await nav.getByRole("link", { name: "Authorization" }).click();
+
+    await expect(page).toHaveURL("/#authorization");
+    await expect(
+      page.getByRole("heading", { name: "Every request ends in a decision" }),
+    ).toBeInViewport();
+  });
+
+  test("reaches the login page from the landing page", async ({ page }) => {
+    await page.goto("/");
+
+    await page
+      .getByRole("banner")
+      .getByRole("link", { name: "Sign in" })
+      .click();
+
+    await expect(page).toHaveURL("/login");
+    await expect(
+      page.getByRole("heading", { name: "Sign in to garam" }),
+    ).toBeVisible();
+  });
+
   test("redirects a console page to the login page", async ({ page }) => {
     await page.goto("/console/orgs");
 

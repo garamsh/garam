@@ -24,6 +24,9 @@ describe("login page", () => {
     expect(
       screen.getByRole("link", { name: "Sign in with Google" }),
     ).toHaveAttribute("href", "/api/auth/login/google");
+    expect(
+      screen.getByRole("link", { name: "Back to the home page" }),
+    ).toHaveAttribute("href", "/");
   });
 
   it("sends an already signed-in visitor to the console", async () => {

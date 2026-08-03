@@ -1,0 +1,8 @@
+# Build context for deploy/local/Dockerfile.web.
+node_modules
+.next
+e2e
+test-results
+playwright-report
+.env*
+!.env.example

@@ -44,6 +44,8 @@ collaborate on a shared plan.
   `/api/*` rewrite (ADR-0009). Its own toolchain and gate (`make web-ci`).
   `/` is the public landing page and `/login` the sign-in page; the
   signed-in application lives under `/console`.
+- `deploy/local/` — Docker Compose stack running Postgres, migrations,
+  authz, api and (profile-gated) web on one machine.
 - `internal/grn/` — identifier; shared primitive.
 - `internal/errorx/` — typed errors; shared primitive.
 - `internal/cli/` — cobra commands + wiring (`serve api` | `serve authz` | `migrate`).

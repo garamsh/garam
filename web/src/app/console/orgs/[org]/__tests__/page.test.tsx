@@ -2,7 +2,7 @@ import { screen } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
-import OrgPage from "@/app/(app)/orgs/[org]/page";
+import OrgPage from "@/app/console/orgs/[org]/page";
 import { renderServerComponent } from "@/testing/render";
 import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";

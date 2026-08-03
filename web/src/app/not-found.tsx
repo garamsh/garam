@@ -10,7 +10,7 @@ export default function NotFound() {
         That page does not exist, or it is not yours to see.
       </p>
       <Button asChild variant="outline">
-        <Link href="/orgs">Back to organizations</Link>
+        <Link href="/">Back to the home page</Link>
       </Button>
     </main>
   );

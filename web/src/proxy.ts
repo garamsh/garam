@@ -4,20 +4,21 @@ import { SESSION_COOKIE } from "@/lib/session";
 
 /**
  * Sends visitors without a session cookie to the login page before the
- * app shell renders. This is a fast path, not the authorization gate:
- * a cookie may be expired or revoked, so every authenticated segment
- * still verifies the session against the backend's `/me`.
+ * console shell renders. This is a fast path, not the authorization
+ * gate: a cookie may be expired or revoked, so `/console` verifies the
+ * session against the backend's `/me`, and the login page sends a
+ * visitor who already has a valid one on to the console.
  */
 export function proxy(request: NextRequest) {
   if (request.cookies.has(SESSION_COOKIE)) {
     return NextResponse.next();
   }
-  const login = new URL("/login", request.url);
-  return NextResponse.redirect(login);
+  return NextResponse.redirect(new URL("/login", request.url));
 }
 
 export const config = {
-  // `/login` and the backend proxy must stay reachable while signed
-  // out — the OAuth round trip runs through `/api/auth/*`.
-  matcher: "/((?!api|login|_next/static|_next/image|favicon.ico).*)",
+  // Everything outside the console — the landing page, `/login`, static
+  // assets, and the `/api` rewrite the OAuth round trip runs through —
+  // is public.
+  matcher: "/console/:path*",
 };

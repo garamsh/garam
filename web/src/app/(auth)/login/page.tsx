@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: "Sign in — garam" };
 
 export default async function LoginPage() {
   if (await getSession()) {
-    redirect("/orgs");
+    redirect("/console");
   }
   return (
     <Card className="w-full max-w-sm">

@@ -1,0 +1,38 @@
+# Multi-stage build of the Next.js frontend (ADR-0009) as a standalone
+# server. Build context is `web/`.
+
+FROM node:24.18.1-alpine3.24 AS deps
+
+WORKDIR /app
+RUN npm install -g pnpm@11.11.0
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile
+
+FROM node:24.18.1-alpine3.24 AS build
+
+WORKDIR /app
+RUN npm install -g pnpm@11.11.0
+
+# The `/api/*` rewrite is baked into the build, so the backend URL has
+# to be known here as well as at runtime.
+ARG GARAM_API_URL=http://api:8080
+ENV GARAM_API_URL=$GARAM_API_URL
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+RUN pnpm build
+
+FROM node:24.18.1-alpine3.24
+
+WORKDIR /app
+ENV NODE_ENV=production HOSTNAME=0.0.0.0 PORT=3000
+
+# `output: "standalone"` emits a self-contained server plus the subset
+# of node_modules it needs; static assets are copied alongside it.
+COPY --from=build /app/.next/standalone ./
+COPY --from=build /app/.next/static ./.next/static
+
+USER node
+EXPOSE 3000
+CMD ["node", "server.js"]

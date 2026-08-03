@@ -22,7 +22,7 @@ test.describe("signed out", () => {
     await page.goto("/login");
 
     await expect(
-      page.getByRole("link", { name: "Continue with Google" }),
+      page.getByRole("link", { name: "Sign in with Google" }),
     ).toHaveAttribute("href", "/api/auth/login/google");
   });
 

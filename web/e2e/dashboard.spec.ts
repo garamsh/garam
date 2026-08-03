@@ -56,7 +56,7 @@ test.describe("signed in", () => {
 
     await expect(page).toHaveURL("/login");
     await expect(
-      page.getByRole("link", { name: "Continue with Google" }),
+      page.getByRole("link", { name: "Sign in with Google" }),
     ).toBeVisible();
 
     // The session is revoked server-side, not merely dropped by the

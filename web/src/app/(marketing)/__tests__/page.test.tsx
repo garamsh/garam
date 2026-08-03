@@ -12,13 +12,18 @@ describe("landing page", () => {
         name: "Who belongs to your organization, and what they may do.",
       }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Organizations and members")).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: "One identifier for everything" }),
+      screen.getByRole("heading", { name: "Organizations and invitations" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Every request ends in a decision" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "One name shape, five segments" }),
     ).toBeInTheDocument();
   });
 
-  it("offers the console as the way in", () => {
+  it("offers the console and the login page as the ways in", () => {
     render(<LandingPage />);
 
     for (const link of screen.getAllByRole("link", {
@@ -26,5 +31,9 @@ describe("landing page", () => {
     })) {
       expect(link).toHaveAttribute("href", "/console");
     }
+    expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute(
+      "href",
+      "/login",
+    );
   });
 });

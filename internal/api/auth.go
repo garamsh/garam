@@ -84,7 +84,9 @@ func (s *Server) OauthCallback(w http.ResponseWriter, r *http.Request, provider 
 	s.expireCookie(w, stateCookie)
 	s.expireCookie(w, verifierCookie)
 	s.setCookie(w, sessionCookie, token, s.cfg.SessionTTL)
-	http.Redirect(w, r, "/", http.StatusFound)
+	// `/` is the public landing page; a signed-in visitor belongs in
+	// the console.
+	http.Redirect(w, r, "/console", http.StatusFound)
 }
 
 // Logout revokes the current session.

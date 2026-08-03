@@ -2,7 +2,7 @@ import { screen } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
-import OrgsPage from "@/app/(app)/orgs/page";
+import OrgsPage from "@/app/console/orgs/page";
 import { renderServerComponent } from "@/testing/render";
 import { API_URL, unauthenticated } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
@@ -24,7 +24,7 @@ describe("organizations page", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Acme/ })).toHaveAttribute(
       "href",
-      "/orgs/acme",
+      "/console/orgs/acme",
     );
   });
 

@@ -29,7 +29,7 @@ export default async function OrgsPage() {
             const slug = slugFromGrn(org.grn);
             return (
               <li key={org.grn}>
-                <Link href={`/orgs/${slug}`} className="block">
+                <Link href={`/console/orgs/${slug}`} className="block">
                   <Card className="gap-2 p-5 transition-colors hover:border-ring">
                     <CardTitle>{org.name}</CardTitle>
                     <CardDescription className="font-mono text-xs">

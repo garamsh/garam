@@ -2,7 +2,7 @@ import { expect, test } from "./fixtures";
 
 test.describe("signed in", () => {
   test("lists the caller's organizations", async ({ page, signedIn }) => {
-    await page.goto("/orgs");
+    await page.goto("/console/orgs");
 
     await expect(
       page.getByRole("heading", { name: "Organizations" }),
@@ -17,10 +17,10 @@ test.describe("signed in", () => {
     page,
     signedIn,
   }) => {
-    await page.goto("/orgs");
+    await page.goto("/console/orgs");
     await page.getByRole("link", { name: signedIn.orgName }).click();
 
-    await expect(page).toHaveURL(`/orgs/${signedIn.orgSlug}`);
+    await expect(page).toHaveURL(`/console/orgs/${signedIn.orgSlug}`);
     await expect(
       page.getByRole("heading", { name: signedIn.orgName }),
     ).toBeVisible();
@@ -44,19 +44,27 @@ test.describe("signed in", () => {
   }) => {
     expect(signedIn.orgSlug).toBeTruthy();
 
-    // The backend redirects to `/` after the OAuth callback.
-    await page.goto("/");
+    // The backend redirects to `/console` after the OAuth callback.
+    await page.goto("/console");
 
-    await expect(page).toHaveURL("/orgs");
+    await expect(page).toHaveURL("/console/orgs");
+  });
+
+  test("skips the login page once signed in", async ({ page, signedIn }) => {
+    expect(signedIn.sessionToken).toBeTruthy();
+
+    await page.goto("/login");
+
+    await expect(page).toHaveURL("/console/orgs");
   });
 
   test("signs out back to the login page", async ({ page, signedIn }) => {
-    await page.goto("/orgs");
+    await page.goto("/console/orgs");
     await page.getByRole("button", { name: "Sign out" }).click();
 
     await expect(page).toHaveURL("/login");
     await expect(
-      page.getByRole("link", { name: "Continue with Google" }),
+      page.getByRole("link", { name: "Sign in with Google" }),
     ).toBeVisible();
 
     // The session is revoked server-side, not merely dropped by the
@@ -68,7 +76,7 @@ test.describe("signed in", () => {
         url: "http://localhost:3000",
       },
     ]);
-    await page.goto("/orgs");
+    await page.goto("/console/orgs");
     await expect(page).toHaveURL("/login");
   });
 });

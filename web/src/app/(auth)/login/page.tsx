@@ -1,15 +1,15 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { getSession } from "@/features/auth/api/get-session";
+import { GoogleSignInButton } from "@/features/auth/components/google-sign-in-button";
 
 export const metadata: Metadata = { title: "Sign in — garam" };
 
 export default async function LoginPage() {
   if (await getSession()) {
-    redirect("/orgs");
+    redirect("/console");
   }
   return (
     <Card className="w-full max-w-sm">
@@ -19,12 +19,8 @@ export default async function LoginPage() {
           Use the Google account your organization invited.
         </p>
       </CardHeader>
-      <CardContent>
-        {/* A plain link, not a fetch: the backend answers with a 302 to
-            Google and sets the PKCE cookies on this origin. */}
-        <Button asChild className="w-full">
-          <a href="/api/auth/login/google">Continue with Google</a>
-        </Button>
+      <CardContent className="flex justify-center">
+        <GoogleSignInButton />
       </CardContent>
     </Card>
   );

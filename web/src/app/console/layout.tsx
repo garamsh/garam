@@ -21,7 +21,7 @@ export default async function AppLayout({
     <>
       <header className="border-b">
         <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-4 px-6 py-4">
-          <Link href="/orgs" className="font-heading text-lg font-semibold">
+          <Link href="/console/orgs" className="font-heading text-lg font-semibold">
             garam
           </Link>
           <UserMenu user={user} />

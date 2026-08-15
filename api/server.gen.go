@@ -363,6 +363,9 @@ type ServerInterface interface {
 	// Logout Revoke the current session and clear the cookie.
 	// (POST /auth/logout)
 	Logout(w http.ResponseWriter, r *http.Request)
+	// ListProviders List the enabled sign-in providers.
+	// (GET /auth/providers)
+	ListProviders(w http.ResponseWriter, r *http.Request)
 	// AcceptInvitation Accept an invitation.
 	// (POST /invitations/{token}/accept)
 	AcceptInvitation(w http.ResponseWriter, r *http.Request, token string)
@@ -565,6 +568,20 @@ func (siw *ServerInterfaceWrapper) Logout(w http.ResponseWriter, r *http.Request
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.Logout(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListProviders operation middleware
+func (siw *ServerInterfaceWrapper) ListProviders(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListProviders(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1868,6 +1885,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/auth/login/{provider}", wrapper.Login)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/auth/callback/{provider}", wrapper.OauthCallback)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/logout", wrapper.Logout)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/auth/providers", wrapper.ListProviders)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me", wrapper.Me)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs", wrapper.ListOrgs)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs", wrapper.CreateOrg)

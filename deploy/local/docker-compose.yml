@@ -1,5 +1,8 @@
-# The whole garam stack on one machine. Separate from the repository
-# root compose file, which is the e2e dev Postgres only (`make db-up`).
+# The whole garam stack on one machine, and also the dev/e2e Postgres:
+# `make db-up` starts only the postgres service from this file, so both
+# concerns share the one compose project (and its volume). They do not
+# share a database — the stack owns `garam`, `make e2e` owns
+# `garam_test`, because it truncates. See README.md.
 name: garam-local
 
 services:
@@ -10,7 +13,7 @@ services:
       POSTGRES_PASSWORD: garam
       POSTGRES_DB: garam
     ports:
-      - "${GARAM_LOCAL_DB_PORT:-55433}:5432"
+      - "${GARAM_DB_PORT:-55432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:

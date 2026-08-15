@@ -41,6 +41,11 @@ sign-in on `/login` — a real session, no Google credentials needed
 ([ADR-0010](./docs/architecture/adr/0010-dev-auth-provider.md)). Off by
 default; localhost tooling only.
 
+The same compose file provides the dev/e2e Postgres: `make db-up`
+starts only its `postgres` service. The stack and the tests get a
+database each on it — the stack's `garam`, and `garam_test` for the
+truncating suite behind `make e2e`.
+
 ## Web frontend
 
 The Next.js app lives in [`web/`](./web/) and talks to the Go backend

@@ -4,12 +4,41 @@ Runs the whole garam stack on one machine with Docker Compose:
 Postgres, migrations, the authz engine, the API, and — behind a
 profile — the web frontend.
 
-This is not the dev database compose file. The repository root
-`docker-compose.yml` still provides the Postgres that `make db-up` and
-the e2e tests use, and the two are independent: this stack runs under
-the compose project `garam-local` with its own volume, and its Postgres
-publishes host port 55433 so it never collides with the root file's
-55432.
+This compose file is also the dev database: `make db-up` starts only
+its `postgres` service for the e2e tests, and `make db-down` removes
+that service again. Both concerns share the one compose project
+`garam-local` and its `postgres-data` volume — there is no second
+compose file.
+
+## Databases
+
+One Postgres server, two databases, because `make e2e` truncates every
+table at test setup and must never reach the data you created through
+the running stack:
+
+- `garam` — the stack's own database, created by the image from
+  `POSTGRES_DB`, migrated by the `migrate` service. `GARAM_DATABASE_URL`
+  points here, and so does the Playwright suite (`make web-e2e`), which
+  only inserts uniquely suffixed rows and seeds sessions for the same
+  api it drives.
+- `garam_test` — the Go store round-trips (`make e2e`). `make db-up`
+  creates it if it is missing, and the suite migrates it itself. It is
+  the only database anything truncates.
+
+Postgres publishes host port 55432 by default. `GARAM_DB_PORT` overrides
+it, but it has to be an environment variable —
+`GARAM_DB_PORT=55440 make db-up e2e`. The Makefile does not read
+`.env`, so a value set only there moves the published port while the
+Makefile's test URL stays on 55432 and `make e2e` fails to connect.
+
+There is one dev Postgres per machine, not one per worktree. This file
+pins the compose project with `name: garam-local`, which takes
+precedence over the directory Compose would otherwise name the project
+after, so every worktree addresses the same container — `GARAM_DB_PORT`
+moves that one server rather than standing up a second. Two worktrees
+must therefore not run `make e2e` at the same time: they share
+`garam_test`, and the `TRUNCATE` at test setup would cut the other run
+out from under itself.
 
 ## Files
 
@@ -27,7 +56,7 @@ cp deploy/local/.env.example deploy/local/.env   # then fill in Google OAuth
 docker compose -f deploy/local/docker-compose.yml up --build
 docker compose -f deploy/local/docker-compose.yml --profile web up --build
 docker compose -f deploy/local/docker-compose.yml --profile web down
-docker compose -f deploy/local/docker-compose.yml --profile web down -v  # drop the database
+docker compose -f deploy/local/docker-compose.yml --profile web down -v  # drop both databases
 ```
 
 Without `--profile web`, the `web` service is neither built nor started.

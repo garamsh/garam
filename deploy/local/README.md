@@ -26,10 +26,19 @@ the running stack:
   the only database anything truncates.
 
 Postgres publishes host port 55432 by default. `GARAM_DB_PORT` overrides
-it (e.g. per worktree), but it has to be an environment variable —
+it, but it has to be an environment variable —
 `GARAM_DB_PORT=55440 make db-up e2e`. The Makefile does not read
 `.env`, so a value set only there moves the published port while the
 Makefile's test URL stays on 55432 and `make e2e` fails to connect.
+
+There is one dev Postgres per machine, not one per worktree. This file
+pins the compose project with `name: garam-local`, which takes
+precedence over the directory Compose would otherwise name the project
+after, so every worktree addresses the same container — `GARAM_DB_PORT`
+moves that one server rather than standing up a second. Two worktrees
+must therefore not run `make e2e` at the same time: they share
+`garam_test`, and the `TRUNCATE` at test setup would cut the other run
+out from under itself.
 
 ## Files
 

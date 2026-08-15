@@ -4,11 +4,17 @@ MOCKERY := go run github.com/vektra/mockery/v3@v3.7.2
 BUF := go run github.com/bufbuild/buf/cmd/buf@v1.72.0
 GOIMPORTS := go run golang.org/x/tools/cmd/goimports@v0.48.0
 
-# Host port for the dev Postgres container. Override per worktree
-# (e.g. GARAM_DB_PORT=55440 make db-up e2e) to run worktrees in parallel.
-# It has to be an environment variable: this file does not read
-# deploy/local/.env, so a value set only there moves compose and not the
-# URL below.
+# Host port for the dev Postgres container. Override it as an
+# environment variable (GARAM_DB_PORT=55440 make db-up e2e): this file
+# does not read deploy/local/.env, so a value set only there moves
+# compose and not the URL below.
+#
+# One dev Postgres per machine, not per worktree:
+# deploy/local/docker-compose.yml pins `name: garam-local`, so every
+# worktree addresses the same compose project and container, and this
+# variable moves that one server rather than adding a second. Do not run
+# `make e2e` from two worktrees at once — they share one garam_test and
+# truncate each other.
 GARAM_DB_PORT ?= 55432
 
 # The e2e suite truncates every table at setup, so it gets its own

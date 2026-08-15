@@ -21,7 +21,12 @@ collaborate on a shared plan.
 - Authorization decisions, expressed as IAM-style policy documents.
 - Org-managed policy documents: stored, versioned append-only,
   activated and rolled back over the authz service, and cached per org
-  in the engine.
+  in the engine. Org admins drive that lifecycle over the HTTP API
+  under `/orgs/{org}/policies`, and attach a policy to a user or a
+  group (ADR-0008); an unattached active policy still grants org-wide.
+- A web console under `/console` for the org structure the API exposes:
+  organizations are listed and created, members are invited by link and
+  the invitation accepted, groups and projects are read (ADR-0009).
 - One identifier system across every resource (GRN).
 
 ## Out of scope (today)
@@ -30,10 +35,15 @@ collaborate on a shared plan.
 - Notifications or messaging.
 - The agent domain (still being planned; code untouched, no API or
   persistence).
-- Attaching a policy to an individual subject or resource; an active
-  policy grants org-wide (ADR-0002, ADR-0007).
-- Policy management over the HTTP API; the lifecycle is gRPC-only.
-- OAuth providers beyond Google.
+- Resource-based policies: a statement names no `Principal`, so a
+  policy reaches subjects through an identity attachment only
+  (ADR-0008).
+- Per-org direct user roles: a role stored on the user applies in every
+  org it belongs to; scoping needs subject × role × scope persistence.
+- Upstream OAuth providers beyond Google. The dev provider (ADR-0010)
+  is not one — it asserts a fixed local identity and contacts nothing.
+- Editing groups, projects and policies from the web console; those
+  endpoints exist, the console reads them but does not write them.
 
 ## Module boundaries
 
@@ -83,7 +93,7 @@ contract is `proto/garam/authz/v1`.
 | `org.Project` | `internal/org` | unit of work |
 | `org.Membership` | `internal/org` | user in an org, carries a `Role` |
 | `org.Invitation` | `internal/org` | single-use token into an org |
-| `authn.Provider` | `internal/authn` | OIDC provider (Google first) |
+| `authn.Provider` | `internal/authn` | sign-in provider (Google OIDC; dev-only, ADR-0010) |
 | `authn.Session` | `internal/authn` | authenticated browser session |
 | `authz.Object` | `internal/authz` | target interface |
 | `authz.Evaluator` | `internal/authz` | policy evaluator (native, IAM-style) |

@@ -80,7 +80,7 @@ persistence.
 
 ## `internal/authn`
 
-Authentication: the OAuth provider abstraction and sessions.
+Authentication: the sign-in provider abstraction and sessions.
 
 | Type | Responsibility |
 |------|----------------|

@@ -77,7 +77,7 @@ their own listen port.
 
 ## Configuration
 
-Every variable is documented in `.env.example`. Two notes:
+Every variable is documented in `.env.example`. Three notes:
 
 - `GARAM_AUTHZ_ADDR` is fixed to `authz:9090` in the compose file: it is
   the internal service address and is not meant to be reconfigured.

@@ -48,13 +48,30 @@ workflow last. Each tier depends only on the tier below it.
 - Output: policy state survives restarts; every policy change is
   versioned and auditable.
 
-## P3 — Workflow core
+## Web console (in progress)
+
+Not a tier in the dependency stack — a surface over what P1 and P2
+already expose, built in parallel rather than gating P3.
+
+- `web/`: Next.js App Router, Tailwind v4, shadcn/ui, three test layers
+  (ADR-0009). Its own toolchain and gate, `make web-ci`, run in CI
+  beside `make ci`.
+- A public landing page at `/`, sign-in at `/login`, and the signed-in
+  application under `/console`.
+- A dev-only sign-in provider behind `GARAM_DEV_AUTH` so local work and
+  manual QA need no Google credentials (ADR-0010).
+- Mutations, phase 1: create an organization, invite a member by link,
+  accept an invitation.
+- Still read-only in the console: groups, projects, and policies. The
+  policy console the landing page advertises does not exist yet.
+
+## P3 — Workflow core (not started)
 
 - `internal/workflow` — workflow definition, state machine, execution.
 - Workflows are themselves GRN-addressed resources.
 - authz remains the gate at every transition.
 
-## P4 — Operational
+## P4 — Operational (not started)
 
 - Structured logging (`log/slog`) with `trace_id` propagation.
 - Prometheus metrics and OpenTelemetry tracing.
@@ -62,7 +79,9 @@ workflow last. Each tier depends only on the tier below it.
 
 ## Sequencing rules
 
-- A later level cannot start until the previous level is green.
+- A later level cannot start until the previous level is green. The web
+  console is not a level: it consumes finished tiers and does not gate
+  the next one.
 - Cross-cutting changes (logging, metrics) enter in P4, not earlier.
 - If a level uncovers a design hole, fix it before moving on — no
   exceptions for "we can clean this up later."

@@ -42,18 +42,6 @@ Active work, milestones, and current state.
 - [plans/roadmap.md](./plans/roadmap.md)
 - [plans/current-state.md](./plans/current-state.md)
 
-## For agents
-
-Operating procedures for AI agents working on this repository.
-
-- [ai/pm-guide.md](./ai/pm-guide.md) — PM agent procedure
-- [ai/worker-guide.md](./ai/worker-guide.md) — worker agent procedure
-- [ai/qa-guide.md](./ai/qa-guide.md) — QA agent procedure
-- [ai/orca-dispatch.md](./ai/orca-dispatch.md) — PM worker dispatch into orca worktrees
-- [ai/adoption.md](./ai/adoption.md) — applying and updating the harness template
-- [ai/BOOTSTRAP.md](./ai/BOOTSTRAP.md) — one-time project initialization
-  (complete)
-
 ## Contributing
 
 1. Read the convention directory end-to-end before the first PR.

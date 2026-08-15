@@ -131,9 +131,11 @@ type InvitationCreateRole string
 
 // Member defines model for Member.
 type Member struct {
-	Role    Role      `json:"role"`
-	Since   time.Time `json:"since"`
-	UserGrn string    `json:"userGrn"`
+	// Nickname Display name from the member's user row. Omitted when that row is gone, which the client renders as it chooses; the GRN is never a substitute.
+	Nickname *string   `json:"nickname,omitempty"`
+	Role     Role      `json:"role"`
+	Since    time.Time `json:"since"`
+	UserGrn  string    `json:"userGrn"`
 }
 
 // MemberRef A group or project member, addressed by GRN.

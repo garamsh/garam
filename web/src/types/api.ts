@@ -539,6 +539,8 @@ export interface components {
         ScopedRoles: components["schemas"]["Role"][];
         Member: {
             userGrn: string;
+            /** @description Display name from the member's user row. Omitted when that row is gone, which the client renders as it chooses; the GRN is never a substitute. */
+            nickname?: string;
             role: components["schemas"]["Role"];
             /** Format: date-time */
             since: string;

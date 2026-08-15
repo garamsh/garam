@@ -34,10 +34,10 @@ Decision: approve / request changes / reject
 
 ## Single-account setups
 
-When the PM and authors share one GitHub account, GitHub rejects `approve` on one's own PR (comment and request-changes still work). In that setup:
+When the PM and authors share one GitHub account, GitHub rejects both `approve` and `request changes` on one's own PR. Only `comment` reviews submit. In that setup:
 
 - **The merge is the approval.** Post the evidence table as a `comment` review, then merge immediately.
-- Request-changes reviews work normally — use them as usual.
+- **A blocking review is a comment review too.** Its `Decision:` line reads `request changes`, and it says outright that the PR must not be merged until the blockers are addressed. Nothing but the PM's restraint gates the merge, so the decision line is the gate — never leave it implied.
 
 ## Responding to a review (author)
 

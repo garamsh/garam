@@ -35,9 +35,10 @@ build:    go build ./...
 mock:     mockery
 gen:      regenerate oapi-codegen, sqlc, buf, mockery (pinned tools)
 check-gen: fail when committed generated code is stale
-db-up / db-down: dockerised dev Postgres; GARAM_DB_PORT overrides the
-          host port (default 55432) so worktrees can run in parallel
-e2e:      store round-trips against real Postgres (needs db-up)
+db-up / db-down: dockerised dev Postgres, one per machine; GARAM_DB_PORT
+          moves that one server's host port (default 55432)
+e2e:      store round-trips against real Postgres (needs db-up); runs
+          against its own database, never two worktrees at once
 ci:       format lint test build check-gen
 ```
 

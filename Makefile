@@ -76,8 +76,11 @@ web-lint:
 web-test:
 	$(PNPM) test
 
+# `next build` runs with NODE_ENV=production, where env.ts requires
+# GARAM_API_URL (the `/api/*` rewrite is baked into the build). Nothing
+# calls the backend during the build, so a placeholder is enough.
 web-build:
-	$(PNPM) build
+	GARAM_API_URL=http://localhost:8080 $(PNPM) build
 
 # web-gen regenerates the API types the frontend consumes from the
 # OpenAPI spec, which stays the contract's source of truth.

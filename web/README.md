@@ -13,7 +13,7 @@ Setup, the dev server, and the Playwright run command live in the
 
 - `src/app/(auth)/` — signed-out routes; `/login` starts the backend
   OAuth flow.
-- `src/app/(app)/` — the authenticated shell and the org dashboard.
+- `src/app/console/` — the authenticated shell and the org dashboard.
 - `src/proxy.ts` — redirects visitors without a session cookie to
   `/login`; the shell re-verifies the session against `/me`.
 - `src/features/` — vertical slices (`auth`, `orgs`): API calls,

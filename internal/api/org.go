@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 
 	apigen "github.com/garamsh/garam/api"
@@ -157,11 +158,37 @@ func (s *Server) ListOrgMembers(w http.ResponseWriter, r *http.Request, orgSlug 
 		writeError(w, err)
 		return
 	}
+	nicknames, err := s.nicknamesOf(r.Context(), members)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	out := make([]apigen.Member, 0, len(members))
 	for _, m := range members {
-		out = append(out, memberToAPI(m))
+		out = append(out, memberToAPI(m, nicknames[m.User().String()]))
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// nicknamesOf resolves the members' display names in one query, keyed
+// by user GRN. A user deleted between the two reads is absent from the
+// map: the reads are not atomic, and the delete cascades the
+// membership away by the next request.
+func (s *Server) nicknamesOf(ctx context.Context, members []*org.Membership) (map[string]*string, error) {
+	grns := make([]grn.GRN, 0, len(members))
+	for _, m := range members {
+		grns = append(grns, m.User())
+	}
+	users, err := s.users.ListByGRNs(ctx, grns)
+	if err != nil {
+		return nil, err
+	}
+	byGRN := make(map[string]*string, len(users))
+	for _, u := range users {
+		nickname := u.Nickname()
+		byGRN[u.GRN().String()] = &nickname
+	}
+	return byGRN, nil
 }
 
 // authorize enforces the action on the org itself.
@@ -217,10 +244,13 @@ func orgToAPI(o *org.Organization) apigen.Organization {
 	}
 }
 
-func memberToAPI(m *org.Membership) apigen.Member {
+// memberToAPI renders a Membership. nickname is nil when the member's
+// user row could not be resolved.
+func memberToAPI(m *org.Membership, nickname *string) apigen.Member {
 	return apigen.Member{
-		UserGrn: m.User().String(),
-		Role:    apigen.Role(m.Role()),
-		Since:   m.CreatedAt(),
+		UserGrn:  m.User().String(),
+		Nickname: nickname,
+		Role:     apigen.Role(m.Role()),
+		Since:    m.CreatedAt(),
 	}
 }

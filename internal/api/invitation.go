@@ -97,5 +97,6 @@ func (s *Server) AcceptInvitation(w http.ResponseWriter, r *http.Request, token 
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, memberToAPI(m))
+	nickname := u.Nickname()
+	writeJSON(w, http.StatusOK, memberToAPI(m, &nickname))
 }

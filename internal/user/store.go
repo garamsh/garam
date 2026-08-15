@@ -19,6 +19,9 @@ type Store interface {
 	Create(ctx context.Context, u *User) error
 	Get(ctx context.Context, g grn.GRN) (*User, error)
 	List(ctx context.Context, f ListFilter) ([]*User, error)
+	// ListByGRNs resolves many Users at once. GRNs without a user are
+	// absent from the result rather than an error.
+	ListByGRNs(ctx context.Context, grns []grn.GRN) ([]*User, error)
 	Update(ctx context.Context, g grn.GRN, p Patch) (*User, error)
 	Delete(ctx context.Context, g grn.GRN) error
 }

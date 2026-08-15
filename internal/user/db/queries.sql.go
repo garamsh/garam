@@ -105,6 +105,39 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 	return items, nil
 }
 
+const listUsersByGRNs = `-- name: ListUsersByGRNs :many
+SELECT grn, nickname, roles, policies, created_at, updated_at FROM users
+WHERE grn = ANY($1::text[])
+ORDER BY grn
+`
+
+func (q *Queries) ListUsersByGRNs(ctx context.Context, grns []string) ([]User, error) {
+	rows, err := q.db.Query(ctx, listUsersByGRNs, grns)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []User
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(
+			&i.Grn,
+			&i.Nickname,
+			&i.Roles,
+			&i.Policies,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateUser = `-- name: UpdateUser :one
 UPDATE users SET
     nickname   = coalesce($1, nickname),

@@ -1122,6 +1122,12 @@ components:
       properties:
         userGrn:
           type: string
+        nickname:
+          type: string
+          description: >-
+            Display name from the member's user row. Omitted when that
+            row is gone, which the client renders as it chooses; the
+            GRN is never a substitute.
         role:
           $ref: '#/components/schemas/Role'
         since:

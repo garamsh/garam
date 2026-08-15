@@ -20,6 +20,8 @@ One decision-maker merges; many workers implement; QA hunts for problems but fix
 | Comment on PRs / issues | Yes | Respond only | Forbidden |
 | Delete remote branches | Merged or confirmed-stale only | Forbidden | Forbidden |
 
+A session is bound to one role at launch with the tool's own `--agent <role>` flag; the role cannot be switched mid-session. Role adapters live in `.claude/agents/` and `.opencode/agents/`.
+
 Detailed procedures: `docs/ai/pm-guide.md`, `docs/ai/worker-guide.md`, `docs/ai/qa-guide.md`. The PM dispatches workers into orca worktrees per `docs/ai/orca-dispatch.md`.
 
 ## Rules that apply to every agent

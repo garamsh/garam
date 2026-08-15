@@ -6,7 +6,7 @@ Operating procedure for worker agents (task branches). You implement assigned wo
 
 1. Read the task. If it is ambiguous, ask — do not guess scope.
 2. Read `docs/convention/README.md` and every convention file relevant to your change.
-3. Read the parts of `docs/architecture/` covering the modules you will touch.
+3. Read `docs/architecture/README.md` for the index, then the responsibility documents covering the modules you will touch. Read ADRs only when you need the context behind a decision.
 
 ## While working
 

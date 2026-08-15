@@ -2,7 +2,7 @@
 
 > Status: **COMPLETE (2026-07-25)** — retrofitted onto an existing codebase; conventions and structure were adopted from the harness template after development had already begun.
 
-Executed once by the PM agent on `main` after the project is created from the template. All changes land in a single bootstrap PR.
+Executed once by the PM agent on `main` after the project is created from the template. All changes land in a single bootstrap PR. If the project already exists and was not created from the template, start with `docs/ai/adoption.md` instead.
 
 ## Steps
 

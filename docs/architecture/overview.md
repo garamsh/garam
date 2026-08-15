@@ -10,7 +10,9 @@ collaborate on a shared plan.
 - Org / group / project structure; groups and projects are created,
   read, updated, deleted, and populated with members over the HTTP API
   under their organization's paths.
-- Google OIDC sign-in with a provider abstraction; server-side sessions.
+- Sign-in through a provider abstraction — Google OIDC, plus a
+  development-only provider gated by `GARAM_DEV_AUTH` (ADR-0010);
+  server-side sessions.
 - Invitation-based org membership with org roles (`owner`, `admin`,
   `member`) enforced on org-scoped HTTP APIs — including the group and
   project endpoints — through the authz evaluator seam.
@@ -50,7 +52,8 @@ collaborate on a shared plan.
 - `internal/errorx/` — typed errors; shared primitive.
 - `internal/cli/` — cobra commands + wiring (`serve api` | `serve authz` | `migrate`).
 - `internal/api/` — handlers implementing the generated ServerInterface.
-- `internal/authn/` — OIDC provider abstraction, sessions.
+- `internal/authn/` — sign-in provider abstraction (Google OIDC,
+  dev-only local), sessions.
 - `internal/authz/` — policy engine: model, evaluator, policy store
   and per-org cache, gRPC servers.
 - `internal/org/` — organizations, groups, projects, memberships, invitations.
@@ -97,6 +100,7 @@ contract is `proto/garam/authz/v1`.
 | Store interfaces live next to their domain | Implementation swap at the package boundary. | [domains.md](./domains.md) |
 | OpenAPI spec is the API source of truth | Handlers implement a generated interface; drift fails CI. | [adr/0004-openapi-first-api.md](./adr/0004-openapi-first-api.md) |
 | Sessions are server-side rows | Logout must revoke; opaque tokens, only hashes persisted. | [adr/0005-server-side-sessions.md](./adr/0005-server-side-sessions.md) |
+| Dev sign-in is a provider, not a bypass | Sessions stay identical to Google's; with the flag off no dev route exists. | [adr/0010-dev-auth-provider.md](./adr/0010-dev-auth-provider.md) |
 | Invitations are token-keyed, not GRN-addressed | The bearer token is the identifier; no new GRN service_type. | [adr/0006-invitation-tokens.md](./adr/0006-invitation-tokens.md) |
 
 ## Non-functional goals

@@ -52,4 +52,4 @@ Issues, PRs, and comments are documentation too.
 - Direct tone: "We do X." Concrete examples beat abstract advice.
 - Code blocks carry a language tag.
 - Use file paths (`internal/authz/check.go`) instead of drawn hierarchies.
-- File names: lowercase kebab-case (`runtime-safety.md`). Uppercase is reserved for fixed-entry files tools and humans look for first: `README.md`, `AGENTS.md`, `CLAUDE.md`, `BOOTSTRAP.md`.
+- File names: lowercase kebab-case (`runtime-safety.md`). Uppercase is reserved for fixed-entry files tools and humans look for first: `README.md`, `AGENTS.md`, `CLAUDE.md`.

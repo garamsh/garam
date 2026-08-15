@@ -1,6 +1,4 @@
-# Conventions are owned by the PM; worker changes to these paths require PM review.
+# The rules are owned; changes to these paths require review from their owner.
+/AGENTS.md @garamsh
 /docs/convention/ @garamsh
-/docs/ai/ @garamsh
-/.opencode/ @garamsh
-/.claude/ @garamsh
 /.github/ @garamsh

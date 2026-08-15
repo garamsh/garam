@@ -22,3 +22,6 @@ Thumbs.db
 
 # Playwright MCP scratch output
 .playwright-mcp/
+
+# opencode's local install
+.opencode/

@@ -61,6 +61,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the enabled sign-in providers.
+         * @description Public endpoint the login page uses to decide which sign-in options to render. `dev` appears only when the server runs with GARAM_DEV_AUTH=true (ADR-0010).
+         */
+        get: operations["listProviders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/me": {
         parameters: {
             query?: never;
@@ -626,7 +646,7 @@ export interface components {
         };
     };
     parameters: {
-        /** @description Authentication provider name (`google`). */
+        /** @description Authentication provider name (`google`; `dev` only when the server runs with GARAM_DEV_AUTH=true). */
         provider: string;
         /** @description Organization identifier (the last GRN segment). */
         org: string;
@@ -655,7 +675,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Authentication provider name (`google`). */
+                /** @description Authentication provider name (`google`; `dev` only when the server runs with GARAM_DEV_AUTH=true). */
                 provider: components["parameters"]["provider"];
             };
             cookie?: never;
@@ -681,7 +701,7 @@ export interface operations {
             };
             header?: never;
             path: {
-                /** @description Authentication provider name (`google`). */
+                /** @description Authentication provider name (`google`; `dev` only when the server runs with GARAM_DEV_AUTH=true). */
                 provider: components["parameters"]["provider"];
             };
             cookie?: never;
@@ -717,6 +737,26 @@ export interface operations {
                 content?: never;
             };
             401: components["responses"]["Error"];
+        };
+    };
+    listProviders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Names of the enabled providers. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
         };
     };
     me: {

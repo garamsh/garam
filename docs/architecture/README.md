@@ -33,6 +33,8 @@ ADRs:
 - [0006](./adr/0006-invitation-tokens.md) — invitation tokens
 - [0007](./adr/0007-hybrid-statement-collection.md) — hybrid statement collection
 - [0008](./adr/0008-identity-based-policy-attachments.md) — identity-based policy attachments
+- [0009](./adr/0009-web-frontend.md) — Next.js web frontend in `web/`
+- [0010](./adr/0010-dev-auth-provider.md) — development-only sign-in provider behind GARAM_DEV_AUTH
 
 ## Rules for edits
 

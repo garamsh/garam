@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"net/http"
+	"slices"
 	"time"
 
 	apigen "github.com/garamsh/garam/api"
@@ -87,6 +88,18 @@ func (s *Server) OauthCallback(w http.ResponseWriter, r *http.Request, provider 
 	// `/` is the public landing page; a signed-in visitor belongs in
 	// the console.
 	http.Redirect(w, r, "/console", http.StatusFound)
+}
+
+// ListProviders returns the names of the registered sign-in providers.
+// The login page renders an option per name; `dev` appears only when
+// the server runs with GARAM_DEV_AUTH=true (ADR-0010).
+func (s *Server) ListProviders(w http.ResponseWriter, _ *http.Request) {
+	names := make([]string, 0, len(s.providers))
+	for name := range s.providers {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+	writeJSON(w, http.StatusOK, names)
 }
 
 // Logout revokes the current session.

@@ -52,6 +52,12 @@ Every variable is documented in `.env.example`. Two notes:
 
 - `GARAM_AUTHZ_ADDR` is fixed to `authz:9090` in the compose file: it is
   the internal service address and is not meant to be reconfigured.
+- `GARAM_DEV_AUTH=true` adds a one-click "Dev sign-in" option to
+  `/login` that creates a real session without Google credentials
+  ([ADR-0010](../../docs/architecture/adr/0010-dev-auth-provider.md)).
+  Off by default; localhost tooling, never enable it anywhere else. The
+  login page learns the option from the api's `/auth/providers` at
+  runtime, so no web rebuild is needed when toggling the flag.
 - The web image bakes `GARAM_API_URL` into the build, because the
   `/api/*` rewrite is resolved at build time. Changing it means
   rebuilding the image, not just restarting the container.

@@ -36,6 +36,11 @@ cp deploy/local/.env.example deploy/local/.env
 docker compose -f deploy/local/docker-compose.yml up --build
 ```
 
+Set `GARAM_DEV_AUTH=true` in `deploy/local/.env` for a one-click dev
+sign-in on `/login` — a real session, no Google credentials needed
+([ADR-0010](./docs/architecture/adr/0010-dev-auth-provider.md)). Off by
+default; localhost tooling only.
+
 ## Web frontend
 
 The Next.js app lives in [`web/`](./web/) and talks to the Go backend

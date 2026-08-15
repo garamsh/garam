@@ -69,22 +69,55 @@ func serveAPI(cmd *cobra.Command) error {
 	if err != nil {
 		return errorx.Wrap(err, "GARAM_SESSION_TTL", errorx.KindInvalidArgument)
 	}
+	cookieSecure := envOr("GARAM_COOKIE_SECURE", "true") == "true"
+	dev, err := devProvider(envOr("GARAM_DEV_AUTH", "false") == "true", cookieSecure)
+	if err != nil {
+		return err
+	}
+	providers := []authn.Provider{google}
+	if dev != nil {
+		providers = append(providers, dev)
+	}
 	srv := api.NewServer(
 		user.NewPostgresStore(pool),
 		org.NewPostgresStore(pool),
 		authn.NewPostgresSessionStore(pool),
-		[]authn.Provider{google},
+		providers,
 		api.NewGRPCEvaluator(conn),
 		api.NewGRPCPolicyManager(conn),
 		api.Config{
 			SessionTTL:   ttl,
-			CookieSecure: envOr("GARAM_COOKIE_SECURE", "true") == "true",
+			CookieSecure: cookieSecure,
 		},
 	)
 
 	addr := envOr("GARAM_HTTP_ADDR", ":8080")
 	cmd.Printf("serving api on %s\n", addr)
 	return http.ListenAndServe(addr, apigen.Handler(srv))
+}
+
+// defaultDevRedirectURL returns the dev login flow to the web origin's
+// /api rewrite on its conventional port.
+const defaultDevRedirectURL = "http://localhost:3000/api/auth/callback/dev"
+
+// devProvider resolves the development-only sign-in provider
+// (ADR-0010): nil unless GARAM_DEV_AUTH opts in. It is localhost
+// tooling, so the combination with Secure cookies — the
+// production-shaped default — refuses to start.
+func devProvider(enabled, cookieSecure bool) (authn.Provider, error) {
+	if !enabled {
+		return nil, nil
+	}
+	if cookieSecure {
+		return nil, errorx.New(errorx.KindInvalidArgument, "GARAM_DEV_AUTH requires GARAM_COOKIE_SECURE=false")
+	}
+	p, err := authn.NewDevProvider(authn.DevConfig{
+		RedirectURL: envOr("GARAM_DEV_REDIRECT_URL", defaultDevRedirectURL),
+	})
+	if err != nil {
+		return nil, errorx.Wrap(err, "dev provider")
+	}
+	return p, nil
 }
 
 // newServeAuthzCommand constructs `garam serve authz`: the gRPC policy

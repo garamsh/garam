@@ -9,6 +9,8 @@ import {
   CardHeader,
 } from "@/components/ui/card";
 import { getSession } from "@/features/auth/api/get-session";
+import { listProviders } from "@/features/auth/api/list-providers";
+import { DevSignInButton } from "@/features/auth/components/dev-sign-in-button";
 import { GoogleSignInButton } from "@/features/auth/components/google-sign-in-button";
 
 export const metadata: Metadata = { title: "Sign in — garam" };
@@ -17,6 +19,7 @@ export default async function LoginPage() {
   if (await getSession()) {
     redirect("/console");
   }
+  const providers = await listProviders();
   return (
     <Card className="w-full max-w-sm [--card-spacing:--spacing(6)]">
       <CardHeader className="gap-2">
@@ -28,8 +31,9 @@ export default async function LoginPage() {
           by invitation, not by signup.
         </p>
       </CardHeader>
-      <CardContent className="flex justify-center">
+      <CardContent className="flex flex-col items-center gap-3">
         <GoogleSignInButton />
+        {providers.includes("dev") && <DevSignInButton />}
       </CardContent>
       <CardFooter className="justify-center text-xs text-muted-foreground">
         <Link href="/" className="transition-colors hover:text-foreground">

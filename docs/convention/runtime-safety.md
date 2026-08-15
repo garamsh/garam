@@ -1,5 +1,7 @@
 # Runtime Safety
 
+How types, boundaries, and error handling keep runtime errors out of production code.
+
 ## Contents
 - Core principle
 - Type system
@@ -17,7 +19,7 @@ A runtime error is a bug the type system let through. Catch as many as possible 
 
 Enable the strictest mode your stack supports — strict nullability, no implicit escape to an "unknown/any/object" shape, no implicit conversions. Strictness catches more bugs at compile time than it costs in effort.
 
-- **No silent assertions.** Type assertions, lint suppressions, and unchecked casts silence the type system without fixing the underlying mismatch. Find the root cause; if you must assert, attach a brief inline comment with the reason.
+- **No silent assertions.** Type assertions, lint suppressions, and unchecked casts silence the type system without fixing the underlying mismatch. Find the root cause; assertions and suppressions are not accepted.
 - **Non-nullable by default.** A type that allows absence everywhere spreads absence-handling through every caller. Mark absence explicitly (with an `Option` / `Maybe` / `Result` shape or a nullable wrapper) only where it is a real state — never as a default.
 - **Domain primitives over raw types.** Define `UserId`, `Money`, `Email` as distinct named types (newtypes, branded types, value objects) rather than as raw strings or numbers. They prevent passing the wrong value at the type level.
 

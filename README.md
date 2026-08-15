@@ -41,6 +41,9 @@ sign-in on `/login` — a real session, no Google credentials needed
 ([ADR-0010](./docs/architecture/adr/0010-dev-auth-provider.md)). Off by
 default; localhost tooling only.
 
+The dev/e2e Postgres that `make db-up` starts is separate; its compose
+file lives in [`deploy/dev/`](./deploy/dev/).
+
 ## Web frontend
 
 The Next.js app lives in [`web/`](./web/) and talks to the Go backend

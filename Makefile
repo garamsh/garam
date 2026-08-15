@@ -50,10 +50,10 @@ check-gen: gen
 	git diff --exit-code -- $(GEN_PATHS)
 
 db-up:
-	docker compose up -d --wait
+	docker compose -f deploy/dev/docker-compose.yml up -d --wait
 
 db-down:
-	docker compose down
+	docker compose -f deploy/dev/docker-compose.yml down
 
 # e2e runs the store round-trips against real Postgres (see db-up).
 e2e:

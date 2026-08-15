@@ -1,5 +1,6 @@
-# The whole garam stack on one machine. Separate from the repository
-# root compose file, which is the e2e dev Postgres only (`make db-up`).
+# The whole garam stack on one machine. Separate from
+# deploy/dev/docker-compose.yml, which is the e2e dev Postgres only
+# (`make db-up`).
 name: garam-local
 
 services:

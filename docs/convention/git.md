@@ -11,6 +11,14 @@ How branches, commits, and PR titles are written.
 
 One task, one branch. Branch from `main`; never commit to `main` directly.
 
+**Exception — Orca worktree branches.** When the PM dispatches a worker
+(`docs/ai/orca-dispatch.md`), Orca creates the branch and the worktree
+before the worker exists, naming it `<github-user>/<task>` — for example
+`sauce-git/console-mutations-110`. That name stands: `worker-guide.md`
+says to work in the worktree in place, and renaming a branch a dispatch
+already tracks breaks the link between them. The prefixes above govern
+every branch created by hand.
+
 ## Commits
 
 Format: `<type>: <imperative summary>`

@@ -33,7 +33,7 @@ Roles:
 
 ## Retention
 
-- Completed plans in `plans/archive/` stay for reference; drop after a year.
+- Completed plans in `plans/archive/` stay for reference; drop a year after they were moved there, not a year after the work shipped.
 - `convention/` and `architecture/` files are not deleted when superseded; mark them at the top with `> DEPRECATED:` and a pointer to the replacement.
 
 ## GitHub artifacts

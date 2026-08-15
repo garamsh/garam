@@ -10,11 +10,9 @@ import (
 	"github.com/garamsh/garam/internal/user"
 )
 
-// scopedStatements collects the statements that apply to the subject
-// when acting on target: the org membership role and the subject's own
-// direct roles, granted over the org and everything it owns, plus the
-// roles the target group or project grants its own members. Direct,
-// group-, and project-derived grants all resolve here, at check time.
+// scopedStatements collects the statements applying to the subject
+// when acting on target: the membership role, the subject's direct
+// roles, and the roles the target group or project grants its members.
 func (s *Server) scopedStatements(r *http.Request, orgGRN grn.GRN, m *org.Membership, target grn.GRN, u *user.User) ([]Statement, error) {
 	statements := []Statement{{
 		Sid:      "org-role-" + string(m.Role()),
@@ -37,13 +35,9 @@ func (s *Server) scopedStatements(r *http.Request, orgGRN grn.GRN, m *org.Member
 	return append(statements, derived...), nil
 }
 
-// userStatements returns what the roles stored on the subject grant.
-// They are direct grants: they carry the same scope as the membership
-// role, so they apply within whichever org the subject is acting in —
-// org membership stays the precondition. Unknown role names grant
-// nothing. Policies attached to the subject are not collected here:
-// the engine owns them and resolves them from the subject and its
-// groups (ADR-0008).
+// userStatements returns what the roles stored on the subject grant,
+// scoped like the membership role. Unknown names grant nothing;
+// attached policies belong to the engine (ADR-0008).
 func userStatements(orgGRN grn.GRN, u *user.User) []Statement {
 	actions := org.ActionsFor(u.Roles())
 	if len(actions) == 0 {

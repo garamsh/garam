@@ -5,6 +5,7 @@ export type Organization = components["schemas"]["Organization"];
 export type Group = components["schemas"]["Group"];
 export type Project = components["schemas"]["Project"];
 export type Member = components["schemas"]["Member"];
+export type Invitation = components["schemas"]["Invitation"];
 
 /** Organizations the signed-in user belongs to. */
 export function listOrgs(): Promise<Organization[]> {

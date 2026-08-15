@@ -1,10 +1,10 @@
 // Package authn owns authentication: the OAuth provider abstraction
 // and the sessions issued after a successful sign-in.
 //
-// Providers implement Provider; the first implementation is Google
-// (google.go). Adding a provider is a new file and a new entry in the
-// provider map at the wiring site — call sites depend only on the
-// Provider interface.
+// Providers implement Provider: Google (google.go) and the
+// development-only dev provider (dev.go, ADR-0010). Adding a provider
+// is a new file and a new entry in the provider map at the wiring
+// site — call sites depend only on the Provider interface.
 package authn
 
 import (

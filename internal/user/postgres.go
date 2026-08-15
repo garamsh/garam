@@ -71,6 +71,31 @@ func (s *PostgresStore) List(ctx context.Context, f ListFilter) ([]*User, error)
 	return users, nil
 }
 
+// ListByGRNs returns the Users with the given GRNs, ordered by GRN.
+// GRNs without a user are absent from the result.
+func (s *PostgresStore) ListByGRNs(ctx context.Context, grns []grn.GRN) ([]*User, error) {
+	if len(grns) == 0 {
+		return []*User{}, nil
+	}
+	keys := make([]string, 0, len(grns))
+	for _, g := range grns {
+		keys = append(keys, g.String())
+	}
+	rows, err := s.q.ListUsersByGRNs(ctx, keys)
+	if err != nil {
+		return nil, classify(err, "list by grns", nil)
+	}
+	users := make([]*User, 0, len(rows))
+	for _, row := range rows {
+		u, err := rowToUser(row)
+		if err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	return users, nil
+}
+
 // Update applies a Patch and returns the updated User.
 func (s *PostgresStore) Update(ctx context.Context, g grn.GRN, p Patch) (*User, error) {
 	row, err := s.q.UpdateUser(ctx, db.UpdateUserParams{

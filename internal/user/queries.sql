@@ -10,6 +10,11 @@ SELECT * FROM users
 ORDER BY grn
 LIMIT sqlc.narg('row_limit') OFFSET sqlc.arg('row_offset');
 
+-- name: ListUsersByGRNs :many
+SELECT * FROM users
+WHERE grn = ANY(sqlc.arg('grns')::text[])
+ORDER BY grn;
+
 -- name: UpdateUser :one
 UPDATE users SET
     nickname   = coalesce(sqlc.narg('nickname'), nickname),

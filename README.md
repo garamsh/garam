@@ -42,7 +42,9 @@ sign-in on `/login` — a real session, no Google credentials needed
 default; localhost tooling only.
 
 The same compose file provides the dev/e2e Postgres: `make db-up`
-starts only its `postgres` service.
+starts only its `postgres` service. The stack and the tests get a
+database each on it — the stack's `garam`, and `garam_test` for the
+truncating suite behind `make e2e`.
 
 ## Web frontend
 

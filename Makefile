@@ -6,9 +6,17 @@ GOIMPORTS := go run golang.org/x/tools/cmd/goimports@v0.48.0
 
 # Host port for the dev Postgres container. Override per worktree
 # (e.g. GARAM_DB_PORT=55440 make db-up e2e) to run worktrees in parallel.
+# It has to be an environment variable: this file does not read
+# deploy/local/.env, so a value set only there moves compose and not the
+# URL below.
 GARAM_DB_PORT ?= 55432
-TEST_DATABASE_URL ?= postgres://garam:garam@localhost:$(GARAM_DB_PORT)/garam?sslmode=disable
 
+# The e2e suite truncates every table at setup, so it gets its own
+# database on the dev Postgres. The local stack keeps `garam`.
+TEST_DB_NAME := garam_test
+TEST_DATABASE_URL ?= postgres://garam:garam@localhost:$(GARAM_DB_PORT)/$(TEST_DB_NAME)?sslmode=disable
+
+COMPOSE_LOCAL := docker compose -f deploy/local/docker-compose.yml
 PNPM := pnpm --dir web
 
 .PHONY: lint format test build mock gen check-gen e2e db-up db-down ci
@@ -49,11 +57,17 @@ GEN_PATHS := api/server.gen.go internal/*/db proto/gen internal/*/mocks
 check-gen: gen
 	git diff --exit-code -- $(GEN_PATHS)
 
+# db-up starts the stack's postgres service alone and makes sure the e2e
+# database exists next to `garam`. Postgres has no CREATE DATABASE IF NOT
+# EXISTS, so ask before creating. The e2e suite migrates it itself.
 db-up:
-	docker compose -f deploy/local/docker-compose.yml up -d --wait postgres
+	$(COMPOSE_LOCAL) up -d --wait postgres
+	@$(COMPOSE_LOCAL) exec -T postgres psql -U garam -d postgres -tAc \
+		"SELECT 1 FROM pg_database WHERE datname='$(TEST_DB_NAME)'" | grep -q 1 \
+		|| $(COMPOSE_LOCAL) exec -T postgres createdb -U garam $(TEST_DB_NAME)
 
 db-down:
-	docker compose -f deploy/local/docker-compose.yml rm -sf postgres
+	$(COMPOSE_LOCAL) rm -sf postgres
 
 # e2e runs the store round-trips against real Postgres (see db-up).
 e2e:

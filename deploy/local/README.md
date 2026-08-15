@@ -8,9 +8,28 @@ This compose file is also the dev database: `make db-up` starts only
 its `postgres` service for the e2e tests, and `make db-down` removes
 that service again. Both concerns share the one compose project
 `garam-local` and its `postgres-data` volume — there is no second
-compose file. Postgres publishes host port 55432 by default;
-`GARAM_DB_PORT` overrides it (e.g. per worktree) for both the stack and
-the Makefile's test URL.
+compose file.
+
+## Databases
+
+One Postgres server, two databases, because `make e2e` truncates every
+table at test setup and must never reach the data you created through
+the running stack:
+
+- `garam` — the stack's own database, created by the image from
+  `POSTGRES_DB`, migrated by the `migrate` service. `GARAM_DATABASE_URL`
+  points here, and so does the Playwright suite (`make web-e2e`), which
+  only inserts uniquely suffixed rows and seeds sessions for the same
+  api it drives.
+- `garam_test` — the Go store round-trips (`make e2e`). `make db-up`
+  creates it if it is missing, and the suite migrates it itself. It is
+  the only database anything truncates.
+
+Postgres publishes host port 55432 by default. `GARAM_DB_PORT` overrides
+it (e.g. per worktree), but it has to be an environment variable —
+`GARAM_DB_PORT=55440 make db-up e2e`. The Makefile does not read
+`.env`, so a value set only there moves the published port while the
+Makefile's test URL stays on 55432 and `make e2e` fails to connect.
 
 ## Files
 
@@ -28,7 +47,7 @@ cp deploy/local/.env.example deploy/local/.env   # then fill in Google OAuth
 docker compose -f deploy/local/docker-compose.yml up --build
 docker compose -f deploy/local/docker-compose.yml --profile web up --build
 docker compose -f deploy/local/docker-compose.yml --profile web down
-docker compose -f deploy/local/docker-compose.yml --profile web down -v  # drop the database
+docker compose -f deploy/local/docker-compose.yml --profile web down -v  # drop both databases
 ```
 
 Without `--profile web`, the `web` service is neither built nor started.

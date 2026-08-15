@@ -48,7 +48,8 @@ collaborate on a shared plan.
   signed-in application lives under `/console`.
 - `deploy/local/` — Docker Compose stack running Postgres, migrations,
   authz, api and (profile-gated) web on one machine; its `postgres`
-  service is also the dev/e2e database (`make db-up`).
+  service also hosts the e2e tests' database (`make db-up`), kept
+  separate from the stack's own.
 - `internal/grn/` — identifier; shared primitive.
 - `internal/errorx/` — typed errors; shared primitive.
 - `internal/cli/` — cobra commands + wiring (`serve api` | `serve authz` | `migrate`).

@@ -688,12 +688,10 @@ func TestPolicyAttachment_DenyOverridesAcrossSources(t *testing.T) {
 	assert.False(t, resp.GetAllowed(), "a group-attached deny overrides the caller's allow")
 }
 
-// TestOrgIsolation_GrantsNeverCrossOrgs asserts the org boundary end to
-// end: nothing org A persists — a policy, a subject or group
-// attachment, a cached statement — changes a decision about org B's
-// resources, and nothing org B persists changes one about org A's.
-// Both orgs' policies name every org in their resource pattern, so the
-// only thing keeping them apart is the org scoping of the lookup.
+// TestOrgIsolation_GrantsNeverCrossOrgs asserts that nothing one org
+// persists — policy, attachment, cached statement — changes a decision
+// about another's. Both policies match every org, so only the lookup's
+// org scoping keeps them apart.
 func TestOrgIsolation_GrantsNeverCrossOrgs(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)

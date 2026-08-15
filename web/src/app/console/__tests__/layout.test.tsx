@@ -3,11 +3,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import AppLayout from "@/app/console/layout";
 
-// The real UserMenu is an async Server Component, which react-dom
-// cannot render under Testing Library. What the layout contract
-// requires is that the shell and children render without waiting for
-// that section, so the test controls the suspension itself: a thrown
-// promise stands in for the pending `/me` fetch.
+// react-dom cannot render the real UserMenu, an async Server
+// Component, under Testing Library. A thrown promise stands in for the
+// pending `/me` fetch so the test controls the suspension.
 const session = vi.hoisted(() => ({
   pending: undefined as Promise<void> | undefined,
 }));

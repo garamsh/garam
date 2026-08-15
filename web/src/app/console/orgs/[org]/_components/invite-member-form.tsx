@@ -19,12 +19,15 @@ export function InviteMemberForm({ org }: { org: string }) {
     createInvitation,
     initialState,
   );
-  const [copied, setCopied] = useState(false);
+  // The copied token, not a flag: a freshly created invitation is a
+  // different token, so the button stops claiming it was copied.
+  const [copiedToken, setCopiedToken] = useState<string | null>(null);
 
   const invitationUrl =
     state.status === "created"
       ? `${window.location.origin}/console/invitations/${state.token}`
       : null;
+  const copied = state.status === "created" && copiedToken === state.token;
 
   return (
     <section className="flex flex-col gap-3">
@@ -73,7 +76,7 @@ export function InviteMemberForm({ org }: { org: string }) {
               variant="outline"
               onClick={async () => {
                 await navigator.clipboard.writeText(invitationUrl);
-                setCopied(true);
+                setCopiedToken(state.status === "created" ? state.token : null);
               }}
             >
               {copied ? "Copied" : "Copy"}

@@ -123,6 +123,16 @@ func TestUserStore_RoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, list, 1)
 
+	// Many GRNs, one query. GRNs without a user are absent, not an error.
+	byGRN, err := s.ListByGRNs(ctx, []grn.GRN{g, grnOf("user", "nobody")})
+	require.NoError(t, err)
+	require.Len(t, byGRN, 1)
+	assert.Equal(t, "ada", byGRN[0].Nickname())
+
+	byGRN, err = s.ListByGRNs(ctx, nil)
+	require.NoError(t, err)
+	assert.Empty(t, byGRN)
+
 	updated, err := s.Update(ctx, g, user.Patch{
 		Nickname: ptr("ada2"),
 		Roles:    []string{"admin"},

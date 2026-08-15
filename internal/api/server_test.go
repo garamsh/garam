@@ -318,6 +318,47 @@ func TestOrgFlow_RoleEnforcement(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 }
 
+func TestListOrgMembers_Nicknames(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+
+	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
+	adaGRN := grn.New("root", "default", user.ServiceType, "ada-sub")
+	f.sessionCookieFor(t, "ada-sub", "Ada")
+	orgGRN := grn.New("root", "default", org.ServiceTypeOrg, slug)
+	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRN, adaGRN, org.RoleMember)))
+	f.permit(permission{ownerGRN, org.ActionOrgMemberList})
+
+	nicknames := func(t *testing.T) map[string]*string {
+		t.Helper()
+		rec := f.do(t, "GET", "/orgs/"+slug+"/members", "", owner)
+		require.Equal(t, http.StatusOK, rec.Code)
+		members := decodeBody[[]apigen.Member](t, rec)
+		require.Len(t, members, 2)
+		byGRN := make(map[string]*string, len(members))
+		for _, m := range members {
+			byGRN[m.UserGrn] = m.Nickname
+		}
+		return byGRN
+	}
+
+	got := nicknames(t)
+	require.NotNil(t, got[ownerGRN.String()])
+	assert.Equal(t, "Owner", *got[ownerGRN.String()])
+	require.NotNil(t, got[adaGRN.String()])
+	assert.Equal(t, "Ada", *got[adaGRN.String()])
+
+	// The membership read and the name read are separate queries. A
+	// user deleted between them resolves to no nickname; the listing
+	// still succeeds, and the GRN is not offered as a substitute.
+	f.users.remove(adaGRN)
+	got = nicknames(t)
+	assert.Nil(t, got[adaGRN.String()])
+	require.NotNil(t, got[ownerGRN.String()])
+	assert.Equal(t, "Owner", *got[ownerGRN.String()])
+}
+
 func TestListOrgs_OnlyMine(t *testing.T) {
 	f := newFixture(t)
 	alice := f.sessionCookieFor(t, "alice-sub", "Alice")
@@ -366,6 +407,8 @@ func TestInvitationFlow_Lifecycle(t *testing.T) {
 	m := decodeBody[apigen.Member](t, rec)
 	assert.Equal(t, apigen.RoleMember, m.Role)
 	assert.Equal(t, "grn:root:default:user:invitee-sub", m.UserGrn)
+	require.NotNil(t, m.Nickname)
+	assert.Equal(t, "Invitee", *m.Nickname)
 
 	// Used tokens are rejected.
 	rec = f.do(t, "POST", "/invitations/"+token+"/accept", "", invitee)

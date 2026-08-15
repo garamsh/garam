@@ -61,6 +61,26 @@ func (s *fakeUserStore) Get(_ context.Context, g grn.GRN) (*user.User, error) {
 	return u, nil
 }
 
+func (s *fakeUserStore) ListByGRNs(_ context.Context, grns []grn.GRN) ([]*user.User, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	users := make([]*user.User, 0, len(grns))
+	for _, g := range grns {
+		if u, ok := s.byID[g.String()]; ok {
+			users = append(users, u)
+		}
+	}
+	return users, nil
+}
+
+// remove drops a user row, leaving memberships that name it
+// unresolvable.
+func (s *fakeUserStore) remove(g grn.GRN) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.byID, g.String())
+}
+
 // grantRoles replaces the stored user with one carrying the given
 // direct roles; login creates users without any.
 func (s *fakeUserStore) grantRoles(g grn.GRN, roles ...string) {

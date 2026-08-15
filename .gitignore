@@ -19,3 +19,6 @@ Thumbs.db
 *.test
 *.out
 /vendor/
+
+# Playwright MCP scratch output
+.playwright-mcp/

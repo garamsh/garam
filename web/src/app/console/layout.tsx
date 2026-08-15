@@ -1,22 +1,17 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
-import { getSession } from "@/features/auth/api/get-session";
 import { UserMenu } from "@/features/auth/components/user-menu";
 
 /**
- * The authenticated shell. It resolves the session against the backend
- * — `proxy.ts` only checks that a cookie exists — so an expired or
- * revoked session lands on the login page rather than on an empty
- * dashboard.
+ * The authenticated shell. The session re-verification lives in the
+ * header's `UserMenu`, behind `<Suspense>`: awaiting the uncached `/me`
+ * fetch at this level would block the whole segment and `loading.tsx`
+ * could never stream (stack-nextjs.md §2).
  */
-export default async function AppLayout({
+export default function AppLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const user = await getSession();
-  if (!user) {
-    redirect("/login");
-  }
   return (
     <>
       <header className="border-b">
@@ -24,7 +19,9 @@ export default async function AppLayout({
           <Link href="/console/orgs" className="font-heading text-lg font-semibold">
             garam
           </Link>
-          <UserMenu user={user} />
+          <Suspense>
+            <UserMenu />
+          </Suspense>
         </div>
       </header>
       <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-8">

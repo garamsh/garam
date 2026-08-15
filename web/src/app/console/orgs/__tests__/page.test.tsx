@@ -26,6 +26,9 @@ describe("organizations page", () => {
       "href",
       "/console/orgs/acme",
     );
+    expect(
+      screen.getByRole("link", { name: "New organization" }),
+    ).toHaveAttribute("href", "/console/orgs/new");
   });
 
   it("says so when the caller belongs to none", async () => {
@@ -36,7 +39,8 @@ describe("organizations page", () => {
     expect(
       screen.getByText("You are not a member of any organization yet."),
     ).toBeInTheDocument();
-    expect(screen.queryAllByRole("link")).toHaveLength(0);
+    // Only the "New organization" link remains.
+    expect(screen.queryAllByRole("link")).toHaveLength(1);
   });
 
   it("sends a rejected session to the login page, not the error boundary", async () => {

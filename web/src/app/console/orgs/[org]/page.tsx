@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { Separator } from "@/components/ui/separator";
+import { getSession } from "@/features/auth/api/get-session";
 import {
   getOrg,
   listGroups,
@@ -10,6 +11,7 @@ import {
 } from "@/features/orgs/api/orgs";
 import { GaramApiError } from "@/lib/garam";
 
+import { InviteMemberForm } from "./_components/invite-member-form";
 import { MemberTable } from "./_components/member-table";
 import { ResourceList } from "./_components/resource-list";
 
@@ -35,11 +37,18 @@ export default async function OrgPage({ params }: Params) {
     throw error;
   });
 
-  const [groups, projects, members] = await Promise.all([
+  const [groups, projects, members, session] = await Promise.all([
     listGroups(slug),
     listProjects(slug),
     listOrgMembers(slug),
+    getSession(),
   ]);
+
+  // Only owners and admins may create invitations.
+  const callerRole = members.find(
+    (member) => member.userGrn === session?.grn,
+  )?.role;
+  const canInvite = callerRole === "owner" || callerRole === "admin";
 
   return (
     <div className="flex flex-col gap-8">
@@ -64,6 +73,13 @@ export default async function OrgPage({ params }: Params) {
       <Separator />
 
       <MemberTable members={members} />
+
+      {canInvite && (
+        <>
+          <Separator />
+          <InviteMemberForm org={slug} />
+        </>
+      )}
     </div>
   );
 }

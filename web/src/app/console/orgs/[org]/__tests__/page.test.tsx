@@ -68,4 +68,28 @@ describe("organization detail page", () => {
       renderServerComponent(OrgPage(params("acme"))),
     ).rejects.toThrow("NEXT_NOT_FOUND");
   });
+
+  it("offers invitations to an owner", async () => {
+    await renderServerComponent(OrgPage(params("acme")));
+
+    expect(
+      screen.getByRole("heading", { name: "Invite a member" }),
+    ).toBeInTheDocument();
+  });
+
+  it("hides invitations from a plain member", async () => {
+    server.use(
+      http.get(`${API_URL}/orgs/acme/members`, () =>
+        HttpResponse.json([
+          { userGrn: "grn:root:default:user:alice", role: "member", since: "2026-01-02T03:04:05Z" },
+        ]),
+      ),
+    );
+
+    await renderServerComponent(OrgPage(params("acme")));
+
+    expect(
+      screen.queryByRole("heading", { name: "Invite a member" }),
+    ).not.toBeInTheDocument();
+  });
 });

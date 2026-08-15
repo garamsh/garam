@@ -13,6 +13,13 @@ export type Seed = {
   projectName: string;
 };
 
+/** A signed-in user without an organization: the invitee side of a flow. */
+export type SeededUser = {
+  sessionToken: string;
+  userGrn: string;
+  nickname: string;
+};
+
 const DATABASE_URL =
   process.env.GARAM_E2E_DATABASE_URL ??
   "postgres://garam:garam@localhost:55432/garam?sslmode=disable";
@@ -20,6 +27,23 @@ const DATABASE_URL =
 /** Mirrors the backend's `authn.HashToken`: hex-encoded SHA-256. */
 function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
+}
+
+/** Writes the user and session rows a completed OAuth callback wrote. */
+async function insertUserAndSession(
+  client: Client,
+  user: SeededUser,
+): Promise<void> {
+  await client.query(
+    `INSERT INTO users (grn, nickname, created_at, updated_at)
+     VALUES ($1, $2, now(), now())`,
+    [user.userGrn, user.nickname],
+  );
+  await client.query(
+    `INSERT INTO sessions (token_hash, user_grn, created_at, expires_at)
+     VALUES ($1, $2, now(), now() + interval '1 hour')`,
+    [hashToken(user.sessionToken), user.userGrn],
+  );
 }
 
 /**
@@ -44,11 +68,7 @@ export async function seedSignedInOrg(): Promise<Seed> {
   await client.connect();
   try {
     await client.query("BEGIN");
-    await client.query(
-      `INSERT INTO users (grn, nickname, created_at, updated_at)
-       VALUES ($1, $2, now(), now())`,
-      [seed.userGrn, seed.nickname],
-    );
+    await insertUserAndSession(client, seed);
     await client.query(
       `INSERT INTO orgs (grn, name, created_at, updated_at)
        VALUES ($1, $2, now(), now())`,
@@ -73,11 +93,6 @@ export async function seedSignedInOrg(): Promise<Seed> {
        VALUES ($1, $2, $3, now(), now())`,
       [`grn:${seed.orgSlug}:default:project:frontend`, orgGrn, seed.projectName],
     );
-    await client.query(
-      `INSERT INTO sessions (token_hash, user_grn, created_at, expires_at)
-       VALUES ($1, $2, now(), now() + interval '1 hour')`,
-      [hashToken(seed.sessionToken), seed.userGrn],
-    );
     await client.query("COMMIT");
   } catch (error) {
     await client.query("ROLLBACK");
@@ -86,4 +101,31 @@ export async function seedSignedInOrg(): Promise<Seed> {
     await client.end();
   }
   return seed;
+}
+
+/**
+ * Seeds a signed-in user who belongs to no organization, for flows that
+ * hand a second identity something to accept.
+ */
+export async function seedSignedInUser(): Promise<SeededUser> {
+  const suffix = randomBytes(6).toString("hex");
+  const user: SeededUser = {
+    sessionToken: randomBytes(32).toString("base64url"),
+    userGrn: `grn:root:default:user:e2e-${suffix}`,
+    nickname: `e2e-user-${suffix}`,
+  };
+
+  const client = new Client({ connectionString: DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query("BEGIN");
+    await insertUserAndSession(client, user);
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    await client.end();
+  }
+  return user;
 }

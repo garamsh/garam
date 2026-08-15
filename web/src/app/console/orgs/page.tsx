@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import { listOrgs } from "@/features/orgs/api/orgs";
 import { slugFromGrn } from "@/features/orgs/grn";
@@ -12,11 +13,18 @@ export default async function OrgsPage() {
 
   return (
     <section className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="font-heading text-2xl font-semibold">Organizations</h1>
-        <p className="text-sm text-muted-foreground">
-          The organizations you belong to.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <h1 className="font-heading text-2xl font-semibold">
+            Organizations
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            The organizations you belong to.
+          </p>
+        </div>
+        <Button asChild>
+          <Link href="/console/orgs/new">New organization</Link>
+        </Button>
       </div>
 
       {orgs.length === 0 ? (

@@ -4,12 +4,13 @@ Runs the whole garam stack on one machine with Docker Compose:
 Postgres, migrations, the authz engine, the API, and — behind a
 profile — the web frontend.
 
-This is not the dev database compose file.
-[`deploy/dev/docker-compose.yml`](../dev/docker-compose.yml) still
-provides the Postgres that `make db-up` and the e2e tests use, and the
-two are independent: this stack runs under the compose project
-`garam-local` with its own volume, and its Postgres publishes host port
-55433 so it never collides with the dev file's 55432.
+This compose file is also the dev database: `make db-up` starts only
+its `postgres` service for the e2e tests, and `make db-down` removes
+that service again. Both concerns share the one compose project
+`garam-local` and its `postgres-data` volume — there is no second
+compose file. Postgres publishes host port 55432 by default;
+`GARAM_DB_PORT` overrides it (e.g. per worktree) for both the stack and
+the Makefile's test URL.
 
 ## Files
 

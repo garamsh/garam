@@ -41,8 +41,8 @@ sign-in on `/login` — a real session, no Google credentials needed
 ([ADR-0010](./docs/architecture/adr/0010-dev-auth-provider.md)). Off by
 default; localhost tooling only.
 
-The dev/e2e Postgres that `make db-up` starts is separate; its compose
-file lives in [`deploy/dev/`](./deploy/dev/).
+The same compose file provides the dev/e2e Postgres: `make db-up`
+starts only its `postgres` service.
 
 ## Web frontend
 

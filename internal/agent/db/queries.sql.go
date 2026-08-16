@@ -110,6 +110,70 @@ func (q *Queries) GetAgentAssignment(ctx context.Context, agentGrn string) (Agen
 	return i, err
 }
 
+const listAgentAssignmentsByOrg = `-- name: ListAgentAssignmentsByOrg :many
+SELECT a.agent_grn, a.operator_grn, a.epoch, a.created_at, a.updated_at FROM agent_assignments a
+JOIN agents g ON g.grn = a.agent_grn
+WHERE g.org_grn = $1
+ORDER BY a.agent_grn
+`
+
+func (q *Queries) ListAgentAssignmentsByOrg(ctx context.Context, orgGrn string) ([]AgentAssignment, error) {
+	rows, err := q.db.Query(ctx, listAgentAssignmentsByOrg, orgGrn)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AgentAssignment
+	for rows.Next() {
+		var i AgentAssignment
+		if err := rows.Scan(
+			&i.AgentGrn,
+			&i.OperatorGrn,
+			&i.Epoch,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAgentsByOrg = `-- name: ListAgentsByOrg :many
+SELECT grn, org_grn, provisioning_state, runtime_state, created_at, updated_at FROM agents WHERE org_grn = $1 ORDER BY grn
+`
+
+func (q *Queries) ListAgentsByOrg(ctx context.Context, orgGrn string) ([]Agent, error) {
+	rows, err := q.db.Query(ctx, listAgentsByOrg, orgGrn)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Agent
+	for rows.Next() {
+		var i Agent
+		if err := rows.Scan(
+			&i.Grn,
+			&i.OrgGrn,
+			&i.ProvisioningState,
+			&i.RuntimeState,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const reportAgentProvisioningState = `-- name: ReportAgentProvisioningState :one
 UPDATE agents SET
     provisioning_state = $1,

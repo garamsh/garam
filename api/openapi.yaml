@@ -17,6 +17,12 @@ tags:
     description: >-
       The versioned policy documents an organization evaluates, and the
       subjects they are attached to.
+  - name: agent
+    description: >-
+      The agents an organization holds. Read-only here: an operator
+      provisions an agent from outside garam and reports back, so
+      nothing on this listener creates one, assigns one, or issues a
+      certificate.
 paths:
   /auth/login/{provider}:
     get:
@@ -611,6 +617,49 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
+  /orgs/{org}/agents:
+    get:
+      operationId: listAgents
+      tags: [agent]
+      summary: List an organization's agents. Requires the `member` role.
+      parameters:
+        - $ref: '#/components/parameters/org'
+      responses:
+        '200':
+          description: The organization's agents.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Agent'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/agents/{agent}:
+    get:
+      operationId: getAgent
+      tags: [agent]
+      summary: Get an agent. Requires the `member` role.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/agent'
+      responses:
+        '200':
+          description: The agent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
   /orgs/{org}/policies:
     post:
       operationId: createPolicy
@@ -979,6 +1028,14 @@ components:
       x-go-name: PolicySlug
       schema:
         type: string
+    agent:
+      name: agent
+      in: path
+      required: true
+      description: Agent identifier (the last GRN segment).
+      x-go-name: AgentSlug
+      schema:
+        type: string
     subject:
       name: subject
       in: path
@@ -1265,6 +1322,63 @@ components:
         subjectGrn:
           type: string
           example: grn:acme:default:group:eng
+    AgentProvisioningState:
+      type: string
+      description: >-
+        What the operator reports about the agent's pod. `pending` is an
+        agent no operator has reported on yet.
+      enum: [pending, provisioned, ready, failed]
+    AgentRuntimeState:
+      type: string
+      description: >-
+        What the agent reports about itself. `unknown` is an agent that
+        has not reported since it was created.
+      enum: [unknown, connected, disconnected]
+    AgentAssignment:
+      type: object
+      description: >-
+        The operator holding an agent, at the epoch that binding is on.
+        Every assignment raises the epoch and fences the operator it
+        replaced.
+      required: [operatorGrn, epoch, since]
+      properties:
+        operatorGrn:
+          type: string
+          example: grn:acme:default:operator:field-one
+        epoch:
+          type: integer
+          minimum: 1
+        since:
+          type: string
+          format: date-time
+          description: When the current binding was written.
+    Agent:
+      type: object
+      description: >-
+        An agent an operator provisioned outside garam. Provisioning
+        state and runtime state are separate facts reported by different
+        parties, and neither substitutes for the other. `assignment` is
+        absent while no operator holds the agent, and `updatedAt` is
+        when a state report last landed — either party's report moves it.
+      required: [grn, orgGrn, provisioningState, runtimeState, createdAt, updatedAt]
+      properties:
+        grn:
+          type: string
+          example: grn:acme:default:agent:9f2ac1b40d8e7a35
+        orgGrn:
+          type: string
+        provisioningState:
+          $ref: '#/components/schemas/AgentProvisioningState'
+        runtimeState:
+          $ref: '#/components/schemas/AgentRuntimeState'
+        assignment:
+          $ref: '#/components/schemas/AgentAssignment'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
     Error:
       type: object
       required: [kind, message]

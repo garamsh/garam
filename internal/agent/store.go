@@ -12,10 +12,16 @@ import (
 type Store interface {
 	Create(ctx context.Context, a *Agent) error
 	Get(ctx context.Context, g grn.GRN) (*Agent, error)
+	// ListByOrg returns the organization's agents, ordered by GRN.
+	ListByOrg(ctx context.Context, orgGRN grn.GRN) ([]*Agent, error)
 	// Assign binds the agent to an operator at the next epoch,
 	// replacing whichever operator held it before.
 	Assign(ctx context.Context, agentGRN, operatorGRN grn.GRN) (*Assignment, error)
 	GetAssignment(ctx context.Context, agentGRN grn.GRN) (*Assignment, error)
+	// ListAssignmentsByOrg returns the assignments of the
+	// organization's agents, ordered by agent GRN. An unassigned agent
+	// has none, so the result is not one per agent.
+	ListAssignmentsByOrg(ctx context.Context, orgGRN grn.GRN) ([]*Assignment, error)
 	// ReportProvisioningState records what the operator assigned at
 	// epoch says about the agent's pod, or ErrStaleEpoch.
 	ReportProvisioningState(ctx context.Context, agentGRN grn.GRN, epoch int, state ProvisioningState) (*Agent, error)

@@ -52,6 +52,23 @@ func (s *PostgresStore) Get(ctx context.Context, g grn.GRN) (*Agent, error) {
 	return rowToAgent(row)
 }
 
+// ListByOrg returns the organization's agents.
+func (s *PostgresStore) ListByOrg(ctx context.Context, orgGRN grn.GRN) ([]*Agent, error) {
+	rows, err := s.q.ListAgentsByOrg(ctx, orgGRN.String())
+	if err != nil {
+		return nil, classify(err, "list agents", nil, nil)
+	}
+	agents := make([]*Agent, 0, len(rows))
+	for _, row := range rows {
+		a, err := rowToAgent(row)
+		if err != nil {
+			return nil, err
+		}
+		agents = append(agents, a)
+	}
+	return agents, nil
+}
+
 // Assign binds the agent to an operator at the next epoch. Every call
 // raises the epoch, so the pods of the assignment it replaces are
 // fenced out whether or not the operator changed.
@@ -77,6 +94,24 @@ func (s *PostgresStore) GetAssignment(ctx context.Context, agentGRN grn.GRN) (*A
 		return nil, classify(err, "get assignment", ErrAssignmentNotFound, nil)
 	}
 	return rowToAssignment(row)
+}
+
+// ListAssignmentsByOrg returns the assignments of the organization's
+// agents. An unassigned agent contributes none.
+func (s *PostgresStore) ListAssignmentsByOrg(ctx context.Context, orgGRN grn.GRN) ([]*Assignment, error) {
+	rows, err := s.q.ListAgentAssignmentsByOrg(ctx, orgGRN.String())
+	if err != nil {
+		return nil, classify(err, "list assignments", nil, nil)
+	}
+	assignments := make([]*Assignment, 0, len(rows))
+	for _, row := range rows {
+		a, err := rowToAssignment(row)
+		if err != nil {
+			return nil, err
+		}
+		assignments = append(assignments, a)
+	}
+	return assignments, nil
 }
 
 // ReportProvisioningState records what the operator assigned at epoch

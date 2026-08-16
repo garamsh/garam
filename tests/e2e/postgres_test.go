@@ -455,6 +455,92 @@ func TestAgentStore_RoundTrip(t *testing.T) {
 	assert.Zero(t, assignments)
 }
 
+// TestAgentStore_ListsTheOrgsOwnAgents covers what the browser read
+// path is served from: an organization's agents and the assignments
+// holding them, each ordered and each scoped to that organization.
+// Every state moves before the read, so a list that answered from the
+// wrong column or the wrong row is visible.
+func TestAgentStore_ListsTheOrgsOwnAgents(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := agent.NewPostgresStore(p)
+	orgs := org.NewPostgresStore(p)
+	acme, globex := orgRootGRN("acme"), orgRootGRN("globex")
+	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(acme, "acme")))
+	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(globex, "globex")))
+
+	held := seedAgent(t, s, acme)
+	loose := seedAgent(t, s, acme)
+	elsewhere := seedAgent(t, s, globex)
+
+	operator := scopedGRN(acme.Identifier, agent.ServiceTypeOperator, "field-one")
+	assigned, err := s.Assign(ctx, held, operator)
+	require.NoError(t, err)
+	_, err = s.ReportProvisioningState(ctx, held, assigned.Epoch(), agent.ProvisioningStateReady)
+	require.NoError(t, err)
+	_, err = s.ReportRuntimeState(ctx, held, assigned.Epoch(), agent.RuntimeStateConnected)
+	require.NoError(t, err)
+	_, err = s.Assign(ctx, elsewhere, scopedGRN(globex.Identifier, agent.ServiceTypeOperator, "field-two"))
+	require.NoError(t, err)
+
+	listed, err := s.ListByOrg(ctx, acme)
+	require.NoError(t, err)
+	require.Len(t, listed, 2, "the org's own agents and no other org's")
+	assert.ElementsMatch(t, []grn.GRN{held, loose}, []grn.GRN{listed[0].GRN(), listed[1].GRN()})
+	assert.Less(t, listed[0].GRN().String(), listed[1].GRN().String(), "ordered by GRN")
+
+	byGRN := map[grn.GRN]*agent.Agent{}
+	for _, a := range listed {
+		byGRN[a.GRN()] = a
+	}
+	// Each reported state comes back in its own field, and the agent
+	// nobody reported on keeps the initial pair.
+	assert.Equal(t, agent.ProvisioningStateReady, byGRN[held].ProvisioningState())
+	assert.Equal(t, agent.RuntimeStateConnected, byGRN[held].RuntimeState())
+	assert.Equal(t, agent.ProvisioningStatePending, byGRN[loose].ProvisioningState())
+	assert.Equal(t, agent.RuntimeStateUnknown, byGRN[loose].RuntimeState())
+
+	// An unassigned agent contributes no assignment, so the list is not
+	// one per agent.
+	assignments, err := s.ListAssignmentsByOrg(ctx, acme)
+	require.NoError(t, err)
+	require.Len(t, assignments, 1)
+	assert.Equal(t, held, assignments[0].Agent())
+	assert.Equal(t, operator, assignments[0].Operator())
+	assert.Equal(t, 1, assignments[0].Epoch())
+
+	// The other org holds its own agent and its own assignment, so the
+	// scoping refuses a pairing rather than every pairing.
+	listed, err = s.ListByOrg(ctx, globex)
+	require.NoError(t, err)
+	require.Len(t, listed, 1)
+	assert.Equal(t, elsewhere, listed[0].GRN())
+	assignments, err = s.ListAssignmentsByOrg(ctx, globex)
+	require.NoError(t, err)
+	require.Len(t, assignments, 1)
+	assert.Equal(t, elsewhere, assignments[0].Agent())
+
+	// An org that holds none reads as empty rather than as everyone's.
+	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("initech"), "initech")))
+	listed, err = s.ListByOrg(ctx, orgRootGRN("initech"))
+	require.NoError(t, err)
+	assert.Empty(t, listed)
+	assignments, err = s.ListAssignmentsByOrg(ctx, orgRootGRN("initech"))
+	require.NoError(t, err)
+	assert.Empty(t, assignments)
+}
+
+// seedAgent mints an agent of the org and stores it.
+func seedAgent(t *testing.T, s *agent.PostgresStore, orgGRN grn.GRN) grn.GRN {
+	t.Helper()
+	g, err := agent.NewGRN(orgGRN)
+	require.NoError(t, err)
+	a, err := agent.New(g, orgGRN)
+	require.NoError(t, err)
+	require.NoError(t, s.Create(context.Background(), a))
+	return g
+}
+
 // TestAgent_GRNNamesAnAgentOfItsOrg covers the schema's copy of the
 // ownership rule the agent domain enforces: a row whose GRN names
 // another organization, or names something that is not an agent, is

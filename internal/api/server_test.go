@@ -29,6 +29,7 @@ type fixture struct {
 	handler   http.Handler
 	users     *fakeUserStore
 	orgs      *fakeOrgStore
+	agents    *fakeAgentStore
 	sessions  *fakeSessionStore
 	provider  *fakeProvider
 	evaluator *mocks.MockEvaluator
@@ -40,12 +41,13 @@ func newFixture(t *testing.T, extra ...authn.Provider) *fixture {
 	f := &fixture{
 		users:     newFakeUserStore(),
 		orgs:      newFakeOrgStore(),
+		agents:    newFakeAgentStore(),
 		sessions:  newFakeSessionStore(),
 		provider:  &fakeProvider{name: "google"},
 		evaluator: mocks.NewMockEvaluator(t),
 		policies:  mocks.NewMockPolicyManager(t),
 	}
-	srv := api.NewServer(f.users, f.orgs, f.sessions, append([]authn.Provider{f.provider}, extra...), f.evaluator, f.policies, api.Config{SessionTTL: time.Hour})
+	srv := api.NewServer(f.users, f.orgs, f.agents, f.sessions, append([]authn.Provider{f.provider}, extra...), f.evaluator, f.policies, api.Config{SessionTTL: time.Hour})
 	f.handler = apigen.Handler(srv)
 	return f
 }

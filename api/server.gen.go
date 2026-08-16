@@ -15,6 +15,51 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for AgentProvisioningState.
+const (
+	Failed      AgentProvisioningState = "failed"
+	Pending     AgentProvisioningState = "pending"
+	Provisioned AgentProvisioningState = "provisioned"
+	Ready       AgentProvisioningState = "ready"
+)
+
+// Valid indicates whether the value is a known member of the AgentProvisioningState enum.
+func (e AgentProvisioningState) Valid() bool {
+	switch e {
+	case Failed:
+		return true
+	case Pending:
+		return true
+	case Provisioned:
+		return true
+	case Ready:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentRuntimeState.
+const (
+	Connected    AgentRuntimeState = "connected"
+	Disconnected AgentRuntimeState = "disconnected"
+	Unknown      AgentRuntimeState = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the AgentRuntimeState enum.
+func (e AgentRuntimeState) Valid() bool {
+	switch e {
+	case Connected:
+		return true
+	case Disconnected:
+		return true
+	case Unknown:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for InvitationCreateRole.
 const (
 	InvitationCreateRoleAdmin  InvitationCreateRole = "admin"
@@ -74,6 +119,37 @@ func (e Role) Valid() bool {
 		return false
 	}
 }
+
+// Agent An agent an operator provisioned outside garam. Provisioning state and runtime state are separate facts reported by different parties, and neither substitutes for the other. `assignment` is absent while no operator holds the agent, and `updatedAt` is when a state report last landed — either party's report moves it.
+type Agent struct {
+	// Assignment The operator holding an agent, at the epoch that binding is on. Every assignment raises the epoch and fences the operator it replaced.
+	Assignment *AgentAssignment `json:"assignment,omitempty"`
+	CreatedAt  time.Time        `json:"createdAt"`
+	Grn        string           `json:"grn"`
+	OrgGrn     string           `json:"orgGrn"`
+
+	// ProvisioningState What the operator reports about the agent's pod. `pending` is an agent no operator has reported on yet.
+	ProvisioningState AgentProvisioningState `json:"provisioningState"`
+
+	// RuntimeState What the agent reports about itself. `unknown` is an agent that has not reported since it was created.
+	RuntimeState AgentRuntimeState `json:"runtimeState"`
+	UpdatedAt    time.Time         `json:"updatedAt"`
+}
+
+// AgentAssignment The operator holding an agent, at the epoch that binding is on. Every assignment raises the epoch and fences the operator it replaced.
+type AgentAssignment struct {
+	Epoch       int    `json:"epoch"`
+	OperatorGrn string `json:"operatorGrn"`
+
+	// Since When the current binding was written.
+	Since time.Time `json:"since"`
+}
+
+// AgentProvisioningState What the operator reports about the agent's pod. `pending` is an agent no operator has reported on yet.
+type AgentProvisioningState string
+
+// AgentRuntimeState What the agent reports about itself. `unknown` is an agent that has not reported since it was created.
+type AgentRuntimeState string
 
 // Error defines model for Error.
 type Error struct {
@@ -262,6 +338,9 @@ type User struct {
 	Nickname string `json:"nickname"`
 }
 
+// AgentSlug defines model for agent.
+type AgentSlug = string
+
 // GroupSlug defines model for group.
 type GroupSlug = string
 
@@ -390,6 +469,12 @@ type ServerInterface interface {
 	// UpdateOrg Update an organization. Requires the `admin` role.
 	// (PATCH /orgs/{org})
 	UpdateOrg(w http.ResponseWriter, r *http.Request, org Org)
+	// ListAgents List an organization's agents. Requires the `member` role.
+	// (GET /orgs/{org}/agents)
+	ListAgents(w http.ResponseWriter, r *http.Request, org Org)
+	// GetAgent Get an agent. Requires the `member` role.
+	// (GET /orgs/{org}/agents/{agent})
+	GetAgent(w http.ResponseWriter, r *http.Request, org Org, agentSlug AgentSlug)
 	// ListGroups List an organization's groups. Requires the `member` role.
 	// (GET /orgs/{org}/groups)
 	ListGroups(w http.ResponseWriter, r *http.Request, org Org, params ListGroupsParams)
@@ -763,6 +848,67 @@ func (siw *ServerInterfaceWrapper) UpdateOrg(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateOrg(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAgents operation middleware
+func (siw *ServerInterfaceWrapper) ListAgents(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAgents(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAgent operation middleware
+func (siw *ServerInterfaceWrapper) GetAgent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "agent" -------------
+	var agentSlug AgentSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAgent(w, r, org, agentSlug)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1912,6 +2058,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/projects/{project}/members", wrapper.ListProjectMembers)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/projects/{project}/members", wrapper.AddProjectMember)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/projects/{project}/members/{member}", wrapper.RemoveProjectMember)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agents", wrapper.ListAgents)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agents/{agent}", wrapper.GetAgent)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/policies", wrapper.ListPolicies)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/policies", wrapper.CreatePolicy)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/policies/{policy}/versions", wrapper.ListPolicyVersions)

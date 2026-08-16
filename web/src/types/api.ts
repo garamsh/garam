@@ -299,6 +299,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/orgs/{org}/agents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List an organization's agents. Requires the `member` role. */
+        get: operations["listAgents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/agents/{agent}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get an agent. Requires the `member` role. */
+        get: operations["getAgent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orgs/{org}/policies": {
         parameters: {
             query?: never;
@@ -630,6 +664,40 @@ export interface components {
             /** @example grn:acme:default:group:eng */
             subjectGrn: string;
         };
+        /**
+         * @description What the operator reports about the agent's pod. `pending` is an agent no operator has reported on yet.
+         * @enum {string}
+         */
+        AgentProvisioningState: "pending" | "provisioned" | "ready" | "failed";
+        /**
+         * @description What the agent reports about itself. `unknown` is an agent that has not reported since it was created.
+         * @enum {string}
+         */
+        AgentRuntimeState: "unknown" | "connected" | "disconnected";
+        /** @description The operator holding an agent, at the epoch that binding is on. Every assignment raises the epoch and fences the operator it replaced. */
+        AgentAssignment: {
+            /** @example grn:acme:default:operator:field-one */
+            operatorGrn: string;
+            epoch: number;
+            /**
+             * Format: date-time
+             * @description When the current binding was written.
+             */
+            since: string;
+        };
+        /** @description An agent an operator provisioned outside garam. Provisioning state and runtime state are separate facts reported by different parties, and neither substitutes for the other. `assignment` is absent while no operator holds the agent, and `updatedAt` is when a state report last landed — either party's report moves it. */
+        Agent: {
+            /** @example grn:acme:default:agent:9f2ac1b40d8e7a35 */
+            grn: string;
+            orgGrn: string;
+            provisioningState: components["schemas"]["AgentProvisioningState"];
+            runtimeState: components["schemas"]["AgentRuntimeState"];
+            assignment?: components["schemas"]["AgentAssignment"];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
         Error: {
             /** @description errorx kind, e.g. `not_found`, `permission_denied`. */
             kind: string;
@@ -660,6 +728,8 @@ export interface components {
         member: string;
         /** @description Policy identifier (the last GRN segment). */
         policy: string;
+        /** @description Agent identifier (the last GRN segment). */
+        agent: string;
         /** @description Subject GRN a policy is attached to. */
         subject: string;
         /** @description Maximum entries to return; 0 means no limit. */
@@ -1409,6 +1479,60 @@ export interface operations {
                 content?: never;
             };
             400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    listAgents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The organization's agents. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Agent"][];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    getAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description Agent identifier (the last GRN segment). */
+                agent: components["parameters"]["agent"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The agent. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Agent"];
+                };
+            };
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/authn"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
@@ -465,4 +466,94 @@ func (s *fakeOrgStore) AcceptInvitation(_ context.Context, token string, _ grn.G
 	}
 	s.accepted[token] = true
 	return inv, nil
+}
+
+// fakeAgentStore is an in-memory agent.Store double. The API reads
+// agents and the assignments holding them; the write methods an
+// operator reaches over the machine listener stay unimplemented and
+// panic through the embedded interface.
+type fakeAgentStore struct {
+	agent.Store
+	mu          sync.Mutex
+	agents      map[string]*agent.Agent
+	assignments map[string]*agent.Assignment
+}
+
+func newFakeAgentStore() *fakeAgentStore {
+	return &fakeAgentStore{
+		agents:      map[string]*agent.Agent{},
+		assignments: map[string]*agent.Assignment{},
+	}
+}
+
+func (s *fakeAgentStore) Create(_ context.Context, a *agent.Agent) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.agents[a.GRN().String()] = a
+	return nil
+}
+
+func (s *fakeAgentStore) Get(_ context.Context, g grn.GRN) (*agent.Agent, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	a, ok := s.agents[g.String()]
+	if !ok {
+		return nil, agent.ErrAgentNotFound
+	}
+	return a, nil
+}
+
+func (s *fakeAgentStore) ListByOrg(_ context.Context, orgGRN grn.GRN) ([]*agent.Agent, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := []*agent.Agent{}
+	for _, a := range s.agents {
+		if a.Organization() == orgGRN {
+			out = append(out, a)
+		}
+	}
+	slices.SortFunc(out, func(a, b *agent.Agent) int {
+		return strings.Compare(a.GRN().String(), b.GRN().String())
+	})
+	return out, nil
+}
+
+func (s *fakeAgentStore) Assign(_ context.Context, agentGRN, operatorGRN grn.GRN) (*agent.Assignment, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.agents[agentGRN.String()]; !ok {
+		return nil, agent.ErrAgentNotFound
+	}
+	epoch := 1
+	if held, ok := s.assignments[agentGRN.String()]; ok {
+		epoch = held.Epoch() + 1
+	}
+	a := agent.NewAssignment(agentGRN, operatorGRN, epoch)
+	s.assignments[agentGRN.String()] = a
+	return a, nil
+}
+
+func (s *fakeAgentStore) GetAssignment(_ context.Context, agentGRN grn.GRN) (*agent.Assignment, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	a, ok := s.assignments[agentGRN.String()]
+	if !ok {
+		return nil, agent.ErrAssignmentNotFound
+	}
+	return a, nil
+}
+
+func (s *fakeAgentStore) ListAssignmentsByOrg(_ context.Context, orgGRN grn.GRN) ([]*agent.Assignment, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := []*agent.Assignment{}
+	for key, a := range s.assignments {
+		if held, ok := s.agents[key]; ok && held.Organization() == orgGRN {
+			out = append(out, a)
+		}
+	}
+	slices.SortFunc(out, func(a, b *agent.Assignment) int {
+		return strings.Compare(a.Agent().String(), b.Agent().String())
+	})
+	return out, nil
 }

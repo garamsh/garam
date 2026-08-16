@@ -16,6 +16,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 
 	apigen "github.com/garamsh/garam/api"
+	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/api"
 	"github.com/garamsh/garam/internal/authn"
 	"github.com/garamsh/garam/internal/authz"
@@ -95,6 +96,7 @@ func serveAPI(cmd *cobra.Command) error {
 	srv := api.NewServer(
 		user.NewPostgresStore(pool),
 		org.NewPostgresStore(pool),
+		agent.NewPostgresStore(pool),
 		authn.NewPostgresSessionStore(pool),
 		providers,
 		api.NewGRPCEvaluator(conn),

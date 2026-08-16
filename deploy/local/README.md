@@ -9,7 +9,9 @@ on — is not part of this stack
 ([ADR-0017](../../docs/architecture/adr/0017-machine-process.md)). Its
 key material is per host, readable by its owner alone, and a container
 running as another user is refused it; run that listener outside
-compose, configured as the `internal/cli` package documents.
+compose, configured as the `internal/cli` package documents, or on the
+local Kubernetes stack in `minikube/`, which generates that key material
+and hands the process a file it owns.
 
 This compose file is also what the test gates run against. `make db-up`
 starts only its `postgres` service for the Go e2e tests, and

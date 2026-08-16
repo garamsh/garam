@@ -169,6 +169,11 @@ file declares and which depends.
   enforce this, so it is a review matter.
 - Go rejects an import cycle at compile time but does not detect a
   `type → struct → type` cycle. Those are found by reading.
+- **A boundary that erases a static type is read back with the comma-ok
+  form.** `context.Value` returns `any`, and probing whether a request
+  satisfies an interface has no other syntax. `v, ok := x.(T)` with an
+  explicit branch for `!ok` is the accepted form; a bare `x.(T)` is not,
+  because it panics instead of handling the case.
 
 ## 3. Naming
 

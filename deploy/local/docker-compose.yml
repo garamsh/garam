@@ -44,8 +44,9 @@ services:
     environment:
       GARAM_DATABASE_URL: ${GARAM_DATABASE_URL:-postgres://garam:garam@postgres:5432/garam?sslmode=disable}
       GARAM_GRPC_ADDR: ":9090"
-      # The engine speaks gRPC only, so /metrics gets a listener and a
-      # published port of its own; the api's rides on its HTTP port.
+      # The engine speaks gRPC only, so /metrics and the probes get a
+      # listener and a published port of its own; the api's ride on its
+      # HTTP port.
       GARAM_METRICS_ADDR: ":9091"
     ports:
       - "${GARAM_LOCAL_METRICS_PORT:-9091}:9091"
@@ -54,10 +55,10 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
-    # The engine serves gRPC without the health service, so readiness is
-    # a TCP connect.
+    # /readyz, so healthy means the engine can answer rather than that a
+    # port is open. It starts answering once the gRPC port is bound.
     healthcheck:
-      test: ["CMD-SHELL", "nc -z 127.0.0.1 9090"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:9091/readyz"]
       interval: 2s
       timeout: 5s
       retries: 10
@@ -88,8 +89,11 @@ services:
         condition: service_completed_successfully
       authz:
         condition: service_healthy
+    # /readyz covers the database and the engine channel both, so `web`
+    # waits for an api that can serve a request rather than one that has
+    # bound its port.
     healthcheck:
-      test: ["CMD-SHELL", "nc -z 127.0.0.1 8080"]
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/readyz"]
       interval: 2s
       timeout: 5s
       retries: 10

@@ -8,7 +8,7 @@ import { seedSignedInOrg, type Seed } from "./seed";
  * organization, so specs never contend over shared rows.
  */
 export const test = base.extend<{ signedIn: Seed }>({
-  signedIn: async ({ context, baseURL }, use) => {
+  signedIn: async ({ context, baseURL }, provide) => {
     const seed = await seedSignedInOrg();
     await context.addCookies([
       {
@@ -19,7 +19,7 @@ export const test = base.extend<{ signedIn: Seed }>({
         sameSite: "Lax",
       },
     ]);
-    await use(seed);
+    await provide(seed);
   },
 });
 

@@ -18,6 +18,20 @@ type Assignment struct {
 	updatedAt   time.Time
 }
 
+// NewAssignment binds the agent to the operator at epoch, as of now.
+// Which pairings are legal is the schema's decision and not this
+// domain's (ADR-0015), so this constructs a value and validates none.
+func NewAssignment(agentGRN, operatorGRN grn.GRN, epoch int) *Assignment {
+	now := time.Now().UTC()
+	return &Assignment{
+		agentGRN:    agentGRN,
+		operatorGRN: operatorGRN,
+		epoch:       epoch,
+		createdAt:   now,
+		updatedAt:   now,
+	}
+}
+
 func (a *Assignment) Agent() grn.GRN       { return a.agentGRN }
 func (a *Assignment) Operator() grn.GRN    { return a.operatorGRN }
 func (a *Assignment) Epoch() int           { return a.epoch }

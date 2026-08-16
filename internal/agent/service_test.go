@@ -1,6 +1,5 @@
-// Internal test package: the service reads assignments through its
-// store, and an Assignment is constructed by this package alone — a
-// double declared outside it has none to answer with.
+// Internal test package: the double below builds the Agents and
+// Assignments it answers with out of this package's own fields.
 package agent
 
 import (
@@ -43,6 +42,16 @@ func (s *memoryStore) Get(_ context.Context, g grn.GRN) (*Agent, error) {
 	return a, nil
 }
 
+func (s *memoryStore) ListByOrg(_ context.Context, orgGRN grn.GRN) ([]*Agent, error) {
+	agents := make([]*Agent, 0, len(s.agents))
+	for _, a := range s.agents {
+		if a.orgGRN == orgGRN {
+			agents = append(agents, a)
+		}
+	}
+	return agents, nil
+}
+
 func (s *memoryStore) Assign(_ context.Context, agentGRN, operatorGRN grn.GRN) (*Assignment, error) {
 	if _, held := s.agents[agentGRN]; !held {
 		return nil, ErrAgentNotFound
@@ -62,6 +71,16 @@ func (s *memoryStore) GetAssignment(_ context.Context, agentGRN grn.GRN) (*Assig
 		return nil, ErrAssignmentNotFound
 	}
 	return assignment, nil
+}
+
+func (s *memoryStore) ListAssignmentsByOrg(_ context.Context, orgGRN grn.GRN) ([]*Assignment, error) {
+	assignments := make([]*Assignment, 0, len(s.assignments))
+	for agentGRN, assignment := range s.assignments {
+		if a, held := s.agents[agentGRN]; held && a.orgGRN == orgGRN {
+			assignments = append(assignments, assignment)
+		}
+	}
+	return assignments, nil
 }
 
 func (s *memoryStore) ReportProvisioningState(context.Context, grn.GRN, int, ProvisioningState) (*Agent, error) {

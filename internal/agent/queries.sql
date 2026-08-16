@@ -5,6 +5,9 @@ VALUES ($1, $2, $3, $4, $5, $6);
 -- name: GetAgent :one
 SELECT * FROM agents WHERE grn = $1;
 
+-- name: ListAgentsByOrg :many
+SELECT * FROM agents WHERE org_grn = $1 ORDER BY grn;
+
 -- AssignAgent writes onto the assignment the agent already has, so a
 -- reassignment moves the operator and raises the epoch that fenced the
 -- one it replaces.
@@ -19,6 +22,12 @@ RETURNING *;
 
 -- name: GetAgentAssignment :one
 SELECT * FROM agent_assignments WHERE agent_grn = $1;
+
+-- name: ListAgentAssignmentsByOrg :many
+SELECT a.* FROM agent_assignments a
+JOIN agents g ON g.grn = a.agent_grn
+WHERE g.org_grn = $1
+ORDER BY a.agent_grn;
 
 -- ReportAgentProvisioningState and ReportAgentRuntimeState write at the
 -- epoch the agent is currently assigned at; any other epoch matches no

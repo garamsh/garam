@@ -62,12 +62,16 @@ gen:
 	$(BUF) generate
 	$(GOIMPORTS) -w proto/gen
 
-# check-gen fails when committed generated code is stale. The diff is
-# scoped to generated paths so unrelated working-tree edits do not fail it.
+# check-gen fails when generated code is stale or uncommitted. It is scoped
+# to generated paths so unrelated working-tree edits do not fail it.
 GEN_PATHS := api/server.gen.go internal/*/db proto/gen internal/*/mocks
 
+# git diff sees tracked paths only, so a generated file nobody added is
+# invisible to it. git status reports modified and untracked entries, skips
+# ignored ones, and exits 0 either way, so the gate checks for output.
 check-gen: gen
-	git diff --exit-code -- $(GEN_PATHS)
+	@out="$$(git status --porcelain -- $(GEN_PATHS))"; \
+		test -z "$$out" || { echo "check-gen: uncommitted generated output:"; echo "$$out"; exit 1; }
 
 # db-up starts the stack's postgres service alone and makes sure the e2e
 # database exists next to `garam`. Postgres has no CREATE DATABASE IF NOT

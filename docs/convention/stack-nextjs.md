@@ -258,9 +258,12 @@ back/forward. The pieces, for a photo modal:
 - The in-process client is Testing Library's `render()` for a
   component and route segment fetching for a whole route.
 - MSW handlers live at `src/testing/mocks/handlers.ts`.
-- The render helper lives at `src/testing/render.tsx` and exports
-  `renderWithProviders`, wrapping Testing Library's `render()` with
-  the providers the app mounts.
+- The render helper lives at `src/testing/render.tsx`. It carries
+  what every test would otherwise repeat: awaiting an async Server
+  Component before handing the resolved tree to Testing Library's
+  `render()`, and wrapping whatever providers the root layout mounts.
+  A provider mounted over one segment is wrapped by the tests of that
+  segment, not here.
 - This stack's substitutes: MSW for outbound HTTP, a Prisma/Drizzle
   test double or SQLite for the database, a fake session for auth,
   `testcontainers-node` for real service dependencies.
@@ -272,15 +275,19 @@ back/forward. The pieces, for a photo modal:
 
 ## 12. Import direction and file naming
 
-The three tiers, and what each may import:
+Three tiers, and what each may import:
 
 - `components/`, `hooks/`, `lib/`, `types/`: cross-feature.
   Each may import from itself or each other.
 - `features/*`: may import the cross-feature modules; **may not**
   import from `app/` or from another feature.
 - `app/`: may import from both.
+- `src/testing/`: outside the tiers. Test scaffolding may import from
+  anywhere, and nothing outside a test imports it.
 
-The ESLint rule `import/no-restricted-paths` enforces this.
+The tiers are not self-enforcing: configure `import/no-restricted-paths`
+to fail the build on a crossing, in the same pull request that creates
+the first feature.
 
 ### File naming
 

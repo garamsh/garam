@@ -132,6 +132,9 @@ func rowToAgent(row db.Agent) (*Agent, error) {
 	if err != nil {
 		return nil, errorx.Wrap(err, "agent store: agent org grn", errorx.KindInternal)
 	}
+	if err := validateOwnership(g, orgGRN); err != nil {
+		return nil, errorx.Wrap(err, "agent store: stored agent", errorx.KindInternal)
+	}
 	provisioning, err := ParseProvisioningState(row.ProvisioningState)
 	if err != nil {
 		return nil, errorx.Wrap(err, "agent store: provisioning state", errorx.KindInternal)

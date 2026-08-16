@@ -141,11 +141,14 @@ Autonomous identity, provisioned outside garam (ADR-0012).
 
 garam mints an agent's GRN and never changes it, so which operator runs
 the agent is a relation a reassignment moves rather than part of the
-identity. Every assignment raises the epoch, and a state report is
-accepted only at the current one — the operator a reassignment replaced
-reports nothing about the agent it lost. An agent is never an
-organization member (ADR-0014), so nothing here references `users`.
-Persistence only: no endpoint, no certificate, no message queue.
+identity. That GRN must name an agent of the organization that owns it:
+ADR-0014 rests tenancy on its organization segment, so the domain
+refuses a pairing that disagrees rather than trusting its callers. Every
+assignment raises the epoch, and a state report is accepted only at the
+current one — the operator a reassignment replaced reports nothing about
+the agent it lost. An agent is never an organization member (ADR-0014),
+so nothing here references `users`. Persistence only: no endpoint, no
+certificate, no message queue.
 
 ## Store implementation status
 

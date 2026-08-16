@@ -346,7 +346,9 @@ func TestAgentStore_RoundTrip(t *testing.T) {
 
 	g, err := agent.NewGRN(orgGRN)
 	require.NoError(t, err)
-	require.NoError(t, s.Create(ctx, agent.New(g, orgGRN)))
+	a, err := agent.New(g, orgGRN)
+	require.NoError(t, err)
+	require.NoError(t, s.Create(ctx, a))
 
 	got, err := s.Get(ctx, g)
 	require.NoError(t, err)

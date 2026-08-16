@@ -95,8 +95,13 @@ type Agent struct {
 }
 
 // New constructs an Agent owned by orgGRN, before an operator has
-// provisioned it and before it has run.
-func New(g, orgGRN grn.GRN) *Agent {
+// provisioned it and before it has run. It fails unless g names an
+// agent of that organization: ADR-0014 rests tenancy on the
+// organization segment of the GRN a certificate carries.
+func New(g, orgGRN grn.GRN) (*Agent, error) {
+	if err := validateOwnership(g, orgGRN); err != nil {
+		return nil, err
+	}
 	now := time.Now().UTC()
 	return &Agent{
 		grn:          g,
@@ -105,7 +110,19 @@ func New(g, orgGRN grn.GRN) *Agent {
 		runtime:      RuntimeStateUnknown,
 		createdAt:    now,
 		updatedAt:    now,
+	}, nil
+}
+
+// validateOwnership returns nil if g names an agent of the organization
+// orgGRN identifies.
+func validateOwnership(g, orgGRN grn.GRN) error {
+	switch {
+	case g.ServiceType != ServiceType:
+		return errorx.New(errorx.KindInvalidArgument, "agent: grn does not name an agent")
+	case g.Organization != orgGRN.Identifier:
+		return errorx.New(errorx.KindInvalidArgument, "agent: grn belongs to another organization")
 	}
+	return nil
 }
 
 func (a *Agent) GRN() grn.GRN                         { return a.grn }

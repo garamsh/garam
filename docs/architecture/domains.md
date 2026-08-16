@@ -12,6 +12,7 @@ Per-domain responsibilities and boundaries.
 - `internal/user`
 - `internal/agent`
 - `internal/ca`
+- `internal/machine`
 - `internal/message`
 - Store implementation status
 - Known gap
@@ -28,6 +29,10 @@ Each `internal/<domain>/` package contains:
 - `db/` — sqlc output from `queries.sql`. Generated, never edited.
 - `*_test.go` — tests.
 - `mocks/` — mockery v3 output, for interfaces tests actually consume (testing.md §Mocking strategy).
+
+A domain that persists nothing has none of the storage files above:
+`internal/machine` is its types, its service, and the seam it reads a
+trust root through.
 
 `queries.sql` and `db/` are a source and its output, not two copies. Every
 generated file says so in its first line, and `make check-gen` fails on any
@@ -184,14 +189,59 @@ implementation is AES-256-GCM under a key-encryption key read from an
 owner-readable file (ADR-0015); the sealed bytes name the key that opens
 them, and open only in the organization's row they were written for, so
 write access to the database moves no trust root. A subject's own key is
-generated per certificate and returned once, never stored. No process constructs the service yet: the listener
-that verifies a presented certificate is unbuilt, and the boot-time key
-requirement lands with it.
+generated per certificate and returned once, never stored. Nothing
+issues a certificate in a running process yet — no provisioning surface
+exists — but `garam serve machine` requires the key-encryption key
+before it serves, so the process that owns the authorities refuses to
+start without the key that opens them rather than failing at the first
+certificate.
 
 That key is as availability-critical as the database — losing it loses
 every organization's CA with no recovery short of new authorities and a
 reissue for every certificate — and why it is held this way rather than
 in a KMS is [ADR-0016](./adr/0016-ca-key-custody.md).
+
+## `internal/machine`
+
+Who is calling on the listener a machine identity authenticates on
+(ADR-0014, ADR-0015).
+
+| Type | Responsibility |
+|------|----------------|
+| `Identity` | the GRN a verified client certificate names |
+| `Service` | recovers that GRN and verifies the certificate against the organization's authority |
+| `TrustRoot` | supplies the authority a certificate has to chain to |
+
+An agent and an operator are the same kind of caller here and the
+listener does not branch on which. The identity is the GRN in the
+certificate's SAN URI and nothing beside it: no user row, no session,
+no membership, so neither foreign key on `users` is touched and no
+handler taking a `*user.User` changes.
+
+The SAN URI is read by round trip. A GRN is an opaque URI, so `Path`
+and `Host` come back as empty strings rather than errors and the
+opaque part alone truncates at a `?` or a `#`; both readings are taken
+and must name the same GRN, which is the rule the issuing side applies
+before it signs. Which authority the certificate must then chain to is
+read off the organization segment of that GRN, so a certificate one
+organization's CA signed for another organization's identity is
+refused by the trust root rather than by a check — including when a
+colon in a segment that is not the last shifts the organization along
+with everything after it.
+
+The package holds no store and reaches no database: `TrustRoot` is the
+seam the composition root satisfies from `internal/ca`, which keeps the
+two domains cooperating through `grn.GRN` alone. Verification needs the
+authority's certificate and never its key.
+
+`garam serve machine` is where the listener runs — its own process and
+its own port, terminating TLS itself with a certificate it reads from a
+file, because a forwarded client-certificate header is trustworthy only
+where every deployment strips it at the edge (ADR-0014). What it serves
+is the identity a connection authenticated as; message ingress and the
+long poll are not built. It is not part of the local Docker stack: its
+key material is per host and the container would run as a user that
+does not own it.
 
 ## `internal/message`
 

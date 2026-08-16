@@ -21,6 +21,11 @@ collaborate on a shared plan.
   issues the client certificates machine identities authenticate with
   (ADR-0014). The subject's GRN travels in a SAN URI; the CA private key
   reaches Postgres sealed under a key-encryption key.
+- A listener machine identities authenticate on, `garam serve machine`.
+  It terminates TLS itself, requires a client certificate, and verifies
+  it against the authority of the organization the certificate's own SAN
+  names (ADR-0014). An agent and an operator authenticate the same way
+  (ADR-0015), and neither touches a user row, a session or a membership.
 - Messages addressed to an agent are held in a queue one reader at a
   time claims from, stored once per sender key and claimable again when
   a reader dies holding one (ADR-0013). Nothing serves that queue yet,
@@ -58,11 +63,12 @@ collaborate on a shared plan.
 - Notifications.
 - The agent surface. `internal/agent` persists identity, operator
   assignment and state (ADR-0012), `internal/ca` issues certificates
-  (ADR-0014), and `internal/message` holds the queue a message reaches
-  an agent through (ADR-0013); nothing else of it exists — no endpoint,
-  no long poll and no adapter, and no TLS listener, so nothing yet
-  verifies a presented certificate or constructs the CA in a running
-  process.
+  (ADR-0014), `internal/message` holds the queue a message reaches an
+  agent through (ADR-0013), and `internal/machine` authenticates a
+  certificate on the listener that serves them; what the listener
+  serves is the identity a connection authenticated as and nothing
+  else — no message ingress, no long poll, no certificate issuing over
+  HTTP, and no adapter.
 - Chat channels. ADR-0013 makes garam a message API and leaves Slack,
   LINE and the rest to consumers of it; none is built, and whether any
   ships first-party is undecided.
@@ -99,11 +105,14 @@ collaborate on a shared plan.
   separate from the stack's own.
 - `internal/grn/` — identifier; shared primitive.
 - `internal/errorx/` — typed errors; shared primitive.
-- `internal/cli/` — cobra commands + wiring (`serve api` | `serve authz` | `migrate`).
+- `internal/cli/` — cobra commands + wiring (`serve api` | `serve authz`
+  | `serve machine` | `migrate`).
 - `internal/agent/` — agent identities and the operator each is
   assigned to.
 - `internal/ca/` — the per-organization certificate authority and the
   certificates it issues.
+- `internal/machine/` — the machine identity a client certificate
+  names, and the listener that verifies one.
 - `internal/message/` — the durable queue a message reaches an agent
   through; one reader claims a message at a time.
 - `internal/api/` — handlers implementing the generated ServerInterface.
@@ -115,10 +124,14 @@ collaborate on a shared plan.
 - `internal/user/` — human identities.
 
 `grn` and `errorx` are the only shared packages. Domains cooperate
-through `grn.GRN`, never through each other's concrete types. `api`
+through `grn.GRN`, never through each other's concrete types — which is
+why `machine` declares the trust root it verifies against and `cli`
+satisfies it from `ca`. `api`
 sees several domains at once and enforces authentication (session
 cookie) at the boundary; org-role checks go through the `Evaluator`
-seam, implemented by the authz gRPC client (ADR-0003 stage 2).
+seam, implemented by the authz gRPC client (ADR-0003 stage 2). The
+machine listener enforces its own authentication at its own boundary
+and shares neither cookie nor session with `api`.
 `internal/api` and `internal/authz` never import each other; the wire
 contract is `proto/garam/authz/v1`.
 
@@ -134,6 +147,8 @@ contract is `proto/garam/authz/v1`.
 | `ca.Authority` | `internal/ca` | an organization's certificate authority, its key sealed |
 | `ca.Certificate` | `internal/ca` | issued client certificate identified by a SAN URI |
 | `ca.Sealer` | `internal/ca` | seals key material against a database dump |
+| `machine.Identity` | `internal/machine` | the GRN a verified client certificate names |
+| `machine.Service` | `internal/machine` | verifies a presented certificate against its organization's authority |
 | `message.Message` | `internal/message` | one message addressed to a recipient |
 | `message.Claim` | `internal/message` | one reader's hold on a message, fenced by a token |
 | `org.Organization` | `internal/org` | top-level tenant |

@@ -69,7 +69,12 @@ func TestNewObservability_CollectsIntoOneRegistry(t *testing.T) {
 
 	families, err := obs.registry.Gather()
 	require.NoError(t, err)
-	assert.NotEmpty(t, families, "the exporter collects into the registry")
+	names := make([]string, 0, len(families))
+	for _, family := range families {
+		names = append(names, family.GetName())
+	}
+	assert.Contains(t, names, "target_info", "the exporter collects into the registry")
+	assert.Contains(t, names, "go_goroutines", "and so does the Go runtime")
 }
 
 func TestLogRequests_ReportsTheRouteAndThePrincipal(t *testing.T) {

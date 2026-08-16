@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/otel"
 	otelprom "go.opentelemetry.io/otel/exporters/prometheus"
@@ -53,6 +54,9 @@ func newObservability(service string) (*observability, error) {
 	res := resource.NewWithAttributes(semconv.SchemaURL, semconv.ServiceName(service))
 
 	registry := prometheus.NewRegistry()
+	// A registry of its own inherits nothing from the default one; the
+	// Go runtime series a scrape is read for come from this collector.
+	registry.MustRegister(collectors.NewGoCollector())
 	reader, err := otelprom.New(otelprom.WithRegisterer(registry))
 	if err != nil {
 		return nil, errorx.Wrap(err, "prometheus exporter", errorx.KindInternal)

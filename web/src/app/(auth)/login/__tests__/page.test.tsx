@@ -1,9 +1,14 @@
 import { screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { HttpResponse, http } from "msw";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import LoginPage from "@/app/(auth)/login/page";
 import { renderServerComponent } from "@/testing/render";
-import { signedOutWith } from "@/testing/mocks/handlers";
+import {
+  API_URL,
+  signedOutWith,
+  unauthenticated,
+} from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
 vi.mock("next/navigation", () => ({
@@ -13,6 +18,8 @@ vi.mock("next/navigation", () => ({
 }));
 
 describe("login page", () => {
+  afterEach(() => vi.restoreAllMocks());
+
   it("offers the Google sign-in button while signed out", async () => {
     server.use(...signedOutWith(["google"]));
 
@@ -48,6 +55,29 @@ describe("login page", () => {
     expect(
       screen.queryByRole("link", { name: "Dev sign-in" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("degrades to Google sign-in when the provider lookup fails", async () => {
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+    server.use(
+      http.get(`${API_URL}/auth/providers`, () =>
+        HttpResponse.json(
+          { kind: "not_found", message: "unknown route" },
+          { status: 404 },
+        ),
+      ),
+      unauthenticated(),
+    );
+
+    await renderServerComponent(LoginPage());
+
+    expect(
+      screen.getByRole("link", { name: "Sign in with Google" }),
+    ).toHaveAttribute("href", "/api/auth/login/google");
+    expect(
+      screen.queryByRole("link", { name: "Dev sign-in" }),
+    ).not.toBeInTheDocument();
+    expect(logged).toHaveBeenCalled();
   });
 
   it("sends an already signed-in visitor to the console", async () => {

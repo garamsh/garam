@@ -40,12 +40,13 @@ the first fact from a crash-loop curiosity into a delivery property.
 
 ## Decision
 
-- **A claim is completed by the terminal event that names its message,
-  and a message whose terminal event never arrives is redelivered.**
-  Both halves belong in one sentence wherever this is written down.
-  The first alone reads as exactly-once — the pairing is deterministic,
-  so it looks like a guarantee — and the drop rule is the only reason
-  it is not.
+- **A claim is completed by a `turn_finished` naming its message, and
+  nothing else completes it.** A message whose completion never
+  arrives — because the turn failed, because the event was dropped,
+  because the adapter died — is redelivered. Both halves belong in one
+  sentence wherever this is written down: the first alone reads as
+  exactly-once, since the pairing is deterministic and so looks like a
+  guarantee, and the drop rule is the only reason it is not.
 - **The adapter learns the mapping at POST time and holds it in
   memory.** garam's identifier to the gateway's, from the 202 body.
   That volatility is the mechanism rather than a flaw in it: a restart
@@ -54,15 +55,17 @@ the first fact from a crash-loop curiosity into a delivery property.
   restart, and a dropped terminal event for a turn that did complete.
   Only the first has a window anyone can state; the second depends on
   how far behind a consumer fell.
-- **A failed turn is retried to a bound, then completed and reported by
-  garam.** From outside, a turn that failed because a model provider
-  was unreachable is indistinguishable from one that failed on the
-  message itself. Completing unconditionally turns a transient failure
-  into silent permanent loss; expiring unconditionally loops forever on
-  a deterministic one. The bound is an attempt count, and at exhaustion
-  garam tells the sender — because the platform does not, and a
-  message that stops without anyone learning why is the failure this
-  project keeps finding.
+- **A turn that fails is an attempt rather than a completion, and
+  attempts are bounded.** From outside, a turn that failed because a
+  model provider was unreachable is indistinguishable from one that
+  failed on the message itself — and `turn_failed` rides the same
+  droppable stream, so its absence is indistinguishable from a turn
+  that never started. The design never has to tell those apart:
+  success completes, everything else retries, and an attempt count is
+  what stops a deterministic failure looping forever. At exhaustion
+  garam tells the sender, because the platform does not — a message
+  that stops without anyone learning why is the failure this project
+  keeps finding.
 - **The adapter renews its lease while a turn is in flight, under a
   ceiling.** The ceiling is a backstop for a lost terminal event, not a
   prediction of how long a turn takes: it only has to exceed a normal
@@ -100,6 +103,15 @@ the first fact from a crash-loop curiosity into a delivery property.
   queue does that today.
 - The queue gains an attempt count and a lease renewal. Neither exists;
   it has `Enqueue`, `Claim` and `Complete`.
+- The adapter has to outlive the agent process during a shutdown, or a
+  graceful restart loses the last turn's completion and redelivers
+  messages that succeeded. That makes it a native sidecar rather than
+  an ordinary container, since the kubelet postpones terminating a
+  sidecar until the main container has stopped — and it makes the
+  termination grace period budget the adapter's completion work on top
+  of the agent's drain, because a sidecar that receives its signal only
+  after the grace period is spent is killed before it can complete
+  anything.
 - A dependency on a foreign constant is now load-bearing. If it moves
   and nobody tells us, the symptom is duplicates rising rather than an
   error.

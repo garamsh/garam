@@ -434,11 +434,13 @@ func TestAgentStore_RoundTrip(t *testing.T) {
 	assert.Zero(t, assignments)
 }
 
-// TestAgent_GRNMatchesItsOrg covers the schema's copy of the ownership
-// rule the agent domain enforces: a row whose GRN names another
-// organization is refused even by a statement that never passes through
-// the domain.
-func TestAgent_GRNMatchesItsOrg(t *testing.T) {
+// TestAgent_GRNNamesAnAgentOfItsOrg covers the schema's copy of the
+// ownership rule the agent domain enforces: a row whose GRN names
+// another organization, or names something that is not an agent, is
+// refused even by a statement that never passes through the domain. A
+// row the database accepted and the domain refused to read would be
+// neither writable nor readable.
+func TestAgent_GRNNamesAnAgentOfItsOrg(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
 	s := agent.NewPostgresStore(p)
@@ -451,12 +453,22 @@ func TestAgent_GRNMatchesItsOrg(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, s.Create(ctx, a))
 
-	// agent.New refuses this pairing, so only a direct statement reaches
+	// agent.New refuses both pairings, so only a direct statement reaches
 	// the constraint.
-	_, err = p.Exec(ctx, `INSERT INTO agents (grn, org_grn, provisioning_state, runtime_state, created_at, updated_at)
-		VALUES ($1, $2, 'pending', 'unknown', now(), now())`,
-		scopedGRN("globex", agent.ServiceType, "deadbeef").String(), orgGRN.String())
-	assert.Error(t, err, "an agent GRN must name the org that owns it")
+	rejected := []struct {
+		name string
+		grn  grn.GRN
+	}{
+		{"another org's agent", scopedGRN("globex", agent.ServiceType, "deadbeef")},
+		{"an identity that is not an agent", grnOf("user", "ada")},
+	}
+	for _, tt := range rejected {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := p.Exec(ctx, `INSERT INTO agents (grn, org_grn, provisioning_state, runtime_state, created_at, updated_at)
+				VALUES ($1, $2, 'pending', 'unknown', now(), now())`, tt.grn.String(), orgGRN.String())
+			assert.Error(t, err)
+		})
+	}
 }
 
 // TestAgentAssignment_StaysInsideItsOrg covers the schema's rules for an

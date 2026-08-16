@@ -1,11 +1,12 @@
--- An agent's GRN carries its organization in the organization segment
--- (ADR-0001) and ADR-0014 rests tenancy on that segment, so it must
--- agree with the org the row belongs to. internal/agent refuses the
--- pairing as well; this is the copy no call path and no direct statement
--- routes around.
+-- An agent's GRN must name an agent of the org the row belongs to: it
+-- carries its organization in the organization segment (ADR-0001) and
+-- ADR-0014 rests tenancy on that segment. internal/agent refuses both
+-- halves as well; this is the copy no call path and no direct statement
+-- routes around, so a row that is written can also be read back.
 ALTER TABLE agents
-    ADD CONSTRAINT agents_grn_same_org
-    CHECK (split_part(grn, ':', 2) = split_part(org_grn, ':', 5));
+    ADD CONSTRAINT agents_grn_ownership
+    CHECK (split_part(grn, ':', 4) = 'agent'
+       AND split_part(grn, ':', 2) = split_part(org_grn, ':', 5));
 
 -- An operator is registered nowhere, so no foreign key says the GRN
 -- names one and a typo would otherwise be a valid operator.

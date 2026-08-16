@@ -44,6 +44,7 @@ ADRs:
 - [0016](./adr/0016-ca-key-custody.md) — a certificate authority's key is sealed by a key the process holds
 - [0017](./adr/0017-machine-process.md) — machine identities are served by a process of their own
 - [0018](./adr/0018-delivery-acknowledgement.md) — a message is completed by the turn-end event that names it
+- [0019](./adr/0019-machine-openapi-spec.md) — the machine listener carries an OpenAPI specification of its own
 
 ## Rules for edits
 

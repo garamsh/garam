@@ -13,6 +13,7 @@ Per-domain responsibilities and boundaries.
 - `internal/agent`
 - `internal/ca`
 - `internal/machine`
+- `internal/machineapi`
 - `internal/message`
 - Store implementation status
 - Known gap
@@ -145,6 +146,9 @@ Autonomous identity, provisioned outside garam (ADR-0012).
 |------|----------------|
 | `Agent` | actor owned by an org; carries the state the operator reports about its pod and the state it reports about itself, separately |
 | `Assignment` | which operator runs an agent, and the epoch that binding holds |
+| `Certificate` | what an agent authenticates with, as this domain hands it back |
+| `Service` | creates an agent for the calling operator, and issues the certificate of one assigned to it |
+| `Issuer` | signs a certificate for a subject GRN |
 
 garam mints an agent's GRN and never changes it, so which operator runs
 the agent is a relation a reassignment moves rather than part of the
@@ -157,9 +161,24 @@ assignment stays inside that organization and names an operator
 epoch, and a state report is accepted only at the current one — the
 operator a reassignment replaced reports nothing about the agent it
 lost. An agent is never an organization member (ADR-0014), so nothing
-here references `users`. Persistence only: no endpoint and no
-certificate. The queue a message reaches an agent through is
-`internal/message`, not this domain.
+here references `users`.
+
+`Service` is what an operator does to the agents it runs. It creates
+one in the operator's own organization, garam minting the identifier,
+and it answers with the certificate of an agent assigned to that
+operator at the current epoch and of no other — the whole of the
+authorization on that surface, which ADR-0015 states is not an
+optimisation and may not be skipped, so no method reaches an issuer
+without it. Comparing the operator on the row is the epoch fence as
+well, and it is the tenancy check too, since a GRN carries its
+organization. A caller that is not an operator is refused: an agent
+authenticates on the same listener and holds nothing.
+
+Signing happens through the `Issuer` seam the composition root
+satisfies from `internal/ca`, so the two domains still cooperate
+through `grn.GRN` alone and this one never holds key material. The
+HTTP surface is `internal/machineapi`, and the queue a message reaches
+an agent through is `internal/message`.
 
 ## `internal/ca`
 
@@ -189,12 +208,11 @@ implementation is AES-256-GCM under a key-encryption key read from an
 owner-readable file (ADR-0015); the sealed bytes name the key that opens
 them, and open only in the organization's row they were written for, so
 write access to the database moves no trust root. A subject's own key is
-generated per certificate and returned once, never stored. Nothing
-issues a certificate in a running process yet — no provisioning surface
-exists — but `garam serve machine` requires the key-encryption key
-before it serves, so the process that owns the authorities refuses to
+generated per certificate and returned once, never stored. `garam serve
+machine` is the process that issues, and it reads the key-encryption
+key before it serves: the process that owns the authorities refuses to
 start without the key that opens them rather than failing at the first
-certificate.
+certificate it is asked for.
 
 That key is as availability-critical as the database — losing it loses
 every organization's CA with no recovery short of new authorities and a
@@ -239,10 +257,31 @@ authority's certificate and never its key.
 its own port (ADR-0017), terminating TLS itself with a certificate it
 reads from a file, because a forwarded client-certificate header is
 trustworthy only where every deployment strips it at the edge
-(ADR-0014). What it serves is the identity a connection authenticated
-as; message ingress and the long poll are not built. It is not part of
-the local Docker stack: its key material is per host and the container
-would run as a user that does not own it.
+(ADR-0014). What it serves is `internal/machineapi`; message ingress
+and the long poll are not built. It is not part of the local Docker
+stack: its key material is per host and the container would run as a
+user that does not own it.
+
+## `internal/machineapi`
+
+What `garam serve machine` serves, implementing the ServerInterface
+generated from `api/machine.yaml` (ADR-0019).
+
+| Type | Responsibility |
+|------|----------------|
+| `Server` | the machine listener's handlers: the caller's identity, creating an agent, issuing an agent's certificate |
+
+A handler's caller is the identity `internal/machine` resolved from the
+client certificate, read back with the comma-ok form and refused where
+a request carries none — no session, no user row, no membership. What
+an operator may reach is not decided here: `internal/agent` decides it,
+and this package parses what the path names, hands the caller over, and
+renders the answer, turning an `errorx` kind into a status at its own
+boundary as `internal/api` does at the browser-facing one.
+
+It holds no store and reaches no certificate authority. `internal/api`
+and this package never import each other and never run in the same
+process (ADR-0017).
 
 ## `internal/message`
 

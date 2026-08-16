@@ -27,6 +27,14 @@ collaborate on a shared plan.
   against the authority of the organization the certificate's own SAN
   names (ADR-0014). An agent and an operator authenticate the same way
   (ADR-0015), and neither touches a user row, a session or a membership.
+  What that listener serves has a specification of its own (ADR-0019).
+- An operator creating an agent and obtaining its certificate, on that
+  listener. garam mints the agent's GRN in the operator's own
+  organization and assigns it at an epoch; an operator obtains the
+  certificate of an agent assigned to it at the current epoch and of no
+  other, which is the whole of the authorization there (ADR-0015). The
+  process that issues holds the key its authorities are sealed under
+  and does not start without it (ADR-0016).
 - Messages addressed to an agent are held in a queue one reader at a
   time claims from, stored once per sender key and claimable again when
   a reader dies holding one (ADR-0013). Nothing serves that queue yet,
@@ -62,14 +70,13 @@ collaborate on a shared plan.
 
 - Workflow execution engine, scheduler, queue.
 - Notifications.
-- The agent surface. `internal/agent` persists identity, operator
-  assignment and state (ADR-0012), `internal/ca` issues certificates
-  (ADR-0014), `internal/message` holds the queue a message reaches an
-  agent through (ADR-0013), and `internal/machine` authenticates a
-  certificate on the listener that serves them; what the listener
-  serves is the identity a connection authenticated as and nothing
-  else — no message ingress, no long poll, no certificate issuing over
-  HTTP, and no adapter.
+- The rest of the agent surface. An operator creates an agent and
+  obtains its certificate (see In scope); what the listener does not
+  serve is message ingress and the long poll over the queue
+  `internal/message` holds (ADR-0013), the state an operator or an
+  agent reports (ADR-0012), and deprovisioning an agent. The adapter is
+  not built, and certificate renewal is reissue and restart rather than
+  an endpoint (ADR-0014).
 - Chat channels. ADR-0013 makes garam a message API and leaves Slack,
   LINE and the rest to consumers of it; none is built, and whether any
   ships first-party is undecided.
@@ -90,7 +97,8 @@ collaborate on a shared plan.
 
 ## Module boundaries
 
-- `api/` — OpenAPI spec (source of truth) + generated server.
+- `api/` — OpenAPI specs (source of truth) + generated servers: the
+  browser-facing listener's and the machine listener's (ADR-0019).
 - `proto/` — authz gRPC service definition + buf-generated code.
 - `cmd/garam/` — thin entrypoint for the cobra CLI.
 - `migrations/` — SQL migrations (golang-migrate); sqlc schema source.
@@ -114,6 +122,8 @@ collaborate on a shared plan.
   certificates it issues.
 - `internal/machine/` — the machine identity a client certificate
   names, and the listener that verifies one.
+- `internal/machineapi/` — handlers implementing the ServerInterface
+  generated from the machine listener's spec.
 - `internal/message/` — the durable queue a message reaches an agent
   through; one reader claims a message at a time.
 - `internal/api/` — handlers implementing the generated ServerInterface.
@@ -132,7 +142,8 @@ sees several domains at once and enforces authentication (session
 cookie) at the boundary; org-role checks go through the `Evaluator`
 seam, implemented by the authz gRPC client (ADR-0003 stage 2). The
 machine listener enforces its own authentication at its own boundary
-and shares neither cookie nor session with `api`.
+and shares neither cookie nor session with `api`; `machineapi` composes
+`agent` behind it, and it and `internal/api` never import each other.
 `internal/api` and `internal/authz` never import each other; the wire
 contract is `proto/garam/authz/v1`.
 
@@ -145,6 +156,7 @@ contract is `proto/garam/authz/v1`.
 | `user.User` | `internal/user` | human identity |
 | `agent.Agent` | `internal/agent` | autonomous actor an operator provisions |
 | `agent.Assignment` | `internal/agent` | agent-to-operator binding, fenced by an epoch |
+| `agent.Service` | `internal/agent` | creates an agent for an operator, issues the certificate of one assigned to it |
 | `ca.Authority` | `internal/ca` | an organization's certificate authority, its key sealed |
 | `ca.Certificate` | `internal/ca` | issued client certificate identified by a SAN URI |
 | `ca.Sealer` | `internal/ca` | seals key material against a database dump |
@@ -186,14 +198,15 @@ contract is `proto/garam/authz/v1`.
 | A CA's key is sealed by a key the process holds, not by a KMS | A database dump opens nothing; issuing depends on no hosted service, which is what lets a user bring their own operator. | [adr/0016-ca-key-custody.md](./adr/0016-ca-key-custody.md) |
 | Machine identities are served by a process of their own | The surface that issues certificates holds every organization's key-encryption key, and the process serving browsers must not. | [adr/0017-machine-process.md](./adr/0017-machine-process.md) |
 | A message is completed by the turn-end event naming it | It is the only signal that pairs deterministically; a lost one redelivers, so delivery is at-least-once rather than exactly-once. | [adr/0018-delivery-acknowledgement.md](./adr/0018-delivery-acknowledgement.md) |
+| The machine listener has a specification of its own | One contract per listener: the browser client generates no types for a surface it cannot call, and whoever writes an operator has something to build against. | [adr/0019-machine-openapi-spec.md](./adr/0019-machine-openapi-spec.md) |
 
 ## Non-functional goals
 
 - **Deterministic decisions** — the engine's `Explain` RPC can
   reproduce why a request was allowed or denied.
 - **Transport-agnostic errors** — `errorx` flows over HTTP, gRPC, CLI
-  without translation at the source; the HTTP mapping lives in
-  `internal/api`.
+  without translation at the source; each HTTP surface maps a kind to a
+  status at its own boundary (`internal/api`, `internal/machineapi`).
 - **Testable in isolation** — every domain exposes an interface; unit
   tests substitute at module boundaries (mocks, in-memory test doubles
   where they exist).

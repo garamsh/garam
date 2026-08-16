@@ -4,9 +4,11 @@ Runs the whole garam stack on one machine with Docker Compose:
 Postgres, migrations, the authz engine, the API, and — behind a
 profile — the web frontend.
 
-This compose file is also the dev database: `make db-up` starts only
-its `postgres` service for the e2e tests, and `make db-down` removes
-that service again. Both concerns share the one compose project
+This compose file is also what the test gates run against. `make db-up`
+starts only its `postgres` service for the Go e2e tests, and
+`make db-down` removes that service again; `make backend-up` starts
+everything but the profile-gated `web` service, which is the backend
+`make web-e2e` drives. Every concern shares the one compose project
 `garam-local` and its `postgres-data` volume — there is no second
 compose file.
 

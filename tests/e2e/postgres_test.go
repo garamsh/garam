@@ -24,6 +24,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/authn"
 	"github.com/garamsh/garam/internal/authz"
 	"github.com/garamsh/garam/internal/errorx"
@@ -87,7 +88,7 @@ func truncate(t *testing.T, p *pgxpool.Pool) {
 	t.Helper()
 	_, err := p.Exec(context.Background(), `TRUNCATE users, orgs, groups, projects,
 		group_members, project_members, org_members, invitations, sessions,
-		policies, policy_versions, policy_attachments CASCADE`)
+		policies, policy_versions, policy_attachments, agents, agent_assignments CASCADE`)
 	require.NoError(t, err)
 }
 
@@ -330,6 +331,93 @@ func TestSessionStore_RoundTrip(t *testing.T) {
 	assert.ErrorIs(t, err, authn.ErrSessionNotFound)
 	// Delete is idempotent.
 	require.NoError(t, s.Delete(ctx, token))
+}
+
+// TestAgentStore_RoundTrip drives an agent through the shape ADR-0012
+// decided: garam mints its GRN, an operator is assigned to it, a
+// reassignment raises the epoch, and the operator that was replaced
+// writes nothing afterwards.
+func TestAgentStore_RoundTrip(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := agent.NewPostgresStore(p)
+	orgGRN := grnOf("org", "acme")
+	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgGRN, "acme")))
+
+	g, err := agent.NewGRN(orgGRN)
+	require.NoError(t, err)
+	require.NoError(t, s.Create(ctx, agent.New(g, orgGRN)))
+
+	got, err := s.Get(ctx, g)
+	require.NoError(t, err)
+	assert.Equal(t, orgGRN, got.Organization())
+	assert.Equal(t, agent.ProvisioningStatePending, got.ProvisioningState())
+	assert.Equal(t, agent.RuntimeStateUnknown, got.RuntimeState())
+
+	_, err = s.Get(ctx, grnOf("agent", "missing"))
+	assert.ErrorIs(t, err, agent.ErrAgentNotFound)
+
+	// Assignment is a relation, so an unassigned agent is a stored
+	// agent with no operator.
+	_, err = s.GetAssignment(ctx, g)
+	assert.ErrorIs(t, err, agent.ErrAssignmentNotFound)
+
+	first := grnOf("operator", "one")
+	assigned, err := s.Assign(ctx, g, first)
+	require.NoError(t, err)
+	assert.Equal(t, first, assigned.Operator())
+	assert.Equal(t, 1, assigned.Epoch())
+
+	// The operator reports the pod; the agent reports itself. Neither
+	// report moves the other's state.
+	provisioned, err := s.ReportProvisioningState(ctx, g, assigned.Epoch(), agent.ProvisioningStateReady)
+	require.NoError(t, err)
+	assert.Equal(t, agent.ProvisioningStateReady, provisioned.ProvisioningState())
+	assert.Equal(t, agent.RuntimeStateUnknown, provisioned.RuntimeState())
+
+	running, err := s.ReportRuntimeState(ctx, g, assigned.Epoch(), agent.RuntimeStateConnected)
+	require.NoError(t, err)
+	assert.Equal(t, agent.RuntimeStateConnected, running.RuntimeState())
+	assert.Equal(t, agent.ProvisioningStateReady, running.ProvisioningState())
+
+	second := grnOf("operator", "two")
+	reassigned, err := s.Assign(ctx, g, second)
+	require.NoError(t, err)
+	assert.Equal(t, second, reassigned.Operator())
+	assert.Equal(t, 2, reassigned.Epoch(), "a reassignment raises the epoch")
+
+	stored, err := s.GetAssignment(ctx, g)
+	require.NoError(t, err)
+	assert.Equal(t, second, stored.Operator())
+	assert.Equal(t, 2, stored.Epoch())
+
+	// A pod left running by the replaced operator still holds epoch 1.
+	_, err = s.ReportProvisioningState(ctx, g, assigned.Epoch(), agent.ProvisioningStateFailed)
+	assert.ErrorIs(t, err, agent.ErrStaleEpoch)
+	_, err = s.ReportRuntimeState(ctx, g, assigned.Epoch(), agent.RuntimeStateDisconnected)
+	assert.ErrorIs(t, err, agent.ErrStaleEpoch)
+
+	after, err := s.Get(ctx, g)
+	require.NoError(t, err)
+	assert.Equal(t, agent.ProvisioningStateReady, after.ProvisioningState(), "the fenced write left the row alone")
+	assert.Equal(t, agent.RuntimeStateConnected, after.RuntimeState())
+
+	// The current epoch still writes.
+	current, err := s.ReportRuntimeState(ctx, g, stored.Epoch(), agent.RuntimeStateDisconnected)
+	require.NoError(t, err)
+	assert.Equal(t, agent.RuntimeStateDisconnected, current.RuntimeState())
+
+	_, err = s.ReportRuntimeState(ctx, grnOf("agent", "missing"), 1, agent.RuntimeStateConnected)
+	assert.ErrorIs(t, err, agent.ErrAgentNotFound)
+
+	// An agent belongs to its org and disappears with it, assignment
+	// included.
+	require.NoError(t, org.NewPostgresStore(p).DeleteOrg(ctx, orgGRN))
+	_, err = s.Get(ctx, g)
+	assert.ErrorIs(t, err, agent.ErrAgentNotFound)
+	var assignments int
+	require.NoError(t, p.QueryRow(ctx, `SELECT count(*) FROM agent_assignments`).Scan(&assignments))
+	assert.Zero(t, assignments)
 }
 
 func ptr[T any](v T) *T { return &v }

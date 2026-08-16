@@ -9,6 +9,7 @@ import (
 	"time"
 
 	apigen "github.com/garamsh/garam/api"
+	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/authn"
 	"github.com/garamsh/garam/internal/org"
 	"github.com/garamsh/garam/internal/user"
@@ -27,6 +28,7 @@ type Config struct {
 type Server struct {
 	users     user.Store
 	orgs      org.Store
+	agents    agent.Store
 	sessions  authn.SessionStore
 	providers map[string]authn.Provider
 	evaluator Evaluator
@@ -39,10 +41,10 @@ var _ apigen.ServerInterface = (*Server)(nil)
 
 // NewServer constructs the API server. providers are keyed by their
 // Name; unknown provider paths 404 without the providers knowing.
-func NewServer(users user.Store, orgs org.Store, sessions authn.SessionStore, providers []authn.Provider, evaluator Evaluator, policies PolicyManager, cfg Config) *Server {
+func NewServer(users user.Store, orgs org.Store, agents agent.Store, sessions authn.SessionStore, providers []authn.Provider, evaluator Evaluator, policies PolicyManager, cfg Config) *Server {
 	byName := make(map[string]authn.Provider, len(providers))
 	for _, p := range providers {
 		byName[p.Name()] = p
 	}
-	return &Server{users: users, orgs: orgs, sessions: sessions, providers: byName, evaluator: evaluator, policies: policies, cfg: cfg}
+	return &Server{users: users, orgs: orgs, agents: agents, sessions: sessions, providers: byName, evaluator: evaluator, policies: policies, cfg: cfg}
 }

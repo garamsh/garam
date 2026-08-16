@@ -58,25 +58,36 @@ const (
 	ActionPolicyUpdate = "policy:update"
 	ActionPolicyAttach = "policy:attach"
 	ActionPolicyDetach = "policy:detach"
+
+	// Reading the agents an org holds. The org owns the constant for
+	// the reason it owns the policy ones: the api server enforces it,
+	// and internal/agent does not import this package — it keeps its
+	// own copy of the org service type rather than depend on it.
+	ActionAgentRead = "agent:read"
 )
 
 // Actions returns the action patterns the role grants on an org and
-// on the groups and projects it contains. The patterns feed IAM-style
-// Allow statements; the evaluator resolves wildcards.
+// on the groups, projects and agents it contains. The patterns feed
+// IAM-style Allow statements; the evaluator resolves wildcards.
+//
+// Agents are named action by action rather than as `agent:*`, every
+// role over: ADR-0012 puts provisioning outside garam, so a wildcard
+// here would grant in advance the very actions no endpoint may offer.
 func (r Role) Actions() []string {
 	switch r {
 	case RoleOwner:
-		return []string{"org:*", "group:*", "project:*", "policy:*"}
+		return []string{"org:*", "group:*", "project:*", "policy:*", ActionAgentRead}
 	case RoleAdmin:
 		return []string{
 			ActionOrgRead, ActionOrgUpdate, ActionOrgMemberList, ActionOrgInvite,
-			"group:*", "project:*", "policy:*",
+			"group:*", "project:*", "policy:*", ActionAgentRead,
 		}
 	case RoleMember:
 		return []string{
 			ActionOrgRead, ActionOrgMemberList,
 			ActionGroupRead, ActionGroupMemberList,
 			ActionProjectRead, ActionProjectMemberList,
+			ActionAgentRead,
 		}
 	}
 	return nil

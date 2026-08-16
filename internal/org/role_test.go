@@ -25,11 +25,11 @@ func TestParseRole_Unknown(t *testing.T) {
 }
 
 func TestRoleActions_GrantSets(t *testing.T) {
-	assert.Equal(t, []string{"org:*", "group:*", "project:*", "policy:*"}, org.RoleOwner.Actions())
+	assert.Equal(t, []string{"org:*", "group:*", "project:*", "policy:*", org.ActionAgentRead}, org.RoleOwner.Actions())
 	assert.Equal(t,
 		[]string{
 			org.ActionOrgRead, org.ActionOrgUpdate, org.ActionOrgMemberList, org.ActionOrgInvite,
-			"group:*", "project:*", "policy:*",
+			"group:*", "project:*", "policy:*", org.ActionAgentRead,
 		},
 		org.RoleAdmin.Actions())
 	assert.Equal(t,
@@ -37,9 +37,21 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			org.ActionOrgRead, org.ActionOrgMemberList,
 			org.ActionGroupRead, org.ActionGroupMemberList,
 			org.ActionProjectRead, org.ActionProjectMemberList,
+			org.ActionAgentRead,
 		},
 		org.RoleMember.Actions())
 	assert.Empty(t, org.Role("").Actions())
+}
+
+// TestRoleActions_NoWildcardOverAgents pins what the grant sets above
+// leave implicit: no role grants `agent:*`, so an action added to this
+// vocabulary later is granted deliberately rather than by a pattern
+// already in place (ADR-0012).
+func TestRoleActions_NoWildcardOverAgents(t *testing.T) {
+	for _, r := range []org.Role{org.RoleOwner, org.RoleAdmin, org.RoleMember} {
+		assert.NotContains(t, r.Actions(), "agent:*", string(r))
+		assert.Contains(t, r.Actions(), org.ActionAgentRead, string(r))
+	}
 }
 
 func TestActionsFor_UnionsKnownRoles(t *testing.T) {
@@ -48,6 +60,7 @@ func TestActionsFor_UnionsKnownRoles(t *testing.T) {
 			org.ActionOrgRead, org.ActionOrgMemberList,
 			org.ActionGroupRead, org.ActionGroupMemberList,
 			org.ActionProjectRead, org.ActionProjectMemberList,
+			org.ActionAgentRead,
 			org.ActionOrgUpdate, org.ActionOrgInvite,
 			"group:*", "project:*", "policy:*",
 		},

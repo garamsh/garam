@@ -23,6 +23,9 @@ import (
 const (
 	prefix        = "grn"
 	segmentsTotal = 5
+	// segmentMax is the longest a segment may be (grn-model.md
+	// §identifier).
+	segmentMax = 64
 )
 
 // Reserved owner segments (ADR-0001).
@@ -74,24 +77,50 @@ func (g GRN) IsZero() bool {
 	return g == GRN{}
 }
 
-// Validate returns nil if every segment is non-empty.
+// Validate returns nil if every segment is a slug: one to segmentMax
+// characters of lowercase letters, digits and '-' (grn-model.md
+// §identifier).
+//
+// The set is what keeps a GRN whole wherever it is carried. ':' shifts
+// every segment after it, '?' and '#' move the tail of a URI into its
+// query or fragment, and '*' and '?' are the wildcards an authorization
+// pattern matches with (ADR-0002) — each renames the resource rather
+// than failing on it.
 func (g GRN) Validate() error {
 	switch {
-	case g.Organization == "":
-		return errorx.New(errorx.KindInvalidArgument, "grn: empty organization")
-	case g.Project == "":
-		return errorx.New(errorx.KindInvalidArgument, "grn: empty project")
-	case g.ServiceType == "":
-		return errorx.New(errorx.KindInvalidArgument, "grn: empty service type")
-	case g.Identifier == "":
-		return errorx.New(errorx.KindInvalidArgument, "grn: empty identifier")
+	case !isSlug(g.Organization):
+		return errorx.New(errorx.KindInvalidArgument, "grn: invalid organization")
+	case !isSlug(g.Project):
+		return errorx.New(errorx.KindInvalidArgument, "grn: invalid project")
+	case !isSlug(g.ServiceType):
+		return errorx.New(errorx.KindInvalidArgument, "grn: invalid service type")
+	case !isSlug(g.Identifier):
+		return errorx.New(errorx.KindInvalidArgument, "grn: invalid identifier")
 	}
 	return nil
 }
 
+// isSlug reports whether s is a segment [Validate] accepts. Every
+// character in the set is one ASCII byte, so any other byte — the lead
+// byte of a multi-byte rune included — fails the loop, and the byte
+// length is the character count.
+func isSlug(s string) bool {
+	if s == "" || len(s) > segmentMax {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		switch c := s[i]; {
+		case c >= 'a' && c <= 'z', c >= '0' && c <= '9', c == '-':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 // Parse parses a GRN from its canonical string form.
 func Parse(s string) (GRN, error) {
-	parts := strings.SplitN(s, ":", segmentsTotal)
+	parts := strings.Split(s, ":")
 	if len(parts) != segmentsTotal || parts[0] != prefix {
 		return GRN{}, errorx.New(errorx.KindInvalidArgument, "grn: malformed string")
 	}

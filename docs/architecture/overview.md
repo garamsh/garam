@@ -60,8 +60,7 @@ collaborate on a shared plan.
   an agent through (ADR-0013); nothing else of it exists — no endpoint,
   no long poll and no adapter, and no TLS listener, so nothing yet
   verifies a presented certificate or constructs the CA in a running
-  process. An assignment is not yet constrained to one organization,
-  which ADR-0015 decides and no code enforces.
+  process.
 - Chat channels. ADR-0013 makes garam a message API and leaves Slack,
   LINE and the rest to consumers of it; none is built, and whether any
   ships first-party is undecided.

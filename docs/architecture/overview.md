@@ -23,7 +23,9 @@ collaborate on a shared plan.
   reaches Postgres sealed under a key-encryption key.
 - Messages addressed to an agent are held in a queue one reader at a
   time claims from, stored once per sender key and claimable again when
-  a reader dies holding one (ADR-0013). Nothing serves that queue yet.
+  a reader dies holding one (ADR-0013). Nothing serves that queue yet,
+  and it carries neither the attempt count nor the lease renewal
+  ADR-0018 needs.
 - Org / group / project structure; groups and projects are created,
   read, updated, deleted, and populated with members over the HTTP API
   under their organization's paths.
@@ -167,6 +169,7 @@ contract is `proto/garam/authz/v1`.
 | An operator is a machine identity of the same kind as an agent | One mechanism to secure and rotate; the assignment row already bounds what an operator may fetch. | [adr/0015-operator-identity.md](./adr/0015-operator-identity.md) |
 | A CA's key is sealed by a key the process holds, not by a KMS | A database dump opens nothing; issuing depends on no hosted service, which is what lets a user bring their own operator. | [adr/0016-ca-key-custody.md](./adr/0016-ca-key-custody.md) |
 | Machine identities are served by a process of their own | The surface that issues certificates holds every organization's key-encryption key, and the process serving browsers must not. | [adr/0017-machine-process.md](./adr/0017-machine-process.md) |
+| A message is completed by the turn-end event naming it | It is the only signal that pairs deterministically; a lost one redelivers, so delivery is at-least-once rather than exactly-once. | [adr/0018-delivery-acknowledgement.md](./adr/0018-delivery-acknowledgement.md) |
 
 ## Non-functional goals
 

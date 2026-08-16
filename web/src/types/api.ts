@@ -551,8 +551,8 @@ export interface components {
              * @enum {string}
              */
             role: "admin" | "member";
-            /** @default 168 */
-            expiresInHours: number;
+            /** @description Token lifetime in hours. The server applies 168 (seven days) when the field is omitted. */
+            expiresInHours?: number;
         };
         Invitation: {
             /** @description Bearer token; presented to the accept endpoint. */

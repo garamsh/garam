@@ -3,6 +3,7 @@
 import { z } from "zod";
 
 import { GaramApiError, garamFetchAuthenticated } from "@/lib/garam";
+import type { components } from "@/types/api";
 
 import type { Invitation } from "./orgs";
 
@@ -36,7 +37,9 @@ export async function createInvitation(
       {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ role: parsed.data.role }),
+        body: JSON.stringify({
+          role: parsed.data.role,
+        } satisfies components["schemas"]["InvitationCreate"]),
       },
     );
     return { status: "created", token: invitation.token };

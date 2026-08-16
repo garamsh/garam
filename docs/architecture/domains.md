@@ -176,18 +176,16 @@ signed: such a certificate stops verifying the day the CA expires.
 The CA private key reaches Postgres only through `Sealer`, whose one
 implementation is AES-256-GCM under a key-encryption key read from an
 owner-readable file (ADR-0015); the sealed bytes name the key that opens
-them. A subject's own key is generated per certificate and returned
-once, never stored. No process constructs the service yet: the listener
+them, and open only in the organization's row they were written for, so
+write access to the database moves no trust root. A subject's own key is
+generated per certificate and returned once, never stored. No process constructs the service yet: the listener
 that verifies a presented certificate is unbuilt, and the boot-time key
 requirement lands with it.
 
-A key the process holds rather than a cloud KMS, considered and
-rejected: a KMS is the stronger custody, because the key never enters
-garam's memory, and taking it would make issuing depend on a hosted
-service in a project that has none — where ADR-0012 has a user bring
-their own operator, a peer of garam rather than a part of it. `Sealer`
-is the seam that keeps the option open: a KMS implementation replaces
-the one there is without touching a caller.
+That key is as availability-critical as the database — losing it loses
+every organization's CA with no recovery short of new authorities and a
+reissue for every certificate — and why it is held this way rather than
+in a KMS is [ADR-0016](./adr/0016-ca-key-custody.md).
 
 ## Store implementation status
 

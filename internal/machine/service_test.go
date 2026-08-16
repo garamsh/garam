@@ -265,44 +265,6 @@ func TestService_RefusesASANThatDoesNotSurviveTheRoundTrip(t *testing.T) {
 	}
 }
 
-// TestService_RefusesASANWhoseColonShiftsTheOrganization is the third
-// way a SAN reads back as something other than what signed it. A colon
-// in a segment that is not the last shifts every segment after it, and
-// the organization is the first of them: the identity moves to another
-// organization, and the authority it must chain to moves with it. So
-// the refusal here is not the reader's — it is the trust root's, which
-// is where ADR-0014 put tenancy.
-//
-// Both halves are asserted, because "refused" alone would hold for an
-// organization that simply has no authority: the shifted organization
-// is given a real one of its own, and the certificate is still refused
-// because acme's authority signed it.
-func TestService_RefusesASANWhoseColonShiftsTheOrganization(t *testing.T) {
-	issuer := newIssuer(t)
-	svc := issuer.service()
-	issuer.authority(t, "acme")
-
-	// "grn:ac:me:default:agent:bot-1" is a whole GRN — of organization
-	// "ac", project "me", identifier "agent:bot-1".
-	shifted := grn.New("ac", "me", "default", "agent:bot-1")
-	require.Equal(t, "grn:ac:me:default:agent:bot-1", shifted.String())
-
-	// Before "ac" has an authority of its own.
-	_, err := authenticate(t, svc, issuer.sign(t, "acme", leaf{uris: []string{shifted.String()}}))
-	require.Error(t, err)
-	assert.True(t, errorx.IsKind(err, errorx.KindUnauthenticated))
-
-	// And after: "ac" can authenticate its own identities, and still
-	// not this one.
-	identity, err := authenticate(t, svc, issuer.issue(t, agentGRN("ac", "bot-1")))
-	require.NoError(t, err)
-	require.Equal(t, "ac", identity.GRN().Organization)
-
-	_, err = authenticate(t, svc, issuer.sign(t, "acme", leaf{uris: []string{shifted.String()}}))
-	require.Error(t, err)
-	assert.True(t, errorx.IsKind(err, errorx.KindUnauthenticated))
-}
-
 // TestService_RefusesAnExpiredCertificate holds everything but the
 // expiry still: both certificates carry the same identity and are
 // signed by the same authority, so the one that is refused is refused

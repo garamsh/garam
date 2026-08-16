@@ -222,12 +222,14 @@ The SAN URI is read by round trip. A GRN is an opaque URI, so `Path`
 and `Host` come back as empty strings rather than errors and the
 opaque part alone truncates at a `?` or a `#`; both readings are taken
 and must name the same GRN, which is the rule the issuing side applies
-before it signs. Which authority the certificate must then chain to is
-read off the organization segment of that GRN, so a certificate one
-organization's CA signed for another organization's identity is
-refused by the trust root rather than by a check — including when a
-colon in a segment that is not the last shifts the organization along
-with everything after it.
+before it signs. A SAN carrying a separator reaches neither reading
+whole: `grn.Parse` splits on every colon and holds every segment to
+the character rule ([grn-model.md](./grn-model.md) §identifier), so a
+colon in a segment that is not the last is refused there rather than
+here. Which authority the certificate must then chain to is read off
+the organization segment of the GRN both readings agree on, so a
+certificate one organization's CA signed for another organization's
+identity is refused by the trust root rather than by a check.
 
 The package holds no store and reaches no database: `TrustRoot` is the
 seam the composition root satisfies from `internal/ca`, which keeps the

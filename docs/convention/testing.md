@@ -1,8 +1,9 @@
-# Testing Conventions
+# Testing Principles
+
+Test layers, mocking, and placement — what each layer proves, what to mock, and where tests live.
 
 ## Contents
-
-- Three layers — unit / integration / e2e
+- Three layers — different goals, different scopes
 - Behavior over implementation
 - Mocking strategy
 - Coverage and naming
@@ -10,27 +11,27 @@
 
 ## Three layers — different goals, different scopes
 
+The concrete in-process client per stack is owned by the project's stack convention file; the Test client column states only the shape each layer requires.
+
 | Layer | Scope | Mocks | Test client | External systems |
 |---|---|---|---|---|
-| **Unit** | single function/type in isolation | replace at module boundaries (DB, HTTP, time, FS) | direct call | none |
-| **Integration** | modules cooperating | external systems substituted; SUT is real | `httptest.NewServer` | mocked |
-| **E2E** | built binary against real infra | nothing | real client | **real** — dockerised Postgres (`make db-up`), gated on `GARAM_TEST_DATABASE_URL` |
+| **Unit** | single function/class in isolation | replace at module boundaries (DB, HTTP, queue, time, FS) | direct call | none |
+| **Integration** | modules cooperating | external systems mocked or substituted; SUT is real | in-process client | mocked |
+| **E2E** | built binary against real infra | nothing | real client | **real** (testcontainers OK) |
 
-The app is *not yet a built binary* in integration. **No testcontainers
-in integration** — real Postgres for an integration test is e2e.
+The app is *not yet a built binary* in integration. **No testcontainers in integration** — real Postgres for an integration test is e2e.
 
 ## Behavior over implementation
 
 Assert on outputs and side-effects only:
-
 - return values
 - emitted events, log lines
 - HTTP responses (status + body)
-- DB rows (at the e2e layer)
+- DB rows (from a testcontainer, at the e2e layer)
 
-Do not assert on: call order, unexported helper shape, private type
-structure, internal refactors. **If a refactor forces test updates, the
-tests were testing implementation.**
+Do not assert on: call order, unexported helper shape, private type structure, internal refactors. **If an internal refactor forces test updates, the tests were testing implementation.**
+
+The concrete targets for a given stack are owned by the project's stack convention file; the lists above state only the kinds that qualify.
 
 ## Mocking strategy
 
@@ -38,30 +39,20 @@ tests were testing implementation.**
 - **Integration**: external systems mocked or substituted; SUT itself is real.
 - **E2E**: nothing mocked. Real binary, real infrastructure.
 
-Mocks are generated with **mockery v3** via `.mockery.yaml`, output to
-`internal/<domain>/mocks/` as importable packages (never `_test.go`
-files — Go cannot import those). Regenerate; never hand-edit.
-`make check-gen` fails CI on stale output.
-
 ### Substitutes for state
 
-Time → inject a clock. Network → `httptest.NewServer`. Filesystem →
-`t.TempDir()`. Random → seed it.
+Time → inject a clock. Network → substitute. Filesystem → tmpdir. Random → seed.
 
 ## Coverage and naming
 
-- Target meaningful branches, not 100%. CI does not gate on a
-  percentage; reviewers check that changed branches are exercised.
-- `TestFunction_Scenario`; subtests via `t.Run("case", ...)`.
-  Table-driven when cases share shape.
-- Assertions: `testify/assert` + `testify/require`.
+- Target meaningful branches, not 100%.
+- Names read like a spec. Concrete test-name forms follow the project's stack convention file.
 - A failing test name should tell you what broke without opening the file.
 
 ## Placement
 
-- Unit: co-located with source. Default to **external test packages**
-  (`package authz_test`) — black-box through the public contract.
-  Internal tests only with a genuine white-box seam; still assert on
-  behavior.
-- Integration: `tests/integration/` (not yet used).
-- E2E: `tests/e2e/`. Never inside `internal/`.
+- Unit: co-located with the source it tests.
+- Integration: co-located with the boundary it exercises, or in a dedicated integration directory.
+- E2E: a dedicated top-level directory, outside the application source tree.
+
+Concrete directory and file names follow the project's stack convention file — the stack file owns placement specifics.

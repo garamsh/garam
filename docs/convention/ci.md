@@ -1,95 +1,100 @@
-# CI Conventions
+# Continuous Integration
+
+How a project's checks are named, run, and secured. The rules hold on any toolchain; one toolchain appears at the end as a reference implementation.
 
 ## Contents
-
 - Core principle
-- Local gate
-- Make targets
-- Workflow authoring
-- Verify an action before adopting
+- One entry point per task
+- Run the checks before pushing
+- Reuse
+- Verify a pinned dependency before adopting it
 - Security baseline
-- Anti-patterns
+- Reference implementation
 
 ## Core principle
 
-Local commands and CI commands must be the same commands. `make ci`
-runs locally and in GitHub Actions with no drift. **Never pick an
-action or tool version from memory** — verify the current stable
-version via webfetch first.
+Local checks and CI checks are the same checks, invoked by the same names. CI re-runs what a contributor already ran; it does not define a second way to run it.
 
-## Local gate
+## One entry point per task
 
-No git hooks are installed (lefthook evaluated and not adopted). Run
-`make ci` before pushing; CI runs the same target and rejects what
-local runs missed.
+- **One name per task.** Each of lint, format, test, and build has exactly one name that a human and CI both invoke. What implements that name — a task runner, a script, a package manifest entry — is the project's choice; the name is the contract.
+- **One name for the whole set.** A single name runs lint, format, test, and build in order, so "run the checks" is one command locally and one step in CI.
+- **CI calls the names, not the commands behind them.** A pipeline that spells out the underlying tool invocations has created a second set of commands, and the two drift.
+- **Entry points stay thin.** An entry point that has grown past a few lines is one name doing several jobs; re-split it into named tasks rather than letting it become a script. What it may not become is a pipeline component: it runs on a contributor's machine as well as in CI.
 
-`make ci` stops short of the two e2e suites, which need Docker. CI runs
-each as its own job; locally they are `make db-up e2e` and
-`make backend-up web-e2e`.
+## Run the checks before pushing
 
-## Make targets
+- Run the project's checks locally before code leaves the machine. CI is the second line of defence, not the only one.
+- Automating that locally — a version-control hook, a watch task, an on-save editor command — is the contributor's choice. No tool is mandated, and running the checks by hand satisfies the rule.
 
-The living list is the `Makefile`. Shape:
+## Reuse
 
-```makefile
-lint:     go vet ./... && buf lint
-format:   gofmt / goimports (pinned via go run)
-test:     go test ./...
-build:    go build ./...
-mock:     mockery
-gen:      regenerate oapi-codegen, sqlc, buf, mockery (pinned tools)
-check-gen: fail when committed generated code is stale
-db-up / db-down: dockerised dev Postgres, one per machine; GARAM_DB_PORT
-          moves that one server's host port (default 55432)
-backend-up: the same compose file's postgres, migrate, authz and api —
-          the backend the browser suite drives
-e2e:      store round-trips against real Postgres (needs db-up); runs
-          against its own database, never two worktrees at once
-web-e2e:  Playwright against the built app and backend-up's backend
-ci:       format lint test build check-gen
-```
+A pipeline step is one of two kinds. A check — lint, format, test, build — is invoked by its entry-point name (§One entry point per task). Everything else a pipeline needs — toolchain setup, caching, artifacts, deploys — is a step this section governs.
 
-## Workflow authoring
+For each of those steps:
 
-For each CI step:
+1. **Search for a maintained component** — a published action, plugin, or reusable job — at its current version, before writing pipeline code.
+2. **Verify it** per the next section before pinning.
+3. **Use it as its own documentation shows**. If no maintained component covers the step, a checked-in script is the fallback — not a license to hand-roll per-job.
 
-1. **Check for an existing action** before writing inline `run:` blocks.
-2. **Verify it** per the next section — version, inputs, usage.
-3. **Use it as documented**, or write inline `run:` if no action exists.
+## Verify a pinned dependency before adopting it
 
-`.github/workflows/ci.yml` runs `make ci`, `make web-ci` and both e2e
-suites on every push and PR, one job each. No parallel sets of
-commands: CI invokes Make targets, nothing else.
+Before pinning anything the pipeline pulls in — a published component, container image, or tool version — read its own documentation and determine:
 
-## Verify an action before adopting
+1. **Current stable version** — not the remembered one. The version an agent recalls may be deprecated, archived, or replaced.
+2. **Exact inputs that version accepts** — inputs shift between releases. Check them against the version's own documentation.
+3. **Exact usage pattern** — follow what the documentation shows. Do not paraphrase inputs or rearrange the documented pattern.
 
-Before pinning any action, `webfetch` its repo to determine:
+Pre-trained recollection is a starting point, not source of truth. An agent that picks a version from memory silently uses a stale or nonexistent release.
 
-1. **Current stable version** — the version an agent remembers may be
-   deprecated or nonexistent.
-2. **Exact inputs the version accepts** — verify against the version's
-   own `action.yml` or README.
-3. **Exact usage pattern** — follow the action's docs.
+Pin to a reference that cannot move: a digest, or a full commit SHA. A tag can be repointed at any time and a branch moves by design, so neither pins anything.
 
-For non-trivial third-party actions, also check the GitHub Advisory
-Database for known vulnerabilities in the candidate version.
+For every third-party dependency, also check the ecosystem's advisory source for known vulnerabilities in the candidate version.
 
 ## Security baseline
 
-- **Minimal permissions**: `permissions: read-all` at the workflow top;
-  grant `write` per job.
-- **No plain-text secrets**: repo or environment secrets; OIDC for
-  cloud deploys.
-- **Avoid script injection**: pass untrusted input via `env:`, never
-  interpolated into `run:`.
-- **Mask derived values**: `::add-mask::` for values derived from
-  secrets that may appear in logs.
+- **Minimal permissions**: the pipeline's default credential grants read only; grant write on the single job that needs it.
+- **No plain-text secrets**: keep tokens, keys, and credentials in the platform's secret store. Prefer short-lived federated credentials (OIDC) over long-lived keys for cloud access.
+- **Avoid script injection**: pass attacker-controlled input to a command through the environment, never interpolated into the command text.
+- **Mask derived values**: values derived from secrets that can reach the logs are masked with the platform's masking mechanism.
 
-## Anti-patterns
+## Reference implementation
 
-- Inline `run:` blocks for what an action already does.
-- A `make` target that drifts from CI — local and CI must match.
-- Pinning to mutable refs (`@main`). Use a SHA or tag.
-- Long shell logic inside a `make` target — extract to `scripts/`.
-- Reusing a workflow without auditing its contents — treat it like any
-  other dependency.
+The rules above bind. This section does not: it is one toolchain — Make for the entry points, GitHub Actions for the pipeline — that satisfies them. A project on another toolchain replaces this section and keeps every rule.
+
+### Entry points as a Makefile
+
+The living list is the `Makefile`. This project has two toolchains, so
+it has two whole-set names rather than one:
+
+- `ci` — `format lint test build check-gen`, the Go module.
+- `web-ci` — `web-lint web-test web-build web-check-gen`, the `web/`
+  app, which has its own package manager and its own gate.
+
+Both run identically on a contributor's machine and in CI. The rest:
+
+- `gen` regenerates oapi-codegen, sqlc, buf and mockery output;
+  `check-gen` fails when what is committed is stale.
+- `db-up` / `db-down` bring up and remove the dockerised Postgres the
+  Go e2e suite needs; `GARAM_DB_PORT` moves that one server's host
+  port, default 55432.
+- `backend-up` brings up postgres, migrate, authz and api from the
+  same compose file — the backend the browser suite drives.
+- `e2e` runs the store round-trips against real Postgres, against its
+  own database, never two worktrees at once. `web-e2e` runs Playwright
+  against the built app and `backend-up`'s backend.
+
+`ci` and `web-ci` stop short of the two e2e suites, which need Docker.
+CI runs each as its own job; locally they are `make db-up e2e` and
+`make backend-up web-e2e`.
+
+### GitHub Actions specifics
+
+- **Existing components**: search the GitHub Marketplace before writing inline `run:` blocks.
+- **Advisories**: for every third-party action, check the GitHub Advisory Database (`github.com/advisories?query=type%3Areviewed+ecosystem%3Aactions`) for the candidate version.
+- **Toolchain setup**: use the official setup action for the project's language; take its version and inputs from its own docs.
+- **Checks**: run `make lint`, `make format`, `make test`, `make build` — the targets, not the commands inside them.
+- **Artifacts**: use the artifact action.
+- **Permissions**: `permissions: read-all` at the workflow top; `write` granted per job.
+- **Secrets**: repo or environment secrets, OIDC for cloud deploys, `::add-mask::VALUE` for values derived from secrets.
+- **Pinning**: a full commit SHA.

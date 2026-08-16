@@ -8,13 +8,13 @@ describe("marketing layout", () => {
     render(<MarketingLayout>{null}</MarketingLayout>);
 
     const nav = screen.getByRole("navigation", { name: "Sections" });
-    expect(within(nav).getByRole("link", { name: "Platform" })).toHaveAttribute(
-      "href",
-      "#platform",
-    );
     expect(
-      within(nav).getByRole("link", { name: "Authorization" }),
-    ).toHaveAttribute("href", "#authorization");
+      within(nav).getByRole("link", { name: "Organization" }),
+    ).toHaveAttribute("href", "#organization");
+    expect(within(nav).getByRole("link", { name: "Agents" })).toHaveAttribute(
+      "href",
+      "#agents",
+    );
     expect(
       within(nav).getByRole("link", { name: "Identifiers" }),
     ).toHaveAttribute("href", "#identifiers");

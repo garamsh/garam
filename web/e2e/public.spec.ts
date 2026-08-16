@@ -7,7 +7,7 @@ test.describe("signed out", () => {
     await expect(page).toHaveURL("/");
     await expect(
       page.getByRole("heading", {
-        name: "Who belongs to your organization, and what they may do.",
+        name: "One organization for the people and the agents that work in it.",
       }),
     ).toBeVisible();
     await expect(
@@ -19,11 +19,11 @@ test.describe("signed out", () => {
     await page.goto("/");
 
     const nav = page.getByRole("navigation", { name: "Sections" });
-    await nav.getByRole("link", { name: "Authorization" }).click();
+    await nav.getByRole("link", { name: "Agents" }).click();
 
-    await expect(page).toHaveURL("/#authorization");
+    await expect(page).toHaveURL("/#agents");
     await expect(
-      page.getByRole("heading", { name: "Every request ends in a decision" }),
+      page.getByRole("heading", { name: "Stored, not yet reachable" }),
     ).toBeInViewport();
   });
 

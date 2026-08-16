@@ -1,70 +1,75 @@
 import { Building2, FileStack, Fingerprint, FolderTree } from "lucide-react";
+import type { Metadata } from "next";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 
-import { PolicyPanel } from "./_components/policy-panel";
+import { PolicyAttachments } from "./_components/policy-attachments";
 import { SectionHeading } from "./_components/section-heading";
 
 /**
  * Every claim on this page has to exist in the product: organizations
- * and invitations, groups and projects, versioned policy documents,
- * GRNs, and Google sign-in.
+ * and invitations, groups and projects, versioned policy documents
+ * attached to identities, GRNs, and Google sign-in.
  */
 const CAPABILITIES = [
   {
     icon: Building2,
-    title: "Organizations and invitations",
+    title: "Invitation, not signup",
     body: "An organization grows by invitation, never by open signup. A single-use, expiring token admits a user with a fixed org role — owner, admin, or member.",
   },
   {
     icon: FolderTree,
     title: "Groups and projects",
-    body: "Groups bundle people; projects hold a unit of work. Both live under one organization, carry their own members, and can hold roles scoped to that resource alone.",
+    body: "Groups bundle people; a project holds a unit of work. Both live under one organization, carry their own members, and can hold roles scoped to that resource alone.",
   },
   {
     icon: FileStack,
-    title: "Policies with versions",
-    body: "Policy documents are stored per organization and versioned append-only. A stored version is never rewritten: activation, archival, and rollback move a pointer.",
+    title: "Policies attached to identities",
+    body: "IAM-style documents, stored per organization and versioned append-only. Attaching one to a user, a group, or an agent decides who it reaches, and a matching Deny anywhere in the set ends the decision.",
   },
   {
     icon: Fingerprint,
     title: "One identifier system",
-    body: "Organizations, groups, projects, policies, and users all carry a GRN, so one name shape answers who a subject is and what a policy is written about.",
+    body: "Organizations, groups, projects, policies, users, and agents all carry a GRN, so one shape answers who a subject is and what a policy is written about.",
   },
 ];
 
-const DECISION_STEPS = [
+/**
+ * Decisions behind the agent surface, each named by the ADR that
+ * settles it so a reader can check the claim. Only the persistence
+ * behind the first exists.
+ */
+const AGENT_DECISIONS = [
   {
-    title: "A matching Deny",
-    body: "Any Deny statement whose action and resource patterns both match ends the decision.",
+    adr: "ADR-0012",
+    title: "Identity and assignment",
+    body: "garam mints an agent's GRN inside an organization and a project and never changes it, so which operator runs the agent is a relation a reassignment moves rather than part of the identity. That operator provisions it from inside a cluster garam never dials into.",
   },
   {
-    title: "A matching Allow",
-    body: "Otherwise an Allow from either origin — a role the api server collected, or an active policy the engine holds — admits the request.",
+    adr: "ADR-0013",
+    title: "Messages",
+    body: "A message reaches an agent when an adapter beside it long-polls a queue held in Postgres, so any garam instance can answer any poll. Channels such as Slack are consumers of that API rather than part of it.",
   },
   {
-    title: "Default Deny",
-    body: "With nothing matched, the request is denied.",
+    adr: "ADR-0014",
+    title: "Authentication",
+    body: "An agent presents a client certificate whose SAN URI is its GRN, on a listener that takes no session cookie. It holds no user row and no org membership; a policy attachment is what widens its reach.",
   },
-];
-
-const POLICY_STATES = [
-  { state: "draft", body: "Stored, evaluated by nothing." },
-  {
-    state: "active",
-    body: "Contributes its default version's statements to checks.",
-  },
-  { state: "archived", body: "Retained, no longer evaluated." },
 ];
 
 const GRN_SEGMENTS = [
   { token: "grn", label: "prefix" },
   { token: "acme", label: "organization" },
-  { token: "billing", label: "project" },
-  { token: "policy", label: "service type" },
-  { token: "org-read", label: "identifier" },
+  { token: "default", label: "project" },
+  { token: "agent", label: "service type" },
+  { token: "bot-1", label: "identifier" },
 ];
+
+export const metadata: Metadata = {
+  description:
+    "One organization for the people and the agents that work in it.",
+};
 
 /** The public front door; everything on it is readable signed out. */
 export default function LandingPage() {
@@ -82,12 +87,14 @@ export default function LandingPage() {
               Identity, organization, authorization
             </span>
             <h1 className="font-heading text-display font-semibold text-balance">
-              Who belongs to your organization, and what they may do.
+              One organization for the people and the agents that work in it.
             </h1>
             <p className="max-w-xl text-lead text-pretty text-muted-foreground">
-              garam keeps the organizations, groups, and projects work is filed
-              under, the people who belong to them, and the versioned policy
-              documents that decide what each of them may do.
+              garam holds the identities, the structure they belong to, and the
+              policy documents that decide what each may do. The people are here
+              today; an agent already has an identity and is a subject of the
+              same policies, while the surface it connects through is decided
+              rather than built.
             </p>
             <div className="flex flex-wrap items-center gap-2 pt-2">
               <Button asChild size="lg">
@@ -101,16 +108,19 @@ export default function LandingPage() {
               Sign in with the Google account your organization invited.
             </p>
           </div>
-          <PolicyPanel />
+          <PolicyAttachments />
         </div>
       </section>
 
-      <section id="platform" className="scroll-mt-20 border-b border-border/60">
+      <section
+        id="organization"
+        className="scroll-mt-20 border-b border-border/60"
+      >
         <div className="mx-auto w-full max-w-shell px-6 py-section">
           <SectionHeading
-            eyebrow="Platform"
-            title="What an organization is made of"
-            body="The structure people work inside, and the rules that decide what they reach."
+            eyebrow="Organization"
+            title="What an organization holds"
+            body="The structure people are invited into, and the policy documents that decide what anything in it may reach."
           />
           <ul className="mt-12 grid border-t border-l border-border sm:grid-cols-2">
             {CAPABILITIES.map(({ icon: Icon, title, body }) => (
@@ -130,60 +140,26 @@ export default function LandingPage() {
       </section>
 
       <section
-        id="authorization"
+        id="agents"
         className="scroll-mt-20 border-b border-border/60 bg-muted/30"
       >
         <div className="mx-auto w-full max-w-shell px-6 py-section">
           <SectionHeading
-            eyebrow="Authorization"
-            title="Every request ends in a decision"
-            body="Statements reach the engine from two origins: the roles the api server collects for the request, and the active policies the engine holds for the organization. Deny overrides across both."
+            eyebrow="Agents"
+            title="Stored, not yet reachable"
+            body="The agent surface is decided in ADRs and largely unbuilt: identity, operator assignment and state are persisted, and nothing else of it exists — no endpoint, no adapter, no message queue, and no certificate authority."
           />
-          <div className="mt-12 grid gap-12 md:grid-cols-2 md:gap-16">
-            <ol className="flex flex-col">
-              {DECISION_STEPS.map((step, index) => (
-                <li
-                  key={step.title}
-                  className="flex gap-4 border-t border-border py-5 first:border-t-0 first:pt-0"
-                >
-                  <span
-                    aria-hidden
-                    className="mt-1 font-mono text-xs text-brand"
-                  >
-                    {index + 1}
-                  </span>
-                  <div className="flex flex-col gap-1">
-                    <h3 className="font-heading text-base font-medium">
-                      {step.title}
-                    </h3>
-                    <p className="text-sm text-pretty text-muted-foreground">
-                      {step.body}
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ol>
-            <div className="flex flex-col gap-4">
-              <h3 className="font-heading text-base font-medium">
-                A policy&rsquo;s life
-              </h3>
-              <dl className="flex flex-col rounded-xl border border-border bg-background">
-                {POLICY_STATES.map(({ state, body }) => (
-                  <div
-                    key={state}
-                    className="flex flex-col gap-1 border-t border-border px-5 py-4 first:border-t-0 sm:flex-row sm:items-baseline sm:gap-4"
-                  >
-                    <dt className="font-mono text-xs sm:w-20">{state}</dt>
-                    <dd className="text-sm text-muted-foreground">{body}</dd>
-                  </div>
-                ))}
-              </dl>
-              <p className="text-sm text-pretty text-muted-foreground">
-                Versions are append-only, enforced by the schema itself, and
-                disappear only with the policy that owns them.
-              </p>
-            </div>
-          </div>
+          <ul className="mt-12 grid gap-px overflow-hidden rounded-xl border border-border bg-border md:grid-cols-3">
+            {AGENT_DECISIONS.map(({ adr, title, body }) => (
+              <li key={adr} className="flex flex-col gap-3 bg-background p-6">
+                <span className="font-mono text-xs text-brand">{adr}</span>
+                <h3 className="font-heading text-base font-medium">{title}</h3>
+                <p className="text-sm text-pretty text-muted-foreground">
+                  {body}
+                </p>
+              </li>
+            ))}
+          </ul>
         </div>
       </section>
 
@@ -195,7 +171,7 @@ export default function LandingPage() {
           <SectionHeading
             eyebrow="Identifiers"
             title="One name shape, five segments"
-            body="A GRN names every resource in the system. Policy resource patterns match those names with wildcards, so grn:acme:* scopes a statement to one organization."
+            body="A GRN names every resource in the system. Its organization and project segments name the resources that own it, so an agent is addressed inside an organization the way a group or a project is."
           />
           <ul className="mt-12 grid gap-px overflow-hidden rounded-xl border border-border bg-border sm:grid-cols-5">
             {GRN_SEGMENTS.map(({ token, label }) => (
@@ -208,8 +184,9 @@ export default function LandingPage() {
             ))}
           </ul>
           <p className="mt-6 text-sm text-muted-foreground">
-            API paths address organizations, groups, projects, and policies by
-            the last segment.
+            <span className="font-mono">default</span> is the project segment of
+            an org-level resource. API paths address organizations, groups,
+            projects, and policies by the last segment.
           </p>
         </div>
       </section>

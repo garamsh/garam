@@ -9,18 +9,27 @@ describe("landing page", () => {
 
     expect(
       screen.getByRole("heading", {
-        name: "Who belongs to your organization, and what they may do.",
+        name: "One organization for the people and the agents that work in it.",
       }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: "Organizations and invitations" }),
+      screen.getByRole("heading", { name: "What an organization holds" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: "Every request ends in a decision" }),
+      screen.getByRole("heading", { name: "Invitation, not signup" }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "One name shape, five segments" }),
     ).toBeInTheDocument();
+  });
+
+  it("frames the agent surface as decided rather than shipped", () => {
+    render(<LandingPage />);
+
+    expect(
+      screen.getByRole("heading", { name: "Stored, not yet reachable" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/nothing else of it exists/)).toBeInTheDocument();
   });
 
   it("offers the console and the login page as the ways in", () => {

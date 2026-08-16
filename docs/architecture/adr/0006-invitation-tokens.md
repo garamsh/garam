@@ -7,7 +7,7 @@
 
 "One identifier system across every resource (GRN)" suggests
 invitations should be GRN-addressed. But the GRN service_type
-catalogue (`docs/convention/naming.md`, PM-owned) has no `invitation`
+catalogue (`docs/architecture/grn-model.md`, PM-owned) has no `invitation`
 entry, and an invitation is not a resource clients address — it is a
 capability: a single-use secret passed out of band.
 

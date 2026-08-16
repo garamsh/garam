@@ -38,8 +38,8 @@ identifier rules below.
 
 ## service_type catalogue
 
-Update both this table and [`../convention/naming.md`](../convention/naming.md)
-when adding or renaming a type.
+This table is the catalogue. Adding or renaming a type changes it here,
+and nowhere else.
 
 | service_type | Domain | Example |
 |--------------|--------|---------|

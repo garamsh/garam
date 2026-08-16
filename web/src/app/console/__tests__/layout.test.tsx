@@ -1,54 +1,70 @@
 import { act, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import AppLayout from "@/app/console/layout";
+import ConsoleLayout from "@/app/console/layout";
 
-// react-dom cannot render the real UserMenu, an async Server
-// Component, under Testing Library. A thrown promise stands in for the
-// pending `/me` fetch so the test controls the suspension.
-const session = vi.hoisted(() => ({
-  pending: undefined as Promise<void> | undefined,
+// react-dom cannot render the shell's async Server Components under
+// Testing Library. A thrown promise stands in for their pending reads
+// so the test controls the suspension.
+const shell = vi.hoisted(() => ({ pending: undefined as Promise<void> | undefined }));
+
+vi.mock("@/app/console/_components/console-sidebar", () => ({
+  ConsoleSidebar: () => {
+    if (shell.pending) throw shell.pending;
+    return <p>Sidebar</p>;
+  },
+  ConsoleSidebarFallback: () => <p>Sidebar loading</p>,
 }));
 
-vi.mock("@/features/auth/components/user-menu", () => ({
-  UserMenu: () => {
-    if (session.pending) throw session.pending;
-    return <span>Alice</span>;
+vi.mock("@/app/console/_components/console-breadcrumb", () => ({
+  ConsoleBreadcrumb: () => {
+    if (shell.pending) throw shell.pending;
+    return <p>Breadcrumb</p>;
   },
 }));
 
 afterEach(() => {
-  session.pending = undefined;
+  shell.pending = undefined;
 });
 
 describe("console layout", () => {
-  it("renders the shell and children while the session section is pending", async () => {
+  it("streams children while the shell's reads are still pending", async () => {
     let resolve!: () => void;
-    session.pending = new Promise<void>((r) => {
-      resolve = r;
+    shell.pending = new Promise<void>((settle) => {
+      resolve = settle;
     });
 
     render(
-      <AppLayout>
+      <ConsoleLayout>
         <p role="status">Loading organizations…</p>
-      </AppLayout>,
+      </ConsoleLayout>,
     );
 
     // The `loading.tsx` stand-in: children stream immediately instead
-    // of waiting on the header's session fetch.
-    expect(screen.getByRole("link", { name: "garam" })).toHaveAttribute(
-      "href",
-      "/console/orgs",
-    );
+    // of waiting on the sidebar's session and organization reads.
     expect(screen.getByRole("status")).toHaveTextContent(
       "Loading organizations…",
     );
-    expect(screen.queryByText("Alice")).not.toBeInTheDocument();
+    expect(screen.getByText("Sidebar loading")).toBeInTheDocument();
+    expect(screen.queryByText("Breadcrumb")).not.toBeInTheDocument();
 
     await act(async () => {
-      session.pending = undefined;
+      shell.pending = undefined;
       resolve();
     });
-    expect(screen.getByText("Alice")).toBeInTheDocument();
+    expect(screen.getByText("Sidebar")).toBeInTheDocument();
+    expect(screen.getByText("Breadcrumb")).toBeInTheDocument();
+  });
+
+  it("offers the sidebar trigger on every route", () => {
+    render(
+      <ConsoleLayout>
+        <p>Anything</p>
+      </ConsoleLayout>,
+    );
+
+    expect(
+      screen.getByRole("button", { name: "Toggle Sidebar" }),
+    ).toBeInTheDocument();
   });
 });

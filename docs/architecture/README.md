@@ -35,6 +35,7 @@ ADRs:
 - [0008](./adr/0008-identity-based-policy-attachments.md) — identity-based policy attachments
 - [0009](./adr/0009-web-frontend.md) — Next.js web frontend in `web/`
 - [0010](./adr/0010-dev-auth-provider.md) — development-only sign-in provider behind GARAM_DEV_AUTH
+- [0011](./adr/0011-console-shell.md) — console sidebar shell over org sections
 
 ## Rules for edits
 

@@ -26,7 +26,10 @@ collaborate on a shared plan.
   group (ADR-0008); an unattached active policy still grants org-wide.
 - A web console under `/console` for the org structure the API exposes:
   organizations are listed and created, members are invited by link and
-  the invitation accepted, groups and projects are read (ADR-0009).
+  the invitation accepted, groups and projects are read (ADR-0009). Its
+  shell is a collapsible sidebar over `Organizations → organization →
+  section`, and it addresses resources by the GRN's last segment rather
+  than printing GRNs (ADR-0011).
 - One identifier system across every resource (GRN).
 
 ## Out of scope (today)
@@ -55,7 +58,8 @@ collaborate on a shared plan.
 - `web/` — Next.js frontend; reaches the API through a same-origin
   `/api/*` rewrite (ADR-0009). Its own toolchain and gate (`make web-ci`).
   `/` is the public landing page and `/login` the sign-in page; the
-  signed-in application lives under `/console`.
+  signed-in application lives under `/console`, whose shell and route
+  structure are ADR-0011.
 - `deploy/local/` — Docker Compose stack running Postgres, migrations,
   authz, api and (profile-gated) web on one machine; its `postgres`
   service also hosts the e2e tests' database (`make db-up`), kept
@@ -114,6 +118,7 @@ contract is `proto/garam/authz/v1`.
 | Sessions are server-side rows | Logout must revoke; opaque tokens, only hashes persisted. | [adr/0005-server-side-sessions.md](./adr/0005-server-side-sessions.md) |
 | Dev sign-in is a provider, not a bypass | Sessions stay identical to Google's; with the flag off no dev route exists. | [adr/0010-dev-auth-provider.md](./adr/0010-dev-auth-provider.md) |
 | Invitations are token-keyed, not GRN-addressed | The bearer token is the identifier; no new GRN service_type. | [adr/0006-invitation-tokens.md](./adr/0006-invitation-tokens.md) |
+| The console is a sidebar shell over org sections | One structure for switching orgs, moving between sections, and knowing where you are. | [adr/0011-console-shell.md](./adr/0011-console-shell.md) |
 
 ## Non-functional goals
 

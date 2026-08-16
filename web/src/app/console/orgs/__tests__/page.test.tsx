@@ -31,14 +31,18 @@ describe("organizations page", () => {
     ).toHaveAttribute("href", "/console/orgs/new");
   });
 
-  it("says so when the caller belongs to none", async () => {
+  it("names organizations without their GRN", async () => {
+    const { container } = await renderServerComponent(OrgsPage());
+
+    expect(container.textContent).not.toContain("grn:");
+  });
+
+  it("shows an empty state when the caller belongs to none", async () => {
     server.use(http.get(`${API_URL}/orgs`, () => HttpResponse.json([])));
 
     await renderServerComponent(OrgsPage());
 
-    expect(
-      screen.getByText("You are not a member of any organization yet."),
-    ).toBeInTheDocument();
+    expect(screen.getByText("No organizations yet")).toBeInTheDocument();
     // Only the "New organization" link remains.
     expect(screen.queryAllByRole("link")).toHaveLength(1);
   });

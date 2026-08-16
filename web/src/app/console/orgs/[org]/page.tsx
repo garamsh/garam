@@ -1,19 +1,18 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import Link from "next/link";
+import { FolderGit2, UserRound, UsersRound } from "lucide-react";
 
-import { Separator } from "@/components/ui/separator";
-import { getSession } from "@/features/auth/api/get-session";
+import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import {
   getOrg,
   listGroups,
   listOrgMembers,
   listProjects,
+  orgNotFound,
 } from "@/features/orgs/api/orgs";
-import { GaramApiError } from "@/lib/garam";
 
-import { InviteMemberForm } from "./_components/invite-member-form";
-import { MemberTable } from "./_components/member-table";
-import { ResourceList } from "./_components/resource-list";
+import { PageHeader } from "../../_components/page-header";
+import { orgHref } from "../../_components/navigation";
 
 type Params = { params: Promise<{ org: string }> };
 
@@ -24,62 +23,49 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 
 export default async function OrgPage({ params }: Params) {
   const { org: slug } = await params;
-
-  // A denied read and a missing org are the same answer to a visitor:
-  // the organization is not theirs to see.
-  const org = await getOrg(slug).catch((error: unknown) => {
-    if (
-      error instanceof GaramApiError &&
-      (error.status === 403 || error.status === 404)
-    ) {
-      notFound();
-    }
-    throw error;
-  });
-
-  const [groups, projects, members, session] = await Promise.all([
+  const [org, groups, projects, members] = await Promise.all([
+    getOrg(slug).catch(orgNotFound),
     listGroups(slug),
     listProjects(slug),
     listOrgMembers(slug),
-    getSession(),
   ]);
 
-  // Only owners and admins may create invitations.
-  const callerRole = members.find(
-    (member) => member.userGrn === session?.grn,
-  )?.role;
-  const canInvite = callerRole === "owner" || callerRole === "admin";
+  const counts = [
+    { segment: "groups", label: "Groups", icon: UsersRound, of: groups.length },
+    {
+      segment: "projects",
+      label: "Projects",
+      icon: FolderGit2,
+      of: projects.length,
+    },
+    {
+      segment: "members",
+      label: "Members",
+      icon: UserRound,
+      of: members.length,
+    },
+  ];
 
   return (
-    <div className="flex flex-col gap-8">
-      <div className="flex flex-col gap-1">
-        <h1 className="font-heading text-2xl font-semibold">{org.name}</h1>
-        <p className="font-mono text-xs text-muted-foreground">{org.grn}</p>
-      </div>
-
-      <div className="grid gap-8 md:grid-cols-2">
-        <ResourceList
-          title="Groups"
-          emptyMessage="This organization has no groups."
-          resources={groups}
-        />
-        <ResourceList
-          title="Projects"
-          emptyMessage="This organization has no projects."
-          resources={projects}
-        />
-      </div>
-
-      <Separator />
-
-      <MemberTable members={members} />
-
-      {canInvite && (
-        <>
-          <Separator />
-          <InviteMemberForm org={slug} />
-        </>
-      )}
-    </div>
+    <>
+      <PageHeader title={org.name} description="What this organization holds." />
+      <ul className="grid gap-4 sm:grid-cols-3">
+        {counts.map((count) => (
+          <li key={count.segment}>
+            <Link href={orgHref(slug, count.segment)} className="block">
+              <Card className="gap-2 p-5 transition-colors hover:border-ring">
+                <CardDescription className="flex items-center gap-2">
+                  <count.icon className="size-4" />
+                  {count.label}
+                </CardDescription>
+                <CardTitle className="text-3xl tabular-nums">
+                  {count.of}
+                </CardTitle>
+              </Card>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }

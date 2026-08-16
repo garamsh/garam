@@ -36,11 +36,12 @@ The concrete targets for a given stack are owned by the project's stack conventi
 
 ## Waiting
 
-A step waits on the condition it depends on, never on a proxy for it. Waiting for something that merely tends to happen first is the shape every intermittent failure takes: the wait ends, the condition has not, and the test passes or fails on timing rather than on behaviour.
+A test that waits on the wrong condition passes for the wrong reason, and the failure surfaces later on a machine with different timing.
 
-- **The awaited condition and the asserted condition are the same condition.** Waiting for an element to exist and then asserting its value is two conditions where the value is the one that matters — the element can exist holding the previous value.
-- **Widening a timeout is not a fix.** It changes how often the race is lost, not whether the wait is on the right thing. A timeout is correct only where the operation is genuinely slow, and the pull request says which it is.
-- **An intermittent failure is reproduced before it is fixed**, and the fix is shown to close it — a rate before and after, not one green run. Conditions differ: a race can hide under load as easily as it appears there.
+- **A step waits on the condition it depends on.** Waiting for something already true proves nothing, and waiting for something unrelated proves less. A step that needs a form to be interactive waits for that, not for a label that was on screen before the step began.
+- **The condition waited on and the condition asserted are the same.** A wait that passes while the assertion reads a stale value waited on the wrong thing.
+- **Raising a timeout is not a fix.** It only lengthens how long the test tolerates the wrong condition. Find what the step depends on.
+- **An intermittent failure is reproduced before it is fixed**, and the fix is shown by the failure rate before against after — not by one green run. The conditions that expose it are not always the loaded ones: a slow machine can hide a race by delaying the thing that would otherwise arrive too early.
 
 ## Mocking strategy
 

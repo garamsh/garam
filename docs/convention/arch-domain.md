@@ -27,9 +27,14 @@ Inside a boundary, declarations come first and implementations depend
 on them — never the reverse. A file declaring a contract does not
 import the file that satisfies it.
 
-Across boundaries, imports run from the specific to the general: the
-layer that composes the system imports a boundary, a boundary imports
+Across boundaries, imports run from the specific to the general: a
+composing layer imports the boundaries it composes, a boundary imports
 shared code, and neither direction reverses.
+
+Composition stacks. What composes several boundaries can itself be
+composed by something above it, and that does not make it a boundary
+reaching upward. The rule fixes the direction, not the number of
+layers.
 
 ## Crossing a boundary
 

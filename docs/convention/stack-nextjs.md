@@ -264,6 +264,10 @@ back/forward. The pieces, for a photo modal:
   `render()`, and wrapping whatever providers the root layout mounts.
   A provider mounted over one segment is wrapped by the tests of that
   segment, not here.
+- The test setup stubs `server-only` to an empty module. That package
+  throws wherever it is imported outside a Server Component, so
+  without the stub every test reaching a server-only module fails
+  before it runs.
 - This stack's substitutes: MSW for outbound HTTP, a Prisma/Drizzle
   test double or SQLite for the database, a fake session for auth,
   `testcontainers-node` for real service dependencies.
@@ -284,6 +288,19 @@ Three tiers, and what each may import:
 - `app/`: may import from both.
 - `src/testing/`: outside the tiers. Test scaffolding may import from
   anywhere, and nothing outside a test imports it.
+
+A feature declares two entry points, not one:
+
+- `features/<name>/index.ts` — what a Server Component may read.
+  Server-only modules reach the graph through here.
+- `features/<name>/actions.ts` — the feature's Server Actions. A
+  client module imports from here.
+
+One barrel over both breaks the build. A barrel that exports anything
+client-reachable is treated as client-reachable whole, so a client
+module importing a single action drags the server-only modules beside
+it into the client graph. The error then names the client module,
+which is innocent — the shape of the barrel is the cause.
 
 The tiers are not self-enforcing: configure `import/no-restricted-paths`
 to fail the build on a crossing, in the same pull request that creates

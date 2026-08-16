@@ -68,8 +68,8 @@ The living list is the `Makefile`. This project has two toolchains, so
 it has two whole-set names rather than one:
 
 - `ci` — `format lint test build check-gen`, the Go module.
-- `web-ci` — `web-lint web-test web-build web-check-gen`, the `web/`
-  app, which has its own package manager and its own gate.
+- `web-ci` — `web-format web-lint web-test web-build web-check-gen`,
+  the `web/` app, which has its own package manager and its own gate.
 
 Both run identically on a contributor's machine and in CI. The rest:
 

@@ -40,9 +40,7 @@ describe("console sidebar", () => {
       "href",
       "/console/orgs/acme/members",
     );
-    expect(
-      screen.getByRole("button", { name: /Alice/ }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Alice/ })).toBeInTheDocument();
   });
 
   it("carries no GRN", async () => {

@@ -63,7 +63,7 @@ alongside `make ci`.
 
 ```sh
 make web-install          # pnpm install --frozen-lockfile
-make web-ci               # lint, typecheck, unit tests, build, codegen check
+make web-ci               # format, lint, typecheck, unit tests, build, codegen check
 pnpm --dir web dev        # dev server on http://localhost:3000
 ```
 

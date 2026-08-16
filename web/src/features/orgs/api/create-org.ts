@@ -11,8 +11,7 @@ import type { Organization } from "./orgs";
 
 /** What the create form has to show: nothing yet, or a refusal. */
 export type CreateOrgState =
-  | { status: "idle" }
-  | { status: "error"; message: string };
+  { status: "idle" } | { status: "error"; message: string };
 
 const Schema = z.object({ name: z.string().trim().min(1) });
 

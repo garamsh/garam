@@ -86,16 +86,16 @@ export async function seedSignedInOrg(): Promise<Seed> {
     await client.query(
       `INSERT INTO groups (grn, org_grn, name, created_at, updated_at)
        VALUES ($1, $2, $3, now(), now())`,
-      [
-        `grn:${seed.orgSlug}:default:group:engineering`,
-        orgGrn,
-        seed.groupName,
-      ],
+      [`grn:${seed.orgSlug}:default:group:engineering`, orgGrn, seed.groupName],
     );
     await client.query(
       `INSERT INTO projects (grn, org_grn, name, created_at, updated_at)
        VALUES ($1, $2, $3, now(), now())`,
-      [`grn:${seed.orgSlug}:default:project:frontend`, orgGrn, seed.projectName],
+      [
+        `grn:${seed.orgSlug}:default:project:frontend`,
+        orgGrn,
+        seed.projectName,
+      ],
     );
     await client.query("COMMIT");
   } catch (error) {

@@ -48,8 +48,12 @@ export const handlers = [
   http.get(`${API_URL}/auth/providers`, () => HttpResponse.json(["google"])),
   http.get(`${API_URL}/orgs`, () => HttpResponse.json([acme])),
   http.get(`${API_URL}/orgs/acme`, () => HttpResponse.json(acme)),
-  http.get(`${API_URL}/orgs/acme/groups`, () => HttpResponse.json([engineering])),
-  http.get(`${API_URL}/orgs/acme/projects`, () => HttpResponse.json([frontend])),
+  http.get(`${API_URL}/orgs/acme/groups`, () =>
+    HttpResponse.json([engineering]),
+  ),
+  http.get(`${API_URL}/orgs/acme/projects`, () =>
+    HttpResponse.json([frontend]),
+  ),
   http.get(`${API_URL}/orgs/acme/members`, () =>
     HttpResponse.json([aliceMembership]),
   ),
@@ -58,9 +62,12 @@ export const handlers = [
 /** Everything the backend guards answers 401 without a session. */
 export function unauthenticated() {
   return http.get(`${API_URL}/*`, () =>
-    HttpResponse.json({ kind: "unauthenticated", message: "no session" }, {
-      status: 401,
-    }),
+    HttpResponse.json(
+      { kind: "unauthenticated", message: "no session" },
+      {
+        status: 401,
+      },
+    ),
   );
 }
 
@@ -77,8 +84,6 @@ export function signedOutWith(providers: string[]) {
         { status: 401 },
       ),
     ),
-    http.get(`${API_URL}/auth/providers`, () =>
-      HttpResponse.json(providers),
-    ),
+    http.get(`${API_URL}/auth/providers`, () => HttpResponse.json(providers)),
   ];
 }

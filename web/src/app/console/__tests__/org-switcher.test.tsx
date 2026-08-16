@@ -30,9 +30,7 @@ describe("organization switcher", () => {
   it("names the organization the caller is inside", () => {
     renderSwitcher("/console/orgs/globex/projects");
 
-    expect(
-      screen.getByRole("button", { name: /Globex/ }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Globex/ })).toBeInTheDocument();
   });
 
   it("says so when no organization is selected", () => {
@@ -49,10 +47,9 @@ describe("organization switcher", () => {
 
     await user.click(screen.getByRole("button", { name: /Acme/ }));
 
-    expect(await screen.findByRole("menuitem", { name: "Acme" })).toHaveAttribute(
-      "aria-current",
-      "true",
-    );
+    expect(
+      await screen.findByRole("menuitem", { name: "Acme" }),
+    ).toHaveAttribute("aria-current", "true");
     const globex = screen.getByRole("menuitem", { name: "Globex" });
     expect(globex).toHaveAttribute("href", "/console/orgs/globex");
     expect(globex).not.toHaveAttribute("aria-current");
@@ -62,7 +59,9 @@ describe("organization switcher", () => {
     const user = userEvent.setup();
     renderSwitcher("/console/orgs");
 
-    await user.click(screen.getByRole("button", { name: /Select organization/ }));
+    await user.click(
+      screen.getByRole("button", { name: /Select organization/ }),
+    );
 
     expect(
       await screen.findByRole("menuitem", { name: "New organization" }),
@@ -73,7 +72,9 @@ describe("organization switcher", () => {
     const user = userEvent.setup();
     renderSwitcher("/console/orgs", []);
 
-    await user.click(screen.getByRole("button", { name: /Select organization/ }));
+    await user.click(
+      screen.getByRole("button", { name: /Select organization/ }),
+    );
 
     expect(await screen.findByText("No organizations yet")).toBeInTheDocument();
     expect(

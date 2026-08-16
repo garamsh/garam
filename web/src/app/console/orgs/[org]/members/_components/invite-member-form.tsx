@@ -67,8 +67,8 @@ export function InviteMemberForm({ org }: { org: string }) {
       {invitationUrl && (
         <div className="flex flex-col gap-2">
           <p className="text-sm text-muted-foreground">
-            Share this link with the person you invited. It works once and
-            then expires.
+            Share this link with the person you invited. It works once and then
+            expires.
           </p>
           <div className="flex max-w-lg gap-2">
             <Input

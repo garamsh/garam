@@ -32,7 +32,7 @@ COMPOSE_LOCAL := docker compose -f deploy/local/docker-compose.yml
 PNPM := pnpm --dir web
 
 .PHONY: lint format test build mock gen check-gen e2e db-up db-down backend-up ci
-.PHONY: web-install web-lint web-test web-build web-gen web-check-gen web-e2e web-ci
+.PHONY: web-install web-lint web-format web-test web-build web-gen web-check-gen web-e2e web-ci
 
 lint:
 	go vet ./...
@@ -110,6 +110,9 @@ web-lint:
 	$(PNPM) lint
 	$(PNPM) typecheck
 
+web-format:
+	$(PNPM) format
+
 web-test:
 	$(PNPM) test
 
@@ -135,4 +138,4 @@ web-e2e:
 	$(PNPM) exec playwright install chromium
 	GARAM_API_URL=http://localhost:8080 $(PNPM) e2e
 
-web-ci: web-lint web-test web-build web-check-gen
+web-ci: web-format web-lint web-test web-build web-check-gen

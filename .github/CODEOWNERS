@@ -1,4 +1,5 @@
 # The rules are owned; changes to these paths require review from their owner.
 /AGENTS.md @garamsh
 /docs/convention/ @garamsh
+/docs/architecture/ @garamsh
 /.github/ @garamsh

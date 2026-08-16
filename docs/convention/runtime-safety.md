@@ -1,19 +1,18 @@
 # Runtime Safety
 
-How types, boundaries, and error handling keep runtime errors out of production code.
+How types, trust boundaries, and error handling keep runtime errors out of production code.
 
 ## Contents
 - Core principle
 - Type system
-- Boundaries
+- Trust boundaries
 - Illegal states
 - Total functions and exhaustive matching
 - Errors as values
-- Anti-patterns
 
 ## Core principle
 
-A runtime error is a bug the type system let through. Catch as many as possible at compile time and parse time; production code then only does what the types prove it can do.
+Many runtime errors are bugs the type system could have caught. Catch those at compile time and parse time, so that what remains at runtime is the class no type can rule out — a machine out of memory, a network that stopped answering, an invariant nothing declared. Production code then does only what the types prove it can do.
 
 ## Type system
 
@@ -23,7 +22,7 @@ Enable the strictest mode your stack supports — strict nullability, no implici
 - **Non-nullable by default.** A type that allows absence everywhere spreads absence-handling through every caller. Mark absence explicitly (with an `Option` / `Maybe` / `Result` shape or a nullable wrapper) only where it is a real state — never as a default.
 - **Domain primitives over raw types.** Define `UserId`, `Money`, `Email` as distinct named types (newtypes, branded types, value objects) rather than as raw strings or numbers. They prevent passing the wrong value at the type level.
 
-## Boundaries
+## Trust boundaries
 
 External data is untrusted. The boundary between outside and inside is where you prove what's true.
 
@@ -44,7 +43,7 @@ A type that allows `{ isPaid: true, isShipped: false }` and `{ isPaid: false, is
 Prefer functions that handle every case explicitly.
 
 - **Exhaustive pattern matching** — when you add a variant, the compiler forces you to handle it (via a `never` / `unreachable` annotation or an exhaustive match).
-- **A function returning an optional / sum shape is total** — every input produces an output. A function returning the raw value may panic on edge inputs.
+- **An optional or sum return type is what lets a function be total** — the failing input has a value to return instead of a panic. Returning one does not make a function total by itself; it removes the reason it would not be.
 - **Where the input space is small and finite, prefer total functions** to partial ones.
 
 ## Errors as values
@@ -55,11 +54,3 @@ Exceptions cross function boundaries invisibly. A return type that bundles a res
 - **Unexpected failure** (programmer bug, OOM, invariant violation): exceptions / panics are fine — they should crash visibly and be logged.
 - **Don't use exceptions for control flow in normal cases.** A `try { ... } catch { /* ignore */ }` is silent failure.
 
-## Anti-patterns
-
-- **Type assertions** — syntax that tells the compiler to treat a value as a different type without runtime checks (e.g. `x as T`).
-- **Lint suppressions** — a directive that disables a specific type-check warning (e.g. a comment that turns the lint off). The lint is usually catching a real issue.
-- **Silent catch** — code that swallows an error without handling, logging, or re-raising it (e.g. `try { ... } catch { /* ignore */ }`).
-- **`JSON.parse(...)` then immediate use** without schema validation — `any` in disguise.
-- **Re-validating at every call** instead of at the boundary — duplicates work and lets invalid values leak past.
-- **Boolean flag combinations** as state — encode as a sum type instead.

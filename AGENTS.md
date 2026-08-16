@@ -10,9 +10,18 @@ This repository is convention-driven. How code, tests, commits, and documents ar
 
 Open the index before you write, then open the files that govern what you are about to touch. Read them from the file. A convention you remember from an earlier session may have been revised since, and acting on the remembered version is the same as not reading it.
 
+`docs/architecture/README.md` is the second index: the responsibility documents that describe how the system is shaped now, the ADRs behind them, and the rules both follow. Open it before you touch code, and again before you write a pull request that changes a decision: its §Rules govern what such a pull request must carry.
+
 You will meet cases the conventions do not name. Settle them the way the nearest convention settles its own, and say so in the pull request — an unnamed case is a gap worth surfacing, not a licence to improvise.
 
 When two conventions genuinely disagree, stop and report it. Choosing one yourself hides the conflict from the person who can fix it.
+
+## Roles
+
+These documents assign authority to two roles. One party may hold both; the rules do not relax when it does.
+
+- **PM** — owns `docs/convention/`, `docs/architecture/`, and the issue tracker. Reviews every pull request and is the only role that merges one. Decides the convention questions a pull request raises. Proposes a change to a convention rather than making it alone. Does not implement.
+- **Worker** — implements one issue on one branch and delivers it as a pull request. Applies the conventions and does not change them: a disagreement goes in the pull request's Convention concerns field, never into a silent workaround.
 
 ## What this file outranks
 

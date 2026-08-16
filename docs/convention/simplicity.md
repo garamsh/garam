@@ -1,21 +1,18 @@
 # Simplicity Conventions
 
-Clear, direct code that does the job — over clever or elaborate code. Complexity must earn its place.
+The default response to a problem is to change the shape, not to add to it.
 
 ## Core principle
 
-Every abstraction names a real, repeated problem. An abstraction that hides no complexity behind it — or that hides a problem that occurs once — is itself complexity. Remove it.
+Where a defect or a requirement can be met either by adding — a branch, a guard, a special case, a wrapper, a file — or by changing the shape so the case cannot arise, take the second. Adding is correct once the restructure has been considered and rejected, and the pull request says why.
+
+Every line, file, and folder is one more the next reader holds and the next change keeps working. That cost is what this rule is paid to avoid. Additions collecting in one place are worth reading as a sign the shape is wrong.
 
 ## Rules
 
-- **No speculative abstraction.** Do not build for imagined future needs: no single-use abstractions, no configuration options nobody asked for, no indirection layers for one caller. Add the abstraction when the second real case arrives, not before.
+- **A division is a response, not a plan.** Start flat. Split a file, or introduce a folder, when the current shape already holds more than one thing — never because a division is expected later. An empty container is a claim the code does not support.
+- **No speculative abstraction.** Do not build for imagined future needs: no configuration options nobody asked for, no indirection layers for one caller. Add the abstraction when the second real case arrives — except a seam, a boundary declared so that a test or an alternative implementation can take the place of the real thing, which earns its keep on the first.
+- **An abstraction that hides nothing is complexity.** One standing between a caller and a single concrete thing, adding no meaning and no seam, is removed.
 - **Consolidate with judgment.** When two features look similar: first verify whether they truly differ. If a unified module is more intuitive and does not need flags and conditionals everywhere, unify them. If unification requires branching at every turn, they are different in essence — keep them separate. A wrong abstraction is worse than honest duplication.
-- **Clarity is testable.** If a competent engineer cannot understand a unit in a few seconds of reading, restructure it before shipping. Nesting depth, indirection hops, and the number of concepts a reader must hold at once are all reviewable.
 - **Delete, don't wrap.** Prefer deleting dead code and dead paths over layering compatibility shims on top of them.
-
-## Anti-patterns
-
-- Wrapper or helper layers that pass everything through without adding meaning.
-- "Generic" utilities with parameters for cases that do not exist.
-- Frameworks inside the project: plugin systems, registries, and dispatch tables built before a second user exists.
-- Deep call chains where each hop only forwards arguments.
+- **Structural complexity is reviewable.** Nesting depth, indirection hops, and the number of concepts a reader must hold at once are all reviewable. A unit harder to read than the problem it solves is restructured before shipping.

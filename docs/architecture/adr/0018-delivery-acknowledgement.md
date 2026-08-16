@@ -17,9 +17,13 @@ message is fire-and-forget and a reply an independent event, with
 nothing pairing them. Those two together leave no per-message
 completion signal at all, which is the gap this closes.
 
-The facts below come from the agent platform's source, checked rather
-than inferred, and each was found by someone holding it beside a fact
-of ours rather than by reading either alone:
+The facts below come from the agent platform's source at `gagent@40ef7ac`,
+checked rather than inferred, and each was found by someone holding it
+beside a fact of ours rather than by reading either alone. That
+repository carries no tags, so a commit is the only anchor available —
+and without one a citation goes on looking valid after it has lost what
+it pointed at, which is worse than a vague claim because the precision
+discourages checking:
 
 - The gateway's inbox is an in-memory buffered channel of 64. A 202
   therefore means a message was accepted into a bounded volatile

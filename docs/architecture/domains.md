@@ -317,7 +317,13 @@ key — garam answers a sender once the message is stored and reports a
 routing failure back as a message rather than rejecting one, so a
 message it cannot yet route has to be storable. `Service` keeps that
 rule where a caller meets it: posting checks that the recipient is a
-GRN and never that it names an agent garam knows.
+GRN and never that it names an agent garam knows. A recipient that is
+not a GRN is refused, which is where the line falls: ADR-0013 rejects
+nothing because a refusal leaves the sender's reply in an outbox
+nobody drains, and that argument is about a reply garam could have
+delivered — an address that does not parse is a broken caller rather
+than a routing failure, and a queue keyed by GRN could never hand the
+row to anyone.
 
 Handing a message out is an attempt, and attempts are bounded: a turn
 that failed and a turn that never started are indistinguishable from

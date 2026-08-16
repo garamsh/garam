@@ -34,6 +34,8 @@ PNPM := pnpm --dir web
 
 .PHONY: lint format test build mock gen check-gen e2e db-up db-down backend-up ci
 .PHONY: web-install web-lint web-format web-test web-build web-gen web-check-gen web-e2e web-ci
+.PHONY: minikube-up minikube-down minikube-start minikube-images minikube-db
+.PHONY: minikube-secret minikube-migrate minikube-apps minikube-forward
 
 lint:
 	go vet ./...
@@ -154,3 +156,93 @@ web-e2e:
 	GARAM_API_URL=http://localhost:8080 $(PNPM) e2e
 
 web-ci: web-format web-lint web-test web-build web-check-gen
+
+# ---------------------------------------------------------------------
+# deploy/local/minikube — the whole stack on a local Kubernetes cluster.
+# Development only: every image is built into that cluster's own daemon
+# and nothing is pushed or pulled, because no node here holds a registry
+# credential (ADR-0020). What reconciles a real cluster is not this.
+# ---------------------------------------------------------------------
+
+# The local cluster keeps its credentials beside its own state instead of
+# in ~/.kube/config, so bringing it up never writes into a kubeconfig
+# holding credentials for a real cluster. An exported KUBECONFIG wins, so
+# `KUBECONFIG=~/.kube/config make minikube-up` merges the context into
+# your own.
+KUBECONFIG ?= $(HOME)/.minikube/kubeconfig
+export KUBECONFIG
+
+# Every command names the context, so nothing in this file can reach a
+# cluster that is not the local one, whichever kubeconfig it reads.
+KUBECTL_MINIKUBE := kubectl --context minikube
+KUBECTL_LOCAL := $(KUBECTL_MINIKUBE) --namespace garam-local
+MINIKUBE_DIR := deploy/local/minikube
+
+# The operator, pinned to the commit that carries the manifest: a release
+# asset can be replaced under its tag and a commit cannot. v1.30.0 is the
+# current stable release and is the first patched for every advisory
+# github.com/cloudnative-pg/cloudnative-pg publishes, the newest of which
+# is GHSA-7qwx-x8ff-3px9.
+CNPG_MANIFEST := https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/4b5e244a7d031f67e025c83c1555e7726ecbbfa1/releases/cnpg-1.30.0.yaml
+
+minikube-up: minikube-start minikube-images minikube-db minikube-secret minikube-migrate minikube-apps
+
+# minikube-start brings up the cluster and the Postgres operator, and is
+# a no-op on both when they are already there. The CRDs are past the
+# annotation size a client-side apply writes, so the apply is server-side.
+minikube-start:
+	minikube status >/dev/null 2>&1 || minikube start --driver=docker
+	$(KUBECTL_MINIKUBE) apply --server-side -f $(CNPG_MANIFEST)
+	$(KUBECTL_MINIKUBE) -n cnpg-system rollout status deployment/cnpg-controller-manager --timeout=300s
+
+# minikube-images builds both images (ADR-0020) into the cluster's own
+# daemon, which docker-env points the client at for the length of the
+# recipe. Nothing is pushed, and the manifests pull Never, so what runs
+# is what was built here. Both Dockerfiles sit outside the context they
+# build — `minikube image build` uploads the context and cannot reach
+# them — and this is the same pair of contexts the compose file uses.
+minikube-images:
+	eval "$$(minikube docker-env --shell bash)"; \
+		docker build -t garam:local -f deploy/local/Dockerfile . && \
+		docker build -t garam-web:local -f deploy/local/Dockerfile.web web
+
+# minikube-db creates the namespace everything else lands in and the
+# Postgres cluster CNPG reconciles, and returns once it is reachable.
+# The operator reports the cluster ready before its Service carries a
+# routable endpoint, and everything downstream connects through that
+# Service — so the second wait is on the endpoint the migration
+# actually dials, not on the condition next to it.
+minikube-db:
+	$(KUBECTL_MINIKUBE) apply -f $(MINIKUBE_DIR)/namespace.yaml
+	$(KUBECTL_MINIKUBE) apply -f $(MINIKUBE_DIR)/postgres.yaml
+	$(KUBECTL_LOCAL) wait --for=condition=Ready cluster/postgres --timeout=300s
+	$(KUBECTL_LOCAL) wait --for=jsonpath='{.endpoints[0].conditions.ready}'=true endpointslice -l kubernetes.io/service-name=postgres-rw --timeout=120s
+
+minikube-secret:
+	$(MINIKUBE_DIR)/machine-key-material.sh
+
+# minikube-migrate applies pending migrations and waits for them. A Job's
+# pod template is immutable, so the finished one is deleted rather than
+# updated.
+minikube-migrate:
+	$(KUBECTL_LOCAL) delete job migrate --ignore-not-found
+	$(KUBECTL_LOCAL) apply -f $(MINIKUBE_DIR)/migrate-job.yaml
+	$(KUBECTL_LOCAL) wait --for=condition=complete job/migrate --timeout=300s
+
+# minikube-apps starts the three serve processes and the web app, and
+# reports what is running rather than that it finished.
+minikube-apps:
+	$(KUBECTL_LOCAL) apply -f $(MINIKUBE_DIR)/garam.yaml
+	@for d in authz api machine web; do $(KUBECTL_LOCAL) rollout status deployment/$$d --timeout=300s; done
+	@$(KUBECTL_LOCAL) get pods
+
+# minikube-forward is how the web app is reached: the Services are
+# cluster-internal and there is no ingress, so nothing leaves the machine
+# without this. It holds the terminal until interrupted.
+minikube-forward:
+	$(KUBECTL_LOCAL) port-forward service/web 3000:3000
+
+# minikube-down removes the stack, its database volume and its key
+# material, and leaves the cluster and the operator up.
+minikube-down:
+	$(KUBECTL_MINIKUBE) delete -f $(MINIKUBE_DIR)/namespace.yaml --ignore-not-found

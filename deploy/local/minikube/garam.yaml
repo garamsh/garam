@@ -1,0 +1,328 @@
+# The three serve processes of ADR-0017 and the web application, as one
+# local Kubernetes deployment. Local only: no ingress, no DNS, no
+# certificate any authority issued, and images that exist nowhere but
+# this machine's cluster. What reconciles a real cluster is not this
+# (ADR-0020).
+#
+# `/healthz` and `/readyz` on the ports below are the interface ADR-0021
+# publishes. A repository this one does not control probes them, so they
+# are not free to move here.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: authz
+  namespace: garam-local
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: authz
+  template:
+    metadata:
+      labels:
+        app: authz
+    spec:
+      containers:
+        - name: authz
+          image: garam:local
+          imagePullPolicy: Never
+          args: ["serve", "authz"]
+          env:
+            - name: GARAM_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-app
+                  key: uri
+            - name: GARAM_GRPC_ADDR
+              value: ":9090"
+            # The engine speaks gRPC only, so the probes and /metrics
+            # share a listener of their own.
+            - name: GARAM_METRICS_ADDR
+              value: ":9091"
+          ports:
+            - name: grpc
+              containerPort: 9090
+            - name: health
+              containerPort: 9091
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 9091
+          # The readiness handler bounds one answer at 2s, so a probe
+          # timing out at the default 1s reports its own deadline where
+          # the process would have named the dependency that failed.
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 9091
+            timeoutSeconds: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: authz
+  namespace: garam-local
+spec:
+  selector:
+    app: authz
+  ports:
+    - name: grpc
+      port: 9090
+      targetPort: grpc
+    - name: health
+      port: 9091
+      targetPort: health
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: garam-local
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+    spec:
+      containers:
+        - name: api
+          image: garam:local
+          imagePullPolicy: Never
+          args: ["serve", "api"]
+          env:
+            - name: GARAM_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-app
+                  key: uri
+            - name: GARAM_HTTP_ADDR
+              value: ":8080"
+            - name: GARAM_AUTHZ_ADDR
+              value: "authz:9090"
+            # Nothing here is reached over TLS, so the session cookie
+            # cannot be Secure — which is also what the dev provider
+            # refuses to start without.
+            - name: GARAM_COOKIE_SECURE
+              value: "false"
+            # One-click sign-in with no Google credentials (ADR-0010).
+            # On here because this deployment is localhost tooling; it
+            # is never on anywhere else.
+            - name: GARAM_DEV_AUTH
+              value: "true"
+            - name: GARAM_DEV_REDIRECT_URL
+              value: "http://localhost:3000/api/auth/callback/dev"
+          ports:
+            - name: http
+              containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8080
+            timeoutSeconds: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+  namespace: garam-local
+spec:
+  selector:
+    app: api
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: machine
+  namespace: garam-local
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: machine
+  template:
+    metadata:
+      labels:
+        app: machine
+    spec:
+      # A Secret volume belongs to root, and the process that reads key
+      # material has to own the file it reads (ADR-0015). fsGroup is
+      # what lets the unprivileged init container below write to the
+      # volume it copies into; the copy is what it then owns.
+      securityContext:
+        fsGroup: 10001
+      initContainers:
+        # The Secret arrives root-owned and group-readable. This copies
+        # it as the same user `serve machine` runs as, so what the
+        # process opens is owned by it and readable by nobody else —
+        # which the key-encryption key is checked for at startup and
+        # refused without.
+        - name: key-material
+          image: garam:local
+          imagePullPolicy: Never
+          command: ["/bin/sh", "-ec"]
+          args:
+            - |
+              for f in ca-kek.hex tls.crt tls.key; do
+                install -m 0600 "/etc/garam/throwaway/$f" "/run/garam/throwaway/$f"
+              done
+              ls -l /run/garam/throwaway
+          volumeMounts:
+            - name: throwaway-secret
+              mountPath: /etc/garam/throwaway
+              readOnly: true
+            - name: throwaway
+              mountPath: /run/garam/throwaway
+      containers:
+        - name: machine
+          image: garam:local
+          imagePullPolicy: Never
+          args: ["serve", "machine"]
+          env:
+            - name: GARAM_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-app
+                  key: uri
+            - name: GARAM_MACHINE_ADDR
+              value: ":8443"
+            # The listener above admits no caller without a client
+            # certificate, and a kubelet holds none, so the probes get a
+            # plaintext listener of their own (ADR-0021).
+            - name: GARAM_MACHINE_HEALTH_ADDR
+              value: ":8444"
+            # These three name files and carry none of their contents. A
+            # key in the environment is inherited by every child process,
+            # readable at /proc/<pid>/environ, and captured in a crash
+            # dump (ADR-0015).
+            - name: GARAM_MACHINE_TLS_CERT_FILE
+              value: /run/garam/throwaway/tls.crt
+            - name: GARAM_MACHINE_TLS_KEY_FILE
+              value: /run/garam/throwaway/tls.key
+            - name: GARAM_CA_KEY_FILE
+              value: /run/garam/throwaway/ca-kek.hex
+          ports:
+            - name: mtls
+              containerPort: 8443
+            - name: health
+              containerPort: 8444
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8444
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8444
+            timeoutSeconds: 3
+          volumeMounts:
+            - name: throwaway
+              mountPath: /run/garam/throwaway
+              readOnly: true
+      volumes:
+        # Both values in this Secret are generated on this machine by
+        # `deploy/local/minikube/machine-key-material.sh` and are worth
+        # nothing off it: the certificate is self-signed and expires in
+        # a month, and the key-encryption key seals certificate
+        # authorities that exist only in this cluster's database.
+        #
+        # The real one is not like this. A cluster that loses its
+        # key-encryption key loses every organization's certificate
+        # authority with no way back (ADR-0016) — so nothing about how
+        # this one is made, stored or thrown away is a pattern to copy.
+        - name: throwaway-secret
+          secret:
+            secretName: machine-throwaway-key-material
+            defaultMode: 0440
+        # Memory-backed, so the copy the process owns never reaches the
+        # node's disk.
+        - name: throwaway
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: machine
+  namespace: garam-local
+spec:
+  selector:
+    app: machine
+  ports:
+    - name: mtls
+      port: 8443
+      targetPort: mtls
+    - name: health
+      port: 8444
+      targetPort: health
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: garam-local
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        - name: web
+          image: garam-web:local
+          imagePullPolicy: Never
+          env:
+            # The /api/* rewrite is baked into the image at build time,
+            # so this value has to match the one the build used.
+            - name: GARAM_API_URL
+              value: "http://api:8080"
+          ports:
+            - name: http
+              containerPort: 3000
+          # The app has no probe endpoint of its own — ADR-0021 governs
+          # the three Go processes — so these are two routes it already
+          # serves, chosen for the two meanings that ADR sets out.
+          #
+          # A static asset answers from the process alone. /login does
+          # not: it server-renders the sign-in options it asks the api
+          # for, and answers 500 while the api is down. Probing that for
+          # liveness restarts the web app every time the api blips,
+          # which was measured here before these were split.
+          livenessProbe:
+            httpGet:
+              path: /icon.svg
+              port: 3000
+          readinessProbe:
+            httpGet:
+              path: /login
+              port: 3000
+            timeoutSeconds: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: garam-local
+spec:
+  selector:
+    app: web
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http

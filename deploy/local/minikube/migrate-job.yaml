@@ -1,0 +1,32 @@
+# One-shot: applies pending migrations and exits. `make minikube-migrate`
+# waits for it to complete before `make minikube-apps` starts anything
+# that reads the schema.
+#
+# A Job's pod template is immutable, so the bring-up deletes this one
+# before applying it rather than updating it. golang-migrate records what
+# it has applied, so the rerun that follows a second bring-up succeeds
+# having changed nothing.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: migrate
+  namespace: garam-local
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: garam:local
+          # Never, not IfNotPresent: an image missing from the cluster's
+          # own daemon is a build that did not run, and no node here
+          # holds a credential to fall back on (ADR-0020).
+          imagePullPolicy: Never
+          args: ["migrate"]
+          env:
+            - name: GARAM_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-app
+                  key: uri

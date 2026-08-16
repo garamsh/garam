@@ -1,0 +1,20 @@
+# Postgres, reconciled by the CloudNativePG operator `make
+# minikube-start` installs.
+#
+# The operator generates the role's password and publishes it, with a
+# ready-made connection URI, in a Secret it names `postgres-app`. Every
+# process here reads `GARAM_DATABASE_URL` from that key, so no database
+# credential is written in this repository at all.
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: postgres
+  namespace: garam-local
+spec:
+  instances: 1
+  bootstrap:
+    initdb:
+      database: garam
+      owner: garam
+  storage:
+    size: 1Gi

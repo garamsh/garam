@@ -36,6 +36,7 @@ ADRs:
 - [0009](./adr/0009-web-frontend.md) — Next.js web frontend in `web/`
 - [0010](./adr/0010-dev-auth-provider.md) — development-only sign-in provider behind GARAM_DEV_AUTH
 - [0011](./adr/0011-console-shell.md) — console sidebar shell over org sections
+- [0012](./adr/0012-agent-operator-model.md) — agents provisioned by operators garam never dials
 
 ## Rules for edits
 

@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"log/slog"
 	"net"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 
 	apigen "github.com/garamsh/garam/api"
@@ -18,6 +20,7 @@ import (
 	"github.com/garamsh/garam/internal/authn"
 	"github.com/garamsh/garam/internal/authz"
 	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/internal/health"
 	"github.com/garamsh/garam/internal/org"
 	"github.com/garamsh/garam/internal/user"
 	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
@@ -103,10 +106,13 @@ func serveAPI(cmd *cobra.Command) error {
 	)
 
 	// The generated router matches before the middleware runs, so the
-	// log line can name the route rather than the path. /metrics
-	// shares the router but not the middleware.
+	// log line can name the route rather than the path. /metrics and
+	// the two probes share the router but not the middleware.
 	mux := http.NewServeMux()
 	mux.Handle("GET /metrics", obs.metricsHandler())
+	// A request needs both to be served: rows out of the database, and
+	// the decision that admits it.
+	health.Register(mux, health.Database(pool), authzChannel{conn: conn})
 	handler := apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{
 		BaseRouter:  mux,
 		Middlewares: []apigen.MiddlewareFunc{obs.logRequests},
@@ -139,6 +145,32 @@ func devProvider(enabled, cookieSecure bool) (authn.Provider, error) {
 		return nil, errorx.Wrap(err, "dev provider")
 	}
 	return p, nil
+}
+
+// authzChannel is the connection to the policy engine as readiness
+// sees it (health.Dependency). Every org-scoped request is decided
+// there, so a channel that cannot carry a decision is a reason to send
+// requests to another replica.
+type authzChannel struct{ conn *grpc.ClientConn }
+
+func (authzChannel) Name() string { return "authz" }
+
+// Check waits for the channel to reach Ready inside ctx, connecting it
+// when it is idle. The state alone would answer for a channel that has
+// never reached the engine — grpc.NewClient connects on the first call
+// — and answering with an RPC would mean sending the engine one it
+// acts on.
+func (a authzChannel) Check(ctx context.Context) error {
+	for {
+		state := a.conn.GetState()
+		if state == connectivity.Ready {
+			return nil
+		}
+		a.conn.Connect()
+		if !a.conn.WaitForStateChange(ctx, state) {
+			return errorx.New(errorx.KindUnavailable, "authz channel is "+state.String())
+		}
+	}
 }
 
 // newServeAuthzCommand constructs `garam serve authz`: the gRPC policy
@@ -181,22 +213,29 @@ func serveAuthz(cmd *cobra.Command) error {
 		}
 	}()
 
-	// The engine speaks gRPC only, so its metrics need a listener of
-	// their own. Losing it must not take the engine down.
-	metricsAddr := envOr("GARAM_METRICS_ADDR", ":9091")
-	go func() {
-		mux := http.NewServeMux()
-		mux.Handle("GET /metrics", obs.metricsHandler())
-		if err := http.ListenAndServe(metricsAddr, mux); err != nil {
-			obs.logger.Error("metrics listener stopped", slog.String("error", err.Error()))
-		}
-	}()
-
 	addr := envOr("GARAM_GRPC_ADDR", ":9090")
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		return errorx.Wrap(err, "authz listen", errorx.KindUnavailable)
 	}
+
+	// The engine speaks gRPC only, so its metrics and its probes need a
+	// listener of their own — a probe carries no gRPC client, and this
+	// one carries no credential either. It starts after the gRPC port
+	// is bound, so an answer here means that port accepts connections.
+	// Losing the listener must not take the engine down.
+	metricsAddr := envOr("GARAM_METRICS_ADDR", ":9091")
+	go func() {
+		mux := http.NewServeMux()
+		mux.Handle("GET /metrics", obs.metricsHandler())
+		// The engine decides from the cache, which fills from the
+		// database and falls back to it on every miss.
+		health.Register(mux, health.Database(pool))
+		if err := http.ListenAndServe(metricsAddr, mux); err != nil {
+			obs.logger.Error("metrics listener stopped", slog.String("error", err.Error()))
+		}
+	}()
+
 	srv := grpc.NewServer(
 		grpc.StatsHandler(otelgrpc.NewServerHandler()),
 		grpc.ChainUnaryInterceptor(obs.logRPCs),

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"log/slog"
+	"net/http"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spf13/cobra"
@@ -14,6 +15,7 @@ import (
 	"github.com/garamsh/garam/internal/ca"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/health"
 	"github.com/garamsh/garam/internal/machine"
 	"github.com/garamsh/garam/internal/machineapi"
 	"github.com/garamsh/garam/internal/org"
@@ -84,7 +86,23 @@ func serveMachine(cmd *cobra.Command) error {
 	// net/http reports one here rather than through a handler.
 	srv.ErrorLog = slog.NewLogLogger(obs.logger.Handler(), slog.LevelWarn)
 
-	obs.logger.Info("serving machine", slog.String("addr", srv.Addr))
+	// The listener above requires a client certificate, which a probe
+	// does not hold, so the probes answer on a listener of their own —
+	// the shape `serve authz` already uses for what a machine reaches
+	// without a session. Nothing unauthenticated joins the TLS
+	// listener, and losing this one must not take that one down.
+	healthAddr := envOr("GARAM_MACHINE_HEALTH_ADDR", ":8444")
+	go func() {
+		mux := http.NewServeMux()
+		// The authorities a presented certificate is verified against,
+		// and the agents this surface answers for, are rows.
+		health.Register(mux, health.Database(pool))
+		if err := http.ListenAndServe(healthAddr, mux); err != nil {
+			obs.logger.Error("health listener stopped", slog.String("error", err.Error()))
+		}
+	}()
+
+	obs.logger.Info("serving machine", slog.String("addr", srv.Addr), slog.String("health_addr", healthAddr))
 	if err := srv.ListenAndServeTLS("", ""); err != nil {
 		return errorx.Wrap(err, "machine serve", errorx.KindInternal)
 	}

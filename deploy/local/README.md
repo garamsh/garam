@@ -24,6 +24,7 @@ compose file.
 - Files
 - Up and down
 - Startup order
+- Probes
 - Metrics
 - Configuration
 
@@ -87,9 +88,26 @@ see `.env.example`.
 
 `migrate` runs once against a healthy Postgres and exits; `authz` and
 `api` wait for it to have exited successfully. `api` additionally waits
-for `authz` to accept connections, and `web` for `api`. Neither server
-registers a health endpoint, so their healthchecks are TCP connects to
-their own listen port.
+for `authz`, and `web` for `api`. Both servers' healthchecks are their
+own readiness probe, so a service is healthy here when it can serve a
+request and not merely when it has bound its port.
+
+## Probes
+
+Every garam process answers two probes on a port that asks for no
+credential: `/healthz`, which reports the process alone, and `/readyz`,
+which reports the dependencies a request needs — the database for each
+of them, and the engine channel for the api. `/healthz` reads nothing
+outside its process, so a database outage does not restart the stack.
+
+- `http://localhost:8080/healthz`, `/readyz` — the api, on the port it
+  already serves the HTTP API on.
+- `http://localhost:9091/healthz`, `/readyz` — the authz engine, on the
+  listener its metrics use.
+
+`garam serve machine` is not part of this stack; it answers both on
+`GARAM_MACHINE_HEALTH_ADDR`, a port of its own, because its own
+listener admits no caller without a client certificate.
 
 ## Metrics
 
@@ -99,7 +117,7 @@ endpoints on the host:
 - `http://localhost:8080/metrics` — the api, on the port it already
   serves the HTTP API on (`GARAM_LOCAL_API_PORT`).
 - `http://localhost:9091/metrics` — the authz engine. It speaks gRPC
-  only, so its metrics get a listener of their own:
+  only, so its metrics and its probes share a listener of their own:
   `GARAM_METRICS_ADDR`, fixed at `:9091` in the compose file, published
   on `GARAM_LOCAL_METRICS_PORT`.
 

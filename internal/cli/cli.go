@@ -3,14 +3,21 @@
 // and `migrate`. Commands are constructed here; cmd/garam only
 // executes the root.
 //
+// Every serve command answers the two probes internal/health mounts —
+// liveness and readiness — on a listener that asks for no credential:
+// the api's own HTTP port, the authz engine's metrics port, and a port
+// of its own for `serve machine`, whose listener admits nobody without
+// a certificate.
+//
 // Configuration is entirely via environment variables:
 //
 //	GARAM_DATABASE_URL     postgres connection string (required)
 //	GARAM_MIGRATIONS_DIR   migrations directory (default "migrations")
 //	GARAM_HTTP_ADDR        api listen address (default ":8080")
 //	GARAM_GRPC_ADDR        authz listen address (default ":9090")
-//	GARAM_METRICS_ADDR     authz /metrics listen address (default ":9091";
-//	                       serve api answers /metrics on GARAM_HTTP_ADDR)
+//	GARAM_METRICS_ADDR     authz /metrics and probe listen address
+//	                       (default ":9091"; serve api answers both on
+//	                       GARAM_HTTP_ADDR)
 //	GARAM_AUTHZ_ADDR       authz engine address for serve api (default "localhost:9090")
 //	GARAM_SESSION_TTL      session lifetime (default "168h")
 //	GARAM_COOKIE_SECURE    "true" to mark cookies Secure (default true)
@@ -22,6 +29,9 @@
 //	GOOGLE_CLIENT_SECRET   Google OAuth client secret (required for serve api)
 //	GOOGLE_REDIRECT_URL    OAuth callback URL (required for serve api)
 //	GARAM_MACHINE_ADDR     machine listener address (default ":8443")
+//	GARAM_MACHINE_HEALTH_ADDR  serve machine's probe listen address
+//	                       (default ":8444"); the machine listener
+//	                       itself admits no caller without a certificate
 //	GARAM_MACHINE_TLS_CERT_FILE  the listener's own certificate, PEM
 //	                       (required for serve machine)
 //	GARAM_MACHINE_TLS_KEY_FILE   its private key, PEM

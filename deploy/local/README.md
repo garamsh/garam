@@ -17,6 +17,7 @@ compose file.
 - Files
 - Up and down
 - Startup order
+- Metrics
 - Configuration
 
 ## Databases
@@ -83,6 +84,23 @@ see `.env.example`.
 for `authz` to accept connections, and `web` for `api`. Neither server
 registers a health endpoint, so their healthchecks are TCP connects to
 their own listen port.
+
+## Metrics
+
+Both servers export Prometheus metrics, and the stack publishes both
+endpoints on the host:
+
+- `http://localhost:8080/metrics` — the api, on the port it already
+  serves the HTTP API on (`GARAM_LOCAL_API_PORT`).
+- `http://localhost:9091/metrics` — the authz engine. It speaks gRPC
+  only, so its metrics get a listener of their own:
+  `GARAM_METRICS_ADDR`, fixed at `:9091` in the compose file, published
+  on `GARAM_LOCAL_METRICS_PORT`.
+
+Nothing in this stack scrapes them. Point a Prometheus at both URLs, or
+`curl` one directly. Spans are not exported: the tracer mints the
+`trace_id` the logs carry and stops there, because there is nowhere to
+ship spans to yet.
 
 ## Configuration
 

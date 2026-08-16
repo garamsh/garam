@@ -44,6 +44,11 @@ services:
     environment:
       GARAM_DATABASE_URL: ${GARAM_DATABASE_URL:-postgres://garam:garam@postgres:5432/garam?sslmode=disable}
       GARAM_GRPC_ADDR: ":9090"
+      # The engine speaks gRPC only, so /metrics gets a listener and a
+      # published port of its own; the api's rides on its HTTP port.
+      GARAM_METRICS_ADDR: ":9091"
+    ports:
+      - "${GARAM_LOCAL_METRICS_PORT:-9091}:9091"
     depends_on:
       postgres:
         condition: service_healthy

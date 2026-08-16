@@ -23,6 +23,10 @@ No git hooks are installed (lefthook evaluated and not adopted). Run
 `make ci` before pushing; CI runs the same target and rejects what
 local runs missed.
 
+`make ci` stops short of the two e2e suites, which need Docker. CI runs
+each as its own job; locally they are `make db-up e2e` and
+`make backend-up web-e2e`.
+
 ## Make targets
 
 The living list is the `Makefile`. Shape:
@@ -37,8 +41,11 @@ gen:      regenerate oapi-codegen, sqlc, buf, mockery (pinned tools)
 check-gen: fail when committed generated code is stale
 db-up / db-down: dockerised dev Postgres, one per machine; GARAM_DB_PORT
           moves that one server's host port (default 55432)
+backend-up: the same compose file's postgres, migrate, authz and api —
+          the backend the browser suite drives
 e2e:      store round-trips against real Postgres (needs db-up); runs
           against its own database, never two worktrees at once
+web-e2e:  Playwright against the built app and backend-up's backend
 ci:       format lint test build check-gen
 ```
 
@@ -50,8 +57,9 @@ For each CI step:
 2. **Verify it** per the next section — version, inputs, usage.
 3. **Use it as documented**, or write inline `run:` if no action exists.
 
-`.github/workflows/ci.yml` runs `make ci` on every push and PR. No
-parallel sets of commands: CI invokes Make targets, nothing else.
+`.github/workflows/ci.yml` runs `make ci`, `make web-ci` and both e2e
+suites on every push and PR, one job each. No parallel sets of
+commands: CI invokes Make targets, nothing else.
 
 ## Verify an action before adopting
 

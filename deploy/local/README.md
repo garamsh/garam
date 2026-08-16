@@ -22,18 +22,20 @@ compose file.
 
 ## Databases
 
-One Postgres server, two databases, because `make e2e` truncates every
-table at test setup and must never reach the data you created through
-the running stack:
+One Postgres server. `make e2e` truncates every table at test setup, so
+it never shares a database with the running stack, whose data you
+created and keep:
 
 - `garam` — the stack's own database, created by the image from
   `POSTGRES_DB`, migrated by the `migrate` service. `GARAM_DATABASE_URL`
   points here, and so does the Playwright suite (`make web-e2e`), which
   only inserts uniquely suffixed rows and seeds sessions for the same
   api it drives.
-- `garam_test` — the Go store round-trips (`make e2e`). `make db-up`
-  creates it if it is missing, and the suite migrates it itself. It is
-  the only database anything truncates.
+- `garam_test` — the Go store round-trips (`make e2e`), and one
+  suffixed database per linked worktree, so concurrent runs neither
+  truncate nor migrate each other's. `make db-up` creates the one it is
+  told to, and the suite migrates it itself. These are the only
+  databases anything truncates.
 
 Postgres publishes host port 55432 by default. `GARAM_DB_PORT` overrides
 it, but it has to be an environment variable —
@@ -45,10 +47,7 @@ There is one dev Postgres per machine, not one per worktree. This file
 pins the compose project with `name: garam-local`, which takes
 precedence over the directory Compose would otherwise name the project
 after, so every worktree addresses the same container — `GARAM_DB_PORT`
-moves that one server rather than standing up a second. Two worktrees
-must therefore not run `make e2e` at the same time: they share
-`garam_test`, and the `TRUNCATE` at test setup would cut the other run
-out from under itself.
+moves that one server rather than standing up a second.
 
 ## Files
 

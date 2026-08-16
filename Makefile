@@ -18,14 +18,15 @@ GOIMPORTS := go run golang.org/x/tools/cmd/goimports@v0.48.0
 # One dev Postgres per machine, not per worktree:
 # deploy/local/docker-compose.yml pins `name: garam-local`, so every
 # worktree addresses the same compose project and container, and this
-# variable moves that one server rather than adding a second. Do not run
-# `make e2e` from two worktrees at once — they share one garam_test and
-# truncate each other.
+# variable moves that one server rather than adding a second.
 GARAM_DB_PORT ?= 55432
 
-# The e2e suite truncates every table at setup, so it gets its own
-# database on the dev Postgres. The local stack keeps `garam`.
-TEST_DB_NAME := garam_test
+# The e2e suite truncates every table and migrates from its own
+# migrations/, so it gets a database per worktree on that one server.
+# The suffix is git's own name for a linked worktree — unique per
+# worktree and fixed for its lifetime — and empty in the main checkout,
+# which keeps garam_test. The local stack keeps `garam`.
+TEST_DB_NAME ?= garam_test$(shell git rev-parse --git-dir | sed -n 's|.*/worktrees/|_|p')
 TEST_DATABASE_URL ?= postgres://garam:garam@localhost:$(GARAM_DB_PORT)/$(TEST_DB_NAME)?sslmode=disable
 
 COMPOSE_LOCAL := docker compose -f deploy/local/docker-compose.yml

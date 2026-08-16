@@ -22,12 +22,15 @@ function params(org: string) {
 
 describe("projects section", () => {
   it("lists the organization's projects by name", async () => {
-    await renderServerComponent(ProjectsPage(params("acme")));
+    const { container } = await renderServerComponent(
+      ProjectsPage(params("acme")),
+    );
 
     expect(
       screen.getByRole("heading", { name: "Projects" }),
     ).toBeInTheDocument();
     expect(screen.getByText("Frontend")).toBeInTheDocument();
+    expect(container.textContent).not.toContain("grn:");
   });
 
   it("shows an empty state rather than a bare list", async () => {

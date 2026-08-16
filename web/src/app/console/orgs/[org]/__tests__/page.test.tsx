@@ -24,7 +24,7 @@ function params(org: string) {
 
 describe("organization overview page", () => {
   it("counts what the organization holds and links to each section", async () => {
-    await renderServerComponent(OrgPage(params("acme")));
+    const { container } = await renderServerComponent(OrgPage(params("acme")));
 
     expect(screen.getByRole("heading", { name: "Acme" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Groups/ })).toHaveAttribute(
@@ -36,6 +36,7 @@ describe("organization overview page", () => {
       "/console/orgs/acme/members",
     );
     expect(screen.getByRole("link", { name: /Projects 1/ })).toBeInTheDocument();
+    expect(container.textContent).not.toContain("grn:");
   });
 
   it("counts zero rather than leaving blank space", async () => {

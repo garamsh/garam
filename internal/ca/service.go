@@ -88,9 +88,6 @@ func (s *service) Issue(ctx context.Context, subject grn.GRN) (*Certificate, err
 	if subject.Organization == grn.RootOwner {
 		return nil, errorx.New(errorx.KindInvalidArgument, "ca: root owns no certificate authority")
 	}
-	// The identity is parsed before anything is created for it: a
-	// subject that cannot be named in a SAN URI gets no organization
-	// CA brought into existence on its way to being refused.
 	uri, err := subjectURI(subject)
 	if err != nil {
 		return nil, err
@@ -246,7 +243,7 @@ func (s *service) open(ctx context.Context, a *Authority) (*x509.Certificate, *e
 // orgGRNOf returns the GRN of the organization that owns the subject,
 // whose CA is the only one that may sign for it. A subject whose
 // organization segment would parse into something else never reaches
-// here: subjectURI refuses it.
+// here: Issue validates the subject first.
 func orgGRNOf(subject grn.GRN) grn.GRN {
 	return grn.New(grn.RootOwner, grn.DefaultProject, serviceTypeOrg, subject.Organization)
 }

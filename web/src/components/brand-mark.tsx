@@ -3,7 +3,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 /**
- * The wordmark and its glyph, linking home. Used by the public shell
+ * The mark and the wordmark, linking home. Used by the public shell
  * and the sign-in shell so both carry one brand.
  */
 export function BrandMark({ className }: { className?: string }) {
@@ -15,12 +15,14 @@ export function BrandMark({ className }: { className?: string }) {
         className,
       )}
     >
-      <span
-        aria-hidden
-        className="flex size-6 items-center justify-center rounded-md bg-foreground font-mono text-sm leading-none font-semibold text-background"
-      >
-        g
-      </span>
+      {/* Plate and glyph are one path; the even-odd rule knocks the glyph out. */}
+      <svg viewBox="0 0 100 100" aria-hidden className="size-6">
+        <path
+          fill="currentColor"
+          fillRule="evenodd"
+          d="M4 0H96A4 4 0 0 1 100 4V96A4 4 0 0 1 96 100H4A4 4 0 0 1 0 96V4A4 4 0 0 1 4 0ZM11 17H41V31H11ZM41 17H55V83H41ZM11 69H41V83H11ZM55 43H90V57H55Z"
+        />
+      </svg>
       <span className="font-heading text-base font-semibold tracking-tight">
         garam
       </span>

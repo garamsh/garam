@@ -38,6 +38,7 @@ ADRs:
 - [0011](./adr/0011-console-shell.md) — console sidebar shell over org sections
 - [0012](./adr/0012-agent-operator-model.md) — agents provisioned by operators garam never dials
 - [0013](./adr/0013-agent-messaging.md) — agent messaging through a garam API an adapter polls
+- [0014](./adr/0014-agent-authentication.md) — agents authenticate with mTLS on a listener of their own
 
 ## Rules for edits
 

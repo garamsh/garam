@@ -145,13 +145,18 @@ path, so a policy of another org is not addressable.
 
 ## Policy attachment
 
-An active policy is attached to subjects — users and groups — through
-`policy_attachments` ([ADR-0008](./adr/0008-identity-based-policy-attachments.md)).
+An active policy is attached to subjects through `policy_attachments`
+([ADR-0008](./adr/0008-identity-based-policy-attachments.md)). The
+engine matches subject strings and validates no service type, so an
+agent GRN is a subject on the same terms as a user
+([ADR-0014](./adr/0014-agent-authentication.md)) — it needs no model
+change, only a caller that can authenticate as one.
 
 | Attachment | Applies to |
 |------------|------------|
 | none | every subject of the policy's org |
 | a user GRN | that user |
+| an agent GRN | that agent |
 | a group GRN | the members the request reports for that subject |
 
 A check therefore evaluates four sources: the org's unattached active
@@ -164,7 +169,9 @@ sends them as `subject_groups` on `Check` / `Explain`; the engine
 matches those GRNs against attachments without knowing what a group
 is. An attachment stays inside the policy's org, enforced by a schema
 trigger; a root-owned identity such as a user cannot name an org in its
-GRN, so org membership stays the api server's precondition. Attachment
+GRN, so org membership stays the api server's precondition. An agent
+names its org in its own GRN, so the trigger binds it directly and it
+is never an org member (ADR-0014). Attachment
 writes announce the org on `garam_policy_change` like any other policy
 write.
 

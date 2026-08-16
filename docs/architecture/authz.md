@@ -5,6 +5,18 @@ engine (`garam serve authz`, see [ADR-0003](./adr/0003-single-cli-topology.md)).
 Policies are IAM-style documents (see
 [ADR-0002](./adr/0002-iam-style-policy-model.md)).
 
+## Contents
+- Policy document
+- Evaluation
+- Statement collection
+- Policy persistence
+- Managing policies over HTTP
+- Policy attachment
+- Components
+- Roles vs policies
+- Explain
+- Constraints
+
 ## Policy document
 
 ```json

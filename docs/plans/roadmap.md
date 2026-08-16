@@ -3,6 +3,15 @@
 garam is built bottom-up: identity first, authorization second,
 workflow last. Each tier depends only on the tier below it.
 
+## Contents
+- MVP — Authentication + org permissions (done)
+- P1 — authz engine (done)
+- P2 — authz persistence & policy versioning (done)
+- Web console (in progress)
+- P3 — Workflow core (not started)
+- P4 — Operational (not started)
+- Sequencing rules
+
 ## MVP — Authentication + org permissions (done)
 
 - GRN value type, `errorx`, domain types and `Store` interfaces for

@@ -11,6 +11,13 @@ Documentation lives in [`docs/`](./docs/).
 - [docs/plans/roadmap.md](./docs/plans/roadmap.md) — where it is going
 - [docs/convention/](./docs/convention/) — how we write code here
 
+## Contents
+- Module path
+- Build and test
+- Local stack
+- Web frontend
+- Development model
+
 ## Module path
 
 `github.com/garamsh/garam`

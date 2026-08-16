@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -33,6 +34,7 @@ import (
 	"github.com/garamsh/garam/internal/ca"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/message"
 	"github.com/garamsh/garam/internal/org"
 	"github.com/garamsh/garam/internal/user"
 	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
@@ -93,7 +95,7 @@ func truncate(t *testing.T, p *pgxpool.Pool) {
 	_, err := p.Exec(context.Background(), `TRUNCATE users, orgs, groups, projects,
 		group_members, project_members, org_members, invitations, sessions,
 		policies, policy_versions, policy_attachments, agents, agent_assignments,
-		certificate_authorities CASCADE`)
+		certificate_authorities, messages CASCADE`)
 	require.NoError(t, err)
 }
 
@@ -1167,4 +1169,158 @@ func chainsTo(t *testing.T, cert *ca.Certificate, authority *ca.Authority) error
 		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
 	})
 	return err
+}
+
+// TestMessageStore_RoundTrip drives the queue ADR-0013 rests on: a
+// message is stored once per sender key, handed to one reader, and
+// stays out of the queue once that reader reports it delivered. No
+// agent row exists here — garam stores a message before it can route
+// one, so the queue references none.
+func TestMessageStore_RoundTrip(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := message.NewPostgresStore(p)
+	bot, elsewhere := grnOf("agent", "bot"), grnOf("agent", "elsewhere")
+	ada := grnOf("user", "ada")
+
+	m, err := message.New(bot, ada, "key-1", "hello")
+	require.NoError(t, err)
+	stored, err := s.Enqueue(ctx, m)
+	require.NoError(t, err)
+	assert.Equal(t, m.ID(), stored.ID())
+
+	retried, err := message.New(bot, ada, "key-1", "hello again")
+	require.NoError(t, err)
+	again, err := s.Enqueue(ctx, retried)
+	require.NoError(t, err)
+	assert.Equal(t, m.ID(), again.ID(), "a repeated sender key returns the stored message")
+	assert.Equal(t, "hello", again.Body(), "and stores nothing new")
+
+	// The queue is a table, not a connection: a store sharing no state
+	// with the one that enqueued claims the message, and dropping every
+	// pooled connection afterwards leaves the claim standing.
+	reader := message.NewPostgresStore(p)
+	claim, err := reader.Claim(ctx, bot, time.Minute)
+	require.NoError(t, err)
+	assert.Equal(t, m.ID(), claim.Message().ID())
+	assert.Equal(t, "hello", claim.Message().Body())
+	assert.Equal(t, ada, claim.Message().Sender())
+	p.Reset()
+
+	_, err = s.Claim(ctx, bot, time.Minute)
+	assert.ErrorIs(t, err, message.ErrNoMessageReady, "a held message is nobody else's")
+	_, err = s.Claim(ctx, elsewhere, time.Minute)
+	assert.ErrorIs(t, err, message.ErrNoMessageReady, "and belongs to the recipient it is addressed to")
+
+	require.NoError(t, reader.Complete(ctx, claim))
+	// A reader retries what it could not confirm, so completing twice
+	// reports the same delivery rather than failing.
+	require.NoError(t, reader.Complete(ctx, claim))
+	_, err = s.Claim(ctx, bot, time.Minute)
+	assert.ErrorIs(t, err, message.ErrNoMessageReady, "a delivered message is not handed out again")
+
+	// The key outlives delivery, so a retry arriving after it neither
+	// stores a message nor requeues the delivered one.
+	late, err := message.New(bot, ada, "key-1", "hello again")
+	require.NoError(t, err)
+	afterDelivery, err := s.Enqueue(ctx, late)
+	require.NoError(t, err)
+	assert.Equal(t, m.ID(), afterDelivery.ID())
+	_, err = s.Claim(ctx, bot, time.Minute)
+	assert.ErrorIs(t, err, message.ErrNoMessageReady)
+}
+
+// TestMessageStore_ClaimIsExclusive puts several readers on one
+// recipient's queue at once: every message is handed out, and none is
+// handed to two readers.
+func TestMessageStore_ClaimIsExclusive(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	bot, ada := grnOf("agent", "bot"), grnOf("user", "ada")
+
+	const queued, readers = 8, 8
+	writer := message.NewPostgresStore(p)
+	for i := range queued {
+		m, err := message.New(bot, ada, fmt.Sprintf("key-%d", i), "hello")
+		require.NoError(t, err)
+		_, err = writer.Enqueue(ctx, m)
+		require.NoError(t, err)
+	}
+
+	// Every reader waits for the last of them to be ready, so the claims
+	// contend rather than run one after another.
+	var (
+		start   = make(chan struct{})
+		wg      sync.WaitGroup
+		mu      sync.Mutex
+		claimed []message.ID
+	)
+	wg.Add(readers)
+	for range readers {
+		go func() {
+			defer wg.Done()
+			s := message.NewPostgresStore(p)
+			<-start
+			for {
+				c, err := s.Claim(ctx, bot, time.Minute)
+				if errors.Is(err, message.ErrNoMessageReady) {
+					return
+				}
+				if !assert.NoError(t, err) {
+					return
+				}
+				mu.Lock()
+				claimed = append(claimed, c.Message().ID())
+				mu.Unlock()
+			}
+		}()
+	}
+	close(start)
+	wg.Wait()
+
+	assert.Len(t, claimed, queued, "every queued message was handed out")
+	held := make(map[message.ID]struct{}, len(claimed))
+	for _, id := range claimed {
+		held[id] = struct{}{}
+	}
+	assert.Len(t, held, queued, "no message was handed to two readers")
+}
+
+// TestMessageStore_LapsedClaimIsHandedOn covers the reader that claims
+// a message and then dies: the lease runs out, the next reader is given
+// the message, and the claim it replaced completes nothing.
+func TestMessageStore_LapsedClaimIsHandedOn(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := message.NewPostgresStore(p)
+	bot, ada := grnOf("agent", "bot"), grnOf("user", "ada")
+
+	m, err := message.New(bot, ada, "key-1", "hello")
+	require.NoError(t, err)
+	_, err = s.Enqueue(ctx, m)
+	require.NoError(t, err)
+
+	lapsing, err := s.Claim(ctx, bot, 100*time.Millisecond)
+	require.NoError(t, err)
+
+	// What is waited for is what is asserted: the claim that succeeds,
+	// not the lease slept through. Only one attempt can succeed, because
+	// it takes the message for a minute.
+	var handedOn *message.Claim
+	require.Eventually(t, func() bool {
+		c, err := s.Claim(ctx, bot, time.Minute)
+		if err != nil {
+			return false
+		}
+		handedOn = c
+		return true
+	}, 5*time.Second, 10*time.Millisecond, "a lapsed claim leaves the message claimable")
+
+	require.NotNil(t, handedOn)
+	assert.Equal(t, m.ID(), handedOn.Message().ID())
+	assert.NotEqual(t, lapsing.ID(), handedOn.ID(), "the message is handed on under a claim of its own")
+
+	assert.ErrorIs(t, s.Complete(ctx, lapsing), message.ErrStaleClaim,
+		"the reader the message was taken from completes nothing")
+	require.NoError(t, s.Complete(ctx, handedOn))
 }

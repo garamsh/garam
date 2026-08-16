@@ -21,6 +21,9 @@ collaborate on a shared plan.
   issues the client certificates machine identities authenticate with
   (ADR-0014). The subject's GRN travels in a SAN URI; the CA private key
   reaches Postgres sealed under a key-encryption key.
+- Messages addressed to an agent are held in a queue one reader at a
+  time claims from, stored once per sender key and claimable again when
+  a reader dies holding one (ADR-0013). Nothing serves that queue yet.
 - Org / group / project structure; groups and projects are created,
   read, updated, deleted, and populated with members over the HTTP API
   under their organization's paths.
@@ -50,14 +53,15 @@ collaborate on a shared plan.
 ## Out of scope (today)
 
 - Workflow execution engine, scheduler, queue.
-- Notifications or messaging.
+- Notifications.
 - The agent surface. `internal/agent` persists identity, operator
-  assignment and state (ADR-0012) and `internal/ca` issues certificates
-  (ADR-0014); nothing else of it exists — no endpoint, no adapter and no
-  message queue (ADR-0013), and no TLS listener, so nothing yet verifies
-  a presented certificate or constructs the CA in a running process. An
-  assignment is not yet constrained to one organization, which ADR-0015
-  decides and no code enforces.
+  assignment and state (ADR-0012), `internal/ca` issues certificates
+  (ADR-0014), and `internal/message` holds the queue a message reaches
+  an agent through (ADR-0013); nothing else of it exists — no endpoint,
+  no long poll and no adapter, and no TLS listener, so nothing yet
+  verifies a presented certificate or constructs the CA in a running
+  process. An assignment is not yet constrained to one organization,
+  which ADR-0015 decides and no code enforces.
 - Chat channels. ADR-0013 makes garam a message API and leaves Slack,
   LINE and the rest to consumers of it; none is built, and whether any
   ships first-party is undecided.
@@ -94,6 +98,8 @@ collaborate on a shared plan.
   assigned to.
 - `internal/ca/` — the per-organization certificate authority and the
   certificates it issues.
+- `internal/message/` — the durable queue a message reaches an agent
+  through; one reader claims a message at a time.
 - `internal/api/` — handlers implementing the generated ServerInterface.
 - `internal/authn/` — sign-in provider abstraction (Google OIDC,
   dev-only local), sessions.
@@ -122,6 +128,8 @@ contract is `proto/garam/authz/v1`.
 | `ca.Authority` | `internal/ca` | an organization's certificate authority, its key sealed |
 | `ca.Certificate` | `internal/ca` | issued client certificate identified by a SAN URI |
 | `ca.Sealer` | `internal/ca` | seals key material against a database dump |
+| `message.Message` | `internal/message` | one message addressed to a recipient |
+| `message.Claim` | `internal/message` | one reader's hold on a message, fenced by a token |
 | `org.Organization` | `internal/org` | top-level tenant |
 | `org.Group` | `internal/org` | user/agent bundle |
 | `org.Project` | `internal/org` | unit of work |

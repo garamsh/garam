@@ -12,6 +12,7 @@ Per-domain responsibilities and boundaries.
 - `internal/user`
 - `internal/agent`
 - `internal/ca`
+- `internal/message`
 - Store implementation status
 - Known gap
 - Future domains
@@ -151,8 +152,9 @@ assignment stays inside that organization and names an operator
 epoch, and a state report is accepted only at the current one — the
 operator a reassignment replaced reports nothing about the agent it
 lost. An agent is never an organization member (ADR-0014), so nothing
-here references `users`. Persistence only: no endpoint, no certificate,
-no message queue.
+here references `users`. Persistence only: no endpoint and no
+certificate. The queue a message reaches an agent through is
+`internal/message`, not this domain.
 
 ## `internal/ca`
 
@@ -191,6 +193,39 @@ every organization's CA with no recovery short of new authorities and a
 reissue for every certificate — and why it is held this way rather than
 in a KMS is [ADR-0016](./adr/0016-ca-key-custody.md).
 
+## `internal/message`
+
+The durable queue a message reaches an agent through (ADR-0013).
+
+| Type | Responsibility |
+|------|----------------|
+| `Message` | one message addressed to a recipient, under an identifier of the queue's own |
+| `Claim` | one reader's hold on a message, and the token that fences it |
+
+Messages are their own boundary rather than part of `internal/agent`: a
+recipient is addressed by GRN, so nothing here depends on the agent
+aggregate, and a message has a lifecycle no agent's contains.
+
+The queue is a table and never a connection, so any garam instance can
+hand any recipient's message to a reader and no process holds anything
+about a recipient. A claim is exclusive for a lease and fenced by a
+token: two readers never hold one message, and a reader that dies leaves
+it claimable again once the lease runs out rather than stranded. The
+token is what makes that safe — the next claim replaces it, so the
+reader it replaced completes nothing. Postgres measures the lease, so no
+instance's clock decides when a claim lapses.
+
+Duplicate suppression is garam's (ADR-0013): a message is stored once
+per sender and idempotency key, and the key outlives delivery so a
+retry arriving afterwards neither stores a message nor requeues the
+delivered one. Neither the recipient nor the sender carries a foreign
+key — garam answers a sender once the message is stored and reports a
+routing failure back as a message rather than rejecting one, so a
+message it cannot yet route has to be storable.
+
+Persistence and claim semantics only: no endpoint, no long poll, no
+adapter, and nothing that deletes a delivered message.
+
 ## Store implementation status
 
 | Domain | Interface | postgres | memory | other |
@@ -201,6 +236,7 @@ in a KMS is [ADR-0016](./adr/0016-ca-key-custody.md).
 | authz (policies) | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | agent | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | ca | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
+| message | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 
 The postgres implementations are written by hand against sqlc output,
 which sqlc generates from each domain's `queries.sql` into

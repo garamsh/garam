@@ -1,0 +1,174 @@
+openapi: 3.1.0
+info:
+  title: garam machine API
+  version: 0.1.0
+  description: >-
+    What `garam serve machine` serves (ADR-0017). A caller is a client
+    certificate whose SAN URI holds its GRN (ADR-0014, ADR-0015): no
+    session cookie, no user row and no organization membership exist on
+    this listener, and the organization segment of that GRN is the
+    whole of the tenancy. This is a different listener from the one
+    `api/openapi.yaml` describes and shares nothing with it.
+tags:
+  - name: identity
+    description: The identity a connection authenticated as.
+  - name: agent
+    description: >-
+      The agents an operator creates and holds. What an operator may
+      obtain is exactly the agents assigned to it at the current epoch
+      (ADR-0015).
+security:
+  - machineCertificate: []
+paths:
+  /identity:
+    get:
+      operationId: getIdentity
+      tags: [identity]
+      summary: Return the identity the connection authenticated as.
+      responses:
+        '200':
+          description: The caller's identity.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Identity'
+        '401':
+          $ref: '#/components/responses/Error'
+  /agents:
+    post:
+      operationId: createAgent
+      tags: [agent]
+      summary: Create an agent and assign it to the calling operator.
+      description: >-
+        garam mints the agent's GRN in the calling operator's
+        organization (ADR-0012) and assigns the agent to that operator.
+        There is no request body: the organization and the operator are
+        what the certificate names. A caller that is not an operator is
+        refused.
+      responses:
+        '201':
+          description: Agent created and assigned to the calling operator.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentAssignment'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /agents/{agent}/certificate:
+    post:
+      operationId: issueAgentCertificate
+      tags: [agent]
+      summary: Issue the certificate an agent authenticates with.
+      description: >-
+        Answers for an agent assigned to the calling operator at the
+        current epoch and refuses every other one, which is the whole
+        of the authorization here (ADR-0015). Each call signs a new
+        certificate and generates the private key it returns once, so
+        it is a POST rather than a GET and rotation is another call
+        (ADR-0014).
+      parameters:
+        - $ref: '#/components/parameters/agent'
+      responses:
+        '201':
+          description: Certificate issued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentCertificate'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+components:
+  parameters:
+    agent:
+      name: agent
+      in: path
+      required: true
+      description: Agent GRN, as `createAgent` returned it.
+      x-go-name: AgentGrn
+      schema:
+        type: string
+  schemas:
+    Identity:
+      type: object
+      required: [grn]
+      properties:
+        grn:
+          type: string
+          example: grn:acme:default:agent:0a1b2c3d4e5f6071
+    AgentAssignment:
+      type: object
+      description: >-
+        An agent and the operator that runs it, at the epoch that
+        binding holds.
+      required: [grn, operator, epoch]
+      properties:
+        grn:
+          type: string
+          example: grn:acme:default:agent:0a1b2c3d4e5f6071
+        operator:
+          type: string
+          example: grn:acme:default:operator:one
+        epoch:
+          type: integer
+          minimum: 1
+          description: >-
+            Rises with every assignment and fences the operator it
+            replaced. An agent presents it when it connects.
+    AgentCertificate:
+      type: object
+      description: >-
+        A client certificate, the private key it was issued with, and
+        the authority that signed it. garam stores no private key, so
+        this one is returned once and a holder that loses it asks for
+        another certificate.
+      required: [grn, certificatePem, privateKeyPem, issuerPem, notAfter]
+      properties:
+        grn:
+          type: string
+          description: >-
+            The agent the certificate identifies, which is also what
+            its SAN URI holds.
+          example: grn:acme:default:agent:0a1b2c3d4e5f6071
+        certificatePem:
+          type: string
+        privateKeyPem:
+          type: string
+        issuerPem:
+          type: string
+          description: >-
+            The signing authority, which the holder needs to verify the
+            other side of a connection.
+        notAfter:
+          type: string
+          format: date-time
+          description: >-
+            When the certificate stops being valid. It carries jitter,
+            so certificates issued together do not expire together.
+    Error:
+      type: object
+      required: [kind, message]
+      properties:
+        kind:
+          type: string
+          description: errorx kind, e.g. `not_found`, `permission_denied`.
+        message:
+          type: string
+  responses:
+    Error:
+      description: Error response.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  securitySchemes:
+    machineCertificate:
+      type: mutualTLS
+      description: >-
+        The client certificate the listener requires. Its SAN URI holds
+        the caller's GRN and nothing else — no roles and no claims.

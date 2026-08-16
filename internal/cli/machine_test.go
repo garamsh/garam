@@ -86,8 +86,10 @@ func TestMachineKeyMaterial_RefusesWhenAFileIsMissing(t *testing.T) {
 	certFile, keyFile := writeTLSKeyPair(t, dir)
 	caKeyFile := writeKeyEncryptionKey(t, dir)
 
-	_, err := machineKeyMaterial(certFile, keyFile, caKeyFile)
+	cert, sealer, err := machineKeyMaterial(certFile, keyFile, caKeyFile)
 	require.NoError(t, err, "every file present")
+	assert.NotNil(t, cert.PrivateKey)
+	assert.NotNil(t, sealer, "the process keeps the key its authorities are sealed under")
 
 	tests := map[string]struct{ certFile, keyFile, caKeyFile string }{
 		"no key-encryption key":          {certFile, keyFile, ""},
@@ -97,7 +99,7 @@ func TestMachineKeyMaterial_RefusesWhenAFileIsMissing(t *testing.T) {
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			_, err := machineKeyMaterial(tt.certFile, tt.keyFile, tt.caKeyFile)
+			_, _, err := machineKeyMaterial(tt.certFile, tt.keyFile, tt.caKeyFile)
 			require.Error(t, err)
 			assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
 		})

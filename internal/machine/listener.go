@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/json"
 	"net/http"
 )
 
@@ -74,25 +73,4 @@ type identityKey struct{}
 func IdentityOf(r *http.Request) (Identity, bool) {
 	identity, ok := r.Context().Value(identityKey{}).(Identity)
 	return identity, ok
-}
-
-// IdentityHandler answers with the GRN the connection authenticated
-// as. It is the whole of what this listener serves today: the message
-// endpoints are a change of their own, and until one exists a freshly
-// provisioned agent has nothing to call that tells a certificate which
-// works from one that was never tried.
-func IdentityHandler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		identity, ok := IdentityOf(r)
-		if !ok {
-			http.Error(w, "no machine identity", http.StatusUnauthorized)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		// A failed write after the header cannot be reported to the
-		// caller.
-		_ = json.NewEncoder(w).Encode(struct {
-			GRN string `json:"grn"`
-		}{GRN: identity.GRN().String()})
-	})
 }

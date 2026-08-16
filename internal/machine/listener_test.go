@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/json"
 	"io"
 	"math/big"
 	"net"
@@ -20,6 +21,25 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/machine"
 )
+
+// identityHandler answers with the GRN the connection authenticated
+// as. What this listener serves is the surface api/machine.yaml
+// describes; here any handler that reads the identity will do, and
+// what these tests are about is that it reads one.
+func identityHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		identity, ok := machine.IdentityOf(r)
+		if !ok {
+			http.Error(w, "no machine identity", http.StatusUnauthorized)
+			return
+		}
+		// A failed write after the header cannot be reported to the
+		// caller.
+		_ = json.NewEncoder(w).Encode(struct {
+			GRN string `json:"grn"`
+		}{GRN: identity.GRN().String()})
+	})
+}
 
 // loopback is the listener's own certificate and the pool a client
 // trusts it through. What garam presents is not what is under test
@@ -91,7 +111,7 @@ func get(t *testing.T, url string, roots *x509.CertPool, client tls.Certificate)
 func TestNewServer_HandsTheHandlerTheIdentity(t *testing.T) {
 	issuer := newIssuer(t)
 	subject := agentGRN("acme", "bot-1")
-	url, roots := listener(t, issuer.service(), machine.IdentityHandler())
+	url, roots := listener(t, issuer.service(), identityHandler())
 
 	resp, body, err := get(t, url, roots, issuer.issue(t, subject))
 	require.NoError(t, err)
@@ -111,7 +131,7 @@ func TestNewServer_RefusesAConnectionItCannotAuthenticate(t *testing.T) {
 	subject := agentGRN("acme", "bot-1")
 	authenticated := issuer.issue(t, subject)
 	issuer.authority(t, "other")
-	url, roots := listener(t, issuer.service(), machine.IdentityHandler())
+	url, roots := listener(t, issuer.service(), identityHandler())
 
 	resp, body, err := get(t, url, roots, authenticated)
 	require.NoError(t, err, "the listener answers a certificate its organization signed")

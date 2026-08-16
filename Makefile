@@ -66,6 +66,7 @@ mock:
 # OpenAPI server, sqlc queries, protobuf code, and mocks.
 gen:
 	$(OAPI_CODEGEN) --config api/oapi-codegen.yaml api/openapi.yaml
+	$(OAPI_CODEGEN) --config api/machine-codegen.yaml api/machine.yaml
 	$(SQLC) generate
 	$(MOCKERY)
 	$(BUF) generate
@@ -73,7 +74,7 @@ gen:
 
 # check-gen fails when generated code is stale or uncommitted. It is scoped
 # to generated paths so unrelated working-tree edits do not fail it.
-GEN_PATHS := api/server.gen.go internal/*/db proto/gen internal/*/mocks
+GEN_PATHS := api/server.gen.go api/machine/server.gen.go internal/*/db proto/gen internal/*/mocks
 
 # git diff sees tracked paths only, so a generated file nobody added is
 # invisible to it. git status reports modified and untracked entries, skips

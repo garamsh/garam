@@ -37,6 +37,15 @@ var (
 	// assignment has no current epoch, so every report about it is
 	// stale.
 	ErrStaleEpoch = errorx.New(errorx.KindFailedPrecondition, "agent assignment epoch is stale")
+	// ErrNotAssigned refuses an operator the agent it names is not
+	// assigned to at the current epoch (ADR-0015). An agent that does
+	// not exist is refused the same way, so a caller learns nothing
+	// about the agents it does not hold.
+	ErrNotAssigned = errorx.New(errorx.KindPermissionDenied, "agent is not assigned to this operator")
+	// ErrNotAnOperator refuses a caller that is not an operator. An
+	// agent authenticates on the same listener (ADR-0015), and holding
+	// an agent is not something an agent does.
+	ErrNotAnOperator = errorx.New(errorx.KindPermissionDenied, "caller is not an operator")
 )
 
 // ProvisioningState is what the operator reports about the agent's pod
@@ -81,6 +90,18 @@ func ParseRuntimeState(s string) (RuntimeState, error) {
 		return r, nil
 	}
 	return "", errorx.New(errorx.KindInvalidArgument, "agent: unknown runtime state")
+}
+
+// Certificate is what an agent authenticates with: the client
+// certificate, the private key it was issued with, and the authority
+// that signed it, each in PEM form (ADR-0014). garam stores no private
+// key, so this value carries the only copy and a holder that loses it
+// asks for another certificate rather than recovering this one.
+type Certificate struct {
+	CertificatePEM []byte
+	PrivateKeyPEM  []byte
+	IssuerPEM      []byte
+	NotAfter       time.Time
 }
 
 // Agent is an autonomous actor owned by an organization. Which operator

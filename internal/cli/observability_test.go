@@ -27,11 +27,13 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
+	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/api"
 	"github.com/garamsh/garam/internal/ca"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/machine"
+	"github.com/garamsh/garam/internal/machineapi"
 	"github.com/garamsh/garam/internal/user"
 	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
 )
@@ -131,7 +133,7 @@ func machineListener(t *testing.T, obs *observability, subject grn.GRN) (string,
 	t.Helper()
 	dir := t.TempDir()
 	certFile, keyFile := writeTLSKeyPair(t, dir)
-	cert, err := machineKeyMaterial(certFile, keyFile, writeKeyEncryptionKey(t, dir))
+	cert, _, err := machineKeyMaterial(certFile, keyFile, writeKeyEncryptionKey(t, dir))
 	require.NoError(t, err)
 
 	store := authorities{}
@@ -147,12 +149,15 @@ func machineListener(t *testing.T, obs *observability, subject grn.GRN) (string,
 	client, err := tls.X509KeyPair(issued.CertificatePEM(), issued.PrivateKeyPEM())
 	require.NoError(t, err)
 
-	mux := http.NewServeMux()
-	mux.Handle("GET /identity", machine.IdentityHandler())
+	// The identity endpoint answers out of the request alone, so the
+	// listener is assembled with no agent service behind it.
+	handler := machinegen.HandlerWithOptions(machineapi.NewServer(nil), machinegen.StdHTTPServerOptions{
+		Middlewares: []machinegen.MiddlewareFunc{obs.logMachineRequests},
+	})
 	srv := machine.NewServer(
 		machine.NewService(certificateAuthorities{store: store}),
 		cert,
-		obs.logMachineRequests(mux),
+		handler,
 	)
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)

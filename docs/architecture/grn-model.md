@@ -25,7 +25,7 @@ the vendor (Garam); no segment repeats it.
 |---------|---------|------------|
 | `organization` | owning Organization identifier | slug; `root` is reserved |
 | `project` | owning Project identifier | slug; `default` when org-level |
-| `service_type` | resource kind (`user`, `org`, …) | see catalogue below |
+| `service_type` | resource kind (`user`, `org`, …) | slug, from the catalogue below |
 | `identifier` | unique id within the type | slug, see below |
 
 ## Ownership
@@ -64,6 +64,14 @@ and nowhere else.
 
 Lowercase letters, digits, `-`. Length ≤ 64. Slug over UUID. Never
 expose a transient ID where a stable one is expected.
+
+The same character rule binds all four segments, `service_type`
+included, and `grn.Validate` enforces it. A segment that can hold a
+colon re-associates the rest on the way back in: `Parse` splits on
+every colon, so a GRN carrying one names a different resource than the
+one written, in a different organization. The catalogue constrains
+which service types exist; it is the character rule that keeps a GRN
+meaning one thing.
 
 ## Rego package note (historical)
 

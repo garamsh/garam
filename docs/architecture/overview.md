@@ -71,6 +71,11 @@ collaborate on a shared plan.
   org it belongs to; scoping needs subject × role × scope persistence.
 - Upstream OAuth providers beyond Google. The dev provider (ADR-0010)
   is not one — it asserts a fixed local identity and contacts nothing.
+  A user's GRN identifier is the provider's subject, so adding a
+  provider whose subjects carry anything outside the segment rule
+  ([grn-model.md](./grn-model.md) §identifier) means deriving a
+  conforming identifier rather than loosening the rule. Google's
+  subject is decimal and fits; `auth0|abc123` would not.
 - Editing groups, projects and policies from the web console; those
   endpoints exist, the console reads them but does not write them.
 

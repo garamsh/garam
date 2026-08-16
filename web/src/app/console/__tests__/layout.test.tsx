@@ -2,6 +2,7 @@ import { act, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import ConsoleLayout from "@/app/console/layout";
+import { SidebarProvider } from "@/components/ui/sidebar";
 
 // react-dom cannot render the shell's async Server Components under
 // Testing Library. A thrown promise stands in for their pending reads
@@ -21,6 +22,14 @@ vi.mock("@/app/console/_components/console-breadcrumb", () => ({
     if (shell.pending) throw shell.pending;
     return <p>Breadcrumb</p>;
   },
+}));
+
+// The provider's own read is a Server Component too; its seeding is
+// covered in console-sidebar-provider.test.tsx.
+vi.mock("@/app/console/_components/console-sidebar-provider", () => ({
+  ConsoleSidebarProvider: ({ children }: { children: React.ReactNode }) => (
+    <SidebarProvider>{children}</SidebarProvider>
+  ),
 }));
 
 afterEach(() => {

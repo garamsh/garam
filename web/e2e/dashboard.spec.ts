@@ -94,6 +94,29 @@ test.describe("signed in", () => {
     await expect(nav.getByRole("link", { name: "Groups" })).toBeVisible();
   });
 
+  test("keeps the collapsed sidebar collapsed across a reload", async ({
+    page,
+    signedIn,
+  }) => {
+    const collapsed = page.locator(
+      '[data-slot="sidebar"][data-state="collapsed"]',
+    );
+    await page.goto(`/console/orgs/${signedIn.orgSlug}`);
+    await page.getByRole("button", { name: "Toggle Sidebar" }).first().click();
+    await expect(collapsed).toHaveCount(1);
+
+    await page.reload();
+
+    await expect(collapsed).toHaveCount(1);
+    // The markup the reload was served, before anything on the client
+    // could correct it: a sidebar collapsed only after hydration would
+    // still be expanded here, and would jump on every load.
+    const served = await page.request.get(`/console/orgs/${signedIn.orgSlug}`);
+    const html = await served.text();
+    expect(html).toContain('data-state="collapsed"');
+    expect(html).not.toContain('data-state="expanded"');
+  });
+
   test("lands on the dashboard from the post-login redirect target", async ({
     page,
     signedIn,

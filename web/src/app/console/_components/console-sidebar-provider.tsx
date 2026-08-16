@@ -1,6 +1,5 @@
-"use client";
-
-import { useState, useSyncExternalStore, type ReactNode } from "react";
+import { cookies } from "next/headers";
+import type { ReactNode } from "react";
 
 import { SidebarProvider } from "@/components/ui/sidebar";
 
@@ -8,36 +7,22 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 // its name.
 const SIDEBAR_COOKIE = "sidebar_state";
 
-// The stored value is read once, at hydration: every later write comes
-// from a toggle this component already re-renders for.
-function subscribe(): () => void {
-  return () => {};
-}
-
-function readStoredOpen(): boolean {
-  return !document.cookie.split("; ").includes(`${SIDEBAR_COOKIE}=false`);
-}
-
 /**
  * ConsoleSidebarProvider seeds the sidebar from the cookie the primitive
- * writes, so a collapsed sidebar is still collapsed after a reload. Server
- * rendering and hydration both read expanded, because reading the cookie in
- * the layout would await a dynamic API at layout level and stop every
- * route's `loading.tsx` streaming (stack-nextjs.md §2, ADR-0011).
+ * writes, so a collapsed sidebar is served collapsed after a reload rather
+ * than corrected once the page is interactive. The read sits behind the
+ * layout's `<Suspense>` boundary: awaited at layout level it would stop
+ * every route's `loading.tsx` streaming (stack-nextjs.md §2, ADR-0011).
  */
-export function ConsoleSidebarProvider({ children }: { children: ReactNode }) {
-  const storedOpen = useSyncExternalStore(
-    subscribe,
-    readStoredOpen,
-    () => true,
-  );
-  const [toggledOpen, setToggledOpen] = useState<boolean | null>(null);
+export async function ConsoleSidebarProvider({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  const stored = (await cookies()).get(SIDEBAR_COOKIE)?.value;
 
   return (
-    <SidebarProvider
-      open={toggledOpen ?? storedOpen}
-      onOpenChange={setToggledOpen}
-    >
+    <SidebarProvider defaultOpen={stored !== "false"}>
       {children}
     </SidebarProvider>
   );

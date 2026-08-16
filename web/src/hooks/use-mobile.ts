@@ -12,7 +12,9 @@ function subscribe(onChange: () => void): () => void {
 /**
  * useIsMobile reports whether the viewport sits below the mobile
  * breakpoint. Server rendering and hydration both read `false`, because
- * the viewport width is unknown until the client subscribes.
+ * the viewport width is unknown until the client subscribes. This hook is
+ * no longer shadcn output — `shadcn add` of a sidebar-dependent primitive
+ * would restore the effect version the lint rejects.
  */
 export function useIsMobile(): boolean {
   return useSyncExternalStore(

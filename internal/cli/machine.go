@@ -20,8 +20,9 @@ import (
 // newServeMachineCommand constructs `garam serve machine`: the
 // listener an agent or an operator authenticates on with a client
 // certificate (ADR-0014, ADR-0015). It terminates TLS itself and takes
-// neither the browser API's proxy nor its cookie, which is why it is a
-// listener of its own rather than a route.
+// neither the browser API's proxy nor its cookie, and it runs as a
+// process of its own so the browser-facing one never holds the key the
+// certificate authorities are sealed under (ADR-0017).
 func newServeMachineCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "machine",

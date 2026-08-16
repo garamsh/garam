@@ -237,13 +237,13 @@ two domains cooperating through `grn.GRN` alone. Verification needs the
 authority's certificate and never its key.
 
 `garam serve machine` is where the listener runs — its own process and
-its own port, terminating TLS itself with a certificate it reads from a
-file, because a forwarded client-certificate header is trustworthy only
-where every deployment strips it at the edge (ADR-0014). What it serves
-is the identity a connection authenticated as; message ingress and the
-long poll are not built. It is not part of the local Docker stack: its
-key material is per host and the container would run as a user that
-does not own it.
+its own port (ADR-0017), terminating TLS itself with a certificate it
+reads from a file, because a forwarded client-certificate header is
+trustworthy only where every deployment strips it at the edge
+(ADR-0014). What it serves is the identity a connection authenticated
+as; message ingress and the long poll are not built. It is not part of
+the local Docker stack: its key material is per host and the container
+would run as a user that does not own it.
 
 ## `internal/message`
 

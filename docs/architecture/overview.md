@@ -21,9 +21,10 @@ collaborate on a shared plan.
   issues the client certificates machine identities authenticate with
   (ADR-0014). The subject's GRN travels in a SAN URI; the CA private key
   reaches Postgres sealed under a key-encryption key.
-- A listener machine identities authenticate on, `garam serve machine`.
-  It terminates TLS itself, requires a client certificate, and verifies
-  it against the authority of the organization the certificate's own SAN
+- A listener machine identities authenticate on, `garam serve machine` —
+  a process of its own, the third from the one image (ADR-0017). It
+  terminates TLS itself, requires a client certificate, and verifies it
+  against the authority of the organization the certificate's own SAN
   names (ADR-0014). An agent and an operator authenticate the same way
   (ADR-0015), and neither touches a user row, a session or a membership.
 - Messages addressed to an agent are held in a queue one reader at a

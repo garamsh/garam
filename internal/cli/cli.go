@@ -1,7 +1,7 @@
 // Package cli owns the cobra command tree for the garam binary
-// (ADR-0003): `serve api`, `serve authz`, `serve machine`, and
-// `migrate`. Commands are constructed here; cmd/garam only executes
-// the root.
+// (ADR-0003, ADR-0017): `serve api`, `serve authz`, `serve machine`,
+// and `migrate`. Commands are constructed here; cmd/garam only
+// executes the root.
 //
 // Configuration is entirely via environment variables:
 //

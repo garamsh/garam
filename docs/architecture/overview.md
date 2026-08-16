@@ -50,7 +50,9 @@ collaborate on a shared plan.
 - The agent surface. `internal/agent` persists identity, operator
   assignment and state (ADR-0012); nothing else of it exists — no
   endpoint, no adapter and no message queue (ADR-0013), and no
-  certificate authority or TLS code (ADR-0014).
+  certificate authority or TLS code (ADR-0014, ADR-0015). An
+  assignment is not yet constrained to one organization, which
+  ADR-0015 decides and no code enforces.
 - Chat channels. ADR-0013 makes garam a message API and leaves Slack,
   LINE and the rest to consumers of it; none is built, and whether any
   ships first-party is undecided.
@@ -140,6 +142,7 @@ contract is `proto/garam/authz/v1`.
 | Agents are provisioned by operators garam never dials | An operator is a peer, so a user can supply their own; a sidecar's outbound connection is the only path in. | [adr/0012-agent-operator-model.md](./adr/0012-agent-operator-model.md) |
 | Messages reach an agent by polling, not by push | A queue in Postgres has no connection to route to, so any instance answers any poll. | [adr/0013-agent-messaging.md](./adr/0013-agent-messaging.md) |
 | Agents authenticate by mTLS on a listener of their own | A GRN in a SAN needs no user row; a separate listener needs no trusted proxy header. | [adr/0014-agent-authentication.md](./adr/0014-agent-authentication.md) |
+| An operator is a machine identity of the same kind as an agent | One mechanism to secure and rotate; the assignment row already bounds what an operator may fetch. | [adr/0015-operator-identity.md](./adr/0015-operator-identity.md) |
 
 ## Non-functional goals
 

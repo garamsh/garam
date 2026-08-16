@@ -12,6 +12,7 @@ import (
 	"io/fs"
 	"os"
 	"strings"
+	"syscall"
 
 	"github.com/garamsh/garam/internal/errorx"
 )
@@ -92,6 +93,16 @@ func NewSealerFromKeyFile(path string) (Sealer, error) {
 	}
 	if info.Mode().Perm()&fs.FileMode(0o077) != 0 {
 		return nil, errorx.New(errorx.KindInvalidArgument, "ca: key-encryption key file is readable beyond its owner")
+	}
+	// ADR-0015 has the reading process run as the file's owner, so the
+	// mode above is only half the rule: owner-only bits protect nothing
+	// from a process that is not the owner.
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return nil, errorx.New(errorx.KindInvalidArgument, "ca: key-encryption key file ownership is unreadable")
+	}
+	if uint64(stat.Uid) != uint64(os.Getuid()) {
+		return nil, errorx.New(errorx.KindInvalidArgument, "ca: key-encryption key file is owned by another user")
 	}
 	raw, err := io.ReadAll(f)
 	if err != nil {

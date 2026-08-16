@@ -10,12 +10,23 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 )
 
-// DefaultCertificateLifetime is how long an issued certificate lasts
-// unless [Config] says otherwise. ADR-0014 accepted expiry as the only
-// revocation there is — no CRL, no OCSP — so this is the whole window a
-// compromised certificate stays usable in, and one day of it costs one
-// restart a day to rotate.
-const DefaultCertificateLifetime = 24 * time.Hour
+// Certificate lifetime bounds. ADR-0014 accepted expiry as the only
+// revocation there is — no CRL, no OCSP — so the lifetime is the whole
+// window a compromised certificate stays usable in, and an unbounded
+// one is that mechanism switched off rather than a setting.
+const (
+	// DefaultCertificateLifetime is what [Config] takes when it says
+	// nothing: a day of exposure, costing one restart a day to rotate.
+	DefaultCertificateLifetime = 24 * time.Hour
+	// MinCertificateLifetime keeps a certificate usable. Rotation is a
+	// restart, so one that expires inside the time it takes to install
+	// is not a credential.
+	MinCertificateLifetime = time.Hour
+	// MaxCertificateLifetime is the widest exposure window this package
+	// will issue. Anything longer is a decision to record rather than a
+	// value to configure.
+	MaxCertificateLifetime = 30 * 24 * time.Hour
+)
 
 // serviceTypeOrg is the GRN service type of an organization. Orgs are
 // root-owned, so an org's identifier is the organization segment of
@@ -24,10 +35,14 @@ const serviceTypeOrg = "org"
 
 // Config holds the CA's security parameters.
 type Config struct {
-	// CertificateLifetime is the longest an issued certificate is
-	// valid for; jitter takes it no further than that. A value that is
-	// not positive takes DefaultCertificateLifetime.
+	// CertificateLifetime is the longest an issued certificate is valid
+	// for; jitter takes it no further than that. Zero takes
+	// DefaultCertificateLifetime, and anything outside
+	// MinCertificateLifetime..MaxCertificateLifetime is refused.
 	CertificateLifetime time.Duration
+	// Now supplies the current time, so a test can hold it still. Zero
+	// takes time.Now.
+	Now func() time.Time
 }
 
 // Service issues the certificates a machine identity authenticates
@@ -43,17 +58,27 @@ type service struct {
 	store    Store
 	sealer   Sealer
 	lifetime time.Duration
+	now      func() time.Time
 }
 
-// NewService constructs the certificate service. There is no
-// constructor that omits the Sealer: a process without a
-// key-encryption key cannot reach the CA at all.
-func NewService(store Store, sealer Sealer, cfg Config) Service {
+// NewService constructs the certificate service, or refuses a lifetime
+// outside the bounds above. There is no constructor that omits the
+// Sealer: a process without a key-encryption key cannot reach the CA at
+// all.
+func NewService(store Store, sealer Sealer, cfg Config) (Service, error) {
 	lifetime := cfg.CertificateLifetime
-	if lifetime <= 0 {
+	if lifetime == 0 {
 		lifetime = DefaultCertificateLifetime
 	}
-	return &service{store: store, sealer: sealer, lifetime: lifetime}
+	if lifetime < MinCertificateLifetime || lifetime > MaxCertificateLifetime {
+		return nil, errorx.New(errorx.KindInvalidArgument,
+			"ca: certificate lifetime must be between "+MinCertificateLifetime.String()+" and "+MaxCertificateLifetime.String())
+	}
+	now := cfg.Now
+	if now == nil {
+		now = time.Now
+	}
+	return &service{store: store, sealer: sealer, lifetime: lifetime, now: now}, nil
 }
 
 func (s *service) Issue(ctx context.Context, subject grn.GRN) (*Certificate, error) {
@@ -83,7 +108,7 @@ func (s *service) Issue(ctx context.Context, subject grn.GRN) (*Certificate, err
 	if err != nil {
 		return nil, err
 	}
-	now := time.Now().UTC()
+	now := s.now().UTC()
 	notAfter, err := expiry(now, s.lifetime)
 	if err != nil {
 		return nil, err
@@ -91,7 +116,12 @@ func (s *service) Issue(ctx context.Context, subject grn.GRN) (*Certificate, err
 	// A certificate that outlives its issuer stops verifying the day the
 	// CA expires, so it is refused rather than signed. The parsed
 	// certificate is what a verifier reads, so it is what bounds this.
-	if notAfter.After(issuer.NotAfter) {
+	// Neither branch can refuse a CA created by this call: the bounds
+	// above cap a lifetime far below authorityLifetime.
+	switch {
+	case !now.Before(issuer.NotAfter):
+		return nil, errorx.New(errorx.KindFailedPrecondition, "ca: the authority that signs has expired")
+	case notAfter.After(issuer.NotAfter):
 		return nil, errorx.New(errorx.KindFailedPrecondition, "ca: certificate would outlive the authority that signs it")
 	}
 	der, err := createCertificate(uri, &key.PublicKey, issuer, issuerKey, now, notAfter)
@@ -118,7 +148,7 @@ func (s *service) Issue(ctx context.Context, subject grn.GRN) (*Certificate, err
 func (s *service) authorityOf(ctx context.Context, orgGRN grn.GRN) (*Authority, error) {
 	authority, err := s.store.Get(ctx, orgGRN)
 	if err == nil {
-		return authority, nil
+		return ownedBy(authority, orgGRN)
 	}
 	if !errorx.IsKind(err, errorx.KindNotFound) {
 		return nil, err
@@ -129,11 +159,30 @@ func (s *service) authorityOf(ctx context.Context, orgGRN grn.GRN) (*Authority, 
 	}
 	if err := s.store.Create(ctx, authority); err != nil {
 		if errorx.IsKind(err, errorx.KindAlreadyExists) {
-			return s.store.Get(ctx, orgGRN)
+			winner, err := s.store.Get(ctx, orgGRN)
+			if err != nil {
+				return nil, err
+			}
+			return ownedBy(winner, orgGRN)
 		}
 		return nil, err
 	}
 	return authority, nil
+}
+
+// ownedBy refuses an authority that is not the organization's own. The
+// store that ships here looks up by primary key, so a mismatch is a bug
+// in an implementation of the seam rather than anything a caller did —
+// and since ADR-0014 rests tenancy on the trust root, this is the last
+// place a wrong CA could be caught before it signs.
+func ownedBy(a *Authority, orgGRN grn.GRN) (*Authority, error) {
+	switch {
+	case a == nil:
+		return nil, errorx.New(errorx.KindInternal, "ca: store returned no authority and no error")
+	case a.orgGRN != orgGRN:
+		return nil, errorx.New(errorx.KindInternal, "ca: store returned another organization's authority")
+	}
+	return a, nil
 }
 
 // newAuthority generates an organization's CA with its private key
@@ -144,7 +193,7 @@ func (s *service) newAuthority(ctx context.Context, orgGRN grn.GRN) (*Authority,
 	if err != nil {
 		return nil, err
 	}
-	now := time.Now().UTC().Truncate(time.Second)
+	now := s.now().UTC().Truncate(time.Second)
 	der, err := createAuthorityCertificate(orgGRN, key, now)
 	if err != nil {
 		return nil, err

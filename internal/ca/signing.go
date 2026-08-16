@@ -10,6 +10,7 @@ import (
 	"math/big"
 	"net/url"
 	"time"
+	"unicode"
 
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
@@ -104,6 +105,15 @@ func createCertificate(uri *url.URL, public *ecdsa.PublicKey, issuer *x509.Certi
 // identity while the whole URI still renders back to the GRN. Comparing
 // strings catches neither; parsing back catches both.
 func subjectURI(g grn.GRN) (*url.URL, error) {
+	// A SAN URI is an IA5String, so a byte past ASCII is refused here
+	// rather than by the encoder — which would fail after the
+	// organization's CA had been created for a subject that cannot have
+	// a certificate, and report a caller's input as an internal fault.
+	for _, r := range g.String() {
+		if r > unicode.MaxASCII {
+			return nil, errorx.New(errorx.KindInvalidArgument, "ca: subject grn is not ascii")
+		}
+	}
 	u, err := url.Parse(g.String())
 	if err != nil {
 		return nil, errorx.Wrap(err, "ca: subject uri", errorx.KindInvalidArgument)

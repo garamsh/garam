@@ -33,6 +33,13 @@ func newSealer(t *testing.T) ca.Sealer {
 	return sealer
 }
 
+func newService(t *testing.T, store ca.Store, sealer ca.Sealer, cfg ca.Config) ca.Service {
+	t.Helper()
+	svc, err := ca.NewService(store, sealer, cfg)
+	require.NoError(t, err)
+	return svc
+}
+
 // issueForNewOrg issues through a service whose store holds no
 // authority yet, and returns the certificate with the authority the
 // service created on demand.
@@ -47,7 +54,8 @@ func issueForNewOrg(t *testing.T, subject grn.GRN, sealer ca.Sealer, cfg ca.Conf
 			return nil
 		}).Once()
 
-	cert, err := ca.NewService(store, sealer, cfg).Issue(context.Background(), subject)
+	svc := newService(t, store, sealer, cfg)
+	cert, err := svc.Issue(context.Background(), subject)
 	require.NoError(t, err)
 	require.NotNil(t, created)
 	return cert, created
@@ -58,7 +66,7 @@ func serviceHolding(t *testing.T, authority *ca.Authority, sealer ca.Sealer, cfg
 	t.Helper()
 	store := mocks.NewMockStore(t)
 	store.EXPECT().Get(mock.Anything, authority.Organization()).Return(authority, nil)
-	return ca.NewService(store, sealer, cfg)
+	return newService(t, store, sealer, cfg)
 }
 
 func parseCertificatePEM(t *testing.T, encoded []byte) *x509.Certificate {
@@ -113,12 +121,41 @@ func TestService_IssueCreatesTheOrganizationAuthorityOnDemand(t *testing.T) {
 	assert.Equal(t, authority.Certificate(), parseCertificatePEM(t, cert.IssuerPEM()).Raw)
 
 	leaf := parseCertificatePEM(t, cert.CertificatePEM())
-	assert.False(t, leaf.IsCA)
-	assert.Equal(t, []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}, leaf.ExtKeyUsage)
 	assert.Equal(t, cert.NotAfter(), leaf.NotAfter.UTC())
 	public, ok := leaf.PublicKey.(*ecdsa.PublicKey)
 	require.True(t, ok)
 	assert.Equal(t, parseKeyPEM(t, cert.PrivateKeyPEM()).PublicKey, *public)
+}
+
+// TestService_IssuedCertificateCannotSign pins the fields that keep an
+// issued certificate a leaf. Asserting that it is not a CA is not
+// enough: an absent basic-constraints extension parses as "not a CA"
+// too, and a key usage nobody reads can carry certificate signing.
+func TestService_IssuedCertificateCannotSign(t *testing.T) {
+	subject := agentGRN("acme", "bot-1")
+	cert, authority := issueForNewOrg(t, subject, newSealer(t), ca.Config{})
+
+	leaf := parseCertificatePEM(t, cert.CertificatePEM())
+	assert.False(t, leaf.IsCA)
+	assert.True(t, leaf.BasicConstraintsValid, "basic constraints are not encoded")
+	assert.Equal(t, x509.KeyUsageDigitalSignature, leaf.KeyUsage)
+	assert.Equal(t, []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}, leaf.ExtKeyUsage)
+
+	// The CA is the other half of that: it may sign certificates, and
+	// only leaves of them.
+	issuer, err := x509.ParseCertificate(authority.Certificate())
+	require.NoError(t, err)
+	assert.True(t, issuer.IsCA)
+	assert.True(t, issuer.BasicConstraintsValid, "basic constraints are not encoded")
+	assert.True(t, issuer.MaxPathLenZero, "the CA may issue intermediates")
+	assert.Equal(t, 0, issuer.MaxPathLen)
+	assert.Equal(t, x509.KeyUsageCertSign, issuer.KeyUsage)
+	assert.Empty(t, issuer.ExtKeyUsage)
+
+	// A serial has to be wide enough that two issuers never collide;
+	// two that merely differ would hold for a single byte.
+	assert.Greater(t, leaf.SerialNumber.BitLen(), 64)
+	assert.Greater(t, issuer.SerialNumber.BitLen(), 64)
 }
 
 // TestService_IssueNamesTheSubjectInASANURI pins the identity ADR-0014
@@ -189,20 +226,60 @@ func TestService_IssueReusesTheOrganizationAuthority(t *testing.T) {
 }
 
 // TestService_CertificateDoesNotChainToAnotherOrganization is the
-// tenancy boundary ADR-0014 put in the trust root: the failure, not the
-// success, is what enforces it.
+// tenancy boundary ADR-0014 put in the trust root. Two certificates
+// failing to chain proves only that two keys differ, so the case that
+// carries the organization is here beside it: two subjects of one
+// organization share its CA, and a subject of another does not.
 func TestService_CertificateDoesNotChainToAnotherOrganization(t *testing.T) {
 	sealer := newSealer(t)
 	acmeCert, acme := issueForNewOrg(t, agentGRN("acme", "bot-1"), sealer, ca.Config{})
 	otherCert, other := issueForNewOrg(t, agentGRN("other", "bot-1"), sealer, ca.Config{})
 
+	sibling, err := serviceHolding(t, acme, sealer, ca.Config{}).
+		Issue(context.Background(), agentGRN("acme", "bot-2"))
+	require.NoError(t, err)
+
+	// Same organization, same trust root.
 	require.NoError(t, verifyAgainst(t, acmeCert, acme))
+	require.NoError(t, verifyAgainst(t, sibling, acme))
 	require.NoError(t, verifyAgainst(t, otherCert, other))
 
-	err := verifyAgainst(t, acmeCert, other)
+	// Another organization, neither direction.
+	err = verifyAgainst(t, acmeCert, other)
 	require.Error(t, err)
 	assert.IsType(t, x509.UnknownAuthorityError{}, err)
-	require.Error(t, verifyAgainst(t, otherCert, acme))
+	assert.Error(t, verifyAgainst(t, sibling, other))
+	assert.Error(t, verifyAgainst(t, otherCert, acme))
+}
+
+// TestService_IssueRefusesAnAuthorityFromAnotherOrganization covers the
+// store seam rather than the store that ships: a lookup by primary key
+// cannot return the wrong row, but Store is exported and mocked, and a
+// certificate signed by another organization's CA is the one failure
+// the trust root cannot catch after the fact.
+func TestService_IssueRefusesAnAuthorityFromAnotherOrganization(t *testing.T) {
+	sealer := newSealer(t)
+	_, other := issueForNewOrg(t, agentGRN("other", "bot-1"), sealer, ca.Config{})
+
+	subject := agentGRN("acme", "bot-1")
+	store := mocks.NewMockStore(t)
+	store.EXPECT().Get(mock.Anything, orgOf(subject)).Return(other, nil).Once()
+
+	_, err := newService(t, store, sealer, ca.Config{}).Issue(context.Background(), subject)
+	require.Error(t, err)
+	assert.True(t, errorx.IsKind(err, errorx.KindInternal))
+}
+
+// TestService_IssueFailsWhenTheStoreReturnsNothing keeps the same seam
+// from panicking on a nil authority with a nil error.
+func TestService_IssueFailsWhenTheStoreReturnsNothing(t *testing.T) {
+	subject := agentGRN("acme", "bot-1")
+	store := mocks.NewMockStore(t)
+	store.EXPECT().Get(mock.Anything, orgOf(subject)).Return(nil, nil).Once()
+
+	_, err := newService(t, store, newSealer(t), ca.Config{}).Issue(context.Background(), subject)
+	require.Error(t, err)
+	assert.True(t, errorx.IsKind(err, errorx.KindInternal))
 }
 
 func TestService_IssueRejects(t *testing.T) {
@@ -212,6 +289,9 @@ func TestService_IssueRejects(t *testing.T) {
 		"root owns no ca":   grn.New(grn.RootOwner, grn.DefaultProject, "org", "acme"),
 		"identifier splits": agentGRN("acme", "bot?1"),
 		"control character": agentGRN("acme", "bot\n1"),
+		// A SAN URI is an IA5String, so this cannot be encoded — and it
+		// is refused here rather than by the encoder, after a CA exists.
+		"beyond ascii": agentGRN("acme", "bot-é"),
 		// A colon shifts every segment after it, so this GRN's SAN URI
 		// reads back as identifier "agent:bot-1" in organization "ac".
 		"segment holds a colon": grn.New("ac:me", grn.DefaultProject, "agent", "bot-1"),
@@ -220,7 +300,7 @@ func TestService_IssueRejects(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			// The mock fails the test if a rejected subject reaches the
 			// store.
-			svc := ca.NewService(mocks.NewMockStore(t), newSealer(t), ca.Config{})
+			svc := newService(t, mocks.NewMockStore(t), newSealer(t), ca.Config{})
 			_, err := svc.Issue(context.Background(), subject)
 			require.Error(t, err)
 			assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
@@ -236,7 +316,7 @@ func TestService_IssueFailsWhenSealingFails(t *testing.T) {
 	sealer.EXPECT().Seal(mock.Anything, mock.Anything, mock.Anything).
 		Return(nil, errorx.New(errorx.KindUnavailable, "sealed by nothing")).Once()
 
-	_, err := ca.NewService(store, sealer, ca.Config{}).Issue(context.Background(), subject)
+	_, err := newService(t, store, sealer, ca.Config{}).Issue(context.Background(), subject)
 	require.Error(t, err)
 	assert.True(t, errorx.IsKind(err, errorx.KindUnavailable))
 }
@@ -267,7 +347,7 @@ func TestService_IssueTakesTheAuthorityAConcurrentWriterCreated(t *testing.T) {
 	store.EXPECT().Create(mock.Anything, mock.Anything).Return(ca.ErrAuthorityAlreadyExists).Once()
 	store.EXPECT().Get(mock.Anything, orgOf(subject)).Return(winner, nil).Once()
 
-	cert, err := ca.NewService(store, sealer, ca.Config{}).Issue(context.Background(), subject)
+	cert, err := newService(t, store, sealer, ca.Config{}).Issue(context.Background(), subject)
 	require.NoError(t, err)
 	assert.NoError(t, verifyAgainst(t, cert, winner))
 }
@@ -279,11 +359,26 @@ func TestService_IssueRefusesToOutliveTheAuthority(t *testing.T) {
 	subject := agentGRN("acme", "bot-1")
 	sealer := newSealer(t)
 	_, authority := issueForNewOrg(t, subject, sealer, ca.Config{})
+	issuer, err := x509.ParseCertificate(authority.Certificate())
+	require.NoError(t, err)
 
-	svc := serviceHolding(t, authority, sealer, ca.Config{CertificateLifetime: 20 * 365 * 24 * time.Hour})
-	_, err := svc.Issue(context.Background(), subject)
+	// An hour before the CA expires, a certificate of any permitted
+	// lifetime would outlive it.
+	at := func(when time.Time) ca.Config {
+		return ca.Config{Now: func() time.Time { return when }}
+	}
+	_, err = serviceHolding(t, authority, sealer, at(issuer.NotAfter.Add(-time.Hour))).
+		Issue(context.Background(), subject)
 	require.Error(t, err)
 	assert.True(t, errorx.IsKind(err, errorx.KindFailedPrecondition))
+	assert.Contains(t, err.Error(), "outlive")
+
+	// Past that, the refusal names the expiry rather than the overrun.
+	_, err = serviceHolding(t, authority, sealer, at(issuer.NotAfter.Add(time.Hour))).
+		Issue(context.Background(), subject)
+	require.Error(t, err)
+	assert.True(t, errorx.IsKind(err, errorx.KindFailedPrecondition))
+	assert.Contains(t, err.Error(), "expired")
 }
 
 func TestService_CertificateLifetimeCarriesJitter(t *testing.T) {
@@ -318,6 +413,54 @@ func TestService_CertificateLifetimeCarriesJitter(t *testing.T) {
 	// tenth of the lifetime landing inside a hundredth of it is about
 	// one in a million, so the spread itself is the assertion.
 	assert.Greater(t, latest.Sub(earliest), lifetime/100, "expiries are bunched")
+}
+
+// TestNewService_RefusesALifetimeOutsideTheBounds covers the parameter
+// that is the revocation mechanism: expiry is all there is (ADR-0014),
+// so a lifetime long enough to defeat it, or short enough to expire
+// before the certificate is installed, fails construction.
+func TestNewService_RefusesALifetimeOutsideTheBounds(t *testing.T) {
+	tests := map[string]time.Duration{
+		"a nanosecond":          time.Nanosecond,
+		"under the minimum":     ca.MinCertificateLifetime - time.Second,
+		"over the maximum":      ca.MaxCertificateLifetime + time.Second,
+		"nine years":            9 * 365 * 24 * time.Hour,
+		"negative":              -time.Hour,
+		"negative and enormous": -9 * 365 * 24 * time.Hour,
+	}
+	for name, lifetime := range tests {
+		t.Run(name, func(t *testing.T) {
+			_, err := ca.NewService(mocks.NewMockStore(t), newSealer(t), ca.Config{CertificateLifetime: lifetime})
+			require.Error(t, err)
+			assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
+		})
+	}
+
+	for name, lifetime := range map[string]time.Duration{
+		"the minimum": ca.MinCertificateLifetime,
+		"the maximum": ca.MaxCertificateLifetime,
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := ca.NewService(mocks.NewMockStore(t), newSealer(t), ca.Config{CertificateLifetime: lifetime})
+			require.NoError(t, err)
+		})
+	}
+}
+
+// TestService_IssueBackdatesAgainstClockSkew holds the clock still, so
+// the validity window is exact rather than approximate.
+func TestService_IssueBackdatesAgainstClockSkew(t *testing.T) {
+	subject := agentGRN("acme", "bot-1")
+	now := time.Date(2026, 8, 16, 12, 0, 0, 0, time.UTC)
+	cert, authority := issueForNewOrg(t, subject, newSealer(t), ca.Config{Now: func() time.Time { return now }})
+
+	leaf := parseCertificatePEM(t, cert.CertificatePEM())
+	assert.True(t, leaf.NotBefore.Before(now), "a peer whose clock trails the issuer cannot use it")
+	assert.Equal(t, now.Add(-time.Minute), leaf.NotBefore.UTC())
+
+	issuer, err := x509.ParseCertificate(authority.Certificate())
+	require.NoError(t, err)
+	assert.Equal(t, now.Add(-time.Minute), issuer.NotBefore.UTC())
 }
 
 func TestNewService_DefaultsTheCertificateLifetime(t *testing.T) {

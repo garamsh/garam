@@ -980,7 +980,8 @@ func TestCertificateAuthority_RoundTrip(t *testing.T) {
 	sealer, err := ca.NewAESGCMSealer(key)
 	require.NoError(t, err)
 	store := ca.NewPostgresStore(p)
-	svc := ca.NewService(store, sealer, ca.Config{})
+	svc, err := ca.NewService(store, sealer, ca.Config{})
+	require.NoError(t, err)
 
 	_, err = store.Get(ctx, acme)
 	assert.ErrorIs(t, err, ca.ErrAuthorityNotFound, "a CA exists only once something needs one")

@@ -138,6 +138,27 @@ func TestAESGCMSealer_OpenRejectsAnotherBinding(t *testing.T) {
 	assert.Equal(t, []byte("a private key"), opened)
 }
 
+// TestAESGCMSealer_OpenRejectsASplicedKeyIdentifier keeps the prefix
+// from being a way in: bytes wearing this key's identifier still do not
+// open unless this key sealed them.
+func TestAESGCMSealer_OpenRejectsASplicedKeyIdentifier(t *testing.T) {
+	ctx := context.Background()
+	mine, err := ca.NewAESGCMSealer(randomKey(t))
+	require.NoError(t, err)
+	theirs, err := ca.NewAESGCMSealer(randomKey(t))
+	require.NoError(t, err)
+
+	mineSealed, err := mine.Seal(ctx, acmeRow, []byte("a private key"))
+	require.NoError(t, err)
+	theirsSealed, err := theirs.Seal(ctx, acmeRow, []byte("a private key"))
+	require.NoError(t, err)
+
+	spliced := append(append([]byte{}, mineSealed[:keyIDPrefix]...), theirsSealed[keyIDPrefix:]...)
+	_, err = mine.Open(ctx, acmeRow, spliced)
+	require.Error(t, err)
+	assert.True(t, errorx.IsKind(err, errorx.KindDataLoss))
+}
+
 func TestNewSealerFromKeyFile_ReadsTheKey(t *testing.T) {
 	ctx := context.Background()
 	key := randomKey(t)

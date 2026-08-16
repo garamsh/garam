@@ -20,7 +20,7 @@ export function BrandMark({ className }: { className?: string }) {
         <path
           fill="currentColor"
           fillRule="evenodd"
-          d="M4 0H96A4 4 0 0 1 100 4V96A4 4 0 0 1 96 100H4A4 4 0 0 1 0 96V4A4 4 0 0 1 4 0ZM11 17H41V31H11ZM41 17H55V83H41ZM11 69H41V83H11ZM55 43H90V57H55Z"
+          d="M4 0H96A4 4 0 0 1 100 4V96A4 4 0 0 1 96 100H4A4 4 0 0 1 0 96V4A4 4 0 0 1 4 0ZM17 15H45V29H17ZM45 15H59V85H45ZM17 71H45V85H17ZM59 43H87V57H59Z"
         />
       </svg>
       <span className="font-heading text-base font-semibold tracking-tight">

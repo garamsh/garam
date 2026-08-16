@@ -72,6 +72,18 @@ describe("consoleCrumbs", () => {
     ]);
   });
 
+  it("names the invitation page (ADR-0011: it renders in the shell)", () => {
+    const crumbs = consoleCrumbs(
+      parseConsolePath("/console/invitations/token"),
+      orgs,
+    );
+
+    expect(crumbs).toEqual([
+      { label: "Organizations", href: "/console/orgs" },
+      { label: "Invitation" },
+    ]);
+  });
+
   it("leaves the current page unlinked", () => {
     const crumbs = consoleCrumbs(parseConsolePath("/console/orgs"), orgs);
 

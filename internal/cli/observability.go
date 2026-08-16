@@ -23,13 +23,15 @@ import (
 
 	"github.com/garamsh/garam/internal/api"
 	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/internal/machine"
 )
 
 // The service name every trace, metric and log line carries, so one
-// stream tells the two servers apart.
+// stream tells the servers apart.
 const (
-	serviceAPI   = "garam-api"
-	serviceAuthz = "garam-authz"
+	serviceAPI     = "garam-api"
+	serviceAuthz   = "garam-authz"
+	serviceMachine = "garam-machine"
 )
 
 // observability is the telemetry one server constructs at startup:
@@ -93,18 +95,39 @@ func (o *observability) logRequests(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var principal api.Principal
 		r = api.WithPrincipal(r, &principal)
-		recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
-
-		next.ServeHTTP(recorder, r)
-
-		o.logger.LogAttrs(r.Context(), levelOf(recorder.status >= http.StatusInternalServerError),
-			"http request",
-			slog.String("operation", r.Pattern),
-			slog.String("trace_id", traceIDOf(r.Context())),
-			slog.Int("status", recorder.status),
-			principalAttr(principal.GRN),
-		)
+		o.logServed(w, r, next, func() string { return principal.GRN })
 	})
+}
+
+// logMachineRequests is logRequests for the machine listener. Its
+// principal is the identity the client certificate authenticated,
+// which the listener resolved before the request reached here, so it
+// is read rather than written back.
+func (o *observability) logMachineRequests(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		o.logServed(w, r, next, func() string {
+			if identity, ok := machine.IdentityOf(r); ok {
+				return identity.GRN().String()
+			}
+			return ""
+		})
+	})
+}
+
+// logServed runs next and emits the line, asking for the principal
+// once the handler has had its chance to resolve one.
+func (o *observability) logServed(w http.ResponseWriter, r *http.Request, next http.Handler, principal func() string) {
+	recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+
+	next.ServeHTTP(recorder, r)
+
+	o.logger.LogAttrs(r.Context(), levelOf(recorder.status >= http.StatusInternalServerError),
+		"http request",
+		slog.String("operation", r.Pattern),
+		slog.String("trace_id", traceIDOf(r.Context())),
+		slog.Int("status", recorder.status),
+		principalAttr(principal()),
+	)
 }
 
 // logRPCs is the gRPC counterpart of logRequests. The engine's

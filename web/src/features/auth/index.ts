@@ -1,0 +1,11 @@
+/**
+ * The auth feature's surface for a Server Component: who is signed in
+ * and the ways in; nothing else under `features/auth/` is public. The
+ * way out is a Server Action, declared in `actions.ts` — reaching this
+ * file from a client module would pull the server-only backend client
+ * into the browser bundle.
+ */
+export { getSession, type User } from "./api/get-session";
+export { listProviders } from "./api/list-providers";
+export { DevSignInButton } from "./components/dev-sign-in-button";
+export { GoogleSignInButton } from "./components/google-sign-in-button";

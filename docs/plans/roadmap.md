@@ -15,7 +15,7 @@ workflow last. Each tier depends only on the tier below it.
 ## MVP — Authentication + org permissions (done)
 
 - GRN value type, `errorx`, domain types and `Store` interfaces for
-  `org` / `user` / `agent`.
+  `org` / `user`.
 - `internal/authn/` — OAuth provider abstraction (OIDC) with Google as
   the first provider; more providers plug in later without touching
   call sites.

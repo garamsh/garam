@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { FolderGit2 } from "lucide-react";
 
-import { listProjects, orgNotFound } from "@/features/orgs/api/orgs";
+import { listProjects, orgNotFound } from "@/features/orgs";
 
 import { EmptyState } from "../../../_components/empty-state";
 import { PageHeader } from "../../../_components/page-header";

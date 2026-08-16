@@ -1,12 +1,7 @@
 import { HttpResponse, http } from "msw";
 
-import type {
-  Group,
-  Member,
-  Organization,
-  Project,
-} from "@/features/orgs/api/orgs";
-import type { User } from "@/features/auth/api/get-session";
+import type { User } from "@/features/auth";
+import type { Group, Member, Organization, Project } from "@/features/orgs";
 
 /** The backend base URL the tests run the server-side client against. */
 export const API_URL = "http://localhost:8080";

@@ -15,7 +15,7 @@ import {
 import {
   createInvitation,
   type CreateInvitationState,
-} from "@/features/orgs/api/create-invitation";
+} from "@/features/orgs/actions";
 
 const initialState: CreateInvitationState = { status: "idle" };
 

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { UsersRound } from "lucide-react";
 
-import { listGroups, orgNotFound } from "@/features/orgs/api/orgs";
+import { listGroups, orgNotFound } from "@/features/orgs";
 
 import { EmptyState } from "../../../_components/empty-state";
 import { PageHeader } from "../../../_components/page-header";

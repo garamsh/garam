@@ -44,7 +44,7 @@ collaborate on a shared plan.
 
 - Workflow execution engine, scheduler, queue.
 - Notifications or messaging.
-- The agent domain (still being planned; code untouched, no API or
+- The agent domain (still being planned; no package, API or
   persistence).
 - Resource-based policies: a statement names no `Principal`, so a
   policy reaches subjects through an identity attachment only
@@ -82,7 +82,6 @@ collaborate on a shared plan.
   and per-org cache, gRPC servers.
 - `internal/org/` — organizations, groups, projects, memberships, invitations.
 - `internal/user/` — human identities.
-- `internal/agent/` — autonomous identities (planning).
 
 `grn` and `errorx` are the only shared packages. Domains cooperate
 through `grn.GRN`, never through each other's concrete types. `api`
@@ -99,7 +98,6 @@ contract is `proto/garam/authz/v1`.
 | `grn.GRN` | `internal/grn` | resource identifier (value type) |
 | `errorx.Error` | `internal/errorx` | typed error with kind |
 | `user.User` | `internal/user` | human identity |
-| `agent.Agent` | `internal/agent` | autonomous identity |
 | `org.Organization` | `internal/org` | top-level tenant |
 | `org.Group` | `internal/org` | user/agent bundle |
 | `org.Project` | `internal/org` | unit of work |

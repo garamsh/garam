@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { UserRound } from "lucide-react";
 
 import { Separator } from "@/components/ui/separator";
-import { getSession } from "@/features/auth/api/get-session";
-import { listOrgMembers, orgNotFound } from "@/features/orgs/api/orgs";
+import { getSession } from "@/features/auth";
+import { listOrgMembers, orgNotFound } from "@/features/orgs";
 
 import { EmptyState } from "../../../_components/empty-state";
 import { PageHeader } from "../../../_components/page-header";

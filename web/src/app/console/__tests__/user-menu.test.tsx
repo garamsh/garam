@@ -10,7 +10,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 // contract is that submitting the control reaches it.
 const loggedOut = vi.hoisted(() => vi.fn());
 
-vi.mock("@/features/auth/api/log-out", () => ({ logOut: loggedOut }));
+vi.mock("@/features/auth/actions", () => ({ logOut: loggedOut }));
 
 function renderMenu(nickname: string) {
   return render(

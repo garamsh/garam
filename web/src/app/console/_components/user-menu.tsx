@@ -17,7 +17,7 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { logOut } from "@/features/auth/api/log-out";
+import { logOut } from "@/features/auth/actions";
 
 /** The signed-in identity and the way out of it. */
 export function UserMenu({ nickname }: { nickname: string }) {

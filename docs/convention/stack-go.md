@@ -328,6 +328,12 @@ configured.
 These are the commands that sit behind the project's entry-point
 names.
 
+`go test` prints only `ok <pkg>` for a package that passes and discards
+the rest of its output; the full output appears on failure, or under
+`-v`. So anything a test binary prints about what it covered is missing
+from exactly the run that needed it. An entry point that has something
+to report prints it itself, before invoking `go test`.
+
 | Task | Command |
 |------|---------|
 | Build | `go build ./...` |

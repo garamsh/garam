@@ -9,7 +9,7 @@ workflow last. Each tier depends only on the tier below it.
 - P2 — authz persistence & policy versioning (done)
 - Web console (in progress)
 - P3 — Workflow core (not started)
-- P4 — Operational (not started)
+- P4 — Operational (partly done)
 - Sequencing rules
 
 ## MVP — Authentication + org permissions (done)
@@ -80,11 +80,16 @@ already expose, built in parallel rather than gating P3.
 - Workflows are themselves GRN-addressed resources.
 - authz remains the gate at every transition.
 
-## P4 — Operational (not started)
+## P4 — Operational (partly done)
 
-- Structured logging (`log/slog`) with `trace_id` propagation.
-- Prometheus metrics and OpenTelemetry tracing.
-- Container image and a minimal deploy path.
+- Structured logging (`log/slog`) with `trace_id` propagation — done.
+  Handlers log the route pattern, never the concrete path, so an
+  invitation token cannot reach a log line.
+- Prometheus metrics and OpenTelemetry tracing — metrics done, both
+  servers exporting on their own endpoints. Spans are minted and
+  propagated but not exported: there is nowhere to ship them yet.
+- Container image and a minimal deploy path — not started. The compose
+  file under `deploy/local/` is a dev stack, not a deploy path.
 
 ## Sequencing rules
 

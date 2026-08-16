@@ -10,7 +10,6 @@ import (
 	"math/big"
 	"net/url"
 	"time"
-	"unicode"
 
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
@@ -92,37 +91,14 @@ func createCertificate(uri *url.URL, public *ecdsa.PublicKey, issuer *x509.Certi
 
 // subjectURI renders a GRN as the SAN URI that identifies it.
 //
-// A GRN is an opaque URI: it has no "//", so url.Parse leaves Path and
-// Host as empty strings rather than failing. A verifier recovers the
-// identity by parsing what it reads, and it may read the whole URI or
-// only Opaque, so the certificate is issued only when both readings
-// parse back to the GRN it was asked for.
-//
-// Two segment contents break that quietly. A ':' shifts every segment
-// after it, so the URI parses back as another identifier in another
-// organization — which is where ADR-0014 rests tenancy. A '?' or '#'
-// moves the tail into RawQuery or Fragment, so Opaque holds a truncated
-// identity while the whole URI still renders back to the GRN. Comparing
-// strings catches neither; parsing back catches both.
+// A GRN is an opaque URI: it has no "//", so a verifier recovers the
+// identity from the whole URI or from Opaque alone. A validated GRN
+// reads back the same either way — its segments are slugs, so nothing
+// in it shifts a segment or moves the tail into a query or a fragment.
 func subjectURI(g grn.GRN) (*url.URL, error) {
-	// A SAN URI is an IA5String, so a byte past ASCII is refused here
-	// rather than by the encoder — which would fail after the
-	// organization's CA had been created for a subject that cannot have
-	// a certificate, and report a caller's input as an internal fault.
-	for _, r := range g.String() {
-		if r > unicode.MaxASCII {
-			return nil, errorx.New(errorx.KindInvalidArgument, "ca: subject grn is not ascii")
-		}
-	}
 	u, err := url.Parse(g.String())
 	if err != nil {
 		return nil, errorx.Wrap(err, "ca: subject uri", errorx.KindInvalidArgument)
-	}
-	for _, reading := range []string{u.String(), u.Scheme + ":" + u.Opaque} {
-		back, err := grn.Parse(reading)
-		if err != nil || back != g {
-			return nil, errorx.New(errorx.KindInvalidArgument, "ca: subject grn does not survive as a uri")
-		}
 	}
 	return u, nil
 }

@@ -199,7 +199,20 @@ func (s *Server) authorize(r *http.Request, orgGRN grn.GRN, u *user.User, action
 // authorizeOn enforces the action on target, a resource of orgGRN.
 // Org membership is the precondition; non-members and denied actions
 // both yield 403. Collection: authz.md §Statement collection.
+//
+// Both GRNs carry a path segment the caller chose, and this is where
+// one stops being inert: scopedStatements splices the org identifier
+// into a resource pattern, where a wildcard would widen the statement
+// past the org it was scoped to. Validating here refuses that before
+// the pattern is built, rather than resting on the membership lookup
+// below happening to miss.
 func (s *Server) authorizeOn(r *http.Request, orgGRN, target grn.GRN, u *user.User, action string) error {
+	if err := orgGRN.Validate(); err != nil {
+		return err
+	}
+	if err := target.Validate(); err != nil {
+		return err
+	}
 	m, err := s.orgs.GetMember(r.Context(), orgGRN, u.GRN())
 	if errorx.IsKind(err, errorx.KindNotFound) {
 		return errorx.New(errorx.KindPermissionDenied, "not a member of this org")

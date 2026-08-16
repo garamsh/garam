@@ -14,12 +14,13 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-// The brand face, per the logo kit: SemiBold is the only weight the
-// wordmark uses.
+// The brand face, per the logo kit. The wordmark is SemiBold; Medium is
+// the other weight `font-heading` is asked for, and an undeclared weight
+// resolves to the nearest declared one.
 const poppins = Poppins({
   variable: "--font-poppins",
   subsets: ["latin"],
-  weight: ["600"],
+  weight: ["500", "600"],
 });
 
 /** Head metadata for every route that does not set its own. */

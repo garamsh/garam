@@ -120,6 +120,7 @@ type Invitation struct {
 
 // InvitationCreate defines model for InvitationCreate.
 type InvitationCreate struct {
+	// ExpiresInHours Token lifetime in hours. The server applies 168 (seven days) when the field is omitted.
 	ExpiresInHours *int `json:"expiresInHours,omitempty"`
 
 	// Role Owners are not transferable by invitation.

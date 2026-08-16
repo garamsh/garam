@@ -1145,7 +1145,9 @@ components:
           type: integer
           minimum: 1
           maximum: 720
-          default: 168
+          description: >-
+            Token lifetime in hours. The server applies 168 (seven
+            days) when the field is omitted.
     Invitation:
       type: object
       required: [token, orgGrn, role, expiresAt]

@@ -1,7 +1,6 @@
 package ca_test
 
 import (
-	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/x509"
@@ -117,7 +116,9 @@ func TestService_IssueCreatesTheOrganizationAuthorityOnDemand(t *testing.T) {
 	assert.False(t, leaf.IsCA)
 	assert.Equal(t, []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}, leaf.ExtKeyUsage)
 	assert.Equal(t, cert.NotAfter(), leaf.NotAfter.UTC())
-	assert.Equal(t, parseKeyPEM(t, cert.PrivateKeyPEM()).PublicKey, *leaf.PublicKey.(*ecdsa.PublicKey))
+	public, ok := leaf.PublicKey.(*ecdsa.PublicKey)
+	require.True(t, ok)
+	assert.Equal(t, parseKeyPEM(t, cert.PrivateKeyPEM()).PublicKey, *public)
 }
 
 // TestService_IssueNamesTheSubjectInASANURI pins the identity ADR-0014
@@ -145,21 +146,30 @@ func TestService_IssueNamesTheSubjectInASANURI(t *testing.T) {
 }
 
 // TestService_StoresTheAuthorityKeySealed demonstrates what a database
-// dump alone yields: bytes that are not the key.
+// dump alone yields. The claim is that the bytes are unusable, not that
+// they differ from the key: a reversible encoding differs from it too
+// and still hands a dump-holder the key, so what is asserted is that
+// they neither parse as a key nor open under any other one.
 func TestService_StoresTheAuthorityKeySealed(t *testing.T) {
+	ctx := context.Background()
 	sealer := newSealer(t)
 	_, authority := issueForNewOrg(t, agentGRN("acme", "bot-1"), sealer, ca.Config{})
 
-	opened, err := sealer.Open(context.Background(), authority.SealedKey())
+	row := []byte(authority.Organization().String())
+	opened, err := sealer.Open(ctx, row, authority.SealedKey())
 	require.NoError(t, err)
 	key, err := x509.ParsePKCS8PrivateKey(opened)
 	require.NoError(t, err)
+	private, ok := key.(*ecdsa.PrivateKey)
+	require.True(t, ok)
 	authorityCert, err := x509.ParseCertificate(authority.Certificate())
 	require.NoError(t, err)
-	assert.Equal(t, authorityCert.PublicKey, key.(*ecdsa.PrivateKey).Public())
+	assert.Equal(t, authorityCert.PublicKey, private.Public())
 
-	assert.NotEqual(t, opened, authority.SealedKey())
-	assert.False(t, bytes.Contains(authority.SealedKey(), opened), "the stored bytes contain the key")
+	_, err = x509.ParsePKCS8PrivateKey(authority.SealedKey())
+	assert.Error(t, err, "the stored bytes parse as a private key")
+	_, err = newSealer(t).Open(ctx, row, authority.SealedKey())
+	assert.Error(t, err, "the stored bytes open under a key-encryption key that never sealed them")
 }
 
 func TestService_IssueReusesTheOrganizationAuthority(t *testing.T) {
@@ -202,6 +212,9 @@ func TestService_IssueRejects(t *testing.T) {
 		"root owns no ca":   grn.New(grn.RootOwner, grn.DefaultProject, "org", "acme"),
 		"identifier splits": agentGRN("acme", "bot?1"),
 		"control character": agentGRN("acme", "bot\n1"),
+		// A colon shifts every segment after it, so this GRN's SAN URI
+		// reads back as identifier "agent:bot-1" in organization "ac".
+		"segment holds a colon": grn.New("ac:me", grn.DefaultProject, "agent", "bot-1"),
 	}
 	for name, subject := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -220,7 +233,7 @@ func TestService_IssueFailsWhenSealingFails(t *testing.T) {
 	store := mocks.NewMockStore(t)
 	store.EXPECT().Get(mock.Anything, orgOf(subject)).Return(nil, ca.ErrAuthorityNotFound).Once()
 	sealer := mocks.NewMockSealer(t)
-	sealer.EXPECT().Seal(mock.Anything, mock.Anything).
+	sealer.EXPECT().Seal(mock.Anything, mock.Anything, mock.Anything).
 		Return(nil, errorx.New(errorx.KindUnavailable, "sealed by nothing")).Once()
 
 	_, err := ca.NewService(store, sealer, ca.Config{}).Issue(context.Background(), subject)
@@ -280,7 +293,7 @@ func TestService_CertificateLifetimeCarriesJitter(t *testing.T) {
 	_, authority := issueForNewOrg(t, subject, sealer, ca.Config{CertificateLifetime: lifetime})
 	svc := serviceHolding(t, authority, sealer, ca.Config{CertificateLifetime: lifetime})
 
-	expiries := make(map[time.Time]struct{})
+	var earliest, latest time.Time
 	for range 8 {
 		issued := time.Now().UTC()
 		cert, err := svc.Issue(context.Background(), subject)
@@ -292,9 +305,19 @@ func TestService_CertificateLifetimeCarriesJitter(t *testing.T) {
 		// down into it.
 		assert.False(t, cert.NotAfter().After(issued.Add(lifetime)))
 		assert.True(t, cert.NotAfter().After(issued.Add(lifetime-lifetime/10-time.Second)))
-		expiries[cert.NotAfter()] = struct{}{}
+		if earliest.IsZero() || cert.NotAfter().Before(earliest) {
+			earliest = cert.NotAfter()
+		}
+		if cert.NotAfter().After(latest) {
+			latest = cert.NotAfter()
+		}
 	}
-	assert.Greater(t, len(expiries), 1, "certificates issued together expire together")
+	// Distinct expiries are not spread ones: a two-second spread would
+	// satisfy "not identical" and still restart a fleet together, which
+	// is the outage the jitter exists to prevent. Eight draws from a
+	// tenth of the lifetime landing inside a hundredth of it is about
+	// one in a million, so the spread itself is the assertion.
+	assert.Greater(t, latest.Sub(earliest), lifetime/100, "expiries are bunched")
 }
 
 func TestNewService_DefaultsTheCertificateLifetime(t *testing.T) {

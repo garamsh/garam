@@ -92,23 +92,27 @@ func createCertificate(uri *url.URL, public *ecdsa.PublicKey, issuer *x509.Certi
 // subjectURI renders a GRN as the SAN URI that identifies it.
 //
 // A GRN is an opaque URI: it has no "//", so url.Parse leaves Path and
-// Host as empty strings rather than failing. Whoever reads this back
-// compares the whole URI string, or Opaque — an empty Path compares
-// equal to any other empty Path, which is every identity at once.
+// Host as empty strings rather than failing. A verifier recovers the
+// identity by parsing what it reads, and it may read the whole URI or
+// only Opaque, so the certificate is issued only when both readings
+// parse back to the GRN it was asked for.
 //
-// Those two readings agree only while the whole GRN is the opaque part,
-// and a '?' or '#' in a segment breaks that quietly: url.Parse moves
-// the tail into RawQuery or Fragment, so Opaque holds a truncated
-// identity while the URI still renders back to the GRN. The check below
-// refuses to issue such a certificate rather than leave a verifier's
-// choice of reading deciding who the holder is.
+// Two segment contents break that quietly. A ':' shifts every segment
+// after it, so the URI parses back as another identifier in another
+// organization — which is where ADR-0014 rests tenancy. A '?' or '#'
+// moves the tail into RawQuery or Fragment, so Opaque holds a truncated
+// identity while the whole URI still renders back to the GRN. Comparing
+// strings catches neither; parsing back catches both.
 func subjectURI(g grn.GRN) (*url.URL, error) {
 	u, err := url.Parse(g.String())
 	if err != nil {
 		return nil, errorx.Wrap(err, "ca: subject uri", errorx.KindInvalidArgument)
 	}
-	if u.Scheme+":"+u.Opaque != g.String() {
-		return nil, errorx.New(errorx.KindInvalidArgument, "ca: subject grn does not survive as a uri")
+	for _, reading := range []string{u.String(), u.Scheme + ":" + u.Opaque} {
+		back, err := grn.Parse(reading)
+		if err != nil || back != g {
+			return nil, errorx.New(errorx.KindInvalidArgument, "ca: subject grn does not survive as a uri")
+		}
 	}
 	return u, nil
 }

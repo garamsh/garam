@@ -38,8 +38,8 @@ func (_m *MockSealer) EXPECT() *MockSealer_Expecter {
 }
 
 // Open provides a mock function for the type MockSealer
-func (_mock *MockSealer) Open(ctx context.Context, sealed []byte) ([]byte, error) {
-	ret := _mock.Called(ctx, sealed)
+func (_mock *MockSealer) Open(ctx context.Context, binding []byte, sealed []byte) ([]byte, error) {
+	ret := _mock.Called(ctx, binding, sealed)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Open")
@@ -47,18 +47,18 @@ func (_mock *MockSealer) Open(ctx context.Context, sealed []byte) ([]byte, error
 
 	var r0 []byte
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, []byte) ([]byte, error)); ok {
-		return returnFunc(ctx, sealed)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, []byte, []byte) ([]byte, error)); ok {
+		return returnFunc(ctx, binding, sealed)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, []byte) []byte); ok {
-		r0 = returnFunc(ctx, sealed)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, []byte, []byte) []byte); ok {
+		r0 = returnFunc(ctx, binding, sealed)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]byte)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, []byte) error); ok {
-		r1 = returnFunc(ctx, sealed)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, []byte, []byte) error); ok {
+		r1 = returnFunc(ctx, binding, sealed)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -72,12 +72,13 @@ type MockSealer_Open_Call struct {
 
 // Open is a helper method to define mock.On call
 //   - ctx context.Context
+//   - binding []byte
 //   - sealed []byte
-func (_e *MockSealer_Expecter) Open(ctx any, sealed any) *MockSealer_Open_Call {
-	return &MockSealer_Open_Call{Call: _e.mock.On("Open", ctx, sealed)}
+func (_e *MockSealer_Expecter) Open(ctx any, binding any, sealed any) *MockSealer_Open_Call {
+	return &MockSealer_Open_Call{Call: _e.mock.On("Open", ctx, binding, sealed)}
 }
 
-func (_c *MockSealer_Open_Call) Run(run func(ctx context.Context, sealed []byte)) *MockSealer_Open_Call {
+func (_c *MockSealer_Open_Call) Run(run func(ctx context.Context, binding []byte, sealed []byte)) *MockSealer_Open_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -87,9 +88,14 @@ func (_c *MockSealer_Open_Call) Run(run func(ctx context.Context, sealed []byte)
 		if args[1] != nil {
 			arg1 = args[1].([]byte)
 		}
+		var arg2 []byte
+		if args[2] != nil {
+			arg2 = args[2].([]byte)
+		}
 		run(
 			arg0,
 			arg1,
+			arg2,
 		)
 	})
 	return _c
@@ -100,14 +106,14 @@ func (_c *MockSealer_Open_Call) Return(bytes []byte, err error) *MockSealer_Open
 	return _c
 }
 
-func (_c *MockSealer_Open_Call) RunAndReturn(run func(ctx context.Context, sealed []byte) ([]byte, error)) *MockSealer_Open_Call {
+func (_c *MockSealer_Open_Call) RunAndReturn(run func(ctx context.Context, binding []byte, sealed []byte) ([]byte, error)) *MockSealer_Open_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // Seal provides a mock function for the type MockSealer
-func (_mock *MockSealer) Seal(ctx context.Context, plaintext []byte) ([]byte, error) {
-	ret := _mock.Called(ctx, plaintext)
+func (_mock *MockSealer) Seal(ctx context.Context, binding []byte, plaintext []byte) ([]byte, error) {
+	ret := _mock.Called(ctx, binding, plaintext)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Seal")
@@ -115,18 +121,18 @@ func (_mock *MockSealer) Seal(ctx context.Context, plaintext []byte) ([]byte, er
 
 	var r0 []byte
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, []byte) ([]byte, error)); ok {
-		return returnFunc(ctx, plaintext)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, []byte, []byte) ([]byte, error)); ok {
+		return returnFunc(ctx, binding, plaintext)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, []byte) []byte); ok {
-		r0 = returnFunc(ctx, plaintext)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, []byte, []byte) []byte); ok {
+		r0 = returnFunc(ctx, binding, plaintext)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]byte)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, []byte) error); ok {
-		r1 = returnFunc(ctx, plaintext)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, []byte, []byte) error); ok {
+		r1 = returnFunc(ctx, binding, plaintext)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -140,12 +146,13 @@ type MockSealer_Seal_Call struct {
 
 // Seal is a helper method to define mock.On call
 //   - ctx context.Context
+//   - binding []byte
 //   - plaintext []byte
-func (_e *MockSealer_Expecter) Seal(ctx any, plaintext any) *MockSealer_Seal_Call {
-	return &MockSealer_Seal_Call{Call: _e.mock.On("Seal", ctx, plaintext)}
+func (_e *MockSealer_Expecter) Seal(ctx any, binding any, plaintext any) *MockSealer_Seal_Call {
+	return &MockSealer_Seal_Call{Call: _e.mock.On("Seal", ctx, binding, plaintext)}
 }
 
-func (_c *MockSealer_Seal_Call) Run(run func(ctx context.Context, plaintext []byte)) *MockSealer_Seal_Call {
+func (_c *MockSealer_Seal_Call) Run(run func(ctx context.Context, binding []byte, plaintext []byte)) *MockSealer_Seal_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -155,9 +162,14 @@ func (_c *MockSealer_Seal_Call) Run(run func(ctx context.Context, plaintext []by
 		if args[1] != nil {
 			arg1 = args[1].([]byte)
 		}
+		var arg2 []byte
+		if args[2] != nil {
+			arg2 = args[2].([]byte)
+		}
 		run(
 			arg0,
 			arg1,
+			arg2,
 		)
 	})
 	return _c
@@ -168,7 +180,7 @@ func (_c *MockSealer_Seal_Call) Return(bytes []byte, err error) *MockSealer_Seal
 	return _c
 }
 
-func (_c *MockSealer_Seal_Call) RunAndReturn(run func(ctx context.Context, plaintext []byte) ([]byte, error)) *MockSealer_Seal_Call {
+func (_c *MockSealer_Seal_Call) RunAndReturn(run func(ctx context.Context, binding []byte, plaintext []byte) ([]byte, error)) *MockSealer_Seal_Call {
 	_c.Call.Return(run)
 	return _c
 }

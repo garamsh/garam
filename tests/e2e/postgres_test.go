@@ -5,7 +5,6 @@
 package e2e_test
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/x509"
@@ -996,16 +995,22 @@ func TestCertificateAuthority_RoundTrip(t *testing.T) {
 	assert.Equal(t, subject.String(), leafOf(t, cert).URIs[0].String())
 	require.NoError(t, chainsTo(t, cert, authority))
 
-	// What a database dump yields is the sealed form, and the key it
-	// holds is readable only through the sealer.
+	// What a database dump yields is the sealed form: readable through
+	// the sealer that produced it, and unusable otherwise — it is not a
+	// key, and it does not open under a key that never sealed it.
 	var sealed []byte
 	require.NoError(t, p.QueryRow(ctx,
 		`SELECT sealed_key FROM certificate_authorities WHERE org_grn = $1`, acme.String()).Scan(&sealed))
-	opened, err := sealer.Open(ctx, sealed)
+	opened, err := sealer.Open(ctx, []byte(acme.String()), sealed)
 	require.NoError(t, err)
 	_, err = x509.ParsePKCS8PrivateKey(opened)
 	require.NoError(t, err)
-	assert.False(t, bytes.Contains(sealed, opened), "the stored bytes contain the key")
+	_, err = x509.ParsePKCS8PrivateKey(sealed)
+	assert.Error(t, err, "the stored bytes parse as a private key")
+	strangerKey, err := ca.NewAESGCMSealer(make([]byte, ca.KeySize))
+	require.NoError(t, err)
+	_, err = strangerKey.Open(ctx, []byte(acme.String()), sealed)
+	assert.Error(t, err, "the stored bytes open under a key-encryption key that never sealed them")
 
 	// The organization's second agent takes the CA the first created.
 	sibling, err := svc.Issue(ctx, scopedGRN("acme", "agent", "bot-2"))
@@ -1022,10 +1027,28 @@ func TestCertificateAuthority_RoundTrip(t *testing.T) {
 	assert.Error(t, chainsTo(t, cert, foreignAuthority))
 	assert.Error(t, chainsTo(t, foreign, authority))
 
-	// A CA belongs to an organization that exists.
+	// A CA belongs to an organization that exists, and no CA is written
+	// for one that does not.
 	_, err = svc.Issue(ctx, scopedGRN("ghost", "agent", "bot-1"))
 	require.Error(t, err)
 	assert.True(t, errorx.IsKind(err, errorx.KindNotFound))
+	var authorities int
+	require.NoError(t, p.QueryRow(ctx, `SELECT count(*) FROM certificate_authorities`).Scan(&authorities))
+	assert.Equal(t, 2, authorities)
+
+	// Write access to the database is not enough to move a trust root:
+	// an authority row copied onto another organization carries a
+	// sealed key that does not open there, so the copy signs nothing.
+	copycat := orgRootGRN("copycat")
+	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(copycat, "copycat")))
+	_, err = p.Exec(ctx, `INSERT INTO certificate_authorities (org_grn, certificate, sealed_key, not_after, created_at)
+		SELECT $1, certificate, sealed_key, not_after, created_at
+		FROM certificate_authorities WHERE org_grn = $2`, copycat.String(), acme.String())
+	require.NoError(t, err)
+
+	_, err = svc.Issue(ctx, scopedGRN("copycat", "agent", "bot-1"))
+	require.Error(t, err)
+	assert.True(t, errorx.IsKind(err, errorx.KindDataLoss))
 
 	assert.ErrorIs(t, store.Create(ctx, authority), ca.ErrAuthorityAlreadyExists)
 }

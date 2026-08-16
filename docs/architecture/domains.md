@@ -184,9 +184,10 @@ requirement lands with it.
 A key the process holds rather than a cloud KMS, considered and
 rejected: a KMS is the stronger custody, because the key never enters
 garam's memory, and taking it would make issuing depend on a hosted
-service in a project that has none — the self-hosting ADR-0012 is built
-around. `Sealer` is the seam that keeps the option open: a KMS
-implementation replaces the one there is without touching a caller.
+service in a project that has none — where ADR-0012 has a user bring
+their own operator, a peer of garam rather than a part of it. `Sealer`
+is the seam that keeps the option open: a KMS implementation replaces
+the one there is without touching a caller.
 
 ## Store implementation status
 

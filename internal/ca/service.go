@@ -153,7 +153,7 @@ func (s *service) newAuthority(ctx context.Context, orgGRN grn.GRN) (*Authority,
 	if err != nil {
 		return nil, errorx.Wrap(err, "ca: marshal authority key", errorx.KindInternal)
 	}
-	sealed, err := s.sealer.Seal(ctx, keyDER)
+	sealed, err := s.sealer.Seal(ctx, binding(orgGRN), keyDER)
 	if err != nil {
 		return nil, errorx.Wrap(err, "ca: seal authority key")
 	}
@@ -166,6 +166,12 @@ func (s *service) newAuthority(ctx context.Context, orgGRN grn.GRN) (*Authority,
 	}, nil
 }
 
+// binding ties a sealed key to the organization whose row holds it, so
+// a key copied onto another organization's row does not open there.
+func binding(orgGRN grn.GRN) []byte {
+	return []byte(orgGRN.String())
+}
+
 // open unseals the CA's private key and parses its certificate. A
 // stored value that no longer parses is corruption, hence internal.
 func (s *service) open(ctx context.Context, a *Authority) (*x509.Certificate, *ecdsa.PrivateKey, error) {
@@ -173,7 +179,7 @@ func (s *service) open(ctx context.Context, a *Authority) (*x509.Certificate, *e
 	if err != nil {
 		return nil, nil, errorx.Wrap(err, "ca: authority certificate", errorx.KindInternal)
 	}
-	keyDER, err := s.sealer.Open(ctx, a.sealedKey)
+	keyDER, err := s.sealer.Open(ctx, binding(a.orgGRN), a.sealedKey)
 	if err != nil {
 		return nil, nil, errorx.Wrap(err, "ca: open authority key")
 	}
@@ -189,7 +195,9 @@ func (s *service) open(ctx context.Context, a *Authority) (*x509.Certificate, *e
 }
 
 // orgGRNOf returns the GRN of the organization that owns the subject,
-// which is the CA that may sign for it.
+// whose CA is the only one that may sign for it. A subject whose
+// organization segment would parse into something else never reaches
+// here: subjectURI refuses it.
 func orgGRNOf(subject grn.GRN) grn.GRN {
 	return grn.New(grn.RootOwner, grn.DefaultProject, serviceTypeOrg, subject.Organization)
 }

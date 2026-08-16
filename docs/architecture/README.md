@@ -42,6 +42,7 @@ ADRs:
 - [0015](./adr/0015-operator-identity.md) — operators authenticate as agents do; key material travels as files
 - [0016](./adr/0016-ca-key-custody.md) — a certificate authority's key is sealed by a key the process holds
 - [0017](./adr/0017-machine-process.md) — machine identities are served by a process of their own
+- [0018](./adr/0018-delivery-acknowledgement.md) — a message is completed by the turn-end event that names it
 
 ## Rules for edits
 

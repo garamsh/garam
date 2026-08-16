@@ -133,6 +133,12 @@ func (s *Server) Me(w http.ResponseWriter, r *http.Request) {
 // login. The provider subject becomes the user's GRN identifier.
 func (s *Server) upsertUser(r *http.Request, identity *authn.Identity) (*user.User, error) {
 	g := userGRN(identity.Subject)
+	// The provider chooses the subject, so it is checked before it is
+	// stored: a GRN written to a row it cannot be read back out of is
+	// the one failure no later boundary can catch.
+	if err := g.Validate(); err != nil {
+		return nil, errorx.Wrap(err, "provider subject")
+	}
 	u, err := s.users.Get(r.Context(), g)
 	if err == nil {
 		return u, nil

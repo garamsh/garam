@@ -3,6 +3,7 @@ package api_test
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -209,4 +210,40 @@ func TestScopedPermissions_RolesAssignedOverHTTP(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 	rec = f.do(t, "PATCH", path, `{"name":"eng"}`, alice)
 	assert.Equal(t, http.StatusForbidden, rec.Code)
+}
+
+// TestScopedPermissions_MalformedSlugStopsBeforeStatementCollection
+// pins where a path segment stops being inert: orgScope splices the
+// org identifier into a resource pattern, and '*' and '?' are that
+// pattern's wildcards (ADR-0002). The well-formed slug is the control
+// — it is answered on the same route, so what the rows below refuse is
+// the segment rather than the request.
+func TestScopedPermissions_MalformedSlugStopsBeforeStatementCollection(t *testing.T) {
+	t.Run("a well-formed slug is answered", func(t *testing.T) {
+		f := newFixture(t)
+		f.enforce()
+		owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+		slug := createOrg(t, f, owner, "acme")
+
+		assert.Equal(t, http.StatusOK, f.do(t, "GET", "/orgs/"+slug, "", owner).Code)
+	})
+
+	// The wildcards are percent-encoded: a raw '?' opens the query
+	// string instead of reaching the path segment.
+	malformed := map[string]string{
+		"a wildcard":                   "%2A",
+		"a single-character wildcard":  "ac%3Fe",
+		"an uppercase slug":            "ACME",
+		"a slug past the length bound": strings.Repeat("a", 65),
+	}
+	for name, slug := range malformed {
+		t.Run(name+" is refused", func(t *testing.T) {
+			// The evaluator carries no expectations, so a request that
+			// reaches statement collection fails the test.
+			f := newFixture(t)
+			owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+
+			assert.Equal(t, http.StatusBadRequest, f.do(t, "GET", "/orgs/"+slug, "", owner).Code)
+		})
+	}
 }

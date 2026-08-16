@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import {
   acceptInvitation,
   type AcceptInvitationState,
-} from "@/features/orgs/api/accept-invitation";
+} from "@/features/orgs/actions";
 
 const initialState: AcceptInvitationState = { status: "idle" };
 

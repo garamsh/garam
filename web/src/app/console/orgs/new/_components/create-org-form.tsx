@@ -5,10 +5,7 @@ import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  createOrg,
-  type CreateOrgState,
-} from "@/features/orgs/api/create-org";
+import { createOrg, type CreateOrgState } from "@/features/orgs/actions";
 
 const initialState: CreateOrgState = { status: "idle" };
 

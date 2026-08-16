@@ -7,8 +7,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import type { Member } from "@/features/orgs/api/orgs";
-import { slugFromGrn } from "@/features/orgs/grn";
+import { slugFromGrn, type Member } from "@/features/orgs";
 
 /** The organization's members by name, role and joining date. */
 export function MemberTable({ members }: { members: Member[] }) {

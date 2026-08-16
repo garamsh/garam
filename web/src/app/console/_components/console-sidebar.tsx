@@ -8,7 +8,7 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getSession } from "@/features/auth/api/get-session";
+import { getSession } from "@/features/auth";
 
 import { ConsoleNav } from "./console-nav";
 import { listConsoleOrgs } from "./console-orgs";

@@ -8,7 +8,7 @@ import {
   listOrgMembers,
   listProjects,
   orgNotFound,
-} from "@/features/orgs/api/orgs";
+} from "@/features/orgs";
 
 import { PageHeader } from "../../_components/page-header";
 import { CONSOLE_SECTIONS, orgHref } from "../../_components/navigation";

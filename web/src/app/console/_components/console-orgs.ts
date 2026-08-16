@@ -1,7 +1,6 @@
 import { cache } from "react";
 
-import { listOrgs } from "@/features/orgs/api/orgs";
-import { slugFromGrn } from "@/features/orgs/grn";
+import { listOrgs, slugFromGrn } from "@/features/orgs";
 
 import type { ConsoleOrg } from "./navigation";
 

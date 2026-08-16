@@ -8,10 +8,12 @@ import {
   CardFooter,
   CardHeader,
 } from "@/components/ui/card";
-import { getSession } from "@/features/auth/api/get-session";
-import { listProviders } from "@/features/auth/api/list-providers";
-import { DevSignInButton } from "@/features/auth/components/dev-sign-in-button";
-import { GoogleSignInButton } from "@/features/auth/components/google-sign-in-button";
+import {
+  DevSignInButton,
+  GoogleSignInButton,
+  getSession,
+  listProviders,
+} from "@/features/auth";
 
 /** Head metadata for the sign-in route; Next.js reads it by name. */
 export const metadata: Metadata = { title: "Sign in — garam" };

@@ -40,6 +40,7 @@ ADRs:
 - [0013](./adr/0013-agent-messaging.md) — agent messaging through a garam API an adapter polls
 - [0014](./adr/0014-agent-authentication.md) — agents authenticate with mTLS on a listener of their own
 - [0015](./adr/0015-operator-identity.md) — operators authenticate as agents do; key material travels as files
+- [0016](./adr/0016-ca-key-custody.md) — a certificate authority's key is sealed by a key the process holds
 
 ## Rules for edits
 

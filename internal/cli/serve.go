@@ -1,12 +1,15 @@
 package cli
 
 import (
+	"log/slog"
 	"net"
 	"net/http"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spf13/cobra"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
@@ -35,6 +38,11 @@ func newServeAPICommand() *cobra.Command {
 func serveAPI(cmd *cobra.Command) error {
 	ctx := cmd.Context()
 
+	obs, err := newObservability(serviceAPI)
+	if err != nil {
+		return err
+	}
+
 	databaseURL := envOr("GARAM_DATABASE_URL", "")
 	if databaseURL == "" {
 		return errorx.New(errorx.KindInvalidArgument, "GARAM_DATABASE_URL is required")
@@ -59,6 +67,9 @@ func serveAPI(cmd *cobra.Command) error {
 	conn, err := grpc.NewClient(
 		envOr("GARAM_AUTHZ_ADDR", "localhost:9090"),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		// Carries this request's trace id to the engine, so one id
+		// covers both halves of the hop.
+		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
 	)
 	if err != nil {
 		return errorx.Wrap(err, "authz client", errorx.KindInvalidArgument)
@@ -91,9 +102,19 @@ func serveAPI(cmd *cobra.Command) error {
 		},
 	)
 
+	// The generated router matches before the middleware runs, so the
+	// log line can name the route rather than the path. /metrics
+	// shares the router but not the middleware.
+	mux := http.NewServeMux()
+	mux.Handle("GET /metrics", obs.metricsHandler())
+	handler := apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{
+		BaseRouter:  mux,
+		Middlewares: []apigen.MiddlewareFunc{obs.logRequests},
+	})
+
 	addr := envOr("GARAM_HTTP_ADDR", ":8080")
-	cmd.Printf("serving api on %s\n", addr)
-	return http.ListenAndServe(addr, apigen.Handler(srv))
+	obs.logger.Info("serving api", slog.String("addr", addr))
+	return http.ListenAndServe(addr, otelhttp.NewHandler(handler, serviceAPI))
 }
 
 // defaultDevRedirectURL returns the dev login flow to the web origin's
@@ -135,6 +156,11 @@ func newServeAuthzCommand() *cobra.Command {
 func serveAuthz(cmd *cobra.Command) error {
 	ctx := cmd.Context()
 
+	obs, err := newObservability(serviceAuthz)
+	if err != nil {
+		return err
+	}
+
 	databaseURL := envOr("GARAM_DATABASE_URL", "")
 	if databaseURL == "" {
 		return errorx.New(errorx.KindInvalidArgument, "GARAM_DATABASE_URL is required")
@@ -151,7 +177,18 @@ func serveAuthz(cmd *cobra.Command) error {
 	// covers writes made by any other process.
 	go func() {
 		if err := authz.ListenPolicyChanges(ctx, pool, cache); err != nil {
-			cmd.PrintErrf("authz: policy change listener stopped: %v\n", err)
+			obs.logger.Error("policy change listener stopped", slog.String("error", err.Error()))
+		}
+	}()
+
+	// The engine speaks gRPC only, so its metrics need a listener of
+	// their own. Losing it must not take the engine down.
+	metricsAddr := envOr("GARAM_METRICS_ADDR", ":9091")
+	go func() {
+		mux := http.NewServeMux()
+		mux.Handle("GET /metrics", obs.metricsHandler())
+		if err := http.ListenAndServe(metricsAddr, mux); err != nil {
+			obs.logger.Error("metrics listener stopped", slog.String("error", err.Error()))
 		}
 	}()
 
@@ -160,10 +197,13 @@ func serveAuthz(cmd *cobra.Command) error {
 	if err != nil {
 		return errorx.Wrap(err, "authz listen", errorx.KindUnavailable)
 	}
-	srv := grpc.NewServer()
+	srv := grpc.NewServer(
+		grpc.StatsHandler(otelgrpc.NewServerHandler()),
+		grpc.ChainUnaryInterceptor(obs.logRPCs),
+	)
 	authzv1.RegisterAuthzServiceServer(srv, authz.NewGRPCServer(cache))
 	authzv1.RegisterPolicyServiceServer(srv, authz.NewPolicyGRPCServer(store, cache))
-	cmd.Printf("serving authz on %s\n", addr)
+	obs.logger.Info("serving authz", slog.String("addr", addr), slog.String("metrics_addr", metricsAddr))
 	if err := srv.Serve(lis); err != nil {
 		return errorx.Wrap(err, "authz serve", errorx.KindInternal)
 	}

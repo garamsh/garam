@@ -30,7 +30,7 @@ export function BrandMark({ className }: { className?: string }) {
       {/* Poppins' ascent less its descent is its cap height, so the
           centred line box centres the caps on the icon. */}
       <span className="font-heading text-[0.7143em] leading-none font-semibold tracking-[0.02em]">
-        garam
+        GARAM
       </span>
     </Link>
   );

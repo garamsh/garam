@@ -46,7 +46,7 @@ ADRs:
 - [0018](./adr/0018-delivery-acknowledgement.md) — a message is completed by the turn-end event that names it
 - [0019](./adr/0019-machine-openapi-spec.md) — the machine listener carries an OpenAPI specification of its own
 - [0020](./adr/0020-published-artifacts.md) — garam publishes images and a contract, not manifests
-- [0020](./adr/0020-liveness-and-readiness.md) — liveness and readiness answer on a port that carries no credential
+- [0021](./adr/0021-liveness-and-readiness.md) — liveness and readiness answer on a port that carries no credential
 
 ## Rules for edits
 

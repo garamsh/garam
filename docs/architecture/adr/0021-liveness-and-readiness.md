@@ -1,4 +1,4 @@
-# ADR 0020: Liveness and readiness answer on a port that carries no credential
+# ADR 0021: Liveness and readiness answer on a port that carries no credential
 
 > Status: accepted
 > Date: 2026-08-17
@@ -28,14 +28,23 @@ there is nothing to ask on at all.
 
 ## Decision
 
-- **Two probes, two meanings.** `/healthz` answers for the process
-  alone and reads nothing outside it. `/readyz` answers for the
-  dependencies a request needs, and fails while one of them is not
-  there.
-- **The answer is served where a caller needs no credential**: the
-  api's own HTTP port, the authz engine's existing metrics listener,
-  and — for `serve machine` — a plaintext listener of its own on
-  `GARAM_MACHINE_HEALTH_ADDR`. The mTLS listener gains no route.
+- **Two probes, two meanings, one spelling on every process.**
+  `/healthz` answers for the process alone and reads nothing outside
+  it. `/readyz` answers for the dependencies a request needs, and fails
+  while one of them is not there. Both paths are the same on all three,
+  so three deployments are configured the same way.
+- **The answer is served where a caller needs no credential**: for
+  `serve api`, the HTTP port it already serves on (`GARAM_HTTP_ADDR`,
+  default `:8080`); for `serve authz`, the listener its metrics already
+  use (`GARAM_METRICS_ADDR`, default `:9091`), because the engine
+  speaks gRPC only; for `serve machine`, a plaintext listener of its
+  own (`GARAM_MACHINE_HEALTH_ADDR`, default `:8444`), because its own
+  listener admits no caller without a client certificate. The mTLS
+  listener gains no route.
+- **Those paths and ports are interface, not implementation.** They are
+  the "paths a probe may reach" of the contract ADR-0020 publishes, so
+  a repository this one does not control is written against them:
+  changing either is superseding this ADR, not editing a handler.
 - **The meaning of the two lives in `internal/health`**, which the
   three composition roots mount. A process names its own dependencies;
   what the two words mean is written once.
@@ -54,6 +63,9 @@ there is nothing to ask on at all.
   second port and is the reason it is worth stating here.
 - The local stack's healthchecks are these probes rather than TCP
   connects, so `service_healthy` means the process can serve a request.
+  They reach them with the base image's `wget`, so removing the shell
+  from that image is a change that has to bring its own healthcheck. A
+  kubelet needs neither.
 - A process whose readiness answer cannot fail is indistinguishable
   from one that works, so each check ships with the failing case
   asserted beside the passing one.

@@ -64,6 +64,9 @@ collaborate on a shared plan.
   shell is a collapsible sidebar over `Organizations → organization →
   section`, and it addresses resources by the GRN's last segment rather
   than printing GRNs (ADR-0011).
+- Each of the three processes answers a liveness and a readiness probe
+  on a listener a scheduler reaches without credentials, liveness
+  reading nothing outside its own process (ADR-0020).
 - One identifier system across every resource (GRN).
 
 ## Out of scope (today)
@@ -120,6 +123,8 @@ collaborate on a shared plan.
 - `internal/errorx/` — typed errors; shared primitive.
 - `internal/cli/` — cobra commands + wiring (`serve api` | `serve authz`
   | `serve machine` | `migrate`).
+- `internal/health/` — what liveness and readiness mean, and the two
+  probes every serve command mounts (ADR-0020).
 - `internal/agent/` — agent identities and the operator each is
   assigned to.
 - `internal/ca/` — the per-organization certificate authority and the
@@ -138,7 +143,9 @@ collaborate on a shared plan.
 - `internal/org/` — organizations, groups, projects, memberships, invitations.
 - `internal/user/` — human identities.
 
-`grn` and `errorx` are the only shared packages. Domains cooperate
+`grn` and `errorx` are the only packages a domain shares; `health` is
+shared by the three serve commands and imported by no domain. Domains
+cooperate
 through `grn.GRN`, never through each other's concrete types — which is
 why `machine` declares the trust root it verifies against and `cli`
 satisfies it from `ca`. `api`
@@ -204,6 +211,7 @@ contract is `proto/garam/authz/v1`.
 | garam publishes images and a contract, not manifests | Cluster state changes in one place; a registry credential is unavailable both locally and on the target cluster. | [adr/0020-published-artifacts.md](./adr/0020-published-artifacts.md) |
 | A message is completed by the turn-end event naming it | It is the only signal that pairs deterministically; a lost one redelivers, so delivery is at-least-once rather than exactly-once. | [adr/0018-delivery-acknowledgement.md](./adr/0018-delivery-acknowledgement.md) |
 | The machine listener has a specification of its own | One contract per listener: the browser client generates no types for a surface it cannot call, and whoever writes an operator has something to build against. | [adr/0019-machine-openapi-spec.md](./adr/0019-machine-openapi-spec.md) |
+| Liveness and readiness answer on a credential-free port | Restarting is the expensive answer, so only readiness reads a dependency; the mTLS listener admits no probe, so that process gets a port for them. | [adr/0020-liveness-and-readiness.md](./adr/0020-liveness-and-readiness.md) |
 
 ## Non-functional goals
 

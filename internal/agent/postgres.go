@@ -82,10 +82,14 @@ func (s *PostgresStore) GetAssignment(ctx context.Context, agentGRN grn.GRN) (*A
 // ReportProvisioningState records what the operator assigned at epoch
 // reports about the agent's pod.
 func (s *PostgresStore) ReportProvisioningState(ctx context.Context, agentGRN grn.GRN, epoch int, state ProvisioningState) (*Agent, error) {
+	e, err := narrowEpoch(epoch)
+	if err != nil {
+		return nil, err
+	}
 	row, err := s.q.ReportAgentProvisioningState(ctx, db.ReportAgentProvisioningStateParams{
 		Grn:               agentGRN.String(),
 		ProvisioningState: string(state),
-		Epoch:             int32(epoch),
+		Epoch:             e,
 		UpdatedAt:         stamp(time.Now().UTC()),
 	})
 	if err != nil {
@@ -97,16 +101,32 @@ func (s *PostgresStore) ReportProvisioningState(ctx context.Context, agentGRN gr
 // ReportRuntimeState records what the agent assigned at epoch reports
 // about itself.
 func (s *PostgresStore) ReportRuntimeState(ctx context.Context, agentGRN grn.GRN, epoch int, state RuntimeState) (*Agent, error) {
+	e, err := narrowEpoch(epoch)
+	if err != nil {
+		return nil, err
+	}
 	row, err := s.q.ReportAgentRuntimeState(ctx, db.ReportAgentRuntimeStateParams{
 		Grn:          agentGRN.String(),
 		RuntimeState: string(state),
-		Epoch:        int32(epoch),
+		Epoch:        e,
 		UpdatedAt:    stamp(time.Now().UTC()),
 	})
 	if err != nil {
 		return nil, s.fenced(ctx, err, "report runtime state", agentGRN)
 	}
 	return rowToAgent(row)
+}
+
+// narrowEpoch converts a reported epoch to the width of the `epoch`
+// column. The module converts to a sqlc parameter without checking;
+// here the value decides the fence, and one that truncates onto the
+// live epoch would be accepted.
+func narrowEpoch(epoch int) (int32, error) {
+	e := int32(epoch)
+	if int(e) != epoch {
+		return 0, ErrStaleEpoch
+	}
+	return e, nil
 }
 
 // fenced says why a state report matched no row: the agent is gone, or

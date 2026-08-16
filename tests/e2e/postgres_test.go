@@ -406,6 +406,11 @@ func TestAgentStore_RoundTrip(t *testing.T) {
 	_, err = s.ReportRuntimeState(ctx, g, assigned.Epoch(), agent.RuntimeStateDisconnected)
 	assert.ErrorIs(t, err, agent.ErrStaleEpoch)
 
+	// An epoch too wide for the column shares its low 32 bits with the
+	// live one and is stale all the same.
+	_, err = s.ReportRuntimeState(ctx, g, stored.Epoch()+1<<32, agent.RuntimeStateDisconnected)
+	assert.ErrorIs(t, err, agent.ErrStaleEpoch)
+
 	after, err := s.Get(ctx, g)
 	require.NoError(t, err)
 	assert.Equal(t, agent.ProvisioningStateReady, after.ProvisioningState(), "the fenced write left the row alone")

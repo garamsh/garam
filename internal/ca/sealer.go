@@ -45,10 +45,9 @@ const (
 // aesGCMSealer seals with AES-256-GCM under a key-encryption key held
 // in memory for the life of the process.
 //
-// Sealed bytes are laid out as key identifier, nonce, then ciphertext,
-// and the identifier is the AEAD's additional data. That layout is what
-// reaches the database, so stored bytes answer which key-encryption key
-// opens them without holding any of it.
+// Sealed bytes are laid out as key identifier, nonce, then ciphertext.
+// That layout is what reaches the database, so stored bytes answer
+// which key-encryption key opens them without holding any of it.
 type aesGCMSealer struct {
 	aead  cipher.AEAD
 	keyID []byte

@@ -272,9 +272,12 @@ func TestService_CertificateLifetimeCarriesJitter(t *testing.T) {
 		cert, err := svc.Issue(context.Background(), subject)
 		require.NoError(t, err)
 		// Jitter only shortens: the configured lifetime is a ceiling,
-		// and a tenth of it is the widest the spread goes.
+		// and a tenth of it is the widest the spread goes. The floor
+		// takes a second on top of that tenth, because a certificate
+		// stores its validity to the second and the expiry is rounded
+		// down into it.
 		assert.False(t, cert.NotAfter().After(issued.Add(lifetime)))
-		assert.True(t, cert.NotAfter().After(issued.Add(lifetime-lifetime/10)))
+		assert.True(t, cert.NotAfter().After(issued.Add(lifetime-lifetime/10-time.Second)))
 		expiries[cert.NotAfter()] = struct{}{}
 	}
 	assert.Greater(t, len(expiries), 1, "certificates issued together expire together")
@@ -286,5 +289,5 @@ func TestNewService_DefaultsTheCertificateLifetime(t *testing.T) {
 	cert, _ := issueForNewOrg(t, subject, newSealer(t), ca.Config{})
 
 	assert.False(t, cert.NotAfter().After(issued.Add(ca.DefaultCertificateLifetime)))
-	assert.True(t, cert.NotAfter().After(issued.Add(ca.DefaultCertificateLifetime-ca.DefaultCertificateLifetime/10)))
+	assert.True(t, cert.NotAfter().After(issued.Add(ca.DefaultCertificateLifetime-ca.DefaultCertificateLifetime/10-time.Second)))
 }

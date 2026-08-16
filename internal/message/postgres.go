@@ -53,9 +53,11 @@ func (s *PostgresStore) Claim(ctx context.Context, recipient grn.GRN, lease time
 	if err != nil {
 		return nil, err
 	}
+	// The lease travels as an interval, so Postgres's clock decides when
+	// the claim lapses and this process's never does.
 	row, err := s.q.ClaimMessage(ctx, db.ClaimMessageParams{
-		ClaimID:      text(string(claimID)),
-		Lease:        interval(lease),
+		ClaimID:      pgtype.Text{String: string(claimID), Valid: true},
+		Lease:        pgtype.Interval{Microseconds: lease.Microseconds(), Valid: true},
 		RecipientGrn: recipient.String(),
 	})
 	if err != nil {
@@ -72,7 +74,7 @@ func (s *PostgresStore) Claim(ctx context.Context, recipient grn.GRN, lease time
 func (s *PostgresStore) Complete(ctx context.Context, c *Claim) error {
 	rows, err := s.q.CompleteMessage(ctx, db.CompleteMessageParams{
 		ID:      string(c.message.id),
-		ClaimID: text(string(c.id)),
+		ClaimID: pgtype.Text{String: string(c.id), Valid: true},
 	})
 	if err != nil {
 		return errorx.Wrap(err, "message store: complete")
@@ -124,14 +126,4 @@ func rowToClaim(row db.Message) (*Claim, error) {
 // stamp converts a time.Time to a valid pgtype.Timestamptz.
 func stamp(t time.Time) pgtype.Timestamptz {
 	return pgtype.Timestamptz{Time: t, Valid: true}
-}
-
-// text converts a string to a valid pgtype.Text.
-func text(s string) pgtype.Text {
-	return pgtype.Text{String: s, Valid: true}
-}
-
-// interval converts a lease to the width Postgres measures it in.
-func interval(d time.Duration) pgtype.Interval {
-	return pgtype.Interval{Microseconds: d.Microseconds(), Valid: true}
 }

@@ -21,8 +21,10 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"
 
+	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/api"
 	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/machine"
 )
 
@@ -152,9 +154,27 @@ func (o *observability) logRPCs(ctx context.Context, req any, info *grpc.UnarySe
 		slog.String("operation", info.FullMethod),
 		slog.String("trace_id", traceIDOf(ctx)),
 		slog.String("code", status.Code(err).String()),
-		principalAttr(fieldUserID, subject),
+		principalAttr(principalField(subject), subject),
 	)
 	return resp, err
+}
+
+// principalField names the field a subject GRN is logged under. The
+// engine matches subject strings and does not validate that one names a
+// user or a group (ADR-0008), so an agent or the operator that runs it
+// (ADR-0014, ADR-0015) reaches it as readily as a person does, and only
+// the GRN tells them apart. A subject that is no GRN at all names no
+// machine.
+func principalField(subject string) string {
+	g, err := grn.Parse(subject)
+	if err != nil {
+		return fieldUserID
+	}
+	switch g.ServiceType {
+	case agent.ServiceType, agent.ServiceTypeOperator:
+		return fieldMachineID
+	}
+	return fieldUserID
 }
 
 // levelOf grades a finished call: a failure is worth waking someone

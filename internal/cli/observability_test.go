@@ -27,10 +27,12 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
+	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/api"
 	"github.com/garamsh/garam/internal/ca"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/machine"
+	"github.com/garamsh/garam/internal/user"
 	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
 )
 
@@ -240,6 +242,51 @@ func TestLogRPCs_ReportsTheMethodAndTheSubject(t *testing.T) {
 			assert.NotEmpty(t, line["trace_id"])
 		})
 	}
+}
+
+// lineForSubject runs one Check about subject through the interceptor
+// and returns the line it logged.
+func lineForSubject(t *testing.T, subject grn.GRN) map[string]any {
+	t.Helper()
+	var out lines
+	obs := recordingObservability(&out)
+	_, err := obs.logRPCs(
+		context.Background(),
+		&authzv1.CheckRequest{SubjectGrn: subject.String()},
+		&grpc.UnaryServerInfo{FullMethod: "/garam.authz.v1.AuthzService/Check"},
+		func(context.Context, any) (any, error) { return &authzv1.CheckResponse{}, nil },
+	)
+	require.NoError(t, err)
+	return decodeLine(t, &out)
+}
+
+// TestLogRPCs_NamesAMachineSubjectAsOne reads the engine's line for a
+// check made on behalf of a machine against its line for one made on
+// behalf of a person. The engine matches subject strings and does not
+// validate that one names a user or a group (ADR-0008), so an agent GRN
+// is a valid subject and a check about it would otherwise be logged as
+// though a person made it — the distinction ADR-0014 rests on.
+//
+// The person's line is asserted beside the machine's, because a machine
+// line without user_id would hold as readily for a line that names no
+// principal at all, and because the two fields have to stay apart in
+// both directions. The person is named by a well-formed user GRN, so
+// what separates the lines is the service type rather than a string the
+// parse rejects.
+func TestLogRPCs_NamesAMachineSubjectAsOne(t *testing.T) {
+	for _, subject := range []grn.GRN{
+		machineGRN("acme", "bot-1"),
+		grn.New("acme", grn.DefaultProject, agent.ServiceTypeOperator, "op-1"),
+	} {
+		line := lineForSubject(t, subject)
+		assert.Equal(t, subject.String(), line[fieldMachineID])
+		assert.NotContains(t, line, fieldUserID)
+	}
+
+	person := grn.New("acme", grn.DefaultProject, user.ServiceType, "alice")
+	personLine := lineForSubject(t, person)
+	assert.Equal(t, person.String(), personLine[fieldUserID])
+	assert.NotContains(t, personLine, fieldMachineID)
 }
 
 // stubEngine answers Check so the interceptor has a call to observe.

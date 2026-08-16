@@ -8,6 +8,8 @@
 //	GARAM_MIGRATIONS_DIR   migrations directory (default "migrations")
 //	GARAM_HTTP_ADDR        api listen address (default ":8080")
 //	GARAM_GRPC_ADDR        authz listen address (default ":9090")
+//	GARAM_METRICS_ADDR     authz /metrics listen address (default ":9091";
+//	                       serve api answers /metrics on GARAM_HTTP_ADDR)
 //	GARAM_AUTHZ_ADDR       authz engine address for serve api (default "localhost:9090")
 //	GARAM_SESSION_TTL      session lifetime (default "168h")
 //	GARAM_COOKIE_SECURE    "true" to mark cookies Secure (default true)

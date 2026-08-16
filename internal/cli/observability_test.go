@@ -1,0 +1,207 @@
+// Internal test package: the middleware, the interceptor and the
+// trace-id fallback are unexported wiring with no exported surface
+// that reaches them.
+package cli
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"log/slog"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"sync"
+	"testing"
+
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
+
+	"github.com/garamsh/garam/internal/api"
+	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
+)
+
+const testSubject = "grn:root:default:user/42"
+
+// lines collects the log output of a handler that may run on another
+// goroutine.
+type lines struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (l *lines) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.buf.Write(p)
+}
+
+func (l *lines) String() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.buf.String()
+}
+
+// recordingObservability returns one whose lines land in out.
+func recordingObservability(out *lines) *observability {
+	return &observability{logger: slog.New(slog.NewJSONHandler(out, nil))}
+}
+
+// decodeLine parses the single line out holds.
+func decodeLine(t *testing.T, out *lines) map[string]any {
+	t.Helper()
+	var line map[string]any
+	require.NoError(t, json.Unmarshal([]byte(out.String()), &line))
+	return line
+}
+
+func TestNewObservability_CollectsIntoOneRegistry(t *testing.T) {
+	obs, err := newObservability("garam-test")
+	require.NoError(t, err)
+
+	families, err := obs.registry.Gather()
+	require.NoError(t, err)
+	assert.NotEmpty(t, families, "the exporter collects into the registry")
+}
+
+func TestLogRequests_ReportsTheRouteAndThePrincipal(t *testing.T) {
+	var out lines
+	obs := recordingObservability(&out)
+
+	// The route carries an invitation token and the query an OAuth
+	// code: neither may reach the line.
+	mux := http.NewServeMux()
+	mux.Handle("GET /invitations/{token}/accept", obs.logRequests(http.HandlerFunc(
+		func(w http.ResponseWriter, r *http.Request) {
+			api.PrincipalFrom(r).GRN = testSubject
+			w.WriteHeader(http.StatusNoContent)
+		})))
+	mux.ServeHTTP(httptest.NewRecorder(),
+		httptest.NewRequest(http.MethodGet, "/invitations/tok-secret/accept?code=oauth-code", nil))
+
+	line := decodeLine(t, &out)
+	assert.Equal(t, "GET /invitations/{token}/accept", line["operation"])
+	assert.Equal(t, testSubject, line["user_id"])
+	assert.Equal(t, float64(http.StatusNoContent), line["status"])
+	assert.NotEmpty(t, line["trace_id"])
+	assert.NotContains(t, out.String(), "tok-secret")
+	assert.NotContains(t, out.String(), "oauth-code")
+}
+
+func TestLogRequests_OmitsAnUnknownPrincipal(t *testing.T) {
+	var out lines
+	obs := recordingObservability(&out)
+
+	mux := http.NewServeMux()
+	mux.Handle("GET /auth/providers", obs.logRequests(http.HandlerFunc(
+		func(http.ResponseWriter, *http.Request) {})))
+	mux.ServeHTTP(httptest.NewRecorder(),
+		httptest.NewRequest(http.MethodGet, "/auth/providers", nil))
+
+	line := decodeLine(t, &out)
+	assert.Equal(t, float64(http.StatusOK), line["status"], "an unwritten status is 200")
+	assert.NotContains(t, line, "user_id")
+}
+
+func TestLogRPCs_ReportsTheMethodAndTheSubject(t *testing.T) {
+	tests := []struct {
+		name  string
+		err   error
+		code  string
+		level string
+	}{
+		{name: "served", code: codes.OK.String(), level: slog.LevelInfo.String()},
+		{
+			name:  "refused",
+			err:   status.Error(codes.PermissionDenied, "denied"),
+			code:  codes.PermissionDenied.String(),
+			level: slog.LevelError.String(),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var out lines
+			obs := recordingObservability(&out)
+
+			_, err := obs.logRPCs(
+				context.Background(),
+				&authzv1.CheckRequest{SubjectGrn: testSubject},
+				&grpc.UnaryServerInfo{FullMethod: "/garam.authz.v1.AuthzService/Check"},
+				func(context.Context, any) (any, error) { return &authzv1.CheckResponse{}, tt.err },
+			)
+			assert.Equal(t, tt.err, err)
+
+			line := decodeLine(t, &out)
+			assert.Equal(t, "/garam.authz.v1.AuthzService/Check", line["operation"])
+			assert.Equal(t, testSubject, line["user_id"])
+			assert.Equal(t, tt.code, line["code"])
+			assert.Equal(t, tt.level, line["level"])
+			assert.NotEmpty(t, line["trace_id"])
+		})
+	}
+}
+
+// stubEngine answers Check so the interceptor has a call to observe.
+type stubEngine struct {
+	authzv1.UnimplementedAuthzServiceServer
+}
+
+func (stubEngine) Check(context.Context, *authzv1.CheckRequest) (*authzv1.CheckResponse, error) {
+	return &authzv1.CheckResponse{}, nil
+}
+
+func TestLogRPCs_ReportsTheCallersTraceID(t *testing.T) {
+	// Without the same id on both lines the two halves of a request
+	// cannot be joined, which is the whole reason the id is logged.
+	_, err := newObservability("garam-test")
+	require.NoError(t, err)
+
+	var out lines
+	obs := recordingObservability(&out)
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	engine := grpc.NewServer(
+		grpc.StatsHandler(otelgrpc.NewServerHandler()),
+		grpc.ChainUnaryInterceptor(obs.logRPCs),
+	)
+	authzv1.RegisterAuthzServiceServer(engine, stubEngine{})
+	go func() { _ = engine.Serve(lis) }()
+	t.Cleanup(engine.Stop)
+
+	conn, err := grpc.NewClient(lis.Addr().String(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithStatsHandler(otelgrpc.NewClientHandler()))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close() })
+
+	ctx, span := otel.Tracer("garam-test").Start(context.Background(), "call")
+	defer span.End()
+	_, err = authzv1.NewAuthzServiceClient(conn).Check(ctx, &authzv1.CheckRequest{SubjectGrn: testSubject})
+	require.NoError(t, err)
+
+	assert.Equal(t, traceIDOf(ctx), decodeLine(t, &out)["trace_id"])
+}
+
+func TestTraceIDOf_PrefersTheSpan(t *testing.T) {
+	id := trace.TraceID{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
+		0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10}
+	ctx := trace.ContextWithSpanContext(context.Background(), trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID: id,
+		SpanID:  trace.SpanID{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08},
+	}))
+
+	assert.Equal(t, id.String(), traceIDOf(ctx))
+}
+
+func TestTraceIDOf_FallsBackToAUUID(t *testing.T) {
+	_, err := uuid.Parse(traceIDOf(context.Background()))
+	assert.NoError(t, err)
+}

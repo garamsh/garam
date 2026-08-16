@@ -6,7 +6,9 @@ export GOTOOLCHAIN := go$(shell sed -n 's/^go //p' go.mod)+auto
 
 OAPI_CODEGEN := go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.8.0
 SQLC := go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
-MOCKERY := go run github.com/vektra/mockery/v3@v3.7.2
+# mockery discovers only the dotted filename; stack-go.md §7 names the
+# undotted one, so the config is passed explicitly.
+MOCKERY := go run github.com/vektra/mockery/v3@v3.7.2 --config mockery.yaml
 BUF := go run github.com/bufbuild/buf/cmd/buf@v1.72.0
 GOIMPORTS := go run golang.org/x/tools/cmd/goimports@v0.48.0
 

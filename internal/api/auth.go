@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"net/http"
@@ -73,6 +74,7 @@ func (s *Server) OauthCallback(w http.ResponseWriter, r *http.Request, provider 
 		writeError(w, err)
 		return
 	}
+	identify(r, u)
 	token, err := authn.NewToken()
 	if err != nil {
 		writeError(w, err)
@@ -159,7 +161,40 @@ func (s *Server) currentUser(r *http.Request) (*user.User, error) {
 	if err != nil {
 		return nil, err
 	}
+	identify(r, u)
 	return u, nil
+}
+
+// Principal is who a request turned out to be. A handler resolves
+// that partway through, after any wrapping handler has started, so
+// the answer travels back out through this cell rather than through a
+// return value.
+type Principal struct {
+	// GRN is the signed-in user, empty until a handler
+	// authenticates the request.
+	GRN string
+}
+
+type principalKey struct{}
+
+// WithPrincipal returns r carrying p, for a caller that wants the
+// identity the handler resolves. A request served without a cell
+// behaves identically; only the answer is lost.
+func WithPrincipal(r *http.Request, p *Principal) *http.Request {
+	return r.WithContext(context.WithValue(r.Context(), principalKey{}, p))
+}
+
+// PrincipalFrom returns the cell [WithPrincipal] attached, or nil.
+func PrincipalFrom(r *http.Request) *Principal {
+	p, _ := r.Context().Value(principalKey{}).(*Principal)
+	return p
+}
+
+// identify records u as the request's principal.
+func identify(r *http.Request, u *user.User) {
+	if p := PrincipalFrom(r); p != nil {
+		p.GRN = u.GRN().String()
+	}
 }
 
 // setCookie writes an HttpOnly SameSite=Lax cookie.

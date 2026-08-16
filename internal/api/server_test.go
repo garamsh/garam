@@ -255,6 +255,31 @@ func TestMe_NoSession(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }
 
+func TestPrincipal_RecordedOnlyWhenAuthenticated(t *testing.T) {
+	tests := []struct {
+		name   string
+		signIn bool
+		want   string
+	}{
+		{name: "signed in", signIn: true, want: "grn:root:default:user:ada"},
+		{name: "anonymous"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := newFixture(t)
+			req := httptest.NewRequest("GET", "/me", nil)
+			if tt.signIn {
+				req.AddCookie(f.sessionCookieFor(t, "ada", "Ada"))
+			}
+
+			var principal api.Principal
+			f.handler.ServeHTTP(httptest.NewRecorder(), api.WithPrincipal(req, &principal))
+
+			assert.Equal(t, tt.want, principal.GRN)
+		})
+	}
+}
+
 // createOrg creates an org via the API and returns its identifier.
 func createOrg(t *testing.T, f *fixture, owner *http.Cookie, name string) string {
 	t.Helper()

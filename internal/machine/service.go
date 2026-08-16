@@ -92,15 +92,12 @@ func (s *service) rootOf(ctx context.Context, subject grn.GRN) (*x509.Certificat
 
 // subjectOf recovers the GRN a certificate names from its SAN URI.
 //
-// A GRN is an opaque URI: it has no "//", so url.Parse leaves Path and
-// Host as empty strings rather than failing, and a verifier reading
-// either recovers an identity that every other empty reading equals.
-// Reading Opaque truncates instead — a '?' moves the tail into
-// RawQuery and a '#' into Fragment — so that reading and the whole URI
-// name different identities. Both are therefore taken and must agree,
-// which is the rule the issuing side applies before it signs: a
-// certificate garam issued passes it, and one carrying a separator that
-// splits the two readings apart does not.
+// The whole URI is parsed, and that one parse is the whole check: every
+// segment of a GRN is lowercase letters, digits and '-' (grn-model.md
+// §identifier), so a URI holding a separator that would move a segment
+// — a colon outside the four, a '?', a '#' — is not a GRN and names no
+// identity. The rule lives in [grn.Parse]; repeating it here would put
+// a second copy where a reader stops looking for the first.
 //
 // Exactly one URI is required. A certificate naming none, or naming a
 // second identity beside the first, has no single answer to who is
@@ -110,14 +107,9 @@ func subjectOf(leaf *x509.Certificate) (grn.GRN, error) {
 	if len(leaf.URIs) != 1 {
 		return grn.GRN{}, errorx.New(errorx.KindUnauthenticated, "machine: certificate does not name exactly one identity")
 	}
-	uri := leaf.URIs[0]
-	subject, err := grn.Parse(uri.String())
+	subject, err := grn.Parse(leaf.URIs[0].String())
 	if err != nil {
 		return grn.GRN{}, errorx.Wrap(err, "machine: san uri is not a grn", errorx.KindUnauthenticated)
-	}
-	opaque, err := grn.Parse(uri.Scheme + ":" + uri.Opaque)
-	if err != nil || opaque != subject {
-		return grn.GRN{}, errorx.New(errorx.KindUnauthenticated, "machine: san uri does not survive as a grn")
 	}
 	return subject, nil
 }

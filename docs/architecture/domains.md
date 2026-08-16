@@ -218,18 +218,17 @@ certificate's SAN URI and nothing beside it: no user row, no session,
 no membership, so neither foreign key on `users` is touched and no
 handler taking a `*user.User` changes.
 
-The SAN URI is read by round trip. A GRN is an opaque URI, so `Path`
-and `Host` come back as empty strings rather than errors and the
-opaque part alone truncates at a `?` or a `#`; both readings are taken
-and must name the same GRN, which is the rule the issuing side applies
-before it signs. A SAN carrying a separator reaches neither reading
-whole: `grn.Parse` splits on every colon and holds every segment to
-the character rule ([grn-model.md](./grn-model.md) §identifier), so a
-colon in a segment that is not the last is refused there rather than
-here. Which authority the certificate must then chain to is read off
-the organization segment of the GRN both readings agree on, so a
-certificate one organization's CA signed for another organization's
-identity is refused by the trust root rather than by a check.
+The SAN carries exactly one URI and it is parsed whole as a GRN. That
+one parse is the whole check: `grn.Parse` splits on every colon and
+holds every segment to the character rule
+([grn-model.md](./grn-model.md) §identifier), so a URI carrying a
+separator that would move a segment — a colon outside the four, a `?`,
+a `#` — is not a GRN and names no identity. The rule lives in
+`internal/grn` and is pinned there; this boundary calls it rather than
+keeping a copy. Which authority the certificate must then chain to is
+read off the organization segment of that GRN, so a certificate one
+organization's CA signed for another organization's identity is
+refused by the trust root rather than by a check.
 
 The package holds no store and reaches no database: `TrustRoot` is the
 seam the composition root satisfies from `internal/ca`, which keeps the

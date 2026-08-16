@@ -221,16 +221,15 @@ func TestService_RefusesACertificateAnotherOrganizationsAuthoritySigned(t *testi
 	}
 }
 
-// TestService_RefusesASANThatDoesNotSurviveTheRoundTrip covers the trap
-// the issuing side was fixed for, on the reading side of the same wire:
-// a GRN is an opaque URI, so a '?' or a '#' leaves the whole URI and
-// the opaque part naming different identities, and a reader that takes
-// one of them authenticates something the other does not.
+// TestService_RefusesASANThatIsNotOneWholeGRN covers what this boundary
+// requires of a SAN: exactly one URI, and a URI that parses whole as a
+// GRN. The separator cases are the trap the issuing side was fixed for,
+// read from the other side of the same wire.
 //
 // Every case here is signed by the organization's own authority, and
 // the control is a certificate from that same authority carrying a SAN
-// that does survive. What separates them is the SAN alone.
-func TestService_RefusesASANThatDoesNotSurviveTheRoundTrip(t *testing.T) {
+// that does parse. What separates them is the SAN alone.
+func TestService_RefusesASANThatIsNotOneWholeGRN(t *testing.T) {
 	issuer := newIssuer(t)
 	svc := issuer.service()
 	subject := agentGRN("acme", "bot-1")
@@ -241,18 +240,17 @@ func TestService_RefusesASANThatDoesNotSurviveTheRoundTrip(t *testing.T) {
 	require.Equal(t, subject, control.GRN())
 
 	tests := map[string]leaf{
-		// A '?' moves the tail into RawQuery: the whole URI reads back
-		// as identifier "bot?1" and the opaque part as "bot".
-		"query separator": {uris: []string{"grn:acme:default:agent:bot?1"}},
-		// A '#' does the same through Fragment.
+		// '?' and '#' move the tail of a URI into its query or its
+		// fragment, and neither is a segment character.
+		"query separator":    {uris: []string{"grn:acme:default:agent:bot?1"}},
 		"fragment separator": {uris: []string{"grn:acme:default:agent:bot#1"}},
 		// Two identities have no single answer to who is calling.
 		"two identities": {uris: []string{subject.String(), agentGRN("acme", "bot-2").String()}},
 		// None has none either, which is what refuses a server
 		// certificate presented here: it names a host, not an identity.
 		"no identity": {hosts: []string{"gateway.acme.example"}},
-		// Path and Host are empty strings rather than errors for an
-		// opaque URI, so a reader of either recovers nothing at all.
+		// Neither hierarchical form is the canonical string, whatever
+		// Host and Path recover from it.
 		"hierarchical uri": {uris: []string{"grn://acme/default/agent/bot-1"}},
 		"not a grn":        {uris: []string{"https://acme.example/agent/bot-1"}},
 	}

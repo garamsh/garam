@@ -207,11 +207,16 @@ minikube-images:
 		docker build -t garam-web:local -f deploy/local/Dockerfile.web web
 
 # minikube-db creates the namespace everything else lands in and the
-# Postgres cluster CNPG reconciles, and returns once it serves.
+# Postgres cluster CNPG reconciles, and returns once it is reachable.
+# The operator reports the cluster ready before its Service carries a
+# routable endpoint, and everything downstream connects through that
+# Service — so the second wait is on the endpoint the migration
+# actually dials, not on the condition next to it.
 minikube-db:
 	$(KUBECTL_MINIKUBE) apply -f $(MINIKUBE_DIR)/namespace.yaml
 	$(KUBECTL_MINIKUBE) apply -f $(MINIKUBE_DIR)/postgres.yaml
 	$(KUBECTL_LOCAL) wait --for=condition=Ready cluster/postgres --timeout=300s
+	$(KUBECTL_LOCAL) wait --for=jsonpath='{.endpoints[0].conditions.ready}'=true endpointslice -l kubernetes.io/service-name=postgres-rw --timeout=120s
 
 minikube-secret:
 	$(MINIKUBE_DIR)/machine-key-material.sh

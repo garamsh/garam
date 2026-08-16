@@ -137,6 +137,12 @@ serve before the migration runs, and the migration has to finish before
 anything that reads the schema starts. `make minikube-migrate` waits for
 the Job to complete, and `make minikube-apps` runs after it.
 
+`make minikube-db` waits twice. The operator reports the cluster ready
+before the Service in front of it carries a routable endpoint, so
+waiting on the cluster alone leaves the first migration attempt to fail
+with `connection refused`; the second wait is on the endpoint the
+migration dials.
+
 A Job's pod template is immutable, so the finished Job is deleted before
 being applied again.
 

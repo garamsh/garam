@@ -68,6 +68,10 @@ collaborate on a shared plan.
 
 ## Out of scope (today)
 
+- Manifests for any cluster garam does not run. garam publishes two
+  images and a contract — ports, probe paths, configuration and which
+  of it is secret, and how key material must arrive (ADR-0020); the
+  repository that owns a cluster owns what reconciles it.
 - Workflow execution engine, scheduler, queue.
 - Notifications.
 - The rest of the agent surface. An operator creates an agent and
@@ -197,6 +201,7 @@ contract is `proto/garam/authz/v1`.
 | An operator is a machine identity of the same kind as an agent | One mechanism to secure and rotate; the assignment row already bounds what an operator may fetch. | [adr/0015-operator-identity.md](./adr/0015-operator-identity.md) |
 | A CA's key is sealed by a key the process holds, not by a KMS | A database dump opens nothing; issuing depends on no hosted service, which is what lets a user bring their own operator. | [adr/0016-ca-key-custody.md](./adr/0016-ca-key-custody.md) |
 | Machine identities are served by a process of their own | The surface that issues certificates holds every organization's key-encryption key, and the process serving browsers must not. | [adr/0017-machine-process.md](./adr/0017-machine-process.md) |
+| garam publishes images and a contract, not manifests | Cluster state changes in one place; a registry credential is unavailable both locally and on the target cluster. | [adr/0020-published-artifacts.md](./adr/0020-published-artifacts.md) |
 | A message is completed by the turn-end event naming it | It is the only signal that pairs deterministically; a lost one redelivers, so delivery is at-least-once rather than exactly-once. | [adr/0018-delivery-acknowledgement.md](./adr/0018-delivery-acknowledgement.md) |
 | The machine listener has a specification of its own | One contract per listener: the browser client generates no types for a surface it cannot call, and whoever writes an operator has something to build against. | [adr/0019-machine-openapi-spec.md](./adr/0019-machine-openapi-spec.md) |
 

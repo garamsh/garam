@@ -142,11 +142,10 @@ ADR rather than by the layout above:
 - `migrations/` — SQL migrations; the schema's source of truth.
 - `tests/e2e/` — black-box tests against real infrastructure.
 
-Not every package under `internal/` is a domain. `api`, `authz`, `cli`,
-`grn` and `errorx` follow their ADR-defined shapes instead: `api` and
-`authz` are independent services that never import each other
-(ADR-0003), `cli` is the composition root, and `grn` and `errorx` are
-shared primitives. A domain package holds its interface in `store.go`.
+Not every package under `internal/` is a domain. `api` and `authz` are
+independent services that never import each other, and `cli` composes
+both (ADR-0003); `grn` and `errorx` are shared primitives. A domain
+package holds its interface in `store.go`.
 
 ## 2. Module / package boundary
 
@@ -290,11 +289,12 @@ Within `internal/<domain>/`:
 
 Use **[mockery v3](https://vektra.github.io/mockery/)**.
 
-- **Config:** `<repo-root>/.mockery.yaml` declares which interfaces to
-  mock, output directory, package names, per-interface overrides.
-  mockery v3.7.2 discovers only the dotted name; an undotted file is
-  reachable only through `--config`, a flag that would be carried to
-  satisfy a filename rather than to configure anything.
+- **Config:** `.mockery.yml` at the module root — or `.mockery.yaml`,
+  which mockery reads equally. One or the other, not both. It declares
+  which interfaces to mock, output directory, package names,
+  per-interface overrides. The leading dot is load-bearing: mockery
+  v3.7.2 discovers only the dotted names, and an undotted file is
+  reachable only through `--config`.
 - **Generated location:** declared in `.mockery.yaml` via `outdir` per
   `interface:` block. Default: `mocks/<package>/<Interface>.go` at
   module root. When interface is scoped to one domain, set

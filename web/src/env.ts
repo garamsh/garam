@@ -12,6 +12,10 @@ const schema = z.object({
       : z.url().default("http://localhost:8080"),
 });
 
+/**
+ * The validated environment. A missing value fails at import rather
+ * than inside the first request that needs it.
+ */
 export const env = schema.parse({
   GARAM_API_URL: process.env.GARAM_API_URL,
 });

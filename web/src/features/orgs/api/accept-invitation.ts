@@ -8,6 +8,7 @@ import { GaramApiError, garamFetchAuthenticated } from "@/lib/garam";
 
 import type { Member } from "./orgs";
 
+/** What the accept form has to show: nothing yet, or a refusal. */
 export type AcceptInvitationState =
   | { status: "idle" }
   | { status: "error"; message: string };

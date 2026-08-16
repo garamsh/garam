@@ -2,6 +2,10 @@
 
 import { Button } from "@/components/ui/button";
 
+/**
+ * Error boundary for the organizations subtree. Client Component by
+ * framework contract (stack-nextjs.md §2).
+ */
 export default function OrgsError({
   error,
   reset,

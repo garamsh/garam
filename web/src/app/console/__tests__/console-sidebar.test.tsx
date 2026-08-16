@@ -1,10 +1,11 @@
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ConsoleSidebar } from "@/app/console/_components/console-sidebar";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { unauthenticated } from "@/testing/mocks/handlers";
+import { renderServerComponent } from "@/testing/render";
 import { server } from "@/testing/setup";
 
 const route = vi.hoisted(() => ({ pathname: "/console/orgs/acme" }));
@@ -18,13 +19,16 @@ vi.mock("next/navigation", () => ({
   },
 }));
 
-async function renderSidebar() {
-  const sidebar = await ConsoleSidebar();
-  return render(
+function Shell({ children }: { children: React.ReactNode }) {
+  return (
     <TooltipProvider>
-      <SidebarProvider>{sidebar}</SidebarProvider>
-    </TooltipProvider>,
+      <SidebarProvider>{children}</SidebarProvider>
+    </TooltipProvider>
   );
+}
+
+function renderSidebar() {
+  return renderServerComponent(ConsoleSidebar(), { wrapper: Shell });
 }
 
 describe("console sidebar", () => {

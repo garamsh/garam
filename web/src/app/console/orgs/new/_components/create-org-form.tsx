@@ -12,6 +12,7 @@ import {
 
 const initialState: CreateOrgState = { status: "idle" };
 
+/** Names a new organization and reports back what the action refused. */
 export function CreateOrgForm() {
   const [state, formAction, pending] = useActionState(
     createOrg,

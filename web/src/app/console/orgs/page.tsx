@@ -9,8 +9,10 @@ import { listConsoleOrgs } from "../_components/console-orgs";
 import { EmptyState } from "../_components/empty-state";
 import { PageHeader } from "../_components/page-header";
 
+/** Head metadata for the organizations route; Next.js reads it by name. */
 export const metadata: Metadata = { title: "Organizations — garam" };
 
+/** The console's first screen: every organization the caller belongs to. */
 export default async function OrgsPage() {
   const orgs = await listConsoleOrgs();
 

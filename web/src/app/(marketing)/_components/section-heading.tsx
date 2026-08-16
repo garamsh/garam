@@ -1,3 +1,4 @@
+/** The eyebrow, title and lead every landing section opens with. */
 export function SectionHeading({
   eyebrow,
   title,

@@ -9,6 +9,7 @@ const PRODUCT_LINKS = [
   { href: "/login", label: "Sign in" },
 ];
 
+/** Closes the landing page: the brand, the way in, and the anchors again. */
 export function SiteFooter() {
   return (
     <footer className="border-t border-border/60">

@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, vi } from "vitest";
 
 import { handlers } from "@/testing/mocks/handlers";
 
+/** The mock backend; a test overrides a route with `server.use`. */
 export const server = setupServer(...handlers);
 
 // `next/headers` is only wired up inside a request; the tests supply a

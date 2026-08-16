@@ -9,6 +9,7 @@ import { GaramApiError, garamFetchAuthenticated } from "@/lib/garam";
 import { slugFromGrn } from "../grn";
 import type { Organization } from "./orgs";
 
+/** What the create form has to show: nothing yet, or a refusal. */
 export type CreateOrgState =
   | { status: "idle" }
   | { status: "error"; message: string };

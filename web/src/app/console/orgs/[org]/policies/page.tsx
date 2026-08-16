@@ -4,8 +4,10 @@ import { ScrollText } from "lucide-react";
 import { EmptyState } from "../../../_components/empty-state";
 import { PageHeader } from "../../../_components/page-header";
 
+/** Head metadata for the policies route; Next.js reads it by name. */
 export const metadata: Metadata = { title: "Policies — garam" };
 
+/** Holds the section's place while policies stay API-only. */
 export default function PoliciesPage() {
   return (
     <>

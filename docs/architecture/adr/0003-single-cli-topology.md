@@ -1,6 +1,6 @@
 # ADR 0003: Single cobra CLI running independent api/authz servers
 
-> Status: accepted
+> Status: accepted; the process count is superseded by [ADR-0017](./0017-machine-process.md)
 > Date: 2026-07-25
 
 ## Context

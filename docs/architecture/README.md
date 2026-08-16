@@ -41,6 +41,7 @@ ADRs:
 - [0014](./adr/0014-agent-authentication.md) — agents authenticate with mTLS on a listener of their own
 - [0015](./adr/0015-operator-identity.md) — operators authenticate as agents do; key material travels as files
 - [0016](./adr/0016-ca-key-custody.md) — a certificate authority's key is sealed by a key the process holds
+- [0017](./adr/0017-machine-process.md) — machine identities are served by a process of their own
 
 ## Rules for edits
 

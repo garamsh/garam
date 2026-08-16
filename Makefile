@@ -1,3 +1,9 @@
+# `go run tool@version` takes the toolchain from the tool's own go
+# directive, which can be older than this module's and then cannot load
+# its packages. The floor is the version go.mod declares; `+auto` still
+# upgrades for a tool that needs a newer one.
+export GOTOOLCHAIN := go$(shell sed -n 's/^go //p' go.mod)+auto
+
 OAPI_CODEGEN := go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.8.0
 SQLC := go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
 MOCKERY := go run github.com/vektra/mockery/v3@v3.7.2

@@ -133,7 +133,7 @@ func (a *Agent) CreatedAt() time.Time                 { return a.createdAt }
 func (a *Agent) UpdatedAt() time.Time                 { return a.updatedAt }
 
 // NewGRN mints the GRN of an agent owned by orgGRN from eight random
-// bytes. Agents belong to the org, not to a project (ADR-0012), and the
+// bytes. Agents belong to the org, not to a project (ADR-0001), and the
 // identifier never changes.
 func NewGRN(orgGRN grn.GRN) (grn.GRN, error) {
 	b := make([]byte, 8)

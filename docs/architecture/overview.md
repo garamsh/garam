@@ -4,6 +4,14 @@ garam is the core of a workflow management product: identity,
 organization, and authorization for people and autonomous agents that
 collaborate on a shared plan.
 
+## Contents
+- In scope
+- Out of scope (today)
+- Module boundaries
+- Core abstractions
+- Decisions
+- Non-functional goals
+
 ## In scope
 
 - Identities for users and agents, including organization membership.

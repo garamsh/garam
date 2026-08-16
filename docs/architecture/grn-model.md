@@ -3,6 +3,14 @@
 Garam Resource Names — one identifier for every resource in garam.
 Implementation: [`internal/grn/grn.go`](../../internal/grn/grn.go).
 
+## Contents
+- Format
+- Ownership
+- service_type catalogue
+- identifier
+- Rego package note (historical)
+- API
+
 ## Format
 
 ```

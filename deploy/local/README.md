@@ -12,6 +12,13 @@ everything but the profile-gated `web` service, which is the backend
 `garam-local` and its `postgres-data` volume — there is no second
 compose file.
 
+## Contents
+- Databases
+- Files
+- Up and down
+- Startup order
+- Configuration
+
 ## Databases
 
 One Postgres server, two databases, because `make e2e` truncates every

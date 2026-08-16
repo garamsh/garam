@@ -2,6 +2,19 @@
 
 Per-domain responsibilities and boundaries.
 
+## Contents
+- Common shape
+- `internal/grn`
+- `internal/errorx`
+- `internal/org`
+- `internal/authz`
+- `internal/authn`
+- `internal/user`
+- `internal/agent`
+- Store implementation status
+- Known gap
+- Future domains
+
 ## Common shape
 
 Each `internal/<domain>/` package contains:

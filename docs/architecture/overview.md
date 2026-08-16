@@ -14,7 +14,8 @@ collaborate on a shared plan.
 
 ## In scope
 
-- Identities for users and agents, including organization membership.
+- Identities for users, including organization membership. Agents are
+  decided but unbuilt, and are never org members (ADR-0014).
 - Org / group / project structure; groups and projects are created,
   read, updated, deleted, and populated with members over the HTTP API
   under their organization's paths.
@@ -30,8 +31,9 @@ collaborate on a shared plan.
 - Org-managed policy documents: stored, versioned append-only,
   activated and rolled back over the authz service, and cached per org
   in the engine. Org admins drive that lifecycle over the HTTP API
-  under `/orgs/{org}/policies`, and attach a policy to a user or a
-  group (ADR-0008); an unattached active policy still grants org-wide.
+  under `/orgs/{org}/policies`, and attach a policy to any identity —
+  a user, a group, or an agent (ADR-0008, ADR-0014); an unattached
+  active policy still grants org-wide.
 - A web console under `/console` for the org structure the API exposes:
   organizations are listed and created, members are invited by link and
   the invitation accepted, groups and projects are read (ADR-0009). Its
@@ -45,9 +47,9 @@ collaborate on a shared plan.
 - Workflow execution engine, scheduler, queue.
 - Notifications or messaging.
 - The agent domain. ADR-0012 settles its shape — identity, operator
-  assignment, delivery and state — and ADR-0013 settles how a message
-  reaches one, but no package, endpoint or persistence exists, and the
-  machine authentication both need does not either.
+  assignment, delivery and state — ADR-0013 how a message reaches one,
+  and ADR-0014 how one authenticates. No package, endpoint,
+  persistence, certificate authority or TLS code exists for any of it.
 - Chat channels. ADR-0013 makes garam a message API and leaves Slack,
   LINE and the rest to consumers of it; none is built, and whether any
   ships first-party is undecided.
@@ -132,6 +134,7 @@ contract is `proto/garam/authz/v1`.
 | The console is a sidebar shell over org sections | One structure for switching orgs, moving between sections, and knowing where you are. | [adr/0011-console-shell.md](./adr/0011-console-shell.md) |
 | Agents are provisioned by operators garam never dials | An operator is a peer, so a user can supply their own; a sidecar's outbound connection is the only path in. | [adr/0012-agent-operator-model.md](./adr/0012-agent-operator-model.md) |
 | Messages reach an agent by polling, not by push | A queue in Postgres has no connection to route to, so any instance answers any poll. | [adr/0013-agent-messaging.md](./adr/0013-agent-messaging.md) |
+| Agents authenticate by mTLS on a listener of their own | A GRN in a SAN needs no user row; a separate listener needs no trusted proxy header. | [adr/0014-agent-authentication.md](./adr/0014-agent-authentication.md) |
 
 ## Non-functional goals
 

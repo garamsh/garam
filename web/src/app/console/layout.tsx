@@ -1,11 +1,7 @@
 import { Suspense } from "react";
 
 import { Separator } from "@/components/ui/separator";
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
+import { SidebarInset, SidebarTrigger } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
@@ -14,6 +10,7 @@ import {
   ConsoleSidebar,
   ConsoleSidebarFallback,
 } from "./_components/console-sidebar";
+import { ConsoleSidebarProvider } from "./_components/console-sidebar-provider";
 
 /**
  * The authenticated shell (ADR-0011). Both data-backed parts sit behind
@@ -26,7 +23,7 @@ export default function ConsoleLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <TooltipProvider>
-      <SidebarProvider>
+      <ConsoleSidebarProvider>
         <Suspense fallback={<ConsoleSidebarFallback />}>
           <ConsoleSidebar />
         </Suspense>
@@ -47,7 +44,7 @@ export default function ConsoleLayout({
             {children}
           </div>
         </SidebarInset>
-      </SidebarProvider>
+      </ConsoleSidebarProvider>
     </TooltipProvider>
   );
 }

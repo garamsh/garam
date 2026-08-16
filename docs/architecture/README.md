@@ -22,6 +22,7 @@ Responsibility documents:
 - [domains.md](./domains.md) — the domain packages and their responsibilities
 - [grn-model.md](./grn-model.md) — the GRN resource naming model
 - [authz.md](./authz.md) — the authorization model
+- [adapter.md](./adapter.md) — what the adapter garam ships must do, and what it rests on
 
 ADRs:
 

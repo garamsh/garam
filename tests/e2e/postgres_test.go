@@ -7,12 +7,20 @@ package e2e_test
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/tls"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io"
+	"math/big"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -29,12 +37,15 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/authn"
 	"github.com/garamsh/garam/internal/authz"
 	"github.com/garamsh/garam/internal/ca"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/machine"
+	"github.com/garamsh/garam/internal/machineapi"
 	"github.com/garamsh/garam/internal/message"
 	"github.com/garamsh/garam/internal/org"
 	"github.com/garamsh/garam/internal/user"
@@ -1325,4 +1336,229 @@ func TestMessageStore_LapsedClaimIsHandedOn(t *testing.T) {
 	assert.ErrorIs(t, s.Complete(ctx, lapsing), message.ErrStaleClaim,
 		"the reader the message was taken from completes nothing")
 	require.NoError(t, s.Complete(ctx, handedOn))
+}
+
+// certificates is the certificate authority as the agent domain signs
+// through it (agent.Issuer) — the adapter the composition root builds,
+// in the form this suite can hold.
+type certificates struct{ issuer ca.Service }
+
+func (c certificates) Issue(ctx context.Context, subject grn.GRN) (*agent.Certificate, error) {
+	issued, err := c.issuer.Issue(ctx, subject)
+	if err != nil {
+		return nil, err
+	}
+	return &agent.Certificate{
+		CertificatePEM: issued.CertificatePEM(),
+		PrivateKeyPEM:  issued.PrivateKeyPEM(),
+		IssuerPEM:      issued.IssuerPEM(),
+		NotAfter:       issued.NotAfter(),
+	}, nil
+}
+
+// machineTrustRoots reads the authority a presented certificate has to
+// chain to out of the ones Postgres holds.
+type machineTrustRoots struct{ store ca.Store }
+
+func (r machineTrustRoots) Get(ctx context.Context, subject grn.GRN) ([]byte, error) {
+	authority, err := r.store.Get(ctx, orgRootGRN(subject.Organization))
+	if err != nil {
+		return nil, err
+	}
+	return authority.Certificate(), nil
+}
+
+// loopbackCertificate is what the listener terminates TLS with. What
+// garam presents is not what this test is about, so it is self-signed
+// and the client below does not verify it.
+func loopbackCertificate(t *testing.T) tls.Certificate {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	template := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "garam machine listener"},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(time.Hour),
+		KeyUsage:              x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		IPAddresses:           []net.IP{net.ParseIP("127.0.0.1")},
+	}
+	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	require.NoError(t, err)
+	return tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key}
+}
+
+// machineListener serves the machine surface over the stores Postgres
+// holds and returns its URL. The parts are the ones `garam serve
+// machine` assembles: the same generated router, the same listener,
+// and authorities sealed under the same key.
+func machineListener(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer) string {
+	t.Helper()
+	authorities := ca.NewPostgresStore(p)
+	issuer, err := ca.NewService(authorities, sealer, ca.Config{})
+	require.NoError(t, err)
+	agents := agent.NewService(agent.NewPostgresStore(p), certificates{issuer: issuer})
+
+	srv := machine.NewServer(
+		machine.NewService(machineTrustRoots{store: authorities}),
+		loopbackCertificate(t),
+		machinegen.Handler(machineapi.NewServer(agents)),
+	)
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	go func() { _ = srv.ServeTLS(lis, "", "") }()
+	t.Cleanup(func() { _ = srv.Close() })
+	return "https://" + lis.Addr().String()
+}
+
+// installed returns the certificate garam signs for subject as the
+// process holding it presents one. An operator's own first certificate
+// arrives out of band (ADR-0015); an agent's comes from the surface
+// under test.
+func installed(t *testing.T, issuer ca.Service, subject grn.GRN) tls.Certificate {
+	t.Helper()
+	issued, err := issuer.Issue(context.Background(), subject)
+	require.NoError(t, err)
+	pair, err := tls.X509KeyPair(issued.CertificatePEM(), issued.PrivateKeyPEM())
+	require.NoError(t, err)
+	return pair
+}
+
+// machineClient presents pair on every request it makes, the way a
+// process holding one certificate reaches this listener.
+func machineClient(t *testing.T, pair tls.Certificate) *http.Client {
+	t.Helper()
+	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{
+		InsecureSkipVerify: true,
+		MinVersion:         tls.VersionTLS13,
+		Certificates:       []tls.Certificate{pair},
+	}}}
+	t.Cleanup(client.CloseIdleConnections)
+	return client
+}
+
+// machineRequest performs one request and returns the status and body.
+func machineRequest(t *testing.T, client *http.Client, method, url string) (int, []byte) {
+	t.Helper()
+	req, err := http.NewRequest(method, url, nil)
+	require.NoError(t, err)
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	return resp.StatusCode, body
+}
+
+// pairOf is the certificate the surface issued, as the process it was
+// issued for presents it.
+func pairOf(t *testing.T, issued machinegen.AgentCertificate) tls.Certificate {
+	t.Helper()
+	pair, err := tls.X509KeyPair([]byte(issued.CertificatePem), []byte(issued.PrivateKeyPem))
+	require.NoError(t, err)
+	return pair
+}
+
+// TestMachineSurface_OperatorCreatesAnAgentThatThenAuthenticates
+// carries ADR-0015's operator path end to end against real Postgres:
+// an operator authenticates with its own certificate, creates an
+// agent, obtains that agent's certificate, and the agent authenticates
+// with it on the same listener. The certificate is carried back in
+// because a surface that issues and a listener that verifies can each
+// be right while the pair is not.
+//
+// Every refusal sits beside an answer, and each operator refused one
+// certificate holds another: what refuses is the assignment rather
+// than a certificate that authenticated nobody.
+func TestMachineSurface_OperatorCreatesAnAgentThatThenAuthenticates(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	orgs := org.NewPostgresStore(p)
+	for _, name := range []string{"acme", "globex"} {
+		require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN(name), name)))
+	}
+
+	key := make([]byte, ca.KeySize)
+	_, err := rand.Read(key)
+	require.NoError(t, err)
+	sealer, err := ca.NewAESGCMSealer(key)
+	require.NoError(t, err)
+	outOfBand, err := ca.NewService(ca.NewPostgresStore(p), sealer, ca.Config{})
+	require.NoError(t, err)
+
+	url := machineListener(t, p, sealer)
+	assignments := agent.NewPostgresStore(p)
+
+	operatorGRN := scopedGRN("acme", agent.ServiceTypeOperator, "one")
+	operator := machineClient(t, installed(t, outOfBand, operatorGRN))
+
+	status, body := machineRequest(t, operator, http.MethodPost, url+"/agents")
+	require.Equal(t, http.StatusCreated, status, string(body))
+	var created machinegen.AgentAssignment
+	require.NoError(t, json.Unmarshal(body, &created))
+	assert.Equal(t, operatorGRN.String(), created.Operator)
+	assert.Equal(t, 1, created.Epoch)
+
+	agentGRN, err := grn.Parse(created.Grn)
+	require.NoError(t, err)
+	assert.Equal(t, "acme", agentGRN.Organization, "garam minted it in the operator's organization")
+	assert.Equal(t, agent.ServiceType, agentGRN.ServiceType)
+
+	stored, err := assignments.GetAssignment(ctx, agentGRN)
+	require.NoError(t, err)
+	assert.Equal(t, operatorGRN, stored.Operator())
+	assert.Equal(t, created.Epoch, stored.Epoch())
+
+	status, body = machineRequest(t, operator, http.MethodPost, url+"/agents/"+created.Grn+"/certificate")
+	require.Equal(t, http.StatusCreated, status, string(body))
+	var issued machinegen.AgentCertificate
+	require.NoError(t, json.Unmarshal(body, &issued))
+	assert.Equal(t, created.Grn, issued.Grn)
+	assert.True(t, issued.NotAfter.After(time.Now()), "a certificate that is already expired")
+
+	// The two halves join here: what this surface issued authenticates
+	// on the listener that verifies it, as the agent it names.
+	provisioned := machineClient(t, pairOf(t, issued))
+	status, body = machineRequest(t, provisioned, http.MethodGet, url+"/identity")
+	require.Equal(t, http.StatusOK, status, string(body))
+	assert.JSONEq(t, `{"grn":"`+created.Grn+`"}`, string(body))
+
+	// That certificate authenticates and still creates nothing: an
+	// agent is not an operator.
+	status, _ = machineRequest(t, provisioned, http.MethodPost, url+"/agents")
+	assert.Equal(t, http.StatusForbidden, status)
+
+	// Another organization's operator authenticates against its own
+	// authority, holds the agent it created there, and is refused the
+	// one it does not hold.
+	strangerGRN := scopedGRN("globex", agent.ServiceTypeOperator, "one")
+	stranger := machineClient(t, installed(t, outOfBand, strangerGRN))
+	status, body = machineRequest(t, stranger, http.MethodPost, url+"/agents")
+	require.Equal(t, http.StatusCreated, status, string(body))
+	var strangers machinegen.AgentAssignment
+	require.NoError(t, json.Unmarshal(body, &strangers))
+	status, _ = machineRequest(t, stranger, http.MethodPost, url+"/agents/"+strangers.Grn+"/certificate")
+	assert.Equal(t, http.StatusCreated, status)
+	status, _ = machineRequest(t, stranger, http.MethodPost, url+"/agents/"+created.Grn+"/certificate")
+	assert.Equal(t, http.StatusForbidden, status, "another organization's agent")
+
+	// An operator of the agent's own organization that holds nothing is
+	// refused the same way.
+	siblingGRN := scopedGRN("acme", agent.ServiceTypeOperator, "two")
+	sibling := machineClient(t, installed(t, outOfBand, siblingGRN))
+	status, _ = machineRequest(t, sibling, http.MethodPost, url+"/agents/"+created.Grn+"/certificate")
+	assert.Equal(t, http.StatusForbidden, status, "an agent of its organization it was not assigned")
+
+	// A reassignment raises the epoch, and what an operator may obtain
+	// follows the row: the one it replaced is refused from then on, and
+	// the one holding the agent now is answered.
+	reassigned, err := assignments.Assign(ctx, agentGRN, siblingGRN)
+	require.NoError(t, err)
+	require.Equal(t, 2, reassigned.Epoch())
+	status, _ = machineRequest(t, operator, http.MethodPost, url+"/agents/"+created.Grn+"/certificate")
+	assert.Equal(t, http.StatusForbidden, status, "the operator the reassignment replaced")
+	status, _ = machineRequest(t, sibling, http.MethodPost, url+"/agents/"+created.Grn+"/certificate")
+	assert.Equal(t, http.StatusCreated, status)
 }

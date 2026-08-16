@@ -6,6 +6,8 @@ package cli
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/tls"
 	"encoding/json"
 	"log/slog"
 	"net"
@@ -26,6 +28,9 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/garamsh/garam/internal/api"
+	"github.com/garamsh/garam/internal/ca"
+	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/machine"
 	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
 )
 
@@ -114,6 +119,89 @@ func TestLogRequests_OmitsAnUnknownPrincipal(t *testing.T) {
 	line := decodeLine(t, &out)
 	assert.Equal(t, float64(http.StatusOK), line["status"], "an unwritten status is 200")
 	assert.NotContains(t, line, "user_id")
+}
+
+// machineListener starts the machine listener behind obs's middleware
+// and returns its URL and a client holding a certificate the
+// organization's own authority signed for subject. The parts are the
+// ones serveMachine assembles.
+func machineListener(t *testing.T, obs *observability, subject grn.GRN) (string, *http.Client) {
+	t.Helper()
+	dir := t.TempDir()
+	certFile, keyFile := writeTLSKeyPair(t, dir)
+	cert, err := machineKeyMaterial(certFile, keyFile, writeKeyEncryptionKey(t, dir))
+	require.NoError(t, err)
+
+	store := authorities{}
+	key := make([]byte, ca.KeySize)
+	_, err = rand.Read(key)
+	require.NoError(t, err)
+	sealer, err := ca.NewAESGCMSealer(key)
+	require.NoError(t, err)
+	issuer, err := ca.NewService(store, sealer, ca.Config{})
+	require.NoError(t, err)
+	issued, err := issuer.Issue(context.Background(), subject)
+	require.NoError(t, err)
+	client, err := tls.X509KeyPair(issued.CertificatePEM(), issued.PrivateKeyPEM())
+	require.NoError(t, err)
+
+	mux := http.NewServeMux()
+	mux.Handle("GET /identity", machine.IdentityHandler())
+	srv := machine.NewServer(
+		machine.NewService(certificateAuthorities{store: store}),
+		cert,
+		obs.logMachineRequests(mux),
+	)
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	go func() { _ = srv.ServeTLS(lis, "", "") }()
+	t.Cleanup(func() { _ = srv.Close() })
+
+	// What garam presents is not what is under test; the certificate it
+	// asks for is.
+	c := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{
+		InsecureSkipVerify: true,
+		MinVersion:         tls.VersionTLS13,
+		Certificates:       []tls.Certificate{client},
+	}}}
+	t.Cleanup(c.CloseIdleConnections)
+	return "https://" + lis.Addr().String(), c
+}
+
+// TestLogServed_NamesAMachinePrincipalAsOne reads the machine
+// listener's line against the browser API's. stack-go.md §5 names
+// user_id when the principal is known and names no field for a machine
+// one; putting both under user_id leaves an audit log unable to tell an
+// agent from a person, which is the distinction ADR-0014 rests on.
+//
+// The person's line is asserted beside the machine's, because a machine
+// line without user_id would hold as readily for a line that names no
+// principal at all, and because the two fields have to stay apart in
+// both directions.
+func TestLogServed_NamesAMachinePrincipalAsOne(t *testing.T) {
+	subject := machineGRN("acme", "bot-1")
+
+	var served lines
+	url, client := machineListener(t, recordingObservability(&served), subject)
+	resp, err := client.Get(url + "/identity")
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	machineLine := decodeLine(t, &served)
+	assert.Equal(t, subject.String(), machineLine[fieldMachineID])
+	assert.NotContains(t, machineLine, fieldUserID)
+
+	var byUser lines
+	obs := recordingObservability(&byUser)
+	mux := http.NewServeMux()
+	mux.Handle("GET /orgs", obs.logRequests(http.HandlerFunc(
+		func(_ http.ResponseWriter, r *http.Request) { api.PrincipalFrom(r).GRN = testSubject })))
+	mux.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/orgs", nil))
+
+	userLine := decodeLine(t, &byUser)
+	assert.Equal(t, testSubject, userLine[fieldUserID])
+	assert.NotContains(t, userLine, fieldMachineID)
 }
 
 func TestLogRPCs_ReportsTheMethodAndTheSubject(t *testing.T) {

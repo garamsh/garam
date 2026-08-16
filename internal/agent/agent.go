@@ -18,8 +18,14 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 )
 
-// ServiceType is the canonical GRN service-type for agents.
-const ServiceType = "agent"
+const (
+	// ServiceType is the canonical GRN service-type for agents.
+	ServiceType = "agent"
+	// ServiceTypeOperator is the canonical GRN service-type for the
+	// operators agents are assigned to (ADR-0012). An operator is
+	// registered nowhere yet; an assignment addresses one by GRN.
+	ServiceTypeOperator = "operator"
+)
 
 // Domain sentinel errors.
 var (
@@ -89,8 +95,13 @@ type Agent struct {
 }
 
 // New constructs an Agent owned by orgGRN, before an operator has
-// provisioned it and before it has run.
-func New(g, orgGRN grn.GRN) *Agent {
+// provisioned it and before it has run. It fails unless g names an
+// agent of that organization: ADR-0014 rests tenancy on the
+// organization segment of the GRN a certificate carries.
+func New(g, orgGRN grn.GRN) (*Agent, error) {
+	if err := validateOwnership(g, orgGRN); err != nil {
+		return nil, err
+	}
 	now := time.Now().UTC()
 	return &Agent{
 		grn:          g,
@@ -99,7 +110,19 @@ func New(g, orgGRN grn.GRN) *Agent {
 		runtime:      RuntimeStateUnknown,
 		createdAt:    now,
 		updatedAt:    now,
+	}, nil
+}
+
+// validateOwnership returns nil if g names an agent of the organization
+// orgGRN identifies.
+func validateOwnership(g, orgGRN grn.GRN) error {
+	switch {
+	case g.ServiceType != ServiceType:
+		return errorx.New(errorx.KindInvalidArgument, "agent: grn does not name an agent")
+	case g.Organization != orgGRN.Identifier:
+		return errorx.New(errorx.KindInvalidArgument, "agent: grn belongs to another organization")
 	}
+	return nil
 }
 
 func (a *Agent) GRN() grn.GRN                         { return a.grn }
@@ -110,7 +133,7 @@ func (a *Agent) CreatedAt() time.Time                 { return a.createdAt }
 func (a *Agent) UpdatedAt() time.Time                 { return a.updatedAt }
 
 // NewGRN mints the GRN of an agent owned by orgGRN from eight random
-// bytes. Agents belong to the org, not to a project (ADR-0012), and the
+// bytes. Agents belong to the org, not to a project (ADR-0001), and the
 // identifier never changes.
 func NewGRN(orgGRN grn.GRN) (grn.GRN, error) {
 	b := make([]byte, 8)

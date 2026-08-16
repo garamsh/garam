@@ -31,11 +31,37 @@ func TestNew_StartsBeforeProvisioningAndBeforeRunning(t *testing.T) {
 	g, err := agent.NewGRN(orgGRN)
 	require.NoError(t, err)
 
-	a := agent.New(g, orgGRN)
+	a, err := agent.New(g, orgGRN)
+	require.NoError(t, err)
 	assert.Equal(t, g, a.GRN())
 	assert.Equal(t, orgGRN, a.Organization())
 	assert.Equal(t, agent.ProvisioningStatePending, a.ProvisioningState())
 	assert.Equal(t, agent.RuntimeStateUnknown, a.RuntimeState())
+}
+
+func TestNew_RejectsAGRNTheOrganizationDoesNotOwn(t *testing.T) {
+	orgGRN := grn.New(grn.RootOwner, grn.DefaultProject, "org", "acme")
+
+	tests := []struct {
+		name string
+		g    grn.GRN
+	}{
+		{
+			name: "another service type",
+			g:    grn.New("acme", grn.DefaultProject, agent.ServiceTypeOperator, "one"),
+		},
+		{
+			name: "another organization",
+			g:    grn.New("evilcorp", grn.DefaultProject, agent.ServiceType, "deadbeef"),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a, err := agent.New(tt.g, orgGRN)
+			assert.Nil(t, a)
+			assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
+		})
+	}
 }
 
 func TestParseProvisioningState(t *testing.T) {

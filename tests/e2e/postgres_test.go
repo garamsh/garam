@@ -346,7 +346,9 @@ func TestAgentStore_RoundTrip(t *testing.T) {
 
 	g, err := agent.NewGRN(orgGRN)
 	require.NoError(t, err)
-	require.NoError(t, s.Create(ctx, agent.New(g, orgGRN)))
+	a, err := agent.New(g, orgGRN)
+	require.NoError(t, err)
+	require.NoError(t, s.Create(ctx, a))
 
 	got, err := s.Get(ctx, g)
 	require.NoError(t, err)
@@ -362,7 +364,14 @@ func TestAgentStore_RoundTrip(t *testing.T) {
 	_, err = s.GetAssignment(ctx, g)
 	assert.ErrorIs(t, err, agent.ErrAssignmentNotFound)
 
-	first := grnOf("operator", "one")
+	// An agent with no assignment has no current epoch, so every report
+	// about it is stale.
+	_, err = s.ReportProvisioningState(ctx, g, 1, agent.ProvisioningStateReady)
+	assert.ErrorIs(t, err, agent.ErrStaleEpoch)
+	_, err = s.ReportRuntimeState(ctx, g, 1, agent.RuntimeStateConnected)
+	assert.ErrorIs(t, err, agent.ErrStaleEpoch)
+
+	first := grnOf(agent.ServiceTypeOperator, "one")
 	assigned, err := s.Assign(ctx, g, first)
 	require.NoError(t, err)
 	assert.Equal(t, first, assigned.Operator())
@@ -380,7 +389,7 @@ func TestAgentStore_RoundTrip(t *testing.T) {
 	assert.Equal(t, agent.RuntimeStateConnected, running.RuntimeState())
 	assert.Equal(t, agent.ProvisioningStateReady, running.ProvisioningState())
 
-	second := grnOf("operator", "two")
+	second := grnOf(agent.ServiceTypeOperator, "two")
 	reassigned, err := s.Assign(ctx, g, second)
 	require.NoError(t, err)
 	assert.Equal(t, second, reassigned.Operator())
@@ -395,6 +404,11 @@ func TestAgentStore_RoundTrip(t *testing.T) {
 	_, err = s.ReportProvisioningState(ctx, g, assigned.Epoch(), agent.ProvisioningStateFailed)
 	assert.ErrorIs(t, err, agent.ErrStaleEpoch)
 	_, err = s.ReportRuntimeState(ctx, g, assigned.Epoch(), agent.RuntimeStateDisconnected)
+	assert.ErrorIs(t, err, agent.ErrStaleEpoch)
+
+	// An epoch too wide for the column shares its low 32 bits with the
+	// live one and is stale all the same.
+	_, err = s.ReportRuntimeState(ctx, g, stored.Epoch()+1<<32, agent.RuntimeStateDisconnected)
 	assert.ErrorIs(t, err, agent.ErrStaleEpoch)
 
 	after, err := s.Get(ctx, g)

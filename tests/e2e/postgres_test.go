@@ -362,7 +362,7 @@ func TestAgentStore_RoundTrip(t *testing.T) {
 	_, err = s.GetAssignment(ctx, g)
 	assert.ErrorIs(t, err, agent.ErrAssignmentNotFound)
 
-	first := grnOf("operator", "one")
+	first := grnOf(agent.ServiceTypeOperator, "one")
 	assigned, err := s.Assign(ctx, g, first)
 	require.NoError(t, err)
 	assert.Equal(t, first, assigned.Operator())
@@ -380,7 +380,7 @@ func TestAgentStore_RoundTrip(t *testing.T) {
 	assert.Equal(t, agent.RuntimeStateConnected, running.RuntimeState())
 	assert.Equal(t, agent.ProvisioningStateReady, running.ProvisioningState())
 
-	second := grnOf("operator", "two")
+	second := grnOf(agent.ServiceTypeOperator, "two")
 	reassigned, err := s.Assign(ctx, g, second)
 	require.NoError(t, err)
 	assert.Equal(t, second, reassigned.Operator())

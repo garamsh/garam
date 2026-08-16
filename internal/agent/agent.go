@@ -18,8 +18,14 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 )
 
-// ServiceType is the canonical GRN service-type for agents.
-const ServiceType = "agent"
+const (
+	// ServiceType is the canonical GRN service-type for agents.
+	ServiceType = "agent"
+	// ServiceTypeOperator is the canonical GRN service-type for the
+	// operators agents are assigned to (ADR-0012). An operator is
+	// registered nowhere yet; an assignment addresses one by GRN.
+	ServiceTypeOperator = "operator"
+)
 
 // Domain sentinel errors.
 var (

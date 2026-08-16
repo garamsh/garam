@@ -419,6 +419,18 @@ func TestInvitationFlow_Lifecycle(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 }
 
+func TestCreateInvitation_DefaultsExpiry(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	f.permit(permission{grn.New("root", "default", user.ServiceType, "owner-sub"), org.ActionOrgInvite})
+
+	rec := f.do(t, "POST", "/orgs/"+slug+"/invitations", `{"role":"member"}`, owner)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	inv := decodeBody[apigen.Invitation](t, rec)
+	assert.WithinDuration(t, time.Now().UTC().Add(7*24*time.Hour), inv.ExpiresAt, time.Minute)
+}
+
 func TestAcceptInvitation_Expired(t *testing.T) {
 	f := newFixture(t)
 	invitee := f.sessionCookieFor(t, "invitee-sub", "Invitee")

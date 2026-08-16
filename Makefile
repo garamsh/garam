@@ -31,7 +31,7 @@ TEST_DATABASE_URL ?= postgres://garam:garam@localhost:$(GARAM_DB_PORT)/$(TEST_DB
 COMPOSE_LOCAL := docker compose -f deploy/local/docker-compose.yml
 PNPM := pnpm --dir web
 
-.PHONY: lint format test build mock gen check-gen e2e db-up db-down ci
+.PHONY: lint format test build mock gen check-gen e2e db-up db-down backend-up ci
 .PHONY: web-install web-lint web-test web-build web-gen web-check-gen web-e2e web-ci
 
 lint:
@@ -81,6 +81,13 @@ db-up:
 db-down:
 	$(COMPOSE_LOCAL) rm -sf postgres
 
+# backend-up starts the backend `make web-e2e` drives — postgres, the
+# one-shot migration, authz and api — from the same compose file, and
+# returns once api answers. The profile-gated `web` service stays down:
+# the browser suite builds and serves the app itself.
+backend-up:
+	$(COMPOSE_LOCAL) up -d --wait api
+
 # e2e runs the store round-trips against real Postgres (see db-up).
 e2e:
 	GARAM_TEST_DATABASE_URL='$(TEST_DATABASE_URL)' go test -count=1 ./tests/e2e/...
@@ -116,10 +123,12 @@ web-gen:
 web-check-gen: web-gen
 	git diff --exit-code -- web/src/types/api.ts
 
-# web-e2e drives the built app in a real browser against a running
-# backend. It needs `db-up`, `garam migrate`, `garam serve authz` and
-# `garam serve api` first — see the web section of the README.
+# web-e2e drives the built app in a real browser against the backend
+# `make backend-up` starts. It builds and serves the app itself, so it
+# needs GARAM_API_URL — the real api here, not `web-build`'s placeholder
+# — and the browser, which Playwright keeps outside the lockfile.
 web-e2e:
-	$(PNPM) e2e
+	$(PNPM) exec playwright install chromium
+	GARAM_API_URL=http://localhost:8080 $(PNPM) e2e
 
 web-ci: web-lint web-test web-build web-check-gen

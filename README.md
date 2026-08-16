@@ -68,21 +68,10 @@ so the OAuth round trip stays on the web origin.
 ### Playwright end-to-end tests
 
 `web/e2e/` drives the built app in a real browser against the real
-backend. Bring up the backend first, in three terminals or with `&`:
+backend. Bring up the backend first:
 
 ```sh
-make db-up
-export GARAM_DATABASE_URL='postgres://garam:garam@localhost:55432/garam?sslmode=disable'
-go run ./cmd/garam migrate
-go run ./cmd/garam serve authz
-GARAM_COOKIE_SECURE=false GOOGLE_REDIRECT_URL=http://localhost:3000/api/auth/callback/google \
-  go run ./cmd/garam serve api
-```
-
-Then, once per machine `pnpm --dir web exec playwright install chromium`,
-and to run the suite:
-
-```sh
+make backend-up          # postgres, migrate, authz and api, in containers
 make web-e2e
 ```
 

@@ -4,16 +4,18 @@ import (
 	"context"
 	"crypto/tls"
 	"log/slog"
-	"net/http"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
+	machinegen "github.com/garamsh/garam/api/machine"
+	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/ca"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/machine"
+	"github.com/garamsh/garam/internal/machineapi"
 	"github.com/garamsh/garam/internal/org"
 )
 
@@ -51,7 +53,7 @@ func serveMachine(cmd *cobra.Command) error {
 	}
 	defer pool.Close()
 
-	cert, err := machineKeyMaterial(
+	cert, sealer, err := machineKeyMaterial(
 		envOr("GARAM_MACHINE_TLS_CERT_FILE", ""),
 		envOr("GARAM_MACHINE_TLS_KEY_FILE", ""),
 		envOr("GARAM_CA_KEY_FILE", ""),
@@ -60,12 +62,22 @@ func serveMachine(cmd *cobra.Command) error {
 		return err
 	}
 
-	mux := http.NewServeMux()
-	mux.Handle("GET /identity", machine.IdentityHandler())
+	authorities := ca.NewPostgresStore(pool)
+	issuer, err := ca.NewService(authorities, sealer, ca.Config{})
+	if err != nil {
+		return err
+	}
+	agents := agent.NewService(agent.NewPostgresStore(pool), certificates{issuer: issuer})
+
+	// The generated router matches before the middleware runs, so the
+	// log line can name the route rather than the path.
+	handler := machinegen.HandlerWithOptions(machineapi.NewServer(agents), machinegen.StdHTTPServerOptions{
+		Middlewares: []machinegen.MiddlewareFunc{obs.logMachineRequests},
+	})
 	srv := machine.NewServer(
-		machine.NewService(certificateAuthorities{store: ca.NewPostgresStore(pool)}),
+		machine.NewService(certificateAuthorities{store: authorities}),
 		cert,
-		otelhttp.NewHandler(obs.logMachineRequests(mux), serviceMachine),
+		otelhttp.NewHandler(handler, serviceMachine),
 	)
 	srv.Addr = envOr("GARAM_MACHINE_ADDR", ":8443")
 	// A refused handshake is the only refusal this listener makes, and
@@ -80,28 +92,28 @@ func serveMachine(cmd *cobra.Command) error {
 }
 
 // machineKeyMaterial loads the certificate the listener terminates TLS
-// with, and requires the key-encryption key every certificate
-// authority is sealed under. Both are files, because key material
-// never travels in the environment (ADR-0015).
+// with, and the key-encryption key every certificate authority is
+// sealed under. Both are files, because key material never travels in
+// the environment (ADR-0015).
 //
-// The key is read and dropped. Nothing on this listener signs a
-// certificate yet, so what the read buys is the refusal: the process
-// that owns the certificate authorities does not start without the key
-// that opens them (ADR-0016), rather than failing at the first
-// certificate it is asked for.
-func machineKeyMaterial(certFile, keyFile, caKeyFile string) (tls.Certificate, error) {
+// This surface signs certificates, so the key it opens an authority
+// with is what the process runs on: a missing, group-readable,
+// malformed or wrong-length one refuses the start rather than the
+// first certificate asked for (ADR-0016).
+func machineKeyMaterial(certFile, keyFile, caKeyFile string) (tls.Certificate, ca.Sealer, error) {
 	if certFile == "" || keyFile == "" {
-		return tls.Certificate{}, errorx.New(errorx.KindInvalidArgument,
+		return tls.Certificate{}, nil, errorx.New(errorx.KindInvalidArgument,
 			"GARAM_MACHINE_TLS_CERT_FILE and GARAM_MACHINE_TLS_KEY_FILE are required")
 	}
-	if _, err := ca.NewSealerFromKeyFile(caKeyFile); err != nil {
-		return tls.Certificate{}, errorx.Wrap(err, "GARAM_CA_KEY_FILE")
+	sealer, err := ca.NewSealerFromKeyFile(caKeyFile)
+	if err != nil {
+		return tls.Certificate{}, nil, errorx.Wrap(err, "GARAM_CA_KEY_FILE")
 	}
 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
-		return tls.Certificate{}, errorx.Wrap(err, "machine listener certificate", errorx.KindInvalidArgument)
+		return tls.Certificate{}, nil, errorx.Wrap(err, "machine listener certificate", errorx.KindInvalidArgument)
 	}
-	return cert, nil
+	return cert, sealer, nil
 }
 
 // certificateAuthorities reads the authority a presented certificate
@@ -117,4 +129,23 @@ func (c certificateAuthorities) Get(ctx context.Context, subject grn.GRN) ([]byt
 		return nil, err
 	}
 	return authority.Certificate(), nil
+}
+
+// certificates is the certificate authority as the agent domain signs
+// through it (agent.Issuer). The two cooperate through grn.GRN alone,
+// so the composition root is where what one issues becomes what the
+// other hands back.
+type certificates struct{ issuer ca.Service }
+
+func (c certificates) Issue(ctx context.Context, subject grn.GRN) (*agent.Certificate, error) {
+	issued, err := c.issuer.Issue(ctx, subject)
+	if err != nil {
+		return nil, err
+	}
+	return &agent.Certificate{
+		CertificatePEM: issued.CertificatePEM(),
+		PrivateKeyPEM:  issued.PrivateKeyPEM(),
+		IssuerPEM:      issued.IssuerPEM(),
+		NotAfter:       issued.NotAfter(),
+	}, nil
 }

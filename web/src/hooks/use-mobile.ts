@@ -1,19 +1,23 @@
-import * as React from "react"
+import { useSyncExternalStore } from "react";
 
-const MOBILE_BREAKPOINT = 768
+const MOBILE_BREAKPOINT = 768;
+const MOBILE_QUERY = `(max-width: ${MOBILE_BREAKPOINT - 1}px)`;
 
-export function useIsMobile() {
-  const [isMobile, setIsMobile] = React.useState<boolean | undefined>(undefined)
+function subscribe(onChange: () => void): () => void {
+  const query = window.matchMedia(MOBILE_QUERY);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
 
-  React.useEffect(() => {
-    const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`)
-    const onChange = () => {
-      setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
-    }
-    mql.addEventListener("change", onChange)
-    setIsMobile(window.innerWidth < MOBILE_BREAKPOINT)
-    return () => mql.removeEventListener("change", onChange)
-  }, [])
-
-  return !!isMobile
+/**
+ * useIsMobile reports whether the viewport sits below the mobile
+ * breakpoint. Server rendering and hydration both read `false`, because
+ * the viewport width is unknown until the client subscribes.
+ */
+export function useIsMobile(): boolean {
+  return useSyncExternalStore(
+    subscribe,
+    () => window.matchMedia(MOBILE_QUERY).matches,
+    () => false,
+  );
 }

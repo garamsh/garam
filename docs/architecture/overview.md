@@ -45,9 +45,12 @@ collaborate on a shared plan.
 - Workflow execution engine, scheduler, queue.
 - Notifications or messaging.
 - The agent domain. ADR-0012 settles its shape — identity, operator
-  assignment, delivery and state — but no package, endpoint or
-  persistence exists, and the machine authentication it needs does not
-  either.
+  assignment, delivery and state — and ADR-0013 settles how a message
+  reaches one, but no package, endpoint or persistence exists, and the
+  machine authentication both need does not either.
+- Chat channels. ADR-0013 makes garam a message API and leaves Slack,
+  LINE and the rest to consumers of it; none is built, and whether any
+  ships first-party is undecided.
 - Resource-based policies: a statement names no `Principal`, so a
   policy reaches subjects through an identity attachment only
   (ADR-0008).
@@ -128,6 +131,7 @@ contract is `proto/garam/authz/v1`.
 | Invitations are token-keyed, not GRN-addressed | The bearer token is the identifier; no new GRN service_type. | [adr/0006-invitation-tokens.md](./adr/0006-invitation-tokens.md) |
 | The console is a sidebar shell over org sections | One structure for switching orgs, moving between sections, and knowing where you are. | [adr/0011-console-shell.md](./adr/0011-console-shell.md) |
 | Agents are provisioned by operators garam never dials | An operator is a peer, so a user can supply their own; a sidecar's outbound connection is the only path in. | [adr/0012-agent-operator-model.md](./adr/0012-agent-operator-model.md) |
+| Messages reach an agent by polling, not by push | A queue in Postgres has no connection to route to, so any instance answers any poll. | [adr/0013-agent-messaging.md](./adr/0013-agent-messaging.md) |
 
 ## Non-functional goals
 

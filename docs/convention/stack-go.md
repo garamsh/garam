@@ -285,10 +285,12 @@ Within `internal/<domain>/`:
 
 Use **[mockery v3](https://vektra.github.io/mockery/)**.
 
-- **Config:** `<repo-root>/mockery.yaml` (v3 — no leading dot)
-  declares which interfaces to mock, output directory, package
-  names, per-interface overrides.
-- **Generated location:** declared in `mockery.yaml` via `outdir` per
+- **Config:** `<repo-root>/.mockery.yaml` declares which interfaces to
+  mock, output directory, package names, per-interface overrides.
+  mockery v3.7.2 discovers only the dotted name; an undotted file is
+  reachable only through `--config`, a flag that would be carried to
+  satisfy a filename rather than to configure anything.
+- **Generated location:** declared in `.mockery.yaml` via `outdir` per
   `interface:` block. Default: `mocks/<package>/<Interface>.go` at
   module root. When interface is scoped to one domain, set
   `outdir: internal/<domain>/mocks/`. Pick one convention per project.

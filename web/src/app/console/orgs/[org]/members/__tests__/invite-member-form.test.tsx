@@ -70,9 +70,13 @@ describe("invite member form", () => {
 
     // The second invitation is a different token nobody has copied yet.
     await user.click(screen.getByRole("button", { name: "Create invitation" }));
-    expect(await screen.findByLabelText("Invitation link")).toHaveValue(
-      "http://localhost:3000/console/invitations/token-2",
-    );
+    // The field already holds token 1, so its value is the only thing that
+    // marks token 2 as having arrived.
+    expect(
+      await screen.findByDisplayValue(
+        "http://localhost:3000/console/invitations/token-2",
+      ),
+    ).toHaveAccessibleName("Invitation link");
     expect(screen.getByRole("button", { name: "Copy" })).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Copied" }),

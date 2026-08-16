@@ -22,3 +22,7 @@ packages:
   github.com/garamsh/garam/internal/authz:
     interfaces:
       Store: {}
+  github.com/garamsh/garam/internal/ca:
+    interfaces:
+      Sealer: {}
+      Store: {}

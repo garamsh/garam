@@ -434,6 +434,83 @@ func TestAgentStore_RoundTrip(t *testing.T) {
 	assert.Zero(t, assignments)
 }
 
+// TestAgent_GRNMatchesItsOrg covers the schema's copy of the ownership
+// rule the agent domain enforces: a row whose GRN names another
+// organization is refused even by a statement that never passes through
+// the domain.
+func TestAgent_GRNMatchesItsOrg(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := agent.NewPostgresStore(p)
+	orgGRN := grnOf("org", "acme")
+	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgGRN, "acme")))
+
+	g, err := agent.NewGRN(orgGRN)
+	require.NoError(t, err)
+	a, err := agent.New(g, orgGRN)
+	require.NoError(t, err)
+	require.NoError(t, s.Create(ctx, a))
+
+	// agent.New refuses this pairing, so only a direct statement reaches
+	// the constraint.
+	_, err = p.Exec(ctx, `INSERT INTO agents (grn, org_grn, provisioning_state, runtime_state, created_at, updated_at)
+		VALUES ($1, $2, 'pending', 'unknown', now(), now())`,
+		scopedGRN("globex", agent.ServiceType, "deadbeef").String(), orgGRN.String())
+	assert.Error(t, err, "an agent GRN must name the org that owns it")
+}
+
+// TestAgentAssignment_StaysInsideItsOrg covers the schema's rules for an
+// assignment (ADR-0015): the GRN it carries names an operator, and that
+// operator belongs to the agent's org. An operator is addressed as an
+// agent is (ADR-0012), so a root-owned one has no place here and is not
+// admitted the way a policy attachment admits a root-owned subject.
+func TestAgentAssignment_StaysInsideItsOrg(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := agent.NewPostgresStore(p)
+	orgGRN := grnOf("org", "acme")
+	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgGRN, "acme")))
+
+	g, err := agent.NewGRN(orgGRN)
+	require.NoError(t, err)
+	a, err := agent.New(g, orgGRN)
+	require.NoError(t, err)
+	require.NoError(t, s.Create(ctx, a))
+
+	rejected := []struct {
+		name     string
+		operator grn.GRN
+	}{
+		{"another org's operator", scopedGRN("globex", agent.ServiceTypeOperator, "one")},
+		{"a root-owned operator", grn.New(grn.RootOwner, grn.DefaultProject, agent.ServiceTypeOperator, "one")},
+		{"an identity that is not an operator", grnOf("user", "ada")},
+	}
+	for _, tt := range rejected {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := s.Assign(ctx, g, tt.operator)
+			assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
+			_, err = s.GetAssignment(ctx, g)
+			assert.ErrorIs(t, err, agent.ErrAssignmentNotFound, "the rejected assignment was not stored")
+		})
+	}
+
+	// The operator of the agent's own org is assigned, so the rules
+	// reject a pairing rather than every pairing.
+	operator := grnOf(agent.ServiceTypeOperator, "one")
+	assigned, err := s.Assign(ctx, g, operator)
+	require.NoError(t, err)
+	assert.Equal(t, operator, assigned.Operator())
+
+	// A reassignment writes onto the row the agent already has, and it
+	// leaves the org the same way an assignment does.
+	_, err = s.Assign(ctx, g, scopedGRN("globex", agent.ServiceTypeOperator, "two"))
+	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
+	stored, err := s.GetAssignment(ctx, g)
+	require.NoError(t, err)
+	assert.Equal(t, operator, stored.Operator(), "the rejected reassignment left the row alone")
+	assert.Equal(t, 1, stored.Epoch())
+}
+
 func ptr[T any](v T) *T { return &v }
 
 // policyDoc builds a one-statement document whose Sid identifies the

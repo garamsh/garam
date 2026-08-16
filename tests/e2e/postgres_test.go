@@ -1,7 +1,8 @@
 // Package e2e_test exercises the Postgres store implementations, and
-// the services layered over them, against a real database. Set GARAM_TEST_DATABASE_URL (e.g. via
-// `make e2e`, which starts the docker-compose Postgres) to run them;
-// without it every test skips.
+// the services layered over them, against a real database.
+// GARAM_TEST_DATABASE_URL names that database; `make db-up e2e` starts
+// the docker-compose Postgres and sets it. The suite fails without it
+// rather than skipping.
 package e2e_test
 
 import (
@@ -59,21 +60,22 @@ func migrationsDir(t *testing.T) string {
 	}
 }
 
-// TestMigrationsDir_Resolves guards the migration source path: it runs
-// without a database, so `make ci` catches a broken path before e2e does.
-func TestMigrationsDir_Resolves(t *testing.T) {
-	entries, err := os.ReadDir(migrationsDir(t))
-	require.NoError(t, err)
-	assert.NotEmpty(t, entries)
+// TestMain requires the test database before any test runs. This layer is
+// defined by real infrastructure, and skipping instead left `go test`
+// printing the same `ok` for a run that touched no database as for one
+// that passed against it.
+func TestMain(m *testing.M) {
+	if os.Getenv("GARAM_TEST_DATABASE_URL") == "" {
+		fmt.Fprintln(os.Stderr, "e2e: GARAM_TEST_DATABASE_URL is not set; run `make db-up e2e`")
+		os.Exit(1)
+	}
+	os.Exit(m.Run())
 }
 
-// pool connects to the test database or skips the test.
+// pool connects to the test database TestMain checked for.
 func pool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	url := os.Getenv("GARAM_TEST_DATABASE_URL")
-	if url == "" {
-		t.Skip("GARAM_TEST_DATABASE_URL not set; skipping e2e")
-	}
 	migrateOnce.Do(func() {
 		m, err := migrate.New("file://"+migrationsDir(t), url)
 		require.NoError(t, err)

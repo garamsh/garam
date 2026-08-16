@@ -45,8 +45,16 @@ format:
 	@out="$$(gofmt -l .)"; test -z "$$out" || { echo "gofmt: $$out"; exit 1; }
 	@out="$$($(GOIMPORTS) -l .)"; test -z "$$out" || { echo "goimports: $$out"; exit 1; }
 
+# go has no negative package pattern, so the sweep is filtered here.
+# tests/e2e needs the Postgres db-up starts and fails without it, so test
+# covers every other package and names the one it left out. Should the
+# filter ever stop matching, the e2e suite is swept back in and fails for
+# want of a database rather than skipping quietly.
+TEST_PKGS = $(shell go list ./... | grep -v '/tests/e2e$$')
+
 test:
-	go test ./...
+	@echo 'test: $(words $(TEST_PKGS)) packages; tests/e2e not covered here — it needs Postgres (make db-up e2e)'
+	@go test $(TEST_PKGS)
 
 build:
 	go build ./...
@@ -70,7 +78,12 @@ GEN_PATHS := api/server.gen.go internal/*/db proto/gen internal/*/mocks
 # git diff sees tracked paths only, so a generated file nobody added is
 # invisible to it. git status reports modified and untracked entries, skips
 # ignored ones, and exits 0 either way, so the gate checks for output.
+#
+# An unmatched pathspec is silent too, so a GEN_PATHS entry naming output
+# that has moved or gone would read as a clean tree. ls fails on it first,
+# and reports the count it did inspect.
 check-gen: gen
+	@paths="$$(ls -d $(GEN_PATHS))" && echo "check-gen: $$(echo "$$paths" | wc -l) generated paths inspected"
 	@out="$$(git status --porcelain -- $(GEN_PATHS))"; \
 		test -z "$$out" || { echo "check-gen: uncommitted generated output:"; echo "$$out"; exit 1; }
 

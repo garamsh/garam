@@ -14,31 +14,45 @@ import (
 const claimMessage = `-- name: ClaimMessage :one
 UPDATE messages SET
     claim_id         = $1,
-    claim_expires_at = now() + $2::interval
+    claimed_at       = now(),
+    claim_expires_at = now() + $2::interval,
+    attempts         = messages.attempts + 1
 WHERE id = (
     SELECT m.id FROM messages m
     WHERE m.recipient_grn = $3
       AND m.completed_at IS NULL
+      AND m.attempts < $4
       AND (m.claim_expires_at IS NULL OR m.claim_expires_at <= now())
     ORDER BY m.created_at, m.id
     LIMIT 1
     FOR UPDATE SKIP LOCKED
 )
-RETURNING id, recipient_grn, sender_grn, idempotency_key, body, created_at, claim_id, claim_expires_at, completed_at
+RETURNING id, recipient_grn, sender_grn, idempotency_key, body, created_at, claim_id, claim_expires_at, completed_at, attempts, claimed_at
 `
 
 type ClaimMessageParams struct {
 	ClaimID      pgtype.Text
 	Lease        pgtype.Interval
 	RecipientGrn string
+	MaxAttempts  int32
 }
 
 // ClaimMessage hands one message to one reader: the row it picks is
 // locked for the statement, and a reader that meets a locked row skips
 // to the next rather than waiting behind it. The lease is measured by
 // Postgres, so no instance's clock decides when a claim lapses.
+//
+// Handing the message out is the attempt, so the count rises here
+// rather than on a failure nobody reports: a turn that fails is
+// indistinguishable from one that never started (ADR-0018). A message
+// that has spent its attempts is not picked again.
 func (q *Queries) ClaimMessage(ctx context.Context, arg ClaimMessageParams) (Message, error) {
-	row := q.db.QueryRow(ctx, claimMessage, arg.ClaimID, arg.Lease, arg.RecipientGrn)
+	row := q.db.QueryRow(ctx, claimMessage,
+		arg.ClaimID,
+		arg.Lease,
+		arg.RecipientGrn,
+		arg.MaxAttempts,
+	)
 	var i Message
 	err := row.Scan(
 		&i.ID,
@@ -50,6 +64,8 @@ func (q *Queries) ClaimMessage(ctx context.Context, arg ClaimMessageParams) (Mes
 		&i.ClaimID,
 		&i.ClaimExpiresAt,
 		&i.CompletedAt,
+		&i.Attempts,
+		&i.ClaimedAt,
 	)
 	return i, err
 }
@@ -57,19 +73,22 @@ func (q *Queries) ClaimMessage(ctx context.Context, arg ClaimMessageParams) (Mes
 const completeMessage = `-- name: CompleteMessage :execrows
 UPDATE messages SET
     completed_at = coalesce(completed_at, now())
-WHERE id = $1 AND claim_id = $2
+WHERE recipient_grn = $1 AND claim_id = $2
 `
 
 type CompleteMessageParams struct {
-	ID      string
-	ClaimID pgtype.Text
+	RecipientGrn string
+	ClaimID      pgtype.Text
 }
 
 // CompleteMessage is fenced by the claim rather than by the message's
 // state: a reader whose claim was handed on matches no row, and one
-// completing twice keeps the delivery it already reported.
+// completing twice keeps the delivery it already reported. The
+// recipient is matched too, so the token is a fence rather than a
+// secret — a claim of another recipient's message completes nothing
+// here even when its identifier is known.
 func (q *Queries) CompleteMessage(ctx context.Context, arg CompleteMessageParams) (int64, error) {
-	result, err := q.db.Exec(ctx, completeMessage, arg.ID, arg.ClaimID)
+	result, err := q.db.Exec(ctx, completeMessage, arg.RecipientGrn, arg.ClaimID)
 	if err != nil {
 		return 0, err
 	}
@@ -81,7 +100,7 @@ INSERT INTO messages (id, recipient_grn, sender_grn, idempotency_key, body, crea
 VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT (sender_grn, idempotency_key) DO UPDATE SET
     idempotency_key = messages.idempotency_key
-RETURNING id, recipient_grn, sender_grn, idempotency_key, body, created_at, claim_id, claim_expires_at, completed_at
+RETURNING id, recipient_grn, sender_grn, idempotency_key, body, created_at, claim_id, claim_expires_at, completed_at, attempts, claimed_at
 `
 
 type EnqueueMessageParams struct {
@@ -117,6 +136,55 @@ func (q *Queries) EnqueueMessage(ctx context.Context, arg EnqueueMessageParams) 
 		&i.ClaimID,
 		&i.ClaimExpiresAt,
 		&i.CompletedAt,
+		&i.Attempts,
+		&i.ClaimedAt,
+	)
+	return i, err
+}
+
+const renewClaim = `-- name: RenewClaim :one
+UPDATE messages SET
+    claim_expires_at = least(now() + $1::interval, claimed_at + $2::interval)
+WHERE recipient_grn = $3
+  AND claim_id = $4
+  AND completed_at IS NULL
+  AND claim_expires_at > now()
+RETURNING id, recipient_grn, sender_grn, idempotency_key, body, created_at, claim_id, claim_expires_at, completed_at, attempts, claimed_at
+`
+
+type RenewClaimParams struct {
+	Lease        pgtype.Interval
+	Ceiling      pgtype.Interval
+	RecipientGrn string
+	ClaimID      pgtype.Text
+}
+
+// RenewClaim extends a live claim's lease, up to a ceiling measured
+// from the moment the claim was taken. The ceiling is the backstop for
+// a completion that never arrives (ADR-0018), so a renewal reaching
+// past it is held at it rather than refused: the claim then lapses on
+// schedule and the message is redelivered. A claim already lapsed,
+// handed on, or completed matches no row.
+func (q *Queries) RenewClaim(ctx context.Context, arg RenewClaimParams) (Message, error) {
+	row := q.db.QueryRow(ctx, renewClaim,
+		arg.Lease,
+		arg.Ceiling,
+		arg.RecipientGrn,
+		arg.ClaimID,
+	)
+	var i Message
+	err := row.Scan(
+		&i.ID,
+		&i.RecipientGrn,
+		&i.SenderGrn,
+		&i.IdempotencyKey,
+		&i.Body,
+		&i.CreatedAt,
+		&i.ClaimID,
+		&i.ClaimExpiresAt,
+		&i.CompletedAt,
+		&i.Attempts,
+		&i.ClaimedAt,
 	)
 	return i, err
 }

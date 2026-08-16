@@ -56,7 +56,9 @@ sql:
         out: internal/ca/db
         sql_package: pgx/v5
   - engine: postgresql
-    schema: migrations/000008_messages.up.sql
+    schema:
+      - migrations/000008_messages.up.sql
+      - migrations/000009_message_delivery.up.sql
     queries: internal/message/queries.sql
     gen:
       go:

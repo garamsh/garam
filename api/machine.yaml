@@ -17,6 +17,11 @@ tags:
       The agents an operator creates and holds. What an operator may
       obtain is exactly the agents assigned to it at the current epoch
       (ADR-0015).
+  - name: message
+    description: >-
+      The queue a message reaches an agent through (ADR-0013). A caller
+      posts to any recipient and acts on messages for the agent it
+      authenticates as and no other.
 security:
   - machineCertificate: []
 paths:
@@ -83,8 +88,132 @@ paths:
           $ref: '#/components/responses/Error'
         '403':
           $ref: '#/components/responses/Error'
+  /messages:
+    post:
+      operationId: postMessage
+      tags: [message]
+      summary: Post a message to a recipient.
+      description: >-
+        The sender is what the certificate names, so the body carries
+        the recipient and nothing about who is sending. garam answers
+        once the message is durably stored and does not check that the
+        recipient exists: rejecting a message it cannot route would
+        destroy it and tell the sender nothing, so a routing failure
+        comes back later as an ordinary message instead (ADR-0013).
+        The sender's idempotency key is what makes a retry store one
+        message rather than two.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MessageSubmission'
+      responses:
+        '201':
+          description: Message stored.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+  /agents/{agent}/claims:
+    post:
+      operationId: claimMessage
+      tags: [message]
+      summary: Claim the next message addressed to an agent.
+      description: >-
+        A long poll: the call waits for a message rather than answering
+        an empty queue at once, and answers 204 when none arrives in
+        that time. The caller claims for the agent it authenticates as
+        and is refused every other one. Exactly one caller holds a
+        given message, under a lease that garam measures; a claim
+        nobody completes lapses and the message is handed on, up to a
+        bounded number of attempts (ADR-0018).
+      parameters:
+        - $ref: '#/components/parameters/agent'
+      responses:
+        '200':
+          description: A message, and the hold the caller now has on it.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Claim'
+        '204':
+          description: Nothing was ready before the wait ran out. Ask again.
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /agents/{agent}/claims/{claim}/renewal:
+    post:
+      operationId: renewClaim
+      tags: [message]
+      summary: Extend a claim while the message is still being worked on.
+      description: >-
+        Renewal is what keeps a long turn from losing its claim
+        mid-flight. It carries the hold no further than a ceiling
+        measured from when the claim was taken, and a renewal reaching
+        past that ceiling is held at it: the ceiling is the backstop
+        for a completion that never arrives, so it is not renewable
+        away (ADR-0018). A claim already lapsed, handed on, or
+        completed is refused.
+      parameters:
+        - $ref: '#/components/parameters/agent'
+        - $ref: '#/components/parameters/claim'
+      responses:
+        '200':
+          description: The hold as it now stands.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Claim'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+  /agents/{agent}/claims/{claim}/completion:
+    post:
+      operationId: completeClaim
+      tags: [message]
+      summary: Report the claimed message delivered.
+      description: >-
+        Completion is fenced by the claim rather than by the message,
+        so a caller whose lease was handed on completes nothing.
+        Completing twice reports the same delivery, because a caller
+        that could not read the answer retries.
+      parameters:
+        - $ref: '#/components/parameters/agent'
+        - $ref: '#/components/parameters/claim'
+      responses:
+        '204':
+          description: The message is delivered and is not handed out again.
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
 components:
   parameters:
+    claim:
+      name: claim
+      in: path
+      required: true
+      description: Claim identifier, as `claimMessage` returned it.
+      x-go-name: ClaimId
+      schema:
+        type: string
     agent:
       name: agent
       in: path
@@ -150,6 +279,78 @@ components:
           description: >-
             When the certificate stops being valid. It carries jitter,
             so certificates issued together do not expire together.
+    MessageSubmission:
+      type: object
+      description: What a sender supplies. Who is sending is the certificate's to say.
+      required: [recipient, idempotencyKey, body]
+      properties:
+        recipient:
+          type: string
+          description: >-
+            GRN of the identity the message is addressed to. It does
+            not have to name an agent garam knows.
+          example: grn:acme:default:agent:0a1b2c3d4e5f6071
+        idempotencyKey:
+          type: string
+          description: >-
+            The sender's own key for this message. Posting the same key
+            twice stores one message and answers with it both times.
+        body:
+          type: string
+          description: >-
+            The message itself. The queue carries it and never reads
+            it, so it may be empty.
+    Message:
+      type: object
+      description: One stored message, under an identifier the queue minted.
+      required: [id, recipient, sender, idempotencyKey, body, createdAt]
+      properties:
+        id:
+          type: string
+          description: >-
+            The queue's identifier for the message. A message is a queue
+            entry rather than a resource a policy names, so it is opaque
+            and not a GRN.
+        recipient:
+          type: string
+          example: grn:acme:default:agent:0a1b2c3d4e5f6071
+        sender:
+          type: string
+          example: grn:acme:default:agent:9f8e7d6c5b4a3021
+        idempotencyKey:
+          type: string
+        body:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    Claim:
+      type: object
+      description: >-
+        One caller's hold on one message, and the token that fences it.
+        Renewal and completion carry that token, and a hold handed on to
+        the next caller stops matching.
+      required: [id, expiresAt, attempt, message]
+      properties:
+        id:
+          type: string
+          description: The claim's identifier, which renewal and completion name.
+        expiresAt:
+          type: string
+          format: date-time
+          description: >-
+            When the hold lapses and the message is handed to the next
+            caller. garam measures it, so no caller's clock decides it.
+        attempt:
+          type: integer
+          minimum: 1
+          description: >-
+            Which delivery of this message the caller is holding.
+            Delivery is at-least-once (ADR-0018), so this is what tells
+            a first delivery from a repeat; a message that reaches the
+            bound is not handed out again.
+        message:
+          $ref: '#/components/schemas/Message'
     Error:
       type: object
       required: [kind, message]

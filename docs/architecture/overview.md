@@ -37,9 +37,14 @@ collaborate on a shared plan.
   and does not start without it (ADR-0016).
 - Messages addressed to an agent are held in a queue one reader at a
   time claims from, stored once per sender key and claimable again when
-  a reader dies holding one (ADR-0013). Nothing serves that queue yet,
-  and it carries neither the attempt count nor the lease renewal
-  ADR-0018 needs.
+  a reader dies holding one (ADR-0013). A message is bounded by an
+  attempt count and a claim is renewable under a ceiling, which is what
+  ADR-0018 rests completion on.
+- Posting, claiming, renewing and completing a message, on the machine
+  listener. A caller posts to any recipient and acts on messages for
+  the agent it authenticates as and no other; a claim is a long poll,
+  and a message addressed to an agent that does not exist is stored and
+  answered with success rather than refused (ADR-0013).
 - Org / group / project structure; groups and projects are created,
   read, updated, deleted, and populated with members over the HTTP API
   under their organization's paths.
@@ -78,12 +83,15 @@ collaborate on a shared plan.
 - Workflow execution engine, scheduler, queue.
 - Notifications.
 - The rest of the agent surface. An operator creates an agent and
-  obtains its certificate (see In scope); what the listener does not
-  serve is message ingress and the long poll over the queue
-  `internal/message` holds (ADR-0013), the state an operator or an
-  agent reports (ADR-0012), and deprovisioning an agent. The adapter is
-  not built, and certificate renewal is reissue and restart rather than
-  an endpoint (ADR-0014).
+  obtains its certificate, and a message is posted, claimed, renewed
+  and completed (see In scope); what the listener does not serve is the
+  state an operator or an agent reports (ADR-0012) and deprovisioning
+  an agent. The adapter is not built, and certificate renewal is
+  reissue and restart rather than an endpoint (ADR-0014).
+- Telling a sender that its message exhausted its attempts. ADR-0018
+  makes that garam's obligation because the agent platform notifies
+  nobody; the queue stops redelivering an exhausted message and nothing
+  yet reports one.
 - Chat channels. ADR-0013 makes garam a message API and leaves Slack,
   LINE and the rest to consumers of it; none is built, and whether any
   ships first-party is undecided.
@@ -134,7 +142,8 @@ collaborate on a shared plan.
 - `internal/machineapi/` — handlers implementing the ServerInterface
   generated from the machine listener's spec.
 - `internal/message/` — the durable queue a message reaches an agent
-  through; one reader claims a message at a time.
+  through; one reader claims a message at a time, and whose queue a
+  caller may act on is decided here.
 - `internal/api/` — handlers implementing the generated ServerInterface.
 - `internal/authn/` — sign-in provider abstraction (Google OIDC,
   dev-only local), sessions.

@@ -6,7 +6,8 @@
 // authenticated as and nothing else — no session, no user row, no
 // organization membership (ADR-0014, ADR-0015). What an operator may
 // reach is bounded by the assignments it holds, which `internal/agent`
-// decides; this package reads the caller off the request, parses what
+// decides, and whose queue a caller may act on is `internal/message`'s
+// to decide; this package reads the caller off the request, parses what
 // the path names, and renders the answer.
 package machineapi
 
@@ -18,20 +19,23 @@ import (
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/machine"
+	"github.com/garamsh/garam/internal/message"
 )
 
 // Server implements machinegen.ServerInterface.
 type Server struct {
-	agents agent.Service
+	agents   agent.Service
+	messages message.Service
 }
 
 // Compile-time check that Server satisfies the generated interface.
 var _ machinegen.ServerInterface = (*Server)(nil)
 
-// NewServer constructs the machine API server over the agent service
-// it answers from.
-func NewServer(agents agent.Service) *Server {
-	return &Server{agents: agents}
+// NewServer constructs the machine API server over the services it
+// answers from: what an operator does to its agents, and what a machine
+// identity does to its own queue.
+func NewServer(agents agent.Service, messages message.Service) *Server {
+	return &Server{agents: agents, messages: messages}
 }
 
 // caller returns the GRN the connection authenticated as, and writes

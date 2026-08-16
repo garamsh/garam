@@ -26,6 +26,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/machine"
 	"github.com/garamsh/garam/internal/machineapi"
+	"github.com/garamsh/garam/internal/message"
 )
 
 func operatorGRN(org string) grn.GRN {
@@ -125,9 +126,10 @@ func loopback(t *testing.T) tls.Certificate {
 // listener serves the surface behind the machine listener and returns
 // its URL with a client holding the certificate the caller's own
 // organization signed. Everything below the surface is real except the
-// agent service: a request arrives over a handshake garam verified, so
-// the identity a handler reads is the one a certificate carried.
-func listener(t *testing.T, agents agent.Service, caller grn.GRN) (string, *http.Client) {
+// services it answers from: a request arrives over a handshake garam
+// verified, so the identity a handler reads is the one a certificate
+// carried.
+func listener(t *testing.T, agents agent.Service, messages message.Service, caller grn.GRN) (string, *http.Client) {
 	t.Helper()
 	store := authorities{}
 	key := make([]byte, ca.KeySize)
@@ -145,7 +147,7 @@ func listener(t *testing.T, agents agent.Service, caller grn.GRN) (string, *http
 	srv := machine.NewServer(
 		machine.NewService(trustRoots{store: store}),
 		loopback(t),
-		machinegen.Handler(machineapi.NewServer(agents)),
+		machinegen.Handler(machineapi.NewServer(agents, messages)),
 	)
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
@@ -189,7 +191,7 @@ func TestServer_IssuesForTheAgentThePathNames(t *testing.T) {
 		IssuerPEM:      []byte("issuer"),
 		NotAfter:       notAfter,
 	}}
-	url, client := listener(t, agents, operator)
+	url, client := listener(t, agents, &messageService{}, operator)
 
 	status, body := do(t, client, http.MethodPost, url+"/agents/"+held.String()+"/certificate")
 	require.Equal(t, http.StatusCreated, status)
@@ -227,7 +229,8 @@ func TestServer_IssuesForTheAgentThePathNames(t *testing.T) {
 func TestServer_AnswersNothingToAConnectionThatAuthenticatedNobody(t *testing.T) {
 	operator := operatorGRN("acme")
 	agents := &agentService{}
-	url, client := listener(t, agents, operator)
+	messages := &messageService{}
+	url, client := listener(t, agents, messages, operator)
 
 	status, body := do(t, client, http.MethodGet, url+"/identity")
 	require.Equal(t, http.StatusOK, status)
@@ -235,12 +238,17 @@ func TestServer_AnswersNothingToAConnectionThatAuthenticatedNobody(t *testing.T)
 
 	// The same surface served any other way carries no identity, and no
 	// handler invents one.
-	plain := httptest.NewServer(machinegen.Handler(machineapi.NewServer(agents)))
+	plain := httptest.NewServer(machinegen.Handler(machineapi.NewServer(agents, messages)))
 	t.Cleanup(plain.Close)
+	bot := agentGRN("acme", "0a1b2c3d4e5f6071").String()
 	routes := map[string]struct{ method, path string }{
 		"identity":    {http.MethodGet, "/identity"},
 		"create":      {http.MethodPost, "/agents"},
-		"certificate": {http.MethodPost, "/agents/" + agentGRN("acme", "0a1b2c3d4e5f6071").String() + "/certificate"},
+		"certificate": {http.MethodPost, "/agents/" + bot + "/certificate"},
+		"post":        {http.MethodPost, "/messages"},
+		"claim":       {http.MethodPost, "/agents/" + bot + "/claims"},
+		"renew":       {http.MethodPost, "/agents/" + bot + "/claims/claim-1/renewal"},
+		"complete":    {http.MethodPost, "/agents/" + bot + "/claims/claim-1/completion"},
 	}
 	for name, route := range routes {
 		t.Run(name, func(t *testing.T) {
@@ -250,4 +258,5 @@ func TestServer_AnswersNothingToAConnectionThatAuthenticatedNobody(t *testing.T)
 		})
 	}
 	assert.Empty(t, agents.calls, "a request that authenticated nobody reached the service")
+	assert.Empty(t, messages.calls, "a request that authenticated nobody reached the service")
 }

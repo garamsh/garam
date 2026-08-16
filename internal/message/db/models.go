@@ -18,4 +18,6 @@ type Message struct {
 	ClaimID        pgtype.Text
 	ClaimExpiresAt pgtype.Timestamptz
 	CompletedAt    pgtype.Timestamptz
+	Attempts       int32
+	ClaimedAt      pgtype.Timestamptz
 }

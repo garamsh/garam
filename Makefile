@@ -78,7 +78,12 @@ GEN_PATHS := api/server.gen.go internal/*/db proto/gen internal/*/mocks
 # git diff sees tracked paths only, so a generated file nobody added is
 # invisible to it. git status reports modified and untracked entries, skips
 # ignored ones, and exits 0 either way, so the gate checks for output.
+#
+# An unmatched pathspec is silent too, so a GEN_PATHS entry naming output
+# that has moved or gone would read as a clean tree. ls fails on it first,
+# and reports the count it did inspect.
 check-gen: gen
+	@paths="$$(ls -d $(GEN_PATHS))" && echo "check-gen: $$(echo "$$paths" | wc -l) generated paths inspected"
 	@out="$$(git status --porcelain -- $(GEN_PATHS))"; \
 		test -z "$$out" || { echo "check-gen: uncommitted generated output:"; echo "$$out"; exit 1; }
 

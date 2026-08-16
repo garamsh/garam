@@ -72,9 +72,14 @@ engine to resolve group-attached policies (ADR-0008). Orgs grow by invitation an
 The org domain owns its action constants (`ActionOrgRead`,
 `ActionGroupRead`, `ActionProjectRead`, `ActionPolicyCreate`, …) —
 including the policy management actions, which the api server enforces
-without importing the engine that stores policies — and `Role.Actions`
+without importing the engine that stores policies, and reading an
+organization's agents, which it enforces without `internal/agent`
+importing this package back — and `Role.Actions`
 maps each role to the action patterns it grants; `ActionsFor` does the same for
-the role names a `Group` or `Project` carries as data. The authz
+the role names a `Group` or `Project` carries as data. Agents are the
+one resource type no role holds a wildcard over: ADR-0012 keeps
+provisioning outside garam, so each agent action is granted by name and
+a later one is a decision rather than an increment. The authz
 evaluator decides. Groups and projects are addressed under their
 organization's HTTP paths, and their GRNs carry the owning org in the
 organization segment, so a group or project role is scoped to that
@@ -174,11 +179,21 @@ well, and it is the tenancy check too, since a GRN carries its
 organization. A caller that is not an operator is refused: an agent
 authenticates on the same listener and holds nothing.
 
+`Store` answers `Service` and, org by org, the read `internal/api`
+serves people: an organization's agents and the assignments holding
+them, each a batch read rather than one per agent. An agent no operator
+holds contributes no assignment, so the two lists are not one length.
+Both aggregates are constructed through this package's exported
+constructors, which is what lets a `Store` outside it answer with them
+at all.
+
 Signing happens through the `Issuer` seam the composition root
 satisfies from `internal/ca`, so the two domains still cooperate
 through `grn.GRN` alone and this one never holds key material. The
-HTTP surface is `internal/machineapi`, and the queue a message reaches
-an agent through is `internal/message`.
+HTTP surfaces are `internal/machineapi` for the operator and
+`internal/api` for the organization's members, which reads and never
+writes — provisioning is an operator's, from outside garam. The queue a
+message reaches an agent through is `internal/message`.
 
 ## `internal/ca`
 

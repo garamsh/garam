@@ -35,6 +35,13 @@ collaborate on a shared plan.
   other, which is the whole of the authorization there (ADR-0015). The
   process that issues holds the key its authorities are sealed under
   and does not start without it (ADR-0016).
+- An organization's members reading the agents it holds, over the
+  browser API under `/orgs/{org}/agents`. An agent is answered with the
+  state its operator reports and the state it reports itself, kept as
+  the separate facts ADR-0012 makes them, and with the operator holding
+  it at which epoch. Read-only: provisioning stays outside garam, so
+  that surface creates no agent, assigns none, and issues no
+  certificate.
 - Messages addressed to an agent are held in a queue one reader at a
   time claims from, stored once per sender key and claimable again when
   a reader dies holding one (ADR-0013). A message is bounded by an
@@ -87,7 +94,8 @@ collaborate on a shared plan.
   and completed (see In scope); what the listener does not serve is the
   state an operator or an agent reports (ADR-0012) and deprovisioning
   an agent. The adapter is not built, and certificate renewal is
-  reissue and restart rather than an endpoint (ADR-0014).
+  reissue and restart rather than an endpoint (ADR-0014). No console
+  page reads the agents the browser API answers.
 - Telling a sender that its message exhausted its attempts. ADR-0018
   makes that garam's obligation because the agent platform notifies
   nobody; the queue stops redelivering an exhausted message and nothing

@@ -21,7 +21,6 @@ export default async function MembersPage({ params }: Params) {
     getSession(),
   ]);
 
-  // Only owners and admins may create invitations.
   const callerRole = members.find(
     (member) => member.userGrn === session?.grn,
   )?.role;

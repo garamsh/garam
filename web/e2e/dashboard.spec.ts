@@ -58,7 +58,6 @@ test.describe("signed in", () => {
       page.getByRole("row", { name: signedIn.userSlug }),
     ).toContainText("owner");
 
-    // The breadcrumb follows the route, and the section is marked.
     await expect(breadcrumb).toContainText("Members");
     await expect(nav.getByRole("link", { name: "Members" })).toHaveAttribute(
       "aria-current",
@@ -91,7 +90,7 @@ test.describe("signed in", () => {
     await expect(
       page.locator('[data-slot="sidebar"][data-state="collapsed"]'),
     ).toHaveCount(1);
-    // The section links survive the collapse; only their labels go.
+    // Collapsing to icons hides the labels, not the links.
     await expect(nav.getByRole("link", { name: "Groups" })).toBeVisible();
   });
 

@@ -1,6 +1,6 @@
 /** The landing page anchors, shared by the header nav and the footer. */
 export const SECTIONS = [
-  { id: "platform", label: "Platform" },
-  { id: "authorization", label: "Authorization" },
+  { id: "organization", label: "Organization" },
+  { id: "agents", label: "Agents" },
   { id: "identifiers", label: "Identifiers" },
 ] as const;

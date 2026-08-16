@@ -259,6 +259,20 @@ func TestService_IssueTakesTheAuthorityAConcurrentWriterCreated(t *testing.T) {
 	assert.NoError(t, verifyAgainst(t, cert, winner))
 }
 
+// TestService_IssueRefusesToOutliveTheAuthority covers a lifetime
+// longer than the CA has left: the certificate would stop verifying the
+// day the CA expires, so it is not signed at all.
+func TestService_IssueRefusesToOutliveTheAuthority(t *testing.T) {
+	subject := agentGRN("acme", "bot-1")
+	sealer := newSealer(t)
+	_, authority := issueForNewOrg(t, subject, sealer, ca.Config{})
+
+	svc := serviceHolding(t, authority, sealer, ca.Config{CertificateLifetime: 20 * 365 * 24 * time.Hour})
+	_, err := svc.Issue(context.Background(), subject)
+	require.Error(t, err)
+	assert.True(t, errorx.IsKind(err, errorx.KindFailedPrecondition))
+}
+
 func TestService_CertificateLifetimeCarriesJitter(t *testing.T) {
 	subject := agentGRN("acme", "bot-1")
 	sealer := newSealer(t)

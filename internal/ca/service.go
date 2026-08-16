@@ -88,6 +88,12 @@ func (s *service) Issue(ctx context.Context, subject grn.GRN) (*Certificate, err
 	if err != nil {
 		return nil, err
 	}
+	// A certificate that outlives its issuer stops verifying the day the
+	// CA expires, so it is refused rather than signed. The parsed
+	// certificate is what a verifier reads, so it is what bounds this.
+	if notAfter.After(issuer.NotAfter) {
+		return nil, errorx.New(errorx.KindFailedPrecondition, "ca: certificate would outlive the authority that signs it")
+	}
 	der, err := createCertificate(uri, &key.PublicKey, issuer, issuerKey, now, notAfter)
 	if err != nil {
 		return nil, err

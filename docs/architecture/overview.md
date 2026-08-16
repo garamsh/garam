@@ -14,8 +14,9 @@ collaborate on a shared plan.
 
 ## In scope
 
-- Identities for users, including organization membership. Agents are
-  decided but unbuilt, and are never org members (ADR-0014).
+- Identities for users, including organization membership. Agent
+  identity and the operator an agent is assigned to are persisted
+  (ADR-0012); an agent is never an org member (ADR-0014).
 - Org / group / project structure; groups and projects are created,
   read, updated, deleted, and populated with members over the HTTP API
   under their organization's paths.
@@ -46,10 +47,10 @@ collaborate on a shared plan.
 
 - Workflow execution engine, scheduler, queue.
 - Notifications or messaging.
-- The agent domain. ADR-0012 settles its shape — identity, operator
-  assignment, delivery and state — ADR-0013 how a message reaches one,
-  and ADR-0014 how one authenticates. No package, endpoint,
-  persistence, certificate authority or TLS code exists for any of it.
+- The agent surface. `internal/agent` persists identity, operator
+  assignment and state (ADR-0012); nothing else of it exists — no
+  endpoint, no adapter and no message queue (ADR-0013), and no
+  certificate authority or TLS code (ADR-0014).
 - Chat channels. ADR-0013 makes garam a message API and leaves Slack,
   LINE and the rest to consumers of it; none is built, and whether any
   ships first-party is undecided.
@@ -82,6 +83,8 @@ collaborate on a shared plan.
 - `internal/grn/` — identifier; shared primitive.
 - `internal/errorx/` — typed errors; shared primitive.
 - `internal/cli/` — cobra commands + wiring (`serve api` | `serve authz` | `migrate`).
+- `internal/agent/` — agent identities and the operator each is
+  assigned to.
 - `internal/api/` — handlers implementing the generated ServerInterface.
 - `internal/authn/` — sign-in provider abstraction (Google OIDC,
   dev-only local), sessions.
@@ -105,6 +108,8 @@ contract is `proto/garam/authz/v1`.
 | `grn.GRN` | `internal/grn` | resource identifier (value type) |
 | `errorx.Error` | `internal/errorx` | typed error with kind |
 | `user.User` | `internal/user` | human identity |
+| `agent.Agent` | `internal/agent` | autonomous actor an operator provisions |
+| `agent.Assignment` | `internal/agent` | agent-to-operator binding, fenced by an epoch |
 | `org.Organization` | `internal/org` | top-level tenant |
 | `org.Group` | `internal/org` | user/agent bundle |
 | `org.Project` | `internal/org` | unit of work |

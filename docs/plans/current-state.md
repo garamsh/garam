@@ -15,8 +15,6 @@ none is scheduled.
   (ADR-0008).
 - **Per-org direct roles** — a role stored on the user applies in every
   org it belongs to. Scoping needs subject × role × scope persistence.
-- **The agent domain** — aggregate and `Store` interface only. No API,
-  no persistence, no design settled.
 - **`Condition` in policy documents** — parsed, never evaluated
   (ADR-0002).
 

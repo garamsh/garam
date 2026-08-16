@@ -30,8 +30,9 @@ test.describe("organization mutations", () => {
     signedIn,
   }) => {
     // The owner creates an invitation and copies its link.
-    await page.goto(`/console/orgs/${signedIn.orgSlug}`);
-    await page.getByLabel("Role").selectOption("member");
+    await page.goto(`/console/orgs/${signedIn.orgSlug}/members`);
+    await page.getByLabel("Role").click();
+    await page.getByRole("option", { name: "Member" }).click();
     await page.getByRole("button", { name: "Create invitation" }).click();
 
     const linkField = page.getByLabel("Invitation link");
@@ -61,10 +62,10 @@ test.describe("organization mutations", () => {
       inviteePage.getByRole("link", { name: signedIn.orgName }),
     ).toBeVisible();
 
-    // The org page now lists both members.
-    await page.goto(`/console/orgs/${signedIn.orgSlug}`);
+    // The members section now lists both members.
+    await page.goto(`/console/orgs/${signedIn.orgSlug}/members`);
     await expect(
-      page.getByRole("row", { name: invitee.userGrn }),
+      page.getByRole("row", { name: invitee.userSlug }),
     ).toContainText("member");
 
     await inviteeContext.close();

@@ -3,6 +3,15 @@
 import { useActionState, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   createInvitation,
   type CreateInvitationState,
@@ -35,18 +44,16 @@ export function InviteMemberForm({ org }: { org: string }) {
       <form action={formAction} className="flex flex-wrap items-end gap-3">
         <input type="hidden" name="org" value={org} />
         <div className="flex flex-col gap-2">
-          <label htmlFor="role" className="text-sm font-medium">
-            Role
-          </label>
-          <select
-            id="role"
-            name="role"
-            defaultValue="member"
-            className="h-9 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-          >
-            <option value="member">Member</option>
-            <option value="admin">Admin</option>
-          </select>
+          <Label htmlFor="role">Role</Label>
+          <Select name="role" defaultValue="member">
+            <SelectTrigger id="role" className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="member">Member</SelectItem>
+              <SelectItem value="admin">Admin</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <Button type="submit" disabled={pending}>
           {pending ? "Creating…" : "Create invitation"}
@@ -64,12 +71,12 @@ export function InviteMemberForm({ org }: { org: string }) {
             then expires.
           </p>
           <div className="flex max-w-lg gap-2">
-            <input
+            <Input
               readOnly
               value={invitationUrl}
               aria-label="Invitation link"
               onFocus={(event) => event.target.select()}
-              className="h-9 min-w-0 flex-1 rounded-md border border-input bg-muted px-3 font-mono text-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="min-w-0 flex-1 bg-muted font-mono text-xs"
             />
             <Button
               type="button"

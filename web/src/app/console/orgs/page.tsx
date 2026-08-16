@@ -1,55 +1,50 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Building2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
-import { listOrgs } from "@/features/orgs/api/orgs";
-import { slugFromGrn } from "@/features/orgs/grn";
+
+import { listConsoleOrgs } from "../_components/console-orgs";
+import { EmptyState } from "../_components/empty-state";
+import { PageHeader } from "../_components/page-header";
 
 export const metadata: Metadata = { title: "Organizations — garam" };
 
 export default async function OrgsPage() {
-  const orgs = await listOrgs();
+  const orgs = await listConsoleOrgs();
 
   return (
-    <section className="flex flex-col gap-6">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <h1 className="font-heading text-2xl font-semibold">
-            Organizations
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            The organizations you belong to.
-          </p>
-        </div>
+    <>
+      <PageHeader
+        title="Organizations"
+        description="The organizations you belong to."
+      >
         <Button asChild>
           <Link href="/console/orgs/new">New organization</Link>
         </Button>
-      </div>
+      </PageHeader>
 
       {orgs.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          You are not a member of any organization yet.
-        </p>
+        <EmptyState
+          icon={Building2}
+          title="No organizations yet"
+          description="You are not a member of any organization yet. Create one to get started."
+        />
       ) : (
-        <ul className="grid gap-4 md:grid-cols-2">
-          {orgs.map((org) => {
-            const slug = slugFromGrn(org.grn);
-            return (
-              <li key={org.grn}>
-                <Link href={`/console/orgs/${slug}`} className="block">
-                  <Card className="gap-2 p-5 transition-colors hover:border-ring">
-                    <CardTitle>{org.name}</CardTitle>
-                    <CardDescription className="font-mono text-xs">
-                      {org.grn}
-                    </CardDescription>
-                  </Card>
-                </Link>
-              </li>
-            );
-          })}
+        <ul className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {orgs.map((org) => (
+            <li key={org.slug}>
+              <Link href={`/console/orgs/${org.slug}`} className="block">
+                <Card className="gap-1 p-5 transition-colors hover:border-ring">
+                  <CardTitle>{org.name}</CardTitle>
+                  <CardDescription>{org.slug}</CardDescription>
+                </Card>
+              </Link>
+            </li>
+          ))}
         </ul>
       )}
-    </section>
+    </>
   );
 }

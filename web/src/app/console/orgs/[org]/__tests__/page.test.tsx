@@ -22,22 +22,23 @@ function params(org: string) {
   return { params: Promise.resolve({ org }) };
 }
 
-describe("organization detail page", () => {
-  it("renders the org with its groups, projects and members", async () => {
+describe("organization overview page", () => {
+  it("counts what the organization holds and links to each section", async () => {
     await renderServerComponent(OrgPage(params("acme")));
 
     expect(screen.getByRole("heading", { name: "Acme" })).toBeInTheDocument();
-    expect(screen.getByText("Engineering")).toBeInTheDocument();
-    expect(screen.getByText("Frontend")).toBeInTheDocument();
-
-    const memberRow = screen.getByRole("row", {
-      name: /grn:root:default:user:alice/,
-    });
-    expect(memberRow).toHaveTextContent("owner");
-    expect(memberRow).toHaveTextContent("2026-01-02");
+    expect(screen.getByRole("link", { name: /Groups/ })).toHaveAttribute(
+      "href",
+      "/console/orgs/acme/groups",
+    );
+    expect(screen.getByRole("link", { name: /Members/ })).toHaveAttribute(
+      "href",
+      "/console/orgs/acme/members",
+    );
+    expect(screen.getByRole("link", { name: /Projects 1/ })).toBeInTheDocument();
   });
 
-  it("reports empty sections rather than blank space", async () => {
+  it("counts zero rather than leaving blank space", async () => {
     server.use(
       http.get(`${API_URL}/orgs/acme/groups`, () => HttpResponse.json([])),
       http.get(`${API_URL}/orgs/acme/projects`, () => HttpResponse.json([])),
@@ -46,15 +47,7 @@ describe("organization detail page", () => {
 
     await renderServerComponent(OrgPage(params("acme")));
 
-    expect(
-      screen.getByText("This organization has no groups."),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("This organization has no projects."),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText("This organization has no members."),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Groups 0/ })).toBeInTheDocument();
   });
 
   it.each([403, 404])("renders not-found on %i", async (status) => {
@@ -67,29 +60,5 @@ describe("organization detail page", () => {
     await expect(
       renderServerComponent(OrgPage(params("acme"))),
     ).rejects.toThrow("NEXT_NOT_FOUND");
-  });
-
-  it("offers invitations to an owner", async () => {
-    await renderServerComponent(OrgPage(params("acme")));
-
-    expect(
-      screen.getByRole("heading", { name: "Invite a member" }),
-    ).toBeInTheDocument();
-  });
-
-  it("hides invitations from a plain member", async () => {
-    server.use(
-      http.get(`${API_URL}/orgs/acme/members`, () =>
-        HttpResponse.json([
-          { userGrn: "grn:root:default:user:alice", role: "member", since: "2026-01-02T03:04:05Z" },
-        ]),
-      ),
-    );
-
-    await renderServerComponent(OrgPage(params("acme")));
-
-    expect(
-      screen.queryByRole("heading", { name: "Invite a member" }),
-    ).not.toBeInTheDocument();
   });
 });

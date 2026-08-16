@@ -13,7 +13,7 @@ test.describe("signed in", () => {
     await expect(page.getByText(signedIn.nickname)).toBeVisible();
   });
 
-  test("opens an organization and shows its groups, projects and members", async ({
+  test("opens an organization and counts what it holds", async ({
     page,
     signedIn,
   }) => {
@@ -25,17 +25,74 @@ test.describe("signed in", () => {
       page.getByRole("heading", { name: signedIn.orgName }),
     ).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: "Groups" }),
-    ).toBeVisible();
+      page.getByRole("navigation", { name: "breadcrumb" }),
+    ).toContainText(signedIn.orgName);
+    await expect(
+      page.getByRole("main").getByRole("link", { name: "Groups" }),
+    ).toContainText("1");
+  });
+
+  test("moves between the organization's sections from the sidebar", async ({
+    page,
+    signedIn,
+  }) => {
+    const nav = page.getByRole("list", { name: "Organization sections" });
+    const breadcrumb = page.getByRole("navigation", { name: "breadcrumb" });
+    await page.goto(`/console/orgs/${signedIn.orgSlug}`);
+
+    await nav.getByRole("link", { name: "Groups" }).click();
+    await expect(page).toHaveURL(`/console/orgs/${signedIn.orgSlug}/groups`);
     await expect(
       page.getByText(signedIn.groupName, { exact: true }),
     ).toBeVisible();
+
+    await nav.getByRole("link", { name: "Projects" }).click();
+    await expect(page).toHaveURL(`/console/orgs/${signedIn.orgSlug}/projects`);
     await expect(
       page.getByText(signedIn.projectName, { exact: true }),
     ).toBeVisible();
 
-    const memberRow = page.getByRole("row", { name: signedIn.userGrn });
-    await expect(memberRow).toContainText("owner");
+    await nav.getByRole("link", { name: "Members" }).click();
+    await expect(page).toHaveURL(`/console/orgs/${signedIn.orgSlug}/members`);
+    await expect(
+      page.getByRole("row", { name: signedIn.userSlug }),
+    ).toContainText("owner");
+
+    // The breadcrumb follows the route, and the section is marked.
+    await expect(breadcrumb).toContainText("Members");
+    await expect(nav.getByRole("link", { name: "Members" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+
+  test("switches organizations from the sidebar header", async ({
+    page,
+    signedIn,
+  }) => {
+    await page.goto(`/console/orgs/${signedIn.orgSlug}/groups`);
+
+    await page.getByRole("button", { name: "Switch organization" }).click();
+    await expect(
+      page.getByRole("menuitem", { name: signedIn.orgName }),
+    ).toHaveAttribute("aria-current", "true");
+    await page.getByRole("menuitem", { name: "New organization" }).click();
+
+    await expect(page).toHaveURL("/console/orgs/new");
+  });
+
+  test("collapses the sidebar to icons", async ({ page, signedIn }) => {
+    const nav = page.getByRole("list", { name: "Organization sections" });
+    await page.goto(`/console/orgs/${signedIn.orgSlug}`);
+    await expect(nav.getByRole("link", { name: "Groups" })).toBeVisible();
+
+    await page.getByRole("button", { name: "Toggle Sidebar" }).first().click();
+
+    await expect(
+      page.locator('[data-slot="sidebar"][data-state="collapsed"]'),
+    ).toHaveCount(1);
+    // The section links survive the collapse; only their labels go.
+    await expect(nav.getByRole("link", { name: "Groups" })).toBeVisible();
   });
 
   test("lands on the dashboard from the post-login redirect target", async ({
@@ -60,7 +117,8 @@ test.describe("signed in", () => {
 
   test("signs out back to the login page", async ({ page, signedIn }) => {
     await page.goto("/console/orgs");
-    await page.getByRole("button", { name: "Sign out" }).click();
+    await page.getByRole("button", { name: "Open account menu" }).click();
+    await page.getByRole("menuitem", { name: "Sign out" }).click();
 
     await expect(page).toHaveURL("/login");
     await expect(

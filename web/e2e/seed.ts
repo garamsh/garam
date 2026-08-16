@@ -8,6 +8,8 @@ export type Seed = {
   orgSlug: string;
   orgName: string;
   userGrn: string;
+  /** The GRN's last segment: what the console shows in place of the GRN. */
+  userSlug: string;
   nickname: string;
   groupName: string;
   projectName: string;
@@ -17,6 +19,7 @@ export type Seed = {
 export type SeededUser = {
   sessionToken: string;
   userGrn: string;
+  userSlug: string;
   nickname: string;
 };
 
@@ -58,6 +61,7 @@ export async function seedSignedInOrg(): Promise<Seed> {
     orgSlug: `e2e-${suffix}`,
     orgName: `E2E Org ${suffix}`,
     userGrn: `grn:root:default:user:e2e-${suffix}`,
+    userSlug: `e2e-${suffix}`,
     nickname: `e2e-user-${suffix}`,
     groupName: "Engineering",
     projectName: "Frontend",
@@ -112,6 +116,7 @@ export async function seedSignedInUser(): Promise<SeededUser> {
   const user: SeededUser = {
     sessionToken: randomBytes(32).toString("base64url"),
     userGrn: `grn:root:default:user:e2e-${suffix}`,
+    userSlug: `e2e-${suffix}`,
     nickname: `e2e-user-${suffix}`,
   };
 

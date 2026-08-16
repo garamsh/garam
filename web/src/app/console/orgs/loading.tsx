@@ -1,7 +1,5 @@
+import { SectionSkeleton } from "../_components/section-skeleton";
+
 export default function Loading() {
-  return (
-    <p role="status" className="text-sm text-muted-foreground">
-      Loading organizations…
-    </p>
-  );
+  return <SectionSkeleton />;
 }

@@ -1,4 +1,6 @@
-import { garamFetchAuthenticated } from "@/lib/garam";
+import { notFound } from "next/navigation";
+
+import { GaramApiError, garamFetchAuthenticated } from "@/lib/garam";
 import type { components } from "@/types/api";
 
 export type Organization = components["schemas"]["Organization"];
@@ -26,6 +28,21 @@ export function listGroups(org: string): Promise<Group[]> {
 
 export function listProjects(org: string): Promise<Project[]> {
   return garamFetchAuthenticated<Project[]>(`/orgs/${orgPath(org)}/projects`);
+}
+
+/**
+ * Rejection handler for an org-scoped read: a denied read and a missing
+ * organization are the same answer to a visitor — the organization is
+ * not theirs to see.
+ */
+export function orgNotFound(error: unknown): never {
+  if (
+    error instanceof GaramApiError &&
+    (error.status === 403 || error.status === 404)
+  ) {
+    notFound();
+  }
+  throw error;
 }
 
 /** Org slugs arrive from the URL, so they are escaped before reuse. */

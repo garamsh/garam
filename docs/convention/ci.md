@@ -80,9 +80,9 @@ Both run identically on a contributor's machine and in CI. The rest:
   port, default 55432.
 - `backend-up` brings up postgres, migrate, authz and api from the
   same compose file — the backend the browser suite drives.
-- `e2e` runs the store round-trips against real Postgres, against its
-  own database, never two worktrees at once. `web-e2e` runs Playwright
-  against the built app and `backend-up`'s backend.
+- `e2e` runs the store round-trips against real Postgres, against a
+  database of its own per worktree. `web-e2e` runs Playwright against
+  the built app and `backend-up`'s backend.
 
 `ci` and `web-ci` stop short of the two e2e suites, which need Docker.
 CI runs each as its own job; locally they are `make db-up e2e` and

@@ -1,5 +1,9 @@
 # Tailwind CSS
 
+Defaults for Tailwind CSS projects. How styles are composed: utilities in markup first, with `@apply`, `@utility`, and theme tokens only where they earn their place.
+
+Checked against Tailwind CSS 4. A claim below that names no version holds for it.
+
 ## Contents
 - Core principle
 - Verify before adopting or upgrading
@@ -8,7 +12,6 @@
 - `@apply` and `@utility`: when each earns its keep
 - Theme tokens via `@theme`
 - Common idioms
-- Anti-patterns
 
 ## Core principle
 
@@ -16,7 +19,7 @@ Compose simple utilities in markup. The cheapest style is the one the framework 
 
 ## Verify before adopting or upgrading
 
-Tailwind shifts between major versions. Confirm the install pattern, config syntax, and browser requirements against the live docs (`tailwindcss.com/docs/installation`, `tailwindcss.com/docs/upgrade-guide`) before adopting — pre-trained recollection is a starting point, not source of truth.
+Tailwind's own locators for a version check: `tailwindcss.com/docs/installation`, `tailwindcss.com/docs/upgrade-guide`.
 
 ## Tailwind v4 specifics
 
@@ -54,14 +57,31 @@ Decision order:
 
 Avoid `@apply` for 1–3 utilities — inline them. `@apply` chains longer than ~10 utilities usually signal the wrong abstraction; the design likely needs a token or a component, not more classes.
 
+Rung 2 — the chain repeats, so it becomes a class:
+
 ```css
-/* In your CSS — when a chain repeats */
-@utility btn-primary {
+.btn-primary {
   @apply inline-flex items-center gap-2 px-4 py-2 rounded-md
          bg-blue-500 text-white font-medium
          hover:bg-blue-600 focus:outline-2 focus:outline-blue-500;
 }
 ```
+
+Rung 3 — a class Tailwind does not ship, left open so variants can
+target it (`lg:scrollbar-none`, `hover:scrollbar-none`):
+
+```css
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+```
+
+Do not write the variants into a `@utility` body. A rung-3 class
+exists so the caller can apply them; baking them in is rung 2 with
+the wrong keyword.
 
 ## Theme tokens via `@theme`
 
@@ -75,7 +95,7 @@ Define design tokens once. Components reference tokens, never raw values.
 }
 ```
 
-Use as `bg-brand-500`, `font-display`, `rounded-card`. Hardcoded hex or px in markup is a smell — extract it.
+Use as `bg-brand-500`, `font-display`, `rounded-card`. Hardcoded hex or px in markup is a smell — extract it. Tailwind's own `--tw-*` variables sit behind that surface and are an implementation detail; reference your tokens, never those.
 
 ## Common idioms
 
@@ -87,11 +107,3 @@ Use as `bg-brand-500`, `font-display`, `rounded-card`. Hardcoded hex or px in ma
 - **Color with opacity** — `bg-black/50` (slash syntax). v3's `bg-opacity-*` is removed.
 - **Arbitrary values** — `bg-[#ff00aa]` or `bg-(--brand-color)` for CSS vars. Search the docs first; a utility usually exists.
 
-## Anti-patterns
-
-- Long arbitrary-value chains. If the chain survives 3 uses, extract it to a token or `@utility`.
-- A single CSS class wrapping one or two utilities — the class then duplicates what a utility does.
-- Custom CSS where a utility already exists. Search `/docs` before writing CSS.
-- Mixing v3 and v4 patterns — `@tailwind` directives and `tailwind.config.js` are v3; they break under v4.
-- Reaching for `--tw-*` internal variables in user code. They're an implementation detail.
-- Designing styles that need to be hand-tuned per breakpoint instead of using Tailwind's responsive prefixes.

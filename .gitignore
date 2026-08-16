@@ -25,3 +25,6 @@ Thumbs.db
 
 # opencode's local install
 .opencode/
+
+# Claude Code local state and agent worktrees
+.claude/

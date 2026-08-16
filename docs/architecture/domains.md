@@ -168,10 +168,11 @@ not chain against another's and tenancy holds in the trust root rather
 than in a check a caller could forget. The subject's GRN travels in a
 SAN URI and the certificate carries nothing else — no name, no roles, no
 claims. Lifetime is the only revocation there is (ADR-0014), so it is
-short by default, configurable, and carries jitter that only shortens
-it, which keeps a fleet from expiring together (ADR-0015). A lifetime
-reaching past what the signing CA has left is refused rather than
-signed: such a certificate stops verifying the day the CA expires.
+short by default and bounded at both ends — a service whose configured
+lifetime falls outside them does not start — and it carries jitter that
+only shortens it, which keeps a fleet from expiring together (ADR-0015).
+A lifetime reaching past what the signing CA has left is refused rather
+than signed: such a certificate stops verifying the day the CA expires.
 
 The CA private key reaches Postgres only through `Sealer`, whose one
 implementation is AES-256-GCM under a key-encryption key read from an

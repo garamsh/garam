@@ -257,10 +257,9 @@ authority's certificate and never its key.
 its own port (ADR-0017), terminating TLS itself with a certificate it
 reads from a file, because a forwarded client-certificate header is
 trustworthy only where every deployment strips it at the edge
-(ADR-0014). What it serves is `internal/machineapi`; message ingress
-and the long poll are not built. It is not part of the local Docker
-stack: its key material is per host and the container would run as a
-user that does not own it.
+(ADR-0014). What it serves is `internal/machineapi`. It is not part of
+the local Docker stack: its key material is per host and the container
+would run as a user that does not own it.
 
 ## `internal/machineapi`
 
@@ -269,15 +268,18 @@ generated from `api/machine.yaml` (ADR-0019).
 
 | Type | Responsibility |
 |------|----------------|
-| `Server` | the machine listener's handlers: the caller's identity, creating an agent, issuing an agent's certificate |
+| `Server` | the machine listener's handlers: the caller's identity, creating an agent, issuing an agent's certificate, and posting, claiming, renewing and completing a message |
 
 A handler's caller is the identity `internal/machine` resolved from the
 client certificate, read back with the comma-ok form and refused where
 a request carries none — no session, no user row, no membership. What
-an operator may reach is not decided here: `internal/agent` decides it,
+an operator may reach is not decided here, and neither is whose queue a
+caller may act on: `internal/agent` and `internal/message` decide those,
 and this package parses what the path names, hands the caller over, and
 renders the answer, turning an `errorx` kind into a status at its own
-boundary as `internal/api` does at the browser-facing one.
+boundary as `internal/api` does at the browser-facing one. A poll that
+found nothing is the one answer that is not a kind: it is an empty
+success, so a caller loops on it rather than telling an error apart.
 
 It holds no store and reaches no certificate authority. `internal/api`
 and this package never import each other and never run in the same
@@ -291,6 +293,8 @@ The durable queue a message reaches an agent through (ADR-0013).
 |------|----------------|
 | `Message` | one message addressed to a recipient, under an identifier of the queue's own |
 | `Claim` | one reader's hold on a message, and the token that fences it |
+| `Config` | the delivery parameters: lease, ceiling, attempts, and how long a claim waits |
+| `Service` | what a machine identity does to its own queue: post, claim, renew, complete |
 
 Messages are their own boundary rather than part of `internal/agent`: a
 recipient is addressed by GRN, so nothing here depends on the agent
@@ -311,10 +315,34 @@ retry arriving afterwards neither stores a message nor requeues the
 delivered one. Neither the recipient nor the sender carries a foreign
 key — garam answers a sender once the message is stored and reports a
 routing failure back as a message rather than rejecting one, so a
-message it cannot yet route has to be storable.
+message it cannot yet route has to be storable. `Service` keeps that
+rule where a caller meets it: posting checks that the recipient is a
+GRN and never that it names an agent garam knows.
 
-Persistence and claim semantics only: no endpoint, no long poll, no
-adapter, and nothing that deletes a delivered message.
+Handing a message out is an attempt, and attempts are bounded: a turn
+that failed and a turn that never started are indistinguishable from
+here, so what ends a message that fails the same way every time is the
+count (ADR-0018). A holder renews its claim while it works, and
+renewal carries the claim no further than a ceiling measured from when
+it was taken — a renewal reaching past that is held at it, so a holder
+that renews forever loses the claim rather than leaving a message
+neither completed nor redelivered. Telling the sender that a message
+exhausted its attempts is garam's obligation and is not built.
+
+`Service` is what a machine identity does to its own queue, and every
+method but posting takes the calling identity beside the recipient
+whose queue it names. One comparison decides it: a GRN carries its
+organization, so refusing a caller that is not the recipient refuses
+another organization's agent by the same line, and no path reaches a
+message around it. A claim waits for a message rather than answering
+an empty queue at once, and it waits by re-reading the queue: a
+message becomes ready when a lease runs out as well as when a sender
+stores one, and a lease running out is a moment passing that nothing
+announces. The interval is the delivery latency ADR-0013 accepted in
+place of a push.
+
+The HTTP surface is `internal/machineapi`; nothing here deletes a
+delivered message, and the adapter is not built.
 
 ## Store implementation status
 

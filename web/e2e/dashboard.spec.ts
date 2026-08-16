@@ -102,8 +102,16 @@ test.describe("signed in", () => {
       '[data-slot="sidebar"][data-state="collapsed"]',
     );
     await page.goto(`/console/orgs/${signedIn.orgSlug}`);
-    await page.getByRole("button", { name: "Toggle Sidebar" }).first().click();
-    await expect(collapsed).toHaveCount(1);
+    // A click the toggle takes before React has hydrated it is dropped,
+    // not queued, so repeat it until the sidebar reports collapsed: the
+    // state the reload has to carry is set by a click that landed.
+    await expect(async () => {
+      await page
+        .getByRole("button", { name: "Toggle Sidebar" })
+        .first()
+        .click();
+      await expect(collapsed).toHaveCount(1, { timeout: 1_000 });
+    }).toPass({ timeout: 15_000 });
 
     await page.reload();
 

@@ -1,6 +1,7 @@
 // Package cli owns the cobra command tree for the garam binary
-// (ADR-0003): `serve api`, `serve authz`, and `migrate`. Commands are
-// constructed here; cmd/garam only executes the root.
+// (ADR-0003, ADR-0017): `serve api`, `serve authz`, `serve machine`,
+// and `migrate`. Commands are constructed here; cmd/garam only
+// executes the root.
 //
 // Configuration is entirely via environment variables:
 //
@@ -20,6 +21,14 @@
 //	GOOGLE_CLIENT_ID       Google OAuth client ID (required for serve api)
 //	GOOGLE_CLIENT_SECRET   Google OAuth client secret (required for serve api)
 //	GOOGLE_REDIRECT_URL    OAuth callback URL (required for serve api)
+//	GARAM_MACHINE_ADDR     machine listener address (default ":8443")
+//	GARAM_MACHINE_TLS_CERT_FILE  the listener's own certificate, PEM
+//	                       (required for serve machine)
+//	GARAM_MACHINE_TLS_KEY_FILE   its private key, PEM
+//	                       (required for serve machine)
+//	GARAM_CA_KEY_FILE      hex-encoded key-encryption key the certificate
+//	                       authorities are sealed under, readable by its
+//	                       owner alone (required for serve machine)
 package cli
 
 import (
@@ -44,7 +53,7 @@ func newServeCommand() *cobra.Command {
 		Use:   "serve",
 		Short: "Run a garam server",
 	}
-	serve.AddCommand(newServeAPICommand(), newServeAuthzCommand())
+	serve.AddCommand(newServeAPICommand(), newServeAuthzCommand(), newServeMachineCommand())
 	return serve
 }
 

@@ -4,6 +4,13 @@ Runs the whole garam stack on one machine with Docker Compose:
 Postgres, migrations, the authz engine, the API, and — behind a
 profile — the web frontend.
 
+`garam serve machine` — the listener a machine identity authenticates
+on — is not part of this stack
+([ADR-0017](../../docs/architecture/adr/0017-machine-process.md)). Its
+key material is per host, readable by its owner alone, and a container
+running as another user is refused it; run that listener outside
+compose, configured as the `internal/cli` package documents.
+
 This compose file is also what the test gates run against. `make db-up`
 starts only its `postgres` service for the Go e2e tests, and
 `make db-down` removes that service again; `make backend-up` starts

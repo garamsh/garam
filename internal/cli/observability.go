@@ -23,13 +23,23 @@ import (
 
 	"github.com/garamsh/garam/internal/api"
 	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/internal/machine"
 )
 
 // The service name every trace, metric and log line carries, so one
-// stream tells the two servers apart.
+// stream tells the servers apart.
 const (
-	serviceAPI   = "garam-api"
-	serviceAuthz = "garam-authz"
+	serviceAPI     = "garam-api"
+	serviceAuthz   = "garam-authz"
+	serviceMachine = "garam-machine"
+)
+
+// The field a served call names its principal with: a person under
+// user_id (stack-go.md §5), a machine identity under machine_id, so
+// one stream tells an agent from a person.
+const (
+	fieldUserID    = "user_id"
+	fieldMachineID = "machine_id"
 )
 
 // observability is the telemetry one server constructs at startup:
@@ -93,18 +103,40 @@ func (o *observability) logRequests(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var principal api.Principal
 		r = api.WithPrincipal(r, &principal)
-		recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
-
-		next.ServeHTTP(recorder, r)
-
-		o.logger.LogAttrs(r.Context(), levelOf(recorder.status >= http.StatusInternalServerError),
-			"http request",
-			slog.String("operation", r.Pattern),
-			slog.String("trace_id", traceIDOf(r.Context())),
-			slog.Int("status", recorder.status),
-			principalAttr(principal.GRN),
-		)
+		o.logServed(w, r, next, fieldUserID, func() string { return principal.GRN })
 	})
+}
+
+// logMachineRequests is logRequests for the machine listener. Its
+// principal is the identity the client certificate authenticated,
+// which the listener resolved before the request reached here, so it
+// is read rather than written back — and it is a machine, which the
+// line says rather than leaving to whoever reads it.
+func (o *observability) logMachineRequests(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		o.logServed(w, r, next, fieldMachineID, func() string {
+			if identity, ok := machine.IdentityOf(r); ok {
+				return identity.GRN().String()
+			}
+			return ""
+		})
+	})
+}
+
+// logServed runs next and emits the line, asking for the principal
+// once the handler has had its chance to resolve one.
+func (o *observability) logServed(w http.ResponseWriter, r *http.Request, next http.Handler, field string, principal func() string) {
+	recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+
+	next.ServeHTTP(recorder, r)
+
+	o.logger.LogAttrs(r.Context(), levelOf(recorder.status >= http.StatusInternalServerError),
+		"http request",
+		slog.String("operation", r.Pattern),
+		slog.String("trace_id", traceIDOf(r.Context())),
+		slog.Int("status", recorder.status),
+		principalAttr(field, principal()),
+	)
 }
 
 // logRPCs is the gRPC counterpart of logRequests. The engine's
@@ -120,7 +152,7 @@ func (o *observability) logRPCs(ctx context.Context, req any, info *grpc.UnarySe
 		slog.String("operation", info.FullMethod),
 		slog.String("trace_id", traceIDOf(ctx)),
 		slog.String("code", status.Code(err).String()),
-		principalAttr(subject),
+		principalAttr(fieldUserID, subject),
 	)
 	return resp, err
 }
@@ -134,14 +166,14 @@ func levelOf(failed bool) slog.Level {
 	return slog.LevelInfo
 }
 
-// principalAttr renders a known principal as the user_id field, and
-// an unknown one as no field at all: an empty user_id would read as a
-// caller identified as nobody.
-func principalAttr(subject string) slog.Attr {
+// principalAttr renders a known principal under field, and an unknown
+// one as no field at all: an empty one would read as a caller
+// identified as nobody.
+func principalAttr(field, subject string) slog.Attr {
 	if subject == "" {
 		return slog.Attr{}
 	}
-	return slog.String("user_id", subject)
+	return slog.String(field, subject)
 }
 
 // traceIDOf returns the call's trace id, falling back to a fresh UUID

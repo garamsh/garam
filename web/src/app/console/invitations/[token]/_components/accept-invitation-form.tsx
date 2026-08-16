@@ -10,6 +10,7 @@ import {
 
 const initialState: AcceptInvitationState = { status: "idle" };
 
+/** Carries the token out of the URL and into the accept action. */
 export function AcceptInvitationForm({ token }: { token: string }) {
   const [state, formAction, pending] = useActionState(
     acceptInvitation,

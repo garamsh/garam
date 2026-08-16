@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 
 import { SECTIONS } from "./sections";
 
+/** The landing page's sticky bar: the section anchors and the way in. */
 export function SiteHeader() {
   return (
     <header className="sticky top-0 z-10 border-b border-border/60 bg-background/80 backdrop-blur">

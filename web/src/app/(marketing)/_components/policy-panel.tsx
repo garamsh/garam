@@ -13,6 +13,7 @@ const DOCUMENT = `{
   ]
 }`;
 
+/** Shows a real policy document rather than describing one. */
 export function PolicyPanel() {
   return (
     <figure className="overflow-hidden rounded-xl border border-border bg-card">

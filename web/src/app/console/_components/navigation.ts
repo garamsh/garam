@@ -38,6 +38,7 @@ export type ConsoleLocation =
 /** A breadcrumb entry; the last one is the current page and has no href. */
 export type Crumb = { label: string; href?: string };
 
+/** The URL of a section inside an organization; "" is the overview. */
 export function orgHref(org: string, segment: string): string {
   return segment ? `/console/orgs/${org}/${segment}` : `/console/orgs/${org}`;
 }

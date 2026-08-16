@@ -10,10 +10,15 @@ import { PageHeader } from "../../../_components/page-header";
 import { InviteMemberForm } from "./_components/invite-member-form";
 import { MemberTable } from "./_components/member-table";
 
+/** Head metadata for the members route; Next.js reads it by name. */
 export const metadata: Metadata = { title: "Members — garam" };
 
 type Params = { params: Promise<{ org: string }> };
 
+/**
+ * The organization's members. The invite form appears only for a
+ * caller whose own membership carries a role that may invite.
+ */
 export default async function MembersPage({ params }: Params) {
   const { org } = await params;
   const [members, session] = await Promise.all([

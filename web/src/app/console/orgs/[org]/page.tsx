@@ -15,11 +15,13 @@ import { CONSOLE_SECTIONS, orgHref } from "../../_components/navigation";
 
 type Params = { params: Promise<{ org: string }> };
 
+/** Titles the route from the URL: the org's name needs a read. */
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { org } = await params;
   return { title: `${org} — garam` };
 }
 
+/** What the organization holds, counted, one card per section. */
 export default async function OrgPage({ params }: Params) {
   const { org: slug } = await params;
   const [org, groups, projects, members] = await Promise.all([

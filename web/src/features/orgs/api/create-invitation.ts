@@ -7,6 +7,10 @@ import type { components } from "@/types/api";
 
 import type { Invitation } from "./orgs";
 
+/**
+ * What the invite form has to show: nothing yet, a refusal, or the
+ * token the invitation was issued under.
+ */
 export type CreateInvitationState =
   | { status: "idle" }
   | { status: "error"; message: string }

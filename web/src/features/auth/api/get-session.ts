@@ -1,6 +1,7 @@
 import { garamFetch, isUnauthenticated } from "@/lib/garam";
 import type { components } from "@/types/api";
 
+/** The signed-in user, as the backend describes one. */
 export type User = components["schemas"]["User"];
 
 /**

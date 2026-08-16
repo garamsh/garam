@@ -66,6 +66,7 @@ const GRN_SEGMENTS = [
   { token: "org-read", label: "identifier" },
 ];
 
+/** The public front door; everything on it is readable signed out. */
 export default function LandingPage() {
   return (
     <>

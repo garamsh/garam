@@ -7,10 +7,12 @@ import { EmptyState } from "../../../_components/empty-state";
 import { PageHeader } from "../../../_components/page-header";
 import { ResourceList } from "../_components/resource-list";
 
+/** Head metadata for the projects route; Next.js reads it by name. */
 export const metadata: Metadata = { title: "Projects — garam" };
 
 type Params = { params: Promise<{ org: string }> };
 
+/** The organization's projects, or a note that it owns none. */
 export default async function ProjectsPage({ params }: Params) {
   const { org } = await params;
   const projects = await listProjects(org).catch(orgNotFound);

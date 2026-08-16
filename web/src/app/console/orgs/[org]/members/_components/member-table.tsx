@@ -10,6 +10,7 @@ import {
 import type { Member } from "@/features/orgs/api/orgs";
 import { slugFromGrn } from "@/features/orgs/grn";
 
+/** The organization's members by name, role and joining date. */
 export function MemberTable({ members }: { members: Member[] }) {
   return (
     <Table>

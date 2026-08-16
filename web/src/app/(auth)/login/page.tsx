@@ -13,8 +13,13 @@ import { listProviders } from "@/features/auth/api/list-providers";
 import { DevSignInButton } from "@/features/auth/components/dev-sign-in-button";
 import { GoogleSignInButton } from "@/features/auth/components/google-sign-in-button";
 
+/** Head metadata for the sign-in route; Next.js reads it by name. */
 export const metadata: Metadata = { title: "Sign in — garam" };
 
+/**
+ * The way in. A visitor who already holds a valid session is sent on
+ * to the console instead of being offered the form again.
+ */
 export default async function LoginPage() {
   if (await getSession()) {
     redirect("/console");

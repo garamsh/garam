@@ -11,17 +11,20 @@ import type { User } from "@/features/auth/api/get-session";
 /** The backend base URL the tests run the server-side client against. */
 export const API_URL = "http://localhost:8080";
 
+/** The signed-in user every test runs as. */
 export const alice: User = {
   grn: "grn:root:default:user:alice",
   nickname: "Alice",
 };
 
+/** The one organization the fixtures place Alice in. */
 export const acme: Organization = {
   grn: "grn:root:default:org:acme",
   name: "Acme",
   createdAt: "2026-01-02T03:04:05Z",
 };
 
+/** The single group Acme holds. */
 export const engineering: Group = {
   grn: "grn:acme:default:group:eng",
   name: "Engineering",
@@ -29,6 +32,7 @@ export const engineering: Group = {
   roles: ["member"],
 };
 
+/** The single project Acme owns. */
 export const frontend: Project = {
   grn: "grn:acme:default:project:frontend",
   name: "Frontend",
@@ -36,6 +40,7 @@ export const frontend: Project = {
   roles: [],
 };
 
+/** Alice's membership of Acme, at the role that may invite. */
 export const aliceMembership: Member = {
   userGrn: alice.grn,
   role: "owner",

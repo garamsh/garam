@@ -16,6 +16,7 @@ export function proxy(request: NextRequest) {
   return NextResponse.redirect(new URL("/login", request.url));
 }
 
+/** The routes `proxy` runs on; Next.js reads this export by name. */
 export const config = {
   // Everything outside the console — the landing page, `/login`, static
   // assets, and the `/api` rewrite the OAuth round trip runs through —

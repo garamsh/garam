@@ -14,11 +14,13 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+/** Head metadata for every route that does not set its own. */
 export const metadata: Metadata = {
   title: "garam",
   description: "Identity, organization, and authorization for shared work.",
 };
 
+/** The document itself: the root layout owns `<html>` and `<body>`. */
 export default function RootLayout({
   children,
 }: Readonly<{

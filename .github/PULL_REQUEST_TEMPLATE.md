@@ -16,4 +16,4 @@
 
 ## Convention concerns
 
-<!-- Optional. Disagreements or gaps found in docs/convention/. The PM decides; do not work around a convention silently. -->
+<!-- Disagreements or gaps found in docs/convention/. The PM decides; do not work around a convention silently. Write N/A with a reason when there are none. -->

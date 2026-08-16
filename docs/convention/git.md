@@ -27,6 +27,7 @@ Format: `<type>: <imperative summary>`
 - Omit the body unless the reason for the change is invisible in the diff. A body never restates what changed.
 - The message contains only what the project put there. Tooling does not append trailers, footers, or attribution lines.
 - Reversing an earlier decision mid-branch is an ordinary commit describing the new state. Earlier commits are not rewritten to hide that the decision changed.
+- A point about a commit message is fixed in the commit that carries it — amend or rebase, then force-push the same branch. A later commit cannot remove text from an earlier one, so it cannot carry that fix. This is the one case where rewriting a branch commit is right.
 
 ## PRs
 

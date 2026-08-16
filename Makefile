@@ -45,8 +45,16 @@ format:
 	@out="$$(gofmt -l .)"; test -z "$$out" || { echo "gofmt: $$out"; exit 1; }
 	@out="$$($(GOIMPORTS) -l .)"; test -z "$$out" || { echo "goimports: $$out"; exit 1; }
 
+# go has no negative package pattern, so the sweep is filtered here.
+# tests/e2e needs the Postgres db-up starts and fails without it, so test
+# covers every other package and names the one it left out. Should the
+# filter ever stop matching, the e2e suite is swept back in and fails for
+# want of a database rather than skipping quietly.
+TEST_PKGS = $(shell go list ./... | grep -v '/tests/e2e$$')
+
 test:
-	go test ./...
+	@echo 'test: $(words $(TEST_PKGS)) packages; tests/e2e not covered here — it needs Postgres (make db-up e2e)'
+	@go test $(TEST_PKGS)
 
 build:
 	go build ./...

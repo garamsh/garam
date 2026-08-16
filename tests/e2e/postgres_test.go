@@ -364,6 +364,13 @@ func TestAgentStore_RoundTrip(t *testing.T) {
 	_, err = s.GetAssignment(ctx, g)
 	assert.ErrorIs(t, err, agent.ErrAssignmentNotFound)
 
+	// An agent with no assignment has no current epoch, so every report
+	// about it is stale.
+	_, err = s.ReportProvisioningState(ctx, g, 1, agent.ProvisioningStateReady)
+	assert.ErrorIs(t, err, agent.ErrStaleEpoch)
+	_, err = s.ReportRuntimeState(ctx, g, 1, agent.RuntimeStateConnected)
+	assert.ErrorIs(t, err, agent.ErrStaleEpoch)
+
 	first := grnOf(agent.ServiceTypeOperator, "one")
 	assigned, err := s.Assign(ctx, g, first)
 	require.NoError(t, err)

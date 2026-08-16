@@ -17,6 +17,10 @@ collaborate on a shared plan.
 - Identities for users, including organization membership. Agent
   identity and the operator an agent is assigned to are persisted
   (ADR-0012); an agent is never an org member (ADR-0014).
+- A certificate authority per organization, created on demand, which
+  issues the client certificates machine identities authenticate with
+  (ADR-0014). The subject's GRN travels in a SAN URI; the CA private key
+  reaches Postgres sealed under a key-encryption key.
 - Org / group / project structure; groups and projects are created,
   read, updated, deleted, and populated with members over the HTTP API
   under their organization's paths.
@@ -48,11 +52,12 @@ collaborate on a shared plan.
 - Workflow execution engine, scheduler, queue.
 - Notifications or messaging.
 - The agent surface. `internal/agent` persists identity, operator
-  assignment and state (ADR-0012); nothing else of it exists — no
-  endpoint, no adapter and no message queue (ADR-0013), and no
-  certificate authority or TLS code (ADR-0014, ADR-0015). An
-  assignment is not yet constrained to one organization, which
-  ADR-0015 decides and no code enforces.
+  assignment and state (ADR-0012) and `internal/ca` issues certificates
+  (ADR-0014); nothing else of it exists — no endpoint, no adapter and no
+  message queue (ADR-0013), and no TLS listener, so nothing yet verifies
+  a presented certificate or constructs the CA in a running process. An
+  assignment is not yet constrained to one organization, which ADR-0015
+  decides and no code enforces.
 - Chat channels. ADR-0013 makes garam a message API and leaves Slack,
   LINE and the rest to consumers of it; none is built, and whether any
   ships first-party is undecided.
@@ -87,6 +92,8 @@ collaborate on a shared plan.
 - `internal/cli/` — cobra commands + wiring (`serve api` | `serve authz` | `migrate`).
 - `internal/agent/` — agent identities and the operator each is
   assigned to.
+- `internal/ca/` — the per-organization certificate authority and the
+  certificates it issues.
 - `internal/api/` — handlers implementing the generated ServerInterface.
 - `internal/authn/` — sign-in provider abstraction (Google OIDC,
   dev-only local), sessions.
@@ -112,6 +119,9 @@ contract is `proto/garam/authz/v1`.
 | `user.User` | `internal/user` | human identity |
 | `agent.Agent` | `internal/agent` | autonomous actor an operator provisions |
 | `agent.Assignment` | `internal/agent` | agent-to-operator binding, fenced by an epoch |
+| `ca.Authority` | `internal/ca` | an organization's certificate authority, its key sealed |
+| `ca.Certificate` | `internal/ca` | issued client certificate identified by a SAN URI |
+| `ca.Sealer` | `internal/ca` | seals key material against a database dump |
 | `org.Organization` | `internal/org` | top-level tenant |
 | `org.Group` | `internal/org` | user/agent bundle |
 | `org.Project` | `internal/org` | unit of work |

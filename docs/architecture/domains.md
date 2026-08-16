@@ -11,6 +11,7 @@ Per-domain responsibilities and boundaries.
 - `internal/authn`
 - `internal/user`
 - `internal/agent`
+- `internal/ca`
 - Store implementation status
 - Known gap
 - Future domains
@@ -150,6 +151,43 @@ the agent it lost. An agent is never an organization member (ADR-0014),
 so nothing here references `users`. Persistence only: no endpoint, no
 certificate, no message queue.
 
+## `internal/ca`
+
+The certificate authority an organization signs machine identities with
+(ADR-0014).
+
+| Type | Responsibility |
+|------|----------------|
+| `Authority` | an organization's CA: the certificate it signs with, and its private key in sealed form |
+| `Certificate` | an issued client certificate, the private key it was issued with, and the CA that signed it |
+| `Sealer` | seals key material so what reaches storage is useless without the key-encryption key the process holds |
+| `Service` | issues a certificate for a subject GRN, creating the organization's CA on demand |
+
+Every organization has its own CA, so a certificate issued by one does
+not chain against another's and tenancy holds in the trust root rather
+than in a check a caller could forget. The subject's GRN travels in a
+SAN URI and the certificate carries nothing else — no name, no roles, no
+claims. Lifetime is the only revocation there is (ADR-0014), so it is
+short by default and bounded at both ends — a service whose configured
+lifetime falls outside them does not start — and it carries jitter that
+only shortens it, which keeps a fleet from expiring together (ADR-0015).
+A lifetime reaching past what the signing CA has left is refused rather
+than signed: such a certificate stops verifying the day the CA expires.
+
+The CA private key reaches Postgres only through `Sealer`, whose one
+implementation is AES-256-GCM under a key-encryption key read from an
+owner-readable file (ADR-0015); the sealed bytes name the key that opens
+them, and open only in the organization's row they were written for, so
+write access to the database moves no trust root. A subject's own key is
+generated per certificate and returned once, never stored. No process constructs the service yet: the listener
+that verifies a presented certificate is unbuilt, and the boot-time key
+requirement lands with it.
+
+That key is as availability-critical as the database — losing it loses
+every organization's CA with no recovery short of new authorities and a
+reissue for every certificate — and why it is held this way rather than
+in a KMS is [ADR-0016](./adr/0016-ca-key-custody.md).
+
 ## Store implementation status
 
 | Domain | Interface | postgres | memory | other |
@@ -159,6 +197,7 @@ certificate, no message queue.
 | authn.SessionStore | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | authz (policies) | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | agent | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
+| ca | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 
 The postgres implementations are written by hand against sqlc output,
 which sqlc generates from each domain's `queries.sql` into

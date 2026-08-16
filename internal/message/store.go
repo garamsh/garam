@@ -9,6 +9,10 @@ import (
 
 // Store is the queue itself: every message lives in it, and a reader
 // reaches one only by claiming it (ADR-0013).
+//
+// Every method past Enqueue takes the recipient whose queue it acts on,
+// so what a caller may reach is decided by one GRN rather than by
+// holding an identifier nobody else guessed.
 type Store interface {
 	// Enqueue stores the message and returns what is stored. A sender
 	// key already used returns the message stored under it, so a sender
@@ -17,10 +21,17 @@ type Store interface {
 	// Claim hands the recipient's oldest ready message to exactly one
 	// caller and holds it for lease, or returns ErrNoMessageReady. A
 	// claim that is never completed lapses when the lease runs out and
-	// the message is handed to the next caller.
-	Claim(ctx context.Context, recipient grn.GRN, lease time.Duration) (*Claim, error)
+	// the message is handed to the next caller, up to maxAttempts hands
+	// in total: a message that spends them stops being redelivered
+	// (ADR-0018).
+	Claim(ctx context.Context, recipient grn.GRN, lease time.Duration, maxAttempts int) (*Claim, error)
+	// Renew extends a live claim's lease by lease, no further than
+	// ceiling past the moment the claim was taken, and returns the hold
+	// as it now stands. A claim that lapsed, was handed on, or was
+	// completed returns ErrStaleClaim.
+	Renew(ctx context.Context, recipient grn.GRN, id ClaimID, lease, ceiling time.Duration) (*Claim, error)
 	// Complete reports the claimed message delivered, or returns
 	// ErrStaleClaim when the claim has since been handed on. Completing
 	// twice with the same claim reports the same delivery.
-	Complete(ctx context.Context, c *Claim) error
+	Complete(ctx context.Context, recipient grn.GRN, id ClaimID) error
 }

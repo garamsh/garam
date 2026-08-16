@@ -3,6 +3,7 @@ package message
 import (
 	"context"
 	"errors"
+	"math"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -47,8 +48,9 @@ func (s *PostgresStore) Enqueue(ctx context.Context, m *Message) (*Message, erro
 }
 
 // Claim hands the recipient's oldest ready message to one reader and
-// holds it for lease, or returns ErrNoMessageReady.
-func (s *PostgresStore) Claim(ctx context.Context, recipient grn.GRN, lease time.Duration) (*Claim, error) {
+// holds it for lease, or returns ErrNoMessageReady. A message that has
+// been handed out maxAttempts times is not ready for anyone.
+func (s *PostgresStore) Claim(ctx context.Context, recipient grn.GRN, lease time.Duration, maxAttempts int) (*Claim, error) {
 	claimID, err := newClaimID()
 	if err != nil {
 		return nil, err
@@ -57,8 +59,9 @@ func (s *PostgresStore) Claim(ctx context.Context, recipient grn.GRN, lease time
 	// the claim lapses and this process's never does.
 	row, err := s.q.ClaimMessage(ctx, db.ClaimMessageParams{
 		ClaimID:      pgtype.Text{String: string(claimID), Valid: true},
-		Lease:        pgtype.Interval{Microseconds: lease.Microseconds(), Valid: true},
+		Lease:        interval(lease),
 		RecipientGrn: recipient.String(),
+		MaxAttempts:  attemptBound(maxAttempts),
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -69,12 +72,31 @@ func (s *PostgresStore) Claim(ctx context.Context, recipient grn.GRN, lease time
 	return rowToClaim(row)
 }
 
+// Renew extends a live claim's lease under the ceiling. A claim that
+// lapsed, was handed on, or was completed matches no row, hence
+// ErrStaleClaim.
+func (s *PostgresStore) Renew(ctx context.Context, recipient grn.GRN, id ClaimID, lease, ceiling time.Duration) (*Claim, error) {
+	row, err := s.q.RenewClaim(ctx, db.RenewClaimParams{
+		Lease:        interval(lease),
+		Ceiling:      interval(ceiling),
+		RecipientGrn: recipient.String(),
+		ClaimID:      pgtype.Text{String: string(id), Valid: true},
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrStaleClaim
+		}
+		return nil, errorx.Wrap(err, "message store: renew")
+	}
+	return rowToClaim(row)
+}
+
 // Complete reports the claimed message delivered. A claim handed on to
 // another reader matches no row, hence ErrStaleClaim.
-func (s *PostgresStore) Complete(ctx context.Context, c *Claim) error {
+func (s *PostgresStore) Complete(ctx context.Context, recipient grn.GRN, id ClaimID) error {
 	rows, err := s.q.CompleteMessage(ctx, db.CompleteMessageParams{
-		ID:      string(c.message.id),
-		ClaimID: pgtype.Text{String: string(c.id), Valid: true},
+		RecipientGrn: recipient.String(),
+		ClaimID:      pgtype.Text{String: string(id), Valid: true},
 	})
 	if err != nil {
 		return errorx.Wrap(err, "message store: complete")
@@ -103,6 +125,7 @@ func rowToMessage(row db.Message) (*Message, error) {
 		idempotencyKey: row.IdempotencyKey,
 		body:           row.Body,
 		createdAt:      row.CreatedAt.Time,
+		attempts:       int(row.Attempts),
 	}, nil
 }
 
@@ -126,4 +149,20 @@ func rowToClaim(row db.Message) (*Claim, error) {
 // stamp converts a time.Time to a valid pgtype.Timestamptz.
 func stamp(t time.Time) pgtype.Timestamptz {
 	return pgtype.Timestamptz{Time: t, Valid: true}
+}
+
+// interval converts a duration to the interval Postgres measures a
+// lease with.
+func interval(d time.Duration) pgtype.Interval {
+	return pgtype.Interval{Microseconds: d.Microseconds(), Valid: true}
+}
+
+// attemptBound narrows the bound to the column's width. A wider one
+// means no bound at all, and narrowing it silently would wrap into a
+// negative one, which withholds every message instead.
+func attemptBound(maxAttempts int) int32 {
+	if maxAttempts > math.MaxInt32 {
+		return math.MaxInt32
+	}
+	return int32(maxAttempts)
 }

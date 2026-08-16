@@ -24,6 +24,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -1195,6 +1196,9 @@ func TestMessageStore_RoundTrip(t *testing.T) {
 	s := message.NewPostgresStore(p)
 	bot, elsewhere := grnOf("agent", "bot"), grnOf("agent", "elsewhere")
 	ada := grnOf("user", "ada")
+	// Wide enough that nothing here is refused for want of attempts;
+	// what the bound does is TestMessageStore_StopsRedeliveringAnExhaustedMessage.
+	const attempts = 8
 
 	m, err := message.New(bot, ada, "key-1", "hello")
 	require.NoError(t, err)
@@ -1213,23 +1217,28 @@ func TestMessageStore_RoundTrip(t *testing.T) {
 	// with the one that enqueued claims the message, and dropping every
 	// pooled connection afterwards leaves the claim standing.
 	reader := message.NewPostgresStore(p)
-	claim, err := reader.Claim(ctx, bot, time.Minute)
+	claim, err := reader.Claim(ctx, bot, time.Minute, attempts)
 	require.NoError(t, err)
 	assert.Equal(t, m.ID(), claim.Message().ID())
 	assert.Equal(t, "hello", claim.Message().Body())
 	assert.Equal(t, ada, claim.Message().Sender())
+	assert.Equal(t, 1, claim.Message().Attempts(), "handing the message out is the first attempt")
 	p.Reset()
 
-	_, err = s.Claim(ctx, bot, time.Minute)
+	_, err = s.Claim(ctx, bot, time.Minute, attempts)
 	assert.ErrorIs(t, err, message.ErrNoMessageReady, "a held message is nobody else's")
-	_, err = s.Claim(ctx, elsewhere, time.Minute)
+	_, err = s.Claim(ctx, elsewhere, time.Minute, attempts)
 	assert.ErrorIs(t, err, message.ErrNoMessageReady, "and belongs to the recipient it is addressed to")
 
-	require.NoError(t, reader.Complete(ctx, claim))
+	// The claim is a fence rather than a secret: another recipient's
+	// queue does not complete under it even where its token is known.
+	assert.ErrorIs(t, s.Complete(ctx, elsewhere, claim.ID()), message.ErrStaleClaim)
+
+	require.NoError(t, reader.Complete(ctx, bot, claim.ID()))
 	// A reader retries what it could not confirm, so completing twice
 	// reports the same delivery rather than failing.
-	require.NoError(t, reader.Complete(ctx, claim))
-	_, err = s.Claim(ctx, bot, time.Minute)
+	require.NoError(t, reader.Complete(ctx, bot, claim.ID()))
+	_, err = s.Claim(ctx, bot, time.Minute, attempts)
 	assert.ErrorIs(t, err, message.ErrNoMessageReady, "a delivered message is not handed out again")
 
 	// The key outlives delivery, so a retry arriving after it neither
@@ -1239,7 +1248,7 @@ func TestMessageStore_RoundTrip(t *testing.T) {
 	afterDelivery, err := s.Enqueue(ctx, late)
 	require.NoError(t, err)
 	assert.Equal(t, m.ID(), afterDelivery.ID())
-	_, err = s.Claim(ctx, bot, time.Minute)
+	_, err = s.Claim(ctx, bot, time.Minute, attempts)
 	assert.ErrorIs(t, err, message.ErrNoMessageReady)
 }
 
@@ -1275,7 +1284,10 @@ func TestMessageStore_ClaimIsExclusive(t *testing.T) {
 			s := message.NewPostgresStore(p)
 			<-start
 			for {
-				c, err := s.Claim(ctx, bot, time.Minute)
+				// The attempt bound is wide enough to hand every message
+				// to every reader, so what keeps a message to one of them
+				// is the claim and not the count.
+				c, err := s.Claim(ctx, bot, time.Minute, readers)
 				if errors.Is(err, message.ErrNoMessageReady) {
 					return
 				}
@@ -1313,7 +1325,7 @@ func TestMessageStore_LapsedClaimIsHandedOn(t *testing.T) {
 	_, err = s.Enqueue(ctx, m)
 	require.NoError(t, err)
 
-	lapsing, err := s.Claim(ctx, bot, 100*time.Millisecond)
+	lapsing, err := s.Claim(ctx, bot, 100*time.Millisecond, 4)
 	require.NoError(t, err)
 
 	// What is waited for is what is asserted: the claim that succeeds,
@@ -1321,7 +1333,7 @@ func TestMessageStore_LapsedClaimIsHandedOn(t *testing.T) {
 	// it takes the message for a minute.
 	var handedOn *message.Claim
 	require.Eventually(t, func() bool {
-		c, err := s.Claim(ctx, bot, time.Minute)
+		c, err := s.Claim(ctx, bot, time.Minute, 4)
 		if err != nil {
 			return false
 		}
@@ -1332,10 +1344,196 @@ func TestMessageStore_LapsedClaimIsHandedOn(t *testing.T) {
 	require.NotNil(t, handedOn)
 	assert.Equal(t, m.ID(), handedOn.Message().ID())
 	assert.NotEqual(t, lapsing.ID(), handedOn.ID(), "the message is handed on under a claim of its own")
+	assert.Equal(t, 2, handedOn.Message().Attempts(), "the hand-on is the second attempt")
 
-	assert.ErrorIs(t, s.Complete(ctx, lapsing), message.ErrStaleClaim,
+	_, err = s.Renew(ctx, bot, lapsing.ID(), time.Minute, time.Hour)
+	assert.ErrorIs(t, err, message.ErrStaleClaim,
+		"the reader the message was taken from renews nothing")
+	assert.ErrorIs(t, s.Complete(ctx, bot, lapsing.ID()), message.ErrStaleClaim,
 		"the reader the message was taken from completes nothing")
-	require.NoError(t, s.Complete(ctx, handedOn))
+	require.NoError(t, s.Complete(ctx, bot, handedOn.ID()))
+}
+
+// TestMessageStore_RenewalHoldsAClaimPastItsLeaseButNotPastTheCeiling
+// covers the turn that outruns its lease. Renewing keeps the message
+// out of every other reader's reach past the lease it was claimed
+// under; the ceiling is measured from the moment the claim was taken
+// and is not renewable away, so a holder that renews forever loses the
+// claim all the same (ADR-0018) rather than leaving a message neither
+// completed nor redelivered.
+func TestMessageStore_RenewalHoldsAClaimPastItsLeaseButNotPastTheCeiling(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := message.NewPostgresStore(p)
+	bot, ada := grnOf("agent", "bot"), grnOf("user", "ada")
+	// The lease is what the claim would lapse under; the ceiling is how
+	// far renewals may carry it. Both are wide enough that a stalled
+	// machine renews late rather than failing.
+	const (
+		lease   = 2 * time.Second
+		ceiling = 5 * time.Second
+	)
+
+	m, err := message.New(bot, ada, "key-1", "hello")
+	require.NoError(t, err)
+	_, err = s.Enqueue(ctx, m)
+	require.NoError(t, err)
+
+	held, err := s.Claim(ctx, bot, lease, 4)
+	require.NoError(t, err)
+
+	// Renew until the lease it was claimed under has run out, which is
+	// the condition the assertion below turns on: what holds the message
+	// from here is renewal and nothing else.
+	renewedUntil := time.Now().Add(lease + 500*time.Millisecond)
+	var renewed *message.Claim
+	for time.Now().Before(renewedUntil) {
+		renewed, err = s.Renew(ctx, bot, held.ID(), lease, ceiling)
+		require.NoError(t, err, "a claim renewed inside its lease is still the holder's")
+		time.Sleep(200 * time.Millisecond)
+	}
+	require.NotNil(t, renewed)
+	assert.True(t, renewed.ExpiresAt().After(held.ExpiresAt()), "renewal carried the claim past where it started")
+	assert.Equal(t, held.ID(), renewed.ID(), "renewal keeps the hold rather than taking a new one")
+
+	_, err = s.Claim(ctx, bot, time.Minute, 4)
+	assert.ErrorIs(t, err, message.ErrNoMessageReady,
+		"a renewed claim is nobody else's, past the lease it was claimed under")
+
+	// The ceiling is the backstop: renewals keep being asked for and the
+	// claim lapses on schedule anyway.
+	var handedOn *message.Claim
+	require.Eventually(t, func() bool {
+		_, _ = s.Renew(ctx, bot, held.ID(), lease, ceiling)
+		c, err := s.Claim(ctx, bot, time.Minute, 4)
+		if err != nil {
+			return false
+		}
+		handedOn = c
+		return true
+	}, 10*time.Second, 200*time.Millisecond, "the ceiling holds a renewal that would carry the claim forever")
+
+	require.NotNil(t, handedOn)
+	assert.Equal(t, m.ID(), handedOn.Message().ID())
+	_, err = s.Renew(ctx, bot, held.ID(), lease, ceiling)
+	assert.ErrorIs(t, err, message.ErrStaleClaim, "a claim carried past its ceiling renews nothing")
+}
+
+// TestMessageStore_StopsRedeliveringAnExhaustedMessage covers the
+// message that fails the same way every time. Handing it out is the
+// attempt, since a turn that failed and a turn that never started are
+// indistinguishable from here (ADR-0018), so a message that has been
+// handed out its bounded number of times is handed out no more.
+func TestMessageStore_StopsRedeliveringAnExhaustedMessage(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := message.NewPostgresStore(p)
+	bot, ada := grnOf("agent", "bot"), grnOf("user", "ada")
+	const attempts = 2
+	const lease = 200 * time.Millisecond
+
+	m, err := message.New(bot, ada, "key-1", "hello")
+	require.NoError(t, err)
+	_, err = s.Enqueue(ctx, m)
+	require.NoError(t, err)
+
+	first, err := s.Claim(ctx, bot, lease, attempts)
+	require.NoError(t, err)
+	assert.Equal(t, 1, first.Message().Attempts())
+
+	// Nobody completes it, so the lease is what ends each attempt.
+	var second *message.Claim
+	require.Eventually(t, func() bool {
+		c, err := s.Claim(ctx, bot, lease, attempts)
+		if err != nil {
+			return false
+		}
+		second = c
+		return true
+	}, 5*time.Second, 20*time.Millisecond, "a lapsed claim leaves the message claimable")
+	require.NotNil(t, second)
+	assert.Equal(t, 2, second.Message().Attempts())
+
+	// Its attempts spent, the message is handed to nobody however long
+	// anyone waits — and the second claim's lease runs out inside this
+	// window, so what withholds it is the count rather than a lease.
+	require.Never(t, func() bool {
+		_, err := s.Claim(ctx, bot, time.Minute, attempts)
+		return err == nil
+	}, 2*time.Second, 50*time.Millisecond, "an exhausted message was handed out again")
+
+	// The same message under a wider bound is claimable, so what stopped
+	// it was the count and not anything else about the row.
+	third, err := s.Claim(ctx, bot, time.Minute, attempts+1)
+	require.NoError(t, err)
+	assert.Equal(t, m.ID(), third.Message().ID())
+	assert.Equal(t, 3, third.Message().Attempts())
+}
+
+// TestMessageService_ClaimWaitsForTheMessageThatArrives drives the long
+// poll over the real queue: the claim is made before there is anything
+// to claim, and it answers with the message a sender stores while it
+// waits. What it waits on is a message becoming claimable, which is the
+// condition the answer is read from — a poll returning early answers
+// that nothing is ready, and this one does not.
+func TestMessageService_ClaimWaitsForTheMessageThatArrives(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	store := message.NewPostgresStore(p)
+	cfg := briefDelivery()
+	s, err := message.NewService(store, cfg)
+	require.NoError(t, err)
+	bot, ada := grnOf("agent", "bot"), grnOf("user", "ada")
+
+	type answer struct {
+		claim *message.Claim
+		err   error
+	}
+	answered := make(chan answer, 1)
+	start := time.Now()
+	go func() {
+		c, err := s.Claim(ctx, bot, bot)
+		answered <- answer{claim: c, err: err}
+	}()
+
+	// Long enough that a poll answering an empty queue at once has
+	// already answered, and short enough to leave the wait running.
+	time.Sleep(10 * cfg.PollInterval)
+	select {
+	case got := <-answered:
+		require.Fail(t, "the poll answered before there was a message", "%+v", got)
+	default:
+	}
+
+	sent, err := message.New(bot, ada, "key-1", "hello")
+	require.NoError(t, err)
+	_, err = store.Enqueue(ctx, sent)
+	require.NoError(t, err)
+
+	select {
+	case got := <-answered:
+		require.NoError(t, got.err)
+		require.NotNil(t, got.claim)
+		assert.Equal(t, sent.ID(), got.claim.Message().ID())
+		assert.Equal(t, "hello", got.claim.Message().Body())
+		assert.Less(t, time.Since(start), cfg.Wait,
+			"the poll waited its whole wait out rather than answering with the message that arrived")
+	case <-time.After(cfg.Wait + 5*time.Second):
+		require.Fail(t, "the poll never answered")
+	}
+}
+
+// briefDelivery is the queue's delivery configuration with the waits
+// shortened to what a test can sit through. What each parameter governs
+// is unchanged; `garam serve machine` runs on the defaults.
+func briefDelivery() message.Config {
+	return message.Config{
+		Lease:        2 * time.Second,
+		LeaseCeiling: 5 * time.Second,
+		Attempts:     2,
+		Wait:         2 * time.Second,
+		PollInterval: 20 * time.Millisecond,
+	}
 }
 
 // certificates is the certificate authority as the agent domain signs
@@ -1400,11 +1598,13 @@ func machineListener(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer) string {
 	issuer, err := ca.NewService(authorities, sealer, ca.Config{})
 	require.NoError(t, err)
 	agents := agent.NewService(agent.NewPostgresStore(p), certificates{issuer: issuer})
+	messages, err := message.NewService(message.NewPostgresStore(p), briefDelivery())
+	require.NoError(t, err)
 
 	srv := machine.NewServer(
 		machine.NewService(machineTrustRoots{store: authorities}),
 		loopbackCertificate(t),
-		machinegen.Handler(machineapi.NewServer(agents)),
+		machinegen.Handler(machineapi.NewServer(agents, messages)),
 	)
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
@@ -1442,14 +1642,22 @@ func machineClient(t *testing.T, pair tls.Certificate) *http.Client {
 // machineRequest performs one request and returns the status and body.
 func machineRequest(t *testing.T, client *http.Client, method, url string) (int, []byte) {
 	t.Helper()
-	req, err := http.NewRequest(method, url, nil)
+	return machineSend(t, client, method, url, "")
+}
+
+// machineSend performs one request carrying body and returns the status
+// and what came back.
+func machineSend(t *testing.T, client *http.Client, method, url, body string) (int, []byte) {
+	t.Helper()
+	req, err := http.NewRequest(method, url, strings.NewReader(body))
 	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
 	resp, err := client.Do(req)
 	require.NoError(t, err)
 	defer func() { _ = resp.Body.Close() }()
-	body, err := io.ReadAll(resp.Body)
+	answer, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
-	return resp.StatusCode, body
+	return resp.StatusCode, answer
 }
 
 // pairOf is the certificate the surface issued, as the process it was
@@ -1561,4 +1769,131 @@ func TestMachineSurface_OperatorCreatesAnAgentThatThenAuthenticates(t *testing.T
 	assert.Equal(t, http.StatusForbidden, status, "the operator the reassignment replaced")
 	status, _ = machineRequest(t, sibling, http.MethodPost, url+"/agents/"+created.Grn+"/certificate")
 	assert.Equal(t, http.StatusCreated, status)
+}
+
+// provisioned creates an agent through the surface as the calling
+// operator and returns its GRN with a client presenting the certificate
+// the surface issued for it. It is the two calls
+// TestMachineSurface_OperatorCreatesAnAgentThatThenAuthenticates covers
+// in full, as the tests that need an authenticated agent make them.
+func provisioned(t *testing.T, url string, operator *http.Client) (grn.GRN, *http.Client) {
+	t.Helper()
+	status, body := machineRequest(t, operator, http.MethodPost, url+"/agents")
+	require.Equal(t, http.StatusCreated, status, string(body))
+	var created machinegen.AgentAssignment
+	require.NoError(t, json.Unmarshal(body, &created))
+
+	status, body = machineRequest(t, operator, http.MethodPost, url+"/agents/"+created.Grn+"/certificate")
+	require.Equal(t, http.StatusCreated, status, string(body))
+	var issued machinegen.AgentCertificate
+	require.NoError(t, json.Unmarshal(body, &issued))
+
+	agentGRN, err := grn.Parse(created.Grn)
+	require.NoError(t, err)
+	return agentGRN, machineClient(t, pairOf(t, issued))
+}
+
+// TestMachineSurface_AnAgentActsOnItsOwnQueueAndNoOther carries a
+// message end to end over the listener an agent authenticates on: one
+// agent posts, the addressed agent claims it, holds it while it works,
+// and reports it delivered, after which the message leaves the queue.
+//
+// Every refusal sits beside the same call made by the agent the message
+// is addressed to. Both callers authenticate, both hold certificates
+// this listener verifies, and only one of them is the recipient — so
+// what refuses is the one comparison rather than a surface that refuses
+// whoever asks.
+func TestMachineSurface_AnAgentActsOnItsOwnQueueAndNoOther(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	orgs := org.NewPostgresStore(p)
+	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+
+	key := make([]byte, ca.KeySize)
+	_, err := rand.Read(key)
+	require.NoError(t, err)
+	sealer, err := ca.NewAESGCMSealer(key)
+	require.NoError(t, err)
+	outOfBand, err := ca.NewService(ca.NewPostgresStore(p), sealer, ca.Config{})
+	require.NoError(t, err)
+
+	url := machineListener(t, p, sealer)
+	operator := machineClient(t, installed(t, outOfBand, scopedGRN("acme", agent.ServiceTypeOperator, "one")))
+	senderGRN, sender := provisioned(t, url, operator)
+	recipientGRN, recipient := provisioned(t, url, operator)
+	queue := url + "/agents/" + recipientGRN.String() + "/claims"
+
+	submission := `{"recipient":"` + recipientGRN.String() + `","idempotencyKey":"key-1","body":"hello"}`
+	status, body := machineSend(t, sender, http.MethodPost, url+"/messages", submission)
+	require.Equal(t, http.StatusCreated, status, string(body))
+	var posted machinegen.Message
+	require.NoError(t, json.Unmarshal(body, &posted))
+	assert.Equal(t, senderGRN.String(), posted.Sender, "the sender is what the certificate named")
+	assert.Equal(t, recipientGRN.String(), posted.Recipient)
+
+	// A sender that could not read the answer sends it again, and one
+	// message is stored.
+	status, body = machineSend(t, sender, http.MethodPost, url+"/messages", submission)
+	require.Equal(t, http.StatusCreated, status, string(body))
+	var repeated machinegen.Message
+	require.NoError(t, json.Unmarshal(body, &repeated))
+	assert.Equal(t, posted.Id, repeated.Id, "a repeated key answers with the message already stored")
+
+	status, body = machineSend(t, sender, http.MethodPost, queue, "")
+	assert.Equal(t, http.StatusForbidden, status, string(body))
+	assert.Contains(t, string(body), `"kind":"permission_denied"`)
+
+	status, body = machineSend(t, recipient, http.MethodPost, queue, "")
+	require.Equal(t, http.StatusOK, status, string(body))
+	var claimed machinegen.Claim
+	require.NoError(t, json.Unmarshal(body, &claimed))
+	assert.Equal(t, posted.Id, claimed.Message.Id)
+	assert.Equal(t, "hello", claimed.Message.Body)
+	assert.Equal(t, 1, claimed.Attempt)
+	assert.True(t, claimed.ExpiresAt.After(time.Now()), "a hold that had lapsed before it was answered")
+
+	held := queue + "/" + claimed.Id
+	status, body = machineSend(t, sender, http.MethodPost, held+"/renewal", "")
+	assert.Equal(t, http.StatusForbidden, status, string(body))
+	status, body = machineSend(t, sender, http.MethodPost, held+"/completion", "")
+	assert.Equal(t, http.StatusForbidden, status, string(body))
+
+	// The holder keeps its claim while the turn runs.
+	status, body = machineSend(t, recipient, http.MethodPost, held+"/renewal", "")
+	require.Equal(t, http.StatusOK, status, string(body))
+	var renewed machinegen.Claim
+	require.NoError(t, json.Unmarshal(body, &renewed))
+	assert.Equal(t, claimed.Id, renewed.Id, "renewal keeps the hold rather than taking a new one")
+	assert.True(t, renewed.ExpiresAt.After(claimed.ExpiresAt), "renewal left the hold where it started")
+
+	status, body = machineSend(t, recipient, http.MethodPost, held+"/completion", "")
+	require.Equal(t, http.StatusNoContent, status, string(body))
+	// A holder that could not read the answer reports it again, and the
+	// same delivery comes back rather than a refusal.
+	status, body = machineSend(t, recipient, http.MethodPost, held+"/completion", "")
+	assert.Equal(t, http.StatusNoContent, status, string(body))
+
+	// The delivered message is handed out no more, so the next poll
+	// waits its wait out and answers that there is nothing.
+	start := time.Now()
+	status, body = machineSend(t, recipient, http.MethodPost, queue, "")
+	assert.Equal(t, http.StatusNoContent, status, string(body))
+	assert.GreaterOrEqual(t, time.Since(start), briefDelivery().Wait,
+		"the poll answered an empty queue before its wait ran out")
+
+	// A message addressed to an agent garam has never provisioned is
+	// stored and answered with success: rejecting it would destroy the
+	// message and tell the sender nothing (ADR-0013). It is in the queue
+	// rather than merely answered for, and storing it provisioned
+	// nothing.
+	ghost := scopedGRN("acme", agent.ServiceType, "0000000000000000")
+	status, body = machineSend(t, sender, http.MethodPost, url+"/messages",
+		`{"recipient":"`+ghost.String()+`","idempotencyKey":"key-2","body":"nobody is home"}`)
+	require.Equal(t, http.StatusCreated, status, string(body))
+
+	stranded, err := message.NewPostgresStore(p).Claim(ctx, ghost, time.Minute, 1)
+	require.NoError(t, err)
+	assert.Equal(t, "nobody is home", stranded.Message().Body())
+	_, err = agent.NewPostgresStore(p).Get(ctx, ghost)
+	assert.ErrorIs(t, err, agent.ErrAgentNotFound, "storing the message provisioned an agent")
 }

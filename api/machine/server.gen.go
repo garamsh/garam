@@ -36,6 +36,21 @@ type AgentCertificate struct {
 	PrivateKeyPem string    `json:"privateKeyPem"`
 }
 
+// Claim One caller's hold on one message, and the token that fences it. Renewal and completion carry that token, and a hold handed on to the next caller stops matching.
+type Claim struct {
+	// Attempt Which delivery of this message the caller is holding. Delivery is at-least-once (ADR-0018), so this is what tells a first delivery from a repeat; a message that reaches the bound is not handed out again.
+	Attempt int `json:"attempt"`
+
+	// ExpiresAt When the hold lapses and the message is handed to the next caller. garam measures it, so no caller's clock decides it.
+	ExpiresAt time.Time `json:"expiresAt"`
+
+	// Id The claim's identifier, which renewal and completion name.
+	Id string `json:"id"`
+
+	// Message One stored message, under an identifier the queue minted.
+	Message Message `json:"message"`
+}
+
 // Error defines model for Error.
 type Error struct {
 	// Kind errorx kind, e.g. `not_found`, `permission_denied`.
@@ -48,8 +63,38 @@ type Identity struct {
 	Grn string `json:"grn"`
 }
 
+// Message One stored message, under an identifier the queue minted.
+type Message struct {
+	Body      string    `json:"body"`
+	CreatedAt time.Time `json:"createdAt"`
+
+	// Id The queue's identifier for the message. A message is a queue entry rather than a resource a policy names, so it is opaque and not a GRN.
+	Id             string `json:"id"`
+	IdempotencyKey string `json:"idempotencyKey"`
+	Recipient      string `json:"recipient"`
+	Sender         string `json:"sender"`
+}
+
+// MessageSubmission What a sender supplies. Who is sending is the certificate's to say.
+type MessageSubmission struct {
+	// Body The message itself. The queue carries it and never reads it, so it may be empty.
+	Body string `json:"body"`
+
+	// IdempotencyKey The sender's own key for this message. Posting the same key twice stores one message and answers with it both times.
+	IdempotencyKey string `json:"idempotencyKey"`
+
+	// Recipient GRN of the identity the message is addressed to. It does not have to name an agent garam knows.
+	Recipient string `json:"recipient"`
+}
+
 // AgentGrn defines model for agent.
 type AgentGrn = string
+
+// ClaimId defines model for claim.
+type ClaimId = string
+
+// PostMessageJSONRequestBody defines body for PostMessage for application/json ContentType.
+type PostMessageJSONRequestBody = MessageSubmission
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -59,9 +104,21 @@ type ServerInterface interface {
 	// IssueAgentCertificate Issue the certificate an agent authenticates with.
 	// (POST /agents/{agent}/certificate)
 	IssueAgentCertificate(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn)
+	// ClaimMessage Claim the next message addressed to an agent.
+	// (POST /agents/{agent}/claims)
+	ClaimMessage(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn)
+	// CompleteClaim Report the claimed message delivered.
+	// (POST /agents/{agent}/claims/{claim}/completion)
+	CompleteClaim(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn, claimId ClaimId)
+	// RenewClaim Extend a claim while the message is still being worked on.
+	// (POST /agents/{agent}/claims/{claim}/renewal)
+	RenewClaim(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn, claimId ClaimId)
 	// GetIdentity Return the identity the connection authenticated as.
 	// (GET /identity)
 	GetIdentity(w http.ResponseWriter, r *http.Request)
+	// PostMessage Post a message to a recipient.
+	// (POST /messages)
+	PostMessage(w http.ResponseWriter, r *http.Request)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -113,11 +170,121 @@ func (siw *ServerInterfaceWrapper) IssueAgentCertificate(w http.ResponseWriter, 
 	handler.ServeHTTP(w, r)
 }
 
+// ClaimMessage operation middleware
+func (siw *ServerInterfaceWrapper) ClaimMessage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agent" -------------
+	var agentGrn AgentGrn
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentGrn, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ClaimMessage(w, r, agentGrn)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CompleteClaim operation middleware
+func (siw *ServerInterfaceWrapper) CompleteClaim(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agent" -------------
+	var agentGrn AgentGrn
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentGrn, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "claim" -------------
+	var claimId ClaimId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "claim", r.PathValue("claim"), &claimId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "claim", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CompleteClaim(w, r, agentGrn, claimId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RenewClaim operation middleware
+func (siw *ServerInterfaceWrapper) RenewClaim(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agent" -------------
+	var agentGrn AgentGrn
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentGrn, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "claim" -------------
+	var claimId ClaimId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "claim", r.PathValue("claim"), &claimId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "claim", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RenewClaim(w, r, agentGrn, claimId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetIdentity operation middleware
 func (siw *ServerInterfaceWrapper) GetIdentity(w http.ResponseWriter, r *http.Request) {
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetIdentity(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PostMessage operation middleware
+func (siw *ServerInterfaceWrapper) PostMessage(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PostMessage(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -250,6 +417,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/identity", wrapper.GetIdentity)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents", wrapper.CreateAgent)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/certificate", wrapper.IssueAgentCertificate)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/messages", wrapper.PostMessage)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/claims", wrapper.ClaimMessage)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/claims/{claim}/renewal", wrapper.RenewClaim)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/claims/{claim}/completion", wrapper.CompleteClaim)
 
 	return m
 }

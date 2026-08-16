@@ -26,6 +26,10 @@ var (
 	// it was handed. A lease that ran out is claimed by the next reader,
 	// and the reader it replaced completes nothing.
 	ErrStaleClaim = errorx.New(errorx.KindFailedPrecondition, "message claim is stale")
+	// ErrNotRecipient refuses a caller acting on a queue that is not its
+	// own. A message is claimed, renewed and completed by the recipient
+	// it is addressed to and by nobody else.
+	ErrNotRecipient = errorx.New(errorx.KindPermissionDenied, "caller is not the recipient")
 )
 
 // ID identifies a stored message. ClaimID identifies one reader's hold
@@ -44,6 +48,7 @@ type Message struct {
 	idempotencyKey string
 	body           string
 	createdAt      time.Time
+	attempts       int
 }
 
 // New builds a message from what a sender supplied. The recipient is
@@ -84,6 +89,13 @@ func (m *Message) Sender() grn.GRN        { return m.sender }
 func (m *Message) IdempotencyKey() string { return m.idempotencyKey }
 func (m *Message) Body() string           { return m.body }
 func (m *Message) CreatedAt() time.Time   { return m.createdAt }
+
+// Attempts is how many times the message has been handed to a reader,
+// the hold the caller is reading it through included. Delivery is
+// at-least-once (ADR-0018), so this is what tells a first delivery from
+// a repeat; the count is bounded, and a message that spends it is not
+// handed out again.
+func (m *Message) Attempts() int { return m.attempts }
 
 // Claim is a message handed to one reader and the token that proves the
 // reader still holds it. It expires: a reader that dies leaves the

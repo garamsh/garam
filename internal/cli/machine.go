@@ -18,6 +18,7 @@ import (
 	"github.com/garamsh/garam/internal/health"
 	"github.com/garamsh/garam/internal/machine"
 	"github.com/garamsh/garam/internal/machineapi"
+	"github.com/garamsh/garam/internal/message"
 	"github.com/garamsh/garam/internal/org"
 )
 
@@ -70,10 +71,17 @@ func serveMachine(cmd *cobra.Command) error {
 		return err
 	}
 	agents := agent.NewService(agent.NewPostgresStore(pool), certificates{issuer: issuer})
+	// The delivery parameters default narrow (ADR-0018), and the
+	// defaults are what this process runs on until something asks for
+	// another value.
+	messages, err := message.NewService(message.NewPostgresStore(pool), message.Config{})
+	if err != nil {
+		return err
+	}
 
 	// The generated router matches before the middleware runs, so the
 	// log line can name the route rather than the path.
-	handler := machinegen.HandlerWithOptions(machineapi.NewServer(agents), machinegen.StdHTTPServerOptions{
+	handler := machinegen.HandlerWithOptions(machineapi.NewServer(agents, messages), machinegen.StdHTTPServerOptions{
 		Middlewares: []machinegen.MiddlewareFunc{obs.logMachineRequests},
 	})
 	srv := machine.NewServer(

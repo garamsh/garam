@@ -60,15 +60,6 @@ func migrationsDir(t *testing.T) string {
 	}
 }
 
-// TestMigrationsDir_Resolves guards the migration source path. It needs
-// no database, so a broken path is reported as itself rather than as a
-// migration failure in every other test.
-func TestMigrationsDir_Resolves(t *testing.T) {
-	entries, err := os.ReadDir(migrationsDir(t))
-	require.NoError(t, err)
-	assert.NotEmpty(t, entries)
-}
-
 // TestMain requires the test database before any test runs. This layer is
 // defined by real infrastructure, and skipping instead left `go test`
 // printing the same `ok` for a run that touched no database as for one

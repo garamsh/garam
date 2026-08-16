@@ -3,36 +3,14 @@
 Start here. Every document is in English, Markdown, and lives next to
 the code it describes.
 
-## Conventions
+Two indexes carry the file lists; this page does not repeat them.
 
-Rules every contributor follows. PR review checks against these.
-
-- [convention/README.md](./convention/README.md) — index
-- [go.md](./convention/go.md)
-- [errors.md](./convention/errors.md)
-- [naming.md](./convention/naming.md)
-- [stack-nextjs.md](./convention/stack-nextjs.md)
-- [stack-tailwind.md](./convention/stack-tailwind.md)
-- [comments.md](./convention/comments.md)
-- [style.md](./convention/style.md)
-- [simplicity.md](./convention/simplicity.md)
-- [runtime-safety.md](./convention/runtime-safety.md)
-- [testing.md](./convention/testing.md)
-- [git.md](./convention/git.md)
-- [review.md](./convention/review.md)
-- [documentation.md](./convention/documentation.md)
-- [ci.md](./convention/ci.md)
-
-## Architecture
-
-The system's shape and the decisions behind it.
-
-- [architecture/README.md](./architecture/README.md) — index
-- [architecture/overview.md](./architecture/overview.md)
-- [architecture/domains.md](./architecture/domains.md)
-- [architecture/grn-model.md](./architecture/grn-model.md)
-- [architecture/authz.md](./architecture/authz.md)
-- [architecture/adr/](./architecture/adr/) — decision records
+- [convention/README.md](./convention/README.md) — the rules every
+  contributor follows, what each file governs, and how they rank
+  against each other. Read it before the first PR.
+- [architecture/README.md](./architecture/README.md) — the
+  responsibility documents describing how the system is shaped now, the
+  ADRs behind them, and the rules both follow.
 
 ## Plans
 
@@ -44,8 +22,6 @@ Active work, milestones, and current state.
 
 ## Contributing
 
-1. Read the convention directory end-to-end before the first PR.
+1. Read the convention index end-to-end before the first PR.
 2. Keep `architecture/` in sync with code changes.
 3. New work that lasts more than a session gets a plan under `plans/`.
-4. Local commands and CI commands are the same commands — see
-   [ci.md](./convention/ci.md).

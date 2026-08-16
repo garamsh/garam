@@ -1,40 +1,66 @@
-# Conventions
+# Conventions Index
 
-Rules every contributor follows. PR review checks against this index. The PM owns these files; workers read and apply them.
+Rules every agent follows when writing code, tests, commits, and documents. The PM owns these files; workers read and apply them.
 
-## Stack-specific (Go)
-
-- [go.md](./go.md) — layout, packages, naming, dependencies
-- [errors.md](./errors.md) — error kinds, sentinels, wrapping
-- [naming.md](./naming.md) — identifiers, GRN, abbreviations
-
-## Stack-specific (Web)
-
-- [stack-nextjs.md](./stack-nextjs.md) — Next.js App Router layout, components, testing
-- [stack-tailwind.md](./stack-tailwind.md) — Tailwind v4 composition, tokens, idioms
+## Contents
+- Stack-neutral
+- Architecture
+- Stack-specific
+- Independence
+- Precedence
 
 ## Stack-neutral
 
-- [comments.md](./comments.md) — docstrings, inline comments, TODO
-- [style.md](./style.md) — naming and pattern consistency in code
-- [simplicity.md](./simplicity.md) — clarity over complexity; consolidation judgment
-- [runtime-safety.md](./runtime-safety.md) — types, boundaries, error handling
-- [testing.md](./testing.md) — test layers, naming, mocking
-- [git.md](./git.md) — branches, commits, PR titles, merging
-- [review.md](./review.md) — what makes a review valid; how authors respond
-- [documentation.md](./documentation.md) — what makes documentation valid
-- [ci.md](./ci.md) — local ↔ CI parity, pre-commit hooks
+| File | Governs |
+|---|---|
+| `code-comments.md` | When and how to comment code |
+| `runtime-safety.md` | Types, trust boundaries, error handling |
+| `testing.md` | Test layers, mocking, placement |
+| `ci.md` | Local/CI parity, pipeline authoring, security |
+| `git.md` | Branches, commits, PR titles, merging |
+| `style.md` | Naming and pattern consistency in code |
+| `simplicity.md` | Whether to add or to change the shape; when an abstraction earns its place |
+| `review.md` | What a review must carry to be valid, and how an author responds |
+| `documentation.md` | What makes a document or a GitHub artifact valid, review comments included |
+
+Every project keeps all of these. They are the floor; only the tables below are selected from.
+
+Selection is not once. A project that changes its stack or its structure takes the file that now matches and drops the one that no longer does, in the pull request that makes the change.
+
+## Architecture
+
+The shape the system is partitioned into. The project keeps the one it uses; each file states the structure it assumes.
+
+| File | Governs |
+|---|---|
+| `arch-domain.md` | Domain-partitioned systems: boundaries, dependency direction, when a boundary is earned |
+
+## Stack-specific
+
+These apply only when the project uses that stack. A file dropped here loses its row above in the same pull request.
+
+| File | Governs |
+|---|---|
+| `stack-go.md` | Go modules and services |
+| `stack-nextjs.md` | Next.js App Router applications |
+| `stack-tailwind.md` | Tailwind CSS styling |
+
+A stack file states the concrete form of what a stack-neutral file governs: the test client and file placement behind `testing.md`, the comment syntax behind `code-comments.md`, the commands behind an entry-point name in `ci.md`. It never restates the rule itself. This table and the one above are where that split is recorded — the files do not point at each other.
 
 ## Independence
 
-Each convention file is self-contained: reading it alone is enough to apply its rules. Cross-references may mark scope boundaries but never hold required content. No rule appears in two files.
+Each convention file is self-contained: reading it alone is enough to apply its rules.
+
+- **One file, one territory.** No artifact is governed by two files. Where two files could both decide a case, one of them is holding the wrong rule.
+- **A rule appears once** — inside a file as much as across files. A section that restates earlier rules in the negative is a second site to keep in sync, not a summary.
+- **Two files' rules may share a reason.** That is not duplication. Each states its own reason; neither points at the other for it.
+- **A convention file does not send the reader to another convention file.** Where one file's territory ends and the next begins is recorded in the tables above, not inside the files themselves.
 
 ## Precedence
 
-1. The stack-specific files, when one applies.
-2. The stack-neutral files.
-3. This index.
+1. The stack-specific file, when one applies.
+2. The architecture file, when one applies.
+3. The stack-neutral files.
+4. This index.
 
-On conflict, the more specific rule wins. If existing code contradicts a
-rule, follow the code and record the deviation in `plans/`. Report
-conflicts to the PM in the PR description — do not resolve them yourself.
+On conflict, the more specific rule wins. Report conflicts to the PM in the PR description — do not resolve them yourself.

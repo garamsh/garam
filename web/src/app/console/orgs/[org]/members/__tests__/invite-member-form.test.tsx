@@ -31,9 +31,7 @@ describe("invite member form", () => {
     const user = userEvent.setup();
     render(<InviteMemberForm org="acme" />);
 
-    await user.click(
-      screen.getByRole("button", { name: "Create invitation" }),
-    );
+    await user.click(screen.getByRole("button", { name: "Create invitation" }));
 
     expect(await screen.findByLabelText("Invitation link")).toHaveValue(
       "http://localhost:3000/console/invitations/secret-token",
@@ -122,9 +120,7 @@ describe("invite member form", () => {
     const user = userEvent.setup();
     render(<InviteMemberForm org="acme" />);
 
-    await user.click(
-      screen.getByRole("button", { name: "Create invitation" }),
-    );
+    await user.click(screen.getByRole("button", { name: "Create invitation" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "requires the admin role",

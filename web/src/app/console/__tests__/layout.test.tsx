@@ -7,7 +7,9 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 // react-dom cannot render the shell's async Server Components under
 // Testing Library. A thrown promise stands in for their pending reads
 // so the test controls the suspension.
-const shell = vi.hoisted(() => ({ pending: undefined as Promise<void> | undefined }));
+const shell = vi.hoisted(() => ({
+  pending: undefined as Promise<void> | undefined,
+}));
 
 vi.mock("@/app/console/_components/console-sidebar", () => ({
   ConsoleSidebar: () => {

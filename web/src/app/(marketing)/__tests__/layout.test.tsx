@@ -8,9 +8,10 @@ describe("marketing layout", () => {
     render(<MarketingLayout>{null}</MarketingLayout>);
 
     const nav = screen.getByRole("navigation", { name: "Sections" });
-    expect(
-      within(nav).getByRole("link", { name: "Platform" }),
-    ).toHaveAttribute("href", "#platform");
+    expect(within(nav).getByRole("link", { name: "Platform" })).toHaveAttribute(
+      "href",
+      "#platform",
+    );
     expect(
       within(nav).getByRole("link", { name: "Authorization" }),
     ).toHaveAttribute("href", "#authorization");

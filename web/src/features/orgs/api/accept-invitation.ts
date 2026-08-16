@@ -10,8 +10,7 @@ import type { Member } from "./orgs";
 
 /** What the accept form has to show: nothing yet, or a refusal. */
 export type AcceptInvitationState =
-  | { status: "idle" }
-  | { status: "error"; message: string };
+  { status: "idle" } | { status: "error"; message: string };
 
 const Schema = z.object({ token: z.string().min(1) });
 

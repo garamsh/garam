@@ -13,11 +13,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 
-import {
-  consoleCrumbs,
-  parseConsolePath,
-  type ConsoleOrg,
-} from "./navigation";
+import { consoleCrumbs, parseConsolePath, type ConsoleOrg } from "./navigation";
 
 /**
  * The trail to the current route. Narrow viewports keep only the last

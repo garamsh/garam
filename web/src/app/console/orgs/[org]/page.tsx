@@ -45,7 +45,10 @@ export default async function OrgPage({ params }: Params) {
 
   return (
     <>
-      <PageHeader title={org.name} description="What this organization holds." />
+      <PageHeader
+        title={org.name}
+        description="What this organization holds."
+      />
       <ul className="grid gap-4 sm:grid-cols-3">
         {cards.map((card) => (
           <li key={card.segment}>

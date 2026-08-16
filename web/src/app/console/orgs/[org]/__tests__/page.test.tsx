@@ -35,7 +35,9 @@ describe("organization overview page", () => {
       "href",
       "/console/orgs/acme/members",
     );
-    expect(screen.getByRole("link", { name: /Projects 1/ })).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: /Projects 1/ }),
+    ).toBeInTheDocument();
     expect(container.textContent).not.toContain("grn:");
   });
 

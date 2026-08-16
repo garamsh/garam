@@ -11,10 +11,7 @@ const initialState: CreateOrgState = { status: "idle" };
 
 /** Names a new organization and reports back what the action refused. */
 export function CreateOrgForm() {
-  const [state, formAction, pending] = useActionState(
-    createOrg,
-    initialState,
-  );
+  const [state, formAction, pending] = useActionState(createOrg, initialState);
 
   return (
     <form action={formAction} className="flex max-w-sm flex-col gap-4">

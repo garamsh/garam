@@ -30,10 +30,15 @@ openssl rand -hex 32 >"$dir/ca-kek.hex"
 # cert-manager here: this pair is self-signed, trusted by nothing, and
 # expires in a month. The names are the ones the Service answers to
 # inside the cluster.
-openssl req -x509 -newkey rsa:2048 -noenc -days 30 \
+#
+# The key is generated on its own because genpkey writes it unencrypted
+# without a flag, where `req -newkey` needs one whose spelling differs
+# between OpenSSL 3 and what a Mac ships.
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out "$dir/tls.key" 2>/dev/null
+openssl req -x509 -new -key "$dir/tls.key" -days 30 \
   -subj "/CN=machine.garam-local.svc.cluster.local" \
   -addext "subjectAltName=DNS:machine,DNS:machine.garam-local.svc,DNS:machine.garam-local.svc.cluster.local,DNS:localhost,IP:127.0.0.1" \
-  -keyout "$dir/tls.key" -out "$dir/tls.crt" 2>/dev/null
+  -out "$dir/tls.crt" 2>/dev/null
 
 kubectl --context minikube -n "$namespace" create secret generic "$secret" \
   --from-file="$dir/ca-kek.hex" \

@@ -23,13 +23,15 @@ describe("landing page", () => {
     ).toBeInTheDocument();
   });
 
-  it("frames the agent surface as decided rather than shipped", () => {
+  it("frames the agent surface as served but unattended", () => {
     render(<LandingPage />);
 
     expect(
-      screen.getByRole("heading", { name: "Stored, not yet reachable" }),
+      screen.getByRole("heading", { name: "Reachable, not yet watched" }),
     ).toBeInTheDocument();
-    expect(screen.getByText(/nothing else of it exists/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/the adapter that would run beside the agent/),
+    ).toBeInTheDocument();
   });
 
   it("offers the console and the login page as the ways in", () => {

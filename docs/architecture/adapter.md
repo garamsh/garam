@@ -88,11 +88,23 @@ that is neither completed nor redelivered — a third state, and the
 least visible of the three.
 
 **The lease and the attempt count are configurable and default narrow.**
-The reason is dated: until the platform's addressed store lands, a
-repeated *turn* is unmeasured — an exact repeated fact is idempotent
-there, but a turn re-reads its input and may extract differently. When
-that store lands the reason expires, and whoever widens the default
-should find this sentence before they do.
+The reason is dated, and the date is later than it looks: a repeated
+*turn* is unmeasured — an exact repeated fact is idempotent in the
+platform's addressed store, but a turn re-reads its input and may
+extract differently.
+
+**The reason expires when that idempotency has been measured against
+the real model, not when the store merges.** The two are not the same
+moment, and the gap between them is the dangerous one: the store lands
+in stages, and one of them removes recall before the stage that reads
+it arrives. A default widened in that gap is widened over a platform
+that answers nothing.
+
+The platform's own maintainers state when it has been measured; this
+document does not track their stages, because a foreign issue number
+is not something a reader here can check. Ask them, and widen only on
+an answer that names a measurement. Whoever widens this default should
+find this sentence before they do.
 
 ## Subscriptions
 

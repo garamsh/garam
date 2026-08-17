@@ -5,6 +5,7 @@ import { Building2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 
+import { ApiUnreachable } from "../_components/api-unreachable";
 import { listConsoleOrgs } from "../_components/console-orgs";
 import { EmptyState } from "../_components/empty-state";
 import { PageHeader } from "../_components/page-header";
@@ -23,16 +24,7 @@ export default async function OrgsPage() {
           title="Organizations"
           description="The organizations you belong to."
         />
-        <section role="alert" className="flex flex-col gap-1">
-          <h2 className="font-heading text-lg font-semibold">
-            Cannot reach the API
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            The garam API is not answering, so this page cannot list your
-            organizations. This is not a sign-in problem and not a permission
-            problem: try again once the API is back.
-          </p>
-        </section>
+        <ApiUnreachable subject="your organizations" />
       </>
     );
   }

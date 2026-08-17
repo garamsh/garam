@@ -5,9 +5,9 @@ import { Separator } from "@/components/ui/separator";
 import { getSession } from "@/features/auth";
 import { listOrgMembers, orgNotFound } from "@/features/orgs";
 
+import { ApiUnreachable } from "../../../_components/api-unreachable";
 import { EmptyState } from "../../../_components/empty-state";
 import { PageHeader } from "../../../_components/page-header";
-import { ApiUnreachable } from "../_components/api-unreachable";
 import { InviteMemberForm } from "./_components/invite-member-form";
 import { MemberTable } from "./_components/member-table";
 

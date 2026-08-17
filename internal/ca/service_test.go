@@ -283,6 +283,13 @@ func TestService_IssueFailsWhenTheStoreReturnsNothing(t *testing.T) {
 }
 
 func TestService_IssueRejects(t *testing.T) {
+	// The subject every row below is one spoiled field of, issued
+	// through the same Issue. It is what stops being accepted if the
+	// service starts refusing on principle rather than on the
+	// identifier it was handed.
+	accepted, _ := issueForNewOrg(t, agentGRN("acme", "bot-1"), newSealer(t), ca.Config{})
+	require.NotNil(t, accepted)
+
 	tests := map[string]grn.GRN{
 		"empty subject":     {},
 		"empty identifier":  agentGRN("acme", ""),

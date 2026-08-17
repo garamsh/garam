@@ -134,15 +134,26 @@ func TestPolicies_MemberIsDenied(t *testing.T) {
 	slug := createOrg(t, f, owner, "acme")
 	orgGRN := grn.New("root", "default", org.ServiceTypeOrg, slug)
 
+	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
 	memberGRN := grn.New("root", "default", user.ServiceType, "member-sub")
 	member := f.sessionCookieFor(t, "member-sub", "Member")
 	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRN, memberGRN, org.RoleMember)))
 	// The member role grants no policy action.
-	f.permit(permission{grn.New("root", "default", user.ServiceType, "owner-sub"), org.ActionPolicyCreate})
+	f.permit(permission{ownerGRN, org.ActionPolicyCreate})
 
-	g, _ := policyFixture(slug)
+	g, p := policyFixture(slug)
 	base := "/orgs/" + slug + "/policies"
 	policyPath := base + "/" + g.Identifier
+
+	// The owner holds ActionPolicyCreate and takes the same route the
+	// first row below is refused on: what stops being accepted when the
+	// verdict stops being asked for.
+	f.policies.EXPECT().
+		CreatePolicy(mock.Anything, orgGRN, "read-only", json.RawMessage(policyDocument), ownerGRN).
+		Return(p, nil)
+	rec := f.do(t, "POST", base, `{"name":"read-only","document":`+policyDocument+`}`, owner)
+	require.Equal(t, http.StatusCreated, rec.Code)
+
 	for _, tc := range []struct{ method, path, body string }{
 		{"POST", base, `{"name":"read-only","document":` + policyDocument + `}`},
 		{"GET", base, ""},
@@ -162,19 +173,30 @@ func TestPolicies_MemberIsDenied(t *testing.T) {
 	}
 }
 
+// TestPolicies_RequireOrgMembership reads one route's three answers
+// together, the way TestGroups_RequireOrgMembership reads the group
+// listing's: the owner is a member holding the action, and neither
+// refusal below is his. Without the first, a listing refused to
+// everyone satisfies the other two.
 func TestPolicies_RequireOrgMembership(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
 	outsider := f.sessionCookieFor(t, "outsider-sub", "Outsider")
+	orgGRN := grn.New("root", "default", org.ServiceTypeOrg, slug)
+	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
+	f.permit(permission{ownerGRN, org.ActionPolicyRead})
+	f.policies.EXPECT().ListPolicies(mock.Anything, orgGRN).Return(nil, nil)
 
-	rec := f.do(t, "GET", "/orgs/"+slug+"/policies", "", outsider)
-	assert.Equal(t, http.StatusForbidden, rec.Code)
-}
+	path := "/orgs/" + slug + "/policies"
+	rec := f.do(t, "GET", path, "", owner)
+	require.Equal(t, http.StatusOK, rec.Code)
 
-func TestPolicies_RequireSession(t *testing.T) {
-	f := newFixture(t)
-	rec := f.do(t, "GET", "/orgs/acme/policies", "")
+	rec = f.do(t, "GET", path, "", outsider)
+	require.Equal(t, http.StatusForbidden, rec.Code)
+	assert.Equal(t, "permission_denied", decodeBody[apigen.Error](t, rec).Kind)
+
+	rec = f.do(t, "GET", path, "")
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }
 

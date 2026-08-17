@@ -118,13 +118,21 @@ func TestGroupMembers_Lifecycle(t *testing.T) {
 	assert.Empty(t, decodeBody[[]apigen.MemberRef](t, rec))
 }
 
+// TestGroups_RequireOrgMembership reads one route's three answers
+// together: the owner is a member holding the action, and neither
+// refusal below is his. Without the first, a listing refused to
+// everyone satisfies the other two.
 func TestGroups_RequireOrgMembership(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	stranger := f.sessionCookieFor(t, "stranger-sub", "Stranger")
 	slug := createOrg(t, f, owner, "acme")
+	f.permit(permission{grn.New("root", "default", user.ServiceType, "owner-sub"), org.ActionGroupRead})
 
-	rec := f.do(t, "GET", "/orgs/"+slug+"/groups", "", stranger)
+	rec := f.do(t, "GET", "/orgs/"+slug+"/groups", "", owner)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	rec = f.do(t, "GET", "/orgs/"+slug+"/groups", "", stranger)
 	require.Equal(t, http.StatusForbidden, rec.Code)
 	assert.Equal(t, "permission_denied", decodeBody[apigen.Error](t, rec).Kind)
 
@@ -177,11 +185,20 @@ func TestGroupRoles_RejectUnknownRole(t *testing.T) {
 		permission{ownerGRN, org.ActionGroupUpdate},
 	)
 
-	rec := f.do(t, "POST", "/orgs/"+slug+"/groups", `{"name":"eng","roles":["root"]}`, owner)
+	// Each refusal is read against the same route taking a name
+	// org.ParseRole knows: what stops being accepted if it stops
+	// parsing anything.
+	rec := f.do(t, "POST", "/orgs/"+slug+"/groups", `{"name":"ops","roles":["admin"]}`, owner)
+	require.Equal(t, http.StatusCreated, rec.Code)
+
+	rec = f.do(t, "POST", "/orgs/"+slug+"/groups", `{"name":"eng","roles":["root"]}`, owner)
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.Equal(t, "invalid_argument", decodeBody[apigen.Error](t, rec).Kind)
 
 	group := createGroup(t, f, owner, slug, "eng")
+	rec = f.do(t, "PATCH", "/orgs/"+slug+"/groups/"+group, `{"roles":["member"]}`, owner)
+	require.Equal(t, http.StatusOK, rec.Code)
+
 	rec = f.do(t, "PATCH", "/orgs/"+slug+"/groups/"+group, `{"roles":["root"]}`, owner)
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }

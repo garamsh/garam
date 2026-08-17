@@ -1,4 +1,7 @@
 -- name: CreateSession :exec
+WITH pruned AS (
+    DELETE FROM sessions WHERE expires_at <= now()
+)
 INSERT INTO sessions (token_hash, user_grn, created_at, expires_at)
 VALUES ($1, $2, $3, $4);
 

@@ -115,6 +115,9 @@ ORDER BY o.grn
 LIMIT sqlc.narg('row_limit') OFFSET sqlc.arg('row_offset');
 
 -- name: CreateInvitation :exec
+WITH pruned AS (
+    DELETE FROM invitations WHERE expires_at <= now() AND accepted_at IS NULL
+)
 INSERT INTO invitations (token, org_grn, role, created_by, created_at, expires_at)
 VALUES ($1, $2, $3, $4, $5, $6);
 

@@ -10,9 +10,9 @@ import {
   orgNotFound,
 } from "@/features/orgs";
 
+import { ApiUnreachable } from "../../_components/api-unreachable";
 import { PageHeader } from "../../_components/page-header";
 import { CONSOLE_SECTIONS, orgHref } from "../../_components/navigation";
-import { ApiUnreachable } from "./_components/api-unreachable";
 
 type Params = { params: Promise<{ org: string }> };
 

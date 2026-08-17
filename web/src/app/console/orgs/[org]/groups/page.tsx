@@ -3,9 +3,9 @@ import { UsersRound } from "lucide-react";
 
 import { listGroups, orgNotFound } from "@/features/orgs";
 
+import { ApiUnreachable } from "../../../_components/api-unreachable";
 import { EmptyState } from "../../../_components/empty-state";
 import { PageHeader } from "../../../_components/page-header";
-import { ApiUnreachable } from "../_components/api-unreachable";
 import { ResourceList } from "../_components/resource-list";
 
 /** Head metadata for the groups route; Next.js reads it by name. */

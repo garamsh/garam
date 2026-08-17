@@ -3,6 +3,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import {
+  API_UNREACHABLE_TITLE,
+  ApiUnreachableReason,
+} from "@/components/api-unreachable";
+import {
   Card,
   CardContent,
   CardFooter,
@@ -34,12 +38,10 @@ export default async function LoginPage() {
       <Card className="w-full max-w-sm [--card-spacing:--spacing(6)]">
         <CardHeader className="gap-2">
           <h1 className="font-heading text-2xl font-semibold tracking-tight">
-            Cannot reach the API
+            {API_UNREACHABLE_TITLE}
           </h1>
           <p className="text-sm text-pretty text-muted-foreground">
-            Signing in needs the garam API, and it is not answering. This is not
-            a sign-in problem and not a permission problem: nothing here can
-            tell whether you are signed in until the API is back.
+            <ApiUnreachableReason subject="the way in" />
           </p>
         </CardHeader>
         <CardFooter className="justify-center text-xs text-muted-foreground">

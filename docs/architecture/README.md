@@ -47,6 +47,7 @@ ADRs:
 - [0019](./adr/0019-machine-openapi-spec.md) — the machine listener carries an OpenAPI specification of its own
 - [0020](./adr/0020-published-artifacts.md) — garam publishes images and a contract, not manifests
 - [0021](./adr/0021-liveness-and-readiness.md) — liveness and readiness answer on a port that carries no credential
+- [0022](./adr/0022-watching-an-agent.md) — an agent is watched only while someone is watching
 
 ## Rules for edits
 

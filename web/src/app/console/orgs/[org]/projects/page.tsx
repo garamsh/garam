@@ -5,6 +5,7 @@ import { listProjects, orgNotFound } from "@/features/orgs";
 
 import { EmptyState } from "../../../_components/empty-state";
 import { PageHeader } from "../../../_components/page-header";
+import { ApiUnreachable } from "../_components/api-unreachable";
 import { ResourceList } from "../_components/resource-list";
 
 /** Head metadata for the projects route; Next.js reads it by name. */
@@ -23,14 +24,16 @@ export default async function ProjectsPage({ params }: Params) {
         title="Projects"
         description="The units of work this organization owns."
       />
-      {projects.length === 0 ? (
+      {projects.status === "unreachable" ? (
+        <ApiUnreachable subject="this organization's projects" />
+      ) : projects.data.length === 0 ? (
         <EmptyState
           icon={FolderGit2}
           title="No projects"
           description="This organization has no projects."
         />
       ) : (
-        <ResourceList resources={projects} />
+        <ResourceList resources={projects.data} />
       )}
     </>
   );

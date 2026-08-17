@@ -7,6 +7,7 @@ import { listOrgMembers, orgNotFound } from "@/features/orgs";
 
 import { EmptyState } from "../../../_components/empty-state";
 import { PageHeader } from "../../../_components/page-header";
+import { ApiUnreachable } from "../_components/api-unreachable";
 import { InviteMemberForm } from "./_components/invite-member-form";
 import { MemberTable } from "./_components/member-table";
 
@@ -27,9 +28,10 @@ export default async function MembersPage({ params }: Params) {
   ]);
 
   const callerGrn = session.status === "signed-in" ? session.user.grn : null;
-  const callerRole = members.find(
-    (member) => member.userGrn === callerGrn,
-  )?.role;
+  const callerRole =
+    members.status === "ok"
+      ? members.data.find((member) => member.userGrn === callerGrn)?.role
+      : undefined;
   const canInvite = callerRole === "owner" || callerRole === "admin";
 
   return (
@@ -38,14 +40,16 @@ export default async function MembersPage({ params }: Params) {
         title="Members"
         description="The people who belong to this organization."
       />
-      {members.length === 0 ? (
+      {members.status === "unreachable" ? (
+        <ApiUnreachable subject="this organization's members" />
+      ) : members.data.length === 0 ? (
         <EmptyState
           icon={UserRound}
           title="No members"
           description="This organization has no members."
         />
       ) : (
-        <MemberTable members={members} />
+        <MemberTable members={members.data} />
       )}
 
       {canInvite && (

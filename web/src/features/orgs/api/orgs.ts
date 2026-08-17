@@ -1,6 +1,10 @@
 import { notFound } from "next/navigation";
 
-import { GaramApiError, garamFetchAuthenticated } from "@/lib/garam";
+import {
+  GaramApiError,
+  GaramUnreachableError,
+  garamFetchAuthenticated,
+} from "@/lib/garam";
 import type { components } from "@/types/api";
 
 /** An organization, as the API returns one. */
@@ -14,29 +18,44 @@ export type Member = components["schemas"]["Member"];
 /** A pending invitation and its bearer token, as the API returns one. */
 export type Invitation = components["schemas"]["Invitation"];
 
+/**
+ * What a read returned, or the fact that the API never answered. An
+ * empty answer and an unanswered read are different states, and a page
+ * that cannot tell them apart reports "none" for an outage.
+ */
+export type OrgRead<T> = { status: "ok"; data: T } | { status: "unreachable" };
+
 /** Organizations the signed-in user belongs to. */
 export function listOrgs(): Promise<Organization[]> {
   return garamFetchAuthenticated<Organization[]>("/orgs");
 }
 
 /** One organization by slug. */
-export function getOrg(org: string): Promise<Organization> {
-  return garamFetchAuthenticated<Organization>(`/orgs/${orgPath(org)}`);
+export function getOrg(org: string): Promise<OrgRead<Organization>> {
+  return catchUnreachable(
+    garamFetchAuthenticated<Organization>(`/orgs/${orgPath(org)}`),
+  );
 }
 
 /** The people who belong to an organization. */
-export function listOrgMembers(org: string): Promise<Member[]> {
-  return garamFetchAuthenticated<Member[]>(`/orgs/${orgPath(org)}/members`);
+export function listOrgMembers(org: string): Promise<OrgRead<Member[]>> {
+  return catchUnreachable(
+    garamFetchAuthenticated<Member[]>(`/orgs/${orgPath(org)}/members`),
+  );
 }
 
 /** The groups an organization holds. */
-export function listGroups(org: string): Promise<Group[]> {
-  return garamFetchAuthenticated<Group[]>(`/orgs/${orgPath(org)}/groups`);
+export function listGroups(org: string): Promise<OrgRead<Group[]>> {
+  return catchUnreachable(
+    garamFetchAuthenticated<Group[]>(`/orgs/${orgPath(org)}/groups`),
+  );
 }
 
 /** The projects an organization owns. */
-export function listProjects(org: string): Promise<Project[]> {
-  return garamFetchAuthenticated<Project[]>(`/orgs/${orgPath(org)}/projects`);
+export function listProjects(org: string): Promise<OrgRead<Project[]>> {
+  return catchUnreachable(
+    garamFetchAuthenticated<Project[]>(`/orgs/${orgPath(org)}/projects`),
+  );
 }
 
 /**
@@ -52,6 +71,22 @@ export function orgNotFound(error: unknown): never {
     notFound();
   }
   throw error;
+}
+
+/**
+ * Hands an unanswered read to the caller as a state it has to render.
+ * Every other rejection travels on: a refusal is `orgNotFound`'s, and a
+ * rejected session is already a redirect to the login page.
+ */
+async function catchUnreachable<T>(read: Promise<T>): Promise<OrgRead<T>> {
+  try {
+    return { status: "ok", data: await read };
+  } catch (error) {
+    if (error instanceof GaramUnreachableError) {
+      return { status: "unreachable" };
+    }
+    throw error;
+  }
 }
 
 /** Org slugs arrive from the URL, so they are escaped before reuse. */

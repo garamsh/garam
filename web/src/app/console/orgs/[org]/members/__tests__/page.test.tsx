@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import MembersPage from "@/app/console/orgs/[org]/members/page";
 import { renderServerComponent } from "@/testing/render";
-import { API_URL } from "@/testing/mocks/handlers";
+import { API_URL, unauthenticated } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
 vi.mock("next/navigation", () => ({
@@ -70,5 +70,41 @@ describe("members section", () => {
     expect(
       screen.queryByRole("heading", { name: "Invite a member" }),
     ).not.toBeInTheDocument();
+  });
+
+  it.each([403, 404])("renders not-found on %i", async (status) => {
+    server.use(
+      http.get(`${API_URL}/orgs/acme/members`, () =>
+        HttpResponse.json({ kind: "denied", message: "no" }, { status }),
+      ),
+    );
+
+    await expect(
+      renderServerComponent(MembersPage(params("acme"))),
+    ).rejects.toThrow("NEXT_NOT_FOUND");
+  });
+
+  it("says the API is unreachable rather than reporting no members", async () => {
+    server.use(http.get(`${API_URL}/*`, () => HttpResponse.error()));
+
+    await renderServerComponent(MembersPage(params("acme")));
+
+    expect(
+      screen.getByRole("heading", { name: "Cannot reach the API" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("This organization has no members."),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "Invite a member" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("sends a rejected session to the login page, not to the notice", async () => {
+    server.use(unauthenticated());
+
+    await expect(
+      renderServerComponent(MembersPage(params("acme"))),
+    ).rejects.toThrow("NEXT_REDIRECT:/login");
   });
 });

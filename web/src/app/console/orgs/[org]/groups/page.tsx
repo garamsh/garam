@@ -5,6 +5,7 @@ import { listGroups, orgNotFound } from "@/features/orgs";
 
 import { EmptyState } from "../../../_components/empty-state";
 import { PageHeader } from "../../../_components/page-header";
+import { ApiUnreachable } from "../_components/api-unreachable";
 import { ResourceList } from "../_components/resource-list";
 
 /** Head metadata for the groups route; Next.js reads it by name. */
@@ -23,14 +24,16 @@ export default async function GroupsPage({ params }: Params) {
         title="Groups"
         description="Bundles of members this organization grants access through."
       />
-      {groups.length === 0 ? (
+      {groups.status === "unreachable" ? (
+        <ApiUnreachable subject="this organization's groups" />
+      ) : groups.data.length === 0 ? (
         <EmptyState
           icon={UsersRound}
           title="No groups"
           description="This organization has no groups."
         />
       ) : (
-        <ResourceList resources={groups} />
+        <ResourceList resources={groups.data} />
       )}
     </>
   );

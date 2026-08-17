@@ -65,10 +65,32 @@ func TestAESGCMSealer_SealsTheSameValueDifferentlyEachTime(t *testing.T) {
 	assert.NotEqual(t, first, second)
 }
 
-func TestAESGCMSealer_RejectsWrongKeySize(t *testing.T) {
-	_, err := ca.NewAESGCMSealer(make([]byte, ca.KeySize-1))
-	require.Error(t, err)
-	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
+// TestNewAESGCMSealer_RejectsAKeyThatIsNotAES256 pins the size to this
+// package rather than to crypto/aes: 16 and 24 bytes are key lengths
+// crypto/aes accepts, so [ca.KeySize] is the only thing refusing them,
+// and the 32-byte key beside them is what the refusal is measured
+// against.
+func TestNewAESGCMSealer_RejectsAKeyThatIsNotAES256(t *testing.T) {
+	tests := map[string]struct {
+		size     int
+		accepted bool
+	}{
+		"an aes-128 key": {size: 16},
+		"an aes-192 key": {size: 24},
+		"an aes-256 key": {size: ca.KeySize, accepted: true},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			sealer, err := ca.NewAESGCMSealer(make([]byte, tc.size))
+			if tc.accepted {
+				require.NoError(t, err)
+				assert.NotNil(t, sealer)
+				return
+			}
+			require.Error(t, err)
+			assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
+		})
+	}
 }
 
 func TestAESGCMSealer_OpenRejectsAlteredBytes(t *testing.T) {

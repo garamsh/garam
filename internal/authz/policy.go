@@ -99,6 +99,12 @@ type PolicyAttachment struct {
 	createdAt  time.Time
 }
 
+// NewPolicyAttachment reconstructs a stored attachment of policyGRN to
+// subjectGRN, recorded at createdAt.
+func NewPolicyAttachment(policyGRN, subjectGRN grn.GRN, createdAt time.Time) *PolicyAttachment {
+	return &PolicyAttachment{policyGRN: policyGRN, subjectGRN: subjectGRN, createdAt: createdAt}
+}
+
 func (a *PolicyAttachment) Policy() grn.GRN      { return a.policyGRN }
 func (a *PolicyAttachment) Subject() grn.GRN     { return a.subjectGRN }
 func (a *PolicyAttachment) CreatedAt() time.Time { return a.createdAt }

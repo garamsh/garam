@@ -84,6 +84,18 @@ type PolicyVersion struct {
 	createdAt time.Time
 }
 
+// NewPolicyVersion reconstructs a stored revision of policyGRN: the
+// document createdBy recorded at createdAt, numbered version.
+func NewPolicyVersion(policyGRN grn.GRN, version int, document PolicyDocument, createdBy grn.GRN, createdAt time.Time) *PolicyVersion {
+	return &PolicyVersion{
+		policyGRN: policyGRN,
+		version:   version,
+		document:  document,
+		createdBy: createdBy,
+		createdAt: createdAt,
+	}
+}
+
 func (v *PolicyVersion) Policy() grn.GRN          { return v.policyGRN }
 func (v *PolicyVersion) Version() int             { return v.version }
 func (v *PolicyVersion) Document() PolicyDocument { return v.document }

@@ -10,6 +10,10 @@
 
 <!-- Commands run locally and their results. Example: `make ci` — pass. -->
 
+## Tests seen to fail
+
+<!-- testing.md §Failing: a test is trusted once it has been watched to break. Name the tests you removed the behaviour from and saw fail, and how. Write N/A with a reason when the change adds no test — documentation, tooling, a revert. "All tests pass" is not an answer to this. -->
+
 ## Conventions consulted
 
 <!-- The docs/convention/ files you actually read and applied. Only list documents you read. -->

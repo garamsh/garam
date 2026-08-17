@@ -445,24 +445,23 @@ rather than holding up the rest — the platform these events come from
 drops them for a slow subscriber already (ADR-0013), so the same answer
 one hop later is not a new failure mode.
 
-The two ends of a watch are in different processes: a browser opens the
+The two ends of a watch are in different processes — a browser opens the
 stream on `garam serve api` and an adapter forwards to `garam serve
-machine`. `Relay` is that crossing, and its implementation is Postgres
-`LISTEN`/`NOTIFY` — nothing is stored, nobody acknowledges, and an event
-no process is listening for is dropped, which is the character ADR-0022
-asks for rather than a log with a short memory. An event too large for
-one announcement is refused rather than shortened: a shortened turn would
-put words in the agent's mouth, where a refused one is the gap this
-stream already permits.
+machine` — and Postgres is the crossing for both the events and the
+count (ADR-0027). `Relay` is the event half, as `LISTEN`/`NOTIFY`: it
+announces and writes nothing down, so an event crossing between processes
+is no more a record than one that never left. An event too large for one
+announcement is refused rather than shortened: a shortened turn would put
+words in the agent's mouth, where a refused one is the gap this stream
+already permits.
 
-`Store` carries a lease for the reason a claim does: a process that dies
-holding a stream deletes nothing, and a watch nobody expires would leave
-an adapter forwarding to a watcher that is gone. Postgres measures it, so
-no instance's clock decides when a watch lapses, and the rows nobody
-closed are dropped where rows are written. The holder of a stream carries
-its lease forward on the same tick it proves the connection alive on, and
-a lease it cannot carry forward ends the stream — a stream nothing
-forwards to any more shows a working agent as a quiet one.
+`Store` is the count half: a leased row per open watch (ADR-0027).
+Postgres measures the lease, so no instance's clock decides when a watch
+lapses, and the rows nobody closed are dropped where rows are written.
+The holder of a stream carries its lease forward on the same tick it
+proves the connection alive on, and a lease it cannot carry forward ends
+the stream — a stream nothing forwards to any more shows a working agent
+as a quiet one.
 
 The HTTP surfaces are `internal/api` for the browser that watches and
 `internal/machineapi` for the adapter that forwards. Which browser is

@@ -278,13 +278,7 @@ func rowToPolicyVersion(row db.PolicyVersion) (*PolicyVersion, error) {
 	if err != nil {
 		return nil, errorx.Wrap(err, "authz store: stored document")
 	}
-	return &PolicyVersion{
-		policyGRN: g,
-		version:   int(row.Version),
-		document:  doc,
-		createdBy: createdBy,
-		createdAt: row.CreatedAt.Time,
-	}, nil
+	return NewPolicyVersion(g, int(row.Version), doc, createdBy, row.CreatedAt.Time), nil
 }
 
 func rowToAttachment(row db.PolicyAttachment) (*PolicyAttachment, error) {

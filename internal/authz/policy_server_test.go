@@ -73,6 +73,73 @@ func TestPolicyGRPCServer_CreatePolicyRejectsBadInput(t *testing.T) {
 	}
 }
 
+// TestPolicyGRPCServer_AddPolicyVersion reads both halves of the RPC:
+// the store is handed the policy, document and author the request
+// named, and the response carries the version the store returned. The
+// stored version's document, author and number all differ from the
+// request's, so a response that echoes the request, reads the author
+// where the policy belongs, or drops the number stops matching.
+func TestPolicyGRPCServer_AddPolicyVersion(t *testing.T) {
+	g := policyGRN(t, orgGRN("acme"))
+	ada, bob := subjectGRN("ada"), subjectGRN("bob")
+	stored := policyDocument("stored", authz.EffectDeny)
+	storedAt := time.Date(2026, 7, 25, 9, 30, 0, 0, time.UTC)
+	store := mocks.NewMockStore(t)
+	store.EXPECT().AddPolicyVersion(mock.Anything, g, documentOf(t, validDocument), ada).
+		Return(authz.NewPolicyVersion(g, 4, stored, bob, storedAt), nil).Once()
+
+	srv := authz.NewPolicyGRPCServer(store, authz.NewPolicyCache(store))
+	resp, err := srv.AddPolicyVersion(context.Background(), &authzv1.AddPolicyVersionRequest{
+		PolicyGrn: g.String(),
+		Document:  validDocument,
+		CreatedBy: ada.String(),
+	})
+	require.NoError(t, err)
+
+	v := resp.GetVersion()
+	assert.Equal(t, g.String(), v.GetPolicyGrn())
+	assert.Equal(t, int32(4), v.GetVersion())
+	assert.Equal(t, bob.String(), v.GetCreatedBy())
+	assert.Equal(t, storedAt, v.GetCreatedAt().AsTime())
+	assert.Equal(t, stored, documentOf(t, v.GetDocument()))
+}
+
+// TestPolicyGRPCServer_ListPolicyVersions holds two versions of one
+// policy, numbered differently, authored by different users at
+// different times and over different documents, so an entry that
+// carries its neighbour's field, its own author in place of its
+// policy, or nothing at all stops matching.
+func TestPolicyGRPCServer_ListPolicyVersions(t *testing.T) {
+	g := policyGRN(t, orgGRN("acme"))
+	ada, bob := subjectGRN("ada"), subjectGRN("bob")
+	original, revised := policyDocument("original", authz.EffectAllow), policyDocument("revised", authz.EffectDeny)
+	createdAt := time.Date(2026, 7, 25, 9, 30, 0, 0, time.UTC)
+	store := mocks.NewMockStore(t)
+	store.EXPECT().ListPolicyVersions(mock.Anything, g).
+		Return([]*authz.PolicyVersion{
+			authz.NewPolicyVersion(g, 1, original, ada, createdAt),
+			authz.NewPolicyVersion(g, 2, revised, bob, createdAt.Add(time.Hour)),
+		}, nil).Once()
+
+	srv := authz.NewPolicyGRPCServer(store, authz.NewPolicyCache(store))
+	resp, err := srv.ListPolicyVersions(context.Background(), &authzv1.ListPolicyVersionsRequest{
+		PolicyGrn: g.String(),
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.GetVersions(), 2)
+
+	first, second := resp.GetVersions()[0], resp.GetVersions()[1]
+	assert.Equal(t, g.String(), first.GetPolicyGrn())
+	assert.Equal(t, int32(1), first.GetVersion())
+	assert.Equal(t, ada.String(), first.GetCreatedBy())
+	assert.Equal(t, createdAt, first.GetCreatedAt().AsTime())
+	assert.Equal(t, original, documentOf(t, first.GetDocument()))
+	assert.Equal(t, int32(2), second.GetVersion())
+	assert.Equal(t, bob.String(), second.GetCreatedBy())
+	assert.Equal(t, createdAt.Add(time.Hour), second.GetCreatedAt().AsTime())
+	assert.Equal(t, revised, documentOf(t, second.GetDocument()))
+}
+
 func TestPolicyGRPCServer_ActivateInvalidatesTheOrgCache(t *testing.T) {
 	acme := orgGRN("acme")
 	store := mocks.NewMockStore(t)
@@ -288,6 +355,15 @@ func TestPolicyGRPCServer_ListPolicyAttachments(t *testing.T) {
 	assert.Equal(t, attachedAt, first.GetCreatedAt().AsTime())
 	assert.Equal(t, bob.String(), second.GetSubjectGrn())
 	assert.Equal(t, attachedAt.Add(time.Hour), second.GetCreatedAt().AsTime())
+}
+
+// documentOf parses the document a response carries, so a response
+// that carries something other than a policy document fails here.
+func documentOf(t *testing.T, raw string) authz.PolicyDocument {
+	t.Helper()
+	doc, err := authz.ParsePolicyDocument([]byte(raw))
+	require.NoError(t, err)
+	return doc
 }
 
 func policyGRN(t *testing.T, orgGRN grn.GRN) grn.GRN {

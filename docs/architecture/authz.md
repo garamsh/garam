@@ -156,6 +156,16 @@ engine read before the break is what it cannot know is current. Only
 shutting the process down ends the listener, and `garam serve authz`
 reports that.
 
+A reconnecting listener does not take the engine out of rotation. The
+engine's readiness reports the database and nothing else, because
+readiness reports what a replica cannot serve without and one that is
+reloading its cache still answers
+([ADR-0029](./adr/0029-readiness-reports-what-a-replica-cannot-serve-without.md)).
+A decision may therefore be made from statements no notification has
+invalidated yet; if that ever has to be refused, the refusal belongs to
+the check, which can name the request in doubt, and not to a probe,
+which cannot.
+
 Lifecycle is served by `PolicyService` in `proto/garam/authz/v1`:
 create, append a version, list policies and versions, activate,
 archive, roll back, attach, detach, and list attachments. Documents are

@@ -113,6 +113,15 @@ is rather than as a silent pull from somewhere else.
 They are built from `deploy/local/Dockerfile` and
 `deploy/local/Dockerfile.web` — the same two the compose stack uses.
 
+Each pod template carries the id of the image it runs, stamped in by
+`make minikube-apps`. The tag alone cannot carry a rebuild:
+`garam:local` names a different image after every build and the same
+Deployment before and after it, which leaves `kubectl apply` a no-op,
+creates no ReplicaSet, and has `rollout status` report the pods still on
+the previous binary as fully rolled out. With the id in the template a
+rebuilt image is a changed Deployment, and an unrebuilt one restarts
+nothing.
+
 ## Which cluster, and whose kubeconfig
 
 Every command names `--context minikube`, so nothing in the `Makefile`

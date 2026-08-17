@@ -238,9 +238,17 @@ minikube-migrate:
 	$(KUBECTL_LOCAL) wait --for=condition=complete job/migrate --timeout=300s
 
 # minikube-apps starts the three serve processes and the web app, and
-# reports what is running rather than that it finished.
+# reports what is running rather than that it finished. Each pod
+# template is stamped with the id of the image it runs, so a rebuilt
+# image is a changed Deployment the apply rolls and an unrebuilt one
+# restarts nothing — which a mutable tag alone cannot tell apart.
 minikube-apps:
-	$(KUBECTL_LOCAL) apply -f $(MINIKUBE_DIR)/garam.yaml
+	@eval "$$(minikube docker-env --shell bash)"; \
+		id="$$(docker image inspect --format '{{.Id}}' garam:local)" && \
+		web_id="$$(docker image inspect --format '{{.Id}}' garam-web:local)" && \
+		echo "minikube-apps: garam:local=$$id garam-web:local=$$web_id" && \
+		sed -e "s|GARAM_IMAGE_ID|$$id|" -e "s|GARAM_WEB_IMAGE_ID|$$web_id|" $(MINIKUBE_DIR)/garam.yaml \
+		| $(KUBECTL_LOCAL) apply -f -
 	@for d in authz api machine web; do $(KUBECTL_LOCAL) rollout status deployment/$$d --timeout=300s; done
 	@$(KUBECTL_LOCAL) get pods
 

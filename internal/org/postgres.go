@@ -365,7 +365,9 @@ func (s *PostgresStore) ListOrgsByMember(ctx context.Context, userGRN grn.GRN, f
 	return orgs, nil
 }
 
-// CreateInvitation persists a new pending Invitation.
+// CreateInvitation persists a new pending Invitation, and deletes the
+// pending Invitations that have expired. An accepted one is kept: it
+// records where a membership came from.
 func (s *PostgresStore) CreateInvitation(ctx context.Context, inv *Invitation) error {
 	err := s.q.CreateInvitation(ctx, db.CreateInvitationParams{
 		Token:     inv.token,

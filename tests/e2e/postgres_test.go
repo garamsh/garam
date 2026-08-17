@@ -117,6 +117,16 @@ func truncate(t *testing.T, p *pgxpool.Pool) {
 	require.NoError(t, err)
 }
 
+// countRows answers a count query against the test database. A store
+// that removes a row is asserted on the table: a getter that filters by
+// expiry answers the same for a row removed and a row ignored.
+func countRows(t *testing.T, p *pgxpool.Pool, query string, args ...any) int {
+	t.Helper()
+	var n int
+	require.NoError(t, p.QueryRow(context.Background(), query, args...).Scan(&n))
+	return n
+}
+
 func grnOf(serviceType, id string) grn.GRN {
 	owner := "acme"
 	if serviceType == "org" {
@@ -327,6 +337,67 @@ func TestOrgStore_InvitationLifecycle(t *testing.T) {
 	assert.ErrorIs(t, err, org.ErrInvitationAccepted)
 	_, err = s.AcceptInvitation(ctx, "nope", invitee)
 	assert.ErrorIs(t, err, org.ErrInvitationNotFound)
+}
+
+// TestOrgStore_CreateInvitationPrunesExpiredPending holds that a pending
+// invitation past its expiry is removed rather than merely refused, and
+// that an accepted one that is equally past its expiry stays: it records
+// where a membership came from, where the pending one is a capability
+// nobody spent. The row is read from the table, because GetInvitation
+// declines an expired invitation whether or not the row is still there.
+//
+// Two controls stand before the sweeping call, one per half of what it
+// matches: an accepted invitation equally past its expiry, which a sweep
+// reading expiry alone would take, and a pending one still live, which a
+// sweep reading acceptance alone would take. Neither is written by the
+// statement that sweeps — a row that statement inserts is out of reach
+// of its own delete, so it would survive any sweep at all.
+func TestOrgStore_CreateInvitationPrunesExpiredPending(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := org.NewPostgresStore(p)
+	orgGRN := grnOf("org", "acme")
+	owner := grnOf("user", "ada")
+	invitee := grnOf("user", "bob")
+
+	users := user.NewPostgresStore(p)
+	require.NoError(t, users.Create(ctx, user.New(owner, "ada")))
+	require.NoError(t, users.Create(ctx, user.New(invitee, "bob")))
+	require.NoError(t, s.CreateOrg(ctx, org.NewOrganization(orgGRN, "acme")))
+
+	lapsed := time.Now().UTC().Add(-time.Hour)
+	ahead := time.Now().UTC().Add(time.Hour)
+
+	spent := org.NewInvitation("tok-accepted", orgGRN, org.RoleMember, owner, lapsed)
+	require.NoError(t, s.CreateInvitation(ctx, spent))
+	_, err := s.AcceptInvitation(ctx, "tok-accepted", invitee)
+	require.NoError(t, err)
+
+	standing := org.NewInvitation("tok-standing", orgGRN, org.RoleMember, owner, ahead)
+	require.NoError(t, s.CreateInvitation(ctx, standing))
+
+	pending := org.NewInvitation("tok-pending", orgGRN, org.RoleMember, owner, lapsed)
+	require.NoError(t, s.CreateInvitation(ctx, pending))
+	// The row survives its own create: nothing here refuses to write an
+	// invitation that is already past its expiry.
+	require.Equal(t, 1, countRows(t, p,
+		"SELECT count(*) FROM invitations WHERE token = $1", "tok-pending"))
+
+	// The next create is what removes it.
+	fresh := org.NewInvitation("tok-fresh", orgGRN, org.RoleMember, owner, ahead)
+	require.NoError(t, s.CreateInvitation(ctx, fresh))
+
+	assert.Equal(t, 0, countRows(t, p,
+		"SELECT count(*) FROM invitations WHERE token = $1", "tok-pending"),
+		"the expired pending invitation was pruned")
+	assert.Equal(t, 1, countRows(t, p,
+		"SELECT count(*) FROM invitations WHERE token = $1", "tok-accepted"),
+		"an accepted invitation is kept, expiry or not")
+	assert.Equal(t, 1, countRows(t, p,
+		"SELECT count(*) FROM invitations WHERE token = $1", "tok-standing"),
+		"a pending invitation that is still live outlives the sweep")
+	assert.Equal(t, 1, countRows(t, p,
+		"SELECT count(*) FROM invitations WHERE token = $1", "tok-fresh"))
 }
 
 // TestOrgStore_ListOrgsPagesEveryOrg runs ListOrgs, which is scoped by
@@ -610,6 +681,48 @@ func TestSessionStore_RoundTrip(t *testing.T) {
 	assert.ErrorIs(t, err, authn.ErrSessionNotFound)
 	// Delete is idempotent.
 	require.NoError(t, s.Delete(ctx, token))
+}
+
+// TestSessionStore_CreatePrunesExpired holds that an expired session's
+// row is removed rather than merely read as absent, which is what bounds
+// the table across every sign-in ever made. The row is read from the
+// table, because Get declines an expired session either way.
+//
+// The standing session is the control, and it is created before the
+// sweeping call rather than by it: a session the same statement inserts
+// is out of reach of that statement's delete, so it would survive a
+// sweep that took the whole table with it and prove nothing.
+func TestSessionStore_CreatePrunesExpired(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	users := user.NewPostgresStore(p)
+	s := authn.NewPostgresSessionStore(p)
+	userGRN := grnOf("user", "ada")
+	require.NoError(t, users.Create(ctx, user.New(userGRN, "ada")))
+
+	standing, err := authn.NewToken()
+	require.NoError(t, err)
+	require.NoError(t, s.Create(ctx, standing, authn.NewSession(userGRN, time.Hour)))
+
+	stale, err := authn.NewToken()
+	require.NoError(t, err)
+	require.NoError(t, s.Create(ctx, stale, authn.NewSession(userGRN, -time.Hour)))
+	// The row survives its own create; the next one is what removes it.
+	require.Equal(t, 1, countRows(t, p,
+		"SELECT count(*) FROM sessions WHERE token_hash = $1", authn.HashToken(stale)))
+
+	fresh, err := authn.NewToken()
+	require.NoError(t, err)
+	require.NoError(t, s.Create(ctx, fresh, authn.NewSession(userGRN, time.Hour)))
+
+	assert.Equal(t, 0, countRows(t, p,
+		"SELECT count(*) FROM sessions WHERE token_hash = $1", authn.HashToken(stale)),
+		"the expired session was pruned")
+	assert.Equal(t, 1, countRows(t, p,
+		"SELECT count(*) FROM sessions WHERE token_hash = $1", authn.HashToken(standing)),
+		"a session that is still live outlives the sweep")
+	assert.Equal(t, 1, countRows(t, p,
+		"SELECT count(*) FROM sessions WHERE token_hash = $1", authn.HashToken(fresh)))
 }
 
 // TestOAuthStateStore_RoundTrip drives a login state through the shape

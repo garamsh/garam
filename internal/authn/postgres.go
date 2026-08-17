@@ -29,7 +29,8 @@ func NewPostgresSessionStore(pool *pgxpool.Pool) *PostgresSessionStore {
 	return &PostgresSessionStore{q: db.New(pool)}
 }
 
-// Create persists a new session for the raw token.
+// Create persists a new session for the raw token, and deletes the
+// sessions that have expired.
 func (s *PostgresSessionStore) Create(ctx context.Context, token string, sess *Session) error {
 	err := s.q.CreateSession(ctx, db.CreateSessionParams{
 		TokenHash: HashToken(token),

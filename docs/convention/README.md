@@ -3,11 +3,18 @@
 Rules every agent follows when writing code, tests, commits, and documents. The PM owns these files; workers read and apply them.
 
 ## Contents
+- Scope
 - Stack-neutral
 - Architecture
 - Stack-specific
 - Independence
 - Precedence
+
+## Scope
+
+These rules bind what the project writes. A committed file a generator produced is not that — the project owns the input and the decision to commit it, not the output's internals — and neither is a comment a tool writes into, which is an interface rather than prose.
+
+What makes a file generated is that regenerating it changes nothing. One nobody can regenerate is authored, whatever its header says.
 
 ## Stack-neutral
 

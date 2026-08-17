@@ -62,10 +62,15 @@ tidies the probes.
 - The web app's readiness cannot fail for a reason outside the
   process, so it says less than the other three's do. That is the
   intended trade: it says less and it says it about the right thing.
-- A dark console during an API outage becomes a console that loads and
-  reports the outage — which is only true if the pages handle an
-  unreachable API, and that is worth its own check rather than an
-  assumption.
+- The console stays in rotation during an API outage. It does **not**
+  report the outage, and this was measured rather than assumed: with
+  the API unreachable, `/login` answers 500 and the console pages
+  answer 200 with no content, all three landing on the last-resort
+  error boundary that says only that something went wrong. Staying in
+  rotation is what this decision buys, and it is half of what a reader
+  wants. The other half is a defect in the pages, tracked separately —
+  this ADR is what makes fixing it worth anything, because a console
+  taken out of rotation cannot report what it knows.
 - ADR-0020's published contract gains a fourth image whose probe paths
   are fixed, so changing them supersedes this ADR rather than editing
   a handler.

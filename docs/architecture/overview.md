@@ -80,8 +80,10 @@ collaborate on a shared plan.
   on a listener a scheduler reaches without credentials, liveness
   reading nothing outside its own process (ADR-0021). The web app
   answers the same two paths, and neither of its probes reads the API,
-  so an API outage leaves the console loading rather than dark
-  (ADR-0023).
+  so an API outage leaves the console in rotation rather than dark
+  (ADR-0023). It stays up without reporting the outage: `/login`
+  answers 500 and the console pages answer empty, which is a defect in
+  the pages rather than in the probes.
 - One identifier system across every resource (GRN).
 
 ## Out of scope (today)

@@ -1983,3 +1983,90 @@ func TestMachineSurface_AnAgentActsOnItsOwnQueueAndNoOther(t *testing.T) {
 	_, err = agent.NewPostgresStore(p).Get(ctx, ghost)
 	assert.ErrorIs(t, err, agent.ErrAgentNotFound, "storing the message provisioned an agent")
 }
+
+// TestMachineSurface_AnotherOrganizationsAgentTakesNothingFromThisQueueAndStillSendsToIt
+// carries the same message path across an organization boundary. A
+// third agent is provisioned by another organization's operator and
+// authenticates on the same listener against its own authority, then
+// makes the calls the recipient makes. Each refusal sits beside the
+// recipient's own call to that endpoint: the stranger's certificate
+// authenticates here, so what refuses is the recipient comparison
+// rather than a certificate this listener rejected.
+//
+// Its post is the one call that crosses. Nothing names an organization
+// boundary at posting, and ADR-0013 stores a message it cannot route
+// rather than refusing one, so a message from another organization is
+// stored and handed to the recipient like any other.
+func TestMachineSurface_AnotherOrganizationsAgentTakesNothingFromThisQueueAndStillSendsToIt(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	orgs := org.NewPostgresStore(p)
+	for _, name := range []string{"acme", "globex"} {
+		require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN(name), name)))
+	}
+
+	key := make([]byte, ca.KeySize)
+	_, err := rand.Read(key)
+	require.NoError(t, err)
+	sealer, err := ca.NewAESGCMSealer(key)
+	require.NoError(t, err)
+	outOfBand, err := ca.NewService(ca.NewPostgresStore(p), sealer, ca.Config{})
+	require.NoError(t, err)
+
+	url := machineListener(t, p, sealer)
+	acmeOperator := machineClient(t, installed(t, outOfBand, scopedGRN("acme", agent.ServiceTypeOperator, "one")))
+	globexOperator := machineClient(t, installed(t, outOfBand, scopedGRN("globex", agent.ServiceTypeOperator, "one")))
+	senderGRN, sender := provisioned(t, url, acmeOperator)
+	recipientGRN, recipient := provisioned(t, url, acmeOperator)
+	strangerGRN, stranger := provisioned(t, url, globexOperator)
+	require.Equal(t, "globex", strangerGRN.Organization, "the stranger was minted in the operator's organization")
+	queue := url + "/agents/" + recipientGRN.String() + "/claims"
+
+	status, body := machineSend(t, sender, http.MethodPost, url+"/messages",
+		`{"recipient":"`+recipientGRN.String()+`","idempotencyKey":"key-1","body":"hello"}`)
+	require.Equal(t, http.StatusCreated, status, string(body))
+	var posted machinegen.Message
+	require.NoError(t, json.Unmarshal(body, &posted))
+
+	status, body = machineSend(t, stranger, http.MethodPost, queue, "")
+	assert.Equal(t, http.StatusForbidden, status, string(body))
+	assert.Contains(t, string(body), `"kind":"permission_denied"`)
+
+	status, body = machineSend(t, recipient, http.MethodPost, queue, "")
+	require.Equal(t, http.StatusOK, status, string(body))
+	var claimed machinegen.Claim
+	require.NoError(t, json.Unmarshal(body, &claimed))
+	assert.Equal(t, posted.Id, claimed.Message.Id)
+	assert.Equal(t, senderGRN.String(), claimed.Message.Sender, "the sender the certificate named survived the trip")
+	assert.Equal(t, "hello", claimed.Message.Body)
+
+	held := queue + "/" + claimed.Id
+	status, body = machineSend(t, stranger, http.MethodPost, held+"/renewal", "")
+	assert.Equal(t, http.StatusForbidden, status, string(body))
+	status, body = machineSend(t, stranger, http.MethodPost, held+"/completion", "")
+	assert.Equal(t, http.StatusForbidden, status, string(body))
+
+	status, body = machineSend(t, recipient, http.MethodPost, held+"/renewal", "")
+	require.Equal(t, http.StatusOK, status, string(body))
+
+	// Completing the first message empties the queue, so the claim below
+	// answers with the message the stranger sent rather than with this
+	// one handed out again.
+	status, body = machineSend(t, recipient, http.MethodPost, held+"/completion", "")
+	require.Equal(t, http.StatusNoContent, status, string(body))
+
+	status, body = machineSend(t, stranger, http.MethodPost, url+"/messages",
+		`{"recipient":"`+recipientGRN.String()+`","idempotencyKey":"key-1","body":"from globex"}`)
+	require.Equal(t, http.StatusCreated, status, string(body))
+	var crossed machinegen.Message
+	require.NoError(t, json.Unmarshal(body, &crossed))
+	assert.Equal(t, strangerGRN.String(), crossed.Sender)
+	assert.NotEqual(t, posted.Id, crossed.Id, "one idempotency key is the sender's own")
+
+	status, body = machineSend(t, recipient, http.MethodPost, queue, "")
+	require.Equal(t, http.StatusOK, status, string(body))
+	require.NoError(t, json.Unmarshal(body, &claimed))
+	assert.Equal(t, crossed.Id, claimed.Message.Id)
+	assert.Equal(t, strangerGRN.String(), claimed.Message.Sender)
+	assert.Equal(t, "from globex", claimed.Message.Body)
+}

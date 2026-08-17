@@ -51,6 +51,7 @@ ADRs:
 - [0023](./adr/0023-web-probes.md) — the web app answers the same two probes as the rest
 - [0024](./adr/0024-policy-decides-what-an-agent-sends.md) — a policy decides what an agent may send
 - [0025](./adr/0025-engine-scope-is-a-caller-obligation.md) — an unattached policy's org scope is the caller's to hold
+- [0026](./adr/0026-the-console-defines-an-agent.md) — the console defines an agent and an operator reads that definition
 
 ## Rules for edits
 

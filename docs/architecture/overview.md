@@ -100,6 +100,11 @@ collaborate on a shared plan.
   makes that garam's obligation because the agent platform notifies
   nobody; the queue stops redelivering an exhausted message and nothing
   yet reports one.
+- Watching an agent work. ADR-0022 decides the shape — forwarded only
+  while someone watches, read as server-sent events, best effort rather
+  than a record — and nothing implements it: the adapter does not
+  forward turn events, garam has no fan-out, and the console has no
+  view.
 - Chat channels. ADR-0013 makes garam a message API and leaves Slack,
   LINE and the rest to consumers of it; none is built, and whether any
   ships first-party is undecided.
@@ -225,6 +230,7 @@ contract is `proto/garam/authz/v1`.
 | An operator is a machine identity of the same kind as an agent | One mechanism to secure and rotate; the assignment row already bounds what an operator may fetch. | [adr/0015-operator-identity.md](./adr/0015-operator-identity.md) |
 | A CA's key is sealed by a key the process holds, not by a KMS | A database dump opens nothing; issuing depends on no hosted service, which is what lets a user bring their own operator. | [adr/0016-ca-key-custody.md](./adr/0016-ca-key-custody.md) |
 | Machine identities are served by a process of their own | The surface that issues certificates holds every organization's key-encryption key, and the process serving browsers must not. | [adr/0017-machine-process.md](./adr/0017-machine-process.md) |
+| An agent is watched only while someone is watching | garam cannot dial an adapter, so the poll it already holds carries the watcher count; an unwatched agent costs nothing. | [adr/0022-watching-an-agent.md](./adr/0022-watching-an-agent.md) |
 | garam publishes images and a contract, not manifests | Cluster state changes in one place; a registry credential is unavailable both locally and on the target cluster. | [adr/0020-published-artifacts.md](./adr/0020-published-artifacts.md) |
 | A message is completed by the turn-end event naming it | It is the only signal that pairs deterministically; a lost one redelivers, so delivery is at-least-once rather than exactly-once. | [adr/0018-delivery-acknowledgement.md](./adr/0018-delivery-acknowledgement.md) |
 | The machine listener has a specification of its own | One contract per listener: the browser client generates no types for a surface it cannot call, and whoever writes an operator has something to build against. | [adr/0019-machine-openapi-spec.md](./adr/0019-machine-openapi-spec.md) |

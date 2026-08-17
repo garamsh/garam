@@ -40,18 +40,35 @@ be:
 
 ## Decision
 
-- **The machine listener asks the engine before it stores a message.**
-  Subject is the identity the certificate named, action is
+- **A recipient of another organization is refused before the engine is
+  asked, and that precondition is what holds the boundary.** A resource
+  pattern cannot hold it, and the distinction is the one a future reader
+  most needs: the engine resolves the policies of the organization that
+  owns the **object**, and an active policy with no attachment applies
+  to every subject of that check (ADR-0008), so a single unattached
+  Allow in the recipient's organization admits every sender anywhere
+  regardless of what the sender's own statements say. A document
+  written `Action: ["*"]` names `message:send` in advance, so an
+  organization already holding one is exposed without writing anything
+  new. Do not drop the precondition as redundant with the
+  `grn:<org>:*` pattern below — the pattern is outranked by any
+  persisted wildcard in the object's organization.
+- **The machine listener asks the engine about every recipient that
+  passes.** Subject is the identity the certificate named, action is
   `message:send`, object is the recipient GRN. `internal/machineapi`
   asks, over a seam of its own, exactly as `internal/api` does on the
   browser-facing listener; the two never import each other and never
-  share a process (ADR-0017).
+  share a process (ADR-0017). The api server makes membership of the
+  object's organization the precondition of every check, which is the
+  same line drawn where a membership exists to read; this listener has
+  none, so it compares organization segments (ADR-0001).
 - **A machine identity's own GRN grants it its own organization.** The
   listener supplies one Allow statement scoped to `grn:<org>:*`, which
   is the identity-derived half of the union — the role-derived
   statements of ADR-0007, for a caller that holds no roles. An agent
   nobody has written a policy for goes on sending inside its
-  organization, and reaches nothing outside it.
+  organization. The organization segment in that pattern is defence in
+  depth, not the boundary.
 - **A policy narrows that with a Deny**, which is how every grant in
   this model is narrowed; deny-overrides applies across the union as it
   does everywhere else.
@@ -75,6 +92,14 @@ be:
   That is a behaviour change: it was accepted and stored until this
   decision, and the assertion that watched it cross is now the
   assertion that it does not.
+- Cross-organization messaging is now impossible **by policy** rather
+  than merely ungranted, and whatever later decides recipient-side
+  consent has to change this precondition rather than write a policy
+  beside it. No document an organization can author reaches past it, so
+  a reader who arrives with a consent mechanism to build and starts
+  with statements will find every one of them outranked. It cannot
+  arrive by an organization detaching a policy or holding a wildcard
+  one either, which is the accident the precondition exists to prevent.
 - **An Allow attached to an agent widens nothing.** The baseline
   already covers the sender's own organization, and outside it the
   engine loads the recipient organization's policies, where an
@@ -105,6 +130,14 @@ be:
 
 ## Rejected alternatives
 
+- **Holding the boundary with the resource pattern alone.** It was the
+  first shape of this decision, and it was wrong for a reason already
+  written into the alternative below: narrowing is by Deny, and no
+  finite set of Denies names every other organization. That objection
+  was aimed at the statement this listener supplies, and the same hole
+  exists in the statements the engine has persisted — an Allow reaching
+  the object's organization outranks any pattern arriving beside it.
+  Refusing before the engine is what closes both.
 - **Granting every recipient by default.** An agent with no policy
   would keep working, and an administrator attaching "may send only
   inside acme" would change nothing, because a baseline Allow on every

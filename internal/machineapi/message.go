@@ -47,10 +47,23 @@ func (s *Server) PostMessage(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, messageBody(stored))
 }
 
-// authorizeSend enforces the policies deciding whether sender may send
-// to recipient. The engine unions what the sender's own identity grants
-// with the policies its organization attached to it, deny-overrides
-// across both (ADR-0007, ADR-0008).
+// authorizeSend refuses a recipient of another organization outright,
+// and asks the engine about every other one. The engine unions what the
+// sender's own identity grants with the policies its organization
+// attached to it, deny-overrides across both (ADR-0007, ADR-0008).
+//
+// The organization boundary is a precondition and not a policy
+// question, because no statement this listener supplies can hold it.
+// The engine resolves the policies of the organization owning the
+// object, and an active policy with no attachment applies to every
+// subject of that check — so one unattached Allow in the recipient's
+// organization admits every sender anywhere, whatever resource pattern
+// arrives beside it, and a document written `Action: ["*"]` before
+// message:send existed names it in advance (ADR-0024). The api server
+// holds the same line by making membership of the object's
+// organization a precondition of every check; this listener has no
+// membership to read, so it compares the organization segments
+// (ADR-0001).
 //
 // Both GRNs reached a handler through grn.Parse, and this is where one
 // stops being inert: sendingStatements splices the organization
@@ -62,6 +75,9 @@ func (s *Server) authorizeSend(ctx context.Context, sender, recipient grn.GRN) e
 	}
 	if err := recipient.Validate(); err != nil {
 		return err
+	}
+	if sender.Organization != recipient.Organization {
+		return errorx.New(errorx.KindPermissionDenied, "recipient is in another organization")
 	}
 	allowed, err := s.evaluator.Evaluate(ctx, EvalInput{
 		Subject:    sender,
@@ -79,16 +95,16 @@ func (s *Server) authorizeSend(ctx context.Context, sender, recipient grn.GRN) e
 }
 
 // sendingStatements is what a machine identity's own GRN grants it
-// before any policy: sending inside its own organization and nowhere
-// else. It is this listener's half of the union the engine evaluates,
-// as the role-derived statements are the api server's (ADR-0007), and
-// it is why an agent nobody has written a policy for still sends.
+// before any policy: sending inside its own organization. It is this
+// listener's half of the union the engine evaluates, as the
+// role-derived statements are the api server's (ADR-0007), and it is
+// why an agent nobody has written a policy for still sends.
 //
 // A policy narrows it with a Deny, which is how every grant in this
-// model is narrowed. An organization's identifier is the organization
-// segment of every resource it owns (ADR-0001), so the pattern is the
-// tenancy boundary the recipient comparison already draws on this
-// listener.
+// model is narrowed. The organization segment in the pattern is
+// defence in depth rather than the boundary: authorizeSend has already
+// refused every recipient it would exclude, and a pattern could not
+// refuse them anyway.
 func sendingStatements(sender grn.GRN) []Statement {
 	return []Statement{{
 		Sid:      "machine-own-org",

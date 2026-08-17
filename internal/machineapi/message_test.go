@@ -233,8 +233,14 @@ func TestServer_ActsOnTheQueueThePathNames(t *testing.T) {
 // agent nobody has written a policy for may send. The refusal sits
 // beside the accepted message: both are the same call by the same
 // sender with nothing attached to it, so what discriminates is the
-// resource pattern the surface collected rather than a surface that
-// refuses whoever asks.
+// recipient's organization rather than a surface that refuses whoever
+// asks.
+//
+// The engine is never asked about the recipient of another
+// organization. That is the property rather than an optimisation: no
+// answer it could give would be trusted, because a policy of the
+// recipient's own organization can allow every sender at once
+// (ADR-0024).
 func TestServer_SendsWhereTheSendersOwnOrganizationReaches(t *testing.T) {
 	sender := agentGRN("acme", "9f8e7d6c5b4a3021")
 	sibling := agentGRN("acme", "0a1b2c3d4e5f6071")
@@ -248,14 +254,16 @@ func TestServer_SendsWhereTheSendersOwnOrganizationReaches(t *testing.T) {
 
 	status, body = send(t, client, http.MethodPost, url+"/messages", submission(stranger, "key-2"))
 	assert.Equal(t, http.StatusForbidden, status, body)
-	assert.JSONEq(t, `{"kind":"permission_denied","message":"sender may not send to this recipient"}`, body)
+	assert.JSONEq(t, `{"kind":"permission_denied","message":"recipient is in another organization"}`, body)
 
 	// A refused message is not stored. It is not the routing failure
 	// ADR-0013 keeps: garam could route this one and declined to.
 	assert.Equal(t, []messageCall{posted(sender, sibling, "key-1")}, messages.calls)
 
-	// The question is the sender, the action and the recipient, and it
-	// carries what the sender's own organization grants it.
+	// One question was asked and it was the recipient of this
+	// organization: the sender, the action and the recipient, carrying
+	// what the sender's own organization grants it. The other recipient
+	// was refused without a policy deciding anything.
 	ownOrg := []machineapi.Statement{{
 		Sid:      "machine-own-org",
 		Effect:   machineapi.EffectAllow,
@@ -264,7 +272,6 @@ func TestServer_SendsWhereTheSendersOwnOrganizationReaches(t *testing.T) {
 	}}
 	assert.Equal(t, []machineapi.EvalInput{
 		{Subject: sender, Object: sibling, Action: message.ActionSend, Statements: ownOrg},
-		{Subject: sender, Object: stranger, Action: message.ActionSend, Statements: ownOrg},
 	}, policies.asked)
 }
 
@@ -289,7 +296,12 @@ func TestServer_AnAttachedPolicyDecidesWhatAnAgentSends(t *testing.T) {
 
 	status, body := send(t, client, http.MethodPost, url+"/messages", submission(refused, "key-1"))
 	require.Equal(t, http.StatusForbidden, status, body)
-	assert.Contains(t, body, `"kind":"permission_denied"`)
+	// A policy refused this one, and the recipient's organization
+	// refused the one in TestServer_SendsWhereTheSendersOwnOrganizationReaches.
+	// Both are 403 and they are not the same answer: one is an
+	// organization's own rule and the other is a boundary no policy
+	// reaches, so a caller reading the body can tell them apart.
+	assert.JSONEq(t, `{"kind":"permission_denied","message":"sender may not send to this recipient"}`, body)
 
 	status, body = send(t, client, http.MethodPost, url+"/messages", submission(sibling, "key-2"))
 	require.Equal(t, http.StatusCreated, status, body)

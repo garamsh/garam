@@ -53,10 +53,13 @@ collaborate on a shared plan.
   agent that does not exist is stored and answered with success rather
   than refused (ADR-0013).
 - Whom a caller may post to, decided by policy on that listener
-  (ADR-0024). A machine identity's own GRN grants it its own
-  organization, and a policy attached to it narrows that with a Deny;
-  what a policy refuses is answered 403 and never stored, which is the
-  one refusal on this path that ADR-0013 does not shape.
+  (ADR-0024). A recipient of another organization is refused before a
+  policy is read, because an unattached policy of the recipient's
+  organization would otherwise admit every sender there is. Inside the
+  organization, a machine identity's own GRN grants it every recipient
+  and a policy attached to it narrows that with a Deny; what is refused
+  is answered 403 and never stored, which is the one refusal on this
+  path that ADR-0013 does not shape.
 - Org / group / project structure; groups and projects are created,
   read, updated, deleted, and populated with members over the HTTP API
   under their organization's paths.

@@ -2110,21 +2110,18 @@ func TestMachineSurface_AnotherOrganizationsAgentReachesNothingOnThisQueue(t *te
 	status, body = machineSend(t, recipient, http.MethodPost, held+"/completion", "")
 	require.Equal(t, http.StatusNoContent, status, string(body))
 
-	// The post crosses no further than the rest: what the stranger's own
-	// GRN grants it is its own organization (ADR-0024).
+	// The post crosses no further than the rest: the recipient is in
+	// another organization, which is refused before a policy is read
+	// (ADR-0024).
 	status, body = machineSend(t, stranger, http.MethodPost, url+"/messages",
 		submissionTo(recipientGRN, "key-2"))
 	require.Equal(t, http.StatusForbidden, status, string(body))
-	assert.Contains(t, string(body), `"kind":"permission_denied"`)
+	assert.JSONEq(t, `{"kind":"permission_denied","message":"recipient is in another organization"}`, string(body))
 
-	// A policy of the sender's own organization does not carry it across
-	// either, and the reason is worth pinning: the engine resolves the
-	// policies of the organization that owns the *object*
-	// ([authz.md](../../docs/architecture/authz.md) §Statement
-	// collection), and an attachment stays inside its own organization
-	// (ADR-0008) — so no policy acme can write is ever loaded for a
-	// globex recipient. The Allow below matches every resource there is
-	// and still decides nothing.
+	// No policy the sender's own organization writes carries it across
+	// either, because the boundary is decided before a policy is
+	// consulted (ADR-0024). The Allow below matches every resource there
+	// is and buys nothing.
 	reachAll := activePolicy(t, policies, orgRootGRN("acme"), "reach-everything",
 		statementDoc("reach-everything", authz.EffectAllow, message.ActionSend, "grn:*:*"))
 	attachPolicy(t, policies, reachAll, senderGRN)
@@ -2132,9 +2129,9 @@ func TestMachineSurface_AnotherOrganizationsAgentReachesNothingOnThisQueue(t *te
 		submissionTo(strangerGRN, "key-3"))
 	require.Equal(t, http.StatusForbidden, status, string(body))
 
-	// That same Allow is loaded and matches inside acme, so what refused
-	// above is the organization the object names and not a policy that
-	// reaches nothing.
+	// That same Allow is active, attached and matching inside acme, so
+	// what refused above is the recipient's organization and not a
+	// policy that reaches nothing.
 	status, body = machineSend(t, sender, http.MethodPost, url+"/messages",
 		submissionTo(recipientGRN, "key-4"))
 	require.Equal(t, http.StatusCreated, status, string(body))
@@ -2194,9 +2191,11 @@ func TestMachineSurface_AnAttachedPolicyDecidesWhatAnAgentSends(t *testing.T) {
 		statementDoc("no-talking", authz.EffectDeny, message.ActionSend, recipientGRN.String()))
 	attachPolicy(t, policies, denied, senderGRN)
 
+	// The organization's own rule refused this one, which is a different
+	// answer from the boundary refusal above and says so in the body.
 	status, body = machineSend(t, sender, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-2"))
 	require.Equal(t, http.StatusForbidden, status, string(body))
-	assert.Contains(t, string(body), `"kind":"permission_denied"`)
+	assert.JSONEq(t, `{"kind":"permission_denied","message":"sender may not send to this recipient"}`, string(body))
 
 	// The Deny names one recipient, so the sender still reaches the
 	// agent beside it.
@@ -2240,4 +2239,108 @@ func TestMachineSurface_AnAttachedPolicyDecidesWhatAnAgentSends(t *testing.T) {
 
 	status, body = machineSend(t, recipient, http.MethodPost, queue, "")
 	assert.Equal(t, http.StatusNoContent, status, string(body), "a refused message reached the queue")
+}
+
+// TestMachineSurface_ARecipientsOwnPolicyAdmitsNoForeignSender covers
+// the boundary a resource pattern cannot hold (#265). The engine
+// resolves the policies of the organization owning the object, and an
+// active policy with no attachment applies to every subject of that
+// check — so one unattached Allow in the recipient's organization
+// grants every sender anywhere, whatever the sender's own statements
+// say.
+//
+// The policy here is `Action: ["*"]` rather than `message:send`,
+// because that is the case that needs no new document: an organization
+// holding a wildcard policy written before this action existed is
+// exposed the day it ships.
+//
+// The engine is asked the same question directly, and answers that the
+// foreign sender is allowed. That is what makes this a test of the
+// precondition rather than of a policy that reached nothing: the engine
+// says yes and the surface still refuses.
+func TestMachineSurface_ARecipientsOwnPolicyAdmitsNoForeignSender(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	orgs := org.NewPostgresStore(p)
+	for _, name := range []string{"alpha", "beta"} {
+		require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN(name), name)))
+	}
+
+	key := make([]byte, ca.KeySize)
+	_, err := rand.Read(key)
+	require.NoError(t, err)
+	sealer, err := ca.NewAESGCMSealer(key)
+	require.NoError(t, err)
+	outOfBand, err := ca.NewService(ca.NewPostgresStore(p), sealer, ca.Config{})
+	require.NoError(t, err)
+
+	policies, evaluator := policyEngine(t, p)
+	url := machineListener(t, p, sealer, evaluator)
+	alphaOperator := machineClient(t, installed(t, outOfBand, scopedGRN("alpha", agent.ServiceTypeOperator, "one")))
+	betaOperator := machineClient(t, installed(t, outOfBand, scopedGRN("beta", agent.ServiceTypeOperator, "one")))
+	foreignGRN, foreign := provisioned(t, url, alphaOperator)
+	recipientGRN, recipient := provisioned(t, url, betaOperator)
+	neighbourGRN, neighbour := provisioned(t, url, betaOperator)
+	require.Equal(t, "alpha", foreignGRN.Organization)
+	require.Equal(t, "beta", recipientGRN.Organization)
+
+	// With nothing written anywhere, the foreign sender is refused and
+	// the recipient's own neighbour is not.
+	status, body := machineSend(t, foreign, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-1"))
+	require.Equal(t, http.StatusForbidden, status, string(body))
+	status, body = machineSend(t, neighbour, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-2"))
+	require.Equal(t, http.StatusCreated, status, string(body))
+
+	// The recipient's organization activates one wildcard policy and
+	// attaches it to nobody, which is what an administrator does by
+	// detaching the last attachment from one they had aimed at a subject.
+	openDoor := activePolicy(t, policies, orgRootGRN("beta"), "everything",
+		statementDoc("everything", authz.EffectAllow, "*", "grn:beta:*"))
+
+	// That policy does reach the foreign subject: the engine, asked the
+	// question the surface would ask, allows it.
+	allowed, err := evaluator.Evaluate(ctx, machineapi.EvalInput{
+		Subject: foreignGRN,
+		Object:  recipientGRN,
+		Action:  message.ActionSend,
+	})
+	require.NoError(t, err)
+	require.True(t, allowed, "the unattached wildcard policy did not reach the foreign subject")
+
+	// The surface refuses it anyway, which is the whole of the fix. The
+	// body names the organization rather than a policy: this refusal is
+	// not one beta wrote and not one it can lift.
+	status, body = machineSend(t, foreign, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-3"))
+	require.Equal(t, http.StatusForbidden, status, string(body))
+	assert.JSONEq(t, `{"kind":"permission_denied","message":"recipient is in another organization"}`, string(body))
+
+	// The same call from inside the organization is accepted while that
+	// policy is active, so what refuses is the sender's organization and
+	// not a surface that stopped accepting messages.
+	status, body = machineSend(t, neighbour, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-4"))
+	require.Equal(t, http.StatusCreated, status, string(body))
+
+	// Archiving the policy changes nothing about the foreign sender: it
+	// was refused before the policy existed and is refused after, so the
+	// refusal never depended on what beta wrote.
+	archivePolicy(t, policies, openDoor)
+	status, body = machineSend(t, foreign, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-5"))
+	require.Equal(t, http.StatusForbidden, status, string(body))
+
+	// Nothing the foreign sender posted is in the queue.
+	queue := url + "/agents/" + recipientGRN.String() + "/claims"
+	var senders []string
+	for range 2 {
+		status, body = machineSend(t, recipient, http.MethodPost, queue, "")
+		require.Equal(t, http.StatusOK, status, string(body))
+		var claimed machinegen.Claim
+		require.NoError(t, json.Unmarshal(body, &claimed))
+		senders = append(senders, claimed.Message.Sender)
+		status, body = machineSend(t, recipient, http.MethodPost, queue+"/"+claimed.Id+"/completion", "")
+		require.Equal(t, http.StatusNoContent, status, string(body))
+	}
+	assert.Equal(t, []string{neighbourGRN.String(), neighbourGRN.String()}, senders)
+
+	status, body = machineSend(t, recipient, http.MethodPost, queue, "")
+	assert.Equal(t, http.StatusNoContent, status, string(body), "a foreign sender's message reached the queue")
 }

@@ -111,11 +111,19 @@ same slot ([ADR-0024](./adr/0024-policy-decides-what-an-agent-sends.md)).
 | the caller's own GRN | `message:send` | `grn:<caller org>:*` |
 
 That is why an agent nobody has written a policy for goes on sending
-inside its organization and reaches nothing outside it. A policy
-narrows it with a Deny, as a Deny narrows a role's grant. The listener
-sends no subject groups: group membership is org data and this listener
-holds no org store, so a policy attached to a group decides nothing
-about what an agent sends.
+inside its organization. A policy narrows it with a Deny, as a Deny
+narrows a role's grant.
+
+What keeps an agent out of another organization is not that pattern.
+The machine listener refuses a recipient of another organization before
+it asks at all, because no supplied statement can hold that line: an
+Allow reaching the object's org outranks whatever arrives beside it
+(§Policy attachment). Org membership is the same precondition on the
+api server, where a membership exists to read.
+
+The listener sends no subject groups: group membership is org data and
+this listener holds no org store, so a policy attached to a group
+decides nothing about what an agent sends.
 
 ## Policy persistence
 
@@ -182,19 +190,27 @@ policies, the policies attached to the subject, the policies attached
 to a group the subject belongs to, and the statements the calling
 server collected. Deny-overrides applies across all four.
 
+An unattached active policy applies to every subject a check names,
+including one from another org: the engine matches attachments and
+never asks whether a subject belongs anywhere. What has always bounded
+that is the caller — the api server admits no subject that is not a
+member of the object's org — so a call path without such a precondition
+turns one unattached Allow into a grant to every identity there is.
+A caller that cannot read a membership supplies the boundary itself.
+
 Detaching an active policy's last attachment does not retire it, it
 widens it back to the org — which for a Deny turns one subject's
-restriction into every subject's. Archiving is what takes a policy out
-of every check.
+restriction into every subject's, and for an Allow is the shortest
+route to the paragraph above. Archiving is what takes a policy out of
+every check.
 
 An attached policy decides what an agent sends
-([ADR-0024](./adr/0024-policy-decides-what-an-agent-sends.md)), and
-only where the check resolves it. The engine loads the policies of the
-org that owns the object, and an attachment stays inside its own org,
-so no policy the sender's org can write applies to a recipient another
-org owns. Every attachment that decides an agent's message is therefore
-a Deny: what an Allow would widen is already covered by the
-identity-derived grant, and what it cannot reach is not loaded.
+([ADR-0024](./adr/0024-policy-decides-what-an-agent-sends.md)), inside
+the sending agent's own org and nowhere else. Every attachment that
+decides an agent's message is therefore a Deny: an Allow widens nothing
+the identity-derived grant does not already cover, and it buys no
+recipient outside the org, which the listener refuses before a policy
+is read.
 
 The api server resolves the subject's groups from the org tables and
 sends them as `subject_groups` on `Check` / `Explain`; the engine

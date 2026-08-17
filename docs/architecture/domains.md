@@ -306,6 +306,14 @@ unions that with the policies attached to the caller (ADR-0024). A
 refusal is answered before anything is stored, so what a policy refused
 is not in the queue.
 
+A recipient of another organization is refused before the engine is
+asked, and that comparison rather than any statement is what holds the
+boundary: an unattached active policy of the recipient's organization
+would otherwise admit every sender there is
+([authz.md](./authz.md) §Policy attachment). It is the precondition
+`internal/api` gets from org membership, on a listener that has no
+membership to read.
+
 It holds no store and reaches no certificate authority, and it never
 imports the engine: `GRPCEvaluator` is its own client, as
 `internal/api` keeps its own. `internal/api` and this package never

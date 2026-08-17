@@ -15,12 +15,13 @@ for it.
 - 4. Server Components — pages and layouts
 - 5. Server Actions
 - 6. Route Handlers — external use only
-- 7. Env (single typed loader at project root)
-- 8. Multi-layout via route groups
-- 9. Parallel routes and intercepts (modal pattern)
-- 10. `proxy.ts` (v16+) / `middleware.ts`
-- 11. Testing — three layers, two locations
-- 12. Import direction and file naming
+- 7. Errors
+- 8. Env (single typed loader at project root)
+- 9. Multi-layout via route groups
+- 10. Parallel routes and intercepts (modal pattern)
+- 11. `proxy.ts` (v16+) / `middleware.ts`
+- 12. Testing — three layers, two locations
+- 13. Import direction and file naming
 
 ## 0. Folder & file naming
 
@@ -57,11 +58,11 @@ At the project root:
 - `next.config.ts`, `package.json`, `eslint.config.mjs`,
   `playwright.config.ts`, `vitest.config.ts` — project config.
 - `.env.example` and `.env.local` (gitignored) — env files stay
-  here, at the root (§7).
+  here, at the root (§8).
 
 Under `src/`:
 
-- `src/proxy.ts` — the v16 request proxy (§10).
+- `src/proxy.ts` — the v16 request proxy (§11).
 - `src/app/` — routes and the App Router file conventions of §2,
   and nothing else.
 - `src/app/api/` — Route Handlers, for external callers only (§6).
@@ -78,9 +79,9 @@ Under `src/`:
   small shared helpers: `auth.ts`, `db.ts`, `api-client.ts`,
   `utils.ts` (the shadcn companion), `rate-limit.ts`, …. A
   vendor that has outgrown one file gets `src/lib/<vendor>/`.
-- `src/env.ts` — the typed env loader (§7).
+- `src/env.ts` — the typed env loader (§8).
 - `src/testing/` — test infrastructure: render helper, MSW
-  handlers, MSW server (§11).
+  handlers, MSW server (§12).
 - `src/types/` — types used by two or more features.
 - `src/styles/globals.css` — global styles.
 - `src/instrumentation.ts` — optional OpenTelemetry hook.
@@ -192,7 +193,35 @@ inside the Server Action.**
   the signature is missing or fails. A body already parsed as JSON
   can no longer be verified.
 
-## 7. Env (single typed loader at project root)
+## 7. Errors
+
+- **Expected failure is a return value.** A rejected password or a
+  taken email comes back from the Server Action as data, and
+  `useActionState` renders it. Throwing puts `error.tsx` over the
+  segment instead, which loses the form and everything typed into it.
+- **A bug is a throw**, and the nearest `error.tsx` catches it. A
+  route whose subject does not exist is neither: that is
+  `notFound()`, which renders `not-found.tsx`.
+- **A thrown error's message does not reach the browser.** In
+  production an error thrown on the server arrives at `error.tsx` as
+  a generic message and a `digest` hash matching the server log. What
+  the user must read is returned; what you must read is logged.
+- **The error you return crosses the wire.** Return the sentence the
+  UI renders, not the failure you caught: an action's return value is
+  serialized to the client, so whatever detail rides on it goes too.
+- **`error.tsx` does not cover the `layout.tsx` beside it**, only the
+  segment's page and what nests below. A layout that throws is caught
+  one segment up, and the root layout only by `global-error.tsx`.
+- **`redirect()` throws to do its job.** Call it outside `try`, or
+  the `catch` takes the navigation for a failure. Nothing after it
+  runs, so `revalidatePath` / `updateTag` come first when the
+  destination reads what the action just wrote.
+- **An error boundary catches renders, not handlers.** A throw inside
+  an `onClick` reaches no boundary and the interaction stops with
+  nothing shown. Run it through `startTransition`, whose throws do
+  bubble, or catch it and put it in state.
+
+## 8. Env (single typed loader at project root)
 
 - One typed, validated loader, at `src/env.ts`. Everything else does
   `import { env } from '@/env'`. **Never** scatter `process.env.X`
@@ -209,7 +238,7 @@ inside the Server Action.**
   has no effect.
 - Dynamic lookups (`process.env[varName]`) are NOT inlined.
 
-## 8. Multi-layout via route groups
+## 9. Multi-layout via route groups
 
 - Each route group owns its layout: `(marketing)/layout.tsx` for the
   public section, `(app)/layout.tsx` for the authenticated one,
@@ -219,7 +248,7 @@ inside the Server Action.**
 - **Keep multiple root layouts rare** — navigation between them is a
   full reload.
 
-## 9. Parallel routes and intercepts (modal pattern)
+## 10. Parallel routes and intercepts (modal pattern)
 
 For modals that stay shareable, refresh-safe, and clean under
 back/forward. The pieces, for a photo modal:
@@ -231,7 +260,7 @@ back/forward. The pieces, for a photo modal:
   navigation.
 - `src/app/layout.tsx` — renders both `{children}` and `{modal}`.
 
-## 10. `proxy.ts` (v16+) / `middleware.ts`
+## 11. `proxy.ts` (v16+) / `middleware.ts`
 
 - The file lives at `src/proxy.ts` (§1). It exports a `proxy`
   function and a
@@ -246,7 +275,7 @@ back/forward. The pieces, for a photo modal:
   rely on it for Server Action security — matchers can exclude
   paths silently (§5).
 
-## 11. Testing — three layers, two locations
+## 12. Testing — three layers, two locations
 
 | Layer | Tool | Location |
 |---|---|---|
@@ -277,7 +306,7 @@ back/forward. The pieces, for a photo modal:
   component identity.
 
 
-## 12. Import direction and file naming
+## 13. Import direction and file naming
 
 Three tiers, and what each may import:
 

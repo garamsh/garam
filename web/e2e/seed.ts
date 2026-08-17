@@ -23,9 +23,21 @@ export type SeededUser = {
   nickname: string;
 };
 
-const DATABASE_URL =
-  process.env.GARAM_E2E_DATABASE_URL ??
-  "postgres://garam:garam@localhost:55432/garam?sslmode=disable";
+/**
+ * The database the suite seeds into. `make web-e2e` supplies it from the
+ * port compose published; unset, there is nothing to guess at.
+ */
+function databaseUrl(): string {
+  const url = process.env.GARAM_E2E_DATABASE_URL;
+  if (!url) {
+    throw new Error(
+      "GARAM_E2E_DATABASE_URL is unset — run the suite through `make web-e2e`",
+    );
+  }
+  return url;
+}
+
+const DATABASE_URL = databaseUrl();
 
 /** Mirrors the backend's `authn.HashToken`: hex-encoded SHA-256. */
 function hashToken(token: string): string {

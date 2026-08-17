@@ -38,6 +38,11 @@ DB_HOST_ADDR = $(shell $(COMPOSE_LOCAL) port postgres 5432 2>/dev/null | sed 's/
 # against a database outside compose.
 TEST_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)/$(TEST_DB_NAME)?sslmode=disable)
 
+# The Playwright suite seeds sessions for the api it drives, so its URL
+# names the stack's own `garam` rather than a database of its own. Empty
+# and overridable on the same terms as the line above.
+WEB_E2E_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)/garam?sslmode=disable)
+
 .PHONY: lint format test build mock gen check-gen e2e db-up db-down backend-up ci
 .PHONY: web-install web-lint web-format web-test web-build web-gen web-check-gen web-e2e web-ci
 .PHONY: minikube-up minikube-down minikube-start minikube-images minikube-db
@@ -165,11 +170,13 @@ web-check-gen: web-gen
 # web-e2e drives the built app in a real browser against the backend
 # `make backend-up` starts. It builds and serves the app itself, so it
 # needs GARAM_API_URL — the real api here, not `web-build`'s placeholder
-# — and the browser, which Playwright keeps outside the lockfile.
+# — the URL its seed script writes sessions through, and the browser,
+# which Playwright keeps outside the lockfile.
 web-e2e:
 	@test -n "$(API_HOST_ADDR)" || { echo "web-e2e: no api published on this host — run make backend-up" >&2; exit 1; }
+	@test -n '$(WEB_E2E_DATABASE_URL)' || { echo "web-e2e: no postgres published on this host — run make backend-up" >&2; exit 1; }
 	$(PNPM) exec playwright install chromium
-	GARAM_API_URL=http://$(API_HOST_ADDR) $(PNPM) e2e
+	GARAM_API_URL=http://$(API_HOST_ADDR) GARAM_E2E_DATABASE_URL='$(WEB_E2E_DATABASE_URL)' $(PNPM) e2e
 
 web-ci: web-format web-lint web-test web-build web-check-gen
 

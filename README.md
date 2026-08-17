@@ -85,8 +85,9 @@ make web-e2e
 The suite builds and starts the app itself. The OAuth round trip cannot
 run unattended, so the tests seed a user, an organization and a session
 row directly into Postgres and hand the browser the resulting cookie;
-everything after the cookie is the real backend. Override
-`GARAM_E2E_DATABASE_URL` when Postgres is not on the default port.
+everything after the cookie is the real backend. `make web-e2e` asks
+compose which port Postgres was published on and hands the suite that
+URL, so `GARAM_DB_PORT` moves the suite with the server.
 
 ## Development model
 

@@ -49,8 +49,9 @@ created and keep:
 
 Postgres publishes host port 55432 by default. `GARAM_DB_PORT` overrides
 it, in `.env` or in the environment
-(`GARAM_DB_PORT=55440 make db-up e2e`). `make e2e` asks compose which
-port it published, so either place moves the suite with the server.
+(`GARAM_DB_PORT=55440 make db-up e2e`). `make e2e` and `make web-e2e`
+ask compose which port it published, so either place moves both suites
+with the server.
 
 There is one dev Postgres per machine, not one per worktree. This file
 pins the compose project with `name: garam-local`, which takes

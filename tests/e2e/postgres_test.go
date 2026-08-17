@@ -1011,11 +1011,15 @@ func TestPolicyAttachment_DenyOverridesAcrossSources(t *testing.T) {
 	assert.False(t, resp.GetAllowed(), "a group-attached deny overrides the caller's allow")
 }
 
-// TestOrgIsolation_GrantsNeverCrossOrgs asserts that nothing one org
-// persists — policy, attachment, cached statement — changes a decision
-// about another's. Both policies match every org, so only the lookup's
-// org scoping keeps them apart.
-func TestOrgIsolation_GrantsNeverCrossOrgs(t *testing.T) {
+// TestOrgIsolation_OnlyAttachmentKeepsGrantsInsideAnOrg asserts what
+// separates two orgs' grants. The attached policies here match every
+// org, so what holds each off the other org's subjects is its
+// attachment, and what holds a role statement off is the org in its
+// resource pattern. The engine scopes its lookup by the object's org
+// and never by the subject's, so an unattached policy reaches whatever
+// subject it is handed — the boundary ADR-0025 leaves to the caller,
+// recorded here as the behaviour the engine has.
+func TestOrgIsolation_OnlyAttachmentKeepsGrantsInsideAnOrg(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
 	store := authz.NewPostgresStore(p)
@@ -1030,33 +1034,46 @@ func TestOrgIsolation_GrantsNeverCrossOrgs(t *testing.T) {
 
 	adaA, webA := scopedGRN("acme", "user", "ada"), scopedGRN("acme", "project", "web")
 	adaB, engB := scopedGRN("globex", "user", "ada"), scopedGRN("globex", "group", "eng")
-	webB := scopedGRN("globex", "project", "web")
+	webB, openB := scopedGRN("globex", "project", "web"), scopedGRN("globex", "project", "open")
 
 	allowA := activePolicy(t, policies, acme, "allow-read", statementDoc("allow-read", authz.EffectAllow, "project:read", "grn:*:*"))
 	attachPolicy(t, policies, allowA, adaA)
 	denyB := activePolicy(t, policies, globex, "deny-read", statementDoc("deny-read", authz.EffectDeny, "project:read", "grn:*:*"))
 	attachPolicy(t, policies, denyB, engB)
 
+	// Unattached, so no subject set stands between this allow and a
+	// subject of another org. It names one project, leaving webB an
+	// object only an attachment reaches.
+	activePolicy(t, policies, globex, "open-door", statementDoc("open-door", authz.EffectAllow, "project:read", openB.String()))
+
 	t.Run("persisted policies stay in their org", func(t *testing.T) {
 		active, err := store.ActivePolicies(ctx, acme)
 		require.NoError(t, err)
-		require.Len(t, active, 1)
-		assert.Equal(t, "allow-read", active[0].Document.Statement[0].Sid)
+		assert.ElementsMatch(t, []string{"allow-read"}, sidsOf(active))
 
 		active, err = store.ActivePolicies(ctx, globex)
 		require.NoError(t, err)
-		require.Len(t, active, 1)
-		assert.Equal(t, "deny-read", active[0].Document.Statement[0].Sid)
+		assert.ElementsMatch(t, []string{"deny-read", "open-door"}, sidsOf(active))
 
-		// Org A's subject is unknown to org B's statement lookup.
+		// The lookup is scoped by the org it is asked about and not by
+		// the subject: org A's subject collects org B's unattached
+		// statement, and none of org A's own.
 		statements, err := cache.Statements(ctx, globex, []grn.GRN{adaA})
 		require.NoError(t, err)
-		assert.Empty(t, statements)
+		require.Len(t, statements, 1)
+		assert.Equal(t, "open-door", statements[0].Sid)
 	})
 
 	t.Run("a subject attachment decides nothing across the boundary", func(t *testing.T) {
 		assert.True(t, checkRead(t, engine, adaA, webA, nil), "org A's attached allow reaches org A's resource")
 		assert.False(t, checkRead(t, engine, adaA, webB, nil), "org A's attached allow does not reach org B's resource")
+	})
+
+	t.Run("an unattached policy reaches a subject of another org", func(t *testing.T) {
+		assert.True(t, checkRead(t, engine, adaA, openB, nil),
+			"org B's unattached allow reaches org A's subject; the caller holds this boundary (ADR-0025)")
+		assert.False(t, checkRead(t, engine, adaA, webB, nil),
+			"that same subject reaches nothing org B's unattached allow does not name")
 	})
 
 	t.Run("a group attachment decides nothing across the boundary", func(t *testing.T) {
@@ -1134,6 +1151,18 @@ func attachPolicy(t *testing.T, srv *authz.PolicyGRPCServer, policyGRN string, s
 		SubjectGrn: subject.String(),
 	})
 	require.NoError(t, err)
+}
+
+// sidsOf names the policies an org lookup returned, by the Sid of each
+// one's single statement. ActivePolicies orders by policy GRN, which
+// the fixture does not choose, so an org's policies are compared as a
+// set.
+func sidsOf(policies []authz.ActivePolicy) []string {
+	sids := make([]string, 0, len(policies))
+	for _, p := range policies {
+		sids = append(sids, p.Document.Statement[0].Sid)
+	}
+	return sids
 }
 
 // roleAllow is the role-derived allow the api server passes for a

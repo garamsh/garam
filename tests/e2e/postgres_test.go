@@ -2047,7 +2047,7 @@ func TestMachineSurface_AnAgentActsOnItsOwnQueueAndNoOther(t *testing.T) {
 // authenticates here, so what refuses is the recipient comparison
 // rather than a certificate this listener rejected.
 //
-// Its post crossed until ADR-0023. What an identity may send is now
+// Its post crossed until ADR-0024. What an identity may send is now
 // decided by policy, and what its own GRN grants it is its own
 // organization, so a message to another organization's agent is
 // refused instead of stored — the one call this test used to watch
@@ -2111,7 +2111,7 @@ func TestMachineSurface_AnotherOrganizationsAgentReachesNothingOnThisQueue(t *te
 	require.Equal(t, http.StatusNoContent, status, string(body))
 
 	// The post crosses no further than the rest: what the stranger's own
-	// GRN grants it is its own organization (ADR-0023).
+	// GRN grants it is its own organization (ADR-0024).
 	status, body = machineSend(t, stranger, http.MethodPost, url+"/messages",
 		submissionTo(recipientGRN, "key-2"))
 	require.Equal(t, http.StatusForbidden, status, string(body))
@@ -2149,7 +2149,7 @@ func TestMachineSurface_AnotherOrganizationsAgentReachesNothingOnThisQueue(t *te
 }
 
 // TestMachineSurface_AnAttachedPolicyDecidesWhatAnAgentSends carries
-// ADR-0023 end to end. An organization writes a policy through the
+// ADR-0024 end to end. An organization writes a policy through the
 // lifecycle service, attaches it to one of its agents, and the machine
 // listener asks the engine over gRPC before it stores anything — the
 // two processes `garam serve authz` and `garam serve machine` are, over

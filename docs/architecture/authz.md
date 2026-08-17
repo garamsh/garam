@@ -104,7 +104,7 @@ carries (§Policy attachment).
 
 A machine identity holds no roles and belongs to no org, so the machine
 listener collects what its GRN alone grants it and supplies that in the
-same slot ([ADR-0023](./adr/0023-policy-decides-what-an-agent-sends.md)).
+same slot ([ADR-0024](./adr/0024-policy-decides-what-an-agent-sends.md)).
 
 | Origin | Action patterns | Resource patterns |
 |--------|-----------------|-------------------|
@@ -188,7 +188,7 @@ restriction into every subject's. Archiving is what takes a policy out
 of every check.
 
 An attached policy decides what an agent sends
-([ADR-0023](./adr/0023-policy-decides-what-an-agent-sends.md)), and
+([ADR-0024](./adr/0024-policy-decides-what-an-agent-sends.md)), and
 only where the check resolves it. The engine loads the policies of the
 org that owns the object, and an attachment stays inside its own org,
 so no policy the sender's org can write applies to a recipient another

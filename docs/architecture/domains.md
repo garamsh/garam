@@ -302,7 +302,7 @@ question rather than a property of the queue: the answer comes from the
 policy engine over `Evaluator`, and a boundary this package composes
 may not reach past it to another process. The listener collects what
 the caller's own GRN grants it — its own organization — and the engine
-unions that with the policies attached to the caller (ADR-0023). A
+unions that with the policies attached to the caller (ADR-0024). A
 refusal is answered before anything is stored, so what a policy refused
 is not in the queue.
 
@@ -368,7 +368,7 @@ whose queue it names. One comparison decides it: a GRN carries its
 organization, so refusing a caller that is not the recipient refuses
 another organization's agent by the same line, and no path reaches a
 message around it. Whom a sender may post to is not decided here — it
-is a policy question, and `internal/machineapi` asks it (ADR-0023).
+is a policy question, and `internal/machineapi` asks it (ADR-0024).
 What this package owns of it is the action constant a policy names,
 because it is the package that defines sending. A claim waits for a
 message rather than answering

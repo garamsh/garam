@@ -1,4 +1,4 @@
-# ADR 0023: A policy decides what an agent may send
+# ADR 0024: A policy decides what an agent may send
 
 > Status: accepted
 > Date: 2026-08-17

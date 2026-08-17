@@ -53,7 +53,7 @@ collaborate on a shared plan.
   agent that does not exist is stored and answered with success rather
   than refused (ADR-0013).
 - Whom a caller may post to, decided by policy on that listener
-  (ADR-0023). A machine identity's own GRN grants it its own
+  (ADR-0024). A machine identity's own GRN grants it its own
   organization, and a policy attached to it narrows that with a Deny;
   what a policy refuses is answered 403 and never stored, which is the
   one refusal on this path that ADR-0013 does not shape.
@@ -241,7 +241,7 @@ and `internal/api` never import each other. Neither imports
 | A message is completed by the turn-end event naming it | It is the only signal that pairs deterministically; a lost one redelivers, so delivery is at-least-once rather than exactly-once. | [adr/0018-delivery-acknowledgement.md](./adr/0018-delivery-acknowledgement.md) |
 | The machine listener has a specification of its own | One contract per listener: the browser client generates no types for a surface it cannot call, and whoever writes an operator has something to build against. | [adr/0019-machine-openapi-spec.md](./adr/0019-machine-openapi-spec.md) |
 | Liveness and readiness answer on a credential-free port | Restarting is the expensive answer, so only readiness reads a dependency; the mTLS listener admits no probe, so that process gets a port for them. | [adr/0021-liveness-and-readiness.md](./adr/0021-liveness-and-readiness.md) |
-| A policy decides what an agent may send | An attachment nothing reads is a control that is not there; the identity's own GRN grants its organization, so closing the gap breaks no working agent. | [adr/0023-policy-decides-what-an-agent-sends.md](./adr/0023-policy-decides-what-an-agent-sends.md) |
+| A policy decides what an agent may send | An attachment nothing reads is a control that is not there; the identity's own GRN grants its organization, so closing the gap breaks no working agent. | [adr/0024-policy-decides-what-an-agent-sends.md](./adr/0024-policy-decides-what-an-agent-sends.md) |
 
 ## Non-functional goals
 

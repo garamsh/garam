@@ -99,11 +99,16 @@ check-gen: gen
 # db-up starts the stack's postgres service alone and makes sure the e2e
 # database exists next to `garam`. Postgres has no CREATE DATABASE IF NOT
 # EXISTS, so ask before creating. The e2e suite migrates it itself.
+#
+# Whether the database exists is psql's output; whether there is an answer
+# at all is its exit status. The two are read separately, because one
+# non-zero status cannot tell a failed query from a clean negative.
 db-up:
 	$(COMPOSE_LOCAL) up -d --wait postgres
-	@$(COMPOSE_LOCAL) exec -T postgres psql -U garam -d postgres -tAc \
-		"SELECT 1 FROM pg_database WHERE datname='$(TEST_DB_NAME)'" | grep -q 1 \
-		|| $(COMPOSE_LOCAL) exec -T postgres createdb -U garam $(TEST_DB_NAME)
+	@present="$$($(COMPOSE_LOCAL) exec -T postgres psql -U garam -d postgres -tAc \
+		"SELECT 1 FROM pg_database WHERE datname='$(TEST_DB_NAME)'")" \
+		|| { echo "db-up: could not ask postgres whether $(TEST_DB_NAME) exists" >&2; exit 1; }; \
+		test -n "$$present" || $(COMPOSE_LOCAL) exec -T postgres createdb -U garam $(TEST_DB_NAME)
 
 db-down:
 	$(COMPOSE_LOCAL) rm -sf postgres

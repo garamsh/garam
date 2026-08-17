@@ -20,8 +20,8 @@ tags:
   - name: message
     description: >-
       The queue a message reaches an agent through (ADR-0013). A caller
-      posts to any recipient and acts on messages for the agent it
-      authenticates as and no other.
+      posts to the recipients its policies reach (ADR-0023) and acts on
+      messages for the agent it authenticates as and no other.
 security:
   - machineCertificate: []
 paths:
@@ -102,6 +102,13 @@ paths:
         comes back later as an ordinary message instead (ADR-0013).
         The sender's idempotency key is what makes a retry store one
         message rather than two.
+
+        Which recipients a sender may reach is decided by policy
+        (ADR-0023): a sender reaches its own organization unless a
+        policy attached to it says otherwise, and a recipient it may
+        not reach is refused rather than stored. That refusal is a 403
+        and not the inbound message ADR-0013 asks for, because garam
+        has no identity to send one under yet.
       requestBody:
         required: true
         content:
@@ -118,6 +125,8 @@ paths:
         '400':
           $ref: '#/components/responses/Error'
         '401':
+          $ref: '#/components/responses/Error'
+        '403':
           $ref: '#/components/responses/Error'
   /agents/{agent}/claims:
     post:

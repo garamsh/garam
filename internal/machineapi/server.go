@@ -9,6 +9,11 @@
 // decides, and whose queue a caller may act on is `internal/message`'s
 // to decide; this package reads the caller off the request, parses what
 // the path names, and renders the answer.
+//
+// What a caller may send is decided here instead, because it is a
+// policy question: the answer comes from the authz engine over a seam
+// this package declares, and a boundary this one composes may not reach
+// past it to another process.
 package machineapi
 
 import (
@@ -24,18 +29,19 @@ import (
 
 // Server implements machinegen.ServerInterface.
 type Server struct {
-	agents   agent.Service
-	messages message.Service
+	agents    agent.Service
+	messages  message.Service
+	evaluator Evaluator
 }
 
 // Compile-time check that Server satisfies the generated interface.
 var _ machinegen.ServerInterface = (*Server)(nil)
 
 // NewServer constructs the machine API server over the services it
-// answers from: what an operator does to its agents, and what a machine
-// identity does to its own queue.
-func NewServer(agents agent.Service, messages message.Service) *Server {
-	return &Server{agents: agents, messages: messages}
+// answers from: what an operator does to its agents, what a machine
+// identity does to its own queue, and what decides whom it may send to.
+func NewServer(agents agent.Service, messages message.Service, evaluator Evaluator) *Server {
+	return &Server{agents: agents, messages: messages, evaluator: evaluator}
 }
 
 // caller returns the GRN the connection authenticated as, and writes

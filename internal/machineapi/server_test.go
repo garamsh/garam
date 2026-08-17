@@ -129,7 +129,7 @@ func loopback(t *testing.T) tls.Certificate {
 // services it answers from: a request arrives over a handshake garam
 // verified, so the identity a handler reads is the one a certificate
 // carried.
-func listener(t *testing.T, agents agent.Service, messages message.Service, caller grn.GRN) (string, *http.Client) {
+func listener(t *testing.T, agents agent.Service, messages message.Service, engine machineapi.Evaluator, caller grn.GRN) (string, *http.Client) {
 	t.Helper()
 	store := authorities{}
 	key := make([]byte, ca.KeySize)
@@ -147,7 +147,7 @@ func listener(t *testing.T, agents agent.Service, messages message.Service, call
 	srv := machine.NewServer(
 		machine.NewService(trustRoots{store: store}),
 		loopback(t),
-		machinegen.Handler(machineapi.NewServer(agents, messages)),
+		machinegen.Handler(machineapi.NewServer(agents, messages, engine)),
 	)
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
@@ -191,7 +191,7 @@ func TestServer_IssuesForTheAgentThePathNames(t *testing.T) {
 		IssuerPEM:      []byte("issuer"),
 		NotAfter:       notAfter,
 	}}
-	url, client := listener(t, agents, &messageService{}, operator)
+	url, client := listener(t, agents, &messageService{}, &engine{}, operator)
 
 	status, body := do(t, client, http.MethodPost, url+"/agents/"+held.String()+"/certificate")
 	require.Equal(t, http.StatusCreated, status)
@@ -230,7 +230,8 @@ func TestServer_AnswersNothingToAConnectionThatAuthenticatedNobody(t *testing.T)
 	operator := operatorGRN("acme")
 	agents := &agentService{}
 	messages := &messageService{}
-	url, client := listener(t, agents, messages, operator)
+	policies := &engine{}
+	url, client := listener(t, agents, messages, policies, operator)
 
 	status, body := do(t, client, http.MethodGet, url+"/identity")
 	require.Equal(t, http.StatusOK, status)
@@ -238,7 +239,7 @@ func TestServer_AnswersNothingToAConnectionThatAuthenticatedNobody(t *testing.T)
 
 	// The same surface served any other way carries no identity, and no
 	// handler invents one.
-	plain := httptest.NewServer(machinegen.Handler(machineapi.NewServer(agents, messages)))
+	plain := httptest.NewServer(machinegen.Handler(machineapi.NewServer(agents, messages, policies)))
 	t.Cleanup(plain.Close)
 	bot := agentGRN("acme", "0a1b2c3d4e5f6071").String()
 	routes := map[string]struct{ method, path string }{
@@ -259,4 +260,5 @@ func TestServer_AnswersNothingToAConnectionThatAuthenticatedNobody(t *testing.T)
 	}
 	assert.Empty(t, agents.calls, "a request that authenticated nobody reached the service")
 	assert.Empty(t, messages.calls, "a request that authenticated nobody reached the service")
+	assert.Empty(t, policies.asked, "a request that authenticated nobody was decided by policy")
 }

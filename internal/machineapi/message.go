@@ -1,6 +1,7 @@
 package machineapi
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -15,7 +16,10 @@ import (
 // what the certificate names, and the recipient is whatever the body
 // says: garam answers once the message is stored and reports a routing
 // failure as a message rather than as a refusal (ADR-0013), so a
-// recipient no agent answers to is stored like any other.
+// recipient no agent answers to is stored like any other. A recipient
+// the sender's policies do not reach is a different answer — nothing
+// is stored, because the refusal is deliberate rather than a routing
+// failure.
 func (s *Server) PostMessage(w http.ResponseWriter, r *http.Request) {
 	sender, ok := caller(w, r)
 	if !ok {
@@ -31,12 +35,67 @@ func (s *Server) PostMessage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, errorx.Wrap(err, "recipient", errorx.KindInvalidArgument))
 		return
 	}
+	if err := s.authorizeSend(r.Context(), sender, recipient); err != nil {
+		writeError(w, err)
+		return
+	}
 	stored, err := s.messages.Post(r.Context(), sender, recipient, submitted.IdempotencyKey, submitted.Body)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, messageBody(stored))
+}
+
+// authorizeSend enforces the policies deciding whether sender may send
+// to recipient. The engine unions what the sender's own identity grants
+// with the policies its organization attached to it, deny-overrides
+// across both (ADR-0007, ADR-0008).
+//
+// Both GRNs reached a handler through grn.Parse, and this is where one
+// stops being inert: sendingStatements splices the organization
+// identifier into a resource pattern, where a wildcard would widen the
+// statement past the organization it was scoped to.
+func (s *Server) authorizeSend(ctx context.Context, sender, recipient grn.GRN) error {
+	if err := sender.Validate(); err != nil {
+		return err
+	}
+	if err := recipient.Validate(); err != nil {
+		return err
+	}
+	allowed, err := s.evaluator.Evaluate(ctx, EvalInput{
+		Subject:    sender,
+		Object:     recipient,
+		Action:     message.ActionSend,
+		Statements: sendingStatements(sender),
+	})
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return errorx.New(errorx.KindPermissionDenied, "sender may not send to this recipient")
+	}
+	return nil
+}
+
+// sendingStatements is what a machine identity's own GRN grants it
+// before any policy: sending inside its own organization and nowhere
+// else. It is this listener's half of the union the engine evaluates,
+// as the role-derived statements are the api server's (ADR-0007), and
+// it is why an agent nobody has written a policy for still sends.
+//
+// A policy narrows it with a Deny, which is how every grant in this
+// model is narrowed. An organization's identifier is the organization
+// segment of every resource it owns (ADR-0001), so the pattern is the
+// tenancy boundary the recipient comparison already draws on this
+// listener.
+func sendingStatements(sender grn.GRN) []Statement {
+	return []Statement{{
+		Sid:      "machine-own-org",
+		Effect:   EffectAllow,
+		Action:   []string{message.ActionSend},
+		Resource: []string{"grn:" + sender.Organization + ":*"},
+	}}
 }
 
 // ClaimMessage hands the caller the next message addressed to the agent

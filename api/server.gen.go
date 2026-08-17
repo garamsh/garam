@@ -145,11 +145,37 @@ type AgentAssignment struct {
 	Since time.Time `json:"since"`
 }
 
+// AgentDefinition What an organization says an agent should be (ADR-0026). It is a record and not an agent: no state is reported on it, and it carries none of the fields an `Agent` carries. `agentGrn` is the identity garam minted for the agent this definition describes, and no agent answers under it until an operator reports one.
+type AgentDefinition struct {
+	AgentGrn  string    `json:"agentGrn"`
+	CreatedAt time.Time `json:"createdAt"`
+
+	// DefinedBy The member that defined the agent.
+	DefinedBy   string `json:"definedBy"`
+	OperatorGrn string `json:"operatorGrn"`
+	OrgGrn      string `json:"orgGrn"`
+
+	// Values What an operator constructs the agent from. garam stores the keys and the strings and interprets neither: what the payload means belongs to the operator that reads it. A key is one to 64 characters of lowercase letters, digits and `-`; a value is at most 4096 bytes; at most 32 entries.
+	Values AgentValues `json:"values"`
+}
+
+// AgentDefinitionCreate What an agent should be, as an organization's member states it.
+type AgentDefinitionCreate struct {
+	// OperatorGrn The operator that is to run the agent. It must be an operator of this organization; whether it exists is not knowable here, because nothing registers an operator.
+	OperatorGrn string `json:"operatorGrn"`
+
+	// Values What an operator constructs the agent from. garam stores the keys and the strings and interprets neither: what the payload means belongs to the operator that reads it. A key is one to 64 characters of lowercase letters, digits and `-`; a value is at most 4096 bytes; at most 32 entries.
+	Values *AgentValues `json:"values,omitempty"`
+}
+
 // AgentProvisioningState What the operator reports about the agent's pod. `pending` is an agent no operator has reported on yet.
 type AgentProvisioningState string
 
 // AgentRuntimeState What the agent reports about itself. `unknown` is an agent that has not reported since it was created.
 type AgentRuntimeState string
+
+// AgentValues What an operator constructs the agent from. garam stores the keys and the strings and interprets neither: what the payload means belongs to the operator that reads it. A key is one to 64 characters of lowercase letters, digits and `-`; a value is at most 4096 bytes; at most 32 entries.
+type AgentValues map[string]string
 
 // Error defines model for Error.
 type Error struct {
@@ -401,6 +427,9 @@ type CreateOrgJSONRequestBody = OrganizationCreate
 // UpdateOrgJSONRequestBody defines body for UpdateOrg for application/json ContentType.
 type UpdateOrgJSONRequestBody = OrganizationPatch
 
+// DefineAgentJSONRequestBody defines body for DefineAgent for application/json ContentType.
+type DefineAgentJSONRequestBody = AgentDefinitionCreate
+
 // CreateGroupJSONRequestBody defines body for CreateGroup for application/json ContentType.
 type CreateGroupJSONRequestBody = GroupCreate
 
@@ -469,6 +498,12 @@ type ServerInterface interface {
 	// UpdateOrg Update an organization. Requires the `admin` role.
 	// (PATCH /orgs/{org})
 	UpdateOrg(w http.ResponseWriter, r *http.Request, org Org)
+	// ListAgentDefinitions List an organization's agent definitions. Requires the `member` role.
+	// (GET /orgs/{org}/agent-definitions)
+	ListAgentDefinitions(w http.ResponseWriter, r *http.Request, org Org)
+	// DefineAgent Define an agent. Requires the `member` role.
+	// (POST /orgs/{org}/agent-definitions)
+	DefineAgent(w http.ResponseWriter, r *http.Request, org Org)
 	// ListAgents List an organization's agents. Requires the `member` role.
 	// (GET /orgs/{org}/agents)
 	ListAgents(w http.ResponseWriter, r *http.Request, org Org)
@@ -848,6 +883,58 @@ func (siw *ServerInterfaceWrapper) UpdateOrg(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateOrg(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAgentDefinitions operation middleware
+func (siw *ServerInterfaceWrapper) ListAgentDefinitions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAgentDefinitions(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DefineAgent operation middleware
+func (siw *ServerInterfaceWrapper) DefineAgent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DefineAgent(w, r, org)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2060,6 +2147,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/projects/{project}/members/{member}", wrapper.RemoveProjectMember)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agents", wrapper.ListAgents)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agents/{agent}", wrapper.GetAgent)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agent-definitions", wrapper.ListAgentDefinitions)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/agent-definitions", wrapper.DefineAgent)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/policies", wrapper.ListPolicies)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/policies", wrapper.CreatePolicy)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/policies/{policy}/versions", wrapper.ListPolicyVersions)

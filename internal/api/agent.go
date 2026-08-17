@@ -64,6 +64,79 @@ func (s *Server) GetAgent(w http.ResponseWriter, r *http.Request, orgSlug apigen
 	writeJSON(w, http.StatusOK, agentToAPI(a, assignment))
 }
 
+// DefineAgent records what an agent of the org should be: which
+// operator is to run it, and the values it is constructed from
+// (ADR-0026). Requires the member role.
+//
+// It creates no agent. The response carries the definition's own
+// shape, so a caller that reads it cannot mistake it for one of the
+// agents an operator has reported.
+func (s *Server) DefineAgent(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org) {
+	u, err := s.currentUser(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.authorize(r, orgGRN(orgSlug), u, org.ActionAgentDefine); err != nil {
+		writeError(w, err)
+		return
+	}
+	var body apigen.AgentDefinitionCreate
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, err)
+		return
+	}
+	operator, err := grn.Parse(body.OperatorGrn)
+	if err != nil {
+		writeError(w, errorx.Wrap(err, "operator", errorx.KindInvalidArgument))
+		return
+	}
+	var raw map[string]string
+	if body.Values != nil {
+		raw = *body.Values
+	}
+	values, err := agent.ParseValues(raw)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	d, err := agent.NewDefinition(orgGRN(orgSlug), operator, values, u.GRN())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.agents.Define(r.Context(), d); err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, definitionToAPI(d))
+}
+
+// ListAgentDefinitions lists the agents the org says it should have.
+// Requires the member role. An entry is a definition and not an agent:
+// nothing here reads the agent rows an operator reports.
+func (s *Server) ListAgentDefinitions(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org) {
+	u, err := s.currentUser(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.authorize(r, orgGRN(orgSlug), u, org.ActionAgentRead); err != nil {
+		writeError(w, err)
+		return
+	}
+	definitions, err := s.agents.ListDefinitionsByOrg(r.Context(), orgGRN(orgSlug))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	out := make([]apigen.AgentDefinition, 0, len(definitions))
+	for _, d := range definitions {
+		out = append(out, definitionToAPI(d))
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
 // assignmentsOf resolves the org's assignments in one query, keyed by
 // agent GRN. An agent assigned between the two reads is absent from the
 // map: the reads are not atomic, and the next request carries it.
@@ -120,4 +193,19 @@ func agentToAPI(a *agent.Agent, assignment *agent.Assignment) apigen.Agent {
 		}
 	}
 	return out
+}
+
+// definitionToAPI renders a Definition. It shares no field with
+// [agentToAPI]: a definition carries no state, because no one has
+// reported any (ADR-0026), and the agent GRN it names is the identity
+// minted for an agent that may not exist.
+func definitionToAPI(d *agent.Definition) apigen.AgentDefinition {
+	return apigen.AgentDefinition{
+		AgentGrn:    d.Agent().String(),
+		OrgGrn:      d.Organization().String(),
+		OperatorGrn: d.Operator().String(),
+		Values:      apigen.AgentValues(d.Values()),
+		DefinedBy:   d.DefinedBy().String(),
+		CreatedAt:   d.CreatedAt(),
+	}
 }

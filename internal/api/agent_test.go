@@ -1,7 +1,10 @@
 package api_test
 
 import (
+	"encoding/json"
 	"net/http"
+	"net/http/httptest"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -170,4 +173,195 @@ func TestAgentRead_AssignmentIsAbsentWhileNoOperatorHolds(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 	rec = f.do(t, "GET", "/orgs/"+slug+"/agents/"+elsewhere.Identifier, "", member)
 	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+// operatorGRNOf names an operator of the org. Nothing registers an
+// operator, so a definition names one by GRN alone (ADR-0026).
+func operatorGRNOf(orgSlug, id string) grn.GRN {
+	return grn.New(orgSlug, "default", agent.ServiceTypeOperator, id)
+}
+
+// defineBody is the request that defines an agent run by operator.
+func defineBody(operator grn.GRN, values string) string {
+	return `{"operatorGrn":"` + operator.String() + `","values":` + values + `}`
+}
+
+// bodyKeys returns the field names a response body carries, sorted. A
+// definition and an agent are told apart by the fields they answer
+// with, so the field set is the property the tests below assert.
+func bodyKeys(t *testing.T, rec *httptest.ResponseRecorder) []string {
+	t.Helper()
+	fields := decodeBody[map[string]json.RawMessage](t, rec)
+	keys := make([]string, 0, len(fields))
+	for k := range fields {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+	return keys
+}
+
+func TestAgentDefine_MemberDefinesWhereOthersAreRefused(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	otherOwner := f.sessionCookieFor(t, "other-owner-sub", "Other Owner")
+	otherSlug := createOrg(t, f, otherOwner, "globex")
+
+	// The outsider is permitted the action and belongs to another org;
+	// the stranger belongs to this one and is permitted nothing. Each
+	// isolates one half of the check, and the member is the case that
+	// stops being answered when either half is removed.
+	f.permit(
+		permission{userGRNOf("member-sub"), org.ActionAgentDefine},
+		permission{userGRNOf("member-sub"), org.ActionAgentRead},
+		permission{userGRNOf("outsider-sub"), org.ActionAgentDefine},
+		permission{userGRNOf("stranger-sub"), org.ActionAgentRead},
+	)
+	member := f.sessionCookieFor(t, "member-sub", "Member")
+	outsider := f.sessionCookieFor(t, "outsider-sub", "Outsider")
+	stranger := f.sessionCookieFor(t, "stranger-sub", "Stranger")
+	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(slug), userGRNOf("member-sub"), org.RoleMember)))
+	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(slug), userGRNOf("stranger-sub"), org.RoleMember)))
+	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(otherSlug), userGRNOf("outsider-sub"), org.RoleMember)))
+
+	operator := operatorGRNOf(slug, "field-one")
+	rec := f.do(t, "POST", "/orgs/"+slug+"/agent-definitions", defineBody(operator, `{"model":"haiku"}`), member)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	defined := decodeBody[apigen.AgentDefinition](t, rec)
+	assert.Equal(t, operator.String(), defined.OperatorGrn)
+	assert.Equal(t, orgGRNOf(slug).String(), defined.OrgGrn)
+	assert.Equal(t, apigen.AgentValues{"model": "haiku"}, defined.Values)
+	assert.Equal(t, userGRNOf("member-sub").String(), defined.DefinedBy)
+	g, err := grn.Parse(defined.AgentGrn)
+	require.NoError(t, err)
+	assert.Equal(t, slug, g.Organization, "the org in the path owns the agent it defines")
+
+	// A member of another org is refused the action it is permitted,
+	// and their own org answers the same request.
+	rec = f.do(t, "POST", "/orgs/"+slug+"/agent-definitions", defineBody(operator, `{}`), outsider)
+	assert.Equal(t, http.StatusForbidden, rec.Code)
+	rec = f.do(t, "POST", "/orgs/"+otherSlug+"/agent-definitions", defineBody(operatorGRNOf(otherSlug, "field-one"), `{}`), outsider)
+	assert.Equal(t, http.StatusCreated, rec.Code)
+
+	// A member of this org the evaluator denies is refused, so
+	// membership alone does not admit. Reading is permitted to that
+	// member, so what it lacks is the write.
+	rec = f.do(t, "POST", "/orgs/"+slug+"/agent-definitions", defineBody(operator, `{}`), stranger)
+	assert.Equal(t, http.StatusForbidden, rec.Code)
+	rec = f.do(t, "GET", "/orgs/"+slug+"/agent-definitions", "", stranger)
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	// Signed out is refused, and the same request carrying a session is
+	// answered.
+	rec = f.do(t, "POST", "/orgs/"+slug+"/agent-definitions", defineBody(operator, `{}`))
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	rec = f.do(t, "POST", "/orgs/"+slug+"/agent-definitions", defineBody(operator, `{}`), member)
+	assert.Equal(t, http.StatusCreated, rec.Code)
+
+	// The org's definitions are its own, and the member reads back what
+	// it defined.
+	rec = f.do(t, "GET", "/orgs/"+slug+"/agent-definitions", "", member)
+	require.Equal(t, http.StatusOK, rec.Code)
+	listed := decodeBody[[]apigen.AgentDefinition](t, rec)
+	assert.Len(t, listed, 2, "this org's definitions and no other org's")
+	assert.True(t, slices.ContainsFunc(listed, func(d apigen.AgentDefinition) bool {
+		return d.AgentGrn == defined.AgentGrn
+	}))
+}
+
+func TestAgentDefine_ADefinitionIsNotAnAgent(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	f.permit(
+		permission{userGRNOf("member-sub"), org.ActionAgentDefine},
+		permission{userGRNOf("member-sub"), org.ActionAgentRead},
+	)
+	member := f.sessionCookieFor(t, "member-sub", "Member")
+	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(slug), userGRNOf("member-sub"), org.RoleMember)))
+
+	// One agent an operator reported, one an organization defined.
+	reported := seedAgent(t, f, slug)
+	rec := f.do(t, "POST", "/orgs/"+slug+"/agent-definitions", defineBody(operatorGRNOf(slug, "field-one"), `{"model":"haiku"}`), member)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	definitionFields := bodyKeys(t, rec)
+	defined, err := grn.Parse(decodeBody[apigen.AgentDefinition](t, rec).AgentGrn)
+	require.NoError(t, err)
+
+	// Defining an agent puts none among the agents: garam learns an
+	// agent exists from the operator that reports it (ADR-0026).
+	rec = f.do(t, "GET", "/orgs/"+slug+"/agents", "", member)
+	require.Equal(t, http.StatusOK, rec.Code)
+	agents := decodeBody[[]apigen.Agent](t, rec)
+	require.Len(t, agents, 1)
+	assert.Equal(t, reported.String(), agents[0].Grn, "the reported agent, not the defined one")
+
+	// The defined agent's own GRN is not addressable there either,
+	// while the reported one is — so the 404 is the missing agent and
+	// not the path.
+	rec = f.do(t, "GET", "/orgs/"+slug+"/agents/"+defined.Identifier, "", member)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+	rec = f.do(t, "GET", "/orgs/"+slug+"/agents/"+reported.Identifier, "", member)
+	require.Equal(t, http.StatusOK, rec.Code)
+	agentFields := bodyKeys(t, rec)
+
+	// The definitions answer the one that was defined and not the one
+	// that was reported.
+	rec = f.do(t, "GET", "/orgs/"+slug+"/agent-definitions", "", member)
+	require.Equal(t, http.StatusOK, rec.Code)
+	definitions := decodeBody[[]apigen.AgentDefinition](t, rec)
+	require.Len(t, definitions, 1)
+	assert.Equal(t, defined.String(), definitions[0].AgentGrn)
+
+	// The two are answered under different shapes, so a reader holding
+	// one body knows which it holds. A definition carries no state,
+	// because nobody has reported any.
+	assert.Equal(t, []string{"agentGrn", "createdAt", "definedBy", "operatorGrn", "orgGrn", "values"}, definitionFields)
+	assert.Equal(t, []string{"createdAt", "grn", "orgGrn", "provisioningState", "runtimeState", "updatedAt"}, agentFields)
+}
+
+func TestAgentDefine_RefusesWhatItCannotStore(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	f.permit(permission{userGRNOf("member-sub"), org.ActionAgentDefine})
+	member := f.sessionCookieFor(t, "member-sub", "Member")
+	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(slug), userGRNOf("member-sub"), org.RoleMember)))
+
+	tests := []struct {
+		name string
+		body string
+	}{
+		{
+			name: "operator that is not a grn",
+			body: `{"operatorGrn":"field-one"}`,
+		},
+		{
+			name: "operator of another organization",
+			body: defineBody(operatorGRNOf("globex", "field-one"), `{}`),
+		},
+		{
+			name: "grn that names an agent rather than an operator",
+			body: `{"operatorGrn":"` + grn.New(slug, "default", agent.ServiceType, "9f2ac1b40d8e7a35").String() + `"}`,
+		},
+		{
+			name: "value key outside the segment character set",
+			body: defineBody(operatorGRNOf(slug, "field-one"), `{"Model_Name":"haiku"}`),
+		},
+		{
+			name: "body that is not an object",
+			body: `[]`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := f.do(t, "POST", "/orgs/"+slug+"/agent-definitions", tt.body, member)
+			assert.Equal(t, http.StatusBadRequest, rec.Code)
+		})
+	}
+
+	// The same request naming this org's operator is accepted, so each
+	// refusal above is what it names and not the endpoint.
+	rec := f.do(t, "POST", "/orgs/"+slug+"/agent-definitions", defineBody(operatorGRNOf(slug, "field-one"), `{"model":"haiku"}`), member)
+	assert.Equal(t, http.StatusCreated, rec.Code)
 }

@@ -37,8 +37,8 @@ const CAPABILITIES = [
 
 /**
  * Decisions behind the agent surface, each named by the ADR that
- * settles it so a reader can check the claim. Only the persistence
- * behind the first exists.
+ * settles it so a reader can check the claim. All three are built; the
+ * adapter that would run beside an agent is not.
  */
 const AGENT_DECISIONS = [
   {
@@ -92,9 +92,9 @@ export default function LandingPage() {
             <p className="max-w-xl text-lead text-pretty text-muted-foreground">
               garam holds the identities, the structure they belong to, and the
               policy documents that decide what each may do. The people are here
-              today; an agent already has an identity and is a subject of the
-              same policies, while the surface it connects through is decided
-              rather than built.
+              today; an agent already has an identity, is a subject of the same
+              policies, and exchanges messages on a listener of its own — the
+              adapter that would run beside it is not built.
             </p>
             <div className="flex flex-wrap items-center gap-2 pt-2">
               <Button asChild size="lg">
@@ -146,8 +146,8 @@ export default function LandingPage() {
         <div className="mx-auto w-full max-w-shell px-6 py-section">
           <SectionHeading
             eyebrow="Agents"
-            title="Stored, not yet reachable"
-            body="The agent surface is decided in ADRs and largely unbuilt: identity, operator assignment and state are persisted, and nothing else of it exists — no endpoint, no adapter, no message queue, and no certificate authority."
+            title="Reachable, not yet watched"
+            body="The listener, the certificate authority behind it, and the message queue are built. What is not is the adapter that would run beside the agent, or any way to watch one work."
           />
           <ul className="mt-12 grid gap-px overflow-hidden rounded-xl border border-border bg-border md:grid-cols-3">
             {AGENT_DECISIONS.map(({ adr, title, body }) => (

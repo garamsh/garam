@@ -1624,6 +1624,15 @@ func briefDelivery() message.Config {
 	}
 }
 
+// memberGroups reads the groups a machine identity belongs to
+// (machineapi.Groups) — the adapter the composition root builds, in the
+// form this suite can hold.
+type memberGroups struct{ store org.Store }
+
+func (m memberGroups) List(ctx context.Context, subject grn.GRN) ([]grn.GRN, error) {
+	return m.store.ListGroupsByMember(ctx, orgRootGRN(subject.Organization), subject)
+}
+
 // certificates is the certificate authority as the agent domain signs
 // through it (agent.Issuer) — the adapter the composition root builds,
 // in the form this suite can hold.
@@ -1718,7 +1727,7 @@ func machineListener(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer, policies m
 	srv := machine.NewServer(
 		machine.NewService(machineTrustRoots{store: authorities}),
 		loopbackCertificate(t),
-		machinegen.Handler(machineapi.NewServer(agents, messages, policies)),
+		machinegen.Handler(machineapi.NewServer(agents, messages, memberGroups{store: org.NewPostgresStore(p)}, policies)),
 	)
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
@@ -2236,6 +2245,111 @@ func TestMachineSurface_AnAttachedPolicyDecidesWhatAnAgentSends(t *testing.T) {
 		require.Equal(t, http.StatusNoContent, status, string(body))
 	}
 	assert.Equal(t, []string{"key-1", "key-4", "key-6"}, keys)
+
+	status, body = machineSend(t, recipient, http.MethodPost, queue, "")
+	assert.Equal(t, http.StatusNoContent, status, string(body), "a refused message reached the queue")
+}
+
+// TestMachineSurface_AGroupAttachedPolicyDecidesWhatItsMembersSend
+// carries the control the fix turns on against real Postgres and the
+// real engine: one policy document, one sender, one recipient, and only
+// the attachment target moving. A group is a target an administrator
+// can pick and an agent is a member of one the way a user is
+// (ADR-0008, ADR-0014), so attached to the sender's group and attached
+// to the sender itself the call has to end the same way. It did not:
+// the group attachment answered 201 and the direct one 403, which is an
+// attachment that reads as a control that is not there.
+//
+// The agent in no group makes the same call at every step, so what
+// refuses is the membership rather than a surface that refuses whoever
+// asks.
+func TestMachineSurface_AGroupAttachedPolicyDecidesWhatItsMembersSend(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	orgs := org.NewPostgresStore(p)
+	acme := orgRootGRN("acme")
+	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(acme, "acme")))
+
+	key := make([]byte, ca.KeySize)
+	_, err := rand.Read(key)
+	require.NoError(t, err)
+	sealer, err := ca.NewAESGCMSealer(key)
+	require.NoError(t, err)
+	outOfBand, err := ca.NewService(ca.NewPostgresStore(p), sealer, ca.Config{})
+	require.NoError(t, err)
+
+	policies, evaluator := policyEngine(t, p)
+	url := machineListener(t, p, sealer, evaluator)
+	operator := machineClient(t, installed(t, outOfBand, scopedGRN("acme", agent.ServiceTypeOperator, "one")))
+	senderGRN, sender := provisioned(t, url, operator)
+	_, outsider := provisioned(t, url, operator)
+	recipientGRN, recipient := provisioned(t, url, operator)
+	siblingGRN, _ := provisioned(t, url, operator)
+
+	engineering := scopedGRN("acme", org.ServiceTypeGroup, "engineering")
+	require.NoError(t, orgs.CreateGroup(ctx, org.NewGroup(engineering, "engineering", acme)))
+	require.NoError(t, orgs.AddGroupMember(ctx, engineering, senderGRN))
+	members, err := orgs.ListGroupMembers(ctx, engineering)
+	require.NoError(t, err)
+	require.Equal(t, []grn.GRN{senderGRN}, members, "the group holds one of the two senders")
+
+	// An agent nobody has written a policy for reaches its own
+	// organization, so the surface starts by accepting the call the
+	// group attachment below refuses.
+	status, body := machineSend(t, sender, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-1"))
+	require.Equal(t, http.StatusCreated, status, string(body))
+
+	denied := activePolicy(t, policies, acme, "no-talking",
+		statementDoc("no-talking", authz.EffectDeny, message.ActionSend, recipientGRN.String()))
+	attachPolicy(t, policies, denied, engineering)
+
+	status, body = machineSend(t, sender, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-2"))
+	require.Equal(t, http.StatusForbidden, status, string(body))
+	assert.JSONEq(t, `{"kind":"permission_denied","message":"sender may not send to this recipient"}`, string(body))
+
+	// The Deny names one recipient, so the member reaches the agent
+	// beside it.
+	status, body = machineSend(t, sender, http.MethodPost, url+"/messages", submissionTo(siblingGRN, "key-3"))
+	require.Equal(t, http.StatusCreated, status, string(body))
+
+	// The agent that is in no group is answered under the same policy.
+	status, body = machineSend(t, outsider, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-4"))
+	require.Equal(t, http.StatusCreated, status, string(body))
+
+	// The same document attached to the sender itself refuses the same
+	// call. Attaching before detaching keeps the policy attached to
+	// something throughout: a last detachment widens it to the whole
+	// organization rather than retiring it (ADR-0008).
+	attachPolicy(t, policies, denied, senderGRN)
+	detachPolicy(t, policies, denied, engineering)
+	status, body = machineSend(t, sender, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-5"))
+	require.Equal(t, http.StatusForbidden, status, string(body))
+
+	// The agent outside the group is answered here too, so what each
+	// attachment refused is the subject it named.
+	status, body = machineSend(t, outsider, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-6"))
+	require.Equal(t, http.StatusCreated, status, string(body))
+
+	// Archiving is what takes the policy out of every check, so both
+	// refusals were this document and nothing beside it.
+	archivePolicy(t, policies, denied)
+	status, body = machineSend(t, sender, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-7"))
+	require.Equal(t, http.StatusCreated, status, string(body))
+
+	// What the recipient's queue holds is every accepted message and no
+	// refused one.
+	queue := url + "/agents/" + recipientGRN.String() + "/claims"
+	var keys []string
+	for range 4 {
+		status, body = machineSend(t, recipient, http.MethodPost, queue, "")
+		require.Equal(t, http.StatusOK, status, string(body))
+		var claimed machinegen.Claim
+		require.NoError(t, json.Unmarshal(body, &claimed))
+		keys = append(keys, claimed.Message.IdempotencyKey)
+		status, body = machineSend(t, recipient, http.MethodPost, queue+"/"+claimed.Id+"/completion", "")
+		require.Equal(t, http.StatusNoContent, status, string(body))
+	}
+	assert.Equal(t, []string{"key-1", "key-4", "key-6", "key-7"}, keys)
 
 	status, body = machineSend(t, recipient, http.MethodPost, queue, "")
 	assert.Equal(t, http.StatusNoContent, status, string(body), "a refused message reached the queue")

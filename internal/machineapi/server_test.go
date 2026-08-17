@@ -37,6 +37,10 @@ func agentGRN(org, id string) grn.GRN {
 	return grn.New(org, grn.DefaultProject, agent.ServiceType, id)
 }
 
+func groupGRN(org, name string) grn.GRN {
+	return grn.New(org, grn.DefaultProject, "group", name)
+}
+
 // call is one thing the surface asked the agent service for.
 type call struct{ operator, subject grn.GRN }
 
@@ -101,6 +105,23 @@ func (r trustRoots) Get(ctx context.Context, subject grn.GRN) ([]byte, error) {
 	return authority.Certificate(), nil
 }
 
+// memberGroups is the machineapi.Groups seam in memory: which groups
+// each identity belongs to, and the answer a store that cannot read
+// them gives.
+type memberGroups struct {
+	byMember map[grn.GRN][]grn.GRN
+	err      error
+	asked    []grn.GRN
+}
+
+func (m *memberGroups) List(_ context.Context, subject grn.GRN) ([]grn.GRN, error) {
+	m.asked = append(m.asked, subject)
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.byMember[subject], nil
+}
+
 // loopback is the certificate the listener terminates TLS with. What
 // garam presents is not what these tests are about, so it is
 // self-signed and the client below does not verify it.
@@ -129,7 +150,7 @@ func loopback(t *testing.T) tls.Certificate {
 // services it answers from: a request arrives over a handshake garam
 // verified, so the identity a handler reads is the one a certificate
 // carried.
-func listener(t *testing.T, agents agent.Service, messages message.Service, engine machineapi.Evaluator, caller grn.GRN) (string, *http.Client) {
+func listener(t *testing.T, agents agent.Service, messages message.Service, groups machineapi.Groups, engine machineapi.Evaluator, caller grn.GRN) (string, *http.Client) {
 	t.Helper()
 	store := authorities{}
 	key := make([]byte, ca.KeySize)
@@ -147,7 +168,7 @@ func listener(t *testing.T, agents agent.Service, messages message.Service, engi
 	srv := machine.NewServer(
 		machine.NewService(trustRoots{store: store}),
 		loopback(t),
-		machinegen.Handler(machineapi.NewServer(agents, messages, engine)),
+		machinegen.Handler(machineapi.NewServer(agents, messages, groups, engine)),
 	)
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
@@ -191,7 +212,7 @@ func TestServer_IssuesForTheAgentThePathNames(t *testing.T) {
 		IssuerPEM:      []byte("issuer"),
 		NotAfter:       notAfter,
 	}}
-	url, client := listener(t, agents, &messageService{}, &engine{}, operator)
+	url, client := listener(t, agents, &messageService{}, &memberGroups{}, &engine{}, operator)
 
 	status, body := do(t, client, http.MethodPost, url+"/agents/"+held.String()+"/certificate")
 	require.Equal(t, http.StatusCreated, status)
@@ -230,8 +251,9 @@ func TestServer_AnswersNothingToAConnectionThatAuthenticatedNobody(t *testing.T)
 	operator := operatorGRN("acme")
 	agents := &agentService{}
 	messages := &messageService{}
+	groups := &memberGroups{}
 	policies := &engine{}
-	url, client := listener(t, agents, messages, policies, operator)
+	url, client := listener(t, agents, messages, groups, policies, operator)
 
 	status, body := do(t, client, http.MethodGet, url+"/identity")
 	require.Equal(t, http.StatusOK, status)
@@ -239,7 +261,7 @@ func TestServer_AnswersNothingToAConnectionThatAuthenticatedNobody(t *testing.T)
 
 	// The same surface served any other way carries no identity, and no
 	// handler invents one.
-	plain := httptest.NewServer(machinegen.Handler(machineapi.NewServer(agents, messages, policies)))
+	plain := httptest.NewServer(machinegen.Handler(machineapi.NewServer(agents, messages, groups, policies)))
 	t.Cleanup(plain.Close)
 	bot := agentGRN("acme", "0a1b2c3d4e5f6071").String()
 	routes := map[string]struct{ method, path string }{
@@ -260,5 +282,6 @@ func TestServer_AnswersNothingToAConnectionThatAuthenticatedNobody(t *testing.T)
 	}
 	assert.Empty(t, agents.calls, "a request that authenticated nobody reached the service")
 	assert.Empty(t, messages.calls, "a request that authenticated nobody reached the service")
+	assert.Empty(t, groups.asked, "a request that authenticated nobody was looked up in a group")
 	assert.Empty(t, policies.asked, "a request that authenticated nobody was decided by policy")
 }

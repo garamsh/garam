@@ -2254,10 +2254,12 @@ func TestMachineSurface_AnAttachedPolicyDecidesWhatAnAgentSends(t *testing.T) {
 // holding a wildcard policy written before this action existed is
 // exposed the day it ships.
 //
-// The engine is asked the same question directly, and answers that the
-// foreign sender is allowed. That is what makes this a test of the
-// precondition rather than of a policy that reached nothing: the engine
-// says yes and the surface still refuses.
+// The engine is asked the same question directly, twice: it denies the
+// foreign sender before the policy exists and allows it after. That
+// pair is what makes this a test of the precondition rather than of a
+// policy that reached nothing, and an engine stuck open fails the first
+// half rather than passing both. The engine says yes and the surface
+// still refuses.
 func TestMachineSurface_ARecipientsOwnPolicyAdmitsNoForeignSender(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
@@ -2291,19 +2293,24 @@ func TestMachineSurface_ARecipientsOwnPolicyAdmitsNoForeignSender(t *testing.T) 
 	status, body = machineSend(t, neighbour, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-2"))
 	require.Equal(t, http.StatusCreated, status, string(body))
 
+	// The engine denies the foreign subject before the policy exists.
+	// It is asked again below and has to answer differently, which is
+	// what makes the pair evidence: an engine stuck open answers the
+	// same both times and fails here.
+	crossing := machineapi.EvalInput{Subject: foreignGRN, Object: recipientGRN, Action: message.ActionSend}
+	allowed, err := evaluator.Evaluate(ctx, crossing)
+	require.NoError(t, err)
+	require.False(t, allowed, "the engine allowed a subject no policy had granted")
+
 	// The recipient's organization activates one wildcard policy and
 	// attaches it to nobody, which is what an administrator does by
 	// detaching the last attachment from one they had aimed at a subject.
 	openDoor := activePolicy(t, policies, orgRootGRN("beta"), "everything",
 		statementDoc("everything", authz.EffectAllow, "*", "grn:beta:*"))
 
-	// That policy does reach the foreign subject: the engine, asked the
-	// question the surface would ask, allows it.
-	allowed, err := evaluator.Evaluate(ctx, machineapi.EvalInput{
-		Subject: foreignGRN,
-		Object:  recipientGRN,
-		Action:  message.ActionSend,
-	})
+	// That policy does reach the foreign subject: the same question,
+	// answered the other way now that beta has written one document.
+	allowed, err = evaluator.Evaluate(ctx, crossing)
 	require.NoError(t, err)
 	require.True(t, allowed, "the unattached wildcard policy did not reach the foreign subject")
 

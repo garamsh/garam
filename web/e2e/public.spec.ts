@@ -23,7 +23,7 @@ test.describe("signed out", () => {
 
     await expect(page).toHaveURL("/#agents");
     await expect(
-      page.getByRole("heading", { name: "Stored, not yet reachable" }),
+      page.getByRole("heading", { name: "Reachable, not yet watched" }),
     ).toBeInViewport();
   });
 

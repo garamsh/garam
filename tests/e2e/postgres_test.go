@@ -378,6 +378,10 @@ func TestAgentStore_RoundTrip(t *testing.T) {
 	assert.Equal(t, orgGRN, got.Organization())
 	assert.Equal(t, agent.ProvisioningStatePending, got.ProvisioningState())
 	assert.Equal(t, agent.RuntimeStateUnknown, got.RuntimeState())
+	// The stamps read back are the ones New set, to the microsecond
+	// Postgres keeps them at.
+	assert.WithinDuration(t, a.CreatedAt(), got.CreatedAt(), time.Microsecond)
+	assert.WithinDuration(t, a.UpdatedAt(), got.UpdatedAt(), time.Microsecond)
 
 	_, err = s.Get(ctx, grnOf("agent", "missing"))
 	assert.ErrorIs(t, err, agent.ErrAgentNotFound)
@@ -399,6 +403,7 @@ func TestAgentStore_RoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, first, assigned.Operator())
 	assert.Equal(t, 1, assigned.Epoch())
+	assert.True(t, assigned.CreatedAt().After(a.CreatedAt()), "the assignment is stamped when it is written, after the agent it binds")
 
 	// The operator reports the pod; the agent reports itself. Neither
 	// report moves the other's state.
@@ -406,6 +411,10 @@ func TestAgentStore_RoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, agent.ProvisioningStateReady, provisioned.ProvisioningState())
 	assert.Equal(t, agent.RuntimeStateUnknown, provisioned.RuntimeState())
+	// A report moves the update stamp and leaves the create stamp, so
+	// each is read from its own column.
+	assert.WithinDuration(t, a.CreatedAt(), provisioned.CreatedAt(), time.Microsecond)
+	assert.True(t, provisioned.UpdatedAt().After(a.UpdatedAt()), "a report moves the update stamp")
 
 	running, err := s.ReportRuntimeState(ctx, g, assigned.Epoch(), agent.RuntimeStateConnected)
 	require.NoError(t, err)
@@ -417,6 +426,10 @@ func TestAgentStore_RoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, second, reassigned.Operator())
 	assert.Equal(t, 2, reassigned.Epoch(), "a reassignment raises the epoch")
+	// A reassignment writes onto the row the first one left, so the
+	// create stamp is still the first one's.
+	assert.Equal(t, assigned.CreatedAt(), reassigned.CreatedAt())
+	assert.True(t, reassigned.UpdatedAt().After(assigned.UpdatedAt()), "and moves the update stamp")
 
 	stored, err := s.GetAssignment(ctx, g)
 	require.NoError(t, err)
@@ -1293,6 +1306,8 @@ func TestMessageStore_RoundTrip(t *testing.T) {
 	stored, err := s.Enqueue(ctx, m)
 	require.NoError(t, err)
 	assert.Equal(t, m.ID(), stored.ID())
+	assert.Equal(t, "key-1", stored.IdempotencyKey(), "the key the sender suppressed duplicates with comes back")
+	assert.WithinDuration(t, m.CreatedAt(), stored.CreatedAt(), time.Microsecond)
 
 	retried, err := message.New(bot, ada, "key-1", "hello again")
 	require.NoError(t, err)

@@ -323,6 +323,239 @@ func TestOrgStore_InvitationLifecycle(t *testing.T) {
 	assert.ErrorIs(t, err, org.ErrInvitationNotFound)
 }
 
+// TestOrgStore_ListOrgsPagesEveryOrg runs ListOrgs, which is scoped by
+// the page rather than by an owner. Two orgs are present, so the bounds
+// decide the result instead of the fixture's size.
+func TestOrgStore_ListOrgsPagesEveryOrg(t *testing.T) {
+	ctx := context.Background()
+	s := org.NewPostgresStore(pool(t))
+	acme, globex := orgRootGRN("acme"), orgRootGRN("globex")
+
+	acmeOrg := org.NewOrganization(acme, "acme")
+	require.NoError(t, s.CreateOrg(ctx, acmeOrg))
+	require.NoError(t, s.CreateOrg(ctx, org.NewOrganization(globex, "globex")))
+
+	all, err := s.ListOrgs(ctx, org.ListFilter{})
+	require.NoError(t, err)
+	assert.Equal(t, []grn.GRN{acme, globex}, grnsOf(all), "every org, ordered by GRN")
+	require.Len(t, all, 2)
+	assert.Equal(t, "acme", all[0].Name())
+	assert.Equal(t, "globex", all[1].Name())
+
+	// The stamp CreateOrg wrote, to the microsecond a timestamptz keeps.
+	// A row read back zeroed, or stamped by a clock read at read time,
+	// fails here.
+	assert.WithinDuration(t, acmeOrg.CreatedAt(), all[0].CreatedAt(), time.Microsecond)
+
+	page, err := s.ListOrgs(ctx, org.ListFilter{Limit: 1})
+	require.NoError(t, err)
+	assert.Equal(t, []grn.GRN{acme}, grnsOf(page), "the limit takes the first page and stops")
+
+	page, err = s.ListOrgs(ctx, org.ListFilter{Offset: 1})
+	require.NoError(t, err)
+	assert.Equal(t, []grn.GRN{globex}, grnsOf(page), "the offset skips the first org")
+}
+
+// TestOrgStore_GroupQueriesStayInsideTheirGroupAndOrg runs
+// ListGroupsByMember, RemoveGroupMember and DeleteGroup. One member
+// belongs to a group in each org and one org holds a second group, so
+// the org filter and the member filter each have a row to exclude.
+func TestOrgStore_GroupQueriesStayInsideTheirGroupAndOrg(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := org.NewPostgresStore(p)
+
+	acme, globex := orgRootGRN("acme"), orgRootGRN("globex")
+	require.NoError(t, s.CreateOrg(ctx, org.NewOrganization(acme, "acme")))
+	require.NoError(t, s.CreateOrg(ctx, org.NewOrganization(globex, "globex")))
+
+	engAcme, opsAcme := scopedGRN("acme", "group", "eng"), scopedGRN("acme", "group", "ops")
+	engGlobex := scopedGRN("globex", "group", "eng")
+	require.NoError(t, s.CreateGroup(ctx, org.NewGroup(engAcme, "eng", acme, string(org.RoleMember))))
+	require.NoError(t, s.CreateGroup(ctx, org.NewGroup(opsAcme, "ops", acme, string(org.RoleMember))))
+	require.NoError(t, s.CreateGroup(ctx, org.NewGroup(engGlobex, "eng", globex, string(org.RoleMember))))
+
+	users := user.NewPostgresStore(p)
+	ada, bob := scopedGRN("acme", "user", "ada"), scopedGRN("acme", "user", "bob")
+	require.NoError(t, users.Create(ctx, user.New(ada, "ada")))
+	require.NoError(t, users.Create(ctx, user.New(bob, "bob")))
+
+	require.NoError(t, s.AddGroupMember(ctx, engAcme, ada))
+	require.NoError(t, s.AddGroupMember(ctx, engAcme, bob))
+	require.NoError(t, s.AddGroupMember(ctx, opsAcme, bob))
+	require.NoError(t, s.AddGroupMember(ctx, engGlobex, ada))
+
+	t.Run("a member's groups are the ones inside the org asked about", func(t *testing.T) {
+		groups, err := s.ListGroupsByMember(ctx, acme, ada)
+		require.NoError(t, err)
+		assert.Equal(t, []grn.GRN{engAcme}, groups)
+
+		// Each group the answer above left out is reached by changing
+		// only the argument that excluded it, so neither absence is a
+		// row the fixture never wrote.
+		groups, err = s.ListGroupsByMember(ctx, globex, ada)
+		require.NoError(t, err)
+		assert.Equal(t, []grn.GRN{engGlobex}, groups, "the org filter is what kept this group out of acme's answer")
+
+		groups, err = s.ListGroupsByMember(ctx, acme, bob)
+		require.NoError(t, err)
+		assert.Equal(t, []grn.GRN{engAcme, opsAcme}, groups, "the member filter is what kept ops out of ada's answer")
+	})
+
+	t.Run("removing a member leaves the group's other member and the member's other group", func(t *testing.T) {
+		require.NoError(t, s.RemoveGroupMember(ctx, engAcme, ada))
+
+		members, err := s.ListGroupMembers(ctx, engAcme)
+		require.NoError(t, err)
+		assert.Equal(t, []grn.GRN{bob}, members, "the removal took ada out of eng and left bob in it")
+
+		groups, err := s.ListGroupsByMember(ctx, globex, ada)
+		require.NoError(t, err)
+		assert.Equal(t, []grn.GRN{engGlobex}, groups, "ada's membership of the other org's group is untouched")
+	})
+
+	t.Run("deleting a group takes its members and leaves its neighbours", func(t *testing.T) {
+		require.NoError(t, s.DeleteGroup(ctx, engAcme))
+
+		_, err := s.GetGroup(ctx, engAcme)
+		assert.ErrorIs(t, err, org.ErrGroupNotFound)
+
+		members, err := s.ListGroupMembers(ctx, engAcme)
+		require.NoError(t, err)
+		assert.Empty(t, members, "bob's membership row went with the group")
+
+		_, err = s.GetGroup(ctx, engGlobex)
+		assert.NoError(t, err, "the other org's group of the same name survives")
+		_, err = s.GetOrg(ctx, acme)
+		assert.NoError(t, err, "the org survives its group")
+
+		remaining, err := s.ListGroups(ctx, acme, org.ListFilter{})
+		require.NoError(t, err)
+		assert.Equal(t, []grn.GRN{opsAcme}, grnsOf(remaining), "the org's other group survives")
+
+		// The refusal, against the delete above as its control: the
+		// first call matched a row and this one matches none.
+		assert.ErrorIs(t, s.DeleteGroup(ctx, engAcme), org.ErrGroupNotFound)
+	})
+}
+
+// TestOrgStore_ProjectQueriesStayInsideTheirProjectAndOrg runs
+// ListProjects, ListProjectMembers, RemoveProjectMember and
+// DeleteProject. Each org holds a project named web and one member
+// belongs to both, so the org filter and the project filter each have a
+// row to exclude.
+func TestOrgStore_ProjectQueriesStayInsideTheirProjectAndOrg(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := org.NewPostgresStore(p)
+
+	acme, globex := orgRootGRN("acme"), orgRootGRN("globex")
+	require.NoError(t, s.CreateOrg(ctx, org.NewOrganization(acme, "acme")))
+	require.NoError(t, s.CreateOrg(ctx, org.NewOrganization(globex, "globex")))
+
+	apiAcme, webAcme := scopedGRN("acme", "project", "api"), scopedGRN("acme", "project", "web")
+	webGlobex := scopedGRN("globex", "project", "web")
+	require.NoError(t, s.CreateProject(ctx, org.NewProject(apiAcme, "api", acme, string(org.RoleMember))))
+	require.NoError(t, s.CreateProject(ctx, org.NewProject(webAcme, "web", acme, string(org.RoleMember))))
+	require.NoError(t, s.CreateProject(ctx, org.NewProject(webGlobex, "web", globex, string(org.RoleMember))))
+
+	users := user.NewPostgresStore(p)
+	ada, bob := scopedGRN("acme", "user", "ada"), scopedGRN("acme", "user", "bob")
+	require.NoError(t, users.Create(ctx, user.New(ada, "ada")))
+	require.NoError(t, users.Create(ctx, user.New(bob, "bob")))
+
+	require.NoError(t, s.AddProjectMember(ctx, webAcme, ada))
+	require.NoError(t, s.AddProjectMember(ctx, webAcme, bob))
+	require.NoError(t, s.AddProjectMember(ctx, apiAcme, bob))
+	require.NoError(t, s.AddProjectMember(ctx, webGlobex, ada))
+
+	t.Run("an org's projects are its own, a page at a time", func(t *testing.T) {
+		list, err := s.ListProjects(ctx, acme, org.ListFilter{})
+		require.NoError(t, err)
+		assert.Equal(t, []grn.GRN{apiAcme, webAcme}, grnsOf(list), "the org's own projects, ordered by GRN")
+
+		// The other org's project of the same name is reached by asking
+		// about that org, so the org filter is what left it out above.
+		other, err := s.ListProjects(ctx, globex, org.ListFilter{})
+		require.NoError(t, err)
+		assert.Equal(t, []grn.GRN{webGlobex}, grnsOf(other))
+
+		require.Len(t, list, 2)
+		assert.Equal(t, "web", list[1].Name())
+		assert.Equal(t, acme, list[1].Organization())
+		assert.Equal(t, []string{string(org.RoleMember)}, list[1].Roles())
+
+		page, err := s.ListProjects(ctx, acme, org.ListFilter{Limit: 1})
+		require.NoError(t, err)
+		assert.Equal(t, []grn.GRN{apiAcme}, grnsOf(page), "the limit takes the first page and stops")
+
+		page, err = s.ListProjects(ctx, acme, org.ListFilter{Offset: 1})
+		require.NoError(t, err)
+		assert.Equal(t, []grn.GRN{webAcme}, grnsOf(page), "the offset skips the first project")
+	})
+
+	t.Run("a project's members are the ones inside the project asked about", func(t *testing.T) {
+		members, err := s.ListProjectMembers(ctx, webAcme)
+		require.NoError(t, err)
+		assert.Equal(t, []grn.GRN{ada, bob}, members, "ordered by member GRN")
+
+		members, err = s.ListProjectMembers(ctx, apiAcme)
+		require.NoError(t, err)
+		assert.Equal(t, []grn.GRN{bob}, members, "ada is absent from the org's other project")
+
+		members, err = s.ListProjectMembers(ctx, webGlobex)
+		require.NoError(t, err)
+		assert.Equal(t, []grn.GRN{ada}, members, "bob is absent from the other org's project of the same name")
+	})
+
+	t.Run("removing a member leaves the project's other member and the member's other project", func(t *testing.T) {
+		require.NoError(t, s.RemoveProjectMember(ctx, webAcme, ada))
+
+		members, err := s.ListProjectMembers(ctx, webAcme)
+		require.NoError(t, err)
+		assert.Equal(t, []grn.GRN{bob}, members, "the removal took ada out of web and left bob in it")
+
+		members, err = s.ListProjectMembers(ctx, webGlobex)
+		require.NoError(t, err)
+		assert.Equal(t, []grn.GRN{ada}, members, "ada's membership of the other org's project is untouched")
+	})
+
+	t.Run("deleting a project takes its members and leaves its neighbours", func(t *testing.T) {
+		require.NoError(t, s.DeleteProject(ctx, webAcme))
+
+		_, err := s.GetProject(ctx, webAcme)
+		assert.ErrorIs(t, err, org.ErrProjectNotFound)
+
+		members, err := s.ListProjectMembers(ctx, webAcme)
+		require.NoError(t, err)
+		assert.Empty(t, members, "bob's membership row went with the project")
+
+		_, err = s.GetProject(ctx, webGlobex)
+		assert.NoError(t, err, "the other org's project of the same name survives")
+		_, err = s.GetOrg(ctx, acme)
+		assert.NoError(t, err, "the org survives its project")
+
+		remaining, err := s.ListProjects(ctx, acme, org.ListFilter{})
+		require.NoError(t, err)
+		assert.Equal(t, []grn.GRN{apiAcme}, grnsOf(remaining), "the org's other project survives")
+
+		// The refusal, against the delete above as its control: the
+		// first call matched a row and this one matches none.
+		assert.ErrorIs(t, s.DeleteProject(ctx, webAcme), org.ErrProjectNotFound)
+	})
+}
+
+// grnsOf names what a list returned, so a scoped list is compared whole
+// instead of by a length guard and an index — the guard aborts before
+// the claim it guards, and a list is one claim.
+func grnsOf[T interface{ GRN() grn.GRN }](items []T) []grn.GRN {
+	out := make([]grn.GRN, 0, len(items))
+	for _, item := range items {
+		out = append(out, item.GRN())
+	}
+	return out
+}
+
 func TestSessionStore_RoundTrip(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)

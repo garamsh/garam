@@ -1,10 +1,11 @@
 import { screen } from "@testing-library/react";
+import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { ConsoleSidebar } from "@/app/console/_components/console-sidebar";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { unauthenticated } from "@/testing/mocks/handlers";
+import { API_URL, unauthenticated } from "@/testing/mocks/handlers";
 import { renderServerComponent } from "@/testing/render";
 import { server } from "@/testing/setup";
 
@@ -53,5 +54,22 @@ describe("console sidebar", () => {
     server.use(unauthenticated());
 
     await expect(renderSidebar()).rejects.toThrow("NEXT_REDIRECT:/login");
+  });
+
+  it("keeps the shell, without the controls its reads feed, when the API is unreachable", async () => {
+    server.use(
+      http.get(`${API_URL}/me`, () => HttpResponse.error()),
+      http.get(`${API_URL}/orgs`, () => HttpResponse.error()),
+    );
+
+    await renderSidebar();
+
+    expect(screen.getByRole("link", { name: "Members" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Switch organization/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Open account menu/ }),
+    ).not.toBeInTheDocument();
   });
 });

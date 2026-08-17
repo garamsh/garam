@@ -80,6 +80,19 @@ describe("login page", () => {
     expect(logged).toHaveBeenCalled();
   });
 
+  it("says the API is unreachable instead of failing", async () => {
+    server.use(http.get(`${API_URL}/me`, () => HttpResponse.error()));
+
+    await renderServerComponent(LoginPage());
+
+    expect(
+      screen.getByRole("heading", { name: "Cannot reach the API" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Sign in with Google" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("sends an already signed-in visitor to the console", async () => {
     await expect(renderServerComponent(LoginPage())).rejects.toThrow(
       "NEXT_REDIRECT:/console",

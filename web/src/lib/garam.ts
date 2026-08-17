@@ -17,6 +17,18 @@ export class GaramApiError extends Error {
   }
 }
 
+/**
+ * The backend never answered: the connection failed, so there is no
+ * status to carry. It is a different answer from `GaramApiError`, where
+ * the backend replied and refused.
+ */
+export class GaramUnreachableError extends Error {
+  constructor(options?: ErrorOptions) {
+    super("the garam API could not be reached", options);
+    this.name = "GaramUnreachableError";
+  }
+}
+
 /** True when the error is the backend rejecting an absent session. */
 export function isUnauthenticated(error: unknown): boolean {
   return error instanceof GaramApiError && error.status === 401;
@@ -41,6 +53,8 @@ export async function garamFetch<T>(
       ...init?.headers,
     },
     cache: "no-store",
+  }).catch((cause: unknown) => {
+    throw new GaramUnreachableError({ cause });
   });
   if (!response.ok) {
     throw new GaramApiError(response.status, await errorMessage(response));

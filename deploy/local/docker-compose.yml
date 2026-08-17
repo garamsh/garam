@@ -114,6 +114,14 @@ services:
     depends_on:
       api:
         condition: service_healthy
+    # /readyz, as the other two services use, so every service in the
+    # stack reports health the same way. Here it reads nothing outside
+    # the process (ADR-0023), so an api outage leaves this healthy.
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:3000/readyz"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
 
 volumes:
   postgres-data:

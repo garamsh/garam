@@ -25,7 +25,7 @@ Rules every agent follows when writing code, tests, commits, and documents. The 
 
 Every project keeps all of these. They are the floor; only the tables below are selected from.
 
-Selection is not once. A project that changes its stack or its structure takes the file that now matches and drops the one that no longer does, in the pull request that makes the change.
+Selection is not once. A change that alters the project's stack or its structure carries the selection with it — the file that now matches added, the one that no longer does dropped, in the same pull request. A worker whose change triggers a selection does not make it.
 
 ## Architecture
 

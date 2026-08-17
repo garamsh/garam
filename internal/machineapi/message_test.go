@@ -411,7 +411,7 @@ func TestServer_StoresNothingWhenThePolicyEngineCannotAnswer(t *testing.T) {
 
 	policies.err = errorx.New(errorx.KindUnavailable, "authz channel is TRANSIENT_FAILURE")
 	status, body = send(t, client, http.MethodPost, url+"/messages", submission(sibling, "key-2"))
-	assert.Equal(t, http.StatusInternalServerError, status, body)
+	assert.Equal(t, http.StatusServiceUnavailable, status, body)
 	assert.Equal(t, []messageCall{posted(sender, sibling, "key-1")}, messages.calls,
 		"a message nothing decided reached the queue")
 }
@@ -435,7 +435,7 @@ func TestServer_StoresNothingWhenGroupMembershipCannotBeRead(t *testing.T) {
 
 	groups.err = errorx.New(errorx.KindUnavailable, "postgres is not accepting connections")
 	status, body = send(t, client, http.MethodPost, url+"/messages", submission(sibling, "key-2"))
-	assert.Equal(t, http.StatusInternalServerError, status, body)
+	assert.Equal(t, http.StatusServiceUnavailable, status, body)
 	assert.Equal(t, []messageCall{posted(sender, sibling, "key-1")}, messages.calls,
 		"a message decided without the sender's groups reached the queue")
 }

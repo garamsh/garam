@@ -7,13 +7,22 @@ import { server } from "@/testing/setup";
 
 describe("getSession", () => {
   it("returns the user behind the session cookie", async () => {
-    await expect(getSession()).resolves.toEqual(alice);
+    await expect(getSession()).resolves.toEqual({
+      status: "signed-in",
+      user: alice,
+    });
   });
 
-  it("returns null when the backend rejects the session", async () => {
+  it("answers signed-out when the backend rejects the session", async () => {
     server.use(unauthenticated());
 
-    await expect(getSession()).resolves.toBeNull();
+    await expect(getSession()).resolves.toEqual({ status: "signed-out" });
+  });
+
+  it("answers unreachable when the API never answered", async () => {
+    server.use(http.get(`${API_URL}/me`, () => HttpResponse.error()));
+
+    await expect(getSession()).resolves.toEqual({ status: "unreachable" });
   });
 
   it("propagates failures that are not an absent session", async () => {

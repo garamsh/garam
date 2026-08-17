@@ -10,7 +10,10 @@
 #
 # GARAM_IMAGE_ID and GARAM_WEB_IMAGE_ID are replaced by `make
 # minikube-apps` with the ids the cluster's daemon holds for the two
-# tags below. Applied by hand the placeholders stand and nothing rolls.
+# tags below. Applying this file by hand replaces those ids in the
+# cluster with the placeholders: every pod rolls onto whatever the tags
+# point at now, and the annotation names a placeholder rather than the
+# image that is running, until the next `make minikube-apps`.
 apiVersion: apps/v1
 kind: Deployment
 metadata:

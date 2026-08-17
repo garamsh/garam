@@ -20,24 +20,33 @@ import { UserMenu } from "./user-menu";
  * stays load-bearing here: `proxy.ts` only checks that a cookie exists,
  * so an expired or revoked session lands on the login page rather than
  * on an empty console.
+ *
+ * A read the API never answered drops the control it fed and keeps the
+ * rest. The layout mounts this behind a `<Suspense>` with no boundary,
+ * so throwing here takes the whole shell down, and a shell that renders
+ * is what leaves the page free to report the outage.
  */
 export async function ConsoleSidebar() {
-  const [orgs, user] = await Promise.all([listConsoleOrgs(), getSession()]);
-  if (!user) {
+  const [orgs, session] = await Promise.all([listConsoleOrgs(), getSession()]);
+  if (session.status === "signed-out") {
     redirect("/login");
   }
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarHeader>
-        <OrgSwitcher orgs={orgs} />
-      </SidebarHeader>
+      {orgs.status === "ok" && (
+        <SidebarHeader>
+          <OrgSwitcher orgs={orgs.orgs} />
+        </SidebarHeader>
+      )}
       <SidebarContent>
         <ConsoleNav />
       </SidebarContent>
-      <SidebarFooter>
-        <UserMenu nickname={user.nickname} />
-      </SidebarFooter>
+      {session.status === "signed-in" && (
+        <SidebarFooter>
+          <UserMenu nickname={session.user.nickname} />
+        </SidebarFooter>
+      )}
       <SidebarRail />
     </Sidebar>
   );

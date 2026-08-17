@@ -26,8 +26,9 @@ export default async function MembersPage({ params }: Params) {
     getSession(),
   ]);
 
+  const callerGrn = session.status === "signed-in" ? session.user.grn : null;
   const callerRole = members.find(
-    (member) => member.userGrn === session?.grn,
+    (member) => member.userGrn === callerGrn,
   )?.role;
   const canInvite = callerRole === "owner" || callerRole === "admin";
 

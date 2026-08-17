@@ -47,6 +47,17 @@ describe("organizations page", () => {
     expect(screen.queryAllByRole("link")).toHaveLength(1);
   });
 
+  it("says the API is unreachable rather than reporting no organizations", async () => {
+    server.use(http.get(`${API_URL}/orgs`, () => HttpResponse.error()));
+
+    await renderServerComponent(OrgsPage());
+
+    expect(
+      screen.getByRole("heading", { name: "Cannot reach the API" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("No organizations yet")).not.toBeInTheDocument();
+  });
+
   it("sends a rejected session to the login page, not the error boundary", async () => {
     server.use(unauthenticated());
 

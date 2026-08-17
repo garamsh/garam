@@ -16,6 +16,27 @@ export const metadata: Metadata = { title: "Organizations — garam" };
 export default async function OrgsPage() {
   const orgs = await listConsoleOrgs();
 
+  if (orgs.status === "unreachable") {
+    return (
+      <>
+        <PageHeader
+          title="Organizations"
+          description="The organizations you belong to."
+        />
+        <section role="alert" className="flex flex-col gap-1">
+          <h2 className="font-heading text-lg font-semibold">
+            Cannot reach the API
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            The garam API is not answering, so this page cannot list your
+            organizations. This is not a sign-in problem and not a permission
+            problem: try again once the API is back.
+          </p>
+        </section>
+      </>
+    );
+  }
+
   return (
     <>
       <PageHeader
@@ -27,7 +48,7 @@ export default async function OrgsPage() {
         </Button>
       </PageHeader>
 
-      {orgs.length === 0 ? (
+      {orgs.orgs.length === 0 ? (
         <EmptyState
           icon={Building2}
           title="No organizations yet"
@@ -35,7 +56,7 @@ export default async function OrgsPage() {
         />
       ) : (
         <ul className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {orgs.map((org) => (
+          {orgs.orgs.map((org) => (
             <li key={org.slug}>
               <Link href={`/console/orgs/${org.slug}`} className="block">
                 <Card className="gap-1 p-5 transition-colors hover:border-ring">

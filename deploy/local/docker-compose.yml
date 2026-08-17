@@ -16,11 +16,17 @@ services:
       - "${GARAM_DB_PORT:-55432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
+    # Over TCP, not the unix socket: the image runs a temporary server on
+    # that socket to initialise the data directory, so a socket probe
+    # reports healthy while the real server is still to start.
+    # start_period covers that initialisation, which the retry budget
+    # alone does not survive on a slow machine.
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U garam"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U garam"]
       interval: 2s
       timeout: 5s
       retries: 10
+      start_period: 60s
 
   # One-shot: applies pending migrations and exits. The servers wait for
   # it to succeed.

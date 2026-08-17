@@ -14,7 +14,7 @@ import (
 func writeError(w http.ResponseWriter, err error) {
 	status := statusOf(errorx.KindOf(err))
 	body := apigen.Error{Kind: errorx.KindOf(err).String(), Message: err.Error()}
-	if status == http.StatusInternalServerError {
+	if status >= http.StatusInternalServerError {
 		// Do not leak internals on 5xx.
 		body.Message = "internal error"
 	}

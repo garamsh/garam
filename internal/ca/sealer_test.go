@@ -2,6 +2,8 @@ package ca_test
 
 import (
 	"context"
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/rand"
 	"encoding/hex"
 	"os"
@@ -65,10 +67,32 @@ func TestAESGCMSealer_SealsTheSameValueDifferentlyEachTime(t *testing.T) {
 	assert.NotEqual(t, first, second)
 }
 
-func TestAESGCMSealer_RejectsWrongKeySize(t *testing.T) {
-	_, err := ca.NewAESGCMSealer(make([]byte, ca.KeySize-1))
-	require.Error(t, err)
-	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
+// TestNewAESGCMSealer_RejectsAKeyThatIsNotAES256 pins the size to this
+// package rather than to crypto/aes: 16 and 24 bytes are key lengths
+// crypto/aes accepts, so [ca.KeySize] is the only thing refusing them,
+// and the 32-byte key beside them is what the refusal is measured
+// against.
+func TestNewAESGCMSealer_RejectsAKeyThatIsNotAES256(t *testing.T) {
+	tests := map[string]struct {
+		size     int
+		accepted bool
+	}{
+		"an aes-128 key": {size: 16},
+		"an aes-192 key": {size: 24},
+		"an aes-256 key": {size: ca.KeySize, accepted: true},
+	}
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			sealer, err := ca.NewAESGCMSealer(make([]byte, tc.size))
+			if tc.accepted {
+				require.NoError(t, err)
+				assert.NotNil(t, sealer)
+				return
+			}
+			require.Error(t, err)
+			assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
+		})
+	}
 }
 
 func TestAESGCMSealer_OpenRejectsAlteredBytes(t *testing.T) {
@@ -139,8 +163,9 @@ func TestAESGCMSealer_OpenRejectsAnotherBinding(t *testing.T) {
 }
 
 // TestAESGCMSealer_OpenRejectsASplicedKeyIdentifier keeps the prefix
-// from being a way in: bytes wearing this key's identifier still do not
-// open unless this key sealed them.
+// from being rewritten: bytes this key sealed, wearing another key's
+// identifier, are refused by the name of that key, while the same bytes
+// untouched open.
 func TestAESGCMSealer_OpenRejectsASplicedKeyIdentifier(t *testing.T) {
 	ctx := context.Background()
 	mine, err := ca.NewAESGCMSealer(randomKey(t))
@@ -153,10 +178,56 @@ func TestAESGCMSealer_OpenRejectsASplicedKeyIdentifier(t *testing.T) {
 	theirsSealed, err := theirs.Seal(ctx, acmeRow, []byte("a private key"))
 	require.NoError(t, err)
 
-	spliced := append(append([]byte{}, mineSealed[:keyIDPrefix]...), theirsSealed[keyIDPrefix:]...)
+	// The identifier is the only thing that differs from mineSealed.
+	spliced := append(append([]byte{}, theirsSealed[:keyIDPrefix]...), mineSealed[keyIDPrefix:]...)
 	_, err = mine.Open(ctx, acmeRow, spliced)
 	require.Error(t, err)
+	assert.True(t, errorx.IsKind(err, errorx.KindFailedPrecondition))
+
+	opened, err := mine.Open(ctx, acmeRow, mineSealed)
+	require.NoError(t, err)
+	assert.Equal(t, []byte("a private key"), opened)
+}
+
+// TestAESGCMSealer_OpenRejectsBytesSealedWithoutTheKeyIdentifier holds
+// the identifier inside what the AEAD authenticates (ADR-0016). Both
+// values below are AES-256-GCM under this sealer's own key, carrying its
+// own identifier, and differ only in whether that identifier was
+// authenticated with them — which is the one thing the prefix check
+// cannot see.
+func TestAESGCMSealer_OpenRejectsBytesSealedWithoutTheKeyIdentifier(t *testing.T) {
+	ctx := context.Background()
+	key := randomKey(t)
+	sealer, err := ca.NewAESGCMSealer(key)
+	require.NoError(t, err)
+
+	secret := []byte("a private key")
+	sealed, err := sealer.Seal(ctx, acmeRow, secret)
+	require.NoError(t, err)
+	keyID := sealed[:keyIDPrefix]
+
+	block, err := aes.NewCipher(key)
+	require.NoError(t, err)
+	aead, err := cipher.NewGCM(block)
+	require.NoError(t, err)
+	// sealWith writes the sealed layout — identifier, nonce, ciphertext —
+	// under this sealer's key, authenticating what it is given.
+	sealWith := func(additionalData []byte) []byte {
+		header := make([]byte, keyIDPrefix+aead.NonceSize())
+		copy(header, keyID)
+		nonce := header[keyIDPrefix:]
+		_, err := rand.Read(nonce)
+		require.NoError(t, err)
+		return aead.Seal(header, nonce, secret, additionalData)
+	}
+
+	_, err = sealer.Open(ctx, acmeRow, sealWith(acmeRow))
+	require.Error(t, err)
 	assert.True(t, errorx.IsKind(err, errorx.KindDataLoss))
+
+	opened, err := sealer.Open(ctx, acmeRow, sealWith(append(append([]byte{}, keyID...), acmeRow...)))
+	require.NoError(t, err)
+	assert.Equal(t, secret, opened)
 }
 
 func TestNewSealerFromKeyFile_ReadsTheKey(t *testing.T) {

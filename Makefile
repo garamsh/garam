@@ -10,34 +10,33 @@ MOCKERY := go run github.com/vektra/mockery/v3@v3.7.2
 BUF := go run github.com/bufbuild/buf/cmd/buf@v1.72.0
 GOIMPORTS := go run golang.org/x/tools/cmd/goimports@v0.48.0
 
-# Host port for the dev Postgres container. Override it as an
-# environment variable (GARAM_DB_PORT=55440 make db-up e2e): this file
-# does not read deploy/local/.env, so a value set only there moves
-# compose and not the URL below.
-#
 # One dev Postgres per machine, not per worktree:
 # deploy/local/docker-compose.yml pins `name: garam-local`, so every
-# worktree addresses the same compose project and container, and this
-# variable moves that one server rather than adding a second.
-GARAM_DB_PORT ?= 55432
-
+# worktree addresses the same compose project and container.
+#
 # The e2e suite truncates every table and migrates from its own
 # migrations/, so it gets a database per worktree on that one server.
 # The suffix is git's own name for a linked worktree — unique per
 # worktree and fixed for its lifetime — and empty in the main checkout,
 # which keeps garam_test. The local stack keeps `garam`.
 TEST_DB_NAME ?= garam_test$(shell git rev-parse --git-dir | sed -n 's|.*/worktrees/|_|p')
-TEST_DATABASE_URL ?= postgres://garam:garam@localhost:$(GARAM_DB_PORT)/$(TEST_DB_NAME)?sslmode=disable
 
 COMPOSE_LOCAL := docker compose -f deploy/local/docker-compose.yml
 PNPM := pnpm --dir web
 
-# Where the running api is published on this host, asked of compose at
-# the moment it is used. GARAM_LOCAL_API_PORT moves that port, from
-# deploy/local/.env as readily as from the environment, and a second
-# copy of it here would be the copy that goes stale. Empty when nothing
-# is published, which `web-e2e` reports rather than dials.
+# Where the api and the dev Postgres are published on this host, asked
+# of compose at the moment each is used. GARAM_LOCAL_API_PORT and
+# GARAM_DB_PORT move them, from deploy/local/.env as readily as from the
+# environment, and a second copy of either here would be the copy that
+# goes stale. Each is empty when nothing is published, which `web-e2e`
+# and `e2e` report rather than dial.
 API_HOST_ADDR = $(shell $(COMPOSE_LOCAL) port api 8080 2>/dev/null | sed 's/^0\.0\.0\.0/localhost/')
+DB_HOST_ADDR = $(shell $(COMPOSE_LOCAL) port postgres 5432 2>/dev/null | sed 's/^0\.0\.0\.0/localhost/')
+
+# Empty rather than half a URL when no Postgres is published, so `e2e`
+# has one thing to test. Set it in the environment to run the suite
+# against a database outside compose.
+TEST_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)/$(TEST_DB_NAME)?sslmode=disable)
 
 .PHONY: lint format test build mock gen check-gen e2e db-up db-down backend-up ci
 .PHONY: web-install web-lint web-format web-test web-build web-gen web-check-gen web-e2e web-ci
@@ -126,6 +125,7 @@ backend-up:
 
 # e2e runs the store round-trips against real Postgres (see db-up).
 e2e:
+	@test -n '$(TEST_DATABASE_URL)' || { echo "e2e: no postgres published on this host — run make db-up" >&2; exit 1; }
 	GARAM_TEST_DATABASE_URL='$(TEST_DATABASE_URL)' go test -count=1 ./tests/e2e/...
 
 ci: format lint test build check-gen

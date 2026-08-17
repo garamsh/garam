@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/authn"
@@ -12,6 +13,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/org"
 	"github.com/garamsh/garam/internal/user"
+	"github.com/garamsh/garam/internal/watch"
 )
 
 // fakeProvider proves the provider abstraction: a second provider is a
@@ -584,4 +586,91 @@ func (s *fakeAgentStore) ListAssignmentsByOrg(_ context.Context, orgGRN grn.GRN)
 		return strings.Compare(a.Agent().String(), b.Agent().String())
 	})
 	return out, nil
+}
+
+// fakeWatchLeases is a watch.Store in memory: one entry per open watch,
+// which is what says whether a watch outlived the stream it belonged to.
+type fakeWatchLeases struct {
+	mu   sync.Mutex
+	byID map[watch.WatchID]grn.GRN
+}
+
+func newFakeWatchLeases() *fakeWatchLeases {
+	return &fakeWatchLeases{byID: map[watch.WatchID]grn.GRN{}}
+}
+
+func (l *fakeWatchLeases) Open(_ context.Context, id watch.WatchID, agent grn.GRN, _ time.Duration) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.byID[id] = agent
+	return nil
+}
+
+func (l *fakeWatchLeases) Refresh(_ context.Context, id watch.WatchID, _ time.Duration) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if _, live := l.byID[id]; !live {
+		return watch.ErrWatchLapsed
+	}
+	return nil
+}
+
+func (l *fakeWatchLeases) Close(_ context.Context, id watch.WatchID) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	delete(l.byID, id)
+	return nil
+}
+
+func (l *fakeWatchLeases) Count(_ context.Context, agent grn.GRN) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	count := 0
+	for _, watched := range l.byID {
+		if watched == agent {
+			count++
+		}
+	}
+	return count, nil
+}
+
+// held is how many watches are open in total.
+func (l *fakeWatchLeases) held() int {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return len(l.byID)
+}
+
+// fakeTurnEvents is the watch.Relay a forwarded event arrives over. The
+// process that received it from an adapter is another one (ADR-0017), so
+// announcing here is what that process does and the receiver registered
+// below is this one.
+type fakeTurnEvents struct {
+	mu      sync.Mutex
+	deliver func(grn.GRN, watch.Event)
+	ready   chan struct{}
+	once    sync.Once
+}
+
+func newFakeTurnEvents() *fakeTurnEvents {
+	return &fakeTurnEvents{ready: make(chan struct{})}
+}
+
+func (r *fakeTurnEvents) Announce(_ context.Context, agent grn.GRN, e watch.Event) error {
+	r.mu.Lock()
+	deliver := r.deliver
+	r.mu.Unlock()
+	if deliver != nil {
+		deliver(agent, e)
+	}
+	return nil
+}
+
+func (r *fakeTurnEvents) Receive(ctx context.Context, deliver func(grn.GRN, watch.Event)) error {
+	r.mu.Lock()
+	r.deliver = deliver
+	r.mu.Unlock()
+	r.once.Do(func() { close(r.ready) })
+	<-ctx.Done()
+	return nil
 }

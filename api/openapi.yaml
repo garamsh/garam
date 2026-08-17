@@ -24,7 +24,9 @@ tags:
       separate paths and separate schemas because they are separate
       facts: a definition is what the organization decided (ADR-0026),
       an agent is what an operator reported. Nothing on this listener
-      assigns an agent or issues a certificate.
+      assigns an agent or issues a certificate. One of them can also be
+      watched working, which is a subscription rather than a read and is
+      granted separately (ADR-0022).
 paths:
   /auth/login/{provider}:
     get:
@@ -656,6 +658,49 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Agent'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/agents/{agent}/watch:
+    get:
+      operationId: watchAgent
+      tags: [agent]
+      summary: Watch an agent work. Requires the `agent:watch` action.
+      description: >-
+        What the agent is saying now, as server-sent events, for as long
+        as the caller holds the response open (ADR-0022). Watching is
+        granted separately from reading: `agent:read` says an agent
+        exists and reports the states two parties report about it, and
+        this exposes the content of its work, so a caller holding only
+        the read is refused here.
+
+        It is best effort and never a record. It begins when it is
+        opened and replays nothing, because nothing was kept; the stream
+        it rests on drops events for a subscriber that falls behind and
+        marks no gap, so a gap here cannot be told from an agent that
+        said nothing. What has to be true afterwards — what an agent did,
+        which messages it consumed — comes from the queue instead.
+
+        Each event carries the platform's own name for it and the event
+        as the platform emitted it. garam writes a comment line on a
+        fixed interval besides, so a caller can tell a live stream with
+        nothing on it from one that is no longer connected. garam never
+        ends the stream to report that the agent has finished: nothing
+        here knows that, and an end that meant it would be the one
+        reading a person could not check.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/agent'
+      responses:
+        '200':
+          description: The stream, for as long as the caller holds it.
+          content:
+            text/event-stream:
+              schema:
+                type: string
         '401':
           $ref: '#/components/responses/Error'
         '403':

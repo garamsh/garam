@@ -24,6 +24,7 @@ import (
 	"github.com/garamsh/garam/internal/health"
 	"github.com/garamsh/garam/internal/org"
 	"github.com/garamsh/garam/internal/user"
+	"github.com/garamsh/garam/internal/watch"
 	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
 )
 
@@ -93,10 +94,28 @@ func serveAPI(cmd *cobra.Command) error {
 	if dev != nil {
 		providers = append(providers, dev)
 	}
+	// A watch is a subscription a browser opens here, and the events it
+	// reads were forwarded to the machine listener, which is another
+	// process (ADR-0017): this one learns of them over the relay and by
+	// no other route. A process holding no stream delivers nothing, so
+	// receiving runs where the streams are and nowhere else. Losing it
+	// leaves the live view dark and every durable path untouched
+	// (ADR-0022).
+	watches, err := watch.NewService(watch.NewPostgresStore(pool), watch.NewPostgresRelay(pool), watch.Config{})
+	if err != nil {
+		return err
+	}
+	go func() {
+		if err := watches.Receive(ctx); err != nil {
+			obs.logger.Error("turn event relay stopped", slog.String("error", err.Error()))
+		}
+	}()
+
 	srv := api.NewServer(
 		user.NewPostgresStore(pool),
 		org.NewPostgresStore(pool),
 		agent.NewPostgresStore(pool),
+		watches,
 		authn.NewPostgresSessionStore(pool),
 		providers,
 		api.NewGRPCEvaluator(conn),

@@ -22,6 +22,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/org"
 	"github.com/garamsh/garam/internal/user"
+	"github.com/garamsh/garam/internal/watch"
 )
 
 // fixture wires a Server to in-memory doubles.
@@ -30,6 +31,8 @@ type fixture struct {
 	users     *fakeUserStore
 	orgs      *fakeOrgStore
 	agents    *fakeAgentStore
+	leases    *fakeWatchLeases
+	relay     *fakeTurnEvents
 	sessions  *fakeSessionStore
 	provider  *fakeProvider
 	evaluator *mocks.MockEvaluator
@@ -42,12 +45,23 @@ func newFixture(t *testing.T, extra ...authn.Provider) *fixture {
 		users:     newFakeUserStore(),
 		orgs:      newFakeOrgStore(),
 		agents:    newFakeAgentStore(),
+		leases:    newFakeWatchLeases(),
+		relay:     newFakeTurnEvents(),
 		sessions:  newFakeSessionStore(),
 		provider:  &fakeProvider{name: "google"},
 		evaluator: mocks.NewMockEvaluator(t),
 		policies:  mocks.NewMockPolicyManager(t),
 	}
-	srv := api.NewServer(f.users, f.orgs, f.agents, f.sessions, append([]authn.Provider{f.provider}, extra...), f.evaluator, f.policies, api.Config{SessionTTL: time.Hour})
+	// The events a stream carries were forwarded to another process, so
+	// this one delivers what the relay announces to the watches it holds
+	// (ADR-0017) — the goroutine `serve api` runs. The lease is short so
+	// a test sees what a quiet stream carries without waiting on it.
+	watches, err := watch.NewService(f.leases, f.relay, watch.Config{Lease: 300 * time.Millisecond})
+	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	go func() { _ = watches.Receive(ctx) }()
+	srv := api.NewServer(f.users, f.orgs, f.agents, watches, f.sessions, append([]authn.Provider{f.provider}, extra...), f.evaluator, f.policies, api.Config{SessionTTL: time.Hour})
 	f.handler = apigen.Handler(srv)
 	return f
 }

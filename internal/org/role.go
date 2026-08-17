@@ -59,11 +59,16 @@ const (
 	ActionPolicyAttach = "policy:attach"
 	ActionPolicyDetach = "policy:detach"
 
-	// Reading the agents an org holds. The org owns the constant for
-	// the reason it owns the policy ones: the api server enforces it,
-	// and internal/agent does not import this package — it keeps its
-	// own copy of the org service type rather than depend on it.
+	// Reading the agents an org holds, and defining one. The org owns
+	// the constants for the reason it owns the policy ones: the api
+	// server enforces them, and internal/agent does not import this
+	// package — it keeps its own copy of the org service type rather
+	// than depend on it.
 	ActionAgentRead = "agent:read"
+	// ActionAgentDefine is saying what an agent should be (ADR-0026).
+	// It is not provisioning one: what an operator made is reported,
+	// and no action here grants it.
+	ActionAgentDefine = "agent:define"
 )
 
 // Actions returns the action patterns the role grants on an org and
@@ -76,18 +81,18 @@ const (
 func (r Role) Actions() []string {
 	switch r {
 	case RoleOwner:
-		return []string{"org:*", "group:*", "project:*", "policy:*", ActionAgentRead}
+		return []string{"org:*", "group:*", "project:*", "policy:*", ActionAgentRead, ActionAgentDefine}
 	case RoleAdmin:
 		return []string{
 			ActionOrgRead, ActionOrgUpdate, ActionOrgMemberList, ActionOrgInvite,
-			"group:*", "project:*", "policy:*", ActionAgentRead,
+			"group:*", "project:*", "policy:*", ActionAgentRead, ActionAgentDefine,
 		}
 	case RoleMember:
 		return []string{
 			ActionOrgRead, ActionOrgMemberList,
 			ActionGroupRead, ActionGroupMemberList,
 			ActionProjectRead, ActionProjectMemberList,
-			ActionAgentRead,
+			ActionAgentRead, ActionAgentDefine,
 		}
 	}
 	return nil

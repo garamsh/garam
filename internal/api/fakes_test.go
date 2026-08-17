@@ -469,20 +469,26 @@ func (s *fakeOrgStore) AcceptInvitation(_ context.Context, token string, _ grn.G
 }
 
 // fakeAgentStore is an in-memory agent.Store double. The API reads
-// agents and the assignments holding them; the write methods an
-// operator reaches over the machine listener stay unimplemented and
-// panic through the embedded interface.
+// agents and the assignments holding them and writes definitions; the
+// write methods an operator reaches over the machine listener stay
+// unimplemented and panic through the embedded interface.
+//
+// Definitions are held apart from agents, as the schema holds them:
+// defining an agent puts nothing in `agents`, so a test that finds one
+// there found what an operator reported.
 type fakeAgentStore struct {
 	agent.Store
 	mu          sync.Mutex
 	agents      map[string]*agent.Agent
 	assignments map[string]*agent.Assignment
+	definitions map[string]*agent.Definition
 }
 
 func newFakeAgentStore() *fakeAgentStore {
 	return &fakeAgentStore{
 		agents:      map[string]*agent.Agent{},
 		assignments: map[string]*agent.Assignment{},
+		definitions: map[string]*agent.Definition{},
 	}
 }
 
@@ -541,6 +547,28 @@ func (s *fakeAgentStore) GetAssignment(_ context.Context, agentGRN grn.GRN) (*ag
 		return nil, agent.ErrAssignmentNotFound
 	}
 	return a, nil
+}
+
+func (s *fakeAgentStore) Define(_ context.Context, d *agent.Definition) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.definitions[d.Agent().String()] = d
+	return nil
+}
+
+func (s *fakeAgentStore) ListDefinitionsByOrg(_ context.Context, orgGRN grn.GRN) ([]*agent.Definition, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := []*agent.Definition{}
+	for _, d := range s.definitions {
+		if d.Organization() == orgGRN {
+			out = append(out, d)
+		}
+	}
+	slices.SortFunc(out, func(a, b *agent.Definition) int {
+		return strings.Compare(a.Agent().String(), b.Agent().String())
+	})
+	return out, nil
 }
 
 func (s *fakeAgentStore) ListAssignmentsByOrg(_ context.Context, orgGRN grn.GRN) ([]*agent.Assignment, error) {

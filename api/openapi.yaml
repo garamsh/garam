@@ -19,10 +19,12 @@ tags:
       subjects they are attached to.
   - name: agent
     description: >-
-      The agents an organization holds. Read-only here: an operator
-      provisions an agent from outside garam and reports back, so
-      nothing on this listener creates one, assigns one, or issues a
-      certificate.
+      The agents an organization holds, and the definitions of the
+      agents it says it should have. The two are answered under
+      separate paths and separate schemas because they are separate
+      facts: a definition is what the organization decided (ADR-0026),
+      an agent is what an operator reported. Nothing on this listener
+      assigns an agent or issues a certificate.
 paths:
   /auth/login/{provider}:
     get:
@@ -654,6 +656,69 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Agent'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/agent-definitions:
+    post:
+      operationId: defineAgent
+      tags: [agent]
+      summary: Define an agent. Requires the `member` role.
+      description: >-
+        Records what an agent should be — which operator is to run it,
+        and the values that operator constructs it from — and mints the
+        GRN of the agent it describes (ADR-0026). It creates no agent:
+        garam learns an agent exists when an operator reports one, so
+        until then the minted GRN is answered here and nowhere under
+        `/orgs/{org}/agents`. A definition is written once and has no
+        update: nothing tells garam whether an operator has already
+        acted on it.
+      parameters:
+        - $ref: '#/components/parameters/org'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentDefinitionCreate'
+      responses:
+        '201':
+          description: Agent defined.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentDefinition'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    get:
+      operationId: listAgentDefinitions
+      tags: [agent]
+      summary: List an organization's agent definitions. Requires the `member` role.
+      description: >-
+        The agents the organization says it should have. An entry here
+        is not an agent, and an agent under `/orgs/{org}/agents` is not
+        a definition; nothing joins the two, because what an operator
+        made from a definition is not reported back yet.
+      parameters:
+        - $ref: '#/components/parameters/org'
+      responses:
+        '200':
+          description: The organization's agent definitions.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AgentDefinition'
         '401':
           $ref: '#/components/responses/Error'
         '403':
@@ -1377,6 +1442,61 @@ components:
           type: string
           format: date-time
         updatedAt:
+          type: string
+          format: date-time
+    AgentValues:
+      type: object
+      description: >-
+        What an operator constructs the agent from. garam stores the
+        keys and the strings and interprets neither: what the payload
+        means belongs to the operator that reads it. A key is one to 64
+        characters of lowercase letters, digits and `-`; a value is at
+        most 4096 bytes; at most 32 entries.
+      additionalProperties:
+        type: string
+      example:
+        model: haiku
+        workspace: grn-acme-default-project-frontend
+    AgentDefinitionCreate:
+      type: object
+      description: What an agent should be, as an organization's member states it.
+      required: [operatorGrn]
+      properties:
+        operatorGrn:
+          type: string
+          description: >-
+            The operator that is to run the agent. It must be an
+            operator of this organization; whether it exists is not
+            knowable here, because nothing registers an operator.
+          example: grn:acme:default:operator:field-one
+        values:
+          $ref: '#/components/schemas/AgentValues'
+    AgentDefinition:
+      type: object
+      description: >-
+        What an organization says an agent should be (ADR-0026). It is
+        a record and not an agent: no state is reported on it, and it
+        carries none of the fields an `Agent` carries. `agentGrn` is
+        the identity garam minted for the agent this definition
+        describes, and no agent answers under it until an operator
+        reports one.
+      required: [agentGrn, orgGrn, operatorGrn, values, definedBy, createdAt]
+      properties:
+        agentGrn:
+          type: string
+          example: grn:acme:default:agent:9f2ac1b40d8e7a35
+        orgGrn:
+          type: string
+        operatorGrn:
+          type: string
+          example: grn:acme:default:operator:field-one
+        values:
+          $ref: '#/components/schemas/AgentValues'
+        definedBy:
+          type: string
+          description: The member that defined the agent.
+          example: grn:root:default:user:117421510527410544321
+        createdAt:
           type: string
           format: date-time
     Error:

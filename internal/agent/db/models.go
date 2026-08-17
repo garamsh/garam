@@ -25,6 +25,15 @@ type AgentAssignment struct {
 	UpdatedAt   pgtype.Timestamptz
 }
 
+type AgentDefinition struct {
+	AgentGrn    string
+	OrgGrn      string
+	OperatorGrn string
+	AgentValues []byte
+	DefinedBy   string
+	CreatedAt   pgtype.Timestamptz
+}
+
 type Group struct {
 	Grn       string
 	OrgGrn    string

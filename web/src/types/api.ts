@@ -333,6 +333,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/orgs/{org}/agent-definitions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List an organization's agent definitions. Requires the `member` role.
+         * @description The agents the organization says it should have. An entry here is not an agent, and an agent under `/orgs/{org}/agents` is not a definition; nothing joins the two, because what an operator made from a definition is not reported back yet.
+         */
+        get: operations["listAgentDefinitions"];
+        put?: never;
+        /**
+         * Define an agent. Requires the `member` role.
+         * @description Records what an agent should be — which operator is to run it, and the values that operator constructs it from — and mints the GRN of the agent it describes (ADR-0026). It creates no agent: garam learns an agent exists when an operator reports one, so until then the minted GRN is answered here and nowhere under `/orgs/{org}/agents`. A definition is written once and has no update: nothing tells garam whether an operator has already acted on it.
+         */
+        post: operations["defineAgent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orgs/{org}/policies": {
         parameters: {
             query?: never;
@@ -697,6 +721,41 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+        };
+        /**
+         * @description What an operator constructs the agent from. garam stores the keys and the strings and interprets neither: what the payload means belongs to the operator that reads it. A key is one to 64 characters of lowercase letters, digits and `-`; a value is at most 4096 bytes; at most 32 entries.
+         * @example {
+         *       "model": "haiku",
+         *       "workspace": "grn-acme-default-project-frontend"
+         *     }
+         */
+        AgentValues: {
+            [key: string]: string;
+        };
+        /** @description What an agent should be, as an organization's member states it. */
+        AgentDefinitionCreate: {
+            /**
+             * @description The operator that is to run the agent. It must be an operator of this organization; whether it exists is not knowable here, because nothing registers an operator.
+             * @example grn:acme:default:operator:field-one
+             */
+            operatorGrn: string;
+            values?: components["schemas"]["AgentValues"];
+        };
+        /** @description What an organization says an agent should be (ADR-0026). It is a record and not an agent: no state is reported on it, and it carries none of the fields an `Agent` carries. `agentGrn` is the identity garam minted for the agent this definition describes, and no agent answers under it until an operator reports one. */
+        AgentDefinition: {
+            /** @example grn:acme:default:agent:9f2ac1b40d8e7a35 */
+            agentGrn: string;
+            orgGrn: string;
+            /** @example grn:acme:default:operator:field-one */
+            operatorGrn: string;
+            values: components["schemas"]["AgentValues"];
+            /**
+             * @description The member that defined the agent.
+             * @example grn:root:default:user:117421510527410544321
+             */
+            definedBy: string;
+            /** Format: date-time */
+            createdAt: string;
         };
         Error: {
             /** @description errorx kind, e.g. `not_found`, `permission_denied`. */
@@ -1533,6 +1592,63 @@ export interface operations {
                     "application/json": components["schemas"]["Agent"];
                 };
             };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    listAgentDefinitions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The organization's agent definitions. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentDefinition"][];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    defineAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentDefinitionCreate"];
+            };
+        };
+        responses: {
+            /** @description Agent defined. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentDefinition"];
+                };
+            };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];

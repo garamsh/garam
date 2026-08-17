@@ -16,7 +16,9 @@ import (
 // memoryStore is a Store in memory. It keeps the assignment rules the
 // service depends on — one operator per agent, an epoch that rises with
 // every assignment — and reports states nowhere: the operator surface
-// writes none.
+// writes none. It holds no definition either: an operator's calls reach
+// none, because what an organization defines is not what an operator
+// creates (ADR-0026).
 type memoryStore struct {
 	agents      map[grn.GRN]*Agent
 	assignments map[grn.GRN]*Assignment
@@ -81,6 +83,14 @@ func (s *memoryStore) ListAssignmentsByOrg(_ context.Context, orgGRN grn.GRN) ([
 		}
 	}
 	return assignments, nil
+}
+
+func (s *memoryStore) Define(context.Context, *Definition) error {
+	return errorx.New(errorx.KindUnimplemented, "nothing is defined here")
+}
+
+func (s *memoryStore) ListDefinitionsByOrg(context.Context, grn.GRN) ([]*Definition, error) {
+	return nil, errorx.New(errorx.KindUnimplemented, "nothing is defined here")
 }
 
 func (s *memoryStore) ReportProvisioningState(context.Context, grn.GRN, int, ProvisioningState) (*Agent, error) {

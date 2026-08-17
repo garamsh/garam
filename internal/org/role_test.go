@@ -25,11 +25,11 @@ func TestParseRole_Unknown(t *testing.T) {
 }
 
 func TestRoleActions_GrantSets(t *testing.T) {
-	assert.Equal(t, []string{"org:*", "group:*", "project:*", "policy:*", org.ActionAgentRead}, org.RoleOwner.Actions())
+	assert.Equal(t, []string{"org:*", "group:*", "project:*", "policy:*", org.ActionAgentRead, org.ActionAgentDefine}, org.RoleOwner.Actions())
 	assert.Equal(t,
 		[]string{
 			org.ActionOrgRead, org.ActionOrgUpdate, org.ActionOrgMemberList, org.ActionOrgInvite,
-			"group:*", "project:*", "policy:*", org.ActionAgentRead,
+			"group:*", "project:*", "policy:*", org.ActionAgentRead, org.ActionAgentDefine,
 		},
 		org.RoleAdmin.Actions())
 	assert.Equal(t,
@@ -37,7 +37,7 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			org.ActionOrgRead, org.ActionOrgMemberList,
 			org.ActionGroupRead, org.ActionGroupMemberList,
 			org.ActionProjectRead, org.ActionProjectMemberList,
-			org.ActionAgentRead,
+			org.ActionAgentRead, org.ActionAgentDefine,
 		},
 		org.RoleMember.Actions())
 	assert.Empty(t, org.Role("").Actions())
@@ -51,6 +51,7 @@ func TestRoleActions_NoWildcardOverAgents(t *testing.T) {
 	for _, r := range []org.Role{org.RoleOwner, org.RoleAdmin, org.RoleMember} {
 		assert.NotContains(t, r.Actions(), "agent:*", string(r))
 		assert.Contains(t, r.Actions(), org.ActionAgentRead, string(r))
+		assert.Contains(t, r.Actions(), org.ActionAgentDefine, string(r))
 	}
 }
 
@@ -60,7 +61,7 @@ func TestActionsFor_UnionsKnownRoles(t *testing.T) {
 			org.ActionOrgRead, org.ActionOrgMemberList,
 			org.ActionGroupRead, org.ActionGroupMemberList,
 			org.ActionProjectRead, org.ActionProjectMemberList,
-			org.ActionAgentRead,
+			org.ActionAgentRead, org.ActionAgentDefine,
 			org.ActionOrgUpdate, org.ActionOrgInvite,
 			"group:*", "project:*", "policy:*",
 		},

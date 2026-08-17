@@ -3,6 +3,7 @@ package authz_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -259,19 +260,34 @@ func TestPolicyGRPCServer_AttachmentRejectsBadGRN(t *testing.T) {
 // TestPolicyGRPCServer_ListPolicyAttachments answers for the listing
 // alone: the store is a mock, so an attach made through the server
 // could not reach the list it returns. What the response carries is
-// what the store held, one entry each.
+// what the store held, one entry each. The two attachments name one
+// policy and two different subjects at two different times, so an
+// entry that carries its neighbour's subject, its own policy in place
+// of its subject, or nothing at all stops matching.
 func TestPolicyGRPCServer_ListPolicyAttachments(t *testing.T) {
 	g := policyGRN(t, orgGRN("acme"))
+	ada, bob := subjectGRN("ada"), subjectGRN("bob")
+	attachedAt := time.Date(2026, 7, 25, 9, 30, 0, 0, time.UTC)
 	store := mocks.NewMockStore(t)
 	store.EXPECT().ListPolicyAttachments(mock.Anything, g).
-		Return([]*authz.PolicyAttachment{{}, {}}, nil).Once()
+		Return([]*authz.PolicyAttachment{
+			authz.NewPolicyAttachment(g, ada, attachedAt),
+			authz.NewPolicyAttachment(g, bob, attachedAt.Add(time.Hour)),
+		}, nil).Once()
 
 	srv := authz.NewPolicyGRPCServer(store, authz.NewPolicyCache(store))
 	resp, err := srv.ListPolicyAttachments(context.Background(), &authzv1.ListPolicyAttachmentsRequest{
 		PolicyGrn: g.String(),
 	})
 	require.NoError(t, err)
-	assert.Len(t, resp.GetAttachments(), 2)
+	require.Len(t, resp.GetAttachments(), 2)
+
+	first, second := resp.GetAttachments()[0], resp.GetAttachments()[1]
+	assert.Equal(t, g.String(), first.GetPolicyGrn())
+	assert.Equal(t, ada.String(), first.GetSubjectGrn())
+	assert.Equal(t, attachedAt, first.GetCreatedAt().AsTime())
+	assert.Equal(t, bob.String(), second.GetSubjectGrn())
+	assert.Equal(t, attachedAt.Add(time.Hour), second.GetCreatedAt().AsTime())
 }
 
 func policyGRN(t *testing.T, orgGRN grn.GRN) grn.GRN {

@@ -296,11 +296,7 @@ func rowToAttachment(row db.PolicyAttachment) (*PolicyAttachment, error) {
 	if err != nil {
 		return nil, errorx.Wrap(err, "authz store: attachment subject grn")
 	}
-	return &PolicyAttachment{
-		policyGRN:  policyGRN,
-		subjectGRN: subjectGRN,
-		createdAt:  row.CreatedAt.Time,
-	}, nil
+	return NewPolicyAttachment(policyGRN, subjectGRN, row.CreatedAt.Time), nil
 }
 
 // classify maps driver errors to errorx kinds. The append-only and

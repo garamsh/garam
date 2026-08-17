@@ -119,14 +119,22 @@ func TestScopedPermissions_GroupWithoutRolesGrantsNothing(t *testing.T) {
 	aliceGRN := grn.New("root", "default", user.ServiceType, "alice-sub")
 	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRN, aliceGRN, org.RoleMember)))
 
-	g := grn.New(slug, "default", org.ServiceTypeGroup, "eng")
-	require.NoError(t, f.orgs.CreateGroup(testCtx(t), org.NewGroup(g, "eng", orgGRN)))
-	require.NoError(t, f.orgs.AddGroupMember(testCtx(t), g, aliceGRN))
+	// Two groups alice belongs to, differing only in whether the group
+	// carries a role. Reading them together is what separates a group
+	// that grants nothing from a route that grants nothing.
+	eng := grn.New(slug, "default", org.ServiceTypeGroup, "eng")
+	require.NoError(t, f.orgs.CreateGroup(testCtx(t), org.NewGroup(eng, "eng", orgGRN)))
+	require.NoError(t, f.orgs.AddGroupMember(testCtx(t), eng, aliceGRN))
+	ops := grn.New(slug, "default", org.ServiceTypeGroup, "ops")
+	require.NoError(t, f.orgs.CreateGroup(testCtx(t), org.NewGroup(ops, "ops", orgGRN, string(org.RoleAdmin))))
+	require.NoError(t, f.orgs.AddGroupMember(testCtx(t), ops, aliceGRN))
 
 	rec := f.do(t, "GET", "/orgs/"+slug+"/groups/eng", "", alice)
 	assert.Equal(t, http.StatusOK, rec.Code)
 	rec = f.do(t, "PATCH", "/orgs/"+slug+"/groups/eng", `{"name":"renamed"}`, alice)
 	assert.Equal(t, http.StatusForbidden, rec.Code)
+	rec = f.do(t, "PATCH", "/orgs/"+slug+"/groups/ops", `{"name":"renamed"}`, alice)
+	assert.Equal(t, http.StatusOK, rec.Code)
 }
 
 // TestScopedPermissions_DirectUserRoles proves roles stored on the

@@ -106,29 +106,47 @@ func TestPolicyCache_StatementsBySubject(t *testing.T) {
 	}
 }
 
-func TestPolicyCache_InvalidateReloadsTheOrg(t *testing.T) {
+// TestPolicyCache_InvalidateDropsOnlyTheOrgNamed reads the two
+// directions together: acme reloads because Invalidate named it, and
+// other survives because Invalidate did not. Either half alone passes
+// on a cache that never drops anything, or on one that drops
+// everything. Each ActivePolicies expectation is exhausted by the one
+// load it stands for, so a load that should have come from the cache
+// fails the test.
+func TestPolicyCache_InvalidateDropsOnlyTheOrgNamed(t *testing.T) {
 	store := mocks.NewMockStore(t)
-	acme := orgGRN("acme")
+	acme, other := orgGRN("acme"), orgGRN("other")
 	store.EXPECT().ActivePolicies(mock.Anything, acme).
 		Return([]authz.ActivePolicy{orgWidePolicy("before", authz.EffectAllow)}, nil).Once()
-	store.EXPECT().ActivePolicies(mock.Anything, acme).
-		Return([]authz.ActivePolicy{orgWidePolicy("after", authz.EffectDeny)}, nil).Once()
+	store.EXPECT().ActivePolicies(mock.Anything, other).
+		Return([]authz.ActivePolicy{orgWidePolicy("other", authz.EffectAllow)}, nil).Once()
 
 	cache := authz.NewPolicyCache(store)
 	before, err := cache.Statements(context.Background(), acme, nil)
 	require.NoError(t, err)
-	assert.Equal(t, "before", before[0].Sid)
+	require.Equal(t, "before", before[0].Sid)
+	otherBefore, err := cache.Statements(context.Background(), other, nil)
+	require.NoError(t, err)
+	require.Equal(t, "other", otherBefore[0].Sid)
 
+	// An org nothing has cached leaves both entries where they are.
+	cache.Invalidate(grn.New(grn.RootOwner, grn.DefaultProject, "org", "missing"))
+	acmeAfterUnknown, err := cache.Statements(context.Background(), acme, nil)
+	require.NoError(t, err)
+	assert.Equal(t, before, acmeAfterUnknown)
+	otherAfterUnknown, err := cache.Statements(context.Background(), other, nil)
+	require.NoError(t, err)
+	assert.Equal(t, otherBefore, otherAfterUnknown)
+
+	store.EXPECT().ActivePolicies(mock.Anything, acme).
+		Return([]authz.ActivePolicy{orgWidePolicy("after", authz.EffectDeny)}, nil).Once()
 	cache.Invalidate(acme)
 
 	after, err := cache.Statements(context.Background(), acme, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "after", after[0].Sid)
 	assert.Equal(t, authz.EffectDeny, after[0].Effect)
-}
-
-func TestPolicyCache_InvalidateUnknownOrgIsANoop(t *testing.T) {
-	store := mocks.NewMockStore(t)
-	cache := authz.NewPolicyCache(store)
-	cache.Invalidate(grn.New(grn.RootOwner, grn.DefaultProject, "org", "missing"))
+	otherAfterAcme, err := cache.Statements(context.Background(), other, nil)
+	require.NoError(t, err)
+	assert.Equal(t, otherBefore, otherAfterAcme)
 }

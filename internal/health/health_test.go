@@ -41,24 +41,34 @@ func serving(deps ...health.Dependency) *http.ServeMux {
 	return mux
 }
 
+// TestReady_NamesTheDependencyThatIsUnavailable covers what the
+// readiness answer turns on: the dependencies the process was given.
+// The rows are read together and each body in full — a handler that
+// answered with an empty body would satisfy every row's status code,
+// and naming no dependency would satisfy the first two.
 func TestReady_NamesTheDependencyThatIsUnavailable(t *testing.T) {
-	// The same two dependencies, differing only in whether the second
-	// one answers: what the readiness answer turns on.
-	down := probe(t, serving(available("database"), unavailable("authz")), health.ReadyPath)
-	assert.Equal(t, http.StatusServiceUnavailable, down.Code)
-	assert.Contains(t, down.Body.String(), "authz")
-
-	up := probe(t, serving(available("database"), available("authz")), health.ReadyPath)
-	assert.Equal(t, http.StatusOK, up.Code)
-	assert.Contains(t, up.Body.String(), "ok")
-}
-
-func TestReady_ReportsNoDependencyItDoesNotHave(t *testing.T) {
-	// A process readiness is given no dependency for is ready, and the
-	// body says nothing about one.
-	rec := probe(t, serving(), health.ReadyPath)
-	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.NotContains(t, rec.Body.String(), "unavailable")
+	cases := map[string]struct {
+		deps []health.Dependency
+		code int
+		body string
+	}{
+		"no dependency to report": {nil, http.StatusOK, "ok\n"},
+		"every one answers": {
+			[]health.Dependency{available("database"), available("authz")},
+			http.StatusOK, "ok\n",
+		},
+		"one does not answer": {
+			[]health.Dependency{available("database"), unavailable("authz")},
+			http.StatusServiceUnavailable, "authz unavailable\n",
+		},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			rec := probe(t, serving(c.deps...), health.ReadyPath)
+			assert.Equal(t, c.code, rec.Code)
+			assert.Equal(t, c.body, rec.Body.String())
+		})
+	}
 }
 
 func TestLive_AnswersWhileADependencyIsUnavailable(t *testing.T) {

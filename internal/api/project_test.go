@@ -162,11 +162,20 @@ func TestProjectRoles_RejectUnknownRole(t *testing.T) {
 		permission{ownerGRN, org.ActionProjectUpdate},
 	)
 
-	rec := f.do(t, "POST", "/orgs/"+slug+"/projects", `{"name":"web","roles":["root"]}`, owner)
+	// Each refusal is read against the same route taking a name
+	// org.ParseRole knows: what stops being accepted if it stops
+	// parsing anything.
+	rec := f.do(t, "POST", "/orgs/"+slug+"/projects", `{"name":"app","roles":["admin"]}`, owner)
+	require.Equal(t, http.StatusCreated, rec.Code)
+
+	rec = f.do(t, "POST", "/orgs/"+slug+"/projects", `{"name":"web","roles":["root"]}`, owner)
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.Equal(t, "invalid_argument", decodeBody[apigen.Error](t, rec).Kind)
 
 	project := createProject(t, f, owner, slug, "web")
+	rec = f.do(t, "PATCH", "/orgs/"+slug+"/projects/"+project, `{"roles":["member"]}`, owner)
+	require.Equal(t, http.StatusOK, rec.Code)
+
 	rec = f.do(t, "PATCH", "/orgs/"+slug+"/projects/"+project, `{"roles":["root"]}`, owner)
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }

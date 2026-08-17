@@ -12,7 +12,7 @@
 
 ## Conventions consulted
 
-<!-- The docs/convention/ files you actually read and applied. -->
+<!-- The docs/convention/ files you actually read and applied. Only list documents you read. -->
 
 ## Defaults not taken
 

@@ -14,15 +14,17 @@ import (
 
 // Domain sentinel errors.
 var (
-	ErrOrgNotFound         = errorx.New(errorx.KindNotFound, "org not found")
-	ErrGroupNotFound       = errorx.New(errorx.KindNotFound, "group not found")
-	ErrProjectNotFound     = errorx.New(errorx.KindNotFound, "project not found")
-	ErrMemberNotFound      = errorx.New(errorx.KindNotFound, "org member not found")
-	ErrInvitationNotFound  = errorx.New(errorx.KindNotFound, "invitation not found")
-	ErrInvitationAccepted  = errorx.New(errorx.KindFailedPrecondition, "invitation already accepted")
-	ErrInvitationExpired   = errorx.New(errorx.KindFailedPrecondition, "invitation expired")
-	ErrOrgAlreadyExists    = errorx.New(errorx.KindAlreadyExists, "org already exists")
-	ErrMemberAlreadyExists = errorx.New(errorx.KindAlreadyExists, "org member already exists")
+	ErrOrgNotFound           = errorx.New(errorx.KindNotFound, "org not found")
+	ErrGroupNotFound         = errorx.New(errorx.KindNotFound, "group not found")
+	ErrProjectNotFound       = errorx.New(errorx.KindNotFound, "project not found")
+	ErrMemberNotFound        = errorx.New(errorx.KindNotFound, "org member not found")
+	ErrGroupMemberNotFound   = errorx.New(errorx.KindNotFound, "group member not found")
+	ErrProjectMemberNotFound = errorx.New(errorx.KindNotFound, "project member not found")
+	ErrInvitationNotFound    = errorx.New(errorx.KindNotFound, "invitation not found")
+	ErrInvitationAccepted    = errorx.New(errorx.KindFailedPrecondition, "invitation already accepted")
+	ErrInvitationExpired     = errorx.New(errorx.KindFailedPrecondition, "invitation expired")
+	ErrOrgAlreadyExists      = errorx.New(errorx.KindAlreadyExists, "org already exists")
+	ErrMemberAlreadyExists   = errorx.New(errorx.KindAlreadyExists, "org member already exists")
 )
 
 // ServiceType* are the canonical GRN service-type prefixes used by

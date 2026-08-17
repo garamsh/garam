@@ -115,6 +115,14 @@ func TestProjectMembers_Lifecycle(t *testing.T) {
 	rec = f.do(t, "GET", "/orgs/"+slug+"/projects/"+project+"/members", "", owner)
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.Empty(t, decodeBody[[]apigen.MemberRef](t, rec))
+
+	// The two removals that match nothing, against the one above as
+	// their control: it took a membership away and answered 204, and
+	// neither of these has one to take.
+	rec = f.do(t, "DELETE", "/orgs/"+slug+"/projects/"+project+"/members/"+ada, "", owner)
+	assert.Equal(t, http.StatusNotFound, rec.Code, "ada is no longer a member")
+	rec = f.do(t, "DELETE", "/orgs/"+slug+"/projects/nope/members/"+ada, "", owner)
+	assert.Equal(t, http.StatusNotFound, rec.Code, "the project does not exist")
 }
 
 func TestProjectRoles_AssignedOverHTTP(t *testing.T) {

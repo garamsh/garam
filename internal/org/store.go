@@ -52,6 +52,8 @@ type Store interface {
 	UpdateGroup(ctx context.Context, g grn.GRN, p GroupPatch) (*Group, error)
 	DeleteGroup(ctx context.Context, g grn.GRN) error
 	AddGroupMember(ctx context.Context, groupGRN, memberGRN grn.GRN) error
+	// RemoveGroupMember returns ErrGroupMemberNotFound when the pair
+	// names no membership, which a Group that does not exist does too.
 	RemoveGroupMember(ctx context.Context, groupGRN, memberGRN grn.GRN) error
 	ListGroupMembers(ctx context.Context, groupGRN grn.GRN) ([]grn.GRN, error)
 	// ListGroupsByMember returns the org's Groups the member belongs
@@ -65,6 +67,9 @@ type Store interface {
 	UpdateProject(ctx context.Context, g grn.GRN, p ProjectPatch) (*Project, error)
 	DeleteProject(ctx context.Context, g grn.GRN) error
 	AddProjectMember(ctx context.Context, projectGRN, memberGRN grn.GRN) error
+	// RemoveProjectMember returns ErrProjectMemberNotFound when the
+	// pair names no membership, which a Project that does not exist
+	// does too.
 	RemoveProjectMember(ctx context.Context, projectGRN, memberGRN grn.GRN) error
 	ListProjectMembers(ctx context.Context, projectGRN grn.GRN) ([]grn.GRN, error)
 
@@ -72,6 +77,8 @@ type Store interface {
 	AddMember(ctx context.Context, m *Membership) error
 	GetMember(ctx context.Context, orgGRN, userGRN grn.GRN) (*Membership, error)
 	ListMembers(ctx context.Context, orgGRN grn.GRN) ([]*Membership, error)
+	// RemoveMember returns ErrMemberNotFound when the pair names no
+	// Membership, which an Organization that does not exist does too.
 	RemoveMember(ctx context.Context, orgGRN, userGRN grn.GRN) error
 	ListOrgsByMember(ctx context.Context, userGRN grn.GRN, f ListFilter) ([]*Organization, error)
 

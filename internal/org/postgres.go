@@ -89,13 +89,7 @@ func (s *PostgresStore) UpdateOrg(ctx context.Context, g grn.GRN, p Patch) (*Org
 // Groups, Projects, Memberships, and Invitations.
 func (s *PostgresStore) DeleteOrg(ctx context.Context, g grn.GRN) error {
 	n, err := s.q.DeleteOrg(ctx, g.String())
-	if err != nil {
-		return classify(err, "delete org", nil, nil)
-	}
-	if n == 0 {
-		return ErrOrgNotFound
-	}
-	return nil
+	return classifyRows(n, err, "delete org", ErrOrgNotFound)
 }
 
 // CreateGroup persists a new Group.
@@ -160,13 +154,7 @@ func (s *PostgresStore) UpdateGroup(ctx context.Context, g grn.GRN, p GroupPatch
 // DeleteGroup removes the Group with the given GRN.
 func (s *PostgresStore) DeleteGroup(ctx context.Context, g grn.GRN) error {
 	n, err := s.q.DeleteGroup(ctx, g.String())
-	if err != nil {
-		return classify(err, "delete group", nil, nil)
-	}
-	if n == 0 {
-		return ErrGroupNotFound
-	}
-	return nil
+	return classifyRows(n, err, "delete group", ErrGroupNotFound)
 }
 
 // AddGroupMember adds a member to the Group.
@@ -178,13 +166,14 @@ func (s *PostgresStore) AddGroupMember(ctx context.Context, groupGRN, memberGRN 
 	return classify(err, "add group member", nil, nil)
 }
 
-// RemoveGroupMember removes a member from the Group.
+// RemoveGroupMember removes a member from the Group, or returns
+// ErrGroupMemberNotFound.
 func (s *PostgresStore) RemoveGroupMember(ctx context.Context, groupGRN, memberGRN grn.GRN) error {
-	err := s.q.RemoveGroupMember(ctx, db.RemoveGroupMemberParams{
+	n, err := s.q.RemoveGroupMember(ctx, db.RemoveGroupMemberParams{
 		GroupGrn:  groupGRN.String(),
 		MemberGrn: memberGRN.String(),
 	})
-	return classify(err, "remove group member", nil, nil)
+	return classifyRows(n, err, "remove group member", ErrGroupMemberNotFound)
 }
 
 // ListGroupMembers returns the GRNs of the Group's members.
@@ -272,13 +261,7 @@ func (s *PostgresStore) UpdateProject(ctx context.Context, g grn.GRN, p ProjectP
 // DeleteProject removes the Project with the given GRN.
 func (s *PostgresStore) DeleteProject(ctx context.Context, g grn.GRN) error {
 	n, err := s.q.DeleteProject(ctx, g.String())
-	if err != nil {
-		return classify(err, "delete project", nil, nil)
-	}
-	if n == 0 {
-		return ErrProjectNotFound
-	}
-	return nil
+	return classifyRows(n, err, "delete project", ErrProjectNotFound)
 }
 
 // AddProjectMember adds a member to the Project.
@@ -290,13 +273,14 @@ func (s *PostgresStore) AddProjectMember(ctx context.Context, projectGRN, member
 	return classify(err, "add project member", nil, nil)
 }
 
-// RemoveProjectMember removes a member from the Project.
+// RemoveProjectMember removes a member from the Project, or returns
+// ErrProjectMemberNotFound.
 func (s *PostgresStore) RemoveProjectMember(ctx context.Context, projectGRN, memberGRN grn.GRN) error {
-	err := s.q.RemoveProjectMember(ctx, db.RemoveProjectMemberParams{
+	n, err := s.q.RemoveProjectMember(ctx, db.RemoveProjectMemberParams{
 		ProjectGrn: projectGRN.String(),
 		MemberGrn:  memberGRN.String(),
 	})
-	return classify(err, "remove project member", nil, nil)
+	return classifyRows(n, err, "remove project member", ErrProjectMemberNotFound)
 }
 
 // ListProjectMembers returns the GRNs of the Project's members.
@@ -349,13 +333,14 @@ func (s *PostgresStore) ListMembers(ctx context.Context, orgGRN grn.GRN) ([]*Mem
 	return members, nil
 }
 
-// RemoveMember removes a user's Membership from an org.
+// RemoveMember removes a user's Membership from an org, or returns
+// ErrMemberNotFound.
 func (s *PostgresStore) RemoveMember(ctx context.Context, orgGRN, userGRN grn.GRN) error {
-	err := s.q.RemoveOrgMember(ctx, db.RemoveOrgMemberParams{
+	n, err := s.q.RemoveOrgMember(ctx, db.RemoveOrgMemberParams{
 		OrgGrn:  orgGRN.String(),
 		UserGrn: userGRN.String(),
 	})
-	return classify(err, "remove member", nil, nil)
+	return classifyRows(n, err, "remove member", ErrMemberNotFound)
 }
 
 // ListOrgsByMember returns the Organizations a user belongs to,
@@ -541,6 +526,21 @@ func parseGRNs(ss []string, op string) ([]grn.GRN, error) {
 		out = append(out, g)
 	}
 	return out, nil
+}
+
+// classifyRows maps the outcome of a statement that reports how many
+// rows it touched: a driver error takes classify, and a statement that
+// matched none takes the notFound sentinel. Every delete and removal
+// in this store answers through here, so none of them reports success
+// for a row that was not there.
+func classifyRows(n int64, err error, op string, notFound error) error {
+	if err != nil {
+		return classify(err, op, nil, nil)
+	}
+	if n == 0 {
+		return notFound
+	}
+	return nil
 }
 
 // classify maps driver errors onto errorx kinds: missing rows become

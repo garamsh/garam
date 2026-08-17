@@ -33,11 +33,15 @@ func NewGRPCEvaluator(conn grpc.ClientConnInterface) *GRPCEvaluator {
 // status codes carry errorx kinds by name (ADR-0003); the mapping
 // point is this transport.
 func (e *GRPCEvaluator) Evaluate(ctx context.Context, in EvalInput) (bool, error) {
+	statements, err := statementsToProto(in.Statements)
+	if err != nil {
+		return false, err
+	}
 	resp, err := e.client.Check(ctx, &authzv1.CheckRequest{
 		SubjectGrn:    in.Subject.String(),
 		ObjectGrn:     in.Object.String(),
 		Action:        in.Action,
-		Statements:    statementsToProto(in.Statements),
+		Statements:    statements,
 		SubjectGroups: grnsToProto(in.SubjectGroups),
 	})
 	if err != nil {
@@ -61,24 +65,35 @@ func grnsToProto(in []grn.GRN) []string {
 	return out
 }
 
-func statementsToProto(in []Statement) []*authzv1.Statement {
+func statementsToProto(in []Statement) ([]*authzv1.Statement, error) {
 	out := make([]*authzv1.Statement, 0, len(in))
 	for _, s := range in {
+		effect, err := effectToProto(s.Effect)
+		if err != nil {
+			return nil, errorx.Wrap(err, "statement "+s.Sid)
+		}
 		out = append(out, &authzv1.Statement{
 			Sid:      s.Sid,
-			Effect:   effectToProto(s.Effect),
+			Effect:   effect,
 			Action:   s.Action,
 			Resource: s.Resource,
 		})
 	}
-	return out
+	return out, nil
 }
 
-func effectToProto(e Effect) authzv1.Effect {
-	if e == EffectDeny {
-		return authzv1.Effect_EFFECT_DENY
+// effectToProto renders an Effect on the wire. An Effect that is
+// neither constant is refused: this process built the statement, so an
+// unrepresentable one is its own defect and not the caller's.
+func effectToProto(e Effect) (authzv1.Effect, error) {
+	switch e {
+	case EffectAllow:
+		return authzv1.Effect_EFFECT_ALLOW, nil
+	case EffectDeny:
+		return authzv1.Effect_EFFECT_DENY, nil
+	default:
+		return authzv1.Effect_EFFECT_UNSPECIFIED, errorx.New(errorx.KindInternal, "effect must be Allow or Deny")
 	}
-	return authzv1.Effect_EFFECT_ALLOW
 }
 
 // kindOf maps gRPC status codes back to error kinds by name.

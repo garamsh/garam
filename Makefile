@@ -42,7 +42,7 @@ API_HOST_ADDR = $(shell $(COMPOSE_LOCAL) port api 8080 2>/dev/null | sed 's/^0\.
 .PHONY: lint format test build mock gen check-gen e2e db-up db-down backend-up ci
 .PHONY: web-install web-lint web-format web-test web-build web-gen web-check-gen web-e2e web-ci
 .PHONY: minikube-up minikube-down minikube-start minikube-images minikube-db
-.PHONY: minikube-secret minikube-migrate minikube-apps minikube-forward
+.PHONY: minikube-secret minikube-migrate minikube-apps minikube-rebuild minikube-forward
 
 lint:
 	go vet ./...
@@ -193,7 +193,13 @@ MINIKUBE_DIR := deploy/local/minikube
 # is GHSA-7qwx-x8ff-3px9.
 CNPG_MANIFEST := https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/4b5e244a7d031f67e025c83c1555e7726ecbbfa1/releases/cnpg-1.30.0.yaml
 
-minikube-up: minikube-start minikube-images minikube-db minikube-secret minikube-migrate minikube-apps
+minikube-up: minikube-start minikube-db minikube-secret minikube-rebuild
+
+# minikube-rebuild is everything a code change touches: the images, the
+# migrations the new code expects, and the processes that run it. The
+# bring-up above composes it rather than restating its steps, so the two
+# cannot come apart.
+minikube-rebuild: minikube-images minikube-migrate minikube-apps
 
 # minikube-start brings up the cluster and the Postgres operator, and is
 # a no-op on both when they are already there. The CRDs are past the
@@ -238,9 +244,17 @@ minikube-migrate:
 	$(KUBECTL_LOCAL) wait --for=condition=complete job/migrate --timeout=300s
 
 # minikube-apps starts the three serve processes and the web app, and
-# reports what is running rather than that it finished.
+# reports what is running rather than that it finished. Each pod
+# template is stamped with the id of the image it runs, so a rebuilt
+# image is a changed Deployment the apply rolls and an unrebuilt one
+# restarts nothing — which a mutable tag alone cannot tell apart.
 minikube-apps:
-	$(KUBECTL_LOCAL) apply -f $(MINIKUBE_DIR)/garam.yaml
+	@eval "$$(minikube docker-env --shell bash)"; \
+		id="$$(docker image inspect --format '{{.Id}}' garam:local)" && \
+		web_id="$$(docker image inspect --format '{{.Id}}' garam-web:local)" && \
+		echo "minikube-apps: garam:local=$$id garam-web:local=$$web_id" && \
+		sed -e "s|GARAM_IMAGE_ID|$$id|" -e "s|GARAM_WEB_IMAGE_ID|$$web_id|" $(MINIKUBE_DIR)/garam.yaml \
+		| $(KUBECTL_LOCAL) apply -f -
 	@for d in authz api machine web; do $(KUBECTL_LOCAL) rollout status deployment/$$d --timeout=300s; done
 	@$(KUBECTL_LOCAL) get pods
 

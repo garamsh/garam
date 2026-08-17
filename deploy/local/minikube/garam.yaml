@@ -7,6 +7,10 @@
 # `/healthz` and `/readyz` on the ports below are the interface ADR-0021
 # publishes. A repository this one does not control probes them, so they
 # are not free to move here.
+#
+# GARAM_IMAGE_ID and GARAM_WEB_IMAGE_ID are replaced by `make
+# minikube-apps` with the ids the cluster's daemon holds for the two
+# tags below. Applied by hand the placeholders stand and nothing rolls.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -21,6 +25,8 @@ spec:
     metadata:
       labels:
         app: authz
+      annotations:
+        image-id: "GARAM_IMAGE_ID"
     spec:
       containers:
         - name: authz
@@ -87,6 +93,8 @@ spec:
     metadata:
       labels:
         app: api
+      annotations:
+        image-id: "GARAM_IMAGE_ID"
     spec:
       containers:
         - name: api
@@ -155,6 +163,8 @@ spec:
     metadata:
       labels:
         app: machine
+      annotations:
+        image-id: "GARAM_IMAGE_ID"
     spec:
       # A Secret volume belongs to root, and the process that reads key
       # material has to own the file it reads (ADR-0015). fsGroup is
@@ -286,6 +296,8 @@ spec:
     metadata:
       labels:
         app: web
+      annotations:
+        image-id: "GARAM_WEB_IMAGE_ID"
     spec:
       containers:
         - name: web

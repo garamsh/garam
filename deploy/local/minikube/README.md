@@ -38,7 +38,8 @@ them in that order.
 ## Up and down
 
 ```sh
-make minikube-up        # cluster, operator, images, database, secret, migrations, processes
+make minikube-up        # cluster, operator, database, secret, images, migrations, processes
+make minikube-rebuild   # after a code change: images, migrations, processes
 make minikube-forward   # publishes the web app on localhost; holds the terminal
 make minikube-down      # removes the namespace, its volume and its key material
 ```
@@ -48,10 +49,17 @@ it works from nothing. Rerunning it is safe: the key material is kept
 rather than regenerated, and the migration Job runs again against an
 already-migrated database and applies nothing.
 
-Each step is its own target — `minikube-start`, `minikube-images`,
+`make minikube-rebuild` is what a code change needs, and it is the whole
+of `minikube-up` past the cluster and the database. The two share one
+list of steps rather than two, so a rebuild cannot come out a step short
+of what a bring-up runs — a change carrying a migration has that
+migration applied before the processes that read the schema start.
+
+Each step is still its own target — `minikube-start`, `minikube-images`,
 `minikube-db`, `minikube-secret`, `minikube-migrate`, `minikube-apps` —
-so rebuilding after a code change is `make minikube-images
-minikube-apps` rather than the whole sequence.
+for when one of them alone is what you want. `make minikube-images
+minikube-apps` is not the rebuild: it puts the new binary in front of
+whatever schema the database already has.
 
 ## Reaching it
 
@@ -112,6 +120,15 @@ is rather than as a silent pull from somewhere else.
 
 They are built from `deploy/local/Dockerfile` and
 `deploy/local/Dockerfile.web` — the same two the compose stack uses.
+
+Each pod template carries the id of the image it runs, stamped in by
+`make minikube-apps`. The tag alone cannot carry a rebuild:
+`garam:local` names a different image after every build and the same
+Deployment before and after it, which leaves `kubectl apply` a no-op,
+creates no ReplicaSet, and has `rollout status` report the pods still on
+the previous binary as fully rolled out. With the id in the template a
+rebuilt image is a changed Deployment, and an unrebuilt one restarts
+nothing.
 
 ## Which cluster, and whose kubeconfig
 

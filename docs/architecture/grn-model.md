@@ -56,7 +56,7 @@ and nowhere else.
 | `org` | organization | `grn:root:default:org:acme` |
 | `group` | user/agent bundle | `grn:acme:default:group:eng` |
 | `project` | unit of work | `grn:acme:default:project:frontend` |
-| `operator` | provisions agents from outside (planned, ADR-0012) | `grn:acme:default:operator:1122334455667788` |
+| `operator` | provisions agents from outside (ADR-0012) | `grn:acme:default:operator:1122334455667788` |
 | `policy` | stored policy document | `grn:acme:default:policy:a1b2c3d4` |
 | `doc` | permissioned document (planned) | `grn:acme:frontend:doc:readme` |
 

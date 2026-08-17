@@ -152,11 +152,14 @@ the process alone and `/readyz` for what it depends on, on the ports
 publishes. A database outage takes the pods out of rotation and leaves
 them running, so they serve again when it returns.
 
-The web app has no such endpoint of its own. Its liveness probe asks for
-a static asset, which answers from the process alone; its readiness
-probe asks for `/login`, which the app can only render by reaching the
-api. Probing `/login` for liveness restarts the web app every time the
-api is down, which is the amplification ADR-0021 exists to prevent.
+The web app answers the same two paths
+([ADR-0023](../../../docs/architecture/adr/0023-web-probes.md)), and
+neither of them reads the api, so an api outage leaves its pods in
+rotation. They replaced probes on two page routes: readiness asked for
+`/login`, which the app can only render by reaching the api, and
+liveness had already been split off it because probing it restarted the
+web app every time the api was down — the amplification ADR-0021 exists
+to prevent.
 
 ## Database credentials
 

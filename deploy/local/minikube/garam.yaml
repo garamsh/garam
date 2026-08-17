@@ -299,24 +299,25 @@ spec:
           ports:
             - name: http
               containerPort: 3000
-          # The app has no probe endpoint of its own — ADR-0021 governs
-          # the three Go processes — so these are two routes it already
-          # serves, chosen for the two meanings that ADR sets out.
+          # The same two paths the other three answer on (ADR-0023).
+          # Both read nothing outside the process, so they are one
+          # answer on two paths and neither needs the extra timeout the
+          # other three's readiness takes.
           #
-          # A static asset answers from the process alone. /login does
-          # not: it server-renders the sign-in options it asks the api
-          # for, and answers 500 while the api is down. Probing that for
-          # liveness restarts the web app every time the api blips,
-          # which was measured here before these were split.
+          # What these replaced is the lesson worth keeping: readiness
+          # asked for /login, which server-renders the sign-in options
+          # it asks the api for and answers 500 while the api is down,
+          # and liveness had already been split off it because probing
+          # it restarted the web app every time the api blipped. That
+          # was measured here.
           livenessProbe:
             httpGet:
-              path: /icon.svg
+              path: /healthz
               port: 3000
           readinessProbe:
             httpGet:
-              path: /login
+              path: /readyz
               port: 3000
-            timeoutSeconds: 3
 ---
 apiVersion: v1
 kind: Service

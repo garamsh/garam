@@ -63,6 +63,17 @@ test.describe("signed out", () => {
     await expect(button.locator("img").first()).toBeVisible();
   });
 
+  test("answers both probes without a session", async ({ request }) => {
+    // Published interface (ADR-0023): a scheduler holds no credential,
+    // so this is the layer that proves no session is asked for.
+    for (const path of ["/healthz", "/readyz"]) {
+      const response = await request.get(path);
+
+      expect(response.status(), path).toBe(200);
+      expect(await response.text(), path).toBe("ok\n");
+    }
+  });
+
   test("serves the backend through the same-origin /api proxy", async ({
     request,
   }) => {

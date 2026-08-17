@@ -115,11 +115,9 @@ inside its organization. A policy narrows it with a Deny, as a Deny
 narrows a role's grant.
 
 What keeps an agent out of another organization is not that pattern.
-The machine listener refuses a recipient of another organization before
-it asks at all, because no supplied statement can hold that line: an
-Allow reaching the object's org outranks whatever arrives beside it
-(§Policy attachment). Org membership is the same precondition on the
-api server, where a membership exists to read.
+The listener refuses a recipient of another organization before it
+asks, which is how it meets the obligation §Policy attachment states;
+the organization segment in the pattern is defence in depth behind it.
 
 The listener sends no subject groups: group membership is org data and
 this listener holds no org store, so a policy attached to a group
@@ -180,7 +178,7 @@ change, only a caller that can authenticate as one.
 
 | Attachment | Applies to |
 |------------|------------|
-| none | every subject of the policy's org |
+| none | every subject the caller asks about (see below) |
 | a user GRN | that user |
 | an agent GRN | that agent |
 | a group GRN | the members the request reports for that subject |
@@ -190,19 +188,28 @@ policies, the policies attached to the subject, the policies attached
 to a group the subject belongs to, and the statements the calling
 server collected. Deny-overrides applies across all four.
 
-An unattached active policy applies to every subject a check names,
-including one from another org: the engine matches attachments and
-never asks whether a subject belongs anywhere. What has always bounded
-that is the caller — the api server admits no subject that is not a
-member of the object's org — so a call path without such a precondition
-turns one unattached Allow into a grant to every identity there is.
-A caller that cannot read a membership supplies the boundary itself.
+**An unattached policy's scope is the caller's obligation, not the
+engine's** ([ADR-0025](./adr/0025-engine-scope-is-a-caller-obligation.md)).
+The engine loads the policies of the organization owning the **object**
+and applies every unattached one to whatever subject it was handed; it
+holds no membership data and cannot tell whether that subject belongs
+to that organization. A caller must therefore establish that the
+subject belongs to the object's organization before asking, and refuse
+before asking if it cannot. `internal/api` establishes it by fetching
+the member whose role it needs; the machine listener establishes it by
+comparing organizations outright, because it holds no org store.
+
+The row above reads "every subject the caller asks about" for that
+reason. A caller that hands the engine a subject from another
+organization gets that organization's unattached policies applied to
+it, which is an organization boundary decided by the caller and not by
+the policy.
 
 Detaching an active policy's last attachment does not retire it, it
 widens it back to the org — which for a Deny turns one subject's
 restriction into every subject's, and for an Allow is the shortest
-route to the paragraph above. Archiving is what takes a policy out of
-every check.
+route to handing that grant to every subject a caller asks about.
+Archiving is what takes a policy out of every check.
 
 An attached policy decides what an agent sends
 ([ADR-0024](./adr/0024-policy-decides-what-an-agent-sends.md)), inside

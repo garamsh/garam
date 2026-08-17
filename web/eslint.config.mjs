@@ -13,13 +13,13 @@ const features = readdirSync(join(import.meta.dirname, "src/features"), {
   .filter((entry) => entry.isDirectory())
   .map((entry) => entry.name);
 
-// The import direction of stack-nextjs.md §12: the cross-feature tiers
-// import neither features nor routes, a feature imports neither routes
-// nor a sibling, and routes import both. `app` reaches a feature only
-// through the two files the feature declares public: `index.ts`, the
-// server-only read surface, and `actions.ts`, the Server Actions — kept
-// apart so a client module cannot pull the backend client into the
-// browser bundle.
+// The tiers of stack-nextjs.md §Import direction and file naming: the
+// cross-feature tiers import neither features nor routes, a feature
+// imports neither routes nor a sibling, and routes import both. `app`
+// reaches a feature only through the two files the feature declares
+// public: `index.ts`, the server-only read surface, and `actions.ts`,
+// the Server Actions — kept apart so a client module cannot pull the
+// backend client into the browser bundle.
 const importDirection = {
   basePath: import.meta.dirname,
   zones: [

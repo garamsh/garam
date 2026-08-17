@@ -21,7 +21,7 @@ via Playwright.
   the session cookie stays same-origin and no CORS layer is needed.
 - **Auth**: the backend's OIDC flow as-is; the UI reads session state
   from `/me`.
-- **Tests**: three layers per `stack-nextjs.md` §11 — Vitest unit,
+- **Tests**: three layers per `stack-nextjs.md` §Testing — Vitest unit,
   Vitest+MSW integration, **Playwright e2e at `web/e2e/`** driving a
   real browser against the built app.
 - **CI**: a web job runs the frontend gate (lint, typecheck, unit,

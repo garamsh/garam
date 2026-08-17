@@ -2,7 +2,10 @@ import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 
-/** Answers both `notFound()` and an unmatched URL (stack-nextjs.md §2). */
+/**
+ * Answers both `notFound()` and an unmatched URL (stack-nextjs.md
+ * §App Router file conventions).
+ */
 export default function NotFound() {
   return (
     <main className="flex flex-1 flex-col items-center justify-center gap-4 p-6">

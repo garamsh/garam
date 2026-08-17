@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 /**
  * Last-resort boundary: it replaces the root layout when the error is
  * above it, so it renders its own `<html>` and `<body>`
- * (stack-nextjs.md §2).
+ * (stack-nextjs.md §App Router file conventions).
  */
 export default function GlobalError({
   error,

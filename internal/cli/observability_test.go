@@ -176,10 +176,11 @@ func machineListener(t *testing.T, obs *observability, subject grn.GRN) (string,
 }
 
 // TestLogServed_NamesAMachinePrincipalAsOne reads the machine
-// listener's line against the browser API's. stack-go.md §5 names
-// user_id when the principal is known and names no field for a machine
-// one; putting both under user_id leaves an audit log unable to tell an
-// agent from a person, which is the distinction ADR-0014 rests on.
+// listener's line against the browser API's. stack-go.md §Logging &
+// observability names user_id when the principal is known and names no
+// field for a machine one; putting both under user_id leaves an audit
+// log unable to tell an agent from a person, which is the distinction
+// ADR-0014 rests on.
 //
 // The person's line is asserted beside the machine's, because a machine
 // line without user_id would hold as readily for a line that names no

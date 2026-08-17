@@ -154,7 +154,7 @@ change, only a caller that can authenticate as one.
 
 | Attachment | Applies to |
 |------------|------------|
-| none | every subject of the policy's org |
+| none | every subject the caller asks about (see below) |
 | a user GRN | that user |
 | an agent GRN | that agent |
 | a group GRN | the members the request reports for that subject |
@@ -163,6 +163,23 @@ A check therefore evaluates four sources: the org's unattached active
 policies, the policies attached to the subject, the policies attached
 to a group the subject belongs to, and the caller's role-derived
 statements. Deny-overrides applies across all four.
+
+**An unattached policy's scope is the caller's obligation, not the
+engine's** ([ADR-0025](./adr/0025-engine-scope-is-a-caller-obligation.md)).
+The engine loads the policies of the organization owning the **object**
+and applies every unattached one to whatever subject it was handed; it
+holds no membership data and cannot tell whether that subject belongs
+to that organization. A caller must therefore establish that the
+subject belongs to the object's organization before asking, and refuse
+before asking if it cannot. `internal/api` establishes it by fetching
+the member whose role it needs; the machine listener establishes it by
+comparing organizations outright, because it holds no org store.
+
+The row above reads "every subject the caller asks about" for that
+reason. A caller that hands the engine a subject from another
+organization gets that organization's unattached policies applied to
+it, which is an organization boundary decided by the caller and not by
+the policy.
 
 The api server resolves the subject's groups from the org tables and
 sends them as `subject_groups` on `Check` / `Explain`; the engine

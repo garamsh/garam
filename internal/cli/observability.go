@@ -37,8 +37,8 @@ const (
 )
 
 // The field a served call names its principal with: a person under
-// user_id (stack-go.md §5), a machine identity under machine_id, so
-// one stream tells an agent from a person.
+// user_id (stack-go.md §Logging & observability), a machine identity
+// under machine_id, so one stream tells an agent from a person.
 const (
 	fieldUserID    = "user_id"
 	fieldMachineID = "machine_id"

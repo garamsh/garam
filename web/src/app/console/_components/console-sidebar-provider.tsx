@@ -12,7 +12,8 @@ const SIDEBAR_COOKIE = "sidebar_state";
  * writes, so a collapsed sidebar is served collapsed after a reload rather
  * than corrected once the page is interactive. The read sits behind the
  * layout's `<Suspense>` boundary: awaited at layout level it would stop
- * every route's `loading.tsx` streaming (stack-nextjs.md §2, ADR-0011).
+ * every route's `loading.tsx` streaming (stack-nextjs.md §App Router
+ * file conventions, ADR-0011).
  */
 export async function ConsoleSidebarProvider({
   children,

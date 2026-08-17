@@ -16,7 +16,8 @@ import { ConsoleSidebarProvider } from "./_components/console-sidebar-provider";
  * The authenticated shell (ADR-0011). Every read it needs sits behind
  * `<Suspense>` — the uncached `/me` and `/orgs` reads, and the sidebar's
  * stored state — because awaiting one at this level would block the whole
- * segment and no route's `loading.tsx` could stream (stack-nextjs.md §2).
+ * segment and no route's `loading.tsx` could stream (stack-nextjs.md
+ * §App Router file conventions).
  */
 export default function ConsoleLayout({
   children,

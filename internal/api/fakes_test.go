@@ -335,6 +335,11 @@ func (s *fakeOrgStore) RemoveGroupMember(_ context.Context, groupGRN, memberGRN 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	k := groupGRN.String()
+	// A Group that does not exist holds no members either, so it takes
+	// the same answer here as it does from the store.
+	if !slices.Contains(s.groupMembers[k], memberGRN) {
+		return org.ErrGroupMemberNotFound
+	}
 	s.groupMembers[k] = slices.DeleteFunc(s.groupMembers[k], func(m grn.GRN) bool { return m == memberGRN })
 	return nil
 }
@@ -425,6 +430,9 @@ func (s *fakeOrgStore) RemoveProjectMember(_ context.Context, projectGRN, member
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	k := projectGRN.String()
+	if !slices.Contains(s.projectMembers[k], memberGRN) {
+		return org.ErrProjectMemberNotFound
+	}
 	s.projectMembers[k] = slices.DeleteFunc(s.projectMembers[k], func(m grn.GRN) bool { return m == memberGRN })
 	return nil
 }

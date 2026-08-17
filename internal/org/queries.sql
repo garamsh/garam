@@ -48,7 +48,7 @@ DELETE FROM groups WHERE grn = $1;
 -- name: AddGroupMember :exec
 INSERT INTO group_members (group_grn, member_grn) VALUES ($1, $2);
 
--- name: RemoveGroupMember :exec
+-- name: RemoveGroupMember :execrows
 DELETE FROM group_members WHERE group_grn = $1 AND member_grn = $2;
 
 -- name: ListGroupMembers :many
@@ -88,7 +88,7 @@ DELETE FROM projects WHERE grn = $1;
 -- name: AddProjectMember :exec
 INSERT INTO project_members (project_grn, member_grn) VALUES ($1, $2);
 
--- name: RemoveProjectMember :exec
+-- name: RemoveProjectMember :execrows
 DELETE FROM project_members WHERE project_grn = $1 AND member_grn = $2;
 
 -- name: ListProjectMembers :many
@@ -104,7 +104,7 @@ SELECT * FROM org_members WHERE org_grn = $1 AND user_grn = $2;
 -- name: ListOrgMembers :many
 SELECT * FROM org_members WHERE org_grn = $1 ORDER BY user_grn;
 
--- name: RemoveOrgMember :exec
+-- name: RemoveOrgMember :execrows
 DELETE FROM org_members WHERE org_grn = $1 AND user_grn = $2;
 
 -- name: ListOrgsByMember :many

@@ -590,7 +590,7 @@ func (q *Queries) ListProjects(ctx context.Context, arg ListProjectsParams) ([]P
 	return items, nil
 }
 
-const removeGroupMember = `-- name: RemoveGroupMember :exec
+const removeGroupMember = `-- name: RemoveGroupMember :execrows
 DELETE FROM group_members WHERE group_grn = $1 AND member_grn = $2
 `
 
@@ -599,12 +599,15 @@ type RemoveGroupMemberParams struct {
 	MemberGrn string
 }
 
-func (q *Queries) RemoveGroupMember(ctx context.Context, arg RemoveGroupMemberParams) error {
-	_, err := q.db.Exec(ctx, removeGroupMember, arg.GroupGrn, arg.MemberGrn)
-	return err
+func (q *Queries) RemoveGroupMember(ctx context.Context, arg RemoveGroupMemberParams) (int64, error) {
+	result, err := q.db.Exec(ctx, removeGroupMember, arg.GroupGrn, arg.MemberGrn)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
-const removeOrgMember = `-- name: RemoveOrgMember :exec
+const removeOrgMember = `-- name: RemoveOrgMember :execrows
 DELETE FROM org_members WHERE org_grn = $1 AND user_grn = $2
 `
 
@@ -613,12 +616,15 @@ type RemoveOrgMemberParams struct {
 	UserGrn string
 }
 
-func (q *Queries) RemoveOrgMember(ctx context.Context, arg RemoveOrgMemberParams) error {
-	_, err := q.db.Exec(ctx, removeOrgMember, arg.OrgGrn, arg.UserGrn)
-	return err
+func (q *Queries) RemoveOrgMember(ctx context.Context, arg RemoveOrgMemberParams) (int64, error) {
+	result, err := q.db.Exec(ctx, removeOrgMember, arg.OrgGrn, arg.UserGrn)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
-const removeProjectMember = `-- name: RemoveProjectMember :exec
+const removeProjectMember = `-- name: RemoveProjectMember :execrows
 DELETE FROM project_members WHERE project_grn = $1 AND member_grn = $2
 `
 
@@ -627,9 +633,12 @@ type RemoveProjectMemberParams struct {
 	MemberGrn  string
 }
 
-func (q *Queries) RemoveProjectMember(ctx context.Context, arg RemoveProjectMemberParams) error {
-	_, err := q.db.Exec(ctx, removeProjectMember, arg.ProjectGrn, arg.MemberGrn)
-	return err
+func (q *Queries) RemoveProjectMember(ctx context.Context, arg RemoveProjectMemberParams) (int64, error) {
+	result, err := q.db.Exec(ctx, removeProjectMember, arg.ProjectGrn, arg.MemberGrn)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const updateGroup = `-- name: UpdateGroup :one

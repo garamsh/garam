@@ -285,6 +285,10 @@ func TestOrgStore_Membership(t *testing.T) {
 	members, err = s.ListMembers(ctx, orgGRN)
 	require.NoError(t, err)
 	assert.Empty(t, members)
+
+	// The refusal, against the removal above as its control: the first
+	// call matched a row and this one matches none.
+	assert.ErrorIs(t, s.RemoveMember(ctx, orgGRN, userGRN), org.ErrMemberNotFound)
 }
 
 func TestOrgStore_InvitationLifecycle(t *testing.T) {
@@ -414,6 +418,15 @@ func TestOrgStore_GroupQueriesStayInsideTheirGroupAndOrg(t *testing.T) {
 		groups, err := s.ListGroupsByMember(ctx, globex, ada)
 		require.NoError(t, err)
 		assert.Equal(t, []grn.GRN{engGlobex}, groups, "ada's membership of the other org's group is untouched")
+
+		// The two refusals, against the removal above as their
+		// control: it matched a row, and neither of these matches
+		// one. Without them a removal reports the same success
+		// whether or not it removed anything.
+		assert.ErrorIs(t, s.RemoveGroupMember(ctx, engAcme, ada), org.ErrGroupMemberNotFound,
+			"ada is no longer a member of eng")
+		assert.ErrorIs(t, s.RemoveGroupMember(ctx, scopedGRN("acme", "group", "nope"), bob), org.ErrGroupMemberNotFound,
+			"the group named does not exist")
 	})
 
 	t.Run("deleting a group takes its members and leaves its neighbours", func(t *testing.T) {
@@ -520,6 +533,14 @@ func TestOrgStore_ProjectQueriesStayInsideTheirProjectAndOrg(t *testing.T) {
 		members, err = s.ListProjectMembers(ctx, webGlobex)
 		require.NoError(t, err)
 		assert.Equal(t, []grn.GRN{ada}, members, "ada's membership of the other org's project is untouched")
+
+		// The two refusals, against the removal above as their
+		// control: it matched a row, and neither of these matches
+		// one.
+		assert.ErrorIs(t, s.RemoveProjectMember(ctx, webAcme, ada), org.ErrProjectMemberNotFound,
+			"ada is no longer a member of web")
+		assert.ErrorIs(t, s.RemoveProjectMember(ctx, scopedGRN("acme", "project", "nope"), bob), org.ErrProjectMemberNotFound,
+			"the project named does not exist")
 	})
 
 	t.Run("deleting a project takes its members and leaves its neighbours", func(t *testing.T) {

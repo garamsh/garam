@@ -113,8 +113,16 @@ db-down:
 # one-shot migration, authz and api — from the same compose file, and
 # returns once api answers. The profile-gated `web` service stays down:
 # the browser suite builds and serves the app itself.
+#
+# It builds first, so what starts is the working tree rather than
+# whatever was built last — the migrations included, since they travel
+# in the same image. Nothing else here carries a source change: an
+# image that already exists satisfies compose, which starts the stale
+# one and reports it healthy. The build is cached, so an unchanged tree
+# costs seconds; the containers are recreated either way, because the
+# image id moves on every export whether or not a layer did.
 backend-up:
-	$(COMPOSE_LOCAL) up -d --wait api
+	$(COMPOSE_LOCAL) up -d --build --wait api
 
 # e2e runs the store round-trips against real Postgres (see db-up).
 e2e:

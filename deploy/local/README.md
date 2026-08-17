@@ -82,6 +82,14 @@ Without `--profile web`, the `web` service is neither built nor started.
 Pass the profile to `down` as well, otherwise the web container is left
 running.
 
+Every `up` above passes `--build`, and `make backend-up` passes it too.
+Compose starts an image that already exists without asking whether the
+sources moved, so an `up` without it runs the previous binary — and the
+previous `migrations/`, which ship in the same image — and reports the
+stack healthy. The build is cached, so an unchanged tree costs seconds;
+the containers are recreated either way, because the image id moves on
+every export whether or not a layer did.
+
 The API answers on `http://localhost:8080` and the frontend on
 `http://localhost:3000`. Both ports, and Postgres', are overridable —
 see `.env.example`.

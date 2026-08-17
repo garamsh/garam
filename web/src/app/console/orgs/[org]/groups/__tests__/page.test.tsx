@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import GroupsPage from "@/app/console/orgs/[org]/groups/page";
 import { renderServerComponent } from "@/testing/render";
-import { API_URL } from "@/testing/mocks/handlers";
+import { API_URL, unauthenticated } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
 vi.mock("next/navigation", () => ({
@@ -53,5 +53,26 @@ describe("groups section", () => {
     await expect(
       renderServerComponent(GroupsPage(params("acme"))),
     ).rejects.toThrow("NEXT_NOT_FOUND");
+  });
+
+  it("says the API is unreachable rather than reporting no groups", async () => {
+    server.use(http.get(`${API_URL}/*`, () => HttpResponse.error()));
+
+    await renderServerComponent(GroupsPage(params("acme")));
+
+    expect(
+      screen.getByRole("heading", { name: "Cannot reach the API" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("This organization has no groups."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("sends a rejected session to the login page, not to the notice", async () => {
+    server.use(unauthenticated());
+
+    await expect(
+      renderServerComponent(GroupsPage(params("acme"))),
+    ).rejects.toThrow("NEXT_REDIRECT:/login");
   });
 });

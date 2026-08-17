@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import ProjectsPage from "@/app/console/orgs/[org]/projects/page";
 import { renderServerComponent } from "@/testing/render";
-import { API_URL } from "@/testing/mocks/handlers";
+import { API_URL, unauthenticated } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
 vi.mock("next/navigation", () => ({
@@ -43,5 +43,38 @@ describe("projects section", () => {
     expect(
       screen.getByText("This organization has no projects."),
     ).toBeInTheDocument();
+  });
+
+  it.each([403, 404])("renders not-found on %i", async (status) => {
+    server.use(
+      http.get(`${API_URL}/orgs/acme/projects`, () =>
+        HttpResponse.json({ kind: "denied", message: "no" }, { status }),
+      ),
+    );
+
+    await expect(
+      renderServerComponent(ProjectsPage(params("acme"))),
+    ).rejects.toThrow("NEXT_NOT_FOUND");
+  });
+
+  it("says the API is unreachable rather than reporting no projects", async () => {
+    server.use(http.get(`${API_URL}/*`, () => HttpResponse.error()));
+
+    await renderServerComponent(ProjectsPage(params("acme")));
+
+    expect(
+      screen.getByRole("heading", { name: "Cannot reach the API" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText("This organization has no projects."),
+    ).not.toBeInTheDocument();
+  });
+
+  it("sends a rejected session to the login page, not to the notice", async () => {
+    server.use(unauthenticated());
+
+    await expect(
+      renderServerComponent(ProjectsPage(params("acme"))),
+    ).rejects.toThrow("NEXT_REDIRECT:/login");
   });
 });

@@ -12,6 +12,7 @@ import {
 
 import { PageHeader } from "../../_components/page-header";
 import { CONSOLE_SECTIONS, orgHref } from "../../_components/navigation";
+import { ApiUnreachable } from "./_components/api-unreachable";
 
 type Params = { params: Promise<{ org: string }> };
 
@@ -31,10 +32,26 @@ export default async function OrgPage({ params }: Params) {
     listOrgMembers(slug),
   ]);
 
+  if (
+    org.status === "unreachable" ||
+    groups.status === "unreachable" ||
+    projects.status === "unreachable" ||
+    members.status === "unreachable"
+  ) {
+    // The organization's own read may be the one that did not answer,
+    // so the title comes from the URL slug rather than from its name.
+    return (
+      <>
+        <PageHeader title={slug} description="What this organization holds." />
+        <ApiUnreachable subject="what this organization holds" />
+      </>
+    );
+  }
+
   const counts = new Map([
-    ["groups", groups.length],
-    ["projects", projects.length],
-    ["members", members.length],
+    ["groups", groups.data.length],
+    ["projects", projects.data.length],
+    ["members", members.data.length],
   ]);
   // Label, icon and order come from the sidebar's own list, so a card
   // cannot drift from the section it links to.
@@ -46,7 +63,7 @@ export default async function OrgPage({ params }: Params) {
   return (
     <>
       <PageHeader
-        title={org.name}
+        title={org.data.name}
         description="What this organization holds."
       />
       <ul className="grid gap-4 sm:grid-cols-3">

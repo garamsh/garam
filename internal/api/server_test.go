@@ -203,10 +203,119 @@ func TestDevLogin_NotRegistered(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, f.do(t, "GET", "/auth/callback/dev?code=dev&state=x", "").Code)
 }
 
-func TestOauthCallback_StateMismatch(t *testing.T) {
+// oauthStateCookie is the state cookie the callback compares against.
+func oauthStateCookie(value string) *http.Cookie {
+	return &http.Cookie{Name: "garam_oauth_state", Value: value}
+}
+
+// oauthVerifierCookie is the PKCE verifier cookie the callback requires.
+func oauthVerifierCookie(value string) *http.Cookie {
+	return &http.Cookie{Name: "garam_oauth_verifier", Value: value}
+}
+
+// callbackFixture wires a fixture whose provider returns an identity,
+// so a callback that clears both guards reaches a session.
+func callbackFixture(t *testing.T) *fixture {
+	t.Helper()
 	f := newFixture(t)
-	rec := f.do(t, "GET", "/auth/callback/google?code=x&state=y", "")
-	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	f.provider.identity = &authn.Identity{Subject: "123", Nickname: "Ada"}
+	return f
+}
+
+func TestOauthCallback_StateAndVerifierGuards(t *testing.T) {
+	// The state the provider hands back in the callback URL. Every
+	// case below sends it; only the cookies differ.
+	const returnedState = "state-abc"
+	const verifier = "verifier-xyz"
+
+	// The accepted case is the control: every refusal below is that
+	// same request with one cookie changed, so removing a guard turns
+	// its refusal into the control's 302 instead of leaving a 401 that
+	// arrives for another reason. Both refusals answer
+	// `unauthenticated`, so the message is what separates the state
+	// guard from the verifier guard.
+	tests := []struct {
+		name        string
+		cookies     []*http.Cookie
+		wantStatus  int
+		wantMessage string
+	}{
+		{
+			name:       "matching state and a present verifier",
+			cookies:    []*http.Cookie{oauthStateCookie(returnedState), oauthVerifierCookie(verifier)},
+			wantStatus: http.StatusFound,
+		},
+		{
+			name:        "state cookie holds a different value",
+			cookies:     []*http.Cookie{oauthStateCookie("state-zzz"), oauthVerifierCookie(verifier)},
+			wantStatus:  http.StatusUnauthorized,
+			wantMessage: "oauth state mismatch",
+		},
+		{
+			name:        "state cookie is empty",
+			cookies:     []*http.Cookie{oauthStateCookie(""), oauthVerifierCookie(verifier)},
+			wantStatus:  http.StatusUnauthorized,
+			wantMessage: "oauth state mismatch",
+		},
+		{
+			name:        "state cookie is absent",
+			cookies:     []*http.Cookie{oauthVerifierCookie(verifier)},
+			wantStatus:  http.StatusUnauthorized,
+			wantMessage: "oauth state mismatch",
+		},
+		{
+			name:        "verifier cookie is absent",
+			cookies:     []*http.Cookie{oauthStateCookie(returnedState)},
+			wantStatus:  http.StatusUnauthorized,
+			wantMessage: "missing pkce verifier",
+		},
+		{
+			name:        "verifier cookie is empty",
+			cookies:     []*http.Cookie{oauthStateCookie(returnedState), oauthVerifierCookie("")},
+			wantStatus:  http.StatusUnauthorized,
+			wantMessage: "missing pkce verifier",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := callbackFixture(t)
+
+			rec := f.do(t, "GET", "/auth/callback/google?code=ok&state="+returnedState, "", tt.cookies...)
+
+			require.Equal(t, tt.wantStatus, rec.Code)
+			if tt.wantStatus == http.StatusFound {
+				assert.Equal(t, "/console", rec.Header().Get("Location"))
+				return
+			}
+			body := decodeBody[apigen.Error](t, rec)
+			assert.Equal(t, "unauthenticated", body.Kind)
+			assert.Equal(t, tt.wantMessage, body.Message)
+		})
+	}
+}
+
+func TestOauthCallback_ExpiresSingleUseCookies(t *testing.T) {
+	const returnedState = "state-abc"
+	f := callbackFixture(t)
+
+	rec := f.do(t, "GET", "/auth/callback/google?code=ok&state="+returnedState, "",
+		oauthStateCookie(returnedState), oauthVerifierCookie("verifier-xyz"))
+	require.Equal(t, http.StatusFound, rec.Code)
+
+	set := map[string]*http.Cookie{}
+	for _, c := range rec.Result().Cookies() {
+		set[c.Name] = c
+	}
+	require.NotNil(t, set["garam_session"], "session cookie set")
+
+	// Expiry is an instruction to the browser, so the property is a
+	// Set-Cookie carrying a negative MaxAge — not the absence of one.
+	for _, name := range []string{"garam_oauth_state", "garam_oauth_verifier"} {
+		c := set[name]
+		require.NotNil(t, c, "%s cleared", name)
+		assert.Negative(t, c.MaxAge, "%s cleared", name)
+		assert.Empty(t, c.Value, "%s cleared", name)
+	}
 }
 
 func TestLoginCallbackMeLogout_RoundTrip(t *testing.T) {

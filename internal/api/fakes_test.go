@@ -126,6 +126,35 @@ func (s *fakeSessionStore) Delete(_ context.Context, token string) error {
 	return nil
 }
 
+// fakeOAuthStateStore is an in-memory authn.OAuthStateStore double. It
+// holds each live state's expiry, as the table holds a row's.
+type fakeOAuthStateStore struct {
+	mu       sync.Mutex
+	expiryOf map[string]time.Time
+}
+
+func newFakeOAuthStateStore() *fakeOAuthStateStore {
+	return &fakeOAuthStateStore{expiryOf: map[string]time.Time{}}
+}
+
+func (s *fakeOAuthStateStore) Issue(_ context.Context, state string, ttl time.Duration) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.expiryOf[state] = time.Now().UTC().Add(ttl)
+	return nil
+}
+
+func (s *fakeOAuthStateStore) Consume(_ context.Context, state string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	expiry, ok := s.expiryOf[state]
+	if !ok || !time.Now().UTC().Before(expiry) {
+		return authn.ErrOAuthStateNotLive
+	}
+	delete(s.expiryOf, state)
+	return nil
+}
+
 // fakeOrgStore is an in-memory org.Store double for the org, group,
 // project, membership, and invitation methods the API exercises.
 type fakeOrgStore struct {

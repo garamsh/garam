@@ -32,6 +32,7 @@ type Server struct {
 	agents    agent.Store
 	watches   watch.Service
 	sessions  authn.SessionStore
+	states    authn.OAuthStateStore
 	providers map[string]authn.Provider
 	evaluator Evaluator
 	policies  PolicyManager
@@ -43,10 +44,10 @@ var _ apigen.ServerInterface = (*Server)(nil)
 
 // NewServer constructs the API server. providers are keyed by their
 // Name; unknown provider paths 404 without the providers knowing.
-func NewServer(users user.Store, orgs org.Store, agents agent.Store, watches watch.Service, sessions authn.SessionStore, providers []authn.Provider, evaluator Evaluator, policies PolicyManager, cfg Config) *Server {
+func NewServer(users user.Store, orgs org.Store, agents agent.Store, watches watch.Service, sessions authn.SessionStore, states authn.OAuthStateStore, providers []authn.Provider, evaluator Evaluator, policies PolicyManager, cfg Config) *Server {
 	byName := make(map[string]authn.Provider, len(providers))
 	for _, p := range providers {
 		byName[p.Name()] = p
 	}
-	return &Server{users: users, orgs: orgs, agents: agents, watches: watches, sessions: sessions, providers: byName, evaluator: evaluator, policies: policies, cfg: cfg}
+	return &Server{users: users, orgs: orgs, agents: agents, watches: watches, sessions: sessions, states: states, providers: byName, evaluator: evaluator, policies: policies, cfg: cfg}
 }

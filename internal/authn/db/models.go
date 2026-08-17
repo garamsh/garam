@@ -34,6 +34,11 @@ type Invitation struct {
 	AcceptedAt pgtype.Timestamptz
 }
 
+type OauthState struct {
+	StateHash string
+	ExpiresAt pgtype.Timestamptz
+}
+
 type Org struct {
 	Grn       string
 	Name      string

@@ -41,13 +41,21 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request, provider apigen.P
 		writeError(w, err)
 		return
 	}
+	// Recorded before it is handed out, and for the same lifetime the
+	// cookie gets: the callback spends the record, so a state that
+	// outlived it would be a cookie no callback accepts.
+	if err := s.states.Issue(r.Context(), state, oauthFlowTTL); err != nil {
+		writeError(w, err)
+		return
+	}
 	s.setCookie(w, stateCookie, state, oauthFlowTTL)
 	s.setCookie(w, verifierCookie, verifier, oauthFlowTTL)
 	http.Redirect(w, r, p.AuthCodeURL(state, verifier), http.StatusFound)
 }
 
 // OauthCallback completes the flow: it validates state, exchanges the
-// code, upserts the user, and issues a session cookie.
+// code, upserts the user, spends the state, and issues a session
+// cookie. Spending the state is what makes the callback single-use.
 func (s *Server) OauthCallback(w http.ResponseWriter, r *http.Request, provider apigen.Provider, params apigen.OauthCallbackParams) {
 	p, ok := s.providers[provider]
 	if !ok {
@@ -77,6 +85,14 @@ func (s *Server) OauthCallback(w http.ResponseWriter, r *http.Request, provider 
 	identify(r, u)
 	token, err := authn.NewToken()
 	if err != nil {
+		writeError(w, err)
+		return
+	}
+	// Spent before the session exists, so two callbacks carrying one
+	// state leave one session between them. Nothing that fails above
+	// reaches here, which leaves the state live for the browser that
+	// owns it — as a refused membership leaves an invitation unburned.
+	if err := s.states.Consume(r.Context(), state.Value); err != nil {
 		writeError(w, err)
 		return
 	}

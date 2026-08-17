@@ -41,7 +41,9 @@ func NewToken() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(b[:]), nil
 }
 
-// HashToken derives the persisted form of a raw session token.
+// HashToken derives the persisted form of a raw secret — a session
+// token, or the state a login issues. Only the hash reaches the
+// database.
 func HashToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])

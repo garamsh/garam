@@ -117,6 +117,7 @@ func serveAPI(cmd *cobra.Command) error {
 		agent.NewPostgresStore(pool),
 		watches,
 		authn.NewPostgresSessionStore(pool),
+		authn.NewPostgresOAuthStateStore(pool),
 		providers,
 		api.NewGRPCEvaluator(conn),
 		api.NewGRPCPolicyManager(conn),

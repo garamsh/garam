@@ -90,8 +90,8 @@ see `.env.example`.
 
 `migrate` runs once against a healthy Postgres and exits; `authz` and
 `api` wait for it to have exited successfully. `api` additionally waits
-for `authz`, and `web` for `api`. Both servers' healthchecks are their
-own readiness probe, so a service is healthy here when it can serve a
+for `authz`, and `web` for `api`. Every server's healthcheck is its own
+readiness probe, so a service is healthy here when it can serve a
 request and not merely when it has bound its port.
 
 ## Probes
@@ -106,6 +106,9 @@ outside its process, so a database outage does not restart the stack.
   already serves the HTTP API on.
 - `http://localhost:9091/healthz`, `/readyz` — the authz engine, on the
   listener its metrics use.
+- `http://localhost:3000/healthz`, `/readyz` — the web app, on the port
+  it serves the console on. Neither reads the api, so both keep
+  answering through an api outage and the app stays in rotation.
 
 `garam serve machine` is not part of this stack; it answers both on
 `GARAM_MACHINE_HEALTH_ADDR`, a port of its own, because its own

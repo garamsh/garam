@@ -8,6 +8,7 @@ What the adapter garam ships must do, and what it rests on to do it.
 - Completion
 - Failure and attempts
 - The lease
+- Watching
 - Subscriptions
 - What garam owns
 - Foreign facts this rests on
@@ -106,13 +107,34 @@ is not something a reader here can check. Ask them, and widen only on
 an answer that names a measurement. Whoever widens this default should
 find this sentence before they do.
 
+## Watching
+
+**Forward turn events only while garam says someone is watching, and read
+that from the claim.** Every claim and every renewal answers with a
+watcher count; forward while it is above zero and forward nothing
+otherwise ([ADR-0022](./adr/0022-watching-an-agent.md)). garam cannot
+dial the adapter, so the poll the adapter already holds is the only
+direction the instruction can travel, and the renewal is where a person
+who opened the view mid-turn is first seen.
+
+- **A forward is best effort.** garam answers that the event was
+  announced and never that anyone saw it, and nothing is stored, so a
+  forward that fails is dropped rather than retried — a retry would
+  compete with the turn it is describing.
+- **Forwarding uses a subscription of its own**, for the reason below: a
+  browser that reads slowly must not cost the completion signal an event.
+- **An event garam cannot carry whole is refused**, not shortened. It is
+  bounded by what one announcement holds, which `api/machine.yaml`
+  states; a refusal is a gap, and this stream already permits one.
+
 ## Subscriptions
 
-Consuming and completing use separate subscriptions. A slow consumer
-must not degrade the signal that decides what it completed: falling
-behind would drop completion events, which produces redeliveries, which
-produce load. The same reasoning keeps readiness on a subscription of
-its own in [ADR-0013](./adr/0013-agent-messaging.md).
+Consuming, completing and forwarding use separate subscriptions. A slow
+consumer must not degrade the signal that decides what it completed:
+falling behind would drop completion events, which produces
+redeliveries, which produce load. The same reasoning keeps readiness on a
+subscription of its own in [ADR-0013](./adr/0013-agent-messaging.md), and
+puts watching on a third ([ADR-0022](./adr/0022-watching-an-agent.md)).
 
 ## What garam owns
 

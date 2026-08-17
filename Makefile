@@ -32,6 +32,13 @@ TEST_DATABASE_URL ?= postgres://garam:garam@localhost:$(GARAM_DB_PORT)/$(TEST_DB
 COMPOSE_LOCAL := docker compose -f deploy/local/docker-compose.yml
 PNPM := pnpm --dir web
 
+# Where the running api is published on this host, asked of compose at
+# the moment it is used. GARAM_LOCAL_API_PORT moves that port, from
+# deploy/local/.env as readily as from the environment, and a second
+# copy of it here would be the copy that goes stale. Empty when nothing
+# is published, which `web-e2e` reports rather than dials.
+API_HOST_ADDR = $(shell $(COMPOSE_LOCAL) port api 8080 2>/dev/null | sed 's/^0\.0\.0\.0/localhost/')
+
 .PHONY: lint format test build mock gen check-gen e2e db-up db-down backend-up ci
 .PHONY: web-install web-lint web-format web-test web-build web-gen web-check-gen web-e2e web-ci
 .PHONY: minikube-up minikube-down minikube-start minikube-images minikube-db
@@ -152,8 +159,9 @@ web-check-gen: web-gen
 # needs GARAM_API_URL — the real api here, not `web-build`'s placeholder
 # — and the browser, which Playwright keeps outside the lockfile.
 web-e2e:
+	@test -n "$(API_HOST_ADDR)" || { echo "web-e2e: no api published on this host — run make backend-up" >&2; exit 1; }
 	$(PNPM) exec playwright install chromium
-	GARAM_API_URL=http://localhost:8080 $(PNPM) e2e
+	GARAM_API_URL=http://$(API_HOST_ADDR) $(PNPM) e2e
 
 web-ci: web-format web-lint web-test web-build web-check-gen
 

@@ -78,7 +78,10 @@ collaborate on a shared plan.
   than printing GRNs (ADR-0011).
 - Each of the three processes answers a liveness and a readiness probe
   on a listener a scheduler reaches without credentials, liveness
-  reading nothing outside its own process (ADR-0021).
+  reading nothing outside its own process (ADR-0021). The web app
+  answers the same two paths, and neither of its probes reads the API,
+  so an API outage leaves the console loading rather than dark
+  (ADR-0023).
 - One identifier system across every resource (GRN).
 
 ## Out of scope (today)
@@ -235,6 +238,7 @@ contract is `proto/garam/authz/v1`.
 | A message is completed by the turn-end event naming it | It is the only signal that pairs deterministically; a lost one redelivers, so delivery is at-least-once rather than exactly-once. | [adr/0018-delivery-acknowledgement.md](./adr/0018-delivery-acknowledgement.md) |
 | The machine listener has a specification of its own | One contract per listener: the browser client generates no types for a surface it cannot call, and whoever writes an operator has something to build against. | [adr/0019-machine-openapi-spec.md](./adr/0019-machine-openapi-spec.md) |
 | Liveness and readiness answer on a credential-free port | Restarting is the expensive answer, so only readiness reads a dependency; the mTLS listener admits no probe, so that process gets a port for them. | [adr/0021-liveness-and-readiness.md](./adr/0021-liveness-and-readiness.md) |
+| The web app answers the same two probes | A fourth surface configured differently is configured wrong silently; probing page routes makes navigation a deployment interface, and a readiness that reads the API darkens the console during the outage it should report. | [adr/0023-web-probes.md](./adr/0023-web-probes.md) |
 
 ## Non-functional goals
 

@@ -145,9 +145,16 @@ The engine parses each org's active documents once and caches the
 resulting statement set. Writes made through the engine drop the org's
 entry directly. Writes made by any other process announce the org on
 the Postgres `LISTEN`/`NOTIFY` channel `garam_policy_change`, which a
-schema trigger raises and the engine's listener consumes; if that
-listener stops, `garam serve authz` reports it and single-process
-invalidation still holds.
+schema trigger raises and the engine's listener consumes.
+
+Losing that connection is ordinary rather than exceptional — a Postgres
+failover breaks it by design — so the listener reopens one, backing off
+between attempts so a database that is down is not retried into an
+outage of its own. A notification raised while it was down is not
+repeated, so a reopened connection drops every cached org: what the
+engine read before the break is what it cannot know is current. Only
+shutting the process down ends the listener, and `garam serve authz`
+reports that.
 
 Lifecycle is served by `PolicyService` in `proto/garam/authz/v1`:
 create, append a version, list policies and versions, activate,

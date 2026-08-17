@@ -106,6 +106,43 @@ func TestPolicyCache_StatementsBySubject(t *testing.T) {
 	}
 }
 
+// TestPolicyCache_InvalidateAllDropsEveryOrg is the counterpart of the
+// test below: what Invalidate does to the org it names, InvalidateAll
+// does to every org at once. Both are read together — acme reloading
+// alone would also pass on a cache that only dropped what it was
+// named, so other is what says the drop was not selective. Each
+// ActivePolicies expectation is exhausted by the one load it stands
+// for, so a load that should have come from the cache fails the test.
+func TestPolicyCache_InvalidateAllDropsEveryOrg(t *testing.T) {
+	store := mocks.NewMockStore(t)
+	acme, other := orgGRN("acme"), orgGRN("other")
+	store.EXPECT().ActivePolicies(mock.Anything, acme).
+		Return([]authz.ActivePolicy{orgWidePolicy("acme-before", authz.EffectAllow)}, nil).Once()
+	store.EXPECT().ActivePolicies(mock.Anything, other).
+		Return([]authz.ActivePolicy{orgWidePolicy("other-before", authz.EffectAllow)}, nil).Once()
+
+	cache := authz.NewPolicyCache(store)
+	acmeBefore, err := cache.Statements(context.Background(), acme, nil)
+	require.NoError(t, err)
+	require.Equal(t, "acme-before", acmeBefore[0].Sid)
+	otherBefore, err := cache.Statements(context.Background(), other, nil)
+	require.NoError(t, err)
+	require.Equal(t, "other-before", otherBefore[0].Sid)
+
+	store.EXPECT().ActivePolicies(mock.Anything, acme).
+		Return([]authz.ActivePolicy{orgWidePolicy("acme-after", authz.EffectAllow)}, nil).Once()
+	store.EXPECT().ActivePolicies(mock.Anything, other).
+		Return([]authz.ActivePolicy{orgWidePolicy("other-after", authz.EffectAllow)}, nil).Once()
+	cache.InvalidateAll()
+
+	acmeAfter, err := cache.Statements(context.Background(), acme, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "acme-after", acmeAfter[0].Sid)
+	otherAfter, err := cache.Statements(context.Background(), other, nil)
+	require.NoError(t, err)
+	assert.Equal(t, "other-after", otherAfter[0].Sid)
+}
+
 // TestPolicyCache_InvalidateDropsOnlyTheOrgNamed reads the two
 // directions together: acme reloads because Invalidate named it, and
 // other survives because Invalidate did not. Either half alone passes

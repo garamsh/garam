@@ -111,8 +111,9 @@ func truncate(t *testing.T, p *pgxpool.Pool) {
 	t.Helper()
 	_, err := p.Exec(context.Background(), `TRUNCATE users, orgs, groups, projects,
 		group_members, project_members, org_members, invitations, sessions,
-		policies, policy_versions, policy_attachments, agents, agent_assignments,
-		agent_definitions, certificate_authorities, messages, agent_watches CASCADE`)
+		oauth_states, policies, policy_versions, policy_attachments, agents,
+		agent_assignments, agent_definitions, certificate_authorities,
+		messages, agent_watches CASCADE`)
 	require.NoError(t, err)
 }
 
@@ -588,6 +589,43 @@ func TestSessionStore_RoundTrip(t *testing.T) {
 	assert.ErrorIs(t, err, authn.ErrSessionNotFound)
 	// Delete is idempotent.
 	require.NoError(t, s.Delete(ctx, token))
+}
+
+// TestOAuthStateStore_RoundTrip drives a login state through the shape
+// the callback rests on: live once, spent by the callback that
+// completes, and gone when its flow has run out. The first consume is
+// the control for the second — the refusals below are the state having
+// been spent or lapsed, not a store that refuses everything.
+func TestOAuthStateStore_RoundTrip(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := authn.NewPostgresOAuthStateStore(p)
+
+	state, err := authn.NewToken()
+	require.NoError(t, err)
+	require.NoError(t, s.Issue(ctx, state, time.Minute))
+	require.NoError(t, s.Consume(ctx, state))
+
+	assert.ErrorIs(t, s.Consume(ctx, state), authn.ErrOAuthStateNotLive)
+	assert.ErrorIs(t, s.Consume(ctx, "never-issued"), authn.ErrOAuthStateNotLive)
+
+	// A state past its lifetime is not live, whether or not the row
+	// naming it is still there.
+	lapsed, err := authn.NewToken()
+	require.NoError(t, err)
+	require.NoError(t, s.Issue(ctx, lapsed, -time.Minute))
+	assert.ErrorIs(t, s.Consume(ctx, lapsed), authn.ErrOAuthStateNotLive)
+
+	// Issuing prunes what has lapsed, which is what bounds the table:
+	// the row above survives its own issue and not the next one.
+	fresh, err := authn.NewToken()
+	require.NoError(t, err)
+	require.NoError(t, s.Issue(ctx, fresh, time.Minute))
+	var rows int
+	require.NoError(t, p.QueryRow(ctx,
+		"SELECT count(*) FROM oauth_states WHERE state_hash = $1", authn.HashToken(lapsed),
+	).Scan(&rows))
+	assert.Equal(t, 0, rows, "the lapsed state was pruned")
 }
 
 // TestAgentStore_RoundTrip drives an agent through the shape ADR-0012

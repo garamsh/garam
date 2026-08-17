@@ -11,6 +11,18 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const consumeOAuthState = `-- name: ConsumeOAuthState :execrows
+DELETE FROM oauth_states WHERE state_hash = $1 AND expires_at > now()
+`
+
+func (q *Queries) ConsumeOAuthState(ctx context.Context, stateHash string) (int64, error) {
+	result, err := q.db.Exec(ctx, consumeOAuthState, stateHash)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const createSession = `-- name: CreateSession :exec
 INSERT INTO sessions (token_hash, user_grn, created_at, expires_at)
 VALUES ($1, $2, $3, $4)
@@ -56,4 +68,22 @@ func (q *Queries) GetSession(ctx context.Context, tokenHash string) (Session, er
 		&i.ExpiresAt,
 	)
 	return i, err
+}
+
+const issueOAuthState = `-- name: IssueOAuthState :exec
+WITH pruned AS (
+    DELETE FROM oauth_states WHERE expires_at <= now()
+)
+INSERT INTO oauth_states (state_hash, expires_at)
+VALUES ($1, $2)
+`
+
+type IssueOAuthStateParams struct {
+	StateHash string
+	ExpiresAt pgtype.Timestamptz
+}
+
+func (q *Queries) IssueOAuthState(ctx context.Context, arg IssueOAuthStateParams) error {
+	_, err := q.db.Exec(ctx, issueOAuthState, arg.StateHash, arg.ExpiresAt)
+	return err
 }

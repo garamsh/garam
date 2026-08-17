@@ -123,10 +123,16 @@ Authentication: the sign-in provider abstraction and sessions.
 | `Identity` | subject + nickname asserted by a provider |
 | `Session` | browser session for a user, expiring |
 | `SessionStore` | persists sessions keyed by token hash |
+| `OAuthStateStore` | persists the state a login issued, until the callback spends it or its lifetime runs out (ADR-0028) |
 
 A second provider is a new file implementing `Provider`; call sites
 depend only on the interface. Raw session tokens live in cookies; only
-SHA-256 hashes reach the database.
+SHA-256 hashes reach the database, the state a login issues included.
+
+A callback completes once because the state it carries is spent from a
+row, not because the response asked the browser to drop the cookie
+holding it (ADR-0028). The state's own lifetime bounds the row, so a
+record cannot outlive what it is checked against or lapse before it.
 
 ## `internal/user`
 
@@ -478,6 +484,7 @@ caller authenticated as.
 | org | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | user | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | authn.SessionStore | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
+| authn.OAuthStateStore | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | authz (policies) | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | agent | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | ca | yes (`store.go`) | yes (`postgres.go`) | not planned | — |

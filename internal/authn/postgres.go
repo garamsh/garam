@@ -63,6 +63,46 @@ func (s *PostgresSessionStore) Delete(ctx context.Context, token string) error {
 	return errorx.Wrap(s.q.DeleteSession(ctx, HashToken(token)), "session store: delete")
 }
 
+// PostgresOAuthStateStore implements OAuthStateStore against
+// PostgreSQL. Only state hashes are persisted; the state the browser
+// carries never touches the database.
+type PostgresOAuthStateStore struct {
+	q *db.Queries
+}
+
+// Compile-time check that PostgresOAuthStateStore satisfies
+// OAuthStateStore.
+var _ OAuthStateStore = (*PostgresOAuthStateStore)(nil)
+
+// NewPostgresOAuthStateStore constructs a Postgres-backed
+// OAuthStateStore.
+func NewPostgresOAuthStateStore(pool *pgxpool.Pool) *PostgresOAuthStateStore {
+	return &PostgresOAuthStateStore{q: db.New(pool)}
+}
+
+// Issue records state as live for ttl.
+func (s *PostgresOAuthStateStore) Issue(ctx context.Context, state string, ttl time.Duration) error {
+	err := s.q.IssueOAuthState(ctx, db.IssueOAuthStateParams{
+		StateHash: HashToken(state),
+		ExpiresAt: stamp(time.Now().UTC().Add(ttl)),
+	})
+	return errorx.Wrap(err, "oauth state store: issue")
+}
+
+// Consume spends a live state, or returns ErrOAuthStateNotLive. The
+// delete is the whole decision: two callbacks racing on one state, one
+// row deleted, so only one of them is told it spent it.
+func (s *PostgresOAuthStateStore) Consume(ctx context.Context, state string) error {
+	spent, err := s.q.ConsumeOAuthState(ctx, HashToken(state))
+	if err != nil {
+		return errorx.Wrap(err, "oauth state store: consume")
+	}
+	if spent == 0 {
+		return ErrOAuthStateNotLive
+	}
+	return nil
+}
+
 // stamp converts a time.Time to a valid pgtype.Timestamptz.
 func stamp(t time.Time) pgtype.Timestamptz {
 	return pgtype.Timestamptz{Time: t, Valid: true}

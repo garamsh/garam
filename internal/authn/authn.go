@@ -15,6 +15,12 @@ import (
 // expired.
 var ErrSessionNotFound = errorx.New(errorx.KindNotFound, "session not found")
 
+// ErrOAuthStateNotLive is returned when a login state was never
+// issued, has expired, or has already been consumed. One answer covers
+// the three: whoever presented the state is told it buys nothing, and
+// not which of the three it is.
+var ErrOAuthStateNotLive = errorx.New(errorx.KindUnauthenticated, "oauth state not live")
+
 // Identity is the authenticated identity asserted by a Provider.
 type Identity struct {
 	Subject  string

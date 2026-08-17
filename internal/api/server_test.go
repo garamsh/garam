@@ -19,6 +19,7 @@ import (
 	"github.com/garamsh/garam/internal/api"
 	"github.com/garamsh/garam/internal/api/mocks"
 	"github.com/garamsh/garam/internal/authn"
+	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/org"
 	"github.com/garamsh/garam/internal/user"
@@ -34,6 +35,7 @@ type fixture struct {
 	leases    *fakeWatchLeases
 	relay     *fakeTurnEvents
 	sessions  *fakeSessionStore
+	states    *fakeOAuthStateStore
 	provider  *fakeProvider
 	evaluator *mocks.MockEvaluator
 	policies  *mocks.MockPolicyManager
@@ -48,6 +50,7 @@ func newFixture(t *testing.T, extra ...authn.Provider) *fixture {
 		leases:    newFakeWatchLeases(),
 		relay:     newFakeTurnEvents(),
 		sessions:  newFakeSessionStore(),
+		states:    newFakeOAuthStateStore(),
 		provider:  &fakeProvider{name: "google"},
 		evaluator: mocks.NewMockEvaluator(t),
 		policies:  mocks.NewMockPolicyManager(t),
@@ -61,7 +64,7 @@ func newFixture(t *testing.T, extra ...authn.Provider) *fixture {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	go func() { _ = watches.Receive(ctx) }()
-	srv := api.NewServer(f.users, f.orgs, f.agents, watches, f.sessions, append([]authn.Provider{f.provider}, extra...), f.evaluator, f.policies, api.Config{SessionTTL: time.Hour})
+	srv := api.NewServer(f.users, f.orgs, f.agents, watches, f.sessions, f.states, append([]authn.Provider{f.provider}, extra...), f.evaluator, f.policies, api.Config{SessionTTL: time.Hour})
 	f.handler = apigen.Handler(srv)
 	return f
 }
@@ -293,6 +296,9 @@ func TestOauthCallback_StateAndVerifierGuards(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			f := callbackFixture(t)
+			// The login that started this flow issued the state the
+			// query carries; only the cookies differ between cases.
+			require.NoError(t, f.states.Issue(testCtx(t), returnedState, time.Minute))
 
 			rec := f.do(t, "GET", "/auth/callback/google?code=ok&state="+returnedState, "", tt.cookies...)
 
@@ -308,9 +314,129 @@ func TestOauthCallback_StateAndVerifierGuards(t *testing.T) {
 	}
 }
 
+// sessionCookieIn returns the session cookie the response sets, or nil
+// when it sets none.
+func sessionCookieIn(rec *httptest.ResponseRecorder) *http.Cookie {
+	for _, c := range rec.Result().Cookies() {
+		if c.Name == "garam_session" {
+			return c
+		}
+	}
+	return nil
+}
+
+// callback issues the callback a login's redirect would produce for
+// state, carrying the cookies that login set.
+func (f *fixture) callback(t *testing.T, state string) *httptest.ResponseRecorder {
+	t.Helper()
+	return f.do(t, "GET", "/auth/callback/google?code=ok&state="+state, "",
+		oauthStateCookie(state), oauthVerifierCookie("verifier-xyz"))
+}
+
+// TestOauthCallback_StateIsSingleUse is the replay: the same callback
+// request twice, cookies included, as anyone holding a captured one
+// would send it. Expiring the cookies asks the browser to drop them
+// and binds nobody else, so the first attempt is the control — the
+// second is refused because the state was spent, not because the
+// request differs from one that worked.
+func TestOauthCallback_StateIsSingleUse(t *testing.T) {
+	const returnedState = "state-abc"
+	f := callbackFixture(t)
+	require.NoError(t, f.states.Issue(testCtx(t), returnedState, time.Minute))
+
+	rec := f.callback(t, returnedState)
+	require.Equal(t, http.StatusFound, rec.Code)
+	require.NotNil(t, sessionCookieIn(rec), "session cookie set")
+
+	rec = f.callback(t, returnedState)
+
+	require.Equal(t, http.StatusUnauthorized, rec.Code)
+	body := decodeBody[apigen.Error](t, rec)
+	assert.Equal(t, "unauthenticated", body.Kind)
+	assert.Equal(t, "oauth state not live", body.Message)
+	assert.Nil(t, sessionCookieIn(rec), "no session for the replay")
+}
+
+// TestOauthCallback_StateMustBeLive covers the two states a callback
+// meets that no replay produced: one no login issued — a code with a
+// state of the sender's own choosing — and one whose flow has run out.
+// The accepted case is the control, and its message separates this
+// refusal from the state guard's.
+func TestOauthCallback_StateMustBeLive(t *testing.T) {
+	const returnedState = "state-abc"
+	tests := []struct {
+		name       string
+		issue      bool
+		ttl        time.Duration
+		wantStatus int
+	}{
+		{
+			name:       "a state a login issued and nothing has spent",
+			issue:      true,
+			ttl:        time.Minute,
+			wantStatus: http.StatusFound,
+		},
+		{
+			name:       "a state no login issued",
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:       "a state whose flow has run out",
+			issue:      true,
+			ttl:        -time.Minute,
+			wantStatus: http.StatusUnauthorized,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := callbackFixture(t)
+			if tt.issue {
+				require.NoError(t, f.states.Issue(testCtx(t), returnedState, tt.ttl))
+			}
+
+			rec := f.callback(t, returnedState)
+
+			require.Equal(t, tt.wantStatus, rec.Code)
+			if tt.wantStatus == http.StatusFound {
+				assert.NotNil(t, sessionCookieIn(rec), "session cookie set")
+				return
+			}
+			body := decodeBody[apigen.Error](t, rec)
+			assert.Equal(t, "unauthenticated", body.Kind)
+			assert.Equal(t, "oauth state not live", body.Message)
+			assert.Nil(t, sessionCookieIn(rec), "no session")
+		})
+	}
+}
+
+// TestOauthCallback_RefusedExchangeLeavesStateLive holds the decision
+// that a failed callback spends nothing: the state is spent where a
+// session is about to exist, not where a request arrives, so a probe
+// that cannot pass the provider costs the browser its sign-in.
+func TestOauthCallback_RefusedExchangeLeavesStateLive(t *testing.T) {
+	const returnedState = "state-abc"
+	f := callbackFixture(t)
+	require.NoError(t, f.states.Issue(testCtx(t), returnedState, time.Minute))
+	f.provider.identity, f.provider.err = nil, errorx.New(errorx.KindUnauthenticated, "token exchange")
+
+	rec := f.callback(t, returnedState)
+	require.Equal(t, http.StatusUnauthorized, rec.Code)
+	require.Equal(t, "token exchange", decodeBody[apigen.Error](t, rec).Message)
+
+	// The control: the browser that owns the state completes with it
+	// afterwards, which it cannot do if the refusal spent it.
+	f.provider.identity, f.provider.err = &authn.Identity{Subject: "123", Nickname: "Ada"}, nil
+
+	rec = f.callback(t, returnedState)
+
+	require.Equal(t, http.StatusFound, rec.Code)
+	assert.NotNil(t, sessionCookieIn(rec), "session cookie set")
+}
+
 func TestOauthCallback_ExpiresSingleUseCookies(t *testing.T) {
 	const returnedState = "state-abc"
 	f := callbackFixture(t)
+	require.NoError(t, f.states.Issue(testCtx(t), returnedState, time.Minute))
 
 	rec := f.do(t, "GET", "/auth/callback/google?code=ok&state="+returnedState, "",
 		oauthStateCookie(returnedState), oauthVerifierCookie("verifier-xyz"))

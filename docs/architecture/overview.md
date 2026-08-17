@@ -69,12 +69,15 @@ collaborate on a shared plan.
   is answered 403 and never stored, which is the one refusal on this
   path that ADR-0013 does not shape.
 - Watching an agent work, while somebody is (ADR-0022). A member of the
-  organization opens a server-sent stream under
+  organization a policy allows opens a server-sent stream under
   `/orgs/{org}/agents/{agent}/watch` and reads what the agent is saying
   now; the machine listener takes the turn events an adapter forwards and
   answers every claim and renewal with how many streams garam holds for
   that agent, which is what says whether to forward at all. Watching is
-  granted by an action of its own, separate from reading one. Nothing
+  granted by an action of its own, separate from reading one, and no role
+  carries it: a grant arriving with membership is one nobody decided, so
+  an organization that wants its members to watch says so in a policy and
+  nobody watches until it does. Nothing
   accumulates for an agent nobody watches — no row, no event carried, no
   entry in either process's memory — and a stream starts where it was
   opened, because there was nothing to replay. The view is best effort

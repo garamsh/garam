@@ -79,9 +79,12 @@ importing this package back — and `Role.Actions`
 maps each role to the action patterns it grants; `ActionsFor` does the same for
 the role names a `Group` or `Project` carries as data. Agents are the
 one resource type no role holds a wildcard over: ADR-0012 keeps
-provisioning outside garam, so each agent action is granted by name and
-a later one is a decision rather than an increment. The authz
-evaluator decides. Groups and projects are addressed under their
+provisioning outside garam, so each agent action a role grants is granted
+by name and a later one is a decision rather than an increment.
+`agent:watch` is granted by no role at all, which is that reason carried
+further — ADR-0022 separates watching from reading so an organization may
+withhold it, and a role naming it would settle that for every
+organization instead. The authz evaluator decides. Groups and projects are addressed under their
 organization's HTTP paths, and their GRNs carry the owning org in the
 organization segment, so a group or project role is scoped to that
 resource alone (authz.md §Statement collection).
@@ -464,7 +467,8 @@ forwards to any more shows a working agent as a quiet one.
 The HTTP surfaces are `internal/api` for the browser that watches and
 `internal/machineapi` for the adapter that forwards. Which browser is
 admitted is decided at the first, by a grant separate from reading an
-agent (ADR-0022); whose events a caller may forward, and whose watchers
+agent and carried by no role, so a policy allows `agent:watch` or nobody
+watches (ADR-0022); whose events a caller may forward, and whose watchers
 it may count, is decided here by one comparison against the identity the
 caller authenticated as.
 

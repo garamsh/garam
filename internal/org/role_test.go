@@ -26,12 +26,12 @@ func TestParseRole_Unknown(t *testing.T) {
 
 func TestRoleActions_GrantSets(t *testing.T) {
 	assert.Equal(t,
-		[]string{"org:*", "group:*", "project:*", "policy:*", org.ActionAgentRead, org.ActionAgentDefine, org.ActionAgentWatch},
+		[]string{"org:*", "group:*", "project:*", "policy:*", org.ActionAgentRead, org.ActionAgentDefine},
 		org.RoleOwner.Actions())
 	assert.Equal(t,
 		[]string{
 			org.ActionOrgRead, org.ActionOrgUpdate, org.ActionOrgMemberList, org.ActionOrgInvite,
-			"group:*", "project:*", "policy:*", org.ActionAgentRead, org.ActionAgentDefine, org.ActionAgentWatch,
+			"group:*", "project:*", "policy:*", org.ActionAgentRead, org.ActionAgentDefine,
 		},
 		org.RoleAdmin.Actions())
 	assert.Equal(t,
@@ -39,22 +39,28 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			org.ActionOrgRead, org.ActionOrgMemberList,
 			org.ActionGroupRead, org.ActionGroupMemberList,
 			org.ActionProjectRead, org.ActionProjectMemberList,
-			org.ActionAgentRead, org.ActionAgentDefine, org.ActionAgentWatch,
+			org.ActionAgentRead, org.ActionAgentDefine,
 		},
 		org.RoleMember.Actions())
 	assert.Empty(t, org.Role("").Actions())
 }
 
-// TestRoleActions_NoWildcardOverAgents pins what the grant sets above
-// leave implicit: no role grants `agent:*`, so an action added to this
-// vocabulary later is granted deliberately rather than by a pattern
-// already in place (ADR-0012).
-func TestRoleActions_NoWildcardOverAgents(t *testing.T) {
+// TestRoleActions_NoRoleReachesAgentWatch pins what the grant sets
+// above leave implicit: no role names `agent:watch`, and none carries
+// the `agent:*` that would reach it without naming it. ADR-0022
+// separates watching from reading so an organization may give one and
+// withhold the other, and ADR-0012 keeps provisioning out of a
+// wildcard; both make an agent action a role grants a deliberate one.
+//
+// The read and the define are the control. Without them the two
+// refusals hold for a role that grants nothing at all, which is a
+// different state and the one most likely to arrive by accident.
+func TestRoleActions_NoRoleReachesAgentWatch(t *testing.T) {
 	for _, r := range []org.Role{org.RoleOwner, org.RoleAdmin, org.RoleMember} {
+		assert.NotContains(t, r.Actions(), org.ActionAgentWatch, string(r))
 		assert.NotContains(t, r.Actions(), "agent:*", string(r))
 		assert.Contains(t, r.Actions(), org.ActionAgentRead, string(r))
 		assert.Contains(t, r.Actions(), org.ActionAgentDefine, string(r))
-		assert.Contains(t, r.Actions(), org.ActionAgentWatch, string(r))
 	}
 }
 
@@ -64,7 +70,7 @@ func TestActionsFor_UnionsKnownRoles(t *testing.T) {
 			org.ActionOrgRead, org.ActionOrgMemberList,
 			org.ActionGroupRead, org.ActionGroupMemberList,
 			org.ActionProjectRead, org.ActionProjectMemberList,
-			org.ActionAgentRead, org.ActionAgentDefine, org.ActionAgentWatch,
+			org.ActionAgentRead, org.ActionAgentDefine,
 			org.ActionOrgUpdate, org.ActionOrgInvite,
 			"group:*", "project:*", "policy:*",
 		},

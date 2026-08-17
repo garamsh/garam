@@ -3,6 +3,7 @@ package api_test
 import (
 	"context"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -254,4 +255,35 @@ func TestScopedPermissions_MalformedSlugStopsBeforeStatementCollection(t *testin
 			assert.Equal(t, http.StatusBadRequest, f.do(t, "GET", "/orgs/"+slug, "", owner).Code)
 		})
 	}
+}
+
+// TestScopedPermissions_NoRoleGrantsWatchingAnAgent covers the grant
+// ADR-0022 keeps off the roles. Watching is separate from reading, and
+// a grant arriving with membership is one nobody decided, so an
+// organization that wants it writes a policy. The owner carries the
+// widest vocabulary a role can, and this runs the real evaluator over
+// the statements the server collected, so a refusal here is a refusal
+// for every role and for every wildcard a role grants.
+//
+// The same owner reading the same agent is the control: it is what
+// stops being answered if the refusal comes from the session, the
+// membership, the org or the agent rather than from the action.
+func TestScopedPermissions_NoRoleGrantsWatchingAnAgent(t *testing.T) {
+	f := newFixture(t)
+	f.enforce()
+
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	held := seedAgent(t, f, slug)
+	// The stream is held open rather than recorded: a grant reaching
+	// this endpoint answers by streaming, and a recorder would wait on
+	// it instead of reporting the status it was handed.
+	server := httptest.NewServer(f.handler)
+	t.Cleanup(server.Close)
+
+	refused, _, _ := open(t, server.URL, "/orgs/"+slug+"/agents/"+held.Identifier+"/watch", owner)
+	assert.Equal(t, http.StatusForbidden, refused.StatusCode)
+
+	answered := f.do(t, "GET", "/orgs/"+slug+"/agents/"+held.Identifier, "", owner)
+	assert.Equal(t, http.StatusOK, answered.Code, "the read is refused too, so the refusal above proves nothing")
 }

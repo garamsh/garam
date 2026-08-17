@@ -73,7 +73,8 @@ const (
 	// ActionAgentWatch is watching an agent work (ADR-0022). Reading an
 	// agent reports that it exists and what two parties say about its
 	// state; watching exposes the content of its work, which an
-	// organization may withhold from someone it lets read.
+	// organization may withhold from someone it lets read. No role
+	// grants it — see Actions.
 	ActionAgentWatch = "agent:watch"
 )
 
@@ -84,21 +85,27 @@ const (
 // Agents are named action by action rather than as `agent:*`, every
 // role over: ADR-0012 puts provisioning outside garam, so a wildcard
 // here would grant in advance the very actions no endpoint may offer.
+//
+// No role names ActionAgentWatch. ADR-0022 separates watching from
+// reading so an organization may give one and withhold the other, and
+// a grant arriving with membership is a grant nobody decided — which
+// is the separation being invisible wherever the roles are the whole
+// of the authorization. Watching is carried by a policy or not at all.
 func (r Role) Actions() []string {
 	switch r {
 	case RoleOwner:
-		return []string{"org:*", "group:*", "project:*", "policy:*", ActionAgentRead, ActionAgentDefine, ActionAgentWatch}
+		return []string{"org:*", "group:*", "project:*", "policy:*", ActionAgentRead, ActionAgentDefine}
 	case RoleAdmin:
 		return []string{
 			ActionOrgRead, ActionOrgUpdate, ActionOrgMemberList, ActionOrgInvite,
-			"group:*", "project:*", "policy:*", ActionAgentRead, ActionAgentDefine, ActionAgentWatch,
+			"group:*", "project:*", "policy:*", ActionAgentRead, ActionAgentDefine,
 		}
 	case RoleMember:
 		return []string{
 			ActionOrgRead, ActionOrgMemberList,
 			ActionGroupRead, ActionGroupMemberList,
 			ActionProjectRead, ActionProjectMemberList,
-			ActionAgentRead, ActionAgentDefine, ActionAgentWatch,
+			ActionAgentRead, ActionAgentDefine,
 		}
 	}
 	return nil

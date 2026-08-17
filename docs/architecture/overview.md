@@ -39,9 +39,10 @@ collaborate on a shared plan.
   browser API under `/orgs/{org}/agents`. An agent is answered with the
   state its operator reports and the state it reports itself, kept as
   the separate facts ADR-0012 makes them, and with the operator holding
-  it at which epoch. Read-only: provisioning stays outside garam, so
-  that surface creates no agent, assigns none, and issues no
-  certificate.
+  it at which epoch. That surface is read-only **today**: it creates no
+  agent, assigns none, and issues no certificate. ADR-0026 decides that
+  defining an agent belongs here — which operator runs it and with what
+  values — and nothing implements it yet.
 - Messages addressed to an agent are held in a queue one reader at a
   time claims from, stored once per sender key and claimable again when
   a reader dies holding one (ADR-0013). A message is bounded by an
@@ -96,6 +97,19 @@ collaborate on a shared plan.
 
 ## Out of scope (today)
 
+- Defining an agent from the console, and the read an operator makes to
+  learn of that definition. ADR-0026 decides the direction — garam holds
+  what an agent should be, an operator asks — and leaves the read
+  surface, its authentication, the shape of the values, and the key an
+  operator matches its own definitions by all undecided. Until it
+  exists, an agent comes to exist only by an operator calling
+  `POST /agents`, which ADR-0026 records as one of two ways and a defect
+  rather than a feature.
+- Secrets. Values an agent, a project or a cluster needs, held at
+  organization and at project level, are part of the intended structure
+  and nothing stores, serves or protects one today.
+- Clusters as a resource an organization connects. Named in the intended
+  structure and explicitly unplanned.
 - Manifests for any cluster garam does not run. garam publishes two
   images and a contract — ports, probe paths, configuration and which
   of it is secret, and how key material must arrive (ADR-0020); the

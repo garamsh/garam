@@ -2,6 +2,7 @@ package e2e_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -9,6 +10,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/golang-migrate/migrate/v4/source"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -148,4 +151,75 @@ func TestMigrate_RefusesADirtyDatabaseNamingTheRecovery(t *testing.T) {
 		assert.Contains(t, retry.Error(), "dirty at version 1")
 		assert.Contains(t, retry.Error(), "force the schema version to -1")
 	})
+}
+
+// upMigration is one `.up.sql` file as golang-migrate reads it.
+type upMigration struct {
+	version uint
+	name    string
+	sql     string
+}
+
+// upMigrations reads migrations/ through golang-migrate's own source
+// driver, so what is checked below is what a migrate run would apply, in
+// the order it would apply it.
+func upMigrations(t *testing.T) []upMigration {
+	t.Helper()
+	src, err := source.Open("file://" + migrationsDir(t))
+	require.NoError(t, err)
+	t.Cleanup(func() { assert.NoError(t, src.Close()) })
+
+	version, err := src.First()
+	require.NoError(t, err, "migrations/ holds no migration")
+
+	var out []upMigration
+	for {
+		body, name, err := src.ReadUp(version)
+		require.NoError(t, err)
+		sql, err := io.ReadAll(body)
+		require.NoError(t, err)
+		require.NoError(t, body.Close())
+		out = append(out, upMigration{version: version, name: name, sql: string(sql)})
+
+		next, err := src.Next(version)
+		if errors.Is(err, os.ErrNotExist) {
+			return out
+		}
+		require.NoError(t, err)
+		version = next
+	}
+}
+
+// TestMigrations_EachAppliesInsideOneTransaction holds the property the
+// recovery `garam migrate` prints rests on: a failed migration leaves no
+// schema change behind, so the version can be forced back without
+// reading the schema first. It holds only while every migration can be
+// applied inside a transaction, and the day one cannot — CREATE INDEX
+// CONCURRENTLY is the usual reason — it stops holding silently. Postgres
+// judges that here, rather than a list of statements someone has to keep
+// current, and a migration it refuses is a decision to take rather than
+// an increment.
+func TestMigrations_EachAppliesInsideOneTransaction(t *testing.T) {
+	const schema = "migrate_transaction_test"
+	migrations := upMigrations(t)
+	databaseURL := isolatedSchema(t, pool(t), schema)
+	c, err := pgxpool.New(context.Background(), databaseURL)
+	require.NoError(t, err)
+	t.Cleanup(c.Close)
+
+	for _, m := range migrations {
+		// The rollback is deferred so that a migration Postgres refuses
+		// releases its connection: a transaction left open holds the
+		// schema, and dropping it would then wait for a test that has
+		// already failed.
+		func() {
+			ctx := context.Background()
+			tx, err := c.Begin(ctx)
+			require.NoError(t, err)
+			defer func() { _ = tx.Rollback(ctx) }()
+			_, err = tx.Exec(ctx, m.sql)
+			require.NoErrorf(t, err, "migration %d (%s) must apply inside one transaction", m.version, m.name)
+			require.NoError(t, tx.Commit(ctx))
+		}()
+	}
 }

@@ -42,7 +42,7 @@ API_HOST_ADDR = $(shell $(COMPOSE_LOCAL) port api 8080 2>/dev/null | sed 's/^0\.
 .PHONY: lint format test build mock gen check-gen e2e db-up db-down backend-up ci
 .PHONY: web-install web-lint web-format web-test web-build web-gen web-check-gen web-e2e web-ci
 .PHONY: minikube-up minikube-down minikube-start minikube-images minikube-db
-.PHONY: minikube-secret minikube-migrate minikube-apps minikube-forward
+.PHONY: minikube-secret minikube-migrate minikube-apps minikube-rebuild minikube-forward
 
 lint:
 	go vet ./...
@@ -193,7 +193,13 @@ MINIKUBE_DIR := deploy/local/minikube
 # is GHSA-7qwx-x8ff-3px9.
 CNPG_MANIFEST := https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/4b5e244a7d031f67e025c83c1555e7726ecbbfa1/releases/cnpg-1.30.0.yaml
 
-minikube-up: minikube-start minikube-images minikube-db minikube-secret minikube-migrate minikube-apps
+minikube-up: minikube-start minikube-db minikube-secret minikube-rebuild
+
+# minikube-rebuild is everything a code change touches: the images, the
+# migrations the new code expects, and the processes that run it. The
+# bring-up above composes it rather than restating its steps, so the two
+# cannot come apart.
+minikube-rebuild: minikube-images minikube-migrate minikube-apps
 
 # minikube-start brings up the cluster and the Postgres operator, and is
 # a no-op on both when they are already there. The CRDs are past the

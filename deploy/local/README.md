@@ -48,10 +48,9 @@ created and keep:
   databases anything truncates.
 
 Postgres publishes host port 55432 by default. `GARAM_DB_PORT` overrides
-it, but it has to be an environment variable —
-`GARAM_DB_PORT=55440 make db-up e2e`. The Makefile does not read
-`.env`, so a value set only there moves the published port while the
-Makefile's test URL stays on 55432 and `make e2e` fails to connect.
+it, in `.env` or in the environment
+(`GARAM_DB_PORT=55440 make db-up e2e`). `make e2e` asks compose which
+port it published, so either place moves the suite with the server.
 
 There is one dev Postgres per machine, not one per worktree. This file
 pins the compose project with `name: garam-local`, which takes

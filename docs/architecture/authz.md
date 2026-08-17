@@ -119,9 +119,13 @@ The listener refuses a recipient of another organization before it
 asks, which is how it meets the obligation §Policy attachment states;
 the organization segment in the pattern is defence in depth behind it.
 
-The listener sends no subject groups: group membership is org data and
-this listener holds no org store, so a policy attached to a group
-decides nothing about what an agent sends.
+The listener sends the sender's groups beside that statement. Group
+membership is org data and this surface holds no store, so it reads
+them over a seam of its own, which is what makes a policy attached to a
+group decide what its members send (§Policy attachment). Membership it
+cannot read refuses the message rather than deciding it without: an
+unread group and an empty one are the same answer otherwise, and the
+difference is every Deny attached to one.
 
 ## Policy persistence
 
@@ -197,7 +201,10 @@ to that organization. A caller must therefore establish that the
 subject belongs to the object's organization before asking, and refuse
 before asking if it cannot. `internal/api` establishes it by fetching
 the member whose role it needs; the machine listener establishes it by
-comparing organizations outright, because it holds no org store.
+comparing organizations outright, because a machine identity is never an
+org member and there is no membership row to miss on. The groups a
+caller sends are subjects too, and the same obligation covers them: a
+group belongs to the org that names it in its GRN.
 
 The row above reads "every subject the caller asks about" for that
 reason. A caller that hands the engine a subject from another
@@ -219,16 +226,17 @@ the identity-derived grant does not already cover, and it buys no
 recipient outside the org, which the listener refuses before a policy
 is read.
 
-The api server resolves the subject's groups from the org tables and
-sends them as `subject_groups` on `Check` / `Explain`; the engine
-matches those GRNs against attachments without knowing what a group
-is. An attachment stays inside the policy's org, enforced by a schema
-trigger; a root-owned identity such as a user cannot name an org in its
-GRN, so org membership stays the api server's precondition. An agent
-names its org in its own GRN, so the trigger binds it directly and it
-is never an org member (ADR-0014). Attachment
-writes announce the org on `garam_policy_change` like any other policy
-write.
+Each caller resolves the subject's groups from the org tables and sends
+them as `subject_groups` on `Check` / `Explain`; the engine matches
+those GRNs against attachments without knowing what a group is. An
+attachment stays inside the policy's org, enforced by a schema trigger;
+a root-owned identity such as a user cannot name an org in its GRN, so
+org membership stays the api server's precondition. An agent names its
+org in its own GRN, so the trigger binds it directly and it is never an
+org member (ADR-0014) — a group holds it as a member all the same, and
+that membership is what a policy attached to the group decides through.
+Attachment writes announce the org on `garam_policy_change` like any
+other policy write.
 
 ## Components
 

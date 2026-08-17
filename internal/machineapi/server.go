@@ -13,10 +13,13 @@
 // What a caller may send is decided here instead, because it is a
 // policy question: the answer comes from the authz engine over a seam
 // this package declares, and a boundary this one composes may not reach
-// past it to another process.
+// past it to another process. That question carries the groups the
+// caller belongs to, read over a seam of the same shape, because a
+// policy attached to a group decides what its members send (ADR-0008).
 package machineapi
 
 import (
+	"context"
 	"net/http"
 
 	machinegen "github.com/garamsh/garam/api/machine"
@@ -27,10 +30,20 @@ import (
 	"github.com/garamsh/garam/internal/message"
 )
 
+// Groups reports which of its organization's groups a machine identity
+// belongs to, so a policy attached to one of them decides what that
+// identity sends (ADR-0008). Group membership is org data, and this
+// surface holds no store: the composition root satisfies this seam from
+// internal/org, as it satisfies the trust root internal/machine reads.
+type Groups interface {
+	List(ctx context.Context, subject grn.GRN) ([]grn.GRN, error)
+}
+
 // Server implements machinegen.ServerInterface.
 type Server struct {
 	agents    agent.Service
 	messages  message.Service
+	groups    Groups
 	evaluator Evaluator
 }
 
@@ -39,9 +52,10 @@ var _ machinegen.ServerInterface = (*Server)(nil)
 
 // NewServer constructs the machine API server over the services it
 // answers from: what an operator does to its agents, what a machine
-// identity does to its own queue, and what decides whom it may send to.
-func NewServer(agents agent.Service, messages message.Service, evaluator Evaluator) *Server {
-	return &Server{agents: agents, messages: messages, evaluator: evaluator}
+// identity does to its own queue, which groups a caller belongs to, and
+// what decides whom it may send to.
+func NewServer(agents agent.Service, messages message.Service, groups Groups, evaluator Evaluator) *Server {
+	return &Server{agents: agents, messages: messages, groups: groups, evaluator: evaluator}
 }
 
 // caller returns the GRN the connection authenticated as, and writes

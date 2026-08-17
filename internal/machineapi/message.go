@@ -50,7 +50,15 @@ func (s *Server) PostMessage(w http.ResponseWriter, r *http.Request) {
 // authorizeSend refuses a recipient of another organization outright,
 // and asks the engine about every other one. The engine unions what the
 // sender's own identity grants with the policies its organization
-// attached to it, deny-overrides across both (ADR-0007, ADR-0008).
+// attached to it and to the groups it belongs to, deny-overrides across
+// all three (ADR-0007, ADR-0008).
+//
+// The groups are resolved after the organization comparison and not
+// before. By then the sender and the recipient share an organization,
+// which is both the one whose policies the engine loads and the one an
+// attachment may not leave, so every subject this call hands over —
+// the sender and each of its groups — belongs to the organization
+// owning the object, which is what a caller owes the engine (ADR-0025).
 //
 // The organization boundary is a precondition and not a policy
 // question, because no statement this listener supplies can hold it.
@@ -79,11 +87,16 @@ func (s *Server) authorizeSend(ctx context.Context, sender, recipient grn.GRN) e
 	if sender.Organization != recipient.Organization {
 		return errorx.New(errorx.KindPermissionDenied, "recipient is in another organization")
 	}
+	groups, err := s.groups.List(ctx, sender)
+	if err != nil {
+		return err
+	}
 	allowed, err := s.evaluator.Evaluate(ctx, EvalInput{
-		Subject:    sender,
-		Object:     recipient,
-		Action:     message.ActionSend,
-		Statements: sendingStatements(sender),
+		Subject:       sender,
+		Object:        recipient,
+		Action:        message.ActionSend,
+		SubjectGroups: groups,
+		Statements:    sendingStatements(sender),
 	})
 	if err != nil {
 		return err

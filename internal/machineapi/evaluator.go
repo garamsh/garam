@@ -26,15 +26,14 @@ type Statement struct {
 
 // EvalInput is one authorization question: may Subject perform Action
 // on Object, given the Statements this listener collected for it.
-//
-// It carries no subject groups. A machine identity's group membership
-// is org data and this listener holds no org store, so a policy
-// attached to a group reaches nothing here (ADR-0008).
+// SubjectGroups names the groups Subject belongs to, so the engine can
+// find the policies attached to them (ADR-0008).
 type EvalInput struct {
-	Subject    grn.GRN
-	Object     grn.GRN
-	Action     string
-	Statements []Statement
+	Subject       grn.GRN
+	Object        grn.GRN
+	Action        string
+	SubjectGroups []grn.GRN
+	Statements    []Statement
 }
 
 // Evaluator is the authorization seam between the machine listener and

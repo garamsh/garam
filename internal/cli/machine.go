@@ -103,7 +103,9 @@ func serveMachine(cmd *cobra.Command) error {
 	// The generated router matches before the middleware runs, so the
 	// log line can name the route rather than the path.
 	handler := machinegen.HandlerWithOptions(
-		machineapi.NewServer(agents, messages, machineapi.NewGRPCEvaluator(conn)),
+		machineapi.NewServer(agents, messages,
+			memberGroups{store: org.NewPostgresStore(pool)},
+			machineapi.NewGRPCEvaluator(conn)),
 		machinegen.StdHTTPServerOptions{
 			Middlewares: []machinegen.MiddlewareFunc{obs.logMachineRequests},
 		})
@@ -179,6 +181,18 @@ func (c certificateAuthorities) Get(ctx context.Context, subject grn.GRN) ([]byt
 		return nil, err
 	}
 	return authority.Certificate(), nil
+}
+
+// memberGroups reads the groups a machine identity belongs to
+// (machineapi.Groups), which decide whether a policy attached to a
+// group reaches what it sends. Organizations are root-owned, so the
+// organization segment of the identity's own GRN names the one whose
+// groups can hold it (ADR-0001, ADR-0014).
+type memberGroups struct{ store org.Store }
+
+func (m memberGroups) List(ctx context.Context, subject grn.GRN) ([]grn.GRN, error) {
+	return m.store.ListGroupsByMember(ctx,
+		grn.New(grn.RootOwner, grn.DefaultProject, org.ServiceTypeOrg, subject.Organization), subject)
 }
 
 // certificates is the certificate authority as the agent domain signs

@@ -29,6 +29,10 @@ func (o grnObject) Type() string { return o.g.ServiceType }
 // the policies an organization attached to a subject: the engine unions
 // them with what the surface supplies, and a Deny from either wins
 // (ADR-0007, ADR-0008).
+//
+// A subject here is what an attachment may name — the caller, and each
+// group the request reports it belongs to — which is how the engine
+// itself reads its attachments (authz.md §Policy attachment).
 type engine struct {
 	attached map[grn.GRN][]authz.Statement
 	err      error
@@ -40,7 +44,10 @@ func (e *engine) Evaluate(ctx context.Context, in machineapi.EvalInput) (bool, e
 	if e.err != nil {
 		return false, e.err
 	}
-	statements := append([]authz.Statement(nil), e.attached[in.Subject]...)
+	var statements []authz.Statement
+	for _, subject := range append([]grn.GRN{in.Subject}, in.SubjectGroups...) {
+		statements = append(statements, e.attached[subject]...)
+	}
 	for _, s := range in.Statements {
 		statements = append(statements, authz.Statement{
 			Sid:      s.Sid,
@@ -147,7 +154,7 @@ func TestServer_PostsUnderTheSenderTheCertificateNames(t *testing.T) {
 	sender := agentGRN("acme", "9f8e7d6c5b4a3021")
 	recipient := agentGRN("acme", "0a1b2c3d4e5f6071")
 	messages := &messageService{}
-	url, client := listener(t, &agentService{}, messages, &engine{}, sender)
+	url, client := listener(t, &agentService{}, messages, &memberGroups{}, &engine{}, sender)
 
 	status, body := send(t, client, http.MethodPost, url+"/messages", `{
 		"recipient": "`+recipient.String()+`",
@@ -187,7 +194,7 @@ func TestServer_PostsUnderTheSenderTheCertificateNames(t *testing.T) {
 func TestServer_ActsOnTheQueueThePathNames(t *testing.T) {
 	caller := agentGRN("acme", "0a1b2c3d4e5f6071")
 	messages := &messageService{}
-	url, client := listener(t, &agentService{}, messages, &engine{}, caller)
+	url, client := listener(t, &agentService{}, messages, &memberGroups{}, &engine{}, caller)
 	claims := url + "/agents/" + caller.String() + "/claims"
 
 	// A poll that found nothing is the ordinary empty answer rather
@@ -247,7 +254,7 @@ func TestServer_SendsWhereTheSendersOwnOrganizationReaches(t *testing.T) {
 	stranger := agentGRN("globex", "0a1b2c3d4e5f6071")
 	messages := &messageService{}
 	policies := &engine{}
-	url, client := listener(t, &agentService{}, messages, policies, sender)
+	url, client := listener(t, &agentService{}, messages, &memberGroups{}, policies, sender)
 
 	status, body := send(t, client, http.MethodPost, url+"/messages", submission(sibling, "key-1"))
 	require.Equal(t, http.StatusCreated, status, body)
@@ -292,7 +299,7 @@ func TestServer_AnAttachedPolicyDecidesWhatAnAgentSends(t *testing.T) {
 	policies := &engine{attached: map[grn.GRN][]authz.Statement{
 		sender: {denySending("no-talking", refused.String())},
 	}}
-	url, client := listener(t, &agentService{}, messages, policies, sender)
+	url, client := listener(t, &agentService{}, messages, &memberGroups{}, policies, sender)
 
 	status, body := send(t, client, http.MethodPost, url+"/messages", submission(refused, "key-1"))
 	require.Equal(t, http.StatusForbidden, status, body)
@@ -309,7 +316,7 @@ func TestServer_AnAttachedPolicyDecidesWhatAnAgentSends(t *testing.T) {
 	// The attachment names one subject, so the agent beside it reaches
 	// the recipient this one may not.
 	other := agentGRN("acme", "1122334455667788")
-	otherURL, otherClient := listener(t, &agentService{}, messages, policies, other)
+	otherURL, otherClient := listener(t, &agentService{}, messages, &memberGroups{}, policies, other)
 	status, body = send(t, otherClient, http.MethodPost, otherURL+"/messages", submission(refused, "key-3"))
 	require.Equal(t, http.StatusCreated, status, body)
 
@@ -326,6 +333,68 @@ func TestServer_AnAttachedPolicyDecidesWhatAnAgentSends(t *testing.T) {
 	}, messages.calls, "the refused message reached the queue")
 }
 
+// TestServer_AGroupAttachedPolicyDecidesWhatItsMembersSend moves one
+// document between attachment targets and asserts the call ends the
+// same way both times: attached to the group the sender belongs to and
+// attached to the sender itself. An attachment that decides nothing
+// reads as a control that is not there (ADR-0008), and a group holding
+// agents is a target an administrator can pick.
+//
+// Three controls sit against the refusal: the agent in no group making
+// the same call, the same sender reaching a recipient the Deny does not
+// name, and the same call once nothing is attached anywhere.
+func TestServer_AGroupAttachedPolicyDecidesWhatItsMembersSend(t *testing.T) {
+	sender := agentGRN("acme", "9f8e7d6c5b4a3021")
+	outsider := agentGRN("acme", "1122334455667788")
+	refused := agentGRN("acme", "deadbeefdeadbeef")
+	sibling := agentGRN("acme", "0a1b2c3d4e5f6071")
+	engineering := groupGRN("acme", "engineering")
+	noTalking := denySending("no-talking", refused.String())
+
+	messages := &messageService{}
+	groups := &memberGroups{byMember: map[grn.GRN][]grn.GRN{sender: {engineering}}}
+	policies := &engine{attached: map[grn.GRN][]authz.Statement{engineering: {noTalking}}}
+	url, client := listener(t, &agentService{}, messages, groups, policies, sender)
+	outsiderURL, outsiderClient := listener(t, &agentService{}, messages, groups, policies, outsider)
+
+	status, body := send(t, client, http.MethodPost, url+"/messages", submission(refused, "key-1"))
+	require.Equal(t, http.StatusForbidden, status, body)
+	assert.JSONEq(t, `{"kind":"permission_denied","message":"sender may not send to this recipient"}`, body)
+	assert.Equal(t, []grn.GRN{sender}, groups.asked,
+		"the groups asked for are the ones the certificate's identity belongs to")
+	require.Len(t, policies.asked, 1)
+	assert.Equal(t, []grn.GRN{engineering}, policies.asked[0].SubjectGroups,
+		"the check carried the group the sender belongs to")
+
+	// The Deny names one recipient, so the member reaches the agent
+	// beside it.
+	status, body = send(t, client, http.MethodPost, url+"/messages", submission(sibling, "key-2"))
+	require.Equal(t, http.StatusCreated, status, body)
+
+	// The agent that is in no group is answered under the same policy.
+	status, body = send(t, outsiderClient, http.MethodPost, outsiderURL+"/messages", submission(refused, "key-3"))
+	require.Equal(t, http.StatusCreated, status, body)
+
+	// The same document attached to the sender itself refuses the same
+	// call. This is the control the failure turned on: the two
+	// attachments answered differently while a group reached nothing.
+	policies.attached = map[grn.GRN][]authz.Statement{sender: {noTalking}}
+	status, body = send(t, client, http.MethodPost, url+"/messages", submission(refused, "key-4"))
+	require.Equal(t, http.StatusForbidden, status, body)
+
+	// Attached to neither, the call goes through, so both refusals were
+	// the attachment and not the recipient.
+	policies.attached = nil
+	status, body = send(t, client, http.MethodPost, url+"/messages", submission(refused, "key-5"))
+	require.Equal(t, http.StatusCreated, status, body)
+
+	assert.Equal(t, []messageCall{
+		posted(sender, sibling, "key-2"),
+		posted(outsider, refused, "key-3"),
+		posted(sender, refused, "key-5"),
+	}, messages.calls, "a refused message reached the queue")
+}
+
 // TestServer_StoresNothingWhenThePolicyEngineCannotAnswer keeps the
 // surface closed on an engine that is not there. The accepted message
 // sits beside it, because a surface that stored nothing at all would
@@ -335,7 +404,7 @@ func TestServer_StoresNothingWhenThePolicyEngineCannotAnswer(t *testing.T) {
 	sibling := agentGRN("acme", "0a1b2c3d4e5f6071")
 	messages := &messageService{}
 	policies := &engine{}
-	url, client := listener(t, &agentService{}, messages, policies, sender)
+	url, client := listener(t, &agentService{}, messages, &memberGroups{}, policies, sender)
 
 	status, body := send(t, client, http.MethodPost, url+"/messages", submission(sibling, "key-1"))
 	require.Equal(t, http.StatusCreated, status, body)
@@ -345,4 +414,28 @@ func TestServer_StoresNothingWhenThePolicyEngineCannotAnswer(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, status, body)
 	assert.Equal(t, []messageCall{posted(sender, sibling, "key-1")}, messages.calls,
 		"a message nothing decided reached the queue")
+}
+
+// TestServer_StoresNothingWhenGroupMembershipCannotBeRead keeps the
+// surface closed on the other half of the question. Membership that
+// cannot be read is not membership that is empty: the difference is
+// every Deny an organization attached to a group, so the message is
+// refused rather than decided without them. The accepted message sits
+// beside it, because a surface that stored nothing at all would pass
+// the refusal alone.
+func TestServer_StoresNothingWhenGroupMembershipCannotBeRead(t *testing.T) {
+	sender := agentGRN("acme", "9f8e7d6c5b4a3021")
+	sibling := agentGRN("acme", "0a1b2c3d4e5f6071")
+	messages := &messageService{}
+	groups := &memberGroups{}
+	url, client := listener(t, &agentService{}, messages, groups, &engine{}, sender)
+
+	status, body := send(t, client, http.MethodPost, url+"/messages", submission(sibling, "key-1"))
+	require.Equal(t, http.StatusCreated, status, body)
+
+	groups.err = errorx.New(errorx.KindUnavailable, "postgres is not accepting connections")
+	status, body = send(t, client, http.MethodPost, url+"/messages", submission(sibling, "key-2"))
+	assert.Equal(t, http.StatusInternalServerError, status, body)
+	assert.Equal(t, []messageCall{posted(sender, sibling, "key-1")}, messages.calls,
+		"a message decided without the sender's groups reached the queue")
 }

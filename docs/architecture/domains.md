@@ -285,6 +285,7 @@ generated from `api/machine.yaml` (ADR-0019).
 |------|----------------|
 | `Server` | the machine listener's handlers: the caller's identity, creating an agent, issuing an agent's certificate, and posting, claiming, renewing and completing a message |
 | `Evaluator` | the seam the listener asks the policy engine through |
+| `Groups` | the seam the listener reads a caller's group membership through |
 
 A handler's caller is the identity `internal/machine` resolved from the
 client certificate, read back with the comma-ok form and refused where
@@ -306,6 +307,15 @@ unions that with the policies attached to the caller (ADR-0024). A
 refusal is answered before anything is stored, so what a policy refused
 is not in the queue.
 
+The question carries the groups the caller belongs to, because an
+attachment names a group as readily as an identity (ADR-0008) and an
+agent is a group member (ADR-0014). Which groups those are is org data,
+so this surface reads them over `Groups` rather than holding a store:
+the composition root satisfies it from `internal/org`, as it satisfies
+the trust root `internal/machine` reads. Membership that cannot be read
+refuses the message rather than deciding it without, because an unread
+group and an empty one are otherwise the same answer.
+
 A recipient of another organization is refused before the engine is
 asked, and that comparison rather than any statement is what holds the
 boundary: an unattached active policy of the recipient's organization
@@ -314,10 +324,11 @@ would otherwise admit every sender there is
 `internal/api` gets from org membership, on a listener that has no
 membership to read.
 
-It holds no store and reaches no certificate authority, and it never
-imports the engine: `GRPCEvaluator` is its own client, as
-`internal/api` keeps its own. `internal/api` and this package never
-import each other and never run in the same process (ADR-0017).
+It holds no store and reaches no certificate authority, and it imports
+neither the engine nor `internal/org`: `GRPCEvaluator` is its own
+client, as `internal/api` keeps its own. `internal/api` and this
+package never import each other and never run in the same process
+(ADR-0017).
 
 ## `internal/message`
 

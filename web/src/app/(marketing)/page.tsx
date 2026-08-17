@@ -54,7 +54,7 @@ const AGENT_DECISIONS = [
   {
     adr: "ADR-0014",
     title: "Authentication",
-    body: "An agent presents a client certificate whose SAN URI is its GRN, on a listener that takes no session cookie. It holds no user row and no org membership; a policy attachment is what widens its reach.",
+    body: "An agent presents a client certificate whose SAN URI is its GRN, on a listener that takes no session cookie. It holds no user row and no org membership; that GRN is what lets it message every recipient in its own organization, a policy attached to it narrows that with a Deny, and no policy widens it past the organization (ADR-0024).",
   },
 ];
 

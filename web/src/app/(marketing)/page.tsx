@@ -16,7 +16,7 @@ const CAPABILITIES = [
   {
     icon: Building2,
     title: "Invitation, not signup",
-    body: "An organization grows by invitation, never by open signup. A single-use, expiring token admits a user with a fixed org role — owner, admin, or member.",
+    body: "An organization grows by invitation, never by open signup. A single-use, expiring token admits a user with a fixed org role — admin or member, never owner.",
   },
   {
     icon: FolderTree,

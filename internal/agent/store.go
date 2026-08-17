@@ -6,9 +6,15 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 )
 
-// Store persists Agents and the operator each one is assigned to. A
+// Store persists Agents, the operator each one is assigned to, and the
+// definitions an organization writes of the agents it should have. A
 // state report carries the epoch it was produced at and is accepted
 // only at the assignment's current epoch (ADR-0012).
+//
+// A definition is stored apart from the agent rows and never written
+// alongside one: garam learns that an agent exists from the operator
+// that reports it, and never from the definition it may have read
+// (ADR-0026).
 type Store interface {
 	Create(ctx context.Context, a *Agent) error
 	Get(ctx context.Context, g grn.GRN) (*Agent, error)
@@ -28,4 +34,11 @@ type Store interface {
 	// ReportRuntimeState records what the agent assigned at epoch says
 	// about itself, or ErrStaleEpoch.
 	ReportRuntimeState(ctx context.Context, agentGRN grn.GRN, epoch int, state RuntimeState) (*Agent, error)
+	// Define records what an organization says an agent should be. It
+	// creates no agent and assigns none: a definition is a record, and
+	// the agent it describes exists when an operator says so.
+	Define(ctx context.Context, d *Definition) error
+	// ListDefinitionsByOrg returns the organization's definitions,
+	// ordered by the agent GRN each one names.
+	ListDefinitionsByOrg(ctx context.Context, orgGRN grn.GRN) ([]*Definition, error)
 }

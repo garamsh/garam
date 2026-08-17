@@ -75,6 +75,34 @@ func (q *Queries) CreateAgent(ctx context.Context, arg CreateAgentParams) error 
 	return err
 }
 
+const createAgentDefinition = `-- name: CreateAgentDefinition :exec
+INSERT INTO agent_definitions (agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at)
+VALUES ($1, $2, $3, $4, $5, $6)
+`
+
+type CreateAgentDefinitionParams struct {
+	AgentGrn    string
+	OrgGrn      string
+	OperatorGrn string
+	AgentValues []byte
+	DefinedBy   string
+	CreatedAt   pgtype.Timestamptz
+}
+
+// A definition is written once and never rewritten: garam cannot tell
+// whether an operator has acted on one, so there is no update here.
+func (q *Queries) CreateAgentDefinition(ctx context.Context, arg CreateAgentDefinitionParams) error {
+	_, err := q.db.Exec(ctx, createAgentDefinition,
+		arg.AgentGrn,
+		arg.OrgGrn,
+		arg.OperatorGrn,
+		arg.AgentValues,
+		arg.DefinedBy,
+		arg.CreatedAt,
+	)
+	return err
+}
+
 const getAgent = `-- name: GetAgent :one
 SELECT grn, org_grn, provisioning_state, runtime_state, created_at, updated_at FROM agents WHERE grn = $1
 `
@@ -132,6 +160,37 @@ func (q *Queries) ListAgentAssignmentsByOrg(ctx context.Context, orgGrn string) 
 			&i.Epoch,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAgentDefinitionsByOrg = `-- name: ListAgentDefinitionsByOrg :many
+SELECT agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at FROM agent_definitions WHERE org_grn = $1 ORDER BY agent_grn
+`
+
+func (q *Queries) ListAgentDefinitionsByOrg(ctx context.Context, orgGrn string) ([]AgentDefinition, error) {
+	rows, err := q.db.Query(ctx, listAgentDefinitionsByOrg, orgGrn)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AgentDefinition
+	for rows.Next() {
+		var i AgentDefinition
+		if err := rows.Scan(
+			&i.AgentGrn,
+			&i.OrgGrn,
+			&i.OperatorGrn,
+			&i.AgentValues,
+			&i.DefinedBy,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}

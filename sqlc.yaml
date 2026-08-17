@@ -39,6 +39,7 @@ sql:
     schema:
       - migrations/000001_init.up.sql
       - migrations/000004_agents.up.sql
+      - migrations/000010_agent_definitions.up.sql
     queries: internal/agent/queries.sql
     gen:
       go:

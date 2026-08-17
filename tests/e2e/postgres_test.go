@@ -111,7 +111,7 @@ func truncate(t *testing.T, p *pgxpool.Pool) {
 	_, err := p.Exec(context.Background(), `TRUNCATE users, orgs, groups, projects,
 		group_members, project_members, org_members, invitations, sessions,
 		policies, policy_versions, policy_attachments, agents, agent_assignments,
-		certificate_authorities, messages CASCADE`)
+		agent_definitions, certificate_authorities, messages CASCADE`)
 	require.NoError(t, err)
 }
 
@@ -643,6 +643,116 @@ func TestAgentAssignment_StaysInsideItsOrg(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, operator, stored.Operator(), "the rejected reassignment left the row alone")
 	assert.Equal(t, 1, stored.Epoch())
+}
+
+// TestAgentDefinitionStore_RoundTrip covers what a definition is
+// (ADR-0026): an organization's record of what an agent should be,
+// written once, holding no agent. The agent GRN it names answers
+// nothing among the agents, because garam learns an agent exists from
+// the operator that reports it.
+func TestAgentDefinitionStore_RoundTrip(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := agent.NewPostgresStore(p)
+	orgs := org.NewPostgresStore(p)
+	orgGRN := grnOf("org", "acme")
+	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgGRN, "acme")))
+	otherOrgGRN := grn.New(grn.RootOwner, grn.DefaultProject, "org", "globex")
+	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(otherOrgGRN, "globex")))
+
+	values, err := agent.ParseValues(map[string]string{"model": "haiku", "workspace": "frontend"})
+	require.NoError(t, err)
+	definedBy := grn.New(grn.RootOwner, grn.DefaultProject, "user", "ada")
+	d, err := agent.NewDefinition(orgGRN, grnOf(agent.ServiceTypeOperator, "one"), values, definedBy)
+	require.NoError(t, err)
+	require.NoError(t, s.Define(ctx, d))
+
+	stored, err := s.ListDefinitionsByOrg(ctx, orgGRN)
+	require.NoError(t, err)
+	require.Len(t, stored, 1)
+	assert.Equal(t, d.Agent(), stored[0].Agent())
+	assert.Equal(t, d.Operator(), stored[0].Operator())
+	assert.Equal(t, definedBy, stored[0].DefinedBy())
+	assert.Equal(t, values, stored[0].Values(), "every key and value survives the column")
+	assert.False(t, stored[0].CreatedAt().IsZero())
+
+	// The definition put no agent anywhere: reading the GRN it names
+	// answers as it did before the definition was written, while an
+	// agent an operator reported is found.
+	_, err = s.Get(ctx, d.Agent())
+	assert.ErrorIs(t, err, agent.ErrAgentNotFound)
+	_, err = s.GetAssignment(ctx, d.Agent())
+	assert.ErrorIs(t, err, agent.ErrAssignmentNotFound)
+	reported, err := agent.NewGRN(orgGRN)
+	require.NoError(t, err)
+	a, err := agent.New(reported, orgGRN)
+	require.NoError(t, err)
+	require.NoError(t, s.Create(ctx, a))
+	_, err = s.Get(ctx, reported)
+	assert.NoError(t, err, "an agent that was reported is found, so the miss above is the definition")
+	agents, err := s.ListByOrg(ctx, orgGRN)
+	require.NoError(t, err)
+	require.Len(t, agents, 1)
+	assert.Equal(t, reported, agents[0].GRN())
+
+	// A definition belongs to the org that wrote it.
+	elsewhere, err := agent.NewDefinition(otherOrgGRN, scopedGRN("globex", agent.ServiceTypeOperator, "one"), agent.Values{}, definedBy)
+	require.NoError(t, err)
+	require.NoError(t, s.Define(ctx, elsewhere))
+	stored, err = s.ListDefinitionsByOrg(ctx, orgGRN)
+	require.NoError(t, err)
+	require.Len(t, stored, 1, "this org's definitions and no other org's")
+	assert.Equal(t, d.Agent(), stored[0].Agent())
+
+	// An empty payload is stored as one and read back as one: an
+	// operator reads no values rather than a missing object.
+	storedElsewhere, err := s.ListDefinitionsByOrg(ctx, otherOrgGRN)
+	require.NoError(t, err)
+	require.Len(t, storedElsewhere, 1)
+	assert.Equal(t, agent.Values{}, storedElsewhere[0].Values())
+}
+
+// TestAgentDefinition_StaysInsideItsOrgAndHoldsAnObject covers the
+// schema's rules for a definition. internal/agent refuses the same
+// pairings, so only a direct statement reaches the constraints — and a
+// row the database accepted and the domain refused to read would be
+// neither writable nor readable.
+func TestAgentDefinition_StaysInsideItsOrgAndHoldsAnObject(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	orgGRN := grnOf("org", "acme")
+	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgGRN, "acme")))
+	g, err := agent.NewGRN(orgGRN)
+	require.NoError(t, err)
+
+	rejected := []struct {
+		name     string
+		agentGRN grn.GRN
+		operator grn.GRN
+		values   string
+	}{
+		{"another org's agent", scopedGRN("globex", agent.ServiceType, "deadbeef"), grnOf(agent.ServiceTypeOperator, "one"), `{}`},
+		{"an identity that is not an agent", grnOf("user", "ada"), grnOf(agent.ServiceTypeOperator, "one"), `{}`},
+		{"another org's operator", g, scopedGRN("globex", agent.ServiceTypeOperator, "one"), `{}`},
+		{"an identity that is not an operator", g, grnOf(agent.ServiceType, "deadbeef"), `{}`},
+		{"values that are not an object", g, grnOf(agent.ServiceTypeOperator, "one"), `[]`},
+	}
+	for _, tt := range rejected {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := p.Exec(ctx, `INSERT INTO agent_definitions (agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at)
+				VALUES ($1, $2, $3, $4::jsonb, $5, now())`,
+				tt.agentGRN.String(), orgGRN.String(), tt.operator.String(), tt.values, grn.New(grn.RootOwner, grn.DefaultProject, "user", "ada").String())
+			assert.Error(t, err)
+		})
+	}
+
+	// The same statement naming this org's agent and operator is
+	// accepted, so the constraints reject a row rather than every row.
+	_, err = p.Exec(ctx, `INSERT INTO agent_definitions (agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at)
+		VALUES ($1, $2, $3, $4::jsonb, $5, now())`,
+		g.String(), orgGRN.String(), grnOf(agent.ServiceTypeOperator, "one").String(), `{"model":"haiku"}`,
+		grn.New(grn.RootOwner, grn.DefaultProject, "user", "ada").String())
+	require.NoError(t, err)
 }
 
 func ptr[T any](v T) *T { return &v }

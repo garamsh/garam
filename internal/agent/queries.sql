@@ -53,3 +53,12 @@ WHERE grn = sqlc.arg('grn')
       WHERE a.agent_grn = agents.grn AND a.epoch = sqlc.arg('epoch')
   )
 RETURNING *;
+
+-- A definition is written once and never rewritten: garam cannot tell
+-- whether an operator has acted on one, so there is no update here.
+-- name: CreateAgentDefinition :exec
+INSERT INTO agent_definitions (agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at)
+VALUES ($1, $2, $3, $4, $5, $6);
+
+-- name: ListAgentDefinitionsByOrg :many
+SELECT * FROM agent_definitions WHERE org_grn = $1 ORDER BY agent_grn;

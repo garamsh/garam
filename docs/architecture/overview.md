@@ -39,10 +39,17 @@ collaborate on a shared plan.
   browser API under `/orgs/{org}/agents`. An agent is answered with the
   state its operator reports and the state it reports itself, kept as
   the separate facts ADR-0012 makes them, and with the operator holding
-  it at which epoch. That surface is read-only **today**: it creates no
-  agent, assigns none, and issues no certificate. ADR-0026 decides that
-  defining an agent belongs here — which operator runs it and with what
-  values — and nothing implements it yet.
+  it at which epoch. That surface reads only: it assigns no agent and
+  issues no certificate.
+- An organization's members **defining** an agent, under
+  `/orgs/{org}/agent-definitions` — which operator is to run it, and
+  with what values (ADR-0026). A definition is a record rather than a
+  command: garam mints the agent's GRN, writes no `agents` row, and
+  knows nothing about whether an operator acted on it. It is immutable,
+  because nothing fences a stale copy until the read an operator makes
+  exists. Defining is granted by `agent:define`, named action by action
+  because ADR-0012 puts provisioning outside garam and a wildcard would
+  grant in advance what no endpoint may offer.
 - Messages addressed to an agent are held in a queue one reader at a
   time claims from, stored once per sender key and claimable again when
   a reader dies holding one (ADR-0013). A message is bounded by an
@@ -97,14 +104,19 @@ collaborate on a shared plan.
 
 ## Out of scope (today)
 
-- Defining an agent from the console, and the read an operator makes to
-  learn of that definition. ADR-0026 decides the direction — garam holds
-  what an agent should be, an operator asks — and leaves the read
-  surface, its authentication, the shape of the values, and the key an
-  operator matches its own definitions by all undecided. Until it
-  exists, an agent comes to exist only by an operator calling
-  `POST /agents`, which ADR-0026 records as one of two ways and a defect
-  rather than a feature.
+- The read an operator makes to learn of a definition. ADR-0026 decides
+  the direction — garam holds what an agent should be, an operator asks
+  — and leaves that surface, its authentication, the shape of the
+  values, and the key an operator matches its own definitions by all
+  undecided.
+- **A definition becoming an agent.** The two paths do not conflict;
+  they never meet. `agent.Service.Create` is the only route to an agent
+  and to an assignment and it mints its own GRN, so the operator a
+  definition names cannot claim it and the certificate route refuses it
+  as unassigned. ADR-0026 expected a conflict between two ways of coming
+  into existence and there is a gap instead. Closing it needs the
+  operator read, a way to hold an agent garam did not mint for that
+  caller, and a rule for which record wins.
 - Secrets. Values an agent, a project or a cluster needs, held at
   organization and at project level, are part of the intended structure
   and nothing stores, serves or protects one today.

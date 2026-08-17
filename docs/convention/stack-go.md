@@ -134,18 +134,32 @@ Multiple root-level files are fine: `errors.go` + `logger.go` +
 - `internal/` is enforced by the Go toolchain. Use it for everything not explicitly public.
 - `pkg/` is for code other modules import. Most services don't need it.
 
-This project adds four directories outside `internal/`, each owned by an
+This project adds six directories outside `internal/`, each owned by an
 ADR rather than by the layout above:
 
-- `api/` — the OpenAPI spec and its generated server (ADR-0004).
+- `api/` — the OpenAPI specifications and the servers generated from
+  them. There are two, one per surface: `openapi.yaml` for the browser
+  (ADR-0004) and `machine.yaml` for the machine listener (ADR-0019).
+  Adding a surface adds a spec here rather than a section to an
+  existing one.
 - `proto/` — `.proto` sources and generated code (ADR-0003).
-- `migrations/` — SQL migrations; the schema's source of truth.
+- `migrations/` — SQL migrations; the schema's source of truth. The Go
+  file beside them tests the migrations and declares no schema.
 - `tests/e2e/` — black-box tests against real infrastructure.
+- `web/` — the frontend, which is not Go and which `stack-web.md`
+  governs instead (ADR-0009).
+- `deploy/` — what is needed to run the built images locally. garam
+  publishes images and a contract rather than manifests, so what a
+  cluster deploys does not live here (ADR-0020).
 
-Not every package under `internal/` is a domain. `api` and `authz` are
-independent services that never import each other, and `cli` composes
-both (ADR-0003); `grn` and `errorx` are shared primitives. A domain
-package holds its interface in `store.go`.
+Not every package under `internal/` is a domain. `api`, `authz` and
+`machineapi` are request surfaces; `api` and `authz` are independent
+services that never import each other, and `cli` composes every
+surface (ADR-0003, ADR-0017). `grn` and `errorx` are shared
+primitives. `machine` is the listener the machine surface is served on
+(ADR-0014), and `health` is mounted on each surface by `cli` rather
+than by any of them (ADR-0021). A domain package holds its interface
+in `store.go`.
 
 ## 2. Module / package boundary
 

@@ -32,7 +32,7 @@ func TestServer_TellsAnEngineThatIsNotThereFromAPolicyThatRefused(t *testing.T) 
 	policies := &engine{attached: map[grn.GRN][]authz.Statement{
 		sender: {denySending("no-talking", refused.String())},
 	}}
-	url, client := listener(t, &agentService{}, messages, &memberGroups{}, policies, sender)
+	url, client := listener(t, &agentService{}, messages, unwatched(t), &memberGroups{}, policies, sender)
 
 	status, body := send(t, client, http.MethodPost, url+"/messages", submission(sibling, "key-1"))
 	require.Equal(t, http.StatusCreated, status, body)
@@ -63,7 +63,7 @@ func TestServer_AnswersEachErrorKindWithItsOwnStatus(t *testing.T) {
 	sender := agentGRN("acme", "9f8e7d6c5b4a3021")
 	sibling := agentGRN("acme", "0a1b2c3d4e5f6071")
 	policies := &engine{}
-	url, client := listener(t, &agentService{}, &messageService{}, &memberGroups{}, policies, sender)
+	url, client := listener(t, &agentService{}, &messageService{}, unwatched(t), &memberGroups{}, policies, sender)
 
 	tests := []struct {
 		kind    errorx.Kind

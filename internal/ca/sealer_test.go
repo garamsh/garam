@@ -2,6 +2,8 @@ package ca_test
 
 import (
 	"context"
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/rand"
 	"encoding/hex"
 	"os"
@@ -185,6 +187,47 @@ func TestAESGCMSealer_OpenRejectsASplicedKeyIdentifier(t *testing.T) {
 	opened, err := mine.Open(ctx, acmeRow, mineSealed)
 	require.NoError(t, err)
 	assert.Equal(t, []byte("a private key"), opened)
+}
+
+// TestAESGCMSealer_OpenRejectsBytesSealedWithoutTheKeyIdentifier holds
+// the identifier inside what the AEAD authenticates (ADR-0016). Both
+// values below are AES-256-GCM under this sealer's own key, carrying its
+// own identifier, and differ only in whether that identifier was
+// authenticated with them — which is the one thing the prefix check
+// cannot see.
+func TestAESGCMSealer_OpenRejectsBytesSealedWithoutTheKeyIdentifier(t *testing.T) {
+	ctx := context.Background()
+	key := randomKey(t)
+	sealer, err := ca.NewAESGCMSealer(key)
+	require.NoError(t, err)
+
+	secret := []byte("a private key")
+	sealed, err := sealer.Seal(ctx, acmeRow, secret)
+	require.NoError(t, err)
+	keyID := sealed[:keyIDPrefix]
+
+	block, err := aes.NewCipher(key)
+	require.NoError(t, err)
+	aead, err := cipher.NewGCM(block)
+	require.NoError(t, err)
+	// sealWith writes the sealed layout — identifier, nonce, ciphertext —
+	// under this sealer's key, authenticating what it is given.
+	sealWith := func(additionalData []byte) []byte {
+		header := make([]byte, keyIDPrefix+aead.NonceSize())
+		copy(header, keyID)
+		nonce := header[keyIDPrefix:]
+		_, err := rand.Read(nonce)
+		require.NoError(t, err)
+		return aead.Seal(header, nonce, secret, additionalData)
+	}
+
+	_, err = sealer.Open(ctx, acmeRow, sealWith(acmeRow))
+	require.Error(t, err)
+	assert.True(t, errorx.IsKind(err, errorx.KindDataLoss))
+
+	opened, err := sealer.Open(ctx, acmeRow, sealWith(append(append([]byte{}, keyID...), acmeRow...)))
+	require.NoError(t, err)
+	assert.Equal(t, secret, opened)
 }
 
 func TestNewSealerFromKeyFile_ReadsTheKey(t *testing.T) {

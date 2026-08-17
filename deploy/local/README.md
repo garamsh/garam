@@ -90,6 +90,12 @@ stack healthy. The build is cached, so an unchanged tree costs seconds;
 the containers are recreated either way, because the image id moves on
 every export whether or not a layer did.
 
+That movement is the provenance attestation BuildKit attaches to each
+export, and `build.provenance: false` in the compose file does not stop
+it. Compose v5.3.1 validates the key and keeps it in the output of
+`docker compose config`, but never passes it to the builder, so the same
+tree built twice still lands on two image ids.
+
 The API answers on `http://localhost:8080` and the frontend on
 `http://localhost:3000`. Both ports, and Postgres', are overridable —
 see `.env.example`.

@@ -140,8 +140,6 @@ ADR rather than by the layout above:
 - `api/` — the OpenAPI specifications and the servers generated from
   them. There are two, one per surface: `openapi.yaml` for the browser
   (ADR-0004) and `machine.yaml` for the machine listener (ADR-0019).
-  Adding a surface adds a spec here rather than a section to an
-  existing one.
 - `proto/` — `.proto` sources and generated code (ADR-0003).
 - `migrations/` — SQL migrations; the schema's source of truth. The Go
   file beside them tests the migrations and declares no schema.

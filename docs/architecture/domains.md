@@ -15,6 +15,7 @@ Per-domain responsibilities and boundaries.
 - `internal/machine`
 - `internal/machineapi`
 - `internal/message`
+- `internal/watch`
 - Store implementation status
 - Known gap
 - Future domains
@@ -78,9 +79,12 @@ importing this package back — and `Role.Actions`
 maps each role to the action patterns it grants; `ActionsFor` does the same for
 the role names a `Group` or `Project` carries as data. Agents are the
 one resource type no role holds a wildcard over: ADR-0012 keeps
-provisioning outside garam, so each agent action is granted by name and
-a later one is a decision rather than an increment. The authz
-evaluator decides. Groups and projects are addressed under their
+provisioning outside garam, so each agent action a role grants is granted
+by name and a later one is a decision rather than an increment.
+`agent:watch` is granted by no role at all, which is that reason carried
+further — ADR-0022 separates watching from reading so an organization may
+withhold it, and a role naming it would settle that for every
+organization instead. The authz evaluator decides. Groups and projects are addressed under their
 organization's HTTP paths, and their GRNs carry the owning org in the
 organization segment, so a group or project role is scoped to that
 resource alone (authz.md §Statement collection).
@@ -284,7 +288,7 @@ generated from `api/machine.yaml` (ADR-0019).
 
 | Type | Responsibility |
 |------|----------------|
-| `Server` | the machine listener's handlers: the caller's identity, creating an agent, issuing an agent's certificate, and posting, claiming, renewing and completing a message |
+| `Server` | the machine listener's handlers: the caller's identity, creating an agent, issuing an agent's certificate, posting, claiming, renewing and completing a message, and forwarding a turn event to whoever is watching the agent |
 | `Evaluator` | the seam the listener asks the policy engine through |
 | `Groups` | the seam the listener reads a caller's group membership through |
 
@@ -324,6 +328,17 @@ would otherwise admit every sender there is
 ([authz.md](./authz.md) §Policy attachment). It is the precondition
 `internal/api` gets from org membership, on a listener that has no
 membership to read.
+
+A claim and a renewal answer with how many streams garam is holding for
+the agent, because garam cannot dial an adapter and the poll it already
+holds is the direction that exists (ADR-0022). The field is always
+answered: zero is the ordinary answer, and a shape that changed with it
+would make the agent nobody watches the exceptional one. A count that
+cannot be read answers zero and is logged rather than returned — the live
+view may not cost a message one of its delivery attempts, which is the
+same reason ADR-0022 keeps watching off the subscription completion rests
+on. A poll that found nothing carries no count: there is no turn to
+forward the events of.
 
 It holds no store and reaches no certificate authority, and it imports
 neither the engine nor `internal/org`: `GRPCEvaluator` is its own
@@ -401,6 +416,61 @@ place of a push.
 The HTTP surface is `internal/machineapi`; nothing here deletes a
 delivered message, and the adapter is not built.
 
+## `internal/watch`
+
+Who is watching an agent work, and what is carried to them while they
+are (ADR-0022).
+
+| Type | Responsibility |
+|------|----------------|
+| `Event` | one turn event as an adapter forwarded it; garam carries it and never reads it |
+| `Subscription` | one open watch: the stream its holder reads, and the lease that has it counted |
+| `Service` | opens a watch, carries a forwarded event to the watchers of that agent, and reports how many there are |
+| `Store` | the watches that are open |
+| `Relay` | the announcement that carries an event to the process holding a stream |
+
+Watching is its own boundary rather than part of `internal/message` or
+`internal/agent`. A watch has a lifecycle neither contains — it begins
+when a person opens an agent and ends when they leave, and nothing about
+it survives that — and the two surfaces that need it, `internal/api` and
+`internal/machineapi`, may not reach each other at all (ADR-0017), so it
+is extracted rather than held by either.
+
+Nothing accumulates for an agent nobody watches, which is what the
+boundary exists to keep true: the service holds an entry per open
+subscription and none per agent, the table holds a row per watch, and an
+event announced while nobody watches reaches no one and is not kept. A
+watcher sees from when it opened, and one that falls behind loses events
+rather than holding up the rest — the platform these events come from
+drops them for a slow subscriber already (ADR-0013), so the same answer
+one hop later is not a new failure mode.
+
+The two ends of a watch are in different processes — a browser opens the
+stream on `garam serve api` and an adapter forwards to `garam serve
+machine` — and Postgres is the crossing for both the events and the
+count (ADR-0027). `Relay` is the event half, as `LISTEN`/`NOTIFY`: it
+announces and writes nothing down, so an event crossing between processes
+is no more a record than one that never left. An event too large for one
+announcement is refused rather than shortened: a shortened turn would put
+words in the agent's mouth, where a refused one is the gap this stream
+already permits.
+
+`Store` is the count half: a leased row per open watch (ADR-0027).
+Postgres measures the lease, so no instance's clock decides when a watch
+lapses, and the rows nobody closed are dropped where rows are written.
+The holder of a stream carries its lease forward on the same tick it
+proves the connection alive on, and a lease it cannot carry forward ends
+the stream — a stream nothing forwards to any more shows a working agent
+as a quiet one.
+
+The HTTP surfaces are `internal/api` for the browser that watches and
+`internal/machineapi` for the adapter that forwards. Which browser is
+admitted is decided at the first, by a grant separate from reading an
+agent and carried by no role, so a policy allows `agent:watch` or nobody
+watches (ADR-0022); whose events a caller may forward, and whose watchers
+it may count, is decided here by one comparison against the identity the
+caller authenticated as.
+
 ## Store implementation status
 
 | Domain | Interface | postgres | memory | other |
@@ -412,6 +482,7 @@ delivered message, and the adapter is not built.
 | agent | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | ca | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | message | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
+| watch | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 
 The postgres implementations are written by hand against sqlc output,
 which sqlc generates from each domain's `queries.sql` into

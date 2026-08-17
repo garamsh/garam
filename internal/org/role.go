@@ -59,8 +59,9 @@ const (
 	ActionPolicyAttach = "policy:attach"
 	ActionPolicyDetach = "policy:detach"
 
-	// Reading the agents an org holds, and defining one. The org owns
-	// the constants for the reason it owns the policy ones: the api
+	// Reading the agents an org holds, defining one, and watching one
+	// work. The org owns the constants for the reason it owns the
+	// policy ones: the api
 	// server enforces them, and internal/agent does not import this
 	// package — it keeps its own copy of the org service type rather
 	// than depend on it.
@@ -69,6 +70,12 @@ const (
 	// It is not provisioning one: what an operator made is reported,
 	// and no action here grants it.
 	ActionAgentDefine = "agent:define"
+	// ActionAgentWatch is watching an agent work (ADR-0022). Reading an
+	// agent reports that it exists and what two parties say about its
+	// state; watching exposes the content of its work, which an
+	// organization may withhold from someone it lets read. No role
+	// grants it — see Actions.
+	ActionAgentWatch = "agent:watch"
 )
 
 // Actions returns the action patterns the role grants on an org and
@@ -78,6 +85,12 @@ const (
 // Agents are named action by action rather than as `agent:*`, every
 // role over: ADR-0012 puts provisioning outside garam, so a wildcard
 // here would grant in advance the very actions no endpoint may offer.
+//
+// No role names ActionAgentWatch. ADR-0022 separates watching from
+// reading so an organization may give one and withhold the other, and
+// a grant arriving with membership is a grant nobody decided — which
+// is the separation being invisible wherever the roles are the whole
+// of the authorization. Watching is carried by a policy or not at all.
 func (r Role) Actions() []string {
 	switch r {
 	case RoleOwner:

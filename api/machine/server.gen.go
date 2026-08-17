@@ -49,6 +49,9 @@ type Claim struct {
 
 	// Message One stored message, under an identifier the queue minted.
 	Message Message `json:"message"`
+
+	// Watchers How many streams garam was holding for this agent when it answered, which is what says whether to forward the turn's events (ADR-0022). Zero is the ordinary answer and the field is always here: garam stores nothing for an agent nobody watches, so it is answered in the same shape as one somebody watches. Every renewal carries the count again, so a person who opened the view mid-turn is seen without a call of their own — and one who left is stopped forwarding to.
+	Watchers int `json:"watchers"`
 }
 
 // Error defines model for Error.
@@ -87,11 +90,23 @@ type MessageSubmission struct {
 	Recipient string `json:"recipient"`
 }
 
+// TurnEvent One event from the agent's monitoring stream, as the agent platform emitted it. garam carries it and never reads it, so what a kind means and what a body holds are the platform's to say.
+type TurnEvent struct {
+	// Body The event itself. It may be empty and it may span lines.
+	Body string `json:"body"`
+
+	// Kind What the platform called this event. It reaches a browser as the name of a server-sent event, so it is one line.
+	Kind string `json:"kind"`
+}
+
 // AgentGrn defines model for agent.
 type AgentGrn = string
 
 // ClaimId defines model for claim.
 type ClaimId = string
+
+// ForwardTurnEventJSONRequestBody defines body for ForwardTurnEvent for application/json ContentType.
+type ForwardTurnEventJSONRequestBody = TurnEvent
 
 // PostMessageJSONRequestBody defines body for PostMessage for application/json ContentType.
 type PostMessageJSONRequestBody = MessageSubmission
@@ -113,6 +128,9 @@ type ServerInterface interface {
 	// RenewClaim Extend a claim while the message is still being worked on.
 	// (POST /agents/{agent}/claims/{claim}/renewal)
 	RenewClaim(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn, claimId ClaimId)
+	// ForwardTurnEvent Forward one turn event to whoever is watching the agent.
+	// (POST /agents/{agent}/turn-events)
+	ForwardTurnEvent(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn)
 	// GetIdentity Return the identity the connection authenticated as.
 	// (GET /identity)
 	GetIdentity(w http.ResponseWriter, r *http.Request)
@@ -257,6 +275,32 @@ func (siw *ServerInterfaceWrapper) RenewClaim(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RenewClaim(w, r, agentGrn, claimId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ForwardTurnEvent operation middleware
+func (siw *ServerInterfaceWrapper) ForwardTurnEvent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agent" -------------
+	var agentGrn AgentGrn
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentGrn, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ForwardTurnEvent(w, r, agentGrn)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -420,6 +464,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/messages", wrapper.PostMessage)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/claims", wrapper.ClaimMessage)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/claims/{claim}/renewal", wrapper.RenewClaim)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/turn-events", wrapper.ForwardTurnEvent)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/claims/{claim}/completion", wrapper.CompleteClaim)
 
 	return m

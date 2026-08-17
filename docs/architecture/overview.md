@@ -68,6 +68,21 @@ collaborate on a shared plan.
   and a policy attached to it narrows that with a Deny; what is refused
   is answered 403 and never stored, which is the one refusal on this
   path that ADR-0013 does not shape.
+- Watching an agent work, while somebody is (ADR-0022). A member of the
+  organization a policy allows opens a server-sent stream under
+  `/orgs/{org}/agents/{agent}/watch` and reads what the agent is saying
+  now; the machine listener takes the turn events an adapter forwards and
+  answers every claim and renewal with how many streams garam holds for
+  that agent, which is what says whether to forward at all. Watching is
+  granted by an action of its own, separate from reading one, and no role
+  carries it: a grant arriving with membership is one nobody decided, so
+  an organization that wants its members to watch says so in a policy and
+  nobody watches until it does. Nothing
+  accumulates for an agent nobody watches — no row, no event carried, no
+  entry in either process's memory — and a stream starts where it was
+  opened, because there was nothing to replay. The view is best effort
+  and never a record: a gap in it cannot be told from an agent that said
+  nothing, so what has to be true afterwards comes from the queue.
 - Org / group / project structure; groups and projects are created,
   read, updated, deleted, and populated with members over the HTTP API
   under their organization's paths.
@@ -139,11 +154,11 @@ collaborate on a shared plan.
   makes that garam's obligation because the agent platform notifies
   nobody; the queue stops redelivering an exhausted message and nothing
   yet reports one.
-- Watching an agent work. ADR-0022 decides the shape — forwarded only
-  while someone watches, read as server-sent events, best effort rather
-  than a record — and nothing implements it: the adapter does not
-  forward turn events, garam has no fan-out, and the console has no
-  view.
+- The two ends of watching an agent work. garam's half is built (see In
+  scope): the stream a browser reads, the watcher count on the poll, and
+  the fan-out between the two listeners. Neither end of it is — no
+  console route opens the stream, and the adapter that would forward turn
+  events is not built (see The rest of the agent surface).
 - Chat channels. ADR-0013 makes garam a message API and leaves Slack,
   LINE and the rest to consumers of it; none is built, and whether any
   ships first-party is undecided.
@@ -196,6 +211,8 @@ collaborate on a shared plan.
 - `internal/message/` — the durable queue a message reaches an agent
   through; one reader claims a message at a time, and whose queue a
   caller may act on is decided here.
+- `internal/watch/` — who is watching an agent work, and the turn events
+  carried to them while they are (ADR-0022). It stores no event.
 - `internal/api/` — handlers implementing the generated ServerInterface.
 - `internal/authn/` — sign-in provider abstraction (Google OIDC,
   dev-only local), sessions.
@@ -218,7 +235,10 @@ and shares neither cookie nor session with `api`; `machineapi` composes
 `agent` and `message` behind it, reaches the engine through an
 `Evaluator` seam of its own to decide what a caller may send, and it
 and `internal/api` never import each other. Neither imports
-`internal/authz`; the wire contract is `proto/garam/authz/v1`.
+`internal/authz`; the wire contract is `proto/garam/authz/v1`. `watch` is
+the one domain both compose: a watch is opened on the browser listener
+and fed on the machine one, and neither listener may reach the other
+(ADR-0017, ADR-0022).
 
 ## Core abstractions
 
@@ -237,6 +257,9 @@ and `internal/api` never import each other. Neither imports
 | `machine.Service` | `internal/machine` | verifies a presented certificate against its organization's authority |
 | `message.Message` | `internal/message` | one message addressed to a recipient |
 | `message.Claim` | `internal/message` | one reader's hold on a message, fenced by a token |
+| `watch.Event` | `internal/watch` | one forwarded turn event, carried and never stored |
+| `watch.Subscription` | `internal/watch` | one open watch: the stream its holder reads |
+| `watch.Service` | `internal/watch` | opens a watch, carries a forwarded event to the watchers of that agent, counts them |
 | `org.Organization` | `internal/org` | top-level tenant |
 | `org.Group` | `internal/org` | user/agent bundle |
 | `org.Project` | `internal/org` | unit of work |

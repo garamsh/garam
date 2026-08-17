@@ -52,6 +52,7 @@ import (
 	"github.com/garamsh/garam/internal/message"
 	"github.com/garamsh/garam/internal/org"
 	"github.com/garamsh/garam/internal/user"
+	"github.com/garamsh/garam/internal/watch"
 	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
 )
 
@@ -111,7 +112,7 @@ func truncate(t *testing.T, p *pgxpool.Pool) {
 	_, err := p.Exec(context.Background(), `TRUNCATE users, orgs, groups, projects,
 		group_members, project_members, org_members, invitations, sessions,
 		policies, policy_versions, policy_attachments, agents, agent_assignments,
-		agent_definitions, certificate_authorities, messages CASCADE`)
+		agent_definitions, certificate_authorities, messages, agent_watches CASCADE`)
 	require.NoError(t, err)
 }
 
@@ -1877,11 +1878,16 @@ func machineListener(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer, policies m
 	agents := agent.NewService(agent.NewPostgresStore(p), certificates{issuer: issuer})
 	messages, err := message.NewService(message.NewPostgresStore(p), briefDelivery())
 	require.NoError(t, err)
+	// The watches this surface counts are opened by the process serving
+	// browsers, so what it holds is the store they are written to and the
+	// relay it announces forwarded events on (ADR-0017, ADR-0022).
+	watches, err := watch.NewService(watch.NewPostgresStore(p), watch.NewPostgresRelay(p), watch.Config{})
+	require.NoError(t, err)
 
 	srv := machine.NewServer(
 		machine.NewService(machineTrustRoots{store: authorities}),
 		loopbackCertificate(t),
-		machinegen.Handler(machineapi.NewServer(agents, messages, memberGroups{store: org.NewPostgresStore(p)}, policies)),
+		machinegen.Handler(machineapi.NewServer(agents, messages, watches, memberGroups{store: org.NewPostgresStore(p)}, policies)),
 	)
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)

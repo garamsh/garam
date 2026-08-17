@@ -333,6 +333,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/orgs/{org}/agents/{agent}/watch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Watch an agent work. Requires the `agent:watch` action.
+         * @description What the agent is saying now, as server-sent events, for as long as the caller holds the response open (ADR-0022). Watching is granted separately from reading: `agent:read` says an agent exists and reports the states two parties report about it, and this exposes the content of its work, so a caller holding only the read is refused here.
+         *     It is best effort and never a record. It begins when it is opened and replays nothing, because nothing was kept; the stream it rests on drops events for a subscriber that falls behind and marks no gap, so a gap here cannot be told from an agent that said nothing. What has to be true afterwards — what an agent did, which messages it consumed — comes from the queue instead.
+         *     Each event carries the platform's own name for it and the event as the platform emitted it. garam writes a comment line on a fixed interval besides, so a caller can tell a live stream with nothing on it from one that is no longer connected. garam never ends the stream to report that the agent has finished: nothing here knows that, and an end that meant it would be the one reading a person could not check.
+         */
+        get: operations["watchAgent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orgs/{org}/agent-definitions": {
         parameters: {
             query?: never;
@@ -1590,6 +1612,34 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Agent"];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    watchAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description Agent identifier (the last GRN segment). */
+                agent: components["parameters"]["agent"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The stream, for as long as the caller holds it. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
                 };
             };
             401: components["responses"]["Error"];

@@ -151,7 +151,7 @@ func machineListener(t *testing.T, obs *observability, subject grn.GRN) (string,
 
 	// The identity endpoint answers out of the request alone, so the
 	// listener is assembled with no service behind it.
-	handler := machinegen.HandlerWithOptions(machineapi.NewServer(nil, nil, nil, nil), machinegen.StdHTTPServerOptions{
+	handler := machinegen.HandlerWithOptions(machineapi.NewServer(nil, nil, nil, nil, nil), machinegen.StdHTTPServerOptions{
 		Middlewares: []machinegen.MiddlewareFunc{obs.logMachineRequests},
 	})
 	srv := machine.NewServer(

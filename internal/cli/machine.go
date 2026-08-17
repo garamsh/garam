@@ -8,7 +8,10 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spf13/cobra"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/agent"
@@ -27,7 +30,9 @@ import (
 // certificate (ADR-0014, ADR-0015). It terminates TLS itself and takes
 // neither the browser API's proxy nor its cookie, and it runs as a
 // process of its own so the browser-facing one never holds the key the
-// certificate authorities are sealed under (ADR-0017).
+// certificate authorities are sealed under (ADR-0017). Like the
+// browser-facing one it reaches the policy engine over gRPC, which is
+// what decides the messages it accepts.
 func newServeMachineCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "machine",
@@ -79,11 +84,29 @@ func serveMachine(cmd *cobra.Command) error {
 		return err
 	}
 
+	// Whom an agent may send to is decided by the policy engine, which
+	// runs as a process of its own and is reached over gRPC (ADR-0003).
+	// Insecure transport: both processes run inside one trust boundary;
+	// TLS between them is future work.
+	conn, err := grpc.NewClient(
+		envOr("GARAM_AUTHZ_ADDR", "localhost:9090"),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		// Carries this request's trace id to the engine, so one id
+		// covers both halves of the hop.
+		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
+	)
+	if err != nil {
+		return errorx.Wrap(err, "authz client", errorx.KindInvalidArgument)
+	}
+	defer func() { _ = conn.Close() }()
+
 	// The generated router matches before the middleware runs, so the
 	// log line can name the route rather than the path.
-	handler := machinegen.HandlerWithOptions(machineapi.NewServer(agents, messages), machinegen.StdHTTPServerOptions{
-		Middlewares: []machinegen.MiddlewareFunc{obs.logMachineRequests},
-	})
+	handler := machinegen.HandlerWithOptions(
+		machineapi.NewServer(agents, messages, machineapi.NewGRPCEvaluator(conn)),
+		machinegen.StdHTTPServerOptions{
+			Middlewares: []machinegen.MiddlewareFunc{obs.logMachineRequests},
+		})
 	srv := machine.NewServer(
 		machine.NewService(certificateAuthorities{store: authorities}),
 		cert,
@@ -103,8 +126,9 @@ func serveMachine(cmd *cobra.Command) error {
 	go func() {
 		mux := http.NewServeMux()
 		// The authorities a presented certificate is verified against,
-		// and the agents this surface answers for, are rows.
-		health.Register(mux, health.Database(pool))
+		// and the agents this surface answers for, are rows; the
+		// decision admitting a message comes from the engine.
+		health.Register(mux, health.Database(pool), authzChannel{conn: conn})
 		if err := http.ListenAndServe(healthAddr, mux); err != nil {
 			obs.logger.Error("health listener stopped", slog.String("error", err.Error()))
 		}

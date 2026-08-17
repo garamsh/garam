@@ -1,6 +1,7 @@
 package machineapi
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -15,7 +16,10 @@ import (
 // what the certificate names, and the recipient is whatever the body
 // says: garam answers once the message is stored and reports a routing
 // failure as a message rather than as a refusal (ADR-0013), so a
-// recipient no agent answers to is stored like any other.
+// recipient no agent answers to is stored like any other. A recipient
+// the sender's policies do not reach is a different answer — nothing
+// is stored, because the refusal is deliberate rather than a routing
+// failure.
 func (s *Server) PostMessage(w http.ResponseWriter, r *http.Request) {
 	sender, ok := caller(w, r)
 	if !ok {
@@ -31,12 +35,83 @@ func (s *Server) PostMessage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, errorx.Wrap(err, "recipient", errorx.KindInvalidArgument))
 		return
 	}
+	if err := s.authorizeSend(r.Context(), sender, recipient); err != nil {
+		writeError(w, err)
+		return
+	}
 	stored, err := s.messages.Post(r.Context(), sender, recipient, submitted.IdempotencyKey, submitted.Body)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, messageBody(stored))
+}
+
+// authorizeSend refuses a recipient of another organization outright,
+// and asks the engine about every other one. The engine unions what the
+// sender's own identity grants with the policies its organization
+// attached to it, deny-overrides across both (ADR-0007, ADR-0008).
+//
+// The organization boundary is a precondition and not a policy
+// question, because no statement this listener supplies can hold it.
+// The engine resolves the policies of the organization owning the
+// object, and an active policy with no attachment applies to every
+// subject of that check — so one unattached Allow in the recipient's
+// organization admits every sender anywhere, whatever resource pattern
+// arrives beside it, and a document written `Action: ["*"]` before
+// message:send existed names it in advance (ADR-0024). The api server
+// holds the same line by making membership of the object's
+// organization a precondition of every check; this listener has no
+// membership to read, so it compares the organization segments
+// (ADR-0001).
+//
+// Both GRNs reached a handler through grn.Parse, and this is where one
+// stops being inert: sendingStatements splices the organization
+// identifier into a resource pattern, where a wildcard would widen the
+// statement past the organization it was scoped to.
+func (s *Server) authorizeSend(ctx context.Context, sender, recipient grn.GRN) error {
+	if err := sender.Validate(); err != nil {
+		return err
+	}
+	if err := recipient.Validate(); err != nil {
+		return err
+	}
+	if sender.Organization != recipient.Organization {
+		return errorx.New(errorx.KindPermissionDenied, "recipient is in another organization")
+	}
+	allowed, err := s.evaluator.Evaluate(ctx, EvalInput{
+		Subject:    sender,
+		Object:     recipient,
+		Action:     message.ActionSend,
+		Statements: sendingStatements(sender),
+	})
+	if err != nil {
+		return err
+	}
+	if !allowed {
+		return errorx.New(errorx.KindPermissionDenied, "sender may not send to this recipient")
+	}
+	return nil
+}
+
+// sendingStatements is what a machine identity's own GRN grants it
+// before any policy: sending inside its own organization. It is this
+// listener's half of the union the engine evaluates, as the
+// role-derived statements are the api server's (ADR-0007), and it is
+// why an agent nobody has written a policy for still sends.
+//
+// A policy narrows it with a Deny, which is how every grant in this
+// model is narrowed. The organization segment in the pattern is
+// defence in depth rather than the boundary: authorizeSend has already
+// refused every recipient it would exclude, and a pattern could not
+// refuse them anyway.
+func sendingStatements(sender grn.GRN) []Statement {
+	return []Statement{{
+		Sid:      "machine-own-org",
+		Effect:   EffectAllow,
+		Action:   []string{message.ActionSend},
+		Resource: []string{"grn:" + sender.Organization + ":*"},
+	}}
 }
 
 // ClaimMessage hands the caller the next message addressed to the agent

@@ -32,6 +32,12 @@ var (
 	ErrNotRecipient = errorx.New(errorx.KindPermissionDenied, "caller is not the recipient")
 )
 
+// ActionSend is the action a policy names to decide what one identity
+// may send to another. The constant is declared here because this
+// package defines sending; the engine matches the string only
+// (authz.md §Policy document).
+const ActionSend = "message:send"
+
 // ID identifies a stored message. ClaimID identifies one reader's hold
 // on it; the two are never interchangeable.
 type (

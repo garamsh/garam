@@ -48,10 +48,18 @@ collaborate on a shared plan.
   attempt count and a claim is renewable under a ceiling, which is what
   ADR-0018 rests completion on.
 - Posting, claiming, renewing and completing a message, on the machine
-  listener. A caller posts to any recipient and acts on messages for
-  the agent it authenticates as and no other; a claim is a long poll,
-  and a message addressed to an agent that does not exist is stored and
-  answered with success rather than refused (ADR-0013).
+  listener. A caller acts on messages for the agent it authenticates as
+  and no other; a claim is a long poll, and a message addressed to an
+  agent that does not exist is stored and answered with success rather
+  than refused (ADR-0013).
+- Whom a caller may post to, decided by policy on that listener
+  (ADR-0024). A recipient of another organization is refused before a
+  policy is read, because an unattached policy of the recipient's
+  organization would otherwise admit every sender there is. Inside the
+  organization, a machine identity's own GRN grants it every recipient
+  and a policy attached to it narrows that with a Deny; what is refused
+  is answered 403 and never stored, which is the one refusal on this
+  path that ADR-0013 does not shape.
 - Org / group / project structure; groups and projects are created,
   read, updated, deleted, and populated with members over the HTTP API
   under their organization's paths.
@@ -181,9 +189,10 @@ cookie) at the boundary; org-role checks go through the `Evaluator`
 seam, implemented by the authz gRPC client (ADR-0003 stage 2). The
 machine listener enforces its own authentication at its own boundary
 and shares neither cookie nor session with `api`; `machineapi` composes
-`agent` behind it, and it and `internal/api` never import each other.
-`internal/api` and `internal/authz` never import each other; the wire
-contract is `proto/garam/authz/v1`.
+`agent` and `message` behind it, reaches the engine through an
+`Evaluator` seam of its own to decide what a caller may send, and it
+and `internal/api` never import each other. Neither imports
+`internal/authz`; the wire contract is `proto/garam/authz/v1`.
 
 ## Core abstractions
 
@@ -241,6 +250,7 @@ contract is `proto/garam/authz/v1`.
 | The machine listener has a specification of its own | One contract per listener: the browser client generates no types for a surface it cannot call, and whoever writes an operator has something to build against. | [adr/0019-machine-openapi-spec.md](./adr/0019-machine-openapi-spec.md) |
 | Liveness and readiness answer on a credential-free port | Restarting is the expensive answer, so only readiness reads a dependency; the mTLS listener admits no probe, so that process gets a port for them. | [adr/0021-liveness-and-readiness.md](./adr/0021-liveness-and-readiness.md) |
 | The web app answers the same two probes | A fourth surface configured differently is configured wrong silently; probing page routes makes navigation a deployment interface, and a readiness that reads the API darkens the console during the outage it should report. | [adr/0023-web-probes.md](./adr/0023-web-probes.md) |
+| A policy decides what an agent may send | An attachment nothing reads is a control that is not there; the identity's own GRN grants its organization, so closing the gap breaks no working agent, and the boundary out of it is a precondition because no statement could hold it. | [adr/0024-policy-decides-what-an-agent-sends.md](./adr/0024-policy-decides-what-an-agent-sends.md) |
 
 ## Non-functional goals
 

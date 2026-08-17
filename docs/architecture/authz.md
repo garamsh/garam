@@ -64,6 +64,7 @@ from either wins.
 | Origin | Owner | Resolved |
 |--------|-------|----------|
 | role-derived statements | api server | per request, from org tables |
+| identity-derived statements | machine listener | per request, from the caller's own GRN |
 | persisted policy statements | authz engine | from the org's cache |
 
 The engine scopes a request to the org that owns the object: an org's
@@ -98,6 +99,29 @@ role's scope, so a direct role applies in every org the subject
 belongs to. Policies are not collected here at all — the engine owns
 them and resolves them from the subject and the groups the request
 carries (§Policy attachment).
+
+### Identity-derived statements
+
+A machine identity holds no roles and belongs to no org, so the machine
+listener collects what its GRN alone grants it and supplies that in the
+same slot ([ADR-0024](./adr/0024-policy-decides-what-an-agent-sends.md)).
+
+| Origin | Action patterns | Resource patterns |
+|--------|-----------------|-------------------|
+| the caller's own GRN | `message:send` | `grn:<caller org>:*` |
+
+That is why an agent nobody has written a policy for goes on sending
+inside its organization. A policy narrows it with a Deny, as a Deny
+narrows a role's grant.
+
+What keeps an agent out of another organization is not that pattern.
+The listener refuses a recipient of another organization before it
+asks, which is how it meets the obligation §Policy attachment states;
+the organization segment in the pattern is defence in depth behind it.
+
+The listener sends no subject groups: group membership is org data and
+this listener holds no org store, so a policy attached to a group
+decides nothing about what an agent sends.
 
 ## Policy persistence
 
@@ -161,8 +185,8 @@ change, only a caller that can authenticate as one.
 
 A check therefore evaluates four sources: the org's unattached active
 policies, the policies attached to the subject, the policies attached
-to a group the subject belongs to, and the caller's role-derived
-statements. Deny-overrides applies across all four.
+to a group the subject belongs to, and the statements the calling
+server collected. Deny-overrides applies across all four.
 
 **An unattached policy's scope is the caller's obligation, not the
 engine's** ([ADR-0025](./adr/0025-engine-scope-is-a-caller-obligation.md)).
@@ -180,6 +204,20 @@ reason. A caller that hands the engine a subject from another
 organization gets that organization's unattached policies applied to
 it, which is an organization boundary decided by the caller and not by
 the policy.
+
+Detaching an active policy's last attachment does not retire it, it
+widens it back to the org — which for a Deny turns one subject's
+restriction into every subject's, and for an Allow is the shortest
+route to handing that grant to every subject a caller asks about.
+Archiving is what takes a policy out of every check.
+
+An attached policy decides what an agent sends
+([ADR-0024](./adr/0024-policy-decides-what-an-agent-sends.md)), inside
+the sending agent's own org and nowhere else. Every attachment that
+decides an agent's message is therefore a Deny: an Allow widens nothing
+the identity-derived grant does not already cover, and it buys no
+recipient outside the org, which the listener refuses before a policy
+is read.
 
 The api server resolves the subject's groups from the org tables and
 sends them as `subject_groups` on `Check` / `Explain`; the engine
@@ -211,8 +249,10 @@ org data resolved by the api server.
 
 The api server never imports this package; it calls the engine over
 gRPC (`Check` / `Explain` in `proto/garam/authz/v1`) and supplies the
-role-derived statements it collected. The in-process `Evaluator`
-remains for tests and local dev.
+role-derived statements it collected. The machine listener reaches the
+same engine the same way, over a seam of its own, and supplies the
+identity-derived ones. The in-process `Evaluator` remains for tests and
+local dev.
 
 ## Roles vs policies
 

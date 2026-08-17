@@ -284,6 +284,7 @@ generated from `api/machine.yaml` (ADR-0019).
 | Type | Responsibility |
 |------|----------------|
 | `Server` | the machine listener's handlers: the caller's identity, creating an agent, issuing an agent's certificate, and posting, claiming, renewing and completing a message |
+| `Evaluator` | the seam the listener asks the policy engine through |
 
 A handler's caller is the identity `internal/machine` resolved from the
 client certificate, read back with the comma-ok form and refused where
@@ -296,9 +297,27 @@ boundary as `internal/api` does at the browser-facing one. A poll that
 found nothing is the one answer that is not a kind: it is an empty
 success, so a caller loops on it rather than telling an error apart.
 
-It holds no store and reaches no certificate authority. `internal/api`
-and this package never import each other and never run in the same
-process (ADR-0017).
+Whom a caller may send to is decided here, because it is a policy
+question rather than a property of the queue: the answer comes from the
+policy engine over `Evaluator`, and a boundary this package composes
+may not reach past it to another process. The listener collects what
+the caller's own GRN grants it — its own organization — and the engine
+unions that with the policies attached to the caller (ADR-0024). A
+refusal is answered before anything is stored, so what a policy refused
+is not in the queue.
+
+A recipient of another organization is refused before the engine is
+asked, and that comparison rather than any statement is what holds the
+boundary: an unattached active policy of the recipient's organization
+would otherwise admit every sender there is
+([authz.md](./authz.md) §Policy attachment). It is the precondition
+`internal/api` gets from org membership, on a listener that has no
+membership to read.
+
+It holds no store and reaches no certificate authority, and it never
+imports the engine: `GRPCEvaluator` is its own client, as
+`internal/api` keeps its own. `internal/api` and this package never
+import each other and never run in the same process (ADR-0017).
 
 ## `internal/message`
 
@@ -310,6 +329,7 @@ The durable queue a message reaches an agent through (ADR-0013).
 | `Claim` | one reader's hold on a message, and the token that fences it |
 | `Config` | the delivery parameters: lease, ceiling, attempts, and how long a claim waits |
 | `Service` | what a machine identity does to its own queue: post, claim, renew, complete |
+| `ActionSend` | the action a policy names to decide what one identity may send to another |
 
 Messages are their own boundary rather than part of `internal/agent`: a
 recipient is addressed by GRN, so nothing here depends on the agent
@@ -355,7 +375,11 @@ method but posting takes the calling identity beside the recipient
 whose queue it names. One comparison decides it: a GRN carries its
 organization, so refusing a caller that is not the recipient refuses
 another organization's agent by the same line, and no path reaches a
-message around it. A claim waits for a message rather than answering
+message around it. Whom a sender may post to is not decided here — it
+is a policy question, and `internal/machineapi` asks it (ADR-0024).
+What this package owns of it is the action constant a policy names,
+because it is the package that defines sending. A claim waits for a
+message rather than answering
 an empty queue at once, and it waits by re-reading the queue: a
 message becomes ready when a lease runs out as well as when a sender
 stores one, and a lease running out is a moment passing that nothing

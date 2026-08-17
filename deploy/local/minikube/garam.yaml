@@ -197,6 +197,10 @@ spec:
                   key: uri
             - name: GARAM_MACHINE_ADDR
               value: ":8443"
+            # Every message this listener accepts is decided by the
+            # engine, so it dials the same one the api server does.
+            - name: GARAM_AUTHZ_ADDR
+              value: "authz:9090"
             # The listener above admits no caller without a client
             # certificate, and a kubelet holds none, so the probes get a
             # plaintext listener of their own (ADR-0021).

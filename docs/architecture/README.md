@@ -49,6 +49,7 @@ ADRs:
 - [0021](./adr/0021-liveness-and-readiness.md) — liveness and readiness answer on a port that carries no credential
 - [0022](./adr/0022-watching-an-agent.md) — an agent is watched only while someone is watching
 - [0023](./adr/0023-web-probes.md) — the web app answers the same two probes as the rest
+- [0024](./adr/0024-policy-decides-what-an-agent-sends.md) — a policy decides what an agent may send
 - [0025](./adr/0025-engine-scope-is-a-caller-obligation.md) — an unattached policy's org scope is the caller's to hold
 
 ## Rules for edits

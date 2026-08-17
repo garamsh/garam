@@ -23,6 +23,13 @@ tags:
       posts to the recipients of its own organization that its policies
       reach (ADR-0024) and acts on messages for the agent it
       authenticates as and no other.
+  - name: watch
+    description: >-
+      What an agent is saying now, on its way to the people watching it
+      (ADR-0022). A caller forwards it while the watcher count on its
+      claim says someone is there, and forwards nothing otherwise:
+      garam keeps none of it, so an agent nobody watches costs nothing
+      here.
 security:
   - machineCertificate: []
 paths:
@@ -191,6 +198,47 @@ paths:
           $ref: '#/components/responses/Error'
         '409':
           $ref: '#/components/responses/Error'
+  /agents/{agent}/turn-events:
+    post:
+      operationId: forwardTurnEvent
+      tags: [watch]
+      summary: Forward one turn event to whoever is watching the agent.
+      description: >-
+        What the agent is saying now, on its way to the browsers
+        watching it. The caller forwards for the agent it authenticates
+        as and is refused every other one.
+
+        Nothing is stored and nobody acknowledges. garam announces the
+        event to the process holding each stream, and an event arriving
+        while nobody watches reaches no one — so a success here says the
+        event was announced and never that a person saw it (ADR-0022).
+        The watcher count on `claimMessage` and `renewClaim` is what
+        says whether to forward at all, and forwarding to an agent
+        nobody watches is the cost that decision exists to avoid.
+
+        An event larger than one announcement carries is refused rather
+        than shortened: a shortened turn would put words in the agent's
+        mouth, where a refused event is the gap this stream already
+        permits.
+      parameters:
+        - $ref: '#/components/parameters/agent'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TurnEvent'
+      responses:
+        '202':
+          description: >-
+            Announced. Nothing is stored, so this is not evidence that
+            a watcher received it.
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
   /agents/{agent}/claims/{claim}/completion:
     post:
       operationId: completeClaim
@@ -341,7 +389,7 @@ components:
         One caller's hold on one message, and the token that fences it.
         Renewal and completion carry that token, and a hold handed on to
         the next caller stops matching.
-      required: [id, expiresAt, attempt, message]
+      required: [id, expiresAt, attempt, watchers, message]
       properties:
         id:
           type: string
@@ -360,8 +408,40 @@ components:
             Delivery is at-least-once (ADR-0018), so this is what tells
             a first delivery from a repeat; a message that reaches the
             bound is not handed out again.
+        watchers:
+          type: integer
+          minimum: 0
+          description: >-
+            How many streams garam was holding for this agent when it
+            answered, which is what says whether to forward the turn's
+            events (ADR-0022). Zero is the ordinary answer and the field
+            is always here: garam stores nothing for an agent nobody
+            watches, so it is answered in the same shape as one somebody
+            watches. Every renewal carries the count again, so a person
+            who opened the view mid-turn is seen without a call of their
+            own — and one who left is stopped forwarding to.
         message:
           $ref: '#/components/schemas/Message'
+    TurnEvent:
+      type: object
+      description: >-
+        One event from the agent's monitoring stream, as the agent
+        platform emitted it. garam carries it and never reads it, so
+        what a kind means and what a body holds are the platform's to
+        say.
+      required: [kind, body]
+      properties:
+        kind:
+          type: string
+          maxLength: 64
+          description: >-
+            What the platform called this event. It reaches a browser as
+            the name of a server-sent event, so it is one line.
+        body:
+          type: string
+          maxLength: 4000
+          description: >-
+            The event itself. It may be empty and it may span lines.
     Error:
       type: object
       required: [kind, message]

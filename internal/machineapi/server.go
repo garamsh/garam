@@ -28,6 +28,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/machine"
 	"github.com/garamsh/garam/internal/message"
+	"github.com/garamsh/garam/internal/watch"
 )
 
 // Groups reports which of its organization's groups a machine identity
@@ -43,6 +44,7 @@ type Groups interface {
 type Server struct {
 	agents    agent.Service
 	messages  message.Service
+	watches   watch.Service
 	groups    Groups
 	evaluator Evaluator
 }
@@ -52,10 +54,11 @@ var _ machinegen.ServerInterface = (*Server)(nil)
 
 // NewServer constructs the machine API server over the services it
 // answers from: what an operator does to its agents, what a machine
-// identity does to its own queue, which groups a caller belongs to, and
-// what decides whom it may send to.
-func NewServer(agents agent.Service, messages message.Service, groups Groups, evaluator Evaluator) *Server {
-	return &Server{agents: agents, messages: messages, groups: groups, evaluator: evaluator}
+// identity does to its own queue, who is watching one work and what it
+// is saying, which groups a caller belongs to, and what decides whom it
+// may send to.
+func NewServer(agents agent.Service, messages message.Service, watches watch.Service, groups Groups, evaluator Evaluator) *Server {
+	return &Server{agents: agents, messages: messages, watches: watches, groups: groups, evaluator: evaluator}
 }
 
 // caller returns the GRN the connection authenticated as, and writes

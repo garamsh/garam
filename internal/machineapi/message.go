@@ -129,7 +129,9 @@ func sendingStatements(sender grn.GRN) []Statement {
 
 // ClaimMessage hands the caller the next message addressed to the agent
 // the path names, waiting for one rather than answering an empty queue
-// at once. A caller that is not that agent is refused.
+// at once. A caller that is not that agent is refused. The answer
+// carries how many are watching the agent, which is what says whether
+// the turn's events are worth forwarding (ADR-0022).
 func (s *Server) ClaimMessage(w http.ResponseWriter, r *http.Request, agentGRN machinegen.AgentGrn) {
 	claimant, recipient, ok := parties(w, r, agentGRN)
 	if !ok {
@@ -139,7 +141,9 @@ func (s *Server) ClaimMessage(w http.ResponseWriter, r *http.Request, agentGRN m
 	if errors.Is(err, message.ErrNoMessageReady) {
 		// A poll that waited its time and found nothing is the ordinary
 		// answer rather than a refusal, so the caller has an empty
-		// answer to loop on instead of an error to tell apart.
+		// answer to loop on instead of an error to tell apart. It
+		// carries no watcher count either: there is no turn to forward
+		// the events of until a message is handed out.
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -147,11 +151,15 @@ func (s *Server) ClaimMessage(w http.ResponseWriter, r *http.Request, agentGRN m
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, claimBody(claim))
+	// The count is read once the message is claimed, so it is the count
+	// at the moment the turn starts rather than at the start of a wait
+	// that may have run for its whole length.
+	writeJSON(w, http.StatusOK, claimBody(claim, s.watchers(r.Context(), claimant, recipient)))
 }
 
 // RenewClaim extends the caller's hold on a message it is still working
-// on and answers with the hold as it now stands.
+// on and answers with the hold as it now stands, and with how many are
+// watching the agent now.
 func (s *Server) RenewClaim(w http.ResponseWriter, r *http.Request, agentGRN machinegen.AgentGrn, claimID machinegen.ClaimId) {
 	holder, recipient, ok := parties(w, r, agentGRN)
 	if !ok {
@@ -162,7 +170,10 @@ func (s *Server) RenewClaim(w http.ResponseWriter, r *http.Request, agentGRN mac
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, claimBody(claim))
+	// A renewal is what a caller makes while the turn is running, so it
+	// is where a person who opened the view mid-turn is first seen, and
+	// where one who has left stops being forwarded to (ADR-0022).
+	writeJSON(w, http.StatusOK, claimBody(claim, s.watchers(r.Context(), holder, recipient)))
 }
 
 // CompleteClaim reports the claimed message delivered.
@@ -195,12 +206,17 @@ func parties(w http.ResponseWriter, r *http.Request, agentGRN machinegen.AgentGr
 	return identity, recipient, true
 }
 
-// claimBody renders a claim as the spec's Claim.
-func claimBody(c *message.Claim) machinegen.Claim {
+// claimBody renders a claim as the spec's Claim, with the number of
+// streams garam is holding for the recipient. The field is always
+// written: zero is the ordinary answer, and a shape that changed with it
+// would make an agent nobody watches the exceptional case rather than
+// the cheap one (ADR-0022).
+func claimBody(c *message.Claim, watchers int) machinegen.Claim {
 	return machinegen.Claim{
 		Id:        string(c.ID()),
 		ExpiresAt: c.ExpiresAt(),
 		Attempt:   c.Message().Attempts(),
+		Watchers:  watchers,
 		Message:   messageBody(c.Message()),
 	}
 }

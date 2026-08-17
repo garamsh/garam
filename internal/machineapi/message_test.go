@@ -154,7 +154,7 @@ func TestServer_PostsUnderTheSenderTheCertificateNames(t *testing.T) {
 	sender := agentGRN("acme", "9f8e7d6c5b4a3021")
 	recipient := agentGRN("acme", "0a1b2c3d4e5f6071")
 	messages := &messageService{}
-	url, client := listener(t, &agentService{}, messages, &memberGroups{}, &engine{}, sender)
+	url, client := listener(t, &agentService{}, messages, unwatched(t), &memberGroups{}, &engine{}, sender)
 
 	status, body := send(t, client, http.MethodPost, url+"/messages", `{
 		"recipient": "`+recipient.String()+`",
@@ -194,7 +194,7 @@ func TestServer_PostsUnderTheSenderTheCertificateNames(t *testing.T) {
 func TestServer_ActsOnTheQueueThePathNames(t *testing.T) {
 	caller := agentGRN("acme", "0a1b2c3d4e5f6071")
 	messages := &messageService{}
-	url, client := listener(t, &agentService{}, messages, &memberGroups{}, &engine{}, caller)
+	url, client := listener(t, &agentService{}, messages, unwatched(t), &memberGroups{}, &engine{}, caller)
 	claims := url + "/agents/" + caller.String() + "/claims"
 
 	// A poll that found nothing is the ordinary empty answer rather
@@ -254,7 +254,7 @@ func TestServer_SendsWhereTheSendersOwnOrganizationReaches(t *testing.T) {
 	stranger := agentGRN("globex", "0a1b2c3d4e5f6071")
 	messages := &messageService{}
 	policies := &engine{}
-	url, client := listener(t, &agentService{}, messages, &memberGroups{}, policies, sender)
+	url, client := listener(t, &agentService{}, messages, unwatched(t), &memberGroups{}, policies, sender)
 
 	status, body := send(t, client, http.MethodPost, url+"/messages", submission(sibling, "key-1"))
 	require.Equal(t, http.StatusCreated, status, body)
@@ -299,7 +299,7 @@ func TestServer_AnAttachedPolicyDecidesWhatAnAgentSends(t *testing.T) {
 	policies := &engine{attached: map[grn.GRN][]authz.Statement{
 		sender: {denySending("no-talking", refused.String())},
 	}}
-	url, client := listener(t, &agentService{}, messages, &memberGroups{}, policies, sender)
+	url, client := listener(t, &agentService{}, messages, unwatched(t), &memberGroups{}, policies, sender)
 
 	status, body := send(t, client, http.MethodPost, url+"/messages", submission(refused, "key-1"))
 	require.Equal(t, http.StatusForbidden, status, body)
@@ -316,7 +316,7 @@ func TestServer_AnAttachedPolicyDecidesWhatAnAgentSends(t *testing.T) {
 	// The attachment names one subject, so the agent beside it reaches
 	// the recipient this one may not.
 	other := agentGRN("acme", "1122334455667788")
-	otherURL, otherClient := listener(t, &agentService{}, messages, &memberGroups{}, policies, other)
+	otherURL, otherClient := listener(t, &agentService{}, messages, unwatched(t), &memberGroups{}, policies, other)
 	status, body = send(t, otherClient, http.MethodPost, otherURL+"/messages", submission(refused, "key-3"))
 	require.Equal(t, http.StatusCreated, status, body)
 
@@ -354,8 +354,8 @@ func TestServer_AGroupAttachedPolicyDecidesWhatItsMembersSend(t *testing.T) {
 	messages := &messageService{}
 	groups := &memberGroups{byMember: map[grn.GRN][]grn.GRN{sender: {engineering}}}
 	policies := &engine{attached: map[grn.GRN][]authz.Statement{engineering: {noTalking}}}
-	url, client := listener(t, &agentService{}, messages, groups, policies, sender)
-	outsiderURL, outsiderClient := listener(t, &agentService{}, messages, groups, policies, outsider)
+	url, client := listener(t, &agentService{}, messages, unwatched(t), groups, policies, sender)
+	outsiderURL, outsiderClient := listener(t, &agentService{}, messages, unwatched(t), groups, policies, outsider)
 
 	status, body := send(t, client, http.MethodPost, url+"/messages", submission(refused, "key-1"))
 	require.Equal(t, http.StatusForbidden, status, body)
@@ -404,7 +404,7 @@ func TestServer_StoresNothingWhenThePolicyEngineCannotAnswer(t *testing.T) {
 	sibling := agentGRN("acme", "0a1b2c3d4e5f6071")
 	messages := &messageService{}
 	policies := &engine{}
-	url, client := listener(t, &agentService{}, messages, &memberGroups{}, policies, sender)
+	url, client := listener(t, &agentService{}, messages, unwatched(t), &memberGroups{}, policies, sender)
 
 	status, body := send(t, client, http.MethodPost, url+"/messages", submission(sibling, "key-1"))
 	require.Equal(t, http.StatusCreated, status, body)
@@ -428,7 +428,7 @@ func TestServer_StoresNothingWhenGroupMembershipCannotBeRead(t *testing.T) {
 	sibling := agentGRN("acme", "0a1b2c3d4e5f6071")
 	messages := &messageService{}
 	groups := &memberGroups{}
-	url, client := listener(t, &agentService{}, messages, groups, &engine{}, sender)
+	url, client := listener(t, &agentService{}, messages, unwatched(t), groups, &engine{}, sender)
 
 	status, body := send(t, client, http.MethodPost, url+"/messages", submission(sibling, "key-1"))
 	require.Equal(t, http.StatusCreated, status, body)

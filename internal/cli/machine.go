@@ -23,6 +23,7 @@ import (
 	"github.com/garamsh/garam/internal/machineapi"
 	"github.com/garamsh/garam/internal/message"
 	"github.com/garamsh/garam/internal/org"
+	"github.com/garamsh/garam/internal/watch"
 )
 
 // newServeMachineCommand constructs `garam serve machine`: the
@@ -84,6 +85,16 @@ func serveMachine(cmd *cobra.Command) error {
 		return err
 	}
 
+	// Whether anyone is watching is read from the rows `serve api` writes
+	// while it holds a stream, and a forwarded event is announced for
+	// that process to deliver: garam cannot dial an adapter, so the
+	// count travels on the poll this process answers, and no stream is
+	// held here (ADR-0022).
+	watches, err := watch.NewService(watch.NewPostgresStore(pool), watch.NewPostgresRelay(pool), watch.Config{})
+	if err != nil {
+		return err
+	}
+
 	// Whom an agent may send to is decided by the policy engine, which
 	// runs as a process of its own and is reached over gRPC (ADR-0003).
 	// Insecure transport: both processes run inside one trust boundary;
@@ -103,7 +114,7 @@ func serveMachine(cmd *cobra.Command) error {
 	// The generated router matches before the middleware runs, so the
 	// log line can name the route rather than the path.
 	handler := machinegen.HandlerWithOptions(
-		machineapi.NewServer(agents, messages,
+		machineapi.NewServer(agents, messages, watches,
 			memberGroups{store: org.NewPostgresStore(pool)},
 			machineapi.NewGRPCEvaluator(conn)),
 		machinegen.StdHTTPServerOptions{

@@ -17,9 +17,14 @@ test.describe("organization mutations", () => {
 
     // The backend assigns the org slug, so only the shape is asserted.
     await expect(page).toHaveURL(/\/console\/orgs\/[0-9a-f]+$/);
-    await expect(page.getByRole("heading", { name })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name, exact: true }),
+    ).toBeVisible();
 
     await page.goto("/console/orgs");
+    // Substring on purpose: the card link's accessible name carries the
+    // org's slug beside its name, so the assertion asks only that the
+    // org appears in the list.
     await expect(page.getByRole("link", { name })).toBeVisible();
   });
 
@@ -64,6 +69,8 @@ test.describe("organization mutations", () => {
 
     // The members section now lists both members.
     await page.goto(`/console/orgs/${signedIn.orgSlug}/members`);
+    // Substring on purpose: a row's accessible name is all of its
+    // cells, and the assertion asks which role one of them shows.
     await expect(
       page.getByRole("row", { name: invitee.userSlug }),
     ).toContainText("member");

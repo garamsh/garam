@@ -1,6 +1,6 @@
 # ADR 0015: Operators authenticate as agents do, and key material travels as files
 
-> Status: accepted
+> Status: accepted — the out-of-band bootstrap is named by [ADR-0032](./0032-garam-ships-the-command-that-mints-an-operators-first-certificate.md)
 > Date: 2026-08-16
 
 ## Contents

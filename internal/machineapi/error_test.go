@@ -7,9 +7,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/garam/internal/authz"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/machineapi"
 )
 
 // engineWords is what the engine's own error says. A caller must not
@@ -29,7 +29,7 @@ func TestServer_TellsAnEngineThatIsNotThereFromAPolicyThatRefused(t *testing.T) 
 	refused := agentGRN("acme", "deadbeefdeadbeef")
 	sibling := agentGRN("acme", "0a1b2c3d4e5f6071")
 	messages := &messageService{}
-	policies := &engine{attached: map[grn.GRN][]authz.Statement{
+	policies := &engine{attached: map[grn.GRN][]machineapi.Statement{
 		sender: {denySending("no-talking", refused.String())},
 	}}
 	url, client := listener(t, &agentService{}, messages, unwatched(t), &memberGroups{}, policies, sender)

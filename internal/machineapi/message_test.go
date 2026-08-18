@@ -10,23 +10,18 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/garamsh/garam/internal/authz"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/machineapi"
 	"github.com/garamsh/garam/internal/message"
 )
 
-// grnObject adapts a GRN to authz.Object; the engine matches strings.
-type grnObject struct{ g grn.GRN }
-
-func (o grnObject) GRN() grn.GRN { return o.g }
-func (o grnObject) Type() string { return o.g.ServiceType }
-
-// engine answers the Evaluator seam with the real policy engine over
-// the statements the surface collected, so what these tests exercise is
-// the collection rather than a stubbed verdict. attached stands in for
-// the policies an organization attached to a subject: the engine unions
+// engine answers the Evaluator seam by evaluating the statements the
+// surface collected with the engine's semantics (ADR-0002), so what
+// these tests exercise is the collection rather than a stubbed verdict.
+// The evaluation is reproduced here because the machineapi package
+// never imports the engine (ADR-0003). attached stands in for the
+// policies an organization attached to a subject: the engine unions
 // them with what the surface supplies, and a Deny from either wins
 // (ADR-0007, ADR-0008).
 //
@@ -34,39 +29,84 @@ func (o grnObject) Type() string { return o.g.ServiceType }
 // group the request reports it belongs to — which is how the engine
 // itself reads its attachments (authz.md §Policy attachment).
 type engine struct {
-	attached map[grn.GRN][]authz.Statement
+	attached map[grn.GRN][]machineapi.Statement
 	err      error
 	asked    []machineapi.EvalInput
 }
 
-func (e *engine) Evaluate(ctx context.Context, in machineapi.EvalInput) (bool, error) {
+func (e *engine) Evaluate(_ context.Context, in machineapi.EvalInput) (bool, error) {
 	e.asked = append(e.asked, in)
 	if e.err != nil {
 		return false, e.err
 	}
-	var statements []authz.Statement
+	var statements []machineapi.Statement
 	for _, subject := range append([]grn.GRN{in.Subject}, in.SubjectGroups...) {
 		statements = append(statements, e.attached[subject]...)
 	}
-	for _, s := range in.Statements {
-		statements = append(statements, authz.Statement{
-			Sid:      s.Sid,
-			Effect:   authz.Effect(s.Effect),
-			Action:   s.Action,
-			Resource: s.Resource,
-		})
+	statements = append(statements, in.Statements...)
+	allow := false
+	for _, s := range statements {
+		if !matches(s, in.Action, in.Object.String()) {
+			continue
+		}
+		if s.Effect == machineapi.EffectDeny {
+			return false, nil
+		}
+		allow = true
 	}
-	d := authz.NewStatementEvaluator(statements).
-		Evaluate(ctx, authz.Context{Object: grnObject{in.Object}, Action: in.Action})
-	return d == authz.DecisionAllow, nil
+	return allow, nil
+}
+
+// matches reports whether the statement applies to an action on a
+// resource: one action pattern and one resource pattern must match.
+func matches(s machineapi.Statement, action, resource string) bool {
+	return matchAny(s.Action, action) && matchAny(s.Resource, resource)
+}
+
+func matchAny(patterns []string, value string) bool {
+	for _, p := range patterns {
+		if matchPattern(p, value) {
+			return true
+		}
+	}
+	return false
+}
+
+// matchPattern applies the pattern language ADR-0002 gives a
+// statement's actions and resources: '*' matches any run of
+// characters, '?' exactly one, anything else matches literally.
+func matchPattern(pattern, value string) bool {
+	px, vx := 0, 0
+	star, starV := -1, 0
+	for vx < len(value) {
+		switch {
+		case px < len(pattern) && (pattern[px] == '?' || pattern[px] == value[vx]):
+			px++
+			vx++
+		case px < len(pattern) && pattern[px] == '*':
+			star = px
+			starV = vx
+			px++
+		case star != -1:
+			px = star + 1
+			starV++
+			vx = starV
+		default:
+			return false
+		}
+	}
+	for px < len(pattern) && pattern[px] == '*' {
+		px++
+	}
+	return px == len(pattern)
 }
 
 // denySending is one attached policy statement refusing what the
 // recipient pattern names.
-func denySending(sid, resource string) authz.Statement {
-	return authz.Statement{
+func denySending(sid, resource string) machineapi.Statement {
+	return machineapi.Statement{
 		Sid:      sid,
-		Effect:   authz.EffectDeny,
+		Effect:   machineapi.EffectDeny,
 		Action:   []string{message.ActionSend},
 		Resource: []string{resource},
 	}
@@ -296,7 +336,7 @@ func TestServer_AnAttachedPolicyDecidesWhatAnAgentSends(t *testing.T) {
 	refused := agentGRN("acme", "deadbeefdeadbeef")
 	sibling := agentGRN("acme", "0a1b2c3d4e5f6071")
 	messages := &messageService{}
-	policies := &engine{attached: map[grn.GRN][]authz.Statement{
+	policies := &engine{attached: map[grn.GRN][]machineapi.Statement{
 		sender: {denySending("no-talking", refused.String())},
 	}}
 	url, client := listener(t, &agentService{}, messages, unwatched(t), &memberGroups{}, policies, sender)
@@ -355,7 +395,7 @@ func TestServer_AGroupAttachedPolicyDecidesWhatItsMembersSend(t *testing.T) {
 
 	messages := &messageService{}
 	groups := &memberGroups{byMember: map[grn.GRN][]grn.GRN{sender: {engineering}}}
-	policies := &engine{attached: map[grn.GRN][]authz.Statement{engineering: {noTalking}}}
+	policies := &engine{attached: map[grn.GRN][]machineapi.Statement{engineering: {noTalking}}}
 	url, client := listener(t, &agentService{}, messages, unwatched(t), groups, policies, sender)
 	outsiderURL, outsiderClient := listener(t, &agentService{}, messages, unwatched(t), groups, policies, outsider)
 
@@ -380,7 +420,7 @@ func TestServer_AGroupAttachedPolicyDecidesWhatItsMembersSend(t *testing.T) {
 	// The same document attached to the sender itself refuses the same
 	// call. This is the control the failure turned on: the two
 	// attachments answered differently while a group reached nothing.
-	policies.attached = map[grn.GRN][]authz.Statement{sender: {noTalking}}
+	policies.attached = map[grn.GRN][]machineapi.Statement{sender: {noTalking}}
 	status, body = send(t, client, http.MethodPost, url+"/messages", submission(refused, "key-4"))
 	require.Equal(t, http.StatusForbidden, status, body)
 

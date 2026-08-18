@@ -35,8 +35,11 @@ service PolicyService {
   // subject instead of to the whole org (ADR-0008).
   rpc AttachPolicy(AttachPolicyRequest) returns (AttachPolicyResponse);
 
-  // DetachPolicy removes one attachment. A policy left with none
-  // applies org-wide again.
+  // DetachPolicy removes one attachment. Removing an active policy's
+  // last attachment is refused with FAILED_PRECONDITION rather than
+  // widening the policy to the whole org; archive the policy or attach
+  // another subject first. An active policy created without
+  // attachments still applies org-wide (ADR-0008).
   rpc DetachPolicy(DetachPolicyRequest) returns (DetachPolicyResponse);
 
   // ListPolicyAttachments lists a policy's attachments in ascending

@@ -1433,8 +1433,9 @@ func TestPolicyWrite_Notifies(t *testing.T) {
 
 // TestPolicyAttachments_RoundTrip drives attachment over the real
 // store: an attached policy reaches the subject it names and the
-// group it names, an archived one reaches nobody, and detaching the
-// last attachment returns the policy to an org-wide grant.
+// group it names, an archived one reaches nobody, and detaching an
+// active policy's last attachment is refused rather than widening the
+// policy back to an org-wide grant.
 func TestPolicyAttachments_RoundTrip(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
@@ -1489,13 +1490,26 @@ func TestPolicyAttachments_RoundTrip(t *testing.T) {
 	_, err = srv.ActivatePolicy(ctx, &authzv1.ActivatePolicyRequest{PolicyGrn: policyGRN})
 	require.NoError(t, err)
 
-	for _, subject := range []grn.GRN{ada, eng} {
-		_, err = srv.DetachPolicy(ctx, &authzv1.DetachPolicyRequest{PolicyGrn: policyGRN, SubjectGrn: subject.String()})
-		require.NoError(t, err)
-	}
+	// Detaching down to one attachment narrows as before, but the last
+	// one is refused: removing it would widen the active policy
+	// org-wide, so the policy keeps applying to eng and to eng only.
+	_, err = srv.DetachPolicy(ctx, &authzv1.DetachPolicyRequest{PolicyGrn: policyGRN, SubjectGrn: ada.String()})
+	require.NoError(t, err)
+	_, err = srv.DetachPolicy(ctx, &authzv1.DetachPolicyRequest{PolicyGrn: policyGRN, SubjectGrn: eng.String()})
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
 	statements, err = cache.Statements(ctx, orgGRN, []grn.GRN{bob})
 	require.NoError(t, err)
+	assert.Empty(t, statements, "a refused detach leaves the policy where it was")
+	statements, err = cache.Statements(ctx, orgGRN, []grn.GRN{eng})
+	require.NoError(t, err)
 	require.Len(t, statements, 1)
+
+	// Archiving is what retires the policy, and what nothing evaluates
+	// detaches freely.
+	_, err = srv.ArchivePolicy(ctx, &authzv1.ArchivePolicyRequest{PolicyGrn: policyGRN})
+	require.NoError(t, err)
+	_, err = srv.DetachPolicy(ctx, &authzv1.DetachPolicyRequest{PolicyGrn: policyGRN, SubjectGrn: eng.String()})
+	require.NoError(t, err)
 
 	_, err = srv.DetachPolicy(ctx, &authzv1.DetachPolicyRequest{PolicyGrn: policyGRN, SubjectGrn: ada.String()})
 	assert.Equal(t, codes.NotFound, status.Code(err))
@@ -1575,6 +1589,45 @@ func TestPolicyAttachment_DenyOverridesAcrossSources(t *testing.T) {
 	resp, err = engine.Check(ctx, req)
 	require.NoError(t, err)
 	assert.False(t, resp.GetAllowed(), "a group-attached deny overrides the caller's allow")
+}
+
+// TestPolicyAttachment_ADenyDoesNotWidenOnDetach covers the transition
+// ADR-0008 left symmetric: a Deny written for one subject, detached
+// from it, must not reach the subjects it was never attached to. The
+// detach of the last attachment is refused, so the Deny goes on
+// deciding for its subject — the passing control beside the refusal —
+// and bob, whom a widening would have caught, is never reached.
+func TestPolicyAttachment_ADenyDoesNotWidenOnDetach(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := authz.NewPostgresStore(p)
+	cache := authz.NewPolicyCache(s)
+	srv := authz.NewPolicyGRPCServer(s, cache)
+	orgGRN := newPolicyOrg(t, p)
+	ada, bob := grnOf("user", "ada"), grnOf("user", "bob")
+
+	created, err := srv.CreatePolicy(ctx, &authzv1.CreatePolicyRequest{
+		OrgGrn:    orgGRN.String(),
+		Name:      "no-read",
+		Document:  `{"Version":"2026-07-25","Statement":[{"Sid":"deny-read","Effect":"Deny","Action":["project:read"],"Resource":["grn:acme:*"]}]}`,
+		CreatedBy: ada.String(),
+	})
+	require.NoError(t, err)
+	policyGRN := created.GetPolicy().GetGrn()
+	_, err = srv.ActivatePolicy(ctx, &authzv1.ActivatePolicyRequest{PolicyGrn: policyGRN})
+	require.NoError(t, err)
+	_, err = srv.AttachPolicy(ctx, &authzv1.AttachPolicyRequest{PolicyGrn: policyGRN, SubjectGrn: ada.String()})
+	require.NoError(t, err)
+
+	_, err = srv.DetachPolicy(ctx, &authzv1.DetachPolicyRequest{PolicyGrn: policyGRN, SubjectGrn: ada.String()})
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+
+	statements, err := cache.Statements(ctx, orgGRN, []grn.GRN{bob})
+	require.NoError(t, err)
+	assert.Empty(t, statements, "a detached Deny reaches no subject it was never attached to")
+	statements, err = cache.Statements(ctx, orgGRN, []grn.GRN{ada})
+	require.NoError(t, err)
+	require.Len(t, statements, 1, "the refused detach leaves the Deny deciding for its subject")
 }
 
 // TestOrgIsolation_OnlyAttachmentKeepsGrantsInsideAnOrg asserts what
@@ -2414,6 +2467,17 @@ func detachPolicy(t *testing.T, srv *authz.PolicyGRPCServer, policyGRN string, s
 	require.NoError(t, err)
 }
 
+// detachRefused asserts the lifecycle refuses to remove policyGRN's
+// attachment to subject: it is an active policy's last.
+func detachRefused(t *testing.T, srv *authz.PolicyGRPCServer, policyGRN string, subject grn.GRN) {
+	t.Helper()
+	_, err := srv.DetachPolicy(context.Background(), &authzv1.DetachPolicyRequest{
+		PolicyGrn:  policyGRN,
+		SubjectGrn: subject.String(),
+	})
+	require.Equal(t, codes.FailedPrecondition, status.Code(err))
+}
+
 // archivePolicy retires policyGRN through the lifecycle service, which
 // takes it out of every check.
 func archivePolicy(t *testing.T, srv *authz.PolicyGRPCServer, policyGRN string) {
@@ -2782,6 +2846,12 @@ func TestMachineSurface_AnotherOrganizationsAgentReachesNothingOnThisQueue(t *te
 // holds no policy reaching the one it does, and the same call once the
 // policy is archived. The queue is drained at the end, so what was
 // refused is shown to be absent rather than merely unanswered.
+//
+// The detach step in the middle is the one an operator runs to stop
+// restricting the sender. It is refused — the sender's attachment is
+// the policy's last, and removing it would apply the Deny to the whole
+// organization — so the policy goes on deciding for its subject alone,
+// and the agent it was never attached to is never reached.
 func TestMachineSurface_AnAttachedPolicyDecidesWhatAnAgentSends(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
@@ -2831,18 +2901,20 @@ func TestMachineSurface_AnAttachedPolicyDecidesWhatAnAgentSends(t *testing.T) {
 	status, body = machineSend(t, other, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-4"))
 	require.Equal(t, http.StatusCreated, status, string(body))
 
-	// Detaching does not narrow this policy to nobody, it widens it to
-	// everybody: an active policy with no attachment applies to every
-	// subject of its org (ADR-0008), so the agent that was reaching the
-	// recipient a moment ago stops.
-	detachPolicy(t, policies, denied, senderGRN)
+	// Detaching the policy's last attachment is refused rather than
+	// widening the Deny to the whole org: the agent beside the sender
+	// goes on reaching the recipient, and the sender goes on being
+	// refused, so the refusal changed nothing the policy decides.
+	detachRefused(t, policies, denied, senderGRN)
 	status, body = machineSend(t, other, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-5"))
+	require.Equal(t, http.StatusCreated, status, string(body))
+	status, body = machineSend(t, sender, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-6"))
 	require.Equal(t, http.StatusForbidden, status, string(body))
 
 	// Archiving is what takes the policy out of every check, so the
 	// refusals above were this policy and nothing beside it.
 	archivePolicy(t, policies, denied)
-	status, body = machineSend(t, sender, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-6"))
+	status, body = machineSend(t, sender, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-7"))
 	require.Equal(t, http.StatusCreated, status, string(body))
 
 	// What the recipient's queue holds is every accepted message and no
@@ -2850,7 +2922,7 @@ func TestMachineSurface_AnAttachedPolicyDecidesWhatAnAgentSends(t *testing.T) {
 	// garam merely cannot route is stored (ADR-0013).
 	queue := url + "/agents/" + recipientGRN.String() + "/claims"
 	var keys []string
-	for range 3 {
+	for range 4 {
 		status, body = machineSend(t, recipient, http.MethodPost, queue, "")
 		require.Equal(t, http.StatusOK, status, string(body))
 		var claimed machinegen.Claim
@@ -2859,7 +2931,7 @@ func TestMachineSurface_AnAttachedPolicyDecidesWhatAnAgentSends(t *testing.T) {
 		status, body = machineSend(t, recipient, http.MethodPost, queue+"/"+claimed.Id+"/completion", "")
 		require.Equal(t, http.StatusNoContent, status, string(body))
 	}
-	assert.Equal(t, []string{"key-1", "key-4", "key-6"}, keys)
+	assert.Equal(t, []string{"key-1", "key-4", "key-5", "key-7"}, keys)
 
 	status, body = machineSend(t, recipient, http.MethodPost, queue, "")
 	assert.Equal(t, http.StatusNoContent, status, string(body), "a refused message reached the queue")
@@ -2933,8 +3005,9 @@ func TestMachineSurface_AGroupAttachedPolicyDecidesWhatItsMembersSend(t *testing
 
 	// The same document attached to the sender itself refuses the same
 	// call. Attaching before detaching keeps the policy attached to
-	// something throughout: a last detachment widens it to the whole
-	// organization rather than retiring it (ADR-0008).
+	// something throughout: an active policy's last attachment refuses
+	// to detach rather than widening the policy to the whole
+	// organization.
 	attachPolicy(t, policies, denied, senderGRN)
 	detachPolicy(t, policies, denied, engineering)
 	status, body = machineSend(t, sender, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-5"))

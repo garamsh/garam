@@ -59,8 +59,11 @@ type PolicyServiceClient interface {
 	// AttachPolicy binds the policy to a subject, so it applies to that
 	// subject instead of to the whole org (ADR-0008).
 	AttachPolicy(ctx context.Context, in *AttachPolicyRequest, opts ...grpc.CallOption) (*AttachPolicyResponse, error)
-	// DetachPolicy removes one attachment. A policy left with none
-	// applies org-wide again.
+	// DetachPolicy removes one attachment. Removing an active policy's
+	// last attachment is refused with FAILED_PRECONDITION rather than
+	// widening the policy to the whole org; archive the policy or attach
+	// another subject first. An active policy created without
+	// attachments still applies org-wide (ADR-0008).
 	DetachPolicy(ctx context.Context, in *DetachPolicyRequest, opts ...grpc.CallOption) (*DetachPolicyResponse, error)
 	// ListPolicyAttachments lists a policy's attachments in ascending
 	// subject GRN order.
@@ -202,8 +205,11 @@ type PolicyServiceServer interface {
 	// AttachPolicy binds the policy to a subject, so it applies to that
 	// subject instead of to the whole org (ADR-0008).
 	AttachPolicy(context.Context, *AttachPolicyRequest) (*AttachPolicyResponse, error)
-	// DetachPolicy removes one attachment. A policy left with none
-	// applies org-wide again.
+	// DetachPolicy removes one attachment. Removing an active policy's
+	// last attachment is refused with FAILED_PRECONDITION rather than
+	// widening the policy to the whole org; archive the policy or attach
+	// another subject first. An active policy created without
+	// attachments still applies org-wide (ADR-0008).
 	DetachPolicy(context.Context, *DetachPolicyRequest) (*DetachPolicyResponse, error)
 	// ListPolicyAttachments lists a policy's attachments in ascending
 	// subject GRN order.

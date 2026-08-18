@@ -17,6 +17,7 @@ var (
 	ErrPolicyAlreadyExists     = errorx.New(errorx.KindAlreadyExists, "policy already exists")
 	ErrAttachmentNotFound      = errorx.New(errorx.KindNotFound, "policy attachment not found")
 	ErrAttachmentAlreadyExists = errorx.New(errorx.KindAlreadyExists, "policy attachment already exists")
+	ErrLastAttachment          = errorx.New(errorx.KindFailedPrecondition, "detaching an active policy's last attachment applies it org-wide; archive the policy or attach another subject first")
 )
 
 // ServiceTypePolicy is the GRN service type of a stored policy.

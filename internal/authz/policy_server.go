@@ -189,7 +189,8 @@ func (s *PolicyGRPCServer) AttachPolicy(ctx context.Context, req *authzv1.Attach
 	return &authzv1.AttachPolicyResponse{Attachment: attachmentToProto(a)}, nil
 }
 
-// DetachPolicy removes one attachment. A policy left with none applies
+// DetachPolicy removes one attachment. The store refuses to remove an
+// active policy's last one: left with none, the policy would apply
 // org-wide again.
 func (s *PolicyGRPCServer) DetachPolicy(ctx context.Context, req *authzv1.DetachPolicyRequest) (*authzv1.DetachPolicyResponse, error) {
 	g, subject, err := parseAttachment(req.GetPolicyGrn(), req.GetSubjectGrn())

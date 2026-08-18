@@ -307,6 +307,27 @@ func TestPolicyGRPCServer_DetachReportsMissing(t *testing.T) {
 	}
 }
 
+// TestPolicyGRPCServer_DetachRefusesTheLastAttachment maps the store's
+// refusal to failed_precondition, beside the not_found above: a caller
+// telling the two apart can tell "no such attachment" from "this one
+// stays".
+func TestPolicyGRPCServer_DetachRefusesTheLastAttachment(t *testing.T) {
+	acme := orgGRN("acme")
+	g, ada := policyGRN(t, acme), subjectGRN("ada")
+	store := mocks.NewMockStore(t)
+	store.EXPECT().GetPolicy(mock.Anything, g).
+		Return(authz.NewPolicy(g, acme, "read-only"), nil).Once()
+	store.EXPECT().DetachPolicy(mock.Anything, g, ada).
+		Return(authz.ErrLastAttachment).Once()
+
+	srv := authz.NewPolicyGRPCServer(store, authz.NewPolicyCache(store))
+	_, err := srv.DetachPolicy(context.Background(), &authzv1.DetachPolicyRequest{
+		PolicyGrn:  g.String(),
+		SubjectGrn: ada.String(),
+	})
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+}
+
 func TestPolicyGRPCServer_AttachmentRejectsBadGRN(t *testing.T) {
 	store := mocks.NewMockStore(t)
 	srv := authz.NewPolicyGRPCServer(store, authz.NewPolicyCache(store))

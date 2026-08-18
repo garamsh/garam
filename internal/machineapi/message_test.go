@@ -320,8 +320,10 @@ func TestServer_AnAttachedPolicyDecidesWhatAnAgentSends(t *testing.T) {
 	status, body = send(t, otherClient, http.MethodPost, otherURL+"/messages", submission(refused, "key-3"))
 	require.Equal(t, http.StatusCreated, status, body)
 
-	// Detaching the policy is what puts the refused recipient back in
-	// reach, so the refusal above was the policy and nothing else.
+	// The policy out of every check is what puts the refused recipient
+	// back in reach — over the lifecycle that is an archive, a last
+	// detach being refused — so the refusal above was the policy and
+	// nothing else.
 	delete(policies.attached, sender)
 	status, body = send(t, client, http.MethodPost, url+"/messages", submission(refused, "key-4"))
 	require.Equal(t, http.StatusCreated, status, body)

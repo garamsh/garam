@@ -1,4 +1,4 @@
-package cli
+package cli_test
 
 import (
 	"net/http"
@@ -8,8 +8,15 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/garamsh/garam/internal/cli"
 	"github.com/garamsh/garam/internal/errorx"
 )
+
+func runProbe(url string) error {
+	root := cli.NewRootCommand()
+	root.SetArgs([]string{"probe", url})
+	return root.Execute()
+}
 
 func TestProbe_AnswersOK(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -17,9 +24,7 @@ func TestProbe_AnswersOK(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cmd := newProbeCommand()
-	cmd.SetArgs([]string{srv.URL})
-	require.NoError(t, cmd.Execute())
+	require.NoError(t, runProbe(srv.URL))
 }
 
 func TestProbe_RefusesUnready(t *testing.T) {
@@ -28,9 +33,7 @@ func TestProbe_RefusesUnready(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	cmd := newProbeCommand()
-	cmd.SetArgs([]string{srv.URL})
-	err := cmd.Execute()
+	err := runProbe(srv.URL)
 	require.Error(t, err)
 	assert.True(t, errorx.IsKind(err, errorx.KindUnavailable), "want an unavailable kind, got %v", err)
 }
@@ -41,7 +44,5 @@ func TestProbe_RefusesSilence(t *testing.T) {
 	addr := srv.URL
 	srv.Close()
 
-	cmd := newProbeCommand()
-	cmd.SetArgs([]string{addr})
-	require.Error(t, cmd.Execute())
+	require.Error(t, runProbe(addr))
 }

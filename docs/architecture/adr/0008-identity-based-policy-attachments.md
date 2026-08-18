@@ -1,6 +1,6 @@
 # ADR 0008: Identity-based policy attachments
 
-> Status: accepted
+> Status: accepted — the detach transition is narrowed by [ADR-0031](./0031-detaching-an-active-policys-last-attachment-is-refused.md)
 > Date: 2026-08-02
 
 ## Context

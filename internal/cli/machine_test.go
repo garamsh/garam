@@ -106,6 +106,25 @@ func TestMachineKeyMaterial_RefusesWhenAFileIsMissing(t *testing.T) {
 	}
 }
 
+// TestMachineKeyMaterial_RefusesAGroupReadableKey holds the listener's
+// own key to the rule ADR-0015 states for key material, through
+// keyfile: the owner-only pair loads, and the same pair with a
+// group-readable key does not — so what refuses is the mode rather
+// than anything around it.
+func TestMachineKeyMaterial_RefusesAGroupReadableKey(t *testing.T) {
+	dir := t.TempDir()
+	certFile, keyFile := writeTLSKeyPair(t, dir)
+	caKeyFile := writeKeyEncryptionKey(t, dir)
+
+	_, _, err := machineKeyMaterial(certFile, keyFile, caKeyFile)
+	require.NoError(t, err, "owner-only key")
+
+	require.NoError(t, os.Chmod(keyFile, 0o640))
+	_, _, err = machineKeyMaterial(certFile, keyFile, caKeyFile)
+	require.Error(t, err)
+	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
+}
+
 // authorities is a ca.Store in memory: the adapter needs a real
 // authority per organization and nothing else a store does.
 type authorities map[grn.GRN]*ca.Authority

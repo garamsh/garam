@@ -58,6 +58,7 @@ ADRs:
 - [0029](./adr/0029-readiness-reports-what-a-replica-cannot-serve-without.md) — readiness reports what a replica cannot serve without, so not the policy listener
 - [0030](./adr/0030-the-login-write-rate-is-bounded-at-the-store.md) — the login write rate is bounded at the store
 - [0031](./adr/0031-detaching-an-active-policys-last-attachment-is-refused.md) — detaching an active policy's last attachment is refused
+- [0032](./adr/0032-garam-ships-the-command-that-mints-an-operators-first-certificate.md) — garam ships the command that mints an operator's first certificate
 
 ## Rules for edits
 

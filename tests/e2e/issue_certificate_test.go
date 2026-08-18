@@ -1,0 +1,88 @@
+package e2e_test
+
+import (
+	"context"
+	"crypto/rand"
+	"crypto/tls"
+	"encoding/hex"
+	"net/http"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/garamsh/garam/internal/agent"
+	"github.com/garamsh/garam/internal/ca"
+	"github.com/garamsh/garam/internal/cli"
+	"github.com/garamsh/garam/internal/org"
+)
+
+// runIssueCertificate runs the shipped command against the test
+// database with the key-encryption key at keyFile, writing the
+// credential into a directory of its own.
+func runIssueCertificate(t *testing.T, keyFile, subjectGRN string) (string, error) {
+	t.Helper()
+	t.Setenv("GARAM_DATABASE_URL", os.Getenv("GARAM_TEST_DATABASE_URL"))
+	t.Setenv("GARAM_CA_KEY_FILE", keyFile)
+	outDir := t.TempDir()
+	root := cli.NewRootCommand()
+	root.SetArgs([]string{"issue-certificate", subjectGRN, "--out-dir", outDir})
+	return outDir, root.Execute()
+}
+
+// TestIssueCertificate_MintsAnOperatorsFirstCertificate carries the one
+// bootstrap ADR-0015 leaves out of band through what the repository
+// ships: the command mints an operator's certificate against real
+// Postgres, and that certificate authenticates on the machine listener
+// — the pair the suite's `installed` helper stands in for everywhere
+// else. The refused agent subject sits beside the minted operator, so
+// what refuses it is the operator check rather than a mint that
+// authenticates nobody.
+func TestIssueCertificate_MintsAnOperatorsFirstCertificate(t *testing.T) {
+	p := pool(t)
+	require.NoError(t, org.NewPostgresStore(p).CreateOrg(context.Background(), org.NewOrganization(orgRootGRN("acme"), "acme")))
+
+	// The key-encryption key reaches the command the way ADR-0015 has
+	// key material reach a process: a file its owner alone can read.
+	key := make([]byte, ca.KeySize)
+	_, err := rand.Read(key)
+	require.NoError(t, err)
+	keyFile := filepath.Join(t.TempDir(), "ca.key")
+	require.NoError(t, os.WriteFile(keyFile, []byte(hex.EncodeToString(key)), 0o600))
+	sealer, err := ca.NewAESGCMSealer(key)
+	require.NoError(t, err)
+
+	_, evaluator := policyEngine(t, p)
+	url := machineListener(t, p, sealer, evaluator)
+
+	operatorGRN := scopedGRN("acme", agent.ServiceTypeOperator, "one")
+	outDir, err := runIssueCertificate(t, keyFile, operatorGRN.String())
+	require.NoError(t, err)
+
+	certPEM, err := os.ReadFile(filepath.Join(outDir, "certificate.pem"))
+	require.NoError(t, err)
+	keyPEM, err := os.ReadFile(filepath.Join(outDir, "key.pem"))
+	require.NoError(t, err)
+	// The key is the credential; the permission bits are what ADR-0015
+	// charges every file holding one with.
+	info, err := os.Stat(filepath.Join(outDir, "key.pem"))
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm(), "the private key is readable by its owner alone")
+	pair, err := tls.X509KeyPair(certPEM, keyPEM)
+	require.NoError(t, err)
+
+	status, body := machineRequest(t, machineClient(t, pair), http.MethodGet, url+"/identity")
+	require.Equal(t, http.StatusOK, status, string(body))
+	assert.JSONEq(t, `{"grn":"`+operatorGRN.String()+`"}`, string(body))
+
+	// An agent subject is refused, and nothing is minted for it: an
+	// agent's certificate comes from the surface an assigned operator
+	// calls, never from this command.
+	agentOutDir, err := runIssueCertificate(t, keyFile, scopedGRN("acme", agent.ServiceType, "bot-1").String())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "is not an operator")
+	_, statErr := os.Stat(filepath.Join(agentOutDir, "certificate.pem"))
+	assert.True(t, os.IsNotExist(statErr), "a refused subject leaves no certificate behind")
+}

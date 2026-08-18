@@ -200,9 +200,22 @@ It proves the processes survive being scheduled, probed, restarted, and
 given their configuration the way a cluster gives it.
 
 It does not prove anything about the registry path, which this stack
-deliberately does not use, and it does not exercise the machine
-process's mTLS surface: that listener admits no caller without a client
-certificate, and issuing one is not part of bringing the stack up. What
-is verified there is that the process starts with its key material, that
-it answers its own probe, and that the mTLS listener refuses a caller
-presenting no certificate.
+deliberately does not use, and bringing the stack up does not exercise
+the machine process's mTLS surface: that listener admits no caller
+without a client certificate, and no certificate is minted as part of
+the bring-up. What is verified there is that the process starts with
+its key material, that it answers its own probe, and that the mTLS
+listener refuses a caller presenting no certificate.
+
+Reaching that surface by hand is a named step rather than a throwaway
+program: `garam issue-certificate <subject-grn> --out-dir <dir>` mints
+an operator's first certificate — the one bootstrap
+[ADR-0015](../../../docs/architecture/adr/0015-operator-identity.md)
+leaves out of band — and refuses any subject that is not an operator.
+It reads the same `GARAM_DATABASE_URL` and `GARAM_CA_KEY_FILE` `serve
+machine` runs on, so against this cluster it runs from this machine:
+port-forward `postgres-rw`, lift the key-encryption key out of the
+`machine-throwaway-key-material` Secret into a file its owner alone can
+read, and port-forward the `machine` Service for the call itself. The
+organization the operator's GRN names must exist first — the
+certificate authority the command creates is a row that references it.

@@ -107,9 +107,10 @@ func databaseAddr(t *testing.T) string {
 	return net.JoinHostPort(cfg.ConnConfig.Host, strconv.Itoa(int(cfg.ConnConfig.Port)))
 }
 
-// listenerPool reaches the test database through proxy, under an
-// application name of its own.
-func listenerPool(t *testing.T, proxy *pgProxy) *pgxpool.Pool {
+// listenerPool reaches the test database through proxy, under the
+// application name appName, so pg_stat_activity tells its connections
+// from every other one this suite holds.
+func listenerPool(t *testing.T, proxy *pgProxy, appName string) *pgxpool.Pool {
 	t.Helper()
 	cfg, err := pgxpool.ParseConfig(os.Getenv("GARAM_TEST_DATABASE_URL"))
 	require.NoError(t, err)
@@ -122,7 +123,7 @@ func listenerPool(t *testing.T, proxy *pgProxy) *pgxpool.Pool {
 	// A fallback address would reach the database around the proxy, and
 	// a connection the test cannot cut is no drop at all.
 	cfg.ConnConfig.Fallbacks = nil
-	cfg.ConnConfig.RuntimeParams["application_name"] = policyListenerAppName
+	cfg.ConnConfig.RuntimeParams["application_name"] = appName
 	p, err := pgxpool.NewWithConfig(context.Background(), cfg)
 	require.NoError(t, err)
 	t.Cleanup(p.Close)
@@ -130,17 +131,17 @@ func listenerPool(t *testing.T, proxy *pgProxy) *pgxpool.Pool {
 }
 
 // requireListenerSessions waits until Postgres reports want sessions
-// registered on the policy channel, which is the connection's state as
-// the server holds it rather than as the test assumes it.
-func requireListenerSessions(t *testing.T, p *pgxpool.Pool, want int) {
+// named appName registered on channel, which is the connection's state
+// as the server holds it rather than as the test assumes it.
+func requireListenerSessions(t *testing.T, p *pgxpool.Pool, appName, channel string, want int) {
 	t.Helper()
 	require.Eventually(t, func() bool {
 		var sessions int
 		err := p.QueryRow(context.Background(),
 			`SELECT count(*) FROM pg_stat_activity WHERE application_name = $1 AND query = $2`,
-			policyListenerAppName, "LISTEN "+authz.PolicyChannel).Scan(&sessions)
+			appName, "LISTEN "+channel).Scan(&sessions)
 		return err == nil && sessions == want
-	}, 10*time.Second, 20*time.Millisecond, "postgres should report %d policy listener session(s)", want)
+	}, 10*time.Second, 20*time.Millisecond, "postgres should report %d session(s) listening on %s", want, channel)
 }
 
 // TestListenPolicyChanges_ResynchronisesAfterADroppedConnection is the
@@ -170,10 +171,10 @@ func TestListenPolicyChanges_ResynchronisesAfterADroppedConnection(t *testing.T)
 	author := grnOf("user", "ada")
 
 	proxy := newPGProxy(t, databaseAddr(t))
-	listening := listenerPool(t, proxy)
+	listening := listenerPool(t, proxy, policyListenerAppName)
 	cache := authz.NewPolicyCache(s)
 	go func() { _ = authz.ListenPolicyChanges(ctx, listening, cache) }()
-	requireListenerSessions(t, p, 1)
+	requireListenerSessions(t, p, policyListenerAppName, authz.PolicyChannel, 1)
 
 	// An entry to invalidate, and then a write to invalidate it with:
 	// the cache answering "before" is the listener delivering, since
@@ -203,7 +204,7 @@ func TestListenPolicyChanges_ResynchronisesAfterADroppedConnection(t *testing.T)
 	proxy.cut()
 	// Postgres drops the session with the socket, so the writes below
 	// are made with nothing listening on the channel at all.
-	requireListenerSessions(t, p, 0)
+	requireListenerSessions(t, p, policyListenerAppName, authz.PolicyChannel, 0)
 
 	_, err = s.SetPolicyStatus(ctx, before, authz.PolicyStatusArchived)
 	require.NoError(t, err)

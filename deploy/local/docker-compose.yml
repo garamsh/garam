@@ -63,8 +63,10 @@ services:
         condition: service_completed_successfully
     # /readyz, so healthy means the engine can answer rather than that a
     # port is open. It starts answering once the gRPC port is bound.
+    # The image carries no shell or wget, so the check runs the binary's
+    # own probe subcommand.
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:9091/readyz"]
+      test: ["CMD", "/usr/local/bin/garam", "probe", "http://127.0.0.1:9091/readyz"]
       interval: 2s
       timeout: 5s
       retries: 10
@@ -97,9 +99,10 @@ services:
         condition: service_healthy
     # /readyz covers the database and the engine channel both, so `web`
     # waits for an api that can serve a request rather than one that has
-    # bound its port.
+    # bound its port. The probe is the binary's own subcommand, as for
+    # authz: the image carries no shell or wget.
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/readyz"]
+      test: ["CMD", "/usr/local/bin/garam", "probe", "http://127.0.0.1:8080/readyz"]
       interval: 2s
       timeout: 5s
       retries: 10

@@ -502,7 +502,7 @@ caller authenticated as.
 | authn.SessionStore | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | authn.OAuthStateStore | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | authz (policies) | yes (`store.go`) | yes (`postgres.go` + `postgres_<concept>.go`) | not planned | — |
-| agent | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
+| agent | yes (`store.go`) | yes (`postgres.go` + `postgres_<concept>.go`) | not planned | — |
 | ca | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | message | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | watch | yes (`store.go`) | yes (`postgres.go`) | not planned | — |

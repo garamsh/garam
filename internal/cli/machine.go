@@ -45,7 +45,8 @@ func newServeMachineCommand() *cobra.Command {
 }
 
 func serveMachine(cmd *cobra.Command) error {
-	ctx := cmd.Context()
+	ctx, stop := serveSignalContext(cmd.Context())
+	defer stop()
 
 	obs, err := newObservability(serviceMachine)
 	if err != nil {
@@ -148,7 +149,7 @@ func serveMachine(cmd *cobra.Command) error {
 	}()
 
 	obs.logger.Info("serving machine", slog.String("addr", srv.Addr), slog.String("health_addr", healthAddr))
-	if err := srv.ListenAndServeTLS("", ""); err != nil {
+	if err := serveHTTP(ctx, srv, func() error { return srv.ListenAndServeTLS("", "") }); err != nil {
 		return errorx.Wrap(err, "machine serve", errorx.KindInternal)
 	}
 	return nil

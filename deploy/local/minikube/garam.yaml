@@ -181,9 +181,17 @@ spec:
         # process opens is owned by it and readable by nobody else —
         # which the key-encryption key is checked for at startup and
         # refused without.
+        #
+        # The runAsUser pins declare the UID both sides share; the
+        # image's USER only implies it. The startup check compares the
+        # file's owner against the reader's UID, so a pod-level
+        # runAsUser or an edit to one container not mirrored on the
+        # other turns a correct file into a refused one.
         - name: key-material
           image: garam:local
           imagePullPolicy: Never
+          securityContext:
+            runAsUser: 10001
           command: ["/bin/sh", "-ec"]
           args:
             - |
@@ -201,6 +209,8 @@ spec:
         - name: machine
           image: garam:local
           imagePullPolicy: Never
+          securityContext:
+            runAsUser: 10001
           args: ["serve", "machine"]
           env:
             - name: GARAM_DATABASE_URL

@@ -177,7 +177,7 @@ spec:
         fsGroup: 10001
       initContainers:
         # The Secret arrives root-owned and group-readable. This copies
-        # it as the same user `serve machine` runs as, so what the
+        # it as the same UID `serve machine` runs as, so what the
         # process opens is owned by it and readable by nobody else —
         # which the key-encryption key is checked for at startup and
         # refused without.
@@ -186,12 +186,14 @@ spec:
         # image's USER only implies it. The startup check compares the
         # file's owner against the reader's UID, so a pod-level
         # runAsUser or an edit to one container not mirrored on the
-        # other turns a correct file into a refused one.
+        # other turns a correct file into a refused one. The garam
+        # image is scratch now and carries no shell, so the copy runs
+        # on the alpine release the repo already pins.
         - name: key-material
-          image: garam:local
-          imagePullPolicy: Never
+          image: alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
           securityContext:
             runAsUser: 10001
+            runAsGroup: 10001
           command: ["/bin/sh", "-ec"]
           args:
             - |

@@ -1,6 +1,8 @@
 # Multi-stage build of the single garam binary (ADR-0003). The same
 # image runs `migrate`, `serve authz` and `serve api`; the compose file
-# picks the subcommand. Build context is the repository root.
+# picks the subcommand, and its healthchecks run `probe` — the runtime
+# stage is scratch, so no shell or wget is there to ask instead. Build
+# context is the repository root.
 
 FROM golang:1.26.5-alpine3.24 AS build
 
@@ -14,11 +16,22 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 go build -o /out/garam ./cmd/garam
 
-FROM alpine:3.24.1
+# The account the processes run as, created here because scratch has no
+# adduser. Only the garam lines travel: the image carries no root
+# account, and the sealer's ownership check reads the numeric UID,
+# which stays 10001.
+RUN adduser -D -u 10001 garam \
+  && grep '^garam:' /etc/passwd > /out/passwd \
+  && grep '^garam:' /etc/group > /out/group
+
+FROM scratch
 
 # ca-certificates: `serve api` performs Google OIDC discovery over HTTPS.
-RUN apk add --no-cache ca-certificates \
-  && adduser -D -u 10001 garam
+# The module never names a time zone (no time.LoadLocation, no
+# time.Local), so the image carries no zoneinfo.
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=build /out/passwd /etc/passwd
+COPY --from=build /out/group /etc/group
 
 COPY --from=build /out/garam /usr/local/bin/garam
 COPY migrations /app/migrations

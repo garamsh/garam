@@ -1,6 +1,6 @@
 // Package cli owns the cobra command tree for the garam binary
 // (ADR-0003, ADR-0017): `serve api`, `serve authz`, `serve machine`,
-// and `migrate`. Commands are constructed here; cmd/garam only
+// `migrate`, and `probe`. Commands are constructed here; cmd/garam only
 // executes the root.
 //
 // Every serve command answers the two probes internal/health mounts —
@@ -55,7 +55,7 @@ func NewRootCommand() *cobra.Command {
 		Use:   "garam",
 		Short: "garam is the workflow management core: identity, orgs, authorization",
 	}
-	root.AddCommand(newServeCommand(), newMigrateCommand())
+	root.AddCommand(newServeCommand(), newMigrateCommand(), newProbeCommand())
 	return root
 }
 

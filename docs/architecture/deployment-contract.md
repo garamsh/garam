@@ -44,11 +44,21 @@ Two images, because there are two runtimes ([ADR-0020](./adr/0020-published-arti
 
 - **Go image** (`deploy/local/Dockerfile`) — one binary whose entry
   point takes a subcommand: `serve api`, `serve authz`, `serve machine`,
-  `migrate` (`ENTRYPOINT ["garam"]`). Runs as UID 10001
-  (`adduser -D -u 10001 garam`, `USER garam`). The migrations ship
-  inside it at `/app/migrations` (`COPY migrations /app/migrations`,
-  `WORKDIR /app`), which is where the default `GARAM_MIGRATIONS_DIR`
-  resolves.
+  `migrate`, `probe` (`ENTRYPOINT ["garam"]`). The runtime stage is
+  `scratch`: the image carries no shell and no package manager, so the
+  local stack's healthchecks run the binary's own `probe` subcommand
+  (`deploy/local/docker-compose.yml`) — a kubelet's `httpGet` needs
+  nothing in the image either way. The trust store the api's Google
+  OIDC discovery needs is copied from the build stage
+  (`COPY --from=build /etc/ssl/certs/ca-certificates.crt`); nothing in
+  the module names a time zone, so no zoneinfo ships. Runs as UID 10001
+  — `scratch` has no `adduser`, so the build stage creates the account
+  and only its `/etc/passwd` and `/etc/group` lines are copied in for
+  `USER garam` to resolve against; the ownership check
+  (§How key material must arrive) reads the numeric UID, which is
+  unchanged. The migrations ship inside it at `/app/migrations`
+  (`COPY migrations /app/migrations`, `WORKDIR /app`), which is where
+  the default `GARAM_MIGRATIONS_DIR` resolves.
 - **Web image** (`deploy/local/Dockerfile.web`) — the Next.js
   application as a standalone server (`CMD ["node", "server.js"]`),
   `USER node`. The `node` base image assigns that user UID 1000; this
@@ -200,12 +210,13 @@ satisfies neither:
 
 The shape that satisfies it is already working in this repository, on
 the `machine` Deployment of `deploy/local/minikube/garam.yaml`: an
-initContainer from the same image — therefore the same UID — copies the
-projected secret with `install -m 0600` onto a memory-backed `emptyDir`,
-with `fsGroup` set so that user can write the volume. The process then
-opens a file it owns with no group or other bits, and both checks pass.
-Relaxing the check to fit plain projection is not an option; the
-deployment shape above is what the rule requires.
+initContainer running as the same UID — stated as `runAsUser: 10001`,
+because the Go image carries no shell for the copy — copies the
+projected secret with `install -m 0600` onto a memory-backed
+`emptyDir`, with `fsGroup` set so that user can write the volume. The
+process then opens a file it owns with no group or other bits, and both
+checks pass. Relaxing the check to fit plain projection is not an
+option; the deployment shape above is what the rule requires.
 
 Two qualifications:
 

@@ -141,9 +141,9 @@ collaborate on a shared plan.
 - Clusters as a resource an organization connects. Named in the intended
   structure and explicitly unplanned.
 - Manifests for any cluster garam does not run. garam publishes two
-  images and a contract — ports, probe paths, configuration and which
-  of it is secret, and how key material must arrive (ADR-0020); the
-  repository that owns a cluster owns what reconciles it.
+  images and the contract [deployment-contract.md](./deployment-contract.md)
+  states (ADR-0020); the repository that owns a cluster owns what
+  reconciles it.
 - Workflow execution engine, scheduler, queue.
 - Notifications.
 - The rest of the agent surface. An operator creates an agent and

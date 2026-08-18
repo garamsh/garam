@@ -23,6 +23,7 @@ Responsibility documents:
 - [grn-model.md](./grn-model.md) — the GRN resource naming model
 - [authz.md](./authz.md) — the authorization model
 - [adapter.md](./adapter.md) — what the adapter garam ships must do, and what it rests on
+- [deployment-contract.md](./deployment-contract.md) — the contract a cluster-owning repository is written against: ports, probe paths, configuration, key material arrival
 
 ADRs:
 

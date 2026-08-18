@@ -38,7 +38,7 @@ import (
 	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
 )
 
-const testSubject = "grn:root:default:user/42"
+const testSubject = "grn:acme:default:user:alice"
 
 // lines collects the log output of a handler that may run on another
 // goroutine.

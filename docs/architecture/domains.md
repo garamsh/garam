@@ -382,7 +382,11 @@ The durable queue a message reaches an agent through (ADR-0013).
 
 Messages are their own boundary rather than part of `internal/agent`: a
 recipient is addressed by GRN, so nothing here depends on the agent
-aggregate, and a message has a lifecycle no agent's contains.
+aggregate, and a message has a lifecycle no agent's contains. A message
+may cross an organization boundary only where a relation permits it —
+one row per consenting pair, held by both organizations and withdrawable
+by either (ADR-0035); the refusal reaches the sender as an ordinary
+inbound message, never a rejection.
 
 The queue is a table and never a connection, so any garam instance can
 hand any recipient's message to a reader and no process holds anything

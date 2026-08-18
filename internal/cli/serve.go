@@ -58,13 +58,13 @@ func serveAPI(cmd *cobra.Command) error {
 	}
 	defer pool.Close()
 
-	google, err := authn.NewGoogleProvider(ctx, authn.GoogleConfig{
+	google, err := googleProvider(ctx, authn.GoogleConfig{
 		ClientID:     envOr("GOOGLE_CLIENT_ID", ""),
 		ClientSecret: envOr("GOOGLE_CLIENT_SECRET", ""),
 		RedirectURL:  envOr("GOOGLE_REDIRECT_URL", ""),
 	})
 	if err != nil {
-		return errorx.Wrap(err, "google provider")
+		return err
 	}
 
 	// Insecure transport: both processes run inside one trust
@@ -90,7 +90,10 @@ func serveAPI(cmd *cobra.Command) error {
 	if err != nil {
 		return err
 	}
-	providers := []authn.Provider{google}
+	providers := []authn.Provider{}
+	if google != nil {
+		providers = append(providers, google)
+	}
 	if dev != nil {
 		providers = append(providers, dev)
 	}
@@ -165,6 +168,27 @@ func devProvider(enabled, cookieSecure bool) (authn.Provider, error) {
 	})
 	if err != nil {
 		return nil, errorx.Wrap(err, "dev provider")
+	}
+	return p, nil
+}
+
+// googleProvider resolves the Google sign-in provider: nil unless the
+// credentials are configured. OIDC discovery runs at construction, so
+// a registered provider has already reached its issuer — a process
+// without outbound connectivity pays that round trip only when sign-in
+// through Google was asked for, and a discovery failure stops startup
+// rather than the first sign-in. One credential without the other is a
+// misconfiguration, not half a provider.
+func googleProvider(ctx context.Context, cfg authn.GoogleConfig) (authn.Provider, error) {
+	if cfg.ClientID == "" && cfg.ClientSecret == "" {
+		return nil, nil
+	}
+	if cfg.ClientID == "" || cfg.ClientSecret == "" {
+		return nil, errorx.New(errorx.KindInvalidArgument, "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are set together or not at all")
+	}
+	p, err := authn.NewGoogleProvider(ctx, cfg)
+	if err != nil {
+		return nil, errorx.Wrap(err, "google provider")
 	}
 	return p, nil
 }

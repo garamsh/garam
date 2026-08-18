@@ -25,9 +25,11 @@
 //	                       requires GARAM_COOKIE_SECURE=false)
 //	GARAM_DEV_REDIRECT_URL dev provider callback URL
 //	                       (default "http://localhost:3000/api/auth/callback/dev")
-//	GOOGLE_CLIENT_ID       Google OAuth client ID (required for serve api)
-//	GOOGLE_CLIENT_SECRET   Google OAuth client secret (required for serve api)
-//	GOOGLE_REDIRECT_URL    OAuth callback URL (required for serve api)
+//	GOOGLE_CLIENT_ID       Google OAuth client ID (optional; both
+//	                       credentials or neither — unset, the google
+//	                       provider is not registered)
+//	GOOGLE_CLIENT_SECRET   Google OAuth client secret (optional)
+//	GOOGLE_REDIRECT_URL    OAuth callback URL
 //	GARAM_MACHINE_ADDR     machine listener address (default ":8443")
 //	GARAM_MACHINE_HEALTH_ADDR  serve machine's probe listen address
 //	                       (default ":8444"); the machine listener

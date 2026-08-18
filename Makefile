@@ -46,7 +46,7 @@ WEB_E2E_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_AD
 .PHONY: lint format test build mock gen check-gen e2e db-up db-down backend-up ci
 .PHONY: web-install web-lint web-format web-test web-build web-gen web-check-gen web-e2e web-ci
 .PHONY: minikube-up minikube-down minikube-start minikube-images minikube-db
-.PHONY: minikube-secret minikube-migrate minikube-apps minikube-rebuild minikube-forward
+.PHONY: minikube-secret minikube-migrate minikube-apps minikube-rebuild minikube-forward minikube-context
 
 lint:
 	go vet ./...
@@ -256,11 +256,23 @@ minikube-up: minikube-start minikube-db minikube-secret minikube-rebuild
 # cannot come apart.
 minikube-rebuild: minikube-images minikube-migrate minikube-apps
 
+# Every kubectl recipe needs the apiserver reachable through the project
+# kubeconfig, and `minikube status` does not answer that: a cluster
+# started outside make writes the new apiserver port into ~/.kube/config
+# and leaves this file stale behind a Running process, which status's
+# exit code also reports as failure. Ask the file itself and repair it
+# with update-context; boot only when the apiserver process is down.
+minikube-context:
+	@$(KUBECTL_MINIKUBE) get --raw=/healthz >/dev/null 2>&1 || { \
+		test "$$(minikube status --format '{{.APIServer}}' 2>/dev/null | head -n 1)" = Running \
+			|| minikube start --driver=docker; \
+		minikube update-context; \
+	}
+
 # minikube-start brings up the cluster and the Postgres operator, and is
 # a no-op on both when they are already there. The CRDs are past the
 # annotation size a client-side apply writes, so the apply is server-side.
-minikube-start:
-	minikube status >/dev/null 2>&1 || minikube start --driver=docker
+minikube-start: minikube-context
 	$(KUBECTL_MINIKUBE) apply --server-side -f $(CNPG_MANIFEST)
 	$(KUBECTL_MINIKUBE) -n cnpg-system rollout status deployment/cnpg-controller-manager --timeout=300s
 
@@ -281,19 +293,19 @@ minikube-images:
 # routable endpoint, and everything downstream connects through that
 # Service — so the second wait is on the endpoint the migration
 # actually dials, not on the condition next to it.
-minikube-db:
+minikube-db: minikube-context
 	$(KUBECTL_MINIKUBE) apply -f $(MINIKUBE_DIR)/namespace.yaml
 	$(KUBECTL_MINIKUBE) apply -f $(MINIKUBE_DIR)/postgres.yaml
 	$(KUBECTL_LOCAL) wait --for=condition=Ready cluster/postgres --timeout=300s
 	$(KUBECTL_LOCAL) wait --for=jsonpath='{.endpoints[0].conditions.ready}'=true endpointslice -l kubernetes.io/service-name=postgres-rw --timeout=120s
 
-minikube-secret:
+minikube-secret: minikube-context
 	$(MINIKUBE_DIR)/machine-key-material.sh
 
 # minikube-migrate applies pending migrations and waits for them. A Job's
 # pod template is immutable, so the finished one is deleted rather than
 # updated.
-minikube-migrate:
+minikube-migrate: minikube-context
 	$(KUBECTL_LOCAL) delete job migrate --ignore-not-found
 	$(KUBECTL_LOCAL) apply -f $(MINIKUBE_DIR)/migrate-job.yaml
 	$(KUBECTL_LOCAL) wait --for=condition=complete job/migrate --timeout=300s
@@ -303,7 +315,7 @@ minikube-migrate:
 # template is stamped with the id of the image it runs, so a rebuilt
 # image is a changed Deployment the apply rolls and an unrebuilt one
 # restarts nothing — which a mutable tag alone cannot tell apart.
-minikube-apps:
+minikube-apps: minikube-context
 	@eval "$$(minikube docker-env --shell bash)"; \
 		id="$$(docker image inspect --format '{{.Id}}' garam:local)" && \
 		web_id="$$(docker image inspect --format '{{.Id}}' garam-web:local)" && \
@@ -316,7 +328,7 @@ minikube-apps:
 # minikube-forward is how the web app is reached: the Services are
 # cluster-internal and there is no ingress, so nothing leaves the machine
 # without this. It holds the terminal until interrupted.
-minikube-forward:
+minikube-forward: minikube-context
 	$(KUBECTL_LOCAL) port-forward service/web 3000:3000
 
 # minikube-down removes the stack, its database volume and its key

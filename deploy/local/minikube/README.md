@@ -147,6 +147,15 @@ export KUBECONFIG=$HOME/.minikube/kubeconfig
 Set `KUBECONFIG` before `make minikube-up` to put the context somewhere
 else, your own kubeconfig included.
 
+A start run outside `make` — a reboot followed by a plain
+`minikube start` is enough — gives the apiserver a new port and writes
+it into `~/.kube/config`, leaving the file above pointing at a port
+that no longer answers. Every target that reaches the cluster checks
+that this file answers before acting and refreshes it when it does
+not, so the next `make` run repairs the state on its own. The one
+exception is `minikube-down`, which never boots a cluster to delete
+from one: after a restart outside `make`, run any other target first.
+
 ## Startup order
 
 The bring-up sequences what a manifest cannot express: Postgres has to

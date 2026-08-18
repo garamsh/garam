@@ -123,7 +123,7 @@ Authentication: the sign-in provider abstraction and sessions.
 | `Identity` | subject + nickname asserted by a provider |
 | `Session` | browser session for a user, expiring |
 | `SessionStore` | persists sessions keyed by token hash |
-| `OAuthStateStore` | persists the state a login issued, until the callback spends it or its lifetime runs out (ADR-0028) |
+| `OAuthStateStore` | persists the state a login issued, until the callback spends it or its lifetime runs out (ADR-0028); issuing refuses past `MaxLiveOAuthStates` live states (ADR-0030) |
 
 A second provider is a new file implementing `Provider`; call sites
 depend only on the interface. Raw session tokens live in cookies; only
@@ -133,6 +133,11 @@ A callback completes once because the state it carries is spent from a
 row, not because the response asked the browser to drop the cookie
 holding it (ADR-0028). The state's own lifetime bounds the row, so a
 record cannot outlive what it is checked against or lapse before it.
+Issuing refuses once `MaxLiveOAuthStates` states are live, which bounds
+the write rate the unauthenticated login endpoint can be driven at to
+that many rows per flow lifetime, for every replica at once — the bound
+is decided in the statement that writes, not held by any one process
+(ADR-0030).
 
 ## `internal/user`
 

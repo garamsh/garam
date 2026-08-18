@@ -81,13 +81,23 @@ func NewPostgresOAuthStateStore(pool *pgxpool.Pool) *PostgresOAuthStateStore {
 	return &PostgresOAuthStateStore{q: db.New(pool)}
 }
 
-// Issue records state as live for ttl.
+// Issue records state as live for ttl, or returns
+// ErrOAuthStateRateLimited when MaxLiveOAuthStates are already live.
+// The statement decides: it inserts nothing past the bound, so the
+// rows it reports are the whole answer.
 func (s *PostgresOAuthStateStore) Issue(ctx context.Context, state string, ttl time.Duration) error {
-	err := s.q.IssueOAuthState(ctx, db.IssueOAuthStateParams{
+	issued, err := s.q.IssueOAuthState(ctx, db.IssueOAuthStateParams{
 		StateHash: HashToken(state),
 		ExpiresAt: stamp(time.Now().UTC().Add(ttl)),
+		MaxLive:   MaxLiveOAuthStates,
 	})
-	return errorx.Wrap(err, "oauth state store: issue")
+	if err != nil {
+		return errorx.Wrap(err, "oauth state store: issue")
+	}
+	if issued == 0 {
+		return ErrOAuthStateRateLimited
+	}
+	return nil
 }
 
 // Consume spends a live state, or returns ErrOAuthStateNotLive. The

@@ -153,6 +153,33 @@ func TestLogin_UnknownProvider(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 }
 
+// TestLogin_ShedsLoadPastTheLiveStateBound drives the endpoint at the
+// rate the code before the bound accepted: one request, one write,
+// nothing in the way. Every login up to MaxLiveOAuthStates redirects;
+// the one past the bound is refused with 429 rather than written. A
+// spent state then admits one more — the control: the refusal tracks
+// the states still live, not the number of requests the endpoint has
+// seen, which would refuse this one too.
+func TestLogin_ShedsLoadPastTheLiveStateBound(t *testing.T) {
+	f := newFixture(t)
+	for range authn.MaxLiveOAuthStates {
+		rec := f.do(t, "GET", "/auth/login/google", "")
+		require.Equal(t, http.StatusFound, rec.Code)
+	}
+
+	rec := f.do(t, "GET", "/auth/login/google", "")
+	assert.Equal(t, http.StatusTooManyRequests, rec.Code)
+
+	// A completed callback spends its state; stand in for it.
+	var spent string
+	for spent = range f.states.expiryOf {
+		break
+	}
+	require.NoError(t, f.states.Consume(testCtx(t), spent))
+	rec = f.do(t, "GET", "/auth/login/google", "")
+	assert.Equal(t, http.StatusFound, rec.Code)
+}
+
 func TestListProviders_ReflectsRegistration(t *testing.T) {
 	// The dev provider is absent unless registered (GARAM_DEV_AUTH).
 	f := newFixture(t)

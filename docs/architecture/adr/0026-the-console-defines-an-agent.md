@@ -1,6 +1,6 @@
 # ADR 0026: The console defines an agent and an operator reads that definition
 
-> Status: accepted
+> Status: accepted — the read surface and the reconciliation it deferred are decided by [ADR-0033](./0033-an-operator-claims-the-agent-a-definition-mints.md)
 > Date: 2026-08-17
 
 ## Contents

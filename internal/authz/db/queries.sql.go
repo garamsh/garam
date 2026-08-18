@@ -106,6 +106,17 @@ func (q *Queries) AttachPolicy(ctx context.Context, arg AttachPolicyParams) (Pol
 	return i, err
 }
 
+const countPolicyAttachments = `-- name: CountPolicyAttachments :one
+SELECT count(*) FROM policy_attachments WHERE policy_grn = $1
+`
+
+func (q *Queries) CountPolicyAttachments(ctx context.Context, policyGrn string) (int64, error) {
+	row := q.db.QueryRow(ctx, countPolicyAttachments, policyGrn)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createFirstPolicyVersion = `-- name: CreateFirstPolicyVersion :one
 INSERT INTO policy_versions (policy_grn, version, document, created_by, created_at)
 VALUES ($1, 1, $2, $3, $4)
@@ -318,6 +329,28 @@ func (q *Queries) ListPolicyVersions(ctx context.Context, policyGrn string) ([]P
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockPolicy = `-- name: LockPolicy :one
+SELECT grn, org_grn, name, status, default_version, created_at, updated_at FROM policies WHERE grn = $1 FOR UPDATE
+`
+
+// LockPolicy serializes a policy's detaches on its own row, so the
+// second of two concurrent last detaches counts what the first
+// removed.
+func (q *Queries) LockPolicy(ctx context.Context, grn string) (Policy, error) {
+	row := q.db.QueryRow(ctx, lockPolicy, grn)
+	var i Policy
+	err := row.Scan(
+		&i.Grn,
+		&i.OrgGrn,
+		&i.Name,
+		&i.Status,
+		&i.DefaultVersion,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const setPolicyDefaultVersion = `-- name: SetPolicyDefaultVersion :one

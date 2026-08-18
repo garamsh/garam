@@ -182,9 +182,26 @@ func (s *PostgresStore) AttachPolicy(ctx context.Context, policyGRN, subjectGRN 
 	return rowToAttachment(row)
 }
 
-// DetachPolicy removes one attachment.
+// DetachPolicy removes one attachment. The delete runs in a
+// transaction holding the policy's row lock, so two concurrent
+// detaches of a policy's last two attachments serialize: the second
+// counts what the first removed and is the one refused. Removing an
+// active policy's last attachment is refused rather than widening the
+// policy org-wide; the rollback undoes the delete, and its change
+// notification with it.
 func (s *PostgresStore) DetachPolicy(ctx context.Context, policyGRN, subjectGRN grn.GRN) error {
-	rows, err := s.q.DetachPolicy(ctx, db.DetachPolicyParams{
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return errorx.Wrap(err, "authz store: begin", errorx.KindUnavailable)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	q := s.q.WithTx(tx)
+	policy, err := q.LockPolicy(ctx, policyGRN.String())
+	if err != nil {
+		return classify(err, "detach policy", ErrPolicyNotFound, nil)
+	}
+	rows, err := q.DetachPolicy(ctx, db.DetachPolicyParams{
 		PolicyGrn:  policyGRN.String(),
 		SubjectGrn: subjectGRN.String(),
 	})
@@ -193,6 +210,18 @@ func (s *PostgresStore) DetachPolicy(ctx context.Context, policyGRN, subjectGRN 
 	}
 	if rows == 0 {
 		return ErrAttachmentNotFound
+	}
+	if policy.Status == string(PolicyStatusActive) {
+		remaining, err := q.CountPolicyAttachments(ctx, policyGRN.String())
+		if err != nil {
+			return classify(err, "detach policy", nil, nil)
+		}
+		if remaining == 0 {
+			return ErrLastAttachment
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return errorx.Wrap(err, "authz store: commit")
 	}
 	return nil
 }

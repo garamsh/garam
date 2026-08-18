@@ -509,7 +509,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Detach a policy from a subject. Requires the `admin` role. */
+        /**
+         * Detach a policy from a subject. Requires the `admin` role.
+         * @description Detaching an active policy's last attachment is refused with 409, because a policy left with none would apply org-wide. Archive the policy, or attach another subject first.
+         */
         delete: operations["detachPolicy"];
         options?: never;
         head?: never;
@@ -2000,6 +2003,7 @@ export interface operations {
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
         };
     };
     createInvitation: {

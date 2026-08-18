@@ -30,7 +30,9 @@ type Store interface {
 	// (ADR-0008), narrowing it from an org-wide grant to that subject.
 	AttachPolicy(ctx context.Context, policyGRN, subjectGRN grn.GRN) (*PolicyAttachment, error)
 	// DetachPolicy removes one attachment, or fails with
-	// ErrAttachmentNotFound.
+	// ErrAttachmentNotFound. Removing an active policy's last
+	// attachment fails with ErrLastAttachment instead: left with none,
+	// the policy would apply org-wide.
 	DetachPolicy(ctx context.Context, policyGRN, subjectGRN grn.GRN) error
 	ListPolicyAttachments(ctx context.Context, policyGRN grn.GRN) ([]*PolicyAttachment, error)
 

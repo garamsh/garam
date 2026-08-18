@@ -52,6 +52,15 @@ RETURNING *;
 -- name: DetachPolicy :execrows
 DELETE FROM policy_attachments WHERE policy_grn = $1 AND subject_grn = $2;
 
+-- LockPolicy serializes a policy's detaches on its own row, so the
+-- second of two concurrent last detaches counts what the first
+-- removed.
+-- name: LockPolicy :one
+SELECT * FROM policies WHERE grn = $1 FOR UPDATE;
+
+-- name: CountPolicyAttachments :one
+SELECT count(*) FROM policy_attachments WHERE policy_grn = $1;
+
 -- name: ListPolicyAttachments :many
 SELECT * FROM policy_attachments WHERE policy_grn = $1 ORDER BY subject_grn;
 

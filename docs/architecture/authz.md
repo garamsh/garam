@@ -229,11 +229,18 @@ organization gets that organization's unattached policies applied to
 it, which is an organization boundary decided by the caller and not by
 the policy.
 
-Detaching an active policy's last attachment does not retire it, it
-widens it back to the org — which for a Deny turns one subject's
-restriction into every subject's, and for an Allow is the shortest
-route to handing that grant to every subject a caller asks about.
-Archiving is what takes a policy out of every check.
+Detaching an active policy's last attachment is refused, because the
+policy would not retire — it would widen back to the org, which for a
+Deny turns one subject's restriction into every subject's, and for an
+Allow hands that grant to every subject a caller asks about. The
+remedies the refusal names are the deliberate acts: archive the policy
+to retire it, or attach the next subject before detaching this one.
+The org-wide state itself is unchanged ([ADR-0008](./adr/0008-identity-based-policy-attachments.md)):
+a policy created and activated without an attachment applies to every
+subject the caller asks about, so entering that state stays possible
+and is never a side effect of removing an attachment. A draft or
+archived policy's last attachment detaches freely — nothing evaluates
+either. Archiving is what takes a policy out of every check.
 
 An attached policy decides what an agent sends
 ([ADR-0024](./adr/0024-policy-decides-what-an-agent-sends.md)), inside

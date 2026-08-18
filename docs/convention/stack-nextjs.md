@@ -304,6 +304,14 @@ back/forward. The pieces, for a photo modal:
 - Assert on rendered text, ARIA, emitted form payloads, and
   navigated URLs — **never** on the internal React tree shape or
   component identity.
+- A text assertion is either identity or presence, and the matcher
+  says which. Identity — the string is the element's whole accessible
+  name, as for a heading — takes `exact: true`, so an appended word
+  fails it. Presence — the accessible name legitimately carries more
+  than the asserted string, as for a row or a card carrying a count —
+  stays substring, with a call-site comment saying why. Substring
+  matching is case-insensitive contains: an identity assertion left
+  substring passes against a page that grew past what it names.
 
 
 ## 13. Import direction and file naming

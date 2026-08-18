@@ -28,7 +28,7 @@ What makes a file generated is that regenerating it changes nothing. One nobody 
 | `style.md` | Naming and pattern consistency in code |
 | `simplicity.md` | Whether to add or to change the shape; when an abstraction earns its place |
 | `review.md` | What a review must carry to be valid, and how an author responds |
-| `documentation.md` | What makes a document or a GitHub artifact valid, review comments included |
+| `documentation.md` | What makes an authored Markdown document or a GitHub artifact valid, review comments included |
 
 Every project keeps all of these. They are the floor; only the tables below are selected from.
 

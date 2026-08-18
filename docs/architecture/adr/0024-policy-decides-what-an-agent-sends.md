@@ -8,6 +8,7 @@
 - Decision
 - Consequences
 - Rejected alternatives
+- Errata
 
 ## Context
 
@@ -166,3 +167,8 @@ be:
   ADR-0013's shape and requires an identity garam does not have. Naming
   one in passing is how a sender identity nobody designed becomes
   permanent.
+
+## Errata
+
+- 2026-08-18 — §Consequences' "A group-attached policy reaches nothing here" was true when written and is false since #285, which gave the machine listener the sender's group membership. `domains.md` describes the working behaviour. The decision stands.
+- 2026-08-18 — §Consequences' "Detaching an active policy's last attachment widens it to the whole organization" described the transition ADR-0008 left open; ADR-0031 has since refused it. The widening concern this ADR recorded is settled by the refusal, not by the widening.

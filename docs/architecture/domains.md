@@ -26,6 +26,9 @@ Each `internal/<domain>/` package contains:
 
 - `<domain>.go` — aggregate types and sentinels.
 - `store.go` — `Store` interface.
+- `service.go` — the `Service` contract, where the domain has
+  behaviour to coordinate; a domain that is only types and persistence
+  has none.
 - `queries.sql` — the domain's SQL, hand-written. The only place SQL is written.
 - `postgres.go` — hand-written `Store` implementation, calling `db/`.
 - `db/` — sqlc output from `queries.sql`. Generated, never edited.

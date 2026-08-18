@@ -94,5 +94,5 @@ URL, so `GARAM_DB_PORT` moves the suite with the server.
 
 ## Development model
 
-This repository is developed by AI agents under three roles (PM,
-worker, QA). See [AGENTS.md](./AGENTS.md) for the role matrix and rules.
+This repository is developed by AI agents under the roles and rules in
+[AGENTS.md](./AGENTS.md).

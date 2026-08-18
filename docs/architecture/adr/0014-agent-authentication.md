@@ -8,6 +8,7 @@
 - Decision
 - Consequences
 - Rejected alternatives
+- Errata
 
 ## Context
 
@@ -121,3 +122,7 @@ not in Go:
   never uses.
 - **A second CA for ingress, separate from the loopback one.** More to
   run and rotate for a separation the SAN check already draws.
+
+## Errata
+
+- 2026-08-18 — §Consequences' "Policy attachments extend that rule and do not gate it" predates ADR-0024: on the machine listener an attached Deny narrows what an identity may send, so an attachment can gate. The authentication decision this ADR takes is unchanged.

@@ -1,5 +1,5 @@
 import { HttpResponse, http } from "msw";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { logOut } from "@/features/auth/api/log-out";
 import { SESSION_COOKIE } from "@/lib/session";
@@ -27,6 +27,9 @@ vi.mock("next/navigation", () => ({
 }));
 
 describe("logOut", () => {
+  // Each test asserts what its own run deleted, not an earlier test's.
+  beforeEach(() => deleted.mockClear());
+
   it("logs the browser out when the backend already rejects the session", async () => {
     server.use(
       http.post(`${API_URL}/auth/logout`, () =>
@@ -41,7 +44,7 @@ describe("logOut", () => {
     expect(deleted).toHaveBeenCalledWith(SESSION_COOKIE);
   });
 
-  it("propagates a failure that is not an expired session", async () => {
+  it("clears the cookie while propagating a failure that is not an expired session", async () => {
     server.use(
       http.post(`${API_URL}/auth/logout`, () =>
         HttpResponse.json(
@@ -52,5 +55,6 @@ describe("logOut", () => {
     );
 
     await expect(logOut()).rejects.toThrow("boom");
+    expect(deleted).toHaveBeenCalledWith(SESSION_COOKIE);
   });
 });

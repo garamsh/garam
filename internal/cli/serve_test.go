@@ -15,8 +15,50 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
+	"github.com/garamsh/garam/internal/authn"
 	"github.com/garamsh/garam/internal/errorx"
 )
+
+func TestGoogleProvider_NotConfigured(t *testing.T) {
+	// No credentials: no provider, and no discovery round trip — the
+	// default issuer would answer here, so a nil provider can only
+	// come from construction never being attempted.
+	p, err := googleProvider(context.Background(), authn.GoogleConfig{})
+	require.NoError(t, err)
+	assert.Nil(t, p)
+}
+
+func TestGoogleProvider_RefusesPartialCredentials(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  authn.GoogleConfig
+	}{
+		{"client id without secret", authn.GoogleConfig{ClientID: "client-id"}},
+		{"secret without client id", authn.GoogleConfig{ClientSecret: "secret"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := googleProvider(context.Background(), tc.cfg)
+			require.Error(t, err)
+			assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), "kind: %v", err)
+		})
+	}
+}
+
+// TestGoogleProvider_DiscoveryFailure is also the control for the two
+// gates above: a fully configured provider reaches construction, so
+// their refusals come from the credential check and not from a helper
+// that refuses everything.
+func TestGoogleProvider_DiscoveryFailure(t *testing.T) {
+	// Port 1 is reserved and unservable, so discovery cannot connect.
+	_, err := googleProvider(context.Background(), authn.GoogleConfig{
+		ClientID:     "client-id",
+		ClientSecret: "secret",
+		Issuer:       "http://127.0.0.1:1",
+	})
+	require.Error(t, err)
+	assert.True(t, errorx.IsKind(err, errorx.KindUnavailable), "kind: %v", err)
+}
 
 func TestDevProvider_Disabled(t *testing.T) {
 	p, err := devProvider(false, false)

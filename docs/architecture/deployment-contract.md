@@ -167,10 +167,13 @@ configuration change applied rolls the pods.
 
 Notes a deployment needs:
 
-- `serve api` performs Google OIDC discovery at startup
-  (`internal/authn/google.go`), so its start depends on reaching the
-  issuer, and empty `GOOGLE_*` values fail the first sign-in rather than
-  the start.
+- `serve api` performs Google OIDC discovery at startup only when both
+  `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set
+  (`internal/cli/serve.go`, `internal/authn/google.go`): then the start
+  depends on reaching the issuer, and an unreachable one stops the
+  start. With neither set, no Google provider is registered — the start
+  owes the issuer nothing, and `GET /auth/providers` omits `google`.
+  One credential without the other refuses the start.
 - The three `*_FILE` values are paths, not contents. Key material
   travels as a file, never through the environment — a value there is
   inherited by child processes, readable at `/proc/<pid>/environ`, and

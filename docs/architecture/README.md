@@ -62,6 +62,7 @@ ADRs:
 - [0033](./adr/0033-an-operator-claims-the-agent-a-definition-mints.md) — an operator claims the agent a definition mints
 - [0034](./adr/0034-a-delivered-message-keeps-its-key-and-drops-its-body.md) — a delivered message keeps its key and drops its body
 - [0035](./adr/0035-a-cross-organization-message-needs-both-organizations-consent.md) — a cross-organization message needs both organizations' consent
+- [0036](./adr/0036-a-secret-in-garam-is-a-reference-not-a-value.md) — a secret in garam is a reference, not a value
 
 ## Rules for edits
 

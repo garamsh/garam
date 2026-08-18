@@ -21,6 +21,20 @@ var ErrSessionNotFound = errorx.New(errorx.KindNotFound, "session not found")
 // not which of the three it is.
 var ErrOAuthStateNotLive = errorx.New(errorx.KindUnauthenticated, "oauth state not live")
 
+// ErrOAuthStateRateLimited is returned when a login state is issued
+// while MaxLiveOAuthStates are already live.
+var ErrOAuthStateRateLimited = errorx.New(errorx.KindResourceExhausted, "oauth state issue rate exceeded")
+
+// MaxLiveOAuthStates bounds the states live at one time, and with them
+// the write rate an unauthenticated caller can drive on
+// /auth/login/{provider}: a state lives at most one flow lifetime, so
+// no caller moves the table past this many writes per lifetime. The
+// store enforces it where the write happens — in the database the
+// processes share — so the bound holds however many replicas serve the
+// endpoint, and keys on no client address a proxy or a spoofed header
+// could bend (ADR-0030).
+const MaxLiveOAuthStates = 1024
+
 // Identity is the authenticated identity asserted by a Provider.
 type Identity struct {
 	Subject  string

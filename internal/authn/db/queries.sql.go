@@ -73,20 +73,33 @@ func (q *Queries) GetSession(ctx context.Context, tokenHash string) (Session, er
 	return i, err
 }
 
-const issueOAuthState = `-- name: IssueOAuthState :exec
+const issueOAuthState = `-- name: IssueOAuthState :execrows
 WITH pruned AS (
     DELETE FROM oauth_states WHERE expires_at <= now()
 )
 INSERT INTO oauth_states (state_hash, expires_at)
-VALUES ($1, $2)
+SELECT $1, $2
+WHERE (SELECT count(*) FROM oauth_states live WHERE live.expires_at > now()) < $3::bigint
 `
 
 type IssueOAuthStateParams struct {
 	StateHash string
 	ExpiresAt pgtype.Timestamptz
+	MaxLive   int64
 }
 
-func (q *Queries) IssueOAuthState(ctx context.Context, arg IssueOAuthStateParams) error {
-	_, err := q.db.Exec(ctx, issueOAuthState, arg.StateHash, arg.ExpiresAt)
-	return err
+// Issuing writes nothing once max_live states are live, which is what
+// bounds the write rate an unauthenticated caller can drive on
+// /auth/login/{provider}: at most max_live rows per flow lifetime,
+// however many processes serve the endpoint. The prune runs whether or
+// not the insert does, so a refused issue still sweeps what lapsed and
+// the table cannot wedge full of dead rows. The count reads the
+// statement's own snapshot, so it sees rows this same statement prunes
+// — the bound it enforces is conservative, never loose.
+func (q *Queries) IssueOAuthState(ctx context.Context, arg IssueOAuthStateParams) (int64, error) {
+	result, err := q.db.Exec(ctx, issueOAuthState, arg.StateHash, arg.ExpiresAt, arg.MaxLive)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

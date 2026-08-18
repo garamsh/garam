@@ -140,7 +140,19 @@ func newFakeOAuthStateStore() *fakeOAuthStateStore {
 func (s *fakeOAuthStateStore) Issue(_ context.Context, state string, ttl time.Duration) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.expiryOf[state] = time.Now().UTC().Add(ttl)
+	now := time.Now().UTC()
+	// The store the double stands in for prunes on every issue and
+	// refuses past MaxLiveOAuthStates live states; the double decides
+	// the same way, so a test meets the bound the real store enforces.
+	for held, expiry := range s.expiryOf {
+		if !now.Before(expiry) {
+			delete(s.expiryOf, held)
+		}
+	}
+	if len(s.expiryOf) >= authn.MaxLiveOAuthStates {
+		return authn.ErrOAuthStateRateLimited
+	}
+	s.expiryOf[state] = now.Add(ttl)
 	return nil
 }
 

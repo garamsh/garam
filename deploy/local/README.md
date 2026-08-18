@@ -47,7 +47,7 @@ created and keep:
   told to, and the suite migrates it itself. These are the only
   databases anything truncates.
 
-Postgres publishes host port 55432 by default. `GARAM_DB_PORT` overrides
+Postgres publishes host port 25432 by default. `GARAM_DB_PORT` overrides
 it, in `.env` or in the environment
 (`GARAM_DB_PORT=55440 make db-up e2e`). `make e2e` and `make web-e2e`
 ask compose which port it published, so either place moves both suites

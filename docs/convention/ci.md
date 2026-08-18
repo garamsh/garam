@@ -80,7 +80,7 @@ Both run identically on a contributor's machine and in CI. The rest:
   `check-gen` fails when what is committed is stale.
 - `db-up` / `db-down` bring up and remove the dockerised Postgres the
   Go e2e suite needs; `GARAM_DB_PORT` moves that one server's host
-  port, default 55432.
+  port, default 25432.
 - `backend-up` brings up postgres, migrate, authz and api from the
   same compose file — the backend the browser suite drives.
 - `e2e` runs the store round-trips against real Postgres, against a

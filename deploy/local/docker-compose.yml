@@ -13,7 +13,7 @@ services:
       POSTGRES_PASSWORD: garam
       POSTGRES_DB: garam
     ports:
-      - "${GARAM_DB_PORT:-55432}:5432"
+      - "${GARAM_DB_PORT:-25432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     # Over TCP, not the unix socket: the image runs a temporary server on

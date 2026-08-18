@@ -560,3 +560,4 @@ the adapter where it is used.
 | doc | `internal/doc` | permissioned document |
 | audit | `internal/audit` | decision and change events |
 | token | `internal/token` | API token exchange (browser sessions live in `internal/authn`) |
+| secret | `internal/secret` | a reference to a secret an external store holds — never the value (ADR-0036) |

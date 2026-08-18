@@ -31,6 +31,10 @@ Each `internal/<domain>/` package contains:
   has none.
 - `queries.sql` — the domain's SQL, hand-written. The only place SQL is written.
 - `postgres.go` — hand-written `Store` implementation, calling `db/`.
+  Past the single-file size limit it splits into `postgres_<concept>.go`
+  files beside it, one per aggregate the store persists, inside the same
+  package: the aggregates' fields are unexported, so the store that
+  rehydrates them must share their package.
 - `db/` — sqlc output from `queries.sql`. Generated, never edited.
 - `*_test.go` — tests.
 - `mocks/` — mockery v3 output, for interfaces tests actually consume (testing.md §Mocking strategy).
@@ -493,11 +497,11 @@ caller authenticated as.
 
 | Domain | Interface | postgres | memory | other |
 |--------|-----------|----------|--------|-------|
-| org | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
+| org | yes (`store.go`) | yes (`postgres.go` + `postgres_<concept>.go`) | not planned | — |
 | user | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | authn.SessionStore | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | authn.OAuthStateStore | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
-| authz (policies) | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
+| authz (policies) | yes (`store.go`) | yes (`postgres.go` + `postgres_<concept>.go`) | not planned | — |
 | agent | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | ca | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | message | yes (`store.go`) | yes (`postgres.go`) | not planned | — |

@@ -85,18 +85,53 @@ gen:
 	$(BUF) generate
 	$(GOIMPORTS) -w proto/gen
 
-# check-gen fails when generated code is stale or uncommitted. It is scoped
-# to generated paths so unrelated working-tree edits do not fail it.
-GEN_PATHS := api/server.gen.go api/machine/server.gen.go internal/*/db proto/gen internal/*/mocks
+# check-gen fails when the committed generated output and what the
+# generators are configured to produce disagree, in either direction:
+# output a generator still owns is modified, uncommitted, or deleted;
+# or tracked output no generator owns is left behind. No generator
+# deletes output it stops producing, so a removed config entry leaves
+# its files committed, and a status check over the owned set says
+# nothing about them.
+#
+# GEN_PATHS is the owned set, and the generator configs are its only
+# source of truth — no generator answers "what do I own". Each states
+# it differently: oapi-codegen names `output:` files, sqlc and buf name
+# `out:` directories, and mockery owns a mocks/ directory beside each
+# package it lists (its dir template is {{.InterfaceDir}}/mocks). The
+# paths are literal, not globs: a glob expands against the working tree
+# when the recipe runs, so a deleted generated directory falls outside
+# it and a pending deletion reads as a clean tree. A parse that stops
+# matching a config shrinks the owned set, which the ownership check
+# below turns into a failure rather than a pass.
+GEN_PATHS := $(shell { sed -n 's/^output: //p' api/oapi-codegen.yaml api/machine-codegen.yaml; \
+	sed -n 's/^        out: //p' sqlc.yaml; \
+	sed -n 's/^    out: //p' buf.gen.yaml; \
+	sed -n 's|^  $(shell sed -n 's/^module //p' go.mod)/\(.*\):$$|\1/mocks|p' .mockery.yaml; } | sort -u)
 
 # git diff sees tracked paths only, so a generated file nobody added is
 # invisible to it. git status reports modified and untracked entries, skips
 # ignored ones, and exits 0 either way, so the gate checks for output.
 #
-# An unmatched pathspec is silent too, so a GEN_PATHS entry naming output
-# that has moved or gone would read as a clean tree. ls fails on it first,
-# and reports the count it did inspect.
-check-gen: gen
+# The checks against the owned set's shape run before gen, which would
+# otherwise heal them silently: a deleted owned path regenerates before
+# any status check could see it. The owned set cannot see output no
+# generator owns, but a generated file declares itself — every
+# generator here writes Go's "// Code generated ... DO NOT EDIT."
+# marker — so a tracked file carrying it that no owned path claims is
+# stale output. The scan reads the index, so output deleted in the
+# working tree but not yet staged is still seen and still fails.
+check-gen:
+	@test -n '$(GEN_PATHS)' || { echo "check-gen: generator configs yielded no output paths — the parse above is broken"; exit 1; }
+	@out="$$(git ls-files --deleted -- $(GEN_PATHS))"; \
+		test -z "$$out" || { echo "check-gen: generated output deleted in the working tree:"; echo "$$out"; exit 1; }
+	@generated="$$(git grep --cached -l -E '^// Code generated .* DO NOT EDIT' || true)"; \
+		test -n "$$generated" || { echo "check-gen: found no generated files — the marker scan is broken"; exit 1; }; \
+		orphans="$$(printf '%s\n' "$$generated" | sed 's|$$|/|' | grep -vF $$(printf '%s/\n' $(GEN_PATHS) | sed 's/^/-e /') || true)"; \
+		test -z "$$orphans" || { echo "check-gen: tracked generated output no generator is configured to produce — commit its removal or restore the config entry:"; printf '%s\n' "$$orphans" | sed 's|/$$||'; exit 1; }; \
+		echo "check-gen: $$(printf '%s\n' "$$generated" | wc -l) generated files, all owned by a generator config"
+	@$(MAKE) --no-print-directory gen
+	@# An owned path gen did not create means the parse and the configs
+	@# disagree; ls fails on it rather than reading it as a clean tree.
 	@paths="$$(ls -d $(GEN_PATHS))" && echo "check-gen: $$(echo "$$paths" | wc -l) generated paths inspected"
 	@out="$$(git status --porcelain -- $(GEN_PATHS))"; \
 		test -z "$$out" || { echo "check-gen: uncommitted generated output:"; echo "$$out"; exit 1; }

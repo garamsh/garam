@@ -172,10 +172,10 @@ Autonomous identity, provisioned outside garam (ADR-0012).
 | Type | Responsibility |
 |------|----------------|
 | `Agent` | actor owned by an org; carries the state the operator reports about its pod and the state it reports about itself, separately |
-| `Definition` | what an organization says an agent should be: which operator runs it and with what values (ADR-0026). Shares no field with `Agent`, so a reader cannot take one for the other, and writes no `agents` row |
+| `Definition` | what an organization says an agent should be: which operator runs it and with what values (ADR-0026). Shares no field with `Agent`, so a reader cannot take one for the other, and writes no `agents` row until the operator it names claims it (ADR-0033) |
 | `Assignment` | which operator runs an agent, and the epoch that binding holds |
 | `Certificate` | what an agent authenticates with, as this domain hands it back |
-| `Service` | creates an agent for the calling operator, and issues the certificate of one assigned to it |
+| `Service` | creates an agent for the calling operator, issues the certificate of one assigned to it, and answers an operator with the definitions naming it so it can claim one (ADR-0033) |
 | `Issuer` | signs a certificate for a subject GRN |
 
 garam mints an agent's GRN and never changes it, so which operator runs

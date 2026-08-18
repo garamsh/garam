@@ -45,9 +45,13 @@ collaborate on a shared plan.
   `/orgs/{org}/agent-definitions` — which operator is to run it, and
   with what values (ADR-0026). A definition is a record rather than a
   command: garam mints the agent's GRN, writes no `agents` row, and
-  knows nothing about whether an operator acted on it. It is immutable,
-  because nothing fences a stale copy until the read an operator makes
-  exists. Defining is granted by `agent:define`, named action by action
+  knows nothing about whether an operator acted on it. The operator the
+  definition names reads its definitions on the machine listener and
+  **claims** one: the claim binds the operator to the definition's
+  agent GRN — the assignment, at a bumped epoch — and admits it to that
+  agent's certificate route (ADR-0033). A definition is immutable and
+  claimed once — a change of intent is a new definition — and the
+  console path and `POST /agents` can never describe the same agent. Defining is granted by `agent:define`, named action by action
   because ADR-0012 puts provisioning outside garam and a wildcard would
   grant in advance what no endpoint may offer.
 - Messages addressed to an agent are held in a queue one reader at a

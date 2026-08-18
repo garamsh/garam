@@ -180,7 +180,6 @@ spec:
         # it as the same UID `serve machine` runs as, so what the
         # process opens is owned by it and readable by nobody else —
         # which the key-encryption key is checked for at startup and
-<<<<<<< HEAD
         # refused without.
         #
         # The runAsUser pins declare the UID both sides share; the

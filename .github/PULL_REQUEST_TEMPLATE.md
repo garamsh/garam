@@ -8,11 +8,11 @@
 
 ## Verification
 
-<!-- Commands run locally and their results. Example: `make ci` — pass. For a test written or changed, which tests were seen to fail with the behaviour removed. -->
+<!-- Commands run locally and their results. Example: `<check command>` — pass. For a test written or changed, which tests were seen to fail with the behaviour removed. -->
 
 ## Conventions consulted
 
-<!-- The docs/convention/ files you actually read and applied. Only list documents you read. -->
+<!-- The docs/convention/ files you actually read and applied. -->
 
 ## Defaults not taken
 

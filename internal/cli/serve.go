@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net"
 	"net/http"
@@ -41,7 +42,8 @@ func newServeAPICommand() *cobra.Command {
 }
 
 func serveAPI(cmd *cobra.Command) error {
-	ctx := cmd.Context()
+	ctx, stop := serveSignalContext(cmd.Context())
+	defer stop()
 
 	obs, err := newObservability(serviceAPI)
 	if err != nil {
@@ -109,7 +111,9 @@ func serveAPI(cmd *cobra.Command) error {
 		return err
 	}
 	go func() {
-		if err := watches.Receive(ctx); err != nil {
+		// A stopped relay is an error only when the stop was not asked
+		// for: shutdown cancels ctx.
+		if err := watches.Receive(ctx); err != nil && !errors.Is(err, context.Canceled) {
 			obs.logger.Error("turn event relay stopped", slog.String("error", err.Error()))
 		}
 	}()
@@ -144,8 +148,9 @@ func serveAPI(cmd *cobra.Command) error {
 	})
 
 	addr := envOr("GARAM_HTTP_ADDR", ":8080")
+	httpSrv := &http.Server{Addr: addr, Handler: otelhttp.NewHandler(handler, serviceAPI)}
 	obs.logger.Info("serving api", slog.String("addr", addr))
-	return http.ListenAndServe(addr, otelhttp.NewHandler(handler, serviceAPI))
+	return serveHTTP(ctx, httpSrv, httpSrv.ListenAndServe)
 }
 
 // defaultDevRedirectURL returns the dev login flow to the web origin's
@@ -232,7 +237,8 @@ func newServeAuthzCommand() *cobra.Command {
 }
 
 func serveAuthz(cmd *cobra.Command) error {
-	ctx := cmd.Context()
+	ctx, stop := serveSignalContext(cmd.Context())
+	defer stop()
 
 	obs, err := newObservability(serviceAuthz)
 	if err != nil {
@@ -254,7 +260,7 @@ func serveAuthz(cmd *cobra.Command) error {
 	// Writes made here invalidate the cache directly; the listener
 	// covers writes made by any other process.
 	go func() {
-		if err := authz.ListenPolicyChanges(ctx, pool, cache); err != nil {
+		if err := authz.ListenPolicyChanges(ctx, pool, cache); err != nil && !errors.Is(err, context.Canceled) {
 			obs.logger.Error("policy change listener stopped", slog.String("error", err.Error()))
 		}
 	}()
@@ -289,7 +295,7 @@ func serveAuthz(cmd *cobra.Command) error {
 	authzv1.RegisterAuthzServiceServer(srv, authz.NewGRPCServer(cache))
 	authzv1.RegisterPolicyServiceServer(srv, authz.NewPolicyGRPCServer(store, cache))
 	obs.logger.Info("serving authz", slog.String("addr", addr), slog.String("metrics_addr", metricsAddr))
-	if err := srv.Serve(lis); err != nil {
+	if err := serveGRPC(ctx, srv, func() error { return srv.Serve(lis) }); err != nil {
 		return errorx.Wrap(err, "authz serve", errorx.KindInternal)
 	}
 	return nil

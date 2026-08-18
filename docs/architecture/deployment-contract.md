@@ -256,12 +256,21 @@ serve Deployments start (`deploy/local/minikube/migrate-job.yaml`).
 
 ## Termination
 
-The source installs no signal handler and runs no graceful-shutdown
-path: `cmd/garam/main.go` executes the command tree directly, and each
-serve command blocks in its listener. Termination on SIGTERM is
-therefore the runtime's default. The exit code a SIGTERM produces is
-unsettled — observed once as an error, not reproduced, tracked as #338 —
-so nothing may claim a clean exit until that settles.
+Every serve command installs a SIGTERM and SIGINT handler
+(`internal/cli/shutdown.go`, wired into `internal/cli/serve.go` and
+`internal/cli/machine.go`). When it fires, the listener closes at once,
+in-flight requests and RPCs finish within a ten-second bound, and past
+it they are abandoned deliberately by the process rather than by the
+kubelet's SIGKILL. The process then exits 0: a requested shutdown is not
+an error, so a pod a rollout or a delete terminates records `Completed`,
+not `Error` (#338 settled this; the assertion is
+`tests/e2e/shutdown_test.go`, which SIGTERMs the built binary as each of
+the three serve processes and requires exit 0).
+
+The bound is the binary's, not the deployment's (`shutdownGrace` in
+`internal/cli/shutdown.go`): a `terminationGracePeriodSeconds` below ten
+seconds truncates in-flight work, and nothing the process does at
+shutdown outlasts it.
 
 ## Not established
 
@@ -280,8 +289,6 @@ Stated here so they are not guessed:
   established; nothing in the source bounds startup. A slow start
   reading as a failed deploy is a function of the deployment's probe
   configuration.
-- **`terminationGracePeriodSeconds` each process needs.** Not
-  established; it follows #338 settling.
 - **A resource floor.** No minimum below which a process fails is known.
 
 ## Decisions this rests on

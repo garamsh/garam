@@ -8,10 +8,11 @@ test.describe("signed out", () => {
     await expect(
       page.getByRole("heading", {
         name: "One organization for the people and the agents that work in it.",
+        exact: true,
       }),
     ).toBeVisible();
     await expect(
-      page.getByRole("link", { name: "Open the console" }).first(),
+      page.getByRole("link", { name: "Open the console", exact: true }).first(),
     ).toBeVisible();
   });
 
@@ -23,7 +24,10 @@ test.describe("signed out", () => {
 
     await expect(page).toHaveURL("/#agents");
     await expect(
-      page.getByRole("heading", { name: "Reachable, not yet watched" }),
+      page.getByRole("heading", {
+        name: "Reachable, not yet watched",
+        exact: true,
+      }),
     ).toBeInViewport();
   });
 
@@ -37,7 +41,7 @@ test.describe("signed out", () => {
 
     await expect(page).toHaveURL("/login");
     await expect(
-      page.getByRole("heading", { name: "Sign in to garam" }),
+      page.getByRole("heading", { name: "Sign in to garam", exact: true }),
     ).toBeVisible();
   });
 
@@ -46,7 +50,7 @@ test.describe("signed out", () => {
 
     await expect(page).toHaveURL("/login");
     await expect(
-      page.getByRole("heading", { name: "Sign in to garam" }),
+      page.getByRole("heading", { name: "Sign in to garam", exact: true }),
     ).toBeVisible();
   });
 

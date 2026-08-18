@@ -5,12 +5,17 @@ test.describe("signed in", () => {
     await page.goto("/console/orgs");
 
     await expect(
-      page.getByRole("heading", { name: "Organizations" }),
+      page.getByRole("heading", { name: "Organizations", exact: true }),
     ).toBeVisible();
+    // Substring on purpose: the card link's accessible name carries the
+    // org's slug beside its name, so the assertion asks only that the
+    // org appears in the list.
     await expect(
       page.getByRole("link", { name: signedIn.orgName }),
     ).toBeVisible();
-    await expect(page.getByText(signedIn.nickname)).toBeVisible();
+    await expect(
+      page.getByText(signedIn.nickname, { exact: true }),
+    ).toBeVisible();
   });
 
   test("opens an organization and counts what it holds", async ({
@@ -22,11 +27,16 @@ test.describe("signed in", () => {
 
     await expect(page).toHaveURL(`/console/orgs/${signedIn.orgSlug}`);
     await expect(
-      page.getByRole("heading", { name: signedIn.orgName }),
+      page.getByRole("heading", { name: signedIn.orgName, exact: true }),
     ).toBeVisible();
+    // Substring on purpose: the breadcrumb is a trail, and the org is
+    // one item in it.
     await expect(
       page.getByRole("navigation", { name: "breadcrumb" }),
     ).toContainText(signedIn.orgName);
+    // Substring on purpose: the card's accessible name is the label plus
+    // the count, and a trailing count must not break the navigation
+    // assertion — the count itself is what the assertion fixes.
     await expect(
       page.getByRole("main").getByRole("link", { name: "Groups" }),
     ).toContainText("1");
@@ -54,6 +64,8 @@ test.describe("signed in", () => {
 
     await nav.getByRole("link", { name: "Members" }).click();
     await expect(page).toHaveURL(`/console/orgs/${signedIn.orgSlug}/members`);
+    // Substring on purpose: a row's accessible name is all of its
+    // cells, and the assertion asks which role one of them shows.
     await expect(
       page.getByRole("row", { name: signedIn.userSlug }),
     ).toContainText("owner");
@@ -152,7 +164,7 @@ test.describe("signed in", () => {
 
     await expect(page).toHaveURL("/login");
     await expect(
-      page.getByRole("link", { name: "Sign in with Google" }),
+      page.getByRole("link", { name: "Sign in with Google", exact: true }),
     ).toBeVisible();
 
     // The session is revoked server-side, not merely dropped by the

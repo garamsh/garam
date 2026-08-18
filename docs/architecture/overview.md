@@ -203,6 +203,8 @@ collaborate on a shared plan.
   separate from the stack's own.
 - `internal/grn/` — identifier; shared primitive.
 - `internal/errorx/` — typed errors; shared primitive.
+- `internal/keyfile/` — the owner-only rule every key material file is
+  read under (ADR-0015); shared primitive.
 - `internal/cli/` — cobra commands + wiring (`serve api` | `serve authz`
   | `serve machine` | `migrate` | `probe` | `issue-certificate`).
 - `internal/health/` — what liveness and readiness mean, and the two
@@ -228,7 +230,10 @@ collaborate on a shared plan.
 - `internal/org/` — organizations, groups, projects, memberships, invitations.
 - `internal/user/` — human identities.
 
-`grn` and `errorx` are the only packages a domain shares; `health` is
+`grn` and `errorx` are the only packages domains share with each other;
+`keyfile` holds the one rule key material files are read under, reached
+by `ca` and by the `cli` wiring that reads the machine listener's own
+key; `health` is
 shared by the three serve commands and imported by no domain. Domains
 cooperate
 through `grn.GRN`, never through each other's concrete types — which is

@@ -169,7 +169,7 @@ configuration change applied rolls the pods.
 | `GARAM_MACHINE_ADDR` | machine | `:8443` | no |
 | `GARAM_MACHINE_HEALTH_ADDR` | machine | `:8444` | no |
 | `GARAM_MACHINE_TLS_CERT_FILE` | machine | none — required | no — it names a file holding a certificate, which is public |
-| `GARAM_MACHINE_TLS_KEY_FILE` | machine | none — required | **yes**, and it names a file: the key itself must never be an environment variable's value ([ADR-0015](./adr/0015-operator-identity.md)) |
+| `GARAM_MACHINE_TLS_KEY_FILE` | machine | none — required | **yes**, and it names a file: the key itself must never be an environment variable's value ([ADR-0015](./adr/0015-operator-identity.md)), and the file is subject to the arrival rule below |
 | `GARAM_CA_KEY_FILE` | machine, issue-certificate | none — required | **yes**, and it names a file, subject to the arrival rule below |
 | `GARAM_MIGRATIONS_DIR` | migrate | `migrations` (`/app/migrations` in the image) | no |
 | `GOOGLE_CLIENT_ID` | api | none | no |
@@ -197,12 +197,13 @@ The rule is [ADR-0015](./adr/0015-operator-identity.md)'s and is not a
 preference: key material reaches a process as a file readable only by
 its owner, with the reading process running as that owner.
 
-It is enforced, not requested. At startup `internal/ca/sealer.go`
-refuses the key-encryption key file when any group or other permission
-bit is set, and separately when its owner is not the process's own UID;
-`internal/cli/machine.go` refuses the start on either. Both halves
-matter for a deployment, because plain Kubernetes secret projection
-satisfies neither:
+It is enforced, not requested. `internal/keyfile` refuses a key file
+when any group or other permission bit is set, and separately when its
+owner is not the process's own UID, and every key file a process reads
+at startup goes through it: the key-encryption key and the machine
+listener's own TLS key alike, so either refusal stops the start. Both
+halves matter for a deployment, because plain Kubernetes secret
+projection satisfies neither:
 
 - A projected secret is owned by root, and `fsGroup` changes the group
   owner, not the user owner. `defaultMode: 0440` with `fsGroup` trips

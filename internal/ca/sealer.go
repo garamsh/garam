@@ -8,13 +8,10 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
-	"io"
-	"io/fs"
-	"os"
 	"strings"
-	"syscall"
 
 	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/internal/keyfile"
 )
 
 // Sealer seals key material so that what reaches storage is useless
@@ -74,39 +71,16 @@ func NewAESGCMSealer(key []byte) (Sealer, error) {
 
 // NewSealerFromKeyFile reads a hex-encoded key-encryption key from path
 // and constructs the default Sealer. Key material reaches a process as
-// a file readable only by its owner (ADR-0015), so a file any group or
-// other user can read is refused rather than used.
+// a file readable only by its owner (ADR-0015), so the read goes
+// through keyfile and a file any group or other user can reach is
+// refused rather than used.
 func NewSealerFromKeyFile(path string) (Sealer, error) {
 	if path == "" {
 		return nil, errorx.New(errorx.KindInvalidArgument, "ca: key-encryption key file is required")
 	}
-	f, err := os.Open(path)
+	raw, err := keyfile.Read(path)
 	if err != nil {
-		return nil, errorx.Wrap(err, "ca: key-encryption key file", errorx.KindInvalidArgument)
-	}
-	defer func() { _ = f.Close() }()
-	// Stat the open file rather than the path: the mode that matters is
-	// the one belonging to the bytes actually read.
-	info, err := f.Stat()
-	if err != nil {
-		return nil, errorx.Wrap(err, "ca: key-encryption key file", errorx.KindInvalidArgument)
-	}
-	if info.Mode().Perm()&fs.FileMode(0o077) != 0 {
-		return nil, errorx.New(errorx.KindInvalidArgument, "ca: key-encryption key file is readable beyond its owner")
-	}
-	// ADR-0015 has the reading process run as the file's owner, so the
-	// mode above is only half the rule: owner-only bits protect nothing
-	// from a process that is not the owner.
-	stat, ok := info.Sys().(*syscall.Stat_t)
-	if !ok {
-		return nil, errorx.New(errorx.KindInvalidArgument, "ca: key-encryption key file ownership is unreadable")
-	}
-	if uint64(stat.Uid) != uint64(os.Getuid()) {
-		return nil, errorx.New(errorx.KindInvalidArgument, "ca: key-encryption key file is owned by another user")
-	}
-	raw, err := io.ReadAll(f)
-	if err != nil {
-		return nil, errorx.Wrap(err, "ca: key-encryption key file", errorx.KindInvalidArgument)
+		return nil, errorx.Wrap(err, "ca: key-encryption key file")
 	}
 	key, err := hex.DecodeString(strings.TrimSpace(string(raw)))
 	if err != nil {

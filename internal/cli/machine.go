@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"log/slog"
 	"net/http"
+	"os"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spf13/cobra"
@@ -19,6 +20,7 @@ import (
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/health"
+	"github.com/garamsh/garam/internal/keyfile"
 	"github.com/garamsh/garam/internal/machine"
 	"github.com/garamsh/garam/internal/machineapi"
 	"github.com/garamsh/garam/internal/message"
@@ -160,6 +162,12 @@ func serveMachine(cmd *cobra.Command) error {
 // sealed under. Both are files, because key material never travels in
 // the environment (ADR-0015).
 //
+// The listener's own key is key material too, so it is read through
+// keyfile under the same owner-only rule as the key-encryption key; a
+// group-readable one refuses the start rather than terminating every
+// machine identity's connection with it. The certificate beside it is
+// public and is read plainly.
+//
 // This surface signs certificates, so the key it opens an authority
 // with is what the process runs on: a missing, group-readable,
 // malformed or wrong-length one refuses the start rather than the
@@ -173,7 +181,15 @@ func machineKeyMaterial(certFile, keyFile, caKeyFile string) (tls.Certificate, c
 	if err != nil {
 		return tls.Certificate{}, nil, errorx.Wrap(err, "GARAM_CA_KEY_FILE")
 	}
-	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	certPEM, err := os.ReadFile(certFile)
+	if err != nil {
+		return tls.Certificate{}, nil, errorx.Wrap(err, "machine listener certificate", errorx.KindInvalidArgument)
+	}
+	keyPEM, err := keyfile.Read(keyFile)
+	if err != nil {
+		return tls.Certificate{}, nil, errorx.Wrap(err, "GARAM_MACHINE_TLS_KEY_FILE")
+	}
+	cert, err := tls.X509KeyPair(certPEM, keyPEM)
 	if err != nil {
 		return tls.Certificate{}, nil, errorx.Wrap(err, "machine listener certificate", errorx.KindInvalidArgument)
 	}

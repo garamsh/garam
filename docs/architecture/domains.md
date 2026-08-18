@@ -6,6 +6,7 @@ Per-domain responsibilities and boundaries.
 - Common shape
 - `internal/grn`
 - `internal/errorx`
+- `internal/keyfile`
 - `internal/org`
 - `internal/authz`
 - `internal/authn`
@@ -59,6 +60,17 @@ Depends on `errorx` only.
 
 `Kind` enum aligned with gRPC status codes, `Error` interface,
 `New` / `Wrap` / `IsKind` / `KindOf`. No domain dependencies.
+
+## `internal/keyfile`
+
+The one rule key material is read under (ADR-0015): a file only the
+reading process's owner can reach — owner-only permission bits and an
+owner equal to the process's UID, both read from the open descriptor so
+no window sits between the check and the read. The rule is neither
+certificates nor listeners, so it lives here once for its two readers:
+`internal/ca` reads the key-encryption key through it, and the
+composition root reads the machine listener's own TLS key through it.
+Depends on `errorx` only.
 
 ## `internal/org`
 
@@ -242,8 +254,9 @@ A lifetime reaching past what the signing CA has left is refused rather
 than signed: such a certificate stops verifying the day the CA expires.
 
 The CA private key reaches Postgres only through `Sealer`, whose one
-implementation is AES-256-GCM under a key-encryption key read from an
-owner-readable file (ADR-0015); the sealed bytes name the key that opens
+implementation is AES-256-GCM under a key-encryption key read from a
+file through `internal/keyfile` (ADR-0015); the sealed bytes name the
+key that opens
 them, and open only in the organization's row they were written for, so
 write access to the database moves no trust root. A subject's own key is
 generated per certificate and returned once, never stored. `garam serve
@@ -297,7 +310,8 @@ authority's certificate and never its key.
 
 `garam serve machine` is where the listener runs — its own process and
 its own port (ADR-0017), terminating TLS itself with a certificate it
-reads from a file, because a forwarded client-certificate header is
+reads from a file, the private key under the owner-only rule
+`internal/keyfile` holds, because a forwarded client-certificate header is
 trustworthy only where every deployment strips it at the edge
 (ADR-0014). What it serves is `internal/machineapi`. It is not part of
 the local Docker stack: its key material is per host and the container

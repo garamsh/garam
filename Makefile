@@ -43,7 +43,7 @@ TEST_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)
 # and overridable on the same terms as the line above.
 WEB_E2E_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)/garam?sslmode=disable)
 
-.PHONY: lint format test build mock gen check-gen e2e db-up db-down backend-up ci
+.PHONY: lint format test build mock gen check-gen e2e db-up db-down backend-up ci template-diff
 .PHONY: web-install web-lint web-format web-test web-build web-gen web-check-gen web-e2e web-ci
 .PHONY: minikube-up minikube-down minikube-start minikube-images minikube-db
 .PHONY: minikube-secret minikube-migrate minikube-apps minikube-rebuild minikube-forward minikube-context
@@ -135,6 +135,12 @@ check-gen:
 	@paths="$$(ls -d $(GEN_PATHS))" && echo "check-gen: $$(echo "$$paths" | wc -l) generated paths inspected"
 	@out="$$(git status --porcelain -- $(GEN_PATHS))"; \
 		test -z "$$out" || { echo "check-gen: uncommitted generated output:"; echo "$$out"; exit 1; }
+
+# template-diff lists what the conventions template moved since the last
+# sync — the question #294 wants answered by a record, not a memory. The
+# record is docs/convention/template-sync, advanced by each sync PR.
+template-diff:
+	@git fetch template --quiet && git log --oneline $$(tail -1 docs/convention/template-sync)..template/main -- docs/convention/ AGENTS.md .github/
 
 # db-up starts the stack's postgres service alone and makes sure the e2e
 # database exists next to `garam`. Postgres has no CREATE DATABASE IF NOT

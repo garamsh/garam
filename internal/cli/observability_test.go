@@ -4,17 +4,21 @@
 package cli
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/tls"
 	"encoding/json"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -123,6 +127,65 @@ func TestLogRequests_OmitsAnUnknownPrincipal(t *testing.T) {
 	line := decodeLine(t, &out)
 	assert.Equal(t, float64(http.StatusOK), line["status"], "an unwritten status is 200")
 	assert.NotContains(t, line, "user_id")
+}
+
+// TestLogRequests_ServesAStreamThroughTheRecorder exercises the seam the
+// agent watch broke on (#380): a streaming handler behind the logging
+// middleware asserts http.Flusher exactly the way WatchAgent does, and
+// the statusRecorder the middleware writes through hid it. The request
+// runs through a real server rather than httptest.NewRecorder, because
+// the recorder is itself a Flusher — which is how the api suite, which
+// drives the handler directly, missed the wrapper swallowing the
+// capability.
+func TestLogRequests_ServesAStreamThroughTheRecorder(t *testing.T) {
+	var out lines
+	obs := recordingObservability(&out)
+
+	handler := obs.logRequests(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			http.Error(w, "response cannot stream", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		flusher.Flush()
+		// A frame the client reads while the stream stays open is what
+		// proves the flush reached the wire rather than a buffer.
+		_, _ = io.WriteString(w, ": keepalive\n\n")
+		flusher.Flush()
+	}))
+	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
+
+	resp, err := server.Client().Get(server.URL + "/orgs/acme/agents/bot-1/watch")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = resp.Body.Close() })
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	assert.Equal(t, "text/event-stream", resp.Header.Get("Content-Type"))
+
+	type read struct {
+		line string
+		err  error
+	}
+	frame := make(chan read, 1)
+	go func() {
+		line, err := bufio.NewReader(resp.Body).ReadString('\n')
+		frame <- read{line, err}
+	}()
+	select {
+	case got := <-frame:
+		require.NoError(t, got.err)
+		assert.Equal(t, ": keepalive\n", got.line)
+	case <-time.After(2 * time.Second):
+		t.Fatal("the stream delivered nothing through the middleware")
+	}
+
+	// Recording what the handler wrote is the middleware's own half of
+	// the seam, and it must survive streaming.
+	assert.Eventually(t, func() bool {
+		return strings.Contains(out.String(), `"status":200`)
+	}, time.Second, 10*time.Millisecond, "the streamed response was not recorded")
 }
 
 // machineListener starts the machine listener behind obs's middleware

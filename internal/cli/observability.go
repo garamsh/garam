@@ -216,3 +216,21 @@ func (s *statusRecorder) WriteHeader(code int) {
 	s.status = code
 	s.ResponseWriter.WriteHeader(code)
 }
+
+// Flush forwards a flush to the writer under the recorder when it can
+// stream: a handler behind this middleware — WatchAgent's SSE stream is
+// one — asserts http.Flusher, which the wrapper otherwise hides (#380).
+// Unwrap serves the same handlers written against
+// http.NewResponseController.
+func (s *statusRecorder) Flush() {
+	if flusher, ok := s.ResponseWriter.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
+// Unwrap exposes the writer under the recorder, so
+// http.NewResponseController and anything else that walks wrappers
+// reaches the capabilities the recorder does not name.
+func (s *statusRecorder) Unwrap() http.ResponseWriter {
+	return s.ResponseWriter
+}

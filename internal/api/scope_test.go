@@ -13,37 +13,75 @@ import (
 
 	apigen "github.com/garamsh/garam/api"
 	"github.com/garamsh/garam/internal/api"
-	"github.com/garamsh/garam/internal/authz"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/org"
 	"github.com/garamsh/garam/internal/user"
 )
 
-// grnObject adapts a GRN to authz.Object; the engine matches strings.
-type grnObject struct{ g grn.GRN }
-
-func (o grnObject) GRN() grn.GRN { return o.g }
-func (o grnObject) Type() string { return o.g.ServiceType }
-
-// enforce answers the Evaluator seam with the real policy engine over
-// the statements the server collected, so scope tests exercise
-// statement collection instead of a stubbed verdict.
+// enforce answers the Evaluator seam by evaluating the statements the
+// server collected with the engine's semantics (ADR-0002), so scope
+// tests exercise statement collection instead of a stubbed verdict. The
+// evaluation is reproduced here because the api package never imports
+// the engine (ADR-0003).
 func (f *fixture) enforce() {
 	f.evaluator.EXPECT().Evaluate(mock.Anything, mock.Anything).
-		RunAndReturn(func(ctx context.Context, in api.EvalInput) (bool, error) {
-			statements := make([]authz.Statement, 0, len(in.Statements))
+		RunAndReturn(func(_ context.Context, in api.EvalInput) (bool, error) {
+			allow := false
 			for _, s := range in.Statements {
-				statements = append(statements, authz.Statement{
-					Sid:      s.Sid,
-					Effect:   authz.Effect(s.Effect),
-					Action:   s.Action,
-					Resource: s.Resource,
-				})
+				if !matches(s, in.Action, in.Object.String()) {
+					continue
+				}
+				if s.Effect == api.EffectDeny {
+					return false, nil
+				}
+				allow = true
 			}
-			d := authz.NewStatementEvaluator(statements).
-				Evaluate(ctx, authz.Context{Object: grnObject{in.Object}, Action: in.Action})
-			return d == authz.DecisionAllow, nil
+			return allow, nil
 		})
+}
+
+// matches reports whether the statement applies to an action on a
+// resource: one action pattern and one resource pattern must match.
+func matches(s api.Statement, action, resource string) bool {
+	return matchAny(s.Action, action) && matchAny(s.Resource, resource)
+}
+
+func matchAny(patterns []string, value string) bool {
+	for _, p := range patterns {
+		if matchPattern(p, value) {
+			return true
+		}
+	}
+	return false
+}
+
+// matchPattern applies the pattern language ADR-0002 gives a
+// statement's actions and resources: '*' matches any run of
+// characters, '?' exactly one, anything else matches literally.
+func matchPattern(pattern, value string) bool {
+	px, vx := 0, 0
+	star, starV := -1, 0
+	for vx < len(value) {
+		switch {
+		case px < len(pattern) && (pattern[px] == '?' || pattern[px] == value[vx]):
+			px++
+			vx++
+		case px < len(pattern) && pattern[px] == '*':
+			star = px
+			starV = vx
+			px++
+		case star != -1:
+			px = star + 1
+			starV++
+			vx = starV
+		default:
+			return false
+		}
+	}
+	for px < len(pattern) && pattern[px] == '*' {
+		px++
+	}
+	return px == len(pattern)
 }
 
 func TestScopedPermissions_Matrix(t *testing.T) {

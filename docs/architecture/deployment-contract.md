@@ -78,6 +78,7 @@ Two images, because there are two runtimes ([ADR-0020](./adr/0020-published-arti
 | `serve machine` | HTTP, plaintext | `GARAM_MACHINE_HEALTH_ADDR` | `:8444` | `/healthz` and `/readyz` only — the mTLS listener admits no probe, so this process gets a port for them ([ADR-0021](./adr/0021-liveness-and-readiness.md)) |
 | web | HTTP | `PORT` | `3000` | the console, plus `/healthz` and `/readyz` |
 | `migrate` | none | — | — | a job: applies and exits |
+| `issue-certificate` | none | — | — | the one bootstrap [ADR-0015](./adr/0015-operator-identity.md) leaves out of band: mints an operator's own first certificate, for operator subjects only, and exits. No serve path reaches it, so no serving process can mint an identity |
 
 - **The probe paths are `/healthz` and `/readyz`, one spelling on all
   four runtimes** (`internal/health/health.go`; `web/src/app/healthz/route.ts`,
@@ -148,14 +149,15 @@ here.
 
 Configuration is entirely environment variables, read once at process
 start in the composition roots (`internal/cli/serve.go`,
-`internal/cli/machine.go`, `internal/cli/migrate.go`) and, for the web
+`internal/cli/machine.go`, `internal/cli/migrate.go`,
+`internal/cli/issue_certificate.go`) and, for the web
 app, validated at boot (`web/src/env.ts`). Nothing watches them, so a
 changed value takes effect on restart — a deployment that wants a
 configuration change applied rolls the pods.
 
 | Name | Read by | Default | Secret |
 |---|---|---|---|
-| `GARAM_DATABASE_URL` | api, authz, machine, migrate | none — required, startup refuses without it | **yes** — carries a password |
+| `GARAM_DATABASE_URL` | api, authz, machine, migrate, issue-certificate | none — required, startup refuses without it | **yes** — carries a password |
 | `GARAM_GRPC_ADDR` | authz | `:9090` | no |
 | `GARAM_METRICS_ADDR` | authz | `:9091` | no |
 | `GARAM_HTTP_ADDR` | api | `:8080` | no |
@@ -168,7 +170,7 @@ configuration change applied rolls the pods.
 | `GARAM_MACHINE_HEALTH_ADDR` | machine | `:8444` | no |
 | `GARAM_MACHINE_TLS_CERT_FILE` | machine | none — required | no — it names a file holding a certificate, which is public |
 | `GARAM_MACHINE_TLS_KEY_FILE` | machine | none — required | **yes**, and it names a file: the key itself must never be an environment variable's value ([ADR-0015](./adr/0015-operator-identity.md)) |
-| `GARAM_CA_KEY_FILE` | machine | none — required | **yes**, and it names a file, subject to the arrival rule below |
+| `GARAM_CA_KEY_FILE` | machine, issue-certificate | none — required | **yes**, and it names a file, subject to the arrival rule below |
 | `GARAM_MIGRATIONS_DIR` | migrate | `migrations` (`/app/migrations` in the image) | no |
 | `GOOGLE_CLIENT_ID` | api | none | no |
 | `GOOGLE_CLIENT_SECRET` | api | none | **yes** |

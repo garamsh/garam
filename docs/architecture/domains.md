@@ -243,7 +243,11 @@ generated per certificate and returned once, never stored. `garam serve
 machine` is the process that issues, and it reads the key-encryption
 key before it serves: the process that owns the authorities refuses to
 start without the key that opens them rather than failing at the first
-certificate it is asked for.
+certificate it is asked for. `garam issue-certificate` reads the same
+key the same way and mints an operator's own first certificate — the
+one bootstrap ADR-0015 leaves out of band. It refuses any subject that
+is not an operator, and no serve path reaches it, so no serving process
+can mint an identity.
 
 That key is as availability-critical as the database — losing it loses
 every organization's CA with no recovery short of new authorities and a

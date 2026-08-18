@@ -200,7 +200,7 @@ collaborate on a shared plan.
 - `internal/grn/` — identifier; shared primitive.
 - `internal/errorx/` — typed errors; shared primitive.
 - `internal/cli/` — cobra commands + wiring (`serve api` | `serve authz`
-  | `serve machine` | `migrate`).
+  | `serve machine` | `migrate` | `probe` | `issue-certificate`).
 - `internal/health/` — what liveness and readiness mean, and the two
   probes every serve command mounts (ADR-0021).
 - `internal/agent/` — agent identities and the operator each is

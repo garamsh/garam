@@ -1,7 +1,12 @@
 // Package cli owns the cobra command tree for the garam binary
 // (ADR-0003, ADR-0017): `serve api`, `serve authz`, `serve machine`,
-// `migrate`, and `probe`. Commands are constructed here; cmd/garam only
-// executes the root.
+// `migrate`, `probe`, and `issue-certificate`. Commands are constructed
+// here; cmd/garam only executes the root.
+//
+// `issue-certificate` is the one bootstrap ADR-0015 leaves out of
+// band: it mints an operator's own first certificate, for operator
+// subjects only, and no serve path reaches it, so no serving process
+// can mint an identity.
 //
 // Every serve command answers the two probes internal/health mounts —
 // liveness and readiness — on a listener that asks for no credential:
@@ -40,7 +45,8 @@
 //	                       (required for serve machine)
 //	GARAM_CA_KEY_FILE      hex-encoded key-encryption key the certificate
 //	                       authorities are sealed under, readable by its
-//	                       owner alone (required for serve machine)
+//	                       owner alone (required for serve machine and
+//	                       issue-certificate)
 package cli
 
 import (
@@ -55,7 +61,7 @@ func NewRootCommand() *cobra.Command {
 		Use:   "garam",
 		Short: "garam is the workflow management core: identity, orgs, authorization",
 	}
-	root.AddCommand(newServeCommand(), newMigrateCommand(), newProbeCommand())
+	root.AddCommand(newServeCommand(), newMigrateCommand(), newProbeCommand(), newIssueCertificateCommand())
 	return root
 }
 

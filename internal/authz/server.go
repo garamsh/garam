@@ -33,8 +33,11 @@ func NewGRPCServer(policies PolicySource) *GRPCServer {
 // Check evaluates the applicable statements and returns the final
 // decision: explicit Deny wins, otherwise any matching Allow permits.
 func (s *GRPCServer) Check(ctx context.Context, req *authzv1.CheckRequest) (*authzv1.CheckResponse, error) {
-	in, err := parseInput(req.GetSubjectGrn(), req.GetObjectGrn(), req.GetAction(), req.GetSubjectGroups(), req.GetStatements())
+	in, err := parseInput(req.GetSubjectGrn(), req.GetObjectGrn(), req.GetAction(), req.GetSubjectGroups(), req.GetSubjectOrg(), req.GetStatements())
 	if err != nil {
+		return nil, grpcError(err)
+	}
+	if err := in.checkScope(); err != nil {
 		return nil, grpcError(err)
 	}
 	statements, err := s.applicable(ctx, in)
@@ -51,8 +54,11 @@ func (s *GRPCServer) Check(ctx context.Context, req *authzv1.CheckRequest) (*aut
 // Explain evaluates the same input and reports every statement's
 // contribution, so a denied request is reproducible after the fact.
 func (s *GRPCServer) Explain(ctx context.Context, req *authzv1.ExplainRequest) (*authzv1.ExplainResponse, error) {
-	in, err := parseInput(req.GetSubjectGrn(), req.GetObjectGrn(), req.GetAction(), req.GetSubjectGroups(), req.GetStatements())
+	in, err := parseInput(req.GetSubjectGrn(), req.GetObjectGrn(), req.GetAction(), req.GetSubjectGroups(), req.GetSubjectOrg(), req.GetStatements())
 	if err != nil {
+		return nil, grpcError(err)
+	}
+	if err := in.checkScope(); err != nil {
 		return nil, grpcError(err)
 	}
 	statements, err := s.applicable(ctx, in)
@@ -111,17 +117,38 @@ func orgGRNOf(object grn.GRN) grn.GRN {
 
 // checkInput is a parsed Check/Explain request. subjects holds the
 // GRNs a policy attachment may name for this request: the subject
-// itself and the groups it belongs to.
+// itself and the groups it belongs to. subjectOrg is the GRN of the
+// organization the subject belongs to when the subject is an org
+// member (ADR-0038); the empty value carries the meaning "no
+// membership was established", which the scope check refuses.
 type checkInput struct {
 	object     grn.GRN
 	action     string
 	subjects   []grn.GRN
 	statements []Statement
+	subjectOrg grn.GRN
+}
+
+// checkScope enforces the engine's organization boundary (ADR-0038):
+// the subject's organization, when given, must match the object's.
+// An empty subjectOrg is a refusal rather than a default-deny: the
+// engine was not given the relationship it would need to establish
+// membership, and a cross-package fixture (#296) added the same
+// property as a caller obligation; the engine is where the obligation
+// now lives.
+func (in checkInput) checkScope() error {
+	if in.subjectOrg.Identifier == "" {
+		return errorx.New(errorx.KindPermissionDenied, "subject_org is required")
+	}
+	if in.subjectOrg != orgGRNOf(in.object) {
+		return errorx.New(errorx.KindPermissionDenied, "subject is not a member of the object's organization")
+	}
+	return nil
 }
 
 // parseInput validates the wire request once at the transport
 // boundary; downstream code trusts the parsed values.
-func parseInput(subjectGRN, objectGRN, action string, subjectGroups []string, stmts []*authzv1.Statement) (checkInput, error) {
+func parseInput(subjectGRN, objectGRN, action string, subjectGroups []string, subjectOrg string, stmts []*authzv1.Statement) (checkInput, error) {
 	subject, err := grn.Parse(subjectGRN)
 	if err != nil {
 		return checkInput{}, errorx.Wrap(err, "subject_grn")
@@ -138,6 +165,13 @@ func parseInput(subjectGRN, objectGRN, action string, subjectGroups []string, st
 	object, err := grn.Parse(objectGRN)
 	if err != nil {
 		return checkInput{}, errorx.Wrap(err, "object_grn")
+	}
+	var org grn.GRN
+	if subjectOrg != "" {
+		org, err = grn.Parse(subjectOrg)
+		if err != nil {
+			return checkInput{}, errorx.Wrap(err, "subject_org")
+		}
 	}
 	if action == "" {
 		return checkInput{}, errorx.New(errorx.KindInvalidArgument, "action is required")
@@ -158,7 +192,7 @@ func parseInput(subjectGRN, objectGRN, action string, subjectGroups []string, st
 			Resource: p.GetResource(),
 		})
 	}
-	return checkInput{object: object, action: action, subjects: subjects, statements: statements}, nil
+	return checkInput{object: object, action: action, subjects: subjects, statements: statements, subjectOrg: org}, nil
 }
 
 // effectToProto renders a stored Effect for an Explain trace. It

@@ -1591,6 +1591,9 @@ func TestPolicyAttachment_DenyOverridesAcrossSources(t *testing.T) {
 			Action:   []string{"project:*"},
 			Resource: []string{"grn:acme:*"},
 		}},
+		// ada is a member of acme: the api server populates subject_org
+		// the same way the engine now requires (ADR-0038).
+		SubjectOrg: grnOf("org", "acme").String(),
 	}
 	engine := authz.NewGRPCServer(cache)
 	resp, err := engine.Check(ctx, req)
@@ -1642,105 +1645,6 @@ func TestPolicyAttachment_ADenyDoesNotWidenOnDetach(t *testing.T) {
 	require.Len(t, statements, 1, "the refused detach leaves the Deny deciding for its subject")
 }
 
-// TestOrgIsolation_OnlyAttachmentKeepsGrantsInsideAnOrg asserts what
-// separates two orgs' grants. The attached policies here match every
-// org, so what holds each off the other org's subjects is its
-// attachment, and what holds a role statement off is the org in its
-// resource pattern. The engine scopes its lookup by the object's org
-// and never by the subject's, so an unattached policy reaches whatever
-// subject it is handed — the boundary ADR-0025 leaves to the caller,
-// recorded here as the behaviour the engine has.
-func TestOrgIsolation_OnlyAttachmentKeepsGrantsInsideAnOrg(t *testing.T) {
-	ctx := context.Background()
-	p := pool(t)
-	store := authz.NewPostgresStore(p)
-	cache := authz.NewPolicyCache(store)
-	policies := authz.NewPolicyGRPCServer(store, cache)
-	engine := authz.NewGRPCServer(cache)
-
-	orgs := org.NewPostgresStore(p)
-	acme, globex := orgRootGRN("acme"), orgRootGRN("globex")
-	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(acme, "acme")))
-	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(globex, "globex")))
-
-	adaA, webA := scopedGRN("acme", "user", "ada"), scopedGRN("acme", "project", "web")
-	adaB, engB := scopedGRN("globex", "user", "ada"), scopedGRN("globex", "group", "eng")
-	webB, openB := scopedGRN("globex", "project", "web"), scopedGRN("globex", "project", "open")
-
-	allowA := activePolicy(t, policies, acme, "allow-read", statementDoc("allow-read", wire.EffectAllow, "project:read", "grn:*:*"))
-	attachPolicy(t, policies, allowA, adaA)
-	denyB := activePolicy(t, policies, globex, "deny-read", statementDoc("deny-read", wire.EffectDeny, "project:read", "grn:*:*"))
-	attachPolicy(t, policies, denyB, engB)
-
-	// Unattached, so no subject set stands between this allow and a
-	// subject of another org. It names one project, leaving webB an
-	// object only an attachment reaches.
-	activePolicy(t, policies, globex, "open-door", statementDoc("open-door", wire.EffectAllow, "project:read", openB.String()))
-
-	t.Run("persisted policies stay in their org", func(t *testing.T) {
-		active, err := store.ActivePolicies(ctx, acme)
-		require.NoError(t, err)
-		assert.ElementsMatch(t, []string{"allow-read"}, sidsOf(active))
-
-		active, err = store.ActivePolicies(ctx, globex)
-		require.NoError(t, err)
-		assert.ElementsMatch(t, []string{"deny-read", "open-door"}, sidsOf(active))
-
-		// The lookup is scoped by the org it is asked about and not by
-		// the subject: org A's subject collects org B's unattached
-		// statement, and none of org A's own.
-		statements, err := cache.Statements(ctx, globex, []grn.GRN{adaA})
-		require.NoError(t, err)
-		require.Len(t, statements, 1)
-		assert.Equal(t, "open-door", statements[0].Sid)
-	})
-
-	t.Run("a subject attachment decides nothing across the boundary", func(t *testing.T) {
-		assert.True(t, checkRead(t, engine, adaA, webA, nil), "org A's attached allow reaches org A's resource")
-		assert.False(t, checkRead(t, engine, adaA, webB, nil), "org A's attached allow does not reach org B's resource")
-	})
-
-	t.Run("an unattached policy reaches a subject of another org", func(t *testing.T) {
-		assert.True(t, checkRead(t, engine, adaA, openB, nil),
-			"org B's unattached allow reaches org A's subject; the caller holds this boundary (ADR-0025)")
-		assert.False(t, checkRead(t, engine, adaA, webB, nil),
-			"that same subject reaches nothing org B's unattached allow does not name")
-	})
-
-	t.Run("a group attachment decides nothing across the boundary", func(t *testing.T) {
-		assert.False(t, checkRead(t, engine, adaB, webB, []grn.GRN{engB}, roleAllow("globex")),
-			"org B's group-attached deny overrides a role allow inside org B")
-		assert.True(t, checkRead(t, engine, adaB, webA, []grn.GRN{engB}, roleAllow("acme")),
-			"org B's group-attached deny does not reach org A's resource")
-	})
-
-	t.Run("role statements stay inside the org that granted them", func(t *testing.T) {
-		assert.False(t, checkRead(t, engine, adaB, webB, nil, roleAllow("acme")),
-			"a role allow scoped to org A grants nothing on org B's resource")
-	})
-
-	t.Run("a write in one org leaves the other org's cache intact", func(t *testing.T) {
-		// Both orgs are cached by now: the checks above filled them.
-		require.True(t, checkRead(t, engine, adaA, webB, nil, roleAllow("globex")))
-
-		// Unattached, this policy denies every subject of org A.
-		activePolicy(t, policies, acme, "deny-all", statementDoc("deny-all", wire.EffectDeny, "project:read", "grn:*:*"))
-
-		assert.False(t, checkRead(t, engine, adaA, webA, nil), "org A's new deny drops org A's cached allow")
-		assert.True(t, checkRead(t, engine, adaA, webB, nil, roleAllow("globex")),
-			"org A's new deny changes no decision about org B's resource")
-	})
-
-	t.Run("a cross-org attachment is rejected", func(t *testing.T) {
-		_, err := policies.AttachPolicy(ctx, &authzv1.AttachPolicyRequest{PolicyGrn: allowA, SubjectGrn: engB.String()})
-		assert.Equal(t, codes.FailedPrecondition, status.Code(err))
-
-		attachments, err := policies.ListPolicyAttachments(ctx, &authzv1.ListPolicyAttachmentsRequest{PolicyGrn: allowA})
-		require.NoError(t, err)
-		assert.Len(t, attachments.GetAttachments(), 1, "the rejected attachment was not stored")
-	})
-}
-
 // orgRootGRN returns the root-owned GRN of the named organization.
 func orgRootGRN(name string) grn.GRN {
 	return grn.New(grn.RootOwner, grn.DefaultProject, "org", name)
@@ -1784,18 +1688,6 @@ func attachPolicy(t *testing.T, srv *authz.PolicyGRPCServer, policyGRN string, s
 	require.NoError(t, err)
 }
 
-// sidsOf names the policies an org lookup returned, by the Sid of each
-// one's single statement. ActivePolicies orders by policy GRN, which
-// the fixture does not choose, so an org's policies are compared as a
-// set.
-func sidsOf(policies []authz.ActivePolicy) []string {
-	sids := make([]string, 0, len(policies))
-	for _, p := range policies {
-		sids = append(sids, p.Document.Statement[0].Sid)
-	}
-	return sids
-}
-
 // roleAllow is the role-derived allow the api server passes for a
 // caller, scoped to the org whose roles granted it (ADR-0007).
 func roleAllow(orgName string) *authzv1.Statement {
@@ -1805,26 +1697,6 @@ func roleAllow(orgName string) *authzv1.Statement {
 		Action:   []string{"project:*"},
 		Resource: []string{"grn:" + orgName + ":*"},
 	}
-}
-
-// checkRead asks the engine whether subject may read object, carrying
-// the groups the caller belongs to and its role-derived statements.
-// Every isolation case turns on the org segments, so the action is
-// fixed to project:read.
-func checkRead(t *testing.T, engine *authz.GRPCServer, subject, object grn.GRN, groups []grn.GRN, roles ...*authzv1.Statement) bool {
-	t.Helper()
-	req := &authzv1.CheckRequest{
-		SubjectGrn: subject.String(),
-		ObjectGrn:  object.String(),
-		Action:     "project:read",
-		Statements: roles,
-	}
-	for _, g := range groups {
-		req.SubjectGroups = append(req.SubjectGroups, g.String())
-	}
-	resp, err := engine.Check(context.Background(), req)
-	require.NoError(t, err)
-	return resp.GetAllowed()
 }
 
 // TestCertificateAuthority_RoundTrip issues against real Postgres: an
@@ -3345,23 +3217,26 @@ func TestMachineSurface_AGroupAttachedPolicyDecidesWhatItsMembersSend(t *testing
 // resolves the policies of the organization owning the object, and an
 // active policy with no attachment applies to every subject of that
 // check — so one unattached Allow in the recipient's organization
-// grants every sender anywhere, whatever the sender's own statements
-// say.
+// would grant every sender anywhere, whatever the sender's own
+// statements say. ADR-0038 closed that: the engine refuses the
+// cross-org call before any policy is read, regardless of what beta
+// has written, and the listener's consent check (ADR-0035) keeps the
+// surface refusing the post anyway.
 //
 // The policy here is `Action: ["*"]` rather than `message:send`,
 // because that is the case that needs no new document: an organization
-// holding a wildcard policy written before this action existed is
-// exposed the day it ships.
+// holding a wildcard policy written before this action existed would
+// be exposed the day the engine's scope check is removed.
 //
-// The engine is asked the same question directly, twice: it denies the
-// foreign sender before the policy exists and allows it after. That
-// pair is what makes this a test of the precondition rather than of a
-// policy that reached nothing, and an engine stuck open fails the first
-// half rather than passing both. The engine says yes and the surface
-// still does not store the message to the recipient: with ADR-0035 the
-// boundary is the consent relation's, not a policy's, and where it
-// does not stand the post returns to the sender as an ordinary inbound
-// message (ADR-0013).
+// The engine is asked the same question directly, twice: it refuses
+// the foreign sender before the policy exists and refuses it after.
+// That pair is what makes this a test of the engine's boundary rather
+// than of a policy that reached nothing, and an engine stuck open
+// fails the first half rather than passing both. The engine refuses
+// and the surface still does not store the message to the recipient:
+// with ADR-0035 the boundary is the consent relation's, not a
+// policy's, and where it does not stand the post returns to the sender
+// as an ordinary inbound message (ADR-0013).
 func TestMachineSurface_ARecipientsOwnPolicyAdmitsNoForeignSender(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
@@ -3400,14 +3275,17 @@ func TestMachineSurface_ARecipientsOwnPolicyAdmitsNoForeignSender(t *testing.T) 
 	status, body = machineSend(t, neighbour, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-2"))
 	require.Equal(t, http.StatusCreated, status, string(body))
 
-	// The engine denies the foreign subject before the policy exists.
-	// It is asked again below and has to answer differently, which is
-	// what makes the pair evidence: an engine stuck open answers the
-	// same both times and fails here.
+	// The engine refuses the foreign subject before the policy exists:
+	// the scope check (ADR-0038) refuses on subject_org alone, without
+	// reading any policy. The pair below asks again after beta has
+	// written an unattached wildcard Allow, and the answer is the
+	// same: the engine holds the boundary here, not the policy. An
+	// engine stuck open answers allow the second time and fails the
+	// pair.
 	crossing := machineapi.EvalInput{Subject: foreignGRN, Object: recipientGRN, Action: message.ActionSend}
 	allowed, err := evaluator.Evaluate(ctx, crossing)
-	require.NoError(t, err)
-	require.False(t, allowed, "the engine allowed a subject no policy had granted")
+	require.Error(t, err, "the engine allowed a foreign subject no policy had granted")
+	require.False(t, allowed)
 
 	// The recipient's organization activates one wildcard policy and
 	// attaches it to nobody, which is what an administrator does by
@@ -3415,11 +3293,13 @@ func TestMachineSurface_ARecipientsOwnPolicyAdmitsNoForeignSender(t *testing.T) 
 	openDoor := activePolicy(t, policies, orgRootGRN("beta"), "everything",
 		statementDoc("everything", wire.EffectAllow, "*", "grn:beta:*"))
 
-	// That policy does reach the foreign subject: the same question,
-	// answered the other way now that beta has written one document.
+	// That policy does not reach the foreign subject: the same
+	// question, refused the same way now that beta has written one
+	// document, because the scope check fires before the policy is
+	// read.
 	allowed, err = evaluator.Evaluate(ctx, crossing)
-	require.NoError(t, err)
-	require.True(t, allowed, "the unattached wildcard policy did not reach the foreign subject")
+	require.Error(t, err, "the unattached wildcard policy reached a foreign subject")
+	require.False(t, allowed)
 
 	// The surface does not store it anyway, which is the whole of the
 	// fix. What comes back names the missing consent rather than a

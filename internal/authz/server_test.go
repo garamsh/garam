@@ -68,6 +68,9 @@ func checkRequest(statements ...*authzv1.Statement) *authzv1.CheckRequest {
 		ObjectGrn:  "grn:root:default:org:acme",
 		Action:     "org:update",
 		Statements: statements,
+		// alice is the request fixture's member of acme; without this
+		// the scope check refuses the call before any statement runs.
+		SubjectOrg: "grn:root:default:org:acme",
 	}
 }
 
@@ -149,6 +152,7 @@ func TestGRPCServer_Explain(t *testing.T) {
 			allowStatement("wrong-action", []string{"org:read"}, []string{"grn:root:default:org:*"}),
 			{Sid: "deny-delete", Effect: authzv1.Effect_EFFECT_DENY, Action: []string{"org:delete"}, Resource: []string{"grn:root:default:org:acme"}},
 		},
+		SubjectOrg: "grn:root:default:org:acme",
 	})
 	require.NoError(t, err)
 	assert.False(t, resp.GetAllowed(), "explicit deny wins")
@@ -294,10 +298,81 @@ func TestGRPCServer_ExplainTracesPersistedStatements(t *testing.T) {
 		ObjectGrn:  "grn:root:default:org:acme",
 		Action:     "org:update",
 		Statements: []*authzv1.Statement{allowStatement("org-role-owner", []string{"org:*"}, []string{"grn:root:default:org:acme"})},
+		SubjectOrg: "grn:root:default:org:acme",
 	})
 	require.NoError(t, err)
 	assert.False(t, resp.GetAllowed())
 	require.Len(t, resp.GetTraces(), 2)
 	assert.Equal(t, "persisted-deny", resp.GetTraces()[0].GetSid())
 	assert.True(t, resp.GetTraces()[0].GetMatched())
+}
+
+// TestGRPCServer_RefusesForeignSubjectWhenSubjectOrgUnset pins the
+// boundary ADR-0025 deferred and ADR-0038 closed: an unattached Allow
+// in another organization must not admit a subject whose membership
+// is not established, and the engine is where the refusal lives. The
+// cross-package fixture (#296) named the same property from the api
+// side; the engine now holds it directly, so the engine suite asserts
+// it.
+//
+// Three cases together bound the property: an unset subject_org
+// refuses the call, a foreign subject_org refuses the call, and a
+// matching subject_org is evaluated normally — so an engine stuck open
+// fails the first two rather than passing all three. The unattached
+// Allow in globex is the case that needed no new document: an
+// organization holding a wildcard policy written before the engine's
+// scope check moved into it is exposed the day the check is removed,
+// not the day a Deny is written.
+func TestGRPCServer_RefusesForeignSubjectWhenSubjectOrgUnset(t *testing.T) {
+	acme := orgGRN("acme")
+	globex := orgGRN("globex")
+	// An unattached Allow in globex, scoped to a globex resource. No
+	// attachment stands between this statement and a subject of any
+	// org, which is the precondition for #265.
+	openDoor := authz.Statement{
+		Sid:      "open-door",
+		Effect:   wire.EffectAllow,
+		Action:   []string{"*"},
+		Resource: []string{"grn:globex:default:project:web"},
+	}
+	client := newAuthzClient(t, staticPolicies{globex: {openDoor}})
+
+	subject := "grn:root:default:user:alice"
+	object := "grn:globex:default:project:web"
+
+	t.Run("subject_org unset refuses before any statement runs", func(t *testing.T) {
+		_, err := client.Check(context.Background(), &authzv1.CheckRequest{
+			SubjectGrn: subject,
+			ObjectGrn:  object,
+			Action:     "project:read",
+		})
+		require.Error(t, err)
+		assert.Equal(t, codes.PermissionDenied, status.Code(err))
+		assert.Contains(t, err.Error(), "subject_org is required")
+	})
+
+	t.Run("subject_org set to a foreign org refuses", func(t *testing.T) {
+		_, err := client.Check(context.Background(), &authzv1.CheckRequest{
+			SubjectGrn: subject,
+			ObjectGrn:  object,
+			Action:     "project:read",
+			// The subject was established as belonging to acme, not
+			// globex: the engine still refuses the cross-org call.
+			SubjectOrg: acme.String(),
+		})
+		require.Error(t, err)
+		assert.Equal(t, codes.PermissionDenied, status.Code(err))
+		assert.Contains(t, err.Error(), "subject is not a member")
+	})
+
+	t.Run("subject_org matching the object's org is evaluated normally", func(t *testing.T) {
+		resp, err := client.Check(context.Background(), &authzv1.CheckRequest{
+			SubjectGrn: "grn:root:default:user:globex-admin",
+			ObjectGrn:  object,
+			Action:     "project:read",
+			SubjectOrg: globex.String(),
+		})
+		require.NoError(t, err)
+		assert.True(t, resp.GetAllowed(), "the unattached Allow in globex reaches a globex subject")
+	})
 }

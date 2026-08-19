@@ -235,6 +235,7 @@ func (s *Server) authorizeOn(r *http.Request, orgGRN, target grn.GRN, u *user.Us
 		Action:        action,
 		SubjectGroups: groups,
 		Statements:    statements,
+		SubjectOrg:    orgGRN,
 	})
 	if err != nil {
 		return err

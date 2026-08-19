@@ -139,6 +139,7 @@ func (s *Server) authorizeSend(ctx context.Context, sender, recipient grn.GRN) (
 		Action:        message.ActionSend,
 		SubjectGroups: groups,
 		Statements:    sendingStatements(sender),
+		SubjectOrg:    subjectOrg(sender),
 	})
 	if err != nil {
 		return false, err
@@ -168,6 +169,17 @@ func sendingStatements(sender grn.GRN) []Statement {
 		Action:   []string{message.ActionSend},
 		Resource: []string{"grn:" + sender.Organization + ":*"},
 	}}
+}
+
+// subjectOrg is the GRN of the organization the sender belongs to, the
+// engine's half of the membership the api server reads for human
+// callers (ADR-0038). A machine identity is not an org member, so the
+// boundary this listener holds is the consent relation's, not a
+// membership lookup's; what the engine sees is the org the sender's
+// GRN already names, asserted in the wire format the api server fills
+// for org members.
+func subjectOrg(sender grn.GRN) grn.GRN {
+	return grn.New(grn.RootOwner, grn.DefaultProject, serviceTypeOrg, sender.Organization)
 }
 
 // ClaimMessage hands the caller the next message addressed to the agent

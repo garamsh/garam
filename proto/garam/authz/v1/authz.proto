@@ -46,6 +46,12 @@ message CheckRequest {
   // (ADR-0008). Group membership is org data the caller resolves; the
   // engine uses it only to find the policies attached to the subject.
   repeated string subject_groups = 5;
+  // subject_org is the GRN of the organization the subject belongs to
+  // when the subject is an org member (ADR-0038). The engine refuses
+  // the call when it is unset and the object's organization is not the
+  // subject's: the boundary ADR-0025 leaves to the caller, enforced
+  // where the obligation lives.
+  string subject_org = 6;
 }
 
 message CheckResponse {
@@ -61,6 +67,7 @@ message ExplainRequest {
   string action = 3;
   repeated Statement statements = 4;
   repeated string subject_groups = 5;
+  string subject_org = 6;
 }
 
 message ExplainResponse {

@@ -12,6 +12,7 @@ import (
 
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/listfilter"
 	"github.com/garamsh/garam/internal/user/db"
 )
 
@@ -52,7 +53,7 @@ func (s *PostgresStore) Get(ctx context.Context, g grn.GRN) (*User, error) {
 }
 
 // List returns Users ordered by GRN.
-func (s *PostgresStore) List(ctx context.Context, f ListFilter) ([]*User, error) {
+func (s *PostgresStore) List(ctx context.Context, f listfilter.Filter) ([]*User, error) {
 	rows, err := s.q.ListUsers(ctx, db.ListUsersParams{
 		RowOffset: int32(f.Offset),
 		RowLimit:  limit(f.Limit),
@@ -177,7 +178,7 @@ func text(s *string) pgtype.Text {
 	return pgtype.Text{String: *s, Valid: true}
 }
 
-// limit converts a ListFilter limit: 0 means "no limit" (SQL NULL).
+// limit converts a list filter's limit: 0 means "no limit" (SQL NULL).
 func limit(n int) pgtype.Int4 {
 	if n <= 0 {
 		return pgtype.Int4{}

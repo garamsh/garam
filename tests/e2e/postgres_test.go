@@ -154,10 +154,10 @@ func TestUserStore_RoundTrip(t *testing.T) {
 	assert.True(t, errorx.IsKind(err, errorx.KindNotFound))
 
 	require.NoError(t, s.Create(ctx, user.New(grnOf("user", "bob"), "bob")))
-	list, err := s.List(ctx, user.ListFilter{})
+	list, err := s.List(ctx, listfilter.Filter{})
 	require.NoError(t, err)
 	assert.Len(t, list, 2)
-	list, err = s.List(ctx, user.ListFilter{Limit: 1, Offset: 1})
+	list, err = s.List(ctx, listfilter.Filter{Limit: 1, Offset: 1})
 	require.NoError(t, err)
 	assert.Len(t, list, 1)
 

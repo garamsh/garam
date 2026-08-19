@@ -1,6 +1,7 @@
 package message_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -39,6 +40,21 @@ func TestNew_CarriesAnEmptyBody(t *testing.T) {
 	m, err := message.New(recipientGRN(), senderGRN(), "key-1", "")
 	require.NoError(t, err)
 	assert.Empty(t, m.Body())
+}
+
+// TestNew_BoundsTheBodyAtTheSubmissionLimit pins the boundary exactly:
+// a body at the bound is carried whole, and one a character past it is
+// refused. The accepted half is the control — it stops being accepted
+// only if what refuses the other half is the bound.
+func TestNew_BoundsTheBodyAtTheSubmissionLimit(t *testing.T) {
+	at := strings.Repeat("b", message.MaxBodyLength)
+	m, err := message.New(recipientGRN(), senderGRN(), "key-1", at)
+	require.NoError(t, err)
+	assert.Equal(t, at, m.Body(), "a body at the bound is carried whole")
+
+	m, err = message.New(recipientGRN(), senderGRN(), "key-1", at+"b")
+	assert.Nil(t, m)
+	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), "a body past the bound is refused")
 }
 
 func TestNew_RejectsAMessageNothingCouldBeDoneWith(t *testing.T) {

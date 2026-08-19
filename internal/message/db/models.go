@@ -13,7 +13,7 @@ type Message struct {
 	RecipientGrn   string
 	SenderGrn      string
 	IdempotencyKey string
-	Body           string
+	Body           pgtype.Text
 	CreatedAt      pgtype.Timestamptz
 	ClaimID        pgtype.Text
 	ClaimExpiresAt pgtype.Timestamptz

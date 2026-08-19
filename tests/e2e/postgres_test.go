@@ -2274,6 +2274,144 @@ func TestMessageService_ClaimWaitsForTheMessageThatArrives(t *testing.T) {
 	}
 }
 
+// TestMessageStore_CompletionDropsTheBodyAndKeepsTheKey is ADR-0034's
+// first half in one round trip: completing a message drops its body and
+// nothing else, so the row that stays still suppresses the sender's
+// retry. The body is read from the table rather than through the store,
+// because nothing reads a completed message back — a getter that
+// rendered a dropped body as empty would answer the same for a body
+// dropped and a body never read.
+func TestMessageStore_CompletionDropsTheBodyAndKeepsTheKey(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := message.NewPostgresStore(p)
+	bot, ada := grnOf("agent", "bot"), grnOf("user", "ada")
+
+	m, err := message.New(bot, ada, "key-1", "hello")
+	require.NoError(t, err)
+	_, err = s.Enqueue(ctx, m)
+	require.NoError(t, err)
+
+	claim, err := s.Claim(ctx, bot, time.Minute, 4)
+	require.NoError(t, err)
+	assert.Equal(t, "hello", claim.Message().Body(), "the body is there to be dropped")
+	require.NoError(t, s.Complete(ctx, bot, claim.ID()))
+
+	assert.Equal(t, 1, countRows(t, p,
+		"SELECT count(*) FROM messages WHERE id = $1 AND body IS NULL", string(m.ID())),
+		"the row stays and its body is gone")
+
+	// The key outlives the body, so a retry after delivery neither
+	// stores a message nor requeues the delivered one.
+	late, err := message.New(bot, ada, "key-1", "hello again")
+	require.NoError(t, err)
+	afterDelivery, err := s.Enqueue(ctx, late)
+	require.NoError(t, err)
+	assert.Equal(t, m.ID(), afterDelivery.ID(), "a retry after completion is still suppressed")
+	_, err = s.Claim(ctx, bot, time.Minute, 4)
+	assert.ErrorIs(t, err, message.ErrNoMessageReady)
+}
+
+// TestMessageStore_EnqueueSweepsWhatOutlivedTheWindow is ADR-0034's
+// second half: storing a message is the queue's one write, so the sweep
+// rides it and deletes an undelivered message older than the retention
+// window whole. Two controls stand beside the expired one, written and
+// aged before the sweeping call: a message still inside the window,
+// which a sweep reading age alone would take, and a completed one
+// equally old, which a sweep reading delivery alone would take.
+func TestMessageStore_EnqueueSweepsWhatOutlivedTheWindow(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := message.NewPostgresStore(p)
+	bot, ada := grnOf("agent", "bot"), grnOf("user", "ada")
+
+	post := func(key string) message.ID {
+		m, err := message.New(bot, ada, key, "hello")
+		require.NoError(t, err)
+		stored, err := s.Enqueue(ctx, m)
+		require.NoError(t, err)
+		return stored.ID()
+	}
+	// age backdates the row, because the window is thirty days and the
+	// test is not.
+	age := func(id message.ID, by time.Duration) {
+		_, err := p.Exec(ctx,
+			"UPDATE messages SET created_at = now() - make_interval(secs => $1) WHERE id = $2",
+			by.Seconds(), string(id))
+		require.NoError(t, err)
+	}
+	present := func(id message.ID) int {
+		return countRows(t, p, "SELECT count(*) FROM messages WHERE id = $1", string(id))
+	}
+
+	// The delivered one is posted first so the claim below takes it: a
+	// claim hands out the oldest message on the queue.
+	delivered := post("key-delivered")
+	claim, err := s.Claim(ctx, bot, time.Minute, 4)
+	require.NoError(t, err)
+	require.Equal(t, delivered, claim.Message().ID(), "the oldest message is the one claimed")
+	require.NoError(t, s.Complete(ctx, bot, claim.ID()))
+
+	expired := post("key-expired")
+	standing := post("key-standing")
+
+	age(expired, message.RetentionWindow+time.Hour)
+	age(delivered, message.RetentionWindow+time.Hour)
+	age(standing, message.RetentionWindow-time.Hour)
+	// The aged row survives its own age: nothing has swept since it
+	// crossed the window, so what removes it below is the sweep and not
+	// the ageing.
+	require.Equal(t, 1, present(expired))
+
+	fresh := post("key-fresh")
+
+	assert.Equal(t, 0, present(expired), "an undelivered message past the window was swept")
+	assert.Equal(t, 1, present(standing), "a message inside the window outlives the sweep")
+	assert.Equal(t, 1, present(delivered), "a completed message is kept, age or not")
+	assert.Equal(t, 1, present(fresh))
+}
+
+// TestMessage_BodyAndCompletionAreOneState covers the schema's copy of
+// the lifecycle (ADR-0034): a body lives exactly while the message is
+// undelivered, so the two half-states — an undelivered row without a
+// body, and a completed one still holding it — are unrepresentable.
+// internal/message never writes either, so only a direct statement
+// reaches the constraint.
+func TestMessage_BodyAndCompletionAreOneState(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	bot, ada := grnOf("agent", "bot"), grnOf("user", "ada")
+
+	rejected := []struct {
+		name string
+		stmt string
+	}{
+		{
+			name: "an undelivered message without a body",
+			stmt: `INSERT INTO messages (id, recipient_grn, sender_grn, idempotency_key, body, created_at)
+				VALUES ('m-nobody', $1, $2, 'key-nobody', NULL, now())`,
+		},
+		{
+			name: "a completed message still holding its body",
+			stmt: `INSERT INTO messages (id, recipient_grn, sender_grn, idempotency_key, body, created_at, claim_id, claim_expires_at, claimed_at, completed_at)
+				VALUES ('m-kept', $1, $2, 'key-kept', 'hello', now(), 'c-1', now(), now(), now())`,
+		},
+	}
+	for _, tt := range rejected {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := p.Exec(ctx, tt.stmt, bot.String(), ada.String())
+			assert.Error(t, err)
+		})
+	}
+
+	// An undelivered message carrying its body is admitted, so the
+	// constraint rejects a half-state rather than every row.
+	m, err := message.New(bot, ada, "key-whole", "hello")
+	require.NoError(t, err)
+	_, err = message.NewPostgresStore(p).Enqueue(ctx, m)
+	require.NoError(t, err)
+}
+
 // briefDelivery is the queue's delivery configuration with the waits
 // shortened to what a test can sit through. What each parameter governs
 // is unchanged; `garam serve machine` runs on the defaults.

@@ -10,6 +10,7 @@ package message
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"strconv"
 	"time"
 
 	"github.com/garamsh/garam/internal/errorx"
@@ -38,6 +39,20 @@ var (
 // (authz.md §Policy document).
 const ActionSend = "message:send"
 
+const (
+	// MaxBodyLength bounds a submission's body, in characters as the
+	// submission schema's maxLength counts them (ADR-0034): well past
+	// any plausible agent turn, small enough that the table's worst
+	// case is arithmetic.
+	MaxBodyLength = 65536
+	// RetentionWindow is how long an undelivered message is kept before
+	// the sweep deletes it whole (ADR-0034). It must exceed the retry
+	// budget a sender operates under, because a deleted row cannot
+	// suppress a retry — the budget is the senders', and the window
+	// names it.
+	RetentionWindow = 30 * 24 * time.Hour
+)
+
 // ID identifies a stored message. ClaimID identifies one reader's hold
 // on it; the two are never interchangeable.
 type (
@@ -46,7 +61,8 @@ type (
 )
 
 // Message is one message addressed to a recipient. The body is opaque:
-// the queue carries it and never reads it.
+// the queue carries it and never reads it. It is dropped at completion
+// (ADR-0034), so a message read back after delivery carries none.
 type Message struct {
 	id             ID
 	recipient      grn.GRN
@@ -74,6 +90,11 @@ func New(recipient, sender grn.GRN, idempotencyKey, body string) (*Message, erro
 	// stored message.
 	if idempotencyKey == "" {
 		return nil, errorx.New(errorx.KindInvalidArgument, "message: empty idempotency key")
+	}
+	// The bound is the schema's maxLength, counted the way it counts.
+	if len([]rune(body)) > MaxBodyLength {
+		return nil, errorx.New(errorx.KindInvalidArgument,
+			"message: body must be at most "+strconv.Itoa(MaxBodyLength)+" characters")
 	}
 	id, err := newID()
 	if err != nil {

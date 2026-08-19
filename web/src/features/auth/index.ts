@@ -5,7 +5,7 @@
  * file from a client module would pull the server-only backend client
  * into the browser bundle.
  */
-export { getSession, type SessionState, type User } from "./api/get-session";
+export { getSession, type User } from "./api/get-session";
 export { listProviders } from "./api/list-providers";
 export { DevSignInButton } from "./components/dev-sign-in-button";
 export { GoogleSignInButton } from "./components/google-sign-in-button";

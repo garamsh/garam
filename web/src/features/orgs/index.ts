@@ -15,7 +15,6 @@ export {
   orgNotFound,
   type Group,
   type Member,
-  type OrgRead,
   type Organization,
   type Project,
 } from "./api/orgs";

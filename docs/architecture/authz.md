@@ -266,7 +266,7 @@ other policy write.
 
 | Component | Responsibility | Depends on |
 |-----------|----------------|------------|
-| `Statement` / `PolicyDocument` | IAM-style rule model (ADR-0002) | — |
+| `Statement` / `PolicyDocument` | IAM-style rule model (ADR-0002); the `Effect` type is declared once in `internal/wire` and shared with every surface | `internal/wire` |
 | `Evaluator` | statement-set → `Decision` | — |
 | `StatementEvaluator` | native in-process `Evaluator` | — |
 | `Policy` / `PolicyVersion` | stored policy and its revisions | — |

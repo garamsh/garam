@@ -43,7 +43,7 @@ TEST_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)
 # and overridable on the same terms as the line above.
 WEB_E2E_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)/garam?sslmode=disable)
 
-.PHONY: lint format test build mock gen check-gen e2e db-up db-down backend-up ci template-diff
+.PHONY: lint format test build gen check-gen e2e db-up db-down backend-up ci template-diff
 .PHONY: web-install web-lint web-format web-test web-build web-gen web-check-gen web-e2e web-ci
 .PHONY: minikube-up minikube-down minikube-start minikube-images minikube-db
 .PHONY: minikube-secret minikube-migrate minikube-apps minikube-rebuild minikube-forward minikube-context
@@ -71,9 +71,6 @@ test:
 
 build:
 	go build ./...
-
-mock:
-	$(MOCKERY)
 
 # gen regenerates everything derived from a source of truth: the
 # OpenAPI server, sqlc queries, protobuf code, and mocks.

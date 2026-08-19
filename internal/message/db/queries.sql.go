@@ -147,8 +147,7 @@ const dropEmptyConsent = `-- name: DropEmptyConsent :exec
 DELETE FROM message_consents
 WHERE org_a = least($1, $2)
   AND org_b = greatest($1, $2)
-  AND a_consented_at IS NULL
-  AND b_consented_at IS NULL
+  AND (CASE WHEN org_a = $1 THEN b_consented_at ELSE a_consented_at END) IS NULL
 `
 
 type DropEmptyConsentParams struct {
@@ -156,10 +155,11 @@ type DropEmptyConsentParams struct {
 	Other string
 }
 
-// DropEmptyConsent removes the pair's row once neither half stands:
-// the table holds live consent only, and a row with both halves down is
-// a tombstone nothing reads. It rides the withdraw, as the retention
-// sweep rides the enqueue (ADR-0034).
+// DropEmptyConsent removes the pair's row when the withdrawing side's
+// was the last half standing: the table holds live consent only, and a
+// row with both halves down is a tombstone nothing reads. It rides the
+// withdraw, as the retention sweep rides the enqueue (ADR-0034), and it
+// is what does nothing where no row ever stood.
 func (q *Queries) DropEmptyConsent(ctx context.Context, arg DropEmptyConsentParams) error {
 	_, err := q.db.Exec(ctx, dropEmptyConsent, arg.Org, arg.Other)
 	return err
@@ -333,6 +333,7 @@ UPDATE message_consents SET
     b_consented_at = CASE WHEN org_b = $1 THEN NULL::timestamptz ELSE b_consented_at END
 WHERE org_a = least($1, $2)
   AND org_b = greatest($1, $2)
+  AND (CASE WHEN org_a = $1 THEN b_consented_at ELSE a_consented_at END) IS NOT NULL
 `
 
 type WithdrawConsentParams struct {
@@ -340,11 +341,13 @@ type WithdrawConsentParams struct {
 	Other string
 }
 
-// WithdrawConsent clears the withdrawing organization's own half and
-// leaves the other's standing: the relation falls, and the remaining
-// half is what a later re-grant joins. Clearing is idempotent — a half
-// already down stays down, and the end state is the one the caller
-// asked for either way.
+// WithdrawConsent clears the withdrawing organization's own half while
+// the other still stands: the relation falls, and the half left up is
+// what a later re-grant joins. Clearing is idempotent — a half already
+// down stays down, and the end state is the one the caller asked for
+// either way. The other half standing is the statement's condition,
+// because a row neither half stands in is not a state the table holds:
+// that case is DropEmptyConsent's.
 func (q *Queries) WithdrawConsent(ctx context.Context, arg WithdrawConsentParams) error {
 	_, err := q.db.Exec(ctx, withdrawConsent, arg.Org, arg.Other)
 	return err

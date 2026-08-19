@@ -95,28 +95,31 @@ ON CONFLICT (org_a, org_b) DO UPDATE SET
     b_consented_at = coalesce(excluded.b_consented_at, message_consents.b_consented_at)
 RETURNING *;
 
--- WithdrawConsent clears the withdrawing organization's own half and
--- leaves the other's standing: the relation falls, and the remaining
--- half is what a later re-grant joins. Clearing is idempotent — a half
--- already down stays down, and the end state is the one the caller
--- asked for either way.
+-- WithdrawConsent clears the withdrawing organization's own half while
+-- the other still stands: the relation falls, and the half left up is
+-- what a later re-grant joins. Clearing is idempotent — a half already
+-- down stays down, and the end state is the one the caller asked for
+-- either way. The other half standing is the statement's condition,
+-- because a row neither half stands in is not a state the table holds:
+-- that case is DropEmptyConsent's.
 -- name: WithdrawConsent :exec
 UPDATE message_consents SET
     a_consented_at = CASE WHEN org_a = sqlc.arg('org') THEN NULL::timestamptz ELSE a_consented_at END,
     b_consented_at = CASE WHEN org_b = sqlc.arg('org') THEN NULL::timestamptz ELSE b_consented_at END
 WHERE org_a = least(sqlc.arg('org'), sqlc.arg('other'))
-  AND org_b = greatest(sqlc.arg('org'), sqlc.arg('other'));
+  AND org_b = greatest(sqlc.arg('org'), sqlc.arg('other'))
+  AND (CASE WHEN org_a = sqlc.arg('org') THEN b_consented_at ELSE a_consented_at END) IS NOT NULL;
 
--- DropEmptyConsent removes the pair's row once neither half stands:
--- the table holds live consent only, and a row with both halves down is
--- a tombstone nothing reads. It rides the withdraw, as the retention
--- sweep rides the enqueue (ADR-0034).
+-- DropEmptyConsent removes the pair's row when the withdrawing side's
+-- was the last half standing: the table holds live consent only, and a
+-- row with both halves down is a tombstone nothing reads. It rides the
+-- withdraw, as the retention sweep rides the enqueue (ADR-0034), and it
+-- is what does nothing where no row ever stood.
 -- name: DropEmptyConsent :exec
 DELETE FROM message_consents
 WHERE org_a = least(sqlc.arg('org'), sqlc.arg('other'))
   AND org_b = greatest(sqlc.arg('org'), sqlc.arg('other'))
-  AND a_consented_at IS NULL
-  AND b_consented_at IS NULL;
+  AND (CASE WHEN org_a = sqlc.arg('org') THEN b_consented_at ELSE a_consented_at END) IS NULL;
 
 -- ConsentStands answers the send path's one question: whether both
 -- halves of the pair stand right now (ADR-0035). A missing row and a

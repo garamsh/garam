@@ -14,6 +14,7 @@ import (
 	"github.com/garamsh/garam/internal/authz"
 	"github.com/garamsh/garam/internal/authz/mocks"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/wire"
 	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
 )
 
@@ -82,7 +83,7 @@ func TestPolicyGRPCServer_CreatePolicyRejectsBadInput(t *testing.T) {
 func TestPolicyGRPCServer_AddPolicyVersion(t *testing.T) {
 	g := policyGRN(t, orgGRN("acme"))
 	ada, bob := subjectGRN("ada"), subjectGRN("bob")
-	stored := policyDocument("stored", authz.EffectDeny)
+	stored := policyDocument("stored", wire.EffectDeny)
 	storedAt := time.Date(2026, 7, 25, 9, 30, 0, 0, time.UTC)
 	store := mocks.NewMockStore(t)
 	store.EXPECT().AddPolicyVersion(mock.Anything, g, documentOf(t, validDocument), ada).
@@ -112,7 +113,7 @@ func TestPolicyGRPCServer_AddPolicyVersion(t *testing.T) {
 func TestPolicyGRPCServer_ListPolicyVersions(t *testing.T) {
 	g := policyGRN(t, orgGRN("acme"))
 	ada, bob := subjectGRN("ada"), subjectGRN("bob")
-	original, revised := policyDocument("original", authz.EffectAllow), policyDocument("revised", authz.EffectDeny)
+	original, revised := policyDocument("original", wire.EffectAllow), policyDocument("revised", wire.EffectDeny)
 	createdAt := time.Date(2026, 7, 25, 9, 30, 0, 0, time.UTC)
 	store := mocks.NewMockStore(t)
 	store.EXPECT().ListPolicyVersions(mock.Anything, g).
@@ -148,7 +149,7 @@ func TestPolicyGRPCServer_ActivateInvalidatesTheOrgCache(t *testing.T) {
 	store.EXPECT().SetPolicyStatus(mock.Anything, mock.Anything, authz.PolicyStatusActive).
 		Return(authz.NewPolicy(policyGRN(t, acme), acme, "read-only"), nil).Once()
 	store.EXPECT().ActivePolicies(mock.Anything, acme).
-		Return([]authz.ActivePolicy{orgWidePolicy("activated", authz.EffectAllow)}, nil).Once()
+		Return([]authz.ActivePolicy{orgWidePolicy("activated", wire.EffectAllow)}, nil).Once()
 
 	cache := authz.NewPolicyCache(store)
 	srv := authz.NewPolicyGRPCServer(store, cache)
@@ -172,7 +173,7 @@ func TestPolicyGRPCServer_ArchiveInvalidatesTheOrgCache(t *testing.T) {
 	acme := orgGRN("acme")
 	store := mocks.NewMockStore(t)
 	store.EXPECT().ActivePolicies(mock.Anything, acme).
-		Return([]authz.ActivePolicy{orgWidePolicy("active", authz.EffectAllow)}, nil).Once()
+		Return([]authz.ActivePolicy{orgWidePolicy("active", wire.EffectAllow)}, nil).Once()
 	store.EXPECT().SetPolicyStatus(mock.Anything, mock.Anything, authz.PolicyStatusArchived).
 		Return(authz.NewPolicy(policyGRN(t, acme), acme, "read-only"), nil).Once()
 	store.EXPECT().ActivePolicies(mock.Anything, acme).
@@ -241,13 +242,13 @@ func TestPolicyGRPCServer_AttachInvalidatesTheOrgCache(t *testing.T) {
 	g, ada := policyGRN(t, acme), subjectGRN("ada")
 	store := mocks.NewMockStore(t)
 	store.EXPECT().ActivePolicies(mock.Anything, acme).
-		Return([]authz.ActivePolicy{orgWidePolicy("org-wide", authz.EffectAllow)}, nil).Once()
+		Return([]authz.ActivePolicy{orgWidePolicy("org-wide", wire.EffectAllow)}, nil).Once()
 	store.EXPECT().GetPolicy(mock.Anything, g).
 		Return(authz.NewPolicy(g, acme, "read-only"), nil).Once()
 	store.EXPECT().AttachPolicy(mock.Anything, g, ada).
 		Return(&authz.PolicyAttachment{}, nil).Once()
 	store.EXPECT().ActivePolicies(mock.Anything, acme).
-		Return([]authz.ActivePolicy{attachedPolicy("ada-only", authz.EffectAllow, ada)}, nil).Once()
+		Return([]authz.ActivePolicy{attachedPolicy("ada-only", wire.EffectAllow, ada)}, nil).Once()
 
 	cache := authz.NewPolicyCache(store)
 	srv := authz.NewPolicyGRPCServer(store, cache)

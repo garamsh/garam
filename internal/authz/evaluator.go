@@ -1,6 +1,10 @@
 package authz
 
-import "context"
+import (
+	"context"
+
+	"github.com/garamsh/garam/internal/wire"
+)
 
 // Decision is the outcome of evaluating a statement set.
 type Decision int
@@ -47,7 +51,7 @@ func (e *StatementEvaluator) Evaluate(_ context.Context, c Context) Decision {
 		if !s.Matches(c.Action, c.Object.GRN().String()) {
 			continue
 		}
-		if s.Effect == EffectDeny {
+		if s.Effect == wire.EffectDeny {
 			return DecisionDeny
 		}
 		decision = DecisionAllow

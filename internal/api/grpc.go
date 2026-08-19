@@ -4,11 +4,10 @@ import (
 	"context"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/wire"
 	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
 )
 
@@ -39,7 +38,7 @@ func (e *GRPCEvaluator) Evaluate(ctx context.Context, in EvalInput) (bool, error
 		ObjectGrn:     in.Object.String(),
 		Action:        in.Action,
 		Statements:    statements,
-		SubjectGroups: grnsToProto(in.SubjectGroups),
+		SubjectGroups: wire.GRNsToProto(in.SubjectGroups),
 	})
 	if err != nil {
 		return false, statusError(err)
@@ -51,13 +50,13 @@ func (e *GRPCEvaluator) Evaluate(ctx context.Context, in EvalInput) (bool, error
 // carry kinds by name (ADR-0003).
 func statusError(err error) error {
 	st, _ := status.FromError(err)
-	return errorx.New(kindOf(st.Code()), st.Message())
+	return errorx.New(wire.KindOf(st.Code()), st.Message())
 }
 
 func statementsToProto(in []Statement) ([]*authzv1.Statement, error) {
 	out := make([]*authzv1.Statement, 0, len(in))
 	for _, s := range in {
-		effect, err := effectToProto(s.Effect)
+		effect, err := wire.EffectToProto(s.Effect)
 		if err != nil {
 			return nil, errorx.Wrap(err, "statement "+s.Sid)
 		}
@@ -69,64 +68,4 @@ func statementsToProto(in []Statement) ([]*authzv1.Statement, error) {
 		})
 	}
 	return out, nil
-}
-
-func grnsToProto(in []grn.GRN) []string {
-	out := make([]string, 0, len(in))
-	for _, g := range in {
-		out = append(out, g.String())
-	}
-	return out
-}
-
-// effectToProto renders an Effect on the wire. An Effect that is
-// neither constant is refused: this process built the statement, so an
-// unrepresentable one is its own defect and not the caller's.
-func effectToProto(e Effect) (authzv1.Effect, error) {
-	switch e {
-	case EffectAllow:
-		return authzv1.Effect_EFFECT_ALLOW, nil
-	case EffectDeny:
-		return authzv1.Effect_EFFECT_DENY, nil
-	default:
-		return authzv1.Effect_EFFECT_UNSPECIFIED, errorx.New(errorx.KindInternal, "effect must be Allow or Deny")
-	}
-}
-
-// kindOf maps gRPC status codes back to error kinds by name.
-func kindOf(c codes.Code) errorx.Kind {
-	switch c {
-	case codes.Canceled:
-		return errorx.KindCanceled
-	case codes.InvalidArgument:
-		return errorx.KindInvalidArgument
-	case codes.DeadlineExceeded:
-		return errorx.KindDeadlineExceeded
-	case codes.NotFound:
-		return errorx.KindNotFound
-	case codes.AlreadyExists:
-		return errorx.KindAlreadyExists
-	case codes.PermissionDenied:
-		return errorx.KindPermissionDenied
-	case codes.ResourceExhausted:
-		return errorx.KindResourceExhausted
-	case codes.FailedPrecondition:
-		return errorx.KindFailedPrecondition
-	case codes.Aborted:
-		return errorx.KindAborted
-	case codes.OutOfRange:
-		return errorx.KindOutOfRange
-	case codes.Unimplemented:
-		return errorx.KindUnimplemented
-	case codes.Internal:
-		return errorx.KindInternal
-	case codes.Unavailable:
-		return errorx.KindUnavailable
-	case codes.DataLoss:
-		return errorx.KindDataLoss
-	case codes.Unauthenticated:
-		return errorx.KindUnauthenticated
-	default:
-		return errorx.KindUnknown
-	}
 }

@@ -53,6 +53,7 @@ import (
 	"github.com/garamsh/garam/internal/org"
 	"github.com/garamsh/garam/internal/user"
 	"github.com/garamsh/garam/internal/watch"
+	"github.com/garamsh/garam/internal/wire"
 	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
 )
 
@@ -1215,13 +1216,13 @@ func ptr[T any](v T) *T { return &v }
 
 // policyDoc builds a one-statement document whose Sid identifies the
 // version it belongs to.
-func policyDoc(sid string, effect authz.Effect) authz.PolicyDocument {
+func policyDoc(sid string, effect wire.Effect) authz.PolicyDocument {
 	return statementDoc(sid, effect, "org:read", "grn:acme:*")
 }
 
 // statementDoc builds a one-statement document over an explicit action
 // and resource pattern.
-func statementDoc(sid string, effect authz.Effect, action, resource string) authz.PolicyDocument {
+func statementDoc(sid string, effect wire.Effect, action, resource string) authz.PolicyDocument {
 	return authz.PolicyDocument{
 		Version: "2026-07-25",
 		Statement: []authz.Statement{{
@@ -1250,7 +1251,7 @@ func TestPolicyStore_LifecycleRoundTrip(t *testing.T) {
 
 	g, err := authz.NewPolicyGRN(orgGRN)
 	require.NoError(t, err)
-	created, err := s.CreatePolicy(ctx, authz.NewPolicy(g, orgGRN, "read-only"), policyDoc("v1", authz.EffectAllow), author)
+	created, err := s.CreatePolicy(ctx, authz.NewPolicy(g, orgGRN, "read-only"), policyDoc("v1", wire.EffectAllow), author)
 	require.NoError(t, err)
 	assert.Equal(t, authz.PolicyStatusDraft, created.Status())
 	assert.Equal(t, 1, created.DefaultVersion())
@@ -1275,7 +1276,7 @@ func TestPolicyStore_LifecycleRoundTrip(t *testing.T) {
 	assert.Empty(t, active[0].Subjects, "an unattached policy applies org-wide")
 
 	// Appending a version leaves the default pointer alone.
-	v2, err := s.AddPolicyVersion(ctx, g, policyDoc("v2", authz.EffectDeny), author)
+	v2, err := s.AddPolicyVersion(ctx, g, policyDoc("v2", wire.EffectDeny), author)
 	require.NoError(t, err)
 	assert.Equal(t, 2, v2.Version())
 	active, err = s.ActivePolicies(ctx, orgGRN)
@@ -1288,7 +1289,7 @@ func TestPolicyStore_LifecycleRoundTrip(t *testing.T) {
 	active, err = s.ActivePolicies(ctx, orgGRN)
 	require.NoError(t, err)
 	assert.Equal(t, "v2", active[0].Document.Statement[0].Sid)
-	assert.Equal(t, authz.EffectDeny, active[0].Document.Statement[0].Effect)
+	assert.Equal(t, wire.EffectDeny, active[0].Document.Statement[0].Effect)
 
 	versions, err := s.ListPolicyVersions(ctx, g)
 	require.NoError(t, err)
@@ -1299,7 +1300,7 @@ func TestPolicyStore_LifecycleRoundTrip(t *testing.T) {
 	assert.True(t, errorx.IsKind(err, errorx.KindNotFound))
 	_, err = s.GetPolicy(ctx, grn.New("acme", "default", authz.ServiceTypePolicy, "missing"))
 	assert.True(t, errorx.IsKind(err, errorx.KindNotFound))
-	_, err = s.AddPolicyVersion(ctx, grn.New("acme", "default", authz.ServiceTypePolicy, "missing"), policyDoc("x", authz.EffectAllow), author)
+	_, err = s.AddPolicyVersion(ctx, grn.New("acme", "default", authz.ServiceTypePolicy, "missing"), policyDoc("x", wire.EffectAllow), author)
 	assert.True(t, errorx.IsKind(err, errorx.KindNotFound))
 }
 
@@ -1351,7 +1352,7 @@ func TestPolicyVersions_AppendOnly(t *testing.T) {
 
 	g, err := authz.NewPolicyGRN(orgGRN)
 	require.NoError(t, err)
-	_, err = s.CreatePolicy(ctx, authz.NewPolicy(g, orgGRN, "read-only"), policyDoc("v1", authz.EffectAllow), grnOf("user", "ada"))
+	_, err = s.CreatePolicy(ctx, authz.NewPolicy(g, orgGRN, "read-only"), policyDoc("v1", wire.EffectAllow), grnOf("user", "ada"))
 	require.NoError(t, err)
 
 	_, err = p.Exec(ctx, `UPDATE policy_versions SET document = '{}'::jsonb WHERE policy_grn = $1`, g.String())
@@ -1382,7 +1383,7 @@ func TestPolicyCache_InvalidatedByNotify(t *testing.T) {
 
 	g, err := authz.NewPolicyGRN(orgGRN)
 	require.NoError(t, err)
-	_, err = s.CreatePolicy(ctx, authz.NewPolicy(g, orgGRN, "read-only"), policyDoc("v1", authz.EffectAllow), grnOf("user", "ada"))
+	_, err = s.CreatePolicy(ctx, authz.NewPolicy(g, orgGRN, "read-only"), policyDoc("v1", wire.EffectAllow), grnOf("user", "ada"))
 	require.NoError(t, err)
 	_, err = s.SetPolicyStatus(ctx, g, authz.PolicyStatusActive)
 	require.NoError(t, err)
@@ -1414,7 +1415,7 @@ func TestPolicyWrite_Notifies(t *testing.T) {
 
 	g, err := authz.NewPolicyGRN(orgGRN)
 	require.NoError(t, err)
-	_, err = s.CreatePolicy(ctx, authz.NewPolicy(g, orgGRN, "read-only"), policyDoc("v1", authz.EffectAllow), grnOf("user", "ada"))
+	_, err = s.CreatePolicy(ctx, authz.NewPolicy(g, orgGRN, "read-only"), policyDoc("v1", wire.EffectAllow), grnOf("user", "ada"))
 	require.NoError(t, err)
 
 	n, err := conn.Conn().WaitForNotification(ctx)
@@ -1526,7 +1527,7 @@ func TestPolicyAttachment_StaysInsideItsOrg(t *testing.T) {
 
 	g, err := authz.NewPolicyGRN(orgGRN)
 	require.NoError(t, err)
-	_, err = s.CreatePolicy(ctx, authz.NewPolicy(g, orgGRN, "read-only"), policyDoc("v1", authz.EffectAllow), grnOf("user", "ada"))
+	_, err = s.CreatePolicy(ctx, authz.NewPolicy(g, orgGRN, "read-only"), policyDoc("v1", wire.EffectAllow), grnOf("user", "ada"))
 	require.NoError(t, err)
 
 	_, err = s.AttachPolicy(ctx, g, grn.New("other", "default", "group", "eng"))
@@ -1555,7 +1556,7 @@ func TestPolicyAttachment_DenyOverridesAcrossSources(t *testing.T) {
 		Version: "2026-07-25",
 		Statement: []authz.Statement{{
 			Sid:      "deny-read",
-			Effect:   authz.EffectDeny,
+			Effect:   wire.EffectDeny,
 			Action:   []string{"project:read"},
 			Resource: []string{"grn:acme:*"},
 		}},
@@ -1655,15 +1656,15 @@ func TestOrgIsolation_OnlyAttachmentKeepsGrantsInsideAnOrg(t *testing.T) {
 	adaB, engB := scopedGRN("globex", "user", "ada"), scopedGRN("globex", "group", "eng")
 	webB, openB := scopedGRN("globex", "project", "web"), scopedGRN("globex", "project", "open")
 
-	allowA := activePolicy(t, policies, acme, "allow-read", statementDoc("allow-read", authz.EffectAllow, "project:read", "grn:*:*"))
+	allowA := activePolicy(t, policies, acme, "allow-read", statementDoc("allow-read", wire.EffectAllow, "project:read", "grn:*:*"))
 	attachPolicy(t, policies, allowA, adaA)
-	denyB := activePolicy(t, policies, globex, "deny-read", statementDoc("deny-read", authz.EffectDeny, "project:read", "grn:*:*"))
+	denyB := activePolicy(t, policies, globex, "deny-read", statementDoc("deny-read", wire.EffectDeny, "project:read", "grn:*:*"))
 	attachPolicy(t, policies, denyB, engB)
 
 	// Unattached, so no subject set stands between this allow and a
 	// subject of another org. It names one project, leaving webB an
 	// object only an attachment reaches.
-	activePolicy(t, policies, globex, "open-door", statementDoc("open-door", authz.EffectAllow, "project:read", openB.String()))
+	activePolicy(t, policies, globex, "open-door", statementDoc("open-door", wire.EffectAllow, "project:read", openB.String()))
 
 	t.Run("persisted policies stay in their org", func(t *testing.T) {
 		active, err := store.ActivePolicies(ctx, acme)
@@ -1712,7 +1713,7 @@ func TestOrgIsolation_OnlyAttachmentKeepsGrantsInsideAnOrg(t *testing.T) {
 		require.True(t, checkRead(t, engine, adaA, webB, nil, roleAllow("globex")))
 
 		// Unattached, this policy denies every subject of org A.
-		activePolicy(t, policies, acme, "deny-all", statementDoc("deny-all", authz.EffectDeny, "project:read", "grn:*:*"))
+		activePolicy(t, policies, acme, "deny-all", statementDoc("deny-all", wire.EffectDeny, "project:read", "grn:*:*"))
 
 		assert.False(t, checkRead(t, engine, adaA, webA, nil), "org A's new deny drops org A's cached allow")
 		assert.True(t, checkRead(t, engine, adaA, webB, nil, roleAllow("globex")),
@@ -2949,7 +2950,7 @@ func TestMachineSurface_AnotherOrganizationsAgentReachesNothingOnThisQueue(t *te
 	// consulted (ADR-0024). The Allow below matches every resource there
 	// is and buys nothing.
 	reachAll := activePolicy(t, policies, orgRootGRN("acme"), "reach-everything",
-		statementDoc("reach-everything", authz.EffectAllow, message.ActionSend, "grn:*:*"))
+		statementDoc("reach-everything", wire.EffectAllow, message.ActionSend, "grn:*:*"))
 	attachPolicy(t, policies, reachAll, senderGRN)
 	status, body = machineSend(t, sender, http.MethodPost, url+"/messages",
 		submissionTo(strangerGRN, "key-3"))
@@ -3020,7 +3021,7 @@ func TestMachineSurface_AnAttachedPolicyDecidesWhatAnAgentSends(t *testing.T) {
 	require.Equal(t, http.StatusCreated, status, string(body))
 
 	denied := activePolicy(t, policies, acme, "no-talking",
-		statementDoc("no-talking", authz.EffectDeny, message.ActionSend, recipientGRN.String()))
+		statementDoc("no-talking", wire.EffectDeny, message.ActionSend, recipientGRN.String()))
 	attachPolicy(t, policies, denied, senderGRN)
 
 	// The organization's own rule refused this one, which is a different
@@ -3125,7 +3126,7 @@ func TestMachineSurface_AGroupAttachedPolicyDecidesWhatItsMembersSend(t *testing
 	require.Equal(t, http.StatusCreated, status, string(body))
 
 	denied := activePolicy(t, policies, acme, "no-talking",
-		statementDoc("no-talking", authz.EffectDeny, message.ActionSend, recipientGRN.String()))
+		statementDoc("no-talking", wire.EffectDeny, message.ActionSend, recipientGRN.String()))
 	attachPolicy(t, policies, denied, engineering)
 
 	status, body = machineSend(t, sender, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-2"))
@@ -3246,7 +3247,7 @@ func TestMachineSurface_ARecipientsOwnPolicyAdmitsNoForeignSender(t *testing.T) 
 	// attaches it to nobody, which is what an administrator does by
 	// detaching the last attachment from one they had aimed at a subject.
 	openDoor := activePolicy(t, policies, orgRootGRN("beta"), "everything",
-		statementDoc("everything", authz.EffectAllow, "*", "grn:beta:*"))
+		statementDoc("everything", wire.EffectAllow, "*", "grn:beta:*"))
 
 	// That policy does reach the foreign subject: the same question,
 	// answered the other way now that beta has written one document.

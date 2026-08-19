@@ -8,6 +8,7 @@ import (
 
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/wire"
 )
 
 // Policy sentinel errors.
@@ -158,7 +159,7 @@ func ParsePolicyDocument(raw []byte) (PolicyDocument, error) {
 		return PolicyDocument{}, errorx.New(errorx.KindInvalidArgument, "policy document: Statement must not be empty")
 	}
 	for _, s := range doc.Statement {
-		if s.Effect != EffectAllow && s.Effect != EffectDeny {
+		if s.Effect != wire.EffectAllow && s.Effect != wire.EffectDeny {
 			return PolicyDocument{}, errorx.New(errorx.KindInvalidArgument, "policy document: statement "+s.Sid+": Effect must be Allow or Deny")
 		}
 		if len(s.Action) == 0 || len(s.Resource) == 0 {

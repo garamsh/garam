@@ -8,6 +8,7 @@ import (
 
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/wire"
 	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
 )
 
@@ -70,7 +71,7 @@ func (s *GRPCServer) Explain(ctx context.Context, req *authzv1.ExplainRequest) (
 		if !matched {
 			continue
 		}
-		if st.Effect == EffectDeny {
+		if st.Effect == wire.EffectDeny {
 			denied = true
 		} else {
 			allowed = true
@@ -143,7 +144,7 @@ func parseInput(subjectGRN, objectGRN, action string, subjectGroups []string, st
 	}
 	statements := make([]Statement, 0, len(stmts))
 	for _, p := range stmts {
-		effect, err := effectFromProto(p.GetEffect())
+		effect, err := wire.EffectFromProto(p.GetEffect())
 		if err != nil {
 			return checkInput{}, errorx.Wrap(err, "statement "+p.GetSid())
 		}
@@ -160,19 +161,13 @@ func parseInput(subjectGRN, objectGRN, action string, subjectGroups []string, st
 	return checkInput{object: object, action: action, subjects: subjects, statements: statements}, nil
 }
 
-func effectFromProto(e authzv1.Effect) (Effect, error) {
-	switch e {
-	case authzv1.Effect_EFFECT_ALLOW:
-		return EffectAllow, nil
-	case authzv1.Effect_EFFECT_DENY:
-		return EffectDeny, nil
-	default:
-		return "", errorx.New(errorx.KindInvalidArgument, "effect must be ALLOW or DENY")
-	}
-}
-
-func effectToProto(e Effect) authzv1.Effect {
-	if e == EffectAllow {
+// effectToProto renders a stored Effect for an Explain trace. It
+// coerces rather than refuses: the trace reports what was evaluated,
+// and a stored statement passed the parse boundary to be stored. It
+// agrees with wire.EffectToProto on both constants; the agreement test
+// in server_internal_test.go is what keeps that true.
+func effectToProto(e wire.Effect) authzv1.Effect {
+	if e == wire.EffectAllow {
 		return authzv1.Effect_EFFECT_ALLOW
 	}
 	return authzv1.Effect_EFFECT_DENY

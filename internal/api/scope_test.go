@@ -16,6 +16,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/org"
 	"github.com/garamsh/garam/internal/user"
+	"github.com/garamsh/garam/internal/wire"
 )
 
 // enforce answers the Evaluator seam by evaluating the statements the
@@ -31,7 +32,7 @@ func (f *fixture) enforce() {
 				if !matches(s, in.Action, in.Object.String()) {
 					continue
 				}
-				if s.Effect == api.EffectDeny {
+				if s.Effect == wire.EffectDeny {
 					return false, nil
 				}
 				allow = true

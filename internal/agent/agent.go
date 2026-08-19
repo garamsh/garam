@@ -32,6 +32,15 @@ var (
 	ErrAgentNotFound      = errorx.New(errorx.KindNotFound, "agent not found")
 	ErrAgentAlreadyExists = errorx.New(errorx.KindAlreadyExists, "agent already exists")
 	ErrAssignmentNotFound = errorx.New(errorx.KindNotFound, "agent assignment not found")
+	// ErrDefinitionNotFound is what a claim of a definition that names
+	// another operator answers as well: the read an operator makes can
+	// name nothing it is not named in (ADR-0033), and the claim keeps
+	// that scoping rather than naming the definition it refuses.
+	ErrDefinitionNotFound = errorx.New(errorx.KindNotFound, "agent definition not found")
+	// ErrDefinitionClaimed refuses a second claim of the agent a
+	// definition minted. A definition is claimed once (ADR-0033):
+	// re-aiming it is a new definition, not another claim of this one.
+	ErrDefinitionClaimed = errorx.New(errorx.KindAlreadyExists, "agent definition is already claimed")
 	// ErrStaleEpoch is returned when a state report does not carry the
 	// epoch the agent is currently assigned at. An agent with no
 	// assignment has no current epoch, so every report about it is

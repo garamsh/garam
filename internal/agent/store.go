@@ -41,4 +41,14 @@ type Store interface {
 	// ListDefinitionsByOrg returns the organization's definitions,
 	// ordered by the agent GRN each one names.
 	ListDefinitionsByOrg(ctx context.Context, orgGRN grn.GRN) ([]*Definition, error)
+	// ListDefinitionsByOperator returns the definitions naming the
+	// operator, each with the assignment claiming it, ordered by the
+	// agent GRN each one names.
+	ListDefinitionsByOperator(ctx context.Context, operatorGRN grn.GRN) ([]*DefinitionState, error)
+	// Claim binds the definition's agent to the operator: the agent row
+	// and the assignment at its first epoch, in one transaction, so the
+	// record and the binding never exist apart. It answers
+	// ErrDefinitionNotFound when no definition names the agent for this
+	// operator and ErrDefinitionClaimed when one already claimed it.
+	Claim(ctx context.Context, agentGRN, operatorGRN grn.GRN) (*Assignment, error)
 }

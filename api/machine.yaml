@@ -17,6 +17,13 @@ tags:
       The agents an operator creates and holds. What an operator may
       obtain is exactly the agents assigned to it at the current epoch
       (ADR-0015).
+  - name: definition
+    description: >-
+      What an organization says its agents should be, read by the
+      operator each definition names (ADR-0026). An operator polls its
+      definitions and claims one, which binds it to the agent GRN the
+      definition minted and admits it to that agent's certificate route
+      (ADR-0033).
   - name: message
     description: >-
       The queue a message reaches an agent through (ADR-0013). A caller
@@ -95,6 +102,65 @@ paths:
         '401':
           $ref: '#/components/responses/Error'
         '403':
+          $ref: '#/components/responses/Error'
+  /definitions:
+    get:
+      operationId: listDefinitions
+      tags: [definition]
+      summary: List the definitions naming the calling operator.
+      description: >-
+        The agents the organization says this operator should run
+        (ADR-0026): the agent GRN each definition minted, the values the
+        operator constructs it from, and whether it is claimed. The
+        answer is scoped by the definition's operator field, so it names
+        nothing the caller is not named in and no policy check stands in
+        front of it (ADR-0033). A caller that is not an operator is
+        refused.
+      responses:
+        '200':
+          description: The caller's definitions, ordered by agent GRN.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Definition'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+  /definitions/{agent}/claim:
+    post:
+      operationId: claimDefinition
+      tags: [definition]
+      summary: Claim the agent a definition minted for the calling operator.
+      description: >-
+        Binds the calling operator to the definition's agent GRN: the
+        assignment is written at its first epoch, and it is what admits
+        the operator to that agent's certificate route — which refuses
+        the GRN as unassigned until then, exactly as before (ADR-0033).
+        A definition is claimed once: a second claim of the same agent
+        GRN is a conflict, never an override. A definition that names
+        another operator answers as one that does not exist, because the
+        claim inherits the read's scoping.
+      parameters:
+        - $ref: '#/components/parameters/agent'
+      responses:
+        '201':
+          description: The agent is assigned to the calling operator.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentAssignment'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
           $ref: '#/components/responses/Error'
   /messages:
     post:
@@ -277,7 +343,7 @@ components:
       name: agent
       in: path
       required: true
-      description: Agent GRN, as `createAgent` returned it.
+      description: Agent GRN, as `createAgent` or `listDefinitions` returned it.
       x-go-name: AgentGrn
       schema:
         type: string
@@ -338,6 +404,41 @@ components:
           description: >-
             When the certificate stops being valid. It carries jitter,
             so certificates issued together do not expire together.
+    Definition:
+      type: object
+      description: >-
+        What an organization says an agent should be, answered to the
+        operator it names (ADR-0026). `claim` is absent while no
+        operator has claimed the definition and carries the epoch the
+        claim's assignment holds at once one has — the only claimant a
+        definition admits is the operator it names, so who claimed it
+        is always the caller.
+      required: [agentGrn, values]
+      properties:
+        agentGrn:
+          type: string
+          description: >-
+            The identity garam minted for the agent this definition
+            describes. No agent answers under it until the claim.
+          example: grn:acme:default:agent:9f2ac1b40d8e7a35
+        values:
+          type: object
+          description: >-
+            What the operator constructs the agent from. garam stores
+            the keys and the strings and interprets neither.
+          additionalProperties:
+            type: string
+        claim:
+          $ref: '#/components/schemas/DefinitionClaim'
+    DefinitionClaim:
+      type: object
+      description: The assignment the claim wrote (ADR-0033).
+      required: [epoch]
+      properties:
+        epoch:
+          type: integer
+          minimum: 1
+          description: The epoch the claim's assignment holds at.
     MessageSubmission:
       type: object
       description: What a sender supplies. Who is sending is the certificate's to say.

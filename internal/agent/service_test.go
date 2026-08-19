@@ -15,17 +15,22 @@ import (
 
 // memoryStore is a Store in memory. It keeps the assignment rules the
 // service depends on — one operator per agent, an epoch that rises with
-// every assignment — and reports states nowhere: the operator surface
-// writes none. It holds no definition either: an operator's calls reach
-// none, because what an organization defines is not what an operator
-// creates (ADR-0026).
+// every assignment — and the claim rules beside them: a definition is
+// claimed once, and the claim is where its agent comes to exist
+// (ADR-0033). It reports states nowhere: the operator surface writes
+// none.
 type memoryStore struct {
 	agents      map[grn.GRN]*Agent
 	assignments map[grn.GRN]*Assignment
+	definitions map[grn.GRN]*Definition
 }
 
 func newMemoryStore() *memoryStore {
-	return &memoryStore{agents: map[grn.GRN]*Agent{}, assignments: map[grn.GRN]*Assignment{}}
+	return &memoryStore{
+		agents:      map[grn.GRN]*Agent{},
+		assignments: map[grn.GRN]*Assignment{},
+		definitions: map[grn.GRN]*Definition{},
+	}
 }
 
 func (s *memoryStore) Create(_ context.Context, a *Agent) error {
@@ -85,12 +90,44 @@ func (s *memoryStore) ListAssignmentsByOrg(_ context.Context, orgGRN grn.GRN) ([
 	return assignments, nil
 }
 
-func (s *memoryStore) Define(context.Context, *Definition) error {
-	return errorx.New(errorx.KindUnimplemented, "nothing is defined here")
+func (s *memoryStore) Define(_ context.Context, d *Definition) error {
+	s.definitions[d.agentGRN] = d
+	return nil
 }
 
 func (s *memoryStore) ListDefinitionsByOrg(context.Context, grn.GRN) ([]*Definition, error) {
-	return nil, errorx.New(errorx.KindUnimplemented, "nothing is defined here")
+	return nil, errorx.New(errorx.KindUnimplemented, "the operator reads by operator, not by org")
+}
+
+func (s *memoryStore) ListDefinitionsByOperator(_ context.Context, operatorGRN grn.GRN) ([]*DefinitionState, error) {
+	states := make([]*DefinitionState, 0, len(s.definitions))
+	for _, d := range s.definitions {
+		if d.operatorGRN != operatorGRN {
+			continue
+		}
+		states = append(states, NewDefinitionState(d, s.assignments[d.agentGRN]))
+	}
+	return states, nil
+}
+
+func (s *memoryStore) Claim(_ context.Context, agentGRN, operatorGRN grn.GRN) (*Assignment, error) {
+	d, held := s.definitions[agentGRN]
+	// A definition naming another operator answers as one that does
+	// not exist: the claim keeps the read's scoping.
+	if !held || d.operatorGRN != operatorGRN {
+		return nil, ErrDefinitionNotFound
+	}
+	if _, claimed := s.assignments[agentGRN]; claimed {
+		return nil, ErrDefinitionClaimed
+	}
+	a, err := New(agentGRN, d.orgGRN)
+	if err != nil {
+		return nil, err
+	}
+	s.agents[agentGRN] = a
+	assignment := &Assignment{agentGRN: agentGRN, operatorGRN: operatorGRN, epoch: 1}
+	s.assignments[agentGRN] = assignment
+	return assignment, nil
 }
 
 func (s *memoryStore) ReportProvisioningState(context.Context, grn.GRN, int, ProvisioningState) (*Agent, error) {
@@ -220,4 +257,115 @@ func TestService_IssueCertificateAnswersOnlyForAnAgentTheOperatorHolds(t *testin
 		[]grn.GRN{held.Agent(), foreign.Agent(), held.Agent()},
 		issuer.signed,
 		"nothing was signed for a caller that was refused")
+}
+
+// define records a definition of an agent operator is to run, the way
+// the console writes one.
+func define(t *testing.T, store *memoryStore, operator grn.GRN, values Values) *Definition {
+	t.Helper()
+	d, err := NewDefinition(orgGRNOf(operator), operator, values,
+		grn.New(grn.RootOwner, grn.DefaultProject, "user", "ada"))
+	require.NoError(t, err)
+	require.NoError(t, store.Define(context.Background(), d))
+	return d
+}
+
+// TestService_DefinitionsAnswersThoseNamingTheCaller covers the read
+// ADR-0033 decides: an operator polls exactly the definitions that name
+// it, each with its claim state, and the definition's operator field is
+// the whole of the scoping. The definitions the answer leaves out sit
+// beside it, so what excludes them is the naming rather than a read
+// that answers nothing.
+func TestService_DefinitionsAnswersThoseNamingTheCaller(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryStore()
+	svc := NewService(store, &signer{})
+
+	caller := operatorGRN("acme", "one")
+	unclaimed := define(t, store, caller, Values{"model": "haiku"})
+	claimed := define(t, store, caller, Values{})
+	define(t, store, operatorGRN("acme", "two"), Values{"model": "opus"})
+	define(t, store, operatorGRN("globex", "one"), Values{})
+
+	// A claim moves one definition's state and no other's.
+	_, err := svc.Claim(ctx, caller, claimed.Agent())
+	require.NoError(t, err)
+
+	states, err := svc.Definitions(ctx, caller)
+	require.NoError(t, err)
+	require.Len(t, states, 2, "the definitions naming the caller and no other's")
+	byAgent := map[grn.GRN]*DefinitionState{}
+	for _, state := range states {
+		byAgent[state.Definition().Agent()] = state
+	}
+	require.Contains(t, byAgent, unclaimed.Agent())
+	assert.Equal(t, Values{"model": "haiku"}, byAgent[unclaimed.Agent()].Definition().Values())
+	assert.Nil(t, byAgent[unclaimed.Agent()].Claim(), "an unclaimed definition carries no claim")
+	require.Contains(t, byAgent, claimed.Agent())
+	claim := byAgent[claimed.Agent()].Claim()
+	require.NotNil(t, claim, "a claimed definition carries the claim")
+	assert.Equal(t, caller, claim.Operator())
+	assert.Equal(t, 1, claim.Epoch())
+
+	_, err = svc.Definitions(ctx, grn.New("acme", grn.DefaultProject, ServiceType, "deadbeefdeadbeef"))
+	assert.ErrorIs(t, err, ErrNotAnOperator, "an agent holds no definitions")
+}
+
+// TestService_ClaimAdmitsTheOperatorToTheCertificateRoute covers the
+// transition ADR-0033 decides: before the claim the certificate route
+// refuses the definition's agent GRN as unassigned — the existing
+// behaviour, asserted as the control — and the claim is what admits the
+// operator to it. A definition is claimed once, and a definition
+// naming another operator answers as one that does not exist, as the
+// read scopes it.
+func TestService_ClaimAdmitsTheOperatorToTheCertificateRoute(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryStore()
+	issuer := &signer{}
+	svc := NewService(store, issuer)
+
+	caller := operatorGRN("acme", "one")
+	d := define(t, store, caller, Values{"model": "haiku"})
+
+	// The control: before the claim the route refuses the GRN exactly
+	// as it refuses an agent that was never defined.
+	_, err := svc.IssueCertificate(ctx, caller, d.Agent())
+	require.ErrorIs(t, err, ErrNotAssigned)
+
+	assignment, err := svc.Claim(ctx, caller, d.Agent())
+	require.NoError(t, err)
+	assert.Equal(t, d.Agent(), assignment.Agent())
+	assert.Equal(t, caller, assignment.Operator())
+	assert.Equal(t, 1, assignment.Epoch())
+
+	// The claim is where the agent comes to exist: nothing reported it,
+	// and the row is there with nothing reported on it.
+	a, err := store.Get(ctx, d.Agent())
+	require.NoError(t, err)
+	assert.Equal(t, ProvisioningStatePending, a.ProvisioningState())
+	assert.Equal(t, RuntimeStateUnknown, a.RuntimeState())
+
+	cert, err := svc.IssueCertificate(ctx, caller, d.Agent())
+	require.NoError(t, err, "the claim admitted the operator to the route")
+	assert.Equal(t, []byte(d.Agent().String()), cert.CertificatePEM)
+
+	refused := map[string]struct {
+		operator grn.GRN
+		agent    grn.GRN
+		err      error
+	}{
+		"a second claim of the same agent":                    {caller, d.Agent(), ErrDefinitionClaimed},
+		"a claim by an operator the definition does not name": {operatorGRN("acme", "two"), d.Agent(), ErrDefinitionNotFound},
+		"a claim of a definition that does not exist":         {caller, grn.New("acme", grn.DefaultProject, ServiceType, "0f0f0f0f0f0f0f0f"), ErrDefinitionNotFound},
+		"a caller that is not an operator":                    {d.Agent(), d.Agent(), ErrNotAnOperator},
+	}
+	for name, tt := range refused {
+		t.Run(name, func(t *testing.T) {
+			_, err := svc.Claim(ctx, tt.operator, tt.agent)
+			assert.ErrorIs(t, err, tt.err)
+		})
+	}
+
+	assert.Equal(t, []grn.GRN{d.Agent()}, issuer.signed,
+		"nothing was signed for a claim that was refused")
 }

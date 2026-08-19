@@ -171,6 +171,58 @@ func (q *Queries) ListAgentAssignmentsByOrg(ctx context.Context, orgGrn string) 
 	return items, nil
 }
 
+const listAgentDefinitionsByOperator = `-- name: ListAgentDefinitionsByOperator :many
+SELECT d.agent_grn, d.org_grn, d.operator_grn, d.agent_values, d.defined_by, d.created_at, a.epoch AS claim_epoch, a.created_at AS claim_created_at, a.updated_at AS claim_updated_at
+FROM agent_definitions d
+LEFT JOIN agent_assignments a ON a.agent_grn = d.agent_grn
+WHERE d.operator_grn = $1
+ORDER BY d.agent_grn
+`
+
+type ListAgentDefinitionsByOperatorRow struct {
+	AgentGrn       string
+	OrgGrn         string
+	OperatorGrn    string
+	AgentValues    []byte
+	DefinedBy      string
+	CreatedAt      pgtype.Timestamptz
+	ClaimEpoch     pgtype.Int4
+	ClaimCreatedAt pgtype.Timestamptz
+	ClaimUpdatedAt pgtype.Timestamptz
+}
+
+// The claim state is the assignment the claim wrote: an unclaimed
+// definition has none, and a claimed one binds the operator it names.
+func (q *Queries) ListAgentDefinitionsByOperator(ctx context.Context, operatorGrn string) ([]ListAgentDefinitionsByOperatorRow, error) {
+	rows, err := q.db.Query(ctx, listAgentDefinitionsByOperator, operatorGrn)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAgentDefinitionsByOperatorRow
+	for rows.Next() {
+		var i ListAgentDefinitionsByOperatorRow
+		if err := rows.Scan(
+			&i.AgentGrn,
+			&i.OrgGrn,
+			&i.OperatorGrn,
+			&i.AgentValues,
+			&i.DefinedBy,
+			&i.CreatedAt,
+			&i.ClaimEpoch,
+			&i.ClaimCreatedAt,
+			&i.ClaimUpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAgentDefinitionsByOrg = `-- name: ListAgentDefinitionsByOrg :many
 SELECT agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at FROM agent_definitions WHERE org_grn = $1 ORDER BY agent_grn
 `
@@ -231,6 +283,27 @@ func (q *Queries) ListAgentsByOrg(ctx context.Context, orgGrn string) ([]Agent, 
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockAgentDefinition = `-- name: LockAgentDefinition :one
+SELECT agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at FROM agent_definitions WHERE agent_grn = $1 FOR UPDATE
+`
+
+// LockAgentDefinition is the lock a claim serializes on: two claims of
+// one definition take the row lock in turn, and the second reads the
+// assignment the first wrote.
+func (q *Queries) LockAgentDefinition(ctx context.Context, agentGrn string) (AgentDefinition, error) {
+	row := q.db.QueryRow(ctx, lockAgentDefinition, agentGrn)
+	var i AgentDefinition
+	err := row.Scan(
+		&i.AgentGrn,
+		&i.OrgGrn,
+		&i.OperatorGrn,
+		&i.AgentValues,
+		&i.DefinedBy,
+		&i.CreatedAt,
+	)
+	return i, err
 }
 
 const reportAgentProvisioningState = `-- name: ReportAgentProvisioningState :one

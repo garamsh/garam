@@ -329,8 +329,8 @@ func (q *Queries) RenewClaim(ctx context.Context, arg RenewClaimParams) (Message
 
 const withdrawConsent = `-- name: WithdrawConsent :exec
 UPDATE message_consents SET
-    a_consented_at = CASE WHEN org_a = $1 THEN NULL END,
-    b_consented_at = CASE WHEN org_b = $1 THEN NULL END
+    a_consented_at = CASE WHEN org_a = $1 THEN NULL::timestamptz ELSE a_consented_at END,
+    b_consented_at = CASE WHEN org_b = $1 THEN NULL::timestamptz ELSE b_consented_at END
 WHERE org_a = least($1, $2)
   AND org_b = greatest($1, $2)
 `

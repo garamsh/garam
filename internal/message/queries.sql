@@ -102,8 +102,8 @@ RETURNING *;
 -- asked for either way.
 -- name: WithdrawConsent :exec
 UPDATE message_consents SET
-    a_consented_at = CASE WHEN org_a = sqlc.arg('org') THEN NULL END,
-    b_consented_at = CASE WHEN org_b = sqlc.arg('org') THEN NULL END
+    a_consented_at = CASE WHEN org_a = sqlc.arg('org') THEN NULL::timestamptz ELSE a_consented_at END,
+    b_consented_at = CASE WHEN org_b = sqlc.arg('org') THEN NULL::timestamptz ELSE b_consented_at END
 WHERE org_a = least(sqlc.arg('org'), sqlc.arg('other'))
   AND org_b = greatest(sqlc.arg('org'), sqlc.arg('other'));
 

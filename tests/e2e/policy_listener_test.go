@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/garam/internal/authz"
+	"github.com/garamsh/garam/internal/wire"
 )
 
 // policyListenerAppName is what the listener's connections call
@@ -185,7 +186,7 @@ func TestListenPolicyChanges_ResynchronisesAfterADroppedConnection(t *testing.T)
 
 	before, err := authz.NewPolicyGRN(orgGRN)
 	require.NoError(t, err)
-	_, err = s.CreatePolicy(ctx, authz.NewPolicy(before, orgGRN, "before"), policyDoc("before", authz.EffectAllow), author)
+	_, err = s.CreatePolicy(ctx, authz.NewPolicy(before, orgGRN, "before"), policyDoc("before", wire.EffectAllow), author)
 	require.NoError(t, err)
 	_, err = s.SetPolicyStatus(ctx, before, authz.PolicyStatusActive)
 	require.NoError(t, err)
@@ -210,7 +211,7 @@ func TestListenPolicyChanges_ResynchronisesAfterADroppedConnection(t *testing.T)
 	require.NoError(t, err)
 	after, err := authz.NewPolicyGRN(orgGRN)
 	require.NoError(t, err)
-	_, err = s.CreatePolicy(ctx, authz.NewPolicy(after, orgGRN, "after"), policyDoc("after", authz.EffectAllow), author)
+	_, err = s.CreatePolicy(ctx, authz.NewPolicy(after, orgGRN, "after"), policyDoc("after", wire.EffectAllow), author)
 	require.NoError(t, err)
 	_, err = s.SetPolicyStatus(ctx, after, authz.PolicyStatusActive)
 	require.NoError(t, err)

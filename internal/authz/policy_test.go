@@ -9,6 +9,7 @@ import (
 	"github.com/garamsh/garam/internal/authz"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/wire"
 )
 
 func TestParsePolicyDocument_Valid(t *testing.T) {
@@ -22,7 +23,7 @@ func TestParsePolicyDocument_Valid(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "2026-07-25", doc.Version)
 	require.Len(t, doc.Statement, 2)
-	assert.Equal(t, authz.EffectAllow, doc.Statement[0].Effect)
+	assert.Equal(t, wire.EffectAllow, doc.Statement[0].Effect)
 	assert.Equal(t, []string{"org:delete"}, doc.Statement[1].Action)
 }
 

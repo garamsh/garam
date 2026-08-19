@@ -8,6 +8,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/org"
 	"github.com/garamsh/garam/internal/user"
+	"github.com/garamsh/garam/internal/wire"
 )
 
 // scopedStatements collects the statements applying to the subject
@@ -16,7 +17,7 @@ import (
 func (s *Server) scopedStatements(r *http.Request, orgGRN grn.GRN, m *org.Membership, target grn.GRN, u *user.User) ([]Statement, error) {
 	statements := []Statement{{
 		Sid:      "org-role-" + string(m.Role()),
-		Effect:   EffectAllow,
+		Effect:   wire.EffectAllow,
 		Action:   m.Role().Actions(),
 		Resource: []string{orgGRN.String(), orgScope(orgGRN)},
 	}}
@@ -45,7 +46,7 @@ func userStatements(orgGRN grn.GRN, u *user.User) []Statement {
 	}
 	return []Statement{{
 		Sid:      "user-role-" + u.GRN().Identifier,
-		Effect:   EffectAllow,
+		Effect:   wire.EffectAllow,
 		Action:   actions,
 		Resource: []string{orgGRN.String(), orgScope(orgGRN)},
 	}}
@@ -76,7 +77,7 @@ func (s *Server) groupStatements(r *http.Request, groupGRN, subject grn.GRN) ([]
 	}
 	return []Statement{{
 		Sid:      "group-role-" + groupGRN.Identifier,
-		Effect:   EffectAllow,
+		Effect:   wire.EffectAllow,
 		Action:   actions,
 		Resource: []string{groupGRN.String()},
 	}}, nil
@@ -107,7 +108,7 @@ func (s *Server) projectStatements(r *http.Request, projectGRN, subject grn.GRN)
 	}
 	return []Statement{{
 		Sid:      "project-role-" + projectGRN.Identifier,
-		Effect:   EffectAllow,
+		Effect:   wire.EffectAllow,
 		Action:   actions,
 		Resource: []string{projectGRN.String()},
 	}}, nil

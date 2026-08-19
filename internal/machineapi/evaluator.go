@@ -4,22 +4,14 @@ import (
 	"context"
 
 	"github.com/garamsh/garam/internal/grn"
-)
-
-// Effect is a statement's outcome when it matches (ADR-0002). It
-// mirrors the wire model; the engine owns the semantics.
-type Effect string
-
-const (
-	EffectAllow Effect = "Allow"
-	EffectDeny  Effect = "Deny"
+	"github.com/garamsh/garam/internal/wire"
 )
 
 // Statement is one IAM-style rule handed to the authz engine for
 // evaluation. Action and Resource entries are wildcard patterns.
 type Statement struct {
 	Sid      string
-	Effect   Effect
+	Effect   wire.Effect
 	Action   []string
 	Resource []string
 }

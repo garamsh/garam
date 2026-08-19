@@ -10,6 +10,7 @@ import (
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/message"
+	"github.com/garamsh/garam/internal/wire"
 )
 
 // PostMessage stores a message the caller is sending. The sender is
@@ -121,7 +122,7 @@ func (s *Server) authorizeSend(ctx context.Context, sender, recipient grn.GRN) e
 func sendingStatements(sender grn.GRN) []Statement {
 	return []Statement{{
 		Sid:      "machine-own-org",
-		Effect:   EffectAllow,
+		Effect:   wire.EffectAllow,
 		Action:   []string{message.ActionSend},
 		Resource: []string{"grn:" + sender.Organization + ":*"},
 	}}

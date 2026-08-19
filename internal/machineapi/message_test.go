@@ -14,6 +14,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/machineapi"
 	"github.com/garamsh/garam/internal/message"
+	"github.com/garamsh/garam/internal/wire"
 )
 
 // engine answers the Evaluator seam by evaluating the statements the
@@ -49,7 +50,7 @@ func (e *engine) Evaluate(_ context.Context, in machineapi.EvalInput) (bool, err
 		if !matches(s, in.Action, in.Object.String()) {
 			continue
 		}
-		if s.Effect == machineapi.EffectDeny {
+		if s.Effect == wire.EffectDeny {
 			return false, nil
 		}
 		allow = true
@@ -106,7 +107,7 @@ func matchPattern(pattern, value string) bool {
 func denySending(sid, resource string) machineapi.Statement {
 	return machineapi.Statement{
 		Sid:      sid,
-		Effect:   machineapi.EffectDeny,
+		Effect:   wire.EffectDeny,
 		Action:   []string{message.ActionSend},
 		Resource: []string{resource},
 	}
@@ -313,7 +314,7 @@ func TestServer_SendsWhereTheSendersOwnOrganizationReaches(t *testing.T) {
 	// was refused without a policy deciding anything.
 	ownOrg := []machineapi.Statement{{
 		Sid:      "machine-own-org",
-		Effect:   machineapi.EffectAllow,
+		Effect:   wire.EffectAllow,
 		Action:   []string{message.ActionSend},
 		Resource: []string{"grn:acme:*"},
 	}}

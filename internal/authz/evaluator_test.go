@@ -8,6 +8,7 @@ import (
 
 	"github.com/garamsh/garam/internal/authz"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/wire"
 )
 
 type testObject struct{ g grn.GRN }
@@ -26,8 +27,8 @@ func evaluate(statements []authz.Statement, action, resource string) authz.Decis
 
 func TestStatementEvaluator_ExplicitDenyWins(t *testing.T) {
 	statements := []authz.Statement{
-		{Sid: "allow", Effect: authz.EffectAllow, Action: []string{"org:*"}, Resource: []string{"grn:root:default:org:acme"}},
-		{Sid: "deny", Effect: authz.EffectDeny, Action: []string{"org:delete"}, Resource: []string{"grn:root:default:org:acme"}},
+		{Sid: "allow", Effect: wire.EffectAllow, Action: []string{"org:*"}, Resource: []string{"grn:root:default:org:acme"}},
+		{Sid: "deny", Effect: wire.EffectDeny, Action: []string{"org:delete"}, Resource: []string{"grn:root:default:org:acme"}},
 	}
 	got := evaluate(statements, "org:delete", "grn:root:default:org:acme")
 	assert.Equal(t, authz.DecisionDeny, got)
@@ -39,8 +40,8 @@ func TestStatementEvaluator_ExplicitDenyWins(t *testing.T) {
 
 func TestStatementEvaluator_ScopedDenyOverridesOrgWideAllow(t *testing.T) {
 	statements := []authz.Statement{
-		{Sid: "org-role-owner", Effect: authz.EffectAllow, Action: []string{"group:*"}, Resource: []string{"grn:acme:*"}},
-		{Sid: "deny-eng", Effect: authz.EffectDeny, Action: []string{"group:delete"}, Resource: []string{"grn:acme:default:group:eng"}},
+		{Sid: "org-role-owner", Effect: wire.EffectAllow, Action: []string{"group:*"}, Resource: []string{"grn:acme:*"}},
+		{Sid: "deny-eng", Effect: wire.EffectDeny, Action: []string{"group:delete"}, Resource: []string{"grn:acme:default:group:eng"}},
 	}
 	assert.Equal(t, authz.DecisionDeny, evaluate(statements, "group:delete", "grn:acme:default:group:eng"))
 
@@ -51,7 +52,7 @@ func TestStatementEvaluator_ScopedDenyOverridesOrgWideAllow(t *testing.T) {
 
 func TestStatementEvaluator_DefaultDeny(t *testing.T) {
 	statements := []authz.Statement{
-		{Sid: "allow", Effect: authz.EffectAllow, Action: []string{"org:read"}, Resource: []string{"grn:root:default:org:acme"}},
+		{Sid: "allow", Effect: wire.EffectAllow, Action: []string{"org:read"}, Resource: []string{"grn:root:default:org:acme"}},
 	}
 	cases := []struct {
 		name             string
@@ -71,7 +72,7 @@ func TestStatementEvaluator_DefaultDeny(t *testing.T) {
 
 func TestStatementEvaluator_Patterns(t *testing.T) {
 	statements := []authz.Statement{
-		{Sid: "wild", Effect: authz.EffectAllow, Action: []string{"org:*"}, Resource: []string{"grn:root:default:org:*"}},
+		{Sid: "wild", Effect: wire.EffectAllow, Action: []string{"org:*"}, Resource: []string{"grn:root:default:org:*"}},
 	}
 	assert.Equal(t, authz.DecisionAllow, evaluate(statements, "org:read", "grn:root:default:org:acme"))
 	assert.Equal(t, authz.DecisionAllow, evaluate(statements, "org:delete", "grn:root:default:org:beta"))
@@ -80,10 +81,10 @@ func TestStatementEvaluator_Patterns(t *testing.T) {
 }
 
 func TestStatement_Matches(t *testing.T) {
-	s := authz.Statement{Effect: authz.EffectAllow, Action: []string{"*"}, Resource: []string{"*"}}
+	s := authz.Statement{Effect: wire.EffectAllow, Action: []string{"*"}, Resource: []string{"*"}}
 	assert.True(t, s.Matches("anything", "grn:root:default:org:acme"))
 
-	s = authz.Statement{Effect: authz.EffectAllow, Action: []string{"org:read"}, Resource: []string{"grn:root:default:org:acme"}}
+	s = authz.Statement{Effect: wire.EffectAllow, Action: []string{"org:read"}, Resource: []string{"grn:root:default:org:acme"}}
 	assert.False(t, s.Matches("org:read", "grn:root:default:org:other"))
 }
 
@@ -109,7 +110,7 @@ func TestStatement_MatchesFullPatterns(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			s := authz.Statement{Effect: authz.EffectAllow, Action: []string{c.pattern}, Resource: []string{"*"}}
+			s := authz.Statement{Effect: wire.EffectAllow, Action: []string{c.pattern}, Resource: []string{"*"}}
 			assert.Equal(t, c.want, s.Matches(c.value, "grn:root:default:org:acme"))
 		})
 	}

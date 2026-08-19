@@ -11,6 +11,7 @@ import (
 	"github.com/garamsh/garam/internal/agent/db"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/pgxerr"
 )
 
 // Define persists a definition. It writes no agent row: what an
@@ -29,14 +30,14 @@ func (s *PostgresStore) Define(ctx context.Context, d *Definition) error {
 		DefinedBy:   d.definedBy.String(),
 		CreatedAt:   stamp(d.createdAt),
 	})
-	return classify(err, "define", nil, nil)
+	return pgxerr.Classify(err, "define", nil, nil)
 }
 
 // ListDefinitionsByOrg returns the organization's definitions.
 func (s *PostgresStore) ListDefinitionsByOrg(ctx context.Context, orgGRN grn.GRN) ([]*Definition, error) {
 	rows, err := s.q.ListAgentDefinitionsByOrg(ctx, orgGRN.String())
 	if err != nil {
-		return nil, classify(err, "list definitions", nil, nil)
+		return nil, pgxerr.Classify(err, "list definitions", nil, nil)
 	}
 	definitions := make([]*Definition, 0, len(rows))
 	for _, row := range rows {
@@ -54,7 +55,7 @@ func (s *PostgresStore) ListDefinitionsByOrg(ctx context.Context, orgGRN grn.GRN
 func (s *PostgresStore) ListDefinitionsByOperator(ctx context.Context, operatorGRN grn.GRN) ([]*DefinitionState, error) {
 	rows, err := s.q.ListAgentDefinitionsByOperator(ctx, operatorGRN.String())
 	if err != nil {
-		return nil, classify(err, "list definitions", nil, nil)
+		return nil, pgxerr.Classify(err, "list definitions", nil, nil)
 	}
 	states := make([]*DefinitionState, 0, len(rows))
 	for _, row := range rows {
@@ -100,7 +101,7 @@ func (s *PostgresStore) Claim(ctx context.Context, agentGRN, operatorGRN grn.GRN
 	q := s.q.WithTx(tx)
 	row, err := q.LockAgentDefinition(ctx, agentGRN.String())
 	if err != nil {
-		return nil, classify(err, "claim", ErrDefinitionNotFound, nil)
+		return nil, pgxerr.Classify(err, "claim", ErrDefinitionNotFound, nil)
 	}
 	// A definition naming another operator is one this caller cannot
 	// read either, so the claim answers as the read does.
@@ -110,7 +111,7 @@ func (s *PostgresStore) Claim(ctx context.Context, agentGRN, operatorGRN grn.GRN
 	if _, err := q.GetAgentAssignment(ctx, agentGRN.String()); err == nil {
 		return nil, ErrDefinitionClaimed
 	} else if !errors.Is(err, pgx.ErrNoRows) {
-		return nil, classify(err, "claim", nil, nil)
+		return nil, pgxerr.Classify(err, "claim", nil, nil)
 	}
 	d, err := rowToDefinition(row)
 	if err != nil {
@@ -129,7 +130,7 @@ func (s *PostgresStore) Claim(ctx context.Context, agentGRN, operatorGRN grn.GRN
 		CreatedAt:         now,
 		UpdatedAt:         now,
 	}); err != nil {
-		return nil, classify(err, "claim", nil, nil)
+		return nil, pgxerr.Classify(err, "claim", nil, nil)
 	}
 	assigned, err := q.AssignAgent(ctx, db.AssignAgentParams{
 		AgentGrn:    agentGRN.String(),
@@ -138,7 +139,7 @@ func (s *PostgresStore) Claim(ctx context.Context, agentGRN, operatorGRN grn.GRN
 		UpdatedAt:   now,
 	})
 	if err != nil {
-		return nil, classify(err, "claim", nil, nil)
+		return nil, pgxerr.Classify(err, "claim", nil, nil)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, errorx.Wrap(err, "agent store: commit")

@@ -8,6 +8,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/listfilter"
 	"github.com/garamsh/garam/internal/org/db"
+	"github.com/garamsh/garam/internal/pgxerr"
 )
 
 // CreateProject persists a new Project.
@@ -21,7 +22,7 @@ func (s *PostgresStore) CreateProject(ctx context.Context, p *Project) error {
 		CreatedAt: stamp(p.createdAt),
 		UpdatedAt: stamp(p.updatedAt),
 	})
-	return classify(err, "create project", nil, nil)
+	return pgxerr.Classify(err, "create project", nil, nil)
 }
 
 // GetProject returns the Project with the given GRN, or
@@ -29,7 +30,7 @@ func (s *PostgresStore) CreateProject(ctx context.Context, p *Project) error {
 func (s *PostgresStore) GetProject(ctx context.Context, g grn.GRN) (*Project, error) {
 	row, err := s.q.GetProject(ctx, g.String())
 	if err != nil {
-		return nil, classify(err, "get project", ErrProjectNotFound, nil)
+		return nil, pgxerr.Classify(err, "get project", ErrProjectNotFound, nil)
 	}
 	return rowToProject(row)
 }
@@ -42,7 +43,7 @@ func (s *PostgresStore) ListProjects(ctx context.Context, orgGRN grn.GRN, f list
 		RowLimit:  limit(f.Limit),
 	})
 	if err != nil {
-		return nil, classify(err, "list projects", nil, nil)
+		return nil, pgxerr.Classify(err, "list projects", nil, nil)
 	}
 	projects := make([]*Project, 0, len(rows))
 	for _, row := range rows {
@@ -65,7 +66,7 @@ func (s *PostgresStore) UpdateProject(ctx context.Context, g grn.GRN, p ProjectP
 		UpdatedAt: stamp(time.Now().UTC()),
 	})
 	if err != nil {
-		return nil, classify(err, "update project", ErrProjectNotFound, nil)
+		return nil, pgxerr.Classify(err, "update project", ErrProjectNotFound, nil)
 	}
 	return rowToProject(row)
 }
@@ -82,7 +83,7 @@ func (s *PostgresStore) AddProjectMember(ctx context.Context, projectGRN, member
 		ProjectGrn: projectGRN.String(),
 		MemberGrn:  memberGRN.String(),
 	})
-	return classify(err, "add project member", nil, nil)
+	return pgxerr.Classify(err, "add project member", nil, nil)
 }
 
 // RemoveProjectMember removes a member from the Project, or returns
@@ -99,7 +100,7 @@ func (s *PostgresStore) RemoveProjectMember(ctx context.Context, projectGRN, mem
 func (s *PostgresStore) ListProjectMembers(ctx context.Context, projectGRN grn.GRN) ([]grn.GRN, error) {
 	rows, err := s.q.ListProjectMembers(ctx, projectGRN.String())
 	if err != nil {
-		return nil, classify(err, "list project members", nil, nil)
+		return nil, pgxerr.Classify(err, "list project members", nil, nil)
 	}
 	return parseGRNs(rows, "project member row")
 }

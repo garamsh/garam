@@ -1,17 +1,15 @@
 package org
 
 import (
-	"errors"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/org/db"
+	"github.com/garamsh/garam/internal/pgxerr"
 )
 
 // PostgresStore implements Store against PostgreSQL. The queries are
@@ -43,44 +41,18 @@ func parseGRNs(ss []string, op string) ([]grn.GRN, error) {
 }
 
 // classifyRows maps the outcome of a statement that reports how many
-// rows it touched: a driver error takes classify, and a statement that
-// matched none takes the notFound sentinel. Every delete and removal
-// in this store answers through here, so none of them reports success
-// for a row that was not there.
+// rows it touched: a driver error takes pgxerr.Classify, and a
+// statement that matched none takes the notFound sentinel. Every
+// delete and removal in this store answers through here, so none of
+// them reports success for a row that was not there.
 func classifyRows(n int64, err error, op string, notFound error) error {
 	if err != nil {
-		return classify(err, op, nil, nil)
+		return pgxerr.Classify(err, op, notFound, nil)
 	}
 	if n == 0 {
 		return notFound
 	}
 	return nil
-}
-
-// classify maps driver errors onto errorx kinds: missing rows become
-// the notFound sentinel, unique violations become the conflict
-// sentinel when given (otherwise already-exists), foreign-key
-// violations become not-found.
-func classify(err error, op string, notFound, conflict error) error {
-	if err == nil {
-		return nil
-	}
-	if errors.Is(err, pgx.ErrNoRows) && notFound != nil {
-		return notFound
-	}
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) {
-		switch pgErr.Code {
-		case "23505":
-			if conflict != nil {
-				return conflict
-			}
-			return errorx.Wrap(err, "org store: "+op, errorx.KindAlreadyExists)
-		case "23503":
-			return errorx.Wrap(err, "org store: "+op+": referenced row missing", errorx.KindNotFound)
-		}
-	}
-	return errorx.Wrap(err, "org store: "+op)
 }
 
 // stamp converts a time.Time to a valid pgtype.Timestamptz.

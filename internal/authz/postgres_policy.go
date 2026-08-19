@@ -8,6 +8,7 @@ import (
 	"github.com/garamsh/garam/internal/authz/db"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/pgxerr"
 )
 
 // CreatePolicy stores the policy and its first version in one
@@ -35,7 +36,7 @@ func (s *PostgresStore) CreatePolicy(ctx context.Context, p *Policy, doc PolicyD
 		UpdatedAt:      stamp(p.updatedAt),
 	})
 	if err != nil {
-		return nil, classify(err, "create policy", nil, ErrPolicyAlreadyExists)
+		return nil, pgxerr.Classify(err, "create policy", nil, ErrPolicyAlreadyExists)
 	}
 	if _, err := q.CreateFirstPolicyVersion(ctx, db.CreateFirstPolicyVersionParams{
 		PolicyGrn: p.grn.String(),
@@ -43,7 +44,7 @@ func (s *PostgresStore) CreatePolicy(ctx context.Context, p *Policy, doc PolicyD
 		CreatedBy: createdBy.String(),
 		CreatedAt: stamp(p.createdAt),
 	}); err != nil {
-		return nil, classify(err, "create policy version", nil, nil)
+		return nil, pgxerr.Classify(err, "create policy version", nil, nil)
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return nil, errorx.Wrap(err, "authz store: commit")
@@ -56,7 +57,7 @@ func (s *PostgresStore) CreatePolicy(ctx context.Context, p *Policy, doc PolicyD
 func (s *PostgresStore) GetPolicy(ctx context.Context, g grn.GRN) (*Policy, error) {
 	row, err := s.q.GetPolicy(ctx, g.String())
 	if err != nil {
-		return nil, classify(err, "get policy", ErrPolicyNotFound, nil)
+		return nil, pgxerr.Classify(err, "get policy", ErrPolicyNotFound, nil)
 	}
 	return rowToPolicy(row)
 }
@@ -65,7 +66,7 @@ func (s *PostgresStore) GetPolicy(ctx context.Context, g grn.GRN) (*Policy, erro
 func (s *PostgresStore) ListPolicies(ctx context.Context, orgGRN grn.GRN) ([]*Policy, error) {
 	rows, err := s.q.ListPolicies(ctx, orgGRN.String())
 	if err != nil {
-		return nil, classify(err, "list policies", nil, nil)
+		return nil, pgxerr.Classify(err, "list policies", nil, nil)
 	}
 	policies := make([]*Policy, 0, len(rows))
 	for _, row := range rows {
@@ -91,7 +92,7 @@ func (s *PostgresStore) AddPolicyVersion(ctx context.Context, g grn.GRN, doc Pol
 		CreatedAt: stamp(time.Now().UTC()),
 	})
 	if err != nil {
-		return nil, classify(err, "add policy version", ErrPolicyNotFound, nil)
+		return nil, pgxerr.Classify(err, "add policy version", ErrPolicyNotFound, nil)
 	}
 	return rowToPolicyVersion(row)
 }
@@ -100,7 +101,7 @@ func (s *PostgresStore) AddPolicyVersion(ctx context.Context, g grn.GRN, doc Pol
 func (s *PostgresStore) ListPolicyVersions(ctx context.Context, g grn.GRN) ([]*PolicyVersion, error) {
 	rows, err := s.q.ListPolicyVersions(ctx, g.String())
 	if err != nil {
-		return nil, classify(err, "list policy versions", nil, nil)
+		return nil, pgxerr.Classify(err, "list policy versions", nil, nil)
 	}
 	versions := make([]*PolicyVersion, 0, len(rows))
 	for _, row := range rows {
@@ -121,7 +122,7 @@ func (s *PostgresStore) SetPolicyStatus(ctx context.Context, g grn.GRN, status P
 		UpdatedAt: stamp(time.Now().UTC()),
 	})
 	if err != nil {
-		return nil, classify(err, "set policy status", ErrPolicyNotFound, nil)
+		return nil, pgxerr.Classify(err, "set policy status", ErrPolicyNotFound, nil)
 	}
 	return rowToPolicy(row)
 }
@@ -133,7 +134,7 @@ func (s *PostgresStore) SetPolicyDefaultVersion(ctx context.Context, g grn.GRN, 
 		PolicyGrn: g.String(),
 		Version:   int32(version),
 	}); err != nil {
-		return nil, classify(err, "get policy version", ErrPolicyVersionNotFound, nil)
+		return nil, pgxerr.Classify(err, "get policy version", ErrPolicyVersionNotFound, nil)
 	}
 	row, err := s.q.SetPolicyDefaultVersion(ctx, db.SetPolicyDefaultVersionParams{
 		Grn:            g.String(),
@@ -141,7 +142,7 @@ func (s *PostgresStore) SetPolicyDefaultVersion(ctx context.Context, g grn.GRN, 
 		UpdatedAt:      stamp(time.Now().UTC()),
 	})
 	if err != nil {
-		return nil, classify(err, "set policy default version", ErrPolicyNotFound, nil)
+		return nil, pgxerr.Classify(err, "set policy default version", ErrPolicyNotFound, nil)
 	}
 	return rowToPolicy(row)
 }

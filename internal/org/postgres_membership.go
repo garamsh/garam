@@ -7,6 +7,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/listfilter"
 	"github.com/garamsh/garam/internal/org/db"
+	"github.com/garamsh/garam/internal/pgxerr"
 )
 
 // AddMember persists a new org Membership.
@@ -17,7 +18,7 @@ func (s *PostgresStore) AddMember(ctx context.Context, m *Membership) error {
 		Role:      string(m.role),
 		CreatedAt: stamp(m.createdAt),
 	})
-	return classify(err, "add member", nil, ErrMemberAlreadyExists)
+	return pgxerr.Classify(err, "add member", nil, ErrMemberAlreadyExists)
 }
 
 // GetMember returns the Membership of a user in an org, or
@@ -28,7 +29,7 @@ func (s *PostgresStore) GetMember(ctx context.Context, orgGRN, userGRN grn.GRN) 
 		UserGrn: userGRN.String(),
 	})
 	if err != nil {
-		return nil, classify(err, "get member", ErrMemberNotFound, nil)
+		return nil, pgxerr.Classify(err, "get member", ErrMemberNotFound, nil)
 	}
 	return rowToMembership(row)
 }
@@ -37,7 +38,7 @@ func (s *PostgresStore) GetMember(ctx context.Context, orgGRN, userGRN grn.GRN) 
 func (s *PostgresStore) ListMembers(ctx context.Context, orgGRN grn.GRN) ([]*Membership, error) {
 	rows, err := s.q.ListOrgMembers(ctx, orgGRN.String())
 	if err != nil {
-		return nil, classify(err, "list members", nil, nil)
+		return nil, pgxerr.Classify(err, "list members", nil, nil)
 	}
 	members := make([]*Membership, 0, len(rows))
 	for _, row := range rows {
@@ -69,7 +70,7 @@ func (s *PostgresStore) ListOrgsByMember(ctx context.Context, userGRN grn.GRN, f
 		RowLimit:  limit(f.Limit),
 	})
 	if err != nil {
-		return nil, classify(err, "list orgs by member", nil, nil)
+		return nil, pgxerr.Classify(err, "list orgs by member", nil, nil)
 	}
 	orgs := make([]*Organization, 0, len(rows))
 	for _, row := range rows {

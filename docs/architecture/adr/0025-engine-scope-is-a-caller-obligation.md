@@ -1,6 +1,6 @@
 # ADR 0025: The engine's organization scope is the caller's obligation
 
-> Status: accepted
+> Status: accepted — the engine-membership half this decision deferred is decided by [ADR-0038](./0038-the-engine-learns-a-subjects-memberships-and-enforces-its-own-scope.md)
 > Date: 2026-08-17
 
 ## Contents

@@ -60,3 +60,10 @@ A concern shared by three or more boundaries is extracted. One shared
 by two stays with the boundary that owns it and is reached through its
 declared surface — unless a boundary may not reach a sibling at all,
 in which case it is extracted too.
+
+A conversion to a wire format the boundaries already share is not a
+shared kernel: a package holding it is depended on for the format,
+not for each other's behaviour, so it does not couple the boundaries
+that import it. What the format names — a wire type and the two
+directions of its conversion — belongs to that package; anything that
+would choose a behaviour rather than convert one does not.

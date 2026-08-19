@@ -23,6 +23,7 @@ import (
 	"github.com/garamsh/garam/internal/authz"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/health"
+	"github.com/garamsh/garam/internal/message"
 	"github.com/garamsh/garam/internal/org"
 	"github.com/garamsh/garam/internal/user"
 	"github.com/garamsh/garam/internal/watch"
@@ -122,6 +123,7 @@ func serveAPI(cmd *cobra.Command) error {
 		user.NewPostgresStore(pool),
 		org.NewPostgresStore(pool),
 		agent.NewPostgresStore(pool),
+		message.NewPostgresStore(pool),
 		watches,
 		authn.NewPostgresSessionStore(pool),
 		authn.NewPostgresOAuthStateStore(pool),

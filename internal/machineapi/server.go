@@ -16,6 +16,9 @@
 // past it to another process. That question carries the groups the
 // caller belongs to, read over a seam of the same shape, because a
 // policy attached to a group decides what its members send (ADR-0008).
+// It is never asked across an organization boundary: there the consent
+// relation decides alone (ADR-0035), read from the message domain that
+// owns it.
 package machineapi
 
 import (
@@ -44,6 +47,7 @@ type Groups interface {
 type Server struct {
 	agents    agent.Service
 	messages  message.Service
+	consents  message.ConsentStore
 	watches   watch.Service
 	groups    Groups
 	evaluator Evaluator
@@ -54,11 +58,12 @@ var _ machinegen.ServerInterface = (*Server)(nil)
 
 // NewServer constructs the machine API server over the services it
 // answers from: what an operator does to its agents, what a machine
-// identity does to its own queue, who is watching one work and what it
-// is saying, which groups a caller belongs to, and what decides whom it
-// may send to.
-func NewServer(agents agent.Service, messages message.Service, watches watch.Service, groups Groups, evaluator Evaluator) *Server {
-	return &Server{agents: agents, messages: messages, watches: watches, groups: groups, evaluator: evaluator}
+// identity does to its own queue, the consent relation that lets a
+// message cross an organization boundary, who is watching one work and
+// what it is saying, which groups a caller belongs to, and what decides
+// whom it may send to.
+func NewServer(agents agent.Service, messages message.Service, consents message.ConsentStore, watches watch.Service, groups Groups, evaluator Evaluator) *Server {
+	return &Server{agents: agents, messages: messages, consents: consents, watches: watches, groups: groups, evaluator: evaluator}
 }
 
 // caller returns the GRN the connection authenticated as, and writes

@@ -100,6 +100,31 @@ func (q *Queries) CompleteMessage(ctx context.Context, arg CompleteMessageParams
 	return result.RowsAffected(), nil
 }
 
+const consentStands = `-- name: ConsentStands :one
+SELECT EXISTS (
+    SELECT 1 FROM message_consents
+    WHERE org_a = least($1, $2)
+      AND org_b = greatest($1, $2)
+      AND a_consented_at IS NOT NULL
+      AND b_consented_at IS NOT NULL
+) AS stands
+`
+
+type ConsentStandsParams struct {
+	Org   string
+	Other string
+}
+
+// ConsentStands answers the send path's one question: whether both
+// halves of the pair stand right now (ADR-0035). A missing row and a
+// half-withdrawn row are the same answer.
+func (q *Queries) ConsentStands(ctx context.Context, arg ConsentStandsParams) (bool, error) {
+	row := q.db.QueryRow(ctx, consentStands, arg.Org, arg.Other)
+	var stands bool
+	err := row.Scan(&stands)
+	return stands, err
+}
+
 const deleteExpiredMessages = `-- name: DeleteExpiredMessages :exec
 DELETE FROM messages
 WHERE completed_at IS NULL
@@ -115,6 +140,28 @@ WHERE completed_at IS NULL
 // with an expiry.
 func (q *Queries) DeleteExpiredMessages(ctx context.Context, retention pgtype.Interval) error {
 	_, err := q.db.Exec(ctx, deleteExpiredMessages, retention)
+	return err
+}
+
+const dropEmptyConsent = `-- name: DropEmptyConsent :exec
+DELETE FROM message_consents
+WHERE org_a = least($1, $2)
+  AND org_b = greatest($1, $2)
+  AND a_consented_at IS NULL
+  AND b_consented_at IS NULL
+`
+
+type DropEmptyConsentParams struct {
+	Org   string
+	Other string
+}
+
+// DropEmptyConsent removes the pair's row once neither half stands:
+// the table holds live consent only, and a row with both halves down is
+// a tombstone nothing reads. It rides the withdraw, as the retention
+// sweep rides the enqueue (ADR-0034).
+func (q *Queries) DropEmptyConsent(ctx context.Context, arg DropEmptyConsentParams) error {
+	_, err := q.db.Exec(ctx, dropEmptyConsent, arg.Org, arg.Other)
 	return err
 }
 
@@ -165,6 +212,74 @@ func (q *Queries) EnqueueMessage(ctx context.Context, arg EnqueueMessageParams) 
 	return i, err
 }
 
+const grantConsent = `-- name: GrantConsent :one
+INSERT INTO message_consents (org_a, org_b, a_consented_at, b_consented_at)
+VALUES (least($1, $2), greatest($1, $2),
+        CASE WHEN $1 < $2 THEN now() END,
+        CASE WHEN $1 > $2 THEN now() END)
+ON CONFLICT (org_a, org_b) DO UPDATE SET
+    a_consented_at = coalesce(excluded.a_consented_at, message_consents.a_consented_at),
+    b_consented_at = coalesce(excluded.b_consented_at, message_consents.b_consented_at)
+RETURNING org_a, org_b, a_consented_at, b_consented_at
+`
+
+type GrantConsentParams struct {
+	Org   interface{}
+	Other interface{}
+}
+
+// GrantConsent stands the granting organization's half of the pair's
+// row, creating the row when this is the first half either side
+// grants. The pair is stored ordered, which the least/greatest pair
+// enforces on every write path; which half moves is decided by where
+// the granter sorts, not by the caller. Re-granting a half that already
+// stands only re-stamps it, so a grant is safe to repeat (ADR-0035).
+func (q *Queries) GrantConsent(ctx context.Context, arg GrantConsentParams) (MessageConsent, error) {
+	row := q.db.QueryRow(ctx, grantConsent, arg.Org, arg.Other)
+	var i MessageConsent
+	err := row.Scan(
+		&i.OrgA,
+		&i.OrgB,
+		&i.AConsentedAt,
+		&i.BConsentedAt,
+	)
+	return i, err
+}
+
+const listConsents = `-- name: ListConsents :many
+SELECT org_a, org_b, a_consented_at, b_consented_at FROM message_consents
+WHERE org_a = $1 OR org_b = $1
+ORDER BY org_a, org_b
+`
+
+// ListConsents reads every relation the organization is a side of,
+// standing or half-withdrawn, so an administrator sees what its half
+// joins and what still waits on the other side.
+func (q *Queries) ListConsents(ctx context.Context, org string) ([]MessageConsent, error) {
+	rows, err := q.db.Query(ctx, listConsents, org)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MessageConsent
+	for rows.Next() {
+		var i MessageConsent
+		if err := rows.Scan(
+			&i.OrgA,
+			&i.OrgB,
+			&i.AConsentedAt,
+			&i.BConsentedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const renewClaim = `-- name: RenewClaim :one
 UPDATE messages SET
     claim_expires_at = least(now() + $1::interval, claimed_at + $2::interval)
@@ -210,4 +325,27 @@ func (q *Queries) RenewClaim(ctx context.Context, arg RenewClaimParams) (Message
 		&i.ClaimedAt,
 	)
 	return i, err
+}
+
+const withdrawConsent = `-- name: WithdrawConsent :exec
+UPDATE message_consents SET
+    a_consented_at = CASE WHEN org_a = $1 THEN NULL END,
+    b_consented_at = CASE WHEN org_b = $1 THEN NULL END
+WHERE org_a = least($1, $2)
+  AND org_b = greatest($1, $2)
+`
+
+type WithdrawConsentParams struct {
+	Org   string
+	Other string
+}
+
+// WithdrawConsent clears the withdrawing organization's own half and
+// leaves the other's standing: the relation falls, and the remaining
+// half is what a later re-grant joins. Clearing is idempotent — a half
+// already down stays down, and the end state is the one the caller
+// asked for either way.
+func (q *Queries) WithdrawConsent(ctx context.Context, arg WithdrawConsentParams) error {
+	_, err := q.db.Exec(ctx, withdrawConsent, arg.Org, arg.Other)
+	return err
 }

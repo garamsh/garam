@@ -12,6 +12,12 @@ import (
 	"github.com/garamsh/garam/internal/message"
 )
 
+// serviceTypeOrg is the GRN service type of an organization, kept as a
+// copy for the reason internal/agent keeps one: this surface may not
+// import internal/org, and the consent relation is keyed by the
+// organizations' GRNs.
+const serviceTypeOrg = "org"
+
 // PostMessage stores a message the caller is sending. The sender is
 // what the certificate names, and the recipient is whatever the body
 // says: garam answers once the message is stored and reports a routing
@@ -35,8 +41,13 @@ func (s *Server) PostMessage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, errorx.Wrap(err, "recipient", errorx.KindInvalidArgument))
 		return
 	}
-	if err := s.authorizeSend(r.Context(), sender, recipient); err != nil {
+	admitted, err := s.authorizeSend(r.Context(), sender, recipient)
+	if err != nil {
 		writeError(w, err)
+		return
+	}
+	if !admitted {
+		s.refuseCrossing(w, r, sender, recipient, submitted.IdempotencyKey)
 		return
 	}
 	stored, err := s.messages.Post(r.Context(), sender, recipient, submitted.IdempotencyKey, submitted.Body)
@@ -47,8 +58,36 @@ func (s *Server) PostMessage(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, messageBody(stored))
 }
 
-// authorizeSend refuses a recipient of another organization outright,
-// and asks the engine about every other one. The engine unions what the
+// refuseCrossing answers a post no consent relation carries across its
+// boundary. garam cannot route the message, so the answer is not a
+// status: the refusal returns to the sender as an ordinary inbound
+// message (ADR-0013, ADR-0035), and the post is answered once that is
+// stored, as for any other. It is stored under the intended recipient's
+// identity because garam holds none of its own (ADR-0024); the body
+// says garam refused, and the key derives from the sender's so a
+// retried post is answered with the refusal already stored rather than
+// piling up one per retry.
+func (s *Server) refuseCrossing(w http.ResponseWriter, r *http.Request, sender, recipient grn.GRN, key string) {
+	refusal := "garam could not deliver your message to " + recipient.String() +
+		": the organizations " + sender.Organization + " and " + recipient.Organization +
+		" do not both consent to cross-organization messages"
+	stored, err := s.messages.Post(r.Context(), recipient, sender, "consent-refused:"+sender.String()+":"+key, refusal)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, messageBody(stored))
+}
+
+// authorizeSend admits a recipient of the sender's own organization on
+// the engine's answer, and one across the organization boundary on the
+// consent relation alone — the engine is never asked a cross-
+// organization question, because no answer it could give would hold the
+// boundary (below). A cross-boundary recipient no standing consent
+// covers is not an error: admitted is false, and PostMessage answers
+// the post with the refusal message ADR-0013 asks for.
+//
+// The same-organization half asks the engine, which unions what the
 // sender's own identity grants with the policies its organization
 // attached to it and to the groups it belongs to, deny-overrides across
 // all three (ADR-0007, ADR-0008).
@@ -67,29 +106,31 @@ func (s *Server) PostMessage(w http.ResponseWriter, r *http.Request) {
 // subject of that check — so one unattached Allow in the recipient's
 // organization admits every sender anywhere, whatever resource pattern
 // arrives beside it, and a document written `Action: ["*"]` before
-// message:send existed names it in advance (ADR-0024). The api server
-// holds the same line by making membership of the object's
-// organization a precondition of every check; this listener has no
-// membership to read, so it compares the organization segments
-// (ADR-0001).
+// message:send existed names it in advance (ADR-0024). The consent
+// relation is what may open the boundary, because it is no policy:
+// both organizations hold it and either withdraws it (ADR-0035).
 //
 // Both GRNs reached a handler through grn.Parse, and this is where one
 // stops being inert: sendingStatements splices the organization
 // identifier into a resource pattern, where a wildcard would widen the
 // statement past the organization it was scoped to.
-func (s *Server) authorizeSend(ctx context.Context, sender, recipient grn.GRN) error {
+func (s *Server) authorizeSend(ctx context.Context, sender, recipient grn.GRN) (bool, error) {
 	if err := sender.Validate(); err != nil {
-		return err
+		return false, err
 	}
 	if err := recipient.Validate(); err != nil {
-		return err
+		return false, err
 	}
 	if sender.Organization != recipient.Organization {
-		return errorx.New(errorx.KindPermissionDenied, "recipient is in another organization")
+		// The relation is keyed by the organizations' GRNs, which are
+		// root-owned (ADR-0001).
+		return s.consents.Stands(ctx,
+			grn.New(grn.RootOwner, grn.DefaultProject, serviceTypeOrg, sender.Organization),
+			grn.New(grn.RootOwner, grn.DefaultProject, serviceTypeOrg, recipient.Organization))
 	}
 	groups, err := s.groups.List(ctx, sender)
 	if err != nil {
-		return err
+		return false, err
 	}
 	allowed, err := s.evaluator.Evaluate(ctx, EvalInput{
 		Subject:       sender,
@@ -99,12 +140,12 @@ func (s *Server) authorizeSend(ctx context.Context, sender, recipient grn.GRN) e
 		Statements:    sendingStatements(sender),
 	})
 	if err != nil {
-		return err
+		return false, err
 	}
 	if !allowed {
-		return errorx.New(errorx.KindPermissionDenied, "sender may not send to this recipient")
+		return false, errorx.New(errorx.KindPermissionDenied, "sender may not send to this recipient")
 	}
-	return nil
+	return true, nil
 }
 
 // sendingStatements is what a machine identity's own GRN grants it
@@ -115,9 +156,10 @@ func (s *Server) authorizeSend(ctx context.Context, sender, recipient grn.GRN) e
 //
 // A policy narrows it with a Deny, which is how every grant in this
 // model is narrowed. The organization segment in the pattern is
-// defence in depth rather than the boundary: authorizeSend has already
-// refused every recipient it would exclude, and a pattern could not
-// refuse them anyway.
+// defence in depth rather than the boundary: the engine is only ever
+// asked about a recipient of the sender's own organization, which the
+// pattern already covers, and a cross-boundary recipient is the consent
+// relation's question, never the engine's (ADR-0035).
 func sendingStatements(sender grn.GRN) []Statement {
 	return []Statement{{
 		Sid:      "machine-own-org",

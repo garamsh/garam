@@ -141,6 +141,63 @@ func (m *memberGroups) List(_ context.Context, subject grn.GRN) ([]grn.GRN, erro
 	return m.byMember[subject], nil
 }
 
+// consents is the message.ConsentStore the surface reads, in memory:
+// the organization pairs whose relation stands, and the answer a store
+// that cannot read one gives. Stands is the whole of what the surface
+// asks; the rest panics through the embedded interface.
+type consents struct {
+	message.ConsentStore
+	pairs map[string]bool
+	err   error
+	asked [][2]grn.GRN
+}
+
+// consenting builds a consents in which the relation stands between
+// each named pair of organization identifiers and no other.
+func consenting(pairs ...[2]string) *consents {
+	c := &consents{pairs: map[string]bool{}}
+	for _, p := range pairs {
+		c.stand(p[0], p[1])
+	}
+	return c
+}
+
+// stand moves the pair's relation up, as two grants would.
+func (c *consents) stand(orgA, orgB string) {
+	a, b := organization(orgA).String(), organization(orgB).String()
+	if b < a {
+		a, b = b, a
+	}
+	c.pairs[a+"|"+b] = true
+}
+
+// fall moves the pair's relation down, as a withdraw would.
+func (c *consents) fall(orgA, orgB string) {
+	a, b := organization(orgA).String(), organization(orgB).String()
+	if b < a {
+		a, b = b, a
+	}
+	delete(c.pairs, a+"|"+b)
+}
+
+func (c *consents) Stands(_ context.Context, a, b grn.GRN) (bool, error) {
+	c.asked = append(c.asked, [2]grn.GRN{a, b})
+	if c.err != nil {
+		return false, c.err
+	}
+	x, y := a.String(), b.String()
+	if y < x {
+		x, y = y, x
+	}
+	return c.pairs[x+"|"+y], nil
+}
+
+// organization returns the GRN of the org the identifier names. Orgs
+// are root-owned (ADR-0001).
+func organization(identifier string) grn.GRN {
+	return grn.New(grn.RootOwner, grn.DefaultProject, "org", identifier)
+}
+
 // loopback is the certificate the listener terminates TLS with. What
 // garam presents is not what these tests are about, so it is
 // self-signed and the client below does not verify it.
@@ -169,7 +226,7 @@ func loopback(t *testing.T) tls.Certificate {
 // services it answers from: a request arrives over a handshake garam
 // verified, so the identity a handler reads is the one a certificate
 // carried.
-func listener(t *testing.T, agents agent.Service, messages message.Service, watches watch.Service, groups machineapi.Groups, engine machineapi.Evaluator, caller grn.GRN) (string, *http.Client) {
+func listener(t *testing.T, agents agent.Service, messages message.Service, standing message.ConsentStore, watches watch.Service, groups machineapi.Groups, engine machineapi.Evaluator, caller grn.GRN) (string, *http.Client) {
 	t.Helper()
 	store := authorities{}
 	key := make([]byte, ca.KeySize)
@@ -187,7 +244,7 @@ func listener(t *testing.T, agents agent.Service, messages message.Service, watc
 	srv := machine.NewServer(
 		machine.NewService(trustRoots{store: store}),
 		loopback(t),
-		machinegen.Handler(machineapi.NewServer(agents, messages, watches, groups, engine)),
+		machinegen.Handler(machineapi.NewServer(agents, messages, standing, watches, groups, engine)),
 	)
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
@@ -231,7 +288,7 @@ func TestServer_IssuesForTheAgentThePathNames(t *testing.T) {
 		IssuerPEM:      []byte("issuer"),
 		NotAfter:       notAfter,
 	}}
-	url, client := listener(t, agents, &messageService{}, unwatched(t), &memberGroups{}, &engine{}, operator)
+	url, client := listener(t, agents, &messageService{}, consenting(), unwatched(t), &memberGroups{}, &engine{}, operator)
 
 	status, body := do(t, client, http.MethodPost, url+"/agents/"+held.String()+"/certificate")
 	require.Equal(t, http.StatusCreated, status)
@@ -272,7 +329,7 @@ func TestServer_AnswersNothingToAConnectionThatAuthenticatedNobody(t *testing.T)
 	messages := &messageService{}
 	groups := &memberGroups{}
 	policies := &engine{}
-	url, client := listener(t, agents, messages, unwatched(t), groups, policies, operator)
+	url, client := listener(t, agents, messages, consenting(), unwatched(t), groups, policies, operator)
 
 	status, body := do(t, client, http.MethodGet, url+"/identity")
 	require.Equal(t, http.StatusOK, status)
@@ -281,7 +338,7 @@ func TestServer_AnswersNothingToAConnectionThatAuthenticatedNobody(t *testing.T)
 	// The same surface served any other way carries no identity, and no
 	// handler invents one.
 	relay := &announced{}
-	plain := httptest.NewServer(machinegen.Handler(machineapi.NewServer(agents, messages, watching(t, relay), groups, policies)))
+	plain := httptest.NewServer(machinegen.Handler(machineapi.NewServer(agents, messages, consenting(), watching(t, relay), groups, policies)))
 	t.Cleanup(plain.Close)
 	bot := agentGRN("acme", "0a1b2c3d4e5f6071").String()
 	routes := map[string]struct{ method, path string }{

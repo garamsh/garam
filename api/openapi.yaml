@@ -1034,6 +1034,82 @@ paths:
           $ref: '#/components/responses/Error'
         '409':
           $ref: '#/components/responses/Error'
+  /orgs/{org}/consents:
+    get:
+      operationId: listOrgConsents
+      tags: [org]
+      summary: List the org's cross-organization consents. Requires the `admin` role.
+      description: >-
+        Every relation the organization is a side of, standing or
+        waiting on one half (ADR-0035). A message crosses between the
+        two organizations only while both halves stand.
+      parameters:
+        - $ref: '#/components/parameters/org'
+      responses:
+        '200':
+          description: The org's consent relations.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OrgConsent'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/consents/{other}:
+    put:
+      operationId: grantOrgConsent
+      tags: [org]
+      summary: Grant the org's half of a cross-organization consent. Requires the `admin` role.
+      description: >-
+        Stands this organization's half of the pair (ADR-0035). The
+        relation stands — and messages may cross in either direction —
+        once the other organization has granted its own half. Granting
+        a half that already stands only re-stamps it.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/other'
+      responses:
+        '200':
+          description: The relation as it now stands.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrgConsent'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: withdrawOrgConsent
+      tags: [org]
+      summary: Withdraw the org's half of a cross-organization consent. Requires the `admin` role.
+      description: >-
+        Clears this organization's own half (ADR-0035). The relation
+        falls at once — a message that no longer has both halves is
+        refused back to its sender — and the other organization's half
+        keeps standing for a later re-grant to join. Withdrawing a half
+        already down changes nothing.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/other'
+      responses:
+        '204':
+          description: Consent withdrawn.
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
   /orgs/{org}/invitations:
     post:
       operationId: createInvitation
@@ -1110,6 +1186,14 @@ components:
       in: path
       required: true
       description: Organization identifier (the last GRN segment).
+      schema:
+        type: string
+    other:
+      name: other
+      in: path
+      required: true
+      description: The other organization of a consent pair (the last GRN segment).
+      x-go-name: OtherSlug
       schema:
         type: string
     group:
@@ -1306,6 +1390,28 @@ components:
         since:
           type: string
           format: date-time
+    OrgConsent:
+      type: object
+      description: >-
+        One organization's view of a cross-organization consent
+        relation (ADR-0035), from the side the path names: `orgGrn` is
+        the other organization, and each half says whether that side's
+        grant stands. `stands` is both halves at once — the only state
+        under which a message crosses.
+      required: [orgGrn, grantedHere, grantedThere, stands]
+      properties:
+        orgGrn:
+          type: string
+          example: grn:root:default:org:globex
+        grantedHere:
+          type: boolean
+          description: The path organization's half stands.
+        grantedThere:
+          type: boolean
+          description: The other organization's half stands.
+        stands:
+          type: boolean
+          description: Both halves stand, so messages may cross.
     InvitationCreate:
       type: object
       required: [role]

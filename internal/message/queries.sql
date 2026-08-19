@@ -78,3 +78,62 @@ UPDATE messages SET
     completed_at = coalesce(completed_at, now()),
     body         = NULL
 WHERE recipient_grn = sqlc.arg('recipient_grn') AND claim_id = sqlc.arg('claim_id');
+
+-- GrantConsent stands the granting organization's half of the pair's
+-- row, creating the row when this is the first half either side
+-- grants. The pair is stored ordered, which the least/greatest pair
+-- enforces on every write path; which half moves is decided by where
+-- the granter sorts, not by the caller. Re-granting a half that already
+-- stands only re-stamps it, so a grant is safe to repeat (ADR-0035).
+-- name: GrantConsent :one
+INSERT INTO message_consents (org_a, org_b, a_consented_at, b_consented_at)
+VALUES (least(sqlc.arg('org'), sqlc.arg('other')), greatest(sqlc.arg('org'), sqlc.arg('other')),
+        CASE WHEN sqlc.arg('org') < sqlc.arg('other') THEN now() END,
+        CASE WHEN sqlc.arg('org') > sqlc.arg('other') THEN now() END)
+ON CONFLICT (org_a, org_b) DO UPDATE SET
+    a_consented_at = coalesce(excluded.a_consented_at, message_consents.a_consented_at),
+    b_consented_at = coalesce(excluded.b_consented_at, message_consents.b_consented_at)
+RETURNING *;
+
+-- WithdrawConsent clears the withdrawing organization's own half and
+-- leaves the other's standing: the relation falls, and the remaining
+-- half is what a later re-grant joins. Clearing is idempotent — a half
+-- already down stays down, and the end state is the one the caller
+-- asked for either way.
+-- name: WithdrawConsent :exec
+UPDATE message_consents SET
+    a_consented_at = CASE WHEN org_a = sqlc.arg('org') THEN NULL END,
+    b_consented_at = CASE WHEN org_b = sqlc.arg('org') THEN NULL END
+WHERE org_a = least(sqlc.arg('org'), sqlc.arg('other'))
+  AND org_b = greatest(sqlc.arg('org'), sqlc.arg('other'));
+
+-- DropEmptyConsent removes the pair's row once neither half stands:
+-- the table holds live consent only, and a row with both halves down is
+-- a tombstone nothing reads. It rides the withdraw, as the retention
+-- sweep rides the enqueue (ADR-0034).
+-- name: DropEmptyConsent :exec
+DELETE FROM message_consents
+WHERE org_a = least(sqlc.arg('org'), sqlc.arg('other'))
+  AND org_b = greatest(sqlc.arg('org'), sqlc.arg('other'))
+  AND a_consented_at IS NULL
+  AND b_consented_at IS NULL;
+
+-- ConsentStands answers the send path's one question: whether both
+-- halves of the pair stand right now (ADR-0035). A missing row and a
+-- half-withdrawn row are the same answer.
+-- name: ConsentStands :one
+SELECT EXISTS (
+    SELECT 1 FROM message_consents
+    WHERE org_a = least(sqlc.arg('org'), sqlc.arg('other'))
+      AND org_b = greatest(sqlc.arg('org'), sqlc.arg('other'))
+      AND a_consented_at IS NOT NULL
+      AND b_consented_at IS NOT NULL
+) AS stands;
+
+-- ListConsents reads every relation the organization is a side of,
+-- standing or half-withdrawn, so an administrator sees what its half
+-- joins and what still waits on the other side.
+-- name: ListConsents :many
+SELECT * FROM message_consents
+WHERE org_a = sqlc.arg('org') OR org_b = sqlc.arg('org')
+ORDER BY org_a, org_b;

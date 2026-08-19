@@ -32,6 +32,7 @@ type fixture struct {
 	users     *fakeUserStore
 	orgs      *fakeOrgStore
 	agents    *fakeAgentStore
+	consents  *fakeConsentStore
 	leases    *fakeWatchLeases
 	relay     *fakeTurnEvents
 	sessions  *fakeSessionStore
@@ -47,6 +48,7 @@ func newFixture(t *testing.T, extra ...authn.Provider) *fixture {
 		users:     newFakeUserStore(),
 		orgs:      newFakeOrgStore(),
 		agents:    newFakeAgentStore(),
+		consents:  newFakeConsentStore(),
 		leases:    newFakeWatchLeases(),
 		relay:     newFakeTurnEvents(),
 		sessions:  newFakeSessionStore(),
@@ -64,7 +66,7 @@ func newFixture(t *testing.T, extra ...authn.Provider) *fixture {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	go func() { _ = watches.Receive(ctx) }()
-	srv := api.NewServer(f.users, f.orgs, f.agents, watches, f.sessions, f.states, append([]authn.Provider{f.provider}, extra...), f.evaluator, f.policies, api.Config{SessionTTL: time.Hour})
+	srv := api.NewServer(f.users, f.orgs, f.agents, f.consents, watches, f.sessions, f.states, append([]authn.Provider{f.provider}, extra...), f.evaluator, f.policies, api.Config{SessionTTL: time.Hour})
 	f.handler = apigen.Handler(srv)
 	return f
 }

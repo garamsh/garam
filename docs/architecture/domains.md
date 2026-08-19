@@ -62,6 +62,24 @@ Depends on `errorx` only.
 `Kind` enum aligned with gRPC status codes, `Error` interface,
 `New` / `Wrap` / `IsKind` / `KindOf`. No domain dependencies.
 
+## `internal/pgxerr`
+
+`Classify(err, op, notFound, conflict)` maps a postgres driver error
+to an `errorx` error. It reads the sql state on a `*pgconn.PgError`:
+`pgx.ErrNoRows` returns the caller's `notFound` (or wraps the chain),
+23505 returns `conflict` (or `KindAlreadyExists`), 23503 returns
+`notFound` (or `KindNotFound` with "<op>: referenced row missing"),
+23514 returns `KindInvalidArgument`, P0001 returns
+`KindFailedPrecondition`, anything else wraps with `op` and the
+chain's kind. `op` is the caller's own label for the operation;
+the wrap message is `op` alone, not prefixed with the store name.
+Depends on `errorx`, `pgx`, `pgconn`. The five domain postgres stores
+that each held their own copy (`org`, `authz`, `ca`, `user`, `agent`)
+now answer through here. The `message` store did not have its own
+copy — it had inline `errors.Is(err, pgx.ErrNoRows)` checks — and
+remains so; the audit that named it as a fifth copy was wrong on
+this.
+
 ## `internal/keyfile`
 
 The one rule key material is read under (ADR-0015): a file only the

@@ -8,6 +8,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/listfilter"
 	"github.com/garamsh/garam/internal/org/db"
+	"github.com/garamsh/garam/internal/pgxerr"
 )
 
 // CreateOrg persists a new Organization.
@@ -18,7 +19,7 @@ func (s *PostgresStore) CreateOrg(ctx context.Context, o *Organization) error {
 		CreatedAt: stamp(o.createdAt),
 		UpdatedAt: stamp(o.updatedAt),
 	})
-	return classify(err, "create org", nil, nil)
+	return pgxerr.Classify(err, "create org", nil, nil)
 }
 
 // GetOrg returns the Organization with the given GRN, or
@@ -26,7 +27,7 @@ func (s *PostgresStore) CreateOrg(ctx context.Context, o *Organization) error {
 func (s *PostgresStore) GetOrg(ctx context.Context, g grn.GRN) (*Organization, error) {
 	row, err := s.q.GetOrg(ctx, g.String())
 	if err != nil {
-		return nil, classify(err, "get org", ErrOrgNotFound, nil)
+		return nil, pgxerr.Classify(err, "get org", ErrOrgNotFound, nil)
 	}
 	return rowToOrg(row)
 }
@@ -38,7 +39,7 @@ func (s *PostgresStore) ListOrgs(ctx context.Context, f listfilter.Filter) ([]*O
 		RowLimit:  limit(f.Limit),
 	})
 	if err != nil {
-		return nil, classify(err, "list orgs", nil, nil)
+		return nil, pgxerr.Classify(err, "list orgs", nil, nil)
 	}
 	orgs := make([]*Organization, 0, len(rows))
 	for _, row := range rows {
@@ -59,7 +60,7 @@ func (s *PostgresStore) UpdateOrg(ctx context.Context, g grn.GRN, p Patch) (*Org
 		UpdatedAt: stamp(time.Now().UTC()),
 	})
 	if err != nil {
-		return nil, classify(err, "update org", ErrOrgNotFound, nil)
+		return nil, pgxerr.Classify(err, "update org", ErrOrgNotFound, nil)
 	}
 	return rowToOrg(row)
 }

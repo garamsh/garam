@@ -7,6 +7,7 @@ import (
 	"github.com/garamsh/garam/internal/authz/db"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/pgxerr"
 )
 
 // AttachPolicy binds the policy to a subject. The schema rejects an
@@ -18,7 +19,7 @@ func (s *PostgresStore) AttachPolicy(ctx context.Context, policyGRN, subjectGRN 
 		CreatedAt:  stamp(time.Now().UTC()),
 	})
 	if err != nil {
-		return nil, classify(err, "attach policy", ErrPolicyNotFound, ErrAttachmentAlreadyExists)
+		return nil, pgxerr.Classify(err, "attach policy", ErrPolicyNotFound, ErrAttachmentAlreadyExists)
 	}
 	return rowToAttachment(row)
 }
@@ -40,14 +41,14 @@ func (s *PostgresStore) DetachPolicy(ctx context.Context, policyGRN, subjectGRN 
 	q := s.q.WithTx(tx)
 	policy, err := q.LockPolicy(ctx, policyGRN.String())
 	if err != nil {
-		return classify(err, "detach policy", ErrPolicyNotFound, nil)
+		return pgxerr.Classify(err, "detach policy", ErrPolicyNotFound, nil)
 	}
 	rows, err := q.DetachPolicy(ctx, db.DetachPolicyParams{
 		PolicyGrn:  policyGRN.String(),
 		SubjectGrn: subjectGRN.String(),
 	})
 	if err != nil {
-		return classify(err, "detach policy", nil, nil)
+		return pgxerr.Classify(err, "detach policy", nil, nil)
 	}
 	if rows == 0 {
 		return ErrAttachmentNotFound
@@ -55,7 +56,7 @@ func (s *PostgresStore) DetachPolicy(ctx context.Context, policyGRN, subjectGRN 
 	if policy.Status == string(PolicyStatusActive) {
 		remaining, err := q.CountPolicyAttachments(ctx, policyGRN.String())
 		if err != nil {
-			return classify(err, "detach policy", nil, nil)
+			return pgxerr.Classify(err, "detach policy", nil, nil)
 		}
 		if remaining == 0 {
 			return ErrLastAttachment
@@ -72,7 +73,7 @@ func (s *PostgresStore) DetachPolicy(ctx context.Context, policyGRN, subjectGRN 
 func (s *PostgresStore) ListPolicyAttachments(ctx context.Context, policyGRN grn.GRN) ([]*PolicyAttachment, error) {
 	rows, err := s.q.ListPolicyAttachments(ctx, policyGRN.String())
 	if err != nil {
-		return nil, classify(err, "list policy attachments", nil, nil)
+		return nil, pgxerr.Classify(err, "list policy attachments", nil, nil)
 	}
 	attachments := make([]*PolicyAttachment, 0, len(rows))
 	for _, row := range rows {
@@ -90,7 +91,7 @@ func (s *PostgresStore) ListPolicyAttachments(ctx context.Context, policyGRN grn
 func (s *PostgresStore) ActivePolicies(ctx context.Context, orgGRN grn.GRN) ([]ActivePolicy, error) {
 	rows, err := s.q.ActivePolicies(ctx, orgGRN.String())
 	if err != nil {
-		return nil, classify(err, "list active policies", nil, nil)
+		return nil, pgxerr.Classify(err, "list active policies", nil, nil)
 	}
 	active := make([]ActivePolicy, 0, len(rows))
 	for _, row := range rows {

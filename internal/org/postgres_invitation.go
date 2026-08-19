@@ -11,6 +11,7 @@ import (
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/org/db"
+	"github.com/garamsh/garam/internal/pgxerr"
 )
 
 // CreateInvitation persists a new pending Invitation, and deletes the
@@ -25,7 +26,7 @@ func (s *PostgresStore) CreateInvitation(ctx context.Context, inv *Invitation) e
 		CreatedAt: stamp(inv.createdAt),
 		ExpiresAt: stamp(inv.expiresAt),
 	})
-	return classify(err, "create invitation", nil, nil)
+	return pgxerr.Classify(err, "create invitation", nil, nil)
 }
 
 // GetInvitation returns the Invitation with the given token, or
@@ -33,7 +34,7 @@ func (s *PostgresStore) CreateInvitation(ctx context.Context, inv *Invitation) e
 func (s *PostgresStore) GetInvitation(ctx context.Context, token string) (*Invitation, error) {
 	row, err := s.q.GetInvitation(ctx, token)
 	if err != nil {
-		return nil, classify(err, "get invitation", ErrInvitationNotFound, nil)
+		return nil, pgxerr.Classify(err, "get invitation", ErrInvitationNotFound, nil)
 	}
 	return rowToInvitation(row)
 }
@@ -51,12 +52,12 @@ func (s *PostgresStore) AcceptInvitation(ctx context.Context, token string, user
 		// The update only misses when the token is unknown or the row
 		// is already accepted; look it up to tell the two apart.
 		if _, getErr := s.q.GetInvitation(ctx, token); getErr != nil {
-			return nil, classify(getErr, "accept invitation", ErrInvitationNotFound, nil)
+			return nil, pgxerr.Classify(getErr, "accept invitation", ErrInvitationNotFound, nil)
 		}
 		return nil, ErrInvitationAccepted
 	}
 	if err != nil {
-		return nil, classify(err, "accept invitation", nil, nil)
+		return nil, pgxerr.Classify(err, "accept invitation", nil, nil)
 	}
 	return rowToInvitation(row)
 }

@@ -1,16 +1,12 @@
 package agent
 
 import (
-	"errors"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/garamsh/garam/internal/agent/db"
-	"github.com/garamsh/garam/internal/errorx"
 )
 
 // PostgresStore implements Store against PostgreSQL. The queries are
@@ -27,35 +23,6 @@ var _ Store = (*PostgresStore)(nil)
 // NewPostgresStore constructs a Postgres-backed Store.
 func NewPostgresStore(pool *pgxpool.Pool) *PostgresStore {
 	return &PostgresStore{pool: pool, q: db.New(pool)}
-}
-
-// classify maps driver errors to errorx kinds. A state outside the
-// column's check constraint is a caller mistake, not an outage.
-func classify(err error, op string, notFound, conflict error) error {
-	if err == nil {
-		return nil
-	}
-	if errors.Is(err, pgx.ErrNoRows) && notFound != nil {
-		return notFound
-	}
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) {
-		switch pgErr.Code {
-		case "23505":
-			if conflict != nil {
-				return conflict
-			}
-			return errorx.Wrap(err, "agent store: "+op, errorx.KindAlreadyExists)
-		case "23503":
-			if notFound != nil {
-				return notFound
-			}
-			return errorx.Wrap(err, "agent store: "+op+": referenced row missing", errorx.KindNotFound)
-		case "23514":
-			return errorx.Wrap(err, "agent store: "+op, errorx.KindInvalidArgument)
-		}
-	}
-	return errorx.Wrap(err, "agent store: "+op)
 }
 
 // stamp converts a time.Time to a valid pgtype.Timestamptz.

@@ -2,17 +2,15 @@ package user
 
 import (
 	"context"
-	"errors"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/listfilter"
+	"github.com/garamsh/garam/internal/pgxerr"
 	"github.com/garamsh/garam/internal/user/db"
 )
 
@@ -40,14 +38,14 @@ func (s *PostgresStore) Create(ctx context.Context, u *User) error {
 		CreatedAt: stamp(u.createdAt),
 		UpdatedAt: stamp(u.updatedAt),
 	})
-	return classify(err, "create", nil)
+	return pgxerr.Classify(err, "create", nil, nil)
 }
 
 // Get returns the User with the given GRN, or ErrUserNotFound.
 func (s *PostgresStore) Get(ctx context.Context, g grn.GRN) (*User, error) {
 	row, err := s.q.GetUser(ctx, g.String())
 	if err != nil {
-		return nil, classify(err, "get", ErrUserNotFound)
+		return nil, pgxerr.Classify(err, "get", ErrUserNotFound, nil)
 	}
 	return rowToUser(row)
 }
@@ -59,7 +57,7 @@ func (s *PostgresStore) List(ctx context.Context, f listfilter.Filter) ([]*User,
 		RowLimit:  limit(f.Limit),
 	})
 	if err != nil {
-		return nil, classify(err, "list", nil)
+		return nil, pgxerr.Classify(err, "list", nil, nil)
 	}
 	users := make([]*User, 0, len(rows))
 	for _, row := range rows {
@@ -84,7 +82,7 @@ func (s *PostgresStore) ListByGRNs(ctx context.Context, grns []grn.GRN) ([]*User
 	}
 	rows, err := s.q.ListUsersByGRNs(ctx, keys)
 	if err != nil {
-		return nil, classify(err, "list by grns", nil)
+		return nil, pgxerr.Classify(err, "list by grns", nil, nil)
 	}
 	users := make([]*User, 0, len(rows))
 	for _, row := range rows {
@@ -107,7 +105,7 @@ func (s *PostgresStore) Update(ctx context.Context, g grn.GRN, p Patch) (*User, 
 		UpdatedAt: stamp(time.Now().UTC()),
 	})
 	if err != nil {
-		return nil, classify(err, "update", ErrUserNotFound)
+		return nil, pgxerr.Classify(err, "update", ErrUserNotFound, nil)
 	}
 	return rowToUser(row)
 }
@@ -116,7 +114,7 @@ func (s *PostgresStore) Update(ctx context.Context, g grn.GRN, p Patch) (*User, 
 func (s *PostgresStore) Delete(ctx context.Context, g grn.GRN) error {
 	n, err := s.q.DeleteUser(ctx, g.String())
 	if err != nil {
-		return classify(err, "delete", nil)
+		return pgxerr.Classify(err, "delete", nil, nil)
 	}
 	if n == 0 {
 		return ErrUserNotFound
@@ -139,22 +137,6 @@ func rowToUser(row db.User) (*User, error) {
 		createdAt: row.CreatedAt.Time,
 		updatedAt: row.UpdatedAt.Time,
 	}, nil
-}
-
-// classify maps driver errors onto errorx kinds: missing rows become
-// the notFound sentinel, unique violations become already-exists.
-func classify(err error, op string, notFound error) error {
-	if err == nil {
-		return nil
-	}
-	if errors.Is(err, pgx.ErrNoRows) && notFound != nil {
-		return notFound
-	}
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-		return errorx.Wrap(err, "user store: "+op, errorx.KindAlreadyExists)
-	}
-	return errorx.Wrap(err, "user store: "+op)
 }
 
 // strs normalizes a nil slice to empty: pgx encodes a nil slice as// NULL, which the NOT NULL array columns reject.

@@ -8,6 +8,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/listfilter"
 	"github.com/garamsh/garam/internal/org/db"
+	"github.com/garamsh/garam/internal/pgxerr"
 )
 
 // CreateGroup persists a new Group.
@@ -21,14 +22,14 @@ func (s *PostgresStore) CreateGroup(ctx context.Context, g *Group) error {
 		CreatedAt: stamp(g.createdAt),
 		UpdatedAt: stamp(g.updatedAt),
 	})
-	return classify(err, "create group", nil, nil)
+	return pgxerr.Classify(err, "create group", nil, nil)
 }
 
 // GetGroup returns the Group with the given GRN, or ErrGroupNotFound.
 func (s *PostgresStore) GetGroup(ctx context.Context, g grn.GRN) (*Group, error) {
 	row, err := s.q.GetGroup(ctx, g.String())
 	if err != nil {
-		return nil, classify(err, "get group", ErrGroupNotFound, nil)
+		return nil, pgxerr.Classify(err, "get group", ErrGroupNotFound, nil)
 	}
 	return rowToGroup(row)
 }
@@ -41,7 +42,7 @@ func (s *PostgresStore) ListGroups(ctx context.Context, orgGRN grn.GRN, f listfi
 		RowLimit:  limit(f.Limit),
 	})
 	if err != nil {
-		return nil, classify(err, "list groups", nil, nil)
+		return nil, pgxerr.Classify(err, "list groups", nil, nil)
 	}
 	groups := make([]*Group, 0, len(rows))
 	for _, row := range rows {
@@ -64,7 +65,7 @@ func (s *PostgresStore) UpdateGroup(ctx context.Context, g grn.GRN, p GroupPatch
 		UpdatedAt: stamp(time.Now().UTC()),
 	})
 	if err != nil {
-		return nil, classify(err, "update group", ErrGroupNotFound, nil)
+		return nil, pgxerr.Classify(err, "update group", ErrGroupNotFound, nil)
 	}
 	return rowToGroup(row)
 }
@@ -81,7 +82,7 @@ func (s *PostgresStore) AddGroupMember(ctx context.Context, groupGRN, memberGRN 
 		GroupGrn:  groupGRN.String(),
 		MemberGrn: memberGRN.String(),
 	})
-	return classify(err, "add group member", nil, nil)
+	return pgxerr.Classify(err, "add group member", nil, nil)
 }
 
 // RemoveGroupMember removes a member from the Group, or returns
@@ -98,7 +99,7 @@ func (s *PostgresStore) RemoveGroupMember(ctx context.Context, groupGRN, memberG
 func (s *PostgresStore) ListGroupMembers(ctx context.Context, groupGRN grn.GRN) ([]grn.GRN, error) {
 	rows, err := s.q.ListGroupMembers(ctx, groupGRN.String())
 	if err != nil {
-		return nil, classify(err, "list group members", nil, nil)
+		return nil, pgxerr.Classify(err, "list group members", nil, nil)
 	}
 	return parseGRNs(rows, "group member row")
 }
@@ -111,7 +112,7 @@ func (s *PostgresStore) ListGroupsByMember(ctx context.Context, orgGRN, memberGR
 		MemberGrn: memberGRN.String(),
 	})
 	if err != nil {
-		return nil, classify(err, "list groups by member", nil, nil)
+		return nil, pgxerr.Classify(err, "list groups by member", nil, nil)
 	}
 	return parseGRNs(rows, "group row")
 }

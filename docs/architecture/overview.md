@@ -211,6 +211,10 @@ collaborate on a shared plan.
   read under (ADR-0015); shared primitive.
 - `internal/listfilter/` — the offset/limit filter a domain's list call
   is scoped by; shared primitive.
+- `internal/pgxerr/` — the mapping from postgres driver errors to
+  errorx kinds every postgres-backed store answers through. The five
+  copies the volume audit found have been collapsed into this one.
+  Shared primitive.
 - `internal/cli/` — cobra commands + wiring (`serve api` | `serve authz`
   | `serve machine` | `migrate` | `probe` | `issue-certificate`).
 - `internal/health/` — what liveness and readiness mean, and the two

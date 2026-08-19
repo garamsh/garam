@@ -11,6 +11,7 @@ import (
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/listfilter"
+	"github.com/garamsh/garam/internal/pgxerr"
 )
 
 // Create persists a new Agent.
@@ -23,14 +24,14 @@ func (s *PostgresStore) Create(ctx context.Context, a *Agent) error {
 		CreatedAt:         stamp(a.createdAt),
 		UpdatedAt:         stamp(a.updatedAt),
 	})
-	return classify(err, "create", nil, ErrAgentAlreadyExists)
+	return pgxerr.Classify(err, "create", nil, ErrAgentAlreadyExists)
 }
 
 // Get returns the Agent with the given GRN, or ErrAgentNotFound.
 func (s *PostgresStore) Get(ctx context.Context, g grn.GRN) (*Agent, error) {
 	row, err := s.q.GetAgent(ctx, g.String())
 	if err != nil {
-		return nil, classify(err, "get", ErrAgentNotFound, nil)
+		return nil, pgxerr.Classify(err, "get", ErrAgentNotFound, nil)
 	}
 	return rowToAgent(row)
 }
@@ -43,7 +44,7 @@ func (s *PostgresStore) ListByOrg(ctx context.Context, orgGRN grn.GRN, f listfil
 		RowLimit:  limit(f.Limit),
 	})
 	if err != nil {
-		return nil, classify(err, "list agents", nil, nil)
+		return nil, pgxerr.Classify(err, "list agents", nil, nil)
 	}
 	agents := make([]*Agent, 0, len(rows))
 	for _, row := range rows {
@@ -110,10 +111,10 @@ func narrowEpoch(epoch int) (int32, error) {
 // the epoch is not the one it is assigned at.
 func (s *PostgresStore) fenced(ctx context.Context, err error, op string, agentGRN grn.GRN) error {
 	if !errors.Is(err, pgx.ErrNoRows) {
-		return classify(err, op, nil, nil)
+		return pgxerr.Classify(err, op, nil, nil)
 	}
 	if _, getErr := s.q.GetAgent(ctx, agentGRN.String()); getErr != nil {
-		return classify(getErr, op, ErrAgentNotFound, nil)
+		return pgxerr.Classify(getErr, op, ErrAgentNotFound, nil)
 	}
 	return ErrStaleEpoch
 }

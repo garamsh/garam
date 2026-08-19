@@ -2,17 +2,15 @@ package ca
 
 import (
 	"context"
-	"errors"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/garamsh/garam/internal/ca/db"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/pgxerr"
 )
 
 // PostgresStore implements Store against PostgreSQL. The queries are
@@ -39,14 +37,14 @@ func (s *PostgresStore) Create(ctx context.Context, a *Authority) error {
 		NotAfter:    stamp(a.notAfter),
 		CreatedAt:   stamp(a.createdAt),
 	})
-	return classify(err, "create", ErrAuthorityAlreadyExists)
+	return pgxerr.Classify(err, "create", nil, ErrAuthorityAlreadyExists)
 }
 
 // Get returns the organization's Authority, or ErrAuthorityNotFound.
 func (s *PostgresStore) Get(ctx context.Context, orgGRN grn.GRN) (*Authority, error) {
 	row, err := s.q.GetCertificateAuthority(ctx, orgGRN.String())
 	if err != nil {
-		return nil, classify(err, "get", nil)
+		return nil, pgxerr.Classify(err, "get", ErrAuthorityNotFound, nil)
 	}
 	return rowToAuthority(row)
 }
@@ -66,31 +64,6 @@ func rowToAuthority(row db.CertificateAuthority) (*Authority, error) {
 		notAfter:    row.NotAfter.Time,
 		createdAt:   row.CreatedAt.Time,
 	}, nil
-}
-
-// classify maps driver errors to errorx kinds. A CA for an
-// organization that does not exist is a missing organization, not an
-// outage.
-func classify(err error, op string, conflict error) error {
-	if err == nil {
-		return nil
-	}
-	if errors.Is(err, pgx.ErrNoRows) {
-		return ErrAuthorityNotFound
-	}
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) {
-		switch pgErr.Code {
-		case "23505":
-			if conflict != nil {
-				return conflict
-			}
-			return errorx.Wrap(err, "ca store: "+op, errorx.KindAlreadyExists)
-		case "23503":
-			return errorx.Wrap(err, "ca store: "+op+": referenced row missing", errorx.KindNotFound)
-		}
-	}
-	return errorx.Wrap(err, "ca store: "+op)
 }
 
 // stamp converts a time.Time to a valid pgtype.Timestamptz.

@@ -34,7 +34,9 @@ import (
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/api"
+	"github.com/garamsh/garam/internal/authn"
 	"github.com/garamsh/garam/internal/ca"
+	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/machine"
 	"github.com/garamsh/garam/internal/machineapi"
@@ -194,6 +196,16 @@ func TestLogRequests_ServesAStreamThroughTheRecorder(t *testing.T) {
 // ones serveMachine assembles.
 func machineListener(t *testing.T, obs *observability, subject grn.GRN) (string, *http.Client) {
 	t.Helper()
+	// The identity endpoint answers out of the request alone, so the
+	// listener is assembled with no service behind it.
+	return machineListenerServing(t, obs, subject, machineapi.NewServer(nil, nil, nil, nil, nil))
+}
+
+// machineListenerServing is machineListener for a test that needs a
+// service behind the surface: it starts the same listener around the
+// given server.
+func machineListenerServing(t *testing.T, obs *observability, subject grn.GRN, server *machineapi.Server) (string, *http.Client) {
+	t.Helper()
 	dir := t.TempDir()
 	certFile, keyFile := writeTLSKeyPair(t, dir)
 	cert, _, err := machineKeyMaterial(certFile, keyFile, writeKeyEncryptionKey(t, dir))
@@ -212,9 +224,7 @@ func machineListener(t *testing.T, obs *observability, subject grn.GRN) (string,
 	client, err := tls.X509KeyPair(issued.CertificatePEM(), issued.PrivateKeyPEM())
 	require.NoError(t, err)
 
-	// The identity endpoint answers out of the request alone, so the
-	// listener is assembled with no service behind it.
-	handler := machinegen.HandlerWithOptions(machineapi.NewServer(nil, nil, nil, nil, nil), machinegen.StdHTTPServerOptions{
+	handler := machinegen.HandlerWithOptions(server, machinegen.StdHTTPServerOptions{
 		Middlewares: []machinegen.MiddlewareFunc{obs.logMachineRequests},
 	})
 	srv := machine.NewServer(
@@ -281,6 +291,7 @@ func TestLogRPCs_ReportsTheMethodAndTheSubject(t *testing.T) {
 		err   error
 		code  string
 		level string
+		cause string
 	}{
 		{name: "served", code: codes.OK.String(), level: slog.LevelInfo.String()},
 		{
@@ -288,6 +299,16 @@ func TestLogRPCs_ReportsTheMethodAndTheSubject(t *testing.T) {
 			err:   status.Error(codes.PermissionDenied, "denied"),
 			code:  codes.PermissionDenied.String(),
 			level: slog.LevelError.String(),
+			// A refusal carries its reason to the caller, so the line
+			// takes no cause: the rule names the 5xx case only.
+			cause: "",
+		},
+		{
+			name:  "fault",
+			err:   status.Error(codes.Internal, "policy store: deadlock detected"),
+			code:  codes.Internal.String(),
+			level: slog.LevelError.String(),
+			cause: "policy store: deadlock detected",
 		},
 	}
 	for _, tt := range tests {
@@ -309,6 +330,12 @@ func TestLogRPCs_ReportsTheMethodAndTheSubject(t *testing.T) {
 			assert.Equal(t, tt.code, line["code"])
 			assert.Equal(t, tt.level, line["level"])
 			assert.NotEmpty(t, line["trace_id"])
+			if tt.cause == "" {
+				assert.NotContains(t, line, "error")
+			} else {
+				assert.Equal(t, tt.cause, line["error"],
+					"a fault of this process leaves its chain on the line")
+			}
 		})
 	}
 }
@@ -356,6 +383,112 @@ func TestLogRPCs_NamesAMachineSubjectAsOne(t *testing.T) {
 	personLine := lineForSubject(t, person)
 	assert.Equal(t, person.String(), personLine[fieldUserID])
 	assert.NotContains(t, personLine, fieldMachineID)
+}
+
+// noGroups is the machineapi.Groups of a caller no group holds.
+type noGroups struct{}
+
+func (noGroups) List(context.Context, grn.GRN) ([]grn.GRN, error) { return nil, nil }
+
+// unreachableEngine is a machineapi.Evaluator that cannot answer: the
+// failure #255 could not read out of the machine listener's logs.
+type unreachableEngine struct{ err error }
+
+func (e unreachableEngine) Evaluate(context.Context, machineapi.EvalInput) (bool, error) {
+	return false, e.err
+}
+
+// deniedEngine is a machineapi.Evaluator answering a refusal.
+type deniedEngine struct{}
+
+func (deniedEngine) Evaluate(context.Context, machineapi.EvalInput) (bool, error) { return false, nil }
+
+// TestLogServed_CarriesTheCauseOfAMachineFailure is the machine
+// surface's half of the rule in runtime-safety.md §Errors reach a
+// handler: a handled error that becomes a 5xx leaves its chain on the
+// request's line, and the client body still withholds it. The refused
+// send sits beside it as the control, because a line carrying a cause
+// on every failure would read exactly like one carrying it on a 5xx,
+// and a refusal's reason already reaches its caller.
+func TestLogServed_CarriesTheCauseOfAMachineFailure(t *testing.T) {
+	sender := machineGRN("acme", "bot-1")
+	recipient := machineGRN("acme", "bot-2")
+	submission := `{"recipient":"` + recipient.String() + `","idempotencyKey":"key-1","body":"x"}`
+	cause := errorx.Wrap(errorx.New(errorx.KindInternal, "dial tcp: connection refused"), "authz engine")
+
+	var out lines
+	url, client := machineListenerServing(t, recordingObservability(&out), sender,
+		machineapi.NewServer(nil, nil, nil, noGroups{}, unreachableEngine{err: cause}))
+
+	resp, err := client.Post(url+"/messages", "application/json", strings.NewReader(submission))
+	require.NoError(t, err)
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+	require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	assert.JSONEq(t, `{"kind":"internal","message":"internal error"}`, string(body),
+		"the client body still withholds the cause")
+
+	line := decodeLine(t, &out)
+	assert.Equal(t, "authz engine: dial tcp: connection refused", line["error"],
+		"the line carries the whole chain")
+	assert.Equal(t, float64(http.StatusInternalServerError), line["status"])
+	assert.NotEmpty(t, line["trace_id"])
+
+	var refusedOut lines
+	url, client = machineListenerServing(t, recordingObservability(&refusedOut), sender,
+		machineapi.NewServer(nil, nil, nil, noGroups{}, deniedEngine{}))
+	resp, err = client.Post(url+"/messages", "application/json", strings.NewReader(submission))
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+	require.Equal(t, http.StatusForbidden, resp.StatusCode)
+	assert.NotContains(t, decodeLine(t, &refusedOut), "error")
+}
+
+// brokenSessions is an authn.SessionStore whose Delete fails the way
+// a store does when the database under it drops.
+type brokenSessions struct {
+	authn.SessionStore
+	err error
+}
+
+func (s brokenSessions) Delete(context.Context, string) error { return s.err }
+
+// TestLogServed_CarriesTheCauseOfAnAPIFailure is the api surface's
+// half of the same rule, driven through a real handler rather than a
+// stub so the surface's own error writer is what records the cause.
+// The 401 beside it is the control: a refusal whose reason the caller
+// holds leaves no cause on the line.
+func TestLogServed_CarriesTheCauseOfAnAPIFailure(t *testing.T) {
+	cause := errorx.Wrap(errorx.New(errorx.KindInternal, "connection reset by peer"), "session delete")
+	srv := api.NewServer(nil, nil, nil, nil, brokenSessions{err: cause}, nil, nil, nil, nil, api.Config{})
+
+	var out lines
+	mux := http.NewServeMux()
+	mux.Handle("POST /auth/logout", recordingObservability(&out).logRequests(http.HandlerFunc(srv.Logout)))
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
+	req.AddCookie(&http.Cookie{Name: "garam_session", Value: "tok-1"})
+	recorder := httptest.NewRecorder()
+	mux.ServeHTTP(recorder, req)
+
+	require.Equal(t, http.StatusInternalServerError, recorder.Code)
+	assert.JSONEq(t, `{"kind":"internal","message":"internal error"}`, recorder.Body.String(),
+		"the client body still withholds the cause")
+
+	line := decodeLine(t, &out)
+	assert.Equal(t, "session delete: connection reset by peer", line["error"],
+		"the line carries the whole chain")
+	assert.Equal(t, float64(http.StatusInternalServerError), line["status"])
+	assert.NotEmpty(t, line["trace_id"])
+
+	var refusedOut lines
+	refusedMux := http.NewServeMux()
+	refusedMux.Handle("POST /auth/logout", recordingObservability(&refusedOut).logRequests(http.HandlerFunc(srv.Logout)))
+	refusedRecorder := httptest.NewRecorder()
+	refusedMux.ServeHTTP(refusedRecorder, httptest.NewRequest(http.MethodPost, "/auth/logout", nil))
+	require.Equal(t, http.StatusUnauthorized, refusedRecorder.Code)
+	assert.NotContains(t, decodeLine(t, &refusedOut), "error")
 }
 
 // stubEngine answers Check so the interceptor has a call to observe.

@@ -19,6 +19,7 @@ import (
 	semconv "go.opentelemetry.io/otel/semconv/v1.43.0"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	"github.com/garamsh/garam/internal/agent"
@@ -126,23 +127,33 @@ func (o *observability) logMachineRequests(next http.Handler) http.Handler {
 }
 
 // logServed runs next and emits the line, asking for the principal
-// once the handler has had its chance to resolve one.
+// once the handler has had its chance to resolve one. A 5xx's cause,
+// which the surface's error writer recorded on the recorder, rides
+// the same line: the client body withholds it and the rule in
+// runtime-safety.md §Errors reach a handler puts it here instead.
 func (o *observability) logServed(w http.ResponseWriter, r *http.Request, next http.Handler, field string, principal func() string) {
 	recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 
 	next.ServeHTTP(recorder, r)
 
-	o.logger.LogAttrs(r.Context(), levelOf(recorder.status >= http.StatusInternalServerError),
-		"http request",
+	attrs := []slog.Attr{
 		slog.String("operation", r.Pattern),
 		slog.String("trace_id", traceIDOf(r.Context())),
 		slog.Int("status", recorder.status),
 		principalAttr(field, principal()),
-	)
+	}
+	if recorder.cause != nil {
+		attrs = append(attrs, slog.String("error", recorder.cause.Error()))
+	}
+	o.logger.LogAttrs(r.Context(), levelOf(recorder.status >= http.StatusInternalServerError),
+		"http request", attrs...)
 }
 
 // logRPCs is the gRPC counterpart of logRequests. The engine's
-// principal is the subject the request asks about.
+// principal is the subject the request asks about. A refusal already
+// carries its reason to the caller, so the line takes the cause only
+// when the code is this process's fault — the 5xx counterpart of the
+// HTTP surfaces (runtime-safety.md §Errors reach a handler).
 func (o *observability) logRPCs(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	resp, err := handler(ctx, req)
 
@@ -150,13 +161,33 @@ func (o *observability) logRPCs(ctx context.Context, req any, info *grpc.UnarySe
 	if named, ok := req.(interface{ GetSubjectGrn() string }); ok {
 		subject = named.GetSubjectGrn()
 	}
-	o.logger.LogAttrs(ctx, levelOf(err != nil), "rpc",
+	attrs := []slog.Attr{
 		slog.String("operation", info.FullMethod),
 		slog.String("trace_id", traceIDOf(ctx)),
 		slog.String("code", status.Code(err).String()),
 		principalAttr(principalField(subject), subject),
-	)
+	}
+	if err != nil && serverFault(status.Code(err)) {
+		// The status message is the errorx chain the engine rendered;
+		// Convert reads a plain error as its text, so either form
+		// reaches the line whole.
+		attrs = append(attrs, slog.String("error", status.Convert(err).Message()))
+	}
+	o.logger.LogAttrs(ctx, levelOf(err != nil), "rpc", attrs...)
 	return resp, err
+}
+
+// serverFault reports whether a gRPC code is what the HTTP surfaces
+// answer a 5xx for: the kinds that mean a fault of this process, and
+// the transient ones a caller retries. Kinds are gRPC-aligned
+// (ADR-0003), so the set mirrors statusOf's 5xx half by name.
+func serverFault(code codes.Code) bool {
+	switch code {
+	case codes.Unknown, codes.Internal, codes.DataLoss,
+		codes.Unimplemented, codes.Unavailable, codes.Canceled, codes.DeadlineExceeded:
+		return true
+	}
+	return false
 }
 
 // principalField names the field a subject GRN is logged under. The
@@ -206,15 +237,24 @@ func traceIDOf(ctx context.Context) string {
 }
 
 // statusRecorder remembers the status an inner handler wrote, which
-// net/http otherwise keeps to itself.
+// net/http otherwise keeps to itself, and the cause a surface's error
+// writer reported for a 5xx.
 type statusRecorder struct {
 	http.ResponseWriter
 	status int
+	cause  error
 }
 
 func (s *statusRecorder) WriteHeader(code int) {
 	s.status = code
 	s.ResponseWriter.WriteHeader(code)
+}
+
+// RecordCause is the recording half of the seam the surfaces' error
+// writers declare: a handled error that becomes a 5xx reaches the
+// line logServed emits, never the client body.
+func (s *statusRecorder) RecordCause(err error) {
+	s.cause = err
 }
 
 // Flush forwards a flush to the writer under the recorder when it can

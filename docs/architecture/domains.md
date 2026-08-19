@@ -76,9 +76,10 @@ Depends on `errorx` only.
 ## `internal/listfilter`
 
 `Filter` scopes a domain's list call: an offset and a limit, where a
-limit of 0 means no limit. Org and agent both page their lists with it,
-and a domain may not import a sibling to borrow the type, so it is
-extracted rather than reached through one of them. No dependencies.
+limit of 0 means no limit. Org, agent and user all page their lists
+with it, and a domain may not import a sibling to borrow the type, so
+it is extracted rather than reached through one of them. No
+dependencies.
 
 ## `internal/org`
 

@@ -98,7 +98,7 @@ type Message struct {
 
 // MessageSubmission What a sender supplies. Who is sending is the certificate's to say.
 type MessageSubmission struct {
-	// Body The message itself. The queue carries it and never reads it, so it may be empty.
+	// Body The message itself. The queue carries it and never reads it, so it may be empty. It is bounded (ADR-0034): 64 KiB is well past any plausible agent turn, small enough that the table's worst case is arithmetic.
 	Body string `json:"body"`
 
 	// IdempotencyKey The sender's own key for this message. Posting the same key twice stores one message and answers with it both times.

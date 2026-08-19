@@ -2,6 +2,7 @@ package message_test
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -232,4 +233,27 @@ func TestService_PostsToARecipientNothingKnowsAbout(t *testing.T) {
 	_, err = s.Post(ctx, senderGRN(), unknown, "", "hello")
 	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), "a message with no key to suppress a duplicate by")
 	assert.Len(t, store.stored, 1, "a refused message reached the queue")
+}
+
+// TestService_RefusesABodyPastTheBoundBeforeStoringIt holds that the
+// submission bound is enforced at the boundary, ahead of the queue: a
+// body past it is refused and nothing reaches the store. The body at
+// the bound is the control — it is stored, so the refusal is the bound
+// rather than a Post that refuses every body.
+func TestService_RefusesABodyPastTheBoundBeforeStoringIt(t *testing.T) {
+	ctx := context.Background()
+	store := &queue{}
+	s, err := message.NewService(store, brief())
+	require.NoError(t, err)
+
+	past := strings.Repeat("b", message.MaxBodyLength+1)
+	_, err = s.Post(ctx, senderGRN(), recipientGRN(), "key-1", past)
+	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
+	assert.Empty(t, store.stored, "a refused body reached the queue")
+
+	at := strings.Repeat("b", message.MaxBodyLength)
+	stored, err := s.Post(ctx, senderGRN(), recipientGRN(), "key-2", at)
+	require.NoError(t, err)
+	assert.Equal(t, at, stored.Body())
+	assert.Len(t, store.stored, 1, "a body at the bound is stored")
 }

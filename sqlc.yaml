@@ -62,6 +62,7 @@ sql:
     schema:
       - migrations/000008_messages.up.sql
       - migrations/000009_message_delivery.up.sql
+      - migrations/000014_message_retention.up.sql
     queries: internal/message/queries.sql
     gen:
       go:

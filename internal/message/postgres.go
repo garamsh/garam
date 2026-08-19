@@ -31,14 +31,22 @@ func NewPostgresStore(pool *pgxpool.Pool) *PostgresStore {
 }
 
 // Enqueue stores the message, or returns the one the sender already
-// stored under the same key.
+// stored under the same key. Storing is the queue's one write, so the
+// retention sweep rides it: an undelivered message older than the
+// window is deleted first, which keeps the table proportional to what
+// is live (ADR-0034). The sweep runs ahead of the insert rather than in
+// it, because a data-modifying CTE shares the insert's snapshot — the
+// conflicting row it deletes would still conflict.
 func (s *PostgresStore) Enqueue(ctx context.Context, m *Message) (*Message, error) {
+	if err := s.q.DeleteExpiredMessages(ctx, interval(RetentionWindow)); err != nil {
+		return nil, errorx.Wrap(err, "message store: sweep")
+	}
 	row, err := s.q.EnqueueMessage(ctx, db.EnqueueMessageParams{
 		ID:             string(m.id),
 		RecipientGrn:   m.recipient.String(),
 		SenderGrn:      m.sender.String(),
 		IdempotencyKey: m.idempotencyKey,
-		Body:           m.body,
+		Body:           pgtype.Text{String: m.body, Valid: true},
 		CreatedAt:      stamp(m.createdAt),
 	})
 	if err != nil {
@@ -123,9 +131,12 @@ func rowToMessage(row db.Message) (*Message, error) {
 		recipient:      recipient,
 		sender:         sender,
 		idempotencyKey: row.IdempotencyKey,
-		body:           row.Body,
-		createdAt:      row.CreatedAt.Time,
-		attempts:       int(row.Attempts),
+		// A completed row's body is dropped, and the schema refuses the
+		// half-states, so an absent body reads as none rather than as
+		// corruption.
+		body:      row.Body.String,
+		createdAt: row.CreatedAt.Time,
+		attempts:  int(row.Attempts),
 	}, nil
 }
 
@@ -138,6 +149,11 @@ func rowToClaim(row db.Message) (*Claim, error) {
 	}
 	if !row.ClaimID.Valid || !row.ClaimExpiresAt.Valid {
 		return nil, errorx.New(errorx.KindInternal, "message store: claimed row carries no claim")
+	}
+	// A claim matches only an undelivered row, which the schema requires
+	// to be carrying its body.
+	if !row.Body.Valid {
+		return nil, errorx.New(errorx.KindInternal, "message store: claimed row carries no body")
 	}
 	return &Claim{
 		message:   m,

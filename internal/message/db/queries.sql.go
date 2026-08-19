@@ -72,7 +72,8 @@ func (q *Queries) ClaimMessage(ctx context.Context, arg ClaimMessageParams) (Mes
 
 const completeMessage = `-- name: CompleteMessage :execrows
 UPDATE messages SET
-    completed_at = coalesce(completed_at, now())
+    completed_at = coalesce(completed_at, now()),
+    body         = NULL
 WHERE recipient_grn = $1 AND claim_id = $2
 `
 
@@ -87,12 +88,34 @@ type CompleteMessageParams struct {
 // recipient is matched too, so the token is a fence rather than a
 // secret — a claim of another recipient's message completes nothing
 // here even when its identifier is known.
+//
+// Completing drops the body (ADR-0034): the row stays so a retry after
+// delivery is still suppressed, and the body, the only large field,
+// goes.
 func (q *Queries) CompleteMessage(ctx context.Context, arg CompleteMessageParams) (int64, error) {
 	result, err := q.db.Exec(ctx, completeMessage, arg.RecipientGrn, arg.ClaimID)
 	if err != nil {
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const deleteExpiredMessages = `-- name: DeleteExpiredMessages :exec
+DELETE FROM messages
+WHERE completed_at IS NULL
+  AND created_at <= now() - $1::interval
+`
+
+// DeleteExpiredMessages is the sweep (ADR-0034): an undelivered
+// message older than the window is deleted whole, its row no longer
+// able to suppress a retry — which the window is sized to outlast.
+// Postgres measures the window, as it measures the lease. Storing a
+// message is the queue's one write, so the sweep rides it rather than a
+// clock of the process's own, the shape 000013 set for the other tables
+// with an expiry.
+func (q *Queries) DeleteExpiredMessages(ctx context.Context, retention pgtype.Interval) error {
+	_, err := q.db.Exec(ctx, deleteExpiredMessages, retention)
+	return err
 }
 
 const enqueueMessage = `-- name: EnqueueMessage :one
@@ -108,7 +131,7 @@ type EnqueueMessageParams struct {
 	RecipientGrn   string
 	SenderGrn      string
 	IdempotencyKey string
-	Body           string
+	Body           pgtype.Text
 	CreatedAt      pgtype.Timestamptz
 }
 

@@ -457,9 +457,12 @@ components:
             twice stores one message and answers with it both times.
         body:
           type: string
+          maxLength: 65536
           description: >-
             The message itself. The queue carries it and never reads
-            it, so it may be empty.
+            it, so it may be empty. It is bounded (ADR-0034): 64 KiB is
+            well past any plausible agent turn, small enough that the
+            table's worst case is arithmetic.
     Message:
       type: object
       description: One stored message, under an identifier the queue minted.

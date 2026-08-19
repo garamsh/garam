@@ -6,7 +6,10 @@ VALUES ($1, $2, $3, $4, $5, $6);
 SELECT * FROM agents WHERE grn = $1;
 
 -- name: ListAgentsByOrg :many
-SELECT * FROM agents WHERE org_grn = $1 ORDER BY grn;
+SELECT * FROM agents
+WHERE org_grn = sqlc.arg('org_grn')
+ORDER BY grn
+LIMIT sqlc.narg('row_limit') OFFSET sqlc.arg('row_offset');
 
 -- AssignAgent writes onto the assignment the agent already has, so a
 -- reassignment moves the operator and raises the epoch that fenced the

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/listfilter"
 )
 
 // Store persists Agents, the operator each one is assigned to, and the
@@ -19,7 +20,7 @@ type Store interface {
 	Create(ctx context.Context, a *Agent) error
 	Get(ctx context.Context, g grn.GRN) (*Agent, error)
 	// ListByOrg returns the organization's agents, ordered by GRN.
-	ListByOrg(ctx context.Context, orgGRN grn.GRN) ([]*Agent, error)
+	ListByOrg(ctx context.Context, orgGRN grn.GRN, f listfilter.Filter) ([]*Agent, error)
 	// Assign binds the agent to an operator at the next epoch,
 	// replacing whichever operator held it before.
 	Assign(ctx context.Context, agentGRN, operatorGRN grn.GRN) (*Assignment, error)

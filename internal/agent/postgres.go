@@ -62,3 +62,11 @@ func classify(err error, op string, notFound, conflict error) error {
 func stamp(t time.Time) pgtype.Timestamptz {
 	return pgtype.Timestamptz{Time: t, Valid: true}
 }
+
+// limit converts a list filter's limit: 0 means "no limit" (SQL NULL).
+func limit(n int) pgtype.Int4 {
+	if n <= 0 {
+		return pgtype.Int4{}
+	}
+	return pgtype.Int4{Int32: int32(n), Valid: true}
+}

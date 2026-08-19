@@ -4,13 +4,8 @@ import (
 	"context"
 
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/listfilter"
 )
-
-// ListFilter scopes a List call. Limit of 0 means "no limit".
-type ListFilter struct {
-	Offset int
-	Limit  int
-}
 
 // Patch holds Organization partial-update fields. Nil entries are
 // unchanged.
@@ -41,14 +36,14 @@ type Store interface {
 	// Organization
 	CreateOrg(ctx context.Context, o *Organization) error
 	GetOrg(ctx context.Context, g grn.GRN) (*Organization, error)
-	ListOrgs(ctx context.Context, f ListFilter) ([]*Organization, error)
+	ListOrgs(ctx context.Context, f listfilter.Filter) ([]*Organization, error)
 	UpdateOrg(ctx context.Context, g grn.GRN, p Patch) (*Organization, error)
 	DeleteOrg(ctx context.Context, g grn.GRN) error
 
 	// Group
 	CreateGroup(ctx context.Context, g *Group) error
 	GetGroup(ctx context.Context, g grn.GRN) (*Group, error)
-	ListGroups(ctx context.Context, orgGRN grn.GRN, f ListFilter) ([]*Group, error)
+	ListGroups(ctx context.Context, orgGRN grn.GRN, f listfilter.Filter) ([]*Group, error)
 	UpdateGroup(ctx context.Context, g grn.GRN, p GroupPatch) (*Group, error)
 	DeleteGroup(ctx context.Context, g grn.GRN) error
 	AddGroupMember(ctx context.Context, groupGRN, memberGRN grn.GRN) error
@@ -63,7 +58,7 @@ type Store interface {
 	// Project
 	CreateProject(ctx context.Context, p *Project) error
 	GetProject(ctx context.Context, g grn.GRN) (*Project, error)
-	ListProjects(ctx context.Context, orgGRN grn.GRN, f ListFilter) ([]*Project, error)
+	ListProjects(ctx context.Context, orgGRN grn.GRN, f listfilter.Filter) ([]*Project, error)
 	UpdateProject(ctx context.Context, g grn.GRN, p ProjectPatch) (*Project, error)
 	DeleteProject(ctx context.Context, g grn.GRN) error
 	AddProjectMember(ctx context.Context, projectGRN, memberGRN grn.GRN) error
@@ -80,7 +75,7 @@ type Store interface {
 	// RemoveMember returns ErrMemberNotFound when the pair names no
 	// Membership, which an Organization that does not exist does too.
 	RemoveMember(ctx context.Context, orgGRN, userGRN grn.GRN) error
-	ListOrgsByMember(ctx context.Context, userGRN grn.GRN, f ListFilter) ([]*Organization, error)
+	ListOrgsByMember(ctx context.Context, userGRN grn.GRN, f listfilter.Filter) ([]*Organization, error)
 
 	// Invitation — pending until accepted, single-use.
 	CreateInvitation(ctx context.Context, inv *Invitation) error

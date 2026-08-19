@@ -47,6 +47,7 @@ import (
 	"github.com/garamsh/garam/internal/ca"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/listfilter"
 	"github.com/garamsh/garam/internal/machine"
 	"github.com/garamsh/garam/internal/machineapi"
 	"github.com/garamsh/garam/internal/message"
@@ -224,7 +225,7 @@ func TestOrgStore_RoundTripWithCascade(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []grn.GRN{userGRN}, members)
 
-	groups, err := s.ListGroups(ctx, orgGRN, org.ListFilter{})
+	groups, err := s.ListGroups(ctx, orgGRN, listfilter.Filter{})
 	require.NoError(t, err)
 	assert.Len(t, groups, 1)
 	assert.Equal(t, orgGRN, groups[0].Organization())
@@ -286,7 +287,7 @@ func TestOrgStore_Membership(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, members, 1)
 
-	orgs, err := s.ListOrgsByMember(ctx, userGRN, org.ListFilter{})
+	orgs, err := s.ListOrgsByMember(ctx, userGRN, listfilter.Filter{})
 	require.NoError(t, err)
 	require.Len(t, orgs, 1)
 	assert.Equal(t, orgGRN, orgs[0].GRN())
@@ -412,7 +413,7 @@ func TestOrgStore_ListOrgsPagesEveryOrg(t *testing.T) {
 	require.NoError(t, s.CreateOrg(ctx, acmeOrg))
 	require.NoError(t, s.CreateOrg(ctx, org.NewOrganization(globex, "globex")))
 
-	all, err := s.ListOrgs(ctx, org.ListFilter{})
+	all, err := s.ListOrgs(ctx, listfilter.Filter{})
 	require.NoError(t, err)
 	assert.Equal(t, []grn.GRN{acme, globex}, grnsOf(all), "every org, ordered by GRN")
 	require.Len(t, all, 2)
@@ -424,11 +425,11 @@ func TestOrgStore_ListOrgsPagesEveryOrg(t *testing.T) {
 	// fails here.
 	assert.WithinDuration(t, acmeOrg.CreatedAt(), all[0].CreatedAt(), time.Microsecond)
 
-	page, err := s.ListOrgs(ctx, org.ListFilter{Limit: 1})
+	page, err := s.ListOrgs(ctx, listfilter.Filter{Limit: 1})
 	require.NoError(t, err)
 	assert.Equal(t, []grn.GRN{acme}, grnsOf(page), "the limit takes the first page and stops")
 
-	page, err = s.ListOrgs(ctx, org.ListFilter{Offset: 1})
+	page, err = s.ListOrgs(ctx, listfilter.Filter{Offset: 1})
 	require.NoError(t, err)
 	assert.Equal(t, []grn.GRN{globex}, grnsOf(page), "the offset skips the first org")
 }
@@ -515,7 +516,7 @@ func TestOrgStore_GroupQueriesStayInsideTheirGroupAndOrg(t *testing.T) {
 		_, err = s.GetOrg(ctx, acme)
 		assert.NoError(t, err, "the org survives its group")
 
-		remaining, err := s.ListGroups(ctx, acme, org.ListFilter{})
+		remaining, err := s.ListGroups(ctx, acme, listfilter.Filter{})
 		require.NoError(t, err)
 		assert.Equal(t, []grn.GRN{opsAcme}, grnsOf(remaining), "the org's other group survives")
 
@@ -556,13 +557,13 @@ func TestOrgStore_ProjectQueriesStayInsideTheirProjectAndOrg(t *testing.T) {
 	require.NoError(t, s.AddProjectMember(ctx, webGlobex, ada))
 
 	t.Run("an org's projects are its own, a page at a time", func(t *testing.T) {
-		list, err := s.ListProjects(ctx, acme, org.ListFilter{})
+		list, err := s.ListProjects(ctx, acme, listfilter.Filter{})
 		require.NoError(t, err)
 		assert.Equal(t, []grn.GRN{apiAcme, webAcme}, grnsOf(list), "the org's own projects, ordered by GRN")
 
 		// The other org's project of the same name is reached by asking
 		// about that org, so the org filter is what left it out above.
-		other, err := s.ListProjects(ctx, globex, org.ListFilter{})
+		other, err := s.ListProjects(ctx, globex, listfilter.Filter{})
 		require.NoError(t, err)
 		assert.Equal(t, []grn.GRN{webGlobex}, grnsOf(other))
 
@@ -571,11 +572,11 @@ func TestOrgStore_ProjectQueriesStayInsideTheirProjectAndOrg(t *testing.T) {
 		assert.Equal(t, acme, list[1].Organization())
 		assert.Equal(t, []string{string(org.RoleMember)}, list[1].Roles())
 
-		page, err := s.ListProjects(ctx, acme, org.ListFilter{Limit: 1})
+		page, err := s.ListProjects(ctx, acme, listfilter.Filter{Limit: 1})
 		require.NoError(t, err)
 		assert.Equal(t, []grn.GRN{apiAcme}, grnsOf(page), "the limit takes the first page and stops")
 
-		page, err = s.ListProjects(ctx, acme, org.ListFilter{Offset: 1})
+		page, err = s.ListProjects(ctx, acme, listfilter.Filter{Offset: 1})
 		require.NoError(t, err)
 		assert.Equal(t, []grn.GRN{webAcme}, grnsOf(page), "the offset skips the first project")
 	})
@@ -629,7 +630,7 @@ func TestOrgStore_ProjectQueriesStayInsideTheirProjectAndOrg(t *testing.T) {
 		_, err = s.GetOrg(ctx, acme)
 		assert.NoError(t, err, "the org survives its project")
 
-		remaining, err := s.ListProjects(ctx, acme, org.ListFilter{})
+		remaining, err := s.ListProjects(ctx, acme, listfilter.Filter{})
 		require.NoError(t, err)
 		assert.Equal(t, []grn.GRN{apiAcme}, grnsOf(remaining), "the org's other project survives")
 
@@ -954,11 +955,21 @@ func TestAgentStore_ListsTheOrgsOwnAgents(t *testing.T) {
 	_, err = s.Assign(ctx, elsewhere, scopedGRN(globex.Identifier, agent.ServiceTypeOperator, "field-two"))
 	require.NoError(t, err)
 
-	listed, err := s.ListByOrg(ctx, acme)
+	listed, err := s.ListByOrg(ctx, acme, listfilter.Filter{})
 	require.NoError(t, err)
 	require.Len(t, listed, 2, "the org's own agents and no other org's")
 	assert.ElementsMatch(t, []grn.GRN{held, loose}, []grn.GRN{listed[0].GRN(), listed[1].GRN()})
 	assert.Less(t, listed[0].GRN().String(), listed[1].GRN().String(), "ordered by GRN")
+
+	page, err := s.ListByOrg(ctx, acme, listfilter.Filter{Limit: 1})
+	require.NoError(t, err)
+	assert.Equal(t, []grn.GRN{listed[0].GRN()}, []grn.GRN{page[0].GRN()}, "the limit takes the first page and stops")
+	require.Len(t, page, 1)
+
+	page, err = s.ListByOrg(ctx, acme, listfilter.Filter{Offset: 1})
+	require.NoError(t, err)
+	require.Len(t, page, 1)
+	assert.Equal(t, listed[1].GRN(), page[0].GRN(), "the offset skips the first agent")
 
 	byGRN := map[grn.GRN]*agent.Agent{}
 	for _, a := range listed {
@@ -982,7 +993,7 @@ func TestAgentStore_ListsTheOrgsOwnAgents(t *testing.T) {
 
 	// The other org holds its own agent and its own assignment, so the
 	// scoping refuses a pairing rather than every pairing.
-	listed, err = s.ListByOrg(ctx, globex)
+	listed, err = s.ListByOrg(ctx, globex, listfilter.Filter{})
 	require.NoError(t, err)
 	require.Len(t, listed, 1)
 	assert.Equal(t, elsewhere, listed[0].GRN())
@@ -993,7 +1004,7 @@ func TestAgentStore_ListsTheOrgsOwnAgents(t *testing.T) {
 
 	// An org that holds none reads as empty rather than as everyone's.
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("initech"), "initech")))
-	listed, err = s.ListByOrg(ctx, orgRootGRN("initech"))
+	listed, err = s.ListByOrg(ctx, orgRootGRN("initech"), listfilter.Filter{})
 	require.NoError(t, err)
 	assert.Empty(t, listed)
 	assignments, err = s.ListAssignmentsByOrg(ctx, orgRootGRN("initech"))
@@ -1146,7 +1157,7 @@ func TestAgentDefinitionStore_RoundTrip(t *testing.T) {
 	require.NoError(t, s.Create(ctx, a))
 	_, err = s.Get(ctx, reported)
 	assert.NoError(t, err, "an agent that was reported is found, so the miss above is the definition")
-	agents, err := s.ListByOrg(ctx, orgGRN)
+	agents, err := s.ListByOrg(ctx, orgGRN, listfilter.Filter{})
 	require.NoError(t, err)
 	require.Len(t, agents, 1)
 	assert.Equal(t, reported, agents[0].GRN())

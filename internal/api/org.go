@@ -7,6 +7,7 @@ import (
 	apigen "github.com/garamsh/garam/api"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/listfilter"
 	"github.com/garamsh/garam/internal/org"
 	"github.com/garamsh/garam/internal/user"
 )
@@ -53,7 +54,7 @@ func (s *Server) ListOrgs(w http.ResponseWriter, r *http.Request, params apigen.
 		writeError(w, err)
 		return
 	}
-	var f org.ListFilter
+	var f listfilter.Filter
 	if params.Limit != nil {
 		f.Limit = *params.Limit
 	}

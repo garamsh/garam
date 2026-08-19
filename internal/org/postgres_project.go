@@ -6,6 +6,7 @@ import (
 
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/listfilter"
 	"github.com/garamsh/garam/internal/org/db"
 )
 
@@ -34,7 +35,7 @@ func (s *PostgresStore) GetProject(ctx context.Context, g grn.GRN) (*Project, er
 }
 
 // ListProjects returns the Organization's Projects ordered by GRN.
-func (s *PostgresStore) ListProjects(ctx context.Context, orgGRN grn.GRN, f ListFilter) ([]*Project, error) {
+func (s *PostgresStore) ListProjects(ctx context.Context, orgGRN grn.GRN, f listfilter.Filter) ([]*Project, error) {
 	rows, err := s.q.ListProjects(ctx, db.ListProjectsParams{
 		OrgGrn:    orgGRN.String(),
 		RowOffset: int32(f.Offset),

@@ -10,6 +10,7 @@ import (
 	"github.com/garamsh/garam/internal/agent/db"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/listfilter"
 )
 
 // Create persists a new Agent.
@@ -34,9 +35,13 @@ func (s *PostgresStore) Get(ctx context.Context, g grn.GRN) (*Agent, error) {
 	return rowToAgent(row)
 }
 
-// ListByOrg returns the organization's agents.
-func (s *PostgresStore) ListByOrg(ctx context.Context, orgGRN grn.GRN) ([]*Agent, error) {
-	rows, err := s.q.ListAgentsByOrg(ctx, orgGRN.String())
+// ListByOrg returns the organization's agents ordered by GRN.
+func (s *PostgresStore) ListByOrg(ctx context.Context, orgGRN grn.GRN, f listfilter.Filter) ([]*Agent, error) {
+	rows, err := s.q.ListAgentsByOrg(ctx, db.ListAgentsByOrgParams{
+		OrgGrn:    orgGRN.String(),
+		RowOffset: int32(f.Offset),
+		RowLimit:  limit(f.Limit),
+	})
 	if err != nil {
 		return nil, classify(err, "list agents", nil, nil)
 	}

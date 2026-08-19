@@ -11,6 +11,7 @@ import (
 
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/listfilter"
 )
 
 // memoryStore is a Store in memory. It keeps the assignment rules the
@@ -49,7 +50,7 @@ func (s *memoryStore) Get(_ context.Context, g grn.GRN) (*Agent, error) {
 	return a, nil
 }
 
-func (s *memoryStore) ListByOrg(_ context.Context, orgGRN grn.GRN) ([]*Agent, error) {
+func (s *memoryStore) ListByOrg(_ context.Context, orgGRN grn.GRN, _ listfilter.Filter) ([]*Agent, error) {
 	agents := make([]*Agent, 0, len(s.agents))
 	for _, a := range s.agents {
 		if a.orgGRN == orgGRN {

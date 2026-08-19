@@ -8,11 +8,12 @@ import (
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/listfilter"
 	"github.com/garamsh/garam/internal/org"
 )
 
 // ListAgents lists the org's agents. Requires the member role.
-func (s *Server) ListAgents(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org) {
+func (s *Server) ListAgents(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, params apigen.ListAgentsParams) {
 	u, err := s.currentUser(r)
 	if err != nil {
 		writeError(w, err)
@@ -22,7 +23,14 @@ func (s *Server) ListAgents(w http.ResponseWriter, r *http.Request, orgSlug apig
 		writeError(w, err)
 		return
 	}
-	agents, err := s.agents.ListByOrg(r.Context(), orgGRN(orgSlug))
+	var f listfilter.Filter
+	if params.Limit != nil {
+		f.Limit = *params.Limit
+	}
+	if params.Offset != nil {
+		f.Offset = *params.Offset
+	}
+	agents, err := s.agents.ListByOrg(r.Context(), orgGRN(orgSlug), f)
 	if err != nil {
 		writeError(w, err)
 		return

@@ -8,6 +8,32 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Group struct {
+	Grn       string
+	OrgGrn    string
+	Name      string
+	Roles     []string
+	Policies  []string
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
+
+type GroupMember struct {
+	GroupGrn  string
+	MemberGrn string
+}
+
+type Invitation struct {
+	Token      string
+	OrgGrn     string
+	Role       string
+	CreatedBy  string
+	CreatedAt  pgtype.Timestamptz
+	ExpiresAt  pgtype.Timestamptz
+	AcceptedBy pgtype.Text
+	AcceptedAt pgtype.Timestamptz
+}
+
 type Message struct {
 	ID             string
 	RecipientGrn   string
@@ -20,4 +46,56 @@ type Message struct {
 	CompletedAt    pgtype.Timestamptz
 	Attempts       int32
 	ClaimedAt      pgtype.Timestamptz
+}
+
+type MessageConsent struct {
+	OrgA         string
+	OrgB         string
+	AConsentedAt pgtype.Timestamptz
+	BConsentedAt pgtype.Timestamptz
+}
+
+type Org struct {
+	Grn       string
+	Name      string
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
+
+type OrgMember struct {
+	OrgGrn    string
+	UserGrn   string
+	Role      string
+	CreatedAt pgtype.Timestamptz
+}
+
+type Project struct {
+	Grn       string
+	OrgGrn    string
+	Name      string
+	Roles     []string
+	Policies  []string
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
+
+type ProjectMember struct {
+	ProjectGrn string
+	MemberGrn  string
+}
+
+type Session struct {
+	TokenHash string
+	UserGrn   string
+	CreatedAt pgtype.Timestamptz
+	ExpiresAt pgtype.Timestamptz
+}
+
+type User struct {
+	Grn       string
+	Nickname  string
+	Roles     []string
+	Policies  []string
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
 }

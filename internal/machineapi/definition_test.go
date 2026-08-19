@@ -35,7 +35,7 @@ func TestServer_AnswersTheDefinitionsNamingTheCaller(t *testing.T) {
 		agent.NewDefinitionState(unclaimed, nil),
 		agent.NewDefinitionState(claimed, agent.NewAssignment(claimed.Agent(), operator, 1)),
 	}}
-	url, client := listener(t, agents, &messageService{}, unwatched(t), &memberGroups{}, &engine{}, operator)
+	url, client := listener(t, agents, &messageService{}, consenting(), unwatched(t), &memberGroups{}, &engine{}, operator)
 
 	status, body := do(t, client, http.MethodGet, url+"/definitions")
 	require.Equal(t, http.StatusOK, status)
@@ -55,7 +55,7 @@ func TestServer_ClaimsTheDefinitionThePathNames(t *testing.T) {
 	operator := operatorGRN("acme")
 	d := defined(t, operator, agent.Values{}, "0a1b2c3d4e5f6071")
 	agents := &agentService{assignment: agent.NewAssignment(d.Agent(), operator, 1)}
-	url, client := listener(t, agents, &messageService{}, unwatched(t), &memberGroups{}, &engine{}, operator)
+	url, client := listener(t, agents, &messageService{}, consenting(), unwatched(t), &memberGroups{}, &engine{}, operator)
 
 	status, body := do(t, client, http.MethodPost, url+"/definitions/"+d.Agent().String()+"/claim")
 	require.Equal(t, http.StatusCreated, status)

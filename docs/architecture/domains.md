@@ -101,7 +101,9 @@ engine to resolve group-attached policies (ADR-0008). Orgs grow by invitation an
 The org domain owns its action constants (`ActionOrgRead`,
 `ActionGroupRead`, `ActionProjectRead`, `ActionPolicyCreate`, …) —
 including the policy management actions, which the api server enforces
-without importing the engine that stores policies, and reading an
+without importing the engine that stores policies, the consent
+management actions (ADR-0035), which it enforces over the relation
+`internal/message` stores, and reading an
 organization's agents, which it enforces without `internal/agent`
 importing this package back — and `Role.Actions`
 maps each role to the action patterns it grants; `ActionsFor` does the same for
@@ -367,10 +369,18 @@ refuses the message rather than deciding it without, because an unread
 group and an empty one are otherwise the same answer.
 
 A recipient of another organization is refused before the engine is
-asked, and that comparison rather than any statement is what holds the
-boundary: an unattached active policy of the recipient's organization
+asked, unless the consent relation between the two organizations stands
+(ADR-0035): the engine is never asked a cross-organization question,
+because an unattached active policy of the recipient's organization
 would otherwise admit every sender there is
-([authz.md](./authz.md) §Policy attachment). It is the precondition
+([authz.md](./authz.md) §Policy attachment). The relation is the one
+thing that may open the boundary, because it is no policy — both
+organizations hold it and either withdraws it — and it is read from
+`internal/message`, the domain that owns it. A post the relation does
+not carry is not rejected: the refusal returns to the sender as an
+ordinary inbound message (ADR-0013), written under the intended
+recipient's identity because garam holds none of its own (ADR-0024).
+The same-organization half of the precondition is the one
 `internal/api` gets from org membership, on a listener that has no
 membership to read.
 
@@ -385,11 +395,12 @@ same reason ADR-0022 keeps watching off the subscription completion rests
 on. A poll that found nothing carries no count: there is no turn to
 forward the events of.
 
-It holds no store and reaches no certificate authority, and it imports
-neither the engine nor `internal/org`: `GRPCEvaluator` is its own
-client, as `internal/api` keeps its own. `internal/api` and this
-package never import each other and never run in the same process
-(ADR-0017).
+It reaches no certificate authority, and it imports neither the engine
+nor `internal/org`: `GRPCEvaluator` is its own client, as
+`internal/api` keeps its own. The one store it holds is the consent
+relation's, which is the message domain's own data and arrives the way
+the queue does. `internal/api` and this package never import each other
+and never run in the same process (ADR-0017).
 
 ## `internal/message`
 
@@ -399,8 +410,10 @@ The durable queue a message reaches an agent through (ADR-0013).
 |------|----------------|
 | `Message` | one message addressed to a recipient, under an identifier of the queue's own |
 | `Claim` | one reader's hold on a message, and the token that fences it |
+| `Consent` | one pair of organizations and the two halves of their cross-organization consent (ADR-0035); it stands while both halves do |
 | `Config` | the delivery parameters: lease, ceiling, attempts, and how long a claim waits |
 | `Service` | what a machine identity does to its own queue: post, claim, renew, complete |
+| `ConsentStore` | the consent relation: an organization granting or withdrawing its own half, and the send path asking whether both halves stand |
 | `ActionSend` | the action a policy names to decide what one identity may send to another |
 
 Messages are their own boundary rather than part of `internal/agent`: a
@@ -409,7 +422,14 @@ aggregate, and a message has a lifecycle no agent's contains. A message
 may cross an organization boundary only where a relation permits it —
 one row per consenting pair, held by both organizations and withdrawable
 by either (ADR-0035); the refusal reaches the sender as an ordinary
-inbound message, never a rejection.
+inbound message, never a rejection. Each half is the stamp its side's
+last grant wrote: a row is created by the first grant, stands when the
+second lands, and is deleted when neither half stands, so the table
+holds live consent only. Both organizations of a pair must exist, which
+the schema holds by reference rather than by a check a caller could
+forget, and an organization that is deleted takes its halves with it.
+Granting and withdrawing is the api server's surface (`internal/api`
+under the org's path); this package owns the relation itself.
 
 The queue is a table and never a connection, so any garam instance can
 hand any recipient's message to a reader and no process holds anything

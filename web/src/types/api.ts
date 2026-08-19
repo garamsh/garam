@@ -519,6 +519,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/orgs/{org}/consents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the org's cross-organization consents. Requires the `admin` role.
+         * @description Every relation the organization is a side of, standing or waiting on one half (ADR-0035). A message crosses between the two organizations only while both halves stand.
+         */
+        get: operations["listOrgConsents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/consents/{other}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Grant the org's half of a cross-organization consent. Requires the `admin` role.
+         * @description Stands this organization's half of the pair (ADR-0035). The relation stands — and messages may cross in either direction — once the other organization has granted its own half. Granting a half that already stands only re-stamps it.
+         */
+        put: operations["grantOrgConsent"];
+        post?: never;
+        /**
+         * Withdraw the org's half of a cross-organization consent. Requires the `admin` role.
+         * @description Clears this organization's own half (ADR-0035). The relation falls at once — a message that no longer has both halves is refused back to its sender — and the other organization's half keeps standing for a later re-grant to join. Withdrawing a half already down changes nothing.
+         */
+        delete: operations["withdrawOrgConsent"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orgs/{org}/invitations": {
         parameters: {
             query?: never;
@@ -627,6 +671,17 @@ export interface components {
             role: components["schemas"]["Role"];
             /** Format: date-time */
             since: string;
+        };
+        /** @description One organization's view of a cross-organization consent relation (ADR-0035), from the side the path names: `orgGrn` is the other organization, and each half says whether that side's grant stands. `stands` is both halves at once — the only state under which a message crosses. */
+        OrgConsent: {
+            /** @example grn:root:default:org:globex */
+            orgGrn: string;
+            /** @description The path organization's half stands. */
+            grantedHere: boolean;
+            /** @description The other organization's half stands. */
+            grantedThere: boolean;
+            /** @description Both halves stand, so messages may cross. */
+            stands: boolean;
         };
         InvitationCreate: {
             /**
@@ -804,6 +859,8 @@ export interface components {
         provider: string;
         /** @description Organization identifier (the last GRN segment). */
         org: string;
+        /** @description The other organization of a consent pair (the last GRN segment). */
+        other: string;
         /** @description Group identifier (the last GRN segment). */
         group: string;
         /** @description Project identifier (the last GRN segment). */
@@ -2008,6 +2065,87 @@ export interface operations {
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+        };
+    };
+    listOrgConsents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The org's consent relations. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgConsent"][];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    grantOrgConsent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description The other organization of a consent pair (the last GRN segment). */
+                other: components["parameters"]["other"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The relation as it now stands. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgConsent"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    withdrawOrgConsent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description The other organization of a consent pair (the last GRN segment). */
+                other: components["parameters"]["other"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Consent withdrawn. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
         };
     };
     createInvitation: {

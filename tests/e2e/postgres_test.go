@@ -115,7 +115,7 @@ func truncate(t *testing.T, p *pgxpool.Pool) {
 		group_members, project_members, org_members, invitations, sessions,
 		oauth_states, policies, policy_versions, policy_attachments, agents,
 		agent_assignments, agent_definitions, certificate_authorities,
-		messages, agent_watches CASCADE`)
+		messages, message_consents, agent_watches CASCADE`)
 	require.NoError(t, err)
 }
 
@@ -2424,6 +2424,134 @@ func TestMessage_BodyAndCompletionAreOneState(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// TestConsentStore_RoundTrip drives the consent relation through the
+// lifecycle ADR-0035 gives it: one row per pair, each half standing
+// from its own side's grant, the relation standing only while both do,
+// and a withdraw taking down the withdrawing side's half alone. The
+// controls are the pair nobody granted and the pair two other
+// organizations hold — a relation is a property of the pair, not of an
+// organization.
+func TestConsentStore_RoundTrip(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := message.NewPostgresStore(p)
+	orgs := org.NewPostgresStore(p)
+	acme, globex, initech := orgRootGRN("acme"), orgRootGRN("globex"), orgRootGRN("initech")
+	for _, o := range []struct {
+		g    grn.GRN
+		name string
+	}{{acme, "acme"}, {globex, "globex"}, {initech, "initech"}} {
+		require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(o.g, o.name)))
+	}
+
+	// Nothing stands where nothing was granted.
+	stands, err := s.Stands(ctx, acme, globex)
+	require.NoError(t, err)
+	assert.False(t, stands)
+
+	// One half does not carry the relation, whichever side grants it.
+	first, err := s.Grant(ctx, acme, globex)
+	require.NoError(t, err)
+	assert.False(t, first.Stands())
+	stands, err = s.Stands(ctx, globex, acme)
+	require.NoError(t, err)
+	assert.False(t, stands, "the direction asked does not matter — it is one row")
+
+	// The second half is what stands the relation.
+	second, err := s.Grant(ctx, globex, acme)
+	require.NoError(t, err)
+	assert.True(t, second.Stands())
+	stands, err = s.Stands(ctx, acme, globex)
+	require.NoError(t, err)
+	assert.True(t, stands)
+
+	// A relation between two other organizations admits nothing for
+	// this pair.
+	_, err = s.Grant(ctx, globex, initech)
+	require.NoError(t, err)
+	_, err = s.Grant(ctx, initech, globex)
+	require.NoError(t, err)
+	stands, err = s.Stands(ctx, acme, initech)
+	require.NoError(t, err)
+	assert.False(t, stands, "globex consenting with both does not join acme to initech")
+
+	// Listing reads an org's relations from whichever side it holds.
+	listed, err := s.List(ctx, globex)
+	require.NoError(t, err)
+	require.Len(t, listed, 2, "the pair with acme and the pair with initech")
+	listed, err = s.List(ctx, acme)
+	require.NoError(t, err)
+	require.Len(t, listed, 1)
+	assert.True(t, listed[0].Stands())
+
+	// A withdraw takes the withdrawing side's half down and leaves the
+	// other's standing: the relation falls, and the row lives on one
+	// half.
+	require.NoError(t, s.Withdraw(ctx, acme, globex))
+	stands, err = s.Stands(ctx, acme, globex)
+	require.NoError(t, err)
+	assert.False(t, stands)
+	listed, err = s.List(ctx, globex)
+	require.NoError(t, err)
+	require.Len(t, listed, 2, "globex's half keeps the row")
+	// Withdrawing what is already down changes nothing.
+	require.NoError(t, s.Withdraw(ctx, acme, globex))
+
+	// The second withdraw empties the row, and the table holds live
+	// consent only.
+	require.NoError(t, s.Withdraw(ctx, globex, acme))
+	assert.Zero(t, countRows(t, p,
+		"SELECT count(*) FROM message_consents WHERE org_a = $1 AND org_b = $2",
+		acme.String(), globex.String()), "a pair neither side stands in is gone")
+	assert.Equal(t, 1, countRows(t, p, "SELECT count(*) FROM message_consents"),
+		"the globex-initech pair is untouched")
+
+	// An organization that is deleted takes its halves with it.
+	require.NoError(t, orgs.DeleteOrg(ctx, globex))
+	assert.Zero(t, countRows(t, p, "SELECT count(*) FROM message_consents"),
+		"the cascade removed the deleted org's remaining half")
+}
+
+// TestConsent_StaysARealPair covers the schema's rules for the
+// relation: the pair is stored ordered, an org never consents with
+// itself, and a row with neither half standing is not a state the
+// table holds. A row the database accepted and the domain read as
+// something else would be neither writable nor trustworthy.
+func TestConsent_StaysARealPair(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	orgs := org.NewPostgresStore(p)
+	acme, globex := orgRootGRN("acme"), orgRootGRN("globex")
+	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(acme, "acme")))
+	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(globex, "globex")))
+
+	rejected := []struct {
+		name string
+		stmt string
+	}{
+		{"an unordered pair", `INSERT INTO message_consents (org_a, org_b, a_consented_at)
+			VALUES ($2, $1, now())`},
+		{"an org consenting with itself", `INSERT INTO message_consents (org_a, org_b, a_consented_at)
+			VALUES ($1, $1, now())`},
+		{"neither half standing", `INSERT INTO message_consents (org_a, org_b)
+			VALUES ($1, $2)`},
+		{"an org that does not exist", `INSERT INTO message_consents (org_a, org_b, a_consented_at)
+			VALUES ($1, 'grn:root:default:org:ghost', now())`},
+	}
+	for _, tt := range rejected {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := p.Exec(ctx, tt.stmt, acme.String(), globex.String())
+			assert.Error(t, err)
+		})
+	}
+
+	// The ordered pair with one half standing is admitted, so the
+	// constraints reject a row rather than every row.
+	_, err := p.Exec(ctx, `INSERT INTO message_consents (org_a, org_b, b_consented_at)
+		VALUES ($1, $2, now())`, acme.String(), globex.String())
+	require.NoError(t, err)
+}
+
 // briefDelivery is the queue's delivery configuration with the waits
 // shortened to what a test can sit through. What each parameter governs
 // is unchanged; `garam serve machine` runs on the defaults.
@@ -2545,7 +2673,7 @@ func machineListener(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer, policies m
 	srv := machine.NewServer(
 		machine.NewService(machineTrustRoots{store: authorities}),
 		loopbackCertificate(t),
-		machinegen.Handler(machineapi.NewServer(agents, messages, watches, memberGroups{store: org.NewPostgresStore(p)}, policies)),
+		machinegen.Handler(machineapi.NewServer(agents, messages, message.NewPostgresStore(p), watches, memberGroups{store: org.NewPostgresStore(p)}, policies)),
 	)
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
@@ -2886,10 +3014,11 @@ func TestMachineSurface_AnAgentActsOnItsOwnQueueAndNoOther(t *testing.T) {
 // rather than a certificate this listener rejected.
 //
 // Its post crossed until ADR-0024. What an identity may send is now
-// decided by policy, and what its own GRN grants it is its own
-// organization, so a message to another organization's agent is
-// refused instead of stored — the one call this test used to watch
-// cross.
+// decided by policy inside its organization, and across the boundary
+// by the consent relation alone (ADR-0035): where no relation stands
+// the message is not stored to the recipient, and the refusal comes
+// back to the sender as an ordinary inbound message (ADR-0013) rather
+// than as a status.
 func TestMachineSurface_AnotherOrganizationsAgentReachesNothingOnThisQueue(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
@@ -2948,24 +3077,42 @@ func TestMachineSurface_AnotherOrganizationsAgentReachesNothingOnThisQueue(t *te
 	status, body = machineSend(t, recipient, http.MethodPost, held+"/completion", "")
 	require.Equal(t, http.StatusNoContent, status, string(body))
 
-	// The post crosses no further than the rest: the recipient is in
-	// another organization, which is refused before a policy is read
-	// (ADR-0024).
+	// The post crosses no further than the rest: no consent stands
+	// between the two organizations, so nothing is stored to the
+	// recipient — and the refusal is not a 4xx but an ordinary inbound
+	// message to the sender, which the 201 below answers (ADR-0013,
+	// ADR-0035).
 	status, body = machineSend(t, stranger, http.MethodPost, url+"/messages",
 		submissionTo(recipientGRN, "key-2"))
-	require.Equal(t, http.StatusForbidden, status, string(body))
-	assert.JSONEq(t, `{"kind":"permission_denied","message":"recipient is in another organization"}`, string(body))
+	require.Equal(t, http.StatusCreated, status, string(body))
+	var refusal machinegen.Message
+	require.NoError(t, json.Unmarshal(body, &refusal))
+	assert.Equal(t, strangerGRN.String(), refusal.Recipient, "the refusal came back to the sender")
+	assert.Equal(t, recipientGRN.String(), refusal.Sender, "written under the intended recipient's identity")
+
+	// It sits in the sender's own queue like any other message.
+	strangerQueue := url + "/agents/" + strangerGRN.String() + "/claims"
+	status, body = machineSend(t, stranger, http.MethodPost, strangerQueue, "")
+	require.Equal(t, http.StatusOK, status, string(body))
+	require.NoError(t, json.Unmarshal(body, &claimed))
+	assert.Equal(t, refusal.Id, claimed.Message.Id)
+	assert.Contains(t, claimed.Message.Body, "do not both consent")
+	status, body = machineSend(t, stranger, http.MethodPost, strangerQueue+"/"+claimed.Id+"/completion", "")
+	require.Equal(t, http.StatusNoContent, status, string(body))
 
 	// No policy the sender's own organization writes carries it across
-	// either, because the boundary is decided before a policy is
-	// consulted (ADR-0024). The Allow below matches every resource there
-	// is and buys nothing.
+	// either, because a policy is never asked across the boundary —
+	// the consent relation is the only thing that opens it (ADR-0024,
+	// ADR-0035). The Allow below matches every resource there is and
+	// buys nothing.
 	reachAll := activePolicy(t, policies, orgRootGRN("acme"), "reach-everything",
 		statementDoc("reach-everything", wire.EffectAllow, message.ActionSend, "grn:*:*"))
 	attachPolicy(t, policies, reachAll, senderGRN)
 	status, body = machineSend(t, sender, http.MethodPost, url+"/messages",
 		submissionTo(strangerGRN, "key-3"))
-	require.Equal(t, http.StatusForbidden, status, string(body))
+	require.Equal(t, http.StatusCreated, status, string(body))
+	require.NoError(t, json.Unmarshal(body, &refusal))
+	assert.Equal(t, senderGRN.String(), refusal.Recipient, "the wildcard policy did not carry the message across")
 
 	// That same Allow is active, attached and matching inside acme, so
 	// what refused above is the recipient's organization and not a
@@ -3211,7 +3358,10 @@ func TestMachineSurface_AGroupAttachedPolicyDecidesWhatItsMembersSend(t *testing
 // pair is what makes this a test of the precondition rather than of a
 // policy that reached nothing, and an engine stuck open fails the first
 // half rather than passing both. The engine says yes and the surface
-// still refuses.
+// still does not store the message to the recipient: with ADR-0035 the
+// boundary is the consent relation's, not a policy's, and where it
+// does not stand the post returns to the sender as an ordinary inbound
+// message (ADR-0013).
 func TestMachineSurface_ARecipientsOwnPolicyAdmitsNoForeignSender(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
@@ -3238,10 +3388,15 @@ func TestMachineSurface_ARecipientsOwnPolicyAdmitsNoForeignSender(t *testing.T) 
 	require.Equal(t, "alpha", foreignGRN.Organization)
 	require.Equal(t, "beta", recipientGRN.Organization)
 
-	// With nothing written anywhere, the foreign sender is refused and
-	// the recipient's own neighbour is not.
+	// With nothing written anywhere, the foreign sender's message is
+	// not stored to the recipient — it comes back to the sender as an
+	// ordinary inbound message — and the recipient's own neighbour is
+	// stored as before.
 	status, body := machineSend(t, foreign, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-1"))
-	require.Equal(t, http.StatusForbidden, status, string(body))
+	require.Equal(t, http.StatusCreated, status, string(body))
+	var refusal machinegen.Message
+	require.NoError(t, json.Unmarshal(body, &refusal))
+	assert.Equal(t, foreignGRN.String(), refusal.Recipient, "the refusal came back to the sender, not to the foreign recipient")
 	status, body = machineSend(t, neighbour, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-2"))
 	require.Equal(t, http.StatusCreated, status, string(body))
 
@@ -3266,27 +3421,33 @@ func TestMachineSurface_ARecipientsOwnPolicyAdmitsNoForeignSender(t *testing.T) 
 	require.NoError(t, err)
 	require.True(t, allowed, "the unattached wildcard policy did not reach the foreign subject")
 
-	// The surface refuses it anyway, which is the whole of the fix. The
-	// body names the organization rather than a policy: this refusal is
-	// not one beta wrote and not one it can lift.
+	// The surface does not store it anyway, which is the whole of the
+	// fix. What comes back names the missing consent rather than a
+	// policy: this refusal is not one beta wrote and not one it can
+	// lift — only the two organizations' relation opens the boundary.
 	status, body = machineSend(t, foreign, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-3"))
-	require.Equal(t, http.StatusForbidden, status, string(body))
-	assert.JSONEq(t, `{"kind":"permission_denied","message":"recipient is in another organization"}`, string(body))
+	require.Equal(t, http.StatusCreated, status, string(body))
+	require.NoError(t, json.Unmarshal(body, &refusal))
+	assert.Equal(t, foreignGRN.String(), refusal.Recipient)
+	assert.Contains(t, refusal.Body, "do not both consent")
 
 	// The same call from inside the organization is accepted while that
-	// policy is active, so what refuses is the sender's organization and
-	// not a surface that stopped accepting messages.
+	// policy is active, so what turns the foreign one back is the
+	// missing relation and not a surface that stopped accepting
+	// messages.
 	status, body = machineSend(t, neighbour, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-4"))
 	require.Equal(t, http.StatusCreated, status, string(body))
 
 	// Archiving the policy changes nothing about the foreign sender: it
-	// was refused before the policy existed and is refused after, so the
+	// came back before the policy existed and comes back after, so the
 	// refusal never depended on what beta wrote.
 	archivePolicy(t, policies, openDoor)
 	status, body = machineSend(t, foreign, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-5"))
-	require.Equal(t, http.StatusForbidden, status, string(body))
+	require.Equal(t, http.StatusCreated, status, string(body))
+	require.NoError(t, json.Unmarshal(body, &refusal))
+	assert.Equal(t, foreignGRN.String(), refusal.Recipient)
 
-	// Nothing the foreign sender posted is in the queue.
+	// Nothing the foreign sender posted is in the recipient's queue.
 	queue := url + "/agents/" + recipientGRN.String() + "/claims"
 	var senders []string
 	for range 2 {
@@ -3302,4 +3463,144 @@ func TestMachineSurface_ARecipientsOwnPolicyAdmitsNoForeignSender(t *testing.T) 
 
 	status, body = machineSend(t, recipient, http.MethodPost, queue, "")
 	assert.Equal(t, http.StatusNoContent, status, string(body), "a foreign sender's message reached the queue")
+
+	// Every one of the foreign sender's posts is in its own queue
+	// instead: three refusals, one per post, each written under the
+	// intended recipient's identity.
+	foreignQueue := url + "/agents/" + foreignGRN.String() + "/claims"
+	var refusals []string
+	for range 3 {
+		status, body = machineSend(t, foreign, http.MethodPost, foreignQueue, "")
+		require.Equal(t, http.StatusOK, status, string(body))
+		var claimed machinegen.Claim
+		require.NoError(t, json.Unmarshal(body, &claimed))
+		assert.Equal(t, recipientGRN.String(), claimed.Message.Sender)
+		assert.Contains(t, claimed.Message.Body, "do not both consent")
+		refusals = append(refusals, claimed.Message.IdempotencyKey)
+		status, body = machineSend(t, foreign, http.MethodPost, foreignQueue+"/"+claimed.Id+"/completion", "")
+		require.Equal(t, http.StatusNoContent, status, string(body))
+	}
+	assert.Equal(t, []string{
+		"consent-refused:" + foreignGRN.String() + ":key-1",
+		"consent-refused:" + foreignGRN.String() + ":key-3",
+		"consent-refused:" + foreignGRN.String() + ":key-5",
+	}, refusals)
+}
+
+// TestMachineSurface_AConsentRelationCarriesAMessageAcrossTheBoundary
+// carries ADR-0035 end to end over the real listener: a message
+// between two organizations is stored and claimable while the relation
+// stands, and refused back to its sender as an ordinary inbound
+// message the moment either half is withdrawn. The grants and
+// withdraws are written through the store, as the api server's
+// handlers write them.
+//
+// The controls sit beside the crossing: one half alone carries
+// nothing, a relation between two other organizations admits nothing
+// for this pair, and the same-organization post is unaffected
+// throughout — so what opens and closes the boundary here is the
+// relation and nothing else.
+func TestMachineSurface_AConsentRelationCarriesAMessageAcrossTheBoundary(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	orgs := org.NewPostgresStore(p)
+	for _, name := range []string{"acme", "globex", "initech"} {
+		require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN(name), name)))
+	}
+
+	key := make([]byte, ca.KeySize)
+	_, err := rand.Read(key)
+	require.NoError(t, err)
+	sealer, err := ca.NewAESGCMSealer(key)
+	require.NoError(t, err)
+	outOfBand, err := ca.NewService(ca.NewPostgresStore(p), sealer, ca.Config{})
+	require.NoError(t, err)
+
+	_, evaluator := policyEngine(t, p)
+	url := machineListener(t, p, sealer, evaluator)
+	acmeOperator := machineClient(t, installed(t, outOfBand, scopedGRN("acme", agent.ServiceTypeOperator, "one")))
+	globexOperator := machineClient(t, installed(t, outOfBand, scopedGRN("globex", agent.ServiceTypeOperator, "one")))
+	initechOperator := machineClient(t, installed(t, outOfBand, scopedGRN("initech", agent.ServiceTypeOperator, "one")))
+	senderGRN, sender := provisioned(t, url, acmeOperator)
+	siblingGRN, _ := provisioned(t, url, acmeOperator)
+	recipientGRN, recipient := provisioned(t, url, globexOperator)
+	bystanderGRN, _ := provisioned(t, url, initechOperator)
+	consents := message.NewPostgresStore(p)
+	queue := url + "/agents/" + recipientGRN.String() + "/claims"
+
+	// No relation anywhere: the post comes back to the sender.
+	status, body := machineSend(t, sender, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-1"))
+	require.Equal(t, http.StatusCreated, status, string(body))
+	var answer machinegen.Message
+	require.NoError(t, json.Unmarshal(body, &answer))
+	assert.Equal(t, senderGRN.String(), answer.Recipient, "no consent: the refusal returns to the sender")
+
+	// One half alone carries nothing.
+	_, err = consents.Grant(ctx, orgRootGRN("acme"), orgRootGRN("globex"))
+	require.NoError(t, err)
+	status, body = machineSend(t, sender, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-2"))
+	require.Equal(t, http.StatusCreated, status, string(body))
+	require.NoError(t, json.Unmarshal(body, &answer))
+	assert.Equal(t, senderGRN.String(), answer.Recipient, "one half does not carry a message across")
+
+	// Both halves standing, the same call crosses and is claimable.
+	_, err = consents.Grant(ctx, orgRootGRN("globex"), orgRootGRN("acme"))
+	require.NoError(t, err)
+	status, body = machineSend(t, sender, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-3"))
+	require.Equal(t, http.StatusCreated, status, string(body))
+	require.NoError(t, json.Unmarshal(body, &answer))
+	assert.Equal(t, recipientGRN.String(), answer.Recipient, "the standing relation stored the message itself")
+
+	status, body = machineSend(t, recipient, http.MethodPost, queue, "")
+	require.Equal(t, http.StatusOK, status, string(body))
+	var claimed machinegen.Claim
+	require.NoError(t, json.Unmarshal(body, &claimed))
+	assert.Equal(t, answer.Id, claimed.Message.Id)
+	assert.Equal(t, senderGRN.String(), claimed.Message.Sender)
+	assert.Equal(t, "hello", claimed.Message.Body)
+	status, body = machineSend(t, recipient, http.MethodPost, queue+"/"+claimed.Id+"/completion", "")
+	require.Equal(t, http.StatusNoContent, status, string(body))
+
+	// A relation between two other organizations admits nothing for
+	// this pair.
+	_, err = consents.Grant(ctx, orgRootGRN("globex"), orgRootGRN("initech"))
+	require.NoError(t, err)
+	_, err = consents.Grant(ctx, orgRootGRN("initech"), orgRootGRN("globex"))
+	require.NoError(t, err)
+	status, body = machineSend(t, sender, http.MethodPost, url+"/messages", submissionTo(bystanderGRN, "key-4"))
+	require.Equal(t, http.StatusCreated, status, string(body))
+	require.NoError(t, json.Unmarshal(body, &answer))
+	assert.Equal(t, senderGRN.String(), answer.Recipient, "globex consenting elsewhere joins acme to nobody")
+
+	// Withdrawal closes the boundary at once: the next post comes back
+	// to the sender, and the half acme left standing is what a re-grant
+	// joins.
+	require.NoError(t, consents.Withdraw(ctx, orgRootGRN("globex"), orgRootGRN("acme")))
+	status, body = machineSend(t, sender, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-5"))
+	require.Equal(t, http.StatusCreated, status, string(body))
+	require.NoError(t, json.Unmarshal(body, &answer))
+	assert.Equal(t, senderGRN.String(), answer.Recipient, "withdrawn, the relation refuses again")
+	_, err = consents.Grant(ctx, orgRootGRN("globex"), orgRootGRN("acme"))
+	require.NoError(t, err)
+	status, body = machineSend(t, sender, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-6"))
+	require.Equal(t, http.StatusCreated, status, string(body))
+	require.NoError(t, json.Unmarshal(body, &answer))
+	assert.Equal(t, recipientGRN.String(), answer.Recipient, "the re-grant crosses again")
+
+	// The same-organization post is unaffected by all of it.
+	status, body = machineSend(t, sender, http.MethodPost, url+"/messages", submissionTo(siblingGRN, "key-7"))
+	require.Equal(t, http.StatusCreated, status, string(body))
+	require.NoError(t, json.Unmarshal(body, &answer))
+	assert.Equal(t, siblingGRN.String(), answer.Recipient)
+
+	// The recipient's queue holds exactly the two messages that
+	// crossed: every accepted one and no refused one.
+	status, body = machineSend(t, recipient, http.MethodPost, queue, "")
+	require.Equal(t, http.StatusOK, status, string(body))
+	require.NoError(t, json.Unmarshal(body, &claimed))
+	assert.Equal(t, "key-6", claimed.Message.IdempotencyKey)
+	status, body = machineSend(t, recipient, http.MethodPost, queue+"/"+claimed.Id+"/completion", "")
+	require.Equal(t, http.StatusNoContent, status, string(body))
+	status, body = machineSend(t, recipient, http.MethodPost, queue, "")
+	assert.Equal(t, http.StatusNoContent, status, string(body), "a refused message reached the queue")
 }

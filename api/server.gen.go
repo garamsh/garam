@@ -246,6 +246,19 @@ type MemberRef struct {
 	MemberGrn string `json:"memberGrn"`
 }
 
+// OrgConsent One organization's view of a cross-organization consent relation (ADR-0035), from the side the path names: `orgGrn` is the other organization, and each half says whether that side's grant stands. `stands` is both halves at once — the only state under which a message crosses.
+type OrgConsent struct {
+	// GrantedHere The path organization's half stands.
+	GrantedHere bool `json:"grantedHere"`
+
+	// GrantedThere The other organization's half stands.
+	GrantedThere bool   `json:"grantedThere"`
+	OrgGrn       string `json:"orgGrn"`
+
+	// Stands Both halves stand, so messages may cross.
+	Stands bool `json:"stands"`
+}
+
 // Organization defines model for Organization.
 type Organization struct {
 	CreatedAt time.Time `json:"createdAt"`
@@ -381,6 +394,9 @@ type Offset = int
 
 // Org defines model for org.
 type Org = string
+
+// OtherSlug defines model for other.
+type OtherSlug = string
 
 // PolicySlug defines model for policy.
 type PolicySlug = string
@@ -520,6 +536,15 @@ type ServerInterface interface {
 	// WatchAgent Watch an agent work. Requires the `agent:watch` action.
 	// (GET /orgs/{org}/agents/{agent}/watch)
 	WatchAgent(w http.ResponseWriter, r *http.Request, org Org, agentSlug AgentSlug)
+	// ListOrgConsents List the org's cross-organization consents. Requires the `admin` role.
+	// (GET /orgs/{org}/consents)
+	ListOrgConsents(w http.ResponseWriter, r *http.Request, org Org)
+	// WithdrawOrgConsent Withdraw the org's half of a cross-organization consent. Requires the `admin` role.
+	// (DELETE /orgs/{org}/consents/{other})
+	WithdrawOrgConsent(w http.ResponseWriter, r *http.Request, org Org, otherSlug OtherSlug)
+	// GrantOrgConsent Grant the org's half of a cross-organization consent. Requires the `admin` role.
+	// (PUT /orgs/{org}/consents/{other})
+	GrantOrgConsent(w http.ResponseWriter, r *http.Request, org Org, otherSlug OtherSlug)
 	// ListGroups List an organization's groups. Requires the `member` role.
 	// (GET /orgs/{org}/groups)
 	ListGroups(w http.ResponseWriter, r *http.Request, org Org, params ListGroupsParams)
@@ -1070,6 +1095,102 @@ func (siw *ServerInterfaceWrapper) WatchAgent(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.WatchAgent(w, r, org, agentSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListOrgConsents operation middleware
+func (siw *ServerInterfaceWrapper) ListOrgConsents(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListOrgConsents(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// WithdrawOrgConsent operation middleware
+func (siw *ServerInterfaceWrapper) WithdrawOrgConsent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "other" -------------
+	var otherSlug OtherSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "other", r.PathValue("other"), &otherSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "other", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.WithdrawOrgConsent(w, r, org, otherSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GrantOrgConsent operation middleware
+func (siw *ServerInterfaceWrapper) GrantOrgConsent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "other" -------------
+	var otherSlug OtherSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "other", r.PathValue("other"), &otherSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "other", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GrantOrgConsent(w, r, org, otherSlug)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2234,6 +2355,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/policies/{policy}/attachments", wrapper.ListPolicyAttachments)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/policies/{policy}/attachments", wrapper.AttachPolicy)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/policies/{policy}/attachments/{subject}", wrapper.DetachPolicy)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/consents", wrapper.ListOrgConsents)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/consents/{other}", wrapper.WithdrawOrgConsent)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/consents/{other}", wrapper.GrantOrgConsent)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/invitations", wrapper.CreateInvitation)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/invitations/{token}/accept", wrapper.AcceptInvitation)
 

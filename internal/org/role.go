@@ -59,6 +59,14 @@ const (
 	ActionPolicyAttach = "policy:attach"
 	ActionPolicyDetach = "policy:detach"
 
+	// Cross-organization consent management (ADR-0035). The org owns
+	// the constants for the reason it owns the policy ones: the
+	// relation is org-managed data the api server enforces over,
+	// stored by internal/message.
+	ActionConsentRead     = "consent:read"
+	ActionConsentGrant    = "consent:grant"
+	ActionConsentWithdraw = "consent:withdraw"
+
 	// Reading the agents an org holds, defining one, and watching one
 	// work. The org owns the constants for the reason it owns the
 	// policy ones: the api
@@ -94,11 +102,11 @@ const (
 func (r Role) Actions() []string {
 	switch r {
 	case RoleOwner:
-		return []string{"org:*", "group:*", "project:*", "policy:*", ActionAgentRead, ActionAgentDefine}
+		return []string{"org:*", "group:*", "project:*", "policy:*", "consent:*", ActionAgentRead, ActionAgentDefine}
 	case RoleAdmin:
 		return []string{
 			ActionOrgRead, ActionOrgUpdate, ActionOrgMemberList, ActionOrgInvite,
-			"group:*", "project:*", "policy:*", ActionAgentRead, ActionAgentDefine,
+			"group:*", "project:*", "policy:*", "consent:*", ActionAgentRead, ActionAgentDefine,
 		}
 	case RoleMember:
 		return []string{

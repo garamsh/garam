@@ -12,6 +12,7 @@ import (
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/listfilter"
+	"github.com/garamsh/garam/internal/message"
 	"github.com/garamsh/garam/internal/org"
 	"github.com/garamsh/garam/internal/user"
 	"github.com/garamsh/garam/internal/watch"
@@ -637,6 +638,109 @@ func (s *fakeAgentStore) ListAssignmentsByOrg(_ context.Context, orgGRN grn.GRN)
 	})
 	return out, nil
 }
+
+// fakeConsentStore is an in-memory message.ConsentStore double. It
+// decides the way the real store does: one row per ordered pair, each
+// half standing from its side's grant until that side withdraws, and a
+// row neither half stands in is gone.
+type fakeConsentStore struct {
+	message.ConsentStore
+	mu     sync.Mutex
+	grants map[string]map[string]bool // pair key → org GRN → half stands
+	err    error
+}
+
+func newFakeConsentStore() *fakeConsentStore {
+	return &fakeConsentStore{grants: map[string]map[string]bool{}}
+}
+
+func consentPairKey(a, b grn.GRN) string {
+	if b.String() < a.String() {
+		a, b = b, a
+	}
+	return a.String() + "|" + b.String()
+}
+
+func (s *fakeConsentStore) Grant(_ context.Context, orgGRN, other grn.GRN) (*message.Consent, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	k := consentPairKey(orgGRN, other)
+	halves, ok := s.grants[k]
+	if !ok {
+		halves = map[string]bool{}
+		s.grants[k] = halves
+	}
+	halves[orgGRN.String()] = true
+	a, b := orgGRN, other
+	if b.String() < a.String() {
+		a, b = b, a
+	}
+	var aAt, bAt *time.Time
+	if halves[a.String()] {
+		aAt = ptrTo(time.Now())
+	}
+	if halves[b.String()] {
+		bAt = ptrTo(time.Now())
+	}
+	return message.NewConsent(a, b, aAt, bAt), nil
+}
+
+func (s *fakeConsentStore) Withdraw(_ context.Context, orgGRN, other grn.GRN) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	k := consentPairKey(orgGRN, other)
+	halves, ok := s.grants[k]
+	if !ok {
+		return nil
+	}
+	delete(halves, orgGRN.String())
+	if len(halves) == 0 {
+		delete(s.grants, k)
+	}
+	return nil
+}
+
+func (s *fakeConsentStore) Stands(_ context.Context, a, b grn.GRN) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.err != nil {
+		return false, s.err
+	}
+	halves, ok := s.grants[consentPairKey(a, b)]
+	return ok && halves[a.String()] && halves[b.String()], nil
+}
+
+func (s *fakeConsentStore) List(_ context.Context, orgGRN grn.GRN) ([]*message.Consent, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := []*message.Consent{}
+	for k, halves := range s.grants {
+		parts := strings.SplitN(k, "|", 2)
+		a, errA := grn.Parse(parts[0])
+		b, errB := grn.Parse(parts[1])
+		if errA != nil || errB != nil {
+			continue
+		}
+		if a != orgGRN && b != orgGRN {
+			continue
+		}
+		var aAt, bAt *time.Time
+		if halves[a.String()] {
+			aAt = ptrTo(time.Now())
+		}
+		if halves[b.String()] {
+			bAt = ptrTo(time.Now())
+		}
+		out = append(out, message.NewConsent(a, b, aAt, bAt))
+	}
+	slices.SortFunc(out, func(x, y *message.Consent) int {
+		return strings.Compare(x.OrgA().String()+x.OrgB().String(), y.OrgA().String()+y.OrgB().String())
+	})
+	return out, nil
+}
+
+// ptrTo returns a pointer to v.
+func ptrTo[T any](v T) *T { return &v }
 
 // fakeWatchLeases is a watch.Store in memory: one entry per open watch,
 // which is what says whether a watch outlived the stream it belonged to.

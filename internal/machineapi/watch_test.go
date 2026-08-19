@@ -111,7 +111,7 @@ func TestServer_ForwardsTheTurnEventsOfTheAgentItAuthenticatedAs(t *testing.T) {
 	caller := agentGRN("acme", "0a1b2c3d4e5f6071")
 	other := agentGRN("acme", "9f8e7d6c5b4a3021")
 	relay := &announced{}
-	url, client := listener(t, &agentService{}, &messageService{}, watching(t, relay), &memberGroups{}, &engine{}, caller)
+	url, client := listener(t, &agentService{}, &messageService{}, consenting(), watching(t, relay), &memberGroups{}, &engine{}, caller)
 
 	status, body := send(t, client, http.MethodPost, url+"/agents/"+caller.String()+"/turn-events",
 		`{"kind":"turn.output","body":"first line\nsecond line"}`)

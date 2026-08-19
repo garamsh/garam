@@ -87,6 +87,10 @@ func serveMachine(cmd *cobra.Command) error {
 	if err != nil {
 		return err
 	}
+	// The consent a cross-organization post needs is the message
+	// domain's relation (ADR-0035); this process reads it and `serve
+	// api` is where an organization grants and withdraws its half.
+	consents := message.NewPostgresStore(pool)
 
 	// Whether anyone is watching is read from the rows `serve api` writes
 	// while it holds a stream, and a forwarded event is announced for
@@ -117,7 +121,7 @@ func serveMachine(cmd *cobra.Command) error {
 	// The generated router matches before the middleware runs, so the
 	// log line can name the route rather than the path.
 	handler := machinegen.HandlerWithOptions(
-		machineapi.NewServer(agents, messages, watches,
+		machineapi.NewServer(agents, messages, consents, watches,
 			memberGroups{store: org.NewPostgresStore(pool)},
 			machineapi.NewGRPCEvaluator(conn)),
 		machinegen.StdHTTPServerOptions{

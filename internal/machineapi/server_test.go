@@ -53,6 +53,8 @@ type agentService struct {
 	certificate *agent.Certificate
 	err         error
 	calls       []call
+	states      []*agent.DefinitionState
+	assignment  *agent.Assignment
 }
 
 func (s *agentService) Create(_ context.Context, operator grn.GRN) (*agent.Assignment, error) {
@@ -69,6 +71,22 @@ func (s *agentService) IssueCertificate(_ context.Context, operator, agentGRN gr
 		return nil, s.err
 	}
 	return s.certificate, nil
+}
+
+func (s *agentService) Definitions(_ context.Context, operator grn.GRN) ([]*agent.DefinitionState, error) {
+	s.calls = append(s.calls, call{operator: operator})
+	if s.err != nil {
+		return nil, s.err
+	}
+	return s.states, nil
+}
+
+func (s *agentService) Claim(_ context.Context, operator, agentGRN grn.GRN) (*agent.Assignment, error) {
+	s.calls = append(s.calls, call{operator: operator, subject: agentGRN})
+	if s.err != nil {
+		return nil, s.err
+	}
+	return s.assignment, nil
 }
 
 // authorities is a ca.Store in memory. The tests need a real
@@ -270,6 +288,8 @@ func TestServer_AnswersNothingToAConnectionThatAuthenticatedNobody(t *testing.T)
 		"identity":    {http.MethodGet, "/identity"},
 		"create":      {http.MethodPost, "/agents"},
 		"certificate": {http.MethodPost, "/agents/" + bot + "/certificate"},
+		"definitions": {http.MethodGet, "/definitions"},
+		"claim agent": {http.MethodPost, "/definitions/" + bot + "/claim"},
 		"post":        {http.MethodPost, "/messages"},
 		"claim":       {http.MethodPost, "/agents/" + bot + "/claims"},
 		"renew":       {http.MethodPost, "/agents/" + bot + "/claims/claim-1/renewal"},

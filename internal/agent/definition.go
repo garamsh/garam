@@ -149,3 +149,24 @@ func (d *Definition) Values() Values        { return d.values }
 // DefinedBy returns the member that defined the agent.
 func (d *Definition) DefinedBy() grn.GRN   { return d.definedBy }
 func (d *Definition) CreatedAt() time.Time { return d.createdAt }
+
+// DefinitionState is a definition together with its claim state: the
+// assignment the claim wrote, or none while it is unclaimed
+// (ADR-0033). The only claimant a definition admits is the operator it
+// names, so a claim here always binds that operator.
+type DefinitionState struct {
+	definition *Definition
+	claim      *Assignment
+}
+
+// NewDefinitionState pairs a definition with the assignment claiming
+// it, which is nil before any claim.
+func NewDefinitionState(d *Definition, claim *Assignment) *DefinitionState {
+	return &DefinitionState{definition: d, claim: claim}
+}
+
+func (s *DefinitionState) Definition() *Definition { return s.definition }
+
+// Claim returns the assignment the claim wrote, or nil while the
+// definition is unclaimed.
+func (s *DefinitionState) Claim() *Assignment { return s.claim }

@@ -54,6 +54,24 @@ type Claim struct {
 	Watchers int `json:"watchers"`
 }
 
+// Definition What an organization says an agent should be, answered to the operator it names (ADR-0026). `claim` is absent while no operator has claimed the definition and carries the epoch the claim's assignment holds at once one has — the only claimant a definition admits is the operator it names, so who claimed it is always the caller.
+type Definition struct {
+	// AgentGrn The identity garam minted for the agent this definition describes. No agent answers under it until the claim.
+	AgentGrn string `json:"agentGrn"`
+
+	// Claim The assignment the claim wrote (ADR-0033).
+	Claim *DefinitionClaim `json:"claim,omitempty"`
+
+	// Values What the operator constructs the agent from. garam stores the keys and the strings and interprets neither.
+	Values map[string]string `json:"values"`
+}
+
+// DefinitionClaim The assignment the claim wrote (ADR-0033).
+type DefinitionClaim struct {
+	// Epoch The epoch the claim's assignment holds at.
+	Epoch int `json:"epoch"`
+}
+
 // Error defines model for Error.
 type Error struct {
 	// Kind errorx kind, e.g. `not_found`, `permission_denied`.
@@ -131,6 +149,12 @@ type ServerInterface interface {
 	// ForwardTurnEvent Forward one turn event to whoever is watching the agent.
 	// (POST /agents/{agent}/turn-events)
 	ForwardTurnEvent(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn)
+	// ListDefinitions List the definitions naming the calling operator.
+	// (GET /definitions)
+	ListDefinitions(w http.ResponseWriter, r *http.Request)
+	// ClaimDefinition Claim the agent a definition minted for the calling operator.
+	// (POST /definitions/{agent}/claim)
+	ClaimDefinition(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn)
 	// GetIdentity Return the identity the connection authenticated as.
 	// (GET /identity)
 	GetIdentity(w http.ResponseWriter, r *http.Request)
@@ -310,6 +334,46 @@ func (siw *ServerInterfaceWrapper) ForwardTurnEvent(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// ListDefinitions operation middleware
+func (siw *ServerInterfaceWrapper) ListDefinitions(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListDefinitions(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ClaimDefinition operation middleware
+func (siw *ServerInterfaceWrapper) ClaimDefinition(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agent" -------------
+	var agentGrn AgentGrn
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentGrn, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ClaimDefinition(w, r, agentGrn)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetIdentity operation middleware
 func (siw *ServerInterfaceWrapper) GetIdentity(w http.ResponseWriter, r *http.Request) {
 
@@ -461,6 +525,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/identity", wrapper.GetIdentity)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents", wrapper.CreateAgent)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/certificate", wrapper.IssueAgentCertificate)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/definitions", wrapper.ListDefinitions)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/definitions/{agent}/claim", wrapper.ClaimDefinition)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/messages", wrapper.PostMessage)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/claims", wrapper.ClaimMessage)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/claims/{claim}/renewal", wrapper.RenewClaim)

@@ -62,3 +62,18 @@ VALUES ($1, $2, $3, $4, $5, $6);
 
 -- name: ListAgentDefinitionsByOrg :many
 SELECT * FROM agent_definitions WHERE org_grn = $1 ORDER BY agent_grn;
+
+-- The claim state is the assignment the claim wrote: an unclaimed
+-- definition has none, and a claimed one binds the operator it names.
+-- name: ListAgentDefinitionsByOperator :many
+SELECT d.*, a.epoch AS claim_epoch, a.created_at AS claim_created_at, a.updated_at AS claim_updated_at
+FROM agent_definitions d
+LEFT JOIN agent_assignments a ON a.agent_grn = d.agent_grn
+WHERE d.operator_grn = $1
+ORDER BY d.agent_grn;
+
+-- LockAgentDefinition is the lock a claim serializes on: two claims of
+-- one definition take the row lock in turn, and the second reads the
+-- assignment the first wrote.
+-- name: LockAgentDefinition :one
+SELECT * FROM agent_definitions WHERE agent_grn = $1 FOR UPDATE;

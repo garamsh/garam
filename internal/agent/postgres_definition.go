@@ -3,6 +3,10 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"time"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/garamsh/garam/internal/agent/db"
 	"github.com/garamsh/garam/internal/errorx"
@@ -43,6 +47,103 @@ func (s *PostgresStore) ListDefinitionsByOrg(ctx context.Context, orgGRN grn.GRN
 		definitions = append(definitions, d)
 	}
 	return definitions, nil
+}
+
+// ListDefinitionsByOperator returns the definitions naming the
+// operator, each with the assignment claiming it where one does.
+func (s *PostgresStore) ListDefinitionsByOperator(ctx context.Context, operatorGRN grn.GRN) ([]*DefinitionState, error) {
+	rows, err := s.q.ListAgentDefinitionsByOperator(ctx, operatorGRN.String())
+	if err != nil {
+		return nil, classify(err, "list definitions", nil, nil)
+	}
+	states := make([]*DefinitionState, 0, len(rows))
+	for _, row := range rows {
+		d, err := rowToDefinition(db.AgentDefinition{
+			AgentGrn:    row.AgentGrn,
+			OrgGrn:      row.OrgGrn,
+			OperatorGrn: row.OperatorGrn,
+			AgentValues: row.AgentValues,
+			DefinedBy:   row.DefinedBy,
+			CreatedAt:   row.CreatedAt,
+		})
+		if err != nil {
+			return nil, err
+		}
+		var claim *Assignment
+		if row.ClaimEpoch.Valid {
+			claim = &Assignment{
+				agentGRN:    d.agentGRN,
+				operatorGRN: d.operatorGRN,
+				epoch:       int(row.ClaimEpoch.Int32),
+				createdAt:   row.ClaimCreatedAt.Time,
+				updatedAt:   row.ClaimUpdatedAt.Time,
+			}
+		}
+		states = append(states, NewDefinitionState(d, claim))
+	}
+	return states, nil
+}
+
+// Claim binds the operator to the agent its definition minted: the
+// agent row and the assignment are written in one transaction holding
+// the definition's row lock, so two concurrent claims serialize and the
+// second reads the assignment the first wrote — the conflict, never an
+// override (ADR-0033). The definition writes no agent row before this
+// (ADR-0026), so the claim is also where the agent comes to exist.
+func (s *PostgresStore) Claim(ctx context.Context, agentGRN, operatorGRN grn.GRN) (*Assignment, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, errorx.Wrap(err, "agent store: begin", errorx.KindUnavailable)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	q := s.q.WithTx(tx)
+	row, err := q.LockAgentDefinition(ctx, agentGRN.String())
+	if err != nil {
+		return nil, classify(err, "claim", ErrDefinitionNotFound, nil)
+	}
+	// A definition naming another operator is one this caller cannot
+	// read either, so the claim answers as the read does.
+	if row.OperatorGrn != operatorGRN.String() {
+		return nil, ErrDefinitionNotFound
+	}
+	if _, err := q.GetAgentAssignment(ctx, agentGRN.String()); err == nil {
+		return nil, ErrDefinitionClaimed
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, classify(err, "claim", nil, nil)
+	}
+	d, err := rowToDefinition(row)
+	if err != nil {
+		return nil, err
+	}
+	a, err := New(d.agentGRN, d.orgGRN)
+	if err != nil {
+		return nil, err
+	}
+	now := stamp(time.Now().UTC())
+	if err := q.CreateAgent(ctx, db.CreateAgentParams{
+		Grn:               a.grn.String(),
+		OrgGrn:            a.orgGRN.String(),
+		ProvisioningState: string(a.provisioning),
+		RuntimeState:      string(a.runtime),
+		CreatedAt:         now,
+		UpdatedAt:         now,
+	}); err != nil {
+		return nil, classify(err, "claim", nil, nil)
+	}
+	assigned, err := q.AssignAgent(ctx, db.AssignAgentParams{
+		AgentGrn:    agentGRN.String(),
+		OperatorGrn: operatorGRN.String(),
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	})
+	if err != nil {
+		return nil, classify(err, "claim", nil, nil)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, errorx.Wrap(err, "agent store: commit")
+	}
+	return rowToAssignment(assigned)
 }
 
 // rowToDefinition converts a sqlc row into the domain aggregate. A

@@ -37,6 +37,16 @@ type Service interface {
 	// authenticates with, for an agent assigned to operator at the
 	// current epoch, and refuses every other one.
 	IssueCertificate(ctx context.Context, operator, agentGRN grn.GRN) (*Certificate, error)
+	// Definitions returns the definitions naming operator, each with
+	// its claim state. The definition's operator field is the scoping,
+	// so the answer can name nothing the caller is not named in and no
+	// policy engine is asked (ADR-0033).
+	Definitions(ctx context.Context, operator grn.GRN) ([]*DefinitionState, error)
+	// Claim binds operator to the agent GRN a definition naming it
+	// minted, which is what admits the operator to that agent's
+	// certificate route. A definition is claimed once: a second claim
+	// of the same agent GRN is a conflict.
+	Claim(ctx context.Context, operator, agentGRN grn.GRN) (*Assignment, error)
 }
 
 type service struct {
@@ -93,6 +103,20 @@ func (s *service) IssueCertificate(ctx context.Context, operator, agentGRN grn.G
 		return nil, ErrNotAssigned
 	}
 	return s.issuer.Issue(ctx, agentGRN)
+}
+
+func (s *service) Definitions(ctx context.Context, operator grn.GRN) ([]*DefinitionState, error) {
+	if err := operates(operator); err != nil {
+		return nil, err
+	}
+	return s.store.ListDefinitionsByOperator(ctx, operator)
+}
+
+func (s *service) Claim(ctx context.Context, operator, agentGRN grn.GRN) (*Assignment, error) {
+	if err := operates(operator); err != nil {
+		return nil, err
+	}
+	return s.store.Claim(ctx, agentGRN, operator)
 }
 
 // operates refuses a caller that is not an operator. An agent

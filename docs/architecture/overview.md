@@ -203,8 +203,14 @@ collaborate on a shared plan.
   separate from the stack's own.
 - `internal/grn/` — identifier; shared primitive.
 - `internal/errorx/` — typed errors; shared primitive.
+- `internal/wire/` — the conversions onto the wire formats the request
+  surfaces share: the statement `Effect` and its authz-proto mapping,
+  errorx kinds rendered as HTTP statuses and read back from gRPC codes;
+  shared primitive.
 - `internal/keyfile/` — the owner-only rule every key material file is
   read under (ADR-0015); shared primitive.
+- `internal/listfilter/` — the offset/limit filter a domain's list call
+  is scoped by; shared primitive.
 - `internal/cli/` — cobra commands + wiring (`serve api` | `serve authz`
   | `serve machine` | `migrate` | `probe` | `issue-certificate`).
 - `internal/health/` — what liveness and readiness mean, and the two
@@ -230,10 +236,12 @@ collaborate on a shared plan.
 - `internal/org/` — organizations, groups, projects, memberships, invitations.
 - `internal/user/` — human identities.
 
-`grn` and `errorx` are the only packages domains share with each other;
-`keyfile` holds the one rule key material files are read under, reached
+`grn`, `errorx` and `listfilter` are the packages domains share with
+each other; `keyfile` holds the one rule key material files are read
+under, reached
 by `ca` and by the `cli` wiring that reads the machine listener's own
-key; `health` is
+key; `wire` is shared by the three request surfaces alone — no domain
+imports it — and `health` is
 shared by the three serve commands and imported by no domain. Domains
 cooperate
 through `grn.GRN`, never through each other's concrete types — which is
@@ -247,7 +255,8 @@ and shares neither cookie nor session with `api`; `machineapi` composes
 `agent` and `message` behind it, reaches the engine through an
 `Evaluator` seam of its own to decide what a caller may send, and it
 and `internal/api` never import each other. Neither imports
-`internal/authz`; the wire contract is `proto/garam/authz/v1`. `watch` is
+`internal/authz`; the wire contract is `proto/garam/authz/v1`, and the
+conversions onto it are declared once in `internal/wire`. `watch` is
 the one domain both compose: a watch is opened on the browser listener
 and fed on the machine one, and neither listener may reach the other
 (ADR-0017, ADR-0022).
@@ -319,8 +328,8 @@ and fed on the machine one, and neither listener may reach the other
 - **Deterministic decisions** — the engine's `Explain` RPC can
   reproduce why a request was allowed or denied.
 - **Transport-agnostic errors** — `errorx` flows over HTTP, gRPC, CLI
-  without translation at the source; each HTTP surface maps a kind to a
-  status at its own boundary (`internal/api`, `internal/machineapi`).
+  without translation at the source; the kind-to-status mapping the
+  HTTP surfaces answer with is declared once in `internal/wire`.
 - **Testable in isolation** — every domain exposes an interface; unit
   tests substitute at module boundaries (mocks, in-memory test doubles
   where they exist).

@@ -14,6 +14,7 @@ import (
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/machineapi"
 	"github.com/garamsh/garam/internal/message"
+	"github.com/garamsh/garam/internal/wire"
 	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
 )
 
@@ -54,7 +55,7 @@ func newGRPCEvaluator(t *testing.T, stub *stubAuthzServer) *machineapi.GRPCEvalu
 
 // evalInputWith is one sending question, carrying a statement of the
 // shape this listener collects for it.
-func evalInputWith(effect machineapi.Effect) machineapi.EvalInput {
+func evalInputWith(effect wire.Effect) machineapi.EvalInput {
 	sender := agentGRN("acme", "one")
 	return machineapi.EvalInput{
 		Subject: sender,
@@ -74,11 +75,11 @@ func evalInputWith(effect machineapi.Effect) machineapi.EvalInput {
 // alone, the refusal would hold for any reason the plumbing supplied.
 func TestGRPCEvaluator_UnrecognisedEffectIsRefused(t *testing.T) {
 	recognised := []struct {
-		effect machineapi.Effect
+		effect wire.Effect
 		want   authzv1.Effect
 	}{
-		{machineapi.EffectAllow, authzv1.Effect_EFFECT_ALLOW},
-		{machineapi.EffectDeny, authzv1.Effect_EFFECT_DENY},
+		{wire.EffectAllow, authzv1.Effect_EFFECT_ALLOW},
+		{wire.EffectDeny, authzv1.Effect_EFFECT_DENY},
 	}
 	for _, c := range recognised {
 		stub := &stubAuthzServer{allowed: true}
@@ -92,7 +93,7 @@ func TestGRPCEvaluator_UnrecognisedEffectIsRefused(t *testing.T) {
 
 	stub := &stubAuthzServer{allowed: true}
 	ev := newGRPCEvaluator(t, stub)
-	allowed, err := ev.Evaluate(context.Background(), evalInputWith(machineapi.Effect("Maybe")))
+	allowed, err := ev.Evaluate(context.Background(), evalInputWith(wire.Effect("Maybe")))
 	require.Error(t, err)
 	assert.True(t, errorx.IsKind(err, errorx.KindInternal), "got %v", err)
 	assert.False(t, allowed)

@@ -255,11 +255,20 @@ func (q *Queries) ListAgentDefinitionsByOrg(ctx context.Context, orgGrn string) 
 }
 
 const listAgentsByOrg = `-- name: ListAgentsByOrg :many
-SELECT grn, org_grn, provisioning_state, runtime_state, created_at, updated_at FROM agents WHERE org_grn = $1 ORDER BY grn
+SELECT grn, org_grn, provisioning_state, runtime_state, created_at, updated_at FROM agents
+WHERE org_grn = $1
+ORDER BY grn
+LIMIT $3 OFFSET $2
 `
 
-func (q *Queries) ListAgentsByOrg(ctx context.Context, orgGrn string) ([]Agent, error) {
-	rows, err := q.db.Query(ctx, listAgentsByOrg, orgGrn)
+type ListAgentsByOrgParams struct {
+	OrgGrn    string
+	RowOffset int32
+	RowLimit  pgtype.Int4
+}
+
+func (q *Queries) ListAgentsByOrg(ctx context.Context, arg ListAgentsByOrgParams) ([]Agent, error) {
+	rows, err := q.db.Query(ctx, listAgentsByOrg, arg.OrgGrn, arg.RowOffset, arg.RowLimit)
 	if err != nil {
 		return nil, err
 	}

@@ -1627,7 +1627,11 @@ export interface operations {
     };
     listAgents: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Maximum entries to return; 0 means no limit. */
+                limit?: components["parameters"]["limit"];
+                offset?: components["parameters"]["offset"];
+            };
             header?: never;
             path: {
                 /** @description Organization identifier (the last GRN segment). */

@@ -5,6 +5,7 @@ import (
 
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/listfilter"
 	"github.com/garamsh/garam/internal/org/db"
 )
 
@@ -61,7 +62,7 @@ func (s *PostgresStore) RemoveMember(ctx context.Context, orgGRN, userGRN grn.GR
 
 // ListOrgsByMember returns the Organizations a user belongs to,
 // ordered by GRN.
-func (s *PostgresStore) ListOrgsByMember(ctx context.Context, userGRN grn.GRN, f ListFilter) ([]*Organization, error) {
+func (s *PostgresStore) ListOrgsByMember(ctx context.Context, userGRN grn.GRN, f listfilter.Filter) ([]*Organization, error) {
 	rows, err := s.q.ListOrgsByMember(ctx, db.ListOrgsByMemberParams{
 		UserGrn:   userGRN.String(),
 		RowOffset: int32(f.Offset),

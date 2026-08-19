@@ -6,6 +6,7 @@ import (
 
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/listfilter"
 	"github.com/garamsh/garam/internal/org/db"
 )
 
@@ -33,7 +34,7 @@ func (s *PostgresStore) GetGroup(ctx context.Context, g grn.GRN) (*Group, error)
 }
 
 // ListGroups returns the Organization's Groups ordered by GRN.
-func (s *PostgresStore) ListGroups(ctx context.Context, orgGRN grn.GRN, f ListFilter) ([]*Group, error) {
+func (s *PostgresStore) ListGroups(ctx context.Context, orgGRN grn.GRN, f listfilter.Filter) ([]*Group, error) {
 	rows, err := s.q.ListGroups(ctx, db.ListGroupsParams{
 		OrgGrn:    orgGRN.String(),
 		RowOffset: int32(f.Offset),

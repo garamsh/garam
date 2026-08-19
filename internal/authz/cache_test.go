@@ -11,9 +11,10 @@ import (
 	"github.com/garamsh/garam/internal/authz"
 	"github.com/garamsh/garam/internal/authz/mocks"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/wire"
 )
 
-func policyDocument(sid string, effect authz.Effect) authz.PolicyDocument {
+func policyDocument(sid string, effect wire.Effect) authz.PolicyDocument {
 	return authz.PolicyDocument{
 		Version: "2026-07-25",
 		Statement: []authz.Statement{{
@@ -27,12 +28,12 @@ func policyDocument(sid string, effect authz.Effect) authz.PolicyDocument {
 
 // orgWidePolicy is an active policy with no attachment: it applies to
 // every subject of its org.
-func orgWidePolicy(sid string, effect authz.Effect) authz.ActivePolicy {
+func orgWidePolicy(sid string, effect wire.Effect) authz.ActivePolicy {
 	return authz.ActivePolicy{Document: policyDocument(sid, effect)}
 }
 
 // attachedPolicy is an active policy that applies only to subjects.
-func attachedPolicy(sid string, effect authz.Effect, subjects ...grn.GRN) authz.ActivePolicy {
+func attachedPolicy(sid string, effect wire.Effect, subjects ...grn.GRN) authz.ActivePolicy {
 	return authz.ActivePolicy{Document: policyDocument(sid, effect), Subjects: subjects}
 }
 
@@ -49,9 +50,9 @@ func TestPolicyCache_LoadsOncePerOrg(t *testing.T) {
 	acme, other := orgGRN("acme"), orgGRN("other")
 	ada := subjectGRN("ada")
 	store.EXPECT().ActivePolicies(mock.Anything, acme).
-		Return([]authz.ActivePolicy{orgWidePolicy("acme-allow", authz.EffectAllow)}, nil).Once()
+		Return([]authz.ActivePolicy{orgWidePolicy("acme-allow", wire.EffectAllow)}, nil).Once()
 	store.EXPECT().ActivePolicies(mock.Anything, other).
-		Return([]authz.ActivePolicy{orgWidePolicy("other-allow", authz.EffectAllow)}, nil).Once()
+		Return([]authz.ActivePolicy{orgWidePolicy("other-allow", wire.EffectAllow)}, nil).Once()
 
 	cache := authz.NewPolicyCache(store)
 	first, err := cache.Statements(context.Background(), acme, []grn.GRN{ada})
@@ -78,9 +79,9 @@ func TestPolicyCache_StatementsBySubject(t *testing.T) {
 	ada, bob, eng := subjectGRN("ada"), subjectGRN("bob"), groupGRN("eng")
 	store := mocks.NewMockStore(t)
 	store.EXPECT().ActivePolicies(mock.Anything, acme).Return([]authz.ActivePolicy{
-		orgWidePolicy("org-wide", authz.EffectAllow),
-		attachedPolicy("ada-only", authz.EffectAllow, ada),
-		attachedPolicy("eng-only", authz.EffectAllow, eng),
+		orgWidePolicy("org-wide", wire.EffectAllow),
+		attachedPolicy("ada-only", wire.EffectAllow, ada),
+		attachedPolicy("eng-only", wire.EffectAllow, eng),
 	}, nil).Once()
 	cache := authz.NewPolicyCache(store)
 
@@ -117,9 +118,9 @@ func TestPolicyCache_InvalidateAllDropsEveryOrg(t *testing.T) {
 	store := mocks.NewMockStore(t)
 	acme, other := orgGRN("acme"), orgGRN("other")
 	store.EXPECT().ActivePolicies(mock.Anything, acme).
-		Return([]authz.ActivePolicy{orgWidePolicy("acme-before", authz.EffectAllow)}, nil).Once()
+		Return([]authz.ActivePolicy{orgWidePolicy("acme-before", wire.EffectAllow)}, nil).Once()
 	store.EXPECT().ActivePolicies(mock.Anything, other).
-		Return([]authz.ActivePolicy{orgWidePolicy("other-before", authz.EffectAllow)}, nil).Once()
+		Return([]authz.ActivePolicy{orgWidePolicy("other-before", wire.EffectAllow)}, nil).Once()
 
 	cache := authz.NewPolicyCache(store)
 	acmeBefore, err := cache.Statements(context.Background(), acme, nil)
@@ -130,9 +131,9 @@ func TestPolicyCache_InvalidateAllDropsEveryOrg(t *testing.T) {
 	require.Equal(t, "other-before", otherBefore[0].Sid)
 
 	store.EXPECT().ActivePolicies(mock.Anything, acme).
-		Return([]authz.ActivePolicy{orgWidePolicy("acme-after", authz.EffectAllow)}, nil).Once()
+		Return([]authz.ActivePolicy{orgWidePolicy("acme-after", wire.EffectAllow)}, nil).Once()
 	store.EXPECT().ActivePolicies(mock.Anything, other).
-		Return([]authz.ActivePolicy{orgWidePolicy("other-after", authz.EffectAllow)}, nil).Once()
+		Return([]authz.ActivePolicy{orgWidePolicy("other-after", wire.EffectAllow)}, nil).Once()
 	cache.InvalidateAll()
 
 	acmeAfter, err := cache.Statements(context.Background(), acme, nil)
@@ -154,9 +155,9 @@ func TestPolicyCache_InvalidateDropsOnlyTheOrgNamed(t *testing.T) {
 	store := mocks.NewMockStore(t)
 	acme, other := orgGRN("acme"), orgGRN("other")
 	store.EXPECT().ActivePolicies(mock.Anything, acme).
-		Return([]authz.ActivePolicy{orgWidePolicy("before", authz.EffectAllow)}, nil).Once()
+		Return([]authz.ActivePolicy{orgWidePolicy("before", wire.EffectAllow)}, nil).Once()
 	store.EXPECT().ActivePolicies(mock.Anything, other).
-		Return([]authz.ActivePolicy{orgWidePolicy("other", authz.EffectAllow)}, nil).Once()
+		Return([]authz.ActivePolicy{orgWidePolicy("other", wire.EffectAllow)}, nil).Once()
 
 	cache := authz.NewPolicyCache(store)
 	before, err := cache.Statements(context.Background(), acme, nil)
@@ -176,13 +177,13 @@ func TestPolicyCache_InvalidateDropsOnlyTheOrgNamed(t *testing.T) {
 	assert.Equal(t, otherBefore, otherAfterUnknown)
 
 	store.EXPECT().ActivePolicies(mock.Anything, acme).
-		Return([]authz.ActivePolicy{orgWidePolicy("after", authz.EffectDeny)}, nil).Once()
+		Return([]authz.ActivePolicy{orgWidePolicy("after", wire.EffectDeny)}, nil).Once()
 	cache.Invalidate(acme)
 
 	after, err := cache.Statements(context.Background(), acme, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "after", after[0].Sid)
-	assert.Equal(t, authz.EffectDeny, after[0].Effect)
+	assert.Equal(t, wire.EffectDeny, after[0].Effect)
 	otherAfterAcme, err := cache.Statements(context.Background(), other, nil)
 	require.NoError(t, err)
 	assert.Equal(t, otherBefore, otherAfterAcme)

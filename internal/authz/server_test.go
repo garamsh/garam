@@ -15,6 +15,7 @@ import (
 
 	"github.com/garamsh/garam/internal/authz"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/wire"
 	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
 )
 
@@ -171,13 +172,13 @@ func TestGRPCServer_CheckPersistedPolicies(t *testing.T) {
 	acme := orgGRN("acme")
 	allowUpdate := authz.Statement{
 		Sid:      "persisted-allow",
-		Effect:   authz.EffectAllow,
+		Effect:   wire.EffectAllow,
 		Action:   []string{"org:update"},
 		Resource: []string{"grn:root:default:org:acme", "grn:acme:*"},
 	}
 	denyUpdate := authz.Statement{
 		Sid:      "persisted-deny",
-		Effect:   authz.EffectDeny,
+		Effect:   wire.EffectDeny,
 		Action:   []string{"org:update"},
 		Resource: []string{"grn:root:default:org:acme", "grn:acme:*"},
 	}
@@ -241,13 +242,13 @@ func TestGRPCServer_CheckAttachedPolicies(t *testing.T) {
 	eng := grn.New("acme", grn.DefaultProject, "group", "eng")
 	allowUpdate := authz.Statement{
 		Sid:      "attached-allow",
-		Effect:   authz.EffectAllow,
+		Effect:   wire.EffectAllow,
 		Action:   []string{"org:update"},
 		Resource: []string{"grn:root:default:org:acme"},
 	}
 	denyUpdate := authz.Statement{
 		Sid:      "attached-deny",
-		Effect:   authz.EffectDeny,
+		Effect:   wire.EffectDeny,
 		Action:   []string{"org:update"},
 		Resource: []string{"grn:root:default:org:acme"},
 	}
@@ -283,7 +284,7 @@ func TestGRPCServer_CheckAttachedPolicies(t *testing.T) {
 func TestGRPCServer_ExplainTracesPersistedStatements(t *testing.T) {
 	client := newAuthzClient(t, staticPolicies{orgGRN("acme"): {{
 		Sid:      "persisted-deny",
-		Effect:   authz.EffectDeny,
+		Effect:   wire.EffectDeny,
 		Action:   []string{"org:update"},
 		Resource: []string{"grn:root:default:org:acme"},
 	}}})

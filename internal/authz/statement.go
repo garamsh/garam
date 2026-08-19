@@ -1,11 +1,7 @@
 package authz
 
-// Effect is a statement's outcome when it matches.
-type Effect string
-
-const (
-	EffectAllow Effect = "Allow"
-	EffectDeny  Effect = "Deny"
+import (
+	"github.com/garamsh/garam/internal/wire"
 )
 
 // Statement is one IAM-style rule (ADR-0002). Action and Resource
@@ -14,7 +10,7 @@ const (
 // and repeat. Anything else must match literally.
 type Statement struct {
 	Sid      string
-	Effect   Effect
+	Effect   wire.Effect
 	Action   []string
 	Resource []string
 }

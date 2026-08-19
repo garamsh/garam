@@ -105,7 +105,7 @@ func text(s *string) pgtype.Text {
 	return pgtype.Text{String: *s, Valid: true}
 }
 
-// limit converts a ListFilter limit: 0 means "no limit" (SQL NULL).
+// limit converts a list filter's limit: 0 means "no limit" (SQL NULL).
 func limit(n int) pgtype.Int4 {
 	if n <= 0 {
 		return pgtype.Int4{}

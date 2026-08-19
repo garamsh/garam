@@ -11,6 +11,7 @@ import (
 	"github.com/garamsh/garam/internal/authn"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/listfilter"
 	"github.com/garamsh/garam/internal/message"
 	"github.com/garamsh/garam/internal/org"
 	"github.com/garamsh/garam/internal/user"
@@ -241,7 +242,7 @@ func (s *fakeOrgStore) DeleteOrg(_ context.Context, g grn.GRN) error {
 	return nil
 }
 
-func (s *fakeOrgStore) ListOrgsByMember(_ context.Context, userGRN grn.GRN, _ org.ListFilter) ([]*org.Organization, error) {
+func (s *fakeOrgStore) ListOrgsByMember(_ context.Context, userGRN grn.GRN, _ listfilter.Filter) ([]*org.Organization, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	out := []*org.Organization{}
@@ -270,7 +271,7 @@ func (s *fakeOrgStore) GetGroup(_ context.Context, g grn.GRN) (*org.Group, error
 	return gr, nil
 }
 
-func (s *fakeOrgStore) ListGroups(_ context.Context, orgGRN grn.GRN, _ org.ListFilter) ([]*org.Group, error) {
+func (s *fakeOrgStore) ListGroups(_ context.Context, orgGRN grn.GRN, _ listfilter.Filter) ([]*org.Group, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	out := []*org.Group{}
@@ -380,7 +381,7 @@ func (s *fakeOrgStore) GetProject(_ context.Context, g grn.GRN) (*org.Project, e
 	return p, nil
 }
 
-func (s *fakeOrgStore) ListProjects(_ context.Context, orgGRN grn.GRN, _ org.ListFilter) ([]*org.Project, error) {
+func (s *fakeOrgStore) ListProjects(_ context.Context, orgGRN grn.GRN, _ listfilter.Filter) ([]*org.Project, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	out := []*org.Project{}
@@ -561,7 +562,7 @@ func (s *fakeAgentStore) Get(_ context.Context, g grn.GRN) (*agent.Agent, error)
 	return a, nil
 }
 
-func (s *fakeAgentStore) ListByOrg(_ context.Context, orgGRN grn.GRN) ([]*agent.Agent, error) {
+func (s *fakeAgentStore) ListByOrg(_ context.Context, orgGRN grn.GRN, _ listfilter.Filter) ([]*agent.Agent, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	out := []*agent.Agent{}

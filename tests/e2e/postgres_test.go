@@ -47,12 +47,14 @@ import (
 	"github.com/garamsh/garam/internal/ca"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/listfilter"
 	"github.com/garamsh/garam/internal/machine"
 	"github.com/garamsh/garam/internal/machineapi"
 	"github.com/garamsh/garam/internal/message"
 	"github.com/garamsh/garam/internal/org"
 	"github.com/garamsh/garam/internal/user"
 	"github.com/garamsh/garam/internal/watch"
+	"github.com/garamsh/garam/internal/wire"
 	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
 )
 
@@ -152,10 +154,10 @@ func TestUserStore_RoundTrip(t *testing.T) {
 	assert.True(t, errorx.IsKind(err, errorx.KindNotFound))
 
 	require.NoError(t, s.Create(ctx, user.New(grnOf("user", "bob"), "bob")))
-	list, err := s.List(ctx, user.ListFilter{})
+	list, err := s.List(ctx, listfilter.Filter{})
 	require.NoError(t, err)
 	assert.Len(t, list, 2)
-	list, err = s.List(ctx, user.ListFilter{Limit: 1, Offset: 1})
+	list, err = s.List(ctx, listfilter.Filter{Limit: 1, Offset: 1})
 	require.NoError(t, err)
 	assert.Len(t, list, 1)
 
@@ -224,7 +226,7 @@ func TestOrgStore_RoundTripWithCascade(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []grn.GRN{userGRN}, members)
 
-	groups, err := s.ListGroups(ctx, orgGRN, org.ListFilter{})
+	groups, err := s.ListGroups(ctx, orgGRN, listfilter.Filter{})
 	require.NoError(t, err)
 	assert.Len(t, groups, 1)
 	assert.Equal(t, orgGRN, groups[0].Organization())
@@ -286,7 +288,7 @@ func TestOrgStore_Membership(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, members, 1)
 
-	orgs, err := s.ListOrgsByMember(ctx, userGRN, org.ListFilter{})
+	orgs, err := s.ListOrgsByMember(ctx, userGRN, listfilter.Filter{})
 	require.NoError(t, err)
 	require.Len(t, orgs, 1)
 	assert.Equal(t, orgGRN, orgs[0].GRN())
@@ -412,7 +414,7 @@ func TestOrgStore_ListOrgsPagesEveryOrg(t *testing.T) {
 	require.NoError(t, s.CreateOrg(ctx, acmeOrg))
 	require.NoError(t, s.CreateOrg(ctx, org.NewOrganization(globex, "globex")))
 
-	all, err := s.ListOrgs(ctx, org.ListFilter{})
+	all, err := s.ListOrgs(ctx, listfilter.Filter{})
 	require.NoError(t, err)
 	assert.Equal(t, []grn.GRN{acme, globex}, grnsOf(all), "every org, ordered by GRN")
 	require.Len(t, all, 2)
@@ -424,11 +426,11 @@ func TestOrgStore_ListOrgsPagesEveryOrg(t *testing.T) {
 	// fails here.
 	assert.WithinDuration(t, acmeOrg.CreatedAt(), all[0].CreatedAt(), time.Microsecond)
 
-	page, err := s.ListOrgs(ctx, org.ListFilter{Limit: 1})
+	page, err := s.ListOrgs(ctx, listfilter.Filter{Limit: 1})
 	require.NoError(t, err)
 	assert.Equal(t, []grn.GRN{acme}, grnsOf(page), "the limit takes the first page and stops")
 
-	page, err = s.ListOrgs(ctx, org.ListFilter{Offset: 1})
+	page, err = s.ListOrgs(ctx, listfilter.Filter{Offset: 1})
 	require.NoError(t, err)
 	assert.Equal(t, []grn.GRN{globex}, grnsOf(page), "the offset skips the first org")
 }
@@ -515,7 +517,7 @@ func TestOrgStore_GroupQueriesStayInsideTheirGroupAndOrg(t *testing.T) {
 		_, err = s.GetOrg(ctx, acme)
 		assert.NoError(t, err, "the org survives its group")
 
-		remaining, err := s.ListGroups(ctx, acme, org.ListFilter{})
+		remaining, err := s.ListGroups(ctx, acme, listfilter.Filter{})
 		require.NoError(t, err)
 		assert.Equal(t, []grn.GRN{opsAcme}, grnsOf(remaining), "the org's other group survives")
 
@@ -556,13 +558,13 @@ func TestOrgStore_ProjectQueriesStayInsideTheirProjectAndOrg(t *testing.T) {
 	require.NoError(t, s.AddProjectMember(ctx, webGlobex, ada))
 
 	t.Run("an org's projects are its own, a page at a time", func(t *testing.T) {
-		list, err := s.ListProjects(ctx, acme, org.ListFilter{})
+		list, err := s.ListProjects(ctx, acme, listfilter.Filter{})
 		require.NoError(t, err)
 		assert.Equal(t, []grn.GRN{apiAcme, webAcme}, grnsOf(list), "the org's own projects, ordered by GRN")
 
 		// The other org's project of the same name is reached by asking
 		// about that org, so the org filter is what left it out above.
-		other, err := s.ListProjects(ctx, globex, org.ListFilter{})
+		other, err := s.ListProjects(ctx, globex, listfilter.Filter{})
 		require.NoError(t, err)
 		assert.Equal(t, []grn.GRN{webGlobex}, grnsOf(other))
 
@@ -571,11 +573,11 @@ func TestOrgStore_ProjectQueriesStayInsideTheirProjectAndOrg(t *testing.T) {
 		assert.Equal(t, acme, list[1].Organization())
 		assert.Equal(t, []string{string(org.RoleMember)}, list[1].Roles())
 
-		page, err := s.ListProjects(ctx, acme, org.ListFilter{Limit: 1})
+		page, err := s.ListProjects(ctx, acme, listfilter.Filter{Limit: 1})
 		require.NoError(t, err)
 		assert.Equal(t, []grn.GRN{apiAcme}, grnsOf(page), "the limit takes the first page and stops")
 
-		page, err = s.ListProjects(ctx, acme, org.ListFilter{Offset: 1})
+		page, err = s.ListProjects(ctx, acme, listfilter.Filter{Offset: 1})
 		require.NoError(t, err)
 		assert.Equal(t, []grn.GRN{webAcme}, grnsOf(page), "the offset skips the first project")
 	})
@@ -629,7 +631,7 @@ func TestOrgStore_ProjectQueriesStayInsideTheirProjectAndOrg(t *testing.T) {
 		_, err = s.GetOrg(ctx, acme)
 		assert.NoError(t, err, "the org survives its project")
 
-		remaining, err := s.ListProjects(ctx, acme, org.ListFilter{})
+		remaining, err := s.ListProjects(ctx, acme, listfilter.Filter{})
 		require.NoError(t, err)
 		assert.Equal(t, []grn.GRN{apiAcme}, grnsOf(remaining), "the org's other project survives")
 
@@ -954,11 +956,21 @@ func TestAgentStore_ListsTheOrgsOwnAgents(t *testing.T) {
 	_, err = s.Assign(ctx, elsewhere, scopedGRN(globex.Identifier, agent.ServiceTypeOperator, "field-two"))
 	require.NoError(t, err)
 
-	listed, err := s.ListByOrg(ctx, acme)
+	listed, err := s.ListByOrg(ctx, acme, listfilter.Filter{})
 	require.NoError(t, err)
 	require.Len(t, listed, 2, "the org's own agents and no other org's")
 	assert.ElementsMatch(t, []grn.GRN{held, loose}, []grn.GRN{listed[0].GRN(), listed[1].GRN()})
 	assert.Less(t, listed[0].GRN().String(), listed[1].GRN().String(), "ordered by GRN")
+
+	page, err := s.ListByOrg(ctx, acme, listfilter.Filter{Limit: 1})
+	require.NoError(t, err)
+	assert.Equal(t, []grn.GRN{listed[0].GRN()}, []grn.GRN{page[0].GRN()}, "the limit takes the first page and stops")
+	require.Len(t, page, 1)
+
+	page, err = s.ListByOrg(ctx, acme, listfilter.Filter{Offset: 1})
+	require.NoError(t, err)
+	require.Len(t, page, 1)
+	assert.Equal(t, listed[1].GRN(), page[0].GRN(), "the offset skips the first agent")
 
 	byGRN := map[grn.GRN]*agent.Agent{}
 	for _, a := range listed {
@@ -982,7 +994,7 @@ func TestAgentStore_ListsTheOrgsOwnAgents(t *testing.T) {
 
 	// The other org holds its own agent and its own assignment, so the
 	// scoping refuses a pairing rather than every pairing.
-	listed, err = s.ListByOrg(ctx, globex)
+	listed, err = s.ListByOrg(ctx, globex, listfilter.Filter{})
 	require.NoError(t, err)
 	require.Len(t, listed, 1)
 	assert.Equal(t, elsewhere, listed[0].GRN())
@@ -993,7 +1005,7 @@ func TestAgentStore_ListsTheOrgsOwnAgents(t *testing.T) {
 
 	// An org that holds none reads as empty rather than as everyone's.
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("initech"), "initech")))
-	listed, err = s.ListByOrg(ctx, orgRootGRN("initech"))
+	listed, err = s.ListByOrg(ctx, orgRootGRN("initech"), listfilter.Filter{})
 	require.NoError(t, err)
 	assert.Empty(t, listed)
 	assignments, err = s.ListAssignmentsByOrg(ctx, orgRootGRN("initech"))
@@ -1146,7 +1158,7 @@ func TestAgentDefinitionStore_RoundTrip(t *testing.T) {
 	require.NoError(t, s.Create(ctx, a))
 	_, err = s.Get(ctx, reported)
 	assert.NoError(t, err, "an agent that was reported is found, so the miss above is the definition")
-	agents, err := s.ListByOrg(ctx, orgGRN)
+	agents, err := s.ListByOrg(ctx, orgGRN, listfilter.Filter{})
 	require.NoError(t, err)
 	require.Len(t, agents, 1)
 	assert.Equal(t, reported, agents[0].GRN())
@@ -1215,13 +1227,13 @@ func ptr[T any](v T) *T { return &v }
 
 // policyDoc builds a one-statement document whose Sid identifies the
 // version it belongs to.
-func policyDoc(sid string, effect authz.Effect) authz.PolicyDocument {
+func policyDoc(sid string, effect wire.Effect) authz.PolicyDocument {
 	return statementDoc(sid, effect, "org:read", "grn:acme:*")
 }
 
 // statementDoc builds a one-statement document over an explicit action
 // and resource pattern.
-func statementDoc(sid string, effect authz.Effect, action, resource string) authz.PolicyDocument {
+func statementDoc(sid string, effect wire.Effect, action, resource string) authz.PolicyDocument {
 	return authz.PolicyDocument{
 		Version: "2026-07-25",
 		Statement: []authz.Statement{{
@@ -1250,7 +1262,7 @@ func TestPolicyStore_LifecycleRoundTrip(t *testing.T) {
 
 	g, err := authz.NewPolicyGRN(orgGRN)
 	require.NoError(t, err)
-	created, err := s.CreatePolicy(ctx, authz.NewPolicy(g, orgGRN, "read-only"), policyDoc("v1", authz.EffectAllow), author)
+	created, err := s.CreatePolicy(ctx, authz.NewPolicy(g, orgGRN, "read-only"), policyDoc("v1", wire.EffectAllow), author)
 	require.NoError(t, err)
 	assert.Equal(t, authz.PolicyStatusDraft, created.Status())
 	assert.Equal(t, 1, created.DefaultVersion())
@@ -1275,7 +1287,7 @@ func TestPolicyStore_LifecycleRoundTrip(t *testing.T) {
 	assert.Empty(t, active[0].Subjects, "an unattached policy applies org-wide")
 
 	// Appending a version leaves the default pointer alone.
-	v2, err := s.AddPolicyVersion(ctx, g, policyDoc("v2", authz.EffectDeny), author)
+	v2, err := s.AddPolicyVersion(ctx, g, policyDoc("v2", wire.EffectDeny), author)
 	require.NoError(t, err)
 	assert.Equal(t, 2, v2.Version())
 	active, err = s.ActivePolicies(ctx, orgGRN)
@@ -1288,7 +1300,7 @@ func TestPolicyStore_LifecycleRoundTrip(t *testing.T) {
 	active, err = s.ActivePolicies(ctx, orgGRN)
 	require.NoError(t, err)
 	assert.Equal(t, "v2", active[0].Document.Statement[0].Sid)
-	assert.Equal(t, authz.EffectDeny, active[0].Document.Statement[0].Effect)
+	assert.Equal(t, wire.EffectDeny, active[0].Document.Statement[0].Effect)
 
 	versions, err := s.ListPolicyVersions(ctx, g)
 	require.NoError(t, err)
@@ -1299,7 +1311,7 @@ func TestPolicyStore_LifecycleRoundTrip(t *testing.T) {
 	assert.True(t, errorx.IsKind(err, errorx.KindNotFound))
 	_, err = s.GetPolicy(ctx, grn.New("acme", "default", authz.ServiceTypePolicy, "missing"))
 	assert.True(t, errorx.IsKind(err, errorx.KindNotFound))
-	_, err = s.AddPolicyVersion(ctx, grn.New("acme", "default", authz.ServiceTypePolicy, "missing"), policyDoc("x", authz.EffectAllow), author)
+	_, err = s.AddPolicyVersion(ctx, grn.New("acme", "default", authz.ServiceTypePolicy, "missing"), policyDoc("x", wire.EffectAllow), author)
 	assert.True(t, errorx.IsKind(err, errorx.KindNotFound))
 }
 
@@ -1351,7 +1363,7 @@ func TestPolicyVersions_AppendOnly(t *testing.T) {
 
 	g, err := authz.NewPolicyGRN(orgGRN)
 	require.NoError(t, err)
-	_, err = s.CreatePolicy(ctx, authz.NewPolicy(g, orgGRN, "read-only"), policyDoc("v1", authz.EffectAllow), grnOf("user", "ada"))
+	_, err = s.CreatePolicy(ctx, authz.NewPolicy(g, orgGRN, "read-only"), policyDoc("v1", wire.EffectAllow), grnOf("user", "ada"))
 	require.NoError(t, err)
 
 	_, err = p.Exec(ctx, `UPDATE policy_versions SET document = '{}'::jsonb WHERE policy_grn = $1`, g.String())
@@ -1382,7 +1394,7 @@ func TestPolicyCache_InvalidatedByNotify(t *testing.T) {
 
 	g, err := authz.NewPolicyGRN(orgGRN)
 	require.NoError(t, err)
-	_, err = s.CreatePolicy(ctx, authz.NewPolicy(g, orgGRN, "read-only"), policyDoc("v1", authz.EffectAllow), grnOf("user", "ada"))
+	_, err = s.CreatePolicy(ctx, authz.NewPolicy(g, orgGRN, "read-only"), policyDoc("v1", wire.EffectAllow), grnOf("user", "ada"))
 	require.NoError(t, err)
 	_, err = s.SetPolicyStatus(ctx, g, authz.PolicyStatusActive)
 	require.NoError(t, err)
@@ -1414,7 +1426,7 @@ func TestPolicyWrite_Notifies(t *testing.T) {
 
 	g, err := authz.NewPolicyGRN(orgGRN)
 	require.NoError(t, err)
-	_, err = s.CreatePolicy(ctx, authz.NewPolicy(g, orgGRN, "read-only"), policyDoc("v1", authz.EffectAllow), grnOf("user", "ada"))
+	_, err = s.CreatePolicy(ctx, authz.NewPolicy(g, orgGRN, "read-only"), policyDoc("v1", wire.EffectAllow), grnOf("user", "ada"))
 	require.NoError(t, err)
 
 	n, err := conn.Conn().WaitForNotification(ctx)
@@ -1526,7 +1538,7 @@ func TestPolicyAttachment_StaysInsideItsOrg(t *testing.T) {
 
 	g, err := authz.NewPolicyGRN(orgGRN)
 	require.NoError(t, err)
-	_, err = s.CreatePolicy(ctx, authz.NewPolicy(g, orgGRN, "read-only"), policyDoc("v1", authz.EffectAllow), grnOf("user", "ada"))
+	_, err = s.CreatePolicy(ctx, authz.NewPolicy(g, orgGRN, "read-only"), policyDoc("v1", wire.EffectAllow), grnOf("user", "ada"))
 	require.NoError(t, err)
 
 	_, err = s.AttachPolicy(ctx, g, grn.New("other", "default", "group", "eng"))
@@ -1555,7 +1567,7 @@ func TestPolicyAttachment_DenyOverridesAcrossSources(t *testing.T) {
 		Version: "2026-07-25",
 		Statement: []authz.Statement{{
 			Sid:      "deny-read",
-			Effect:   authz.EffectDeny,
+			Effect:   wire.EffectDeny,
 			Action:   []string{"project:read"},
 			Resource: []string{"grn:acme:*"},
 		}},
@@ -1655,15 +1667,15 @@ func TestOrgIsolation_OnlyAttachmentKeepsGrantsInsideAnOrg(t *testing.T) {
 	adaB, engB := scopedGRN("globex", "user", "ada"), scopedGRN("globex", "group", "eng")
 	webB, openB := scopedGRN("globex", "project", "web"), scopedGRN("globex", "project", "open")
 
-	allowA := activePolicy(t, policies, acme, "allow-read", statementDoc("allow-read", authz.EffectAllow, "project:read", "grn:*:*"))
+	allowA := activePolicy(t, policies, acme, "allow-read", statementDoc("allow-read", wire.EffectAllow, "project:read", "grn:*:*"))
 	attachPolicy(t, policies, allowA, adaA)
-	denyB := activePolicy(t, policies, globex, "deny-read", statementDoc("deny-read", authz.EffectDeny, "project:read", "grn:*:*"))
+	denyB := activePolicy(t, policies, globex, "deny-read", statementDoc("deny-read", wire.EffectDeny, "project:read", "grn:*:*"))
 	attachPolicy(t, policies, denyB, engB)
 
 	// Unattached, so no subject set stands between this allow and a
 	// subject of another org. It names one project, leaving webB an
 	// object only an attachment reaches.
-	activePolicy(t, policies, globex, "open-door", statementDoc("open-door", authz.EffectAllow, "project:read", openB.String()))
+	activePolicy(t, policies, globex, "open-door", statementDoc("open-door", wire.EffectAllow, "project:read", openB.String()))
 
 	t.Run("persisted policies stay in their org", func(t *testing.T) {
 		active, err := store.ActivePolicies(ctx, acme)
@@ -1712,7 +1724,7 @@ func TestOrgIsolation_OnlyAttachmentKeepsGrantsInsideAnOrg(t *testing.T) {
 		require.True(t, checkRead(t, engine, adaA, webB, nil, roleAllow("globex")))
 
 		// Unattached, this policy denies every subject of org A.
-		activePolicy(t, policies, acme, "deny-all", statementDoc("deny-all", authz.EffectDeny, "project:read", "grn:*:*"))
+		activePolicy(t, policies, acme, "deny-all", statementDoc("deny-all", wire.EffectDeny, "project:read", "grn:*:*"))
 
 		assert.False(t, checkRead(t, engine, adaA, webA, nil), "org A's new deny drops org A's cached allow")
 		assert.True(t, checkRead(t, engine, adaA, webB, nil, roleAllow("globex")),
@@ -3094,7 +3106,7 @@ func TestMachineSurface_AnotherOrganizationsAgentReachesNothingOnThisQueue(t *te
 	// ADR-0035). The Allow below matches every resource there is and
 	// buys nothing.
 	reachAll := activePolicy(t, policies, orgRootGRN("acme"), "reach-everything",
-		statementDoc("reach-everything", authz.EffectAllow, message.ActionSend, "grn:*:*"))
+		statementDoc("reach-everything", wire.EffectAllow, message.ActionSend, "grn:*:*"))
 	attachPolicy(t, policies, reachAll, senderGRN)
 	status, body = machineSend(t, sender, http.MethodPost, url+"/messages",
 		submissionTo(strangerGRN, "key-3"))
@@ -3167,7 +3179,7 @@ func TestMachineSurface_AnAttachedPolicyDecidesWhatAnAgentSends(t *testing.T) {
 	require.Equal(t, http.StatusCreated, status, string(body))
 
 	denied := activePolicy(t, policies, acme, "no-talking",
-		statementDoc("no-talking", authz.EffectDeny, message.ActionSend, recipientGRN.String()))
+		statementDoc("no-talking", wire.EffectDeny, message.ActionSend, recipientGRN.String()))
 	attachPolicy(t, policies, denied, senderGRN)
 
 	// The organization's own rule refused this one, which is a different
@@ -3272,7 +3284,7 @@ func TestMachineSurface_AGroupAttachedPolicyDecidesWhatItsMembersSend(t *testing
 	require.Equal(t, http.StatusCreated, status, string(body))
 
 	denied := activePolicy(t, policies, acme, "no-talking",
-		statementDoc("no-talking", authz.EffectDeny, message.ActionSend, recipientGRN.String()))
+		statementDoc("no-talking", wire.EffectDeny, message.ActionSend, recipientGRN.String()))
 	attachPolicy(t, policies, denied, engineering)
 
 	status, body = machineSend(t, sender, http.MethodPost, url+"/messages", submissionTo(recipientGRN, "key-2"))
@@ -3401,7 +3413,7 @@ func TestMachineSurface_ARecipientsOwnPolicyAdmitsNoForeignSender(t *testing.T) 
 	// attaches it to nobody, which is what an administrator does by
 	// detaching the last attachment from one they had aimed at a subject.
 	openDoor := activePolicy(t, policies, orgRootGRN("beta"), "everything",
-		statementDoc("everything", authz.EffectAllow, "*", "grn:beta:*"))
+		statementDoc("everything", wire.EffectAllow, "*", "grn:beta:*"))
 
 	// That policy does reach the foreign subject: the same question,
 	// answered the other way now that beta has written one document.

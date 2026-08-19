@@ -628,6 +628,8 @@ paths:
       summary: List an organization's agents. Requires the `member` role.
       parameters:
         - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
       responses:
         '200':
           description: The organization's agents.

@@ -42,6 +42,7 @@ func (e *GRPCEvaluator) Evaluate(ctx context.Context, in EvalInput) (bool, error
 		Action:        in.Action,
 		Statements:    statements,
 		SubjectGroups: wire.GRNsToProto(in.SubjectGroups),
+		SubjectOrg:    in.SubjectOrg.String(),
 	})
 	if err != nil {
 		return false, statusError(err)

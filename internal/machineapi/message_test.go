@@ -333,7 +333,7 @@ func TestServer_SendsWhereTheSendersOwnOrganizationReaches(t *testing.T) {
 		Resource: []string{"grn:acme:*"},
 	}}
 	assert.Equal(t, []machineapi.EvalInput{
-		{Subject: sender, Object: sibling, Action: message.ActionSend, Statements: ownOrg},
+		{Subject: sender, Object: sibling, Action: message.ActionSend, Statements: ownOrg, SubjectOrg: organization("acme")},
 	}, policies.asked)
 	assert.Equal(t, [][2]grn.GRN{{organization("acme"), organization("globex")}}, standing.asked)
 }

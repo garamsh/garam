@@ -125,7 +125,10 @@ them over a seam of its own, which is what makes a policy attached to a
 group decide what its members send (§Policy attachment). Membership it
 cannot read refuses the message rather than deciding it without: an
 unread group and an empty one are the same answer otherwise, and the
-difference is every Deny attached to one.
+difference is every Deny attached to one. The listener also sends
+`subject_org` — the GRN of the organization the sender's own GRN
+already names — so the engine's scope check (ADR-0038) reads the
+boundary the same way it reads any other subject's.
 
 ## Policy persistence
 
@@ -210,24 +213,30 @@ to a group the subject belongs to, and the statements the calling
 server collected. Deny-overrides applies across all four.
 
 **An unattached policy's scope is the caller's obligation, not the
-engine's** ([ADR-0025](./adr/0025-engine-scope-is-a-caller-obligation.md)).
-The engine loads the policies of the organization owning the **object**
-and applies every unattached one to whatever subject it was handed; it
+engine's** ([ADR-0025](./adr/0025-engine-scope-is-a-caller-obligation.md))
+— the engine did not hold it, and the engine now does. The engine
+loads the policies of the organization owning the **object** and
+applies every unattached one to whatever subject it was handed; it
 holds no membership data and cannot tell whether that subject belongs
-to that organization. A caller must therefore establish that the
-subject belongs to the object's organization before asking, and refuse
-before asking if it cannot. `internal/api` establishes it by fetching
-the member whose role it needs; the machine listener establishes it by
-comparing organizations outright, because a machine identity is never an
-org member and there is no membership row to miss on. The groups a
-caller sends are subjects too, and the same obligation covers them: a
-group belongs to the org that names it in its GRN.
+to that organization. The caller therefore establishes that the
+subject belongs to the object's organization before asking, sends
+that organization as `subject_org` on `Check` / `Explain`, and the
+engine refuses the call when the field is unset or does not match
+([ADR-0038](./adr/0038-the-engine-learns-a-subjects-memberships-and-enforces-its-own-scope.md)).
+`internal/api` populates it from the org whose member it fetched; the
+machine listener populates it from the sender's own GRN, after the
+consent relation has decided the same-organization half. A caller
+that hands the engine a subject from another organization is refused
+at the engine — the boundary has moved, and the engine is where the
+obligation now lives. The groups a caller sends are subjects too, and
+the same obligation covers them: a group belongs to the org that
+names it in its GRN.
 
 The row above reads "every subject the caller asks about" for that
 reason. A caller that hands the engine a subject from another
 organization gets that organization's unattached policies applied to
-it, which is an organization boundary decided by the caller and not by
-the policy.
+it — only when it also names the right `subject_org`, which is what
+the engine now requires.
 
 Detaching an active policy's last attachment is refused, because the
 policy would not retire — it would widen back to the org, which for a
@@ -252,13 +261,15 @@ is read.
 
 Each caller resolves the subject's groups from the org tables and sends
 them as `subject_groups` on `Check` / `Explain`; the engine matches
-those GRNs against attachments without knowing what a group is. An
-attachment stays inside the policy's org, enforced by a schema trigger;
-a root-owned identity such as a user cannot name an org in its GRN, so
-org membership stays the api server's precondition. An agent names its
-org in its own GRN, so the trigger binds it directly and it is never an
-org member (ADR-0014) — a group holds it as a member all the same, and
-that membership is what a policy attached to the group decides through.
+those GRNs against attachments without knowing what a group is. Each
+caller also sends `subject_org` — the GRN of the organization the
+subject belongs to — and the engine refuses the call when it is unset
+or does not name the object's organization (ADR-0038). An attachment
+stays inside the policy's org, enforced by a schema trigger; a
+root-owned identity such as a user cannot name an org in its GRN, so
+org membership is established by the api server populating `subject_org`
+before asking. An agent names its org in its own GRN, so the
+machine listener reads it directly.
 Attachment writes announce the org on `garam_policy_change` like any
 other policy write.
 

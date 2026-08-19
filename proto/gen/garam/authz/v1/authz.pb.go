@@ -157,6 +157,12 @@ type CheckRequest struct {
 	// (ADR-0008). Group membership is org data the caller resolves; the
 	// engine uses it only to find the policies attached to the subject.
 	SubjectGroups []string `protobuf:"bytes,5,rep,name=subject_groups,json=subjectGroups,proto3" json:"subject_groups,omitempty"`
+	// subject_org is the GRN of the organization the subject belongs to
+	// when the subject is an org member (ADR-0038). The engine refuses
+	// the call when it is unset and the object's organization is not the
+	// subject's: the boundary ADR-0025 leaves to the caller, enforced
+	// where the obligation lives.
+	SubjectOrg    string `protobuf:"bytes,6,opt,name=subject_org,json=subjectOrg,proto3" json:"subject_org,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -226,6 +232,13 @@ func (x *CheckRequest) GetSubjectGroups() []string {
 	return nil
 }
 
+func (x *CheckRequest) GetSubjectOrg() string {
+	if x != nil {
+		return x.SubjectOrg
+	}
+	return ""
+}
+
 type CheckResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// allowed is the final decision: explicit Deny wins, otherwise any
@@ -280,6 +293,7 @@ type ExplainRequest struct {
 	Action        string                 `protobuf:"bytes,3,opt,name=action,proto3" json:"action,omitempty"`
 	Statements    []*Statement           `protobuf:"bytes,4,rep,name=statements,proto3" json:"statements,omitempty"`
 	SubjectGroups []string               `protobuf:"bytes,5,rep,name=subject_groups,json=subjectGroups,proto3" json:"subject_groups,omitempty"`
+	SubjectOrg    string                 `protobuf:"bytes,6,opt,name=subject_org,json=subjectOrg,proto3" json:"subject_org,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -347,6 +361,13 @@ func (x *ExplainRequest) GetSubjectGroups() []string {
 		return x.SubjectGroups
 	}
 	return nil
+}
+
+func (x *ExplainRequest) GetSubjectOrg() string {
+	if x != nil {
+		return x.SubjectOrg
+	}
+	return ""
 }
 
 type ExplainResponse struct {
@@ -471,7 +492,7 @@ const file_garam_authz_v1_authz_proto_rawDesc = "" +
 	"\x03sid\x18\x01 \x01(\tR\x03sid\x12.\n" +
 	"\x06effect\x18\x02 \x01(\x0e2\x16.garam.authz.v1.EffectR\x06effect\x12\x16\n" +
 	"\x06action\x18\x03 \x03(\tR\x06action\x12\x1a\n" +
-	"\bresource\x18\x04 \x03(\tR\bresource\"\xc8\x01\n" +
+	"\bresource\x18\x04 \x03(\tR\bresource\"\xe9\x01\n" +
 	"\fCheckRequest\x12\x1f\n" +
 	"\vsubject_grn\x18\x01 \x01(\tR\n" +
 	"subjectGrn\x12\x1d\n" +
@@ -481,9 +502,11 @@ const file_garam_authz_v1_authz_proto_rawDesc = "" +
 	"\n" +
 	"statements\x18\x04 \x03(\v2\x19.garam.authz.v1.StatementR\n" +
 	"statements\x12%\n" +
-	"\x0esubject_groups\x18\x05 \x03(\tR\rsubjectGroups\")\n" +
+	"\x0esubject_groups\x18\x05 \x03(\tR\rsubjectGroups\x12\x1f\n" +
+	"\vsubject_org\x18\x06 \x01(\tR\n" +
+	"subjectOrg\")\n" +
 	"\rCheckResponse\x12\x18\n" +
-	"\aallowed\x18\x01 \x01(\bR\aallowed\"\xca\x01\n" +
+	"\aallowed\x18\x01 \x01(\bR\aallowed\"\xeb\x01\n" +
 	"\x0eExplainRequest\x12\x1f\n" +
 	"\vsubject_grn\x18\x01 \x01(\tR\n" +
 	"subjectGrn\x12\x1d\n" +
@@ -493,7 +516,9 @@ const file_garam_authz_v1_authz_proto_rawDesc = "" +
 	"\n" +
 	"statements\x18\x04 \x03(\v2\x19.garam.authz.v1.StatementR\n" +
 	"statements\x12%\n" +
-	"\x0esubject_groups\x18\x05 \x03(\tR\rsubjectGroups\"c\n" +
+	"\x0esubject_groups\x18\x05 \x03(\tR\rsubjectGroups\x12\x1f\n" +
+	"\vsubject_org\x18\x06 \x01(\tR\n" +
+	"subjectOrg\"c\n" +
 	"\x0fExplainResponse\x12\x18\n" +
 	"\aallowed\x18\x01 \x01(\bR\aallowed\x126\n" +
 	"\x06traces\x18\x02 \x03(\v2\x1e.garam.authz.v1.StatementTraceR\x06traces\"l\n" +

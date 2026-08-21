@@ -46,4 +46,5 @@ The template asks which convention files you opened, and a reviewer checks that 
 ## This project
 
 - Secrets never enter a commit. `ci.md` covers them once they reach a pipeline; before that, the `.gitignore` and your own attention are the whole defence.
+- GitHub Actions does not run here. Every run since 2026-08-18 has failed (`gh run list --repo garamsh/garam`), and the account owner states the `garamsh` Actions quota is exhausted — a cause this repository cannot check. Run the local checks before you push and treat them as the whole defence rather than the first of two; a red Actions check is not a reason to hold a pull request.
 - Conversation follows the user's language. Code, comments, and documents are English regardless.

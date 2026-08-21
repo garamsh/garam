@@ -1,7 +1,12 @@
 # Multi-stage build of the Next.js frontend (ADR-0009) as a standalone
 # server. Build context is `web/`.
+#
+# All three stages take the same base, pinned by digest: the tag reads
+# and the digest resolves, so two builds of this commit pull the same
+# bytes. No bot moves it — re-resolve with
+# `docker buildx imagetools inspect <ref>` and commit the result.
 
-FROM node:24.18.1-alpine3.24 AS deps
+FROM node:24.18.1-alpine3.24@sha256:f70403e87646dc51b45295f4b8b70cdad0b63d2297c4c9899119b03f7af7a6b3 AS deps
 
 WORKDIR /app
 RUN npm install -g pnpm@11.11.0
@@ -9,7 +14,7 @@ RUN npm install -g pnpm@11.11.0
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 
-FROM node:24.18.1-alpine3.24 AS build
+FROM node:24.18.1-alpine3.24@sha256:f70403e87646dc51b45295f4b8b70cdad0b63d2297c4c9899119b03f7af7a6b3 AS build
 
 WORKDIR /app
 RUN npm install -g pnpm@11.11.0
@@ -23,7 +28,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN pnpm build
 
-FROM node:24.18.1-alpine3.24
+FROM node:24.18.1-alpine3.24@sha256:f70403e87646dc51b45295f4b8b70cdad0b63d2297c4c9899119b03f7af7a6b3
 
 WORKDIR /app
 ENV NODE_ENV=production HOSTNAME=0.0.0.0 PORT=3000

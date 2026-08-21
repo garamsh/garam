@@ -4,7 +4,11 @@
 # stage is scratch, so no shell or wget is there to ask instead. Build
 # context is the repository root.
 
-FROM golang:1.26.5-alpine3.24 AS build
+# The base is pinned by digest: the tag reads and the digest resolves,
+# so two builds of this commit pull the same bytes. No bot moves it —
+# re-resolve with `docker buildx imagetools inspect <ref>` and commit
+# the result.
+FROM golang:1.26.5-alpine3.24@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2 AS build
 
 WORKDIR /src
 

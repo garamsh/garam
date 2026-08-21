@@ -40,7 +40,34 @@ says so rather than guessing.
 
 ## Images
 
-Two images, because there are two runtimes ([ADR-0020](./adr/0020-published-artifacts.md)). Tags are immutable.
+Two images, because there are two runtimes ([ADR-0020](./adr/0020-published-artifacts.md)). Tags are immutable, and [ADR-0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md) fixes where they are published and under what names:
+
+| Image | Published as |
+|---|---|
+| Go | `486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam/garam-server:<version>` |
+| Web | `486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam/garam-web:<version>` |
+
+`<version>` is a released git tag with its `v` dropped — `v0.3.0` in git
+is `0.3.0` here — and one commit publishes both images under the same
+one, so a manifest pins one version across the pair. What a manifest
+pins is that tag rather than a digest: the tags are immutable, so the
+tag answers what is deployed on its own. Each image's digest is
+recorded beside its tag in the GitHub release for that version, for a
+consumer that would rather pin one.
+
+**Nothing is published yet, and neither repository exists.** Read on
+2026-08-22: `aws ecr describe-repositories --region ap-northeast-2`
+lists `garam/garam`, `garam/gagent-agent` and `garam/gagent-workspace`
+and neither name above; no workflow pushes to a registry
+(`.github/workflows/ci.yml`); `gh release list --repo garamsh/garam`
+returns nothing. What the references above fix is the names a manifest
+may be written against, not an image it can pull today.
+
+Once the repositories exist, no pull secret is needed for them: the
+cluster is configured to pull with a role granted `ecr:BatchGetImage`
+on every repository in the account, assumed by the kubelet's credential
+provider (`garamsh/infra` `modules/aws/ecr-pull.tf`,
+`modules/cluster/images.tf`, read 2026-08-22).
 
 - **Go image** (`deploy/local/Dockerfile`) — one binary whose entry
   point takes a subcommand: `serve api`, `serve authz`, `serve machine`,
@@ -303,6 +330,12 @@ Stated here so they are not guessed:
   established; nothing in the source bounds startup. A slow start
   reading as a failed deploy is a function of the deployment's probe
   configuration.
+- **What `/api/*` points at in a published web image.** Not established.
+  The rewrite target is a build argument baked into the image (`ARG
+  GARAM_API_URL` in `deploy/local/Dockerfile.web`, read by
+  `web/next.config.ts`), and no release exists to have chosen a value,
+  so a consumer cannot assume a published image carries the local
+  default.
 - **A resource floor.** No minimum below which a process fails is known.
 
 ## Decisions this rests on
@@ -333,3 +366,6 @@ Stated here so they are not guessed:
   two
 - [ADR-0029](./adr/0029-readiness-reports-what-a-replica-cannot-serve-without.md)
   — readiness reports what a replica cannot serve without
+- [ADR-0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)
+  — where the two images are published, under what names, and what
+  triggers a push

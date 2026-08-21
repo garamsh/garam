@@ -65,6 +65,7 @@ ADRs:
 - [0036](./adr/0036-a-secret-in-garam-is-a-reference-not-a-value.md) — a secret in garam is a reference, not a value
 - [0037](./adr/0037-the-machine-listener-presents-a-per-organization-certificate.md) — the machine listener presents a per-organization certificate
 - [0038](./adr/0038-the-engine-learns-a-subjects-memberships-and-enforces-its-own-scope.md) — the engine learns a subject's memberships and enforces its own scope
+- [0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md) — a version tag publishes both images to the account's registry
 
 ## Rules for edits
 

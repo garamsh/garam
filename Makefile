@@ -161,11 +161,31 @@ check-gen:
 	@out="$$(git status --porcelain -- $(GEN_PATHS))"; \
 		test -z "$$out" || { echo "check-gen: uncommitted generated output:"; echo "$$out"; exit 1; }
 
-# template-diff lists what the conventions template moved since the last
-# sync — the question #294 wants answered by a record, not a memory. The
-# record is docs/convention/template-sync, advanced by each sync PR.
+# template-diff reports where every path the conventions template tracks
+# stands here — the question #294 wants answered by a run, not a memory.
+# Both of its inputs are derived, so neither can go stale: the path set
+# is the template's own tree, and a path's base is the newest template
+# commit whose blob equals the one HEAD holds. No such commit means the
+# content was never the template's — a local adaptation, or a file the
+# two repositories only share the name of — and no revision describes
+# that, so the path is named and left there. A path absent here is
+# reported rather than skipped, which is how a directory the template
+# grows arrives without an edit to this file.
 template-diff:
-	@git fetch template --quiet && git log --oneline $$(tail -1 docs/convention/template-sync)..template/main -- docs/convention/ AGENTS.md .github/
+	@git fetch template --quiet
+	@paths="$$(git ls-tree -r --name-only template/main)"; \
+		test -n "$$paths" || { echo 'template-diff: template/main tracks no path — the tree listing is broken'; exit 1; }; \
+		echo "template-diff: $$(printf '%s\n' "$$paths" | wc -l) paths tracked by template/main"; \
+		for p in $$paths; do \
+			ours="$$(git rev-parse -q --verify "HEAD:$$p")" || { printf '  absent here  %s\n' "$$p"; continue; }; \
+			base="$$(git log --format='%H' --no-renames --raw --abbrev=40 template/main -- "$$p" \
+				| awk -v ours="$$ours" 'NF==1{c=$$0} $$4==ours{print c; exit}')"; \
+			test -n "$$base" || { printf '  adapted      %s\n' "$$p"; continue; }; \
+			since="$$(git log --oneline --no-decorate "$$base..template/main" -- "$$p")"; \
+			test -n "$$since" || { printf '  current      %s  %s\n' "$$p" "$$(git rev-parse --short "$$base")"; continue; }; \
+			printf '  behind       %s  ours matches %s\n' "$$p" "$$(git rev-parse --short "$$base")"; \
+			printf '%s\n' "$$since" | sed 's/^/                 /'; \
+		done
 
 # db-up starts the stack's postgres service alone and makes sure the e2e
 # database exists next to `garam`. Postgres has no CREATE DATABASE IF NOT

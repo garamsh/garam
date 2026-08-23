@@ -3,8 +3,9 @@
 #
 # All three stages take the same base, pinned by digest: the tag reads
 # and the digest resolves, so two builds of this commit pull the same
-# bytes. No bot moves it — re-resolve with
-# `docker buildx imagetools inspect <ref>` and commit the result.
+# bytes. Dependabot proposes a newer tag — `.github/dependabot.yml`
+# names what it does not cover — and a move by hand re-resolves with
+# `docker buildx imagetools inspect <ref>`.
 
 FROM node:24.18.1-alpine3.24@sha256:f70403e87646dc51b45295f4b8b70cdad0b63d2297c4c9899119b03f7af7a6b3 AS deps
 

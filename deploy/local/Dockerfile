@@ -5,9 +5,10 @@
 # context is the repository root.
 
 # The base is pinned by digest: the tag reads and the digest resolves,
-# so two builds of this commit pull the same bytes. No bot moves it —
-# re-resolve with `docker buildx imagetools inspect <ref>` and commit
-# the result.
+# so two builds of this commit pull the same bytes. Dependabot proposes
+# a newer tag — `.github/dependabot.yml` names what it does not cover —
+# and a move by hand re-resolves with
+# `docker buildx imagetools inspect <ref>`.
 FROM golang:1.26.5-alpine3.24@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2 AS build
 
 WORKDIR /src

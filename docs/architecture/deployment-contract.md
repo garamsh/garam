@@ -55,19 +55,22 @@ tag answers what is deployed on its own. Each image's digest is
 recorded beside its tag in the GitHub release for that version, for a
 consumer that would rather pin one.
 
-**Nothing is published yet, and neither repository exists.** Read on
-2026-08-22: `aws ecr describe-repositories --region ap-northeast-2`
-lists `garam/garam`, `garam/gagent-agent` and `garam/gagent-workspace`
-and neither name above; no workflow pushes to a registry
+**Both repositories exist and neither holds an image.** Read on
+2026-08-24: `aws ecr describe-repositories --region ap-northeast-2`
+lists `garam/garam-server` and `garam/garam-web`, both `IMMUTABLE`,
+beside `garam/gagent-agent` and `garam/gagent-workspace`; `aws ecr
+list-images --repository-name` returns an empty list for each of the
+two names above; no workflow pushes to a registry
 (`.github/workflows/ci.yml`); `gh release list --repo garamsh/garam`
-returns nothing. What the references above fix is the names a manifest
-may be written against, not an image it can pull today.
+returns nothing. So a manifest may name either reference above and
+still pull nothing today: what is missing is the tag, not the
+repository, and the first release is what supplies it.
 
-Once the repositories exist, no pull secret is needed for them: the
-cluster is configured to pull with a role granted `ecr:BatchGetImage`
-on every repository in the account, assumed by the kubelet's credential
-provider (`garamsh/infra` `modules/aws/ecr-pull.tf`,
-`modules/cluster/images.tf`, read 2026-08-22).
+No pull secret is needed for either repository: the cluster pulls with
+a role granted `ecr:BatchGetImage` on every repository in the account,
+assumed by the kubelet's credential provider (`garamsh/infra`
+`modules/aws/ecr-pull.tf`, `modules/cluster/images.tf`, read
+2026-08-24).
 
 - **Go image** (`deploy/local/Dockerfile`) — one binary whose entry
   point takes a subcommand: `serve api`, `serve authz`, `serve machine`,

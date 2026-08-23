@@ -235,8 +235,19 @@ web-build:
 web-gen:
 	$(PNPM) gen:api
 
+# What gen:api writes, read from the script that writes it: package.json
+# owns the -o path, and a second copy here is the copy that goes stale.
+# The script runs in web/, so the path it names is relative to it.
+WEB_GEN_PATHS = $(shell sed -n 's|.*"gen:api": ".* -o \([^" ]*\)".*|web/\1|p' web/package.json)
+
+# A git diff pathspec matching no tracked file exits 0 having compared
+# nothing, so what git tracks under the owned path is counted first: a
+# moved -o or a removed file fails here instead of passing forever.
 web-check-gen: web-gen
-	git diff --exit-code -- web/src/types/api.ts
+	@echo 'web-check-gen: $(words $(WEB_GEN_PATHS)) generated paths compared'
+	@test -n '$(WEB_GEN_PATHS)' && git ls-files --error-unmatch -- $(WEB_GEN_PATHS) >/dev/null 2>&1 \
+		|| { echo 'web-check-gen: nothing to compare — package.json names no gen:api output, or git tracks none of "$(WEB_GEN_PATHS)"'; exit 1; }
+	@git diff --exit-code -- $(WEB_GEN_PATHS)
 
 # web-e2e drives the built app in a real browser against the backend
 # `make backend-up` starts. It builds and serves the app itself, so it

@@ -9,6 +9,7 @@ The contract ADR-0020 obliges garam to publish: the ports each process listens o
 - What readiness reports
 - Configuration values
 - How key material must arrive
+- The key-encryption key cannot be regenerated
 - The database connection
 - The migrate job
 - Termination
@@ -218,7 +219,7 @@ configuration change applied rolls the pods.
 | `GARAM_MACHINE_HEALTH_ADDR` | machine | `:8444` | no |
 | `GARAM_MACHINE_TLS_CERT_FILE` | machine | none — required | no — it names a file holding a certificate, which is public |
 | `GARAM_MACHINE_TLS_KEY_FILE` | machine | none — required | **yes**, and it names a file: the key itself must never be an environment variable's value ([ADR-0015](./adr/0015-operator-identity.md)), and the file is subject to the arrival rule below |
-| `GARAM_CA_KEY_FILE` | machine, issue-certificate | none — required | **yes**, and it names a file, subject to the arrival rule below |
+| `GARAM_CA_KEY_FILE` | machine, issue-certificate | none — required | **yes**, and it names a file, subject to the arrival rule below — and the key it names cannot be regenerated (§The key-encryption key cannot be regenerated) |
 | `GARAM_MIGRATIONS_DIR` | migrate | `migrations` (`/app/migrations` in the image) | no |
 | `GOOGLE_CLIENT_ID` | api | none | no |
 | `GOOGLE_CLIENT_SECRET` | api | none | **yes** |
@@ -283,6 +284,50 @@ Two qualifications:
   own — the tenancy hole [ADR-0020](./adr/0020-published-artifacts.md)
   forbids. There is nothing to mount and nothing to rotate; only the
   server certificate is mounted.
+
+## The key-encryption key cannot be regenerated
+
+**The key-encryption key — the bytes in the file `GARAM_CA_KEY_FILE`
+names, not the path — cannot be regenerated.** Every organization's
+certificate authority is sealed under the key present when that
+authority was created, and the sealed bytes open only under that same
+key: a different one is refused by the identifier of the key it needs
+rather than read as corruption (`internal/ca/service.go`,
+`internal/ca/sealer.go`). Rotation is not built and not designed — the
+identifier is what would make it possible later, and nothing performs
+it ([ADR-0016](./adr/0016-ca-key-custody.md)) — so there is no path
+from one key to another. Under a different key every authority sealed
+under the old one is unopenable and no certificate can be signed or
+renewed for its organization (`internal/ca/service.go`); the only
+remedy is a new authority per organization and a reissue of every
+certificate under it.
+
+Nothing detects the substitution at start: the arrival checks above
+pass on any well-formed key, and nothing compares it against what the
+database already holds (`internal/cli/machine.go`). The wrong key
+starts cleanly and fails at the first certificate asked for.
+
+The obligation that follows, in the form a deployment can act on:
+
+- **Created once, never replaced.** A re-run of whatever supplies the
+  key must be a no-op that keeps what already exists, never a
+  regeneration.
+- **It must survive the cluster.** A key that exists only as something
+  the cluster generated is lost with the cluster, and every
+  organization's certificate authority is lost with it.
+- **Where it lives is the cluster owner's decision.** garam requires
+  the two properties above and names no store; choosing one is not
+  this contract's to do.
+
+**The machine listener's certificate and key do not carry this
+property.** `GARAM_MACHINE_TLS_CERT_FILE` and
+`GARAM_MACHINE_TLS_KEY_FILE` — `tls.crt` and `tls.key` where the local
+manifest names them (`deploy/local/minikube/garam.yaml`) — seal
+nothing: they are the listener's own pair, read for the TLS handshake
+and nothing else (`internal/cli/machine.go`,
+`internal/machine/listener.go`). The pair is safe to regenerate at any
+time and safe to have issued by cert-manager or any other issuer. The
+constraint above is the key-encryption key's alone.
 
 ## The database connection
 

@@ -1,0 +1,19 @@
+# The mover for the base-image pins in deploy/local/, which
+# docs/convention/ci.md §Verify a pinned dependency before adopting it
+# requires of a pin.
+#
+# Covers a newer tag for both Dockerfile and Dockerfile.web, rewriting
+# the tag and the digest together.
+#
+# Does not cover: a CVE with no newer tag, because the docker ecosystem
+# receives version updates and not security updates; a base republished
+# under the same tag, which can be treated as already current while the
+# tag is unchanged; deploy/local/docker-compose.yml, which is kept only
+# if it parses as a Kubernetes resource and it does not; and
+# deploy/local/minikube/, which is a subdirectory and is not searched.
+version: 2
+updates:
+  - package-ecosystem: "docker"
+    directory: "/deploy/local"
+    schedule:
+      interval: "weekly"

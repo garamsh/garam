@@ -44,7 +44,7 @@ TEST_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)
 WEB_E2E_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)/garam?sslmode=disable)
 
 .PHONY: lint format test build gen check-gen e2e db-up db-down backend-up ci template-diff
-.PHONY: web-install web-lint web-format web-test web-build web-gen web-check-gen web-e2e web-ci
+.PHONY: web-install web-lint web-format web-test web-build web-gen web-check-gen web-e2e web-image-e2e web-ci
 .PHONY: minikube-up minikube-down minikube-start minikube-images minikube-db
 .PHONY: minikube-secret minikube-migrate minikube-apps minikube-rebuild minikube-forward minikube-context
 
@@ -220,6 +220,14 @@ web-e2e:
 	@test -n '$(WEB_E2E_DATABASE_URL)' || { echo "web-e2e: no postgres published on this host — run make backend-up" >&2; exit 1; }
 	$(PNPM) exec playwright install chromium
 	GARAM_API_URL=http://$(API_HOST_ADDR) GARAM_E2E_DATABASE_URL='$(WEB_E2E_DATABASE_URL)' $(PNPM) e2e
+
+# web-image-e2e checks the built image rather than the app: that the
+# standalone server starts, answers both probes and reaches the baked
+# `/api/*` target. It builds the image it checks; GARAM_WEB_IMAGE names
+# one to check instead, which is how an image pulled from ECR by digest
+# is verified.
+web-image-e2e:
+	tests/image/web.sh
 
 web-ci: web-format web-lint web-test web-build web-check-gen
 

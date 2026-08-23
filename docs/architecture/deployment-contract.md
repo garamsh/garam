@@ -41,7 +41,7 @@ says so rather than guessing.
 
 ## Images
 
-Two images, because there are two runtimes ([ADR-0020](./adr/0020-published-artifacts.md)). Tags are immutable, and [ADR-0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md) fixes where they are published and under what names:
+Two images, because there are two runtimes ([ADR-0020](./adr/0020-published-artifacts.md)). Their tags are immutable, and [ADR-0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md) fixes where they are published and under what names:
 
 | Image | Published as |
 |---|---|
@@ -107,19 +107,41 @@ publishes.** The bring-up pair named next is not part of it: a manifest
 this document owes accuracy to is written against the table and never
 against those two names. Until a release exists, images reach a
 development cluster by hand through `garam/garam-server-dev` and
-`garam/garam-web-dev`, tagged by commit rather than by version
-([ADR-0040](./adr/0040-a-development-pair-carries-bring-up-images-until-the-first-release.md)).
-Nothing is promised about them: no version means anything there, no
-digest is recorded anywhere, and both repositories are emptied and
-removed once the release path publishes its first image, which stops
-every reference into them resolving. A manifest that pins one is
-deploying a bring-up build knowingly and for that long. Both exist and
-neither is empty: read on 2026-08-24, `aws ecr describe-repositories
---region ap-northeast-2` returns both, `IMMUTABLE` with scan-on-push,
-and each has held an image since that date. Which tags either holds is
-read from `aws ecr list-images` and not from here: a bring-up tag is
-recorded nowhere, so a sentence naming one would be stale at the next
-push. `garamsh/infra` #128 is the request they came from.
+`garam/garam-web-dev`
+([ADR-0041](./adr/0041-a-moving-tag-carries-the-bring-up-images-and-every-consumer-pulls-with-always.md)).
+Each push moves the tag `dev` onto the bytes just built and pushes a
+second tag beside it on the same bytes: the first twelve characters of
+the commit the build came from. That commit tag records what was built
+and promises nothing about fetching the commit it names, and ADR-0041
+makes both repositories mutable, so no tag in either is evidence of the
+bytes behind it.
+
+**A manifest that pins either bring-up reference sets
+`imagePullPolicy: Always` on every container that names it.** The `dev`
+tag moves, and a container spec that leaves the field unset takes
+`IfNotPresent` for any tag but `:latest`: a node already holding
+`garam/garam-web-dev:dev` then keeps running the bytes it has while the
+registry holds newer ones, no manifest changes, and the divergence
+surfaces as one node behaving unlike another. `Always` is what makes a
+moving tag safe to pin, and it is owed on both bring-up references —
+the commit tag included, because a mutable repository can move that one
+too. The two published references above do not carry the obligation:
+their tags are immutable, so the default policy is safe there.
+
+Nothing else is promised about the bring-up pair: no version means
+anything there, no digest is recorded anywhere, and both repositories
+are emptied and removed once the release path publishes its first
+image, which stops every reference into them resolving. A manifest that
+pins one is deploying a bring-up build knowingly and for that long.
+Both exist and neither is empty: read on 2026-08-24, `aws ecr
+describe-repositories --region ap-northeast-2` returns both with
+scan-on-push, and each has held an image since that date. Which tags
+either holds is read from `aws ecr list-images` and not from here: a
+bring-up tag is recorded nowhere, so a sentence naming one would be
+stale at the next push. Both read `IMMUTABLE` on that date;
+`garamsh/infra` owns `image_tag_mutability` and makes them mutable
+against ADR-0041, and `garamsh/infra` #128 is the request they came
+from.
 
 ## Ports and probe paths
 
@@ -480,6 +502,7 @@ Stated here so they are not guessed:
 - [ADR-0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)
   — where the two images are published, under what names, and what
   triggers a push
-- [ADR-0040](./adr/0040-a-development-pair-carries-bring-up-images-until-the-first-release.md)
-  — the bring-up pair that carries images until the first release, and
-  what removes it
+- [ADR-0041](./adr/0041-a-moving-tag-carries-the-bring-up-images-and-every-consumer-pulls-with-always.md)
+  — the mutable bring-up pair that carries images until the first
+  release, the moving tag it carries them under, and the pull policy a
+  consumer of one owes

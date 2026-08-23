@@ -29,7 +29,9 @@ go build ./...
 go test  ./...
 ```
 
-CI and local run the same commands (`make ci`). See
+`make ci` runs the same commands, and the pipeline that is configured
+to run it does not run here ([AGENTS.md](./AGENTS.md) §This project) —
+so run it before you push. See
 [docs/convention/ci.md](./docs/convention/ci.md).
 
 ## Local stack
@@ -58,7 +60,7 @@ truncating suite behind `make e2e`.
 The Next.js app lives in [`web/`](./web/) and talks to the Go backend
 through a same-origin `/api/*` rewrite
 ([ADR-0009](./docs/architecture/adr/0009-web-frontend.md)). It keeps
-its own toolchain and lockfile; `make web-ci` is its gate, run in CI
+its own toolchain and lockfile; `make web-ci` is its gate, run
 alongside `make ci`.
 
 ```sh

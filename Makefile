@@ -238,8 +238,26 @@ web-lint:
 	$(PNPM) lint
 	$(PNPM) typecheck
 
+# prettier reports no count and exits 0 when its ignore files leave it
+# nothing, so what it opened is read out of its debug log: one
+# `resolve config from` line per file. That log is not part of what
+# prettier promises, so a parse yielding no line fails the target below
+# rather than reporting a number nobody checked.
+WEB_FORMAT_LOG_FILES = $(shell $(PNPM) exec prettier . --check --log-level debug 2>&1 | sed -n "s|^\[debug\] resolve config from '\(.*\)'$$|\1|p")
+
+# Config resolution runs before parser inference, so that log also names
+# files prettier then skips for want of a parser. getFileInfo is
+# prettier's own answer to which of them it would have checked, and
+# without it an ignore file that swallowed every source would still pass
+# on a count the skipped files held above zero. Each path is quoted
+# because the App Router puts parentheses and brackets in these names.
+WEB_FORMAT_FILES = $(shell $(PNPM) exec node -e 'const p=require("prettier");(async()=>{for(const f of process.argv.slice(1))if((await p.getFileInfo(f)).inferredParser)console.log(f)})()' $(patsubst %,'%',$(WEB_FORMAT_LOG_FILES)))
+
 web-format:
-	$(PNPM) format
+	@echo 'web-format: $(words $(WEB_FORMAT_FILES)) files (prettier)'
+	@test -n '$(WEB_FORMAT_LOG_FILES)' || { echo 'web-format: nothing parsed — the prettier debug log named no file'; exit 1; }
+	@test -n '$(WEB_FORMAT_FILES)' || { echo 'web-format: nothing to check — the ignore files left prettier no file it can parse'; exit 1; }
+	@$(PNPM) format
 
 web-test:
 	$(PNPM) test

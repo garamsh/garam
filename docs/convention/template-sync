@@ -1,4 +1,0 @@
-# The conventions template commit this repository last synced to.
-# What a sync covered is `git log <this>..template/main` at a glance —
-# run `make template-diff`. Updated by the sync PR, each sync.
-0cd9263

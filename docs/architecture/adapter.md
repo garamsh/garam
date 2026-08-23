@@ -30,6 +30,13 @@ because it must outlive the agent process during shutdown — a native
 sidecar rather than an ordinary container, for the reason in
 [ADR-0018](./adr/0018-delivery-acknowledgement.md).
 
+It reaches garam as the agent, with the certificate garam issued for
+that agent, and verifies garam's listener against the authority that
+signed it: the listener presents a certificate of that same
+per-organization authority, so the root an adapter needs is already in
+its hands ([ADR-0014](./adr/0014-agent-authentication.md),
+[ADR-0037](./adr/0037-the-machine-listener-presents-a-per-organization-certificate.md)).
+
 ## The delivery loop
 
 1. Claim a message for its agent from garam's queue. The claim carries
@@ -179,5 +186,3 @@ know anyone depends on it.
   would remove the adapter's pairing, which is a simplification rather
   than a correctness gain, and the pairing is not what makes the design
   work.
-- Where garam's own server certificate for the machine listener comes
-  from is undecided and tracked separately.

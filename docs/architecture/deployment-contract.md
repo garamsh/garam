@@ -75,7 +75,11 @@ assumed by the kubelet's credential provider (`garamsh/infra`
 
 - **Go image** (`deploy/local/Dockerfile`) — one binary whose entry
   point takes a subcommand: `serve api`, `serve authz`, `serve machine`,
-  `migrate`, `probe` (`ENTRYPOINT ["garam"]`). The runtime stage is
+  `migrate`, `probe`, `adapter` (`ENTRYPOINT ["garam"]`). The last of
+  those is the only one a cluster this repository does not describe
+  runs: `adapter` is the delivery loop that goes beside one agent, in
+  that agent's pod ([adapter.md](./adapter.md)), so this image is pulled
+  there as well as here. The runtime stage is
   `scratch`: the image carries no shell and no package manager, so the
   local stack's healthchecks run the binary's own `probe` subcommand
   (`deploy/local/docker-compose.yml`) — a kubelet's `httpGet` needs
@@ -130,6 +134,7 @@ a sentence naming one would be stale at the next push.
 | web | HTTP | `PORT` | `3000` | the console, plus `/healthz` and `/readyz` |
 | `migrate` | none | — | — | a job: applies and exits |
 | `issue-certificate` | none | — | — | the one bootstrap [ADR-0015](./adr/0015-operator-identity.md) leaves out of band: mints an operator's own first certificate, for operator subjects only, and exits. No serve path reaches it, so no serving process can mint an identity |
+| `adapter` | none | — | — | nothing: it dials out and listens on no port. It runs beside one agent in that agent's pod, claims that agent's messages from the machine listener above, and posts them into the agent platform's gateway over loopback ([adapter.md](./adapter.md), [ADR-0013](./adr/0013-agent-messaging.md)). It answers no probe — see §Not established |
 
 - **The probe paths are `/healthz` and `/readyz`, one spelling on all
   four runtimes** (`internal/health/health.go`; `web/src/app/healthz/route.ts`,
@@ -226,6 +231,13 @@ configuration change applied rolls the pods.
 | `GOOGLE_CLIENT_ID` | api | none | no |
 | `GOOGLE_CLIENT_SECRET` | api | none | **yes** |
 | `GOOGLE_REDIRECT_URL` | api | none | no |
+| `GARAM_ADAPTER_AGENT` | adapter | none — required | no |
+| `GARAM_ADAPTER_MACHINE_URL` | adapter | none — required | no |
+| `GARAM_ADAPTER_GATEWAY_URL` | adapter | `http://127.0.0.1:8080` — the loopback address the gateway binds unless mTLS is configured for it ([ADR-0012](./adr/0012-agent-operator-model.md)) | no |
+| `GARAM_ADAPTER_GATEWAY_AGENT` | adapter | none — required | no |
+| `GARAM_ADAPTER_TLS_CERT_FILE` | adapter | none — required | no — it names a file holding a certificate, which is public |
+| `GARAM_ADAPTER_TLS_KEY_FILE` | adapter | none — required | **yes**, and it names a file, subject to the arrival rule below |
+| `GARAM_ADAPTER_ISSUER_FILE` | adapter | none — required | no — it names a file holding the issuing authority's certificate |
 | `GARAM_API_URL` | web | none in production (`web/src/env.ts`); baked into the image at build time (`deploy/local/Dockerfile.web`), so the runtime value must match the build's | no |
 
 Notes a deployment needs:
@@ -237,7 +249,19 @@ Notes a deployment needs:
   start. With neither set, no Google provider is registered — the start
   owes the issuer nothing, and `GET /auth/providers` omits `google`.
   One credential without the other refuses the start.
-- The three `*_FILE` values are paths, not contents. Key material
+- The adapter is given the agent's own identity: the certificate
+  `issueAgentCertificate` returned, its private key, and the authority
+  that signed it. That authority is what garam's own listener is
+  verified against, because the listener presents a certificate of the
+  same per-organization authority
+  ([ADR-0037](./adr/0037-the-machine-listener-presents-a-per-organization-certificate.md)),
+  so the three files arrive together and rotate together — reissue and
+  restart, with no reload ([ADR-0014](./adr/0014-agent-authentication.md)).
+  `GARAM_ADAPTER_AGENT` is garam's GRN for the agent and
+  `GARAM_ADAPTER_GATEWAY_AGENT` is what the agent platform serves it
+  under; they are two names for one agent and neither can be derived
+  from the other.
+- The `*_FILE` values are paths, not contents. Key material
   travels as a file, never through the environment — a value there is
   inherited by child processes, readable at `/proc/<pid>/environ`, and
   captured in crash dumps ([ADR-0015](./adr/0015-operator-identity.md)).
@@ -274,9 +298,10 @@ option; the deployment shape above is what the rule requires.
 
 Two qualifications:
 
-- The startup enforcement applies to `GARAM_CA_KEY_FILE`. The TLS key
-  has no such check in the source; the same arrival shape covers it, and
-  the local manifest copies all three files the same way.
+- The startup enforcement applies to `GARAM_CA_KEY_FILE` and to
+  `GARAM_ADAPTER_TLS_KEY_FILE`. The machine listener's own TLS key has
+  no such check in the source; the same arrival shape covers it, and the
+  local manifest copies all three files the same way.
 - **There is no client CA bundle, and creating one is forbidden.** The
   machine listener requires a certificate and verifies it per connection
   against the certificate authority of the organization the
@@ -367,7 +392,14 @@ serve Deployments start (`deploy/local/minikube/migrate-job.yaml`).
 
 Every serve command installs a SIGTERM and SIGINT handler
 (`internal/cli/shutdown.go`, wired into `internal/cli/serve.go` and
-`internal/cli/machine.go`). When it fires, the listener closes at once,
+`internal/cli/machine.go`), and so does `adapter`
+(`internal/cli/delivery.go`), which stops claiming and exits 0. What it
+was carrying goes with it: the pairings it held reach no disk, their
+leases lapse, and garam hands those messages out again
+([ADR-0018](./adr/0018-delivery-acknowledgement.md)). That is why it has
+to outlive the agent beside it — a native sidecar rather than an
+ordinary container — and why its own termination grace period is budget
+on top of the agent's drain rather than shared with it. When it fires, the listener closes at once,
 in-flight requests and RPCs finish within a ten-second bound, and past
 it they are abandoned deliberately by the process rather than by the
 kubelet's SIGKILL. The process then exits 0: a requested shutdown is not
@@ -404,6 +436,11 @@ Stated here so they are not guessed:
   `web/next.config.ts`), and no release exists to have chosen a value,
   so a consumer cannot assume a published image carries the local
   default.
+- **Whether the adapter answers a probe.** It answers none: it has no
+  listener, and [ADR-0021](./adr/0021-liveness-and-readiness.md) decides
+  the probes for the three serve processes rather than for a process
+  that only dials out. Whether a sidecar beside an agent owes one, and
+  what it would report, is undecided.
 - **A resource floor.** No minimum below which a process fails is known.
 
 ## Decisions this rests on
@@ -416,6 +453,8 @@ Stated here so they are not guessed:
   provider behind `GARAM_DEV_AUTH`
 - [ADR-0012](./adr/0012-agent-operator-model.md) — operators garam never
   dials, so the machine listener is reached from outside
+- [ADR-0013](./adr/0013-agent-messaging.md) — the adapter garam writes
+  and an orchestrator deploys, beside the agent it serves
 - [ADR-0014](./adr/0014-agent-authentication.md) — mTLS on a listener of
   its own, per-connection trust root
 - [ADR-0015](./adr/0015-operator-identity.md) — key material travels as
@@ -424,6 +463,8 @@ Stated here so they are not guessed:
   authorities are sealed under
 - [ADR-0017](./adr/0017-machine-process.md) — three serve processes from
   one image
+- [ADR-0018](./adr/0018-delivery-acknowledgement.md) — the adapter
+  completes on the turn-end event and holds its pairing in memory
 - [ADR-0019](./adr/0019-machine-openapi-spec.md) — the machine
   listener's own specification
 - [ADR-0020](./adr/0020-published-artifacts.md) — images and this
@@ -434,6 +475,9 @@ Stated here so they are not guessed:
   two
 - [ADR-0029](./adr/0029-readiness-reports-what-a-replica-cannot-serve-without.md)
   — readiness reports what a replica cannot serve without
+- [ADR-0037](./adr/0037-the-machine-listener-presents-a-per-organization-certificate.md)
+  — the listener presents its organization's own certificate, which is
+  what an agent verifies it against
 - [ADR-0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)
   — where the two images are published, under what names, and what
   triggers a push

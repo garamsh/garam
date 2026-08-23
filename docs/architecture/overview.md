@@ -64,6 +64,17 @@ collaborate on a shared plan.
   and no other; a claim is a long poll, and a message addressed to an
   agent that does not exist is stored and answered with success rather
   than refused (ADR-0013).
+- **The adapter's delivery loop**, run beside one agent as `garam
+  adapter` ([adapter.md](./adapter.md)): it claims a message for that
+  agent, posts it into the agent platform's gateway over loopback, holds
+  the pairing of the gateway's identifier to garam's in memory, and
+  completes the claim when a turn reports success and names the message.
+  A turn that fails is an attempt, and every completion that does not
+  arrive is a redelivery — nothing is transactional and nothing recovers
+  across a restart, because the pairing living in memory alone is what
+  makes a restart lapse the lease rather than lose the message
+  (ADR-0018). Forwarding what a turn says to whoever is watching is not
+  part of it (see Out of scope).
 - Whom a caller may post to, decided by policy on that listener
   (ADR-0024). A recipient of another organization is refused before a
   policy is read, because an unattached policy of the recipient's
@@ -154,8 +165,9 @@ collaborate on a shared plan.
   obtains its certificate, and a message is posted, claimed, renewed
   and completed (see In scope); what the listener does not serve is the
   state an operator or an agent reports (ADR-0012) and deprovisioning
-  an agent. The adapter is not built, and certificate renewal is
-  reissue and restart rather than an endpoint (ADR-0014). No console
+  an agent. The adapter carries messages and forwards nothing (see the
+  watching entry below), and certificate renewal is reissue and restart
+  rather than an endpoint (ADR-0014). No console
   page reads the agents the browser API answers.
 - Telling a sender that its message exhausted its attempts. ADR-0018
   makes that garam's obligation because the agent platform notifies
@@ -164,8 +176,9 @@ collaborate on a shared plan.
 - The two ends of watching an agent work. garam's half is built (see In
   scope): the stream a browser reads, the watcher count on the poll, and
   the fan-out between the two listeners. Neither end of it is — no
-  console route opens the stream, and the adapter that would forward turn
-  events is not built (see The rest of the agent surface).
+  console route opens the stream, and the adapter forwards nothing: its
+  delivery loop is built and the §Watching half of
+  [adapter.md](./adapter.md) is not.
 - Chat channels. ADR-0013 makes garam a message API and leaves Slack,
   LINE and the rest to consumers of it; none is built, and whether any
   ships first-party is undecided.
@@ -216,7 +229,8 @@ collaborate on a shared plan.
   copies the volume audit found have been collapsed into this one.
   Shared primitive.
 - `internal/cli/` — cobra commands + wiring (`serve api` | `serve authz`
-  | `serve machine` | `migrate` | `probe` | `issue-certificate`).
+  | `serve machine` | `migrate` | `probe` | `issue-certificate` |
+  `adapter`).
 - `internal/health/` — what liveness and readiness mean, and the two
   probes every serve command mounts (ADR-0021).
 - `internal/agent/` — agent identities and the operator each is
@@ -230,6 +244,11 @@ collaborate on a shared plan.
 - `internal/message/` — the durable queue a message reaches an agent
   through; one reader claims a message at a time, and whose queue a
   caller may act on is decided here.
+- `internal/delivery/` — the adapter's delivery loop: it claims a
+  message for one agent, posts it into that agent's gateway, and
+  completes the claim the turn that succeeded named ([adapter.md](./adapter.md),
+  ADR-0018). It runs beside the agent rather than inside garam, and
+  holds what it is carrying in memory alone.
 - `internal/watch/` — who is watching an agent work, and the turn events
   carried to them while they are (ADR-0022). It stores no event.
 - `internal/api/` — handlers implementing the generated ServerInterface.
@@ -263,7 +282,10 @@ and `internal/api` never import each other. Neither imports
 conversions onto it are declared once in `internal/wire`. `watch` is
 the one domain both compose: a watch is opened on the browser listener
 and fed on the machine one, and neither listener may reach the other
-(ADR-0017, ADR-0022).
+(ADR-0017, ADR-0022). `delivery` is the one package that runs outside
+garam: it is a client of the machine listener rather than part of it, so
+it reads that listener's specification through the models generated from
+it and imports no request surface and no domain.
 
 ## Core abstractions
 
@@ -285,6 +307,7 @@ and fed on the machine one, and neither listener may reach the other
 | `watch.Event` | `internal/watch` | one forwarded turn event, carried and never stored |
 | `watch.Subscription` | `internal/watch` | one open watch: the stream its holder reads |
 | `watch.Service` | `internal/watch` | opens a watch, carries a forwarded event to the watchers of that agent, counts them |
+| `delivery.Service` | `internal/delivery` | the loop beside one agent: claims a message, posts it into the agent's gateway, completes the claim a turn named |
 | `org.Organization` | `internal/org` | top-level tenant |
 | `org.Group` | `internal/org` | user/agent bundle |
 | `org.Project` | `internal/org` | unit of work |

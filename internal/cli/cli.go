@@ -1,7 +1,11 @@
 // Package cli owns the cobra command tree for the garam binary
 // (ADR-0003, ADR-0017): `serve api`, `serve authz`, `serve machine`,
-// `migrate`, `probe`, and `issue-certificate`. Commands are constructed
-// here; cmd/garam only executes the root.
+// `migrate`, `probe`, `issue-certificate`, and `adapter`. Commands are
+// constructed here; cmd/garam only executes the root.
+//
+// `adapter` is the one command that serves nothing and connects
+// outward: the delivery loop docs/architecture/adapter.md specifies,
+// run beside one agent by whoever deploys that agent.
 //
 // `issue-certificate` is the one bootstrap ADR-0015 leaves out of
 // band: it mints an operator's own first certificate, for operator
@@ -47,6 +51,22 @@
 //	                       authorities are sealed under, readable by its
 //	                       owner alone (required for serve machine and
 //	                       issue-certificate)
+//	GARAM_ADAPTER_AGENT    GRN of the agent the adapter carries messages
+//	                       for (required for adapter)
+//	GARAM_ADAPTER_MACHINE_URL  base URL of the machine listener it claims
+//	                       from (required for adapter)
+//	GARAM_ADAPTER_GATEWAY_URL  base URL of the agent platform's gateway
+//	                       (default "http://127.0.0.1:8080")
+//	GARAM_ADAPTER_GATEWAY_AGENT  the identifier that gateway serves its
+//	                       agent under, which is not garam's GRN for it
+//	                       (required for adapter)
+//	GARAM_ADAPTER_TLS_CERT_FILE  the agent's own client certificate, PEM
+//	                       (required for adapter)
+//	GARAM_ADAPTER_TLS_KEY_FILE   its private key, PEM, readable by its
+//	                       owner alone (required for adapter)
+//	GARAM_ADAPTER_ISSUER_FILE    the authority that issued it, PEM, which
+//	                       is also the root garam's listener is verified
+//	                       against (required for adapter)
 package cli
 
 import (
@@ -61,7 +81,8 @@ func NewRootCommand() *cobra.Command {
 		Use:   "garam",
 		Short: "garam is the workflow management core: identity, orgs, authorization",
 	}
-	root.AddCommand(newServeCommand(), newMigrateCommand(), newProbeCommand(), newIssueCertificateCommand())
+	root.AddCommand(newServeCommand(), newMigrateCommand(), newProbeCommand(),
+		newIssueCertificateCommand(), newAdapterCommand())
 	return root
 }
 

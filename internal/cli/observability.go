@@ -35,6 +35,7 @@ const (
 	serviceAPI     = "garam-api"
 	serviceAuthz   = "garam-authz"
 	serviceMachine = "garam-machine"
+	serviceAdapter = "garam-adapter"
 )
 
 // The field a served call names its principal with: a person under

@@ -47,11 +47,14 @@ Facts, each read on 2026-08-24:
   `modules/aws/ecr-pull.tf`), assumed by the kubelet's credential
   provider, so a new repository needs no pull secret and no change
   there.
-- **The development repositories do not exist.** `garamsh/infra` #128
-  (open, 2026-08-23) asks for `garam/garam-server-dev` and
-  `garam/garam-web-dev`, `IMMUTABLE` with scan-on-push, held in an
-  input of their own precisely so the push role above does not come to
-  reach them.
+- **Both development repositories now exist and both are empty.**
+  `aws ecr describe-repositories --region ap-northeast-2` lists
+  `garam/garam-server-dev` and `garam/garam-web-dev`, both `IMMUTABLE`
+  with scan-on-push, created 2026-08-24, and `aws ecr list-images`
+  returns no image for either. `garamsh/infra` #128 (still open, read
+  2026-08-24) is the request they came from, and asks for them held in
+  an input of their own precisely so the push role above does not come
+  to reach them.
 - **Local development is a different thing and is untouched.** `make
   minikube-images` builds `garam:local` and `garam-web:local` into the
   local cluster's own daemon and uses no registry (`Makefile`), which

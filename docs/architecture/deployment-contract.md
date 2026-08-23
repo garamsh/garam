@@ -57,14 +57,14 @@ consumer that would rather pin one.
 
 **Both repositories exist and neither holds an image.** Read on
 2026-08-24: `aws ecr describe-repositories --region ap-northeast-2`
-lists `garam/garam-server` and `garam/garam-web`, both `IMMUTABLE`,
-beside `garam/gagent-agent` and `garam/gagent-workspace`; `aws ecr
-list-images --repository-name` returns an empty list for each of the
-two names above; no workflow pushes to a registry
-(`.github/workflows/ci.yml`); `gh release list --repo garamsh/garam`
-returns nothing. So a manifest may name either reference above and
-still pull nothing today: what is missing is the tag, not the
-repository, and the first release is what supplies it.
+returns nine repositories, `garam/garam-server` and `garam/garam-web`
+among them, both `IMMUTABLE`, beside `gagent`'s five and the bring-up
+pair named below; `aws ecr list-images --repository-name` returns an
+empty list for each of the two names above; no workflow pushes to a
+registry (`.github/workflows/ci.yml`); `gh release list --repo
+garamsh/garam` returns nothing. So a manifest may name either
+reference above and still pull nothing today: what is missing is the
+tag, not the repository, and the first release is what supplies it.
 
 No pull secret is needed for either repository: the cluster pulls with
 a role granted `ecr:BatchGetImage` on every repository in the account,
@@ -108,9 +108,12 @@ Nothing is promised about them: no version means anything there, no
 digest is recorded anywhere, and both repositories are emptied and
 removed once the release path publishes its first image, which stops
 every reference into them resolving. A manifest that pins one is
-deploying a bring-up build knowingly and for that long. Neither exists
-yet — both are absent from the listing above; `garamsh/infra` #128 is
-the request.
+deploying a bring-up build knowingly and for that long. Both exist and
+neither holds an image: read on 2026-08-24, `aws ecr
+describe-repositories --region ap-northeast-2` returns both, `IMMUTABLE`
+with scan-on-push, and `aws ecr list-images --repository-name` returns
+an empty list for each. `garamsh/infra` #128 is the request they came
+from.
 
 ## Ports and probe paths
 

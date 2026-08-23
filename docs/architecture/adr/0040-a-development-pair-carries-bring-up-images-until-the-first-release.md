@@ -1,6 +1,6 @@
 # ADR 0040: A development pair carries bring-up images until the first release
 
-> Status: accepted
+> Status: superseded by [ADR-0041](./0041-a-moving-tag-carries-the-bring-up-images-and-every-consumer-pulls-with-always.md)
 > Date: 2026-08-24
 
 ## Contents

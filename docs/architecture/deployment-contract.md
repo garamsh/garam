@@ -136,12 +136,38 @@ pins one is deploying a bring-up build knowingly and for that long.
 Both exist and neither is empty: read on 2026-08-24, `aws ecr
 describe-repositories --region ap-northeast-2` returns both with
 scan-on-push, and each has held an image since that date. Which tags
-either holds is read from `aws ecr list-images` and not from here: a
-bring-up tag is recorded nowhere, so a sentence naming one would be
-stale at the next push. Both read `IMMUTABLE` on that date;
-`garamsh/infra` owns `image_tag_mutability` and makes them mutable
-against ADR-0041, and `garamsh/infra` #128 is the request they came
-from.
+either holds is read from `aws ecr list-images`, which returns each
+tag's digest beside it, and not from here: no bring-up reference is
+recorded anywhere, so a sentence naming one would be stale at the next
+push. Both read `IMMUTABLE` on that date; `garamsh/infra` owns
+`image_tag_mutability` and makes them mutable against ADR-0041, and
+`garamsh/infra` #128 is the request they came from.
+
+**A manifest may name a bring-up image by digest instead, and a digest
+is evidence of its bytes where a tag is not.** A digest is
+content-addressed: the registry serves the bytes that hash to it or
+nothing at all, so a moved tag, a mutable repository, and an
+administrator's reach all leave `garam/garam-web-dev@sha256:<digest>`
+resolving to what was verified under it. That is the registry's
+property rather than a promise made here — this contract records no
+digest, and nothing in it holds one alive past the removal above. A
+digest also says nothing about where its bytes came from; the commit
+tag is what records that, on the terms above. Which of the three —
+the moving tag, the commit tag, or a digest — a manifest pins is the
+consuming repository's to decide against this contract, which
+publishes what each guarantees and stops there.
+
+**Pinning a digest does not discharge the obligation above: ADR-0041
+§Decision puts it on a consumer that pulls either bring-up image,
+whatever form the reference takes.** What changes is what `Always` is
+worth there. The digest fixes the bytes on its own, so re-fetching
+cannot change which ones run and the policy has nothing there to
+double; what it still decides is what a node does once the reference
+stops resolving — the pull fails and the container does not start,
+where `IfNotPresent` would start the copy the node already holds and
+leave a node without one unable to. The price ADR-0041 §Consequences
+names is paid either way: a pod cannot start while the registry is
+unreachable, even on a node that already holds the bytes.
 
 ## Ports and probe paths
 

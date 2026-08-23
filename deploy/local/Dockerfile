@@ -9,7 +9,7 @@
 # a newer tag — `.github/dependabot.yml` names what it does not cover —
 # and a move by hand re-resolves with
 # `docker buildx imagetools inspect <ref>`.
-FROM golang:1.26.5-alpine3.24@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2 AS build
+FROM golang:1.26.7-alpine3.24@sha256:28d89ee9cc0ff9fec75c82ca201e6bf7fdf9a679d4b7b24dfa04f2bb766bb468 AS build
 
 WORKDIR /src
 

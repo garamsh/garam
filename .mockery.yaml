@@ -5,7 +5,7 @@ log-level: info
 dir: "{{.InterfaceDir}}/mocks"
 # Mocks live in importable packages: Go cannot import a package made
 # only of _test.go files.
-filename: "{{.InterfaceName | firstLower}}.go"
+filename: "{{.InterfaceName | snakecase}}.go"
 pkgname: "mocks"
 structname: "Mock{{.InterfaceName}}"
 packages:

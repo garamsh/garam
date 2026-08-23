@@ -63,8 +63,8 @@ Not a tier in the dependency stack — a surface over what P1 and P2
 already expose, built in parallel rather than gating P3.
 
 - `web/`: Next.js App Router, Tailwind v4, shadcn/ui, three test layers
-  (ADR-0009). Its own toolchain and gate, `make web-ci`, run in CI
-  beside `make ci`.
+  (ADR-0009). Its own toolchain and gate, `make web-ci`, run beside
+  `make ci`.
 - A public landing page at `/`, sign-in at `/login`, and the signed-in
   application under `/console`.
 - A dev-only sign-in provider behind `GARAM_DEV_AUTH` so local work and

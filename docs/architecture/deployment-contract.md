@@ -421,6 +421,15 @@ Stated here so they are not guessed:
   the probes for the three serve processes rather than for a process
   that only dials out. Whether a sidecar beside an agent owes one, and
   what it would report, is undecided.
+- **Resource requests and limits.** No figure is published for any
+  process and none has been measured — nothing under `deploy/` sets a
+  `resources` block, so there is no observed number here to copy. The
+  figures are the deployment's to pick, and to record as picked rather
+  than measured, so a later reader does not take them for garam's.
+  Setting none is not neutral: a pod no container of which requests
+  either resource is `BestEffort` — Kubernetes' own classification,
+  which `kubectl describe pod` reports as `QoS Class` — and the
+  kubelet evicts `BestEffort` first under node pressure.
 - **A resource floor.** No minimum below which a process fails is known.
 
 ## Decisions this rests on

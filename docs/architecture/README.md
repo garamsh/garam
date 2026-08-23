@@ -66,8 +66,6 @@ ADRs:
 - [0037](./adr/0037-the-machine-listener-presents-a-per-organization-certificate.md) — the machine listener presents a per-organization certificate
 - [0038](./adr/0038-the-engine-learns-a-subjects-memberships-and-enforces-its-own-scope.md) — the engine learns a subject's memberships and enforces its own scope
 - [0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md) — a version tag publishes both images to the account's registry
-- [0040](./adr/0040-a-development-pair-carries-bring-up-images-until-the-first-release.md) — a development pair carries bring-up images until the first release (superseded by 0041)
-- [0041](./adr/0041-a-moving-tag-carries-the-bring-up-images-and-every-consumer-pulls-with-always.md) — a moving tag carries the bring-up images, and every consumer pulls with Always
 
 ## Rules for edits
 

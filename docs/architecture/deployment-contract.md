@@ -59,13 +59,13 @@ consumer that would rather pin one.
 **Both repositories exist and neither holds an image.** Read on
 2026-08-24: `aws ecr describe-repositories --region ap-northeast-2`
 returns nine repositories, `garam/garam-server` and `garam/garam-web`
-among them, both `IMMUTABLE`, beside `gagent`'s five and the bring-up
-pair named below; `aws ecr list-images --repository-name` returns an
-empty list for each of the two names above; no workflow pushes to a
-registry (`.github/workflows/ci.yml`); `gh release list --repo
-garamsh/garam` returns nothing. So a manifest may name either
-reference above and still pull nothing today: what is missing is the
-tag, not the repository, and the first release is what supplies it.
+among them, both `IMMUTABLE`; `aws ecr list-images --repository-name`
+returns an empty list for each of the two names above; no workflow
+pushes to a registry (`.github/workflows/ci.yml`); `gh release
+list --repo garamsh/garam` returns nothing. So a manifest may name
+either reference above and still pull nothing today: what is missing
+is the tag, not the repository, and the first release is what
+supplies it.
 
 No pull secret is needed for either repository: the cluster pulls with
 a role granted `ecr:BatchGetImage` on every repository in the account,
@@ -101,73 +101,6 @@ assumed by the kubelet's credential provider (`garamsh/infra`
   running pod. Listens on port 3000 (`ENV ... PORT=3000`). The `/api/*`
   rewrite target is baked into the build (`ARG GARAM_API_URL`), so the
   runtime value must match the one the build used.
-
-**The two references in the table are the whole of what this contract
-publishes.** The bring-up pair named next is not part of it: a manifest
-this document owes accuracy to is written against the table and never
-against those two names. Until a release exists, images reach a
-development cluster by hand through `garam/garam-server-dev` and
-`garam/garam-web-dev`
-([ADR-0041](./adr/0041-a-moving-tag-carries-the-bring-up-images-and-every-consumer-pulls-with-always.md)).
-Each push moves the tag `dev` onto the bytes just built and pushes a
-second tag beside it on the same bytes: the first twelve characters of
-the commit the build came from. That commit tag records what was built
-and promises nothing about fetching the commit it names, and ADR-0041
-makes both repositories mutable, so no tag in either is evidence of the
-bytes behind it.
-
-**A manifest that pins either bring-up reference sets
-`imagePullPolicy: Always` on every container that names it.** The `dev`
-tag moves, and a container spec that leaves the field unset takes
-`IfNotPresent` for any tag but `:latest`: a node already holding
-`garam/garam-web-dev:dev` then keeps running the bytes it has while the
-registry holds newer ones, no manifest changes, and the divergence
-surfaces as one node behaving unlike another. `Always` is what makes a
-moving tag safe to pin, and it is owed on both bring-up references —
-the commit tag included, because a mutable repository can move that one
-too. The two published references above do not carry the obligation:
-their tags are immutable, so the default policy is safe there.
-
-Nothing else is promised about the bring-up pair: no version means
-anything there, no digest is recorded anywhere, and both repositories
-are emptied and removed once the release path publishes its first
-image, which stops every reference into them resolving. A manifest that
-pins one is deploying a bring-up build knowingly and for that long.
-Both exist and neither is empty: read on 2026-08-24, `aws ecr
-describe-repositories --region ap-northeast-2` returns both with
-scan-on-push, and each has held an image since that date. Which tags
-either holds is read from `aws ecr list-images`, which returns each
-tag's digest beside it, and not from here: no bring-up reference is
-recorded anywhere, so a sentence naming one would be stale at the next
-push. Both read `IMMUTABLE` on that date; `garamsh/infra` owns
-`image_tag_mutability` and makes them mutable against ADR-0041, and
-`garamsh/infra` #128 is the request they came from.
-
-**A manifest may name a bring-up image by digest instead, and a digest
-is evidence of its bytes where a tag is not.** A digest is
-content-addressed: the registry serves the bytes that hash to it or
-nothing at all, so a moved tag, a mutable repository, and an
-administrator's reach all leave `garam/garam-web-dev@sha256:<digest>`
-resolving to what was verified under it. That is the registry's
-property rather than a promise made here — this contract records no
-digest, and nothing in it holds one alive past the removal above. A
-digest also says nothing about where its bytes came from; the commit
-tag is what records that, on the terms above. Which of the three —
-the moving tag, the commit tag, or a digest — a manifest pins is the
-consuming repository's to decide against this contract, which
-publishes what each guarantees and stops there.
-
-**Pinning a digest does not discharge the obligation above: ADR-0041
-§Decision puts it on a consumer that pulls either bring-up image,
-whatever form the reference takes.** What changes is what `Always` is
-worth there. The digest fixes the bytes on its own, so re-fetching
-cannot change which ones run and the policy has nothing there to
-double; what it still decides is what a node does once the reference
-stops resolving — the pull fails and the container does not start,
-where `IfNotPresent` would start the copy the node already holds and
-leave a node without one unable to. The price ADR-0041 §Consequences
-names is paid either way: a pod cannot start while the registry is
-unreachable, even on a node that already holds the bytes.
 
 ## Ports and probe paths
 
@@ -528,7 +461,3 @@ Stated here so they are not guessed:
 - [ADR-0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)
   — where the two images are published, under what names, and what
   triggers a push
-- [ADR-0041](./adr/0041-a-moving-tag-carries-the-bring-up-images-and-every-consumer-pulls-with-always.md)
-  — the mutable bring-up pair that carries images until the first
-  release, the moving tag it carries them under, and the pull policy a
-  consumer of one owes

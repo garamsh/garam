@@ -108,12 +108,14 @@ Nothing is promised about them: no version means anything there, no
 digest is recorded anywhere, and both repositories are emptied and
 removed once the release path publishes its first image, which stops
 every reference into them resolving. A manifest that pins one is
-deploying a bring-up build knowingly and for that long. Both exist and
-neither holds an image: read on 2026-08-24, `aws ecr
-describe-repositories --region ap-northeast-2` returns both, `IMMUTABLE`
-with scan-on-push, and `aws ecr list-images --repository-name` returns
-an empty list for each. `garamsh/infra` #128 is the request they came
-from.
+deploying a bring-up build knowingly and for that long. Both exist:
+read on 2026-08-24, `aws ecr describe-repositories --region
+ap-northeast-2` returns both, `IMMUTABLE` with scan-on-push.
+`garam/garam-server-dev` has held an image since that date and is no
+longer empty. Which tags either holds is read from `aws ecr
+list-images` and not from here: a bring-up tag is recorded nowhere, so
+a sentence naming one would be stale at the next push.
+`garamsh/infra` #128 is the request they came from.
 
 ## Ports and probe paths
 

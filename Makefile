@@ -48,29 +48,57 @@ WEB_E2E_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_AD
 .PHONY: minikube-up minikube-down minikube-start minikube-images minikube-db
 .PHONY: minikube-secret minikube-migrate minikube-apps minikube-rebuild minikube-forward minikube-context
 
+# The module's packages, listed once so the targets below report the set
+# they covered rather than name a ./... pattern whose match nobody sees.
+# An empty list is never passed on: given no argument at all these tools
+# read the current directory, so each target fails on one instead.
+GO_PKGS = $(shell go list ./...)
+
+# What buf lint will read, counted on lint's line. buf itself fails on a
+# module holding no .proto file; the guard below is for an ls-files that
+# comes back empty, which would otherwise print a zero nobody checked.
+PROTO_FILES = $(shell $(BUF) ls-files)
+
 lint:
-	go vet ./...
-	$(BUF) lint
+	@echo 'lint: $(words $(GO_PKGS)) packages (go vet), $(words $(PROTO_FILES)) proto files (buf lint)'
+	@test -n '$(GO_PKGS)' && test -n '$(PROTO_FILES)' || { echo 'lint: nothing to lint — go list or the buf module matched no input'; exit 1; }
+	@go vet $(GO_PKGS)
+	@$(BUF) lint
 
 # gofmt and goimports list offending files but exit 0, so the gate is a
-# non-empty-output check.
+# non-empty-output check. Walking `.` is just as silent when it reaches
+# no file, so the files are listed here and counted; an empty list fails
+# rather than reaching a tool that, given no file, formats stdin and
+# reports nothing.
+FORMAT_FILES = $(shell find . -type f -name '*.go' -not -path '*/.*')
+
 format:
-	@out="$$(gofmt -l .)"; test -z "$$out" || { echo "gofmt: $$out"; exit 1; }
-	@out="$$($(GOIMPORTS) -l .)"; test -z "$$out" || { echo "goimports: $$out"; exit 1; }
+	@echo 'format: $(words $(FORMAT_FILES)) Go files (gofmt, goimports)'
+	@test -n '$(FORMAT_FILES)' || { echo 'format: nothing to check — the sweep matched no Go file'; exit 1; }
+	@out="$$(gofmt -l $(FORMAT_FILES))"; test -z "$$out" || { echo "gofmt: $$out"; exit 1; }
+	@out="$$($(GOIMPORTS) -l $(FORMAT_FILES))"; test -z "$$out" || { echo "goimports: $$out"; exit 1; }
 
 # go has no negative package pattern, so the sweep is filtered here.
 # tests/e2e needs the Postgres db-up starts and fails without it, so test
 # covers every other package and names the one it left out. Should the
 # filter ever stop matching, the e2e suite is swept back in and fails for
 # want of a database rather than skipping quietly.
-TEST_PKGS = $(shell go list ./... | grep -v '/tests/e2e$$')
+TEST_PKGS = $(filter-out %/tests/e2e,$(GO_PKGS))
 
 test:
 	@echo 'test: $(words $(TEST_PKGS)) packages; tests/e2e not covered here — it needs Postgres (make db-up e2e)'
 	@go test $(TEST_PKGS)
 
+# `go build ./...` exits 0 having done nothing should that pattern ever
+# resolve to no package, so build names what it compiles too. It skips a
+# test-only package swept in by ./... and fails on one named directly,
+# so the list holds those with a non-test file; go test covers the rest.
+BUILD_PKGS = $(shell go list -f '{{if .GoFiles}}{{.ImportPath}}{{end}}' ./...)
+
 build:
-	go build ./...
+	@echo 'build: $(words $(BUILD_PKGS)) packages'
+	@test -n '$(BUILD_PKGS)' || { echo 'build: nothing to build — no package has a non-test Go file'; exit 1; }
+	@go build $(BUILD_PKGS)
 
 # gen regenerates everything derived from a source of truth: the
 # OpenAPI server, sqlc queries, protobuf code, and mocks.

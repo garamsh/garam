@@ -25,23 +25,28 @@ consequence [ADR-0020](./adr/0020-published-artifacts.md) accepted. It
 records what is; changing any port, path, or configuration name in it is
 a decision, not an edit here.
 
-It consolidates the contract handover the consuming repository recorded
-as its issue #3 (`garamsh/gitops`): the three listeners, the machine
-listener's TLS passthrough, `serve authz` plaintext and cluster-internal,
-the `/api/*` same-origin rewrite, `migrate` as a PreSync-suited job, and
-the client-CA prohibition all originate there and are restated here
-against the source they are checkable in. That issue remains the
-consumer's record of its own decisions; this is the artifact it cites
-rather than copies.
+It consolidates the contract handover recorded in the consuming
+repository's issue #3 (`garamsh/gitops`): the three listeners, the
+machine listener's TLS passthrough, `serve authz` plaintext and
+cluster-internal, the `/api/*` same-origin rewrite, `migrate` as a
+PreSync-suited job, and the client-CA prohibition all originate there
+and are answered here against the source they are checkable in.
+**Cite this document rather than copying what it says.** A copy is a
+second contract that no change here reaches, and only this one is kept
+current.
 
-Every claim below names the path it can be checked against, per
-`docs/convention/documentation.md` §Keep it current. Where the source
-answers a deployment question with nothing checkable, §Not established
-says so rather than guessing.
+Every claim below about this repository names the path it can be
+checked against. A claim about the deployment — its cluster, its
+registry, or the account either sits in — is not garam's to check, so
+it is written as an obligation a reader can act on and a reviewer can
+look for, never as a description that would go false with no pull
+request here touching it (`docs/convention/documentation.md` §Keep it
+current). Where the source answers a deployment question with nothing
+checkable, §Not established says so rather than guessing.
 
 ## Images
 
-Two images, because there are two runtimes ([ADR-0020](./adr/0020-published-artifacts.md)). Their tags are immutable, and [ADR-0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md) fixes where they are published and under what names:
+Two images, because there are two runtimes ([ADR-0020](./adr/0020-published-artifacts.md)). [ADR-0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md) fixes where they are published and under what names:
 
 | Image | Published as |
 |---|---|
@@ -50,38 +55,51 @@ Two images, because there are two runtimes ([ADR-0020](./adr/0020-published-arti
 
 `<version>` is a released git tag with its `v` dropped — `v0.3.0` in git
 is `0.3.0` here — and one commit publishes both images under the same
-one, so a manifest pins one version across the pair. What a manifest
-pins is that tag rather than a digest: the tags are immutable, so the
-tag answers what is deployed on its own. Each image's digest is
-recorded beside its tag in the GitHub release for that version, for a
-consumer that would rather pin one.
+one, so a manifest pins one version across the pair.
 
-**Both repositories exist and neither holds an image.** Read on
-2026-08-24: `aws ecr describe-repositories --region ap-northeast-2`
-returns nine repositories, `garam/garam-server` and `garam/garam-web`
-among them, both `IMMUTABLE`, beside `gagent`'s five and the bring-up
-pair named below; `aws ecr list-images --repository-name` returns an
-empty list for each of the two names above; no workflow pushes to a
-registry (`.github/workflows/ci.yml`); `gh release list --repo
-garamsh/garam` returns nothing. So a manifest may name either
-reference above and still pull nothing today: what is missing is the
-tag, not the repository, and the first release is what supplies it.
+**garam requires both repositories `IMMUTABLE`, with scan-on-push, of
+whoever owns the registry**
+([ADR-0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)).
+That requirement is what lets a manifest pin the tag rather than a
+digest: under it the tag answers what is deployed on its own and no
+reference has to be edited to stay true. A tag pushed while its
+repository was mutable stays unproven whatever the setting reads
+afterwards, so a consumer that wants the setting read reads it with
+`aws ecr describe-repositories` and not from here. Each image's digest
+is recorded beside its tag in the GitHub release for that version, for
+a consumer that would rather pin one regardless.
 
-No pull secret is needed for either repository: the cluster pulls with
-a role granted `ecr:BatchGetImage` on every repository in the account,
-assumed by the kubelet's credential provider (`garamsh/infra`
-`modules/aws/ecr-pull.tf`, `modules/cluster/images.tf`, read
-2026-08-24).
+**Nothing is published, so a manifest may name either reference above
+and still pull nothing.** No release exists (`gh release list --repo
+garamsh/garam` returns nothing) and nothing here pushes to a registry
+(`.github/workflows/ci.yml`), so no `<version>` has ever been minted:
+what is missing is the tag rather than the repository, and the first
+release is what supplies it. Whether either repository exists yet is
+read from `aws ecr describe-repositories --region ap-northeast-2` and
+what it holds from `aws ecr list-images --repository-name`, never from
+here — a reading recorded here would be stale at the next push.
+
+**A pull credential is the deployment's to provide, and this contract
+publishes none.** Both references name a private registry in the
+account, so pulling one takes whatever credential that registry
+accepts — a node role a kubelet's credential provider assumes, a pull
+secret on the pulling service account, or anything else that
+authenticates there. garam mints none of them, hands none over, and
+owes a manifest nothing to mount for one: a cluster already able to
+pull the account's registry needs no pull secret added for garam, and
+a cluster that cannot pull it is not made able by anything published
+here. The same holds for the bring-up pair below.
 
 - **Go image** (`deploy/local/Dockerfile`) — one binary whose entry
   point takes a subcommand: `serve api`, `serve authz`, `serve machine`,
   `migrate`, `probe`, `adapter` (`ENTRYPOINT ["garam"]`). The last of
   those is the only one a cluster this repository does not describe
   runs: `adapter` is the delivery loop that goes beside one agent, in
-  that agent's pod ([adapter.md](./adapter.md)), so this image is pulled
-  there as well as here. The runtime stage is
-  `scratch`: the image carries no shell and no package manager, so the
-  local stack's healthchecks run the binary's own `probe` subcommand
+  that agent's pod ([adapter.md](./adapter.md)), **so whoever deploys
+  an agent pulls this same image into that agent's cluster and owes it
+  the credential above.** The runtime stage is `scratch`: the image
+  carries no shell and no package manager, so the local stack's
+  healthchecks run the binary's own `probe` subcommand
   (`deploy/local/docker-compose.yml`) — a kubelet's `httpGet` needs
   nothing in the image either way. The trust store the api's Google
   OIDC discovery needs is copied from the build stage
@@ -113,8 +131,8 @@ Each push moves the tag `dev` onto the bytes just built and pushes a
 second tag beside it on the same bytes: the first twelve characters of
 the commit the build came from. That commit tag records what was built
 and promises nothing about fetching the commit it names, and ADR-0041
-makes both repositories mutable, so no tag in either is evidence of the
-bytes behind it.
+requires both repositories `MUTABLE` with scan-on-push kept, so **no
+tag in either may be taken as evidence of the bytes behind it.**
 
 **A manifest that pins either bring-up reference sets
 `imagePullPolicy: Always` on every container that names it.** The `dev`
@@ -126,22 +144,18 @@ surfaces as one node behaving unlike another. `Always` is what makes a
 moving tag safe to pin, and it is owed on both bring-up references —
 the commit tag included, because a mutable repository can move that one
 too. The two published references above do not carry the obligation:
-their tags are immutable, so the default policy is safe there.
+their repositories are required immutable above, so nothing moves under
+a released tag and the default policy is safe there.
 
 Nothing else is promised about the bring-up pair: no version means
-anything there, no digest is recorded anywhere, and both repositories
-are emptied and removed once the release path publishes its first
-image, which stops every reference into them resolving. A manifest that
-pins one is deploying a bring-up build knowingly and for that long.
-Both exist and neither is empty: read on 2026-08-24, `aws ecr
-describe-repositories --region ap-northeast-2` returns both with
-scan-on-push, and each has held an image since that date. Which tags
-either holds is read from `aws ecr list-images`, which returns each
-tag's digest beside it, and not from here: no bring-up reference is
-recorded anywhere, so a sentence naming one would be stale at the next
-push. Both read `IMMUTABLE` on that date; `garamsh/infra` owns
-`image_tag_mutability` and makes them mutable against ADR-0041, and
-`garamsh/infra` #128 is the request they came from.
+anything there, no digest is recorded anywhere, and ADR-0041 requires
+both repositories emptied and removed once the release path publishes
+its first image, which stops every reference into them resolving. A
+manifest that pins one is deploying a bring-up build knowingly and for
+that long. **Which tags either repository holds is read from `aws ecr
+list-images`, which returns each tag's digest beside it, and never from
+here**: no bring-up reference is recorded anywhere, so a sentence
+naming one would be stale at the next push.
 
 **A manifest may name a bring-up image by digest instead, and a digest
 is evidence of its bytes where a tag is not.** A digest is

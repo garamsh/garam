@@ -94,6 +94,23 @@ everything after the cookie is the real backend. `make web-e2e` asks
 compose which port Postgres was published on and hands the suite that
 URL, so `GARAM_DB_PORT` moves the suite with the server.
 
+### The image a cluster runs
+
+`make web-image-e2e` builds the web image and checks it rather than the
+app: that the standalone server starts, that `/healthz` and `/readyz`
+answer, and that `/api/*` reaches the URL baked into the build. The
+Playwright suite above drives a dev server, so nothing else here
+exercises the image.
+
+```sh
+make web-image-e2e                        # builds the image, then checks it
+GARAM_WEB_IMAGE=<ref> make web-image-e2e  # checks that image instead
+```
+
+The override is how an image pulled from a registry by digest is
+verified. Like `make e2e` and `make web-e2e` it needs Docker, so it
+stays outside `make web-ci`.
+
 ## Development model
 
 This repository is developed by AI agents under the roles and rules in

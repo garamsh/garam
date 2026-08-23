@@ -75,6 +75,9 @@ func adapt(cmd *cobra.Command) error {
 // different names for one agent — garam's GRN and what the gateway
 // itself serves — and neither can be guessed from the other.
 func adapterLoop(agentRaw, machineURL, gatewayURL, gatewayAgent, certFile, keyFile, issuerFile string) (delivery.Service, error) {
+	if agentRaw == "" {
+		return nil, errorx.New(errorx.KindInvalidArgument, "GARAM_ADAPTER_AGENT is required")
+	}
 	agent, err := grn.Parse(agentRaw)
 	if err != nil {
 		return nil, errorx.Wrap(err, "GARAM_ADAPTER_AGENT", errorx.KindInvalidArgument)

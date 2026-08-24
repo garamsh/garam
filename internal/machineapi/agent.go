@@ -30,11 +30,13 @@ func (s *Server) CreateAgent(w http.ResponseWriter, r *http.Request) {
 }
 
 // IssueAgentCertificate answers with the certificate of an agent
-// assigned to the calling operator at the current epoch, and refuses
-// every other one (ADR-0015). The private key it returns is generated
-// per certificate and stored nowhere.
+// assigned to the calling operator at the current epoch (ADR-0015), or
+// with a renewal for the agent calling as itself (ADR-0040), and
+// refuses every other caller. The private key it returns is generated
+// per certificate and stored nowhere; the garam server root beside it
+// is what the holder verifies garam by.
 func (s *Server) IssueAgentCertificate(w http.ResponseWriter, r *http.Request, agentGRN machinegen.AgentGrn) {
-	operator, ok := caller(w, r)
+	identity, ok := caller(w, r)
 	if !ok {
 		return
 	}
@@ -43,7 +45,7 @@ func (s *Server) IssueAgentCertificate(w http.ResponseWriter, r *http.Request, a
 		writeError(w, errorx.Wrap(err, "agent", errorx.KindInvalidArgument))
 		return
 	}
-	certificate, err := s.agents.IssueCertificate(r.Context(), operator, subject)
+	certificate, err := s.agents.IssueCertificate(r.Context(), identity, subject)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -53,6 +55,7 @@ func (s *Server) IssueAgentCertificate(w http.ResponseWriter, r *http.Request, a
 		CertificatePem: string(certificate.CertificatePEM),
 		PrivateKeyPem:  string(certificate.PrivateKeyPEM),
 		IssuerPem:      string(certificate.IssuerPEM),
+		ServerRootPem:  string(certificate.ServerRootPEM),
 		NotAfter:       certificate.NotAfter,
 	})
 }

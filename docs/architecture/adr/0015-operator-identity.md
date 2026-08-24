@@ -8,6 +8,7 @@
 - Decision
 - Consequences
 - Rejected alternatives
+- Errata
 
 ## Context
 
@@ -112,3 +113,7 @@ Facts established outside this repository, checked rather than assumed:
 - **Passing key material through the environment.** Convenient, and
   each of the three leak paths above is a plain fact about the process
   model rather than a hypothetical.
+
+## Errata
+
+- 2026-08-24 — §Decision's "Rotation is a restart on both sides" is the reason it gives for jitter and a shared expiry, and [ADR-0040](./0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md) has since removed the restart: both ends read their certificate per handshake. The decision stands on what remains true — certificates issued together would otherwise expire together, and a fleet renewing at one moment is the load jitter exists to spread.

@@ -42,8 +42,8 @@ Each `internal/<domain>/` package contains:
 - `mocks/` — mockery v3 output, for interfaces tests actually consume (testing.md §Mocking strategy).
 
 A domain that persists nothing has none of the storage files above:
-`internal/machine` is its types, its service, and the seam it reads a
-trust root through.
+`internal/machine` is its types, its service, and the two seams it
+reads through — a trust root for the caller, a certificate for itself.
 
 `queries.sql` and `db/` are a source and its output, not two copies. Every
 generated file says so in its first line, and `make check-gen` fails on any
@@ -86,10 +86,17 @@ The one rule key material is read under (ADR-0015): a file only the
 reading process's owner can reach — owner-only permission bits and an
 owner equal to the process's UID, both read from the open descriptor so
 no window sits between the check and the read. The rule is neither
-certificates nor listeners, so it lives here once for its two readers:
-`internal/ca` reads the key-encryption key through it, and the
-composition root reads the machine listener's own TLS key through it.
-Depends on `errorx` only.
+certificates nor listeners, so it lives here once for every process that
+opens one: `internal/ca` reads the key-encryption key through it, and
+the composition root reads the machine listener's pair and the adapter's
+through it.
+
+`Pair` is a certificate and its key held as the two paths they arrive
+at rather than as what they held at startup, so every read answers with
+the files as they are now and a replaced pair is presented on the next
+handshake without a restart (ADR-0040). The key goes through the rule
+above on every read; the certificate beside it is public. Depends on
+`errorx` only.
 
 ## `internal/listfilter`
 
@@ -215,9 +222,9 @@ Autonomous identity, provisioned outside garam (ADR-0012).
 | `Agent` | actor owned by an org; carries the state the operator reports about its pod and the state it reports about itself, separately |
 | `Definition` | what an organization says an agent should be: which operator runs it and with what values (ADR-0026). Shares no field with `Agent`, so a reader cannot take one for the other, and writes no `agents` row until the operator it names claims it (ADR-0033) |
 | `Assignment` | which operator runs an agent, and the epoch that binding holds |
-| `Certificate` | what an agent authenticates with, as this domain hands it back |
-| `Service` | creates an agent for the calling operator, issues the certificate of one assigned to it, and answers an operator with the definitions naming it so it can claim one (ADR-0033) |
-| `Issuer` | signs a certificate for a subject GRN |
+| `Certificate` | what an agent authenticates with and the garam server root it verifies garam by, as this domain hands them back |
+| `Service` | creates an agent for the calling operator, issues the certificate of one assigned to it or renews an agent's own, and answers an operator with the definitions naming it so it can claim one (ADR-0033) |
+| `Issuer` | signs a certificate for a subject GRN and hands back the garam server root beside it |
 
 garam mints an agent's GRN and never changes it, so which operator runs
 the agent is a relation a reassignment moves rather than part of the
@@ -240,8 +247,11 @@ authorization on that surface, which ADR-0015 states is not an
 optimisation and may not be skipped, so no method reaches an issuer
 without it. Comparing the operator on the row is the epoch fence as
 well, and it is the tenancy check too, since a GRN carries its
-organization. A caller that is not an operator is refused: an agent
-authenticates on the same listener and holds nothing.
+organization. A caller that is not an operator is refused, with one exception: an
+agent asking for its own certificate is renewing over the connection
+that certificate authenticated, which grants it nothing it does not
+already hold (ADR-0040). An expired certificate has no such connection,
+so the operator route is what recovers one.
 
 `Store` answers `Service` and, org by org, the read `internal/api`
 serves people: an organization's agents and the assignments holding
@@ -312,7 +322,8 @@ Who is calling on the listener a machine identity authenticates on
 |------|----------------|
 | `Identity` | the GRN a verified client certificate names |
 | `Service` | recovers that GRN and verifies the certificate against the organization's authority |
-| `TrustRoot` | supplies the authority a certificate has to chain to |
+| `TrustRoot` | supplies the authority a presented certificate has to chain to |
+| `ServerCertificate` | supplies the certificate the listener presents, asked per handshake so a replaced one needs no restart (ADR-0040) |
 
 An agent and an operator are the same kind of caller here and the
 listener does not branch on which. The identity is the GRN in the
@@ -335,12 +346,18 @@ refused by the trust root rather than by a check.
 The package holds no store and reaches no database: `TrustRoot` is the
 seam the composition root satisfies from `internal/ca`, which keeps the
 two domains cooperating through `grn.GRN` alone. Verification needs the
-authority's certificate and never its key.
+authority's certificate and never its key. `ServerCertificate` is the
+other seam, satisfied from `internal/keyfile`, and what it answers with
+is a different trust root: garam verifies an identity by its
+organization's authority, and an identity verifies garam by the one
+root every organization shares (ADR-0040).
 
 `garam serve machine` is where the listener runs — its own process and
-its own port (ADR-0017), terminating TLS itself with a certificate it
-reads from a file, the private key under the owner-only rule
-`internal/keyfile` holds, because a forwarded client-certificate header is
+its own port (ADR-0017), terminating TLS itself with the pair it holds
+as two paths and re-reads per handshake, the private key under the
+owner-only rule `internal/keyfile` holds, and the root that signed that
+pair beside them for every identity it issues a certificate to. It
+terminates TLS itself because a forwarded client-certificate header is
 trustworthy only where every deployment strips it at the edge
 (ADR-0014). What it serves is `internal/machineapi`. It is not part of
 the local Docker stack: its key material is per host and the container

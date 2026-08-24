@@ -80,13 +80,19 @@ machine process's probes — forward its Service the same way.
 
 ## Key material
 
-`serve machine` needs a server certificate and a key-encryption key, and
-there is no cert-manager and no key store here to get them from.
-`machine-key-material.sh` generates both on the first bring-up and puts
-them in a Secret. Both are disposable:
+`serve machine` needs a certificate and its key, the garam server root
+that signed them, and a key-encryption key, and there is no cert-manager
+and no key store here to get any of them from.
+`machine-key-material.sh` generates them and puts them in a Secret. All
+of it is disposable:
 
-- The certificate is self-signed, valid for a month, and trusted by
-  nothing.
+- The root is self-signed, valid for a year, and trusted by nothing off
+  this machine. A real deployment holds this authority's key where garam
+  cannot reach it
+  ([ADR-0040](../../../docs/architecture/adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md));
+  here it is thrown away with the temporary directory, so nothing
+  renews.
+- The certificate that root signs is valid for a month.
 - The key-encryption key seals certificate authorities that exist only
   in this cluster's database.
 
@@ -98,9 +104,13 @@ not carry anything from this directory into a deployment that holds one.
 
 The script generates into a private temporary directory and deletes it
 on the way out, so no generated value is ever written into this
-repository. It keeps an existing Secret rather than replacing it: a new
-key-encryption key would leave every authority already in the database
-unopenable.
+repository. It never replaces a key-encryption key that already exists:
+a new one would leave every authority already in the database
+unopenable. A Secret that already carries a server root is left alone
+whole; one predating the root gets fresh TLS material beside the key
+that was already there, so a cluster brought up before
+[ADR-0040](../../../docs/architecture/adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)
+keeps its authorities and starts.
 
 Key material reaches the process as a file readable only by its owner,
 with the process running as that owner

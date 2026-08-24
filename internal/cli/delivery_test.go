@@ -16,23 +16,22 @@ import (
 // adapterArgs is one set of what the environment names the adapter.
 type adapterArgs struct {
 	agent, machineURL, gatewayURL, gatewayAgent string
-	certFile, keyFile, issuerFile               string
+	certFile, keyFile, serverRootFile           string
 }
 
 func (a adapterArgs) build() error {
-	_, err := adapterLoop(a.agent, a.machineURL, a.gatewayURL, a.gatewayAgent, a.certFile, a.keyFile, a.issuerFile)
+	_, err := adapterLoop(a.agent, a.machineURL, a.gatewayURL, a.gatewayAgent, a.certFile, a.keyFile, a.serverRootFile)
 	return err
 }
 
-// adapterKeyMaterial writes what the adapter presents and what it
-// verifies garam with. The issuer is the certificate itself: what it
-// carries is not what the assembly checks, and one self-signed pair
-// answers both.
-func adapterKeyMaterial(t *testing.T) (certFile, keyFile, issuerFile string) {
+// adapterKeyMaterial writes what the adapter presents and the garam
+// server root it verifies garam by (ADR-0040), which is a certificate
+// of its own rather than the authority that signed the agent.
+func adapterKeyMaterial(t *testing.T) (certFile, keyFile, serverRootFile string) {
 	t.Helper()
 	dir := t.TempDir()
 	certFile, keyFile = writeTLSKeyPair(t, dir)
-	return certFile, keyFile, certFile
+	return certFile, keyFile, writeServerRoot(t, dir)
 }
 
 // TestAdapterLoop_RefusesWhatItCannotRunOn covers what the process will
@@ -40,15 +39,15 @@ func adapterKeyMaterial(t *testing.T) (certFile, keyFile, issuerFile string) {
 // changes one value of it, so what refuses is that value rather than
 // anything beside it.
 func TestAdapterLoop_RefusesWhatItCannotRunOn(t *testing.T) {
-	certFile, keyFile, issuerFile := adapterKeyMaterial(t)
+	certFile, keyFile, serverRootFile := adapterKeyMaterial(t)
 	working := adapterArgs{
-		agent:        machineGRN("acme", "bot-1").String(),
-		machineURL:   "https://garam.example:8443",
-		gatewayURL:   defaultGatewayURL,
-		gatewayAgent: "default",
-		certFile:     certFile,
-		keyFile:      keyFile,
-		issuerFile:   issuerFile,
+		agent:          machineGRN("acme", "bot-1").String(),
+		machineURL:     "https://garam.example:8443",
+		gatewayURL:     defaultGatewayURL,
+		gatewayAgent:   "default",
+		certFile:       certFile,
+		keyFile:        keyFile,
+		serverRootFile: serverRootFile,
 	}
 	require.NoError(t, working.build(), "everything the loop needs")
 
@@ -61,8 +60,8 @@ func TestAdapterLoop_RefusesWhatItCannotRunOn(t *testing.T) {
 		"no gateway agent":                     func(a adapterArgs) adapterArgs { a.gatewayAgent = ""; return a },
 		"no certificate":                       func(a adapterArgs) adapterArgs { a.certFile = ""; return a },
 		"no private key":                       func(a adapterArgs) adapterArgs { a.keyFile = ""; return a },
-		"no issuer":                            func(a adapterArgs) adapterArgs { a.issuerFile = ""; return a },
-		"an issuer that is not one":            func(a adapterArgs) adapterArgs { a.issuerFile = a.keyFile; return a },
+		"no server root":                       func(a adapterArgs) adapterArgs { a.serverRootFile = ""; return a },
+		"a server root that is not one":        func(a adapterArgs) adapterArgs { a.serverRootFile = a.keyFile; return a },
 	}
 	for name, change := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -78,13 +77,13 @@ func TestAdapterLoop_RefusesWhatItCannotRunOn(t *testing.T) {
 // loads and the same pair with a group-readable key does not, so what
 // refuses is the mode rather than anything around it.
 func TestAdapterClient_RefusesAGroupReadableKey(t *testing.T) {
-	certFile, keyFile, issuerFile := adapterKeyMaterial(t)
+	certFile, keyFile, serverRootFile := adapterKeyMaterial(t)
 
-	_, err := adapterClient(certFile, keyFile, issuerFile)
+	_, err := adapterClient(certFile, keyFile, serverRootFile)
 	require.NoError(t, err, "owner-only key")
 
 	require.NoError(t, os.Chmod(keyFile, 0o640))
-	_, err = adapterClient(certFile, keyFile, issuerFile)
+	_, err = adapterClient(certFile, keyFile, serverRootFile)
 	require.Error(t, err)
 	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
 }
@@ -93,13 +92,13 @@ func TestAdapterClient_RefusesAGroupReadableKey(t *testing.T) {
 // that was configured and never arrived, which a deployment gets wrong
 // before it gets anything else wrong.
 func TestAdapterClient_RefusesKeyMaterialThatIsNotThere(t *testing.T) {
-	certFile, keyFile, issuerFile := adapterKeyMaterial(t)
+	certFile, keyFile, serverRootFile := adapterKeyMaterial(t)
 	absent := filepath.Join(t.TempDir(), "absent.pem")
 
 	for name, args := range map[string][3]string{
-		"a certificate that is not there": {absent, keyFile, issuerFile},
-		"a key that is not there":         {certFile, absent, issuerFile},
-		"an issuer that is not there":     {certFile, keyFile, absent},
+		"a certificate that is not there": {absent, keyFile, serverRootFile},
+		"a key that is not there":         {certFile, absent, serverRootFile},
+		"a server root that is not there": {certFile, keyFile, absent},
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := adapterClient(args[0], args[1], args[2])

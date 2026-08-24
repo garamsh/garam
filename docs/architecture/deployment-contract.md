@@ -190,7 +190,10 @@ start in the composition roots (`internal/cli/serve.go`,
 `internal/cli/issue_certificate.go`) and, for the web
 app, validated at boot (`web/src/env.ts`). Nothing watches them, so a
 changed value takes effect on restart — a deployment that wants a
-configuration change applied rolls the pods.
+configuration change applied rolls the pods. The `*_TLS_*` paths below
+are the one place where that is not the whole story: the path is read
+once and the file it names is re-read per handshake, which §How key
+material must arrive states and puts obligations on.
 
 | Name | Read by | Default | Secret |
 |---|---|---|---|
@@ -207,7 +210,9 @@ configuration change applied rolls the pods.
 | `GARAM_MACHINE_HEALTH_ADDR` | machine | `:8444` | no |
 | `GARAM_MACHINE_TLS_CERT_FILE` | machine | none — required | no — it names a file holding a certificate, which is public |
 | `GARAM_MACHINE_TLS_KEY_FILE` | machine | none — required | **yes**, and it names a file: the key itself must never be an environment variable's value ([ADR-0015](./adr/0015-operator-identity.md)), and the file is subject to the arrival rule below |
+| `GARAM_MACHINE_SERVER_ROOT_FILE` | machine | none — required | no — it names a file holding the garam server root, which is a certificate and is public |
 | `GARAM_CA_KEY_FILE` | machine, issue-certificate | none — required | **yes**, and it names a file, subject to the arrival rule below — and the key it names cannot be regenerated (§The key-encryption key cannot be regenerated) |
+| `GARAM_CERTIFICATE_LIFETIME` | machine, issue-certificate | `24h` (`internal/ca/service.go`) | no |
 | `GARAM_MIGRATIONS_DIR` | migrate | `migrations` (`/app/migrations` in the image) | no |
 | `GOOGLE_CLIENT_ID` | api | none | no |
 | `GOOGLE_CLIENT_SECRET` | api | none | **yes** |
@@ -218,7 +223,7 @@ configuration change applied rolls the pods.
 | `GARAM_ADAPTER_GATEWAY_AGENT` | adapter | none — required | no |
 | `GARAM_ADAPTER_TLS_CERT_FILE` | adapter | none — required | no — it names a file holding a certificate, which is public |
 | `GARAM_ADAPTER_TLS_KEY_FILE` | adapter | none — required | **yes**, and it names a file, subject to the arrival rule below |
-| `GARAM_ADAPTER_ISSUER_FILE` | adapter | none — required | no — it names a file holding the issuing authority's certificate |
+| `GARAM_ADAPTER_SERVER_ROOT_FILE` | adapter | none — required | no — it names a file holding the garam server root, which is a certificate and is public |
 | `GARAM_API_URL` | web | none in production (`web/src/env.ts`); baked into the image at build time (`deploy/local/Dockerfile.web`), so the runtime value must match the build's | no |
 
 Notes a deployment needs:
@@ -230,18 +235,27 @@ Notes a deployment needs:
   start. With neither set, no Google provider is registered — the start
   owes the issuer nothing, and `GET /auth/providers` omits `google`.
   One credential without the other refuses the start.
-- The adapter is given the agent's own identity: the certificate
-  `issueAgentCertificate` returned, its private key, and the authority
-  that signed it. That authority is what garam's own listener is
-  verified against, because the listener presents a certificate of the
-  same per-organization authority
-  ([ADR-0037](./adr/0037-the-machine-listener-presents-a-per-organization-certificate.md)),
-  so the three files arrive together and rotate together — reissue and
-  restart, with no reload ([ADR-0014](./adr/0014-agent-authentication.md)).
+- The adapter is given the agent's own identity — the certificate
+  `issueAgentCertificate` returned and its private key — and the garam
+  server root, which is what garam's listener is verified against. The
+  root is a different input from the authority that signed the agent:
+  the two directions rest on different roots
+  ([ADR-0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)),
+  and that same answer carries both, so a deployment writing the files
+  takes `serverRootPem` for this value and not `issuerPem`.
   `GARAM_ADAPTER_AGENT` is garam's GRN for the agent and
   `GARAM_ADAPTER_GATEWAY_AGENT` is what the agent platform serves it
   under; they are two names for one agent and neither can be derived
   from the other.
+- **`GARAM_CERTIFICATE_LIFETIME` is a security parameter.** Expiry is
+  the only revocation garam has — no CRL, no responder
+  ([ADR-0014](./adr/0014-agent-authentication.md)) — so the value is the
+  window a stolen certificate stays usable in. `internal/ca/service.go`
+  bounds it at one hour and thirty days and refuses the start outside
+  them. The default is deliberately loose while rotation is new
+  ([ADR-0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md));
+  lowering it is a configuration change, and it is only safe once the
+  obligations in §How key material must arrive are met.
 - The `*_FILE` values are paths, not contents. Key material
   travels as a file, never through the environment — a value there is
   inherited by child processes, readable at `/proc/<pid>/environ`, and
@@ -278,8 +292,23 @@ process then opens a file it owns with no group or other bits, and both
 checks pass. Relaxing the check to fit plain projection is not an
 option; the deployment shape above is what the rule requires.
 
-One qualification:
+Two qualifications:
 
+- **Each `*_TLS_CERT_FILE` and `*_TLS_KEY_FILE` pair is re-read on
+  every handshake**, on the listener and in the adapter alike
+  (`internal/keyfile/pair.go`), so a replaced pair is presented on the
+  next connection with nothing restarted
+  ([ADR-0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)).
+  Two obligations follow, and a deployment that meets neither has
+  rotation only on a restart:
+  - **Replace the pair atomically.** A reader that opens a half-written
+    file refuses the handshake. Writing beside the file and renaming
+    over it leaves no such moment; writing in place does.
+  - **Keep the file the process opens current.** The shape above copies
+    the projected secret once, in an initContainer, so a certificate
+    replaced afterwards reaches the projected volume and not the copy.
+    Whatever refreshes it must satisfy the arrival rule for the key on
+    every refresh, not only the first.
 - **There is no client CA bundle, and creating one is forbidden.** The
   machine listener requires a certificate and verifies it per connection
   against the certificate authority of the organization the
@@ -287,8 +316,10 @@ One qualification:
   (`internal/machine/listener.go`). A pool holding every organization's
   authority would accept a certificate against a root that is not its
   own — the tenancy hole [ADR-0020](./adr/0020-published-artifacts.md)
-  forbids. There is nothing to mount and nothing to rotate; only the
-  server certificate is mounted.
+  forbids. There is nothing to mount and nothing to rotate; what is
+  mounted is the listener's own pair and the garam server root
+  `GARAM_MACHINE_SERVER_ROOT_FILE` names, and neither is a bundle of
+  client authorities.
 
 ## The key-encryption key cannot be regenerated
 
@@ -325,14 +356,39 @@ The obligation that follows, in the form a deployment can act on:
   this contract's to do.
 
 **The machine listener's certificate and key do not carry this
-property.** `GARAM_MACHINE_TLS_CERT_FILE` and
-`GARAM_MACHINE_TLS_KEY_FILE` — `tls.crt` and `tls.key` where the local
-manifest names them (`deploy/local/minikube/garam.yaml`) — seal
-nothing: they are the listener's own pair, read for the TLS handshake
-and nothing else (`internal/cli/machine.go`,
-`internal/machine/listener.go`). The pair is safe to regenerate at any
-time and safe to have issued by cert-manager or any other issuer. The
-constraint above is the key-encryption key's alone.
+property, and they are not free of obligations either.**
+`GARAM_MACHINE_TLS_CERT_FILE` and `GARAM_MACHINE_TLS_KEY_FILE` —
+`tls.crt` and `tls.key` where the local manifest names them
+(`deploy/local/minikube/garam.yaml`) — seal nothing: they are the
+listener's own pair, read for the TLS handshake and nothing else
+(`internal/cli/machine.go`, `internal/machine/listener.go`). Replacing
+them loses nothing, and the constraint above is the key-encryption key's
+alone. What binds instead is who signs them
+([ADR-0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)):
+
+- **One certificate authority signs that pair and signs nothing else.**
+  It is separate from every organization's authority, and garam never
+  holds its key — the process holds the pair it signed and its
+  certificate, and no more. cert-manager issuing from an issuer
+  dedicated to this listener satisfies this; an issuer that also signs
+  other workloads does not, because what it signs is what every agent
+  trusts garam by.
+- **That authority's certificate is `GARAM_MACHINE_SERVER_ROOT_FILE`,
+  and garam hands it to every identity it issues a certificate to**
+  (`serverRootPem` in `api/machine.yaml`). It is public, it is read once
+  at startup, and it must be the root the pair above chains to — a
+  mismatch reaches every agent and works for none.
+- **Replacing that authority invalidates what every agent already
+  holds**, and garam reads it once, so it is a restart plus a reissue
+  rather than a rotation. Nothing in garam schedules it; it should
+  outlive the certificates it signs by years.
+- **An operator bootstrapped by `issue-certificate` needs that root
+  too, and the command does not write it**: it writes
+  `certificate.pem`, `key.pem` and `issuer.pem` and no more
+  (`internal/cli/issue_certificate.go`). The root is public and the
+  deployment already holds it, so whoever installs that first
+  certificate out of band installs the same file
+  `GARAM_MACHINE_SERVER_ROOT_FILE` names beside it.
 
 ## The database connection
 
@@ -469,9 +525,10 @@ Stated here so they are not guessed:
   two
 - [ADR-0029](./adr/0029-readiness-reports-what-a-replica-cannot-serve-without.md)
   — readiness reports what a replica cannot serve without
-- [ADR-0037](./adr/0037-the-machine-listener-presents-a-per-organization-certificate.md)
-  — the listener presents its organization's own certificate, which is
-  what an agent verifies it against
 - [ADR-0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)
   — where the two images are published, under what names, and what
   triggers a push
+- [ADR-0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)
+  — the listener presents one certificate signed by a garam server
+  authority the deployment holds, every identity pins that root, and a
+  replaced pair is served without a restart (superseding ADR-0037)

@@ -13,30 +13,37 @@ import (
 const serviceTypeOrg = "org"
 
 // Issuer signs the certificate a machine identity authenticates with
-// (ADR-0014). It is the seam `internal/ca` satisfies: this domain
-// names a subject by GRN and never reads key material.
+// (ADR-0014) and hands back the garam server root it verifies garam by
+// (ADR-0040). It is the seam `internal/ca` and the composition root
+// satisfy between them: this domain names a subject by GRN and never
+// reads key material.
 type Issuer interface {
 	// Issue returns a certificate for subject, signed by the authority
-	// of the organization that owns it.
+	// of the organization that owns it, carrying the garam server root
+	// the holder verifies garam by.
 	Issue(ctx context.Context, subject grn.GRN) (*Certificate, error)
 }
 
-// Service is what an operator does to the agents it runs: it creates
-// them and obtains the certificates they authenticate with.
+// Service is what an operator does to the agents it runs — it creates
+// them and obtains the certificates they authenticate with — and the
+// one thing an agent does for itself, which is renew its own.
 //
-// Both methods take the calling operator, and every answer is bounded
-// by the assignment that operator holds. That is the whole of the
-// authorization here and there is no path around it — an operator's
-// blast radius is the agents assigned to it, which ADR-0015 states is
-// not an optimisation and may not be skipped.
+// Every method takes the caller, and an operator's answers are bounded
+// by the assignments it holds. That is the whole of the authorization
+// here and there is no path around it — an operator's blast radius is
+// the agents assigned to it, which ADR-0015 states is not an
+// optimisation and may not be skipped. The one caller that is not an
+// operator is an agent renewing its own certificate (ADR-0040), which
+// is bounded by the identity it already authenticated as.
 type Service interface {
 	// Create mints an agent in the operator's own organization and
 	// assigns it to that operator.
 	Create(ctx context.Context, operator grn.GRN) (*Assignment, error)
 	// IssueCertificate returns the certificate the named agent
-	// authenticates with, for an agent assigned to operator at the
-	// current epoch, and refuses every other one.
-	IssueCertificate(ctx context.Context, operator, agentGRN grn.GRN) (*Certificate, error)
+	// authenticates with, for the agent itself or for an agent assigned
+	// to a calling operator at the current epoch, and refuses every
+	// other caller.
+	IssueCertificate(ctx context.Context, caller, agentGRN grn.GRN) (*Certificate, error)
 	// Definitions returns the definitions naming operator, each with
 	// its claim state. The definition's operator field is the scoping,
 	// so the answer can name nothing the caller is not named in and no
@@ -83,8 +90,17 @@ func (s *service) Create(ctx context.Context, operator grn.GRN) (*Assignment, er
 	return s.store.Assign(ctx, g, operator)
 }
 
-func (s *service) IssueCertificate(ctx context.Context, operator, agentGRN grn.GRN) (*Certificate, error) {
-	if err := operates(operator); err != nil {
+func (s *service) IssueCertificate(ctx context.Context, caller, agentGRN grn.GRN) (*Certificate, error) {
+	// An agent renews its own certificate over the connection that
+	// certificate authenticated, which is what keeps a lifetime short
+	// enough to be the revocation ADR-0014 leaves (ADR-0040). It grants
+	// nothing: the caller holds that identity already, and once the
+	// certificate has expired there is no connection to renew over and
+	// the operator route below is the only way back.
+	if caller.ServiceType == ServiceType && caller == agentGRN {
+		return s.issuer.Issue(ctx, agentGRN)
+	}
+	if err := operates(caller); err != nil {
 		return nil, err
 	}
 	assignment, err := s.store.GetAssignment(ctx, agentGRN)
@@ -99,7 +115,7 @@ func (s *service) IssueCertificate(ctx context.Context, operator, agentGRN grn.G
 	// row, and the operator it replaced stops matching. GRNs carry
 	// their organization, so an operator of another organization
 	// differs here too.
-	if assignment.Operator() != operator {
+	if assignment.Operator() != caller {
 		return nil, ErrNotAssigned
 	}
 	return s.issuer.Issue(ctx, agentGRN)

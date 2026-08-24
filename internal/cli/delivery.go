@@ -56,7 +56,7 @@ func adapt(cmd *cobra.Command) error {
 		envOr("GARAM_ADAPTER_GATEWAY_AGENT", ""),
 		envOr("GARAM_ADAPTER_TLS_CERT_FILE", ""),
 		envOr("GARAM_ADAPTER_TLS_KEY_FILE", ""),
-		envOr("GARAM_ADAPTER_ISSUER_FILE", ""),
+		envOr("GARAM_ADAPTER_SERVER_ROOT_FILE", ""),
 	)
 	if err != nil {
 		return err
@@ -74,7 +74,7 @@ func adapt(cmd *cobra.Command) error {
 // gateway's address, which has a default: the two identifiers are
 // different names for one agent — garam's GRN and what the gateway
 // itself serves — and neither can be guessed from the other.
-func adapterLoop(agentRaw, machineURL, gatewayURL, gatewayAgent, certFile, keyFile, issuerFile string) (delivery.Service, error) {
+func adapterLoop(agentRaw, machineURL, gatewayURL, gatewayAgent, certFile, keyFile, serverRootFile string) (delivery.Service, error) {
 	if agentRaw == "" {
 		return nil, errorx.New(errorx.KindInvalidArgument, "GARAM_ADAPTER_AGENT is required")
 	}
@@ -88,7 +88,7 @@ func adapterLoop(agentRaw, machineURL, gatewayURL, gatewayAgent, certFile, keyFi
 	if gatewayAgent == "" {
 		return nil, errorx.New(errorx.KindInvalidArgument, "GARAM_ADAPTER_GATEWAY_AGENT is required")
 	}
-	client, err := adapterClient(certFile, keyFile, issuerFile)
+	client, err := adapterClient(certFile, keyFile, serverRootFile)
 	if err != nil {
 		return nil, err
 	}
@@ -108,46 +108,46 @@ func adapterLoop(agentRaw, machineURL, gatewayURL, gatewayAgent, certFile, keyFi
 }
 
 // adapterClient is the connection garam sees: the agent's own
-// certificate, and the authority that issued it as the root garam's
-// listener is verified against. The two travel together — the issuer is
-// what a holder needs to verify the other side — so the same
-// per-organization root holds both directions (ADR-0037).
+// certificate, and the garam server root as what garam's listener is
+// verified against. The two are different roots — the authority that
+// signed the agent signs no server certificate — so the root is an
+// input of its own rather than the issuer travelling beside the
+// certificate (ADR-0040).
+//
+// The certificate is presented per handshake rather than frozen at
+// startup, for the reason the listener reads its own per handshake: a
+// renewed one is presented on the next connection and this process
+// keeps running.
 //
 // The private key is key material, so it is read under the owner-only
 // rule every key file here is read under (ADR-0015); the certificate
-// and the issuer beside it are public and are read plainly.
+// and the root beside it are public and are read plainly.
 //
 // The client carries no timeout: a claim is a long poll and the event
 // stream is held open for as long as the agent runs, so what bounds a
 // call is the context rather than the client.
-func adapterClient(certFile, keyFile, issuerFile string) (*http.Client, error) {
-	if certFile == "" || keyFile == "" || issuerFile == "" {
+func adapterClient(certFile, keyFile, serverRootFile string) (*http.Client, error) {
+	if certFile == "" || keyFile == "" || serverRootFile == "" {
 		return nil, errorx.New(errorx.KindInvalidArgument,
-			"GARAM_ADAPTER_TLS_CERT_FILE, GARAM_ADAPTER_TLS_KEY_FILE and GARAM_ADAPTER_ISSUER_FILE are required")
+			"GARAM_ADAPTER_TLS_CERT_FILE, GARAM_ADAPTER_TLS_KEY_FILE and GARAM_ADAPTER_SERVER_ROOT_FILE are required")
 	}
-	certPEM, err := os.ReadFile(certFile)
+	pair, err := keyfile.NewPair(certFile, keyFile)
 	if err != nil {
-		return nil, errorx.Wrap(err, "adapter certificate", errorx.KindInvalidArgument)
+		return nil, errorx.Wrap(err, "adapter certificate")
 	}
-	keyPEM, err := keyfile.Read(keyFile)
+	serverRootPEM, err := os.ReadFile(serverRootFile)
 	if err != nil {
-		return nil, errorx.Wrap(err, "GARAM_ADAPTER_TLS_KEY_FILE")
-	}
-	certificate, err := tls.X509KeyPair(certPEM, keyPEM)
-	if err != nil {
-		return nil, errorx.Wrap(err, "adapter certificate", errorx.KindInvalidArgument)
-	}
-	issuerPEM, err := os.ReadFile(issuerFile)
-	if err != nil {
-		return nil, errorx.Wrap(err, "adapter issuer", errorx.KindInvalidArgument)
+		return nil, errorx.Wrap(err, "adapter server root", errorx.KindInvalidArgument)
 	}
 	roots := x509.NewCertPool()
-	if !roots.AppendCertsFromPEM(issuerPEM) {
-		return nil, errorx.New(errorx.KindInvalidArgument, "adapter issuer: no certificate in "+issuerFile)
+	if !roots.AppendCertsFromPEM(serverRootPEM) {
+		return nil, errorx.New(errorx.KindInvalidArgument, "adapter server root: no certificate in "+serverRootFile)
 	}
 	return &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{
-		Certificates: []tls.Certificate{certificate},
-		RootCAs:      roots,
-		MinVersion:   tls.VersionTLS13,
+		GetClientCertificate: func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
+			return pair.Get()
+		},
+		RootCAs:    roots,
+		MinVersion: tls.VersionTLS13,
 	}}}, nil
 }

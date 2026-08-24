@@ -8,6 +8,7 @@
 - Decision
 - Consequences
 - Rejected alternatives
+- Errata
 
 ## Context
 
@@ -138,3 +139,7 @@ the first fact from a crash-loop curiosity into a delivery property.
 - **Predicting a worst-case turn duration and setting the lease to
   it.** Requires a number the adapter cannot see, and it is exactly the
   kind of number that goes stale without anything failing.
+
+## Errata
+
+- 2026-08-24 — §Context's "Certificate rotation is a restart on both sides (ADR-0014, ADR-0015), so a restart is scheduled rather than exceptional" lost its scheduled cause to [ADR-0040](./0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md), which rotates certificates without one. The delivery property stands on the restarts that remain ordinary — a rollout, a crash, a node moving — and at-least-once delivery rests on the dropped event as much as on either.

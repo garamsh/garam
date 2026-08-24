@@ -32,11 +32,14 @@ sidecar rather than an ordinary container, for the reason in
 [ADR-0018](./adr/0018-delivery-acknowledgement.md).
 
 It reaches garam as the agent, with the certificate garam issued for
-that agent, and verifies garam's listener against the authority that
-signed it: the listener presents a certificate of that same
-per-organization authority, so the root an adapter needs is already in
-its hands ([ADR-0014](./adr/0014-agent-authentication.md),
-[ADR-0037](./adr/0037-the-machine-listener-presents-a-per-organization-certificate.md)).
+that agent, and verifies garam's listener against the garam server root
+— one root every organization shares, separate from the authority that
+signed the agent, and delivered in the same answer as the certificate
+([ADR-0014](./adr/0014-agent-authentication.md),
+[ADR-0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)).
+It presents its certificate per handshake rather than holding what it
+read at startup, so a renewed one is presented on the next connection
+and this process keeps running.
 
 ## The delivery loop
 

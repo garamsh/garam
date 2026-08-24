@@ -229,7 +229,7 @@ func TestService_IssueCertificateAnswersOnlyForAnAgentTheOperatorHolds(t *testin
 		"an operator of another organization":       {stranger, held.Agent(), ErrNotAssigned},
 		"an agent assigned to nobody":               {holder, unassignedGRN, ErrNotAssigned},
 		"an agent that does not exist":              {holder, grn.New("acme", grn.DefaultProject, ServiceType, "0f0f0f0f0f0f0f0f"), ErrNotAssigned},
-		"a caller that is not an operator":          {held.Agent(), held.Agent(), ErrNotAnOperator},
+		"an agent asking for another agent's":       {held.Agent(), foreign.Agent(), ErrNotAnOperator},
 	}
 	for name, tt := range refused {
 		t.Run(name, func(t *testing.T) {
@@ -257,6 +257,40 @@ func TestService_IssueCertificateAnswersOnlyForAnAgentTheOperatorHolds(t *testin
 	assert.Equal(t,
 		[]grn.GRN{held.Agent(), foreign.Agent(), held.Agent()},
 		issuer.signed,
+		"nothing was signed for a caller that was refused")
+}
+
+// TestService_IssueCertificateRenewsTheAgentsOwnCertificate is the
+// renewal ADR-0040 opens: an agent asks for its own certificate over
+// the connection its current one authenticated, and gets one. It is
+// bounded by the identity the caller already holds, which the two
+// refusals beside it are what show — the same call from an agent of
+// the same organization, and from the operator's own GRN, both of
+// which the route would answer if the caller were not compared to the
+// subject at all.
+func TestService_IssueCertificateRenewsTheAgentsOwnCertificate(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryStore()
+	issuer := &signer{}
+	svc := NewService(store, issuer)
+
+	operator := operatorGRN("acme", "one")
+	held, err := svc.Create(ctx, operator)
+	require.NoError(t, err)
+	sibling, err := svc.Create(ctx, operator)
+	require.NoError(t, err)
+
+	cert, err := svc.IssueCertificate(ctx, held.Agent(), held.Agent())
+	require.NoError(t, err, "an agent renewing its own certificate")
+	assert.Equal(t, []byte(held.Agent().String()), cert.CertificatePEM)
+
+	_, err = svc.IssueCertificate(ctx, sibling.Agent(), held.Agent())
+	assert.ErrorIs(t, err, ErrNotAnOperator, "an agent of the same organization")
+
+	_, err = svc.IssueCertificate(ctx, operator, operator)
+	assert.ErrorIs(t, err, ErrNotAssigned, "an operator is not an agent renewing itself")
+
+	assert.Equal(t, []grn.GRN{held.Agent()}, issuer.signed,
 		"nothing was signed for a caller that was refused")
 }
 

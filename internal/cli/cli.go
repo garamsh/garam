@@ -45,12 +45,20 @@
 //	                       itself admits no caller without a certificate
 //	GARAM_MACHINE_TLS_CERT_FILE  the listener's own certificate, PEM
 //	                       (required for serve machine)
-//	GARAM_MACHINE_TLS_KEY_FILE   its private key, PEM
-//	                       (required for serve machine)
+//	GARAM_MACHINE_TLS_KEY_FILE   its private key, PEM, readable by its
+//	                       owner alone (required for serve machine).
+//	                       Both files are re-read per handshake, so a
+//	                       replaced pair is served without a restart
+//	GARAM_MACHINE_SERVER_ROOT_FILE  the garam server root that signed the
+//	                       pair above, PEM, handed to every identity that
+//	                       receives a certificate (required for serve
+//	                       machine)
 //	GARAM_CA_KEY_FILE      hex-encoded key-encryption key the certificate
 //	                       authorities are sealed under, readable by its
 //	                       owner alone (required for serve machine and
 //	                       issue-certificate)
+//	GARAM_CERTIFICATE_LIFETIME  how long a certificate garam signs stays
+//	                       valid (default "24h"; internal/ca bounds it)
 //	GARAM_ADAPTER_AGENT    GRN of the agent the adapter carries messages
 //	                       for (required for adapter)
 //	GARAM_ADAPTER_MACHINE_URL  base URL of the machine listener it claims
@@ -64,15 +72,19 @@
 //	                       (required for adapter)
 //	GARAM_ADAPTER_TLS_KEY_FILE   its private key, PEM, readable by its
 //	                       owner alone (required for adapter)
-//	GARAM_ADAPTER_ISSUER_FILE    the authority that issued it, PEM, which
-//	                       is also the root garam's listener is verified
-//	                       against (required for adapter)
+//	GARAM_ADAPTER_SERVER_ROOT_FILE  the garam server root the listener is
+//	                       verified against, PEM, which is not the
+//	                       authority that issued the certificate above
+//	                       (required for adapter)
 package cli
 
 import (
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
+
+	"github.com/garamsh/garam/internal/errorx"
 )
 
 // NewRootCommand constructs the garam command tree.
@@ -101,4 +113,22 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// certificateLifetime is how long a certificate garam signs stays
+// valid. Expiry is the only revocation there is (ADR-0014), so the
+// value is a security parameter rather than a tuning knob, and the two
+// commands that sign read it the same way. An unset value is zero,
+// which takes internal/ca's own default rather than restating it here;
+// a value outside the bounds that package states refuses the start.
+func certificateLifetime() (time.Duration, error) {
+	raw := envOr("GARAM_CERTIFICATE_LIFETIME", "")
+	if raw == "" {
+		return 0, nil
+	}
+	lifetime, err := time.ParseDuration(raw)
+	if err != nil {
+		return 0, errorx.Wrap(err, "GARAM_CERTIFICATE_LIFETIME", errorx.KindInvalidArgument)
+	}
+	return lifetime, nil
 }

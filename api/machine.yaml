@@ -16,7 +16,9 @@ tags:
     description: >-
       The agents an operator creates and holds. What an operator may
       obtain is exactly the agents assigned to it at the current epoch
-      (ADR-0015).
+      (ADR-0015). An agent reaches one route of its own here: it renews
+      its own certificate over the connection that certificate
+      authenticated (ADR-0040).
   - name: definition
     description: >-
       What an organization says its agents should be, read by the

@@ -133,9 +133,10 @@ func waitForProbe(t *testing.T, url string, logs *bytes.Buffer) {
 	}
 }
 
-// machineKeyMaterialFiles writes the three files `serve machine`
-// refuses to start without: the listener's certificate and key, and the
-// key-encryption key with the owner-only mode the sealer enforces.
+// machineKeyMaterialFiles writes the four files `serve machine` refuses
+// to start without: the listener's certificate and key, the
+// key-encryption key with the owner-only mode the sealer enforces, and
+// the garam server root every identity pins garam by (ADR-0040).
 func machineKeyMaterialFiles(t *testing.T) (certFile, keyFile, kekFile, rootFile string) {
 	t.Helper()
 	dir := t.TempDir()

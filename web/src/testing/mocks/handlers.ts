@@ -61,7 +61,6 @@ export const aliceMembership: Member = {
 /** The signed-in happy path: Alice owns Acme, which holds one of each. */
 export const handlers = [
   http.get(`${API_URL}/me`, () => HttpResponse.json(alice)),
-  http.get(`${API_URL}/auth/providers`, () => HttpResponse.json(["google"])),
   http.get(`${API_URL}/orgs`, () => HttpResponse.json([acme])),
   http.get(`${API_URL}/orgs/acme`, () => HttpResponse.json(acme)),
   http.get(`${API_URL}/orgs/acme/groups`, () =>
@@ -88,21 +87,4 @@ export function unauthenticated() {
       },
     ),
   );
-}
-
-/**
- * Signed-out variant for pages that also read public endpoints:
- * `/me` rejects the session while `/auth/providers` still advertises
- * the given providers.
- */
-export function signedOutWith(providers: string[]) {
-  return [
-    http.get(`${API_URL}/me`, () =>
-      HttpResponse.json(
-        { kind: "unauthenticated", message: "no session" },
-        { status: 401 },
-      ),
-    ),
-    http.get(`${API_URL}/auth/providers`, () => HttpResponse.json(providers)),
-  ];
 }

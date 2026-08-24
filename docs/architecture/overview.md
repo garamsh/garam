@@ -28,6 +28,11 @@ collaborate on a shared plan.
   names (ADR-0014). An agent and an operator authenticate the same way
   (ADR-0015), and neither touches a user row, a session or a membership.
   What that listener serves has a specification of its own (ADR-0019).
+  The other direction rests on a different root: the listener presents
+  one certificate signed by a garam server authority the deployment
+  holds and garam never does, every identity is given that root with its
+  own certificate, and both ends read their pair per handshake so a
+  replaced one is served without a restart (ADR-0040).
 - An operator creating an agent and obtaining its certificate, on that
   listener. garam mints the agent's GRN in the operator's own
   organization and assigns it at an epoch; an operator obtains the
@@ -158,8 +163,9 @@ collaborate on a shared plan.
   and completed (see In scope); what the listener does not serve is the
   state an operator or an agent reports (ADR-0012) and deprovisioning
   an agent. The adapter carries messages and forwards nothing (see the
-  watching entry below), and certificate renewal is reissue and restart
-  rather than an endpoint (ADR-0014). No console page reads the agents
+  watching entry below). An agent renews its own certificate on the
+  certificate route (ADR-0040); an operator's own has no renewal path
+  and arrives out of band (ADR-0015). No console page reads the agents
   the browser API answers: the console's agents section reads
   definitions, which are not agents (ADR-0026).
 - Telling a sender that its message exhausted its attempts. ADR-0018
@@ -289,9 +295,10 @@ it and imports no request surface and no domain.
 | `user.User` | `internal/user` | human identity |
 | `agent.Agent` | `internal/agent` | autonomous actor an operator provisions |
 | `agent.Assignment` | `internal/agent` | agent-to-operator binding, fenced by an epoch |
-| `agent.Service` | `internal/agent` | creates an agent for an operator, issues the certificate of one assigned to it |
+| `agent.Service` | `internal/agent` | creates an agent for an operator, issues the certificate of one assigned to it, and renews an agent's own |
 | `ca.Authority` | `internal/ca` | an organization's certificate authority, its key sealed |
 | `ca.Certificate` | `internal/ca` | issued client certificate identified by a SAN URI |
+| `machine.ServerCertificate` | `internal/machine` | what the listener presents, asked per handshake so a replaced one needs no restart |
 | `ca.Sealer` | `internal/ca` | seals key material against a database dump |
 | `machine.Identity` | `internal/machine` | the GRN a verified client certificate names |
 | `machine.Service` | `internal/machine` | verifies a presented certificate against its organization's authority |
@@ -331,6 +338,7 @@ it and imports no request surface and no domain.
 | Agents are provisioned by operators garam never dials | An operator is a peer, so a user can supply their own; garam is never the side that connects. | [adr/0012-agent-operator-model.md](./adr/0012-agent-operator-model.md) |
 | Messages reach an agent by polling, not by push | A queue in Postgres has no connection to route to, so any instance answers any poll. | [adr/0013-agent-messaging.md](./adr/0013-agent-messaging.md) |
 | Agents authenticate by mTLS on a listener of their own | A GRN in a SAN needs no user row; a separate listener needs no trusted proxy header. | [adr/0014-agent-authentication.md](./adr/0014-agent-authentication.md) |
+| garam presents one pinned server certificate and certificates rotate without a restart | A server picks its certificate before the client sends one, so per-organization selection is unreachable; expiry is the only revocation, and a lifetime short enough to be one is unusable when every rotation is a restart. | [adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md) |
 | An operator is a machine identity of the same kind as an agent | One mechanism to secure and rotate; the assignment row already bounds what an operator may fetch. | [adr/0015-operator-identity.md](./adr/0015-operator-identity.md) |
 | A CA's key is sealed by a key the process holds, not by a KMS | A database dump opens nothing; issuing depends on no hosted service, which is what lets a user bring their own operator. | [adr/0016-ca-key-custody.md](./adr/0016-ca-key-custody.md) |
 | Machine identities are served by a process of their own | The surface that issues certificates holds every organization's key-encryption key, and the process serving browsers must not. | [adr/0017-machine-process.md](./adr/0017-machine-process.md) |

@@ -1,6 +1,6 @@
 # ADR 0037: The machine listener presents a per-organization certificate
 
-> Status: accepted
+> Status: superseded by [ADR-0040](./0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)
 > Date: 2026-08-19
 
 ## Contents

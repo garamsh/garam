@@ -1,6 +1,6 @@
 # ADR 0014: Agents authenticate with mTLS on a listener of their own
 
-> Status: accepted
+> Status: accepted — §Decision's rotation term is superseded by [ADR-0040](./0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)
 > Date: 2026-08-16
 
 ## Contents

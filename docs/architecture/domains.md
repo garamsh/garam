@@ -86,10 +86,17 @@ The one rule key material is read under (ADR-0015): a file only the
 reading process's owner can reach — owner-only permission bits and an
 owner equal to the process's UID, both read from the open descriptor so
 no window sits between the check and the read. The rule is neither
-certificates nor listeners, so it lives here once for its two readers:
-`internal/ca` reads the key-encryption key through it, and the
-composition root reads the machine listener's own TLS key through it.
-Depends on `errorx` only.
+certificates nor listeners, so it lives here once for every process that
+opens one: `internal/ca` reads the key-encryption key through it, and
+the composition root reads the machine listener's pair and the adapter's
+through it.
+
+`Pair` is a certificate and its key held as the two paths they arrive
+at rather than as what they held at startup, so every read answers with
+the files as they are now and a replaced pair is presented on the next
+handshake without a restart (ADR-0040). The key goes through the rule
+above on every read; the certificate beside it is public. Depends on
+`errorx` only.
 
 ## `internal/listfilter`
 
@@ -215,9 +222,9 @@ Autonomous identity, provisioned outside garam (ADR-0012).
 | `Agent` | actor owned by an org; carries the state the operator reports about its pod and the state it reports about itself, separately |
 | `Definition` | what an organization says an agent should be: which operator runs it and with what values (ADR-0026). Shares no field with `Agent`, so a reader cannot take one for the other, and writes no `agents` row until the operator it names claims it (ADR-0033) |
 | `Assignment` | which operator runs an agent, and the epoch that binding holds |
-| `Certificate` | what an agent authenticates with, as this domain hands it back |
-| `Service` | creates an agent for the calling operator, issues the certificate of one assigned to it, and answers an operator with the definitions naming it so it can claim one (ADR-0033) |
-| `Issuer` | signs a certificate for a subject GRN |
+| `Certificate` | what an agent authenticates with and the garam server root it verifies garam by, as this domain hands them back |
+| `Service` | creates an agent for the calling operator, issues the certificate of one assigned to it or renews an agent's own, and answers an operator with the definitions naming it so it can claim one (ADR-0033) |
+| `Issuer` | signs a certificate for a subject GRN and hands back the garam server root beside it |
 
 garam mints an agent's GRN and never changes it, so which operator runs
 the agent is a relation a reassignment moves rather than part of the
@@ -240,8 +247,11 @@ authorization on that surface, which ADR-0015 states is not an
 optimisation and may not be skipped, so no method reaches an issuer
 without it. Comparing the operator on the row is the epoch fence as
 well, and it is the tenancy check too, since a GRN carries its
-organization. A caller that is not an operator is refused: an agent
-authenticates on the same listener and holds nothing.
+organization. A caller that is not an operator is refused, with one exception: an
+agent asking for its own certificate is renewing over the connection
+that certificate authenticated, which grants it nothing it does not
+already hold (ADR-0040). An expired certificate has no such connection,
+so the operator route is what recovers one.
 
 `Store` answers `Service` and, org by org, the read `internal/api`
 serves people: an organization's agents and the assignments holding

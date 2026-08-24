@@ -1,7 +1,13 @@
 import { HttpResponse, http } from "msw";
 
 import type { User } from "@/features/auth";
-import type { Group, Member, Organization, Project } from "@/features/orgs";
+import type {
+  AgentDefinition,
+  Group,
+  Member,
+  Organization,
+  Project,
+} from "@/features/orgs";
 
 /** The backend base URL the tests run the server-side client against. */
 export const API_URL = "http://localhost:8080";
@@ -35,6 +41,16 @@ export const frontend: Project = {
   roles: [],
 };
 
+/** The single agent Acme says it should have. */
+export const fieldAgent: AgentDefinition = {
+  agentGrn: "grn:acme:default:agent:9f2ac1b40d8e7a35",
+  orgGrn: acme.grn,
+  operatorGrn: "grn:acme:default:operator:field-one",
+  values: { model: "haiku" },
+  definedBy: alice.grn,
+  createdAt: "2026-01-02T03:04:05Z",
+};
+
 /** Alice's membership of Acme, at the role that may invite. */
 export const aliceMembership: Member = {
   userGrn: alice.grn,
@@ -56,6 +72,9 @@ export const handlers = [
   ),
   http.get(`${API_URL}/orgs/acme/members`, () =>
     HttpResponse.json([aliceMembership]),
+  ),
+  http.get(`${API_URL}/orgs/acme/agent-definitions`, () =>
+    HttpResponse.json([fieldAgent]),
   ),
 ];
 

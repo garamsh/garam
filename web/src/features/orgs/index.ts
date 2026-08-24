@@ -8,11 +8,13 @@
  */
 export {
   getOrg,
+  listAgentDefinitions,
   listGroups,
   listOrgMembers,
   listOrgs,
   listProjects,
   orgNotFound,
+  type AgentDefinition,
   type Group,
   type Member,
   type Organization,

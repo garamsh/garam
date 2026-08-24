@@ -91,10 +91,13 @@ const CLAIMS: Claim[] = [
     facts: [
       // Watching's two ends are a console route and the adapter
       // (overview.md §Out of scope); garam's half, internal/watch, is
-      // built and is not what this claim is about.
+      // built and is not what this claim is about. The console's half
+      // is the route for one agent: the section above it defines agents
+      // (ADR-0026) and watches none, so the section's own path stopped
+      // standing for this claim.
       {
         kind: "path",
-        path: "web/src/app/console/orgs/[org]/agents",
+        path: "web/src/app/console/orgs/[org]/agents/[agent]",
         exists: false,
       },
       { kind: "path", path: "internal/adapter", exists: false },

@@ -12,6 +12,7 @@ The description of how garam is deployed: the five workloads it runs, the ports 
 - Key material and secrets
 - Pinning a version
 - What keeps it true
+- What the checks are complete over
 - What it is not
 
 ## What this is
@@ -69,8 +70,9 @@ A workload and its account carry one name on purpose, and the chart
 offers no value that changes either: a repository that binds a role to
 an account looks it up by the workload's name, and a name two
 repositories set separately is a name they can disagree about silently.
-The table is the contract another repository matches its own manifests
-against rather than a description of them.
+`make chart` reads this table and fails when the render stops matching
+it (§What keeps it true), so it is the contract another repository
+matches its own manifests against rather than a description of them.
 
 **One account per workload, never one for the release.** A single
 account every workload presented would be the namespace `default` under
@@ -290,20 +292,50 @@ the module pin in the `Makefile`, so nothing is installed by hand and
 every run takes one version. It reports what it covered and fails when a
 count is zero:
 
-- `helm lint --strict` against each value file in `ci/`.
-- `helm template` against each, so a template that cannot render fails.
-- The environment comparison above, against the names the source reads —
-  `envOr` in `internal/cli/`, which wraps the module's only `os.Getenv`
-  call, and the schema in `web/src/env.ts`.
+- `chart-lint` — `helm lint --strict` against each value file in `ci/`.
+- `chart-render` — `helm template` against each, so a template that
+  cannot render fails, and the environment comparison above against the
+  names the source reads: `envOr` in `internal/cli/`, which wraps the
+  module's only `os.Getenv` call, and the schema in `web/src/env.ts`.
+- `chart-identity` — the identity comparison against
+  §Workload identities. Every rendered Deployment and Job names the
+  account that table pairs it with, every account a workload names is
+  rendered, and a workload naming none fails rather than reaching a
+  cluster as `default`.
 
-The comparison is what an executable artefact buys over prose: a
-variable added to the source and not to the chart fails the check
-instead of being discovered by a deployment.
+The comparisons are what an executable artefact buys over prose: a
+variable added to the source and not to the chart, or a workload added
+without an identity, fails the check instead of being discovered by a
+deployment.
 
-What it does not check: that a rendered manifest is accepted by an
-apiserver, and that `web.apiUrl` equals the value the web image was
-built with. Nothing here can check the second — the rewrite target is
-baked in at build time.
+## What the checks are complete over
+
+A check that fires correctly says nothing about what it never reads, so
+what each is complete over is recorded here rather than inferred.
+`chart-render` and `chart-identity` each point here in the line they
+print.
+
+- `chart-lint` and `chart-render` are complete over **templates that
+  produce YAML**: one that cannot render fails. Neither asks an
+  apiserver whether the YAML it produced would be accepted.
+- `chart-render` is complete over **environment names**, exactly: every
+  name the source reads is rendered or declared unset, and every name
+  rendered is read. It reads no value — a name rendered with the wrong
+  value passes.
+- `chart-identity` is complete over **pod identity**: which account each
+  Deployment and Job runs as, and whether the accounts they name are
+  rendered.
+
+Nothing checks the rest of what a pod carries — volumes and mounts,
+probe paths and ports, the security context, resource figures, the hook
+annotations on the migrate Job. Each is reviewed rather than checked.
+
+Two things sit outside any of them:
+
+- A deployment setting `serviceAccount.create: false` renders no
+  account, and nothing here can see the object it supplies instead.
+- `web.apiUrl` must equal the value the web image was built with, and
+  nothing can check it: the rewrite target is baked in at build time.
 
 ## What it is not
 

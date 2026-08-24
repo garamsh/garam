@@ -45,7 +45,7 @@ TEST_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)
 WEB_E2E_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)/garam?sslmode=disable)
 
 .PHONY: lint format test build gen check-gen e2e db-up db-down backend-up ci template-diff
-.PHONY: chart chart-lint chart-render
+.PHONY: chart chart-lint chart-render chart-identity
 .PHONY: web-install web-lint web-format web-test web-build web-gen web-check-gen web-e2e web-image-e2e web-ci
 .PHONY: minikube-up minikube-down minikube-start minikube-images minikube-db
 .PHONY: minikube-secret minikube-migrate minikube-apps minikube-rebuild minikube-forward minikube-context
@@ -340,7 +340,13 @@ CHART_WEB_ENV = $(shell sed -n 's/^ *\([A-Z][A-Z0-9_]*\): process\.env\.\1,$$/\1
 CHART_UNSET_ENV = $(shell awk '/^\#\# /{s=0} /^\#\# Not set by this chart/{s=1} s' $(CHART_DIR)/README.md \
 	| sed -n 's/^| `\([A-Z][A-Z0-9_]*\)`.*/\1/p')
 
-chart: chart-lint chart-render
+# The account each workload runs as, read from the README table another
+# repository matches its own manifests against. A renamed heading empties
+# this and fails the target below rather than checking nothing.
+CHART_IDENTITIES = $(shell awk '/^\#\# /{s=0} /^\#\# Workload identities/{s=1} s' $(CHART_DIR)/README.md \
+	| sed -n 's/^| `\([a-z0-9-]*\)` | [A-Za-z]* | `\([a-z0-9-]*\)` |$$/\1=\2/p')
+
+chart: chart-lint chart-render chart-identity
 
 chart-lint:
 	@echo 'chart-lint: $(words $(CHART_TEMPLATES)) templates, $(words $(CHART_VALUES)) value files (helm lint --strict)'
@@ -354,7 +360,7 @@ chart-lint:
 # chart is lowercase, so an all-caps `- name:` in the render is an
 # environment variable.
 chart-render:
-	@echo 'chart-render: $(words $(CHART_GO_ENV)) Go and $(words $(CHART_WEB_ENV)) web environment names read by the source, $(words $(CHART_UNSET_ENV)) declared unset'
+	@echo 'chart-render: $(words $(CHART_GO_ENV)) Go and $(words $(CHART_WEB_ENV)) web environment names read by the source, $(words $(CHART_UNSET_ENV)) declared unset — environment names only, $(CHART_DIR)/README.md §What the checks are complete over'
 	@test -n '$(CHART_GO_ENV)' && test -n '$(CHART_WEB_ENV)' \
 		|| { echo 'chart-render: the source sweep read no name — the envOr or env.ts parse is broken'; exit 1; }
 	@test -n '$(CHART_UNSET_ENV)' \
@@ -371,6 +377,41 @@ chart-render:
 		sort -u "$$out/rendered" "$$out/unset" > "$$out/covered"; \
 		diff "$$out/source" "$$out/covered" \
 			|| { echo 'chart-render: < read by the source, neither rendered nor declared unset; > covered by the chart, read by nothing'; exit 1; }
+
+# chart-identity compares the identity every rendered workload runs as
+# against the table the README declares it under. chart-render is exact
+# about environment names and blind to the rest of a pod, so a workload
+# that renders no serviceAccountName runs as the namespace default and
+# fails here instead.
+chart-identity:
+	@echo 'chart-identity: $(words $(CHART_IDENTITIES)) workload identities declared by $(CHART_DIR)/README.md §Workload identities — pod identity only, §What the checks are complete over'
+	@test -n '$(CHART_IDENTITIES)' \
+		|| { echo 'chart-identity: $(CHART_DIR)/README.md §Workload identities declared no workload — the parse is broken'; exit 1; }
+	@set -e; \
+		out="$$(mktemp -d)"; trap 'rm -rf "$$out"' EXIT; \
+		printf '%s\n' $(CHART_IDENTITIES) | sort -u > "$$out/declared"; \
+		cut -d= -f2 "$$out/declared" | sort -u > "$$out/declared-accounts"; \
+		test "$$(wc -l < "$$out/declared-accounts")" -eq "$$(wc -l < "$$out/declared")" \
+			|| { echo 'chart-identity: two workloads are declared under one account — one account for the release is the namespace default under a better name'; exit 1; }; \
+		for v in $(CHART_VALUES); do \
+			n="$$(basename "$$v")"; \
+			$(HELM) template garam $(CHART_DIR) --values "$$v" > "$$out/render"; \
+			awk 'function flush() { if (kind == "Deployment" || kind == "Job") printf "W %s=%s\n", name, (sa == "" ? "none" : sa); else if (kind == "ServiceAccount") printf "A %s\n", name } \
+				/^---$$/ { flush(); kind = ""; name = ""; sa = ""; next } \
+				/^kind: / { kind = $$2 } \
+				/^  name: / { if (name == "") name = $$2 } \
+				/^ *serviceAccountName: / { sa = $$2 } \
+				END { flush() }' "$$out/render" > "$$out/identity"; \
+			sed -n 's/^W //p' "$$out/identity" | sort -u > "$$out/bound"; \
+			sed -n 's/^A //p' "$$out/identity" | sort -u > "$$out/accounts"; \
+			echo "chart-identity: $$n — $$(wc -l < "$$out/bound") workloads bound, $$(wc -l < "$$out/accounts") accounts rendered"; \
+			none="$$(sed -n 's/=none$$//p' "$$out/bound")"; \
+			test -z "$$none" || { echo "chart-identity: $$n renders no serviceAccountName, so it would run as the namespace default:"; echo "$$none"; exit 1; }; \
+			diff "$$out/declared" "$$out/bound" \
+				|| { echo "chart-identity: $$n: < workload=account declared in the README, > rendered by the chart"; exit 1; }; \
+			diff "$$out/declared-accounts" "$$out/accounts" \
+				|| { echo "chart-identity: $$n: < an account a workload names, > a ServiceAccount the chart renders"; exit 1; }; \
+		done
 
 # ---------------------------------------------------------------------
 # deploy/local/minikube — the whole stack on a local Kubernetes cluster.

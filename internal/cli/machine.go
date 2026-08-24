@@ -2,7 +2,7 @@ package cli
 
 import (
 	"context"
-	"encoding/pem"
+	"crypto/x509"
 	"log/slog"
 	"net/http"
 	"os"
@@ -210,10 +210,11 @@ func machineKeyMaterial(certFile, keyFile, caKeyFile, serverRootFile string) (*k
 	if err != nil {
 		return nil, nil, nil, errorx.Wrap(err, "GARAM_MACHINE_SERVER_ROOT_FILE", errorx.KindInvalidArgument)
 	}
-	// A root an agent cannot verify garam against is a root that reaches
-	// every agent and works for none, so it is parsed here rather than
-	// handed on as whatever the file held.
-	if block, _ := pem.Decode(serverRoot); block == nil || block.Type != "CERTIFICATE" {
+	// A root an agent cannot verify garam against reaches every agent
+	// and works for none, so it is parsed here rather than handed on as
+	// whatever the file held — through the pool the adapter reads the
+	// same file into, so the two agree on what counts as one.
+	if !x509.NewCertPool().AppendCertsFromPEM(serverRoot) {
 		return nil, nil, nil, errorx.New(errorx.KindInvalidArgument,
 			"GARAM_MACHINE_SERVER_ROOT_FILE: no certificate in "+serverRootFile)
 	}

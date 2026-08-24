@@ -174,6 +174,14 @@ The obligation that follows, in the form a deployment can act on:
 - **Where it lives is the cluster owner's decision.** garam requires
   the two properties above and names no store; choosing one is not
   this contract's to do.
+- **Whatever reads it into the cluster grants to the machine
+  listener's own subject.** The chart renders a ServiceAccount per
+  workload and binds each workload to its own
+  ([ADR-0043](./adr/0043-every-workload-the-chart-renders-runs-as-an-account-of-its-own.md)),
+  so the subject to scope that grant to is `serve machine`'s account
+  and never one every pod in the namespace presents. The arrival checks
+  above read a file's owner and its mode; which workload opened it is
+  not something they can tell.
 
 **The machine listener's certificate and key do not carry this
 property, and they are not free of obligations either.**
@@ -339,3 +347,6 @@ that would assert one:
 - [ADR-0042](./adr/0042-a-chart-is-the-description-of-a-garam-deployment.md)
   — the chart describes the deployment and this document keeps what a
   chart cannot carry; it supersedes ADR-0020
+- [ADR-0043](./adr/0043-every-workload-the-chart-renders-runs-as-an-account-of-its-own.md)
+  — every workload the chart renders runs as an account of its own,
+  which is the subject a role is scoped to

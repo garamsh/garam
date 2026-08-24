@@ -190,7 +190,10 @@ start in the composition roots (`internal/cli/serve.go`,
 `internal/cli/issue_certificate.go`) and, for the web
 app, validated at boot (`web/src/env.ts`). Nothing watches them, so a
 changed value takes effect on restart — a deployment that wants a
-configuration change applied rolls the pods.
+configuration change applied rolls the pods. The `*_TLS_*` paths below
+are the one place where that is not the whole story: the path is read
+once and the file it names is re-read per handshake, which §How key
+material must arrive states and puts obligations on.
 
 | Name | Read by | Default | Secret |
 |---|---|---|---|
@@ -522,10 +525,10 @@ Stated here so they are not guessed:
   two
 - [ADR-0029](./adr/0029-readiness-reports-what-a-replica-cannot-serve-without.md)
   — readiness reports what a replica cannot serve without
+- [ADR-0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)
+  — where the two images are published, under what names, and what
+  triggers a push
 - [ADR-0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)
   — the listener presents one certificate signed by a garam server
   authority the deployment holds, every identity pins that root, and a
   replaced pair is served without a restart (superseding ADR-0037)
-- [ADR-0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)
-  — where the two images are published, under what names, and what
-  triggers a push

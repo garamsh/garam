@@ -261,8 +261,8 @@ collaborate on a shared plan.
 `grn`, `errorx` and `listfilter` are the packages domains share with
 each other; `keyfile` holds the one rule key material files are read
 under, reached
-by `ca` and by the `cli` wiring that reads the machine listener's own
-key; `wire` is shared by the three request surfaces alone — no domain
+by `ca` and by the `cli` wiring that reads the machine listener's pair
+and the adapter's; `wire` is shared by the three request surfaces alone — no domain
 imports it — and `health` is
 shared by the three serve commands and imported by no domain. Domains
 cooperate
@@ -298,10 +298,10 @@ it and imports no request surface and no domain.
 | `agent.Service` | `internal/agent` | creates an agent for an operator, issues the certificate of one assigned to it, and renews an agent's own |
 | `ca.Authority` | `internal/ca` | an organization's certificate authority, its key sealed |
 | `ca.Certificate` | `internal/ca` | issued client certificate identified by a SAN URI |
-| `machine.ServerCertificate` | `internal/machine` | what the listener presents, asked per handshake so a replaced one needs no restart |
 | `ca.Sealer` | `internal/ca` | seals key material against a database dump |
 | `machine.Identity` | `internal/machine` | the GRN a verified client certificate names |
 | `machine.Service` | `internal/machine` | verifies a presented certificate against its organization's authority |
+| `machine.ServerCertificate` | `internal/machine` | what the listener presents, asked per handshake so a replaced one needs no restart |
 | `message.Message` | `internal/message` | one message addressed to a recipient |
 | `message.Claim` | `internal/message` | one reader's hold on a message, fenced by a token |
 | `watch.Event` | `internal/watch` | one forwarded turn event, carried and never stored |

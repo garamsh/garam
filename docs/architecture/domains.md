@@ -42,8 +42,8 @@ Each `internal/<domain>/` package contains:
 - `mocks/` — mockery v3 output, for interfaces tests actually consume (testing.md §Mocking strategy).
 
 A domain that persists nothing has none of the storage files above:
-`internal/machine` is its types, its service, and the seam it reads a
-trust root through.
+`internal/machine` is its types, its service, and the two seams it
+reads through — a trust root for the caller, a certificate for itself.
 
 `queries.sql` and `db/` are a source and its output, not two copies. Every
 generated file says so in its first line, and `make check-gen` fails on any
@@ -322,7 +322,8 @@ Who is calling on the listener a machine identity authenticates on
 |------|----------------|
 | `Identity` | the GRN a verified client certificate names |
 | `Service` | recovers that GRN and verifies the certificate against the organization's authority |
-| `TrustRoot` | supplies the authority a certificate has to chain to |
+| `TrustRoot` | supplies the authority a presented certificate has to chain to |
+| `ServerCertificate` | supplies the certificate the listener presents, asked per handshake so a replaced one needs no restart (ADR-0040) |
 
 An agent and an operator are the same kind of caller here and the
 listener does not branch on which. The identity is the GRN in the
@@ -345,12 +346,18 @@ refused by the trust root rather than by a check.
 The package holds no store and reaches no database: `TrustRoot` is the
 seam the composition root satisfies from `internal/ca`, which keeps the
 two domains cooperating through `grn.GRN` alone. Verification needs the
-authority's certificate and never its key.
+authority's certificate and never its key. `ServerCertificate` is the
+other seam, satisfied from `internal/keyfile`, and what it answers with
+is a different trust root: garam verifies an identity by its
+organization's authority, and an identity verifies garam by the one
+root every organization shares (ADR-0040).
 
 `garam serve machine` is where the listener runs — its own process and
-its own port (ADR-0017), terminating TLS itself with a certificate it
-reads from a file, the private key under the owner-only rule
-`internal/keyfile` holds, because a forwarded client-certificate header is
+its own port (ADR-0017), terminating TLS itself with the pair it holds
+as two paths and re-reads per handshake, the private key under the
+owner-only rule `internal/keyfile` holds, and the root that signed that
+pair beside them for every identity it issues a certificate to. It
+terminates TLS itself because a forwarded client-certificate header is
 trustworthy only where every deployment strips it at the edge
 (ADR-0014). What it serves is `internal/machineapi`. It is not part of
 the local Docker stack: its key material is per host and the container

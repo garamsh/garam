@@ -9,6 +9,7 @@ SQLC := go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
 MOCKERY := go run github.com/vektra/mockery/v3@v3.7.2
 BUF := go run github.com/bufbuild/buf/cmd/buf@v1.72.0
 GOIMPORTS := go run golang.org/x/tools/cmd/goimports@v0.48.0
+HELM := go run helm.sh/helm/v4/cmd/helm@v4.2.4
 
 # One dev Postgres per machine, not per worktree:
 # deploy/local/docker-compose.yml pins `name: garam-local`, so every
@@ -44,6 +45,7 @@ TEST_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)
 WEB_E2E_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)/garam?sslmode=disable)
 
 .PHONY: lint format test build gen check-gen e2e db-up db-down backend-up ci template-diff
+.PHONY: chart chart-lint chart-render
 .PHONY: web-install web-lint web-format web-test web-build web-gen web-check-gen web-e2e web-image-e2e web-ci
 .PHONY: minikube-up minikube-down minikube-start minikube-images minikube-db
 .PHONY: minikube-secret minikube-migrate minikube-apps minikube-rebuild minikube-forward minikube-context
@@ -224,7 +226,7 @@ e2e:
 	@test -n '$(TEST_DATABASE_URL)' || { echo "e2e: no postgres published on this host — run make db-up" >&2; exit 1; }
 	GARAM_TEST_DATABASE_URL='$(TEST_DATABASE_URL)' go test -count=1 ./tests/e2e/...
 
-ci: format lint test build check-gen
+ci: format lint test build check-gen chart
 
 # ---------------------------------------------------------------------
 # web/ — the Next.js frontend (ADR-0009). It keeps its own toolchain and
@@ -307,6 +309,68 @@ web-image-e2e:
 	tests/image/web.sh
 
 web-ci: web-format web-lint web-test web-build web-check-gen
+
+# ---------------------------------------------------------------------
+# deploy/charts/garam — the chart that describes a garam deployment
+# (ADR-0042). `chart` is the whole check and `make ci` runs it; both
+# halves are named tasks of their own. helm is run through the module
+# pin at the top of this file rather than off the path, so a contributor
+# installs nothing and every run takes one version.
+# ---------------------------------------------------------------------
+
+CHART_DIR := deploy/charts/garam
+CHART_TEMPLATES = $(wildcard $(CHART_DIR)/templates/*.yaml)
+
+# One render case per value file: the minimal one takes every default and
+# the full one sets every optional value, so only their union reaches the
+# templates' one branch.
+CHART_VALUES = $(wildcard $(CHART_DIR)/ci/*-values.yaml)
+
+# Every environment variable garam reads, derived from the two files that
+# read them rather than listed here: envOr wraps the Go module's only
+# os.Getenv call, and web/src/env.ts is the web app's only reader. The
+# call's opening parenthesis is matched as `.` because make counts the
+# parentheses inside $(shell ...) and an unbalanced one ends it early.
+CHART_GO_ENV = $(shell grep -rho 'envOr."[A-Z_]*"' --include=*.go internal cmd | sed 's/.*"\([A-Z_]*\)"/\1/' | sort -u)
+CHART_WEB_ENV = $(shell sed -n 's/^ *\([A-Z][A-Z0-9_]*\): process\.env\.\1,$$/\1/p' web/src/env.ts)
+
+# What the chart declares it does not set, read from the table that
+# carries the reasons. A renamed heading empties this and fails the
+# target below rather than exempting nothing quietly.
+CHART_UNSET_ENV = $(shell awk '/^\#\# /{s=0} /^\#\# Not set by this chart/{s=1} s' $(CHART_DIR)/README.md \
+	| sed -n 's/^| `\([A-Z][A-Z0-9_]*\)`.*/\1/p')
+
+chart: chart-lint chart-render
+
+chart-lint:
+	@echo 'chart-lint: $(words $(CHART_TEMPLATES)) templates, $(words $(CHART_VALUES)) value files (helm lint --strict)'
+	@test -n '$(CHART_VALUES)' || { echo 'chart-lint: nothing to lint — $(CHART_DIR)/ci holds no value file'; exit 1; }
+	@set -e; for v in $(CHART_VALUES); do $(HELM) lint --strict --quiet $(CHART_DIR) --values "$$v"; done
+
+# chart-render renders every value file and compares the environment
+# names the render carries against the ones the source reads. Nothing
+# else keeps the chart honest: a manifest that renders is not a manifest
+# that matches the code. Every container, port and volume name in the
+# chart is lowercase, so an all-caps `- name:` in the render is an
+# environment variable.
+chart-render:
+	@echo 'chart-render: $(words $(CHART_GO_ENV)) Go and $(words $(CHART_WEB_ENV)) web environment names read by the source, $(words $(CHART_UNSET_ENV)) declared unset'
+	@test -n '$(CHART_GO_ENV)' && test -n '$(CHART_WEB_ENV)' \
+		|| { echo 'chart-render: the source sweep read no name — the envOr or env.ts parse is broken'; exit 1; }
+	@test -n '$(CHART_UNSET_ENV)' \
+		|| { echo 'chart-render: $(CHART_DIR)/README.md §Not set by this chart named no variable — the parse is broken'; exit 1; }
+	@set -e; \
+		out="$$(mktemp -d)"; trap 'rm -rf "$$out"' EXIT; \
+		for v in $(CHART_VALUES); do $(HELM) template garam $(CHART_DIR) --values "$$v" > "$$out/$$(basename "$$v")"; done; \
+		echo "chart-render: $$(cat "$$out"/*-values.yaml | grep -c '^kind:') documents rendered"; \
+		sed -n 's/^ *- name: \([A-Z][A-Z0-9_]*\)$$/\1/p' "$$out"/*-values.yaml | sort -u > "$$out/rendered"; \
+		printf '%s\n' $(CHART_UNSET_ENV) | sort -u > "$$out/unset"; \
+		printf '%s\n' $(CHART_GO_ENV) $(CHART_WEB_ENV) | sort -u > "$$out/source"; \
+		both="$$(comm -12 "$$out/rendered" "$$out/unset")"; \
+		test -z "$$both" || { echo "chart-render: rendered and declared unset at once:"; echo "$$both"; exit 1; }; \
+		sort -u "$$out/rendered" "$$out/unset" > "$$out/covered"; \
+		diff "$$out/source" "$$out/covered" \
+			|| { echo 'chart-render: < read by the source, neither rendered nor declared unset; > covered by the chart, read by nothing'; exit 1; }
 
 # ---------------------------------------------------------------------
 # deploy/local/minikube — the whole stack on a local Kubernetes cluster.

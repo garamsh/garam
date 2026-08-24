@@ -3,10 +3,6 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import {
-  API_UNREACHABLE_TITLE,
-  ApiUnreachableReason,
-} from "@/components/api-unreachable";
-import {
   Card,
   CardContent,
   CardFooter,
@@ -15,9 +11,12 @@ import {
 import {
   DevSignInButton,
   GoogleSignInButton,
+  PasswordSignInForm,
   getSession,
   listProviders,
 } from "@/features/auth";
+
+import { ApiUnreachableCard } from "../_components/api-unreachable-card";
 
 /** Head metadata for the sign-in route; Next.js reads it by name. */
 export const metadata: Metadata = { title: "Sign in — garam" };
@@ -34,23 +33,7 @@ export default async function LoginPage() {
     redirect("/console");
   }
   if (session.status === "unreachable") {
-    return (
-      <Card className="w-full max-w-sm [--card-spacing:--spacing(6)]">
-        <CardHeader className="gap-2">
-          <h1 className="font-heading text-2xl font-semibold tracking-tight">
-            {API_UNREACHABLE_TITLE}
-          </h1>
-          <p className="text-sm text-pretty text-muted-foreground">
-            <ApiUnreachableReason subject="the way in" />
-          </p>
-        </CardHeader>
-        <CardFooter className="justify-center text-xs text-muted-foreground">
-          <Link href="/" className="transition-colors hover:text-foreground">
-            Back to the home page
-          </Link>
-        </CardFooter>
-      </Card>
-    );
+    return <ApiUnreachableCard subject="the way in" />;
   }
   const providers = await listProviders();
   return (
@@ -60,15 +43,33 @@ export default async function LoginPage() {
           Sign in to garam
         </h1>
         <p className="text-sm text-pretty text-muted-foreground">
-          Use the Google account your organization invited. Accounts are created
-          by invitation, not by signup.
+          Use the account you registered, or the Google account your
+          organization invited. Accounts are created by invitation, not by
+          signup.
         </p>
       </CardHeader>
-      <CardContent className="flex flex-col items-center gap-3">
-        <GoogleSignInButton />
-        {providers.includes("dev") && <DevSignInButton />}
+      <CardContent className="flex flex-col gap-6">
+        <PasswordSignInForm />
+        <div className="flex items-center gap-3">
+          <span aria-hidden className="h-px flex-1 bg-border" />
+          <span className="text-xs text-muted-foreground">or</span>
+          <span aria-hidden className="h-px flex-1 bg-border" />
+        </div>
+        <div className="flex flex-col items-center gap-3">
+          <GoogleSignInButton />
+          {providers.includes("dev") && <DevSignInButton />}
+        </div>
       </CardContent>
-      <CardFooter className="justify-center text-xs text-muted-foreground">
+      <CardFooter className="flex-col gap-2 text-xs text-muted-foreground">
+        <p>
+          Holding an invitation and no account yet?{" "}
+          <Link
+            href="/register"
+            className="text-foreground underline underline-offset-4"
+          >
+            Create one
+          </Link>
+        </p>
         <Link href="/" className="transition-colors hover:text-foreground">
           Back to the home page
         </Link>

@@ -170,7 +170,8 @@ persistence.
 
 ## `internal/authn`
 
-Authentication: the sign-in provider abstraction and sessions.
+Authentication: the sign-in provider abstraction, password
+verification, and sessions.
 
 | Type | Responsibility |
 |------|----------------|
@@ -179,10 +180,29 @@ Authentication: the sign-in provider abstraction and sessions.
 | `Session` | browser session for a user, expiring |
 | `SessionStore` | persists sessions keyed by token hash |
 | `OAuthStateStore` | persists the state a login issued, until the callback spends it or its lifetime runs out (ADR-0028); issuing refuses past `MaxLiveOAuthStates` live states (ADR-0030) |
+| `Password` | a password as typed; renders as a redaction marker in every form, so it cannot reach a log line, a response, or a message (ADR-0040) |
+| `Verifier` | the stored Argon2id form of a password, carrying the parameters it was computed under |
+| `PasswordCredentialStore` | persists one verifier per user that has a password |
+| `PasswordAttemptStore` | bounds the verifications live at once; recording refuses past `MaxLivePasswordAttempts` (ADR-0040) |
 
 A second provider is a new file implementing `Provider`; call sites
 depend only on the interface. Raw session tokens live in cookies; only
 SHA-256 hashes reach the database, the state a login issues included.
+
+A password is not a `Provider` and never becomes one: that interface is
+an authorization-code flow, and satisfying it would mean inventing a
+code. Password sign-in is its own endpoint asserting the same
+`Identity`, after which the path is the callback's — a session row and
+a cookie, unchanged (ADR-0005, ADR-0040). What is stored is an Argon2id
+verifier carrying its own parameters, so raising them invalidates no
+row: a sign-in against any other setting re-hashes on its way out.
+Accounts minted this way take the reserved `local-` prefix in the user
+identifier space, which a provider subject may not claim, so a password
+account and a provider account can never resolve to one user row.
+
+A wrong password and a username no credential belongs to are one
+refusal, in message and in the work done: the second verifies against a
+verifier derived from random bytes rather than returning early.
 
 A callback completes once because the state it carries is spent from a
 row, not because the response asked the browser to drop the cookie
@@ -591,6 +611,8 @@ caller authenticated as.
 | user | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | authn.SessionStore | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | authn.OAuthStateStore | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
+| authn.PasswordCredentialStore | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
+| authn.PasswordAttemptStore | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | authz (policies) | yes (`store.go`) | yes (`postgres.go` + `postgres_<concept>.go`) | not planned | — |
 | agent | yes (`store.go`) | yes (`postgres.go` + `postgres_<concept>.go`) | not planned | — |
 | ca | yes (`store.go`) | yes (`postgres.go`) | not planned | — |

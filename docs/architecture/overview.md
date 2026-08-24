@@ -106,9 +106,8 @@ collaborate on a shared plan.
 - Org / group / project structure; groups and projects are created,
   read, updated, deleted, and populated with members over the HTTP API
   under their organization's paths.
-- Sign-in through a provider abstraction — Google OIDC, plus a
-  development-only provider gated by `GARAM_DEV_AUTH` (ADR-0010);
-  server-side sessions.
+- Sign-in through a provider abstraction — Google OIDC; server-side
+  sessions.
 - Sign-in with a username and a password, which is not a provider: it
   is verified against a stored Argon2id verifier and issues the same
   session (ADR-0041). Registering one needs an invitation.
@@ -155,6 +154,13 @@ collaborate on a shared plan.
   planned ([grn-model.md](./grn-model.md)).
 - Clusters as a resource an organization connects. Named in the intended
   structure and explicitly unplanned.
+- A first account on an empty database. `/register` mints one only from
+  an invitation (ADR-0006) and an invitation comes from an org admin, so
+  a database holding neither is reached with real Google credentials or
+  with rows written against it directly. The development-only provider
+  that used to stand in for this was removed
+  ([ADR-0044](./adr/0044-the-development-only-sign-in-provider-is-removed.md))
+  and nothing replaced it.
 - Reconciling a cluster garam does not run. garam publishes two images
   and the chart at `deploy/charts/garam/` that describes a deployment
   (ADR-0042); which address each process answers on and which of them
@@ -341,7 +347,7 @@ it and imports no request surface and no domain.
 | Store interfaces live next to their domain | Implementation swap at the package boundary. | [domains.md](./domains.md) |
 | OpenAPI spec is the API source of truth | Handlers implement a generated interface; drift fails CI. | [adr/0004-openapi-first-api.md](./adr/0004-openapi-first-api.md) |
 | Sessions are server-side rows | Logout must revoke; opaque tokens, only hashes persisted. | [adr/0005-server-side-sessions.md](./adr/0005-server-side-sessions.md) |
-| Dev sign-in is a provider, not a bypass | Sessions stay identical to Google's; with the flag off no dev route exists. | [adr/0010-dev-auth-provider.md](./adr/0010-dev-auth-provider.md) |
+| The development-only sign-in provider is removed | A password is a way in that ships (ADR-0041), and the provider forced `GARAM_COOKIE_SECURE=false` on any deployment that enabled it. | [adr/0044-the-development-only-sign-in-provider-is-removed.md](./adr/0044-the-development-only-sign-in-provider-is-removed.md) |
 | A password is garam's own credential, not a provider | Argon2id verifies it and the verifier carries its parameters, so they can be raised later; an invitation is what mints the account. | [adr/0041-a-password-is-garams-own-credential-verified-by-argon2id.md](./adr/0041-a-password-is-garams-own-credential-verified-by-argon2id.md) |
 | Invitations are token-keyed, not GRN-addressed | The bearer token is the identifier; no new GRN service_type. | [adr/0006-invitation-tokens.md](./adr/0006-invitation-tokens.md) |
 | The console is a sidebar shell over org sections | One structure for switching orgs, moving between sections, and knowing where you are. | [adr/0011-console-shell.md](./adr/0011-console-shell.md) |

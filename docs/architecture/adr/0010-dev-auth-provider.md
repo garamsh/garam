@@ -1,6 +1,6 @@
 # ADR 0010: Development-only sign-in provider behind GARAM_DEV_AUTH
 
-> Status: accepted
+> Status: superseded by [ADR-0044](./0044-the-development-only-sign-in-provider-is-removed.md)
 > Date: 2026-08-15
 
 ## Context

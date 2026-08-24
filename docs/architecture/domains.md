@@ -175,7 +175,7 @@ verification, and sessions.
 
 | Type | Responsibility |
 |------|----------------|
-| `Provider` | OIDC authorization-code flow with PKCE; `google.go` and the dev-only `dev.go` (ADR-0010) implement it |
+| `Provider` | OIDC authorization-code flow with PKCE; `google.go` implements it (ADR-0044 removed the development-only second implementation) |
 | `Identity` | subject + nickname asserted by a provider |
 | `Session` | browser session for a user, expiring |
 | `SessionStore` | persists sessions keyed by token hash |

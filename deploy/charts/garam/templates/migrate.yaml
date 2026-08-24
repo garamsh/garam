@@ -21,6 +21,7 @@ spec:
         {{- include "garam.selectorLabels" (dict "root" $ "component" "migrate") | nindent 8 }}
     spec:
       restartPolicy: Never
+{{- include "garam.serviceAccountName" (dict "root" $ "component" "migrate") }}
 {{- include "garam.imagePullSecrets" . }}
       containers:
         - name: migrate
@@ -30,3 +31,11 @@ spec:
           env:
             {{- include "garam.databaseEnv" . | nindent 12 }}
           resources: {{- toYaml .Values.migrate.resources | nindent 12 }}
+{{/*
+A pre-install hook runs before the chart's ordinary resources exist, so
+the Job's account is created in the same phase and at a lower weight.
+An account created as an ordinary resource would not exist yet, and the
+apiserver refuses a pod naming an account it cannot find.
+*/}}
+{{- $hook := dict "helm.sh/hook" "pre-install,pre-upgrade" "helm.sh/hook-weight" "-10" "helm.sh/hook-delete-policy" "before-hook-creation" -}}
+{{- include "garam.serviceAccount" (dict "root" $ "component" "migrate" "hookAnnotations" $hook) }}

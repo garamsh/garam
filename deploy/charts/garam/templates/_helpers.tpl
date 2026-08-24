@@ -57,3 +57,47 @@ so an empty list leaves no blank line behind.
 {{- end }}
 {{- end }}
 {{- end -}}
+
+{{/*
+The account a workload runs as. The name is a value taken verbatim, and
+the chart composes none: a role another repository owns names this
+subject in its trust policy, so a name composed from the release name
+would move that subject whenever a deployment renamed its release, and
+the failure is a credential that stops arriving at runtime (ADR-0043).
+No name renders no field, and the workload runs as the namespace
+default.
+
+Indented for a pod spec, the one depth all five workloads call it from.
+*/}}
+{{- define "garam.serviceAccountName" -}}
+{{- with (index .root.Values .component "serviceAccount").name }}
+      serviceAccountName: {{ . }}
+{{- end }}
+{{- end -}}
+
+{{/*
+Rendered at the end of each workload's own file, so one workload's
+objects stay in one file. A caller whose workload is a hook passes the
+hook annotations that put its account in the same phase.
+*/}}
+{{- define "garam.serviceAccount" -}}
+{{- $account := index .root.Values .component "serviceAccount" -}}
+{{- if $account.create }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ required (printf "%s.serviceAccount.name is required when create is true: the chart composes no name, because another repository owns the role bound to this subject (ADR-0043)" .component) $account.name }}
+  labels:
+    {{- include "garam.labels" . | nindent 4 }}
+  {{- if or .hookAnnotations $account.annotations }}
+  annotations:
+    {{- with .hookAnnotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- with $account.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- end }}
+{{- end }}
+{{- end -}}

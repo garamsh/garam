@@ -18,6 +18,7 @@ spec:
       labels:
         {{- include "garam.selectorLabels" (dict "root" $ "component" "api") | nindent 8 }}
     spec:
+{{- include "garam.serviceAccountName" (dict "root" $ "component" "api") }}
 {{- include "garam.imagePullSecrets" . }}
       containers:
         - name: api
@@ -73,3 +74,4 @@ spec:
     - name: http
       port: 8080
       targetPort: http
+{{- include "garam.serviceAccount" (dict "root" $ "component" "api") }}

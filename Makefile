@@ -45,7 +45,7 @@ TEST_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)
 WEB_E2E_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)/garam?sslmode=disable)
 
 .PHONY: lint format test build gen check-gen e2e db-up db-down backend-up ci template-diff
-.PHONY: chart chart-lint chart-render
+.PHONY: chart chart-lint chart-render chart-identity
 .PHONY: web-install web-lint web-format web-test web-build web-gen web-check-gen web-e2e web-image-e2e web-ci
 .PHONY: minikube-up minikube-down minikube-start minikube-images minikube-db
 .PHONY: minikube-secret minikube-migrate minikube-apps minikube-rebuild minikube-forward minikube-context
@@ -340,7 +340,18 @@ CHART_WEB_ENV = $(shell sed -n 's/^ *\([A-Z][A-Z0-9_]*\): process\.env\.\1,$$/\1
 CHART_UNSET_ENV = $(shell awk '/^\#\# /{s=0} /^\#\# Not set by this chart/{s=1} s' $(CHART_DIR)/README.md \
 	| sed -n 's/^| `\([A-Z][A-Z0-9_]*\)`.*/\1/p')
 
-chart: chart-lint chart-render
+# Every workload the chart renders, the kind it renders as, and the value
+# that names the account it runs as — read from the README table a
+# consumer places its own names through. A renamed heading empties this
+# and fails the target below rather than checking nothing.
+CHART_IDENTITIES = $(shell awk '/^\#\# /{s=0} /^\#\# Workload identities/{s=1} s' $(CHART_DIR)/README.md \
+	| sed -n 's/^| `\([a-z0-9-]*\)` | \([A-Za-z]*\) | `\([a-zA-Z0-9.]*\)` |.*/\1=\2=\3/p')
+
+# The value file that names no account, so its render is what a
+# deployment supplying only what the chart requires receives.
+CHART_DEFAULT_VALUES = $(CHART_DIR)/ci/minimal-values.yaml
+
+chart: chart-lint chart-render chart-identity
 
 chart-lint:
 	@echo 'chart-lint: $(words $(CHART_TEMPLATES)) templates, $(words $(CHART_VALUES)) value files (helm lint --strict)'
@@ -354,7 +365,7 @@ chart-lint:
 # chart is lowercase, so an all-caps `- name:` in the render is an
 # environment variable.
 chart-render:
-	@echo 'chart-render: $(words $(CHART_GO_ENV)) Go and $(words $(CHART_WEB_ENV)) web environment names read by the source, $(words $(CHART_UNSET_ENV)) declared unset'
+	@echo 'chart-render: $(words $(CHART_GO_ENV)) Go and $(words $(CHART_WEB_ENV)) web environment names read by the source, $(words $(CHART_UNSET_ENV)) declared unset — environment names only, $(CHART_DIR)/README.md §What the checks are complete over'
 	@test -n '$(CHART_GO_ENV)' && test -n '$(CHART_WEB_ENV)' \
 		|| { echo 'chart-render: the source sweep read no name — the envOr or env.ts parse is broken'; exit 1; }
 	@test -n '$(CHART_UNSET_ENV)' \
@@ -372,118 +383,57 @@ chart-render:
 		diff "$$out/source" "$$out/covered" \
 			|| { echo 'chart-render: < read by the source, neither rendered nor declared unset; > covered by the chart, read by nothing'; exit 1; }
 
-# ---------------------------------------------------------------------
-# deploy/local/minikube — the whole stack on a local Kubernetes cluster.
-# Development only: every image is built into that cluster's own daemon
-# and nothing is pushed or pulled, because no node here holds a registry
-# credential (ADR-0020). What reconciles a real cluster is not this.
-# ---------------------------------------------------------------------
-
-# The local cluster keeps its credentials beside its own state instead of
-# in ~/.kube/config, so bringing it up never writes into a kubeconfig
-# holding credentials for a real cluster. An exported KUBECONFIG wins, so
-# `KUBECONFIG=~/.kube/config make minikube-up` merges the context into
-# your own.
-KUBECONFIG ?= $(HOME)/.minikube/kubeconfig
-export KUBECONFIG
-
-# Every command names the context, so nothing in this file can reach a
-# cluster that is not the local one, whichever kubeconfig it reads.
-KUBECTL_MINIKUBE := kubectl --context minikube
-KUBECTL_LOCAL := $(KUBECTL_MINIKUBE) --namespace garam-local
-MINIKUBE_DIR := deploy/local/minikube
-
-# The operator, pinned to the commit that carries the manifest: a release
-# asset can be replaced under its tag and a commit cannot. v1.30.0 is the
-# current stable release and is the first patched for every advisory
-# github.com/cloudnative-pg/cloudnative-pg publishes, the newest of which
-# is GHSA-7qwx-x8ff-3px9.
-CNPG_MANIFEST := https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/4b5e244a7d031f67e025c83c1555e7726ecbbfa1/releases/cnpg-1.30.0.yaml
-
-minikube-up: minikube-start minikube-db minikube-secret minikube-rebuild
-
-# minikube-rebuild is everything a code change touches: the images, the
-# migrations the new code expects, and the processes that run it. The
-# bring-up above composes it rather than restating its steps, so the two
-# cannot come apart.
-minikube-rebuild: minikube-images minikube-migrate minikube-apps
-
-# Every kubectl recipe needs the apiserver reachable through the project
-# kubeconfig, and `minikube status` does not answer that: a cluster
-# started outside make writes the new apiserver port into ~/.kube/config
-# and leaves this file stale behind a Running process, which status's
-# exit code also reports as failure. Ask the file itself and repair it
-# with update-context; boot only when the apiserver process is down.
-minikube-context:
-	@$(KUBECTL_MINIKUBE) get --raw=/healthz >/dev/null 2>&1 || { \
-		test "$$(minikube status --format '{{.APIServer}}' 2>/dev/null | head -n 1)" = Running \
-			|| minikube start --driver=docker; \
-		minikube update-context; \
-	}
-
-# minikube-start brings up the cluster and the Postgres operator, and is
-# a no-op on both when they are already there. The CRDs are past the
-# annotation size a client-side apply writes, so the apply is server-side.
-minikube-start: minikube-context
-	$(KUBECTL_MINIKUBE) apply --server-side -f $(CNPG_MANIFEST)
-	$(KUBECTL_MINIKUBE) -n cnpg-system rollout status deployment/cnpg-controller-manager --timeout=300s
-
-# minikube-images builds both images (ADR-0020) into the cluster's own
-# daemon, which docker-env points the client at for the length of the
-# recipe. Nothing is pushed, and the manifests pull Never, so what runs
-# is what was built here. Both Dockerfiles sit outside the context they
-# build — `minikube image build` uploads the context and cannot reach
-# them — and this is the same pair of contexts the compose file uses.
-minikube-images:
-	eval "$$(minikube docker-env --shell bash)"; \
-		docker build -t garam:local -f deploy/local/Dockerfile . && \
-		docker build -t garam-web:local -f deploy/local/Dockerfile.web web
-
-# minikube-db creates the namespace everything else lands in and the
-# Postgres cluster CNPG reconciles, and returns once it is reachable.
-# The operator reports the cluster ready before its Service carries a
-# routable endpoint, and everything downstream connects through that
-# Service — so the second wait is on the endpoint the migration
-# actually dials, not on the condition next to it.
-minikube-db: minikube-context
-	$(KUBECTL_MINIKUBE) apply -f $(MINIKUBE_DIR)/namespace.yaml
-	$(KUBECTL_MINIKUBE) apply -f $(MINIKUBE_DIR)/postgres.yaml
-	$(KUBECTL_LOCAL) wait --for=condition=Ready cluster/postgres --timeout=300s
-	$(KUBECTL_LOCAL) wait --for=jsonpath='{.endpoints[0].conditions.ready}'=true endpointslice -l kubernetes.io/service-name=postgres-rw --timeout=120s
-
-minikube-secret: minikube-context
-	$(MINIKUBE_DIR)/machine-key-material.sh
-
-# minikube-migrate applies pending migrations and waits for them. A Job's
-# pod template is immutable, so the finished one is deleted rather than
-# updated.
-minikube-migrate: minikube-context
-	$(KUBECTL_LOCAL) delete job migrate --ignore-not-found
-	$(KUBECTL_LOCAL) apply -f $(MINIKUBE_DIR)/migrate-job.yaml
-	$(KUBECTL_LOCAL) wait --for=condition=complete job/migrate --timeout=300s
-
-# minikube-apps starts the three serve processes and the web app, and
-# reports what is running rather than that it finished. Each pod
-# template is stamped with the id of the image it runs, so a rebuilt
-# image is a changed Deployment the apply rolls and an unrebuilt one
-# restarts nothing — which a mutable tag alone cannot tell apart.
-minikube-apps: minikube-context
-	@eval "$$(minikube docker-env --shell bash)"; \
-		id="$$(docker image inspect --format '{{.Id}}' garam:local)" && \
-		web_id="$$(docker image inspect --format '{{.Id}}' garam-web:local)" && \
-		echo "minikube-apps: garam:local=$$id garam-web:local=$$web_id" && \
-		sed -e "s|GARAM_IMAGE_ID|$$id|" -e "s|GARAM_WEB_IMAGE_ID|$$web_id|" $(MINIKUBE_DIR)/garam.yaml \
-		| $(KUBECTL_LOCAL) apply -f -
-	@for d in authz api machine web; do $(KUBECTL_LOCAL) rollout status deployment/$$d --timeout=300s; done
-	@$(KUBECTL_LOCAL) get pods
-
-# minikube-forward is how the web app is reached: the Services are
-# cluster-internal and there is no ingress, so nothing leaves the machine
-# without this. It holds the terminal until interrupted.
-minikube-forward: minikube-context
-	$(KUBECTL_LOCAL) port-forward service/web 3000:3000
-
-# minikube-down removes the stack, its database volume and its key
-# material, and leaves the cluster and the operator up.
-minikube-down:
-	$(KUBECTL_MINIKUBE) delete -f $(MINIKUBE_DIR)/namespace.yaml --ignore-not-found
+# chart-identity compares the identity every rendered workload runs as
+# against the table the README declares it under, under two release
+# names. An account name is the subject another repository binds a role
+# to (ADR-0043): a name this chart composed would move with the release
+# name, the credential would stop arriving at runtime, and one render
+# cannot see it. Keyed on the component label, which no release name
+# enters, so the two renders compare directly.
+chart-identity:
+	@echo 'chart-identity: $(words $(CHART_IDENTITIES)) workloads declared by $(CHART_DIR)/README.md §Workload identities — pod identity only, §What the checks are complete over'
+	@test -n '$(CHART_IDENTITIES)' \
+		|| { echo 'chart-identity: $(CHART_DIR)/README.md §Workload identities declared no workload — the parse is broken'; exit 1; }
+	@set -e; \
+		out="$$(mktemp -d)"; trap 'rm -rf "$$out"' EXIT; \
+		identity() { rel="$$1"; shift; $(HELM) template "$$rel" $(CHART_DIR) "$$@" > "$$out/raw"; awk ' \
+			function flush() { \
+				if (kind == "Deployment" || kind == "Job") printf "workload %s=%s runs as %s\n", comp, kind, \
+					(fields > 1 ? fields " serviceAccountName fields at once" : (sa == "" ? "the namespace default" : sa)); \
+				else if (kind == "ServiceAccount") printf "account %s\n", name } \
+			/^---$$/ { flush(); kind = ""; comp = ""; name = ""; sa = ""; fields = 0; next } \
+			/^kind: / { kind = $$2 } \
+			/^  name: / { if (name == "") name = $$2 } \
+			/app.kubernetes.io\/component: / { if (comp == "") comp = $$2 } \
+			/^ *serviceAccountName: / { sa = $$2; fields++ } \
+			END { flush() }' "$$out/raw" | sort; }; \
+		printf '%s\n' $(CHART_IDENTITIES) | cut -d= -f1,2 | sort -u > "$$out/declared"; \
+		for v in $(CHART_VALUES); do \
+			n="$$(basename "$$v")"; \
+			identity garam --values "$$v" > "$$out/garam"; \
+			identity prod-garam --values "$$v" > "$$out/prod-garam"; \
+			echo "chart-identity: $$n — $$(grep -c '^workload ' "$$out/garam" || true) workloads, $$(grep -c '^account ' "$$out/garam" || true) accounts"; \
+			diff "$$out/garam" "$$out/prod-garam" \
+				|| { echo "chart-identity: $$n: < release garam, > release prod-garam — an identity moved with the release name, and so did the subject another repository binds a role to"; exit 1; }; \
+			sed -n 's/^workload \([a-zA-Z0-9=-]*\) runs as .*/\1/p' "$$out/garam" | sort -u > "$$out/rendered"; \
+			diff "$$out/declared" "$$out/rendered" \
+				|| { echo "chart-identity: $$n: < workload=kind declared in the README, > rendered by the chart"; exit 1; }; \
+			sed -n 's/^account //p' "$$out/garam" | sort -u > "$$out/accounts"; \
+			sed -n 's/^workload .* runs as //p' "$$out/garam" | sort -u > "$$out/bound"; \
+			unused="$$(comm -23 "$$out/accounts" "$$out/bound")"; \
+			test -z "$$unused" || { echo "chart-identity: $$n renders an account no workload runs as — a subject the next reader takes for one that was needed, and one an annotation sends a consumer to a role for:"; echo "$$unused"; exit 1; }; \
+		done; \
+		probe=""; for d in $(CHART_IDENTITIES); do probe="$$probe --set $${d##*=}=probe-$${d%%=*}"; done; \
+		identity garam --values $(CHART_DEFAULT_VALUES) $$probe > "$$out/probe"; \
+		for d in $(CHART_IDENTITIES); do \
+			grep -q " runs as probe-$${d%%=*}$$" "$$out/probe" \
+				|| { echo "chart-identity: §Workload identities names $${d##*=} for $${d%%=*}, and setting it named no account — the value is not the one the chart reads, or it is not read verbatim"; exit 1; }; \
+		done; \
+		identity garam --values $(CHART_DEFAULT_VALUES) > "$$out/default"; \
+		defaulted="$$(grep '^account ' "$$out/default" || true; grep '^workload ' "$$out/default" | grep -v 'runs as the namespace default' || true)"; \
+		test -z "$$defaulted" || { echo "chart-identity: $$(basename $(CHART_DEFAULT_VALUES)) names no account and the chart supplied one anyway — the default is none:"; echo "$$defaulted"; exit 1; }; \
+		echo "chart-identity: $$(basename $(CHART_DEFAULT_VALUES)) — no name given, so no account created and every workload on the namespace default"; \
+		for d in $(CHART_IDENTITIES); do p="$${d##*=}"; \
+			if $(HELM) template garam $(CHART_DIR) --values $(CHART_DEFAULT_VALUES) --set "$${p%.name}.create=true" >/dev/null 2>&1; then \
+				echo "chart-identity: $${p%.name}.create=true rendered with no $$p — the chart composed a name, and a composed name moves the subject another repository binds a role to"; exit 1; fi; \
+		done

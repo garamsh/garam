@@ -1,6 +1,13 @@
 # Every optional value set, so the render `make chart` checks covers the
-# configuration the minimal one leaves out — Google sign-in above all,
-# which is the only branch in the templates.
+# configuration the minimal one leaves out — Google sign-in, and an
+# account created and annotated for every workload, which are the two
+# branches in the templates. The minimal file covers the other side of
+# the second: no name, so no account and no binding.
+#
+# Each name and annotation below is a fixture. A deployment's names are
+# whatever its own infrastructure repository binds a role to, and which
+# key performs the binding is that deployment's platform's; the chart
+# holds neither.
 image:
   server:
     tag: "0.0.0-ci"
@@ -13,6 +20,11 @@ database:
   secretName: garam-database
   secretKey: uri
 api:
+  serviceAccount:
+    name: garam-api
+    create: true
+    annotations:
+      eks.amazonaws.com/role-arn: arn:aws:iam::000000000000:role/garam-ci-api
   sessionTTL: 24h
   cookieSecure: true
   google:
@@ -26,11 +38,21 @@ api:
       cpu: 100m
       memory: 128Mi
 authz:
+  serviceAccount:
+    name: garam-authz
+    create: true
+    annotations:
+      eks.amazonaws.com/role-arn: arn:aws:iam::000000000000:role/garam-ci-authz
   resources:
     requests:
       cpu: 100m
       memory: 128Mi
 machine:
+  serviceAccount:
+    name: garam-machine
+    create: true
+    annotations:
+      eks.amazonaws.com/role-arn: arn:aws:iam::000000000000:role/garam-ci-machine
   keyMaterial:
     secretName: garam-machine-key-material
     certKey: tls.crt
@@ -43,12 +65,22 @@ machine:
       cpu: 100m
       memory: 128Mi
 web:
+  serviceAccount:
+    name: garam-web
+    create: true
+    annotations:
+      eks.amazonaws.com/role-arn: arn:aws:iam::000000000000:role/garam-ci-web
   apiUrl: https://garam.example/api
   resources:
     requests:
       cpu: 100m
       memory: 128Mi
 migrate:
+  serviceAccount:
+    name: garam-migrate
+    create: true
+    annotations:
+      eks.amazonaws.com/role-arn: arn:aws:iam::000000000000:role/garam-ci-migrate
   resources:
     requests:
       cpu: 100m

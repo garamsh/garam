@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -173,6 +174,34 @@ func TestRejectAbsent_RefusesAsAStoredVerifierDoes(t *testing.T) {
 	assert.True(t, errorx.IsKind(authn.RejectAbsent(testPassword), errorx.KindUnauthenticated))
 }
 
+// TestRejectAbsent_DerivesAsAStoredVerifierDoes holds the claim the
+// refusal above rests on: the unknown-username path runs the Argon2id
+// derivation rather than returning early, so it costs what a wrong
+// password costs. Argon2id's cost is the memory it fills, which the
+// policy states in KiB and every call allocates, so what the call
+// allocated reports whether the derivation was reached (ADR-0041).
+func TestRejectAbsent_DerivesAsAStoredVerifierDoes(t *testing.T) {
+	// The absent verifier is derived on the first call and kept; the
+	// readings below are of a steady-state call, not of that one.
+	require.ErrorIs(t, authn.RejectAbsent(testPassword), authn.ErrPasswordRejected)
+
+	stored, err := authn.NewVerifier(testPassword)
+	require.NoError(t, err)
+	floor := memoryPerDerivation(t, stored) / 2
+
+	// The control: the same refusal with the derivation taken out of
+	// it. Without it the floor could be reading allocation the call
+	// makes for other reasons rather than the work.
+	withoutTheWork := func() error { return authn.ErrPasswordRejected }
+	assert.Less(t, bytesAllocated(func() { _ = withoutTheWork() }), floor,
+		"a refusal that derives nothing falls below the floor")
+
+	assert.GreaterOrEqual(t, bytesAllocated(func() { _ = authn.RejectAbsent(testPassword) }), floor,
+		"the unknown-username path fills Argon2id's memory")
+	assert.GreaterOrEqual(t, bytesAllocated(func() { _ = stored.Match("something-else-entirely") }), floor,
+		"as does the wrong-password path it has to be indistinguishable from")
+}
+
 // supersededVerifier builds the verifier a weaker policy would have
 // stored, computing the tag here rather than through the code under
 // test.
@@ -189,4 +218,30 @@ func supersededVerifier(t *testing.T, p authn.Password) authn.Verifier {
 		argon2.Version, memory, iterations, parallelism,
 		base64.RawStdEncoding.EncodeToString(salt),
 		base64.RawStdEncoding.EncodeToString(tag)))
+}
+
+// memoryPerDerivation reports, in bytes, the memory one derivation
+// under v's parameters has to fill. It is read from v rather than
+// written here, so raising the policy moves the expectation with it.
+func memoryPerDerivation(t *testing.T, v authn.Verifier) uint64 {
+	t.Helper()
+	fields := strings.Split(string(v), "$")
+	require.Len(t, fields, 6, "a verifier carries its parameters")
+	var kib uint64
+	_, err := fmt.Sscanf(fields[3], "m=%d", &kib)
+	require.NoError(t, err)
+	require.NotZero(t, kib)
+	return kib * 1024
+}
+
+// bytesAllocated reports what f allocated. TotalAlloc only rises, so
+// anything allocated elsewhere in the process inflates the reading:
+// every assertion on it is a floor, and the one ceiling is the control,
+// which has the same margin to spare.
+func bytesAllocated(f func()) uint64 {
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	f()
+	runtime.ReadMemStats(&after)
+	return after.TotalAlloc - before.TotalAlloc
 }

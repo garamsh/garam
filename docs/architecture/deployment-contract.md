@@ -1,16 +1,12 @@
 # Deployment Contract
 
-The contract ADR-0020 obliges garam to publish: the ports each process listens on, the paths a probe may reach, every configuration value and whether it is secret, and how key material must arrive.
+What a garam deployment must plan for that no manifest can carry: what readiness reports, what bounds termination, how the migration fails, what the binary enforces about key material, and what is not known.
 
 ## Contents
 - What it is
-- Images
-- Ports and probe paths
 - What readiness reports
-- Configuration values
-- How key material must arrive
+- What the binary enforces about key material
 - The key-encryption key cannot be regenerated
-- The database connection
 - The migrate job
 - Termination
 - Not established
@@ -18,128 +14,32 @@ The contract ADR-0020 obliges garam to publish: the ports each process listens o
 
 ## What it is
 
-A repository outside this one — the repository that owns a cluster and
-reconciles it — is written against this document, so a change that
-falsifies it breaks someone else's deployment silently, which is the
-consequence [ADR-0020](./adr/0020-published-artifacts.md) accepted. It
-records what is; changing any port, path, or configuration name in it is
-a decision, not an edit here.
+The chart at `deploy/charts/garam/` is the description of a garam
+deployment ([ADR-0042](./adr/0042-a-chart-is-the-description-of-a-garam-deployment.md)).
+It is authoritative for everything a deployment *sets* — the images, the
+ports, every configuration value, the mounts, and the shape key material
+arrives in — and `make chart` checks it against the source rather than
+against a reader's attention.
 
-It consolidates the contract handover the consuming repository recorded
-as its issue #3 (`garamsh/gitops`): the three listeners, the machine
-listener's TLS passthrough, `serve authz` plaintext and cluster-internal,
-the `/api/*` same-origin rewrite, `migrate` as a PreSync-suited job, and
-the client-CA prohibition all originate there and are restated here
-against the source they are checkable in. That issue remains the
-consumer's record of its own decisions; this is the artifact it cites
-rather than copies.
+**This document is authoritative for what the binary does with what the
+chart sets, and for what is not known.** Where the two could both answer
+a question, the chart answers it. Nothing here restates a value the
+chart carries: the ports table, the configuration table, the image
+references and the database connection each moved into
+`deploy/charts/garam/values.yaml` and the templates beside it, because
+two descriptions of one deployment is the defect ADR-0042 exists to
+remove.
 
-Every claim below names the path it can be checked against, per
-`docs/convention/documentation.md` §Keep it current. Where the source
-answers a deployment question with nothing checkable, §Not established
-says so rather than guessing.
+It records what is. Changing any behaviour named below is a decision,
+not an edit here. Every claim names the path it can be checked against,
+per `docs/convention/documentation.md` §Keep it current; where the
+source answers a deployment question with nothing checkable, §Not
+established says so rather than guessing.
 
-## Images
-
-Two images, because there are two runtimes ([ADR-0020](./adr/0020-published-artifacts.md)). Their tags are immutable, and [ADR-0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md) fixes where they are published and under what names:
-
-| Image | Published as |
-|---|---|
-| Go | `486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam/garam-server:<version>` |
-| Web | `486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam/garam-web:<version>` |
-
-`<version>` is a released git tag with its `v` dropped — `v0.3.0` in git
-is `0.3.0` here — and one commit publishes both images under the same
-one, so a manifest pins one version across the pair. What a manifest
-pins is that tag rather than a digest: the tags are immutable, so the
-tag answers what is deployed on its own. Each image's digest is
-recorded beside its tag in the GitHub release for that version, for a
-consumer that would rather pin one.
-
-**Both repositories exist and neither holds an image.** Read on
-2026-08-24: `aws ecr describe-repositories --region ap-northeast-2`
-returns nine repositories, `garam/garam-server` and `garam/garam-web`
-among them, both `IMMUTABLE`; `aws ecr list-images --repository-name`
-returns an empty list for each of the two names above; no workflow
-pushes to a registry (`.github/workflows/ci.yml`); `gh release
-list --repo garamsh/garam` returns nothing. So a manifest may name
-either reference above and still pull nothing today: what is missing
-is the tag, not the repository, and the first release is what
-supplies it.
-
-**A deployment must be able to pull both references above; how it does
-that is not garam's to decide.** The registry admits no anonymous pull
-and the credential it issues expires (`ecr:GetAuthorizationToken`), so
-whatever pulls a garam image holds one that is valid at pull time and
-renewed before it lapses. A pull secret is one way to supply that and
-garam does not forbid it; a node credential minted per pull is another.
-
-- **Go image** (`deploy/local/Dockerfile`) — one binary whose entry
-  point takes a subcommand: `serve api`, `serve authz`, `serve machine`,
-  `migrate`, `probe`, `adapter` (`ENTRYPOINT ["garam"]`). The last of
-  those is the only one a cluster this repository does not describe
-  runs: `adapter` is the delivery loop that goes beside one agent, in
-  that agent's pod ([adapter.md](./adapter.md)), so this image is pulled
-  there as well as here. The runtime stage is
-  `scratch`: the image carries no shell and no package manager, so the
-  local stack's healthchecks run the binary's own `probe` subcommand
-  (`deploy/local/docker-compose.yml`) — a kubelet's `httpGet` needs
-  nothing in the image either way. The trust store the api's Google
-  OIDC discovery needs is copied from the build stage
-  (`COPY --from=build /etc/ssl/certs/ca-certificates.crt`); nothing in
-  the module names a time zone, so no zoneinfo ships. Runs as UID 10001
-  — `scratch` has no `adduser`, so the build stage creates the account
-  and only its `/etc/passwd` and `/etc/group` lines are copied in for
-  `USER garam` to resolve against; the ownership check
-  (§How key material must arrive) reads the numeric UID, which is
-  unchanged. The migrations ship inside it at `/app/migrations`
-  (`COPY migrations /app/migrations`, `WORKDIR /app`), which is where
-  the default `GARAM_MIGRATIONS_DIR` resolves.
-- **Web image** (`deploy/local/Dockerfile.web`) — the Next.js
-  application as a standalone server (`CMD ["node", "server.js"]`),
-  `USER node`. The `node` base image assigns that user UID 1000; this
-  is read from the Dockerfile and has not been verified against a
-  running pod. Listens on port 3000 (`ENV ... PORT=3000`). The `/api/*`
-  rewrite target is baked into the build (`ARG GARAM_API_URL`), so the
-  runtime value must match the one the build used.
-
-## Ports and probe paths
-
-| Process | Listener | Set by | Default | Serves |
-|---|---|---|---|---|
-| `serve api` | HTTP | `GARAM_HTTP_ADDR` | `:8080` | the OpenAPI API (`api/`), plus `/metrics`, `/healthz`, `/readyz` with no credential (`internal/cli/serve.go`) |
-| `serve authz` | gRPC, plaintext | `GARAM_GRPC_ADDR` | `:9090` | the engine's RPCs only (`proto/garam/authz/v1`); cluster-internal by design ([ADR-0003](./adr/0003-single-cli-topology.md)) |
-| `serve authz` | HTTP | `GARAM_METRICS_ADDR` | `:9091` | `/metrics`, `/healthz`, `/readyz` — the engine speaks gRPC only, so its probes and metrics share a listener of their own ([ADR-0021](./adr/0021-liveness-and-readiness.md)) |
-| `serve machine` | HTTPS, mTLS | `GARAM_MACHINE_ADDR` | `:8443` | the machine API (`api/machine.yaml`, [ADR-0019](./adr/0019-machine-openapi-spec.md)); every caller presents a client certificate, TLS 1.3 only (`internal/machine/listener.go`) |
-| `serve machine` | HTTP, plaintext | `GARAM_MACHINE_HEALTH_ADDR` | `:8444` | `/healthz` and `/readyz` only — the mTLS listener admits no probe, so this process gets a port for them ([ADR-0021](./adr/0021-liveness-and-readiness.md)) |
-| web | HTTP | `PORT` | `3000` | the console, plus `/healthz` and `/readyz` |
-| `migrate` | none | — | — | a job: applies and exits |
-| `issue-certificate` | none | — | — | the one bootstrap [ADR-0015](./adr/0015-operator-identity.md) leaves out of band: mints an operator's own first certificate, for operator subjects only, and exits. No serve path reaches it, so no serving process can mint an identity |
-| `adapter` | none | — | — | nothing: it dials out and listens on no port. It runs beside one agent in that agent's pod, claims that agent's messages from the machine listener above, and posts them into the agent platform's gateway over loopback ([adapter.md](./adapter.md), [ADR-0013](./adr/0013-agent-messaging.md)). It answers no probe — see §Not established |
-
-- **The probe paths are `/healthz` and `/readyz`, one spelling on all
-  four runtimes** (`internal/health/health.go`; `web/src/app/healthz/route.ts`,
-  `web/src/app/readyz/route.ts`). Liveness answers for the process alone
-  and reads nothing outside it.
-- **These ports and paths are interface, not implementation**
-  ([ADR-0021](./adr/0021-liveness-and-readiness.md),
-  [ADR-0023](./adr/0023-web-probes.md)): changing one supersedes the
-  ADR, it is not an edit to a handler.
-- The mTLS listener terminates TLS itself and authenticates the caller's
-  certificate (`internal/machine/listener.go`), so it cannot sit behind
-  a TLS-terminating proxy — that strips the certificate and every call
-  fails authentication. It needs TLS passthrough or direct exposure, and
-  it is the one listener machine identities reach from outside the
-  cluster ([ADR-0012](./adr/0012-agent-operator-model.md),
-  [ADR-0014](./adr/0014-agent-authentication.md)). The mTLS listener
-  gains no unauthenticated route.
-- Browsers reach the API same-origin through the web app's `/api/*`
-  rewrite (`web/next.config.ts`), so the API needs no public hostname
-  for the browser path ([ADR-0009](./adr/0009-web-frontend.md)).
-- `/metrics` answers on the same unauthenticated listeners as the probes
-  on `serve api` and `serve authz` (`internal/cli/serve.go`,
-  `internal/cli/observability.go`); `serve machine` exposes no metrics
-  listener (`internal/cli/machine.go`).
+The client-CA prohibition below originates in the consuming repository's
+own record (`garamsh/gitops` issue #3), restated here against the source
+it is checkable in. That repository has not agreed to consume the chart,
+and ADR-0042 assumes nothing about whether it will.
 
 ## What readiness reports
 
@@ -160,6 +60,7 @@ The semantics, fixed in `internal/health/health.go`:
 - Readiness fails whole as soon as one dependency fails, naming that
   dependency and nothing else. There is no partial readiness and no
   per-route readiness.
+- Liveness answers for the process alone and reads nothing outside it.
 
 Two sentences a consumer must plan against:
 
@@ -174,128 +75,33 @@ Two sentences a consumer must plan against:
   leave rotation. Readiness deliberately does not report it
   ([ADR-0029](./adr/0029-readiness-reports-what-a-replica-cannot-serve-without.md)).
 
-garam takes no position on probe tolerance. The local manifest sets only
-`timeoutSeconds: 3` on its readiness probes — because the handler bounds
-one answer at two seconds — and nothing else
-(`deploy/local/minikube/garam.yaml`). Any other value a live probe
-object shows, `failureThreshold` and `periodSeconds` among them, is the
-platform's default or the deployment's own choice, never a decision made
-here.
+garam takes no position on probe tolerance. Every probe field the chart
+does not set — `failureThreshold` and `periodSeconds` among them — is
+the platform's default or the deployment's own choice, never a decision
+made here.
 
-## Configuration values
-
-Configuration is entirely environment variables, read once at process
-start in the composition roots (`internal/cli/serve.go`,
-`internal/cli/machine.go`, `internal/cli/migrate.go`,
-`internal/cli/issue_certificate.go`) and, for the web
-app, validated at boot (`web/src/env.ts`). Nothing watches them, so a
-changed value takes effect on restart — a deployment that wants a
-configuration change applied rolls the pods. The `*_TLS_*` paths below
-are the one place where that is not the whole story: the path is read
-once and the file it names is re-read per handshake, which §How key
-material must arrive states and puts obligations on.
-
-| Name | Read by | Default | Secret |
-|---|---|---|---|
-| `GARAM_DATABASE_URL` | api, authz, machine, migrate, issue-certificate | none — required, startup refuses without it | **yes** — carries a password |
-| `GARAM_GRPC_ADDR` | authz | `:9090` | no |
-| `GARAM_METRICS_ADDR` | authz | `:9091` | no |
-| `GARAM_HTTP_ADDR` | api | `:8080` | no |
-| `GARAM_AUTHZ_ADDR` | api, machine | `localhost:9090` | no |
-| `GARAM_SESSION_TTL` | api | `168h` | no |
-| `GARAM_COOKIE_SECURE` | api | `true` | no |
-| `GARAM_DEV_AUTH` | api | `false` — development only ([ADR-0010](./adr/0010-dev-auth-provider.md)); requires `GARAM_COOKIE_SECURE=false` | no |
-| `GARAM_DEV_REDIRECT_URL` | api | `http://localhost:3000/api/auth/callback/dev` | no |
-| `GARAM_MACHINE_ADDR` | machine | `:8443` | no |
-| `GARAM_MACHINE_HEALTH_ADDR` | machine | `:8444` | no |
-| `GARAM_MACHINE_TLS_CERT_FILE` | machine | none — required | no — it names a file holding a certificate, which is public |
-| `GARAM_MACHINE_TLS_KEY_FILE` | machine | none — required | **yes**, and it names a file: the key itself must never be an environment variable's value ([ADR-0015](./adr/0015-operator-identity.md)), and the file is subject to the arrival rule below |
-| `GARAM_MACHINE_SERVER_ROOT_FILE` | machine | none — required | no — it names a file holding the garam server root, which is a certificate and is public |
-| `GARAM_CA_KEY_FILE` | machine, issue-certificate | none — required | **yes**, and it names a file, subject to the arrival rule below — and the key it names cannot be regenerated (§The key-encryption key cannot be regenerated) |
-| `GARAM_CERTIFICATE_LIFETIME` | machine, issue-certificate | `24h` (`internal/ca/service.go`) | no |
-| `GARAM_MIGRATIONS_DIR` | migrate | `migrations` (`/app/migrations` in the image) | no |
-| `GOOGLE_CLIENT_ID` | api | none | no |
-| `GOOGLE_CLIENT_SECRET` | api | none | **yes** |
-| `GOOGLE_REDIRECT_URL` | api | none | no |
-| `GARAM_ADAPTER_AGENT` | adapter | none — required | no |
-| `GARAM_ADAPTER_MACHINE_URL` | adapter | none — required | no |
-| `GARAM_ADAPTER_GATEWAY_URL` | adapter | `http://127.0.0.1:8080` — the loopback address the gateway binds unless mTLS is configured for it ([ADR-0012](./adr/0012-agent-operator-model.md)) | no |
-| `GARAM_ADAPTER_GATEWAY_AGENT` | adapter | none — required | no |
-| `GARAM_ADAPTER_TLS_CERT_FILE` | adapter | none — required | no — it names a file holding a certificate, which is public |
-| `GARAM_ADAPTER_TLS_KEY_FILE` | adapter | none — required | **yes**, and it names a file, subject to the arrival rule below |
-| `GARAM_ADAPTER_SERVER_ROOT_FILE` | adapter | none — required | no — it names a file holding the garam server root, which is a certificate and is public |
-| `GARAM_API_URL` | web | none in production (`web/src/env.ts`); baked into the image at build time (`deploy/local/Dockerfile.web`), so the runtime value must match the build's | no |
-
-Notes a deployment needs:
-
-- `serve api` performs Google OIDC discovery at startup only when both
-  `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set
-  (`internal/cli/serve.go`, `internal/authn/google.go`): then the start
-  depends on reaching the issuer, and an unreachable one stops the
-  start. With neither set, no Google provider is registered — the start
-  owes the issuer nothing, and `GET /auth/providers` omits `google`.
-  One credential without the other refuses the start.
-- The adapter is given the agent's own identity — the certificate
-  `issueAgentCertificate` returned and its private key — and the garam
-  server root, which is what garam's listener is verified against. The
-  root is a different input from the authority that signed the agent:
-  the two directions rest on different roots
-  ([ADR-0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)),
-  and that same answer carries both, so a deployment writing the files
-  takes `serverRootPem` for this value and not `issuerPem`.
-  `GARAM_ADAPTER_AGENT` is garam's GRN for the agent and
-  `GARAM_ADAPTER_GATEWAY_AGENT` is what the agent platform serves it
-  under; they are two names for one agent and neither can be derived
-  from the other.
-- **`GARAM_CERTIFICATE_LIFETIME` is a security parameter.** Expiry is
-  the only revocation garam has — no CRL, no responder
-  ([ADR-0014](./adr/0014-agent-authentication.md)) — so the value is the
-  window a stolen certificate stays usable in. `internal/ca/service.go`
-  bounds it at one hour and thirty days and refuses the start outside
-  them. The default is deliberately loose while rotation is new
-  ([ADR-0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md));
-  lowering it is a configuration change, and it is only safe once the
-  obligations in §How key material must arrive are met.
-- The `*_FILE` values are paths, not contents. Key material
-  travels as a file, never through the environment — a value there is
-  inherited by child processes, readable at `/proc/<pid>/environ`, and
-  captured in crash dumps ([ADR-0015](./adr/0015-operator-identity.md)).
-
-## How key material must arrive
+## What the binary enforces about key material
 
 The rule is [ADR-0015](./adr/0015-operator-identity.md)'s and is not a
 preference: key material reaches a process as a file readable only by
 its owner, with the reading process running as that owner.
 
-It is enforced, not requested. `internal/keyfile` refuses a key file
+**It is enforced, not requested.** `internal/keyfile` refuses a key file
 when any group or other permission bit is set, and separately when its
 owner is not the process's own UID, and every key file a process reads
 at startup goes through it: the key-encryption key, the machine
 listener's own TLS key (`internal/cli/machine.go`) and the adapter's
-(`internal/cli/delivery.go`) alike, so either refusal stops the start
-of that process. Both halves matter for a deployment, because plain
-Kubernetes secret projection satisfies neither:
+(`internal/cli/delivery.go`) alike, so either refusal stops the start of
+that process. Plain Kubernetes Secret projection satisfies neither half
+— a projected file is root-owned, and `fsGroup` changes the group owner
+rather than the user owner. Relaxing the check to fit plain projection
+is not an option; the arrival shape the chart renders is what the rule
+requires.
 
-- A projected secret is owned by root, and `fsGroup` changes the group
-  owner, not the user owner. `defaultMode: 0440` with `fsGroup` trips
-  the permission check.
-- `defaultMode: 0400` root-owned trips the ownership check — and in
-  practice the process cannot even open the file.
+Three qualifications:
 
-The shape that satisfies it is already working in this repository, on
-the `machine` Deployment of `deploy/local/minikube/garam.yaml`: an
-initContainer running as the same UID — stated as `runAsUser: 10001`,
-because the Go image carries no shell for the copy — copies the
-projected secret with `install -m 0600` onto a memory-backed
-`emptyDir`, with `fsGroup` set so that user can write the volume. The
-process then opens a file it owns with no group or other bits, and both
-checks pass. Relaxing the check to fit plain projection is not an
-option; the deployment shape above is what the rule requires.
-
-Two qualifications:
-
-- **Each `*_TLS_CERT_FILE` and `*_TLS_KEY_FILE` pair is re-read on
-  every handshake**, on the listener and in the adapter alike
+- **Each `*_TLS_CERT_FILE` and `*_TLS_KEY_FILE` pair is re-read on every
+  handshake**, on the machine listener and in the adapter alike
   (`internal/keyfile/pair.go`), so a replaced pair is presented on the
   next connection with nothing restarted
   ([ADR-0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)).
@@ -304,22 +110,34 @@ Two qualifications:
   - **Replace the pair atomically.** A reader that opens a half-written
     file refuses the handshake. Writing beside the file and renaming
     over it leaves no such moment; writing in place does.
-  - **Keep the file the process opens current.** The shape above copies
-    the projected secret once, in an initContainer, so a certificate
-    replaced afterwards reaches the projected volume and not the copy.
-    Whatever refreshes it must satisfy the arrival rule for the key on
-    every refresh, not only the first.
+  - **Keep the file the process opens current.** The arrival shape
+    copies the projected Secret once, at pod start, so a pair replaced
+    afterwards reaches the projected volume and not the copy the process
+    reads. Whatever refreshes that copy must satisfy the arrival rule
+    for the key on every refresh, not only the first, and must rename
+    rather than write in place.
+- **`GARAM_CERTIFICATE_LIFETIME` is a security parameter, and its safe
+  values depend on the two obligations above.** Expiry is the only
+  revocation garam has — no CRL, no responder
+  ([ADR-0014](./adr/0014-agent-authentication.md)) — so the value is the
+  window a stolen certificate stays usable in. `internal/ca/service.go`
+  bounds it at one hour and thirty days and refuses the start outside
+  them. The default is deliberately loose while rotation is new
+  ([ADR-0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md));
+  a deployment that has met neither obligation renews on a restart, so
+  lowering it there shortens the window between restarts rather than the
+  window a certificate is usable in.
 - **There is no client CA bundle, and creating one is forbidden.** The
   machine listener requires a certificate and verifies it per connection
   against the certificate authority of the organization the
   certificate's own SAN names, read from the database at handshake time
   (`internal/machine/listener.go`). A pool holding every organization's
   authority would accept a certificate against a root that is not its
-  own — the tenancy hole [ADR-0020](./adr/0020-published-artifacts.md)
-  forbids. There is nothing to mount and nothing to rotate; what is
-  mounted is the listener's own pair and the garam server root
-  `GARAM_MACHINE_SERVER_ROOT_FILE` names, and neither is a bundle of
-  client authorities.
+  own — the tenancy hole [ADR-0014](./adr/0014-agent-authentication.md)
+  rests on the trust root to close. There is nothing to mount and
+  nothing to rotate; what is mounted is the listener's own pair and the
+  garam server root `GARAM_MACHINE_SERVER_ROOT_FILE` names, and neither
+  is a bundle of client authorities.
 
 ## The key-encryption key cannot be regenerated
 
@@ -357,10 +175,9 @@ The obligation that follows, in the form a deployment can act on:
 
 **The machine listener's certificate and key do not carry this
 property, and they are not free of obligations either.**
-`GARAM_MACHINE_TLS_CERT_FILE` and `GARAM_MACHINE_TLS_KEY_FILE` —
-`tls.crt` and `tls.key` where the local manifest names them
-(`deploy/local/minikube/garam.yaml`) — seal nothing: they are the
-listener's own pair, read for the TLS handshake and nothing else
+`GARAM_MACHINE_TLS_CERT_FILE` and `GARAM_MACHINE_TLS_KEY_FILE` — the
+pair `machine.keyMaterial` names in the chart — seal nothing: they are
+the listener's own pair, read for the TLS handshake and nothing else
 (`internal/cli/machine.go`, `internal/machine/listener.go`). Replacing
 them loses nothing, and the constraint above is the key-encryption key's
 alone. What binds instead is who signs them
@@ -377,7 +194,11 @@ alone. What binds instead is who signs them
   and garam hands it to every identity it issues a certificate to**
   (`serverRootPem` in `api/machine.yaml`). It is public, it is read once
   at startup, and it must be the root the pair above chains to — a
-  mismatch reaches every agent and works for none.
+  mismatch reaches every agent and works for none. A deployment writing
+  an adapter's files takes that same `serverRootPem` for
+  `GARAM_ADAPTER_SERVER_ROOT_FILE` and not `issuerPem`, which is the
+  authority that signed the agent rather than the one the agent verifies
+  garam by ([adapter.md](./adapter.md)).
 - **Replacing that authority invalidates what every agent already
   holds**, and garam reads it once, so it is a restart plus a reissue
   rather than a rotation. Nothing in garam schedules it; it should
@@ -390,28 +211,17 @@ alone. What binds instead is who signs them
   certificate out of band installs the same file
   `GARAM_MACHINE_SERVER_ROOT_FILE` names beside it.
 
-## The database connection
-
-One DSN in `GARAM_DATABASE_URL`, consumed as-is by every process that
-opens the database (`internal/cli/`); nothing reassembles host, port,
-user, and database. The local manifest bridges CloudNativePG's published
-`uri` key directly — `secretKeyRef: {name: postgres-app, key: uri}` —
-and a deployment whose database publishes the same shape can do the same
-(`deploy/local/minikube/garam.yaml`).
-
 ## The migrate job
 
 `migrate` applies all pending migrations and exits
-(`internal/cli/migrate.go`); it suits a PreSync-style hook and listens
-on nothing. The local cluster runs it as a Job that completes before the
-serve Deployments start (`deploy/local/minikube/migrate-job.yaml`).
+(`internal/cli/migrate.go`) and listens on nothing.
 
 - **It fails closed on a dirty database and never clears the flag
   itself.** A failed run leaves the database dirty, and every later run
   refuses with a message naming the recovery — read the failed run's
   log, fix the migration, force the version, run again
   (`internal/cli/migrate.go`). The real error exists only in the first
-  run's log, so a hook whose retry deletes the previous Job destroys the
+  run's log, so a retry that deletes the previous Job destroys the
   evidence.
 - Every migration this project ships is applied inside a transaction and
   leaves nothing behind when it fails (`internal/cli/migrate.go`); one
@@ -449,8 +259,9 @@ shutdown outlasts it.
 
 ## Not established
 
-Answers the consumer asked for that the source does not establish.
-Stated here so they are not guessed:
+Answers a consumer asked for that the source does not establish. Stated
+here so they are not guessed, and so the chart does not offer a value
+that would assert one:
 
 - **Read-only root filesystem.** Not established for either image. What
   is checkable: `issue-certificate` is the one command under `internal/`
@@ -466,7 +277,8 @@ Stated here so they are not guessed:
 - **Replica safety above one.** Not established for `serve api`,
   `serve authz`, or `serve machine`. No leader election exists anywhere
   in the source; whether that makes a second replica safe or unsafe is
-  not answered here. (`migrate` is answered above.)
+  not answered here. This is why the chart fixes every Deployment at one
+  replica and offers no value for it. (`migrate` is answered above.)
 - **Worst-case time from start to `/readyz` answering ok.** Not
   established; nothing in the source bounds startup. A slow start
   reading as a failed deploy is a function of the deployment's probe
@@ -476,21 +288,21 @@ Stated here so they are not guessed:
   GARAM_API_URL` in `deploy/local/Dockerfile.web`, read by
   `web/next.config.ts`), and no release exists to have chosen a value,
   so a consumer cannot assume a published image carries the local
-  default.
+  default. The chart's `web.apiUrl` has to match whatever that build
+  used, and nothing checks that.
 - **Whether the adapter answers a probe.** It answers none: it has no
   listener, and [ADR-0021](./adr/0021-liveness-and-readiness.md) decides
   the probes for the three serve processes rather than for a process
   that only dials out. Whether a sidecar beside an agent owes one, and
   what it would report, is undecided.
 - **Resource requests and limits.** No figure is published for any
-  process and none has been measured — nothing under `deploy/` sets a
-  `resources` block, so there is no observed number here to copy. The
-  figures are the deployment's to pick, and to record as picked rather
-  than measured, so a later reader does not take them for garam's.
-  Setting none is not neutral: a pod no container of which requests
-  either resource is `BestEffort` — Kubernetes' own classification,
-  which `kubectl describe pod` reports as `QoS Class` — and the
-  kubelet evicts `BestEffort` first under node pressure.
+  process and none has been measured. The figures are the deployment's
+  to pick, and to record as picked rather than measured, so a later
+  reader does not take them for garam's. Setting none is not neutral: a
+  pod no container of which requests either resource is `BestEffort` —
+  Kubernetes' own classification, which `kubectl describe pod` reports
+  as `QoS Class` — and the kubelet evicts `BestEffort` first under node
+  pressure.
 - **A resource floor.** No minimum below which a process fails is known.
 
 ## Decisions this rests on
@@ -499,12 +311,6 @@ Stated here so they are not guessed:
   reached over plaintext gRPC inside the trust boundary
 - [ADR-0009](./adr/0009-web-frontend.md) — the web app and its `/api/*`
   rewrite
-- [ADR-0010](./adr/0010-dev-auth-provider.md) — the development-only
-  provider behind `GARAM_DEV_AUTH`
-- [ADR-0012](./adr/0012-agent-operator-model.md) — operators garam never
-  dials, so the machine listener is reached from outside
-- [ADR-0013](./adr/0013-agent-messaging.md) — the adapter garam writes
-  and an orchestrator deploys, beside the agent it serves
 - [ADR-0014](./adr/0014-agent-authentication.md) — mTLS on a listener of
   its own, per-connection trust root
 - [ADR-0015](./adr/0015-operator-identity.md) — key material travels as
@@ -515,10 +321,6 @@ Stated here so they are not guessed:
   one image
 - [ADR-0018](./adr/0018-delivery-acknowledgement.md) — the adapter
   completes on the turn-end event and holds its pairing in memory
-- [ADR-0019](./adr/0019-machine-openapi-spec.md) — the machine
-  listener's own specification
-- [ADR-0020](./adr/0020-published-artifacts.md) — images and this
-  contract, not manifests; immutable tags
 - [ADR-0021](./adr/0021-liveness-and-readiness.md) — the two probes on a
   credential-free port
 - [ADR-0023](./adr/0023-web-probes.md) — the web app answers the same
@@ -532,3 +334,6 @@ Stated here so they are not guessed:
   — the listener presents one certificate signed by a garam server
   authority the deployment holds, every identity pins that root, and a
   replaced pair is served without a restart (superseding ADR-0037)
+- [ADR-0042](./adr/0042-a-chart-is-the-description-of-a-garam-deployment.md)
+  — the chart describes the deployment and this document keeps what a
+  chart cannot carry; it supersedes ADR-0020

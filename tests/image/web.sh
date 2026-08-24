@@ -1,8 +1,8 @@
 #!/bin/sh
-# Runs the web image and checks what deployment-contract.md §Images and
-# §Ports and probe paths promise of it: the standalone server starts,
-# /healthz and /readyz answer (ADR-0023), and `/api/*` reaches the URL
-# baked at build time (ADR-0009). The subject is the built image, which
+# Runs the web image and checks what deploy/charts/garam renders against
+# it: the standalone server starts, /healthz and /readyz answer on the
+# port the chart probes (ADR-0023), and `/api/*` reaches the URL baked at
+# build time (ADR-0009). The subject is the built image, which
 # `web/e2e` never sees — it drives a dev server.
 #
 # GARAM_WEB_IMAGE names an image to check instead of building one, so the

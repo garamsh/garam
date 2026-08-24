@@ -19,12 +19,14 @@ const serviceTypeOrg = "org"
 // reads key material.
 type Issuer interface {
 	// Issue returns a certificate for subject, signed by the authority
-	// of the organization that owns it.
+	// of the organization that owns it, carrying the garam server root
+	// the holder verifies garam by.
 	Issue(ctx context.Context, subject grn.GRN) (*Certificate, error)
 }
 
-// Service is what an operator does to the agents it runs: it creates
-// them and obtains the certificates they authenticate with.
+// Service is what an operator does to the agents it runs — it creates
+// them and obtains the certificates they authenticate with — and the
+// one thing an agent does for itself, which is renew its own.
 //
 // Every method takes the caller, and an operator's answers are bounded
 // by the assignments it holds. That is the whole of the authorization

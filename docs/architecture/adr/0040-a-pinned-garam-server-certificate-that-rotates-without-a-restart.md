@@ -112,13 +112,13 @@ is a restart.
   garam can hand it on, and files that stay current when the certificate
   is replaced. A shape that copies the material at pod start refreshes
   nothing afterwards, so rotation there is still a restart —
-  [deployment-contract.md](../deployment-contract.md) states both
-  obligations in the form a deployment acts on.
+  [deployment-contract.md](../deployment-contract.md) states each of
+  them in the form a deployment acts on.
 - **`garamsh/gitops` is affected and keeps cert-manager.** It gains an
   issuer that signs only this listener's certificate, and the root that
-  issuer signs with becomes something every agent is given. The sentence
-  in this repository's contract that told it any issuer would do was
-  wrong and is corrected in the change that carries this ADR.
+  issuer signs with becomes something every agent is given. It built on
+  the sentence corrected above, so it learns of this from the contract
+  rather than from a failure.
 - **The server root's own rotation is a restart**, and changing it
   invalidates what every agent already holds. It is read once, it
   outlives the certificates it signs by years, and nothing here

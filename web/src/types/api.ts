@@ -92,7 +92,7 @@ export interface paths {
         put?: never;
         /**
          * Create an account from an invitation and sign in.
-         * @description Creates the user, its password credential, and the membership the invitation names, then sets the `garam_session` cookie. There is no registration without an invitation: organizations grow by invitation rather than open signup (ADR-0006), and the token is the possession proof that authorizes the account (ADR-0040). The account is a local one, distinct from any account the same person holds through a provider.
+         * @description Creates the user, its password credential, and the membership the invitation names, then sets the `garam_session` cookie. There is no registration without an invitation: organizations grow by invitation rather than open signup (ADR-0006), and the token is the possession proof that authorizes the account (ADR-0041). The account is a local one, distinct from any account the same person holds through a provider.
          */
         post: operations["registerPassword"];
         delete?: never;
@@ -112,7 +112,7 @@ export interface paths {
         put?: never;
         /**
          * Sign in with a username and a password.
-         * @description Verifies the password against the stored Argon2id verifier and sets the `garam_session` cookie. A wrong password and a username no account holds are refused identically — same status, same body — because telling them apart publishes the account list (ADR-0040). Verifications live at one time are bounded, so this answers 429 under load rather than hashing (ADR-0030's shape).
+         * @description Verifies the password against the stored Argon2id verifier and sets the `garam_session` cookie. A wrong password and a username no account holds are refused identically — same status, same body — because telling them apart publishes the account list (ADR-0041). Verifications live at one time are bounded, so this answers 429 under load rather than hashing (ADR-0030's shape).
          */
         post: operations["loginPassword"];
         delete?: never;
@@ -657,7 +657,7 @@ export interface components {
             username: string;
             /**
              * Format: password
-             * @description Sent on this request only. It is never returned by any endpoint, never logged, and never placed in an error message (ADR-0040).
+             * @description Sent on this request only. It is never returned by any endpoint, never logged, and never placed in an error message (ADR-0041).
              */
             password: string;
         };
@@ -665,7 +665,7 @@ export interface components {
             /** @description The invitation being accepted. It names the organization and the role the new account joins with. */
             invitationToken: string;
             /**
-             * @description Lowercase letters, digits and `-`. It becomes the account's GRN identifier under the reserved `local-` prefix, which no provider subject may claim, so a local account and a provider account can never resolve to one user row (ADR-0040).
+             * @description Lowercase letters, digits and `-`. It becomes the account's GRN identifier under the reserved `local-` prefix, which no provider subject may claim, so a local account and a provider account can never resolve to one user row (ADR-0041).
              * @example alice
              */
             username: string;

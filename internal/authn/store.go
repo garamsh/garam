@@ -36,7 +36,7 @@ type OAuthStateStore interface {
 // PasswordCredentialStore persists the verifier that authenticates a
 // user's password, one row per user that has one. The password itself
 // never reaches it — only the Argon2id verifier derived from it
-// (ADR-0040).
+// (ADR-0041).
 type PasswordCredentialStore interface {
 	// Create records the first verifier for a user.
 	Create(ctx context.Context, userGRN grn.GRN, v Verifier) error

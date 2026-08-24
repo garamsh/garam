@@ -38,7 +38,7 @@ const MaxLiveOAuthStates = 1024
 // ErrPasswordCredentialNotFound is returned when a user has no
 // password credential. It never reaches a caller of the sign-in
 // endpoint, which answers ErrPasswordRejected for a username no
-// credential belongs to (ADR-0040).
+// credential belongs to (ADR-0041).
 var ErrPasswordCredentialNotFound = errorx.New(errorx.KindNotFound, "password credential not found")
 
 // ErrPasswordAttemptRateLimited is returned when a password
@@ -54,7 +54,7 @@ var ErrPasswordAttemptRateLimited = errorx.New(errorx.KindResourceExhausted, "pa
 // same shape bounds the same kind of lever: the store refuses past this
 // many live attempts, in the statement that writes, and nothing is
 // hashed past it. A verification that succeeds releases its own
-// attempt, so only failures accumulate (ADR-0040).
+// attempt, so only failures accumulate (ADR-0041).
 const MaxLivePasswordAttempts = 1024
 
 // Identity is the authenticated identity asserted by a Provider.

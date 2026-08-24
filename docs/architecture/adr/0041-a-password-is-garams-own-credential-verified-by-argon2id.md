@@ -1,4 +1,4 @@
-# ADR 0040: A password is garam's own credential, verified by Argon2id and minted by an invitation
+# ADR 0041: A password is garam's own credential, verified by Argon2id and minted by an invitation
 
 > Status: accepted
 > Date: 2026-08-25

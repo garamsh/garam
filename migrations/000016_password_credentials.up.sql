@@ -1,5 +1,5 @@
 -- The verifier that authenticates a password, and the bound on how
--- often one may be computed (ADR-0040).
+-- often one may be computed (ADR-0041).
 --
 -- A verifier is garam's own authentication material rather than a value
 -- held on someone else's behalf, so ADR-0036 — which keeps secret

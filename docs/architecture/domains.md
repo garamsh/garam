@@ -180,10 +180,10 @@ verification, and sessions.
 | `Session` | browser session for a user, expiring |
 | `SessionStore` | persists sessions keyed by token hash |
 | `OAuthStateStore` | persists the state a login issued, until the callback spends it or its lifetime runs out (ADR-0028); issuing refuses past `MaxLiveOAuthStates` live states (ADR-0030) |
-| `Password` | a password as typed; renders as a redaction marker in every form, so it cannot reach a log line, a response, or a message (ADR-0040) |
+| `Password` | a password as typed; renders as a redaction marker in every form, so it cannot reach a log line, a response, or a message (ADR-0041) |
 | `Verifier` | the stored Argon2id form of a password, carrying the parameters it was computed under |
 | `PasswordCredentialStore` | persists one verifier per user that has a password |
-| `PasswordAttemptStore` | bounds the verifications live at once; recording refuses past `MaxLivePasswordAttempts` (ADR-0040) |
+| `PasswordAttemptStore` | bounds the verifications live at once; recording refuses past `MaxLivePasswordAttempts` (ADR-0041) |
 
 A second provider is a new file implementing `Provider`; call sites
 depend only on the interface. Raw session tokens live in cookies; only
@@ -193,7 +193,7 @@ A password is not a `Provider` and never becomes one: that interface is
 an authorization-code flow, and satisfying it would mean inventing a
 code. Password sign-in is its own endpoint asserting the same
 `Identity`, after which the path is the callback's — a session row and
-a cookie, unchanged (ADR-0005, ADR-0040). What is stored is an Argon2id
+a cookie, unchanged (ADR-0005, ADR-0041). What is stored is an Argon2id
 verifier carrying its own parameters, so raising them invalidates no
 row: a sign-in against any other setting re-hashes on its way out.
 Accounts minted this way take the reserved `local-` prefix in the user

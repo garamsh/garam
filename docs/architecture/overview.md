@@ -111,7 +111,7 @@ collaborate on a shared plan.
   server-side sessions.
 - Sign-in with a username and a password, which is not a provider: it
   is verified against a stored Argon2id verifier and issues the same
-  session (ADR-0040). Registering one needs an invitation.
+  session (ADR-0041). Registering one needs an invitation.
 - Invitation-based org membership with org roles (`owner`, `admin`,
   `member`) enforced on org-scoped HTTP APIs — including the group and
   project endpoints — through the authz evaluator seam.
@@ -197,7 +197,7 @@ collaborate on a shared plan.
   conforming identifier rather than loosening the rule. Google's
   subject is decimal and fits; `auth0|abc123` would not. A subject
   under the reserved `local-` prefix is refused rather than adopted,
-  because that prefix names a password account (ADR-0040).
+  because that prefix names a password account (ADR-0041).
 - Editing groups, projects and policies from the web console; those
   endpoints exist, the console reads them but does not write them.
 
@@ -319,8 +319,8 @@ it and imports no request surface and no domain.
 | `org.Membership` | `internal/org` | user in an org, carries a `Role` |
 | `org.Invitation` | `internal/org` | single-use token into an org |
 | `authn.Provider` | `internal/authn` | sign-in provider (Google OIDC; dev-only, ADR-0010) |
-| `authn.Password` | `internal/authn` | a password as typed; renders redacted everywhere (ADR-0040) |
-| `authn.Verifier` | `internal/authn` | stored Argon2id verifier, carrying its own parameters (ADR-0040) |
+| `authn.Password` | `internal/authn` | a password as typed; renders redacted everywhere (ADR-0041) |
+| `authn.Verifier` | `internal/authn` | stored Argon2id verifier, carrying its own parameters (ADR-0041) |
 | `authn.Session` | `internal/authn` | authenticated browser session |
 | `authz.Object` | `internal/authz` | target interface |
 | `authz.Evaluator` | `internal/authz` | policy evaluator (native, IAM-style) |
@@ -340,7 +340,7 @@ it and imports no request surface and no domain.
 | OpenAPI spec is the API source of truth | Handlers implement a generated interface; drift fails CI. | [adr/0004-openapi-first-api.md](./adr/0004-openapi-first-api.md) |
 | Sessions are server-side rows | Logout must revoke; opaque tokens, only hashes persisted. | [adr/0005-server-side-sessions.md](./adr/0005-server-side-sessions.md) |
 | Dev sign-in is a provider, not a bypass | Sessions stay identical to Google's; with the flag off no dev route exists. | [adr/0010-dev-auth-provider.md](./adr/0010-dev-auth-provider.md) |
-| A password is garam's own credential, not a provider | Argon2id verifies it and the verifier carries its parameters, so they can be raised later; an invitation is what mints the account. | [adr/0040-a-password-is-garams-own-credential-verified-by-argon2id.md](./adr/0040-a-password-is-garams-own-credential-verified-by-argon2id.md) |
+| A password is garam's own credential, not a provider | Argon2id verifies it and the verifier carries its parameters, so they can be raised later; an invitation is what mints the account. | [adr/0041-a-password-is-garams-own-credential-verified-by-argon2id.md](./adr/0041-a-password-is-garams-own-credential-verified-by-argon2id.md) |
 | Invitations are token-keyed, not GRN-addressed | The bearer token is the identifier; no new GRN service_type. | [adr/0006-invitation-tokens.md](./adr/0006-invitation-tokens.md) |
 | The console is a sidebar shell over org sections | One structure for switching orgs, moving between sections, and knowing where you are. | [adr/0011-console-shell.md](./adr/0011-console-shell.md) |
 | Agents are provisioned by operators garam never dials | An operator is a peer, so a user can supply their own; garam is never the side that connects. | [adr/0012-agent-operator-model.md](./adr/0012-agent-operator-model.md) |

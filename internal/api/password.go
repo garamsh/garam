@@ -19,7 +19,7 @@ const (
 	// the accounts garam mints itself. A provider subject may not claim
 	// it, so a local account and a provider account can never resolve
 	// to one user row — the takeover that a flat subject space would
-	// otherwise allow in both directions (ADR-0040).
+	// otherwise allow in both directions (ADR-0041).
 	localPrefix = "local-"
 
 	// passwordAttemptTTL is how long a recorded attempt holds its slot.
@@ -38,7 +38,7 @@ var ErrUsernameInvalid = errorx.New(errorx.KindInvalidArgument, "username must b
 // in. There is no registration without one: the token is the
 // unguessable possession proof that authorizes the account, and it is
 // also what gates the hash below — nothing is computed for a caller
-// who does not hold a live invitation (ADR-0006, ADR-0040).
+// who does not hold a live invitation (ADR-0006, ADR-0041).
 func (s *Server) RegisterPassword(w http.ResponseWriter, r *http.Request) {
 	var body apigen.PasswordRegistration
 	if err := decodeJSON(r, &body); err != nil {
@@ -124,7 +124,7 @@ func (s *Server) LoginPassword(w http.ResponseWriter, r *http.Request) {
 // authenticates, or refuses. A wrong password and a username no
 // credential belongs to leave by the same return with the same error:
 // they are one answer, because telling them apart publishes the
-// account list (ADR-0040).
+// account list (ADR-0041).
 func (s *Server) verifyPassword(r *http.Request, username string, p authn.Password) (*user.User, error) {
 	g, err := localUserGRN(username)
 	if err != nil {
@@ -139,7 +139,7 @@ func (s *Server) verifyPassword(r *http.Request, username string, p authn.Passwo
 		return nil, err
 	}
 	// Recorded before anything is hashed, so the bound is what decides
-	// whether the computation happens at all (ADR-0040).
+	// whether the computation happens at all (ADR-0041).
 	if err := s.attempts.Record(r.Context(), attempt, passwordAttemptTTL); err != nil {
 		return nil, err
 	}
@@ -172,7 +172,7 @@ func (s *Server) verifyPassword(r *http.Request, username string, p authn.Passwo
 // upgradeVerifier re-hashes a verified password when what is stored
 // was computed under parameters other than the current policy, which
 // is what converges the stored population onto one setting without
-// asking anyone to reset (ADR-0040). The sign-in has already
+// asking anyone to reset (ADR-0041). The sign-in has already
 // succeeded, so a failure here is reported and not raised: the upgrade
 // is maintenance, and refusing a valid sign-in over it would be worse
 // than carrying the old parameters one login longer.
@@ -223,7 +223,7 @@ func localUserGRN(username string) (grn.GRN, error) {
 // reservedSubject reports whether a provider asserted a subject in the
 // space garam mints local accounts from. Such a subject is refused
 // rather than adopted: honouring it would hand the provider's caller a
-// local account's row (ADR-0040).
+// local account's row (ADR-0041).
 func reservedSubject(subject string) bool {
 	return strings.HasPrefix(subject, localPrefix)
 }

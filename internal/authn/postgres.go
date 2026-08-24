@@ -121,7 +121,7 @@ func stamp(t time.Time) pgtype.Timestamptz {
 
 // PostgresPasswordCredentialStore implements PasswordCredentialStore
 // against PostgreSQL. Only the Argon2id verifier is persisted; the
-// password never reaches the database (ADR-0040).
+// password never reaches the database (ADR-0041).
 type PostgresPasswordCredentialStore struct {
 	q *db.Queries
 }

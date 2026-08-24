@@ -137,7 +137,7 @@ func TestLoginPassword_UnknownUserAndWrongPasswordAreOneAnswer(t *testing.T) {
 }
 
 // TestLoginPassword_RefusalCarriesNothingThatWasSent holds the rule
-// that a password is never placed in an error message (ADR-0040).
+// that a password is never placed in an error message (ADR-0041).
 func TestLoginPassword_RefusalCarriesNothingThatWasSent(t *testing.T) {
 	f := newFixture(t)
 	token := inviteTo(t, f, "acme", "invite-tok")
@@ -212,7 +212,7 @@ func TestLoginPassword_ReleasesTheSlotItVerified(t *testing.T) {
 // end to end: a credential stored under weaker parameters still signs
 // in, and is rewritten at the current policy on the way out, so the
 // stored population converges without anyone being asked to reset
-// (ADR-0040).
+// (ADR-0041).
 func TestLoginPassword_UpgradesASupersededVerifier(t *testing.T) {
 	f := newFixture(t)
 	token := inviteTo(t, f, "acme", "invite-tok")
@@ -286,7 +286,7 @@ func TestRegisterPassword_RefusesAUsernameThatIsTakenOrUnusable(t *testing.T) {
 // TestOauthCallback_RefusesAProviderSubjectInTheReservedSpace is the
 // other half of the collision guard: a provider that asserts a subject
 // in the space local accounts are minted from would otherwise be
-// handed that account's row (ADR-0040).
+// handed that account's row (ADR-0041).
 func TestOauthCallback_RefusesAProviderSubjectInTheReservedSpace(t *testing.T) {
 	f := newFixture(t)
 	token := inviteTo(t, f, "acme", "invite-tok")

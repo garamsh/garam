@@ -68,7 +68,7 @@ func TestPasswordCredentialStore_RoundTrip(t *testing.T) {
 // TestPasswordAttemptStore_BoundsWhatIsLive drives the statement that
 // enforces the bound, against the database that enforces it. ADR-0030
 // put the decision in the writing statement so it holds across every
-// replica; ADR-0040 applies the same shape to the Argon2id
+// replica; ADR-0041 applies the same shape to the Argon2id
 // computation, and this is the SQL doing it.
 //
 // Releasing a slot and recording once more is the control: it shows the
@@ -123,7 +123,7 @@ func TestPasswordAttemptStore_PrunesWhatLapsed(t *testing.T) {
 // again afterwards. A wrong password and an unknown username are
 // refused identically here as they are in the handler's own tests —
 // asserted again because this is the path with the real store behind
-// it (ADR-0040).
+// it (ADR-0041).
 func TestPasswordSignIn_RoundTripAgainstPostgres(t *testing.T) {
 	p := pool(t)
 	truncate(t, p)

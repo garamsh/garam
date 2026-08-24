@@ -278,7 +278,7 @@ type OrganizationPatch struct {
 
 // PasswordLogin defines model for PasswordLogin.
 type PasswordLogin struct {
-	// Password Sent on this request only. It is never returned by any endpoint, never logged, and never placed in an error message (ADR-0040).
+	// Password Sent on this request only. It is never returned by any endpoint, never logged, and never placed in an error message (ADR-0041).
 	Password string `json:"password"`
 	Username string `json:"username"`
 }
@@ -291,7 +291,7 @@ type PasswordRegistration struct {
 	// Password At least 15 characters, at most 128 bytes. Handled as the login password is: never returned, logged, or echoed.
 	Password string `json:"password"`
 
-	// Username Lowercase letters, digits and `-`. It becomes the account's GRN identifier under the reserved `local-` prefix, which no provider subject may claim, so a local account and a provider account can never resolve to one user row (ADR-0040).
+	// Username Lowercase letters, digits and `-`. It becomes the account's GRN identifier under the reserved `local-` prefix, which no provider subject may claim, so a local account and a provider account can never resolve to one user row (ADR-0041).
 	Username string `json:"username"`
 }
 

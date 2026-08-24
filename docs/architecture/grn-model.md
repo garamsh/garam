@@ -70,7 +70,7 @@ One prefix is reserved. A `user` identifier beginning `local-` names an
 account garam minted from a username and a password, and no sign-in
 provider's subject may claim one: a provider that asserts such a
 subject is refused rather than handed the account it names
-([ADR-0040](./adr/0040-a-password-is-garams-own-credential-verified-by-argon2id.md)).
+([ADR-0041](./adr/0041-a-password-is-garams-own-credential-verified-by-argon2id.md)).
 The prefix is what keeps the two kinds of account in disjoint spaces,
 so neither can ever resolve to the other's row.
 

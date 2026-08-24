@@ -18,7 +18,7 @@ import (
 // Password is a password as a person typed it. Every way the standard
 // library renders a value renders this one as a redaction marker, so a
 // password that reaches a log line, a formatted message, or a response
-// body carries nothing (ADR-0040). The underlying string is reachable
+// body carries nothing (ADR-0041). The underlying string is reachable
 // only by an explicit conversion, which is what hashing does.
 type Password string
 
@@ -33,7 +33,7 @@ func (Password) MarshalJSON() ([]byte, error) { return []byte(`"` + redacted + `
 // Verifier is the stored form of a password: a PHC string carrying the
 // Argon2id parameters the tag was computed under, so verification reads
 // its cost from the value it is checking rather than from the current
-// policy (ADR-0040).
+// policy (ADR-0041).
 type Verifier string
 
 // argon2idParams are the Argon2id cost parameters a verifier is
@@ -50,7 +50,7 @@ type argon2idParams struct {
 // iteration count of 2, and 1 degree of parallelism". Raising it
 // invalidates no stored verifier; each carries the parameters it was
 // made with, and a sign-in against any other setting re-hashes
-// (ADR-0040).
+// (ADR-0041).
 var currentPolicy = argon2idParams{memory: 19456, iterations: 2, parallelism: 1}
 
 const (
@@ -74,7 +74,7 @@ const (
 // ErrPasswordRejected is the single answer to a password that does not
 // verify and to a username no credential belongs to. Telling the two
 // apart would publish the account list, so one error covers both and
-// names neither (ADR-0040).
+// names neither (ADR-0041).
 var ErrPasswordRejected = errorx.New(errorx.KindUnauthenticated, "username or password is incorrect")
 
 // ErrPasswordTooShort and ErrPasswordTooLong refuse a password at
@@ -124,7 +124,7 @@ func (v Verifier) Match(p Password) error {
 // AtCurrentPolicy reports whether v was computed under the parameters
 // NewVerifier writes now. A verifier that is not is re-hashed after the
 // sign-in it verified, which is what converges the stored population
-// onto one setting without asking anyone to reset (ADR-0040). It reads
+// onto one setting without asking anyone to reset (ADR-0041). It reads
 // false for a verifier it cannot decode, which Match has already
 // refused.
 func (v Verifier) AtCurrentPolicy() bool {
@@ -151,7 +151,7 @@ var absentVerifier = sync.OnceValues(func() (Verifier, error) {
 // RejectAbsent spends the computation a stored credential would have
 // spent and then refuses, so a username no credential belongs to costs
 // what a wrong password costs and the two are refused alike
-// (ADR-0040).
+// (ADR-0041).
 func RejectAbsent(p Password) error {
 	v, err := absentVerifier()
 	if err != nil {

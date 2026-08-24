@@ -45,7 +45,7 @@ func TestNewVerifier_SaltsEachVerifier(t *testing.T) {
 // TestNewVerifier_CarriesTheParametersItUsed holds the property the
 // upgrade path rests on: the stored form says what it was computed
 // under, so verification reads its cost from the value rather than
-// from whatever the policy has since become (ADR-0040).
+// from whatever the policy has since become (ADR-0041).
 func TestNewVerifier_CarriesTheParametersItUsed(t *testing.T) {
 	v, err := authn.NewVerifier(testPassword)
 	require.NoError(t, err)
@@ -116,7 +116,7 @@ func TestNewVerifier_RefusesAPasswordOutsideTheLengthBounds(t *testing.T) {
 
 // TestNewVerifier_LengthRefusalNamesTheBoundNotThePassword holds the
 // rule for the errors raised before any verifier exists: a refusal
-// says what was wrong without echoing what was sent (ADR-0040).
+// says what was wrong without echoing what was sent (ADR-0041).
 func TestNewVerifier_LengthRefusalNamesTheBoundNotThePassword(t *testing.T) {
 	secret := authn.Password(strings.Repeat("hunter2-", 20))
 	require.Greater(t, len(secret), authn.MaxPasswordLength, "long enough to be refused")
@@ -129,7 +129,7 @@ func TestNewVerifier_LengthRefusalNamesTheBoundNotThePassword(t *testing.T) {
 
 // TestPassword_RendersRedactedEverywhere is what makes "never logged,
 // never returned, never in an error message" a property of the type
-// rather than a rule a reviewer has to enforce (ADR-0040).
+// rather than a rule a reviewer has to enforce (ADR-0041).
 func TestPassword_RendersRedactedEverywhere(t *testing.T) {
 	secret := authn.Password("hunter2-hunter2-hunter2")
 

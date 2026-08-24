@@ -48,7 +48,7 @@ UPDATE password_credentials SET verifier = $2, updated_at = $3 WHERE user_grn = 
 -- full of dead rows. The count reads the statement's own snapshot, so
 -- it sees rows this same statement prunes — the bound it enforces is
 -- conservative, never loose. This is ADR-0030's shape applied to a cost
--- that is not a write (ADR-0040).
+-- that is not a write (ADR-0041).
 -- name: RecordPasswordAttempt :execrows
 WITH pruned AS (
     DELETE FROM password_attempts WHERE expires_at <= now()

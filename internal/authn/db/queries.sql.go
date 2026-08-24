@@ -160,7 +160,7 @@ type RecordPasswordAttemptParams struct {
 // full of dead rows. The count reads the statement's own snapshot, so
 // it sees rows this same statement prunes — the bound it enforces is
 // conservative, never loose. This is ADR-0030's shape applied to a cost
-// that is not a write (ADR-0040).
+// that is not a write (ADR-0041).
 func (q *Queries) RecordPasswordAttempt(ctx context.Context, arg RecordPasswordAttemptParams) (int64, error) {
 	result, err := q.db.Exec(ctx, recordPasswordAttempt, arg.AttemptID, arg.ExpiresAt, arg.MaxLive)
 	if err != nil {

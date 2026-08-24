@@ -147,8 +147,8 @@ ADR rather than by the layout above:
 - `migrations/` — SQL migrations; the schema's source of truth. The Go
   file beside them tests the migrations and declares no schema.
 - `tests/e2e/` — black-box tests against real infrastructure.
-- `web/` — the frontend, which is not Go and which `stack-web.md`
-  governs instead (ADR-0009).
+- `web/` — the frontend, which is not Go, so this file does not govern
+  it (ADR-0009).
 - `deploy/` — what is needed to run the built images locally. garam
   publishes images and a contract rather than manifests, so what a
   cluster deploys does not live here (ADR-0020).

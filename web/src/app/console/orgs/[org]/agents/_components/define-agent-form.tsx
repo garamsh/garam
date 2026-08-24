@@ -15,8 +15,8 @@ import {
   parseAgentValues,
   parseOperatorIdentifier,
   valueBytes,
-  type Parsed,
 } from "@/lib/agent-definition";
+import type { Parsed } from "@/lib/parsed";
 
 const initialState: DefineAgentState = { status: "idle" };
 

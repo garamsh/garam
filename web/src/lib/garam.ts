@@ -35,15 +35,17 @@ export function isUnauthenticated(error: unknown): boolean {
 }
 
 /**
- * Calls the backend with the caller's session cookie attached.
+ * Calls the backend with the caller's session cookie attached and hands
+ * back the response it answered with, for a caller that needs more of
+ * it than the body — the `Set-Cookie` a sign-in carries.
  *
  * Server-side rendering talks to the backend directly rather than
  * through the `/api/*` rewrite, which exists for the browser.
  */
-export async function garamFetch<T>(
+export async function garamRequest(
   path: string,
   init?: RequestInit,
-): Promise<T> {
+): Promise<Response> {
   const session = (await cookies()).get(SESSION_COOKIE);
   const response = await fetch(`${env.GARAM_API_URL}${path}`, {
     ...init,
@@ -59,6 +61,15 @@ export async function garamFetch<T>(
   if (!response.ok) {
     throw new GaramApiError(response.status, await errorMessage(response));
   }
+  return response;
+}
+
+/** `garamRequest` for a caller that needs only the body it answered. */
+export async function garamFetch<T>(
+  path: string,
+  init?: RequestInit,
+): Promise<T> {
+  const response = await garamRequest(path, init);
   if (response.status === 204) {
     return undefined as T;
   }

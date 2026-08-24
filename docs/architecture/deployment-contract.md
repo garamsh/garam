@@ -67,11 +67,12 @@ either reference above and still pull nothing today: what is missing
 is the tag, not the repository, and the first release is what
 supplies it.
 
-No pull secret is needed for either repository: the cluster pulls with
-a role granted `ecr:BatchGetImage` on every repository in the account,
-assumed by the kubelet's credential provider (`garamsh/infra`
-`modules/aws/ecr-pull.tf`, `modules/cluster/images.tf`, read
-2026-08-24).
+**A deployment must be able to pull both references above; how it does
+that is not garam's to decide.** The registry admits no anonymous pull
+and the credential it issues expires (`ecr:GetAuthorizationToken`), so
+whatever pulls a garam image holds one that is valid at pull time and
+renewed before it lapses. A pull secret is one way to supply that and
+garam does not forbid it; a node credential minted per pull is another.
 
 - **Go image** (`deploy/local/Dockerfile`) — one binary whose entry
   point takes a subcommand: `serve api`, `serve authz`, `serve machine`,

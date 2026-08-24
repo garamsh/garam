@@ -18,7 +18,7 @@ spec:
       labels:
         {{- include "garam.selectorLabels" (dict "root" $ "component" "authz") | nindent 8 }}
     spec:
-      serviceAccountName: {{ include "garam.serviceAccountName" (dict "root" $ "component" "authz") }}
+{{- include "garam.serviceAccountName" (dict "root" $ "component" "authz") }}
 {{- include "garam.imagePullSecrets" . }}
       containers:
         - name: authz

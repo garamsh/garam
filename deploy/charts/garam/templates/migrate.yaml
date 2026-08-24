@@ -21,7 +21,7 @@ spec:
         {{- include "garam.selectorLabels" (dict "root" $ "component" "migrate") | nindent 8 }}
     spec:
       restartPolicy: Never
-      serviceAccountName: {{ include "garam.serviceAccountName" (dict "root" $ "component" "migrate") }}
+{{- include "garam.serviceAccountName" (dict "root" $ "component" "migrate") }}
 {{- include "garam.imagePullSecrets" . }}
       containers:
         - name: migrate

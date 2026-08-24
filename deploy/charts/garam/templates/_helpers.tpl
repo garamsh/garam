@@ -59,14 +59,20 @@ so an empty list leaves no blank line behind.
 {{- end -}}
 
 {{/*
-The account a workload runs as, and the account object itself. One per
-workload, named after it: a single account for the release would make
-every workload one subject, which is what the namespace default already
-is. The name is derived rather than settable — a repository that binds a
-role to it matches this name (README, §Workload identities).
+The account a workload runs as. The name is a value taken verbatim, and
+the chart composes none: a role another repository owns names this
+subject in its trust policy, so a name composed from the release name
+would move that subject whenever a deployment renamed its release, and
+the failure is a credential that stops arriving at runtime (ADR-0043).
+No name renders no field, and the workload runs as the namespace
+default.
+
+Indented for a pod spec, the one depth all five workloads call it from.
 */}}
 {{- define "garam.serviceAccountName" -}}
-{{- printf "%s-%s" (include "garam.fullname" .root) .component -}}
+{{- with (index .root.Values .component "serviceAccount").name }}
+      serviceAccountName: {{ . }}
+{{- end }}
 {{- end -}}
 
 {{/*
@@ -81,7 +87,7 @@ hook annotations that put its account in the same phase.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: {{ include "garam.serviceAccountName" . }}
+  name: {{ required (printf "%s.serviceAccount.name is required when create is true: the chart composes no name, because another repository owns the role bound to this subject (ADR-0043)" .component) $account.name }}
   labels:
     {{- include "garam.labels" . | nindent 4 }}
   {{- if or .hookAnnotations $account.annotations }}

@@ -30,8 +30,8 @@ garam's to assume. Nothing here is written into `garamsh/gitops`.
 ## What it renders
 
 Five workloads, a `ClusterIP` Service in front of each of the four that
-listen, and a `ServiceAccount` each workload runs as
-(§Workload identities). Each workload's file renders all of its own
+listen, and a `ServiceAccount` for each workload a deployment names one
+for (§Workload identities). Each workload's file renders all of its own
 objects:
 
 - `templates/api.yaml` — `serve api`, port 8080.
@@ -54,36 +54,50 @@ ADR, then a value.
 
 ## Workload identities
 
-**Every workload runs as an account of its own**, and the chart creates
-it. The names, under a release named `garam` — another release name
-prefixes each of them, as it does every other object here:
+Every workload can run as an account of its own, and **the chart creates
+none by default**. `<workload>.serviceAccount.name` is the account it
+runs as and `<workload>.serviceAccount.create` renders the object under
+that name; both are off until a deployment sets them, so the chart
+renders none, one, or five accounts and the values decide which.
 
-| Workload | Kind | ServiceAccount |
+| Workload | Kind | Account name |
 |---|---|---|
-| `garam-api` | Deployment | `garam-api` |
-| `garam-authz` | Deployment | `garam-authz` |
-| `garam-machine` | Deployment | `garam-machine` |
-| `garam-migrate` | Job | `garam-migrate` |
-| `garam-web` | Deployment | `garam-web` |
+| `api` | Deployment | `api.serviceAccount.name` |
+| `authz` | Deployment | `authz.serviceAccount.name` |
+| `machine` | Deployment | `machine.serviceAccount.name` |
+| `migrate` | Job | `migrate.serviceAccount.name` |
+| `web` | Deployment | `web.serviceAccount.name` |
 
-A workload and its account carry one name on purpose, and the chart
-offers no value that changes either: a repository that binds a role to
-an account looks it up by the workload's name, and a name two
-repositories set separately is a name they can disagree about silently.
 `make chart` reads this table and fails when the render stops matching
-it (§What keeps it true), so it is the contract another repository
-matches its own manifests against rather than a description of them.
+it (§What keeps it true), so a workload added without an identity
+decision fails the check rather than reaching a cluster unnoticed.
 
-**One account per workload, never one for the release.** A single
-account every workload presented would be the namespace `default` under
-a better name: a role scoped to it is held by every pod that presents
-it, and the role the machine listener needs is one no other workload may
-hold.
+**The name is taken verbatim, and the chart composes none.** A name is
+the subject an IAM trust policy in the infrastructure repository is
+conditioned on, so the two repositories have to hold one name, and a
+name this chart composed from the release name would move whenever a
+deployment renamed its release. That failure arrives at runtime, in a
+credential that stops being issued, and a render under one release name
+cannot show it — so `make chart` renders under two
+([ADR-0043](../../../docs/architecture/adr/0043-a-workloads-account-is-named-by-a-value-and-the-chart-creates-none-by-default.md)).
+
+**Set a name only where a role is bound to it.** An account nothing uses
+is a subject the next reader takes for one that was needed; an annotated
+one is worse, because the annotation makes a consumer assume a role that
+may not exist and fail at runtime rather than at apply. `make chart`
+fails on an account no workload runs as.
 
 **Annotations are how a cloud role binds to an account**, and each
 account takes its own through `<workload>.serviceAccount.annotations`.
 The chart carries none: which key binds a role is the deployment's
 platform's.
+
+**`create: false` with a name set is the supported pair.** The workload
+runs as that account and the chart renders no object, which is what a
+deployment whose infrastructure repository owns the account needs — it
+keeps the object it made, and adoption is not a rename. The reverse pair
+is refused: `create: true` with no name has no name to create under, and
+the render fails rather than composing one.
 
 **The migrate Job's account is created in the same hook phase as the
 Job**, at a lower weight. A `pre-install` hook runs before the chart's
@@ -91,32 +105,31 @@ ordinary resources exist, and the apiserver refuses a pod naming an
 account it cannot find; a deployment supplying that one itself has it in
 place before the release's first install rather than with it.
 
-**`<workload>.serviceAccount.create: false` does not turn identity off.**
-The workload still names the account above; what changes is that the
-chart renders no object and the deployment supplies one under that name.
-That is the path for a repository that created the account before
-adopting this chart — it keeps the object it made, and adoption is not a
-rename.
+### Which workloads need one
 
-### Why the machine listener cannot run as `default`
-
-`serve machine` reads the key-encryption key every organization's
-certificate authority is sealed under
+`serve machine` is the only one that needs an account today. It reads
+the key-encryption key every organization's certificate authority is
+sealed under
 ([ADR-0016](../../../docs/architecture/adr/0016-ca-key-custody.md)) and
 refuses to start without it (`internal/cli/machine.go`). That key
 arrives in the Secret `machine.keyMaterial.secretName` names, which this
 chart does not create; whatever populates it grants to a subject, and
-the subject to grant to is `garam-machine` rather than one every pod in
+that subject is the machine listener's own rather than one every pod in
 the namespace presents.
 
-Getting it wrong fails in the right direction — the pod does not start,
-and restoring the identity fixes it. What is unrepairable is the fix
-that looks obvious from that failure: minting a replacement key. A
-different key opens no authority already sealed and there is no path
-from one key to another, so every organization loses the authority it
-already has (`docs/architecture/deployment-contract.md` §The
-key-encryption key cannot be regenerated, which carries what the only
-remedy costs).
+`serve api` needs one when it reads a cloud-held secret of its own —
+Google sign-in is the pending case. `authz`, `web` and `migrate` read
+none, so a role bound to an account for any of them would grant what
+nothing asks for.
+
+Getting the machine listener's identity wrong fails in the right
+direction — the pod does not start, and restoring the identity fixes it.
+What is unrepairable is the fix that looks obvious from that failure:
+minting a replacement key. A different key opens no authority already
+sealed and there is no path from one key to another, so every
+organization loses the authority it already has
+(`docs/architecture/deployment-contract.md` §The key-encryption key
+cannot be regenerated, which carries what the only remedy costs).
 
 ## Values a deployment must supply
 
@@ -298,15 +311,15 @@ count is zero:
   names the source reads: `envOr` in `internal/cli/`, which wraps the
   module's only `os.Getenv` call, and the schema in `web/src/env.ts`.
 - `chart-identity` — the identity comparison against
-  §Workload identities. Every rendered Deployment and Job names the
-  account that table pairs it with, every account a workload names is
-  rendered, and a workload naming none fails rather than reaching a
-  cluster as `default`.
+  §Workload identities. Every rendered Deployment and Job is a workload
+  that table declares, every account the chart renders is one a workload
+  runs as, the value files that name none render none, and every render
+  is repeated under a second release name and must come out identical.
 
 The comparisons are what an executable artefact buys over prose: a
-variable added to the source and not to the chart, or a workload added
-without an identity, fails the check instead of being discovered by a
-deployment.
+variable added to the source and not to the chart, or an account name
+that moves with the release name, fails the check instead of being
+discovered by a deployment.
 
 ## What the checks are complete over
 
@@ -323,8 +336,10 @@ print.
   rendered is read. It reads no value — a name rendered with the wrong
   value passes.
 - `chart-identity` is complete over **pod identity**: which account each
-  Deployment and Job runs as, and whether the accounts they name are
-  rendered.
+  Deployment and Job runs as, whether every account rendered is one a
+  workload runs as, and whether either moves when the release name
+  changes. It reads no annotation — an account carrying a key no
+  platform binds a role through passes.
 
 Nothing checks the rest of what a pod carries — volumes and mounts,
 probe paths and ports, the security context, resource figures, the hook
@@ -333,7 +348,10 @@ annotations on the migrate Job. Each is reviewed rather than checked.
 Two things sit outside any of them:
 
 - A deployment setting `serviceAccount.create: false` renders no
-  account, and nothing here can see the object it supplies instead.
+  account, and nothing here can see the object it supplies instead — nor
+  whether the name it sets is the one its infrastructure repository
+  binds a role to. That agreement is the contract §Workload identities
+  states and no check in this repository can reach.
 - `web.apiUrl` must equal the value the web image was built with, and
   nothing can check it: the rewrite target is baked in at build time.
 

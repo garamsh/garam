@@ -19,7 +19,7 @@ spec:
       labels:
         {{- include "garam.selectorLabels" (dict "root" $ "component" "web") | nindent 8 }}
     spec:
-      serviceAccountName: {{ include "garam.serviceAccountName" (dict "root" $ "component" "web") }}
+{{- include "garam.serviceAccountName" (dict "root" $ "component" "web") }}
 {{- include "garam.imagePullSecrets" . }}
       containers:
         - name: web

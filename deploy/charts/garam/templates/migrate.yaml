@@ -1,0 +1,32 @@
+# Applies pending migrations and exits. It runs before anything that
+# reads the schema, as a hook rather than an ordinary manifest.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "garam.fullname" . }}-migrate
+  labels:
+    {{- include "garam.labels" (dict "root" $ "component" "migrate") | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-5"
+    # before-hook-creation, and deliberately not hook-failed: a failed
+    # run's log is the only place its error exists, and deleting the Job
+    # on failure destroys it.
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        {{- include "garam.selectorLabels" (dict "root" $ "component" "migrate") | nindent 8 }}
+    spec:
+      restartPolicy: Never
+{{- include "garam.imagePullSecrets" . }}
+      containers:
+        - name: migrate
+          image: {{ include "garam.serverImage" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["migrate"]
+          env:
+            {{- include "garam.databaseEnv" . | nindent 12 }}
+          resources: {{- toYaml .Values.migrate.resources | nindent 12 }}

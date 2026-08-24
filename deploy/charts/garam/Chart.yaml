@@ -1,0 +1,14 @@
+apiVersion: v2
+name: garam
+description: The five workloads garam runs — serve api, serve authz, serve machine, the web console, and the migrate job
+type: application
+# The chart's own version, moved by a change to the chart. It is not a
+# garam version: nothing packages or publishes this chart, so a consumer
+# pins it by a git ref of garamsh/garam and pins the images separately
+# through image.*.tag (ADR-0042).
+version: 0.1.0
+# No appVersion. It would name a released garam, and no release exists —
+# `gh release list --repo garamsh/garam` returns nothing and neither
+# image repository holds a tag (ADR-0039). The change that publishes the
+# first release sets it, and makes a default for image.*.tag honest at
+# the same time.

@@ -212,9 +212,10 @@ collaborate on a shared plan.
 - `tests/e2e/` — store round-trips against real Postgres.
 - `web/` — Next.js frontend; reaches the API through a same-origin
   `/api/*` rewrite (ADR-0009). Its own toolchain and gate (`make web-ci`).
-  `/` is the public landing page and `/login` the sign-in page; the
-  signed-in application lives under `/console`, whose shell and route
-  structure are ADR-0011.
+  `/` is the public landing page, `/login` the sign-in page and
+  `/register` where an invitation becomes a password account
+  (ADR-0041); the signed-in application lives under `/console`, whose
+  shell and route structure are ADR-0011.
 - `deploy/local/` — Docker Compose stack running Postgres, migrations,
   authz, api and (profile-gated) web on one machine; its `postgres`
   service also hosts the e2e tests' database (`make db-up`), kept

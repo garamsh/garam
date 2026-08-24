@@ -14,6 +14,7 @@ vi.mock("next/headers", () => ({
   cookies: () =>
     Promise.resolve({
       get: (name: string) => ({ name, value: "test-session-token" }),
+      set: () => {},
       delete: () => {},
     }),
 }));

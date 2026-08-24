@@ -36,6 +36,33 @@ describe("login page", () => {
     ).toHaveAttribute("href", "/");
   });
 
+  it("offers the username and password form beside the provider buttons", async () => {
+    server.use(...signedOutWith(["google"]));
+
+    await renderServerComponent(LoginPage());
+
+    expect(screen.getByLabelText("Username")).toBeInTheDocument();
+    expect(screen.getByLabelText("Password")).toHaveAttribute(
+      "type",
+      "password",
+    );
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Sign in with Google" }),
+    ).toBeInTheDocument();
+  });
+
+  it("sends a visitor holding an invitation to the registration page", async () => {
+    server.use(...signedOutWith(["google"]));
+
+    await renderServerComponent(LoginPage());
+
+    expect(screen.getByRole("link", { name: "Create one" })).toHaveAttribute(
+      "href",
+      "/register",
+    );
+  });
+
   it("offers dev sign-in when the backend advertises it", async () => {
     server.use(...signedOutWith(["dev", "google"]));
 

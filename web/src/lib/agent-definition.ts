@@ -11,6 +11,8 @@
  * and an operator identifier both follow.
  */
 
+import { refuse, type Parsed } from "@/lib/parsed";
+
 /** How many values one definition carries. */
 export const AGENT_VALUES_MAX_ENTRIES = 32;
 
@@ -28,10 +30,6 @@ export const SUGGESTED_VALUE_KEYS = ["model", "system-prompt"] as const;
 
 /** One row of the values editor, before it is known to be a value. */
 export type ValueEntry = { key: string; value: string };
-
-/** A parsed input, or the sentence to show in place of it. */
-export type Parsed<T> =
-  { status: "ok"; value: T } | { status: "error"; message: string };
 
 const SEGMENT = /^[a-z0-9-]+$/;
 
@@ -113,8 +111,4 @@ export function parseAgentValues(
     values.set(key, value);
   }
   return { status: "ok", value: Object.fromEntries(values) };
-}
-
-function refuse(message: string): { status: "error"; message: string } {
-  return { status: "error", message };
 }

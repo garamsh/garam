@@ -10,6 +10,7 @@ What the adapter garam ships must do, and what it rests on to do it.
 - The lease
 - Watching
 - Subscriptions
+- Readiness
 - What garam owns
 - Foreign facts this rests on
 - Not decided
@@ -140,8 +141,38 @@ Consuming, completing and forwarding use separate subscriptions. A slow
 consumer must not degrade the signal that decides what it completed:
 falling behind would drop completion events, which produces
 redeliveries, which produce load. The same reasoning keeps readiness on a
-subscription of its own in [ADR-0013](./adr/0013-agent-messaging.md), and
-puts watching on a third ([ADR-0022](./adr/0022-watching-an-agent.md)).
+subscription of its own (below), and puts watching on a third
+([ADR-0022](./adr/0022-watching-an-agent.md)).
+
+## Readiness
+
+**Readiness is a monitoring subscription the adapter opens fresh, of
+its own** — not the one it consumes, and not a handle it kept. The
+adapter is ready while opening one succeeds and not ready when opening
+one fails ([ADR-0013](./adr/0013-agent-messaging.md)).
+
+Opening one exercises the process rather than the socket. A dial that
+connects says a port is bound; a subscription that opens says the
+gateway served a request, and it says so about the agent this adapter
+was placed beside rather than about the pod's network.
+
+It is a subscription of its own for the reason above: readiness decides
+whether the agent is treated as healthy, and a consumer that has fallen
+behind must not be able to answer that question for it.
+
+Two properties of the gateway are what make the answer mean anything,
+and both are named in §Foreign facts this rests on: opening a
+subscription enqueues nothing, so asking costs the agent no throughput
+however often it is asked, and no listener exists before the tool
+registry has loaded, so an answer means the agent can accept work
+rather than that a process has started. If either moves, the
+subscription goes on opening and stops meaning that, which is what a
+row there exists to catch.
+
+Whether anything outside the adapter reads this is a separate question
+and an open one: the adapter listens on no port, so it answers no
+Kubernetes probe, and what a sidecar beside an agent owes a scheduler
+is undecided ([deployment-contract.md](./deployment-contract.md)).
 
 ## What garam owns
 
@@ -170,6 +201,8 @@ points at.
 | One turn takes up to a bounded batch as a single input | `internal/gateway/queue.go` | The batch would not be the completion unit |
 | The inbox is a volatile buffer | `internal/gateway/service.go` | The accept response would be an acknowledgement |
 | A failed turn reaches no sender | `internal/gateway/queue.go` | garam would not owe the notification |
+| Opening a monitoring subscription enqueues nothing | `internal/gateway/events.go` | Readiness would spend the agent's throughput to measure it |
+| No listener exists before the tool registry has loaded | `cmd/gagent/agent.go` | An answer would stop meaning the agent can accept work |
 
 This promotes an observability surface into a delivery contract, and
 the two carry different obligations: observability may lose an event, a

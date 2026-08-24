@@ -138,22 +138,13 @@ collaborate on a shared plan.
 
 ## Out of scope (today)
 
-- The read an operator makes to learn of a definition. ADR-0026 decides
-  the direction — garam holds what an agent should be, an operator asks
-  — and leaves that surface, its authentication, the shape of the
-  values, and the key an operator matches its own definitions by all
-  undecided.
-- **A definition becoming an agent.** The two paths do not conflict;
-  they never meet. `agent.Service.Create` is the only route to an agent
-  and to an assignment and it mints its own GRN, so the operator a
-  definition names cannot claim it and the certificate route refuses it
-  as unassigned. ADR-0026 expected a conflict between two ways of coming
-  into existence and there is a gap instead. Closing it needs the
-  operator read, a way to hold an agent garam did not mint for that
-  caller, and a rule for which record wins.
-- Secrets. Values an agent, a project or a cluster needs, held at
-  organization and at project level, are part of the intended structure
-  and nothing stores, serves or protects one today.
+- Secrets. What one is, is decided: garam holds a reference to a value
+  an organization's own store keeps — never the value — and no surface
+  of garam's serves one
+  ([ADR-0036](./adr/0036-a-secret-in-garam-is-a-reference-not-a-value.md)).
+  What is out of scope is the whole of it: no resource, no store, no
+  surface, and the `secret` service type stands in the catalogue as
+  planned ([grn-model.md](./grn-model.md)).
 - Clusters as a resource an organization connects. Named in the intended
   structure and explicitly unplanned.
 - Manifests for any cluster garam does not run. garam publishes two

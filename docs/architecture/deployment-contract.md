@@ -256,10 +256,11 @@ its owner, with the reading process running as that owner.
 It is enforced, not requested. `internal/keyfile` refuses a key file
 when any group or other permission bit is set, and separately when its
 owner is not the process's own UID, and every key file a process reads
-at startup goes through it: the key-encryption key and the machine
-listener's own TLS key alike, so either refusal stops the start. Both
-halves matter for a deployment, because plain Kubernetes secret
-projection satisfies neither:
+at startup goes through it: the key-encryption key, the machine
+listener's own TLS key (`internal/cli/machine.go`) and the adapter's
+(`internal/cli/delivery.go`) alike, so either refusal stops the start
+of that process. Both halves matter for a deployment, because plain
+Kubernetes secret projection satisfies neither:
 
 - A projected secret is owned by root, and `fsGroup` changes the group
   owner, not the user owner. `defaultMode: 0440` with `fsGroup` trips
@@ -277,12 +278,8 @@ process then opens a file it owns with no group or other bits, and both
 checks pass. Relaxing the check to fit plain projection is not an
 option; the deployment shape above is what the rule requires.
 
-Two qualifications:
+One qualification:
 
-- The startup enforcement applies to `GARAM_CA_KEY_FILE` and to
-  `GARAM_ADAPTER_TLS_KEY_FILE`. The machine listener's own TLS key has
-  no such check in the source; the same arrival shape covers it, and the
-  local manifest copies all three files the same way.
 - **There is no client CA bundle, and creating one is forbidden.** The
   machine listener requires a certificate and verifies it per connection
   against the certificate authority of the organization the
@@ -400,9 +397,16 @@ Answers the consumer asked for that the source does not establish.
 Stated here so they are not guessed:
 
 - **Read-only root filesystem.** Not established for either image. What
-  is checkable: no code under `internal/` or `cmd/` writes a file. What
-  the web runtime writes, if anything, is unverified — so the
-  `securityContext` field is the deployment's to set either way.
+  is checkable: `issue-certificate` is the one command under `internal/`
+  or `cmd/` that writes a file — it creates the directory `--out-dir`
+  names and writes `certificate.pem`, `key.pem` and `issuer.pem` into it
+  (`internal/cli/issue_certificate.go`) — so that job needs a writable
+  path there and the three serve processes need none. Where the
+  directory cannot be created the run fails before a certificate is
+  minted; where it exists and cannot be written the run fails after, and
+  the private key in that answer exists nowhere else. What the web
+  runtime writes, if anything, is unverified — so the `securityContext`
+  field is the deployment's to set either way.
 - **Replica safety above one.** Not established for `serve api`,
   `serve authz`, or `serve machine`. No leader election exists anywhere
   in the source; whether that makes a second replica safe or unsafe is

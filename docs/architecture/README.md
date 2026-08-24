@@ -4,7 +4,7 @@ Current architecture of the system and the decisions behind it. This file is the
 
 ## Structure
 
-- **Responsibility documents** (`overview.md`, `domains.md`, `grn-model.md`, `authz.md`) — the single source of truth for how the system is shaped *now*. To know the current state, read only these.
+- **Responsibility documents** — the single source of truth for how the system is shaped *now*. To know the current state, read only these; the Index below is the set.
 - **`adr/`** — the record of individual decisions: direction taken, context, rejected alternatives.
 
 ## Rules

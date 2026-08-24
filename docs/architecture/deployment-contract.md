@@ -291,10 +291,10 @@ option; the deployment shape above is what the rule requires.
 
 Two qualifications:
 
-- **The two `*_TLS_*` files are re-read on every handshake**, on the
-  listener and in the adapter alike (`internal/keyfile/pair.go`), so a
-  replaced pair is presented on the next connection with nothing
-  restarted
+- **Each `*_TLS_CERT_FILE` and `*_TLS_KEY_FILE` pair is re-read on
+  every handshake**, on the listener and in the adapter alike
+  (`internal/keyfile/pair.go`), so a replaced pair is presented on the
+  next connection with nothing restarted
   ([ADR-0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)).
   Two obligations follow, and a deployment that meets neither has
   rotation only on a restart:
@@ -314,8 +314,9 @@ Two qualifications:
   authority would accept a certificate against a root that is not its
   own — the tenancy hole [ADR-0020](./adr/0020-published-artifacts.md)
   forbids. There is nothing to mount and nothing to rotate; what is
-  mounted is the listener's own pair and the garam server root above,
-  and neither is a bundle of client authorities.
+  mounted is the listener's own pair and the garam server root
+  `GARAM_MACHINE_SERVER_ROOT_FILE` names, and neither is a bundle of
+  client authorities.
 
 ## The key-encryption key cannot be regenerated
 

@@ -82,9 +82,6 @@ services:
       GARAM_AUTHZ_ADDR: authz:9090
       # Plain HTTP locally, so the session cookie cannot be Secure.
       GARAM_COOKIE_SECURE: "false"
-      # Opt-in one-click local sign-in (ADR-0010).
-      GARAM_DEV_AUTH: ${GARAM_DEV_AUTH:-false}
-      GARAM_DEV_REDIRECT_URL: ${GARAM_DEV_REDIRECT_URL:-http://localhost:3000/api/auth/callback/dev}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GOOGLE_REDIRECT_URL: ${GOOGLE_REDIRECT_URL:-http://localhost:3000/api/auth/callback/google}

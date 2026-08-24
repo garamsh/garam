@@ -180,8 +180,6 @@ that the source no longer reads.
 | `GARAM_ADAPTER_TLS_KEY_FILE` | Same: the adapter's own deployment. |
 | `GARAM_ADAPTER_SERVER_ROOT_FILE` | Same: the adapter's own deployment. |
 | `GARAM_MIGRATIONS_DIR` | The migrations ship inside the image and the default resolves to them there. A value here could only point the Job away from them. |
-| `GARAM_DEV_AUTH` | Development only, and it requires `GARAM_COOKIE_SECURE=false` (ADR-0010). `deploy/local/` is where it is turned on. |
-| `GARAM_DEV_REDIRECT_URL` | Read only by the provider above. |
 
 Two things sit outside that comparison:
 

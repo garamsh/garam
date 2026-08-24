@@ -65,15 +65,15 @@ whatever schema the database already has.
 
 Nothing here is published to the host. The Services are cluster-internal
 and there is no ingress, so `make minikube-forward` is the only way in:
-it forwards the web app to `http://localhost:3000`, which is the port
-the api's dev callback is configured for. Move one and the sign-in flow
-breaks.
+it forwards the web app to `http://localhost:3000`.
 
-`GARAM_DEV_AUTH` is on, so `/login` offers a one-click sign-in that
-needs no Google credentials
-([ADR-0010](../../../docs/architecture/adr/0010-dev-auth-provider.md)).
-That is why this stack must not be reachable from anywhere but this
-machine.
+`/login` takes Google, which needs real credentials this deployment
+sets none of, or a username and a password, which `/register` mints
+only from an invitation an org admin issued
+([ADR-0041](../../../docs/architecture/adr/0041-a-password-is-garams-own-credential-verified-by-argon2id.md)).
+The database this stack starts with holds no admin, so reaching the
+console means writing user and session rows against it directly, as
+`web/e2e/seed.ts` does for the browser suite.
 
 To reach anything else — the api, the authz engine's metrics, the
 machine process's probes — forward its Service the same way.

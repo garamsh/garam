@@ -115,17 +115,9 @@ spec:
             - name: GARAM_AUTHZ_ADDR
               value: "authz:9090"
             # Nothing here is reached over TLS, so the session cookie
-            # cannot be Secure — which is also what the dev provider
-            # refuses to start without.
+            # cannot be Secure.
             - name: GARAM_COOKIE_SECURE
               value: "false"
-            # One-click sign-in with no Google credentials (ADR-0010).
-            # On here because this deployment is localhost tooling; it
-            # is never on anywhere else.
-            - name: GARAM_DEV_AUTH
-              value: "true"
-            - name: GARAM_DEV_REDIRECT_URL
-              value: "http://localhost:3000/api/auth/callback/dev"
           ports:
             - name: http
               containerPort: 8080

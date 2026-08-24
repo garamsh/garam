@@ -37,7 +37,7 @@ spec:
           command: ["/bin/sh", "-ec"]
           args:
             - |
-              for f in {{ .Values.machine.keyMaterial.certKey }} {{ .Values.machine.keyMaterial.keyKey }} {{ .Values.machine.keyMaterial.kekKey }}; do
+              for f in {{ .Values.machine.keyMaterial.certKey }} {{ .Values.machine.keyMaterial.keyKey }} {{ .Values.machine.keyMaterial.kekKey }} {{ .Values.machine.keyMaterial.serverRootKey }}; do
                 install -m 0600 "/etc/garam/key-material/$f" "/run/garam/key-material/$f"
               done
               ls -l /run/garam/key-material
@@ -65,13 +65,28 @@ spec:
               value: ":8444"
             - name: GARAM_AUTHZ_ADDR
               value: {{ printf "%s-authz:9090" (include "garam.fullname" .) | quote }}
-            # These three name files and carry none of their contents.
+            # These four name files and carry none of their contents.
+            #
+            # The pair is re-read per handshake, so a replaced one is
+            # served on the next connection (ADR-0040). The copy above
+            # is made once, at pod start, and this chart renders nothing
+            # that refreshes it — so rotation here is still a restart,
+            # and whatever refreshes the copy renames over the file
+            # rather than writing in place (chart README, §Key material
+            # and secrets).
             - name: GARAM_MACHINE_TLS_CERT_FILE
               value: {{ printf "/run/garam/key-material/%s" (required "machine.keyMaterial.certKey is required" .Values.machine.keyMaterial.certKey) | quote }}
             - name: GARAM_MACHINE_TLS_KEY_FILE
               value: {{ printf "/run/garam/key-material/%s" (required "machine.keyMaterial.keyKey is required" .Values.machine.keyMaterial.keyKey) | quote }}
+            # The root every identity garam issues a certificate to pins
+            # garam by. It signed the pair above and nothing else, it is
+            # public, and it is read once at startup (ADR-0040).
+            - name: GARAM_MACHINE_SERVER_ROOT_FILE
+              value: {{ printf "/run/garam/key-material/%s" (required "machine.keyMaterial.serverRootKey is required" .Values.machine.keyMaterial.serverRootKey) | quote }}
             - name: GARAM_CA_KEY_FILE
               value: {{ printf "/run/garam/key-material/%s" (required "machine.keyMaterial.kekKey is required" .Values.machine.keyMaterial.kekKey) | quote }}
+            - name: GARAM_CERTIFICATE_LIFETIME
+              value: {{ required "machine.certificateLifetime is required" .Values.machine.certificateLifetime | quote }}
           ports:
             - name: mtls
               containerPort: 8443
@@ -97,7 +112,7 @@ spec:
       volumes:
         - name: key-material-secret
           secret:
-            secretName: {{ required "machine.keyMaterial.secretName is required: it names the Secret holding the listener's certificate and key and the key-encryption key" .Values.machine.keyMaterial.secretName }}
+            secretName: {{ required "machine.keyMaterial.secretName is required: it names the Secret holding the listener's certificate and key, the root that signed them, and the key-encryption key" .Values.machine.keyMaterial.secretName }}
             defaultMode: 0440
         # Memory-backed, so the copy the process owns never reaches the
         # node's disk.

@@ -110,6 +110,19 @@ Two facts bound what may be relied on here, each read on 2026-08-25:
   projected Secret as the reading UID onto a memory-backed volume — and
   generates nothing, because a regenerated key-encryption key opens no
   authority already sealed ([ADR-0016](./0016-ca-key-custody.md)).
+- **The chart renders how key material arrives and not how it is
+  replaced.** The machine listener re-reads its certificate and key on
+  every handshake, so a replaced pair is served without a restart
+  ([ADR-0040](./0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)),
+  and the copy the arrival shape makes is made once at pod start. A
+  refresh that keeps that copy current has to rename over the file the
+  process opens — a reader that opens a half-written one refuses the
+  handshake — and has to satisfy the arrival rule on every refresh
+  rather than only the first. The chart renders no such refresh: what
+  would perform it belongs to the cluster the deployment owns, and
+  nothing here could be run against a cluster to show it works. Both
+  obligations are stated in `deploy/charts/garam/README.md` §Key
+  material and secrets, where whoever adds the refresh reads them.
 - **`make chart` is what keeps the chart true, and `make ci` runs it.**
   It lints and renders every value file under `deploy/charts/garam/ci/`,
   and it compares the environment names the render carries against the
@@ -187,6 +200,13 @@ Two facts bound what may be relied on here, each read on 2026-08-25:
   reader who wants the configuration surface reads `values.yaml`. The
   compensation is that `values.yaml` cannot be wrong about what the
   chart renders, and the paragraph it replaced could.
+- **Rotating the machine listener's pair costs a restart under this
+  chart alone.** garam's half of the mechanism is built and the chart's
+  half is not: the pair is re-read per handshake, and what the chart
+  renders is a copy made once. A deployment that wants rotation without
+  a restart supplies the refresh itself, and a deployment that does not
+  is where it was before ADR-0040 — nothing regresses, and what it pays
+  is a restart each time the listener's certificate is replaced.
 - **The five workloads are described twice in this repository** — here
   and in `deploy/local/minikube/`. They are not the same description:
   the local manifests carry a dev sign-in provider, throwaway key

@@ -57,13 +57,23 @@ fails without them:
   names an image that can be pulled.
 - `database.secretName` — the Secret holding `GARAM_DATABASE_URL`.
 - `machine.keyMaterial.secretName` — the Secret holding the machine
-  listener's certificate and key and the key-encryption key.
+  listener's certificate and key, the garam server root that signed
+  them, and the key-encryption key.
 - `web.apiUrl` — `web/src/env.ts` refuses to boot in production without
   it.
 
 Setting `api.google.clientId` makes `api.google.redirectUrl` and
 `api.google.clientSecret` required too. One Google credential without
 the other refuses the start, so the chart refuses the render instead.
+
+`machine.certificateLifetime` defaults to the binary's own `24h` and is
+a security parameter: it bounds every certificate garam signs for an
+agent or an operator, expiry is the only revocation garam has, and the
+binary refuses to start outside one hour and thirty days
+(`docs/architecture/deployment-contract.md` §What the binary enforces
+about key material). Lowering it is safe only where each of those
+identities renews and rewrites its own files without a restart, which
+this chart does not deploy and cannot check.
 
 `resources` is empty on every workload. No figure has been measured for
 any garam process and setting none is not neutral, both of which
@@ -85,7 +95,7 @@ that the source no longer reads.
 | `GARAM_ADAPTER_GATEWAY_AGENT` | Same: the adapter's own deployment. |
 | `GARAM_ADAPTER_TLS_CERT_FILE` | Same: the adapter's own deployment. |
 | `GARAM_ADAPTER_TLS_KEY_FILE` | Same: the adapter's own deployment. |
-| `GARAM_ADAPTER_ISSUER_FILE` | Same: the adapter's own deployment. |
+| `GARAM_ADAPTER_SERVER_ROOT_FILE` | Same: the adapter's own deployment. |
 | `GARAM_MIGRATIONS_DIR` | The migrations ship inside the image and the default resolves to them there. A value here could only point the Job away from them. |
 | `GARAM_DEV_AUTH` | Development only, and it requires `GARAM_COOKIE_SECURE=false` (ADR-0010). `deploy/local/` is where it is turned on. |
 | `GARAM_DEV_REDIRECT_URL` | Read only by the provider above. |
@@ -98,8 +108,9 @@ Two things sit outside that comparison:
   probes to match.
 - `issue-certificate` is a command rather than a workload — the one
   out-of-band bootstrap (ADR-0015), run by hand against the same
-  database. The two variables it reads are already rendered above for
-  the workloads that need them.
+  database. The three variables it reads are already rendered above for
+  the workloads that need them, and whoever runs it supplies the same
+  values.
 
 ## Exposure is the cluster owner's
 
@@ -145,6 +156,30 @@ about key material). `templates/machine.yaml` renders the shape that
 does satisfy it: an initContainer running as UID 10001 copies the
 projected Secret with `install -m 0600` onto a memory-backed
 `emptyDir`, with `fsGroup` set so it can write there.
+
+The Secret holds four files, and `machine.keyMaterial` names the key
+each is under: the listener's certificate and key, the garam server root
+that signed them and that every identity garam issues to pins garam by,
+and the key-encryption key. One authority signs that pair and nothing
+else, so an issuer that also signs other workloads must not mint it
+(ADR-0040).
+
+**The copy is made once, and rotation is the deployment's other half.**
+The listener re-reads its certificate and key on every handshake, so a
+replaced pair is served on the next connection with nothing restarted
+(ADR-0040). This chart renders the copy at pod start and nothing that
+refreshes it, so a pair replaced in the Secret reaches the projected
+volume and not the file the process opens: under this chart alone,
+rotation is still a pod restart. Whatever a deployment adds to refresh
+that copy carries both obligations
+(`docs/architecture/deployment-contract.md` §What the binary enforces
+about key material):
+
+- It replaces the pair by renaming over the file, never by writing in
+  place. A reader that opens a half-written file refuses the handshake.
+- It satisfies the arrival rule on every refresh, not only the first:
+  the file the process opens stays owned by that process with no group
+  or other bit set.
 
 The chart generates no key material, and the key-encryption key is why
 — it cannot be regenerated

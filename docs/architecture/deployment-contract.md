@@ -114,19 +114,21 @@ Three qualifications:
     copies the projected Secret once, at pod start, so a pair replaced
     afterwards reaches the projected volume and not the copy the process
     reads. Whatever refreshes that copy must satisfy the arrival rule
-    for the key on every refresh, not only the first, and must rename
-    rather than write in place.
-- **`GARAM_CERTIFICATE_LIFETIME` is a security parameter, and its safe
-  values depend on the two obligations above.** Expiry is the only
-  revocation garam has — no CRL, no responder
+    for the key on every refresh, not only the first.
+- **`GARAM_CERTIFICATE_LIFETIME` is a security parameter.** It bounds
+  every certificate garam signs — an agent's and an operator's, not the
+  listener's own pair, which garam does not issue
+  (`internal/ca/service.go`). Expiry is the only revocation garam has —
+  no CRL, no responder
   ([ADR-0014](./adr/0014-agent-authentication.md)) — so the value is the
   window a stolen certificate stays usable in. `internal/ca/service.go`
   bounds it at one hour and thirty days and refuses the start outside
   them. The default is deliberately loose while rotation is new
   ([ADR-0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md));
-  a deployment that has met neither obligation renews on a restart, so
-  lowering it there shortens the window between restarts rather than the
-  window a certificate is usable in.
+  lowering it is safe only where the two obligations above are met on
+  the files each renewed certificate is written to, because an identity
+  whose files are replaced in place or left stale stops connecting
+  sooner the lower it goes.
 - **There is no client CA bundle, and creating one is forbidden.** The
   machine listener requires a certificate and verifies it per connection
   against the certificate authority of the organization the

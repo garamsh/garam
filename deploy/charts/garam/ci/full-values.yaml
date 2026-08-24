@@ -35,7 +35,9 @@ machine:
     secretName: garam-machine-key-material
     certKey: tls.crt
     keyKey: tls.key
+    serverRootKey: server-root.pem
     kekKey: ca-kek.hex
+  certificateLifetime: 1h
   resources:
     requests:
       cpu: 100m

@@ -1,6 +1,6 @@
 # ADR 0020: garam publishes images and a contract, not manifests
 
-> Status: accepted
+> Status: superseded by [ADR-0042](./0042-a-chart-is-the-description-of-a-garam-deployment.md)
 > Date: 2026-08-17
 
 ## Contents

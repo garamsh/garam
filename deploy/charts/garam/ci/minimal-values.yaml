@@ -1,0 +1,14 @@
+# Every required value and nothing else: the render `make chart` checks
+# a deployment that takes every default.
+image:
+  server:
+    tag: "0.0.0-ci"
+  web:
+    tag: "0.0.0-ci"
+database:
+  secretName: garam-database
+machine:
+  keyMaterial:
+    secretName: garam-machine-key-material
+web:
+  apiUrl: http://garam-api:8080

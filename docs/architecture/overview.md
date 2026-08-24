@@ -155,10 +155,11 @@ collaborate on a shared plan.
   planned ([grn-model.md](./grn-model.md)).
 - Clusters as a resource an organization connects. Named in the intended
   structure and explicitly unplanned.
-- Manifests for any cluster garam does not run. garam publishes two
-  images and the contract [deployment-contract.md](./deployment-contract.md)
-  states (ADR-0020); the repository that owns a cluster owns what
-  reconciles it.
+- Reconciling a cluster garam does not run. garam publishes two images
+  and the chart at `deploy/charts/garam/` that describes a deployment
+  (ADR-0042); which address each process answers on and which of them
+  leaves the cluster stays the repository that owns the cluster's, and
+  the chart renders no exposure at all.
 - Workflow execution engine, scheduler, queue.
 - Notifications.
 - The rest of the agent surface. An operator creates an agent and
@@ -351,7 +352,7 @@ it and imports no request surface and no domain.
 | A CA's key is sealed by a key the process holds, not by a KMS | A database dump opens nothing; issuing depends on no hosted service, which is what lets a user bring their own operator. | [adr/0016-ca-key-custody.md](./adr/0016-ca-key-custody.md) |
 | Machine identities are served by a process of their own | The surface that issues certificates holds every organization's key-encryption key, and the process serving browsers must not. | [adr/0017-machine-process.md](./adr/0017-machine-process.md) |
 | An agent is watched only while someone is watching | garam cannot dial an adapter, so the poll it already holds carries the watcher count; an unwatched agent costs nothing. | [adr/0022-watching-an-agent.md](./adr/0022-watching-an-agent.md) |
-| garam publishes images and a contract, not manifests | Cluster state changes in one place; a registry credential is unavailable both locally and on the target cluster. | [adr/0020-published-artifacts.md](./adr/0020-published-artifacts.md) |
+| garam publishes a chart that describes its deployment | An executable artefact is checked against the source, and prose was falsified three times in one night; cluster state stays in one place because the consumer holds a values file rather than manifests. | [adr/0042-a-chart-is-the-description-of-a-garam-deployment.md](./adr/0042-a-chart-is-the-description-of-a-garam-deployment.md) |
 | A message is completed by the turn-end event naming it | It is the only signal that pairs deterministically; a lost one redelivers, so delivery is at-least-once rather than exactly-once. | [adr/0018-delivery-acknowledgement.md](./adr/0018-delivery-acknowledgement.md) |
 | The machine listener has a specification of its own | One contract per listener: the browser client generates no types for a surface it cannot call, and whoever writes an operator has something to build against. | [adr/0019-machine-openapi-spec.md](./adr/0019-machine-openapi-spec.md) |
 | Liveness and readiness answer on a credential-free port | Restarting is the expensive answer, so only readiness reads a dependency; the mTLS listener admits no probe, so that process gets a port for them. | [adr/0021-liveness-and-readiness.md](./adr/0021-liveness-and-readiness.md) |

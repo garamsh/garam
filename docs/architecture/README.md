@@ -23,7 +23,7 @@ Responsibility documents:
 - [grn-model.md](./grn-model.md) — the GRN resource naming model
 - [authz.md](./authz.md) — the authorization model
 - [adapter.md](./adapter.md) — what the adapter garam ships must do, and what it rests on
-- [deployment-contract.md](./deployment-contract.md) — the contract a cluster-owning repository is written against: ports, probe paths, configuration, key material arrival
+- [deployment-contract.md](./deployment-contract.md) — what a deployment must plan for that no manifest carries: readiness, termination, migration failure, key-material enforcement, and what is not established
 
 ADRs:
 
@@ -46,7 +46,7 @@ ADRs:
 - [0017](./adr/0017-machine-process.md) — machine identities are served by a process of their own
 - [0018](./adr/0018-delivery-acknowledgement.md) — a message is completed by the turn-end event that names it
 - [0019](./adr/0019-machine-openapi-spec.md) — the machine listener carries an OpenAPI specification of its own
-- [0020](./adr/0020-published-artifacts.md) — garam publishes images and a contract, not manifests
+- [0020](./adr/0020-published-artifacts.md) — garam publishes images and a contract, not manifests; superseded by 0042
 - [0021](./adr/0021-liveness-and-readiness.md) — liveness and readiness answer on a port that carries no credential
 - [0022](./adr/0022-watching-an-agent.md) — an agent is watched only while someone is watching
 - [0023](./adr/0023-web-probes.md) — the web app answers the same two probes as the rest
@@ -68,6 +68,7 @@ ADRs:
 - [0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md) — a version tag publishes both images to the account's registry
 - [0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md) — the machine listener presents a pinned garam server certificate, and certificates rotate without a restart
 - [0041](./adr/0041-a-password-is-garams-own-credential-verified-by-argon2id.md) — a password is garam's own credential, verified by Argon2id and minted by an invitation
+- [0042](./adr/0042-a-chart-is-the-description-of-a-garam-deployment.md) — a chart at `deploy/charts/garam/` describes the deployment, superseding ADR-0020
 
 ## Rules for edits
 

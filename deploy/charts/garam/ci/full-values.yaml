@@ -1,0 +1,55 @@
+# Every optional value set, so the render `make chart` checks covers the
+# configuration the minimal one leaves out — Google sign-in above all,
+# which is the only branch in the templates.
+image:
+  server:
+    tag: "0.0.0-ci"
+  web:
+    tag: "0.0.0-ci"
+  pullPolicy: Always
+  pullSecrets:
+    - garam-registry
+database:
+  secretName: garam-database
+  secretKey: uri
+api:
+  sessionTTL: 24h
+  cookieSecure: true
+  google:
+    clientId: "0000000000-ci.apps.googleusercontent.com"
+    redirectUrl: https://garam.example/auth/callback/google
+    clientSecret:
+      secretName: garam-google
+      secretKey: client-secret
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+authz:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+machine:
+  keyMaterial:
+    secretName: garam-machine-key-material
+    certKey: tls.crt
+    keyKey: tls.key
+    serverRootKey: server-root.pem
+    kekKey: ca-kek.hex
+  certificateLifetime: 1h
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+web:
+  apiUrl: https://garam.example/api
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+migrate:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi

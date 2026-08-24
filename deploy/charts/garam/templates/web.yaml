@@ -1,0 +1,60 @@
+# The Next.js console (ADR-0009). It reads nothing outside itself, so
+# both probes are one answer on two paths and an API outage takes no
+# replica out of rotation (ADR-0023).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "garam.fullname" . }}-web
+  labels:
+    {{- include "garam.labels" (dict "root" $ "component" "web") | nindent 4 }}
+spec:
+  # Fixed at one, as on every workload here: replica safety above one is
+  # not established.
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "garam.selectorLabels" (dict "root" $ "component" "web") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "garam.selectorLabels" (dict "root" $ "component" "web") | nindent 8 }}
+    spec:
+{{- include "garam.imagePullSecrets" . }}
+      containers:
+        - name: web
+          image: {{ include "garam.webImage" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            # Baked into the image at build time as well, so this must
+            # equal the value that build used.
+            - name: GARAM_API_URL
+              value: {{ required "web.apiUrl is required: web/src/env.ts refuses to boot in production without it" .Values.web.apiUrl | quote }}
+          # PORT=3000 is set in the image (deploy/local/Dockerfile.web);
+          # the chart does not set it, so the port below is the image's.
+          ports:
+            - name: http
+              containerPort: 3000
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 3000
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 3000
+          resources: {{- toYaml .Values.web.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "garam.fullname" . }}-web
+  labels:
+    {{- include "garam.labels" (dict "root" $ "component" "web") | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "garam.selectorLabels" (dict "root" $ "component" "web") | nindent 4 }}
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http

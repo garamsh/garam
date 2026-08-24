@@ -10,3 +10,13 @@ export function slugFromGrn(grn: string): string {
   }
   return segments[4];
 }
+
+/**
+ * The GRN of an operator of `org`, built from the identifier the
+ * console addresses it by. An operator is org-level, so its project
+ * segment is `default` (grn-model.md §Ownership). `identifier` is what
+ * `parseOperatorIdentifier` returned, so it carries no colon of its own.
+ */
+export function operatorGrn(org: string, identifier: string): string {
+  return `grn:${org}:default:operator:${identifier}`;
+}

@@ -17,6 +17,12 @@ export type Project = components["schemas"]["Project"];
 export type Member = components["schemas"]["Member"];
 /** A pending invitation and its bearer token, as the API returns one. */
 export type Invitation = components["schemas"]["Invitation"];
+/**
+ * What an organization says an agent should be, as the API returns one.
+ * It is a record and not an agent (ADR-0026): no operator has
+ * necessarily acted on it, and nothing here reports whether one has.
+ */
+export type AgentDefinition = components["schemas"]["AgentDefinition"];
 
 /**
  * What a read returned, or the fact that the API never answered. An
@@ -55,6 +61,17 @@ export function listGroups(org: string): Promise<OrgRead<Group[]>> {
 export function listProjects(org: string): Promise<OrgRead<Project[]>> {
   return catchUnreachable(
     garamFetchAuthenticated<Project[]>(`/orgs/${orgPath(org)}/projects`),
+  );
+}
+
+/** The agents an organization says it should have. */
+export function listAgentDefinitions(
+  org: string,
+): Promise<OrgRead<AgentDefinition[]>> {
+  return catchUnreachable(
+    garamFetchAuthenticated<AgentDefinition[]>(
+      `/orgs/${orgPath(org)}/agent-definitions`,
+    ),
   );
 }
 

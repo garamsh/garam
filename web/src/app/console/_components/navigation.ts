@@ -1,4 +1,5 @@
 import {
+  Bot,
   FolderGit2,
   LayoutDashboard,
   ScrollText,
@@ -23,6 +24,7 @@ export const CONSOLE_SECTIONS: readonly ConsoleSection[] = [
   { segment: "", label: "Overview", icon: LayoutDashboard },
   { segment: "groups", label: "Groups", icon: UsersRound },
   { segment: "projects", label: "Projects", icon: FolderGit2 },
+  { segment: "agents", label: "Agents", icon: Bot },
   { segment: "members", label: "Members", icon: UserRound },
   { segment: "policies", label: "Policies", icon: ScrollText },
 ];

@@ -118,8 +118,9 @@ collaborate on a shared plan.
   active policy still grants org-wide.
 - A web console under `/console` for the org structure the API exposes:
   organizations are listed and created, members are invited by link and
-  the invitation accepted, groups and projects are read (ADR-0009). Its
-  shell is a collapsible sidebar over `Organizations → organization →
+  the invitation accepted, groups and projects are read, and an agent is
+  defined and the organization's definitions read (ADR-0009, ADR-0026).
+  Its shell is a collapsible sidebar over `Organizations → organization →
   section`, and it addresses resources by the GRN's last segment rather
   than printing GRNs (ADR-0011).
 - Each of the three processes answers a liveness and a readiness probe
@@ -167,8 +168,9 @@ collaborate on a shared plan.
   state an operator or an agent reports (ADR-0012) and deprovisioning
   an agent. The adapter carries messages and forwards nothing (see the
   watching entry below), and certificate renewal is reissue and restart
-  rather than an endpoint (ADR-0014). No console
-  page reads the agents the browser API answers.
+  rather than an endpoint (ADR-0014). No console page reads the agents
+  the browser API answers: the console's agents section reads
+  definitions, which are not agents (ADR-0026).
 - Telling a sender that its message exhausted its attempts. ADR-0018
   makes that garam's obligation because the agent platform notifies
   nobody; the queue stops redelivering an exhausted message and nothing

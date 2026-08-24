@@ -53,6 +53,18 @@ type OrgMember struct {
 	CreatedAt pgtype.Timestamptz
 }
 
+type PasswordAttempt struct {
+	AttemptID string
+	ExpiresAt pgtype.Timestamptz
+}
+
+type PasswordCredential struct {
+	UserGrn   string
+	Verifier  string
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
+
 type Project struct {
 	Grn       string
 	OrgGrn    string

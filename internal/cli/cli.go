@@ -30,10 +30,6 @@
 //	GARAM_AUTHZ_ADDR       authz engine address for serve api (default "localhost:9090")
 //	GARAM_SESSION_TTL      session lifetime (default "168h")
 //	GARAM_COOKIE_SECURE    "true" to mark cookies Secure (default true)
-//	GARAM_DEV_AUTH         "true" to enable the dev sign-in provider (default false;
-//	                       requires GARAM_COOKIE_SECURE=false)
-//	GARAM_DEV_REDIRECT_URL dev provider callback URL
-//	                       (default "http://localhost:3000/api/auth/callback/dev")
 //	GOOGLE_CLIENT_ID       Google OAuth client ID (optional; both
 //	                       credentials or neither — unset, the google
 //	                       provider is not registered)

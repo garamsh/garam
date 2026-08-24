@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"slices"
 	"strings"
 	"testing"
@@ -187,70 +186,18 @@ func TestLogin_ShedsLoadPastTheLiveStateBound(t *testing.T) {
 }
 
 func TestListProviders_ReflectsRegistration(t *testing.T) {
-	// The dev provider is absent unless registered (GARAM_DEV_AUTH).
+	// A provider the server was never given is absent from the list;
+	// the one it was given is the control, so the absence is
+	// registration and not an endpoint that names nothing.
 	f := newFixture(t)
 	rec := f.do(t, "GET", "/auth/providers", "")
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, []string{"google"}, decodeBody[[]string](t, rec))
 
-	dev, err := authn.NewDevProvider(authn.DevConfig{RedirectURL: "http://web.test/api/auth/callback/dev"})
-	require.NoError(t, err)
-	f = newFixture(t, dev)
+	f = newFixture(t, &fakeProvider{name: "second"})
 	rec = f.do(t, "GET", "/auth/providers", "")
 	require.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, []string{"dev", "google"}, decodeBody[[]string](t, rec))
-}
-
-func TestDevLogin_RoundTrip(t *testing.T) {
-	dev, err := authn.NewDevProvider(authn.DevConfig{RedirectURL: "http://web.test/api/auth/callback/dev"})
-	require.NoError(t, err)
-	f := newFixture(t, dev)
-
-	// Login redirects to the provider's own callback with code and
-	// state filled in.
-	rec := f.do(t, "GET", "/auth/login/dev", "")
-	require.Equal(t, http.StatusFound, rec.Code)
-	loc, err := url.Parse(rec.Header().Get("Location"))
-	require.NoError(t, err)
-	assert.Equal(t, "http://web.test/api/auth/callback/dev", loc.Scheme+"://"+loc.Host+loc.Path)
-	state := loc.Query().Get("state")
-	require.NotEmpty(t, state)
-	var cookies []*http.Cookie
-	var stateCookieFound bool
-	for _, c := range rec.Result().Cookies() {
-		cookies = append(cookies, c)
-		if c.Name == "garam_oauth_state" {
-			stateCookieFound = true
-			assert.Equal(t, state, c.Value)
-		}
-	}
-	assert.True(t, stateCookieFound, "state cookie set")
-
-	// The callback upserts the dev user and issues a real session.
-	rec = f.do(t, "GET", "/auth/callback/dev?"+loc.Query().Encode(), "", cookies...)
-	require.Equal(t, http.StatusFound, rec.Code)
-	assert.Equal(t, "/console", rec.Header().Get("Location"))
-	var session *http.Cookie
-	for _, c := range rec.Result().Cookies() {
-		if c.Name == "garam_session" {
-			session = c
-		}
-	}
-	require.NotNil(t, session, "session cookie set")
-
-	rec = f.do(t, "GET", "/me", "", session)
-	require.Equal(t, http.StatusOK, rec.Code)
-	me := decodeBody[apigen.User](t, rec)
-	assert.Equal(t, "Dev", me.Nickname)
-	assert.Equal(t, "grn:root:default:user:dev", me.Grn)
-}
-
-func TestDevLogin_NotRegistered(t *testing.T) {
-	// Without GARAM_DEV_AUTH the dev routes answer like any unknown
-	// provider.
-	f := newFixture(t)
-	assert.Equal(t, http.StatusNotFound, f.do(t, "GET", "/auth/login/dev", "").Code)
-	assert.Equal(t, http.StatusNotFound, f.do(t, "GET", "/auth/callback/dev?code=dev&state=x", "").Code)
+	assert.Equal(t, []string{"google", "second"}, decodeBody[[]string](t, rec))
 }
 
 // oauthStateCookie is the state cookie the callback compares against.

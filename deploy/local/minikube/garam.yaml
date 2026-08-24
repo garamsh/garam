@@ -197,7 +197,7 @@ spec:
           command: ["/bin/sh", "-ec"]
           args:
             - |
-              for f in ca-kek.hex tls.crt tls.key; do
+              for f in ca-kek.hex tls.crt tls.key server-root.pem; do
                 install -m 0600 "/etc/garam/throwaway/$f" "/run/garam/throwaway/$f"
               done
               ls -l /run/garam/throwaway
@@ -231,14 +231,25 @@ spec:
             # plaintext listener of their own (ADR-0021).
             - name: GARAM_MACHINE_HEALTH_ADDR
               value: ":8444"
-            # These three name files and carry none of their contents. A
+            # These four name files and carry none of their contents. A
             # key in the environment is inherited by every child process,
             # readable at /proc/<pid>/environ, and captured in a crash
             # dump (ADR-0015).
+            #
+            # The pair is re-read per handshake, so replacing the two
+            # files in place would replace what the next connection is
+            # served (ADR-0040). The initContainer above copies them at
+            # pod start and nothing refreshes the copy, so rotation here
+            # is still a restart — the deployment's half of the
+            # mechanism, not garam's.
             - name: GARAM_MACHINE_TLS_CERT_FILE
               value: /run/garam/throwaway/tls.crt
             - name: GARAM_MACHINE_TLS_KEY_FILE
               value: /run/garam/throwaway/tls.key
+            # The root every agent pins garam by, which signed the pair
+            # above and nothing else.
+            - name: GARAM_MACHINE_SERVER_ROOT_FILE
+              value: /run/garam/throwaway/server-root.pem
             - name: GARAM_CA_KEY_FILE
               value: /run/garam/throwaway/ca-kek.hex
           ports:
@@ -260,11 +271,12 @@ spec:
               mountPath: /run/garam/throwaway
               readOnly: true
       volumes:
-        # Both values in this Secret are generated on this machine by
-        # `deploy/local/minikube/machine-key-material.sh` and are worth
-        # nothing off it: the certificate is self-signed and expires in
-        # a month, and the key-encryption key seals certificate
-        # authorities that exist only in this cluster's database.
+        # Every value in this Secret is generated on this machine by
+        # `deploy/local/minikube/machine-key-material.sh` and is worth
+        # nothing off it: the certificate and the root that signed it are
+        # trusted by nothing, and the key-encryption key seals
+        # certificate authorities that exist only in this cluster's
+        # database.
         #
         # The real one is not like this. A cluster that loses its
         # key-encryption key loses every organization's certificate

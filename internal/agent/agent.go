@@ -101,15 +101,21 @@ func ParseRuntimeState(s string) (RuntimeState, error) {
 	return "", errorx.New(errorx.KindInvalidArgument, "agent: unknown runtime state")
 }
 
-// Certificate is what an agent authenticates with: the client
-// certificate, the private key it was issued with, and the authority
-// that signed it, each in PEM form (ADR-0014). garam stores no private
-// key, so this value carries the only copy and a holder that loses it
-// asks for another certificate rather than recovering this one.
+// Certificate is what an agent authenticates with and what it verifies
+// garam by: the client certificate, the private key it was issued with,
+// the authority that signed it, and the garam server root, each in PEM
+// form (ADR-0014, ADR-0040). garam stores no private key, so this value
+// carries the only copy and a holder that loses it asks for another
+// certificate rather than recovering this one.
+//
+// IssuerPEM names the authority this certificate chains to and is not
+// what garam is verified against: the two directions rest on different
+// roots, and ServerRootPEM is the one a holder pins garam by.
 type Certificate struct {
 	CertificatePEM []byte
 	PrivateKeyPEM  []byte
 	IssuerPEM      []byte
+	ServerRootPEM  []byte
 	NotAfter       time.Time
 }
 

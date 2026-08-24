@@ -83,11 +83,14 @@ paths:
       summary: Issue the certificate an agent authenticates with.
       description: >-
         Answers for an agent assigned to the calling operator at the
-        current epoch and refuses every other one, which is the whole
-        of the authorization here (ADR-0015). Each call signs a new
+        current epoch, and for the agent itself renewing over the
+        connection its current certificate authenticated (ADR-0040).
+        Every other caller is refused, which is the whole of the
+        authorization here (ADR-0015). A renewal grants nothing: the
+        caller already holds that identity, and an expired certificate
+        has no connection left to renew over. Each call signs a new
         certificate and generates the private key it returns once, so
-        it is a POST rather than a GET and rotation is another call
-        (ADR-0014).
+        it is a POST rather than a GET.
       parameters:
         - $ref: '#/components/parameters/agent'
       responses:
@@ -377,11 +380,12 @@ components:
     AgentCertificate:
       type: object
       description: >-
-        A client certificate, the private key it was issued with, and
-        the authority that signed it. garam stores no private key, so
-        this one is returned once and a holder that loses it asks for
-        another certificate.
-      required: [grn, certificatePem, privateKeyPem, issuerPem, notAfter]
+        A client certificate, the private key it was issued with, the
+        authority that signed it, and the garam server root the holder
+        verifies garam by. garam stores no private key, so this one is
+        returned once and a holder that loses it asks for another
+        certificate.
+      required: [grn, certificatePem, privateKeyPem, issuerPem, serverRootPem, notAfter]
       properties:
         grn:
           type: string
@@ -396,8 +400,16 @@ components:
         issuerPem:
           type: string
           description: >-
-            The signing authority, which the holder needs to verify the
-            other side of a connection.
+            The authority that signed this certificate. It is not what
+            garam is verified against: the two directions rest on
+            different roots (ADR-0040).
+        serverRootPem:
+          type: string
+          description: >-
+            The garam server root. A holder verifies garam's listener
+            against this and against nothing else — one root for every
+            organization, separate from the authority above and signing
+            only what garam presents (ADR-0040).
         notAfter:
           type: string
           format: date-time

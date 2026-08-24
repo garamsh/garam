@@ -106,7 +106,7 @@ func subjectURI(g grn.GRN) (*url.URL, error) {
 // expiry returns when a certificate issued at now stops being valid.
 // Jitter only ever shortens the lifetime, so the configured value stays
 // the ceiling it is meant to be, and agents provisioned together stop
-// expiring — and so restarting — together (ADR-0015).
+// expiring — and so renewing — together (ADR-0015).
 func expiry(now time.Time, lifetime time.Duration) (time.Time, error) {
 	spread := int64(lifetime / jitterFraction)
 	if spread <= 0 {

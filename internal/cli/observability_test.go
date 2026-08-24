@@ -208,7 +208,7 @@ func machineListenerServing(t *testing.T, obs *observability, subject grn.GRN, s
 	t.Helper()
 	dir := t.TempDir()
 	certFile, keyFile := writeTLSKeyPair(t, dir)
-	cert, _, err := machineKeyMaterial(certFile, keyFile, writeKeyEncryptionKey(t, dir))
+	pair, _, _, err := machineKeyMaterial(certFile, keyFile, writeKeyEncryptionKey(t, dir), writeServerRoot(t, dir))
 	require.NoError(t, err)
 
 	store := authorities{}
@@ -229,7 +229,7 @@ func machineListenerServing(t *testing.T, obs *observability, subject grn.GRN, s
 	})
 	srv := machine.NewServer(
 		machine.NewService(certificateAuthorities{store: store}),
-		cert,
+		pair,
 		handler,
 	)
 	lis, err := net.Listen("tcp", "127.0.0.1:0")

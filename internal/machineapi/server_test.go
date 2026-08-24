@@ -198,10 +198,14 @@ func organization(identifier string) grn.GRN {
 	return grn.New(grn.RootOwner, grn.DefaultProject, "org", identifier)
 }
 
+// listenerCertificate is what garam presents, as the listener asks for
+// it (machine.ServerCertificate).
+type listenerCertificate tls.Certificate
+
 // loopback is the certificate the listener terminates TLS with. What
 // garam presents is not what these tests are about, so it is
 // self-signed and the client below does not verify it.
-func loopback(t *testing.T) tls.Certificate {
+func loopback(t *testing.T) listenerCertificate {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
@@ -217,7 +221,15 @@ func loopback(t *testing.T) tls.Certificate {
 	}
 	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
 	require.NoError(t, err)
-	return tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key}
+	return listenerCertificate{Certificate: [][]byte{der}, PrivateKey: key}
+}
+
+// Get answers every handshake with the one certificate above. The
+// listener asks per handshake so a replaced certificate is served
+// without a restart (ADR-0040); nothing replaces this one.
+func (c listenerCertificate) Get() (*tls.Certificate, error) {
+	certificate := tls.Certificate(c)
+	return &certificate, nil
 }
 
 // listener serves the surface behind the machine listener and returns
@@ -286,6 +298,7 @@ func TestServer_IssuesForTheAgentThePathNames(t *testing.T) {
 		CertificatePEM: []byte("certificate"),
 		PrivateKeyPEM:  []byte("private key"),
 		IssuerPEM:      []byte("issuer"),
+		ServerRootPEM:  []byte("server root"),
 		NotAfter:       notAfter,
 	}}
 	url, client := listener(t, agents, &messageService{}, consenting(), unwatched(t), &memberGroups{}, &engine{}, operator)
@@ -297,6 +310,7 @@ func TestServer_IssuesForTheAgentThePathNames(t *testing.T) {
 		"certificatePem": "certificate",
 		"privateKeyPem": "private key",
 		"issuerPem": "issuer",
+		"serverRootPem": "server root",
 		"notAfter": "2026-08-17T12:00:00Z"
 	}`, body)
 	assert.Equal(t, []call{{operator: operator, subject: held}}, agents.calls,

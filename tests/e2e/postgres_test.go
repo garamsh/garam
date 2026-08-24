@@ -2449,7 +2449,10 @@ func (m memberGroups) List(ctx context.Context, subject grn.GRN) ([]grn.GRN, err
 // certificates is the certificate authority as the agent domain signs
 // through it (agent.Issuer) — the adapter the composition root builds,
 // in the form this suite can hold.
-type certificates struct{ issuer ca.Service }
+type certificates struct {
+	issuer     ca.Service
+	serverRoot []byte
+}
 
 func (c certificates) Issue(ctx context.Context, subject grn.GRN) (*agent.Certificate, error) {
 	issued, err := c.issuer.Issue(ctx, subject)
@@ -2460,6 +2463,7 @@ func (c certificates) Issue(ctx context.Context, subject grn.GRN) (*agent.Certif
 		CertificatePEM: issued.CertificatePEM(),
 		PrivateKeyPEM:  issued.PrivateKeyPEM(),
 		IssuerPEM:      issued.IssuerPEM(),
+		ServerRootPEM:  c.serverRoot,
 		NotAfter:       issued.NotAfter(),
 	}, nil
 }
@@ -2476,10 +2480,14 @@ func (r machineTrustRoots) Get(ctx context.Context, subject grn.GRN) ([]byte, er
 	return authority.Certificate(), nil
 }
 
+// listenerCertificate is what garam presents, as the listener asks for
+// it (machine.ServerCertificate).
+type listenerCertificate tls.Certificate
+
 // loopbackCertificate is what the listener terminates TLS with. What
 // garam presents is not what this test is about, so it is self-signed
 // and the client below does not verify it.
-func loopbackCertificate(t *testing.T) tls.Certificate {
+func loopbackCertificate(t *testing.T) listenerCertificate {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
@@ -2495,7 +2503,26 @@ func loopbackCertificate(t *testing.T) tls.Certificate {
 	}
 	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
 	require.NoError(t, err)
-	return tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key}
+	return listenerCertificate{Certificate: [][]byte{der}, PrivateKey: key}
+}
+
+// Get answers every handshake with the one certificate above. The
+// listener asks per handshake so a replaced certificate is served
+// without a restart (ADR-0040); nothing replaces this one.
+func (c listenerCertificate) Get() (*tls.Certificate, error) {
+	certificate := tls.Certificate(c)
+	return &certificate, nil
+}
+
+// certificatePEM renders what the listener presents in the form an
+// agent receives the garam server root in (ADR-0040). Nothing here
+// signs the listener's certificate, so the root it chains to is itself.
+func certificatePEM(c listenerCertificate) []byte {
+	var out []byte
+	for _, der := range c.Certificate {
+		out = append(out, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})...)
+	}
+	return out
 }
 
 // policyEngine serves the authz engine over gRPC against the policies
@@ -2533,7 +2560,9 @@ func machineListener(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer, policies m
 	authorities := ca.NewPostgresStore(p)
 	issuer, err := ca.NewService(authorities, sealer, ca.Config{})
 	require.NoError(t, err)
-	agents := agent.NewService(agent.NewPostgresStore(p), certificates{issuer: issuer})
+	presented := loopbackCertificate(t)
+	agents := agent.NewService(agent.NewPostgresStore(p),
+		certificates{issuer: issuer, serverRoot: certificatePEM(presented)})
 	messages, err := message.NewService(message.NewPostgresStore(p), briefDelivery())
 	require.NoError(t, err)
 	// The watches this surface counts are opened by the process serving
@@ -2544,7 +2573,7 @@ func machineListener(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer, policies m
 
 	srv := machine.NewServer(
 		machine.NewService(machineTrustRoots{store: authorities}),
-		loopbackCertificate(t),
+		presented,
 		machinegen.Handler(machineapi.NewServer(agents, messages, message.NewPostgresStore(p), watches, memberGroups{store: org.NewPostgresStore(p)}, policies)),
 	)
 	lis, err := net.Listen("tcp", "127.0.0.1:0")

@@ -52,7 +52,7 @@ func TestServe_ExitsZeroOnSIGTERM(t *testing.T) {
 			}, "http://" + metricsAddr + "/healthz"
 		}},
 		{"machine", func(t *testing.T) ([]string, string) {
-			certFile, keyFile, kekFile := machineKeyMaterialFiles(t)
+			certFile, keyFile, kekFile, rootFile := machineKeyMaterialFiles(t)
 			healthAddr := freeAddr(t)
 			return []string{
 				"GARAM_DATABASE_URL=" + databaseURL,
@@ -61,6 +61,7 @@ func TestServe_ExitsZeroOnSIGTERM(t *testing.T) {
 				"GARAM_MACHINE_TLS_CERT_FILE=" + certFile,
 				"GARAM_MACHINE_TLS_KEY_FILE=" + keyFile,
 				"GARAM_CA_KEY_FILE=" + kekFile,
+				"GARAM_MACHINE_SERVER_ROOT_FILE=" + rootFile,
 			}, "http://" + healthAddr + "/healthz"
 		}},
 	}
@@ -135,7 +136,7 @@ func waitForProbe(t *testing.T, url string, logs *bytes.Buffer) {
 // machineKeyMaterialFiles writes the three files `serve machine`
 // refuses to start without: the listener's certificate and key, and the
 // key-encryption key with the owner-only mode the sealer enforces.
-func machineKeyMaterialFiles(t *testing.T) (certFile, keyFile, kekFile string) {
+func machineKeyMaterialFiles(t *testing.T) (certFile, keyFile, kekFile, rootFile string) {
 	t.Helper()
 	dir := t.TempDir()
 
@@ -159,5 +160,12 @@ func machineKeyMaterialFiles(t *testing.T) (certFile, keyFile, kekFile string) {
 	require.NoError(t, err)
 	keyFile = filepath.Join(dir, "tls.key")
 	require.NoError(t, os.WriteFile(keyFile, pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: der}), 0o600))
-	return certFile, keyFile, kekFile
+
+	// The root every machine identity pins garam by (ADR-0040). What it
+	// carries is not what a shutdown is about, so it is the certificate
+	// above: the process reads it, hands it on, and never verifies with
+	// it.
+	rootFile = filepath.Join(dir, "server-root.pem")
+	require.NoError(t, os.WriteFile(rootFile, certPEM, 0o644))
+	return certFile, keyFile, kekFile, rootFile
 }

@@ -13,14 +13,17 @@ import (
 // Certificate lifetime bounds. ADR-0014 accepted expiry as the only
 // revocation there is — no CRL, no OCSP — so the lifetime is the whole
 // window a compromised certificate stays usable in, and an unbounded
-// one is that mechanism switched off rather than a setting.
+// one is that mechanism switched off rather than a setting. What the
+// deployment picks inside these bounds is configuration (ADR-0040).
 const (
 	// DefaultCertificateLifetime is what [Config] takes when it says
-	// nothing: a day of exposure, costing one restart a day to rotate.
+	// nothing: a day of exposure, costing one renewal a day. It is
+	// deliberately conservative — the mechanism that makes a shorter one
+	// usable ships before the number is tightened (ADR-0040).
 	DefaultCertificateLifetime = 24 * time.Hour
-	// MinCertificateLifetime keeps a certificate usable. Rotation is a
-	// restart, so one that expires inside the time it takes to install
-	// is not a credential.
+	// MinCertificateLifetime keeps a certificate usable. One that
+	// expires inside the time it takes to reach the process that
+	// presents it is not a credential.
 	MinCertificateLifetime = time.Hour
 	// MaxCertificateLifetime is the widest exposure window this package
 	// will issue. Anything longer is a decision to record rather than a
@@ -38,7 +41,9 @@ type Config struct {
 	// CertificateLifetime is the longest an issued certificate is valid
 	// for; jitter takes it no further than that. Zero takes
 	// DefaultCertificateLifetime, and anything outside
-	// MinCertificateLifetime..MaxCertificateLifetime is refused.
+	// MinCertificateLifetime..MaxCertificateLifetime is refused — a
+	// refusal the process that reads it from its configuration does not
+	// start past (ADR-0040).
 	CertificateLifetime time.Duration
 	// Now supplies the current time, so a test can hold it still. Zero
 	// takes time.Now.

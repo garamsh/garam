@@ -2,7 +2,7 @@ package cli
 
 import (
 	"context"
-	"crypto/tls"
+	"encoding/pem"
 	"log/slog"
 	"net/http"
 	"os"
@@ -65,21 +65,27 @@ func serveMachine(cmd *cobra.Command) error {
 	}
 	defer pool.Close()
 
-	cert, sealer, err := machineKeyMaterial(
+	pair, sealer, serverRoot, err := machineKeyMaterial(
 		envOr("GARAM_MACHINE_TLS_CERT_FILE", ""),
 		envOr("GARAM_MACHINE_TLS_KEY_FILE", ""),
 		envOr("GARAM_CA_KEY_FILE", ""),
+		envOr("GARAM_MACHINE_SERVER_ROOT_FILE", ""),
 	)
 	if err != nil {
 		return err
 	}
 
-	authorities := ca.NewPostgresStore(pool)
-	issuer, err := ca.NewService(authorities, sealer, ca.Config{})
+	lifetime, err := certificateLifetime()
 	if err != nil {
 		return err
 	}
-	agents := agent.NewService(agent.NewPostgresStore(pool), certificates{issuer: issuer})
+	authorities := ca.NewPostgresStore(pool)
+	issuer, err := ca.NewService(authorities, sealer, ca.Config{CertificateLifetime: lifetime})
+	if err != nil {
+		return err
+	}
+	agents := agent.NewService(agent.NewPostgresStore(pool),
+		certificates{issuer: issuer, serverRoot: serverRoot})
 	// The delivery parameters default narrow (ADR-0018), and the
 	// defaults are what this process runs on until something asks for
 	// another value.
@@ -129,7 +135,7 @@ func serveMachine(cmd *cobra.Command) error {
 		})
 	srv := machine.NewServer(
 		machine.NewService(certificateAuthorities{store: authorities}),
-		cert,
+		pair,
 		otelhttp.NewHandler(handler, serviceMachine),
 	)
 	srv.Addr = envOr("GARAM_MACHINE_ADDR", ":8443")
@@ -161,43 +167,57 @@ func serveMachine(cmd *cobra.Command) error {
 	return nil
 }
 
-// machineKeyMaterial loads the certificate the listener terminates TLS
-// with, and the key-encryption key every certificate authority is
-// sealed under. Both are files, because key material never travels in
-// the environment (ADR-0015).
+// machineKeyMaterial loads what the process serves TLS on: the pair the
+// listener presents, the key-encryption key every certificate authority
+// is sealed under, and the garam server root every machine identity
+// pins garam by (ADR-0040). Each arrives as a file, because key
+// material never travels in the environment (ADR-0015).
 //
-// The listener's own key is key material too, so it is read through
-// keyfile under the same owner-only rule as the key-encryption key; a
-// group-readable one refuses the start rather than terminating every
-// machine identity's connection with it. The certificate beside it is
-// public and is read plainly.
+// The pair holds the two paths rather than the certificate they held at
+// startup, so replacing the files replaces what the next connection is
+// served. The read here is what refuses a start the listener could
+// never have served a handshake from: the listener's own key is key
+// material and is read under the same owner-only rule as the
+// key-encryption key, and a group-readable one refuses the start rather
+// than terminating every machine identity's connection with it.
 //
 // This surface signs certificates, so the key it opens an authority
 // with is what the process runs on: a missing, group-readable,
 // malformed or wrong-length one refuses the start rather than the
 // first certificate asked for (ADR-0016).
-func machineKeyMaterial(certFile, keyFile, caKeyFile string) (tls.Certificate, ca.Sealer, error) {
+//
+// The server root is a certificate, so it is public and is read
+// plainly. It is read once: a root outlives every certificate it signs
+// by years, and replacing one is a restart.
+func machineKeyMaterial(certFile, keyFile, caKeyFile, serverRootFile string) (*keyfile.Pair, ca.Sealer, []byte, error) {
 	if certFile == "" || keyFile == "" {
-		return tls.Certificate{}, nil, errorx.New(errorx.KindInvalidArgument,
+		return nil, nil, nil, errorx.New(errorx.KindInvalidArgument,
 			"GARAM_MACHINE_TLS_CERT_FILE and GARAM_MACHINE_TLS_KEY_FILE are required")
+	}
+	if serverRootFile == "" {
+		return nil, nil, nil, errorx.New(errorx.KindInvalidArgument,
+			"GARAM_MACHINE_SERVER_ROOT_FILE is required: an agent pins the root that signed this listener (ADR-0040)")
 	}
 	sealer, err := ca.NewSealerFromKeyFile(caKeyFile)
 	if err != nil {
-		return tls.Certificate{}, nil, errorx.Wrap(err, "GARAM_CA_KEY_FILE")
+		return nil, nil, nil, errorx.Wrap(err, "GARAM_CA_KEY_FILE")
 	}
-	certPEM, err := os.ReadFile(certFile)
+	pair, err := keyfile.NewPair(certFile, keyFile)
 	if err != nil {
-		return tls.Certificate{}, nil, errorx.Wrap(err, "machine listener certificate", errorx.KindInvalidArgument)
+		return nil, nil, nil, errorx.Wrap(err, "machine listener certificate")
 	}
-	keyPEM, err := keyfile.Read(keyFile)
+	serverRoot, err := os.ReadFile(serverRootFile)
 	if err != nil {
-		return tls.Certificate{}, nil, errorx.Wrap(err, "GARAM_MACHINE_TLS_KEY_FILE")
+		return nil, nil, nil, errorx.Wrap(err, "GARAM_MACHINE_SERVER_ROOT_FILE", errorx.KindInvalidArgument)
 	}
-	cert, err := tls.X509KeyPair(certPEM, keyPEM)
-	if err != nil {
-		return tls.Certificate{}, nil, errorx.Wrap(err, "machine listener certificate", errorx.KindInvalidArgument)
+	// A root an agent cannot verify garam against is a root that reaches
+	// every agent and works for none, so it is parsed here rather than
+	// handed on as whatever the file held.
+	if block, _ := pem.Decode(serverRoot); block == nil || block.Type != "CERTIFICATE" {
+		return nil, nil, nil, errorx.New(errorx.KindInvalidArgument,
+			"GARAM_MACHINE_SERVER_ROOT_FILE: no certificate in "+serverRootFile)
 	}
-	return cert, sealer, nil
+	return pair, sealer, serverRoot, nil
 }
 
 // certificateAuthorities reads the authority a presented certificate
@@ -228,10 +248,16 @@ func (m memberGroups) List(ctx context.Context, subject grn.GRN) ([]grn.GRN, err
 }
 
 // certificates is the certificate authority as the agent domain signs
-// through it (agent.Issuer). The two cooperate through grn.GRN alone,
-// so the composition root is where what one issues becomes what the
-// other hands back.
-type certificates struct{ issuer ca.Service }
+// through it (agent.Issuer), and the garam server root travelling
+// beside what it signs. The two cooperate through grn.GRN alone, so the
+// composition root is where what one issues becomes what the other
+// hands back — and it is the only place that holds both the authority
+// that signs an agent and the root that agent verifies garam against
+// (ADR-0040).
+type certificates struct {
+	issuer     ca.Service
+	serverRoot []byte
+}
 
 func (c certificates) Issue(ctx context.Context, subject grn.GRN) (*agent.Certificate, error) {
 	issued, err := c.issuer.Issue(ctx, subject)
@@ -242,6 +268,7 @@ func (c certificates) Issue(ctx context.Context, subject grn.GRN) (*agent.Certif
 		CertificatePEM: issued.CertificatePEM(),
 		PrivateKeyPEM:  issued.PrivateKeyPEM(),
 		IssuerPEM:      issued.IssuerPEM(),
+		ServerRootPEM:  c.serverRoot,
 		NotAfter:       issued.NotAfter(),
 	}, nil
 }

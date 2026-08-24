@@ -8,9 +8,9 @@ import (
 )
 
 // NewServer returns the machine-facing HTTP server: it terminates TLS
-// with cert, requires a client certificate, and serves next only for a
-// connection whose certificate authenticated (ADR-0014). The caller
-// gives it an address and serves it.
+// with what certificate answers, requires a client certificate, and
+// serves next only for a connection whose certificate authenticated
+// (ADR-0014). The caller gives it an address and serves it.
 //
 // The chain is verified here rather than by the TLS stack. ClientCAs
 // verifies against one pool, and which authority may sign is decided by
@@ -19,13 +19,20 @@ import (
 // that is not its own, which is the tenancy ADR-0014 rests on the trust
 // root. What TLS is left to enforce is that a certificate is presented
 // at all.
-func NewServer(s Service, cert tls.Certificate, next http.Handler) *http.Server {
+func NewServer(s Service, certificate ServerCertificate, next http.Handler) *http.Server {
 	// TLS 1.3 only: both ends of this surface are garam's, so neither
 	// needs an older one.
 	base := &tls.Config{
-		MinVersion:   tls.VersionTLS13,
-		Certificates: []tls.Certificate{cert},
-		ClientAuth:   tls.RequireAnyClientCert,
+		MinVersion: tls.VersionTLS13,
+		ClientAuth: tls.RequireAnyClientCert,
+	}
+	// Asked per handshake rather than frozen into Certificates, so a
+	// replaced certificate is presented on the next connection with
+	// nothing restarted (ADR-0040). The client half below is untouched
+	// by it: TLS 1.3 sends the server's certificate before the client
+	// sends one, so nothing here reads what the caller presented.
+	base.GetCertificate = func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
+		return certificate.Get()
 	}
 	// Per connection, because the handshake's context reaches
 	// VerifyPeerCertificate no other way: a lookup then ends with the

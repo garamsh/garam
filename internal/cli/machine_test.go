@@ -46,34 +46,52 @@ func writeKeyEncryptionKey(t *testing.T, dir string) string {
 	return path
 }
 
-// writeTLSKeyPair writes the certificate the listener terminates TLS
-// with. What it carries is not what the assembly checks, so it is
-// self-signed.
-func writeTLSKeyPair(t *testing.T, dir string) (string, string) {
+// selfSigned returns a certificate and its key in PEM form. What either
+// carries is not what the assemblies below check, so one shape answers
+// wherever they need a certificate.
+func selfSigned(t *testing.T, commonName string) (certPEM, keyPEM []byte) {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 	template := &x509.Certificate{
 		SerialNumber:          big.NewInt(1),
-		Subject:               pkix.Name{CommonName: "garam machine listener"},
+		Subject:               pkix.Name{CommonName: commonName},
 		NotBefore:             time.Now().Add(-time.Hour),
 		NotAfter:              time.Now().Add(time.Hour),
-		KeyUsage:              x509.KeyUsageDigitalSignature,
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
+		IsCA:                  true,
 		DNSNames:              []string{"localhost"},
 	}
 	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
 	require.NoError(t, err)
 	keyDER, err := x509.MarshalPKCS8PrivateKey(key)
 	require.NoError(t, err)
+	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}),
+		pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
+}
 
+// writeServerRoot writes the garam server root a machine identity pins
+// garam by (ADR-0040). It is a certificate of its own rather than the
+// listener's, because the two are what this change separates.
+func writeServerRoot(t *testing.T, dir string) string {
+	t.Helper()
+	certPEM, _ := selfSigned(t, "garam server root")
+	path := filepath.Join(dir, "server-root.pem")
+	require.NoError(t, os.WriteFile(path, certPEM, 0o644))
+	return path
+}
+
+// writeTLSKeyPair writes the certificate the listener terminates TLS
+// with, as key material arrives: the key readable by its owner alone.
+func writeTLSKeyPair(t *testing.T, dir string) (string, string) {
+	t.Helper()
+	certPEM, keyPEM := selfSigned(t, "garam machine listener")
 	certFile := filepath.Join(dir, "tls.crt")
 	keyFile := filepath.Join(dir, "tls.key")
-	require.NoError(t, os.WriteFile(certFile,
-		pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0o600))
-	require.NoError(t, os.WriteFile(keyFile,
-		pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER}), 0o600))
+	require.NoError(t, os.WriteFile(certFile, certPEM, 0o600))
+	require.NoError(t, os.WriteFile(keyFile, keyPEM, 0o600))
 	return certFile, keyFile
 }
 
@@ -85,21 +103,28 @@ func TestMachineKeyMaterial_RefusesWhenAFileIsMissing(t *testing.T) {
 	dir := t.TempDir()
 	certFile, keyFile := writeTLSKeyPair(t, dir)
 	caKeyFile := writeKeyEncryptionKey(t, dir)
+	rootFile := writeServerRoot(t, dir)
 
-	cert, sealer, err := machineKeyMaterial(certFile, keyFile, caKeyFile)
+	pair, sealer, serverRoot, err := machineKeyMaterial(certFile, keyFile, caKeyFile, rootFile)
 	require.NoError(t, err, "every file present")
-	assert.NotNil(t, cert.PrivateKey)
+	presented, err := pair.Get()
+	require.NoError(t, err)
+	assert.NotNil(t, presented.PrivateKey)
 	assert.NotNil(t, sealer, "the process keeps the key its authorities are sealed under")
+	assert.NotEmpty(t, serverRoot, "the process keeps the root every agent pins it by")
 
-	tests := map[string]struct{ certFile, keyFile, caKeyFile string }{
-		"no key-encryption key":          {certFile, keyFile, ""},
-		"a key-encryption key not there": {certFile, keyFile, filepath.Join(dir, "absent.key")},
-		"no certificate":                 {"", keyFile, caKeyFile},
-		"no private key":                 {certFile, "", caKeyFile},
+	tests := map[string]struct{ certFile, keyFile, caKeyFile, rootFile string }{
+		"no key-encryption key":          {certFile, keyFile, "", rootFile},
+		"a key-encryption key not there": {certFile, keyFile, filepath.Join(dir, "absent.key"), rootFile},
+		"no certificate":                 {"", keyFile, caKeyFile, rootFile},
+		"no private key":                 {certFile, "", caKeyFile, rootFile},
+		"no server root":                 {certFile, keyFile, caKeyFile, ""},
+		"a server root not there":        {certFile, keyFile, caKeyFile, filepath.Join(dir, "absent.pem")},
+		"a server root that is a key":    {certFile, keyFile, caKeyFile, keyFile},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			_, _, err := machineKeyMaterial(tt.certFile, tt.keyFile, tt.caKeyFile)
+			_, _, _, err := machineKeyMaterial(tt.certFile, tt.keyFile, tt.caKeyFile, tt.rootFile)
 			require.Error(t, err)
 			assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
 		})
@@ -115,12 +140,13 @@ func TestMachineKeyMaterial_RefusesAGroupReadableKey(t *testing.T) {
 	dir := t.TempDir()
 	certFile, keyFile := writeTLSKeyPair(t, dir)
 	caKeyFile := writeKeyEncryptionKey(t, dir)
+	rootFile := writeServerRoot(t, dir)
 
-	_, _, err := machineKeyMaterial(certFile, keyFile, caKeyFile)
+	_, _, _, err := machineKeyMaterial(certFile, keyFile, caKeyFile, rootFile)
 	require.NoError(t, err, "owner-only key")
 
 	require.NoError(t, os.Chmod(keyFile, 0o640))
-	_, _, err = machineKeyMaterial(certFile, keyFile, caKeyFile)
+	_, _, _, err = machineKeyMaterial(certFile, keyFile, caKeyFile, rootFile)
 	require.Error(t, err)
 	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
 }

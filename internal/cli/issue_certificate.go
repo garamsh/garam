@@ -78,7 +78,11 @@ func issueCertificate(cmd *cobra.Command, subjectRaw, outDir string) error {
 		return errorx.Wrap(err, "out-dir", errorx.KindInvalidArgument)
 	}
 
-	issuer, err := ca.NewService(ca.NewPostgresStore(pool), sealer, ca.Config{})
+	lifetime, err := certificateLifetime()
+	if err != nil {
+		return err
+	}
+	issuer, err := ca.NewService(ca.NewPostgresStore(pool), sealer, ca.Config{CertificateLifetime: lifetime})
 	if err != nil {
 		return err
 	}

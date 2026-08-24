@@ -21,19 +21,22 @@ type AgentAssignment struct {
 	Operator string `json:"operator"`
 }
 
-// AgentCertificate A client certificate, the private key it was issued with, and the authority that signed it. garam stores no private key, so this one is returned once and a holder that loses it asks for another certificate.
+// AgentCertificate A client certificate, the private key it was issued with, the authority that signed it, and the garam server root the holder verifies garam by. garam stores no private key, so this one is returned once and a holder that loses it asks for another certificate.
 type AgentCertificate struct {
 	CertificatePem string `json:"certificatePem"`
 
 	// Grn The agent the certificate identifies, which is also what its SAN URI holds.
 	Grn string `json:"grn"`
 
-	// IssuerPem The signing authority, which the holder needs to verify the other side of a connection.
+	// IssuerPem The authority that signed this certificate. It is not what garam is verified against: the two directions rest on different roots (ADR-0040).
 	IssuerPem string `json:"issuerPem"`
 
 	// NotAfter When the certificate stops being valid. It carries jitter, so certificates issued together do not expire together.
 	NotAfter      time.Time `json:"notAfter"`
 	PrivateKeyPem string    `json:"privateKeyPem"`
+
+	// ServerRootPem The garam server root. A holder verifies garam's listener against this and against nothing else — one root for every organization, separate from the authority above and signing only what garam presents (ADR-0040).
+	ServerRootPem string `json:"serverRootPem"`
 }
 
 // Claim One caller's hold on one message, and the token that fences it. Renewal and completion carry that token, and a hold handed on to the next caller stops matching.

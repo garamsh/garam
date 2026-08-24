@@ -69,8 +69,10 @@ func (c *Certificate) CertificatePEM() []byte { return c.certPEM }
 // PrivateKeyPEM returns the private key in PKCS#8 PEM form.
 func (c *Certificate) PrivateKeyPEM() []byte { return c.keyPEM }
 
-// IssuerPEM returns the signing CA certificate in PEM form, which the
-// holder needs to verify the other side of a connection.
+// IssuerPEM returns the signing CA certificate in PEM form: the
+// authority this certificate chains to. It is not what garam is
+// verified against — the two directions rest on different roots, and
+// the one a holder pins garam by travels beside this (ADR-0040).
 func (c *Certificate) IssuerPEM() []byte { return c.issuerPEM }
 
 // NotAfter returns when the certificate stops being valid. It carries

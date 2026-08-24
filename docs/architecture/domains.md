@@ -504,8 +504,12 @@ stores one, and a lease running out is a moment passing that nothing
 announces. The interval is the delivery latency ADR-0013 accepted in
 place of a push.
 
-The HTTP surface is `internal/machineapi`; nothing here deletes a
-delivered message, and the adapter is not built.
+The HTTP surface is `internal/machineapi`, and the reader on the other
+side of it is the adapter garam ships ([adapter.md](./adapter.md)).
+The retention above is this package's own work rather than a schedule a
+deployment carries: the sweep rides the enqueue, so a queue being
+written to is a queue being swept (`internal/message/postgres.go`,
+ADR-0034).
 
 ## `internal/watch`
 

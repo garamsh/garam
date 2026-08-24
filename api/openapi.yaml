@@ -112,6 +112,73 @@ paths:
                 items:
                   type: string
                 example: ["dev", "google"]
+  /auth/password/register:
+    post:
+      operationId: registerPassword
+      tags: [auth]
+      summary: Create an account from an invitation and sign in.
+      description: >-
+        Creates the user, its password credential, and the membership
+        the invitation names, then sets the `garam_session` cookie.
+        There is no registration without an invitation: organizations
+        grow by invitation rather than open signup (ADR-0006), and the
+        token is the possession proof that authorizes the account
+        (ADR-0041). The account is a local one, distinct from any
+        account the same person holds through a provider.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordRegistration'
+      responses:
+        '201':
+          description: The resulting membership, with the session cookie set.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Member'
+        '400':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+        '422':
+          $ref: '#/components/responses/Error'
+  /auth/password/login:
+    post:
+      operationId: loginPassword
+      tags: [auth]
+      summary: Sign in with a username and a password.
+      description: >-
+        Verifies the password against the stored Argon2id verifier and
+        sets the `garam_session` cookie. A wrong password and a username
+        no account holds are refused identically — same status, same
+        body — because telling them apart publishes the account list
+        (ADR-0041). Verifications live at one time are bounded, so this
+        answers 429 under load rather than hashing (ADR-0030's shape).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordLogin'
+      responses:
+        '200':
+          description: The signed-in user, with the session cookie set.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
   /me:
     get:
       operationId: me
@@ -1271,6 +1338,44 @@ components:
           example: grn:garam:default:user:117421510527410544321
         nickname:
           type: string
+    PasswordLogin:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          example: alice
+        password:
+          type: string
+          format: password
+          description: >-
+            Sent on this request only. It is never returned by any
+            endpoint, never logged, and never placed in an error
+            message (ADR-0041).
+    PasswordRegistration:
+      type: object
+      required: [invitationToken, username, password]
+      properties:
+        invitationToken:
+          type: string
+          description: >-
+            The invitation being accepted. It names the organization and
+            the role the new account joins with.
+        username:
+          type: string
+          description: >-
+            Lowercase letters, digits and `-`. It becomes the account's
+            GRN identifier under the reserved `local-` prefix, which no
+            provider subject may claim, so a local account and a
+            provider account can never resolve to one user row
+            (ADR-0041).
+          example: alice
+        password:
+          type: string
+          format: password
+          description: >-
+            At least 15 characters, at most 128 bytes. Handled as the
+            login password is: never returned, logged, or echoed.
     Organization:
       type: object
       required: [grn, name, createdAt]

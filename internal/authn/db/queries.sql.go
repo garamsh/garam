@@ -23,6 +23,28 @@ func (q *Queries) ConsumeOAuthState(ctx context.Context, stateHash string) (int6
 	return result.RowsAffected(), nil
 }
 
+const createPasswordCredential = `-- name: CreatePasswordCredential :exec
+INSERT INTO password_credentials (user_grn, verifier, created_at, updated_at)
+VALUES ($1, $2, $3, $4)
+`
+
+type CreatePasswordCredentialParams struct {
+	UserGrn   string
+	Verifier  string
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
+
+func (q *Queries) CreatePasswordCredential(ctx context.Context, arg CreatePasswordCredentialParams) error {
+	_, err := q.db.Exec(ctx, createPasswordCredential,
+		arg.UserGrn,
+		arg.Verifier,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+	)
+	return err
+}
+
 const createSession = `-- name: CreateSession :exec
 WITH pruned AS (
     DELETE FROM sessions WHERE expires_at <= now()
@@ -55,6 +77,17 @@ DELETE FROM sessions WHERE token_hash = $1
 func (q *Queries) DeleteSession(ctx context.Context, tokenHash string) error {
 	_, err := q.db.Exec(ctx, deleteSession, tokenHash)
 	return err
+}
+
+const getPasswordCredential = `-- name: GetPasswordCredential :one
+SELECT verifier FROM password_credentials WHERE user_grn = $1
+`
+
+func (q *Queries) GetPasswordCredential(ctx context.Context, userGrn string) (string, error) {
+	row := q.db.QueryRow(ctx, getPasswordCredential, userGrn)
+	var verifier string
+	err := row.Scan(&verifier)
+	return verifier, err
 }
 
 const getSession = `-- name: GetSession :one
@@ -102,4 +135,60 @@ func (q *Queries) IssueOAuthState(ctx context.Context, arg IssueOAuthStateParams
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const recordPasswordAttempt = `-- name: RecordPasswordAttempt :execrows
+WITH pruned AS (
+    DELETE FROM password_attempts WHERE expires_at <= now()
+)
+INSERT INTO password_attempts (attempt_id, expires_at)
+SELECT $1, $2
+WHERE (SELECT count(*) FROM password_attempts live WHERE live.expires_at > now()) < $3::bigint
+`
+
+type RecordPasswordAttemptParams struct {
+	AttemptID string
+	ExpiresAt pgtype.Timestamptz
+	MaxLive   int64
+}
+
+// Recording writes nothing once max_live attempts are live, which is
+// what bounds the Argon2id computations an unauthenticated caller can
+// drive on /auth/password/login: the handler hashes nothing when this
+// inserts nothing. The prune runs whether or not the insert does, so a
+// refused attempt still sweeps what lapsed and the table cannot wedge
+// full of dead rows. The count reads the statement's own snapshot, so
+// it sees rows this same statement prunes — the bound it enforces is
+// conservative, never loose. This is ADR-0030's shape applied to a cost
+// that is not a write (ADR-0041).
+func (q *Queries) RecordPasswordAttempt(ctx context.Context, arg RecordPasswordAttemptParams) (int64, error) {
+	result, err := q.db.Exec(ctx, recordPasswordAttempt, arg.AttemptID, arg.ExpiresAt, arg.MaxLive)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const releasePasswordAttempt = `-- name: ReleasePasswordAttempt :exec
+DELETE FROM password_attempts WHERE attempt_id = $1
+`
+
+func (q *Queries) ReleasePasswordAttempt(ctx context.Context, attemptID string) error {
+	_, err := q.db.Exec(ctx, releasePasswordAttempt, attemptID)
+	return err
+}
+
+const replacePasswordVerifier = `-- name: ReplacePasswordVerifier :exec
+UPDATE password_credentials SET verifier = $2, updated_at = $3 WHERE user_grn = $1
+`
+
+type ReplacePasswordVerifierParams struct {
+	UserGrn   string
+	Verifier  string
+	UpdatedAt pgtype.Timestamptz
+}
+
+func (q *Queries) ReplacePasswordVerifier(ctx context.Context, arg ReplacePasswordVerifierParams) error {
+	_, err := q.db.Exec(ctx, replacePasswordVerifier, arg.UserGrn, arg.Verifier, arg.UpdatedAt)
+	return err
 }

@@ -66,6 +66,14 @@ and nowhere else.
 Lowercase letters, digits, `-`. Length ≤ 64. Slug over UUID. Never
 expose a transient ID where a stable one is expected.
 
+One prefix is reserved. A `user` identifier beginning `local-` names an
+account garam minted from a username and a password, and no sign-in
+provider's subject may claim one: a provider that asserts such a
+subject is refused rather than handed the account it names
+([ADR-0041](./adr/0041-a-password-is-garams-own-credential-verified-by-argon2id.md)).
+The prefix is what keeps the two kinds of account in disjoint spaces,
+so neither can ever resolve to the other's row.
+
 The same character rule binds all four segments, `service_type`
 included, and `grn.Validate` enforces it. A segment that can hold a
 colon re-associates the rest on the way back in: `Parse` splits on

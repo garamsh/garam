@@ -148,6 +148,9 @@ func (s *Server) Me(w http.ResponseWriter, r *http.Request) {
 // upsertUser returns the user for the identity, creating it on first
 // login. The provider subject becomes the user's GRN identifier.
 func (s *Server) upsertUser(r *http.Request, identity *authn.Identity) (*user.User, error) {
+	if reservedSubject(identity.Subject) {
+		return nil, errorx.New(errorx.KindUnauthenticated, "provider subject claims a reserved identifier")
+	}
 	g := userGRN(identity.Subject)
 	// The provider chooses the subject, so it is checked before it is
 	// stored: a GRN written to a row it cannot be read back out of is

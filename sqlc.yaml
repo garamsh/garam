@@ -20,6 +20,7 @@ sql:
     schema:
       - migrations/000001_init.up.sql
       - migrations/000012_oauth_states.up.sql
+      - migrations/000016_password_credentials.up.sql
     queries: internal/authn/queries.sql
     gen:
       go:

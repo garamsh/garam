@@ -175,13 +175,15 @@ The obligation that follows, in the form a deployment can act on:
   the two properties above and names no store; choosing one is not
   this contract's to do.
 - **Whatever reads it into the cluster grants to the machine
-  listener's own subject.** The chart renders a ServiceAccount per
-  workload and binds each workload to its own
-  ([ADR-0043](./adr/0043-every-workload-the-chart-renders-runs-as-an-account-of-its-own.md)),
-  so the subject to scope that grant to is `serve machine`'s account
-  and never one every pod in the namespace presents. The arrival checks
-  above read a file's owner and its mode; which workload opened it is
-  not something they can tell.
+  listener's own subject.** Scope that grant to the account
+  `serve machine` runs as, never to one every pod in the namespace
+  presents. The chart names that account from
+  `machine.serviceAccount.name` and composes nothing, so the name the
+  grant is written against and the name the deployment sets are one name
+  it holds in both places
+  ([ADR-0043](./adr/0043-a-workloads-account-is-named-by-a-value-and-the-chart-creates-none-by-default.md)).
+  The arrival checks above read a file's owner and its mode; which
+  workload opened it is not something they can tell.
 
 **The machine listener's certificate and key do not carry this
 property, and they are not free of obligations either.**
@@ -347,6 +349,6 @@ that would assert one:
 - [ADR-0042](./adr/0042-a-chart-is-the-description-of-a-garam-deployment.md)
   — the chart describes the deployment and this document keeps what a
   chart cannot carry; it supersedes ADR-0020
-- [ADR-0043](./adr/0043-every-workload-the-chart-renders-runs-as-an-account-of-its-own.md)
-  — every workload the chart renders runs as an account of its own,
-  which is the subject a role is scoped to
+- [ADR-0043](./adr/0043-a-workloads-account-is-named-by-a-value-and-the-chart-creates-none-by-default.md)
+  — a workload's account is named by a value the deployment sets, which
+  is the subject a role is scoped to

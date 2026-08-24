@@ -69,7 +69,7 @@ ADRs:
 - [0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md) — the machine listener presents a pinned garam server certificate, and certificates rotate without a restart
 - [0041](./adr/0041-a-password-is-garams-own-credential-verified-by-argon2id.md) — a password is garam's own credential, verified by Argon2id and minted by an invitation
 - [0042](./adr/0042-a-chart-is-the-description-of-a-garam-deployment.md) — a chart at `deploy/charts/garam/` describes the deployment, superseding ADR-0020
-- [0043](./adr/0043-every-workload-the-chart-renders-runs-as-an-account-of-its-own.md) — every workload the chart renders runs as an account of its own, named after the workload
+- [0043](./adr/0043-a-workloads-account-is-named-by-a-value-and-the-chart-creates-none-by-default.md) — a workload's account is named by a value the deployment sets, and the chart creates none by default
 
 ## Rules for edits
 

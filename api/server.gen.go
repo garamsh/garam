@@ -276,6 +276,25 @@ type OrganizationPatch struct {
 	Name *string `json:"name,omitempty"`
 }
 
+// PasswordLogin defines model for PasswordLogin.
+type PasswordLogin struct {
+	// Password Sent on this request only. It is never returned by any endpoint, never logged, and never placed in an error message (ADR-0040).
+	Password string `json:"password"`
+	Username string `json:"username"`
+}
+
+// PasswordRegistration defines model for PasswordRegistration.
+type PasswordRegistration struct {
+	// InvitationToken The invitation being accepted. It names the organization and the role the new account joins with.
+	InvitationToken string `json:"invitationToken"`
+
+	// Password At least 15 characters, at most 128 bytes. Handled as the login password is: never returned, logged, or echoed.
+	Password string `json:"password"`
+
+	// Username Lowercase letters, digits and `-`. It becomes the account's GRN identifier under the reserved `local-` prefix, which no provider subject may claim, so a local account and a provider account can never resolve to one user row (ADR-0040).
+	Username string `json:"username"`
+}
+
 // Policy defines model for Policy.
 type Policy struct {
 	CreatedAt time.Time `json:"createdAt"`
@@ -444,6 +463,12 @@ type ListProjectsParams struct {
 	Offset *Offset `form:"offset,omitempty" json:"offset,omitempty"`
 }
 
+// LoginPasswordJSONRequestBody defines body for LoginPassword for application/json ContentType.
+type LoginPasswordJSONRequestBody = PasswordLogin
+
+// RegisterPasswordJSONRequestBody defines body for RegisterPassword for application/json ContentType.
+type RegisterPasswordJSONRequestBody = PasswordRegistration
+
 // CreateOrgJSONRequestBody defines body for CreateOrg for application/json ContentType.
 type CreateOrgJSONRequestBody = OrganizationCreate
 
@@ -497,6 +522,12 @@ type ServerInterface interface {
 	// Logout Revoke the current session and clear the cookie.
 	// (POST /auth/logout)
 	Logout(w http.ResponseWriter, r *http.Request)
+	// LoginPassword Sign in with a username and a password.
+	// (POST /auth/password/login)
+	LoginPassword(w http.ResponseWriter, r *http.Request)
+	// RegisterPassword Create an account from an invitation and sign in.
+	// (POST /auth/password/register)
+	RegisterPassword(w http.ResponseWriter, r *http.Request)
 	// ListProviders List the enabled sign-in providers.
 	// (GET /auth/providers)
 	ListProviders(w http.ResponseWriter, r *http.Request)
@@ -726,6 +757,34 @@ func (siw *ServerInterfaceWrapper) Logout(w http.ResponseWriter, r *http.Request
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.Logout(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// LoginPassword operation middleware
+func (siw *ServerInterfaceWrapper) LoginPassword(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.LoginPassword(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RegisterPassword operation middleware
+func (siw *ServerInterfaceWrapper) RegisterPassword(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RegisterPassword(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2317,6 +2376,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/auth/callback/{provider}", wrapper.OauthCallback)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/logout", wrapper.Logout)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/auth/providers", wrapper.ListProviders)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/password/register", wrapper.RegisterPassword)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/auth/password/login", wrapper.LoginPassword)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/me", wrapper.Me)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs", wrapper.ListOrgs)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs", wrapper.CreateOrg)

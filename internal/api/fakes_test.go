@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strings"
 	"sync"
@@ -827,4 +828,114 @@ func (r *fakeTurnEvents) Receive(ctx context.Context, deliver func(grn.GRN, watc
 	r.once.Do(func() { close(r.ready) })
 	<-ctx.Done()
 	return nil
+}
+
+// fakePasswordCredentialStore is an in-memory
+// authn.PasswordCredentialStore double.
+type fakePasswordCredentialStore struct {
+	mu     sync.Mutex
+	byUser map[string]authn.Verifier
+}
+
+func newFakePasswordCredentialStore() *fakePasswordCredentialStore {
+	return &fakePasswordCredentialStore{byUser: map[string]authn.Verifier{}}
+}
+
+// Create records the first verifier for a user. A second one is a
+// conflict, as the table's primary key makes it.
+func (s *fakePasswordCredentialStore) Create(_ context.Context, userGRN grn.GRN, v authn.Verifier) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, held := s.byUser[userGRN.String()]; held {
+		return errorx.New(errorx.KindAlreadyExists, "password credential exists")
+	}
+	s.byUser[userGRN.String()] = v
+	return nil
+}
+
+func (s *fakePasswordCredentialStore) Get(_ context.Context, userGRN grn.GRN) (authn.Verifier, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	v, held := s.byUser[userGRN.String()]
+	if !held {
+		return "", authn.ErrPasswordCredentialNotFound
+	}
+	return v, nil
+}
+
+func (s *fakePasswordCredentialStore) Replace(_ context.Context, userGRN grn.GRN, v authn.Verifier) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.byUser[userGRN.String()] = v
+	return nil
+}
+
+// held returns the verifier stored for a user, so a test can read what
+// a sign-in left behind.
+func (s *fakePasswordCredentialStore) held(userGRN grn.GRN) authn.Verifier {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.byUser[userGRN.String()]
+}
+
+// fakePasswordAttemptStore is an in-memory
+// authn.PasswordAttemptStore double. It holds each live attempt's
+// expiry, as the table holds a row's.
+type fakePasswordAttemptStore struct {
+	mu       sync.Mutex
+	expiryOf map[string]time.Time
+}
+
+func newFakePasswordAttemptStore() *fakePasswordAttemptStore {
+	return &fakePasswordAttemptStore{expiryOf: map[string]time.Time{}}
+}
+
+// Record decides as the statement it stands in for decides: it prunes
+// what lapsed and writes nothing past MaxLivePasswordAttempts, so a
+// test meets the bound the real store enforces.
+func (s *fakePasswordAttemptStore) Record(_ context.Context, attempt string, ttl time.Duration) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now().UTC()
+	for held, expiry := range s.expiryOf {
+		if !now.Before(expiry) {
+			delete(s.expiryOf, held)
+		}
+	}
+	if len(s.expiryOf) >= authn.MaxLivePasswordAttempts {
+		return authn.ErrPasswordAttemptRateLimited
+	}
+	s.expiryOf[attempt] = now.Add(ttl)
+	return nil
+}
+
+func (s *fakePasswordAttemptStore) Release(_ context.Context, attempt string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.expiryOf, attempt)
+	return nil
+}
+
+// fill records n attempts, standing in for the verifications a caller
+// already drove. Filling the store directly rather than through the
+// endpoint keeps the test off n Argon2id computations, which are the
+// cost the bound exists to refuse.
+func (s *fakePasswordAttemptStore) fill(n int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	expiry := time.Now().UTC().Add(time.Hour)
+	for i := range n {
+		s.expiryOf[fmt.Sprintf("filled-%d", i)] = expiry
+	}
+}
+
+// releaseOne frees a single slot, standing in for a verification that
+// succeeded.
+func (s *fakePasswordAttemptStore) releaseOne() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for held := range s.expiryOf {
+		delete(s.expiryOf, held)
+		return
+	}
 }

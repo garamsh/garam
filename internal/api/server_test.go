@@ -28,34 +28,38 @@ import (
 
 // fixture wires a Server to in-memory doubles.
 type fixture struct {
-	handler   http.Handler
-	users     *fakeUserStore
-	orgs      *fakeOrgStore
-	agents    *fakeAgentStore
-	consents  *fakeConsentStore
-	leases    *fakeWatchLeases
-	relay     *fakeTurnEvents
-	sessions  *fakeSessionStore
-	states    *fakeOAuthStateStore
-	provider  *fakeProvider
-	evaluator *mocks.MockEvaluator
-	policies  *mocks.MockPolicyManager
+	handler     http.Handler
+	users       *fakeUserStore
+	orgs        *fakeOrgStore
+	agents      *fakeAgentStore
+	consents    *fakeConsentStore
+	leases      *fakeWatchLeases
+	relay       *fakeTurnEvents
+	sessions    *fakeSessionStore
+	states      *fakeOAuthStateStore
+	credentials *fakePasswordCredentialStore
+	attempts    *fakePasswordAttemptStore
+	provider    *fakeProvider
+	evaluator   *mocks.MockEvaluator
+	policies    *mocks.MockPolicyManager
 }
 
 func newFixture(t *testing.T, extra ...authn.Provider) *fixture {
 	t.Helper()
 	f := &fixture{
-		users:     newFakeUserStore(),
-		orgs:      newFakeOrgStore(),
-		agents:    newFakeAgentStore(),
-		consents:  newFakeConsentStore(),
-		leases:    newFakeWatchLeases(),
-		relay:     newFakeTurnEvents(),
-		sessions:  newFakeSessionStore(),
-		states:    newFakeOAuthStateStore(),
-		provider:  &fakeProvider{name: "google"},
-		evaluator: mocks.NewMockEvaluator(t),
-		policies:  mocks.NewMockPolicyManager(t),
+		users:       newFakeUserStore(),
+		orgs:        newFakeOrgStore(),
+		agents:      newFakeAgentStore(),
+		consents:    newFakeConsentStore(),
+		leases:      newFakeWatchLeases(),
+		relay:       newFakeTurnEvents(),
+		sessions:    newFakeSessionStore(),
+		states:      newFakeOAuthStateStore(),
+		credentials: newFakePasswordCredentialStore(),
+		attempts:    newFakePasswordAttemptStore(),
+		provider:    &fakeProvider{name: "google"},
+		evaluator:   mocks.NewMockEvaluator(t),
+		policies:    mocks.NewMockPolicyManager(t),
 	}
 	// The events a stream carries were forwarded to another process, so
 	// this one delivers what the relay announces to the watches it holds
@@ -66,7 +70,7 @@ func newFixture(t *testing.T, extra ...authn.Provider) *fixture {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	go func() { _ = watches.Receive(ctx) }()
-	srv := api.NewServer(f.users, f.orgs, f.agents, f.consents, watches, f.sessions, f.states, append([]authn.Provider{f.provider}, extra...), f.evaluator, f.policies, api.Config{SessionTTL: time.Hour})
+	srv := api.NewServer(f.users, f.orgs, f.agents, f.consents, watches, f.sessions, f.states, f.credentials, f.attempts, append([]authn.Provider{f.provider}, extra...), f.evaluator, f.policies, api.Config{SessionTTL: time.Hour})
 	f.handler = apigen.Handler(srv)
 	return f
 }

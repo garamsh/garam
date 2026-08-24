@@ -127,6 +127,8 @@ func serveAPI(cmd *cobra.Command) error {
 		watches,
 		authn.NewPostgresSessionStore(pool),
 		authn.NewPostgresOAuthStateStore(pool),
+		authn.NewPostgresPasswordCredentialStore(pool),
+		authn.NewPostgresPasswordAttemptStore(pool),
 		providers,
 		api.NewGRPCEvaluator(conn),
 		api.NewGRPCPolicyManager(conn),

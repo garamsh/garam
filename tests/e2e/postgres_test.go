@@ -113,7 +113,8 @@ func truncate(t *testing.T, p *pgxpool.Pool) {
 	t.Helper()
 	_, err := p.Exec(context.Background(), `TRUNCATE users, orgs, groups, projects,
 		group_members, project_members, org_members, invitations, sessions,
-		oauth_states, policies, policy_versions, policy_attachments, agents,
+		oauth_states, password_credentials, password_attempts,
+		policies, policy_versions, policy_attachments, agents,
 		agent_assignments, agent_definitions, certificate_authorities,
 		messages, message_consents, agent_watches CASCADE`)
 	require.NoError(t, err)

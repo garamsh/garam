@@ -17,15 +17,16 @@ selected by SNI. Nothing was built: `internal/machine/listener.go`
 presented one certificate read once at startup, and #481 measured a
 running listener answering every connection with the mounted pair —
 including one carrying no SNI at all, which that ADR says gets no
-answer. The consequence was that garam's own adapter could not connect,
-because it verified garam against the organization issuer it is handed
-with its certificate and the listener presents nothing that chains to
-it.
+answer. The consequence was that garam's own adapter could not connect:
+it verified garam against the organization issuer it is handed with its
+certificate, and the listener presented nothing that chains to it.
 
-Two documents already disagreed with each other and with the code: this
-contract's key-material section called the listener's pair "safe to have
-issued by cert-manager or any other issuer", and `adapter.md` stated
-ADR-0037's expectation as a description of what is.
+Two documents already disagreed with each other and with the code.
+[deployment-contract.md](../deployment-contract.md)'s key-material
+section called the listener's pair "safe to have issued by cert-manager
+or any other issuer", and [adapter.md](../adapter.md) stated ADR-0037's
+expectation as a description of what is. Both are corrected in the
+change that carries this ADR.
 
 #482 put the fork to the project owner, who took neither branch. What
 decided it was read off `garam-dev` on 2026-08-24 rather than recalled:

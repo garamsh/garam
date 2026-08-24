@@ -14,6 +14,13 @@
 // client certificate. Nothing here reads a forwarded
 // client-certificate header: one is trustworthy only where every
 // deployment strips it at the edge (ADR-0014).
+//
+// What it presents in the other direction is one certificate every
+// machine identity pins, asked for per handshake through
+// [ServerCertificate] so a replaced one is served without a restart
+// (ADR-0040). That root is not this package's per-organization one:
+// garam verifies an identity by its organization's authority, and an
+// identity verifies garam by the root every organization shares.
 package machine
 
 import "github.com/garamsh/garam/internal/grn"

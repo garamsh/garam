@@ -8,9 +8,10 @@ import (
 )
 
 // NewServer returns the machine-facing HTTP server: it terminates TLS
-// with what certificate answers, requires a client certificate, and
-// serves next only for a connection whose certificate authenticated
-// (ADR-0014). The caller gives it an address and serves it.
+// with the certificate that seam answers with, requires a client
+// certificate, and serves next only for a connection whose certificate
+// authenticated (ADR-0014). The caller gives it an address and serves
+// it.
 //
 // The chain is verified here rather than by the TLS stack. ClientCAs
 // verifies against one pool, and which authority may sign is decided by

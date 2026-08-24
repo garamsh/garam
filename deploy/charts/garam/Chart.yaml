@@ -6,7 +6,7 @@ type: application
 # garam version: nothing packages or publishes this chart, so a consumer
 # pins it by a git ref of garamsh/garam and pins the images separately
 # through image.*.tag (ADR-0042).
-version: 0.1.0
+version: 0.2.0
 # No appVersion. It would name a released garam, and no release exists —
 # `gh release list --repo garamsh/garam` returns nothing and neither
 # image repository holds a tag (ADR-0039). The change that publishes the

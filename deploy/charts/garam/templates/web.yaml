@@ -19,6 +19,7 @@ spec:
       labels:
         {{- include "garam.selectorLabels" (dict "root" $ "component" "web") | nindent 8 }}
     spec:
+      serviceAccountName: {{ include "garam.serviceAccountName" (dict "root" $ "component" "web") }}
 {{- include "garam.imagePullSecrets" . }}
       containers:
         - name: web
@@ -58,3 +59,4 @@ spec:
     - name: http
       port: 3000
       targetPort: http
+{{- include "garam.serviceAccount" (dict "root" $ "component" "web") }}

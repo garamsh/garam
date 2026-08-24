@@ -57,3 +57,41 @@ so an empty list leaves no blank line behind.
 {{- end }}
 {{- end }}
 {{- end -}}
+
+{{/*
+The account a workload runs as, and the account object itself. One per
+workload, named after it: a single account for the release would make
+every workload one subject, which is what the namespace default already
+is. The name is derived rather than settable — a repository that binds a
+role to it matches this name (README, §Workload identities).
+*/}}
+{{- define "garam.serviceAccountName" -}}
+{{- printf "%s-%s" (include "garam.fullname" .root) .component -}}
+{{- end -}}
+
+{{/*
+Rendered at the end of each workload's own file, so one workload's
+objects stay in one file. A caller whose workload is a hook passes the
+hook annotations that put its account in the same phase.
+*/}}
+{{- define "garam.serviceAccount" -}}
+{{- $account := index .root.Values .component "serviceAccount" -}}
+{{- if $account.create }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "garam.serviceAccountName" . }}
+  labels:
+    {{- include "garam.labels" . | nindent 4 }}
+  {{- if or .hookAnnotations $account.annotations }}
+  annotations:
+    {{- with .hookAnnotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- with $account.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- end }}
+{{- end }}
+{{- end -}}

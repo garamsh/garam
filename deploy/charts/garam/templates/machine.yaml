@@ -20,6 +20,7 @@ spec:
       labels:
         {{- include "garam.selectorLabels" (dict "root" $ "component" "machine") | nindent 8 }}
     spec:
+      serviceAccountName: {{ include "garam.serviceAccountName" (dict "root" $ "component" "machine") }}
 {{- include "garam.imagePullSecrets" . }}
       # fsGroup is what lets the unprivileged init container write the
       # volume it copies into; the copy is what it then owns.
@@ -138,3 +139,4 @@ spec:
     - name: health
       port: 8444
       targetPort: health
+{{- include "garam.serviceAccount" (dict "root" $ "component" "machine") }}

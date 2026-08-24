@@ -1,6 +1,10 @@
 # Every optional value set, so the render `make chart` checks covers the
-# configuration the minimal one leaves out — Google sign-in above all,
-# which is the only branch in the templates.
+# configuration the minimal one leaves out — Google sign-in and a
+# ServiceAccount annotation, which are the two branches in the templates.
+#
+# Each annotation below is a fixture that exercises the branch rendering
+# one. Which key binds a role is the deployment's platform's, and the
+# chart holds none.
 image:
   server:
     tag: "0.0.0-ci"
@@ -13,6 +17,10 @@ database:
   secretName: garam-database
   secretKey: uri
 api:
+  serviceAccount:
+    create: true
+    annotations:
+      eks.amazonaws.com/role-arn: arn:aws:iam::000000000000:role/garam-ci-api
   sessionTTL: 24h
   cookieSecure: true
   google:
@@ -26,11 +34,19 @@ api:
       cpu: 100m
       memory: 128Mi
 authz:
+  serviceAccount:
+    create: true
+    annotations:
+      eks.amazonaws.com/role-arn: arn:aws:iam::000000000000:role/garam-ci-authz
   resources:
     requests:
       cpu: 100m
       memory: 128Mi
 machine:
+  serviceAccount:
+    create: true
+    annotations:
+      eks.amazonaws.com/role-arn: arn:aws:iam::000000000000:role/garam-ci-machine
   keyMaterial:
     secretName: garam-machine-key-material
     certKey: tls.crt
@@ -43,12 +59,20 @@ machine:
       cpu: 100m
       memory: 128Mi
 web:
+  serviceAccount:
+    create: true
+    annotations:
+      eks.amazonaws.com/role-arn: arn:aws:iam::000000000000:role/garam-ci-web
   apiUrl: https://garam.example/api
   resources:
     requests:
       cpu: 100m
       memory: 128Mi
 migrate:
+  serviceAccount:
+    create: true
+    annotations:
+      eks.amazonaws.com/role-arn: arn:aws:iam::000000000000:role/garam-ci-migrate
   resources:
     requests:
       cpu: 100m

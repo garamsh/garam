@@ -5,6 +5,7 @@ The description of how garam is deployed: the five workloads it runs, the ports 
 ## Contents
 - What this is
 - What it renders
+- Workload identities
 - Values a deployment must supply
 - Not set by this chart
 - Exposure is the cluster owner's
@@ -27,8 +28,10 @@ garam's to assume. Nothing here is written into `garamsh/gitops`.
 
 ## What it renders
 
-Five workloads, and a `ClusterIP` Service in front of each of the four
-that listen:
+Five workloads, a `ClusterIP` Service in front of each of the four that
+listen, and a `ServiceAccount` each workload runs as
+(§Workload identities). Each workload's file renders all of its own
+objects:
 
 - `templates/api.yaml` — `serve api`, port 8080.
 - `templates/authz.yaml` — `serve authz`, gRPC on 9090, probes and
@@ -47,6 +50,71 @@ Replica safety above one is not established
 (`docs/architecture/deployment-contract.md` §Not established), and a
 chart value would assert what garam does not know. Establishing it is an
 ADR, then a value.
+
+## Workload identities
+
+**Every workload runs as an account of its own**, and the chart creates
+it. The names, under a release named `garam` — another release name
+prefixes each of them, as it does every other object here:
+
+| Workload | Kind | ServiceAccount |
+|---|---|---|
+| `garam-api` | Deployment | `garam-api` |
+| `garam-authz` | Deployment | `garam-authz` |
+| `garam-machine` | Deployment | `garam-machine` |
+| `garam-migrate` | Job | `garam-migrate` |
+| `garam-web` | Deployment | `garam-web` |
+
+A workload and its account carry one name on purpose, and the chart
+offers no value that changes either: a repository that binds a role to
+an account looks it up by the workload's name, and a name two
+repositories set separately is a name they can disagree about silently.
+The table is the contract another repository matches its own manifests
+against rather than a description of them.
+
+**One account per workload, never one for the release.** A single
+account every workload presented would be the namespace `default` under
+a better name: a role scoped to it is held by every pod that presents
+it, and the role the machine listener needs is one no other workload may
+hold.
+
+**Annotations are how a cloud role binds to an account**, and each
+account takes its own through `<workload>.serviceAccount.annotations`.
+The chart carries none: which key binds a role is the deployment's
+platform's.
+
+**The migrate Job's account is created in the same hook phase as the
+Job**, at a lower weight. A `pre-install` hook runs before the chart's
+ordinary resources exist, and the apiserver refuses a pod naming an
+account it cannot find; a deployment supplying that one itself has it in
+place before the release's first install rather than with it.
+
+**`<workload>.serviceAccount.create: false` does not turn identity off.**
+The workload still names the account above; what changes is that the
+chart renders no object and the deployment supplies one under that name.
+That is the path for a repository that created the account before
+adopting this chart — it keeps the object it made, and adoption is not a
+rename.
+
+### Why the machine listener cannot run as `default`
+
+`serve machine` reads the key-encryption key every organization's
+certificate authority is sealed under
+([ADR-0016](../../../docs/architecture/adr/0016-ca-key-custody.md)) and
+refuses to start without it (`internal/cli/machine.go`). That key
+arrives in the Secret `machine.keyMaterial.secretName` names, which this
+chart does not create; whatever populates it grants to a subject, and
+the subject to grant to is `garam-machine` rather than one every pod in
+the namespace presents.
+
+Getting it wrong fails in the right direction — the pod does not start,
+and restoring the identity fixes it. What is unrepairable is the fix
+that looks obvious from that failure: minting a replacement key. A
+different key opens no authority already sealed and there is no path
+from one key to another, so every organization loses the authority it
+already has (`docs/architecture/deployment-contract.md` §The
+key-encryption key cannot be regenerated, which carries what the only
+remedy costs).
 
 ## Values a deployment must supply
 

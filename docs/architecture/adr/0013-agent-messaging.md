@@ -8,6 +8,7 @@
 - Decision
 - Consequences
 - Rejected alternatives
+- Errata
 
 ## Context
 
@@ -140,3 +141,7 @@ nowhere:
 - **Treating a probe failure during startup as expected.** It would
   weaken the signal exactly in the window — rollout, restart,
   crashloop — that the probe exists for.
+
+## Errata
+
+- 2026-08-24 — §Consequences' "Rotation is a restart; there is no reload" was true when written and is false since [ADR-0040](./0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md): the listener and the adapter both read their certificate per handshake, so a replaced one is presented without a restart. The messaging decision this ADR takes is unchanged.

@@ -173,3 +173,18 @@ renews as readily as the operator does.
 - **The renewal on the browser API.** That surface authenticates a
   session and a user (ADR-0005); an operator has neither, and the
   certificate being replaced is not something a cookie proves.
+
+## Errata
+
+- 2026-08-26 — §Decision item 8 opens "The three refusals are told
+  apart by kind" and then names **four** conditions: too early,
+  superseded, expired, and "not an operator". There are four refusals
+  in three kinds, because expired and "not an operator" share
+  `permission_denied` — which is what `internal/operator/operator.go`
+  declares (`ErrRenewalTooEarly`, `ErrSuperseded`,
+  `ErrCertificateExpired`, `ErrNotAnOperator`) and what the sentence's
+  own list says. The claim the item makes is unaffected and correct: a
+  client acts on the kind, and there are three of those. What is wrong
+  is the noun — "three refusals" where the three counts kinds. The same
+  count was corrected in `docs/architecture/domains.md`, which had
+  stated three refusals rather than four (#571).

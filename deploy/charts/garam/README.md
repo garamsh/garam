@@ -142,8 +142,13 @@ fails without them:
 - `machine.keyMaterial.secretName` — the Secret holding the machine
   listener's certificate and key, the garam server root that signed
   them, and the key-encryption key.
-- `web.apiUrl` — `web/src/env.ts` refuses to boot in production without
-  it.
+- `web.apiUrl` — the address the web process reaches `serve api` on,
+  baked into the image at build time as the `/api/*` rewrite target and
+  read again at runtime by every server-side render
+  (`web/src/lib/garam.ts`). Absent at runtime the process still starts
+  and answers both probes, `/` and the rewrite keep serving, and every
+  server-rendered route answers 500: `web/src/env.ts` parses at import,
+  and only the routes reaching the backend import it.
 
 Setting `api.google.clientId` makes `api.google.redirectUrl` and
 `api.google.clientSecret` required too. One Google credential without

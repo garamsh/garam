@@ -13,6 +13,7 @@ import (
 	apigen "github.com/garamsh/garam/api"
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
 	"github.com/garamsh/garam/internal/user"
 )
@@ -177,6 +178,17 @@ func TestAgentRead_AssignmentIsAbsentWhileNoOperatorHolds(t *testing.T) {
 
 // operatorGRNOf names an operator of the org. Nothing registers an
 // operator, so a definition names one by GRN alone (ADR-0026).
+// registerOperator puts a registered operator of the org in the store
+// and returns its GRN. A definition names one the org has registered
+// (ADR-0044), so every test that defines an agent needs one first.
+func registerOperator(t *testing.T, f *fixture, orgSlug, id string) grn.GRN {
+	t.Helper()
+	o, err := operator.New(orgGRNOf(orgSlug), id, userGRNOf("owner-sub"))
+	require.NoError(t, err)
+	require.NoError(t, f.operators.Register(testCtx(t), o))
+	return o.GRN()
+}
+
 func operatorGRNOf(orgSlug, id string) grn.GRN {
 	return grn.New(orgSlug, "default", agent.ServiceTypeOperator, id)
 }
@@ -224,11 +236,12 @@ func TestAgentDefine_MemberDefinesWhereOthersAreRefused(t *testing.T) {
 	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(slug), userGRNOf("stranger-sub"), org.RoleMember)))
 	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(otherSlug), userGRNOf("outsider-sub"), org.RoleMember)))
 
-	operator := operatorGRNOf(slug, "field-one")
-	rec := f.do(t, "POST", "/orgs/"+slug+"/agent-definitions", defineBody(operator, `{"model":"haiku"}`), member)
+	operatorGRN := registerOperator(t, f, slug, "field-one")
+	otherOperator := registerOperator(t, f, otherSlug, "field-one")
+	rec := f.do(t, "POST", "/orgs/"+slug+"/agent-definitions", defineBody(operatorGRN, `{"model":"haiku"}`), member)
 	require.Equal(t, http.StatusCreated, rec.Code)
 	defined := decodeBody[apigen.AgentDefinition](t, rec)
-	assert.Equal(t, operator.String(), defined.OperatorGrn)
+	assert.Equal(t, operatorGRN.String(), defined.OperatorGrn)
 	assert.Equal(t, orgGRNOf(slug).String(), defined.OrgGrn)
 	assert.Equal(t, apigen.AgentValues{"model": "haiku"}, defined.Values)
 	assert.Equal(t, userGRNOf("member-sub").String(), defined.DefinedBy)
@@ -238,24 +251,24 @@ func TestAgentDefine_MemberDefinesWhereOthersAreRefused(t *testing.T) {
 
 	// A member of another org is refused the action it is permitted,
 	// and their own org answers the same request.
-	rec = f.do(t, "POST", "/orgs/"+slug+"/agent-definitions", defineBody(operator, `{}`), outsider)
+	rec = f.do(t, "POST", "/orgs/"+slug+"/agent-definitions", defineBody(operatorGRN, `{}`), outsider)
 	assert.Equal(t, http.StatusForbidden, rec.Code)
-	rec = f.do(t, "POST", "/orgs/"+otherSlug+"/agent-definitions", defineBody(operatorGRNOf(otherSlug, "field-one"), `{}`), outsider)
+	rec = f.do(t, "POST", "/orgs/"+otherSlug+"/agent-definitions", defineBody(otherOperator, `{}`), outsider)
 	assert.Equal(t, http.StatusCreated, rec.Code)
 
 	// A member of this org the evaluator denies is refused, so
 	// membership alone does not admit. Reading is permitted to that
 	// member, so what it lacks is the write.
-	rec = f.do(t, "POST", "/orgs/"+slug+"/agent-definitions", defineBody(operator, `{}`), stranger)
+	rec = f.do(t, "POST", "/orgs/"+slug+"/agent-definitions", defineBody(operatorGRN, `{}`), stranger)
 	assert.Equal(t, http.StatusForbidden, rec.Code)
 	rec = f.do(t, "GET", "/orgs/"+slug+"/agent-definitions", "", stranger)
 	assert.Equal(t, http.StatusOK, rec.Code)
 
 	// Signed out is refused, and the same request carrying a session is
 	// answered.
-	rec = f.do(t, "POST", "/orgs/"+slug+"/agent-definitions", defineBody(operator, `{}`))
+	rec = f.do(t, "POST", "/orgs/"+slug+"/agent-definitions", defineBody(operatorGRN, `{}`))
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
-	rec = f.do(t, "POST", "/orgs/"+slug+"/agent-definitions", defineBody(operator, `{}`), member)
+	rec = f.do(t, "POST", "/orgs/"+slug+"/agent-definitions", defineBody(operatorGRN, `{}`), member)
 	assert.Equal(t, http.StatusCreated, rec.Code)
 
 	// The org's definitions are its own, and the member reads back what
@@ -282,7 +295,7 @@ func TestAgentDefine_ADefinitionIsNotAnAgent(t *testing.T) {
 
 	// One agent an operator reported, one an organization defined.
 	reported := seedAgent(t, f, slug)
-	rec := f.do(t, "POST", "/orgs/"+slug+"/agent-definitions", defineBody(operatorGRNOf(slug, "field-one"), `{"model":"haiku"}`), member)
+	rec := f.do(t, "POST", "/orgs/"+slug+"/agent-definitions", defineBody(registerOperator(t, f, slug, "field-one"), `{"model":"haiku"}`), member)
 	require.Equal(t, http.StatusCreated, rec.Code)
 	definitionFields := bodyKeys(t, rec)
 	defined, err := grn.Parse(decodeBody[apigen.AgentDefinition](t, rec).AgentGrn)
@@ -327,6 +340,7 @@ func TestAgentDefine_RefusesWhatItCannotStore(t *testing.T) {
 	f.permit(permission{userGRNOf("member-sub"), org.ActionAgentDefine})
 	member := f.sessionCookieFor(t, "member-sub", "Member")
 	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(slug), userGRNOf("member-sub"), org.RoleMember)))
+	registered := registerOperator(t, f, slug, "field-one")
 
 	tests := []struct {
 		name string
@@ -346,7 +360,7 @@ func TestAgentDefine_RefusesWhatItCannotStore(t *testing.T) {
 		},
 		{
 			name: "value key outside the segment character set",
-			body: defineBody(operatorGRNOf(slug, "field-one"), `{"Model_Name":"haiku"}`),
+			body: defineBody(registered, `{"Model_Name":"haiku"}`),
 		},
 		{
 			name: "body that is not an object",
@@ -362,6 +376,54 @@ func TestAgentDefine_RefusesWhatItCannotStore(t *testing.T) {
 
 	// The same request naming this org's operator is accepted, so each
 	// refusal above is what it names and not the endpoint.
-	rec := f.do(t, "POST", "/orgs/"+slug+"/agent-definitions", defineBody(operatorGRNOf(slug, "field-one"), `{"model":"haiku"}`), member)
+	rec := f.do(t, "POST", "/orgs/"+slug+"/agent-definitions", defineBody(registered, `{"model":"haiku"}`), member)
+	assert.Equal(t, http.StatusCreated, rec.Code)
+}
+
+// TestAgentDefine_RefusesAnOperatorTheOrgHasNotRegistered is the defect
+// #510 exists to close. Before it, a definition could name an operator
+// garam held no record of, nothing reported it, and the definition sat
+// there for an operator that would never read it.
+//
+// The refusal names the GRN that named no record, so the person who
+// mistyped it is told which string was wrong rather than that something
+// was. Registering that same operator is the control: it changes
+// nothing else about the request, and the request that was refused is
+// then answered — so what refused it was the registry and not the body,
+// the caller, or the path.
+func TestAgentDefine_RefusesAnOperatorTheOrgHasNotRegistered(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	f.permit(
+		permission{userGRNOf("member-sub"), org.ActionAgentDefine},
+		permission{userGRNOf("member-sub"), org.ActionAgentRead},
+		permission{userGRNOf("member-sub"), org.ActionOperatorRegister},
+	)
+	member := f.sessionCookieFor(t, "member-sub", "Member")
+	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(slug), userGRNOf("member-sub"), org.RoleMember)))
+
+	unregistered := operatorGRNOf(slug, "gagent-dev")
+	body := defineBody(unregistered, `{"model":"haiku"}`)
+	rec := f.do(t, "POST", "/orgs/"+slug+"/agent-definitions", body, member)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	refusal := decodeBody[apigen.Error](t, rec)
+	assert.Contains(t, refusal.Message, "registered no operator")
+	assert.Contains(t, refusal.Message, unregistered.Identifier,
+		"the refusal names the identifier that named no record")
+	assert.NotContains(t, refusal.Message, "grn:",
+		"the console renders this sentence, and it prints no GRN (ADR-0011)")
+
+	// A refused definition is not a definition: nothing was written on
+	// the way to the refusal.
+	rec = f.do(t, "GET", "/orgs/"+slug+"/agent-definitions", "", member)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Empty(t, decodeBody[[]apigen.AgentDefinition](t, rec))
+
+	rec = f.do(t, "POST", "/orgs/"+slug+"/operators", `{"identifier":"gagent-dev"}`, member)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	assert.Equal(t, unregistered.String(), decodeBody[apigen.Operator](t, rec).Grn)
+
+	rec = f.do(t, "POST", "/orgs/"+slug+"/agent-definitions", body, member)
 	assert.Equal(t, http.StatusCreated, rec.Code)
 }

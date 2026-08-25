@@ -76,6 +76,11 @@ func (s *Server) GetAgent(w http.ResponseWriter, r *http.Request, orgSlug apigen
 // operator is to run it, and the values it is constructed from
 // (ADR-0026). Requires the member role.
 //
+// The operator must be one the org has registered (ADR-0044): a
+// definition naming an operator garam holds no record of is refused
+// here, where a typed GRN can still be corrected, rather than becoming
+// a definition no operator will ever claim.
+//
 // It creates no agent. The response carries the definition's own
 // shape, so a caller that reads it cannot mistake it for one of the
 // agents an operator has reported.
@@ -94,7 +99,7 @@ func (s *Server) DefineAgent(w http.ResponseWriter, r *http.Request, orgSlug api
 		writeError(w, err)
 		return
 	}
-	operator, err := grn.Parse(body.OperatorGrn)
+	operatorGRN, err := grn.Parse(body.OperatorGrn)
 	if err != nil {
 		writeError(w, errorx.Wrap(err, "operator", errorx.KindInvalidArgument))
 		return
@@ -108,8 +113,15 @@ func (s *Server) DefineAgent(w http.ResponseWriter, r *http.Request, orgSlug api
 		writeError(w, err)
 		return
 	}
-	d, err := agent.NewDefinition(orgGRN(orgSlug), operator, values, u.GRN())
+	d, err := agent.NewDefinition(orgGRN(orgSlug), operatorGRN, values, u.GRN())
 	if err != nil {
+		writeError(w, err)
+		return
+	}
+	// NewDefinition proves the GRN names an operator of this org; this
+	// proves the org registered it. The two refusals name different
+	// things wrong, so they stay apart.
+	if err := s.requireRegisteredOperator(r, operatorGRN); err != nil {
 		writeError(w, err)
 		return
 	}

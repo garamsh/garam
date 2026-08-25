@@ -11,7 +11,7 @@
  * The character rule is the GRN segment rule
  * (`docs/architecture/grn-model.md` §identifier). What garam refuses on
  * top of it is not shape but absence: an identifier no operator is
- * registered under is refused by the API, which names it (ADR-0044).
+ * registered under is refused by the API, which names it (ADR-0045).
  */
 
 import { refuse, type Parsed } from "@/lib/parsed";

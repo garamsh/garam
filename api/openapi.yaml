@@ -22,7 +22,7 @@ tags:
       The operators an organization has registered. A record says garam
       holds one, and nothing more: it carries no credential, and an
       operator authenticates with the certificate it already holds
-      whether or not one exists (ADR-0044).
+      whether or not one exists (ADR-0045).
   - name: agent
     description: >-
       The agents an organization holds, and the definitions of the
@@ -854,7 +854,7 @@ paths:
       description: >-
         Records that this organization has an operator under the
         identifier given, so a definition can name one garam holds a
-        record of (ADR-0044). The identifier is supplied and not minted:
+        record of (ADR-0045). The identifier is supplied and not minted:
         an operator that already holds a certificate is registered under
         the GRN that certificate names.
 
@@ -866,7 +866,7 @@ paths:
         There is no route that removes a record. garam has no
         revocation: a certificate that has not expired keeps
         authenticating whatever this organization holds, and a route
-        implying otherwise would be worse than none (ADR-0044).
+        implying otherwise would be worse than none (ADR-0045).
       parameters:
         - $ref: '#/components/parameters/org'
       requestBody:
@@ -1838,7 +1838,7 @@ components:
             The operator that is to run the agent. It must be one this
             organization has registered under `/orgs/{org}/operators`;
             one it has not registered is refused, naming the identifier
-            that named no record (ADR-0044).
+            that named no record (ADR-0045).
           example: grn:acme:default:operator:field-one
         values:
           $ref: '#/components/schemas/AgentValues'

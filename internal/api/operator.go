@@ -14,7 +14,7 @@ import (
 // identifier given. Requires the admin role.
 //
 // It hands the operator nothing. Registering is garam coming to hold a
-// record that the operator exists (ADR-0044); what the operator
+// record that the operator exists (ADR-0045); what the operator
 // authenticates with is a certificate this listener does not mint and
 // this route does not read.
 func (s *Server) RegisterOperator(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org) {
@@ -69,7 +69,7 @@ func (s *Server) ListOperators(w http.ResponseWriter, r *http.Request, orgSlug a
 }
 
 // requireRegisteredOperator refuses a GRN the org holds no record of
-// (ADR-0044). The refusal is a bad request rather than a missing
+// (ADR-0045). The refusal is a bad request rather than a missing
 // resource: the caller named the operator in a body, and a 404 on this
 // path would read as the organization being the thing that is absent.
 //

@@ -69,7 +69,7 @@ func TestRoleActions_NoRoleReachesAgentWatch(t *testing.T) {
 }
 
 // TestRoleActions_OnlyOwnerAndAdminRegisterAnOperator pins the split
-// ADR-0044 rests on: every role reads the operators an org registered,
+// ADR-0045 rests on: every role reads the operators an org registered,
 // because defining an agent needs the list to name one from, and only
 // the two administrative roles register one. The read is the control —
 // without it the member's refusal would also hold for a role that

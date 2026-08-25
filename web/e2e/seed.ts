@@ -113,7 +113,7 @@ export async function seedSignedInOrg(): Promise<Seed> {
       ],
     );
     // An agent definition may only name an operator the organization
-    // has registered (ADR-0044), so the record comes with the org.
+    // has registered (ADR-0045), so the record comes with the org.
     await client.query(
       `INSERT INTO operators (grn, org_grn, registered_by, created_at)
        VALUES ($1, $2, $3, now())`,

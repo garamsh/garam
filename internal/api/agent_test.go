@@ -180,7 +180,7 @@ func TestAgentRead_AssignmentIsAbsentWhileNoOperatorHolds(t *testing.T) {
 // operator, so a definition names one by GRN alone (ADR-0026).
 // registerOperator puts a registered operator of the org in the store
 // and returns its GRN. A definition names one the org has registered
-// (ADR-0044), so every test that defines an agent needs one first.
+// (ADR-0045), so every test that defines an agent needs one first.
 func registerOperator(t *testing.T, f *fixture, orgSlug, id string) grn.GRN {
 	t.Helper()
 	o, err := operator.New(orgGRNOf(orgSlug), id, userGRNOf("owner-sub"))

@@ -4,7 +4,7 @@
 -- retired for definitions. It still holds for `agent_assignments`
 -- (000007): an operator holding a certificate creates an agent on the
 -- machine listener whether or not anybody registered it, and requiring
--- registration there is a separate decision (ADR-0044).
+-- registration there is a separate decision (ADR-0045).
 --
 -- NO ACTION rather than RESTRICT, which is load-bearing: deleting an
 -- org cascades to `operators` and to `agent_definitions` in one

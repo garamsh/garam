@@ -23,7 +23,7 @@ const (
 	ServiceType = "agent"
 	// ServiceTypeOperator is the canonical GRN service-type for the
 	// operators agents are assigned to (ADR-0012). internal/operator
-	// owns the record that one exists (ADR-0044); this package
+	// owns the record that one exists (ADR-0045); this package
 	// addresses an operator by GRN and reads no record of its own.
 	ServiceTypeOperator = "operator"
 )

@@ -104,7 +104,7 @@ type Definition struct {
 // definition naming another organization's operator names one that can
 // never read it. Whether the organization registered that operator is
 // a read this constructor does not make; the caller answers it against
-// internal/operator before the definition is stored (ADR-0044).
+// internal/operator before the definition is stored (ADR-0045).
 func NewDefinition(orgGRN, operatorGRN grn.GRN, values Values, definedBy grn.GRN) (*Definition, error) {
 	g, err := NewGRN(orgGRN)
 	if err != nil {
@@ -133,7 +133,7 @@ func NewDefinition(orgGRN, operatorGRN grn.GRN, values Values, definedBy grn.GRN
 //
 // It validates the GRN itself, not only the two segments below: the
 // identifier is answered back in the refusal a definition naming an
-// unregistered operator gets (ADR-0044), and a segment that never met
+// unregistered operator gets (ADR-0045), and a segment that never met
 // the character rule is not text to echo.
 func validateOperator(operatorGRN, orgGRN grn.GRN) error {
 	if err := operatorGRN.Validate(); err != nil {

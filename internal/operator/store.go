@@ -10,7 +10,7 @@ import (
 //
 // It is a registry and not a lifecycle: there is no update, because a
 // record carries nothing to change, and no delete, because deleting one
-// would stop nothing an operator can already do (ADR-0044).
+// would stop nothing an operator can already do (ADR-0045).
 type Store interface {
 	// Register records the operator, or ErrOperatorAlreadyRegistered
 	// when the organization already has one under that GRN.

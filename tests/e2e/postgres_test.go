@@ -132,7 +132,7 @@ func countRows(t *testing.T, p *pgxpool.Pool, query string, args ...any) int {
 }
 
 // registerOperator records that the org owning g has an operator under
-// it, which a definition naming one now requires (ADR-0044).
+// it, which a definition naming one now requires (ADR-0045).
 func registerOperator(t *testing.T, p *pgxpool.Pool, g grn.GRN) grn.GRN {
 	t.Helper()
 	o, err := operator.New(orgRootGRN(g.Organization), g.Identifier, scopedGRN(g.Organization, "user", "ada"))
@@ -1125,7 +1125,7 @@ func TestAgentAssignment_StaysInsideItsOrg(t *testing.T) {
 	assert.Equal(t, 1, stored.Epoch())
 }
 
-// TestOperatorStore_RoundTrip covers what a registration is (ADR-0044):
+// TestOperatorStore_RoundTrip covers what a registration is (ADR-0045):
 // an organization's record that it has an operator, carrying no
 // credential and no state anybody reports.
 //
@@ -1189,7 +1189,7 @@ func TestOperatorStore_RoundTrip(t *testing.T) {
 }
 
 // TestAgentDefinition_RefusesAnOperatorTheOrgHasNotRegistered covers
-// the schema's copy of the check internal/api makes (ADR-0044). The
+// the schema's copy of the check internal/api makes (ADR-0045). The
 // domain refuses it on the way in, so only a store call that skipped
 // the handler reaches the foreign key — and this is the copy no call
 // path routes around.

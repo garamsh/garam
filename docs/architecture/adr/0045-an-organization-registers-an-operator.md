@@ -1,4 +1,4 @@
-# ADR 0044: An organization registers an operator, and a definition may name no other
+# ADR 0045: An organization registers an operator, and a definition may name no other
 
 > Status: accepted
 > Date: 2026-08-25

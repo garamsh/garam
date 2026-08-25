@@ -68,7 +68,7 @@ const (
 	ActionConsentWithdraw = "consent:withdraw"
 
 	// Reading the operators an org has registered, and registering one
-	// (ADR-0044). The org owns the constants for the reason it owns the
+	// (ADR-0045). The org owns the constants for the reason it owns the
 	// policy ones, and internal/operator does not import this package.
 	ActionOperatorRead = "operator:read"
 	// ActionOperatorRegister is recording that the org has an operator.
@@ -104,7 +104,7 @@ const (
 // Agents and operators are named action by action rather than as
 // `agent:*` and `operator:*`, every role over: ADR-0012 puts
 // provisioning outside garam, so a wildcard here would grant in advance
-// the very actions no endpoint may offer. ADR-0044 leaves an operator's
+// the very actions no endpoint may offer. ADR-0045 leaves an operator's
 // enrolment and its revocation undecided, which is more of the same.
 //
 // A member reads the operators an org has registered and does not

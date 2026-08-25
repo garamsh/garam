@@ -236,7 +236,7 @@ engine owns (ADR-0008), not through this list.
 
 ## `internal/operator`
 
-The record that an organization has an operator (ADR-0044).
+The record that an organization has an operator (ADR-0045).
 
 | Type | Responsibility |
 |------|----------------|
@@ -260,7 +260,7 @@ copy of that check no call path routes around.
 
 There is no update and no delete. A record carries nothing to change,
 and removing one would stop nothing an operator can already do, which is
-a route ADR-0044 declines to offer until revocation is decided.
+a route ADR-0045 declines to offer until revocation is decided.
 
 ## `internal/agent`
 
@@ -284,7 +284,7 @@ the schema refuses it again where nothing routes around it. An
 assignment stays inside that organization and names an operator
 (ADR-0015), which the schema alone decides. A definition names one the
 organization has registered as well, which the browser surface decides
-against `internal/operator` and the schema decides again (ADR-0044);
+against `internal/operator` and the schema decides again (ADR-0045);
 this domain reads no record of its own and addresses an operator by GRN. Every assignment raises the
 epoch, and a state report is accepted only at the current one — the
 operator a reassignment replaced reports nothing about the agent it

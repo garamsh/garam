@@ -434,9 +434,9 @@ export interface paths {
         put?: never;
         /**
          * Register an operator of an organization. Requires the `admin` role.
-         * @description Records that this organization has an operator under the identifier given, so a definition can name one garam holds a record of (ADR-0044). The identifier is supplied and not minted: an operator that already holds a certificate is registered under the GRN that certificate names.
+         * @description Records that this organization has an operator under the identifier given, so a definition can name one garam holds a record of (ADR-0045). The identifier is supplied and not minted: an operator that already holds a certificate is registered under the GRN that certificate names.
          *     It grants the operator nothing. How an operator proves itself is unchanged — a registered operator obtains its first certificate exactly as an unregistered one does, through the command ADR-0032 ships, which reads no record here.
-         *     There is no route that removes a record. garam has no revocation: a certificate that has not expired keeps authenticating whatever this organization holds, and a route implying otherwise would be worse than none (ADR-0044).
+         *     There is no route that removes a record. garam has no revocation: a certificate that has not expired keeps authenticating whatever this organization holds, and a route implying otherwise would be worse than none (ADR-0045).
          */
         post: operations["registerOperator"];
         delete?: never;
@@ -920,7 +920,7 @@ export interface components {
         /** @description What an agent should be, as an organization's member states it. */
         AgentDefinitionCreate: {
             /**
-             * @description The operator that is to run the agent. It must be one this organization has registered under `/orgs/{org}/operators`; one it has not registered is refused, naming the identifier that named no record (ADR-0044).
+             * @description The operator that is to run the agent. It must be one this organization has registered under `/orgs/{org}/operators`; one it has not registered is refused, naming the identifier that named no record (ADR-0045).
              * @example grn:acme:default:operator:field-one
              */
             operatorGrn: string;

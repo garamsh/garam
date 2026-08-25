@@ -161,7 +161,7 @@ type AgentDefinition struct {
 
 // AgentDefinitionCreate What an agent should be, as an organization's member states it.
 type AgentDefinitionCreate struct {
-	// OperatorGrn The operator that is to run the agent. It must be one this organization has registered under `/orgs/{org}/operators`; one it has not registered is refused, naming the identifier that named no record (ADR-0044).
+	// OperatorGrn The operator that is to run the agent. It must be one this organization has registered under `/orgs/{org}/operators`; one it has not registered is refused, naming the identifier that named no record (ADR-0045).
 	OperatorGrn string `json:"operatorGrn"`
 
 	// Values What an operator constructs the agent from. garam stores the keys and the strings and interprets neither: what the payload means belongs to the operator that reads it. A key is one to 64 characters of lowercase letters, digits and `-`; a value is at most 4096 bytes; at most 32 entries.

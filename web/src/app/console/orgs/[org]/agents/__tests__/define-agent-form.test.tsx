@@ -32,7 +32,7 @@ function recordDefinitions() {
 describe("define agent form", () => {
   it("renders the refusal an unregistered operator gets, and prints no GRN", async () => {
     // The API refuses a definition naming an operator the organization
-    // has not registered (ADR-0044) and names the identifier rather
+    // has not registered (ADR-0045) and names the identifier rather
     // than the GRN, which is what lets the console render the sentence
     // it is given (ADR-0011).
     server.use(

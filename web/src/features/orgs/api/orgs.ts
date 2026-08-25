@@ -26,7 +26,7 @@ export type AgentDefinition = components["schemas"]["AgentDefinition"];
 /**
  * An operator an organization has registered, as the API returns one.
  * The record says garam holds one; it says nothing about whether the
- * operator is running or reachable (ADR-0044).
+ * operator is running or reachable (ADR-0045).
  */
 export type Operator = components["schemas"]["Operator"];
 

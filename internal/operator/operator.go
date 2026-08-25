@@ -1,5 +1,5 @@
 // Package operator owns the record that an organization has an
-// operator (ADR-0044).
+// operator (ADR-0045).
 //
 // An operator provisions agents inside a cluster garam never dials
 // (ADR-0012) and authenticates with a certificate garam's own command

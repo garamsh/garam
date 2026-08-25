@@ -1,5 +1,5 @@
 -- An organization registers an operator, and this table is the record
--- (ADR-0044). Before it, an operator existed only as a GRN somebody
+-- (ADR-0045). Before it, an operator existed only as a GRN somebody
 -- composed by hand for `garam issue-certificate` (ADR-0032), so a
 -- definition could name one that was never going to exist and nothing
 -- reported it.

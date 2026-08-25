@@ -27,7 +27,7 @@ const Schema = z.object({
 });
 
 /**
- * Registers an operator of the organization (ADR-0044). It hands the
+ * Registers an operator of the organization (ADR-0045). It hands the
  * operator nothing: what it authenticates with is a certificate garam's
  * own command mints, and this write does not reach it.
  */

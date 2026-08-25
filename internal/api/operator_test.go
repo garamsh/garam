@@ -79,7 +79,7 @@ func TestOperatorRegister_AdminRegistersWhereOthersAreRefused(t *testing.T) {
 
 // TestOperatorRegister_RefusesWhatItCannotStore covers the boundary the
 // identifier crosses. It is supplied by the caller rather than minted
-// (ADR-0044), so it is the one org resource where a person's typing
+// (ADR-0045), so it is the one org resource where a person's typing
 // reaches a GRN segment directly.
 //
 // The accepted registration at the end is the control: every refusal

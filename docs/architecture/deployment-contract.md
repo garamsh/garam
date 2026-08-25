@@ -227,7 +227,7 @@ alone. What binds instead is who signs them
   an admin of the organization registers the operator over the browser
   API (`POST /orgs/{org}/operators`), under the same identifier the
   certificate's subject GRN carries
-  ([ADR-0044](./adr/0044-an-organization-registers-an-operator.md)). The
+  ([ADR-0045](./adr/0045-an-organization-registers-an-operator.md)). The
   order between the two is free, but a deployment that skips the
   registration has an operator that authenticates and no definition can
   name: `POST /orgs/{org}/agent-definitions` refuses an operator the
@@ -338,7 +338,7 @@ that would assert one:
   its own, per-connection trust root
 - [ADR-0015](./adr/0015-operator-identity.md) — key material travels as
   files, never the environment
-- [ADR-0044](./adr/0044-an-organization-registers-an-operator.md) — an
+- [ADR-0045](./adr/0045-an-organization-registers-an-operator.md) — an
   organization registers an operator, which no command does for it
 - [ADR-0016](./adr/0016-ca-key-custody.md) — the key-encryption key the
   authorities are sealed under

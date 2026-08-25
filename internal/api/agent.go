@@ -76,7 +76,7 @@ func (s *Server) GetAgent(w http.ResponseWriter, r *http.Request, orgSlug apigen
 // operator is to run it, and the values it is constructed from
 // (ADR-0026). Requires the member role.
 //
-// The operator must be one the org has registered (ADR-0044): a
+// The operator must be one the org has registered (ADR-0045): a
 // definition naming an operator garam holds no record of is refused
 // here, where a typed GRN can still be corrected, rather than becoming
 // a definition no operator will ever claim.

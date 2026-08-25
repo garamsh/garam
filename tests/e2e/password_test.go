@@ -140,7 +140,7 @@ func TestPasswordSignIn_RoundTripAgainstPostgres(t *testing.T) {
 	require.NoError(t, orgs.CreateInvitation(ctx,
 		org.NewInvitation(token, acme, org.RoleMember, owner, time.Now().UTC().Add(time.Hour))))
 
-	srv := api.NewServer(users, orgs, nil, nil, nil,
+	srv := api.NewServer(users, orgs, nil, nil, nil, nil,
 		authn.NewPostgresSessionStore(p), nil,
 		authn.NewPostgresPasswordCredentialStore(p),
 		authn.NewPostgresPasswordAttemptStore(p),

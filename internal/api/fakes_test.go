@@ -14,6 +14,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/listfilter"
 	"github.com/garamsh/garam/internal/message"
+	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
 	"github.com/garamsh/garam/internal/user"
 	"github.com/garamsh/garam/internal/watch"
@@ -938,4 +939,49 @@ func (s *fakePasswordAttemptStore) releaseOne() {
 		delete(s.expiryOf, held)
 		return
 	}
+}
+
+type fakeOperatorStore struct {
+	operator.Store
+	mu        sync.Mutex
+	operators map[string]*operator.Operator
+}
+
+func newFakeOperatorStore() *fakeOperatorStore {
+	return &fakeOperatorStore{operators: map[string]*operator.Operator{}}
+}
+
+func (s *fakeOperatorStore) Register(_ context.Context, o *operator.Operator) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.operators[o.GRN().String()]; ok {
+		return operator.ErrOperatorAlreadyRegistered
+	}
+	s.operators[o.GRN().String()] = o
+	return nil
+}
+
+func (s *fakeOperatorStore) Get(_ context.Context, g grn.GRN) (*operator.Operator, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	o, ok := s.operators[g.String()]
+	if !ok {
+		return nil, operator.ErrOperatorNotFound
+	}
+	return o, nil
+}
+
+func (s *fakeOperatorStore) ListByOrg(_ context.Context, orgGRN grn.GRN) ([]*operator.Operator, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := []*operator.Operator{}
+	for _, o := range s.operators {
+		if o.Organization() == orgGRN {
+			out = append(out, o)
+		}
+	}
+	slices.SortFunc(out, func(a, b *operator.Operator) int {
+		return strings.Compare(a.GRN().String(), b.GRN().String())
+	})
+	return out, nil
 }

@@ -47,7 +47,7 @@ func TestLogin_EndpointShedsPastTheLiveStateBound(t *testing.T) {
 	// Login reaches only the state store and the provider; the
 	// dependencies its sibling handlers use stay nil rather than
 	// doubled.
-	srv := api.NewServer(nil, nil, nil, nil, nil, nil,
+	srv := api.NewServer(nil, nil, nil, nil, nil, nil, nil,
 		authn.NewPostgresOAuthStateStore(p), nil, nil, []authn.Provider{stubProvider{}}, nil, nil,
 		api.Config{SessionTTL: time.Hour})
 	handler := apigen.Handler(srv)

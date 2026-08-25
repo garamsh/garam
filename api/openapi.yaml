@@ -17,6 +17,12 @@ tags:
     description: >-
       The versioned policy documents an organization evaluates, and the
       subjects they are attached to.
+  - name: operator
+    description: >-
+      The operators an organization has registered. A record says garam
+      holds one, and nothing more: it carries no credential, and an
+      operator authenticates with the certificate it already holds
+      whether or not one exists (ADR-0044).
   - name: agent
     description: >-
       The agents an organization holds, and the definitions of the
@@ -834,6 +840,78 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/AgentDefinition'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/operators:
+    post:
+      operationId: registerOperator
+      tags: [operator]
+      summary: Register an operator of an organization. Requires the `admin` role.
+      description: >-
+        Records that this organization has an operator under the
+        identifier given, so a definition can name one garam holds a
+        record of (ADR-0044). The identifier is supplied and not minted:
+        an operator that already holds a certificate is registered under
+        the GRN that certificate names.
+
+        It grants the operator nothing. How an operator proves itself is
+        unchanged — a registered operator obtains its first certificate
+        exactly as an unregistered one does, through the command
+        ADR-0032 ships, which reads no record here.
+
+        There is no route that removes a record. garam has no
+        revocation: a certificate that has not expired keeps
+        authenticating whatever this organization holds, and a route
+        implying otherwise would be worse than none (ADR-0044).
+      parameters:
+        - $ref: '#/components/parameters/org'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperatorRegistration'
+      responses:
+        '201':
+          description: Operator registered.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operator'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+    get:
+      operationId: listOperators
+      tags: [operator]
+      summary: List an organization's operators. Requires the `member` role.
+      description: >-
+        The operators this organization has registered. An entry says
+        garam holds the record; it does not say the operator is running,
+        reachable, or holds a certificate — garam never dials one
+        (ADR-0012) and learns nothing about it until it calls.
+      parameters:
+        - $ref: '#/components/parameters/org'
+      responses:
+        '200':
+          description: The organization's operators.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Operator'
         '401':
           $ref: '#/components/responses/Error'
         '403':
@@ -1707,6 +1785,35 @@ components:
         updatedAt:
           type: string
           format: date-time
+    Operator:
+      type: object
+      required: [grn, orgGrn, registeredBy, createdAt]
+      properties:
+        grn:
+          type: string
+          example: grn:acme:default:operator:field-one
+        orgGrn:
+          type: string
+        registeredBy:
+          type: string
+          description: The member that registered the operator.
+        createdAt:
+          type: string
+          format: date-time
+    OperatorRegistration:
+      type: object
+      required: [identifier]
+      properties:
+        identifier:
+          type: string
+          description: >-
+            Lowercase letters, digits and `-`, at most 64 characters. It
+            becomes the identifier segment of the operator's GRN, which
+            is the subject `garam issue-certificate` mints a certificate
+            for (ADR-0032) — so it is supplied rather than minted, and an
+            operator already holding a certificate is registered under
+            the GRN that certificate names.
+          example: field-one
     AgentValues:
       type: object
       description: >-
@@ -1728,9 +1835,10 @@ components:
         operatorGrn:
           type: string
           description: >-
-            The operator that is to run the agent. It must be an
-            operator of this organization; whether it exists is not
-            knowable here, because nothing registers an operator.
+            The operator that is to run the agent. It must be one this
+            organization has registered under `/orgs/{org}/operators`;
+            one it has not registered is refused, naming the identifier
+            that named no record (ADR-0044).
           example: grn:acme:default:operator:field-one
         values:
           $ref: '#/components/schemas/AgentValues'

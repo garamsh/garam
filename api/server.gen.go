@@ -161,7 +161,7 @@ type AgentDefinition struct {
 
 // AgentDefinitionCreate What an agent should be, as an organization's member states it.
 type AgentDefinitionCreate struct {
-	// OperatorGrn The operator that is to run the agent. It must be an operator of this organization; whether it exists is not knowable here, because nothing registers an operator.
+	// OperatorGrn The operator that is to run the agent. It must be one this organization has registered under `/orgs/{org}/operators`; one it has not registered is refused, naming the identifier that named no record (ADR-0044).
 	OperatorGrn string `json:"operatorGrn"`
 
 	// Values What an operator constructs the agent from. garam stores the keys and the strings and interprets neither: what the payload means belongs to the operator that reads it. A key is one to 64 characters of lowercase letters, digits and `-`; a value is at most 4096 bytes; at most 32 entries.
@@ -244,6 +244,22 @@ type Member struct {
 // MemberRef A group or project member, addressed by GRN.
 type MemberRef struct {
 	MemberGrn string `json:"memberGrn"`
+}
+
+// Operator defines model for Operator.
+type Operator struct {
+	CreatedAt time.Time `json:"createdAt"`
+	Grn       string    `json:"grn"`
+	OrgGrn    string    `json:"orgGrn"`
+
+	// RegisteredBy The member that registered the operator.
+	RegisteredBy string `json:"registeredBy"`
+}
+
+// OperatorRegistration defines model for OperatorRegistration.
+type OperatorRegistration struct {
+	// Identifier Lowercase letters, digits and `-`, at most 64 characters. It becomes the identifier segment of the operator's GRN, which is the subject `garam issue-certificate` mints a certificate for (ADR-0032) — so it is supplied rather than minted, and an operator already holding a certificate is registered under the GRN that certificate names.
+	Identifier string `json:"identifier"`
 }
 
 // OrgConsent One organization's view of a cross-organization consent relation (ADR-0035), from the side the path names: `orgGrn` is the other organization, and each half says whether that side's grant stands. `stands` is both halves at once — the only state under which a message crosses.
@@ -490,6 +506,9 @@ type AddGroupMemberJSONRequestBody = MemberRef
 // CreateInvitationJSONRequestBody defines body for CreateInvitation for application/json ContentType.
 type CreateInvitationJSONRequestBody = InvitationCreate
 
+// RegisterOperatorJSONRequestBody defines body for RegisterOperator for application/json ContentType.
+type RegisterOperatorJSONRequestBody = OperatorRegistration
+
 // CreatePolicyJSONRequestBody defines body for CreatePolicy for application/json ContentType.
 type CreatePolicyJSONRequestBody = PolicyCreate
 
@@ -606,6 +625,12 @@ type ServerInterface interface {
 	// ListOrgMembers List members of an organization. Requires the `member` role.
 	// (GET /orgs/{org}/members)
 	ListOrgMembers(w http.ResponseWriter, r *http.Request, org Org)
+	// ListOperators List an organization's operators. Requires the `member` role.
+	// (GET /orgs/{org}/operators)
+	ListOperators(w http.ResponseWriter, r *http.Request, org Org)
+	// RegisterOperator Register an operator of an organization. Requires the `admin` role.
+	// (POST /orgs/{org}/operators)
+	RegisterOperator(w http.ResponseWriter, r *http.Request, org Org)
 	// ListPolicies List an organization's policies. Requires the `admin` role.
 	// (GET /orgs/{org}/policies)
 	ListPolicies(w http.ResponseWriter, r *http.Request, org Org)
@@ -1611,6 +1636,58 @@ func (siw *ServerInterfaceWrapper) ListOrgMembers(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// ListOperators operation middleware
+func (siw *ServerInterfaceWrapper) ListOperators(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListOperators(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RegisterOperator operation middleware
+func (siw *ServerInterfaceWrapper) RegisterOperator(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RegisterOperator(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListPolicies operation middleware
 func (siw *ServerInterfaceWrapper) ListPolicies(w http.ResponseWriter, r *http.Request) {
 
@@ -2406,6 +2483,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agents/{agent}/watch", wrapper.WatchAgent)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agent-definitions", wrapper.ListAgentDefinitions)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/agent-definitions", wrapper.DefineAgent)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/operators", wrapper.ListOperators)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/operators", wrapper.RegisterOperator)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/policies", wrapper.ListPolicies)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/policies", wrapper.CreatePolicy)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/policies/{policy}/versions", wrapper.ListPolicyVersions)

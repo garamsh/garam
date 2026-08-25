@@ -175,6 +175,9 @@ func TestPasswordSignIn_RoundTripAgainstPostgres(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, wrongPassword.Code)
 	assert.Equal(t, unknownUser.Code, wrongPassword.Code)
 	assert.Equal(t, unknownUser.Body.String(), wrongPassword.Body.String())
+	// The control for the search below: the refusal carries a message,
+	// so what is absent is the password and not the whole body.
+	require.Contains(t, wrongPassword.Body.String(), "message")
 	assert.NotContains(t, wrongPassword.Body.String(), "wrong-password-entirely")
 	assert.Equal(t, 2, countRows(t, p, "SELECT count(*) FROM password_attempts"),
 		"and each failure keeps its slot")

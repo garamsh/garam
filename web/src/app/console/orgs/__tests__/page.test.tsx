@@ -34,6 +34,9 @@ describe("organizations page", () => {
   it("names organizations without their GRN", async () => {
     const { container } = await renderServerComponent(OrgsPage());
 
+    // The control for the search: the listing rendered, so what is
+    // absent is the GRN and not the page.
+    expect(screen.getByRole("link", { name: /Acme/ })).toBeInTheDocument();
     expect(container.textContent).not.toContain("grn:");
   });
 

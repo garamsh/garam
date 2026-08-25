@@ -92,6 +92,12 @@ describe("parsePassword", () => {
   });
 
   it("names the bound and never what was typed", () => {
+    // The first half of the name is the property: a refusal that lost
+    // its message carries no password either.
+    expect(parsePassword("hunter2")).toEqual({
+      status: "error",
+      message: `A password holds at least ${PASSWORD_MIN_LENGTH} characters.`,
+    });
     expect(JSON.stringify(parsePassword("hunter2"))).not.toContain("hunter2");
   });
 });

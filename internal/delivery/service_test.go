@@ -224,6 +224,7 @@ func (q *garamQueue) deliveries() int {
 // ended by the test rather than by a running agent, which is what makes
 // the order of a post and a turn's end something a test decides.
 type agentGateway struct {
+	t      *testing.T
 	server *httptest.Server
 
 	mu          sync.Mutex
@@ -238,7 +239,7 @@ const gatewayAgentID = "default"
 
 func newAgentGateway(t *testing.T) *agentGateway {
 	t.Helper()
-	g := &agentGateway{}
+	g := &agentGateway{t: t}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /agents/{agent}/messages", g.post)
 	mux.HandleFunc("GET /agents/{agent}/events", g.events)
@@ -273,14 +274,19 @@ func (g *agentGateway) events(w http.ResponseWriter, r *http.Request) {
 	g.mu.Unlock()
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.WriteHeader(http.StatusOK)
-	w.(http.Flusher).Flush()
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		g.t.Errorf("the gateway's writer does not flush, so no event reaches the subscriber")
+		return
+	}
+	flusher.Flush()
 	for {
 		select {
 		case <-r.Context().Done():
 			return
 		case event := <-events:
 			fmt.Fprintf(w, "data: %s\n\n", event)
-			w.(http.Flusher).Flush()
+			flusher.Flush()
 		}
 	}
 }

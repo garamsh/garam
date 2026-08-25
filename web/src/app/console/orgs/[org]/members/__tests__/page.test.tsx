@@ -67,6 +67,12 @@ describe("members section", () => {
 
     await renderServerComponent(MembersPage(params("acme")));
 
+    // The control for the absence below: the section rendered for this
+    // member, so the missing heading is the role branch and not a page
+    // that failed to render at all.
+    expect(screen.getByRole("row", { name: /alice/ })).toHaveTextContent(
+      "member",
+    );
     expect(
       screen.queryByRole("heading", { name: "Invite a member" }),
     ).not.toBeInTheDocument();

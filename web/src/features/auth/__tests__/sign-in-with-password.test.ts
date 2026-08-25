@@ -133,6 +133,12 @@ describe("signInWithPassword", () => {
     expect(seen).toEqual([
       { method: "POST", url: `${API_URL}/auth/password/login` },
     ]);
+    // The control for the search: the refusal reached the caller, so
+    // what carries no password is a real answer and not an empty one.
+    expect(state).toEqual({
+      status: "error",
+      message: "That username and password do not match an account.",
+    });
     expect(JSON.stringify(state)).not.toContain(PASSWORD);
   });
 

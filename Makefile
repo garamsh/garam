@@ -225,10 +225,22 @@ db-down:
 backend-up:
 	$(COMPOSE_LOCAL) up -d --build --wait api
 
+# What the e2e suite covers, listed once so the target reports the set it
+# ran rather than name a ./... pattern whose match nobody sees. `go test`
+# prints `[no test files]` and exits 0 for a package holding none — a
+# build tag that stopped matching, a renamed file — which reads exactly
+# like the run that did the work. Only packages holding a test file are
+# listed, so that condition empties the list and fails below instead of
+# reaching go test.
+E2E_PKGS = $(shell go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./tests/e2e/...)
+E2E_TEST_FILES = $(shell go list -f '{{range .TestGoFiles}}{{.}} {{end}}{{range .XTestGoFiles}}{{.}} {{end}}' ./tests/e2e/...)
+
 # e2e runs the store round-trips against real Postgres (see db-up).
 e2e:
+	@echo 'e2e: $(words $(E2E_PKGS)) packages, $(words $(E2E_TEST_FILES)) test files, against $(TEST_DB_NAME)'
+	@test -n '$(E2E_PKGS)' || { echo 'e2e: nothing to run — no package under ./tests/e2e/... holds a test file'; exit 1; }
 	@test -n '$(TEST_DATABASE_URL)' || { echo "e2e: no postgres published on this host — run make db-up" >&2; exit 1; }
-	GARAM_TEST_DATABASE_URL='$(TEST_DATABASE_URL)' go test -count=1 ./tests/e2e/...
+	GARAM_TEST_DATABASE_URL='$(TEST_DATABASE_URL)' go test -count=1 $(E2E_PKGS)
 
 ci: format lint test build check-gen chart
 

@@ -47,6 +47,9 @@ describe("console sidebar", () => {
   it("carries no GRN", async () => {
     const { container } = await renderSidebar();
 
+    // The control for the search: the sidebar rendered, so what is
+    // absent is the GRN and not the whole tree.
+    expect(screen.getByRole("link", { name: "Members" })).toBeInTheDocument();
     expect(container.textContent).not.toContain("grn:");
   });
 

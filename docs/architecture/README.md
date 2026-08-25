@@ -14,6 +14,20 @@ Current architecture of the system and the decisions behind it. This file is the
 3. **Decisions land in pairs.** A PR that adds or supersedes an ADR must update the affected responsibility documents in the same PR. A PR with only one of the two is rejected — the final state must always live in the responsibility documents.
 4. Keep this index current: every responsibility document and notable ADR is listed here.
 
+## What nothing detects
+
+Rule 1 requires a responsibility document's current decisions to be consolidated and synthesized. A decision restated at many sites in one document is neither, and rule 1 has said so since 981c537, which predates every pull request named below. Nothing detects a document that has accumulated those sites, and nothing detects one of them being left behind when the decision changes. The requirement is stated; the detection is what is absent.
+
+Rule 3 is not that detection, and it is not what let the sites accumulate. It pairs an ADR with the responsibility documents it affects, and its unit is the file: it is satisfied once the affected document is in the pull request. Of the four cases #558's investigation read, rule 3 reached one and was breached there: #393 added ADR-0035 and paired [domains.md](./domains.md) without opening [overview.md](./overview.md). In the other three it did what it says — the affected document was opened and moved, or no ADR landed for it to trigger on. What stayed stale in those three was a further site of a claim the document was already carrying at several, which is rule 1's ground and not rule 3's.
+
+An author who has moved one site cannot find the rest by searching for the decision they just made, and that is a fact about the sites rather than about the search. The ones left behind are the ones that do not name the new decision, so the search returns precisely the set that already moved. `git show 4b1bef1:docs/architecture/overview.md | grep -oiE '0035|consent'` returns nothing — 4b1bef1 is the revision before #556 corrected that document — while `grep -oE 'ADR-[0-9]{4}'` over the same input returns 76: the search ran, over a file citing ADRs throughout, and the stale statement of the cross-organization refusal named neither the number nor the decision's word.
+
+Searching for the superseded decision instead is a genuine improvement over searching for the new one, and it is still a search. Two careful searches of `docs/architecture/overview.md` at 7dd0682 for the removed development-only sign-in provider disagreed in opposite directions inside one count: one missed line 268, which reads `dev-only local`, and one counted line 106, an §In scope bullet about org structure that may not carry the claim at all. Between those two searches over that document the unit being counted was not fixed; that is what the disagreement shows, and it is not evidence that no unit could be fixed. What holds either way is rule 1's ground: a document that does not accumulate the sites has nothing to enumerate.
+
+No pipeline stands behind this either. `make ci` reads no file under `docs/`, and this repository's own `ci` workflow does not run at all — AGENTS.md §This project names the command that shows that, and asks for it to be checked here rather than taken on report.
+
+[api-surface.md](./api-surface.md) §What nothing checks records the same shape for a different artifact, the prose inside the two API specifications. That half is stated there and not here.
+
 ## Index
 
 Responsibility documents:

@@ -4,15 +4,14 @@ managed:
   override:
     - file_option: go_package_prefix
       value: github.com/garamsh/garam/proto/gen
-# Nothing parses this file for a pin, so the two plugin versions below
-# move when a contributor moves them, and a bump lands with the `make
-# gen` that follows it or `check-gen` fails. No owner and no scheduled
-# review is named for them either, so they have no mover of any form
-# docs/convention/ci.md §Verify admits.
+# The two plugin versions below are tool directives in go.mod: go.sum
+# records them and Dependabot's gomod ecosystem proposes their bumps,
+# and `.github/dependabot.yml` names what it does not cover. A move
+# lands with the `make gen` that follows it or `check-gen` fails.
 plugins:
-  - local: [go, run, google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11]
+  - local: [go, tool, protoc-gen-go]
     out: proto/gen
     opt: paths=source_relative
-  - local: [go, run, google.golang.org/grpc/cmd/protoc-gen-go-grpc@v1.6.2]
+  - local: [go, tool, protoc-gen-go-grpc]
     out: proto/gen
     opt: paths=source_relative

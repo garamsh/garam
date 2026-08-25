@@ -4,17 +4,25 @@
 # upgrades for a tool that needs a newer one.
 export GOTOOLCHAIN := go$(shell sed -n 's/^go //p' go.mod)+auto
 
-# No Dependabot ecosystem parses a Makefile, so nothing proposes a bump
-# for the six generator pins below: each moves when a contributor moves
-# it. No owner and no scheduled review is named for them either, so they
-# have no mover of any form docs/convention/ci.md §Verify admits. Five
-# of them write output this repository commits, so a bump lands with the
-# `gen` that follows it or `check-gen` fails.
-OAPI_CODEGEN := go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.8.0
-SQLC := go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
-MOCKERY := go run github.com/vektra/mockery/v3@v3.7.2
-BUF := go run github.com/bufbuild/buf/cmd/buf@v1.72.0
-GOIMPORTS := go run golang.org/x/tools/cmd/goimports@v0.48.0
+# Tool directives in go.mod: go.sum records each version and
+# Dependabot's gomod ecosystem proposes its bumps, and
+# `.github/dependabot.yml` names what it does not cover. Each writes
+# output this repository commits, so a move — a bump, or a floor another
+# dependency raises — lands with the `gen` that follows it or
+# `check-gen` fails.
+OAPI_CODEGEN := go tool oapi-codegen
+SQLC := go tool sqlc
+MOCKERY := go tool mockery
+BUF := go tool buf
+GOIMPORTS := go tool goimports
+
+# helm is not a tool directive: helm.sh/helm/v4 requires a
+# google.golang.org/protobuf newer than protoc-gen-go's, and merging its
+# graph into this module's raises that floor and restamps every
+# generated .pb.go header. Nothing parses this line for a pin, so it has
+# no mover of any form docs/convention/ci.md §Verify admits — no bot,
+# and no owner or scheduled review named either. It writes no output
+# this repository commits, so nothing here fails when it goes stale.
 HELM := go run helm.sh/helm/v4/cmd/helm@v4.2.4
 
 # One dev Postgres per machine, not per worktree:

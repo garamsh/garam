@@ -609,8 +609,9 @@ retry arriving afterwards neither stores a message nor requeues the
 delivered one. Retention is for space, not for not-keeping
 (ADR-0034): a completed message keeps that small row and drops its
 body at completion, an unclaimed message expires after thirty days,
-and a submission's body is bounded at 64 KiB — so the table's growth
-is a rate a volume can be sized against. Neither the recipient nor the sender carries a foreign
+and a submission's body is bounded at 65536 characters, which UTF-8
+spends up to 256 KiB on — so the table's growth is a rate a volume can
+be sized against. Neither the recipient nor the sender carries a foreign
 key — garam answers a sender once the message is stored and reports a
 routing failure back as a message rather than rejecting one, so a
 message it cannot yet route has to be storable. `Service` keeps that

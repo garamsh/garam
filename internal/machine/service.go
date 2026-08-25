@@ -63,11 +63,11 @@ func (s *service) Authenticate(ctx context.Context, chain [][]byte) (Identity, e
 	if err != nil {
 		return Identity{}, errorx.Wrap(err, "machine: client certificate", errorx.KindUnauthenticated)
 	}
-	subject, err := subjectOf(leaf)
+	identity, err := identityOf(leaf)
 	if err != nil {
 		return Identity{}, err
 	}
-	root, err := s.rootOf(ctx, subject)
+	root, err := s.rootOf(ctx, identity.grn)
 	if err != nil {
 		return Identity{}, err
 	}
@@ -79,7 +79,7 @@ func (s *service) Authenticate(ctx context.Context, chain [][]byte) (Identity, e
 	}); err != nil {
 		return Identity{}, errorx.Wrap(err, "machine: certificate does not chain to its organization's authority", errorx.KindUnauthenticated)
 	}
-	return Identity{grn: subject}, nil
+	return identity, nil
 }
 
 // rootOf returns the parsed certificate of the authority that may sign
@@ -102,7 +102,8 @@ func (s *service) rootOf(ctx context.Context, subject grn.GRN) (*x509.Certificat
 	return root, nil
 }
 
-// subjectOf recovers the GRN a certificate names from its SAN URI.
+// identityOf reads the identity a certificate names from its SAN URI,
+// and the certificate's own dates and serial beside it.
 //
 // The whole URI is parsed, and that one parse is the whole check: every
 // segment of a GRN is lowercase letters, digits and '-' (grn-model.md
@@ -115,13 +116,18 @@ func (s *service) rootOf(ctx context.Context, subject grn.GRN) (*x509.Certificat
 // second identity beside the first, has no single answer to who is
 // calling — which is also what refuses a server certificate presented
 // here, since it names a host and not an identity.
-func subjectOf(leaf *x509.Certificate) (grn.GRN, error) {
+func identityOf(leaf *x509.Certificate) (Identity, error) {
 	if len(leaf.URIs) != 1 {
-		return grn.GRN{}, errorx.New(errorx.KindUnauthenticated, "machine: certificate does not name exactly one identity")
+		return Identity{}, errorx.New(errorx.KindUnauthenticated, "machine: certificate does not name exactly one identity")
 	}
 	subject, err := grn.Parse(leaf.URIs[0].String())
 	if err != nil {
-		return grn.GRN{}, errorx.Wrap(err, "machine: san uri is not a grn", errorx.KindUnauthenticated)
+		return Identity{}, errorx.Wrap(err, "machine: san uri is not a grn", errorx.KindUnauthenticated)
 	}
-	return subject, nil
+	return Identity{
+		grn:       subject,
+		serial:    leaf.SerialNumber.String(),
+		notBefore: leaf.NotBefore,
+		notAfter:  leaf.NotAfter,
+	}, nil
 }

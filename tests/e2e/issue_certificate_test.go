@@ -2,9 +2,7 @@ package e2e_test
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/tls"
-	"encoding/hex"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -14,7 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/garam/internal/agent"
-	"github.com/garamsh/garam/internal/ca"
 	"github.com/garamsh/garam/internal/cli"
 	"github.com/garamsh/garam/internal/org"
 )
@@ -46,13 +43,7 @@ func TestIssueCertificate_MintsAnOperatorsFirstCertificate(t *testing.T) {
 
 	// The key-encryption key reaches the command the way ADR-0015 has
 	// key material reach a process: a file its owner alone can read.
-	key := make([]byte, ca.KeySize)
-	_, err := rand.Read(key)
-	require.NoError(t, err)
-	keyFile := filepath.Join(t.TempDir(), "ca.key")
-	require.NoError(t, os.WriteFile(keyFile, []byte(hex.EncodeToString(key)), 0o600))
-	sealer, err := ca.NewAESGCMSealer(key)
-	require.NoError(t, err)
+	keyFile, sealer := keyEncryptionKey(t)
 
 	_, evaluator := policyEngine(t, p)
 	url := machineListener(t, p, sealer, evaluator)

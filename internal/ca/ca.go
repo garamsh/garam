@@ -53,6 +53,7 @@ func (a *Authority) SealedKey() []byte { return a.sealedKey }
 // so a caller that loses it reissues rather than recovers.
 type Certificate struct {
 	subject   grn.GRN
+	serial    string
 	certPEM   []byte
 	keyPEM    []byte
 	issuerPEM []byte
@@ -62,6 +63,11 @@ type Certificate struct {
 // Subject returns the GRN the certificate identifies, which is also
 // what its SAN URI holds.
 func (c *Certificate) Subject() grn.GRN { return c.subject }
+
+// Serial returns the certificate's serial number in decimal. Two
+// certificates naming one subject are told apart by it, which is what a
+// renewal of one of them has to name (ADR-0046).
+func (c *Certificate) Serial() string { return c.serial }
 
 // CertificatePEM returns the certificate in PEM form.
 func (c *Certificate) CertificatePEM() []byte { return c.certPEM }

@@ -50,7 +50,7 @@ func (s *Server) IssueAgentCertificate(w http.ResponseWriter, r *http.Request, a
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, machinegen.AgentCertificate{
+	writeJSON(w, http.StatusCreated, machinegen.MachineCertificate{
 		Grn:            subject.String(),
 		CertificatePem: string(certificate.CertificatePEM),
 		PrivateKeyPem:  string(certificate.PrivateKeyPEM),

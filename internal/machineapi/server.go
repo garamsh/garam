@@ -31,6 +31,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/machine"
 	"github.com/garamsh/garam/internal/message"
+	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/watch"
 )
 
@@ -46,6 +47,7 @@ type Groups interface {
 // Server implements machinegen.ServerInterface.
 type Server struct {
 	agents    agent.Service
+	operators operator.Service
 	messages  message.Service
 	consents  message.ConsentStore
 	watches   watch.Service
@@ -57,24 +59,35 @@ type Server struct {
 var _ machinegen.ServerInterface = (*Server)(nil)
 
 // NewServer constructs the machine API server over the services it
-// answers from: what an operator does to its agents, what a machine
-// identity does to its own queue, the consent relation that lets a
-// message cross an organization boundary, who is watching one work and
-// what it is saying, which groups a caller belongs to, and what decides
-// whom it may send to.
-func NewServer(agents agent.Service, messages message.Service, consents message.ConsentStore, watches watch.Service, groups Groups, evaluator Evaluator) *Server {
-	return &Server{agents: agents, messages: messages, consents: consents, watches: watches, groups: groups, evaluator: evaluator}
+// answers from: what an operator does to its agents, what an operator
+// does to its own certificate, what a machine identity does to its own
+// queue, the consent relation that lets a message cross an organization
+// boundary, who is watching one work and what it is saying, which
+// groups a caller belongs to, and what decides whom it may send to.
+func NewServer(agents agent.Service, operators operator.Service, messages message.Service, consents message.ConsentStore, watches watch.Service, groups Groups, evaluator Evaluator) *Server {
+	return &Server{agents: agents, operators: operators, messages: messages, consents: consents, watches: watches, groups: groups, evaluator: evaluator}
 }
 
 // caller returns the GRN the connection authenticated as, and writes
-// the refusal itself when there is none. Every request the machine
-// listener serves carries an identity, so the refusal is what a request
-// that reached a handler any other way gets.
+// the refusal itself when there is none.
 func caller(w http.ResponseWriter, r *http.Request) (grn.GRN, bool) {
+	identity, ok := callerCertificate(w, r)
+	return identity.GRN(), ok
+}
+
+// callerCertificate returns the identity and the certificate it
+// authenticated with, and writes the refusal itself when there is none.
+// Every request the machine listener serves carries an identity, so the
+// refusal is what a request that reached a handler any other way gets.
+//
+// One route reads the certificate rather than the GRN alone: what may
+// replace a certificate is decided by the certificate presented
+// (ADR-0046).
+func callerCertificate(w http.ResponseWriter, r *http.Request) (machine.Identity, bool) {
 	identity, ok := machine.IdentityOf(r)
 	if !ok {
 		writeError(w, errorx.New(errorx.KindUnauthenticated, "no machine identity"))
-		return grn.GRN{}, false
+		return machine.Identity{}, false
 	}
-	return identity.GRN(), true
+	return identity, true
 }

@@ -110,6 +110,10 @@ func (s *service) Issue(ctx context.Context, subject grn.GRN) (*Certificate, err
 	if err != nil {
 		return nil, err
 	}
+	serial, err := serialNumber()
+	if err != nil {
+		return nil, err
+	}
 	now := s.now().UTC()
 	notAfter, err := expiry(now, s.lifetime)
 	if err != nil {
@@ -126,7 +130,7 @@ func (s *service) Issue(ctx context.Context, subject grn.GRN) (*Certificate, err
 	case notAfter.After(issuer.NotAfter):
 		return nil, errorx.New(errorx.KindFailedPrecondition, "ca: certificate would outlive the authority that signs it")
 	}
-	der, err := createCertificate(uri, &key.PublicKey, issuer, issuerKey, now, notAfter)
+	der, err := createCertificate(serial, uri, &key.PublicKey, issuer, issuerKey, now, notAfter)
 	if err != nil {
 		return nil, err
 	}
@@ -136,6 +140,7 @@ func (s *service) Issue(ctx context.Context, subject grn.GRN) (*Certificate, err
 	}
 	return &Certificate{
 		subject:   subject,
+		serial:    serial.String(),
 		certPEM:   encodePEM("CERTIFICATE", der),
 		keyPEM:    encodePEM("PRIVATE KEY", keyDER),
 		issuerPEM: encodePEM("CERTIFICATE", authority.certificate),

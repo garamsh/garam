@@ -13,6 +13,7 @@ import (
 	"github.com/garamsh/garam/internal/ca"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/operator"
 )
 
 // newIssueCertificateCommand constructs `garam issue-certificate
@@ -86,7 +87,15 @@ func issueCertificate(cmd *cobra.Command, subjectRaw, outDir string) error {
 	if err != nil {
 		return err
 	}
-	issued, err := issuer.Issue(ctx, subject)
+	// Minted through the operator domain, which records the certificate
+	// as the operator's current one: what a renewal presents has to be
+	// that certificate, so a re-run here is also the recovery from a
+	// lineage another holder took (ADR-0046). No server root travels
+	// with it — the command writes the three files below and the root
+	// the deployment already holds arrives beside them.
+	operators := operator.NewService(operator.NewPostgresStore(pool),
+		operatorCertificates{issuer: issuer}, operator.Config{})
+	issued, err := operators.Issue(ctx, subject)
 	if err != nil {
 		return err
 	}
@@ -99,9 +108,9 @@ func issueCertificate(cmd *cobra.Command, subjectRaw, outDir string) error {
 		data []byte
 		perm fs.FileMode
 	}{
-		{"certificate.pem", issued.CertificatePEM(), 0o644},
-		{"key.pem", issued.PrivateKeyPEM(), 0o600},
-		{"issuer.pem", issued.IssuerPEM(), 0o644},
+		{"certificate.pem", issued.CertificatePEM, 0o644},
+		{"key.pem", issued.PrivateKeyPEM, 0o600},
+		{"issuer.pem", issued.IssuerPEM, 0o644},
 	}
 	for _, w := range writes {
 		if err := os.WriteFile(filepath.Join(outDir, w.name), w.data, w.perm); err != nil {
@@ -110,6 +119,6 @@ func issueCertificate(cmd *cobra.Command, subjectRaw, outDir string) error {
 	}
 
 	cmd.Printf("issued %s, valid until %s; written to %s\n",
-		subject.String(), issued.NotAfter().UTC().Format(time.RFC3339), outDir)
+		subject.String(), issued.NotAfter.UTC().Format(time.RFC3339), outDir)
 	return nil
 }

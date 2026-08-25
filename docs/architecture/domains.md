@@ -236,12 +236,21 @@ engine owns (ADR-0008), not through this list.
 
 ## `internal/operator`
 
-The record that an organization has an operator (ADR-0045).
+What an organization records about an operator, and what that operator
+authenticates with: the record that the organization has it (ADR-0045),
+and which certificate garam last issued it, together with what it takes
+to replace that with the next (ADR-0046).
 
 | Type | Responsibility |
 |------|----------------|
 | `Operator` | an organization's record that it has an operator under this GRN: who registered it and when |
 | `Store` | registers one, answers one by GRN, and lists an organization's own |
+| `Credential` | the certificate a connection authenticated with — the identity it names, which certificate it is, and how long it is good for |
+| `Certificate` | what an operator authenticates with and the garam server root it verifies garam by, as this domain hands them back |
+| `Current` | the certificate garam last issued an operator: the record a renewal is measured against |
+| `CertificateStore` | records what garam last issued, and moves that record to the successor only where the presented certificate is still it |
+| `Service` | mints an operator's certificate out of band and adopts it, and renews the one an operator presents |
+| `Issuer` | signs a certificate for a subject GRN and hands back the garam server root beside it |
 
 The identifier is the caller's rather than garam's, which is what makes
 this domain unlike every other org resource. An operator's GRN is
@@ -261,6 +270,48 @@ copy of that check no call path routes around.
 There is no update and no delete. A record carries nothing to change,
 and removing one would stop nothing an operator can already do, which is
 a route ADR-0045 declines to offer until revocation is decided.
+
+The certificate half reads no record above it. An operator renews with
+what it holds, and whether its organization registered it changes
+nothing about that.
+
+An operator's first certificate arrives out of band (ADR-0015,
+ADR-0032). Every one after it is issued here, over the connection the
+certificate being replaced authenticated, so the out-of-band mint is a
+bootstrap rather than a standing obligation.
+
+Three things refuse a renewal, and each is a decision rather than a
+guard. A certificate that has expired renews nothing: the listener
+refuses it a handshake earlier, and the rule states the same boundary as
+the empty end of its window, so what follows expiry is a mint out of
+band. A certificate with more than a third of its validity left is
+refused as too early, measured off the certificate rather than off a
+configured number, so the window holds whatever lifetime signed it. And
+only the certificate garam last issued an operator may renew it: garam
+records that certificate and moves the record to the successor in the
+statement that checks it, so every other copy of that identity stops
+being renewable at once. That last one is what bounds a stolen
+certificate where there is no revocation — the operator it was taken
+from renews, the copy loses the lineage, and it expires. It revokes
+nothing: a certificate that can no longer renew keeps authenticating
+until it runs out.
+
+The mint adopts whatever it issued, so re-running `garam
+issue-certificate` takes the lineage from every certificate that already
+names the operator. That is the recovery from an answer nobody received,
+and the closest thing to a revocation garam has.
+
+`CertificateStore` holds one row per operator and has no read: what the
+rule needs is not the current certificate but whether the presented one
+is still it, and the write answers that itself. Signing happens through
+the `Issuer` seam the composition root satisfies from `internal/ca`, as
+the agent domain's does, so this one never holds key material; the
+successor is signed before the record moves, and a caller that lost the
+lineage receives nothing. The HTTP surface is `internal/machineapi`, and
+`internal/cli` is the other caller — `garam issue-certificate`, the one
+bootstrap ADR-0015 leaves out of band. The agent's certificate is not
+this domain's: an agent is admitted to its own by the claim its operator
+made (ADR-0033) and renews on the route ADR-0040 gave it.
 
 ## `internal/agent`
 
@@ -329,7 +380,7 @@ The certificate authority an organization signs machine identities with
 | Type | Responsibility |
 |------|----------------|
 | `Authority` | an organization's CA: the certificate it signs with, and its private key in sealed form |
-| `Certificate` | an issued client certificate, the private key it was issued with, and the CA that signed it |
+| `Certificate` | an issued client certificate, the private key it was issued with, the CA that signed it, and the serial that tells it from another certificate naming the same subject |
 | `Sealer` | seals key material so what reaches storage is useless without the key-encryption key the process holds |
 | `Service` | issues a certificate for a subject GRN, creating the organization's CA on demand |
 
@@ -372,16 +423,19 @@ Who is calling on the listener a machine identity authenticates on
 
 | Type | Responsibility |
 |------|----------------|
-| `Identity` | the GRN a verified client certificate names |
+| `Identity` | the GRN a verified client certificate names, and the certificate's own serial and dates — which is what a caller asking to replace it is answered by (ADR-0046) |
 | `Service` | recovers that GRN and verifies the certificate against the organization's authority |
 | `TrustRoot` | supplies the authority a presented certificate has to chain to |
 | `ServerCertificate` | supplies the certificate the listener presents, asked per handshake so a replaced one needs no restart (ADR-0040) |
 
 An agent and an operator are the same kind of caller here and the
-listener does not branch on which. The identity is the GRN in the
-certificate's SAN URI and nothing beside it: no user row, no session,
-no membership, so neither foreign key on `users` is touched and no
-handler taking a `*user.User` changes.
+listener does not branch on which. What the certificate asserts is the
+GRN in its SAN URI and nothing beside it: no user row, no session, no
+membership, so neither foreign key on `users` is touched and no handler
+taking a `*user.User` changes. The identity carries the certificate's
+own serial and dates as well, which assert nothing and describe which
+certificate authenticated — the one question a caller asking to replace
+it is answered by (ADR-0046).
 
 The SAN carries exactly one URI and it is parsed whole as a GRN. That
 one parse is the whole check: `grn.Parse` splits on every colon and
@@ -422,18 +476,19 @@ generated from `api/machine.yaml` (ADR-0019).
 
 | Type | Responsibility |
 |------|----------------|
-| `Server` | the machine listener's handlers: the caller's identity, creating an agent, issuing an agent's certificate, posting, claiming, renewing and completing a message, and forwarding a turn event to whoever is watching the agent |
+| `Server` | the machine listener's handlers: the caller's identity, renewing the certificate that identity authenticated with, creating an agent, issuing an agent's certificate, posting, claiming, renewing and completing a message, and forwarding a turn event to whoever is watching the agent |
 | `Evaluator` | the seam the listener asks the policy engine through |
 | `Groups` | the seam the listener reads a caller's group membership through |
 
 A handler's caller is the identity `internal/machine` resolved from the
 client certificate, read back with the comma-ok form and refused where
 a request carries none — no session, no user row, no membership. What
-an operator may reach is not decided here, and neither is whose queue a
-caller may act on: `internal/agent` and `internal/message` decide those,
-and this package parses what the path names, hands the caller over, and
-renders the answer, turning an `errorx` kind into a status at its own
-boundary as `internal/api` does at the browser-facing one. A poll that
+an operator may reach is not decided here, and neither is whether the
+certificate it presented may be replaced or whose queue a caller may act
+on: `internal/agent`, `internal/operator` and `internal/message` decide
+those, and this package parses what the path names, hands the caller
+over, and renders the answer, turning an `errorx` kind into a status at
+its own boundary as `internal/api` does at the browser-facing one. A poll that
 found nothing is the one answer that is not a kind: it is an empty
 success, so a caller loops on it rather than telling an error apart.
 
@@ -646,7 +701,8 @@ caller authenticated as.
 | authn.PasswordCredentialStore | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | authn.PasswordAttemptStore | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | authz (policies) | yes (`store.go`) | yes (`postgres.go` + `postgres_<concept>.go`) | not planned | — |
-| operator | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
+| operator.Store | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
+| operator.CertificateStore | yes (`store.go`) | yes (`postgres_certificate.go`) | not planned | — |
 | agent | yes (`store.go`) | yes (`postgres.go` + `postgres_<concept>.go`) | not planned | — |
 | ca | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | message | yes (`store.go`) | yes (`postgres.go`) | not planned | — |

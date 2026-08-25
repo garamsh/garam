@@ -98,7 +98,7 @@ rather than the user owner. Relaxing the check to fit plain projection
 is not an option; the arrival shape the chart renders is what the rule
 requires.
 
-Three qualifications:
+Four qualifications:
 
 - **Each `*_TLS_CERT_FILE` and `*_TLS_KEY_FILE` pair is re-read on every
   handshake**, on the machine listener and in the adapter alike
@@ -129,6 +129,28 @@ Three qualifications:
   the files each renewed certificate is written to, because an identity
   whose files are replaced in place or left stale stops connecting
   sooner the lower it goes.
+- **An operator renews its own certificate, so a deployment must not
+  build a job that rotates one.** It presents the certificate it holds
+  to `POST /identity/certificate` on the machine listener and receives
+  the next one
+  ([ADR-0046](./adr/0046-an-operator-renews-its-certificate-by-presenting-the-one-it-holds.md)).
+  Three consequences a deployment acts on:
+  - **Ask inside the window.** A renewal is admitted once two thirds of
+    the certificate's validity has passed, and refused before that.
+    Whatever asks has to run often enough to meet that window — at the
+    default lifetime it is about eight hours wide — and to write what
+    comes back to the files the process reads, under the two
+    obligations above.
+  - **Only the newest certificate renews.** garam records the
+    certificate it last issued an operator and renews that one alone, so
+    an operator identity is held by one process: two sharing one
+    certificate will both renew and one will be refused from then on.
+  - **Re-running `issue-certificate` is the recovery**, and it is the
+    same act as the bootstrap. It takes the lineage from every
+    certificate that already names the operator, which is what recovers
+    from a renewal answer that never arrived. It revokes nothing: a
+    certificate that can no longer renew keeps authenticating until it
+    expires, because expiry is still the only revocation there is.
 - **There is no client CA bundle, and creating one is forbidden.** The
   machine listener requires a certificate and verifies it per connection
   against the certificate authority of the organization the
@@ -365,3 +387,6 @@ that would assert one:
 - [ADR-0043](./adr/0043-a-workloads-account-is-named-by-a-value-and-the-chart-creates-none-by-default.md)
   — a workload's account is named by a value the deployment sets, which
   is the subject a role is scoped to
+- [ADR-0046](./adr/0046-an-operator-renews-its-certificate-by-presenting-the-one-it-holds.md)
+  — an operator renews its own certificate, so the out-of-band mint is a
+  bootstrap and not a schedule

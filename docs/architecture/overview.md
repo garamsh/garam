@@ -40,6 +40,14 @@ collaborate on a shared plan.
   other, which is the whole of the authorization there (ADR-0015). The
   process that issues holds the key its authorities are sealed under
   and does not start without it (ADR-0016).
+- An operator renewing its own certificate on that listener, by
+  presenting the one it holds (ADR-0046). garam records the certificate
+  it last issued each operator and renews that one alone, so a copy of
+  it stops renewing the moment the operator does; a certificate outside
+  its renewal window and one that has expired are both refused, and what
+  follows an expired one is the out-of-band mint (ADR-0032). Nothing
+  here revokes a certificate — expiry is still the only revocation
+  (ADR-0014).
 - An organization's members reading the agents it holds, over the
   browser API under `/orgs/{org}/agents`. An agent is answered with the
   state its operator reports and the state it reports itself, kept as
@@ -190,10 +198,12 @@ collaborate on a shared plan.
   state an operator or an agent reports (ADR-0012) and deprovisioning
   an agent. The adapter carries messages and forwards nothing (see the
   watching entry below). An agent renews its own certificate on the
-  certificate route (ADR-0040); an operator's own has no renewal path
-  and arrives out of band (ADR-0015). No console page reads the agents
-  the browser API answers: the console's agents section reads
-  definitions, which are not agents (ADR-0026).
+  certificate route (ADR-0040) and an operator renews its own by
+  presenting it (ADR-0046); an operator's first still arrives out of
+  band (ADR-0015, ADR-0032), and how it is delivered is not decided
+  here. No console page reads the agents the browser API answers: the
+  console's agents section reads definitions, which are not agents
+  (ADR-0026).
 - Revoking anything. A certificate garam signed authenticates until it
   expires, and nothing shortens that: there is no revocation list, no
   serial the listener checks, and no route that removes an operator's
@@ -274,7 +284,9 @@ collaborate on a shared plan.
 - `internal/health/` — what liveness and readiness mean, and the two
   probes every serve command mounts (ADR-0021).
 - `internal/operator/` — the record that an organization has an
-  operator (ADR-0045). It holds no credential and no reported state.
+  operator (ADR-0045), which holds no credential and no reported state,
+  and the operator's own certificate: which one garam last issued it,
+  and what it takes to replace that with the next (ADR-0046).
 - `internal/agent/` — agent identities and the operator each is
   assigned to.
 - `internal/ca/` — the per-organization certificate authority and the
@@ -317,8 +329,8 @@ cookie) at the boundary; org-role checks go through the `Evaluator`
 seam, implemented by the authz gRPC client (ADR-0003 stage 2). The
 machine listener enforces its own authentication at its own boundary
 and shares neither cookie nor session with `api`; `machineapi` composes
-`agent` and `message` behind it, reaches the engine through an
-`Evaluator` seam of its own to decide what a caller may send, and it
+`agent`, `operator` and `message` behind it, reaches the engine through
+an `Evaluator` seam of its own to decide what a caller may send, and it
 and `internal/api` never import each other. Neither imports
 `internal/authz`; the wire contract is `proto/garam/authz/v1`, and the
 conversions onto it are declared once in `internal/wire`. `watch` is
@@ -343,7 +355,9 @@ it and imports no request surface and no domain.
 | `ca.Authority` | `internal/ca` | an organization's certificate authority, its key sealed |
 | `ca.Certificate` | `internal/ca` | issued client certificate identified by a SAN URI |
 | `ca.Sealer` | `internal/ca` | seals key material against a database dump |
-| `machine.Identity` | `internal/machine` | the GRN a verified client certificate names |
+| `operator.Credential` | `internal/operator` | the certificate a connection authenticated with, as the renewal rule reads it |
+| `operator.Service` | `internal/operator` | mints an operator's certificate out of band, and renews the one an operator presents |
+| `machine.Identity` | `internal/machine` | the GRN a verified client certificate names, and which certificate named it |
 | `machine.Service` | `internal/machine` | verifies a presented certificate against its organization's authority |
 | `machine.ServerCertificate` | `internal/machine` | what the listener presents, asked per handshake so a replaced one needs no restart |
 | `message.Message` | `internal/message` | one message addressed to a recipient |
@@ -387,6 +401,7 @@ it and imports no request surface and no domain.
 | Agents authenticate by mTLS on a listener of their own | A GRN in a SAN needs no user row; a separate listener needs no trusted proxy header. | [adr/0014-agent-authentication.md](./adr/0014-agent-authentication.md) |
 | garam presents one pinned server certificate and certificates rotate without a restart | A server picks its certificate before the client sends one, so per-organization selection is unreachable; expiry is the only revocation, and a lifetime short enough to be one is unusable when every rotation is a restart. | [adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md) |
 | An organization registers an operator, and a definition may name no other | A definition naming an operator nobody registered was a definition no operator would ever claim, and nothing reported it. | [adr/0045-an-organization-registers-an-operator.md](./adr/0045-an-organization-registers-an-operator.md) |
+| An operator renews its certificate by presenting the one it holds | Provisioning one on a schedule needs a standing write path to the key-encryption key, for every tenant; and with no revocation, only a record of the certificate garam last issued keeps a stolen copy from renewing forever. | [adr/0046-an-operator-renews-its-certificate-by-presenting-the-one-it-holds.md](./adr/0046-an-operator-renews-its-certificate-by-presenting-the-one-it-holds.md) |
 | An operator is a machine identity of the same kind as an agent | One mechanism to secure and rotate; the assignment row already bounds what an operator may fetch. | [adr/0015-operator-identity.md](./adr/0015-operator-identity.md) |
 | A CA's key is sealed by a key the process holds, not by a KMS | A database dump opens nothing; issuing depends on no hosted service, which is what lets a user bring their own operator. | [adr/0016-ca-key-custody.md](./adr/0016-ca-key-custody.md) |
 | Machine identities are served by a process of their own | The surface that issues certificates holds every organization's key-encryption key, and the process serving browsers must not. | [adr/0017-machine-process.md](./adr/0017-machine-process.md) |

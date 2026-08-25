@@ -72,6 +72,7 @@ ADRs:
 - [0043](./adr/0043-a-workloads-account-is-named-by-a-value-and-the-chart-creates-none-by-default.md) — a workload's account is named by a value the deployment sets, and the chart creates none by default
 - [0044](./adr/0044-the-development-only-sign-in-provider-is-removed.md) — the development-only sign-in provider is removed, superseding ADR-0010
 - [0045](./adr/0045-an-organization-registers-an-operator.md) — an organization registers an operator, and a definition may name no other
+- [0046](./adr/0046-an-operator-renews-its-certificate-by-presenting-the-one-it-holds.md) — an operator renews its certificate by presenting the one it holds, and only the newest one renews
 
 ## Rules for edits
 

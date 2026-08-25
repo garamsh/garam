@@ -88,7 +88,12 @@ func sendingEvents(t *testing.T, events ...string) *delivery.HTTPGateway {
 		for _, event := range events {
 			fmt.Fprintf(w, "data: %s\n\n", event)
 		}
-		w.(http.Flusher).Flush()
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			t.Errorf("the test server's writer does not flush, so the stream never reaches the subscriber")
+			return
+		}
+		flusher.Flush()
 	})
 }
 
@@ -172,7 +177,12 @@ func TestHTTPGateway_SubscribeEndsWithTheContextThatOpenedIt(t *testing.T) {
 	gateway := gatewayAnswering(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.WriteHeader(http.StatusOK)
-		w.(http.Flusher).Flush()
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			t.Errorf("the test server's writer does not flush, so the stream never reaches the subscriber")
+			return
+		}
+		flusher.Flush()
 		<-r.Context().Done()
 	})
 

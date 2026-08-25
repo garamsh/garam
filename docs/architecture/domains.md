@@ -618,7 +618,7 @@ per sender and idempotency key, and the key outlives delivery so a
 retry arriving afterwards neither stores a message nor requeues the
 delivered one. Retention is for space, not for not-keeping
 (ADR-0034): a completed message keeps that small row and drops its
-body at completion, an unclaimed message expires after thirty days,
+body at completion, an undelivered message expires after thirty days,
 and a submission's body is bounded at 65536 characters, which UTF-8
 spends up to 256 KiB on — so the table's growth is a rate a volume can
 be sized against. Neither the recipient nor the sender carries a foreign

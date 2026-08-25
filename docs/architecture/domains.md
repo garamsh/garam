@@ -409,7 +409,10 @@ certificate it is asked for. `garam issue-certificate` reads the same
 key the same way and mints an operator's own first certificate — the
 one bootstrap ADR-0015 leaves out of band. It refuses any subject that
 is not an operator, and no serve path reaches it, so no serving process
-can mint an identity.
+mints an operator's first certificate, which is why the command is a
+sibling of `serve` rather than a subcommand under it. That is as far as
+the refusal and the command tree reach: `garam serve machine` mints
+identities and issues certificates on the listener it serves.
 
 That key is as availability-critical as the database — losing it loses
 every organization's CA with no recovery short of new authorities and a

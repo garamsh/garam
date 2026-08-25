@@ -104,12 +104,17 @@ collaborate on a shared plan.
   part of it (see Out of scope).
 - Whom a caller may post to, decided by policy on that listener
   (ADR-0024). A recipient of another organization is refused before a
-  policy is read, because an unattached policy of the recipient's
-  organization would otherwise admit every sender there is. Inside the
-  organization, a machine identity's own GRN grants it every recipient
-  and a policy attached to it narrows that with a Deny; what is refused
-  is answered 403 and never stored, which is the one refusal on this
-  path that ADR-0013 does not shape.
+  policy is read, unless the consent relation between the two
+  organizations stands (ADR-0035): the boundary is a precondition
+  rather than a policy question, because an unattached policy of the
+  recipient's organization would otherwise admit every sender there
+  is, and a relation both organizations hold and either withdraws is
+  what may open it. A post no relation carries is not rejected — the
+  refusal reaches the sender as an ordinary inbound message
+  (ADR-0013). Inside the organization, a machine identity's own GRN
+  grants it every recipient and a policy attached to it narrows that
+  with a Deny; what is refused is answered 403 and never stored, which
+  is the one refusal on this path that ADR-0013 does not shape.
 - Watching an agent work, while somebody is (ADR-0022). A member of the
   organization a policy allows opens a server-sent stream under
   `/orgs/{org}/agents/{agent}/watch` and reads what the agent is saying
@@ -128,6 +133,10 @@ collaborate on a shared plan.
 - Org / group / project structure; groups and projects are created,
   read, updated, deleted, and populated with members over the HTTP API
   under their organization's paths.
+- An organization granting and withdrawing its own half of a
+  cross-organization consent, and reading the relations it is a side
+  of, over the browser API under `/orgs/{org}/consents`. All three are
+  org-admin actions (ADR-0035).
 - Sign-in through a provider abstraction — Google OIDC; server-side
   sessions.
 - Sign-in with a username and a password, which is not a provider: it
@@ -234,9 +243,8 @@ collaborate on a shared plan.
   (ADR-0008).
 - Per-org direct user roles: a role stored on the user applies in every
   org it belongs to; scoping needs subject × role × scope persistence.
-- Upstream OAuth providers beyond Google. The dev provider (ADR-0010)
-  is not one — it asserts a fixed local identity and contacts nothing.
-  A user's GRN identifier is the provider's subject, so adding a
+- Upstream OAuth providers beyond Google. A user's GRN identifier is
+  the provider's subject, so adding a
   provider whose subjects carry anything outside the segment rule
   ([grn-model.md](./grn-model.md) §identifier) means deriving a
   conforming identifier rather than loosening the rule. Google's
@@ -306,8 +314,8 @@ collaborate on a shared plan.
 - `internal/watch/` — who is watching an agent work, and the turn events
   carried to them while they are (ADR-0022). It stores no event.
 - `internal/api/` — handlers implementing the generated ServerInterface.
-- `internal/authn/` — sign-in provider abstraction (Google OIDC,
-  dev-only local), password verification, sessions.
+- `internal/authn/` — sign-in provider abstraction, implemented by
+  Google OIDC alone (ADR-0044), password verification, sessions.
 - `internal/authz/` — policy engine: model, evaluator, policy store
   and per-org cache, gRPC servers.
 - `internal/org/` — organizations, groups, projects, memberships, invitations.
@@ -317,9 +325,12 @@ collaborate on a shared plan.
 each other; `keyfile` holds the one rule key material files are read
 under, reached
 by `ca` and by the `cli` wiring that reads the machine listener's pair
-and the adapter's; `wire` is shared by the three request surfaces alone — no domain
-imports it — and `health` is
-shared by the three serve commands and imported by no domain. Domains
+and the adapter's; `wire` is reached by three packages and no others —
+`api`, `machineapi` and `authz`, the first two at their request
+boundaries and `authz` from its model, where the statement `Effect` it
+declares is the type every surface shares ([authz.md](./authz.md)
+§Components) — and `health` is shared by the three serve commands and
+imported by no domain. Domains
 cooperate
 through `grn.GRN`, never through each other's concrete types — which is
 why `machine` declares the trust root it verifies against and `cli`
@@ -328,15 +339,18 @@ sees several domains at once and enforces authentication (session
 cookie) at the boundary; org-role checks go through the `Evaluator`
 seam, implemented by the authz gRPC client (ADR-0003 stage 2). The
 machine listener enforces its own authentication at its own boundary
-and shares neither cookie nor session with `api`; `machineapi` composes
-`agent`, `operator` and `message` behind it, reaches the engine through
-an `Evaluator` seam of its own to decide what a caller may send, and it
-and `internal/api` never import each other. Neither imports
-`internal/authz`; the wire contract is `proto/garam/authz/v1`, and the
-conversions onto it are declared once in `internal/wire`. `watch` is
-the one domain both compose: a watch is opened on the browser listener
-and fed on the machine one, and neither listener may reach the other
-(ADR-0017, ADR-0022). `delivery` is the one package that runs outside
+and shares neither cookie nor session with `api`; `machineapi` reaches
+the engine through an `Evaluator` seam of its own to decide what a
+caller may send, and it and `internal/api` never import each other.
+Neither imports `internal/authz`; the wire contract is
+`proto/garam/authz/v1`, and the conversions onto it are declared once
+in `internal/wire`. Both surfaces compose four domains — `agent`,
+`message`, `operator` and `watch`. `watch` is extracted rather than
+held by either of them because a watch has a lifecycle neither
+`message` nor `agent` contains, and its two ends fall on different
+listeners — opened on the browser one, fed on the machine one — which
+may not reach each other (ADR-0017, ADR-0022). `delivery` is the one
+package that runs outside
 garam: it is a client of the machine listener rather than part of it, so
 it reads that listener's specification through the models generated from
 it and imports no request surface and no domain.
@@ -371,7 +385,7 @@ it and imports no request surface and no domain.
 | `org.Project` | `internal/org` | unit of work |
 | `org.Membership` | `internal/org` | user in an org, carries a `Role` |
 | `org.Invitation` | `internal/org` | single-use token into an org |
-| `authn.Provider` | `internal/authn` | sign-in provider (Google OIDC; dev-only, ADR-0010) |
+| `authn.Provider` | `internal/authn` | sign-in provider; Google OIDC implements it and nothing else does (ADR-0044) |
 | `authn.Password` | `internal/authn` | a password as typed; renders redacted everywhere (ADR-0041) |
 | `authn.Verifier` | `internal/authn` | stored Argon2id verifier, carrying its own parameters (ADR-0041) |
 | `authn.Session` | `internal/authn` | authenticated browser session |
@@ -413,6 +427,7 @@ it and imports no request surface and no domain.
 | The web app answers the same two probes | A fourth surface configured differently is configured wrong silently; probing page routes makes navigation a deployment interface, and a readiness that reads the API darkens the console during the outage it should report. | [adr/0023-web-probes.md](./adr/0023-web-probes.md) |
 | Readiness reports what a replica cannot serve without | A probe gated on a dependency every replica shares fails on all of them at once, so it withdraws the fleet instead of degrading it; a replica reloading its policy cache can still answer, and staleness that ever needs refusing is refused by the check. | [adr/0029-readiness-reports-what-a-replica-cannot-serve-without.md](./adr/0029-readiness-reports-what-a-replica-cannot-serve-without.md) |
 | A policy decides what an agent may send | An attachment nothing reads is a control that is not there; the identity's own GRN grants its organization, so closing the gap breaks no working agent, and the boundary out of it is a precondition because no statement could hold it. | [adr/0024-policy-decides-what-an-agent-sends.md](./adr/0024-policy-decides-what-an-agent-sends.md) |
+| A cross-organization message needs both organizations' consent | No policy can hold that boundary — a statement names no principal and an attachment cannot name a foreign subject — so what opens it is a relation row both organizations hold and either withdraws. | [adr/0035-a-cross-organization-message-needs-both-organizations-consent.md](./adr/0035-a-cross-organization-message-needs-both-organizations-consent.md) |
 
 ## Non-functional goals
 

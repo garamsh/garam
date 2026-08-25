@@ -209,6 +209,34 @@ The obligation that follows, in the form a deployment can act on:
   The arrival checks above read a file's owner and its mode; which
   workload opened it is not something they can tell.
 
+**Part of that obligation has been exercised, once.** A drill on
+2026-08-25 dumped one organization's `certificate_authorities` row from
+`garam-dev` and restored it into a scratch database: the restored row's
+`certificate` and `sealed_key` were byte-identical to the live row's,
+and `issue-certificate` run against the copy issued an operator
+certificate (recorded on #486). That the command read the restored row
+rather than the live one was shown and not assumed — with the copy's
+sealed key overwritten the same command refused, naming the key the
+corrupted row then needed, while the live row was unchanged throughout.
+So a sealed authority that has been through a dump and a restore opens
+under the same key and still signs. That is one leg of a restore and
+not a restore of a deployment; it says nothing about recovering one.
+Four limits are the distance between the two:
+
+- **The key was never restored.** It was present throughout, arriving
+  as it always does. The half whose loss has no remedy is the half the
+  drill left alone.
+- **The live authority was never touched.** The drill ran against an
+  isolated copy of one row, and the overwrite above was applied to that
+  copy alone. The record names the copy as a second database and does
+  not say whether it sat on separate infrastructure.
+- **Nothing takes the dump.** It was taken by hand for the drill, so
+  the state was shown to survive a restore rather than shown to be
+  backed up, and what a real restore would draw on does not exist yet.
+- **One authority, one cluster, one key.** Whether a restore holds
+  across a key rotation is untested, and untestable while rotation is
+  neither built nor designed.
+
 **The machine listener's certificate and key do not carry this
 property, and they are not free of obligations either.**
 `GARAM_MACHINE_TLS_CERT_FILE` and `GARAM_MACHINE_TLS_KEY_FILE` — the

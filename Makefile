@@ -51,7 +51,7 @@ TEST_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)
 WEB_E2E_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)/garam?sslmode=disable)
 
 .PHONY: lint format test build gen check-gen e2e db-up db-down backend-up ci template-diff
-.PHONY: chart chart-lint chart-render chart-identity
+.PHONY: chart chart-lint chart-render chart-identity chart-package
 .PHONY: web-install web-lint web-format web-test web-build web-gen web-check-gen web-e2e web-image-e2e web-ci
 .PHONY: minikube-up minikube-down minikube-start minikube-images minikube-db
 .PHONY: minikube-secret minikube-migrate minikube-apps minikube-rebuild minikube-forward minikube-context
@@ -382,7 +382,13 @@ CHART_IDENTITIES = $(shell awk '/^\#\# /{s=0} /^\#\# Workload identities/{s=1} s
 # deployment supplying only what the chart requires receives.
 CHART_DEFAULT_VALUES = $(CHART_DIR)/ci/minimal-values.yaml
 
-chart: chart-lint chart-render chart-identity
+# The resource names the packaged artifact may not carry as a key,
+# listed so the count the target prints is the set it searched for. Two
+# names, which $(CHART_DIR)/README.md §What the checks are complete over
+# records as the whole of what that target reaches.
+CHART_RESOURCE_NAMES := cpu memory
+
+chart: chart-lint chart-render chart-identity chart-package
 
 chart-lint:
 	@echo 'chart-lint: $(words $(CHART_TEMPLATES)) templates, $(words $(CHART_VALUES)) value files (helm lint --strict)'
@@ -468,6 +474,28 @@ chart-identity:
 			if $(HELM) template garam $(CHART_DIR) --values $(CHART_DEFAULT_VALUES) --set "$${p%.name}.create=true" >/dev/null 2>&1; then \
 				echo "chart-identity: $${p%.name}.create=true rendered with no $$p — the chart composed a name, and a composed name moves the subject another repository binds a role to"; exit 1; fi; \
 		done
+
+# chart-package reads the artifact `helm package` produces, which the
+# three targets above never open: everything not excluded ships, `ci/`
+# included, so a file reaches a consumer without passing through any of
+# them. A resource name set there reads as a figure garam measured, and
+# none is (docs/architecture/deployment-contract.md §Not established).
+chart-package:
+	@echo 'chart-package: $(words $(CHART_RESOURCE_NAMES)) resource names searched for as keys in the packaged artifact — resource quantities only, $(CHART_DIR)/README.md §What the checks are complete over'
+	@set -e; \
+		out="$$(mktemp -d)"; trap 'rm -rf "$$out"' EXIT; \
+		$(HELM) package $(CHART_DIR) --destination "$$out" >/dev/null; \
+		tgz="$$(echo "$$out"/*.tgz)"; \
+		mkdir "$$out/unpacked"; tar -xzf "$$tgz" -C "$$out/unpacked"; \
+		cd "$$out/unpacked"; \
+		files="$$(find . -type f | wc -l)"; \
+		named="$$(grep -rn resources . | wc -l)"; \
+		test "$$files" -gt 0 && test "$$named" -gt 0 \
+			|| { echo 'chart-package: the unpacked artifact named resources nowhere — the package or the search read nothing'; exit 1; }; \
+		re="$$(echo '$(CHART_RESOURCE_NAMES)' | tr ' ' '|')"; \
+		found="$$(grep -rnE "\b($$re):" . || true)"; \
+		test -z "$$found" || { echo "chart-package: the artifact sets a resource name, and no figure is published for any garam process (docs/architecture/deployment-contract.md §Not established):"; echo "$$found"; exit 1; }; \
+		echo "chart-package: $$(basename "$$tgz") — $$files files, $$named lines naming resources, 0 setting one of the names"
 
 # ---------------------------------------------------------------------
 # deploy/local/minikube — the whole stack on a local Kubernetes cluster.

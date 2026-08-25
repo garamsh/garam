@@ -320,6 +320,12 @@ count is zero:
   that table declares, every account the chart renders is one a workload
   runs as, the value files that name none render none, and every render
   is repeated under a second release name and must come out identical.
+- `chart-package` — `helm package`, then a search of the unpacked
+  artifact for `cpu` and `memory` as keys. Every file not excluded ships,
+  `ci/` included, so a value file reaches a consumer without passing the
+  three above, each of which reads the source tree instead. This file
+  ships in the artifact too, so it names the two as words rather than as
+  keys.
 
 The comparisons are what an executable artefact buys over prose: a
 variable added to the source and not to the chart, or an account name
@@ -345,10 +351,22 @@ print.
   workload runs as, and whether either moves when the release name
   changes. It reads no annotation — an account carrying a key no
   platform binds a role through passes.
+- `chart-package` is complete over **two resource names in the published
+  artifact**: no file `helm package` ships sets `cpu` or `memory` as a
+  key. It reads no third name, so a figure under `ephemeral-storage` or
+  an extended resource passes, and it reads no render — a figure a
+  deployment sets in its own values is that deployment's and reaches no
+  file this opens.
+
+`chart-package` reaches one thing §Not established in
+`docs/architecture/deployment-contract.md` says garam does not publish: a
+resource figure. Nothing stops the chart from publishing an answer to the
+rest — a read-only root filesystem, replica safety above one, a bound on
+startup — and each of those stays reviewed rather than checked.
 
 Nothing checks the rest of what a pod carries — volumes and mounts,
-probe paths and ports, the security context, resource figures, the hook
-annotations on the migrate Job. Each is reviewed rather than checked.
+probe paths and ports, the security context, the hook annotations on the
+migrate Job. Each is reviewed rather than checked.
 
 Two things sit outside any of them:
 

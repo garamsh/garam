@@ -318,10 +318,10 @@ Use **[mockery v3](https://vektra.github.io/mockery/)**.
   per-interface overrides. The leading dot is load-bearing: mockery
   v3.7.2 discovers only the dotted names, and an undotted file is
   reachable only through `--config`.
-- **Generated location:** declared in `.mockery.yaml` via `outdir` per
+- **Generated location:** declared in `.mockery.yaml` via `dir` per
   `interface:` block. Default: `mocks/<package>/<Interface>.go` at
   module root. When interface is scoped to one domain, set
-  `outdir: internal/<domain>/mocks/`. Pick one convention per project.
+  `dir: internal/<domain>/mocks/`. Pick one convention per project.
 - **Generation:** `mockery` (reads config) or `go generate ./...`
   when interfaces carry `//go:generate mockery` directives. Pick one.
 - **In tests:** the generated mock satisfies the interface; pass it

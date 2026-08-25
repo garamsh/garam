@@ -86,11 +86,14 @@ Both run identically on a contributor's machine and in CI. The rest:
   same compose file — the backend the browser suite drives.
 - `e2e` runs the store round-trips against real Postgres, against a
   database of its own per worktree. `web-e2e` runs Playwright against
-  the built app and `backend-up`'s backend.
+  the built app and `backend-up`'s backend. `web-image-e2e` runs
+  `tests/image/`'s checks against the built web image rather than
+  against the app.
 
-`ci` and `web-ci` stop short of the two e2e suites, which need Docker.
-CI runs each as its own job; locally they are `make db-up e2e` and
-`make backend-up web-e2e`.
+`ci` and `web-ci` stop short of the three e2e suites, which need
+Docker. Locally they are `make db-up e2e`, `make backend-up web-e2e`
+and `make web-image-e2e`. CI runs the first two as jobs of their own
+and runs `web-image-e2e` in no job.
 
 ### GitHub Actions specifics
 

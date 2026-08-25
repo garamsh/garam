@@ -73,3 +73,21 @@ arrive: a file its owner alone can read, enforced by the same sealer
   rather than by decision.
 - **A `make` target wrapper.** A convenience over the command, not a
   shape of its own; nothing about the decision changes inside one.
+
+## Errata
+
+- 2026-08-26 — §Decision's "No serving process can reach it" states that
+  "a running server cannot mint an identity". The premise is true — the
+  command is a root-level subcommand no serve path references — but the
+  conclusion drawn from it is wider than it supports. `garam serve
+  machine` mints agent identities and issues certificates on the
+  listener it serves: `POST /agents` answered `201` with a freshly
+  minted GRN on the dev cluster, and `internal/machineapi/agent.go`
+  reaches `internal/agent/service.go`'s `NewGRN` and `issuer.Issue`.
+  What the premise does support, and what the decision rests on, is
+  narrower: no serving process mints an operator's **first**
+  certificate, which is the bootstrap ADR-0015 leaves out of band and
+  the reason this command is a sibling of `serve` rather than a
+  subcommand under it. The decision stands on that. The same clause was
+  corrected in `docs/architecture/domains.md` (#557),
+  `internal/cli/cli.go` and `internal/cli/issue_certificate.go` (#561).

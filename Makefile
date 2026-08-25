@@ -499,6 +499,10 @@ MINIKUBE_DIR := deploy/local/minikube
 # project's own advisories. Nothing proposes a bump for this pin either,
 # and no owner and no scheduled review is named for it, so it has no
 # mover of any form docs/convention/ci.md §Verify admits.
+#
+# The database's Postgres major is no longer this pin's to move:
+# deploy/local/minikube/postgres.yaml names its own image rather than
+# taking the default this operator version carries.
 CNPG_MANIFEST := https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/4b5e244a7d031f67e025c83c1555e7726ecbbfa1/releases/cnpg-1.30.0.yaml
 
 minikube-up: minikube-start minikube-db minikube-secret minikube-rebuild

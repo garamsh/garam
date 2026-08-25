@@ -11,6 +11,17 @@ metadata:
   name: postgres
   namespace: garam-local
 spec:
+  # Postgres 17: the major deploy/local/docker-compose.yml pins and the
+  # dev cluster in garamsh/gitops runs, moved only together with them.
+  # Named here because an unset imageName takes the operator's
+  # compiled-in default instead, which at the pinned v1.30.0 is 18.4 —
+  # so this database's major moved with CNPG_MANIFEST and no file here
+  # said so. Tag and digest both: the operator reads the major from the
+  # tag and the digest fixes the build; no Dependabot ecosystem reads a
+  # key named imageName, and no owner and no scheduled review is named
+  # either, so this pin has no mover of any form
+  # docs/convention/ci.md §Verify admits.
+  imageName: ghcr.io/cloudnative-pg/postgresql:17.11-system-trixie@sha256:d3601aae9a06dd1b8069864ffed80344720e289a98fbf749954d2edeec715fa0
   instances: 1
   bootstrap:
     initdb:

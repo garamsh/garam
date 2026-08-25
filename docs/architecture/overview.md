@@ -104,12 +104,17 @@ collaborate on a shared plan.
   part of it (see Out of scope).
 - Whom a caller may post to, decided by policy on that listener
   (ADR-0024). A recipient of another organization is refused before a
-  policy is read, because an unattached policy of the recipient's
-  organization would otherwise admit every sender there is. Inside the
-  organization, a machine identity's own GRN grants it every recipient
-  and a policy attached to it narrows that with a Deny; what is refused
-  is answered 403 and never stored, which is the one refusal on this
-  path that ADR-0013 does not shape.
+  policy is read, unless the consent relation between the two
+  organizations stands (ADR-0035): the boundary is a precondition
+  rather than a policy question, because an unattached policy of the
+  recipient's organization would otherwise admit every sender there
+  is, and a relation both organizations hold and either withdraws is
+  what may open it. A post no relation carries is not rejected — the
+  refusal reaches the sender as an ordinary inbound message
+  (ADR-0013). Inside the organization, a machine identity's own GRN
+  grants it every recipient and a policy attached to it narrows that
+  with a Deny; what is refused is answered 403 and never stored, which
+  is the one refusal on this path that ADR-0013 does not shape.
 - Watching an agent work, while somebody is (ADR-0022). A member of the
   organization a policy allows opens a server-sent stream under
   `/orgs/{org}/agents/{agent}/watch` and reads what the agent is saying
@@ -128,6 +133,10 @@ collaborate on a shared plan.
 - Org / group / project structure; groups and projects are created,
   read, updated, deleted, and populated with members over the HTTP API
   under their organization's paths.
+- An organization granting and withdrawing its own half of a
+  cross-organization consent, and reading the relations it is a side
+  of, over the browser API under `/orgs/{org}/consents`. All three are
+  org-admin actions (ADR-0035).
 - Sign-in through a provider abstraction — Google OIDC; server-side
   sessions.
 - Sign-in with a username and a password, which is not a provider: it
@@ -413,6 +422,7 @@ it and imports no request surface and no domain.
 | The web app answers the same two probes | A fourth surface configured differently is configured wrong silently; probing page routes makes navigation a deployment interface, and a readiness that reads the API darkens the console during the outage it should report. | [adr/0023-web-probes.md](./adr/0023-web-probes.md) |
 | Readiness reports what a replica cannot serve without | A probe gated on a dependency every replica shares fails on all of them at once, so it withdraws the fleet instead of degrading it; a replica reloading its policy cache can still answer, and staleness that ever needs refusing is refused by the check. | [adr/0029-readiness-reports-what-a-replica-cannot-serve-without.md](./adr/0029-readiness-reports-what-a-replica-cannot-serve-without.md) |
 | A policy decides what an agent may send | An attachment nothing reads is a control that is not there; the identity's own GRN grants its organization, so closing the gap breaks no working agent, and the boundary out of it is a precondition because no statement could hold it. | [adr/0024-policy-decides-what-an-agent-sends.md](./adr/0024-policy-decides-what-an-agent-sends.md) |
+| A cross-organization message needs both organizations' consent | No policy can hold that boundary — a statement names no principal and an attachment cannot name a foreign subject — so what opens it is a relation row both organizations hold and either withdraws. | [adr/0035-a-cross-organization-message-needs-both-organizations-consent.md](./adr/0035-a-cross-organization-message-needs-both-organizations-consent.md) |
 
 ## Non-functional goals
 

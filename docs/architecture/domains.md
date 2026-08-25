@@ -482,8 +482,11 @@ pair beside them for every identity it issues a certificate to. It
 terminates TLS itself because a forwarded client-certificate header is
 trustworthy only where every deployment strips it at the edge
 (ADR-0014). What it serves is `internal/machineapi`. It is not part of
-the local Docker stack: its key material is per host and the container
-would run as a user that does not own it.
+the local Docker stack: its key material is per host, and compose has
+no step that generates it and hands a container a file that container
+owns. The Kubernetes stacks under `deploy/` have that step — an init
+container copies the key material as the UID the listener runs as — so
+what compose lacks is the step, not something a container cannot do.
 
 ## `internal/machineapi`
 

@@ -221,6 +221,12 @@ func TestNewServer_HandsTheHandlerTheIdentity(t *testing.T) {
 // with the replacement would hold for a listener that had been serving
 // it all along, and a certificate simply being served is what this
 // change does not need to prove.
+//
+// What this covers is the read per handshake, not the pin: serverPair
+// mints a root per call, so the rotation below replaces the root and
+// the leaf together and the closing assertion holds because the root
+// changed. The rotation that keeps the root is
+// TestNewServer_ServesARotatedLeafToAClientThatPinnedTheRoot.
 func TestNewServer_ServesAReplacedCertificateWithoutARestart(t *testing.T) {
 	issuer := newIssuer(t)
 	client := issuer.issue(t, agentGRN("acme", "bot-1"))
@@ -236,6 +242,40 @@ func TestNewServer_ServesAReplacedCertificateWithoutARestart(t *testing.T) {
 	// of the certificate the process started with.
 	_, _, err := get(t, url, roots, client)
 	assert.Error(t, err)
+}
+
+// TestNewServer_ServesARotatedLeafToAClientThatPinnedTheRoot is the
+// property ADR-0040 rests on: a machine identity is given one garam
+// server root (§Decision 4), the leaf that root signed is replaced
+// underneath it (§Decision 5), and the identity reaches garam across
+// the rotation holding nothing new. One root signs both leaves here,
+// and the same pool verifies both connections.
+//
+// The client pinning the first leaf itself is the control. It verifies
+// that leaf before the rotation and stops verifying after it, so the
+// success above is attributable to the root outliving what it signed
+// rather than to the leaf never having changed — a client verifying
+// nothing at all reads the same without it (testing.md §Failing).
+func TestNewServer_ServesARotatedLeafToAClientThatPinnedTheRoot(t *testing.T) {
+	issuer := newIssuer(t)
+	client := issuer.issue(t, agentGRN("acme", "bot-1"))
+	root := newServerRoot(t, "the garam server root that signs both")
+	dir := t.TempDir()
+	first := root.issue(t, dir, presented)
+	url := serve(t, dir, issuer.service(), identityHandler())
+
+	pinnedRoot := root.pool()
+	pinnedLeaf := x509.NewCertPool()
+	pinnedLeaf.AddCert(first)
+	require.Equal(t, presented, served(t, url, pinnedRoot, client))
+	require.Equal(t, presented, served(t, url, pinnedLeaf, client))
+
+	const rotated = "the certificate the same root signed afterwards"
+	root.issue(t, dir, rotated)
+
+	assert.Equal(t, rotated, served(t, url, pinnedRoot, client))
+	_, _, err := get(t, url, pinnedLeaf, client)
+	assert.ErrorContains(t, err, "certificate signed by unknown authority")
 }
 
 // TestNewServer_IsVerifiedAgainstTheGaramServerRoot covers both

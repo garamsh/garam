@@ -109,8 +109,8 @@ func (s *Server) OauthCallback(w http.ResponseWriter, r *http.Request, provider 
 }
 
 // ListProviders returns the names of the registered sign-in providers.
-// The login page renders an option per name; `dev` appears only when
-// the server runs with GARAM_DEV_AUTH=true (ADR-0010).
+// A name absent from it has no login route: /auth/login/{provider} is
+// generic and answers 404 for a provider nothing registered.
 func (s *Server) ListProviders(w http.ResponseWriter, _ *http.Request) {
 	names := make([]string, 0, len(s.providers))
 	for name := range s.providers {

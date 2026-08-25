@@ -45,10 +45,12 @@ cp deploy/local/.env.example deploy/local/.env
 docker compose -f deploy/local/docker-compose.yml up --build
 ```
 
-Set `GARAM_DEV_AUTH=true` in `deploy/local/.env` for a one-click dev
-sign-in on `/login` — a real session, no Google credentials needed
-([ADR-0010](./docs/architecture/adr/0010-dev-auth-provider.md)). Off by
-default; localhost tooling only.
+Signing in needs real Google credentials in `deploy/local/.env`, or a
+password account, which needs an invitation from an org admin
+([ADR-0041](./docs/architecture/adr/0041-a-password-is-garams-own-credential-verified-by-argon2id.md)).
+A stack whose database is empty has neither: see
+[deploy/local/README.md](./deploy/local/README.md) §Configuration for
+the first account.
 
 The same compose file provides the dev/e2e Postgres: `make db-up`
 starts only its `postgres` service. The stack and the tests get a

@@ -36,7 +36,7 @@ ADRs:
 - [0007](./adr/0007-hybrid-statement-collection.md) — hybrid statement collection
 - [0008](./adr/0008-identity-based-policy-attachments.md) — identity-based policy attachments
 - [0009](./adr/0009-web-frontend.md) — Next.js web frontend in `web/`
-- [0010](./adr/0010-dev-auth-provider.md) — development-only sign-in provider behind GARAM_DEV_AUTH
+- [0010](./adr/0010-dev-auth-provider.md) — development-only sign-in provider behind GARAM_DEV_AUTH; superseded by 0044
 - [0011](./adr/0011-console-shell.md) — console sidebar shell over org sections
 - [0012](./adr/0012-agent-operator-model.md) — agents provisioned by operators garam never dials
 - [0013](./adr/0013-agent-messaging.md) — agent messaging through a garam API an adapter polls
@@ -70,6 +70,7 @@ ADRs:
 - [0041](./adr/0041-a-password-is-garams-own-credential-verified-by-argon2id.md) — a password is garam's own credential, verified by Argon2id and minted by an invitation
 - [0042](./adr/0042-a-chart-is-the-description-of-a-garam-deployment.md) — a chart at `deploy/charts/garam/` describes the deployment, superseding ADR-0020
 - [0043](./adr/0043-a-workloads-account-is-named-by-a-value-and-the-chart-creates-none-by-default.md) — a workload's account is named by a value the deployment sets, and the chart creates none by default
+- [0044](./adr/0044-the-development-only-sign-in-provider-is-removed.md) — the development-only sign-in provider is removed, superseding ADR-0010
 
 ## Rules for edits
 

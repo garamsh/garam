@@ -67,8 +67,8 @@ already expose, built in parallel rather than gating P3.
   `make ci`.
 - A public landing page at `/`, sign-in at `/login`, and the signed-in
   application under `/console`.
-- A dev-only sign-in provider behind `GARAM_DEV_AUTH` so local work and
-  manual QA need no Google credentials (ADR-0010).
+- Sign-in with a username and a password beside Google, registered
+  from an invitation (ADR-0041).
 - Mutations, phase 1: create an organization, invite a member by link,
   accept an invitation.
 - Still read-only in the console: groups, projects, and policies. The

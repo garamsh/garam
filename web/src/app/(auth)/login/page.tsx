@@ -9,11 +9,9 @@ import {
   CardHeader,
 } from "@/components/ui/card";
 import {
-  DevSignInButton,
   GoogleSignInButton,
   PasswordSignInForm,
   getSession,
-  listProviders,
 } from "@/features/auth";
 
 import { ApiUnreachableCard } from "../_components/api-unreachable-card";
@@ -35,7 +33,6 @@ export default async function LoginPage() {
   if (session.status === "unreachable") {
     return <ApiUnreachableCard subject="the way in" />;
   }
-  const providers = await listProviders();
   return (
     <Card className="w-full max-w-sm [--card-spacing:--spacing(6)]">
       <CardHeader className="gap-2">
@@ -57,7 +54,6 @@ export default async function LoginPage() {
         </div>
         <div className="flex flex-col items-center gap-3">
           <GoogleSignInButton />
-          {providers.includes("dev") && <DevSignInButton />}
         </div>
       </CardContent>
       <CardFooter className="flex-col gap-2 text-xs text-muted-foreground">

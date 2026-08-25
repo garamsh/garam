@@ -70,7 +70,7 @@ export interface paths {
         };
         /**
          * List the enabled sign-in providers.
-         * @description Public endpoint the login page uses to decide which sign-in options to render. `dev` appears only when the server runs with GARAM_DEV_AUTH=true (ADR-0010).
+         * @description Public endpoint naming the sign-in providers the server has registered. A name absent from the list has no login route: `/auth/login/{provider}` is generic and answers 404 for a provider nothing registered.
          */
         get: operations["listProviders"];
         put?: never;
@@ -918,7 +918,7 @@ export interface components {
         };
     };
     parameters: {
-        /** @description Authentication provider name (`google`; `dev` only when the server runs with GARAM_DEV_AUTH=true). */
+        /** @description Authentication provider name (`google`). */
         provider: string;
         /** @description Organization identifier (the last GRN segment). */
         org: string;
@@ -951,7 +951,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                /** @description Authentication provider name (`google`; `dev` only when the server runs with GARAM_DEV_AUTH=true). */
+                /** @description Authentication provider name (`google`). */
                 provider: components["parameters"]["provider"];
             };
             cookie?: never;
@@ -977,7 +977,7 @@ export interface operations {
             };
             header?: never;
             path: {
-                /** @description Authentication provider name (`google`; `dev` only when the server runs with GARAM_DEV_AUTH=true). */
+                /** @description Authentication provider name (`google`). */
                 provider: components["parameters"]["provider"];
             };
             cookie?: never;

@@ -41,6 +41,10 @@ api:
     create: false
     annotations: {}
   sessionTTL: 168h
+  # Assumes a TLS-terminating proxy in front of `serve api` and the web
+  # app. Without one a browser rejects the cookie over plain HTTP:
+  # nothing refuses at startup, every page renders, and sign-in never
+  # sticks — see the README, §Exposure is the cluster owner's.
   cookieSecure: true
   # Set all three or none. One Google credential without the other
   # refuses the start, which the template rejects rather than deploys.

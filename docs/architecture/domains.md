@@ -733,7 +733,8 @@ caller authenticated as.
 | operator.CertificateStore | yes (`store.go`) | yes (`postgres_certificate.go`) | not planned | — |
 | agent | yes (`store.go`) | yes (`postgres.go` + `postgres_<concept>.go`) | not planned | — |
 | ca | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
-| message | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
+| message.Store | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
+| message.ConsentStore | yes (`consent.go`) | yes (`postgres_consent.go`) | not planned | — |
 | watch | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 
 The postgres implementations are written by hand against sqlc output,

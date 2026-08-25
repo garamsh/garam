@@ -352,15 +352,18 @@ here references `users`.
 one in the operator's own organization, garam minting the identifier,
 and it answers with the certificate of an agent assigned to that
 operator at the current epoch and of no other — the whole of the
-authorization on that surface, which ADR-0015 states is not an
-optimisation and may not be skipped, so no method reaches an issuer
+authorization on the operator route, which ADR-0015 states is not an
+optimisation and may not be skipped, so no operator reaches an issuer
 without it. Comparing the operator on the row is the epoch fence as
 well, and it is the tenancy check too, since a GRN carries its
-organization. A caller that is not an operator is refused, with one exception: an
-agent asking for its own certificate is renewing over the connection
-that certificate authenticated, which grants it nothing it does not
-already hold (ADR-0040). An expired certificate has no such connection,
-so the operator route is what recovers one.
+organization. A caller that is not an operator is refused, with one
+exception: an agent asking for its own certificate is renewing over the
+connection that certificate authenticated, which grants it nothing it
+does not already hold (ADR-0040). That branch is the one route the
+assignment comparison does not stand on — the connection is what
+authorizes it, and it reaches the issuer before the comparison is made.
+An expired certificate has no such connection, so the operator route is
+what recovers one.
 
 `Store` answers `Service` and, org by org, the read `internal/api`
 serves people: an organization's agents and the assignments holding

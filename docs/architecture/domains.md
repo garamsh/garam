@@ -512,13 +512,15 @@ found nothing is the one answer that is not a kind: it is an empty
 success, so a caller loops on it rather than telling an error apart.
 
 Whom a caller may send to is decided here, because it is a policy
-question rather than a property of the queue: the answer comes from the
-policy engine over `Evaluator`, and a boundary this package composes
-may not reach past it to another process. The listener collects what
-the caller's own GRN grants it — its own organization — and the engine
-unions that with the policies attached to the caller (ADR-0024). A
-refusal is answered before anything is stored, so what a policy refused
-is not in the queue.
+question rather than a property of the queue: for a recipient of the
+caller's own organization the answer comes from the policy engine over
+`Evaluator`, and a boundary this package composes may not reach past it
+to another process. The listener collects what the caller's own GRN
+grants it — its own organization — and the engine unions that with the
+policies attached to the caller (ADR-0024). A recipient of another
+organization is the consent relation's question and never the engine's
+(ADR-0035). A refusal is answered before anything is stored, so what a
+policy refused is not in the queue.
 
 The question carries the groups the caller belongs to, because an
 attachment names a group as readily as an identity (ADR-0008) and an

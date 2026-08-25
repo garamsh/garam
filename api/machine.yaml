@@ -141,6 +141,17 @@ paths:
         has no connection left to renew over. Each call signs a new
         certificate and generates the private key it returns once, so
         it is a POST rather than a GET.
+
+        The assignment is the whole of the precondition as well. There
+        is no renewal window and no lineage here: a caller the
+        assignment admits may ask at any time and as often as it needs,
+        and a certificate this route has already replaced asks again
+        successfully. Contrast `renewIdentityCertificate`, which
+        replaces the caller's own certificate and holds both bounds.
+        The durable step is therefore storing what comes back rather
+        than making the call, and a store that fails is answered by
+        asking for another certificate rather than by retrying the
+        store.
       parameters:
         - $ref: '#/components/parameters/agent'
       responses:

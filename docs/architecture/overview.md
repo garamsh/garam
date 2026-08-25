@@ -326,9 +326,12 @@ collaborate on a shared plan.
 each other; `keyfile` holds the one rule key material files are read
 under, reached
 by `ca` and by the `cli` wiring that reads the machine listener's pair
-and the adapter's; `wire` is shared by the three request surfaces alone — no domain
-imports it — and `health` is
-shared by the three serve commands and imported by no domain. Domains
+and the adapter's; `wire` is reached by three packages and no others —
+`api`, `machineapi` and `authz`, the first two at their request
+boundaries and `authz` from its model, where the statement `Effect` it
+declares is the type every surface shares ([authz.md](./authz.md)
+§Components) — and `health` is shared by the three serve commands and
+imported by no domain. Domains
 cooperate
 through `grn.GRN`, never through each other's concrete types — which is
 why `machine` declares the trust root it verifies against and `cli`
@@ -337,15 +340,18 @@ sees several domains at once and enforces authentication (session
 cookie) at the boundary; org-role checks go through the `Evaluator`
 seam, implemented by the authz gRPC client (ADR-0003 stage 2). The
 machine listener enforces its own authentication at its own boundary
-and shares neither cookie nor session with `api`; `machineapi` composes
-`agent`, `operator` and `message` behind it, reaches the engine through
-an `Evaluator` seam of its own to decide what a caller may send, and it
-and `internal/api` never import each other. Neither imports
-`internal/authz`; the wire contract is `proto/garam/authz/v1`, and the
-conversions onto it are declared once in `internal/wire`. `watch` is
-the one domain both compose: a watch is opened on the browser listener
-and fed on the machine one, and neither listener may reach the other
-(ADR-0017, ADR-0022). `delivery` is the one package that runs outside
+and shares neither cookie nor session with `api`; `machineapi` reaches
+the engine through an `Evaluator` seam of its own to decide what a
+caller may send, and it and `internal/api` never import each other.
+Neither imports `internal/authz`; the wire contract is
+`proto/garam/authz/v1`, and the conversions onto it are declared once
+in `internal/wire`. Both surfaces compose four domains — `agent`,
+`message`, `operator` and `watch`. `watch` is extracted rather than
+held by either of them because a watch has a lifecycle neither
+`message` nor `agent` contains, and its two ends fall on different
+listeners — opened on the browser one, fed on the machine one — which
+may not reach each other (ADR-0017, ADR-0022). `delivery` is the one
+package that runs outside
 garam: it is a client of the machine listener rather than part of it, so
 it reads that listener's specification through the models generated from
 it and imports no request surface and no domain.

@@ -5,8 +5,10 @@
 export GOTOOLCHAIN := go$(shell sed -n 's/^go //p' go.mod)+auto
 
 # No Dependabot ecosystem parses a Makefile, so nothing proposes a bump
-# for the six pins below: each moves when a contributor moves it. Five
-# of them write output this repository commits, so a bump lands with the
+# for the six pins below: each moves when a contributor moves it. No
+# owner and no scheduled review is named for them either, so they have
+# no mover of any form docs/convention/ci.md §Verify admits. Five of
+# them write output this repository commits, so a bump lands with the
 # `gen` that follows it or `check-gen` fails.
 OAPI_CODEGEN := go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.8.0
 SQLC := go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1

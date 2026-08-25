@@ -3,9 +3,11 @@
 # what it does not.
 #
 # No entry reaches the Makefile, buf.gen.yaml or
-# deploy/charts/garam/values.yaml; each of those records at the pin what
-# moves it instead. Nothing here reaches go.mod, web/package.json or
-# deploy/local/minikube/ at all.
+# deploy/charts/garam/values.yaml; each of those records at the pin that
+# it has no mover of any form §Verify admits — no bot, and no owner or
+# scheduled review named either. Nothing here reaches go.mod,
+# web/package.json or deploy/local/minikube/ at all, and go.mod's `go`
+# directive has no mover on the same terms.
 #
 # What each entry covers was read from github/docs at commit
 # 0dddeeb8cce75425f9ca0cdffd6a1cbd94926c07 and dependabot/dependabot-core

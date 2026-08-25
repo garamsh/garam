@@ -450,8 +450,8 @@ certificate authenticated — the one question a caller asking to replace
 it is answered by (ADR-0046).
 
 The SAN carries exactly one URI and it is parsed whole as a GRN. That
-one parse is the whole check: `grn.Parse` splits on every colon and
-holds every segment to the character rule
+one parse is the whole of the check on the URI: `grn.Parse` splits on
+every colon and holds every segment to the character rule
 ([grn-model.md](./grn-model.md) §identifier), so a URI carrying a
 separator that would move a segment — a colon outside the four, a `?`,
 a `#` — is not a GRN and names no identity. The rule lives in
@@ -459,7 +459,11 @@ a `#` — is not a GRN and names no identity. The rule lives in
 keeping a copy. Which authority the certificate must then chain to is
 read off the organization segment of that GRN, so a certificate one
 organization's CA signed for another organization's identity is
-refused by the trust root rather than by a check.
+refused by the trust root rather than by a check. Chaining is not the
+whole of that verification either: it is `crypto/x509`'s, which in the
+same call refuses a certificate outside its validity period and one not
+marked for client authentication, so neither refusal is code this
+repository holds.
 
 The package holds no store and reaches no database: `TrustRoot` is the
 seam the composition root satisfies from `internal/ca`, which keeps the

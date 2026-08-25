@@ -94,8 +94,11 @@ web:
     name: ""
     create: false
     annotations: {}
-  # The `/api/*` rewrite target, baked into the image at build time: this
-  # must equal the value that build used, and nothing here checks it.
+  # The address the web process reaches `serve api` on, read twice: baked
+  # into the image at build time as the `/api/*` rewrite target, and read
+  # again at runtime by every server-side render. It must equal the value
+  # that build used, and nothing here checks it — see the README, §Values
+  # a deployment must supply.
   apiUrl: ""
   resources: {}
 

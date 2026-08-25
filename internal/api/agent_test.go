@@ -165,6 +165,11 @@ func TestAgentRead_AssignmentIsAbsentWhileNoOperatorHolds(t *testing.T) {
 	for _, a := range listed {
 		assigned[a.Grn] = a.Assignment != nil
 	}
+	// Both GRNs have to be in the listing before their assignment is
+	// read: a missing key reports false exactly as a listed agent that
+	// carries no operator does.
+	require.Contains(t, assigned, held.String())
+	require.Contains(t, assigned, loose.String())
 	assert.True(t, assigned[held.String()])
 	assert.False(t, assigned[loose.String()])
 

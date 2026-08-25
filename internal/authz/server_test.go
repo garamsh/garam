@@ -162,6 +162,10 @@ func TestGRPCServer_Explain(t *testing.T) {
 		traces[tr.GetSid()] = tr
 	}
 	require.Len(t, traces, 3)
+	// The trace has to be present before its Matched is read: a sid the
+	// engine mislabelled is absent from the map, and an absent trace
+	// reports Matched false exactly as a present one that did not match.
+	require.Contains(t, traces, "wrong-action")
 	assert.True(t, traces["allow-all"].GetMatched())
 	assert.False(t, traces["wrong-action"].GetMatched())
 	assert.True(t, traces["deny-delete"].GetMatched())

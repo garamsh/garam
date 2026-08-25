@@ -126,6 +126,12 @@ func TestLoginPassword_UnknownUserAndWrongPasswordAreOneAnswer(t *testing.T) {
 	assert.Nil(t, sessionCookie(wrongPassword.Result()))
 	assert.Nil(t, sessionCookie(unknownUser.Result()))
 
+	// The control for the two searches below: each body is a real
+	// refusal with a message in it, so what is absent is the username
+	// and not the response.
+	require.Contains(t, wrongPassword.Body.String(), "message")
+	require.Contains(t, unknownUser.Body.String(), "message")
+
 	// Nor does either name the username it was asked about.
 	assert.NotContains(t, wrongPassword.Body.String(), "alice")
 	assert.NotContains(t, unknownUser.Body.String(), "mallory")

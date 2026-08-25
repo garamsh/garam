@@ -25,6 +25,10 @@ describe("proxy", () => {
   it("lets a visitor carrying a session cookie through", () => {
     const response = proxy(request("/console/orgs", { signedIn: true }));
 
+    // Passing through is the property; carrying no Location header is
+    // its consequence, and an error response has none either.
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-middleware-next")).toBe("1");
     expect(response.headers.get("location")).toBeNull();
   });
 });

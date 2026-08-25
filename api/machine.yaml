@@ -561,9 +561,14 @@ components:
           maxLength: 65536
           description: >-
             The message itself. The queue carries it and never reads
-            it, so it may be empty. It is bounded (ADR-0034): 64 KiB is
-            well past any plausible agent turn, small enough that the
-            table's worst case is arithmetic.
+            it, so it may be empty. It is bounded (ADR-0034):
+            `maxLength` counts characters, so the bound is 65536 of
+            them — well past any plausible agent turn — and UTF-8
+            spends up to four bytes on each, so a body weighs up to 256
+            KiB. The bound is what keeps the table's worst case
+            arithmetic, and 256 KiB is the figure that arithmetic runs
+            on: size a buffer or a row estimate against it, not against
+            the character count.
     Message:
       type: object
       description: One stored message, under an identifier the queue minted.

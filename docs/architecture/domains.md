@@ -286,8 +286,10 @@ ADR-0032). Every one after it is issued here, over the connection the
 certificate being replaced authenticated, so the out-of-band mint is a
 bootstrap rather than a standing obligation.
 
-Three things refuse a renewal, and each is a decision rather than a
-guard. A certificate that has expired renews nothing: the listener
+Four things refuse a renewal, and each is a decision rather than a
+guard. A certificate whose subject is not an operator is refused before
+any window is measured: what this domain renews is an operator's
+certificate. A certificate that has expired renews nothing: the listener
 refuses it a handshake earlier, and the rule states the same boundary as
 the empty end of its window, so what follows expiry is a mint out of
 band. A certificate with more than a third of its validity left is

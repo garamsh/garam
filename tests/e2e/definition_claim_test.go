@@ -181,3 +181,81 @@ func TestAgentStore_ConcurrentClaimsSerializeToOneWinner(t *testing.T) {
 	assert.Equal(t, operator, assignment.Operator())
 	assert.Equal(t, 1, assignment.Epoch(), "the one claim wrote the first epoch")
 }
+
+// TestDefinitionSurface_AClaimReportsTheAgentsCurrentAssignment holds
+// what `api/machine.yaml` states of `listDefinitions`: a claim is not
+// evidence of holding. The claim field reports the agent's assignment
+// as it stands, while the definition carrying it names its operator
+// once and is never rewritten, so the two come apart as soon as the
+// agent is assigned elsewhere — the definition stays listed, stays
+// claimed, and carries the epoch of whoever holds the agent by then.
+// The certificate route is the only place that epoch is met.
+//
+// The reassignment is written through the store because no request
+// path performs one. `Store.Assign` is reached in production only from
+// `agent.Service.Create`, which mints a fresh GRN, and a definition is
+// claimed once — so this setup stands in for an operator replacement
+// garam has no route for today, and a reader should not take it for
+// one. What it exposes is a property of the read, which holds whether
+// or not a reassignment ever happens.
+func TestDefinitionSurface_AClaimReportsTheAgentsCurrentAssignment(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	_, sealer := keyEncryptionKey(t)
+	_, evaluator := policyEngine(t, p)
+	url := machineListener(t, p, sealer, evaluator)
+
+	outOfBand, err := ca.NewService(ca.NewPostgresStore(p), sealer, ca.Config{})
+	require.NoError(t, err)
+	oneGRN := scopedGRN("acme", agent.ServiceTypeOperator, "one")
+	twoGRN := scopedGRN("acme", agent.ServiceTypeOperator, "two")
+	one := machineClient(t, installed(t, outOfBand, oneGRN))
+	two := machineClient(t, installed(t, outOfBand, twoGRN))
+
+	store := agent.NewPostgresStore(p)
+	d := defineAgent(t, p, store, oneGRN, agent.Values{"model": "haiku"})
+	status, body := machineRequest(t, one, http.MethodPost, url+"/definitions/"+d.Agent().String()+"/claim")
+	require.Equal(t, http.StatusCreated, status, string(body))
+
+	read := definitionsOf(t, one, url)
+	require.Len(t, read, 1)
+	require.NotNil(t, read[0].Claim)
+	require.Equal(t, 1, read[0].Claim.Epoch)
+	// The claim admits this operator to the agent's certificate route,
+	// so the refusal after the reassignment is the assignment's doing
+	// rather than a route that refuses this caller either way.
+	status, body = machineRequest(t, one, http.MethodPost, url+"/agents/"+d.Agent().String()+"/certificate")
+	require.Equal(t, http.StatusCreated, status, string(body))
+
+	reassigned, err := store.Assign(ctx, d.Agent(), twoGRN)
+	require.NoError(t, err)
+	require.Equal(t, twoGRN, reassigned.Operator())
+	require.Equal(t, 2, reassigned.Epoch())
+
+	// The definition names the operator that no longer holds the agent,
+	// and nothing rewrites it: it stays listed, it stays claimed, and
+	// the epoch it carries is the one the agent is assigned at now,
+	// which belongs to the operator that replaced this one.
+	read = definitionsOf(t, one, url)
+	require.Len(t, read, 1, "the definition still names this operator")
+	assert.Equal(t, d.Agent().String(), read[0].AgentGrn)
+	require.NotNil(t, read[0].Claim, "a definition stays claimed")
+	assert.Equal(t, 2, read[0].Claim.Epoch, "the epoch of whoever holds the agent now")
+
+	// The operator that does hold the agent reads none of it, since the
+	// read is scoped by the definition's operator field. Holding the
+	// agent and being listed with a claim are separate states, and this
+	// is the pair that has them apart.
+	assert.Empty(t, definitionsOf(t, two, url))
+
+	// The certificate route is where that epoch is met: the operator
+	// the assignment no longer names is refused there, beside the one
+	// it now names, so what refuses is the assignment rather than the
+	// route.
+	status, body = machineRequest(t, one, http.MethodPost, url+"/agents/"+d.Agent().String()+"/certificate")
+	assert.Equal(t, http.StatusForbidden, status, string(body))
+	assert.Contains(t, string(body), `"kind":"permission_denied"`)
+	status, body = machineRequest(t, two, http.MethodPost, url+"/agents/"+d.Agent().String()+"/certificate")
+	assert.Equal(t, http.StatusCreated, status, string(body))
+}

@@ -485,7 +485,7 @@ generated from `api/machine.yaml` (ADR-0019).
 
 | Type | Responsibility |
 |------|----------------|
-| `Server` | the machine listener's handlers: the caller's identity, renewing the certificate that identity authenticated with, creating an agent, issuing an agent's certificate, posting, claiming, renewing and completing a message, and forwarding a turn event to whoever is watching the agent |
+| `Server` | the machine listener's handlers, one for every operation `api/machine.yaml` declares |
 | `Evaluator` | the seam the listener asks the policy engine through |
 | `Groups` | the seam the listener reads a caller's group membership through |
 

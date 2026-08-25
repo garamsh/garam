@@ -401,9 +401,11 @@ The certificate authority an organization signs machine identities with
 | `Sealer` | seals key material so what reaches storage is useless without the key-encryption key the process holds |
 | `Service` | issues a certificate for a subject GRN, creating the organization's CA on demand |
 
-Every organization has its own CA, so a certificate issued by one does
-not chain against another's and tenancy holds in the trust root rather
-than in a check a caller could forget. The subject's GRN travels in a
+A CA is an organization's own rather than shared, so a certificate
+issued by one does not chain against another's and tenancy holds in the
+trust root rather than in a check a caller could forget. It is created
+on the first certificate that organization needs, so an organization
+that has needed none has no authority yet. The subject's GRN travels in a
 SAN URI and the certificate carries nothing else — no name, no roles, no
 claims. Lifetime is the only revocation there is (ADR-0014), so it is
 short by default and bounded at both ends — a service whose configured

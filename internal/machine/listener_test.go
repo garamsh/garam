@@ -48,30 +48,49 @@ func identityHandler() http.Handler {
 func certPath(dir string) string { return filepath.Join(dir, "tls.crt") }
 func keyPath(dir string) string  { return filepath.Join(dir, "tls.key") }
 
-// serverPair writes the certificate the listener presents into dir,
-// named commonName and signed by a garam server root minted for this
-// call, and returns the pool that verifies it (ADR-0040). Writing into
-// a directory a listener is already serving from replaces both the
-// certificate and the root that verifies it, which is what rotation
-// does to a running process.
-func serverPair(t *testing.T, dir, commonName string) *x509.CertPool {
+// serverRoot is a garam server certificate authority as these tests
+// hold it (ADR-0040): the root a machine identity pins, and the key
+// that signs the leaves the listener presents under it.
+type serverRoot struct {
+	certificate *x509.Certificate
+	key         *ecdsa.PrivateKey
+}
+
+// newServerRoot mints one under the given name.
+func newServerRoot(t *testing.T, commonName string) *serverRoot {
 	t.Helper()
-	rootKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
-	rootTemplate := &x509.Certificate{
+	template := &x509.Certificate{
 		SerialNumber:          big.NewInt(time.Now().UnixNano()),
-		Subject:               pkix.Name{CommonName: "garam server root for " + commonName},
+		Subject:               pkix.Name{CommonName: commonName},
 		NotBefore:             time.Now().Add(-time.Hour),
 		NotAfter:              time.Now().Add(time.Hour),
 		KeyUsage:              x509.KeyUsageCertSign,
 		BasicConstraintsValid: true,
 		IsCA:                  true,
 	}
-	rootDER, err := x509.CreateCertificate(rand.Reader, rootTemplate, rootTemplate, &rootKey.PublicKey, rootKey)
+	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
 	require.NoError(t, err)
-	root, err := x509.ParseCertificate(rootDER)
+	certificate, err := x509.ParseCertificate(der)
 	require.NoError(t, err)
+	return &serverRoot{certificate: certificate, key: key}
+}
 
+// pool returns what a client pinning this root verifies garam against.
+func (r *serverRoot) pool() *x509.CertPool {
+	pool := x509.NewCertPool()
+	pool.AddCert(r.certificate)
+	return pool
+}
+
+// issue writes the pair the listener reads into dir, named commonName
+// and signed by this root, and returns the leaf it wrote. Writing into
+// a directory a listener is already serving from replaces the leaf and
+// leaves the root that signs it standing, which is the rotation
+// ADR-0040 §Decision 5 is written for.
+func (r *serverRoot) issue(t *testing.T, dir, commonName string) *x509.Certificate {
+	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 	der, err := x509.CreateCertificate(rand.Reader, &x509.Certificate{
@@ -83,7 +102,7 @@ func serverPair(t *testing.T, dir, commonName string) *x509.CertPool {
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
 		IPAddresses:           []net.IP{net.ParseIP("127.0.0.1")},
-	}, root, &key.PublicKey, rootKey)
+	}, r.certificate, &key.PublicKey, r.key)
 	require.NoError(t, err)
 	keyDER, err := x509.MarshalPKCS8PrivateKey(key)
 	require.NoError(t, err)
@@ -93,13 +112,42 @@ func serverPair(t *testing.T, dir, commonName string) *x509.CertPool {
 	require.NoError(t, os.WriteFile(keyPath(dir),
 		pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER}), 0o600))
 
-	roots := x509.NewCertPool()
-	roots.AddCert(root)
-	return roots
+	leaf, err := x509.ParseCertificate(der)
+	require.NoError(t, err)
+	return leaf
+}
+
+// serverPair writes the certificate the listener presents into dir,
+// named commonName and signed by a garam server root minted for this
+// call, and returns the pool that verifies it (ADR-0040). Writing into
+// a directory a listener is already serving from replaces both the
+// certificate and the root that verifies it. Where only the leaf is to
+// change, one [serverRoot] issues both.
+func serverPair(t *testing.T, dir, commonName string) *x509.CertPool {
+	t.Helper()
+	root := newServerRoot(t, "garam server root for "+commonName)
+	root.issue(t, dir, commonName)
+	return root.pool()
 }
 
 // presented is the certificate the listener served on this connection.
 const presented = "the certificate garam started with"
+
+// serve starts the machine listener on a loopback port, presenting the
+// pair dir already holds, and returns the base URL. It reads the files
+// per handshake, so what dir holds later is what a later connection is
+// served.
+func serve(t *testing.T, dir string, svc machine.Service, next http.Handler) string {
+	t.Helper()
+	pair, err := keyfile.NewPair(certPath(dir), keyPath(dir))
+	require.NoError(t, err)
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	srv := machine.NewServer(svc, pair, next)
+	go func() { _ = srv.ServeTLS(lis, "", "") }()
+	t.Cleanup(func() { _ = srv.Close() })
+	return "https://" + lis.Addr().String()
+}
 
 // listener starts the machine listener on a loopback port, presenting
 // the pair in a directory of its own, and returns the base URL, that
@@ -108,14 +156,7 @@ func listener(t *testing.T, svc machine.Service, next http.Handler) (string, str
 	t.Helper()
 	dir := t.TempDir()
 	roots := serverPair(t, dir, presented)
-	pair, err := keyfile.NewPair(certPath(dir), keyPath(dir))
-	require.NoError(t, err)
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	srv := machine.NewServer(svc, pair, next)
-	go func() { _ = srv.ServeTLS(lis, "", "") }()
-	t.Cleanup(func() { _ = srv.Close() })
-	return "https://" + lis.Addr().String(), dir, roots
+	return serve(t, dir, svc, next), dir, roots
 }
 
 // get performs one request, presenting client as the certificate — or

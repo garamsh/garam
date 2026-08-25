@@ -383,9 +383,11 @@ Signing happens through the `Issuer` seam the composition root
 satisfies from `internal/ca`, so the two domains still cooperate
 through `grn.GRN` alone and this one never holds key material. The
 HTTP surfaces are `internal/machineapi` for the operator and
-`internal/api` for the organization's members, which reads and never
-writes — provisioning is an operator's, from outside garam. The queue a
-message reaches an agent through is `internal/message`.
+`internal/api` for the organization's members, which reads the agents
+and writes only definitions — provisioning is an operator's, from
+outside garam, and a definition writes no `agents` row until the
+operator it names claims it (ADR-0033). The queue a message reaches an
+agent through is `internal/message`.
 
 ## `internal/ca`
 

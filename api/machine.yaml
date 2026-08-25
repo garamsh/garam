@@ -180,6 +180,17 @@ paths:
         nothing the caller is not named in and no policy check stands in
         front of it (ADR-0033). A caller that is not an operator is
         refused.
+
+        A claim here is not evidence of holding. What the claim field
+        reports is the agent's assignment as it stands now, while the
+        definition carrying it names its operator once and is never
+        rewritten — so the two come apart as soon as the agent is
+        assigned elsewhere, and the definition stays listed, stays
+        claimed, and carries the epoch of whoever holds the agent by
+        then. The certificate route is the only place that epoch is
+        met: it is where an operator the assignment no longer names is
+        refused, under `permission_denied`, and nothing before it
+        refuses one.
       responses:
         '200':
           description: The caller's definitions, ordered by agent GRN.
@@ -499,10 +510,10 @@ components:
       description: >-
         What an organization says an agent should be, answered to the
         operator it names (ADR-0026). `claim` is absent while no
-        operator has claimed the definition and carries the epoch the
-        claim's assignment holds at once one has — the only claimant a
-        definition admits is the operator it names, so who claimed it
-        is always the caller.
+        operator has claimed the definition and carries the agent's
+        assignment epoch once one has — the only claimant a definition
+        admits is the operator it names, so who claimed it is always
+        the caller.
       required: [agentGrn, values]
       properties:
         agentGrn:
@@ -522,13 +533,13 @@ components:
           $ref: '#/components/schemas/DefinitionClaim'
     DefinitionClaim:
       type: object
-      description: The assignment the claim wrote (ADR-0033).
+      description: The agent's assignment, first written by the claim (ADR-0033).
       required: [epoch]
       properties:
         epoch:
           type: integer
           minimum: 1
-          description: The epoch the claim's assignment holds at.
+          description: The epoch the agent's assignment holds at now.
     MessageSubmission:
       type: object
       description: What a sender supplies. Who is sending is the certificate's to say.

@@ -39,21 +39,21 @@ type Claim struct {
 	Watchers int `json:"watchers"`
 }
 
-// Definition What an organization says an agent should be, answered to the operator it names (ADR-0026). `claim` is absent while no operator has claimed the definition and carries the epoch the claim's assignment holds at once one has — the only claimant a definition admits is the operator it names, so who claimed it is always the caller.
+// Definition What an organization says an agent should be, answered to the operator it names (ADR-0026). `claim` is absent while no operator has claimed the definition and carries the agent's assignment epoch once one has — the only claimant a definition admits is the operator it names, so who claimed it is always the caller.
 type Definition struct {
 	// AgentGrn The identity garam minted for the agent this definition describes. No agent answers under it until the claim.
 	AgentGrn string `json:"agentGrn"`
 
-	// Claim The assignment the claim wrote (ADR-0033).
+	// Claim The agent's assignment, first written by the claim (ADR-0033).
 	Claim *DefinitionClaim `json:"claim,omitempty"`
 
 	// Values What the operator constructs the agent from. garam stores the keys and the strings and interprets neither.
 	Values map[string]string `json:"values"`
 }
 
-// DefinitionClaim The assignment the claim wrote (ADR-0033).
+// DefinitionClaim The agent's assignment, first written by the claim (ADR-0033).
 type DefinitionClaim struct {
-	// Epoch The epoch the claim's assignment holds at.
+	// Epoch The epoch the agent's assignment holds at now.
 	Epoch int `json:"epoch"`
 }
 

@@ -26,10 +26,10 @@ thin binary and an orchestrator deploys it
 they own its placement.
 
 It runs beside exactly one agent, in that agent's pod. It has to,
-because the gateway binds loopback unless mTLS is configured and
-because it must outlive the agent process during shutdown — a native
-sidecar rather than an ordinary container, for the reason in
-[ADR-0018](./adr/0018-delivery-acknowledgement.md).
+because the gateway binds loopback unless mTLS is configured
+(`gagent@40ef7ac`) and because it must outlive the agent process during
+shutdown — a native sidecar rather than an ordinary container, for the
+reason in [ADR-0018](./adr/0018-delivery-acknowledgement.md).
 
 It reaches garam as the agent, with the certificate garam issued for
 that agent, and verifies garam's listener against the garam server root
@@ -118,9 +118,12 @@ that answers nothing.
 
 The platform's own maintainers state when it has been measured; this
 document does not track their stages, because a foreign issue number
-is not something a reader here can check. Ask them, and widen only on
-an answer that names a measurement. Whoever widens this default should
-find this sentence before they do.
+is not something a reader here can check. What the two paragraphs
+above say about their store is what they stated on 2026-08-17, read
+from no tree, so it is checked by asking them again rather than at a
+commit. Ask them, and widen only on an answer that names a
+measurement. Whoever widens this default should find this sentence
+before they do.
 
 ## Watching
 
@@ -185,11 +188,11 @@ is undecided ([deployment-contract.md](./deployment-contract.md)).
 
 Idempotency and reconciliation are garam's, not the adapter's and not
 the platform's ([ADR-0013](./adr/0013-agent-messaging.md)). The
-platform cannot be asked whether a message was processed, and the
-adapter's knowledge is deliberately volatile, so **"has this already
-been handled" can only live on garam's side.** A design that puts it in
-the pod or in an orchestrator's status is inventing a distinction that
-does not exist there.
+platform cannot be asked whether a message was processed
+(`gagent@40ef7ac`), and the adapter's knowledge is deliberately
+volatile, so **"has this already been handled" can only live on garam's
+side.** A design that puts it in the pod or in an orchestrator's status
+is inventing a distinction that does not exist there.
 
 ## Foreign facts this rests on
 
@@ -197,7 +200,13 @@ Named because this contract would be **wrong** if any of them changed,
 not because they were mentioned. Read at `gagent@40ef7ac`; that
 repository carries no tags, so a commit is the only anchor, and an
 unanchored citation goes on looking valid after it has lost what it
-points at.
+points at. The sections above restate several of these rows, and the
+same commit is the anchor for those restatements.
+
+The last two rows are not that reading's. They arrived on 2026-08-25
+from [ADR-0013](./adr/0013-agent-messaging.md) §Decision, which is
+where they were read, and ADR-0013 records the second of them as true
+when it was written and not guaranteed.
 
 | Fact | Where | What breaks without it |
 |---|---|---|
@@ -219,9 +228,10 @@ know anyone depends on it.
 
 ## Not decided
 
-- A durable inbox on the platform's side is unbuilt and unscheduled —
-  treat it as unavailable rather than refused. If it arrives, the
-  completion rule does not change; the redelivery causes reduce by one.
+- A durable inbox on the platform's side was unbuilt and unscheduled at
+  `gagent@40ef7ac` — treat it as unavailable rather than refused. If it
+  arrives, the completion rule does not change; the redelivery causes
+  reduce by one.
 - A caller-supplied message identifier was considered and declined: it
   would remove the adapter's pairing, which is a simplification rather
   than a correctness gain, and the pairing is not what makes the design

@@ -25,7 +25,8 @@ carry — what readiness reports, what bounds termination, what is not
 established — and no longer restates what is here.
 
 Consuming it is the cluster-owning repository's decision to make, not
-garam's to assume. Nothing here is written into `garamsh/gitops`.
+garam's to assume. Nothing here is written into `garamsh/gitops`, which
+held nothing of this chart when it was read on 2026-08-25.
 
 ## What it renders
 
@@ -44,7 +45,7 @@ objects:
   `pre-upgrade` hook. It carries no `hook-failed` delete policy: a
   failed run's log is the only place its error exists. A consumer that
   renders with `helm template` receives the Job as an ordinary manifest
-  and orders it itself.
+  and orders it itself (helm v4.2.4, the version the `Makefile` pins).
 
 Every Deployment is `replicas: 1` and the chart offers no value for it.
 Replica safety above one is not established
@@ -74,7 +75,8 @@ decision fails the check rather than reaching a cluster unnoticed.
 
 **The name is taken verbatim, and the chart composes none.** A name is
 the subject an IAM trust policy in the infrastructure repository is
-conditioned on, so the two repositories have to hold one name, and a
+conditioned on — `garamsh/infra`, as the review on #504 read it on
+2026-08-24 — so the two repositories have to hold one name, and a
 name this chart composed from the release name would move whenever a
 deployment renamed its release. That failure arrives at runtime, in a
 credential that stops being issued, and a render under one release name
@@ -298,10 +300,11 @@ one and the chart does not require it; a node credential minted per pull
 is another.
 
 **Neither image exists yet.** No release pipeline exists, no release has
-been cut, and both ECR repositories are empty, so the references
-`values.yaml` carries pull nothing today. `Chart.yaml` has no
-`appVersion` for the same reason; the change that publishes the first
-release sets it and makes a default for the two tags honest.
+been cut, and both ECR repositories were empty when ADR-0042 read them
+on 2026-08-25, so the references `values.yaml` carries pull nothing.
+`Chart.yaml` has no `appVersion` for the same reason; the change that
+publishes the first release sets it and makes a default for the two tags
+honest.
 
 ## What keeps it true
 

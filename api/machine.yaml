@@ -115,6 +115,15 @@ paths:
         There is no request body: the organization and the operator are
         what the certificate names. A caller that is not an operator is
         refused.
+
+        The agent it mints has no definition. This route keeps minting
+        for agents no definition describes (ADR-0033) and writes none
+        itself, so the agent is assigned to the caller and absent from
+        every `listDefinitions` answer, which answers definitions
+        rather than assignments. It is an ordinary assigned agent
+        otherwise: `issueAgentCertificate` answers for it on the
+        assignment alone. An operator that constructs the agents its
+        definitions name therefore never constructs this one.
       responses:
         '201':
           description: Agent created and assigned to the calling operator.
@@ -180,6 +189,16 @@ paths:
         nothing the caller is not named in and no policy check stands in
         front of it (ADR-0033). A caller that is not an operator is
         refused.
+
+        This answers definitions, not assignments. An agent assigned to
+        the calling operator that no definition describes is absent
+        from it, and `createAgent` mints exactly that: it assigns the
+        agent it creates and writes no definition (ADR-0033). Such an
+        agent hands over a certificate on request and appears in no
+        answer here, so a loop that constructs the agents this route
+        names constructs a subset of the agents assigned to the caller.
+        Nothing reports the difference, and this listener answers no
+        list of assignments to compare against.
 
         A claim here is not evidence of holding. What the claim field
         reports is the agent's assignment as it stands now, while the

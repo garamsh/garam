@@ -20,8 +20,10 @@ import (
 // <subject-grn>`: the one bootstrap ADR-0015 leaves out of band,
 // minting an operator's own first certificate. It is a command of its
 // own rather than anything a serve path reaches, so no serving process
-// can mint — a server answers what it is asked, and nothing it is
-// asked runs this.
+// mints an operator's first certificate — which is why it is a sibling
+// of `serve` rather than a subcommand under it. That is the whole of
+// the boundary: `serve machine` mints agent identities and issues
+// certificates on the listener it serves.
 func newIssueCertificateCommand() *cobra.Command {
 	var outDir string
 	cmd := &cobra.Command{

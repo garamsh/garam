@@ -268,10 +268,12 @@ rule, and the schema applies it again where nothing routes around it.
 A record grants nothing and reports nothing. No listener reads one to
 admit a caller: an operator authenticates with the certificate it holds
 (ADR-0015), and garam never dials one, so there is no state here for
-anybody to report. What the record is for is the question a definition
-asks — whether this organization has the operator it names — and
-`internal/api` asks it there. The `agent_definitions` foreign key is the
-copy of that check no call path routes around.
+anybody to report. What the record is read for is the question a
+definition asks — whether this organization has the operator it names —
+which `internal/api` asks there, and the list of what the organization
+has registered, which the console shows and `ListByOrg` exists for. The
+`agent_definitions` foreign key is the copy of the definition's check
+no call path routes around.
 
 There is no update and no delete. A record carries nothing to change,
 and removing one would stop nothing an operator can already do, which is

@@ -33,7 +33,10 @@ Each `internal/<domain>/` package contains:
 - `service.go` — the `Service` contract, where the domain has
   behaviour to coordinate; a domain that is only types and persistence
   has none.
-- `queries.sql` — the domain's SQL, hand-written. The only place SQL is written.
+- `queries.sql` — the domain's SQL, hand-written. The only place the
+  domain's own queries are written: `migrations/` holds the schema, and
+  the `LISTEN`/`NOTIFY` statements that read no row are issued from Go
+  (`internal/authz`, `internal/watch`).
 - `postgres.go` — hand-written `Store` implementation, calling `db/`.
   Past the single-file size limit it splits into `postgres_<concept>.go`
   files beside it, one per aggregate the store persists, inside the same
@@ -75,12 +78,12 @@ to an `errorx` error. It reads the sql state on a `*pgconn.PgError`:
 `KindFailedPrecondition`, anything else wraps with `op` and the
 chain's kind. `op` is the caller's own label for the operation;
 the wrap message is `op` alone, not prefixed with the store name.
-Depends on `errorx`, `pgx`, `pgconn`. The five domain postgres stores
-that each held their own copy (`org`, `authz`, `ca`, `user`, `agent`)
-now answer through here. The `message` store did not have its own
-copy — it had inline `errors.Is(err, pgx.ErrNoRows)` checks — and
-remains so; the audit that named it as a fifth copy was wrong on
-this.
+Depends on `errorx`, `pgx`, `pgconn`. Six domain postgres stores answer
+through here: the five that each held their own copy (`org`, `authz`,
+`ca`, `user`, `agent`), and `operator`, which never had one. The
+`message` store did not have its own copy either — it had inline
+`errors.Is(err, pgx.ErrNoRows)` checks, as `internal/authn` does — and
+remains so; the audit that named it as a fifth copy was wrong on this.
 
 ## `internal/keyfile`
 
@@ -265,10 +268,12 @@ rule, and the schema applies it again where nothing routes around it.
 A record grants nothing and reports nothing. No listener reads one to
 admit a caller: an operator authenticates with the certificate it holds
 (ADR-0015), and garam never dials one, so there is no state here for
-anybody to report. What the record is for is the question a definition
-asks — whether this organization has the operator it names — and
-`internal/api` asks it there. The `agent_definitions` foreign key is the
-copy of that check no call path routes around.
+anybody to report. What the record is read for is the question a
+definition asks — whether this organization has the operator it names —
+which `internal/api` asks there, and the list of what the organization
+has registered, which the console shows and `ListByOrg` exists for. The
+`agent_definitions` foreign key is the copy of the definition's check
+no call path routes around.
 
 There is no update and no delete. A record carries nothing to change,
 and removing one would stop nothing an operator can already do, which is
@@ -283,8 +288,10 @@ ADR-0032). Every one after it is issued here, over the connection the
 certificate being replaced authenticated, so the out-of-band mint is a
 bootstrap rather than a standing obligation.
 
-Three things refuse a renewal, and each is a decision rather than a
-guard. A certificate that has expired renews nothing: the listener
+Four things refuse a renewal, and each is a decision rather than a
+guard. A certificate whose subject is not an operator is refused before
+any window is measured: what this domain renews is an operator's
+certificate. A certificate that has expired renews nothing: the listener
 refuses it a handshake earlier, and the rule states the same boundary as
 the empty end of its window, so what follows expiry is a mint out of
 band. A certificate with more than a third of its validity left is
@@ -310,9 +317,11 @@ is still it, and the write answers that itself. Signing happens through
 the `Issuer` seam the composition root satisfies from `internal/ca`, as
 the agent domain's does, so this one never holds key material; the
 successor is signed before the record moves, and a caller that lost the
-lineage receives nothing. The HTTP surface is `internal/machineapi`, and
-`internal/cli` is the other caller — `garam issue-certificate`, the one
-bootstrap ADR-0015 leaves out of band. The agent's certificate is not
+lineage receives nothing. The certificate half's HTTP surface is
+`internal/machineapi`, and `internal/cli` is its other caller — `garam
+issue-certificate`, the one bootstrap ADR-0015 leaves out of band. The
+record half's surface is `internal/api`, on the organization's own
+paths, which is the third caller this domain has. The agent's certificate is not
 this domain's: an agent is admitted to its own by the claim its operator
 made (ADR-0033) and renews on the route ADR-0040 gave it.
 
@@ -349,15 +358,18 @@ here references `users`.
 one in the operator's own organization, garam minting the identifier,
 and it answers with the certificate of an agent assigned to that
 operator at the current epoch and of no other — the whole of the
-authorization on that surface, which ADR-0015 states is not an
-optimisation and may not be skipped, so no method reaches an issuer
+authorization on the operator route, which ADR-0015 states is not an
+optimisation and may not be skipped, so no operator reaches an issuer
 without it. Comparing the operator on the row is the epoch fence as
 well, and it is the tenancy check too, since a GRN carries its
-organization. A caller that is not an operator is refused, with one exception: an
-agent asking for its own certificate is renewing over the connection
-that certificate authenticated, which grants it nothing it does not
-already hold (ADR-0040). An expired certificate has no such connection,
-so the operator route is what recovers one.
+organization. A caller that is not an operator is refused, with one
+exception: an agent asking for its own certificate is renewing over the
+connection that certificate authenticated, which grants it nothing it
+does not already hold (ADR-0040). That branch is the one route the
+assignment comparison does not stand on — the connection is what
+authorizes it, and it reaches the issuer before the comparison is made.
+An expired certificate has no such connection, so the operator route is
+what recovers one.
 
 `Store` answers `Service` and, org by org, the read `internal/api`
 serves people: an organization's agents and the assignments holding
@@ -371,9 +383,11 @@ Signing happens through the `Issuer` seam the composition root
 satisfies from `internal/ca`, so the two domains still cooperate
 through `grn.GRN` alone and this one never holds key material. The
 HTTP surfaces are `internal/machineapi` for the operator and
-`internal/api` for the organization's members, which reads and never
-writes — provisioning is an operator's, from outside garam. The queue a
-message reaches an agent through is `internal/message`.
+`internal/api` for the organization's members, which reads the agents
+and writes only definitions — provisioning is an operator's, from
+outside garam, and a definition writes no `agents` row until the
+operator it names claims it (ADR-0033). The queue a message reaches an
+agent through is `internal/message`.
 
 ## `internal/ca`
 
@@ -387,9 +401,11 @@ The certificate authority an organization signs machine identities with
 | `Sealer` | seals key material so what reaches storage is useless without the key-encryption key the process holds |
 | `Service` | issues a certificate for a subject GRN, creating the organization's CA on demand |
 
-Every organization has its own CA, so a certificate issued by one does
-not chain against another's and tenancy holds in the trust root rather
-than in a check a caller could forget. The subject's GRN travels in a
+A CA is an organization's own rather than shared, so a certificate
+issued by one does not chain against another's and tenancy holds in the
+trust root rather than in a check a caller could forget. It is created
+on the first certificate that organization needs, so an organization
+that has needed none has no authority yet. The subject's GRN travels in a
 SAN URI and the certificate carries nothing else — no name, no roles, no
 claims. Lifetime is the only revocation there is (ADR-0014), so it is
 short by default and bounded at both ends — a service whose configured
@@ -444,8 +460,8 @@ certificate authenticated — the one question a caller asking to replace
 it is answered by (ADR-0046).
 
 The SAN carries exactly one URI and it is parsed whole as a GRN. That
-one parse is the whole check: `grn.Parse` splits on every colon and
-holds every segment to the character rule
+one parse is the whole of the check on the URI: `grn.Parse` splits on
+every colon and holds every segment to the character rule
 ([grn-model.md](./grn-model.md) §identifier), so a URI carrying a
 separator that would move a segment — a colon outside the four, a `?`,
 a `#` — is not a GRN and names no identity. The rule lives in
@@ -453,7 +469,11 @@ a `#` — is not a GRN and names no identity. The rule lives in
 keeping a copy. Which authority the certificate must then chain to is
 read off the organization segment of that GRN, so a certificate one
 organization's CA signed for another organization's identity is
-refused by the trust root rather than by a check.
+refused by the trust root rather than by a check. Chaining is not the
+whole of that verification either: it is `crypto/x509`'s, which in the
+same call refuses a certificate outside its validity period and one not
+marked for client authentication, so neither refusal is code this
+repository holds.
 
 The package holds no store and reaches no database: `TrustRoot` is the
 seam the composition root satisfies from `internal/ca`, which keeps the
@@ -472,8 +492,11 @@ pair beside them for every identity it issues a certificate to. It
 terminates TLS itself because a forwarded client-certificate header is
 trustworthy only where every deployment strips it at the edge
 (ADR-0014). What it serves is `internal/machineapi`. It is not part of
-the local Docker stack: its key material is per host and the container
-would run as a user that does not own it.
+the local Docker stack: its key material is per host, and compose has
+no step that generates it and hands a container a file that container
+owns. The Kubernetes stacks under `deploy/` have that step — an init
+container copies the key material as the UID the listener runs as — so
+what compose lacks is the step, not something a container cannot do.
 
 ## `internal/machineapi`
 
@@ -482,7 +505,7 @@ generated from `api/machine.yaml` (ADR-0019).
 
 | Type | Responsibility |
 |------|----------------|
-| `Server` | the machine listener's handlers: the caller's identity, renewing the certificate that identity authenticated with, creating an agent, issuing an agent's certificate, posting, claiming, renewing and completing a message, and forwarding a turn event to whoever is watching the agent |
+| `Server` | the machine listener's handlers, one for every operation `api/machine.yaml` declares |
 | `Evaluator` | the seam the listener asks the policy engine through |
 | `Groups` | the seam the listener reads a caller's group membership through |
 
@@ -499,13 +522,15 @@ found nothing is the one answer that is not a kind: it is an empty
 success, so a caller loops on it rather than telling an error apart.
 
 Whom a caller may send to is decided here, because it is a policy
-question rather than a property of the queue: the answer comes from the
-policy engine over `Evaluator`, and a boundary this package composes
-may not reach past it to another process. The listener collects what
-the caller's own GRN grants it — its own organization — and the engine
-unions that with the policies attached to the caller (ADR-0024). A
-refusal is answered before anything is stored, so what a policy refused
-is not in the queue.
+question rather than a property of the queue: for a recipient of the
+caller's own organization the answer comes from the policy engine over
+`Evaluator`, and a boundary this package composes may not reach past it
+to another process. The listener collects what the caller's own GRN
+grants it — its own organization — and the engine unions that with the
+policies attached to the caller (ADR-0024). A recipient of another
+organization is the consent relation's question and never the engine's
+(ADR-0035). A refusal is answered before anything is stored, so what a
+policy refused is not in the queue.
 
 The question carries the groups the caller belongs to, because an
 attachment names a group as readily as an identity (ADR-0008) and an
@@ -593,9 +618,10 @@ per sender and idempotency key, and the key outlives delivery so a
 retry arriving afterwards neither stores a message nor requeues the
 delivered one. Retention is for space, not for not-keeping
 (ADR-0034): a completed message keeps that small row and drops its
-body at completion, an unclaimed message expires after thirty days,
-and a submission's body is bounded at 64 KiB — so the table's growth
-is a rate a volume can be sized against. Neither the recipient nor the sender carries a foreign
+body at completion, an undelivered message expires after thirty days,
+and a submission's body is bounded at 65536 characters, which UTF-8
+spends up to 256 KiB on — so the table's growth is a rate a volume can
+be sized against. Neither the recipient nor the sender carries a foreign
 key — garam answers a sender once the message is stored and reports a
 routing failure back as a message rather than rejecting one, so a
 message it cannot yet route has to be storable. `Service` keeps that
@@ -711,7 +737,8 @@ caller authenticated as.
 | operator.CertificateStore | yes (`store.go`) | yes (`postgres_certificate.go`) | not planned | — |
 | agent | yes (`store.go`) | yes (`postgres.go` + `postgres_<concept>.go`) | not planned | — |
 | ca | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
-| message | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
+| message.Store | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
+| message.ConsentStore | yes (`consent.go`) | yes (`postgres_consent.go`) | not planned | — |
 | watch | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 
 The postgres implementations are written by hand against sqlc output,

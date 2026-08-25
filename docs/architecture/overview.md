@@ -243,9 +243,8 @@ collaborate on a shared plan.
   (ADR-0008).
 - Per-org direct user roles: a role stored on the user applies in every
   org it belongs to; scoping needs subject × role × scope persistence.
-- Upstream OAuth providers beyond Google. The dev provider (ADR-0010)
-  is not one — it asserts a fixed local identity and contacts nothing.
-  A user's GRN identifier is the provider's subject, so adding a
+- Upstream OAuth providers beyond Google. A user's GRN identifier is
+  the provider's subject, so adding a
   provider whose subjects carry anything outside the segment rule
   ([grn-model.md](./grn-model.md) §identifier) means deriving a
   conforming identifier rather than loosening the rule. Google's
@@ -315,8 +314,8 @@ collaborate on a shared plan.
 - `internal/watch/` — who is watching an agent work, and the turn events
   carried to them while they are (ADR-0022). It stores no event.
 - `internal/api/` — handlers implementing the generated ServerInterface.
-- `internal/authn/` — sign-in provider abstraction (Google OIDC,
-  dev-only local), password verification, sessions.
+- `internal/authn/` — sign-in provider abstraction, implemented by
+  Google OIDC alone (ADR-0044), password verification, sessions.
 - `internal/authz/` — policy engine: model, evaluator, policy store
   and per-org cache, gRPC servers.
 - `internal/org/` — organizations, groups, projects, memberships, invitations.
@@ -386,7 +385,7 @@ it and imports no request surface and no domain.
 | `org.Project` | `internal/org` | unit of work |
 | `org.Membership` | `internal/org` | user in an org, carries a `Role` |
 | `org.Invitation` | `internal/org` | single-use token into an org |
-| `authn.Provider` | `internal/authn` | sign-in provider (Google OIDC; dev-only, ADR-0010) |
+| `authn.Provider` | `internal/authn` | sign-in provider; Google OIDC implements it and nothing else does (ADR-0044) |
 | `authn.Password` | `internal/authn` | a password as typed; renders redacted everywhere (ADR-0041) |
 | `authn.Verifier` | `internal/authn` | stored Argon2id verifier, carrying its own parameters (ADR-0041) |
 | `authn.Session` | `internal/authn` | authenticated browser session |

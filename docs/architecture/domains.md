@@ -33,7 +33,10 @@ Each `internal/<domain>/` package contains:
 - `service.go` — the `Service` contract, where the domain has
   behaviour to coordinate; a domain that is only types and persistence
   has none.
-- `queries.sql` — the domain's SQL, hand-written. The only place SQL is written.
+- `queries.sql` — the domain's SQL, hand-written. The only place the
+  domain's own queries are written: `migrations/` holds the schema, and
+  the `LISTEN`/`NOTIFY` statements that read no row are issued from Go
+  (`internal/authz`, `internal/watch`).
 - `postgres.go` — hand-written `Store` implementation, calling `db/`.
   Past the single-file size limit it splits into `postgres_<concept>.go`
   files beside it, one per aggregate the store persists, inside the same

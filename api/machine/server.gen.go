@@ -21,24 +21,6 @@ type AgentAssignment struct {
 	Operator string `json:"operator"`
 }
 
-// AgentCertificate A client certificate, the private key it was issued with, the authority that signed it, and the garam server root the holder verifies garam by. garam stores no private key, so this one is returned once and a holder that loses it asks for another certificate.
-type AgentCertificate struct {
-	CertificatePem string `json:"certificatePem"`
-
-	// Grn The agent the certificate identifies, which is also what its SAN URI holds.
-	Grn string `json:"grn"`
-
-	// IssuerPem The authority that signed this certificate. It is not what garam is verified against: the two directions rest on different roots (ADR-0040).
-	IssuerPem string `json:"issuerPem"`
-
-	// NotAfter When the certificate stops being valid. It carries jitter, so certificates issued together do not expire together.
-	NotAfter      time.Time `json:"notAfter"`
-	PrivateKeyPem string    `json:"privateKeyPem"`
-
-	// ServerRootPem The garam server root. A holder verifies garam's listener against this and against nothing else — one root for every organization, separate from the authority above and signing only what garam presents (ADR-0040).
-	ServerRootPem string `json:"serverRootPem"`
-}
-
 // Claim One caller's hold on one message, and the token that fences it. Renewal and completion carry that token, and a hold handed on to the next caller stops matching.
 type Claim struct {
 	// Attempt Which delivery of this message the caller is holding. Delivery is at-least-once (ADR-0018), so this is what tells a first delivery from a repeat; a message that reaches the bound is not handed out again.
@@ -85,6 +67,24 @@ type Error struct {
 // Identity defines model for Identity.
 type Identity struct {
 	Grn string `json:"grn"`
+}
+
+// MachineCertificate A client certificate, the private key it was issued with, the authority that signed it, and the garam server root the holder verifies garam by. garam stores no private key, so this one is returned once and a holder that loses it asks for another certificate. One shape for both routes that issue one: what an agent is given and what an operator renews differ in who may ask, not in what comes back.
+type MachineCertificate struct {
+	CertificatePem string `json:"certificatePem"`
+
+	// Grn The identity the certificate names, which is also what its SAN URI holds.
+	Grn string `json:"grn"`
+
+	// IssuerPem The authority that signed this certificate. It is not what garam is verified against: the two directions rest on different roots (ADR-0040).
+	IssuerPem string `json:"issuerPem"`
+
+	// NotAfter When the certificate stops being valid. It carries jitter, so certificates issued together do not expire together.
+	NotAfter      time.Time `json:"notAfter"`
+	PrivateKeyPem string    `json:"privateKeyPem"`
+
+	// ServerRootPem The garam server root. A holder verifies garam's listener against this and against nothing else — one root for every organization, separate from the authority above and signing only what garam presents (ADR-0040).
+	ServerRootPem string `json:"serverRootPem"`
 }
 
 // Message One stored message, under an identifier the queue minted.
@@ -161,6 +161,9 @@ type ServerInterface interface {
 	// GetIdentity Return the identity the connection authenticated as.
 	// (GET /identity)
 	GetIdentity(w http.ResponseWriter, r *http.Request)
+	// RenewIdentityCertificate Renew the certificate the connection authenticated with.
+	// (POST /identity/certificate)
+	RenewIdentityCertificate(w http.ResponseWriter, r *http.Request)
 	// PostMessage Post a message to a recipient.
 	// (POST /messages)
 	PostMessage(w http.ResponseWriter, r *http.Request)
@@ -391,6 +394,20 @@ func (siw *ServerInterfaceWrapper) GetIdentity(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// RenewIdentityCertificate operation middleware
+func (siw *ServerInterfaceWrapper) RenewIdentityCertificate(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RenewIdentityCertificate(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // PostMessage operation middleware
 func (siw *ServerInterfaceWrapper) PostMessage(w http.ResponseWriter, r *http.Request) {
 
@@ -526,6 +543,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	}
 
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/identity", wrapper.GetIdentity)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/identity/certificate", wrapper.RenewIdentityCertificate)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents", wrapper.CreateAgent)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/certificate", wrapper.IssueAgentCertificate)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/definitions", wrapper.ListDefinitions)

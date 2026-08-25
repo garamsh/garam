@@ -186,6 +186,39 @@ func TestService_AuthenticatesACertificateItsOrganizationsAuthoritySigned(t *tes
 	assert.Equal(t, subject, identity.GRN())
 }
 
+// TestService_CarriesThePresentedCertificate holds the identity against
+// the certificate it was read from: which certificate authenticated is
+// what decides whether it may be replaced (ADR-0046), and an identity
+// that named the subject alone could not answer that.
+//
+// The second certificate is the control. One certificate matching its
+// own fields holds for an identity carrying anything at all; two
+// certificates of one subject differ in the serial alone, so the
+// identity following it is the serial being read.
+func TestService_CarriesThePresentedCertificate(t *testing.T) {
+	issuer := newIssuer(t)
+	svc := issuer.service()
+	subject := agentGRN("acme", "bot-1")
+	issuer.authority(t, "acme")
+
+	notAfter := time.Now().Add(90 * time.Minute).Truncate(time.Second)
+	first := issuer.sign(t, "acme", leaf{uris: []string{subject.String()}, notAfter: notAfter})
+	identity, err := authenticate(t, svc, first)
+	require.NoError(t, err)
+	presented, err := x509.ParseCertificate(first.Certificate[0])
+	require.NoError(t, err)
+	assert.Equal(t, presented.SerialNumber.String(), identity.Serial())
+	assert.Equal(t, presented.NotBefore, identity.NotBefore())
+	assert.Equal(t, presented.NotAfter, identity.NotAfter())
+
+	second := issuer.sign(t, "acme", leaf{uris: []string{subject.String()}, notAfter: notAfter})
+	other, err := authenticate(t, svc, second)
+	require.NoError(t, err)
+	assert.Equal(t, subject, other.GRN())
+	assert.NotEqual(t, identity.Serial(), other.Serial(),
+		"two certificates naming one identity are told apart by the serial")
+}
+
 // TestService_RefusesACertificateAnotherOrganizationsAuthoritySigned is
 // the tenancy boundary ADR-0014 put in the trust root. Two certificates
 // failing to verify proves only that two keys differ, so the case that

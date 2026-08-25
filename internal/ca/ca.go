@@ -66,7 +66,7 @@ func (c *Certificate) Subject() grn.GRN { return c.subject }
 
 // Serial returns the certificate's serial number in decimal. Two
 // certificates naming one subject are told apart by it, which is what a
-// renewal of one of them has to name (ADR-0045).
+// renewal of one of them has to name (ADR-0046).
 func (c *Certificate) Serial() string { return c.serial }
 
 // CertificatePEM returns the certificate in PEM form.

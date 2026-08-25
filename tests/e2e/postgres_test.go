@@ -117,6 +117,7 @@ func truncate(t *testing.T, p *pgxpool.Pool) {
 		oauth_states, password_credentials, password_attempts,
 		policies, policy_versions, policy_attachments, agents,
 		agent_assignments, agent_definitions, operators, certificate_authorities,
+		operator_certificates,
 		messages, message_consents, agent_watches CASCADE`)
 	require.NoError(t, err)
 }
@@ -2568,6 +2569,29 @@ func (c certificates) Issue(ctx context.Context, subject grn.GRN) (*agent.Certif
 	}, nil
 }
 
+// operatorCertificates is that same authority in the shape the operator
+// domain signs through (operator.Issuer), carrying the serial a renewal
+// presents to say which certificate it is replacing.
+type operatorCertificates struct {
+	issuer     ca.Service
+	serverRoot []byte
+}
+
+func (c operatorCertificates) Issue(ctx context.Context, subject grn.GRN) (*operator.Certificate, error) {
+	issued, err := c.issuer.Issue(ctx, subject)
+	if err != nil {
+		return nil, err
+	}
+	return &operator.Certificate{
+		Serial:         operator.Serial(issued.Serial()),
+		CertificatePEM: issued.CertificatePEM(),
+		PrivateKeyPEM:  issued.PrivateKeyPEM(),
+		IssuerPEM:      issued.IssuerPEM(),
+		ServerRootPEM:  c.serverRoot,
+		NotAfter:       issued.NotAfter(),
+	}, nil
+}
+
 // machineTrustRoots reads the authority a presented certificate has to
 // chain to out of the ones Postgres holds.
 type machineTrustRoots struct{ store ca.Store }
@@ -2663,6 +2687,10 @@ func machineListener(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer, policies m
 	presented := loopbackCertificate(t)
 	agents := agent.NewService(agent.NewPostgresStore(p),
 		certificates{issuer: issuer, serverRoot: certificatePEM(presented)})
+	// An operator renews its own certificate here, recording each one it
+	// is issued (ADR-0046).
+	operators := operator.NewService(operator.NewPostgresStore(p),
+		operatorCertificates{issuer: issuer, serverRoot: certificatePEM(presented)}, operator.Config{})
 	messages, err := message.NewService(message.NewPostgresStore(p), briefDelivery())
 	require.NoError(t, err)
 	// The watches this surface counts are opened by the process serving
@@ -2674,7 +2702,7 @@ func machineListener(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer, policies m
 	srv := machine.NewServer(
 		machine.NewService(machineTrustRoots{store: authorities}),
 		presented,
-		machinegen.Handler(machineapi.NewServer(agents, messages, message.NewPostgresStore(p), watches, memberGroups{store: org.NewPostgresStore(p)}, policies)),
+		machinegen.Handler(machineapi.NewServer(agents, operators, messages, message.NewPostgresStore(p), watches, memberGroups{store: org.NewPostgresStore(p)}, policies)),
 	)
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
@@ -2767,7 +2795,7 @@ func archivePolicy(t *testing.T, srv *authz.PolicyGRPCServer, policyGRN string) 
 
 // pairOf is the certificate the surface issued, as the process it was
 // issued for presents it.
-func pairOf(t *testing.T, issued machinegen.AgentCertificate) tls.Certificate {
+func pairOf(t *testing.T, issued machinegen.MachineCertificate) tls.Certificate {
 	t.Helper()
 	pair, err := tls.X509KeyPair([]byte(issued.CertificatePem), []byte(issued.PrivateKeyPem))
 	require.NoError(t, err)
@@ -2827,7 +2855,7 @@ func TestMachineSurface_OperatorCreatesAnAgentThatThenAuthenticates(t *testing.T
 
 	status, body = machineRequest(t, operator, http.MethodPost, url+"/agents/"+created.Grn+"/certificate")
 	require.Equal(t, http.StatusCreated, status, string(body))
-	var issued machinegen.AgentCertificate
+	var issued machinegen.MachineCertificate
 	require.NoError(t, json.Unmarshal(body, &issued))
 	assert.Equal(t, created.Grn, issued.Grn)
 	assert.True(t, issued.NotAfter.After(time.Now()), "a certificate that is already expired")
@@ -2891,7 +2919,7 @@ func provisioned(t *testing.T, url string, operator *http.Client) (grn.GRN, *htt
 
 	status, body = machineRequest(t, operator, http.MethodPost, url+"/agents/"+created.Grn+"/certificate")
 	require.Equal(t, http.StatusCreated, status, string(body))
-	var issued machinegen.AgentCertificate
+	var issued machinegen.MachineCertificate
 	require.NoError(t, json.Unmarshal(body, &issued))
 
 	agentGRN, err := grn.Parse(created.Grn)

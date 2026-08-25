@@ -116,7 +116,7 @@ func TestDefinitionSurface_AnOperatorReadsClaimsAndRunsWhatNamesIt(t *testing.T)
 	// And the certificate route issues for the claimed agent.
 	status, body = machineRequest(t, one, http.MethodPost, url+"/agents/"+mine.Agent().String()+"/certificate")
 	require.Equal(t, http.StatusCreated, status, string(body))
-	var issued machinegen.AgentCertificate
+	var issued machinegen.MachineCertificate
 	require.NoError(t, json.Unmarshal(body, &issued))
 	assert.Equal(t, mine.Agent().String(), issued.Grn)
 

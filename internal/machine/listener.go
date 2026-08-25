@@ -55,7 +55,7 @@ func NewServer(s Service, certificate ServerCertificate, next http.Handler) *htt
 
 // identify hands next the identity the connection authenticated as.
 // The certificate it reads is the one the handshake verified, and it
-// reads it by the same rule, so what reaches a handler is the GRN
+// reads it by the same rule, so what reaches a handler is the identity
 // [Service.Authenticate] returned. The refusal is what a request that
 // reached here any other way gets instead.
 func identify(next http.Handler) http.Handler {
@@ -64,12 +64,12 @@ func identify(next http.Handler) http.Handler {
 			http.Error(w, "no client certificate", http.StatusUnauthorized)
 			return
 		}
-		subject, err := subjectOf(r.TLS.PeerCertificates[0])
+		identity, err := identityOf(r.TLS.PeerCertificates[0])
 		if err != nil {
 			http.Error(w, "certificate does not authenticate", http.StatusUnauthorized)
 			return
 		}
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), identityKey{}, Identity{grn: subject})))
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), identityKey{}, identity)))
 	})
 }
 

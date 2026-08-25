@@ -24,6 +24,7 @@ import (
 	"github.com/garamsh/garam/internal/machine"
 	"github.com/garamsh/garam/internal/machineapi"
 	"github.com/garamsh/garam/internal/message"
+	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
 	"github.com/garamsh/garam/internal/watch"
 )
@@ -86,6 +87,11 @@ func serveMachine(cmd *cobra.Command) error {
 	}
 	agents := agent.NewService(agent.NewPostgresStore(pool),
 		certificates{issuer: issuer, serverRoot: serverRoot})
+	// An operator renews its own certificate on this listener, through
+	// the same authority and the same server root its agents are given
+	// (ADR-0046).
+	operators := operator.NewService(operator.NewPostgresStore(pool),
+		operatorCertificates{issuer: issuer, serverRoot: serverRoot}, operator.Config{})
 	// The delivery parameters default narrow (ADR-0018), and the
 	// defaults are what this process runs on until something asks for
 	// another value.
@@ -127,7 +133,7 @@ func serveMachine(cmd *cobra.Command) error {
 	// The generated router matches before the middleware runs, so the
 	// log line can name the route rather than the path.
 	handler := machinegen.HandlerWithOptions(
-		machineapi.NewServer(agents, messages, consents, watches,
+		machineapi.NewServer(agents, operators, messages, consents, watches,
 			memberGroups{store: org.NewPostgresStore(pool)},
 			machineapi.NewGRPCEvaluator(conn)),
 		machinegen.StdHTTPServerOptions{
@@ -266,6 +272,31 @@ func (c certificates) Issue(ctx context.Context, subject grn.GRN) (*agent.Certif
 		return nil, err
 	}
 	return &agent.Certificate{
+		CertificatePEM: issued.CertificatePEM(),
+		PrivateKeyPEM:  issued.PrivateKeyPEM(),
+		IssuerPEM:      issued.IssuerPEM(),
+		ServerRootPEM:  c.serverRoot,
+		NotAfter:       issued.NotAfter(),
+	}, nil
+}
+
+// operatorCertificates is that same authority in the shape the operator
+// domain signs through (operator.Issuer). It carries the serial as
+// well: what an operator presents on the renewal that replaces a
+// certificate is which certificate it is, and only the issuer knows
+// that (ADR-0046).
+type operatorCertificates struct {
+	issuer     ca.Service
+	serverRoot []byte
+}
+
+func (c operatorCertificates) Issue(ctx context.Context, subject grn.GRN) (*operator.Certificate, error) {
+	issued, err := c.issuer.Issue(ctx, subject)
+	if err != nil {
+		return nil, err
+	}
+	return &operator.Certificate{
+		Serial:         operator.Serial(issued.Serial()),
 		CertificatePEM: issued.CertificatePEM(),
 		PrivateKeyPEM:  issued.PrivateKeyPEM(),
 		IssuerPEM:      issued.IssuerPEM(),

@@ -68,7 +68,7 @@ func createAuthorityCertificate(orgGRN grn.GRN, key *ecdsa.PrivateKey, now time.
 // by uri with the issuer's key, and returns it in DER form. The serial
 // is the caller's, because what identifies the certificate outlives
 // this call: it is what a renewal presents to say which certificate it
-// is replacing (ADR-0045).
+// is replacing (ADR-0046).
 func createCertificate(serial *big.Int, uri *url.URL, public *ecdsa.PublicKey, issuer *x509.Certificate, issuerKey *ecdsa.PrivateKey, now, notAfter time.Time) ([]byte, error) {
 	// An empty subject name makes Go mark the SAN critical, which is
 	// what carries the identity here (ADR-0014).

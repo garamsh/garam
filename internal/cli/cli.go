@@ -10,7 +10,11 @@
 // `issue-certificate` is the one bootstrap ADR-0015 leaves out of
 // band: it mints an operator's own first certificate, for operator
 // subjects only, and no serve path reaches it, so no serving process
-// can mint an identity.
+// mints an operator's first certificate — which is why the command is
+// a sibling of `serve` rather than a subcommand under it. That is as
+// far as it reaches: `serve machine` mints agent identities and issues
+// certificates on the listener it serves
+// (docs/architecture/domains.md §internal/ca).
 //
 // Every serve command answers the two probes internal/health mounts —
 // liveness and readiness — on a listener that asks for no credential:

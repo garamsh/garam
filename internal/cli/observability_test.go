@@ -461,7 +461,7 @@ func (s brokenSessions) Delete(context.Context, string) error { return s.err }
 // holds leaves no cause on the line.
 func TestLogServed_CarriesTheCauseOfAnAPIFailure(t *testing.T) {
 	cause := errorx.Wrap(errorx.New(errorx.KindInternal, "connection reset by peer"), "session delete")
-	srv := api.NewServer(nil, nil, nil, nil, nil, brokenSessions{err: cause}, nil, nil, nil, nil, nil, nil, api.Config{})
+	srv := api.NewServer(nil, nil, nil, nil, nil, nil, brokenSessions{err: cause}, nil, nil, nil, nil, nil, nil, api.Config{})
 
 	var out lines
 	mux := http.NewServeMux()

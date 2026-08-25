@@ -23,6 +23,12 @@ export type Invitation = components["schemas"]["Invitation"];
  * necessarily acted on it, and nothing here reports whether one has.
  */
 export type AgentDefinition = components["schemas"]["AgentDefinition"];
+/**
+ * An operator an organization has registered, as the API returns one.
+ * The record says garam holds one; it says nothing about whether the
+ * operator is running or reachable (ADR-0045).
+ */
+export type Operator = components["schemas"]["Operator"];
 
 /**
  * What a read returned, or the fact that the API never answered. An
@@ -61,6 +67,13 @@ export function listGroups(org: string): Promise<OrgRead<Group[]>> {
 export function listProjects(org: string): Promise<OrgRead<Project[]>> {
   return catchUnreachable(
     garamFetchAuthenticated<Project[]>(`/orgs/${orgPath(org)}/projects`),
+  );
+}
+
+/** The operators an organization has registered. */
+export function listOperators(org: string): Promise<OrgRead<Operator[]>> {
+  return catchUnreachable(
+    garamFetchAuthenticated<Operator[]>(`/orgs/${orgPath(org)}/operators`),
   );
 }
 

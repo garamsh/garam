@@ -52,6 +52,16 @@ sql:
   - engine: postgresql
     schema:
       - migrations/000001_init.up.sql
+      - migrations/000017_operators.up.sql
+    queries: internal/operator/queries.sql
+    gen:
+      go:
+        package: db
+        out: internal/operator/db
+        sql_package: pgx/v5
+  - engine: postgresql
+    schema:
+      - migrations/000001_init.up.sql
       - migrations/000005_certificate_authorities.up.sql
     queries: internal/ca/queries.sql
     gen:

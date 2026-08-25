@@ -30,6 +30,36 @@ function recordDefinitions() {
 }
 
 describe("define agent form", () => {
+  it("renders the refusal an unregistered operator gets, and prints no GRN", async () => {
+    // The API refuses a definition naming an operator the organization
+    // has not registered (ADR-0045) and names the identifier rather
+    // than the GRN, which is what lets the console render the sentence
+    // it is given (ADR-0011).
+    server.use(
+      http.post(`${API_URL}/orgs/acme/agent-definitions`, () =>
+        HttpResponse.json(
+          {
+            kind: "invalid_argument",
+            message:
+              "this organization has registered no operator named gagent-dev",
+          },
+          { status: 400 },
+        ),
+      ),
+    );
+    const user = userEvent.setup();
+    const { container } = render(<DefineAgentForm org="acme" />);
+
+    await user.type(screen.getByLabelText("Operator"), "gagent-dev");
+    await user.click(screen.getByRole("button", { name: "Define agent" }));
+
+    expect(
+      await screen.findByText(
+        "this organization has registered no operator named gagent-dev",
+      ),
+    ).toBeInTheDocument();
+    expect(container.textContent).not.toContain("grn:");
+  });
   it("builds the operator GRN from the organization and posts the values as a map", async () => {
     const posted = recordDefinitions();
     const user = userEvent.setup();

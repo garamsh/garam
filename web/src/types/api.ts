@@ -419,6 +419,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/orgs/{org}/operators": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List an organization's operators. Requires the `member` role.
+         * @description The operators this organization has registered. An entry says garam holds the record; it does not say the operator is running, reachable, or holds a certificate — garam never dials one (ADR-0012) and learns nothing about it until it calls.
+         */
+        get: operations["listOperators"];
+        put?: never;
+        /**
+         * Register an operator of an organization. Requires the `admin` role.
+         * @description Records that this organization has an operator under the identifier given, so a definition can name one garam holds a record of (ADR-0045). The identifier is supplied and not minted: an operator that already holds a certificate is registered under the GRN that certificate names.
+         *     It grants the operator nothing. How an operator proves itself is unchanged — a registered operator obtains its first certificate exactly as an unregistered one does, through the command ADR-0032 ships, which reads no record here.
+         *     There is no route that removes a record. garam has no revocation: a certificate that has not expired keeps authenticating whatever this organization holds, and a route implying otherwise would be worse than none (ADR-0045).
+         */
+        post: operations["registerOperator"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orgs/{org}/policies": {
         parameters: {
             query?: never;
@@ -865,6 +891,22 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        Operator: {
+            /** @example grn:acme:default:operator:field-one */
+            grn: string;
+            orgGrn: string;
+            /** @description The member that registered the operator. */
+            registeredBy: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        OperatorRegistration: {
+            /**
+             * @description Lowercase letters, digits and `-`, at most 64 characters. It becomes the identifier segment of the operator's GRN, which is the subject `garam issue-certificate` mints a certificate for (ADR-0032) — so it is supplied rather than minted, and an operator already holding a certificate is registered under the GRN that certificate names.
+             * @example field-one
+             */
+            identifier: string;
+        };
         /**
          * @description What an operator constructs the agent from. garam stores the keys and the strings and interprets neither: what the payload means belongs to the operator that reads it. A key is one to 64 characters of lowercase letters, digits and `-`; a value is at most 4096 bytes; at most 32 entries.
          * @example {
@@ -878,7 +920,7 @@ export interface components {
         /** @description What an agent should be, as an organization's member states it. */
         AgentDefinitionCreate: {
             /**
-             * @description The operator that is to run the agent. It must be an operator of this organization; whether it exists is not knowable here, because nothing registers an operator.
+             * @description The operator that is to run the agent. It must be one this organization has registered under `/orgs/{org}/operators`; one it has not registered is refused, naming the identifier that named no record (ADR-0045).
              * @example grn:acme:default:operator:field-one
              */
             operatorGrn: string;
@@ -1884,6 +1926,64 @@ export interface operations {
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
+        };
+    };
+    listOperators: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The organization's operators. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Operator"][];
+                };
+            };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    registerOperator: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperatorRegistration"];
+            };
+        };
+        responses: {
+            /** @description Operator registered. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Operator"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
         };
     };
     listPolicies: {

@@ -13,9 +13,9 @@ import {
   AGENT_VALUE_MAX_BYTES,
   SUGGESTED_VALUE_KEYS,
   parseAgentValues,
-  parseOperatorIdentifier,
   valueBytes,
 } from "@/lib/agent-definition";
+import { parseOperatorIdentifier } from "@/lib/operator";
 import type { Parsed } from "@/lib/parsed";
 
 const initialState: DefineAgentState = { status: "idle" };

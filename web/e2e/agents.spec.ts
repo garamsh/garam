@@ -30,7 +30,7 @@ test.describe("agent definitions", () => {
       page.getByRole("button", { name: "Define agent" }),
     ).toBeDisabled();
 
-    await page.getByLabel("Operator").fill("field-one");
+    await page.getByLabel("Operator").fill(signedIn.operatorIdentifier);
     await page.getByLabel("Key 1", { exact: true }).fill("model");
     // Exact on purpose: the row's remove button is named "Remove value
     // 1", which carries the field's own name as a substring.
@@ -50,7 +50,9 @@ test.describe("agent definitions", () => {
     await page.reload();
 
     await expect(page.getByText(identifier, { exact: true })).toBeVisible();
-    await expect(page.getByText("field-one", { exact: true })).toBeVisible();
+    await expect(
+      page.getByText(signedIn.operatorIdentifier, { exact: true }),
+    ).toBeVisible();
     await expect(page.getByText("be brief", { exact: true })).toBeVisible();
   });
 });

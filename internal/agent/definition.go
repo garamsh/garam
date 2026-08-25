@@ -102,8 +102,9 @@ type Definition struct {
 // It fails unless operatorGRN names an operator of that organization:
 // an operator holds one organization's certificate (ADR-0015), so a
 // definition naming another organization's operator names one that can
-// never read it. Whether that operator exists is not knowable here —
-// nothing registers an operator, and the GRN is all garam holds.
+// never read it. Whether the organization registered that operator is
+// a read this constructor does not make; the caller answers it against
+// internal/operator before the definition is stored (ADR-0045).
 func NewDefinition(orgGRN, operatorGRN grn.GRN, values Values, definedBy grn.GRN) (*Definition, error) {
 	g, err := NewGRN(orgGRN)
 	if err != nil {
@@ -129,7 +130,15 @@ func NewDefinition(orgGRN, operatorGRN grn.GRN, values Values, definedBy grn.GRN
 
 // validateOperator returns nil if operatorGRN names an operator of the
 // organization orgGRN identifies.
+//
+// It validates the GRN itself, not only the two segments below: the
+// identifier is answered back in the refusal a definition naming an
+// unregistered operator gets (ADR-0045), and a segment that never met
+// the character rule is not text to echo.
 func validateOperator(operatorGRN, orgGRN grn.GRN) error {
+	if err := operatorGRN.Validate(); err != nil {
+		return errorx.Wrap(err, "agent: operator", errorx.KindInvalidArgument)
+	}
 	switch {
 	case operatorGRN.ServiceType != ServiceTypeOperator:
 		return errorx.New(errorx.KindInvalidArgument, "agent: grn does not name an operator")

@@ -51,6 +51,7 @@ import (
 	"github.com/garamsh/garam/internal/machine"
 	"github.com/garamsh/garam/internal/machineapi"
 	"github.com/garamsh/garam/internal/message"
+	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
 	"github.com/garamsh/garam/internal/user"
 	"github.com/garamsh/garam/internal/watch"
@@ -115,7 +116,7 @@ func truncate(t *testing.T, p *pgxpool.Pool) {
 		group_members, project_members, org_members, invitations, sessions,
 		oauth_states, password_credentials, password_attempts,
 		policies, policy_versions, policy_attachments, agents,
-		agent_assignments, agent_definitions, certificate_authorities,
+		agent_assignments, agent_definitions, operators, certificate_authorities,
 		messages, message_consents, agent_watches CASCADE`)
 	require.NoError(t, err)
 }
@@ -128,6 +129,16 @@ func countRows(t *testing.T, p *pgxpool.Pool, query string, args ...any) int {
 	var n int
 	require.NoError(t, p.QueryRow(context.Background(), query, args...).Scan(&n))
 	return n
+}
+
+// registerOperator records that the org owning g has an operator under
+// it, which a definition naming one now requires (ADR-0045).
+func registerOperator(t *testing.T, p *pgxpool.Pool, g grn.GRN) grn.GRN {
+	t.Helper()
+	o, err := operator.New(orgRootGRN(g.Organization), g.Identifier, scopedGRN(g.Organization, "user", "ada"))
+	require.NoError(t, err)
+	require.NoError(t, operator.NewPostgresStore(p).Register(context.Background(), o))
+	return o.GRN()
 }
 
 func grnOf(serviceType, id string) grn.GRN {
@@ -1114,6 +1125,92 @@ func TestAgentAssignment_StaysInsideItsOrg(t *testing.T) {
 	assert.Equal(t, 1, stored.Epoch())
 }
 
+// TestOperatorStore_RoundTrip covers what a registration is (ADR-0045):
+// an organization's record that it has an operator, carrying no
+// credential and no state anybody reports.
+//
+// The cascade is asserted because it is what a delete route would
+// otherwise have to decide: the record follows the organization out and
+// nothing else follows the record.
+func TestOperatorStore_RoundTrip(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := operator.NewPostgresStore(p)
+	orgs := org.NewPostgresStore(p)
+	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("globex"), "globex")))
+
+	registeredBy := scopedGRN("acme", "user", "ada")
+	one, err := operator.New(orgRootGRN("acme"), "one", registeredBy)
+	require.NoError(t, err)
+	require.NoError(t, s.Register(ctx, one))
+
+	stored, err := s.Get(ctx, one.GRN())
+	require.NoError(t, err)
+	assert.Equal(t, one.GRN(), stored.GRN())
+	assert.Equal(t, orgRootGRN("acme"), stored.Organization())
+	assert.Equal(t, registeredBy, stored.RegisteredBy())
+	assert.False(t, stored.CreatedAt().IsZero())
+
+	// Registering the same GRN twice is a conflict, not a second row.
+	assert.ErrorIs(t, s.Register(ctx, one), operator.ErrOperatorAlreadyRegistered)
+
+	// A record belongs to the org that registered it.
+	elsewhere, err := operator.New(orgRootGRN("globex"), "one", scopedGRN("globex", "user", "ada"))
+	require.NoError(t, err)
+	require.NoError(t, s.Register(ctx, elsewhere))
+	listed, err := s.ListByOrg(ctx, orgRootGRN("acme"))
+	require.NoError(t, err)
+	require.Len(t, listed, 1, "this org's operators and no other org's")
+	assert.Equal(t, one.GRN(), listed[0].GRN())
+
+	// An operator nobody registered is a miss rather than an empty
+	// record, and the registered one is the control for it.
+	_, err = s.Get(ctx, scopedGRN("acme", operator.ServiceType, "two"))
+	assert.ErrorIs(t, err, operator.ErrOperatorNotFound)
+
+	// Deleting the org takes its operators and the definitions naming
+	// them in one statement. The foreign key between the two is NO
+	// ACTION for exactly this: RESTRICT would refuse the cascade.
+	definitions := agent.NewPostgresStore(p)
+	d, err := agent.NewDefinition(orgRootGRN("acme"), one.GRN(), agent.Values{}, registeredBy)
+	require.NoError(t, err)
+	require.NoError(t, definitions.Define(ctx, d))
+	require.NoError(t, orgs.DeleteOrg(ctx, orgRootGRN("acme")))
+	_, err = s.Get(ctx, one.GRN())
+	assert.ErrorIs(t, err, operator.ErrOperatorNotFound)
+	remaining, err := definitions.ListDefinitionsByOrg(ctx, orgRootGRN("acme"))
+	require.NoError(t, err)
+	assert.Empty(t, remaining)
+	// The other org is untouched, so the cascade removed a row rather
+	// than every row.
+	_, err = s.Get(ctx, elsewhere.GRN())
+	assert.NoError(t, err)
+}
+
+// TestAgentDefinition_RefusesAnOperatorTheOrgHasNotRegistered covers
+// the schema's copy of the check internal/api makes (ADR-0045). The
+// domain refuses it on the way in, so only a store call that skipped
+// the handler reaches the foreign key — and this is the copy no call
+// path routes around.
+func TestAgentDefinition_RefusesAnOperatorTheOrgHasNotRegistered(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := agent.NewPostgresStore(p)
+	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	definedBy := scopedGRN("acme", "user", "ada")
+
+	unregistered, err := agent.NewDefinition(orgRootGRN("acme"), scopedGRN("acme", agent.ServiceTypeOperator, "gagent-dev"), agent.Values{}, definedBy)
+	require.NoError(t, err)
+	assert.Error(t, s.Define(ctx, unregistered))
+
+	// Registering that operator is what makes the same write land, so
+	// the refusal was the missing record and not the row.
+	registered, err := agent.NewDefinition(orgRootGRN("acme"), registerOperator(t, p, scopedGRN("acme", agent.ServiceTypeOperator, "gagent-dev")), agent.Values{}, definedBy)
+	require.NoError(t, err)
+	assert.NoError(t, s.Define(ctx, registered))
+}
+
 // TestAgentDefinitionStore_RoundTrip covers what a definition is
 // (ADR-0026): an organization's record of what an agent should be,
 // written once, holding no agent. The agent GRN it names answers
@@ -1132,7 +1229,7 @@ func TestAgentDefinitionStore_RoundTrip(t *testing.T) {
 	values, err := agent.ParseValues(map[string]string{"model": "haiku", "workspace": "frontend"})
 	require.NoError(t, err)
 	definedBy := grn.New(grn.RootOwner, grn.DefaultProject, "user", "ada")
-	d, err := agent.NewDefinition(orgGRN, grnOf(agent.ServiceTypeOperator, "one"), values, definedBy)
+	d, err := agent.NewDefinition(orgGRN, registerOperator(t, p, grnOf(agent.ServiceTypeOperator, "one")), values, definedBy)
 	require.NoError(t, err)
 	require.NoError(t, s.Define(ctx, d))
 
@@ -1165,7 +1262,7 @@ func TestAgentDefinitionStore_RoundTrip(t *testing.T) {
 	assert.Equal(t, reported, agents[0].GRN())
 
 	// A definition belongs to the org that wrote it.
-	elsewhere, err := agent.NewDefinition(otherOrgGRN, scopedGRN("globex", agent.ServiceTypeOperator, "one"), agent.Values{}, definedBy)
+	elsewhere, err := agent.NewDefinition(otherOrgGRN, registerOperator(t, p, scopedGRN("globex", agent.ServiceTypeOperator, "one")), agent.Values{}, definedBy)
 	require.NoError(t, err)
 	require.NoError(t, s.Define(ctx, elsewhere))
 	stored, err = s.ListDefinitionsByOrg(ctx, orgGRN)
@@ -1193,6 +1290,7 @@ func TestAgentDefinition_StaysInsideItsOrgAndHoldsAnObject(t *testing.T) {
 	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgGRN, "acme")))
 	g, err := agent.NewGRN(orgGRN)
 	require.NoError(t, err)
+	registered := registerOperator(t, p, grnOf(agent.ServiceTypeOperator, "one"))
 
 	rejected := []struct {
 		name     string
@@ -1200,11 +1298,12 @@ func TestAgentDefinition_StaysInsideItsOrgAndHoldsAnObject(t *testing.T) {
 		operator grn.GRN
 		values   string
 	}{
-		{"another org's agent", scopedGRN("globex", agent.ServiceType, "deadbeef"), grnOf(agent.ServiceTypeOperator, "one"), `{}`},
-		{"an identity that is not an agent", grnOf("user", "ada"), grnOf(agent.ServiceTypeOperator, "one"), `{}`},
+		{"another org's agent", scopedGRN("globex", agent.ServiceType, "deadbeef"), registered, `{}`},
+		{"an identity that is not an agent", grnOf("user", "ada"), registered, `{}`},
 		{"another org's operator", g, scopedGRN("globex", agent.ServiceTypeOperator, "one"), `{}`},
 		{"an identity that is not an operator", g, grnOf(agent.ServiceType, "deadbeef"), `{}`},
-		{"values that are not an object", g, grnOf(agent.ServiceTypeOperator, "one"), `[]`},
+		{"an operator this org has not registered", g, grnOf(agent.ServiceTypeOperator, "two"), `{}`},
+		{"values that are not an object", g, registered, `[]`},
 	}
 	for _, tt := range rejected {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1219,7 +1318,7 @@ func TestAgentDefinition_StaysInsideItsOrgAndHoldsAnObject(t *testing.T) {
 	// accepted, so the constraints reject a row rather than every row.
 	_, err = p.Exec(ctx, `INSERT INTO agent_definitions (agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at)
 		VALUES ($1, $2, $3, $4::jsonb, $5, now())`,
-		g.String(), orgGRN.String(), grnOf(agent.ServiceTypeOperator, "one").String(), `{"model":"haiku"}`,
+		g.String(), orgGRN.String(), registered.String(), `{"model":"haiku"}`,
 		grn.New(grn.RootOwner, grn.DefaultProject, "user", "ada").String())
 	require.NoError(t, err)
 }

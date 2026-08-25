@@ -10,6 +10,7 @@ export {
   getOrg,
   listAgentDefinitions,
   listGroups,
+  listOperators,
   listOrgMembers,
   listOrgs,
   listProjects,
@@ -17,6 +18,7 @@ export {
   type AgentDefinition,
   type Group,
   type Member,
+  type Operator,
   type Organization,
   type Project,
 } from "./api/orgs";

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -20,11 +21,11 @@ import (
 
 // defineAgent records a definition of an agent operator is to run, as
 // the console writes one through internal/api.
-func defineAgent(t *testing.T, s *agent.PostgresStore, operator grn.GRN, values agent.Values) *agent.Definition {
+func defineAgent(t *testing.T, p *pgxpool.Pool, s *agent.PostgresStore, operatorGRN grn.GRN, values agent.Values) *agent.Definition {
 	t.Helper()
 	d, err := agent.NewDefinition(
-		grn.New(grn.RootOwner, grn.DefaultProject, "org", operator.Organization),
-		operator, values, scopedGRN(operator.Organization, "user", "ada"))
+		orgRootGRN(operatorGRN.Organization),
+		registerOperator(t, p, operatorGRN), values, scopedGRN(operatorGRN.Organization, "user", "ada"))
 	require.NoError(t, err)
 	require.NoError(t, s.Define(context.Background(), d))
 	return d
@@ -71,9 +72,9 @@ func TestDefinitionSurface_AnOperatorReadsClaimsAndRunsWhatNamesIt(t *testing.T)
 	two := machineClient(t, installed(t, outOfBand, scopedGRN("acme", agent.ServiceTypeOperator, "two")))
 
 	store := agent.NewPostgresStore(p)
-	mine := defineAgent(t, store, oneGRN, agent.Values{"model": "haiku"})
-	siblings := defineAgent(t, store, scopedGRN("acme", agent.ServiceTypeOperator, "two"), agent.Values{})
-	defineAgent(t, store, scopedGRN("globex", agent.ServiceTypeOperator, "one"), agent.Values{})
+	mine := defineAgent(t, p, store, oneGRN, agent.Values{"model": "haiku"})
+	siblings := defineAgent(t, p, store, scopedGRN("acme", agent.ServiceTypeOperator, "two"), agent.Values{})
+	defineAgent(t, p, store, scopedGRN("globex", agent.ServiceTypeOperator, "one"), agent.Values{})
 
 	// The read is scoped by the definition's operator field: each
 	// operator reads exactly the definitions naming it, and the claim
@@ -148,7 +149,7 @@ func TestAgentStore_ConcurrentClaimsSerializeToOneWinner(t *testing.T) {
 	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 
 	operator := scopedGRN("acme", agent.ServiceTypeOperator, "one")
-	d := defineAgent(t, s, operator, agent.Values{})
+	d := defineAgent(t, p, s, operator, agent.Values{})
 
 	const contenders = 4
 	start := make(chan struct{})

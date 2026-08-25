@@ -67,6 +67,16 @@ const (
 	ActionConsentGrant    = "consent:grant"
 	ActionConsentWithdraw = "consent:withdraw"
 
+	// Reading the operators an org has registered, and registering one
+	// (ADR-0045). The org owns the constants for the reason it owns the
+	// policy ones, and internal/operator does not import this package.
+	ActionOperatorRead = "operator:read"
+	// ActionOperatorRegister is recording that the org has an operator.
+	// It is not enrolling one and not granting it anything: what an
+	// operator authenticates with is a certificate no action here
+	// mints.
+	ActionOperatorRegister = "operator:register"
+
 	// Reading the agents an org holds, defining one, and watching one
 	// work. The org owns the constants for the reason it owns the
 	// policy ones: the api
@@ -87,12 +97,20 @@ const (
 )
 
 // Actions returns the action patterns the role grants on an org and
-// on the groups, projects and agents it contains. The patterns feed
-// IAM-style Allow statements; the evaluator resolves wildcards.
+// on the groups, projects, operators and agents it contains. The
+// patterns feed IAM-style Allow statements; the evaluator resolves
+// wildcards.
 //
-// Agents are named action by action rather than as `agent:*`, every
-// role over: ADR-0012 puts provisioning outside garam, so a wildcard
-// here would grant in advance the very actions no endpoint may offer.
+// Agents and operators are named action by action rather than as
+// `agent:*` and `operator:*`, every role over: ADR-0012 puts
+// provisioning outside garam, so a wildcard here would grant in advance
+// the very actions no endpoint may offer. ADR-0045 leaves an operator's
+// enrolment and its revocation undecided, which is more of the same.
+//
+// A member reads the operators an org has registered and does not
+// register one. Defining an agent needs the list to name an operator
+// from, and standing up a machine identity for the organization is the
+// administrative act registering already looks like.
 //
 // No role names ActionAgentWatch. ADR-0022 separates watching from
 // reading so an organization may give one and withhold the other, and
@@ -102,18 +120,22 @@ const (
 func (r Role) Actions() []string {
 	switch r {
 	case RoleOwner:
-		return []string{"org:*", "group:*", "project:*", "policy:*", "consent:*", ActionAgentRead, ActionAgentDefine}
+		return []string{
+			"org:*", "group:*", "project:*", "policy:*", "consent:*",
+			ActionOperatorRead, ActionOperatorRegister, ActionAgentRead, ActionAgentDefine,
+		}
 	case RoleAdmin:
 		return []string{
 			ActionOrgRead, ActionOrgUpdate, ActionOrgMemberList, ActionOrgInvite,
-			"group:*", "project:*", "policy:*", "consent:*", ActionAgentRead, ActionAgentDefine,
+			"group:*", "project:*", "policy:*", "consent:*",
+			ActionOperatorRead, ActionOperatorRegister, ActionAgentRead, ActionAgentDefine,
 		}
 	case RoleMember:
 		return []string{
 			ActionOrgRead, ActionOrgMemberList,
 			ActionGroupRead, ActionGroupMemberList,
 			ActionProjectRead, ActionProjectMemberList,
-			ActionAgentRead, ActionAgentDefine,
+			ActionOperatorRead, ActionAgentRead, ActionAgentDefine,
 		}
 	}
 	return nil

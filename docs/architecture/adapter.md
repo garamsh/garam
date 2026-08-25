@@ -205,8 +205,7 @@ same commit is the anchor for those restatements.
 
 The last two rows are not that reading's. They arrived on 2026-08-25
 from [ADR-0013](./adr/0013-agent-messaging.md) §Decision, which is
-where they were read, and ADR-0013 records the second of them as true
-when it was written and not guaranteed.
+where they were read.
 
 | Fact | Where | What breaks without it |
 |---|---|---|
@@ -218,7 +217,7 @@ when it was written and not guaranteed.
 | The inbox is a volatile buffer | `internal/gateway/service.go` | The accept response would be an acknowledgement |
 | A failed turn reaches no sender | `internal/gateway/queue.go` | garam would not owe the notification |
 | Opening a monitoring subscription enqueues nothing | `internal/gateway/events.go` | Readiness would spend the agent's throughput to measure it |
-| No listener exists before the tool registry has loaded | `cmd/gagent/agent.go` | An answer would stop meaning the agent can accept work |
+| No listener exists before the tool registry has loaded — true when [ADR-0013](./adr/0013-agent-messaging.md) §Decision recorded it, and not guaranteed | `cmd/gagent/agent.go` | An answer would stop meaning the agent can accept work |
 
 This promotes an observability surface into a delivery contract, and
 the two carry different obligations: observability may lose an event, a

@@ -192,10 +192,12 @@ Two things sit outside that comparison:
   image sets it (`deploy/local/Dockerfile.web`) and Next.js reads it, so
   the chart sets no value and names 3000 on the container port and both
   probes to match.
-- `issue-certificate` is a command rather than a workload — the one
-  out-of-band bootstrap (ADR-0015), run by hand against the same
-  database. The three variables it reads are already rendered above for
-  the workloads that need them, and whoever runs it supplies the same
+- `issue-certificate` is a command rather than a workload, run by hand
+  against the same database: the bootstrap ADR-0015 leaves out of band.
+  It is not the only step a deployment performs out of band — the key
+  material §Key material and secrets names is the other. The three
+  variables `issue-certificate` reads are already rendered above for the
+  workloads that need them, and whoever runs it supplies the same
   values.
 
 ## Exposure is the cluster owner's

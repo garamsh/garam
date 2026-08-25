@@ -137,8 +137,9 @@ Multiple root-level files are fine: `errors.go` + `logger.go` +
 - `internal/` is enforced by the Go toolchain. Use it for everything not explicitly public.
 - `pkg/` is for code other modules import. Most services don't need it.
 
-This project adds six directories outside `internal/`, each owned by an
-ADR rather than by the layout above:
+This project adds seven directories the layout above does not name.
+Each bullet names the ADR that owns its directory where one does;
+`migrations/`, `tests/` and `docs/` are owned by none.
 
 - `api/` — the OpenAPI specifications and the servers generated from
   them. There are two, one per surface: `openapi.yaml` for the browser
@@ -146,12 +147,18 @@ ADR rather than by the layout above:
 - `proto/` — `.proto` sources and generated code (ADR-0003).
 - `migrations/` — SQL migrations; the schema's source of truth. The Go
   file beside them tests the migrations and declares no schema.
-- `tests/e2e/` — black-box tests against real infrastructure.
+- `tests/` — black-box tests: `tests/e2e/` against real infrastructure,
+  `tests/image/` against the built image.
 - `web/` — the frontend, which is not Go, so this file does not govern
   it (ADR-0009).
-- `deploy/` — what is needed to run the built images locally. garam
-  publishes images and a contract rather than manifests, so what a
-  cluster deploys does not live here (ADR-0020).
+- `deploy/` — `local/` is what is needed to run the built images
+  locally, and `charts/garam/` is the chart that describes a garam
+  deployment (ADR-0042, superseding ADR-0020). garam publishes two
+  images and a contract; the chart now stands beside them, so what a
+  cluster deploys does live here. `deploy/charts/garam/README.md`
+  describes what it renders.
+- `docs/` — the conventions, the architecture documents and the plans;
+  `docs/README.md` is the index.
 
 Not every package under `internal/` is a domain. `api`, `authz` and
 `machineapi` are request surfaces; `api` and `authz` are independent

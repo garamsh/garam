@@ -101,8 +101,8 @@ URL, so `GARAM_DB_PORT` moves the suite with the server.
 `make web-image-e2e` builds the web image and checks it rather than the
 app: that the standalone server starts, that `/healthz` and `/readyz`
 answer, and that `/api/*` reaches the URL baked into the build. The
-Playwright suite above drives a dev server, so nothing else here
-exercises the image.
+Playwright suite above runs the built app from the source tree, outside
+any container, so nothing else here exercises the image.
 
 ```sh
 make web-image-e2e                        # builds the image, then checks it

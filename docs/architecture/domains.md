@@ -78,12 +78,12 @@ to an `errorx` error. It reads the sql state on a `*pgconn.PgError`:
 `KindFailedPrecondition`, anything else wraps with `op` and the
 chain's kind. `op` is the caller's own label for the operation;
 the wrap message is `op` alone, not prefixed with the store name.
-Depends on `errorx`, `pgx`, `pgconn`. The five domain postgres stores
-that each held their own copy (`org`, `authz`, `ca`, `user`, `agent`)
-now answer through here. The `message` store did not have its own
-copy — it had inline `errors.Is(err, pgx.ErrNoRows)` checks — and
-remains so; the audit that named it as a fifth copy was wrong on
-this.
+Depends on `errorx`, `pgx`, `pgconn`. Six domain postgres stores answer
+through here: the five that each held their own copy (`org`, `authz`,
+`ca`, `user`, `agent`), and `operator`, which never had one. The
+`message` store did not have its own copy either — it had inline
+`errors.Is(err, pgx.ErrNoRows)` checks, as `internal/authn` does — and
+remains so; the audit that named it as a fifth copy was wrong on this.
 
 ## `internal/keyfile`
 

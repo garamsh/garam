@@ -7,7 +7,10 @@ name: garam-local
 
 services:
   postgres:
-    image: postgres:17.10-alpine3.24
+    # Digest as well as tag: the tag resolves through a mutable pointer,
+    # and `17.10` names the Postgres patch, so what moves under it is the
+    # Alpine rebuild. Dependabot moves the pair together.
+    image: postgres:17.10-alpine3.24@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
     environment:
       POSTGRES_USER: garam
       POSTGRES_PASSWORD: garam

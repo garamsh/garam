@@ -1,19 +1,66 @@
-# The mover for the base-image pins in deploy/local/, which
-# docs/convention/ci.md §Verify a pinned dependency before adopting it
-# requires of a pin.
+# The movers docs/convention/ci.md §Verify a pinned dependency before
+# adopting it requires of a pin. Each entry states what it covers and
+# what it does not.
 #
-# Covers a newer tag for both Dockerfile and Dockerfile.web, rewriting
-# the tag and the digest together.
+# No entry reaches the Makefile, buf.gen.yaml or
+# deploy/charts/garam/values.yaml; each of those records at the pin what
+# moves it instead. Nothing here reaches go.mod, web/package.json or
+# deploy/local/minikube/ at all.
 #
-# Does not cover: a CVE with no newer tag, because the docker ecosystem
-# receives version updates and not security updates; a base republished
-# under the same tag, which can be treated as already current while the
-# tag is unchanged; deploy/local/docker-compose.yml, which is kept only
-# if it parses as a Kubernetes resource and it does not; and
-# deploy/local/minikube/, which is a subdirectory and is not searched.
+# What each entry covers was read from github/docs at commit
+# 0dddeeb8cce75425f9ca0cdffd6a1cbd94926c07 and dependabot/dependabot-core
+# at commit 98786d7814bb4f7199ca3cdb08350b6180b82983.
 version: 2
 updates:
+  # deploy/local/Dockerfile and Dockerfile.web.
+  #
+  # Covers a newer tag for both, rewriting the tag and the digest
+  # together.
+  #
+  # Does not cover: a CVE with no newer tag, because the docker
+  # ecosystem receives version updates and not security updates; a base
+  # republished under the same tag, which can be treated as already
+  # current while the tag is unchanged; deploy/local/docker-compose.yml,
+  # which is kept only if it parses as a Kubernetes resource and it does
+  # not; and deploy/local/minikube/, which is a subdirectory and is not
+  # searched.
+  #
+  # It also moves only the FROM line. go.mod's `go` directive names the
+  # same Go version Dockerfile does, and web/.nvmrc the same Node major
+  # as Dockerfile.web, so every bump this proposes arrives half-done and
+  # splits the container's toolchain from the repository's declared
+  # version unless the other half lands with it.
   - package-ecosystem: "docker"
     directory: "/deploy/local"
+    schedule:
+      interval: "weekly"
+
+  # deploy/local/docker-compose.yml's postgres image, which the entry
+  # above does not read.
+  #
+  # Covers a newer tag, rewriting the tag and the digest together. It
+  # runs the docker ecosystem's own update checker, so the two cases
+  # that entry does not cover are not covered here either.
+  - package-ecosystem: "docker-compose"
+    directory: "/deploy/local"
+    schedule:
+      interval: "weekly"
+
+  # .github/workflows/ci.yml's four action pins.
+  #
+  # Covers a newer release for an action pinned by full commit SHA,
+  # rewriting the SHA and the trailing version comment together.
+  #
+  # Does not cover an action referenced by a path rather than by
+  # repository, and does not keep a version comment that carries
+  # anything besides the version — see the comment in that file.
+  #
+  # A CVE reaches this ecosystem, unlike docker, but as a security
+  # update rather than as an entry here, and the fix it proposes is the
+  # tag rather than the commit that tag names. Such a pull request
+  # re-pins by tag, which §Verify does not accept, and has to be moved
+  # back to the commit before it merges.
+  - package-ecosystem: "github-actions"
+    directory: "/"
     schedule:
       interval: "weekly"

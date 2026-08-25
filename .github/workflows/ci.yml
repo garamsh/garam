@@ -1,5 +1,10 @@
 name: ci
 
+# Each action is pinned to a full commit SHA, and the trailing comment is
+# the tag that commit carries. Dependabot moves the two together only
+# while the comment ends with that version, so a note appended to one
+# leaves it naming a version the SHA is not.
+
 on:
   push:
     branches: [main]

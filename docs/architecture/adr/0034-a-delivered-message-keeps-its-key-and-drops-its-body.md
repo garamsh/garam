@@ -83,3 +83,19 @@ privacy property that was never built. Then:
 - **Delete nothing until the store decision lands.** The store question
   (this deployment's volume mechanics) is exactly what the unbounded
   table was blocking; waiting inverts the dependency.
+
+## Errata
+
+- 2026-08-26 — §Decision's "A body is bounded at submission" gives the
+  bound as **64 KiB**. The bound is **65536 characters**:
+  `maxLength: 65536` in `api/machine.yaml` counts characters, and
+  `internal/message/message.go` tests `len([]rune(body)) >
+  MaxBodyLength` against the same number, with its own comment naming
+  the unit. UTF-8 spends up to four bytes per rune, so the worst case is
+  **256 KiB** rather than 64 KiB, and a body in this project's own
+  conversation language spends three — roughly 192 KiB. The decision
+  stands: a bounded body is what makes the table's worst case
+  arithmetic, and it remains arithmetic. What was wrong is the figure
+  that arithmetic was performed on, which was out by up to four times.
+  The same statement in `api/machine.yaml` and
+  `docs/architecture/domains.md` is corrected separately (#565, #564).

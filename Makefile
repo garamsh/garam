@@ -492,9 +492,11 @@ MINIKUBE_DIR := deploy/local/minikube
 
 # The operator, pinned to the commit that carries the manifest: a release
 # asset can be replaced under its tag and a commit cannot. v1.30.0 is the
-# current stable release and is the first patched for every advisory
-# github.com/cloudnative-pg/cloudnative-pg publishes, the newest of which
-# is GHSA-7qwx-x8ff-3px9.
+# current stable release and the first patched for all four advisories
+# github.com/cloudnative-pg/cloudnative-pg publishes; GHSA-7qwx-x8ff-3px9
+# is what puts that floor at 1.30.0 rather than 1.29.2, and the GitHub
+# Advisory Database does not carry it — re-check the four at the
+# project's own advisories.
 CNPG_MANIFEST := https://raw.githubusercontent.com/cloudnative-pg/cloudnative-pg/4b5e244a7d031f67e025c83c1555e7726ecbbfa1/releases/cnpg-1.30.0.yaml
 
 minikube-up: minikube-start minikube-db minikube-secret minikube-rebuild

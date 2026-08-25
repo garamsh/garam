@@ -1,8 +1,13 @@
-# Every optional value set, so the render `make chart` checks covers the
-# configuration the minimal one leaves out — Google sign-in, and an
-# account created and annotated for every workload, which are the two
-# branches in the templates. The minimal file covers the other side of
-# the second: no name, so no account and no binding.
+# The configuration the minimal file leaves out — Google sign-in, and an
+# account created and annotated for every workload, two of the branches
+# in the templates — so the render `make chart` checks covers both sides
+# of each. The minimal file covers the other side of the second: no
+# name, so no account and no binding.
+#
+# `resources` is set nowhere here. No template branches on it, so a
+# value covers nothing, and `helm package` ships this file inside the
+# chart, where a quantity reads as a figure garam measured. None is
+# (`docs/architecture/deployment-contract.md` §Not established).
 #
 # Each name and annotation below is a fixture. A deployment's names are
 # whatever its own infrastructure repository binds a role to, and which
@@ -33,20 +38,12 @@ api:
     clientSecret:
       secretName: garam-google
       secretKey: client-secret
-  resources:
-    requests:
-      cpu: 100m
-      memory: 128Mi
 authz:
   serviceAccount:
     name: garam-authz
     create: true
     annotations:
       eks.amazonaws.com/role-arn: arn:aws:iam::000000000000:role/garam-ci-authz
-  resources:
-    requests:
-      cpu: 100m
-      memory: 128Mi
 machine:
   serviceAccount:
     name: garam-machine
@@ -60,10 +57,6 @@ machine:
     serverRootKey: server-root.pem
     kekKey: ca-kek.hex
   certificateLifetime: 1h
-  resources:
-    requests:
-      cpu: 100m
-      memory: 128Mi
 web:
   serviceAccount:
     name: garam-web
@@ -71,17 +64,9 @@ web:
     annotations:
       eks.amazonaws.com/role-arn: arn:aws:iam::000000000000:role/garam-ci-web
   apiUrl: https://garam.example/api
-  resources:
-    requests:
-      cpu: 100m
-      memory: 128Mi
 migrate:
   serviceAccount:
     name: garam-migrate
     create: true
     annotations:
       eks.amazonaws.com/role-arn: arn:aws:iam::000000000000:role/garam-ci-migrate
-  resources:
-    requests:
-      cpu: 100m
-      memory: 128Mi

@@ -227,8 +227,8 @@ collaborate on a shared plan.
   question ADR-0045 raises and leaves open.
 - Telling a sender that its message exhausted its attempts. ADR-0018
   makes that garam's obligation because the agent platform notifies
-  nobody; the queue stops redelivering an exhausted message and nothing
-  yet reports one.
+  nobody (`gagent@40ef7ac`); the queue stops redelivering an exhausted
+  message and nothing yet reports one.
 - The two ends of watching an agent work. garam's half is built (see In
   scope): the stream a browser reads, the watcher count on the poll, and
   the fan-out between the two listeners. Neither end of it is — no

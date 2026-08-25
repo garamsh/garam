@@ -174,12 +174,14 @@ anything that reads the schema starts. `make minikube-migrate` waits for
 the Job to complete, and `make minikube-apps` runs after it.
 
 `make minikube-db` waits twice. The operator reports the cluster ready
-before the Service in front of it carries a routable endpoint, so
+before the Service in front of it carries a routable endpoint
+(CloudNativePG 1.30.0, the release `CNPG_MANIFEST` applies), so
 waiting on the cluster alone leaves the first migration attempt to fail
 with `connection refused`; the second wait is on the endpoint the
 migration dials.
 
-A Job's pod template is immutable, so the finished Job is deleted before
+A Job's pod template is immutable (read 2026-08-17; this repository
+pins no Kubernetes version), so the finished Job is deleted before
 being applied again.
 
 Once running, each process reports for itself. `/healthz` answers for
@@ -200,9 +202,9 @@ to prevent.
 ## Database credentials
 
 The operator generates the database role's password and publishes it,
-with a ready-made connection URI, in a Secret it maintains. Every
-process reads `GARAM_DATABASE_URL` from that Secret, so no database
-credential is written in this repository.
+with a ready-made connection URI, in a Secret it maintains
+(CloudNativePG 1.30.0). Every process reads `GARAM_DATABASE_URL` from
+that Secret, so no database credential is written in this repository.
 
 ## What this proves and what it does not
 

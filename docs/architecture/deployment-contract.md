@@ -38,8 +38,9 @@ established says so rather than guessing.
 
 The client-CA prohibition below originates in the consuming repository's
 own record (`garamsh/gitops` issue #3), restated here against the source
-it is checkable in. That repository has not agreed to consume the chart,
-and ADR-0042 assumes nothing about whether it will.
+it is checkable in. That repository had not agreed to consume the chart
+when it was read on 2026-08-25, and ADR-0042 assumes nothing about
+whether it will.
 
 ## What readiness reports
 
@@ -94,8 +95,9 @@ listener's own TLS key (`internal/cli/machine.go`) and the adapter's
 (`internal/cli/delivery.go`) alike, so either refusal stops the start of
 that process. Plain Kubernetes Secret projection satisfies neither half
 — a projected file is root-owned, and `fsGroup` changes the group owner
-rather than the user owner. Relaxing the check to fit plain projection
-is not an option; the arrival shape the chart renders is what the rule
+rather than the user owner (read 2026-08-25; this repository pins no
+Kubernetes version). Relaxing the check to fit plain projection is not
+an option; the arrival shape the chart renders is what the rule
 requires.
 
 Four qualifications:
@@ -347,7 +349,8 @@ that would assert one:
   pod no container of which requests either resource is `BestEffort` —
   Kubernetes' own classification, which `kubectl describe pod` reports
   as `QoS Class` — and the kubelet evicts `BestEffort` first under node
-  pressure.
+  pressure (read 2026-08-25; this repository pins no Kubernetes
+  version).
 - **A resource floor.** No minimum below which a process fails is known.
 
 ## Decisions this rests on

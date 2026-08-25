@@ -12,8 +12,9 @@ services:
     # Alpine rebuild. Dependabot moves the pair together.
     #
     # The `17` is not Dependabot's to move: deploy/local/minikube/postgres.yaml
-    # and the dev cluster in garamsh/gitops run that same major, so a bump
-    # crossing it lands at all three sites or at none.
+    # and the dev cluster in garamsh/gitops — read there on 2026-08-26 —
+    # run that same major, so a bump crossing it lands at all three sites
+    # or at none.
     image: postgres:17.11-alpine3.24@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
     environment:
       POSTGRES_USER: garam

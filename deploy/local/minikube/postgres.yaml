@@ -12,7 +12,8 @@ metadata:
   namespace: garam-local
 spec:
   # Postgres 17: the major deploy/local/docker-compose.yml pins and the
-  # dev cluster in garamsh/gitops runs, moved only together with them.
+  # dev cluster in garamsh/gitops ran when it was read on 2026-08-26,
+  # moved only together with them.
   # Named here because an unset imageName takes the operator's
   # compiled-in default instead, which at the pinned v1.30.0 is 18.4 —
   # so this database's major moved with CNPG_MANIFEST and no file here

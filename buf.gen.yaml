@@ -4,6 +4,9 @@ managed:
   override:
     - file_option: go_package_prefix
       value: github.com/garamsh/garam/proto/gen
+# Nothing parses this file for a pin, so the two plugin versions below
+# move when a contributor moves them, and a bump lands with the `make
+# gen` that follows it or `check-gen` fails.
 plugins:
   - local: [go, run, google.golang.org/protobuf/cmd/protoc-gen-go@v1.36.11]
     out: proto/gen

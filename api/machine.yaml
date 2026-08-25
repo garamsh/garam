@@ -33,8 +33,9 @@ tags:
   - name: message
     description: >-
       The queue a message reaches an agent through (ADR-0013). A caller
-      posts to the recipients of its own organization that its policies
-      reach (ADR-0024) and acts on messages for the agent it
+      posts inside its own organization to the recipients its policies
+      reach (ADR-0024), and outside it only where both organizations
+      consent (ADR-0035). It acts on messages for the agent it
       authenticates as and no other.
   - name: watch
     description: >-

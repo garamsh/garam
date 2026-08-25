@@ -6,13 +6,14 @@ Per-domain responsibilities and boundaries.
 - Common shape
 - `internal/grn`
 - `internal/errorx`
+- `internal/pgxerr`
 - `internal/keyfile`
 - `internal/listfilter`
 - `internal/org`
-- `internal/operator`
 - `internal/authz`
 - `internal/authn`
 - `internal/user`
+- `internal/operator`
 - `internal/agent`
 - `internal/ca`
 - `internal/machine`

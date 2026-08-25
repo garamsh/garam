@@ -315,9 +315,11 @@ is still it, and the write answers that itself. Signing happens through
 the `Issuer` seam the composition root satisfies from `internal/ca`, as
 the agent domain's does, so this one never holds key material; the
 successor is signed before the record moves, and a caller that lost the
-lineage receives nothing. The HTTP surface is `internal/machineapi`, and
-`internal/cli` is the other caller — `garam issue-certificate`, the one
-bootstrap ADR-0015 leaves out of band. The agent's certificate is not
+lineage receives nothing. The certificate half's HTTP surface is
+`internal/machineapi`, and `internal/cli` is its other caller — `garam
+issue-certificate`, the one bootstrap ADR-0015 leaves out of band. The
+record half's surface is `internal/api`, on the organization's own
+paths, which is the third caller this domain has. The agent's certificate is not
 this domain's: an agent is admitted to its own by the claim its operator
 made (ADR-0033) and renews on the route ADR-0040 gave it.
 

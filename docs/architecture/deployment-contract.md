@@ -222,6 +222,17 @@ alone. What binds instead is who signs them
   deployment already holds it, so whoever installs that first
   certificate out of band installs the same file
   `GARAM_MACHINE_SERVER_ROOT_FILE` names beside it.
+- **Registering that operator is a second act, and the command does not
+  perform it.** `issue-certificate` mints the certificate; an owner or
+  an admin of the organization registers the operator over the browser
+  API (`POST /orgs/{org}/operators`), under the same identifier the
+  certificate's subject GRN carries
+  ([ADR-0044](./adr/0044-an-organization-registers-an-operator.md)). The
+  order between the two is free, but a deployment that skips the
+  registration has an operator that authenticates and no definition can
+  name: `POST /orgs/{org}/agent-definitions` refuses an operator the
+  organization has not registered. Nothing registers one automatically —
+  no listener, no migration, and no command.
 
 ## The migrate job
 
@@ -327,6 +338,8 @@ that would assert one:
   its own, per-connection trust root
 - [ADR-0015](./adr/0015-operator-identity.md) — key material travels as
   files, never the environment
+- [ADR-0044](./adr/0044-an-organization-registers-an-operator.md) — an
+  organization registers an operator, which no command does for it
 - [ADR-0016](./adr/0016-ca-key-custody.md) — the key-encryption key the
   authorities are sealed under
 - [ADR-0017](./adr/0017-machine-process.md) — three serve processes from

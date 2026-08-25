@@ -9,6 +9,7 @@ Per-domain responsibilities and boundaries.
 - `internal/keyfile`
 - `internal/listfilter`
 - `internal/org`
+- `internal/operator`
 - `internal/authz`
 - `internal/authn`
 - `internal/user`
@@ -233,6 +234,34 @@ alongside group- and project-derived grants at check time
 evaluated: a policy reaches a subject through an attachment the authz
 engine owns (ADR-0008), not through this list.
 
+## `internal/operator`
+
+The record that an organization has an operator (ADR-0044).
+
+| Type | Responsibility |
+|------|----------------|
+| `Operator` | an organization's record that it has an operator under this GRN: who registered it and when |
+| `Store` | registers one, answers one by GRN, and lists an organization's own |
+
+The identifier is the caller's rather than garam's, which is what makes
+this domain unlike every other org resource. An operator's GRN is
+already the subject of a certificate wherever `issue-certificate` has
+run (ADR-0032), so a minted identifier would name something other than
+the operator that exists. What the domain applies is the GRN segment
+rule, and the schema applies it again where nothing routes around it.
+
+A record grants nothing and reports nothing. No listener reads one to
+admit a caller: an operator authenticates with the certificate it holds
+(ADR-0015), and garam never dials one, so there is no state here for
+anybody to report. What the record is for is the question a definition
+asks — whether this organization has the operator it names — and
+`internal/api` asks it there. The `agent_definitions` foreign key is the
+copy of that check no call path routes around.
+
+There is no update and no delete. A record carries nothing to change,
+and removing one would stop nothing an operator can already do, which is
+a route ADR-0044 declines to offer until revocation is decided.
+
 ## `internal/agent`
 
 Autonomous identity, provisioned outside garam (ADR-0012).
@@ -253,7 +282,10 @@ ADR-0014 rests tenancy on its organization segment, so the domain
 refuses a pairing that disagrees rather than trusting its callers, and
 the schema refuses it again where nothing routes around it. An
 assignment stays inside that organization and names an operator
-(ADR-0015), which the schema alone decides. Every assignment raises the
+(ADR-0015), which the schema alone decides. A definition names one the
+organization has registered as well, which the browser surface decides
+against `internal/operator` and the schema decides again (ADR-0044);
+this domain reads no record of its own and addresses an operator by GRN. Every assignment raises the
 epoch, and a state report is accepted only at the current one — the
 operator a reassignment replaced reports nothing about the agent it
 lost. An agent is never an organization member (ADR-0014), so nothing
@@ -614,6 +646,7 @@ caller authenticated as.
 | authn.PasswordCredentialStore | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | authn.PasswordAttemptStore | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | authz (policies) | yes (`store.go`) | yes (`postgres.go` + `postgres_<concept>.go`) | not planned | — |
+| operator | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | agent | yes (`store.go`) | yes (`postgres.go` + `postgres_<concept>.go`) | not planned | — |
 | ca | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | message | yes (`store.go`) | yes (`postgres.go`) | not planned | — |

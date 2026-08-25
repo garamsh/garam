@@ -46,6 +46,17 @@ collaborate on a shared plan.
   the separate facts ADR-0012 makes them, and with the operator holding
   it at which epoch. That surface reads only: it assigns no agent and
   issues no certificate.
+- An organization **registering** an operator, under
+  `/orgs/{org}/operators`, and its members reading the list (ADR-0044).
+  A record is a GRN, who registered it and when: it carries no
+  credential, grants nothing, and reports nothing, because garam never
+  dials an operator. The identifier is supplied rather than minted,
+  since an operator that already holds a certificate has to be
+  registered under the GRN that certificate names. Registering is
+  granted by `operator:register` and reading by `operator:read`, both
+  named action by action for the reason the agent actions are. There is
+  no route that removes a record: garam has no revocation, so removing
+  one would stop nothing (see Out of scope).
 - An organization's members **defining** an agent, under
   `/orgs/{org}/agent-definitions` — which operator is to run it, and
   with what values (ADR-0026). A definition is a record rather than a
@@ -56,7 +67,10 @@ collaborate on a shared plan.
   agent GRN — the assignment, at a bumped epoch — and admits it to that
   agent's certificate route (ADR-0033). A definition is immutable and
   claimed once — a change of intent is a new definition — and the
-  console path and `POST /agents` can never describe the same agent. Defining is granted by `agent:define`, named action by action
+  console path and `POST /agents` can never describe the same agent. The
+  operator a definition names must be one the organization registered;
+  one it has not is refused, naming the identifier that named no record
+  (ADR-0044). Defining is granted by `agent:define`, named action by action
   because ADR-0012 puts provisioning outside garam and a wildcard would
   grant in advance what no endpoint may offer.
 - Messages addressed to an agent are held in a queue one reader at a
@@ -125,8 +139,10 @@ collaborate on a shared plan.
   active policy still grants org-wide.
 - A web console under `/console` for the org structure the API exposes:
   organizations are listed and created, members are invited by link and
-  the invitation accepted, groups and projects are read, and an agent is
-  defined and the organization's definitions read (ADR-0009, ADR-0026).
+  the invitation accepted, groups and projects are read, an operator is
+  registered and the organization's operators read (ADR-0044), and an
+  agent is defined and the organization's definitions read (ADR-0009,
+  ADR-0026).
   Its shell is a collapsible sidebar over `Organizations → organization →
   section`, and it addresses resources by the GRN's last segment rather
   than printing GRNs (ADR-0011).
@@ -178,6 +194,18 @@ collaborate on a shared plan.
   and arrives out of band (ADR-0015). No console page reads the agents
   the browser API answers: the console's agents section reads
   definitions, which are not agents (ADR-0026).
+- Revoking anything. A certificate garam signed authenticates until it
+  expires, and nothing shortens that: there is no revocation list, no
+  serial the listener checks, and no route that removes an operator's
+  record — which is why registering one is not offered as a way to
+  withdraw it (ADR-0044).
+- How an operator proves it is the operator a record names. Registering
+  is method-independent by decision: there is no enrolment ticket, no
+  service-account token, and no exchange route, and an operator obtains
+  its first certificate exactly as it did before there was a registry —
+  `garam issue-certificate`, which reads no record (ADR-0032, ADR-0044).
+  Whether that command should require a registered operator is a real
+  question ADR-0044 raises and leaves open.
 - Telling a sender that its message exhausted its attempts. ADR-0018
   makes that garam's obligation because the agent platform notifies
   nobody; the queue stops redelivering an exhausted message and nothing
@@ -245,6 +273,8 @@ collaborate on a shared plan.
   `adapter`).
 - `internal/health/` — what liveness and readiness mean, and the two
   probes every serve command mounts (ADR-0021).
+- `internal/operator/` — the record that an organization has an
+  operator (ADR-0044). It holds no credential and no reported state.
 - `internal/agent/` — agent identities and the operator each is
   assigned to.
 - `internal/ca/` — the per-organization certificate authority and the
@@ -306,6 +336,7 @@ it and imports no request surface and no domain.
 | `grn.GRN` | `internal/grn` | resource identifier (value type) |
 | `errorx.Error` | `internal/errorx` | typed error with kind |
 | `user.User` | `internal/user` | human identity |
+| `operator.Operator` | `internal/operator` | an organization's record that it has an operator |
 | `agent.Agent` | `internal/agent` | autonomous actor an operator provisions |
 | `agent.Assignment` | `internal/agent` | agent-to-operator binding, fenced by an epoch |
 | `agent.Service` | `internal/agent` | creates an agent for an operator, issues the certificate of one assigned to it, and renews an agent's own |
@@ -355,6 +386,7 @@ it and imports no request surface and no domain.
 | Messages reach an agent by polling, not by push | A queue in Postgres has no connection to route to, so any instance answers any poll. | [adr/0013-agent-messaging.md](./adr/0013-agent-messaging.md) |
 | Agents authenticate by mTLS on a listener of their own | A GRN in a SAN needs no user row; a separate listener needs no trusted proxy header. | [adr/0014-agent-authentication.md](./adr/0014-agent-authentication.md) |
 | garam presents one pinned server certificate and certificates rotate without a restart | A server picks its certificate before the client sends one, so per-organization selection is unreachable; expiry is the only revocation, and a lifetime short enough to be one is unusable when every rotation is a restart. | [adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md) |
+| An organization registers an operator, and a definition may name no other | A definition naming an operator nobody registered was a definition no operator would ever claim, and nothing reported it. | [adr/0044-an-organization-registers-an-operator.md](./adr/0044-an-organization-registers-an-operator.md) |
 | An operator is a machine identity of the same kind as an agent | One mechanism to secure and rotate; the assignment row already bounds what an operator may fetch. | [adr/0015-operator-identity.md](./adr/0015-operator-identity.md) |
 | A CA's key is sealed by a key the process holds, not by a KMS | A database dump opens nothing; issuing depends on no hosted service, which is what lets a user bring their own operator. | [adr/0016-ca-key-custody.md](./adr/0016-ca-key-custody.md) |
 | Machine identities are served by a process of their own | The surface that issues certificates holds every organization's key-encryption key, and the process serving browsers must not. | [adr/0017-machine-process.md](./adr/0017-machine-process.md) |

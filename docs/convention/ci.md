@@ -70,7 +70,8 @@ The rules above bind. This section does not: it is one toolchain — Make for th
 The living list is the `Makefile`. This project has two toolchains, so
 it has two whole-set names rather than one:
 
-- `ci` — `format lint test build check-gen`, the Go module.
+- `ci` — `format lint test build check-gen chart`, the Go module and the
+  chart it ships.
 - `web-ci` — `web-format web-lint web-test web-build web-check-gen`,
   the `web/` app, which has its own package manager and its own gate.
 

@@ -229,13 +229,28 @@ paths:
         The sender's idempotency key is what makes a retry store one
         message rather than two.
 
-        Which recipients a sender may reach is decided by policy
-        (ADR-0024): a recipient of another organization is refused
-        outright, and inside the sender's own organization it reaches
-        every recipient unless a policy attached to it says otherwise.
-        What it may not reach is refused rather than stored. That
-        refusal is a 403 and not the inbound message ADR-0013 asks for,
-        because garam has no identity to send one under yet.
+        Which recipients a sender may reach is two questions, and they
+        are refused two different ways.
+
+        Inside the sender's own organization, policy decides
+        (ADR-0024): it reaches every recipient unless a policy attached
+        to it says otherwise. A recipient a policy refuses is a 403 and
+        nothing is stored, because garam could have routed the message
+        and the organization said not to, so storing it would deliver
+        what was refused.
+
+        Across the organization boundary the precondition is a consent
+        relation both organizations hold, which no policy reaches past
+        (ADR-0035). Where that relation does not stand garam cannot
+        route the message, so the post is stored and answered 201 like
+        any other: what is stored is the refusal, addressed back to the
+        sender as an ordinary inbound message whose sender is the
+        recipient that could not be reached and whose body names the
+        two organizations that do not both consent (ADR-0013). The 201
+        carries that refusal rather than the message submitted, which
+        is how a caller tells the two apart, and its idempotency key
+        derives from the sender's so a retried post is answered with
+        the one refusal already stored.
       requestBody:
         required: true
         content:

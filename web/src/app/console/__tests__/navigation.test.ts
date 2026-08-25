@@ -24,7 +24,7 @@ describe("parseConsolePath", () => {
     expect(location.kind === "org" && location.section.label).toBe("Overview");
   });
 
-  it.each(["groups", "projects", "agents", "members", "policies"])(
+  it.each(["groups", "projects", "operators", "agents", "members", "policies"])(
     "reads the %s section",
     (segment) => {
       const location = parseConsolePath(`/console/orgs/acme/${segment}`);

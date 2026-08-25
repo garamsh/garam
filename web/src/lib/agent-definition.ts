@@ -7,8 +7,9 @@
  *
  * The numbers are the ones `api/openapi.yaml` publishes under
  * `AgentValues`; the character rule is the GRN segment rule
- * (`docs/architecture/grn-model.md` §identifier), which a value key
- * and an operator identifier both follow.
+ * (`docs/architecture/grn-model.md` §identifier). The operator a
+ * definition names carries the same rule and is parsed by
+ * `src/lib/operator.ts`, which two forms reach.
  */
 
 import { refuse, type Parsed } from "@/lib/parsed";
@@ -19,8 +20,8 @@ export const AGENT_VALUES_MAX_ENTRIES = 32;
 /** How long one value is, in bytes. */
 export const AGENT_VALUE_MAX_BYTES = 4096;
 
-/** How long a value key or an operator identifier is, in characters. */
-export const AGENT_SEGMENT_MAX_LENGTH = 64;
+/** How long a value key is, in characters. */
+export const AGENT_KEY_MAX_LENGTH = 64;
 
 /**
  * Keys the form offers. garam interprets no key, so these are a
@@ -36,30 +37,6 @@ const SEGMENT = /^[a-z0-9-]+$/;
 /** The UTF-8 byte length a value is measured by. */
 export function valueBytes(value: string): number {
   return new TextEncoder().encode(value).length;
-}
-
-/**
- * Reads the operator identifier: the GRN's last segment, which is what
- * the console addresses an operator by (ADR-0011). A segment carrying
- * a colon would name a different resource once it is built into a GRN,
- * which is what the character rule keeps out.
- */
-export function parseOperatorIdentifier(input: string): Parsed<string> {
-  const identifier = input.trim();
-  if (identifier === "") {
-    return refuse("Name the operator that is to run this agent.");
-  }
-  if (identifier.length > AGENT_SEGMENT_MAX_LENGTH) {
-    return refuse(
-      `An operator identifier holds at most ${AGENT_SEGMENT_MAX_LENGTH} characters; this one holds ${identifier.length}.`,
-    );
-  }
-  if (!SEGMENT.test(identifier)) {
-    return refuse(
-      "An operator identifier holds only lowercase letters, digits and hyphens.",
-    );
-  }
-  return { status: "ok", value: identifier };
 }
 
 /**
@@ -87,9 +64,9 @@ export function parseAgentValues(
     if (key === "") {
       return refuse("Every value needs a key.");
     }
-    if (key.length > AGENT_SEGMENT_MAX_LENGTH) {
+    if (key.length > AGENT_KEY_MAX_LENGTH) {
       return refuse(
-        `A key holds at most ${AGENT_SEGMENT_MAX_LENGTH} characters; one here holds ${key.length}.`,
+        `A key holds at most ${AGENT_KEY_MAX_LENGTH} characters; one here holds ${key.length}.`,
       );
     }
     if (!SEGMENT.test(key)) {

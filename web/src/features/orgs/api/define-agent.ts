@@ -3,11 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-import {
-  parseAgentValues,
-  parseOperatorIdentifier,
-  type ValueEntry,
-} from "@/lib/agent-definition";
+import { parseAgentValues, type ValueEntry } from "@/lib/agent-definition";
+import { parseOperatorIdentifier } from "@/lib/operator";
 import {
   GaramApiError,
   GaramUnreachableError,

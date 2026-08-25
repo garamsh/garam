@@ -5,6 +5,7 @@ import type {
   AgentDefinition,
   Group,
   Member,
+  Operator,
   Organization,
   Project,
 } from "@/features/orgs";
@@ -41,6 +42,14 @@ export const frontend: Project = {
   roles: [],
 };
 
+/** The single operator Acme has registered. */
+export const fieldOne: Operator = {
+  grn: "grn:acme:default:operator:field-one",
+  orgGrn: acme.grn,
+  registeredBy: alice.grn,
+  createdAt: "2026-01-02T03:04:05Z",
+};
+
 /** The single agent Acme says it should have. */
 export const fieldAgent: AgentDefinition = {
   agentGrn: "grn:acme:default:agent:9f2ac1b40d8e7a35",
@@ -71,6 +80,9 @@ export const handlers = [
   ),
   http.get(`${API_URL}/orgs/acme/members`, () =>
     HttpResponse.json([aliceMembership]),
+  ),
+  http.get(`${API_URL}/orgs/acme/operators`, () =>
+    HttpResponse.json([fieldOne]),
   ),
   http.get(`${API_URL}/orgs/acme/agent-definitions`, () =>
     HttpResponse.json([fieldAgent]),

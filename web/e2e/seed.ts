@@ -13,6 +13,8 @@ export type Seed = {
   nickname: string;
   groupName: string;
   projectName: string;
+  /** The operator the org has registered, which a definition may name. */
+  operatorIdentifier: string;
 };
 
 /** A signed-in user without an organization: the invitee side of a flow. */
@@ -77,6 +79,7 @@ export async function seedSignedInOrg(): Promise<Seed> {
     nickname: `e2e-user-${suffix}`,
     groupName: "Engineering",
     projectName: "Frontend",
+    operatorIdentifier: "field-one",
   };
   const orgGrn = `grn:root:default:org:${seed.orgSlug}`;
 
@@ -107,6 +110,17 @@ export async function seedSignedInOrg(): Promise<Seed> {
         `grn:${seed.orgSlug}:default:project:frontend`,
         orgGrn,
         seed.projectName,
+      ],
+    );
+    // An agent definition may only name an operator the organization
+    // has registered (ADR-0044), so the record comes with the org.
+    await client.query(
+      `INSERT INTO operators (grn, org_grn, registered_by, created_at)
+       VALUES ($1, $2, $3, now())`,
+      [
+        `grn:${seed.orgSlug}:default:operator:${seed.operatorIdentifier}`,
+        orgGrn,
+        seed.userGrn,
       ],
     );
     await client.query("COMMIT");

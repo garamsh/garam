@@ -22,6 +22,7 @@ Responsibility documents:
 - [domains.md](./domains.md) — the domain packages and their responsibilities
 - [grn-model.md](./grn-model.md) — the GRN resource naming model
 - [authz.md](./authz.md) — the authorization model
+- [api-surface.md](./api-surface.md) — the listeners garam serves on, what admits a caller to each, and what each one's specification is authoritative for
 - [adapter.md](./adapter.md) — what the adapter garam ships must do, and what it rests on
 - [deployment-contract.md](./deployment-contract.md) — what a deployment must plan for that no manifest carries: readiness, termination, migration failure, key-material enforcement, and what is not established
 

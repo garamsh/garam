@@ -236,7 +236,20 @@ ci: format lint test build check-gen chart
 web-install:
 	$(PNPM) install --frozen-lockfile
 
+# eslint prints nothing and exits 0 both when it covered the tree and
+# when its ignore patterns left it a fraction of it, so what it covered
+# is read out of its own JSON report: one entry per file it linted. A
+# report naming no file fails the target below rather than reporting a
+# count nobody checked.
+WEB_LINT_FILES = $(shell { $(PNPM) exec eslint --format json | $(PNPM) exec node -e 'for(const r of JSON.parse(require("fs").readFileSync(0,"utf8")))console.log(r.filePath)'; } 2>/dev/null)
+
+# tsc reads its inputs from tsconfig.json rather than from eslint's
+# ignore patterns, so the TS18003 it raises on its own empty input says
+# nothing about what eslint read. The count above is the eslint half
+# reporting for itself.
 web-lint:
+	@echo 'web-lint: $(words $(WEB_LINT_FILES)) files (eslint)'
+	@test -n '$(WEB_LINT_FILES)' || { echo 'web-lint: nothing to lint — the eslint report named no file; $(PNPM) lint reports why'; exit 1; }
 	$(PNPM) lint
 	$(PNPM) typecheck
 

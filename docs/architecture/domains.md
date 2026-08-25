@@ -133,10 +133,12 @@ management actions (ADR-0035), which it enforces over the relation
 organization's agents, which it enforces without `internal/agent`
 importing this package back — and `Role.Actions`
 maps each role to the action patterns it grants; `ActionsFor` does the same for
-the role names a `Group` or `Project` carries as data. Agents are the
-one resource type no role holds a wildcard over: ADR-0012 keeps
+the role names a `Group` or `Project` carries as data. No role holds a
+wildcard over agents, and none holds one over operators: ADR-0012 keeps
 provisioning outside garam, so each agent action a role grants is granted
-by name and a later one is a decision rather than an increment.
+by name and a later one is a decision rather than an increment, and
+ADR-0045 leaves an operator's enrolment and its revocation undecided,
+which is more of the same.
 `agent:watch` is granted by no role at all, which is that reason carried
 further — ADR-0022 separates watching from reading so an organization may
 withhold it, and a role naming it would settle that for every

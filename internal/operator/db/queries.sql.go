@@ -11,6 +11,55 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const adoptOperatorCertificate = `-- name: AdoptOperatorCertificate :exec
+INSERT INTO operator_certificates (operator_grn, serial, issued_at)
+VALUES ($1, $2, $3)
+ON CONFLICT (operator_grn) DO UPDATE
+    SET serial = EXCLUDED.serial, issued_at = EXCLUDED.issued_at
+`
+
+type AdoptOperatorCertificateParams struct {
+	OperatorGrn string
+	Serial      string
+	IssuedAt    pgtype.Timestamptz
+}
+
+func (q *Queries) AdoptOperatorCertificate(ctx context.Context, arg AdoptOperatorCertificateParams) error {
+	_, err := q.db.Exec(ctx, adoptOperatorCertificate, arg.OperatorGrn, arg.Serial, arg.IssuedAt)
+	return err
+}
+
+const advanceOperatorCertificate = `-- name: AdvanceOperatorCertificate :execrows
+INSERT INTO operator_certificates (operator_grn, serial, issued_at)
+VALUES ($1, $2, $3)
+ON CONFLICT (operator_grn) DO UPDATE
+    SET serial = EXCLUDED.serial, issued_at = EXCLUDED.issued_at
+    WHERE operator_certificates.serial = $4
+`
+
+type AdvanceOperatorCertificateParams struct {
+	OperatorGrn string
+	Serial      string
+	IssuedAt    pgtype.Timestamptz
+	Predecessor string
+}
+
+// Moves the record only where it still holds the serial the caller
+// presented, so two holders of one identity cannot both carry the
+// lineage on. An operator with no row yet is adopted by the insert.
+func (q *Queries) AdvanceOperatorCertificate(ctx context.Context, arg AdvanceOperatorCertificateParams) (int64, error) {
+	result, err := q.db.Exec(ctx, advanceOperatorCertificate,
+		arg.OperatorGrn,
+		arg.Serial,
+		arg.IssuedAt,
+		arg.Predecessor,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const createOperator = `-- name: CreateOperator :exec
 INSERT INTO operators (grn, org_grn, registered_by, created_at)
 VALUES ($1, $2, $3, $4)

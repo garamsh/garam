@@ -41,6 +41,12 @@ type Operator struct {
 	CreatedAt    pgtype.Timestamptz
 }
 
+type OperatorCertificate struct {
+	OperatorGrn string
+	Serial      string
+	IssuedAt    pgtype.Timestamptz
+}
+
 type Org struct {
 	Grn       string
 	Name      string

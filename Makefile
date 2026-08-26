@@ -366,14 +366,15 @@ CHART_TEMPLATES = $(wildcard $(CHART_DIR)/templates/*.yaml)
 CHART_VALUES = $(wildcard $(CHART_DIR)/ci/*-values.yaml)
 
 # Every environment variable garam reads, derived from the two files that
-# read them rather than listed here: envOr wraps the Go module's only
-# os.Getenv call, and web/src/env.ts is the web app's only reader. Both
-# Go readers are swept — envOr returns the raw string and envBool parses
-# one through it — because a name reached through either is a name the
-# source reads. The call's opening parenthesis is matched as `.` because
-# make counts the parentheses inside $(shell ...) and an unbalanced one
-# ends it early.
-CHART_GO_ENV = $(shell grep -rhoE 'env(Or|Bool)."[A-Z_]*"' --include=*.go internal cmd | sed 's/.*"\([A-Z_]*\)"/\1/' | sort -u)
+# read them rather than listed here. The Go side is the envName block in
+# internal/cli: envOr wraps the module's only os.Getenv call and takes a
+# name declared there, so this reads the declarations rather than the
+# spelling of the calls — a wrapper around envOr no longer shrinks what
+# this check covers, which is what a call-site pattern could not promise
+# (#734). The two guards chart-render runs first are what keep the block
+# equal to the reads. web/src/env.ts is the web app's only reader and is
+# parsed for its own shape.
+CHART_GO_ENV = $(shell grep -rhoE 'envName = "[A-Z_]+"' --include=*.go internal cmd | sed 's/.*"\([A-Z_]*\)"/\1/' | sort -u)
 CHART_WEB_ENV = $(shell sed -n 's/^ *\([A-Z][A-Z0-9_]*\): process\.env\.\1,$$/\1/p' web/src/env.ts)
 
 # What the chart declares it does not set, read from the table that
@@ -415,7 +416,19 @@ chart-lint:
 chart-render:
 	@echo 'chart-render: $(words $(CHART_GO_ENV)) Go and $(words $(CHART_WEB_ENV)) web environment names read by the source, $(words $(CHART_UNSET_ENV)) declared unset — environment names only, $(CHART_DIR)/README.md §What the checks are complete over'
 	@test -n '$(CHART_GO_ENV)' && test -n '$(CHART_WEB_ENV)' \
-		|| { echo 'chart-render: the source sweep read no name — the envOr or env.ts parse is broken'; exit 1; }
+		|| { echo 'chart-render: the source sweep read no name — the envName block or the env.ts parse is broken'; exit 1; }
+	@# What makes the block above the whole of what the Go source reads:
+	@# every read reaches os.Getenv, and os.Getenv is called once, inside
+	@# envOr. A second read is a name this check cannot see.
+	@reads="$$(grep -rhoE 'os\.(Getenv|LookupEnv|Environ)\(' --include=*.go --exclude=*_test.go internal cmd | wc -l)"; \
+		test "$$reads" -eq 1 \
+		|| { echo "chart-render: $$reads reads of the environment under internal|cmd, expected the one envOr holds — a read outside it is a name this check cannot see"; exit 1; }
+	@# And every name reaching envOr is declared rather than written at
+	@# the call, so no reader can name a variable this check does not
+	@# enumerate. An env-shaped literal passed to any call is that.
+	@stray="$$(grep -rnE '[A-Za-z_][A-Za-z0-9_]*\("(GARAM|GOOGLE)_[A-Z_]+"' --include=*.go --exclude=*_test.go internal cmd || true)"; \
+		test -z "$$stray" \
+		|| { echo 'chart-render: an environment name is written at a call site rather than declared in internal/cli, so this check cannot enumerate it:'; echo "$$stray"; exit 1; }
 	@test -n '$(CHART_UNSET_ENV)' \
 		|| { echo 'chart-render: $(CHART_DIR)/README.md §Not set by this chart named no variable — the parse is broken'; exit 1; }
 	@set -e; \

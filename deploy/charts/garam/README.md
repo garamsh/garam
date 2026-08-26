@@ -369,7 +369,14 @@ print.
 - `chart-render` is complete over **environment names**, exactly: every
   name the source reads is rendered or declared unset, and every name
   rendered is read. It reads no value — a name rendered with the wrong
-  value passes.
+  value passes. What the Go source reads is the `envName` block in
+  `internal/cli`, not a pattern over the calls that read it, so a
+  wrapper around `envOr` cannot quietly shrink what this covers: the
+  target refuses a second read of the environment under `internal|cmd`
+  and refuses a name written at a call site instead of declared there.
+  The web half is `web/src/env.ts` parsed for its own shape, and it
+  carries no such guard — a module reading `process.env` directly would
+  be a name this check never sees.
 - `chart-identity` is complete over **pod identity**: which account each
   Deployment and Job runs as, whether every account rendered is one a
   workload runs as, and whether either moves when the release name

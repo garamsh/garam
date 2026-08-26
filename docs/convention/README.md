@@ -41,6 +41,7 @@ These apply only when the project uses that stack. A file dropped here loses its
 
 | File | Extends | Governs |
 |---|---|---|
+| `stack-container.md` | — | Container images the project builds |
 | `stack-go.md` | — | Go modules and services |
 | `stack-nextjs.md` | — | Next.js App Router applications |
 | `stack-tailwind.md` | — | Tailwind CSS styling |

@@ -84,6 +84,49 @@ so an empty list leaves no blank line behind.
 {{- end -}}
 
 {{/*
+The two fields PodSecurity `restricted` reads on a container and nowhere
+else: neither is settable on a pod spec, so every container carries its
+own copy. garam binds no low port and executes nothing that gains a
+capability, so dropping all of them and refusing escalation costs the
+workloads nothing.
+
+The other two fields `restricted` requires — runAsNonRoot and
+seccompProfile — sit on the pod spec, where each workload writes them
+beside the UID that makes runAsNonRoot admissible for its own image.
+
+Indented for a container in a pod spec.
+*/}}
+{{/*
+The two fields PodSecurity `restricted` reads on a pod spec, and the UID
+that makes the first of them admissible.
+
+runAsNonRoot is not implied by a UID: the kubelet reads it as set or
+unset, and with it set and no numeric runAsUser it resolves the image's
+own user instead. Both images declare that user by name — `USER garam`
+and `USER node` — and a name it cannot resolve to a number is refused
+at container start, not at admission ("image has non-numeric user",
+kubernetes v1.34.0 `pkg/kubelet/kuberuntime/security_context_others.go`).
+So the number is written here, and each caller passes the one its own
+image was built with.
+
+Indented for a pod spec.
+*/}}
+{{- define "garam.podSecurityContext" }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: {{ .uid }}
+        seccompProfile:
+          type: RuntimeDefault
+{{- end -}}
+
+{{- define "garam.containerSecurityContext" }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+{{- end -}}
+
+{{/*
 The account a workload runs as. The name is a value taken verbatim, and
 the chart composes none: a role another repository owns names this
 subject in its trust policy, so a name composed from the release name

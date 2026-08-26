@@ -33,8 +33,16 @@ spec:
       # The Secret below is projected 0440, so its group owner decides
       # who reads it. fsGroup makes that group the init container's,
       # without which the copy cannot open its source.
+      #
+      # runAsNonRoot is asserted here rather than left to the UIDs below:
+      # the kubelet reads it as set or unset and infers it from no
+      # number. Both containers set a numeric runAsUser, which is what
+      # makes it admissible for an image whose USER is a name.
       securityContext:
         fsGroup: 10001
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       initContainers:
         # A projected Secret is root-owned and group-readable, and the
         # process refuses a key file it does not own or that any group or
@@ -44,6 +52,9 @@ spec:
           securityContext:
             runAsUser: 10001
             runAsGroup: 10001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           command: ["/bin/sh", "-ec"]
           args:
             - |
@@ -66,6 +77,9 @@ spec:
           # reader's UID.
           securityContext:
             runAsUser: 10001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
           args: ["serve", "machine"]
           env:
             {{- include "garam.databaseEnv" . | nindent 12 }}

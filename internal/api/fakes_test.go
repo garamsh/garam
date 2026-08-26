@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
+
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/authn"
 	"github.com/garamsh/garam/internal/errorx"
@@ -16,6 +18,7 @@ import (
 	"github.com/garamsh/garam/internal/message"
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
+	"github.com/garamsh/garam/internal/pgxerr"
 	"github.com/garamsh/garam/internal/user"
 	"github.com/garamsh/garam/internal/watch"
 )
@@ -51,9 +54,23 @@ func newFakeUserStore() *fakeUserStore {
 	return &fakeUserStore{byID: map[string]*user.User{}}
 }
 
+// Create records a user. A second row under one GRN is refused the way
+// the postgres store refuses it — the driver's own error through
+// pgxerr.Classify (internal/user/postgres.go) — because a double this
+// surface reads its own answers from must carry what production
+// carries, text included.
 func (s *fakeUserStore) Create(_ context.Context, u *user.User) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if _, held := s.byID[u.GRN().String()]; held {
+		return pgxerr.Classify(&pgconn.PgError{
+			Severity:       "ERROR",
+			Code:           "23505",
+			Message:        `duplicate key value violates unique constraint "users_pkey"`,
+			ConstraintName: "users_pkey",
+			TableName:      "users",
+		}, "create", nil, nil)
+	}
 	s.byID[u.GRN().String()] = u
 	return nil
 }

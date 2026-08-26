@@ -104,11 +104,16 @@ type causeRecorder interface {
 // surface.
 func writeError(w http.ResponseWriter, err error) {
 	status := wire.StatusOf(errorx.KindOf(err))
-	body := apigen.Error{Kind: errorx.KindOf(err).String(), Message: err.Error()}
+	// What a client reads is never the chain's own text unless this
+	// project wrote every part of it (wire.MessageOf): a driver error
+	// names a table, a constraint and a SQLSTATE, and a decoder quotes
+	// the body it could not read.
+	body := apigen.Error{Kind: errorx.KindOf(err).String(), Message: wire.MessageOf(err)}
 	if status >= http.StatusInternalServerError {
-		// Do not leak internals on 5xx. The chain — which can carry a
-		// GRN or a driver error's text, never a row value — reaches
-		// the request log instead of the client.
+		// Above 500 nothing of the chain reaches the client, authored
+		// or not: this project's own message can still carry a GRN,
+		// never a row value. The chain reaches the request log
+		// instead.
 		body.Message = "internal error"
 		if recorder, ok := w.(causeRecorder); ok {
 			recorder.RecordCause(err)

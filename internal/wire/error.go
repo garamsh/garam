@@ -42,6 +42,71 @@ func StatusOf(k errorx.Kind) int {
 	}
 }
 
+// MessageOf is what a client may be told about err. An error this
+// project constructed through errorx carries its own message; one
+// whose chain reaches an error from outside — a driver error naming a
+// table, a constraint and a SQLSTATE, a decoder quoting the body it
+// could not read — carries text nobody here wrote for a caller, so the
+// client reads this project's own sentence for the kind instead. The
+// chain is not changed and still reaches the request log.
+func MessageOf(err error) string {
+	if err == nil {
+		return ""
+	}
+	if authored(err) {
+		return err.Error()
+	}
+	return messageOfKind(errorx.KindOf(err))
+}
+
+// authored reports whether every error in the chain was constructed
+// here, through errorx. The type of each link decides it, never the
+// text: a message that has to be read to be judged is one that will be
+// misjudged, and a driver's message reads like prose.
+func authored(err error) bool {
+	for err != nil {
+		e, ok := err.(errorx.Error)
+		if !ok {
+			return false
+		}
+		err = e.Unwrap()
+	}
+	return true
+}
+
+// messageOfKind is what a client is told when the chain's text is not
+// this project's to show. It says what the kind means for the request
+// and nothing about what produced it.
+func messageOfKind(k errorx.Kind) string {
+	switch k {
+	case errorx.KindInvalidArgument, errorx.KindOutOfRange:
+		return "the request is not in the required form"
+	case errorx.KindUnauthenticated:
+		return "unauthenticated"
+	case errorx.KindPermissionDenied:
+		return "permission denied"
+	case errorx.KindNotFound:
+		return "not found"
+	case errorx.KindAlreadyExists:
+		return "already exists"
+	case errorx.KindFailedPrecondition:
+		return "the request does not apply to the current state"
+	case errorx.KindAborted:
+		return "the request conflicted with another and was not applied"
+	case errorx.KindResourceExhausted:
+		return "too many requests"
+	case errorx.KindDeadlineExceeded:
+		return "the request took too long"
+	case errorx.KindUnimplemented:
+		return "not implemented"
+	default:
+		// The kinds that mean a fault of this process. Every surface
+		// replaces the message on a 5xx anyway, so this is what one
+		// would read if a surface stopped doing that.
+		return "internal error"
+	}
+}
+
 // KindOf maps gRPC status codes back to error kinds by name.
 func KindOf(c codes.Code) errorx.Kind {
 	switch c {

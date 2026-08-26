@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -18,6 +19,43 @@ import (
 	"github.com/garamsh/garam/internal/org"
 	"github.com/garamsh/garam/internal/user"
 )
+
+// TestRegisterPassword_ConflictCarriesNoneOfTheDriversText is the
+// regression for the disclosure: a duplicate row reaches the client as
+// a 409 whose message names nothing of the schema. The store answers
+// with the driver's error through pgxerr.Classify — table, constraint
+// and SQLSTATE in the text — and the surface is what must not pass it
+// on. `POST /auth/password/register` is unauthenticated, so this body
+// was readable without any credential.
+//
+// The first registration is the control: the same route, the same
+// body shape, answered 201, so the refusal below is the second row and
+// not the route. The assertions that matter are the absent fragments —
+// a 409 carrying the right kind, the right status and a valid Error
+// body is exactly what the leak looked like.
+func TestRegisterPassword_ConflictCarriesNoneOfTheDriversText(t *testing.T) {
+	f := newFixture(t)
+	first := inviteTo(t, f, "acme", "first-tok")
+	require.Equal(t, http.StatusCreated,
+		f.do(t, "POST", "/auth/password/register", registerBody(first, "alice", registeredPassword)).Code,
+		"the control: the first registration lands")
+
+	orgGRN := grn.New("root", "default", org.ServiceTypeOrg, "acme")
+	creator := grn.New("root", "default", user.ServiceType, "owner-sub")
+	require.NoError(t, f.orgs.CreateInvitation(testCtx(t),
+		org.NewInvitation("second-tok", orgGRN, org.RoleMember, creator, time.Now().UTC().Add(time.Hour))))
+
+	rec := f.do(t, "POST", "/auth/password/register", registerBody("second-tok", "alice", registeredPassword))
+	require.Equal(t, http.StatusConflict, rec.Code)
+	require.Equal(t, "application/json", rec.Header().Get("Content-Type"))
+	body := decodeBody[apigen.Error](t, rec)
+	assert.Equal(t, "already_exists", body.Kind)
+
+	for _, leaked := range []string{"users_pkey", "users", "SQLSTATE", "23505", "duplicate key"} {
+		assert.NotContains(t, body.Message, leaked,
+			"the response names something only the schema and the driver know")
+	}
+}
 
 // TestServer_TellsAnEngineThatIsNotThereFromADecisionThatRefused keeps
 // the two refusals apart on this listener as well. A denied decision is

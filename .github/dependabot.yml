@@ -2,11 +2,12 @@
 # adopting it requires of a pin. Each entry states what it covers and
 # what it does not.
 #
-# No entry reaches the Makefile's helm pin or
-# deploy/charts/garam/values.yaml; each of those records at the pin that
-# it has no mover of any form §Verify admits — no bot, and no owner or
-# scheduled review named either. Nothing here reaches web/package.json
-# or deploy/local/minikube/ at all, and go.mod's `go` directive has no
+# No entry reaches the Makefile's helm pin,
+# deploy/charts/garam/values.yaml, or the images pinned in
+# deploy/local/minikube/garam.yaml and postgres.yaml; each of those
+# records at the pin that it has no mover of any form §Verify admits —
+# no bot, and no owner or scheduled review named either. Nothing here
+# reaches web/package.json at all, and go.mod's `go` directive has no
 # mover on the same terms.
 #
 # What each entry covers was read from github/docs at commit

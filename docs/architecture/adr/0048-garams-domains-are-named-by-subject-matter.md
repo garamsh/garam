@@ -3,10 +3,13 @@
 > Status: accepted
 > Date: 2026-08-26
 
-Every count below was measured at `5a70c6c`, against non-test files
-only. `#608` carries the commands and the record of the four revisions
-they went through; re-run them there rather than reading a number here
-as current.
+Every count below was measured at `5a70c6c`, over authored non-test
+files. `_test.go` is excluded, and so is committed generator output —
+the sqlc packages under `internal/*/db/` and the mockery packages under
+`internal/*/mocks/` — which `docs/convention/README.md` §Scope places
+outside what the project writes. `#608` carries the commands and the
+record of the four revisions they went through; re-run them there
+rather than reading a number here as current.
 
 ## Contents
 - Context
@@ -84,10 +87,12 @@ Each composes several boundaries, and
 composes several boundaries is not itself one of them.
 
 `internal/api` is the clearest case and the largest package in the
-tree. It is 3776 lines — 19% of the 19,663 non-test lines under
-`internal/` — and declares thirteen exported types of its own, which is
-what a package accumulates when it holds behaviour rather than
-composing it. `internal/api/policy.go` is its largest file at 286
+tree. It is 2913 lines — 21% of the 14,019 under `internal/`, and
+nearly twice the next largest — and declares thirteen exported types of
+its own, which is what a package accumulates when it holds behaviour
+rather than composing it. That next largest is `internal/cli`, so the
+two biggest folders under `internal/` are both things this decision
+says are not domains. `internal/api/policy.go` is its largest file at 286
 lines, and it depends on `org` and `user` rather than on `authz`: the
 management of a policy sits in the surface while the evaluation of one
 sits in the domain, with `Policy`, `PolicyVersion`, `PolicyAttachment`,

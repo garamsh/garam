@@ -160,6 +160,24 @@ func TestLogin_UnknownProvider(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 }
 
+// TestOauthCallback_UnknownProvider holds the refusal the other half of
+// this flow already makes: a provider nothing registered is not there,
+// and the callback says so the way `Login` does. The registered
+// provider beside it is the control — the same request, missing the
+// same cookies, is refused as unauthenticated instead, so the 404
+// tracks the provider rather than a surface that refuses every
+// callback.
+func TestOauthCallback_UnknownProvider(t *testing.T) {
+	f := newFixture(t)
+
+	rec := f.do(t, "GET", "/auth/callback/github?code=ok&state=s", "")
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+
+	rec = f.do(t, "GET", "/auth/callback/google?code=ok&state=s", "")
+	assert.Equal(t, http.StatusUnauthorized, rec.Code,
+		"past the provider check a callback carrying no state is refused for another reason")
+}
+
 // TestLogin_ShedsLoadPastTheLiveStateBound drives the endpoint at the
 // rate the code before the bound accepted: one request, one write,
 // nothing in the way. Every login up to MaxLiveOAuthStates redirects;

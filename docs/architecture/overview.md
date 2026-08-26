@@ -232,6 +232,17 @@ collaborate on a shared plan.
   console route opens the stream, and the adapter forwards nothing: its
   delivery loop is built and the §Watching half of
   [adapter.md](./adapter.md) is not.
+- Whether anything can ask the adapter whether it is healthy. What
+  readiness would mean for it is decided — a monitoring subscription it
+  opens fresh, so an answer says the gateway served a request rather
+  than that a port is bound
+  ([ADR-0013](./adr/0013-agent-messaging.md), §Readiness of
+  [adapter.md](./adapter.md)) — and none of it is built: nothing opens
+  that subscription and the adapter binds no listener, so it answers no
+  Kubernetes probe. Its calls are bounded and a failed one is logged,
+  so a stalled peer is no longer silent inside the pod; what is missing
+  is anything outside it learning that the loop stopped making
+  progress.
 - Chat channels. ADR-0013 makes garam a message API and leaves Slack,
   LINE and the rest to consumers of it; none is built, and whether any
   ships first-party is undecided.

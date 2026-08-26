@@ -560,16 +560,21 @@ func (panickingSessions) Delete(context.Context, string) error { panic("session 
 // panic becomes a 500 this line reports; reversed, it unwinds past
 // logServed and decodeLine finds no line at all. The cause carries the
 // stack because net/http, having never seen the panic, no longer logs
-// one — and decodeLine parses the whole buffer, so a second line would
-// fail it. logMachineRequests shares logServed, so the machine listener
-// is the same wiring.
+// one. logMachineRequests shares logServed, so the machine listener is
+// the same wiring.
+//
+// The server-level middleware wraps it here as it does in serve api,
+// which makes the count the second thing this test holds: the surface's
+// middleware answers first, so the outer one writes nothing and only
+// one line is emitted. decodeLine parses the whole buffer, so a second
+// line fails it.
 func TestLogRequests_ReportsARecoveredPanicOnce(t *testing.T) {
 	var out lines
 	obs := recordingObservability(&out)
 	srv := api.NewServer(nil, nil, nil, nil, nil, nil, panickingSessions{}, nil, nil, nil, nil, nil, nil, api.Config{})
-	server := httptest.NewServer(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{
+	server := httptest.NewServer(obs.recoverPanics(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{
 		Middlewares: []apigen.MiddlewareFunc{api.RecoverPanics, obs.logRequests},
-	}))
+	})))
 	t.Cleanup(server.Close)
 
 	req, err := http.NewRequest(http.MethodPost, server.URL+"/auth/logout", nil)
@@ -591,4 +596,48 @@ func TestLogRequests_ReportsARecoveredPanicOnce(t *testing.T) {
 	assert.Contains(t, line["error"], "panic: session store defect")
 	assert.Contains(t, line["error"], "panickingSessions.Delete",
 		"the stack net/http no longer logs travels in the cause")
+}
+
+// TestRecoverPanics_AnswersARouteTheSliceDoesNotReach is `serve api`'s
+// shape. The composition root puts /metrics and the two probes on the
+// mux it then hands the generated router as BaseRouter, and
+// oapi-codegen applies the middleware slice inside each operation's own
+// wrapper rather than around the router — so a route registered beside
+// the spec operations carries none of it, however the slice is written.
+//
+// Without the server-level middleware the client's own Get fails and
+// the require below never reaches a status. The body is what says which
+// middleware answered: the surface's middleware writes the
+// specification's Error as JSON, and this one writes plain text because
+// no specification describes the path it is answering for.
+func TestRecoverPanics_AnswersARouteTheSliceDoesNotReach(t *testing.T) {
+	var out lines
+	obs := recordingObservability(&out)
+
+	mux := http.NewServeMux()
+	mux.Handle("GET /metrics", http.HandlerFunc(
+		func(http.ResponseWriter, *http.Request) { panic("collector defect") }))
+	srv := api.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{})
+	server := httptest.NewServer(obs.recoverPanics(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{
+		BaseRouter:  mux,
+		Middlewares: []apigen.MiddlewareFunc{api.RecoverPanics, obs.logRequests},
+	})))
+	t.Cleanup(server.Close)
+
+	resp, err := server.Client().Get(server.URL + "/metrics")
+	require.NoError(t, err, "the client read no answer at all")
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+
+	require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	assert.Equal(t, "internal error\n", string(body), "no internals reach the body")
+
+	line := decodeLine(t, &out)
+	assert.Equal(t, "http panic", line["msg"])
+	assert.Equal(t, "GET /metrics", line["operation"])
+	assert.Equal(t, float64(http.StatusInternalServerError), line["status"])
+	assert.NotEmpty(t, line["trace_id"])
+	assert.Contains(t, line["error"], "panic: collector defect",
+		"the line is the only record this panic leaves")
 }

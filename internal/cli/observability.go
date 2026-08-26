@@ -2,9 +2,11 @@ package cli
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
+	"runtime/debug"
 
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus"
@@ -148,6 +150,37 @@ func (o *observability) logServed(w http.ResponseWriter, r *http.Request, next h
 	}
 	o.logger.LogAttrs(r.Context(), levelOf(recorder.status >= http.StatusInternalServerError),
 		"http request", attrs...)
+}
+
+// recoverPanics answers a panicking handler on behalf of the server
+// rather than of a route: every net/http server a serve command builds
+// wraps its outermost handler in it, so a route added to any of those
+// routers is covered by having been added (stack-go.md §4, whose
+// subject is the server).
+//
+// It logs as well as answers, which the surfaces' own middleware does
+// not. That one runs where a request line is already being emitted and
+// where the answer owes a specification's Error; this one runs where
+// neither holds — the probes, `/metrics`, an unmatched path, the TLS
+// listener's identity check — so the line it writes is the only record
+// the panic leaves, and the body is plain because no specification
+// describes those paths.
+func (o *observability) recoverPanics(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			v := recover()
+			if v == nil {
+				return
+			}
+			o.logger.LogAttrs(r.Context(), slog.LevelError, "http panic",
+				slog.String("operation", r.Pattern),
+				slog.String("trace_id", traceIDOf(r.Context())),
+				slog.Int("status", http.StatusInternalServerError),
+				slog.String("error", fmt.Sprintf("panic: %v\n%s", v, debug.Stack())))
+			http.Error(w, "internal error", http.StatusInternalServerError)
+		}()
+		next.ServeHTTP(w, r)
+	})
 }
 
 // logRPCs is the gRPC counterpart of logRequests. The engine's

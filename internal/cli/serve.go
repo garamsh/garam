@@ -135,7 +135,10 @@ func serveAPI(cmd *cobra.Command) error {
 
 	// The generated router matches before the middleware runs, so the
 	// log line can name the route rather than the path. /metrics and
-	// the two probes share the router but not the middleware.
+	// the two probes share the router; the generated slice reaches
+	// neither, because oapi-codegen applies it inside each operation's
+	// own wrapper rather than around the router, so recoverPanics below
+	// is what covers them.
 	mux := http.NewServeMux()
 	mux.Handle("GET /metrics", obs.metricsHandler())
 	// A request needs both to be served: rows out of the database, and
@@ -150,7 +153,10 @@ func serveAPI(cmd *cobra.Command) error {
 	})
 
 	addr := envOr("GARAM_HTTP_ADDR", ":8080")
-	httpSrv := &http.Server{Addr: addr, Handler: otelhttp.NewHandler(handler, serviceAPI)}
+	// Outermost, so every route this mux carries is answered rather than
+	// dropped — the spec operations, /metrics, the probes, and a path
+	// that matches none of them.
+	httpSrv := &http.Server{Addr: addr, Handler: obs.recoverPanics(otelhttp.NewHandler(handler, serviceAPI))}
 	obs.logger.Info("serving api", slog.String("addr", addr))
 	return serveHTTP(ctx, httpSrv, httpSrv.ListenAndServe)
 }
@@ -261,7 +267,7 @@ func serveAuthz(cmd *cobra.Command) error {
 		// The engine decides from the cache, which fills from the
 		// database and falls back to it on every miss.
 		health.Register(mux, health.Database(pool))
-		if err := http.ListenAndServe(metricsAddr, mux); err != nil {
+		if err := http.ListenAndServe(metricsAddr, obs.recoverPanics(mux)); err != nil {
 			obs.logger.Error("metrics listener stopped", slog.String("error", err.Error()))
 		}
 	}()

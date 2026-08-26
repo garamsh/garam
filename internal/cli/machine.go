@@ -134,7 +134,9 @@ func serveMachine(cmd *cobra.Command) error {
 	// log line can name the route rather than the path. The last
 	// middleware listed is the outermost, so recovery runs inside the
 	// logging: a panic becomes the 500 the line reports rather than an
-	// unwind that leaves no line at all.
+	// unwind that leaves no line at all. The slice reaches the spec
+	// operations alone; recoverPanics below covers the rest of what
+	// this server serves.
 	handler := machinegen.HandlerWithOptions(
 		machineapi.NewServer(agents, operators, messages, consents, watches,
 			memberGroups{store: org.NewPostgresStore(pool)},
@@ -147,6 +149,10 @@ func serveMachine(cmd *cobra.Command) error {
 		pair,
 		otelhttp.NewHandler(handler, serviceMachine),
 	)
+	// Assigned rather than passed in, because NewServer puts the
+	// identity check outside the handler it is given and that check
+	// runs per request too.
+	srv.Handler = obs.recoverPanics(srv.Handler)
 	srv.Addr = envOr("GARAM_MACHINE_ADDR", ":8443")
 	// A refused handshake is the only refusal this listener makes, and
 	// net/http reports one here rather than through a handler.
@@ -164,7 +170,7 @@ func serveMachine(cmd *cobra.Command) error {
 		// and the agents this surface answers for, are rows; the
 		// decision admitting a message comes from the engine.
 		health.Register(mux, health.Database(pool), authzChannel{conn: conn})
-		if err := http.ListenAndServe(healthAddr, mux); err != nil {
+		if err := http.ListenAndServe(healthAddr, obs.recoverPanics(mux)); err != nil {
 			obs.logger.Error("health listener stopped", slog.String("error", err.Error()))
 		}
 	}()

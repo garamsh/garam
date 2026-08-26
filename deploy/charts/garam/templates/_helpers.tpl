@@ -107,6 +107,17 @@ hook annotations that put its account in the same phase.
 */}}
 {{- define "garam.serviceAccount" -}}
 {{- $account := index .root.Values .component "serviceAccount" -}}
+{{/*
+Annotations reach an account this chart creates, and there is nothing
+for them to reach when it creates none: under `create: false` the
+account is a subject another repository owns, so an annotation written
+here would be dropped without a diagnostic and the role it binds would
+never arrive. Refused rather than dropped — the annotation belongs
+wherever that account is created.
+*/}}
+{{- if and (not $account.create) $account.annotations -}}
+{{- fail (printf "%s.serviceAccount.annotations is set with create: false. The chart renders no ServiceAccount under create: false, so these annotations would reach nothing: set them where that account is created, or set create: true." .component) -}}
+{{- end -}}
 {{- if $account.create }}
 ---
 apiVersion: v1

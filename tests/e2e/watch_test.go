@@ -149,6 +149,31 @@ func TestWatchStore_ALapsedWatchIsNotCountedAndIsSweptOnTheNextOpen(t *testing.T
 	assert.Zero(t, watchRows(t, p))
 }
 
+// TestWatchStore_ClassifiesAWatchOnSomethingThatIsNotAnAgent covers the
+// check 000011 carries: what a watch names is an agent, and no foreign
+// key says so because a watch may never be what keeps an agent's row
+// alive. The store answers the refusal as an invalid argument rather
+// than as the driver error's default kind.
+//
+// The watch that opens is the control: the same call on an agent GRN
+// lands, so the refusal is the service type in the GRN and not the
+// call.
+func TestWatchStore_ClassifiesAWatchOnSomethingThatIsNotAnAgent(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	store := watch.NewPostgresStore(p)
+
+	require.NoError(t, store.Open(ctx, "watch-on-an-agent", scopedGRN("acme", agent.ServiceType, "0a1b2c3d4e5f6071"), time.Minute),
+		"a watch on an agent opens")
+	t.Cleanup(func() { require.NoError(t, store.Close(ctx, "watch-on-an-agent")) })
+
+	// 23514 on agent_watches_agent_service_type.
+	err := store.Open(ctx, "watch-on-a-user", scopedGRN("acme", "user", "ada"), time.Minute)
+	require.Error(t, err)
+	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument),
+		"a watch on something that is not an agent is the caller's mistake")
+}
+
 // TestWatchRelay_RefusesAnEventLargerThanOneAnnouncementCarries pins the
 // limit the relay rests on. The event of the same length that is carried
 // is the control: the refusal is the encoded size and not the length of

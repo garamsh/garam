@@ -2531,6 +2531,34 @@ func TestConsent_StaysARealPair(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// TestConsentStore_ClassifiesAGrantTowardAnOrgThatIsNotThere covers the
+// foreign key 000015 carries: a consent row names two organizations
+// that exist. What this pins is the store's own answer — a grant toward
+// an organization that is not there is not found, rather than the
+// driver error's default kind.
+//
+// The pair that stands is the control: the same call between two real
+// organizations grants, so the refusal names the absent organization
+// and not the call.
+func TestConsentStore_ClassifiesAGrantTowardAnOrgThatIsNotThere(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	truncate(t, p)
+	orgs := org.NewPostgresStore(p)
+	acme, globex := orgRootGRN("acme"), orgRootGRN("globex")
+	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(acme, "acme")))
+	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(globex, "globex")))
+
+	consents := message.NewPostgresStore(p)
+	_, err := consents.Grant(ctx, acme, globex)
+	require.NoError(t, err, "a grant between two organizations that exist stands")
+
+	_, err = consents.Grant(ctx, acme, orgRootGRN("ghost"))
+	require.Error(t, err)
+	assert.True(t, errorx.IsKind(err, errorx.KindNotFound),
+		"granting toward an organization that does not exist names the missing row")
+}
+
 // briefDelivery is the queue's delivery configuration with the waits
 // shortened to what a test can sit through. What each parameter governs
 // is unchanged; `garam serve machine` runs on the defaults.

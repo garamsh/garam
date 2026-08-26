@@ -55,11 +55,19 @@ URL segment, so `(marketing)` and `(auth)` are not in any path.
 | Path | For | Reached by |
 |---|---|---|
 | `/` | the public landing page | anyone |
-| `/login` | sign in — a password form and Google's button; a visitor already holding a session is sent on to the console | anyone |
+| `/login` | sign in — a password form, and a provider button only where the backend answers with that provider; a visitor already holding a session is sent on to the console | anyone |
 | `/register` | turn an invitation into a password account ([ADR-0041](./adr/0041-a-password-is-garams-own-credential-verified-by-argon2id.md)) | anyone holding an invitation token |
 | `/console/*` | the signed-in application | a visitor carrying a session cookie |
 | `/healthz`, `/readyz` | the two probes, spelled as every other process spells them ([ADR-0023](./adr/0023-web-probes.md)) | anything that can open the port |
 | `/api/*` | the same-origin rewrite onto the browser-facing listener ([ADR-0009](./adr/0009-web-frontend.md)) | the browser |
+
+The sign-in page asks `/auth/providers` at runtime and renders a
+provider button only for a name it answers with, so a build cannot
+offer a door the backend would answer 404 for
+(`web/src/app/(auth)/login/page.tsx`, reading through
+`web/src/features/auth/api/list-providers.ts`). A read that fails
+yields no names, so the password form stays the way in. Which ADR holds
+that decision is open (§Not established).
 
 The console's structure is `Organizations → organization → section`,
 carried by a collapsible sidebar shell over every `/console/*` route
@@ -189,16 +197,15 @@ files (ADR-0009, `docs/convention/stack-nextjs.md` §12).
 - **Reading policies.** The section exists and says it cannot. Whether
   the console reads them, and whether it ever writes one, is not
   recorded either way.
-- **How the sign-in page learns which providers exist.**
-  [ADR-0010](./adr/0010-dev-auth-provider.md) decided it learns them at
-  runtime from the public `/auth/providers`, so that a mismatched build
-  could not offer a door the backend would answer 404 for.
+- **Which ADR holds the sign-in page's provider discovery.** The
+  behaviour is live and is stated under §What it serves.
+  [ADR-0010](./adr/0010-dev-auth-provider.md) decided it, and
   [ADR-0044](./adr/0044-the-development-only-sign-in-provider-is-removed.md)
-  superseded that ADR to remove the second provider and did not carry
-  the discovery decision either way. The page names Google directly
-  today, `api/openapi.yaml` still specifies the endpoint and
-  `internal/api` still serves it, and nothing in this repository calls
-  it. Which of the two the project means to hold is unrecorded.
+  superseded that ADR to remove the second provider without carrying
+  the discovery decision either way — so what the application does
+  rests on a decision whose ADR is superseded.
+  `web/src/features/auth/api/list-providers.ts` and
+  `web/src/app/(auth)/login/page.tsx` both cite ADR-0010 for it.
 - **What the application promises a visitor across versions.** Nothing
   records it, and [api-surface.md](./api-surface.md) §Not decided
   records the same absence for the API it calls. One released image is

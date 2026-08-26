@@ -235,6 +235,10 @@ file declares and which depends.
 ## 4. Error handling
 
 - Errors are values. Use `error` interface, never panics in libraries.
+- An HTTP server still holds a recover middleware: `net/http` recovers
+  a handler's panic and logs the stack itself, but aborts the response
+  instead of answering — the client gets a closed connection, or an
+  HTTP/2 `RST_STREAM` — so the middleware exists to reply 500.
 - Don't log and return — pick one (usually return; let the caller
   decide to log).
 - Wrap at boundaries (network, IO, external calls), not on every line.

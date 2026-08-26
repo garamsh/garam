@@ -56,8 +56,7 @@ Each domain's package contains:
 - `db/` — sqlc output from `queries.sql`. Generated, never edited.
 - `*_test.go` — tests.
 - `mocks/` — mockery v3 output, generated from the interfaces
-  `.mockery.yaml` names. Only a package whose interface a test consumes
-  has one.
+  `.mockery.yaml` names.
 
 A store splits into `postgres_<concept>.go` files beside `postgres.go`,
 inside the same package, when the package persists more than one

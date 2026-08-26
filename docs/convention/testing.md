@@ -61,6 +61,7 @@ A test that cannot fail is not evidence. It passes on the day the behaviour is d
 - **Unit**: mock any module boundary you control.
 - **Integration**: external systems mocked or substituted; SUT itself is real.
 - **E2E**: nothing mocked. Real binary, real infrastructure.
+- **A generated mock exists only where a test consumes it.** An interface earns its entry in the generator's configuration when the first test needs a double, and loses it when the last one goes. A mock nothing calls is generated code standing in for nothing.
 
 ### Substitutes for state
 

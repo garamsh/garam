@@ -8,6 +8,7 @@
 - Decision
 - Consequences
 - Rejected alternatives
+- Errata
 
 ## Context
 
@@ -93,3 +94,25 @@ there is nothing to ask on at all.
   nothing invalidates — but it never restarts, so one database blip
   would drain every replica permanently. Restarting the listener is
   what has to land first.
+
+## Errata
+
+- 2026-08-27 — §Consequences' "They reach them with the base image's
+  `wget`, so removing the shell from that image is a change that has to
+  bring its own healthcheck" was true when written and is false since
+  #369, which on 2026-08-18 moved the Go image's final stage to
+  `FROM scratch`. At `da50c58`, where #231 merged this ADR, that stage
+  was `FROM alpine:3.24.1` and both Go healthchecks read
+  `CMD-SHELL wget -q -O /dev/null …/readyz`; today
+  `deploy/local/docker-compose.yml` runs the shipped binary instead —
+  `garam probe` against `/readyz` on `:8080` and `:9091`, a subcommand
+  `internal/cli/probe.go` answers. The constraint this sentence states
+  was met rather than broken: the change that removed the shell brought
+  its own healthcheck, which is what the clause asked of it. The only
+  `wget` left is the `web` service's, on a different image
+  (`node:24.18.1-alpine3.24`) that carried no healthcheck at all when
+  this ADR merged, so it was never in this sentence's scope. The rest of
+  the bullet stands — the local stack's healthchecks are these probes
+  rather than TCP connects, so `service_healthy` still means the process
+  can serve a request — and the decision is untouched: both probes still
+  answer on a port that carries no credential.

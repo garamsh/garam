@@ -2,6 +2,8 @@ package authz_test
 
 import (
 	"context"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -187,4 +189,142 @@ func TestPolicyCache_InvalidateDropsOnlyTheOrgNamed(t *testing.T) {
 	otherAfterAcme, err := cache.Statements(context.Background(), other, nil)
 	require.NoError(t, err)
 	assert.Equal(t, otherBefore, otherAfterAcme)
+}
+
+// gatedFill holds the first ActivePolicies call open so a test can act
+// while a fill is in flight, and counts every call. The second call and
+// after answer archived: the org grants nothing.
+type gatedFill struct {
+	inStore chan struct{}
+	release chan struct{}
+	calls   atomic.Int64
+}
+
+func newGatedFill() *gatedFill {
+	return &gatedFill{inStore: make(chan struct{}), release: make(chan struct{})}
+}
+
+// answer is the ActivePolicies the gated store returns. The first call
+// blocks inside the store until release is closed and then answers with
+// the policy that was live when it read; every later call answers
+// archived.
+func (g *gatedFill) answer(active []authz.ActivePolicy) func(context.Context, grn.GRN) ([]authz.ActivePolicy, error) {
+	return func(context.Context, grn.GRN) ([]authz.ActivePolicy, error) {
+		if g.calls.Add(1) == 1 {
+			close(g.inStore)
+			<-g.release
+			return active, nil
+		}
+		return nil, nil
+	}
+}
+
+// TestPolicyCache_HonoursAnInvalidationRaisedDuringAFill drives the
+// window between the store read and the map write. The fill reads the
+// store, an archive invalidates the org while that read is in flight,
+// and the fill then finishes: what it read is a snapshot from before
+// the archive, and installing it would put the org back to where it was
+// with nothing left to drop it again.
+//
+// The interleaving is driven rather than described: the invalidation
+// runs while the loader is inside ActivePolicies, which is where
+// PolicyGRPCServer.ArchivePolicy's own Invalidate lands when a check
+// misses at the same moment. The store call count is the second
+// assertion because an empty answer alone would also hold for a cache
+// that served an empty entry it should not have had.
+func TestPolicyCache_HonoursAnInvalidationRaisedDuringAFill(t *testing.T) {
+	acme := orgGRN("acme")
+	ada := subjectGRN("ada")
+	gate := newGatedFill()
+
+	store := mocks.NewMockStore(t)
+	store.EXPECT().ActivePolicies(mock.Anything, acme).
+		RunAndReturn(gate.answer([]authz.ActivePolicy{orgWidePolicy("stale-allow", wire.EffectAllow)}))
+
+	cache := authz.NewPolicyCache(store)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, err := cache.Statements(context.Background(), acme, []grn.GRN{ada})
+		assert.NoError(t, err)
+	}()
+
+	<-gate.inStore
+	cache.Invalidate(acme)
+	close(gate.release)
+	wg.Wait()
+
+	got, err := cache.Statements(context.Background(), acme, []grn.GRN{ada})
+	require.NoError(t, err)
+	assert.Empty(t, got, "the archived policy is still being served")
+	assert.Equal(t, int64(2), gate.calls.Load(), "the store was not read again after the invalidation")
+}
+
+// TestPolicyCache_InvalidateAllDuringAFillIsAlsoHonoured is the
+// listener's half of the same window. A reopened connection drops every
+// org because it cannot know what it missed, and a fill in flight when
+// that happens carries exactly what the reconnect exists to distrust.
+func TestPolicyCache_InvalidateAllDuringAFillIsAlsoHonoured(t *testing.T) {
+	acme := orgGRN("acme")
+	ada := subjectGRN("ada")
+	gate := newGatedFill()
+
+	store := mocks.NewMockStore(t)
+	store.EXPECT().ActivePolicies(mock.Anything, acme).
+		RunAndReturn(gate.answer([]authz.ActivePolicy{orgWidePolicy("stale-allow", wire.EffectAllow)}))
+
+	cache := authz.NewPolicyCache(store)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		_, err := cache.Statements(context.Background(), acme, []grn.GRN{ada})
+		assert.NoError(t, err)
+	}()
+
+	<-gate.inStore
+	cache.InvalidateAll()
+	close(gate.release)
+	wg.Wait()
+
+	got, err := cache.Statements(context.Background(), acme, []grn.GRN{ada})
+	require.NoError(t, err)
+	assert.Empty(t, got)
+	assert.Equal(t, int64(2), gate.calls.Load(), "the store was not read again after the invalidation")
+}
+
+// TestPolicyCache_ConcurrentMissesConvergeOnOneSnapshot holds what the
+// generation check must not break. Several checks missing on one org at
+// once each read the store, and the entry left behind is one snapshot:
+// a later check reads what they all read rather than whichever fill
+// happened to be last past a guard that turned some of them away.
+func TestPolicyCache_ConcurrentMissesConvergeOnOneSnapshot(t *testing.T) {
+	acme := orgGRN("acme")
+	ada := subjectGRN("ada")
+	store := mocks.NewMockStore(t)
+	store.EXPECT().ActivePolicies(mock.Anything, acme).
+		Return([]authz.ActivePolicy{orgWidePolicy("acme-allow", wire.EffectAllow)}, nil)
+
+	cache := authz.NewPolicyCache(store)
+	const callers = 8
+	got := make([][]authz.Statement, callers)
+	var wg sync.WaitGroup
+	for i := range callers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			statements, err := cache.Statements(context.Background(), acme, []grn.GRN{ada})
+			assert.NoError(t, err)
+			got[i] = statements
+		}()
+	}
+	wg.Wait()
+	for _, statements := range got {
+		assert.Equal(t, got[0], statements, "two concurrent misses served different snapshots")
+	}
+
+	after, err := cache.Statements(context.Background(), acme, []grn.GRN{ada})
+	require.NoError(t, err)
+	assert.Equal(t, got[0], after, "the entry left behind is not what the callers were served")
 }

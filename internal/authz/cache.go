@@ -63,6 +63,14 @@ type PolicyCache struct {
 	store Store
 	mu    sync.RWMutex
 	byOrg map[grn.GRN][]cachedPolicy
+	// gen counts invalidations. A fill reads the store outside the
+	// lock, so an invalidation can land while that read is in flight
+	// and find no entry to drop; installing the snapshot afterwards
+	// would put the org back with nothing left to drop it again. The
+	// fill reads gen before the store and installs only if it has not
+	// moved, which is what makes an invalidation raised at any point
+	// during a fill take effect.
+	gen uint64
 }
 
 // Compile-time check that PolicyCache satisfies PolicySource.
@@ -93,6 +101,7 @@ func (c *PolicyCache) Statements(ctx context.Context, orgGRN grn.GRN, subjects [
 func (c *PolicyCache) policies(ctx context.Context, orgGRN grn.GRN) ([]cachedPolicy, error) {
 	c.mu.RLock()
 	cached, ok := c.byOrg[orgGRN]
+	gen := c.gen
 	c.mu.RUnlock()
 	if ok {
 		return cached, nil
@@ -110,7 +119,15 @@ func (c *PolicyCache) policies(ctx context.Context, orgGRN grn.GRN) ([]cachedPol
 		policies = append(policies, cachedPolicy{statements: a.Document.Statement, subjects: subjects})
 	}
 	c.mu.Lock()
-	c.byOrg[orgGRN] = policies
+	// A gen that has moved means an invalidation was raised after this
+	// snapshot was read, so it is not installed. The caller is still
+	// answered from it — it is what the store held when the request
+	// arrived — and the next miss reads the store again. Counting
+	// invalidations rather than tracking them per org costs an unrelated
+	// org's fill a re-read and never an answer.
+	if c.gen == gen {
+		c.byOrg[orgGRN] = policies
+	}
 	c.mu.Unlock()
 	return policies, nil
 }
@@ -119,6 +136,7 @@ func (c *PolicyCache) policies(ctx context.Context, orgGRN grn.GRN) ([]cachedPol
 func (c *PolicyCache) Invalidate(orgGRN grn.GRN) {
 	c.mu.Lock()
 	delete(c.byOrg, orgGRN)
+	c.gen++
 	c.mu.Unlock()
 }
 
@@ -127,6 +145,7 @@ func (c *PolicyCache) Invalidate(orgGRN grn.GRN) {
 func (c *PolicyCache) InvalidateAll() {
 	c.mu.Lock()
 	clear(c.byOrg)
+	c.gen++
 	c.mu.Unlock()
 }
 

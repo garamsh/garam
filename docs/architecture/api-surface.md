@@ -63,12 +63,16 @@ either through a redirect provider — Google is the only one left
 — or against a password garam verifies itself, which is an endpoint
 rather than a provider
 ([ADR-0041](./adr/0041-a-password-is-garams-own-credential-verified-by-argon2id.md)).
-Starting a login, its callback, the provider list, and the probes and
-metrics this process serves from the same router carry no credential;
-[ADR-0030](./adr/0030-the-login-write-rate-is-bounded-at-the-store.md)
-names that set and bounds the one write in it a caller can make
-unconditionally. A callback that finds no live record of the login it
-claims to complete is refused as unauthenticated
+Starting a login, its callback, the provider list, registering an
+account from an invitation, and signing in with a password carry no
+credential, as do the probes and metrics this process serves from the
+same router. Which operations those are is read from
+`api/openapi.yaml` rather than remembered: an operation carrying
+`security: []` opts out of the cookie requirement the file applies to
+every other one. The login write rate is bounded at the store
+([ADR-0030](./adr/0030-the-login-write-rate-is-bounded-at-the-store.md)).
+A callback that finds no live record of the login it claims to
+complete is refused as unauthenticated
 ([ADR-0028](./adr/0028-oauth-state-is-a-server-side-record.md)).
 
 **Machine.** A client certificate whose SAN URI holds the caller's GRN
@@ -261,8 +265,7 @@ document owes an update.
 - [ADR-0028](./adr/0028-oauth-state-is-a-server-side-record.md) — a
   login's state is a record the callback spends
 - [ADR-0030](./adr/0030-the-login-write-rate-is-bounded-at-the-store.md)
-  — the unauthenticated surface's one unconditional write is bounded at
-  the store
+  — the login write rate is bounded at the store
 - [ADR-0032](./adr/0032-garam-ships-the-command-that-mints-an-operators-first-certificate.md)
   — a first certificate comes from a command no serving process can
   reach

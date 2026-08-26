@@ -55,13 +55,19 @@ type queued struct {
 type garamQueue struct {
 	server *httptest.Server
 
-	mu          sync.Mutex
-	lease       time.Duration
-	messages    []*queued
-	claims      map[string]*queued
-	refusing    bool
-	refused     int
-	completions int
+	mu       sync.Mutex
+	lease    time.Duration
+	messages []*queued
+	claims   map[string]*queued
+	refusing bool
+	refused  int
+	// hangFirstCompletion parks the first completion until the test
+	// ends, which is the stalled peer with hold's one goroutine on the
+	// other side of it.
+	hangFirstCompletion chan struct{}
+	completionCallsSeen int
+	renewals            int
+	completions         int
 }
 
 func newGaramQueue(t *testing.T, lease time.Duration, bodies ...string) *garamQueue {
@@ -124,6 +130,9 @@ func (q *garamQueue) handOut() *machinegen.Claim {
 
 func (q *garamQueue) renew(w http.ResponseWriter, r *http.Request) {
 	q.mu.Lock()
+	q.renewals++
+	q.mu.Unlock()
+	q.mu.Lock()
 	defer q.mu.Unlock()
 	m, held := q.claims[r.PathValue("claim")]
 	if !held || q.refusing || m.completed || time.Now().After(m.expiresAt) {
@@ -142,6 +151,20 @@ func (q *garamQueue) renew(w http.ResponseWriter, r *http.Request) {
 }
 
 func (q *garamQueue) complete(w http.ResponseWriter, r *http.Request) {
+	q.mu.Lock()
+	q.completionCallsSeen++
+	hang := q.hangFirstCompletion
+	first := q.completionCallsSeen == 1
+	q.mu.Unlock()
+	if hang != nil && first {
+		// Accepted and never answered. Only the caller's own deadline
+		// ends this, and before #747 there was none.
+		select {
+		case <-hang:
+		case <-r.Context().Done():
+		}
+		return
+	}
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.completions++
@@ -194,6 +217,24 @@ func (q *garamQueue) completionCalls() int {
 
 // renewalsRefused is how many renewals the queue has answered the way
 // it answers one for a hold that is gone.
+// hangFirstCompletionCall parks the first completion until the test
+// ends. hold calls complete inline, so before #747 that stopped every
+// completion behind it.
+func (q *garamQueue) hangFirstCompletionCall(t *testing.T) {
+	t.Helper()
+	stop := make(chan struct{})
+	q.mu.Lock()
+	q.hangFirstCompletion = stop
+	q.mu.Unlock()
+	t.Cleanup(func() { close(stop) })
+}
+
+func (q *garamQueue) renewalsAttempted() int {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return q.renewals
+}
+
 func (q *garamQueue) renewalsRefused() int {
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -345,11 +386,18 @@ func brief() delivery.Config {
 // another against the same two fakes.
 func run(t *testing.T, queue *garamQueue, gateway *agentGateway) context.CancelFunc {
 	t.Helper()
+	return runWith(t, queue, gateway, brief())
+}
+
+// runWith is run with the config named, so a test can bound the calls
+// more tightly than the defaults do.
+func runWith(t *testing.T, queue *garamQueue, gateway *agentGateway, cfg delivery.Config) context.CancelFunc {
+	t.Helper()
 	claims, err := delivery.NewHTTPQueue(queue.server.Client(), queue.server.URL, agentGRN())
 	require.NoError(t, err)
 	ingress, err := delivery.NewHTTPGateway(gateway.server.Client(), gateway.server.URL, gatewayAgentID)
 	require.NoError(t, err)
-	loop, err := delivery.NewService(claims, ingress, brief())
+	loop, err := delivery.NewService(claims, ingress, cfg)
 	require.NoError(t, err)
 
 	ctx, stop := context.WithCancel(context.Background())

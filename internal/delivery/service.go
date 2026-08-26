@@ -21,6 +21,18 @@ const (
 	// expiry it was given, so without a floor the interval below would
 	// shrink toward zero as a claim approaches it.
 	DefaultMinRenewInterval = time.Second
+	// DefaultClaimTimeout bounds one claim. A claim is a long poll that
+	// answers 204 when nothing arrived, so the bound has to clear
+	// garam's wait — thirty seconds (message.DefaultWait) — with room
+	// for the answer to travel, or every empty poll becomes an error.
+	DefaultClaimTimeout = 60 * time.Second
+	// DefaultCallTimeout bounds the calls that are not long polls: the
+	// post to the gateway, and the renewal and completion hold makes
+	// inline. It sits under one renewal interval — a lease divided by
+	// renewDivisor, and garam's default lease is thirty seconds — so a
+	// peer that stops answering costs less than the gap to the next
+	// renewal rather than stopping every other claim behind it.
+	DefaultCallTimeout = 5 * time.Second
 	// renewDivisor is how many renewals fall inside one lease. Three
 	// means two may be lost — to a paused process or a slow call —
 	// before a claim whose turn is still running lapses.
@@ -38,6 +50,11 @@ type Config struct {
 	// shorter than renewDivisor times this cannot be held at all —
 	// garam's default lease is thirty seconds.
 	MinRenewInterval time.Duration
+	// ClaimTimeout bounds one claim, which is a long poll and needs a
+	// bound above garam's wait.
+	ClaimTimeout time.Duration
+	// CallTimeout bounds every call that is not a long poll.
+	CallTimeout time.Duration
 }
 
 // Queue is garam's side of the loop: the claim this adapter holds for
@@ -108,6 +125,8 @@ func NewService(queue Queue, gateway Gateway, cfg Config) (Service, error) {
 		return nil, errorx.New(errorx.KindInvalidArgument, "delivery: retry delay must be positive")
 	case cfg.MinRenewInterval <= 0:
 		return nil, errorx.New(errorx.KindInvalidArgument, "delivery: minimum renew interval must be positive")
+	case cfg.ClaimTimeout <= 0 || cfg.CallTimeout <= 0:
+		return nil, errorx.New(errorx.KindInvalidArgument, "delivery: call bounds must be positive")
 	}
 	return &service{queue: queue, gateway: gateway, cfg: cfg}, nil
 }
@@ -119,6 +138,12 @@ func withDefaults(cfg Config) Config {
 	}
 	if cfg.MinRenewInterval == 0 {
 		cfg.MinRenewInterval = DefaultMinRenewInterval
+	}
+	if cfg.ClaimTimeout == 0 {
+		cfg.ClaimTimeout = DefaultClaimTimeout
+	}
+	if cfg.CallTimeout == 0 {
+		cfg.CallTimeout = DefaultCallTimeout
 	}
 	return cfg
 }
@@ -190,7 +215,9 @@ func (s *service) hold(ctx context.Context, posted <-chan pairing, ended <-chan 
 // channel send ahead of an event a turn's length behind it.
 func (s *service) claim(ctx context.Context, posted chan<- pairing) {
 	for ctx.Err() == nil {
-		claim, err := s.queue.Claim(ctx)
+		claimCtx, cancel := context.WithTimeout(ctx, s.cfg.ClaimTimeout)
+		claim, err := s.queue.Claim(claimCtx)
+		cancel()
 		if errors.Is(err, ErrNoMessageReady) {
 			// The poll waited its time at garam, so asking again at once
 			// is the loop rather than a spin.
@@ -204,7 +231,9 @@ func (s *service) claim(ctx context.Context, posted chan<- pairing) {
 			s.wait(ctx)
 			continue
 		}
-		id, err := s.gateway.Post(ctx, claim.Body)
+		postCtx, cancel := context.WithTimeout(ctx, s.cfg.CallTimeout)
+		id, err := s.gateway.Post(postCtx, claim.Body)
+		cancel()
 		if err != nil {
 			if ctx.Err() != nil {
 				return
@@ -305,7 +334,10 @@ func (s *service) complete(ctx context.Context, held map[GatewayID]pairing, turn
 				slog.String("gateway_message", string(id)))
 			continue
 		}
-		if err := s.queue.Complete(ctx, p.claim.ID); err != nil {
+		callCtx, cancel := context.WithTimeout(ctx, s.cfg.CallTimeout)
+		err := s.queue.Complete(callCtx, p.claim.ID)
+		cancel()
+		if err != nil {
 			// A completion that does not arrive is a redelivery, which
 			// is what every other lost completion here means too.
 			slog.WarnContext(ctx, "claim not completed",
@@ -327,7 +359,9 @@ func (s *service) renew(ctx context.Context, held map[GatewayID]pairing) {
 		if p.renewAt.After(now) {
 			continue
 		}
-		renewed, err := s.queue.Renew(ctx, p.claim.ID)
+		callCtx, cancel := context.WithTimeout(ctx, s.cfg.CallTimeout)
+		renewed, err := s.queue.Renew(callCtx, p.claim.ID)
+		cancel()
 		if errors.Is(err, ErrClaimLapsed) {
 			slog.WarnContext(ctx, "claim lapsed",
 				slog.String("claim", string(p.claim.ID)),

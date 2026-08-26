@@ -37,8 +37,11 @@ type HTTPQueue struct {
 //
 // The client must not carry a timeout shorter than garam's claim wait:
 // a claim is a long poll that answers 204 when nothing arrived, so a
-// client timeout under it turns every empty poll into an error. Bound
-// the call with a context instead.
+// client timeout under it turns every empty poll into an error. Each
+// call carries its own deadline instead, applied by the caller —
+// [Config.ClaimTimeout] for the poll and [Config.CallTimeout] for the
+// rest — so a peer that accepts and never answers is bounded without
+// the poll being cut short.
 func NewHTTPQueue(client *http.Client, base string, agent grn.GRN) (*HTTPQueue, error) {
 	if client == nil {
 		return nil, errorx.New(errorx.KindInvalidArgument, "delivery: queue client is required")

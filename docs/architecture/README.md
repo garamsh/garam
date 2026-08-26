@@ -14,8 +14,9 @@ Current architecture of the system and the decisions behind it. This file is the
 3. **Decisions land in pairs.** A PR that adds or supersedes an ADR must update the affected responsibility documents in the same PR. A PR with only one of the two is rejected — the final state must always live in the responsibility documents.
 4. Keep this index current: every responsibility document and notable ADR is listed here.
 5. **Every domain or concern has a responsibility document.** The PR that introduces one adds its document; the PR that removes one deletes it. A system with no code yet has no more than `structure.md` (rule 6), and that is the correct state.
-
-Rule 5 is taken verbatim from the conventions template, `garamsh/convention-driven-project@214546f`. Its `(rule 6)` points at a rule of that file's which garam does not carry: garam has no `structure.md`, and its structural rules are `docs/convention/arch-domain.md`, ranked by `docs/convention/README.md` §Precedence. The sentence holding that reference is about a system with no code yet, which garam is not, so it decides nothing here. The text is quoted rather than adapted so that a diff against that file still shows what garam has adopted and what it has not; #602 declines rules 6 to 8, which decide where structural rules live and are not a sync.
+6. **Structural rules live in `structure.md`.** The shape chosen at bootstrap imposes rules — what the unit is, what may reference what, when a new one is earned — and they belong in the responsibility document for that concern, where a reviewer cites one by line and a correction is an ordinary edit. Not the ADR: rule 2 freezes that body, so superseding the choice of shape would be the price of fixing a rule's wording.
+7. **A point the structural rules leave to the project is settled in an ADR** — the one recording the shape where the question is met at bootstrap, a later one where it is met later. Which side is taken decides what counts as a defect, so it is a decision under rule 4, and the ADR still holds the record after bootstrap. Nothing obliges a project to settle a question it has not met: until then the point waits under `structure.md`'s open questions, where it binds nothing, and moves into that document's current decisions when the project takes a side.
+8. **Structural rules rank between the convention tiers.** Where `structure.md` and a convention file decide the same case differently, the stack-specific file that applies governs; `structure.md` governs against the tiers below it in `docs/convention/README.md` §Precedence — the stack-neutral files, then that index itself. A stack file carries the shape its framework imposes and the project cannot restate; the shape chosen at bootstrap is this project's own refinement of what a stack-neutral file states for every project. A project with no `structure.md` meets no such conflict, and this rule asks nothing of it.
 
 ## What nothing detects
 
@@ -35,6 +36,7 @@ No pipeline stands behind this either. `make ci` reads no file under `docs/`, an
 
 Responsibility documents:
 
+- [structure.md](./structure.md) — the shape garam is partitioned into, what may reference what, and when a new boundary is earned
 - [overview.md](./overview.md) — what garam is and is not; module list
 - [domains.md](./domains.md) — the domain packages and their responsibilities
 - [grn-model.md](./grn-model.md) — the GRN resource naming model
@@ -91,6 +93,7 @@ ADRs:
 - [0044](./adr/0044-the-development-only-sign-in-provider-is-removed.md) — the development-only sign-in provider is removed, superseding ADR-0010
 - [0045](./adr/0045-an-organization-registers-an-operator.md) — an organization registers an operator, and a definition may name no other
 - [0046](./adr/0046-an-operator-renews-its-certificate-by-presenting-the-one-it-holds.md) — an operator renews its certificate by presenting the one it holds, and only the newest one renews
+- [0047](./adr/0047-a-domain-reaches-a-sibling-through-its-declared-surface.md) — garam is partitioned by domain, and a boundary reaches a sibling through the surface that sibling declares
 
 ## Rules for edits
 

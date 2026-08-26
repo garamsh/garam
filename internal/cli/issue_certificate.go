@@ -57,16 +57,16 @@ func issueCertificate(cmd *cobra.Command, subjectRaw, outDir string) error {
 			"subject "+subject.String()+" is not an operator: this command mints an operator's first certificate only (ADR-0015)")
 	}
 
-	databaseURL := envOr("GARAM_DATABASE_URL", "")
+	databaseURL := envOr(envDatabaseURL, "")
 	if databaseURL == "" {
 		return errorx.New(errorx.KindInvalidArgument, "GARAM_DATABASE_URL is required")
 	}
 	// The command holds the key-encryption key under the custody
 	// serve machine starts under (ADR-0016): a file its owner alone can
 	// read, and the sealer refuses anything else.
-	sealer, err := ca.NewSealerFromKeyFile(envOr("GARAM_CA_KEY_FILE", ""))
+	sealer, err := ca.NewSealerFromKeyFile(envOr(envCAKeyFile, ""))
 	if err != nil {
-		return errorx.Wrap(err, "GARAM_CA_KEY_FILE")
+		return errorx.Wrap(err, string(envCAKeyFile))
 	}
 	pool, err := pgxpool.New(ctx, databaseURL)
 	if err != nil {

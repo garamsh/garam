@@ -110,8 +110,50 @@ func newServeCommand() *cobra.Command {
 	return serve
 }
 
-func envOr(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
+// envName is the name of an environment variable garam reads. Every
+// name the module reads is declared below and reaches os.Getenv from
+// there, so the set is enumerable from these declarations rather than
+// from the spelling of the calls that read them: `make chart-render`
+// reads this block, and a wrapper around envOr cannot shrink what that
+// check covers.
+type envName string
+
+// The environment garam reads. What a deployment must set is described
+// in deploy/charts/garam/README.md; this block is the set that README
+// is checked against.
+const (
+	envDatabaseURL           envName = "GARAM_DATABASE_URL"
+	envMigrationsDir         envName = "GARAM_MIGRATIONS_DIR"
+	envHTTPAddr              envName = "GARAM_HTTP_ADDR"
+	envGRPCAddr              envName = "GARAM_GRPC_ADDR"
+	envMetricsAddr           envName = "GARAM_METRICS_ADDR"
+	envAuthzAddr             envName = "GARAM_AUTHZ_ADDR"
+	envSessionTTL            envName = "GARAM_SESSION_TTL"
+	envCookieSecure          envName = "GARAM_COOKIE_SECURE"
+	envGoogleClientID        envName = "GOOGLE_CLIENT_ID"
+	envGoogleClientSecret    envName = "GOOGLE_CLIENT_SECRET"
+	envGoogleRedirectURL     envName = "GOOGLE_REDIRECT_URL"
+	envCAKeyFile             envName = "GARAM_CA_KEY_FILE"
+	envCertificateLifetime   envName = "GARAM_CERTIFICATE_LIFETIME"
+	envMachineAddr           envName = "GARAM_MACHINE_ADDR"
+	envMachineHealthAddr     envName = "GARAM_MACHINE_HEALTH_ADDR"
+	envMachineTLSCertFile    envName = "GARAM_MACHINE_TLS_CERT_FILE"
+	envMachineTLSKeyFile     envName = "GARAM_MACHINE_TLS_KEY_FILE"
+	envMachineServerRootFile envName = "GARAM_MACHINE_SERVER_ROOT_FILE"
+	envAdapterAgent          envName = "GARAM_ADAPTER_AGENT"
+	envAdapterMachineURL     envName = "GARAM_ADAPTER_MACHINE_URL"
+	envAdapterGatewayURL     envName = "GARAM_ADAPTER_GATEWAY_URL"
+	envAdapterGatewayAgent   envName = "GARAM_ADAPTER_GATEWAY_AGENT"
+	envAdapterTLSCertFile    envName = "GARAM_ADAPTER_TLS_CERT_FILE"
+	envAdapterTLSKeyFile     envName = "GARAM_ADAPTER_TLS_KEY_FILE"
+	envAdapterServerRootFile envName = "GARAM_ADAPTER_SERVER_ROOT_FILE"
+)
+
+// envOr reads a declared name, or the fallback when it is unset or
+// empty. It holds the module's only os.Getenv call, which is what
+// makes the block above the whole of what the source reads.
+func envOr(key envName, fallback string) string {
+	if v := os.Getenv(string(key)); v != "" {
 		return v
 	}
 	return fallback
@@ -124,13 +166,13 @@ func envOr(key, fallback string) string {
 // which takes internal/ca's own default rather than restating it here;
 // a value outside the bounds that package states refuses the start.
 func certificateLifetime() (time.Duration, error) {
-	raw := envOr("GARAM_CERTIFICATE_LIFETIME", "")
+	raw := envOr(envCertificateLifetime, "")
 	if raw == "" {
 		return 0, nil
 	}
 	lifetime, err := time.ParseDuration(raw)
 	if err != nil {
-		return 0, errorx.Wrap(err, "GARAM_CERTIFICATE_LIFETIME", errorx.KindInvalidArgument)
+		return 0, errorx.Wrap(err, string(envCertificateLifetime), errorx.KindInvalidArgument)
 	}
 	return lifetime, nil
 }

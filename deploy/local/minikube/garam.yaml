@@ -180,6 +180,12 @@ spec:
         # other turns a correct file into a refused one. The garam
         # image is scratch now and carries no shell, so the copy runs
         # on the alpine release the repo already pins.
+        #
+        # Nothing proposes a bump for it: the docker entry covers
+        # deploy/local and does not search subdirectories, so no entry in
+        # .github/dependabot.yml reaches this file. No owner and no
+        # scheduled review is named for it either, so it has no mover of
+        # any form docs/convention/ci.md §Verify admits.
         - name: key-material
           image: alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
           securityContext:

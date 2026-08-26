@@ -3,8 +3,8 @@
 #
 # The operator generates the role's password and publishes it, with a
 # ready-made connection URI, in a Secret it names `postgres-app`. Every
-# process here reads `GARAM_DATABASE_URL` from that key, so no database
-# credential is written in this repository at all.
+# process here reads `GARAM_DATABASE_URL` from that key, so no file in
+# this stack holds a database credential.
 apiVersion: postgresql.cnpg.io/v1
 kind: Cluster
 metadata:

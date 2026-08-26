@@ -53,6 +53,14 @@ Replica safety above one is not established
 chart value would assert what garam does not know. Establishing it is an
 ADR, then a value.
 
+Each also sets `strategy: type: Recreate`, so that count holds across an
+upgrade and not only at rest. The default `RollingUpdate` brings the new
+pod up before taking the old one down, which at one replica runs two of
+the workload for the length of the rollout — the state `replicas: 1`
+exists to avoid. The cost is that an upgrade is a gap in service rather
+than a handover, which is the same trade `replicas: 1` already makes for
+a node failure.
+
 ## Workload identities
 
 Every workload can run as an account of its own, and **the chart creates

@@ -10,6 +10,14 @@ spec:
   # Fixed at one. No leader election exists and replica safety above one
   # is not established, so the chart offers no value for it.
   replicas: 1
+  # Recreate, not the default RollingUpdate: at one replica the default
+  # brings the new pod up before taking the old one down, so an upgrade
+  # runs two of a workload whose safety above one replica is not
+  # established (docs/architecture/deployment-contract.md §Not
+  # established). Terminating first holds the count `replicas` fixes
+  # across an upgrade as well as at rest.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       {{- include "garam.selectorLabels" (dict "root" $ "component" "authz") | nindent 6 }}

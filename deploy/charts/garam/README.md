@@ -344,10 +344,18 @@ count is zero:
   that table declares, every account the chart renders is one a workload
   runs as, the value files that name none render none, and every render
   is repeated under a second release name and must come out identical.
+- `chart-security` — the PodSecurity `restricted` comparison against
+  every workload §Workload identities declares. The pod spec sets
+  `runAsNonRoot: true` and a `seccompProfile` type, every container
+  refuses privilege escalation and drops `ALL`, and every container's
+  effective `runAsUser` is an integer — its own, or the pod's where it
+  sets none, which is the rule the kubelet applies and the one most
+  containers here rely on. The line it prints counts how many took the
+  pod's.
 - `chart-package` — `helm package`, then a search of the unpacked
   artifact for `cpu` and `memory` as keys. Every file not excluded ships,
   `ci/` included, so a value file reaches a consumer without passing the
-  three above, each of which reads the source tree instead. This file
+  four above, each of which reads the source tree instead. This file
   ships in the artifact too, so it names the two as words rather than as
   keys.
 
@@ -360,8 +368,8 @@ discovered by a deployment.
 
 A check that fires correctly says nothing about what it never reads, so
 what each is complete over is recorded here rather than inferred.
-`chart-render` and `chart-identity` each point here in the line they
-print.
+`chart-render`, `chart-identity`, `chart-security` and `chart-package`
+each point here in the line they print.
 
 - `chart-lint` and `chart-render` are complete over **templates that
   produce YAML**: one that cannot render fails. Neither asks an
@@ -393,6 +401,19 @@ print.
   filename names, and `minimal-values.yaml` must still render. It reads
   no other value — a value documented as guarded and given no file
   there passes, which is why a new guard lands with its file.
+- `chart-security` is complete over **the PodSecurity `restricted`
+  fields of a rendered pod spec**: `runAsNonRoot: true` and a
+  `seccompProfile` type of `RuntimeDefault` or `Localhost` on the pod,
+  and on every container, init containers included, an integer effective
+  `runAsUser`, `allowPrivilegeEscalation: false`, and `ALL` among the
+  dropped capabilities. It reads the first two on the pod spec only:
+  `restricted` admits them on a container instead, so a workload that
+  moved them there fails this check though an apiserver would admit it.
+  It
+  reads no other field of a security context and asks no apiserver. What
+  no pod spec carries stays outside it — which user an image actually
+  runs as is the image's fact, not this render's, and nothing here reads
+  it.
 - `chart-package` is complete over **two resource names in the published
   artifact**: no file `helm package` ships sets `cpu` or `memory` as a
   key. It reads no third name, so a figure under `ephemeral-storage` or
@@ -407,8 +428,9 @@ rest — a read-only root filesystem, replica safety above one, a bound on
 startup — and each of those stays reviewed rather than checked.
 
 Nothing checks the rest of what a pod carries — volumes and mounts,
-probe paths and ports, the security context, the hook annotations on the
-migrate Job. Each is reviewed rather than checked.
+probe paths and ports, the security-context fields `chart-security` does
+not read, the hook annotations on the migrate Job. Each is reviewed
+rather than checked.
 
 Two things sit outside any of them:
 

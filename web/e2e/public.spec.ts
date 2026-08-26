@@ -54,17 +54,23 @@ test.describe("signed out", () => {
     ).toBeVisible();
   });
 
-  test("starts the backend OAuth flow from the Google sign-in button", async ({
+  test("offers no provider button when the backend registers none", async ({
     page,
   }) => {
     await page.goto("/login");
 
-    // Google's branding guidelines: its own button asset under an
-    // approved label
-    // (developers.google.com/identity/branding-guidelines).
-    const button = page.getByRole("link", { name: "Sign in with Google" });
-    await expect(button).toHaveAttribute("href", "/api/auth/login/google");
-    await expect(button.locator("img").first()).toBeVisible();
+    // This stack sets no GOOGLE_CLIENT_ID (`deploy/local/.env.example`),
+    // so `serve api` registers no provider and `/auth/login/google`
+    // answers 404. The page asks `/auth/providers` and offers what the
+    // backend answers with (ADR-0010), so the button is absent here and
+    // the password form is the way in.
+    await expect(
+      page.getByRole("heading", { name: "Sign in to garam", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByLabel("Username")).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Sign in with Google" }),
+    ).toHaveCount(0);
   });
 
   test("answers both probes without a session", async ({ request }) => {

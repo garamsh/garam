@@ -12,6 +12,7 @@ import {
   GoogleSignInButton,
   PasswordSignInForm,
   getSession,
+  listProviders,
 } from "@/features/auth";
 
 import { ApiUnreachableCard } from "../_components/api-unreachable-card";
@@ -24,6 +25,10 @@ export const metadata: Metadata = { title: "Sign in — garam" };
  * to the console instead of being offered the form again. An API that
  * did not answer is said out loud: every way in from here runs through
  * it, so offering the buttons would be offering a door that is shut.
+ *
+ * Which provider buttons appear is the backend's answer rather than
+ * this build's assumption (ADR-0010): a provider it has not registered
+ * has no login route, so a button for one would lead to a 404.
  */
 export default async function LoginPage() {
   const session = await getSession();
@@ -33,6 +38,7 @@ export default async function LoginPage() {
   if (session.status === "unreachable") {
     return <ApiUnreachableCard subject="the way in" />;
   }
+  const offersGoogle = (await listProviders()).includes("google");
   return (
     <Card className="w-full max-w-sm [--card-spacing:--spacing(6)]">
       <CardHeader className="gap-2">
@@ -40,21 +46,26 @@ export default async function LoginPage() {
           Sign in to garam
         </h1>
         <p className="text-sm text-pretty text-muted-foreground">
-          Use the account you registered, or the Google account your
-          organization invited. Accounts are created by invitation, not by
-          signup.
+          {offersGoogle
+            ? "Use the account you registered, or the Google account your organization invited."
+            : "Use the account you registered."}{" "}
+          Accounts are created by invitation, not by signup.
         </p>
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
         <PasswordSignInForm />
-        <div className="flex items-center gap-3">
-          <span aria-hidden className="h-px flex-1 bg-border" />
-          <span className="text-xs text-muted-foreground">or</span>
-          <span aria-hidden className="h-px flex-1 bg-border" />
-        </div>
-        <div className="flex flex-col items-center gap-3">
-          <GoogleSignInButton />
-        </div>
+        {offersGoogle && (
+          <>
+            <div className="flex items-center gap-3">
+              <span aria-hidden className="h-px flex-1 bg-border" />
+              <span className="text-xs text-muted-foreground">or</span>
+              <span aria-hidden className="h-px flex-1 bg-border" />
+            </div>
+            <div className="flex flex-col items-center gap-3">
+              <GoogleSignInButton />
+            </div>
+          </>
+        )}
       </CardContent>
       <CardFooter className="flex-col gap-2 text-xs text-muted-foreground">
         <p>

@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import GroupsPage from "@/app/console/orgs/[org]/groups/page";
 import { renderServerComponent } from "@/testing/render";
-import { API_URL, unauthenticated } from "@/testing/mocks/handlers";
+import { API_URL, signedOut } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
 vi.mock("next/navigation", () => ({
@@ -69,7 +69,7 @@ describe("groups section", () => {
   });
 
   it("sends a rejected session to the login page, not to the notice", async () => {
-    server.use(unauthenticated());
+    server.use(...signedOut());
 
     await expect(
       renderServerComponent(GroupsPage(params("acme"))),

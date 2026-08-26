@@ -2,7 +2,7 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
 
 import { getSession } from "@/features/auth/api/get-session";
-import { API_URL, alice, unauthenticated } from "@/testing/mocks/handlers";
+import { API_URL, alice, signedOut } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
 describe("getSession", () => {
@@ -14,7 +14,7 @@ describe("getSession", () => {
   });
 
   it("answers signed-out when the backend rejects the session", async () => {
-    server.use(unauthenticated());
+    server.use(...signedOut());
 
     await expect(getSession()).resolves.toEqual({ status: "signed-out" });
   });

@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import OrgsPage from "@/app/console/orgs/page";
 import { renderServerComponent } from "@/testing/render";
-import { API_URL, unauthenticated } from "@/testing/mocks/handlers";
+import { API_URL, signedOut } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
 // `redirect()` throws a control-flow error the router catches; the
@@ -62,7 +62,7 @@ describe("organizations page", () => {
   });
 
   it("sends a rejected session to the login page, not the error boundary", async () => {
-    server.use(unauthenticated());
+    server.use(...signedOut());
 
     await expect(renderServerComponent(OrgsPage())).rejects.toThrow(
       "NEXT_REDIRECT:/login",

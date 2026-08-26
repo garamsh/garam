@@ -2,7 +2,7 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
 
 import { listProviders } from "@/features/auth";
-import { API_URL } from "@/testing/mocks/handlers";
+import { API_URL, signedOut } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
 describe("listProviders", () => {
@@ -12,6 +12,15 @@ describe("listProviders", () => {
         HttpResponse.json(["google"]),
       ),
     );
+
+    await expect(listProviders()).resolves.toEqual(["google"]);
+  });
+
+  // The subject here is the signed-out fixture rather than the read:
+  // `/auth/providers` is public, and a fixture refusing it would fail a
+  // page that is correct.
+  it("returns the names when the caller holds no session", async () => {
+    server.use(...signedOut());
 
     await expect(listProviders()).resolves.toEqual(["google"]);
   });

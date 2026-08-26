@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ConsoleSidebar } from "@/app/console/_components/console-sidebar";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { API_URL, unauthenticated } from "@/testing/mocks/handlers";
+import { API_URL, signedOut } from "@/testing/mocks/handlers";
 import { renderServerComponent } from "@/testing/render";
 import { server } from "@/testing/setup";
 
@@ -54,7 +54,7 @@ describe("console sidebar", () => {
   });
 
   it("sends a rejected session to the login page", async () => {
-    server.use(unauthenticated());
+    server.use(...signedOut());
 
     await expect(renderSidebar()).rejects.toThrow("NEXT_REDIRECT:/login");
   });

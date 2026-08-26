@@ -3,7 +3,7 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import OperatorsPage from "@/app/console/orgs/[org]/operators/page";
-import { API_URL, unauthenticated } from "@/testing/mocks/handlers";
+import { API_URL, signedOut } from "@/testing/mocks/handlers";
 import { renderServerComponent } from "@/testing/render";
 import { server } from "@/testing/setup";
 
@@ -83,7 +83,7 @@ describe("operators section", () => {
   });
 
   it("sends a rejected session to the login page, not to the notice", async () => {
-    server.use(unauthenticated());
+    server.use(...signedOut());
 
     await expect(
       renderServerComponent(OperatorsPage(params("acme"))),

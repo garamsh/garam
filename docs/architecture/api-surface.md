@@ -38,7 +38,8 @@ repeated. A second copy is a second thing to keep true.
 | Browser-facing HTTP | `garam serve api` | `api/openapi.yaml` | a signed-in person, through the web app's same-origin `/api/*` rewrite (ADR-0009) |
 | Machine | `garam serve machine` | `api/machine.yaml` | an operator or an agent holding a certificate garam issued (ADR-0014, ADR-0015) |
 | Policy engine | `garam serve authz` | `proto/garam/authz/v1` | one of the two listeners above, over gRPC (ADR-0003) |
-| Probes and metrics | every serve command, and the web app | no specification | anything that can open the port (ADR-0021, ADR-0023) |
+| Probes | every serve command, and the web app | no specification | anything that can open the port (ADR-0021, ADR-0023) |
+| Metrics | `garam serve api` and `garam serve authz`, on the listener each already runs | no specification | anything that can open the port |
 
 The first two are separate processes
 ([ADR-0017](./adr/0017-machine-process.md)), and neither may call the
@@ -211,6 +212,18 @@ decided says what closing that would take.
   tag and no release, and no ADR names a deprecation path or what
   counts as a breaking change. Treat every surface as unversioned, and
   do not read that field as a promise.
+- **Whether `garam serve machine` exposes the metrics it already
+  collects.** It builds a registry as the other two do — the
+  `newObservability` in `internal/cli/observability.go` registers the Go
+  collector and wires the OpenTelemetry Prometheus reader as the global
+  meter provider — and `internal/cli/machine.go` instruments both its
+  HTTP handler and its gRPC client against it. Nothing serves it:
+  `metricsHandler` is mounted on the two listeners in
+  `internal/cli/serve.go` and nowhere else, so that process pays for the
+  instrumentation and no scraper can read it. ADR-0021 gave it a
+  plaintext listener for the probes and did not say whether `/metrics`
+  joins that listener; adding one there is a decision about what the
+  listener serves rather than a defect to fix in a handler.
 - **Whether anything outside the cluster reaches any listener.** The
   chart renders four `ClusterIP` Services and refuses to offer a value
   that would expose one (ADR-0042), so exposure is the deployment's

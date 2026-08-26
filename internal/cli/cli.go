@@ -117,6 +117,15 @@ func envOr(key, fallback string) string {
 	return fallback
 }
 
+// requestReadTimeout bounds how long a request has to arrive, not how
+// long a handler may run: net/http applies it to reading, so a stalled
+// client is disconnected at the bound while a watch stream and a
+// message wait — both far longer than this — are untouched. Generous
+// against the largest body either listener admits (65536 characters,
+// ADR-0034) and against the machine listener's handshake, which is read
+// on the same connection.
+const requestReadTimeout = 30 * time.Second
+
 // certificateLifetime is how long a certificate garam signs stays
 // valid. Expiry is the only revocation there is (ADR-0014), so the
 // value is a security parameter rather than a tuning knob, and the two

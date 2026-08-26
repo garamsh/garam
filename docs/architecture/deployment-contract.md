@@ -341,6 +341,14 @@ The bound is the binary's, not the deployment's (`shutdownGrace` in
 seconds truncates in-flight work, and nothing the process does at
 shutdown outlasts it.
 
+A request carries a bound of its own, thirty seconds to arrive, on both
+HTTP listeners (`requestReadTimeout` in `internal/cli/cli.go`, and on
+the machine listener it covers the handshake read too). It bounds
+reading rather than a handler — a watch stream and a message claim both
+outlive it by design — so what it disconnects is a client that has
+stopped sending, which would otherwise hold a connection open until the
+shutdown bound above expired.
+
 ## Not established
 
 Answers a consumer asked for that the source does not establish. Stated

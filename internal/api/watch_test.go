@@ -3,6 +3,7 @@ package api_test
 import (
 	"bufio"
 	"context"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -114,6 +115,57 @@ func watchers(t *testing.T, f *fixture) (string, grn.GRN, *http.Cookie, *http.Co
 			org.NewMembership(orgGRNOf(slug), userGRNOf(subject), org.RoleMember)))
 	}
 	return slug, seedAgent(t, f, slug), watcher, reader
+}
+
+// TestWatchAgent_SurvivesTheServersReadTimeout holds a stream open past
+// a server's ReadTimeout and requires an event forwarded after the bound
+// to still arrive: the bound is on reading a request, not on how long a
+// handler may run. The stalled client below is the control — without it
+// this passes on a server that set no bound at all.
+func TestWatchAgent_SurvivesTheServersReadTimeout(t *testing.T) {
+	const bound = 300 * time.Millisecond
+	const keepAliveFrame = ": keepalive\n"
+
+	f := newFixture(t)
+	slug, held, watcher, _ := watchers(t, f)
+	server := httptest.NewUnstartedServer(f.handler)
+	server.Config.ReadTimeout = bound
+	server.Start()
+	t.Cleanup(server.Close)
+	f.awaitReceiving(t)
+
+	path := "/orgs/" + slug + "/agents/" + held.Identifier + "/watch"
+	resp, stream, _ := open(t, server.URL, path, watcher)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	// Well past the bound, and past it before anything is forwarded, so
+	// nothing below can have been in flight when it expired.
+	time.Sleep(4 * bound)
+	f.forward(t, held, "turn.output", "after the bound")
+	// A keep-alive written after the bound is already the answer — the
+	// handler is still writing — but the forwarded event is what says
+	// the stream still carries what it is for.
+	frame := nextFrame(t, stream)
+	for frame == strings.TrimSuffix(keepAliveFrame, "\n") || frame == keepAliveFrame {
+		frame = nextFrame(t, stream)
+	}
+	assert.Equal(t, "event: turn.output\ndata: after the bound\n", frame,
+		"the stream died at the read bound; a watch outlives it by design (ADR-0022)")
+
+	// The control: the same server disconnects a client that stalls
+	// mid-body, so the bound above was in force rather than absent.
+	conn, err := net.Dial("tcp", strings.TrimPrefix(server.URL, "http://"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close() })
+	_, err = conn.Write([]byte("POST /auth/password/register HTTP/1.1\r\n" +
+		"Host: garam\r\nContent-Type: application/json\r\nContent-Length: 200\r\n\r\n" +
+		`{"username":"a"`))
+	require.NoError(t, err)
+	start := time.Now()
+	require.NoError(t, conn.SetReadDeadline(time.Now().Add(10*bound)))
+	_, err = conn.Read(make([]byte, 512))
+	require.NoError(t, err, "the stalled client was not disconnected, so no bound is in force")
+	assert.Less(t, time.Since(start), 8*bound, "the stall outlived the bound")
 }
 
 // TestWatchAgent_CarriesWhatIsForwardedWhileTheStreamIsOpen is the whole

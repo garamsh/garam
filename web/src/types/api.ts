@@ -1176,6 +1176,7 @@ export interface operations {
                     "application/json": components["schemas"]["Organization"][];
                 };
             };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
         };
     };
@@ -1337,6 +1338,7 @@ export interface operations {
                     "application/json": components["schemas"]["Group"][];
                 };
             };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
@@ -1574,6 +1576,7 @@ export interface operations {
                     "application/json": components["schemas"]["Project"][];
                 };
             };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
@@ -1811,6 +1814,7 @@ export interface operations {
                     "application/json": components["schemas"]["Agent"][];
                 };
             };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];

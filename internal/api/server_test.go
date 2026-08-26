@@ -724,3 +724,94 @@ func TestAcceptInvitation_Expired(t *testing.T) {
 	require.Equal(t, http.StatusConflict, rec.Code)
 	assert.Equal(t, "failed_precondition", decodeBody[apigen.Error](t, rec).Kind)
 }
+
+// TestListPaging_RefusesAPageTheColumnsCannotHold drives every list
+// endpoint with the two values api/openapi.yaml's `minimum: 0` excludes
+// and the two the paging columns cannot hold. Each is refused with the
+// status the specification now declares, naming the parameter.
+//
+// The unpaged read is the control, per endpoint. Four 400s prove
+// nothing beside a surface that refuses these routes outright, and
+// without it the refusal could be the authorization ahead of it rather
+// than the paging.
+func TestListPaging_RefusesAPageTheColumnsCannotHold(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	f.permit(
+		permission{userGRNOf("owner-sub"), org.ActionGroupRead},
+		permission{userGRNOf("owner-sub"), org.ActionProjectRead},
+		permission{userGRNOf("owner-sub"), org.ActionAgentRead},
+	)
+
+	endpoints := map[string]string{
+		"orgs":     "/orgs",
+		"groups":   "/orgs/" + slug + "/groups",
+		"projects": "/orgs/" + slug + "/projects",
+		"agents":   "/orgs/" + slug + "/agents",
+	}
+	refused := []struct{ name, param, query string }{
+		{"negative limit", "limit", "limit=-1"},
+		{"negative offset", "offset", "offset=-1"},
+		{"limit past the column", "limit", "limit=4294967296"},
+		{"offset past the column", "offset", "offset=4294967296"},
+	}
+	for endpoint, path := range endpoints {
+		t.Run(endpoint, func(t *testing.T) {
+			control := f.do(t, "GET", path, "", owner)
+			require.Equal(t, http.StatusOK, control.Code, "the endpoint answers a page unpaged")
+
+			for _, tt := range refused {
+				t.Run(tt.name, func(t *testing.T) {
+					rec := f.do(t, "GET", path+"?"+tt.query, "", owner)
+
+					require.Equal(t, http.StatusBadRequest, rec.Code)
+					body := decodeBody[apigen.Error](t, rec)
+					assert.Equal(t, "out_of_range", body.Kind)
+					assert.Contains(t, body.Message, tt.param)
+				})
+			}
+		})
+	}
+}
+
+// TestListPaging_AnswersNoPageTheCallerDidNotAskFor is the defect in
+// its own terms. `limit=4294967296` truncated onto the `integer` column
+// as 0, which the store reads as "no limit", and `offset=4294967296`
+// truncated the same way onto page one — each answered 200 carrying a
+// page nobody asked for, which is what makes it worse than an error: a
+// caller cannot tell it from the page it asked for.
+//
+// That no page comes back is asserted by the body decoding as the
+// declared Error object: a JSON array does not unmarshal into it, so a
+// page would fail that step rather than pass it. What the store does
+// with a page it is given is not re-proved here —
+// TestOrgStore_ListOrgsPagesEveryOrg covers that against real Postgres,
+// and the fake this fixture holds ignores the filter outright.
+func TestListPaging_AnswersNoPageTheCallerDidNotAskFor(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	createOrg(t, f, owner, "acme")
+	createOrg(t, f, owner, "beta")
+	createOrg(t, f, owner, "gamma")
+
+	all := f.do(t, "GET", "/orgs", "", owner)
+	require.Equal(t, http.StatusOK, all.Code)
+	require.Len(t, decodeBody[[]apigen.Organization](t, all), 3, "control: three orgs to page")
+
+	// The control is the column's own maximum, accepted where the next
+	// value up is refused. It is what says the refusals below are the
+	// bound rather than a list that has stopped answering, and it is
+	// the pair of values a bound off by one would not separate.
+	edge := f.do(t, "GET", "/orgs?limit=2147483647&offset=2147483647", "", owner)
+	require.Equal(t, http.StatusOK, edge.Code, "control: int32's own maximum is in range")
+
+	for _, query := range []string{"limit=4294967296", "offset=4294967296"} {
+		t.Run(query, func(t *testing.T) {
+			rec := f.do(t, "GET", "/orgs?"+query, "", owner)
+
+			require.Equal(t, http.StatusBadRequest, rec.Code)
+			assert.Equal(t, "out_of_range", decodeBody[apigen.Error](t, rec).Kind)
+		})
+	}
+}

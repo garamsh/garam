@@ -241,6 +241,8 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Organization'
+        '400':
+          $ref: '#/components/responses/Error'
         '401':
           $ref: '#/components/responses/Error'
   /orgs/{org}:
@@ -372,6 +374,8 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Group'
+        '400':
+          $ref: '#/components/responses/Error'
         '401':
           $ref: '#/components/responses/Error'
         '403':
@@ -557,6 +561,8 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Project'
+        '400':
+          $ref: '#/components/responses/Error'
         '401':
           $ref: '#/components/responses/Error'
         '403':
@@ -715,6 +721,8 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/Agent'
+        '400':
+          $ref: '#/components/responses/Error'
         '401':
           $ref: '#/components/responses/Error'
         '403':

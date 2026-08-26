@@ -13,11 +13,14 @@ import (
 
 // RecoverPanics answers a handler that panicked. net/http recovers the
 // panic and logs the stack itself, but abandons the response instead of
-// answering, and this listener negotiates HTTP/2: the caller reads an
-// RST_STREAM and cannot tell a defect here from a network fault, which
-// an adapter holding a durable queue retries forever. Recovering first
-// is what makes the answer a 500, and the stack travels in the cause
-// because net/http no longer sees the panic to log it.
+// answering, and an abandoned response tells the caller nothing on
+// either protocol: the shipped adapter meets this listener over
+// HTTP/1.1 — its transport declines h2, which
+// internal/cli/delivery_test.go pins — so it reads a closed connection,
+// cannot tell that from a network fault, and, holding a durable queue,
+// retries forever. Recovering first is what makes the answer a 500, and
+// the stack travels in the cause because net/http no longer sees the
+// panic to log it.
 //
 // It answers and does not log (stack-go.md §4). The cause reaches the
 // request line through the recorder a handled 5xx already reports on,

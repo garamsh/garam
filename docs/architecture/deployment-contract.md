@@ -87,6 +87,15 @@ The rule is [ADR-0015](./adr/0015-operator-identity.md)'s and is not a
 preference: key material reaches a process as a file readable only by
 its owner, with the reading process running as that owner.
 
+**Which owner that is, the Pod decides.** `runAsUser` sets the UID the
+process runs as, and the image's `USER` does not decide it: garam's
+image declares `USER garam` (uid 10001, `deploy/local/Dockerfile`),
+which is a default a Pod overrides rather than a value a key file must
+be owned by. #644 measured it: `garam adapter` ran as 65532, an agent
+operator's user and not garam's own, against a key file owned by 65532,
+and `internal/keyfile` accepted it — what the rule constrains is that
+the two agree, not that either is garam's.
+
 **It is enforced, not requested.** `internal/keyfile` refuses a key file
 when any group or other permission bit is set, and separately when its
 owner is not the process's own UID, and every key file a process reads

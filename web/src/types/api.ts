@@ -1009,6 +1009,7 @@ export interface operations {
                 content?: never;
             };
             404: components["responses"]["Error"];
+            429: components["responses"]["Error"];
         };
     };
     oauthCallback: {
@@ -1036,6 +1037,7 @@ export interface operations {
             };
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
+            404: components["responses"]["Error"];
         };
     };
     logout: {
@@ -1102,7 +1104,6 @@ export interface operations {
             400: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
-            422: components["responses"]["Error"];
         };
     };
     loginPassword: {
@@ -2361,6 +2362,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];

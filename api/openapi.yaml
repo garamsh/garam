@@ -55,6 +55,8 @@ paths:
                 type: string
         '404':
           $ref: '#/components/responses/Error'
+        '429':
+          $ref: '#/components/responses/Error'
   /auth/callback/{provider}:
     get:
       operationId: oauthCallback
@@ -87,6 +89,8 @@ paths:
         '400':
           $ref: '#/components/responses/Error'
         '401':
+          $ref: '#/components/responses/Error'
+        '404':
           $ref: '#/components/responses/Error'
   /auth/logout:
     post:
@@ -151,8 +155,6 @@ paths:
         '404':
           $ref: '#/components/responses/Error'
         '409':
-          $ref: '#/components/responses/Error'
-        '422':
           $ref: '#/components/responses/Error'
   /auth/password/login:
     post:
@@ -1252,6 +1254,8 @@ paths:
       responses:
         '204':
           description: Consent withdrawn.
+        '400':
+          $ref: '#/components/responses/Error'
         '401':
           $ref: '#/components/responses/Error'
         '403':

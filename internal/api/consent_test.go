@@ -171,6 +171,31 @@ func TestConsents_RefusesAnOrgThatIsNotThereOrIsItself(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
+// TestConsents_WithdrawRefusesTheOrgItself is withdraw's half of the
+// refusal the grant above already carries. Both routes resolve the
+// other organization through one helper, so an organization consents
+// with another and not with itself in either direction, and only one
+// of the two said so. The withdraw toward a real other organization is
+// the control — that route answers, so the refusal is the self case
+// rather than a route that refuses everything.
+func TestConsents_WithdrawRefusesTheOrgItself(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
+	f.permit(permission{ownerGRN, org.ActionConsentWithdraw})
+
+	otherGRN := orgGRNForTest("globex")
+	require.NoError(t, f.orgs.CreateOrg(testCtx(t), org.NewOrganization(otherGRN, "globex")))
+
+	base := "/orgs/" + slug + "/consents"
+	rec := f.do(t, "DELETE", base+"/globex", "", owner)
+	require.Equal(t, http.StatusNoContent, rec.Code)
+
+	rec = f.do(t, "DELETE", base+"/"+slug, "", owner)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
 // orgGRNForTest builds the GRN of the org the slug names, as the
 // surface's own helper does.
 func orgGRNForTest(slug string) grn.GRN {

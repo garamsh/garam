@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import LoginPage from "@/app/(auth)/login/page";
 import { renderServerComponent } from "@/testing/render";
-import { API_URL, unauthenticated } from "@/testing/mocks/handlers";
+import { API_URL, signedOutWith } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
 vi.mock("next/navigation", () => ({
@@ -15,7 +15,7 @@ vi.mock("next/navigation", () => ({
 
 describe("login page", () => {
   it("offers the Google sign-in button while signed out", async () => {
-    server.use(unauthenticated());
+    server.use(...signedOutWith(["google"]));
 
     await renderServerComponent(LoginPage());
 
@@ -31,7 +31,7 @@ describe("login page", () => {
   });
 
   it("offers the username and password form beside the provider buttons", async () => {
-    server.use(unauthenticated());
+    server.use(...signedOutWith(["google"]));
 
     await renderServerComponent(LoginPage());
 
@@ -46,8 +46,71 @@ describe("login page", () => {
     ).toBeInTheDocument();
   });
 
+  // The three tests below assert a refusal, so each carries the control
+  // that isolates the mechanism in the same test (`testing.md` §Failing):
+  // the same page, the same query, with the backend registering the
+  // provider. Without it an absent button could be a page that failed to
+  // render or a query that never matched anything.
+  it("offers a provider button, and names Google, only when the backend registers one", async () => {
+    server.use(...signedOutWith(["google"]));
+    const registered = await renderServerComponent(LoginPage());
+    expect(
+      screen.getByRole("link", { name: "Sign in with Google" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Google account your organization invited/),
+    ).toBeInTheDocument();
+    registered.unmount();
+
+    server.use(...signedOutWith([]));
+    await renderServerComponent(LoginPage());
+    expect(
+      screen.queryByRole("link", { name: "Sign in with Google" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/Google/)).not.toBeInTheDocument();
+    // The password form is the way in that remains, so a deployment
+    // that configures no provider is still usable.
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
+    expect(screen.queryByText("or")).not.toBeInTheDocument();
+  });
+
+  it("offers no button for a provider it holds none for", async () => {
+    server.use(...signedOutWith(["google"]));
+    const known = await renderServerComponent(LoginPage());
+    expect(
+      screen.getByRole("link", { name: "Sign in with Google" }),
+    ).toBeInTheDocument();
+    known.unmount();
+
+    server.use(...signedOutWith(["github"]));
+    await renderServerComponent(LoginPage());
+    expect(
+      screen.queryByRole("link", { name: "Sign in with Google" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
+  });
+
+  it("offers no provider button when the provider list cannot be read", async () => {
+    server.use(...signedOutWith(["google"]));
+    const readable = await renderServerComponent(LoginPage());
+    expect(
+      screen.getByRole("link", { name: "Sign in with Google" }),
+    ).toBeInTheDocument();
+    readable.unmount();
+
+    server.use(
+      ...signedOutWith([]),
+      http.get(`${API_URL}/auth/providers`, () => HttpResponse.error()),
+    );
+    await renderServerComponent(LoginPage());
+    expect(
+      screen.queryByRole("link", { name: "Sign in with Google" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
+  });
+
   it("sends a visitor holding an invitation to the registration page", async () => {
-    server.use(unauthenticated());
+    server.use(...signedOutWith(["google"]));
 
     await renderServerComponent(LoginPage());
 

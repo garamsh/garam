@@ -163,8 +163,11 @@ test.describe("signed in", () => {
     await page.getByRole("menuitem", { name: "Sign out" }).click();
 
     await expect(page).toHaveURL("/login");
+    // The heading rather than a provider button: which buttons the page
+    // offers is the backend's answer (ADR-0010), and this stack
+    // registers no provider.
     await expect(
-      page.getByRole("link", { name: "Sign in with Google", exact: true }),
+      page.getByRole("heading", { name: "Sign in to garam", exact: true }),
     ).toBeVisible();
 
     // The session is revoked server-side, not merely dropped by the

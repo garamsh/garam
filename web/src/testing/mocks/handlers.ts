@@ -70,6 +70,7 @@ export const aliceMembership: Member = {
 /** The signed-in happy path: Alice owns Acme, which holds one of each. */
 export const handlers = [
   http.get(`${API_URL}/me`, () => HttpResponse.json(alice)),
+  http.get(`${API_URL}/auth/providers`, () => HttpResponse.json(["google"])),
   http.get(`${API_URL}/orgs`, () => HttpResponse.json([acme])),
   http.get(`${API_URL}/orgs/acme`, () => HttpResponse.json(acme)),
   http.get(`${API_URL}/orgs/acme/groups`, () =>
@@ -99,4 +100,23 @@ export function unauthenticated() {
       },
     ),
   );
+}
+
+/**
+ * Signed out, with the backend advertising the given providers. Two
+ * handlers rather than one, because `/auth/providers` is public
+ * (`api/openapi.yaml`, `security: []`) and answers whether or not the
+ * caller holds a session — which `unauthenticated()`'s wildcard cannot
+ * express.
+ */
+export function signedOutWith(providers: string[]) {
+  return [
+    http.get(`${API_URL}/me`, () =>
+      HttpResponse.json(
+        { kind: "unauthenticated", message: "no session" },
+        { status: 401 },
+      ),
+    ),
+    http.get(`${API_URL}/auth/providers`, () => HttpResponse.json(providers)),
+  ];
 }

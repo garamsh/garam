@@ -72,7 +72,11 @@ func newFixture(t *testing.T, extra ...authn.Provider) *fixture {
 	t.Cleanup(cancel)
 	go func() { _ = watches.Receive(ctx) }()
 	srv := api.NewServer(f.users, f.orgs, f.agents, f.operators, f.consents, watches, f.sessions, f.states, f.credentials, f.attempts, append([]authn.Provider{f.provider}, extra...), f.evaluator, f.policies, api.Config{SessionTTL: time.Hour})
-	f.handler = apigen.Handler(srv)
+	// Wired as `serve api` wires it: a binding failure is refused
+	// before any handler runs, so the option is what decides the body.
+	f.handler = apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{
+		ErrorHandlerFunc: api.BindingError,
+	})
 	return f
 }
 

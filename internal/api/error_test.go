@@ -81,3 +81,56 @@ func TestRecoverPanics_AnswersInsteadOfDroppingTheConnection(t *testing.T) {
 	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 	assert.JSONEq(t, `{"kind":"internal","message":"internal error"}`, string(body))
 }
+
+// marker is a value no message should ever repeat, distinctive enough
+// that finding it in a body cannot be a coincidence.
+const marker = "MARKER-abc"
+
+// TestBindingError_NamesTheParameterAndNotTheValue is the refusal a
+// parameter the router cannot bind gets: the body api/openapi.yaml
+// declares, carrying a message built from the parameter name rather
+// than from the binding error's own text.
+//
+// The absent marker is the assertion that matters. A handler that
+// carries the binding error's text into the JSON message answers the
+// declared schema and repeats the submitted value at once, and every
+// other assertion here passes over that.
+//
+// The parseable value is the control. A 400 holds as readily for a
+// route that does not exist or a body that was rejected later, and
+// without it nothing here says the refusal tracks the binding.
+func TestBindingError_NamesTheParameterAndNotTheValue(t *testing.T) {
+	f := newFixture(t)
+
+	rec := f.do(t, "GET", "/orgs?limit="+marker, "")
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
+	assert.Equal(t, apigen.Error{
+		Kind:    "invalid_argument",
+		Message: "parameter limit is not in the required format",
+	}, decodeBody[apigen.Error](t, rec))
+	assert.NotContains(t, rec.Body.String(), marker,
+		"the body repeats what the caller submitted")
+
+	control := f.do(t, "GET", "/orgs?limit=7", "")
+	assert.Equal(t, http.StatusUnauthorized, control.Code,
+		"a value that parses binds, and the request reaches the session check")
+}
+
+// TestBindingError_NamesAMissingParameter covers the second refusal the
+// generated router builds. It carries no submitted value to withhold —
+// the parameter is the one that was not sent — so what it holds is that
+// the declared body reaches this path too.
+func TestBindingError_NamesAMissingParameter(t *testing.T) {
+	f := newFixture(t)
+
+	rec := f.do(t, "GET", "/auth/callback/google?state="+marker, "")
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, apigen.Error{
+		Kind:    "invalid_argument",
+		Message: "query parameter code is required",
+	}, decodeBody[apigen.Error](t, rec))
+	assert.NotContains(t, rec.Body.String(), marker)
+}

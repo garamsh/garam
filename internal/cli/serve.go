@@ -150,6 +150,10 @@ func serveAPI(cmd *cobra.Command) error {
 	handler := apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{
 		BaseRouter:  mux,
 		Middlewares: []apigen.MiddlewareFunc{api.RecoverPanics, obs.logRequests},
+		// A parameter the router cannot bind is refused before any
+		// handler runs, so this is the only place the surface's own
+		// error body reaches that refusal.
+		ErrorHandlerFunc: api.BindingError,
 	})
 
 	addr := envOr("GARAM_HTTP_ADDR", ":8080")

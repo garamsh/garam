@@ -65,6 +65,44 @@ func TestPasswordCredentialStore_RoundTrip(t *testing.T) {
 	assert.Equal(t, 0, countRows(t, p, "SELECT count(*) FROM password_credentials"))
 }
 
+// TestPasswordCredentialStore_ClassifiesWhatTheSchemaRefuses covers the
+// two refusals the table carries (000016): one credential per user, and
+// a credential only for a user that exists. Each reaches the caller as
+// its own kind rather than as the chain's default, which is what the
+// store reading its driver errors through pgxerr buys.
+//
+// The write that lands is the control: the same call, with the same
+// verifier, succeeds for a user holding no credential — so what the two
+// refusals name is the constraint rather than a store refusing
+// everything.
+func TestPasswordCredentialStore_ClassifiesWhatTheSchemaRefuses(t *testing.T) {
+	p := pool(t)
+	truncate(t, p)
+	ctx := context.Background()
+
+	users := user.NewPostgresStore(p)
+	alice := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "local-alice")
+	require.NoError(t, users.Create(ctx, user.New(alice, "alice")))
+
+	verifier, err := authn.NewVerifier(e2ePassword)
+	require.NoError(t, err)
+	credentials := authn.NewPostgresPasswordCredentialStore(p)
+	require.NoError(t, credentials.Create(ctx, alice, verifier), "a first credential for a real user lands")
+
+	// 23505 on password_credentials' primary key: the user holds one.
+	err = credentials.Create(ctx, alice, verifier)
+	require.Error(t, err)
+	assert.True(t, errorx.IsKind(err, errorx.KindAlreadyExists),
+		"a second credential for one user is a conflict, not an outage")
+
+	// 23503 on its reference to users: there is nobody to hold it.
+	ghost := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "local-ghost")
+	err = credentials.Create(ctx, ghost, verifier)
+	require.Error(t, err)
+	assert.True(t, errorx.IsKind(err, errorx.KindNotFound),
+		"a credential for a user that does not exist names the missing row")
+}
+
 // TestPasswordAttemptStore_BoundsWhatIsLive drives the statement that
 // enforces the bound, against the database that enforces it. ADR-0030
 // put the decision in the writing statement so it holds across every

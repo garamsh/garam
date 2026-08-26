@@ -11,6 +11,7 @@ import (
 
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/pgxerr"
 	"github.com/garamsh/garam/internal/watch/db"
 )
 
@@ -56,7 +57,7 @@ func NewPostgresStore(pool *pgxpool.Pool) *PostgresStore {
 // processes that have died holding one.
 func (s *PostgresStore) Open(ctx context.Context, id WatchID, agent grn.GRN, lease time.Duration) error {
 	if err := s.q.DeleteLapsedWatches(ctx); err != nil {
-		return errorx.Wrap(err, "watch store: sweep")
+		return pgxerr.Classify(err, "sweep", nil, nil)
 	}
 	err := s.q.OpenWatch(ctx, db.OpenWatchParams{
 		ID:       string(id),
@@ -64,7 +65,7 @@ func (s *PostgresStore) Open(ctx context.Context, id WatchID, agent grn.GRN, lea
 		Lease:    interval(lease),
 	})
 	if err != nil {
-		return errorx.Wrap(err, "watch store: open")
+		return pgxerr.Classify(err, "open", nil, nil)
 	}
 	return nil
 }
@@ -73,7 +74,7 @@ func (s *PostgresStore) Open(ctx context.Context, id WatchID, agent grn.GRN, lea
 func (s *PostgresStore) Refresh(ctx context.Context, id WatchID, lease time.Duration) error {
 	rows, err := s.q.RefreshWatch(ctx, db.RefreshWatchParams{ID: string(id), Lease: interval(lease)})
 	if err != nil {
-		return errorx.Wrap(err, "watch store: refresh")
+		return pgxerr.Classify(err, "refresh", nil, nil)
 	}
 	if rows == 0 {
 		return ErrWatchLapsed
@@ -84,7 +85,7 @@ func (s *PostgresStore) Refresh(ctx context.Context, id WatchID, lease time.Dura
 // Close deletes the watch's lease.
 func (s *PostgresStore) Close(ctx context.Context, id WatchID) error {
 	if err := s.q.CloseWatch(ctx, string(id)); err != nil {
-		return errorx.Wrap(err, "watch store: close")
+		return pgxerr.Classify(err, "close", nil, nil)
 	}
 	return nil
 }
@@ -93,7 +94,7 @@ func (s *PostgresStore) Close(ctx context.Context, id WatchID) error {
 func (s *PostgresStore) Count(ctx context.Context, agent grn.GRN) (int, error) {
 	count, err := s.q.CountLiveWatches(ctx, agent.String())
 	if err != nil {
-		return 0, errorx.Wrap(err, "watch store: count")
+		return 0, pgxerr.Classify(err, "count", nil, nil)
 	}
 	return int(count), nil
 }

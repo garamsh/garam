@@ -2,17 +2,16 @@ package message
 
 import (
 	"context"
-	"errors"
 	"math"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/message/db"
+	"github.com/garamsh/garam/internal/pgxerr"
 )
 
 // PostgresStore implements Store against PostgreSQL. The queries are
@@ -39,7 +38,7 @@ func NewPostgresStore(pool *pgxpool.Pool) *PostgresStore {
 // conflicting row it deletes would still conflict.
 func (s *PostgresStore) Enqueue(ctx context.Context, m *Message) (*Message, error) {
 	if err := s.q.DeleteExpiredMessages(ctx, interval(RetentionWindow)); err != nil {
-		return nil, errorx.Wrap(err, "message store: sweep")
+		return nil, pgxerr.Classify(err, "sweep", nil, nil)
 	}
 	row, err := s.q.EnqueueMessage(ctx, db.EnqueueMessageParams{
 		ID:             string(m.id),
@@ -50,7 +49,7 @@ func (s *PostgresStore) Enqueue(ctx context.Context, m *Message) (*Message, erro
 		CreatedAt:      stamp(m.createdAt),
 	})
 	if err != nil {
-		return nil, errorx.Wrap(err, "message store: enqueue")
+		return nil, pgxerr.Classify(err, "enqueue", nil, nil)
 	}
 	return rowToMessage(row)
 }
@@ -72,10 +71,7 @@ func (s *PostgresStore) Claim(ctx context.Context, recipient grn.GRN, lease time
 		MaxAttempts:  attemptBound(maxAttempts),
 	})
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrNoMessageReady
-		}
-		return nil, errorx.Wrap(err, "message store: claim")
+		return nil, pgxerr.Classify(err, "claim", ErrNoMessageReady, nil)
 	}
 	return rowToClaim(row)
 }
@@ -91,10 +87,7 @@ func (s *PostgresStore) Renew(ctx context.Context, recipient grn.GRN, id ClaimID
 		ClaimID:      pgtype.Text{String: string(id), Valid: true},
 	})
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrStaleClaim
-		}
-		return nil, errorx.Wrap(err, "message store: renew")
+		return nil, pgxerr.Classify(err, "renew", ErrStaleClaim, nil)
 	}
 	return rowToClaim(row)
 }
@@ -107,7 +100,7 @@ func (s *PostgresStore) Complete(ctx context.Context, recipient grn.GRN, id Clai
 		ClaimID:      pgtype.Text{String: string(id), Valid: true},
 	})
 	if err != nil {
-		return errorx.Wrap(err, "message store: complete")
+		return pgxerr.Classify(err, "complete", nil, nil)
 	}
 	if rows == 0 {
 		return ErrStaleClaim
@@ -120,11 +113,11 @@ func (s *PostgresStore) Complete(ctx context.Context, recipient grn.GRN, id Clai
 func rowToMessage(row db.Message) (*Message, error) {
 	recipient, err := grn.Parse(row.RecipientGrn)
 	if err != nil {
-		return nil, errorx.Wrap(err, "message store: recipient grn", errorx.KindInternal)
+		return nil, errorx.Wrap(err, "recipient grn", errorx.KindInternal)
 	}
 	sender, err := grn.Parse(row.SenderGrn)
 	if err != nil {
-		return nil, errorx.Wrap(err, "message store: sender grn", errorx.KindInternal)
+		return nil, errorx.Wrap(err, "sender grn", errorx.KindInternal)
 	}
 	return &Message{
 		id:             ID(row.ID),
@@ -148,12 +141,12 @@ func rowToClaim(row db.Message) (*Claim, error) {
 		return nil, err
 	}
 	if !row.ClaimID.Valid || !row.ClaimExpiresAt.Valid {
-		return nil, errorx.New(errorx.KindInternal, "message store: claimed row carries no claim")
+		return nil, errorx.New(errorx.KindInternal, "claimed row carries no claim")
 	}
 	// A claim matches only an undelivered row, which the schema requires
 	// to be carrying its body.
 	if !row.Body.Valid {
-		return nil, errorx.New(errorx.KindInternal, "message store: claimed row carries no body")
+		return nil, errorx.New(errorx.KindInternal, "claimed row carries no body")
 	}
 	return &Claim{
 		message:   m,

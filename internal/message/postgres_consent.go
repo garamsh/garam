@@ -9,6 +9,7 @@ import (
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/message/db"
+	"github.com/garamsh/garam/internal/pgxerr"
 )
 
 // Compile-time check that PostgresStore satisfies ConsentStore.
@@ -20,7 +21,7 @@ var _ ConsentStore = (*PostgresStore)(nil)
 func (s *PostgresStore) Grant(ctx context.Context, org, other grn.GRN) (*Consent, error) {
 	row, err := s.q.GrantConsent(ctx, db.GrantConsentParams{Org: org.String(), Other: other.String()})
 	if err != nil {
-		return nil, errorx.Wrap(err, "message store: grant consent")
+		return nil, pgxerr.Classify(err, "grant consent", nil, nil)
 	}
 	return rowToConsent(row)
 }
@@ -32,10 +33,10 @@ func (s *PostgresStore) Grant(ctx context.Context, org, other grn.GRN) (*Consent
 func (s *PostgresStore) Withdraw(ctx context.Context, org, other grn.GRN) error {
 	arg := db.WithdrawConsentParams{Org: org.String(), Other: other.String()}
 	if err := s.q.WithdrawConsent(ctx, arg); err != nil {
-		return errorx.Wrap(err, "message store: withdraw consent")
+		return pgxerr.Classify(err, "withdraw consent", nil, nil)
 	}
 	if err := s.q.DropEmptyConsent(ctx, db.DropEmptyConsentParams(arg)); err != nil {
-		return errorx.Wrap(err, "message store: drop empty consent")
+		return pgxerr.Classify(err, "drop empty consent", nil, nil)
 	}
 	return nil
 }
@@ -47,7 +48,7 @@ func (s *PostgresStore) Withdraw(ctx context.Context, org, other grn.GRN) error 
 func (s *PostgresStore) Stands(ctx context.Context, a, b grn.GRN) (bool, error) {
 	stands, err := s.q.ConsentStands(ctx, db.ConsentStandsParams{Org: a.String(), Other: b.String()})
 	if err != nil {
-		return false, errorx.Wrap(err, "message store: consent stands")
+		return false, pgxerr.Classify(err, "consent stands", nil, nil)
 	}
 	return stands, nil
 }
@@ -56,7 +57,7 @@ func (s *PostgresStore) Stands(ctx context.Context, a, b grn.GRN) (bool, error) 
 func (s *PostgresStore) List(ctx context.Context, org grn.GRN) ([]*Consent, error) {
 	rows, err := s.q.ListConsents(ctx, org.String())
 	if err != nil {
-		return nil, errorx.Wrap(err, "message store: list consents")
+		return nil, pgxerr.Classify(err, "list consents", nil, nil)
 	}
 	consents := make([]*Consent, 0, len(rows))
 	for _, row := range rows {
@@ -74,11 +75,11 @@ func (s *PostgresStore) List(ctx context.Context, org grn.GRN) ([]*Consent, erro
 func rowToConsent(row db.MessageConsent) (*Consent, error) {
 	orgA, err := grn.Parse(row.OrgA)
 	if err != nil {
-		return nil, errorx.Wrap(err, "message store: consent org a", errorx.KindInternal)
+		return nil, errorx.Wrap(err, "consent org a", errorx.KindInternal)
 	}
 	orgB, err := grn.Parse(row.OrgB)
 	if err != nil {
-		return nil, errorx.Wrap(err, "message store: consent org b", errorx.KindInternal)
+		return nil, errorx.Wrap(err, "consent org b", errorx.KindInternal)
 	}
 	return NewConsent(orgA, orgB, consentStamp(row.AConsentedAt), consentStamp(row.BConsentedAt)), nil
 }

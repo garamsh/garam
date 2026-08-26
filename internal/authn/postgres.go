@@ -2,16 +2,15 @@ package authn
 
 import (
 	"context"
-	"errors"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/garamsh/garam/internal/authn/db"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/pgxerr"
 )
 
 // PostgresSessionStore implements SessionStore against PostgreSQL.
@@ -38,18 +37,15 @@ func (s *PostgresSessionStore) Create(ctx context.Context, token string, sess *S
 		CreatedAt: stamp(sess.createdAt),
 		ExpiresAt: stamp(sess.expiresAt),
 	})
-	return errorx.Wrap(err, "session store: create")
+	return pgxerr.Classify(err, "create session", nil, nil)
 }
 
 // Get returns the live session for the raw token, or
 // ErrSessionNotFound.
 func (s *PostgresSessionStore) Get(ctx context.Context, token string) (*Session, error) {
 	row, err := s.q.GetSession(ctx, HashToken(token))
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrSessionNotFound
-	}
 	if err != nil {
-		return nil, errorx.Wrap(err, "session store: get")
+		return nil, pgxerr.Classify(err, "get session", ErrSessionNotFound, nil)
 	}
 	g, err := grn.Parse(row.UserGrn)
 	if err != nil {
@@ -61,7 +57,7 @@ func (s *PostgresSessionStore) Get(ctx context.Context, token string) (*Session,
 // Delete revokes the session for the raw token. Deleting an unknown
 // token is not an error so logout is idempotent.
 func (s *PostgresSessionStore) Delete(ctx context.Context, token string) error {
-	return errorx.Wrap(s.q.DeleteSession(ctx, HashToken(token)), "session store: delete")
+	return pgxerr.Classify(s.q.DeleteSession(ctx, HashToken(token)), "delete session", nil, nil)
 }
 
 // PostgresOAuthStateStore implements OAuthStateStore against
@@ -92,7 +88,7 @@ func (s *PostgresOAuthStateStore) Issue(ctx context.Context, state string, ttl t
 		MaxLive:   MaxLiveOAuthStates,
 	})
 	if err != nil {
-		return errorx.Wrap(err, "oauth state store: issue")
+		return pgxerr.Classify(err, "issue oauth state", nil, nil)
 	}
 	if issued == 0 {
 		return ErrOAuthStateRateLimited
@@ -106,7 +102,7 @@ func (s *PostgresOAuthStateStore) Issue(ctx context.Context, state string, ttl t
 func (s *PostgresOAuthStateStore) Consume(ctx context.Context, state string) error {
 	spent, err := s.q.ConsumeOAuthState(ctx, HashToken(state))
 	if err != nil {
-		return errorx.Wrap(err, "oauth state store: consume")
+		return pgxerr.Classify(err, "consume oauth state", nil, nil)
 	}
 	if spent == 0 {
 		return ErrOAuthStateNotLive
@@ -145,17 +141,14 @@ func (s *PostgresPasswordCredentialStore) Create(ctx context.Context, userGRN gr
 		CreatedAt: now,
 		UpdatedAt: now,
 	})
-	return errorx.Wrap(err, "password credential store: create")
+	return pgxerr.Classify(err, "create password credential", nil, nil)
 }
 
 // Get returns the user's verifier, or ErrPasswordCredentialNotFound.
 func (s *PostgresPasswordCredentialStore) Get(ctx context.Context, userGRN grn.GRN) (Verifier, error) {
 	v, err := s.q.GetPasswordCredential(ctx, userGRN.String())
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", ErrPasswordCredentialNotFound
-	}
 	if err != nil {
-		return "", errorx.Wrap(err, "password credential store: get")
+		return "", pgxerr.Classify(err, "get password credential", ErrPasswordCredentialNotFound, nil)
 	}
 	return Verifier(v), nil
 }
@@ -168,7 +161,7 @@ func (s *PostgresPasswordCredentialStore) Replace(ctx context.Context, userGRN g
 		Verifier:  string(v),
 		UpdatedAt: stamp(time.Now().UTC()),
 	})
-	return errorx.Wrap(err, "password credential store: replace")
+	return pgxerr.Classify(err, "replace password verifier", nil, nil)
 }
 
 // PostgresPasswordAttemptStore implements PasswordAttemptStore against
@@ -198,7 +191,7 @@ func (s *PostgresPasswordAttemptStore) Record(ctx context.Context, attempt strin
 		MaxLive:   MaxLivePasswordAttempts,
 	})
 	if err != nil {
-		return errorx.Wrap(err, "password attempt store: record")
+		return pgxerr.Classify(err, "record password attempt", nil, nil)
 	}
 	if recorded == 0 {
 		return ErrPasswordAttemptRateLimited
@@ -209,5 +202,5 @@ func (s *PostgresPasswordAttemptStore) Record(ctx context.Context, attempt strin
 // Release frees a recorded attempt's slot. Releasing an unknown attempt
 // is not an error: the slot is gone either way.
 func (s *PostgresPasswordAttemptStore) Release(ctx context.Context, attempt string) error {
-	return errorx.Wrap(s.q.ReleasePasswordAttempt(ctx, attempt), "password attempt store: release")
+	return pgxerr.Classify(s.q.ReleasePasswordAttempt(ctx, attempt), "release password attempt", nil, nil)
 }

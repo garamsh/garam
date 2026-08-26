@@ -147,6 +147,13 @@ who opened the view mid-turn is first seen.
 
 ## Subscriptions
 
+**One of these exists.** `readTurns` (`internal/delivery/service.go`)
+opens the single subscription the loop holds, and it carries turn
+endings — consuming and completing together. Forwarding and readiness
+are unbuilt (§Watching, §Readiness), so what follows is the rule the
+built one already keeps and the rule the others take when they are
+built, rather than a description of what runs.
+
 Consuming, completing and forwarding use separate subscriptions. A slow
 consumer must not degrade the signal that decides what it completed:
 falling behind would drop completion events, which produces
@@ -155,6 +162,12 @@ subscription of its own (below), and puts watching on a third
 ([ADR-0022](./adr/0022-watching-an-agent.md)).
 
 ## Readiness
+
+**Nothing implements this.** The mechanism below is decided
+([ADR-0013](./adr/0013-agent-messaging.md)) and unbuilt: nothing under
+`internal/delivery/` or `internal/cli/delivery.go` opens a readiness
+subscription. [overview.md](./overview.md) §Out of scope (today)
+records it, beside the §Watching half.
 
 **Readiness is a monitoring subscription the adapter opens fresh, of
 its own** — not the one it consumes, and not a handle it kept. The

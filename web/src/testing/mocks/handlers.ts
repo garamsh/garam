@@ -1,4 +1,4 @@
-import { HttpResponse, http } from "msw";
+import { HttpResponse, http, type JsonBodyType } from "msw";
 
 import type { User } from "@/features/auth";
 import type {
@@ -67,56 +67,58 @@ export const aliceMembership: Member = {
   since: "2026-01-02T03:04:05Z",
 };
 
-/** The signed-in happy path: Alice owns Acme, which holds one of each. */
-export const handlers = [
-  http.get(`${API_URL}/me`, () => HttpResponse.json(alice)),
-  http.get(`${API_URL}/auth/providers`, () => HttpResponse.json(["google"])),
-  http.get(`${API_URL}/orgs`, () => HttpResponse.json([acme])),
-  http.get(`${API_URL}/orgs/acme`, () => HttpResponse.json(acme)),
-  http.get(`${API_URL}/orgs/acme/groups`, () =>
-    HttpResponse.json([engineering]),
-  ),
-  http.get(`${API_URL}/orgs/acme/projects`, () =>
-    HttpResponse.json([frontend]),
-  ),
-  http.get(`${API_URL}/orgs/acme/members`, () =>
-    HttpResponse.json([aliceMembership]),
-  ),
-  http.get(`${API_URL}/orgs/acme/operators`, () =>
-    HttpResponse.json([fieldOne]),
-  ),
-  http.get(`${API_URL}/orgs/acme/agent-definitions`, () =>
-    HttpResponse.json([fieldAgent]),
-  ),
+/**
+ * Every route the fixtures model: what it answers signed in, and
+ * whether the backend guards it. The split is the one
+ * `api/openapi.yaml` records — an operation carrying `security: []`
+ * answers without a session — and the signed-out fixtures below
+ * reproduce it.
+ */
+const routes: { path: string; guarded: boolean; body: JsonBodyType }[] = [
+  { path: "/me", guarded: true, body: alice },
+  { path: "/auth/providers", guarded: false, body: ["google"] },
+  { path: "/orgs", guarded: true, body: [acme] },
+  { path: "/orgs/acme", guarded: true, body: acme },
+  { path: "/orgs/acme/groups", guarded: true, body: [engineering] },
+  { path: "/orgs/acme/projects", guarded: true, body: [frontend] },
+  { path: "/orgs/acme/members", guarded: true, body: [aliceMembership] },
+  { path: "/orgs/acme/operators", guarded: true, body: [fieldOne] },
+  { path: "/orgs/acme/agent-definitions", guarded: true, body: [fieldAgent] },
 ];
 
-/** Everything the backend guards answers 401 without a session. */
-export function unauthenticated() {
-  return http.get(`${API_URL}/*`, () =>
-    HttpResponse.json(
-      { kind: "unauthenticated", message: "no session" },
-      {
-        status: 401,
-      },
-    ),
+/** The signed-in happy path: Alice owns Acme, which holds one of each. */
+export const handlers = routes.map(({ path, body }) =>
+  http.get(`${API_URL}${path}`, () => HttpResponse.json(body)),
+);
+
+/** What the backend answers on a route it guards, without a session. */
+function noSession() {
+  return HttpResponse.json(
+    { kind: "unauthenticated", message: "no session" },
+    { status: 401 },
   );
 }
 
 /**
- * Signed out, with the backend advertising the given providers. Two
- * handlers rather than one, because `/auth/providers` is public
- * (`api/openapi.yaml`, `security: []`) and answers whether or not the
- * caller holds a session — which `unauthenticated()`'s wildcard cannot
- * express.
+ * Signed out: every route the backend guards refuses, and the public
+ * ones keep answering. A route the fixtures do not model is left
+ * unhandled, so a page reading one fails by name rather than on a 401
+ * nothing decided.
+ */
+export function signedOut() {
+  return routes
+    .filter((route) => route.guarded)
+    .map(({ path }) => http.get(`${API_URL}${path}`, noSession));
+}
+
+/**
+ * Signed out, with the backend advertising the given providers.
+ * `/auth/providers` is public, so what it answers is the login page's
+ * input whether or not the caller holds a session.
  */
 export function signedOutWith(providers: string[]) {
   return [
-    http.get(`${API_URL}/me`, () =>
-      HttpResponse.json(
-        { kind: "unauthenticated", message: "no session" },
-        { status: 401 },
-      ),
-    ),
+    ...signedOut(),
     http.get(`${API_URL}/auth/providers`, () => HttpResponse.json(providers)),
   ];
 }

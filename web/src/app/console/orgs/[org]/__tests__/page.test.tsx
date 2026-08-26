@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import OrgPage from "@/app/console/orgs/[org]/page";
 import { renderServerComponent } from "@/testing/render";
-import { API_URL, unauthenticated } from "@/testing/mocks/handlers";
+import { API_URL, signedOut } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
 // `notFound()` and `redirect()` throw control-flow errors the router
@@ -79,7 +79,7 @@ describe("organization overview page", () => {
   });
 
   it("sends a rejected session to the login page, not to the notice", async () => {
-    server.use(unauthenticated());
+    server.use(...signedOut());
 
     await expect(
       renderServerComponent(OrgPage(params("acme"))),

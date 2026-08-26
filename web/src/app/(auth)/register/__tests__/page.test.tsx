@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import RegisterPage from "@/app/(auth)/register/page";
 import { renderServerComponent } from "@/testing/render";
-import { API_URL, unauthenticated } from "@/testing/mocks/handlers";
+import { API_URL, signedOut } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
 vi.mock("next/navigation", () => ({
@@ -15,7 +15,7 @@ vi.mock("next/navigation", () => ({
 
 describe("register page", () => {
   it("asks for an invitation rather than offering an open form", async () => {
-    server.use(unauthenticated());
+    server.use(...signedOut());
 
     await renderServerComponent(RegisterPage());
 

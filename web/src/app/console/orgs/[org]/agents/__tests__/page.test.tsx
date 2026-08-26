@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import AgentsPage from "@/app/console/orgs/[org]/agents/page";
 import { renderServerComponent } from "@/testing/render";
-import { API_URL, fieldAgent, unauthenticated } from "@/testing/mocks/handlers";
+import { API_URL, fieldAgent, signedOut } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
 vi.mock("next/navigation", () => ({
@@ -99,7 +99,7 @@ describe("agents section", () => {
   });
 
   it("sends a rejected session to the login page, not to the notice", async () => {
-    server.use(unauthenticated());
+    server.use(...signedOut());
 
     await expect(
       renderServerComponent(AgentsPage(params("acme"))),

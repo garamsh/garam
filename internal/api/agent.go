@@ -23,12 +23,10 @@ func (s *Server) ListAgents(w http.ResponseWriter, r *http.Request, orgSlug apig
 		writeError(w, err)
 		return
 	}
-	var f listfilter.Filter
-	if params.Limit != nil {
-		f.Limit = *params.Limit
-	}
-	if params.Offset != nil {
-		f.Offset = *params.Offset
+	f, err := listfilter.Parse(params.Limit, params.Offset)
+	if err != nil {
+		writeError(w, err)
+		return
 	}
 	agents, err := s.agents.ListByOrg(r.Context(), orgGRN(orgSlug), f)
 	if err != nil {

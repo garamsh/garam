@@ -56,8 +56,8 @@ See §0 for the banned-name list.
 - `internal/<domain>/<name>/` — the implementations of that dependency
   interface, one file each (`repository/postgres.go`,
   `repository/memory.go`); the in-memory one serves tests and dev.
-- `internal/<crosscutting>/` — a concern at least three domains
-  share, named by what it is.
+- `internal/<crosscutting>/` — a shared concern extracted below the
+  domains, named by what it is.
 - `go.mod`, `go.sum` — module root.
 
 **Rules for `internal/<domain>/`:**

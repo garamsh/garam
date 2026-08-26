@@ -14,7 +14,6 @@ import (
 type testObject struct{ g grn.GRN }
 
 func (o testObject) GRN() grn.GRN { return o.g }
-func (o testObject) Type() string { return o.g.ServiceType }
 
 func evaluate(statements []authz.Statement, action, resource string) authz.Decision {
 	ev := authz.NewStatementEvaluator(statements)

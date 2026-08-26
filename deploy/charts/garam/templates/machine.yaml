@@ -5,13 +5,21 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "garam.fullname" . }}-machine
+  name: {{ include "garam.name" (dict "root" $ "word" "machine") }}
   labels:
     {{- include "garam.labels" (dict "root" $ "component" "machine") | nindent 4 }}
 spec:
   # Fixed at one, as on every workload here: replica safety above one is
   # not established.
   replicas: 1
+  # Recreate, not the default RollingUpdate: at one replica the default
+  # brings the new pod up before taking the old one down, so an upgrade
+  # runs two of a workload whose safety above one replica is not
+  # established (docs/architecture/deployment-contract.md §Not
+  # established). Terminating first holds the count `replicas` fixes
+  # across an upgrade as well as at rest.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       {{- include "garam.selectorLabels" (dict "root" $ "component" "machine") | nindent 6 }}
@@ -66,7 +74,7 @@ spec:
             - name: GARAM_MACHINE_HEALTH_ADDR
               value: ":8444"
             - name: GARAM_AUTHZ_ADDR
-              value: {{ printf "%s-authz:9090" (include "garam.fullname" .) | quote }}
+              value: {{ printf "%s:9090" (include "garam.name" (dict "root" $ "word" "authz")) | quote }}
             # These four name files and carry none of their contents.
             #
             # The pair is re-read per handshake, so a replaced one is
@@ -126,7 +134,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "garam.fullname" . }}-machine
+  name: {{ include "garam.name" (dict "root" $ "word" "machine") }}
   labels:
     {{- include "garam.labels" (dict "root" $ "component" "machine") | nindent 4 }}
 spec:

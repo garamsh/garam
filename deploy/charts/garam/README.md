@@ -53,6 +53,14 @@ Replica safety above one is not established
 chart value would assert what garam does not know. Establishing it is an
 ADR, then a value.
 
+Each also sets `strategy: type: Recreate`, so that count holds across an
+upgrade and not only at rest. The default `RollingUpdate` brings the new
+pod up before taking the old one down, which at one replica runs two of
+the workload for the length of the rollout — the state `replicas: 1`
+exists to avoid. The cost is that an upgrade is a gap in service rather
+than a handover, which is the same trade `replicas: 1` already makes for
+a node failure.
+
 ## Workload identities
 
 Every workload can run as an account of its own, and **the chart creates
@@ -358,6 +366,12 @@ print.
   workload runs as, and whether either moves when the release name
   changes. It reads no annotation — an account carrying a key no
   platform binds a role through passes.
+- `chart-names` is complete over **rendered object names against the
+  63-character limit**, under the longest release name Helm accepts. It
+  reads the name and nothing else: a name inside the limit but wrong,
+  or any other field an apiserver would refuse, passes. It asks no
+  apiserver either — it holds one rule that an apply enforces, which is
+  why the rule is written here rather than discovered there.
 - `chart-package` is complete over **two resource names in the published
   artifact**: no file `helm package` ships sets `cpu` or `memory` as a
   key. It reads no third name, so a figure under `ephemeral-storage` or

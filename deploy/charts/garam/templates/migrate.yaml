@@ -3,7 +3,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ include "garam.fullname" . }}-migrate
+  name: {{ include "garam.name" (dict "root" $ "word" "migrate") }}
   labels:
     {{- include "garam.labels" (dict "root" $ "component" "migrate") | nindent 4 }}
   annotations:

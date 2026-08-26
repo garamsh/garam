@@ -59,7 +59,7 @@ TEST_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)
 WEB_E2E_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)/garam?sslmode=disable)
 
 .PHONY: lint format test build gen check-gen e2e db-up db-down backend-up ci template-diff
-.PHONY: chart chart-lint chart-render chart-identity chart-package
+.PHONY: chart chart-lint chart-render chart-identity chart-names chart-package
 .PHONY: web-install web-lint web-format web-test web-build web-gen web-check-gen web-e2e web-image-e2e web-ci
 .PHONY: minikube-up minikube-down minikube-start minikube-images minikube-db
 .PHONY: minikube-secret minikube-migrate minikube-apps minikube-rebuild minikube-forward minikube-context
@@ -399,7 +399,7 @@ CHART_DEFAULT_VALUES = $(CHART_DIR)/ci/minimal-values.yaml
 # records as the whole of what that target reaches.
 CHART_RESOURCE_NAMES := cpu memory
 
-chart: chart-lint chart-render chart-identity chart-package
+chart: chart-lint chart-render chart-identity chart-names chart-package
 
 chart-lint:
 	@echo 'chart-lint: $(words $(CHART_TEMPLATES)) templates, $(words $(CHART_VALUES)) value files (helm lint --strict)'
@@ -491,6 +491,36 @@ chart-identity:
 # included, so a file reaches a consumer without passing through any of
 # them. A resource name set there reads as a figure garam measured, and
 # none is (docs/architecture/deployment-contract.md §Not established).
+# chart-names renders under the longest release name Helm accepts and
+# holds every object name to 63 characters. Rendering cannot see this
+# class on its own: `helm template` produced a 67-character Service
+# name and only an apply reported it (#725), and the two release names
+# the checks above render under are too short to reach the boundary.
+#
+# 63 binds for three different reasons — a Service name is a DNS-1035
+# label, a Job's name becomes its pods' `job-name` label value, and a
+# Deployment name reaches pod hostnames — so the check is on the name
+# rather than on the kind.
+#
+# `^  name: ` is the object's own name at exactly two spaces: a
+# container, an env entry and a secretKeyRef all sit deeper.
+CHART_LONG_RELEASE := garam-production-eu-west-1-primary-tenant-alpha-01234
+
+chart-names:
+	@echo 'chart-names: $(words $(CHART_VALUES)) value files rendered as $(CHART_LONG_RELEASE) (release length $(shell printf %s '$(CHART_LONG_RELEASE)' | wc -c), Helm caps it at 53)'
+	@test -n '$(CHART_VALUES)' || { echo 'chart-names: nothing to render — $(CHART_DIR)/ci holds no value file'; exit 1; }
+	@set -e; \
+		out="$$(mktemp -d)"; trap 'rm -rf "$$out"' EXIT; \
+		for v in $(CHART_VALUES); do \
+			$(HELM) template $(CHART_LONG_RELEASE) $(CHART_DIR) --values "$$v" \
+				| sed -n 's/^  name: \(.*\)$$/\1/p' >> "$$out/names"; \
+		done; \
+		total="$$(sort -u "$$out/names" | wc -l)"; \
+		test "$$total" -gt 0 || { echo 'chart-names: the render named no object — the name parse is broken'; exit 1; }; \
+		over="$$(awk 'length($$0) > 63 { print length($$0)" "$$0 }' "$$out/names" | sort -u)"; \
+		test -z "$$over" || { echo 'chart-names: over the 63-character limit, which an apply refuses and a render does not:'; echo "$$over"; exit 1; }; \
+		echo "chart-names: $$total distinct object names, longest $$(awk '{ if (length($$0) > m) m = length($$0) } END { print m }' "$$out/names"), none over 63"
+
 chart-package:
 	@echo 'chart-package: $(words $(CHART_RESOURCE_NAMES)) resource names searched for as keys in the packaged artifact — resource quantities only, $(CHART_DIR)/README.md §What the checks are complete over'
 	@set -e; \

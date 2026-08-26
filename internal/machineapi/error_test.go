@@ -58,6 +58,10 @@ func TestServer_TellsAnEngineThatIsNotThereFromAPolicyThatRefused(t *testing.T) 
 // the rows are read against each other: a surface answering one status
 // for everything fails all but one of them.
 //
+// The engine is a fake and each row sets the kind on it, so a row
+// proves the mapping renders that kind and never that a real engine
+// produces it.
+//
 // The message is the second half of each row. Internals stay out of a
 // 5xx body whatever the kind, and every status below one carries the
 // error the engine produced.

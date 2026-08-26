@@ -13,6 +13,9 @@ Current architecture of the system and the decisions behind it. This file is the
 2. **ADRs are append-only.** Once merged, the body is frozen. Exceptions: updating the status field (`accepted` → `superseded by ADR-XXXX`), fixing typos or broken links, and appending a dated entry under `## Errata` when a decision stands but a fact supporting it was wrong — the erratum names what falsified the fact, and the original text stays intact. A changed decision means a new ADR that supersedes the old one — never an edit.
 3. **Decisions land in pairs.** A PR that adds or supersedes an ADR must update the affected responsibility documents in the same PR. A PR with only one of the two is rejected — the final state must always live in the responsibility documents.
 4. Keep this index current: every responsibility document and notable ADR is listed here.
+5. **Every domain or concern has a responsibility document.** The PR that introduces one adds its document; the PR that removes one deletes it. A system with no code yet has no more than `structure.md` (rule 6), and that is the correct state.
+
+Rule 5 is taken verbatim from the conventions template, `garamsh/convention-driven-project@214546f`. Its `(rule 6)` points at a rule of that file's which garam does not carry: garam has no `structure.md`, and its structural rules are `docs/convention/arch-domain.md`, ranked by `docs/convention/README.md` §Precedence. The sentence holding that reference is about a system with no code yet, which garam is not, so it decides nothing here. The text is quoted rather than adapted so that a diff against that file still shows what garam has adopted and what it has not; #602 declines rules 6 to 8, which decide where structural rules live and are not a sync.
 
 ## What nothing detects
 

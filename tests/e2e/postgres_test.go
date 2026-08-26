@@ -199,6 +199,51 @@ func TestUserStore_RoundTrip(t *testing.T) {
 	assert.True(t, errorx.IsKind(s.Delete(ctx, g), errorx.KindNotFound))
 }
 
+// TestUserStore_DeleteRefusedByAReferenceIsNotAMissingRow drives the
+// one delete in this schema a foreign key can refuse.
+// `invitations.created_by` references `users (grn)` with no
+// `ON DELETE CASCADE`, so the row is kept rather than followed, and
+// postgres answers 23503 — the code an insert would mean "the row you
+// named is missing" by, and this statement means the opposite by.
+//
+// Two controls stand beside the refusal, one per answer it has to stay
+// apart from. The unreferenced user deletes, so the refusal tracks the
+// reference rather than a delete that never works; the absent user is
+// still not found, so the two answers a caller has to tell apart are
+// asserted together. The read at the end is the point of the issue: the
+// row the caller was refused about is still there.
+func TestUserStore_DeleteRefusedByAReferenceIsNotAMissingRow(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	users := user.NewPostgresStore(p)
+	orgs := org.NewPostgresStore(p)
+
+	referenced, free := grnOf("user", "ada"), grnOf("user", "bob")
+	orgGRN := grnOf("org", "acme")
+	require.NoError(t, users.Create(ctx, user.New(referenced, "ada")))
+	require.NoError(t, users.Create(ctx, user.New(free, "bob")))
+	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgGRN, "acme")))
+	require.NoError(t, orgs.CreateInvitation(ctx, org.NewInvitation(
+		"tok-1", orgGRN, org.RoleAdmin, referenced, time.Now().Add(time.Hour).UTC())))
+
+	err := users.Delete(ctx, referenced)
+
+	require.Error(t, err)
+	assert.ErrorIs(t, err, user.ErrUserReferenced)
+	assert.True(t, errorx.IsKind(err, errorx.KindFailedPrecondition))
+	assert.False(t, errorx.IsKind(err, errorx.KindNotFound),
+		"a delete another row blocks is not a missing row")
+
+	require.NoError(t, users.Delete(ctx, free),
+		"control: an unreferenced user deletes")
+	assert.True(t, errorx.IsKind(users.Delete(ctx, grnOf("user", "nobody")), errorx.KindNotFound),
+		"control: a user that is not there is still not found")
+
+	got, err := users.Get(ctx, referenced)
+	require.NoError(t, err, "the refused delete removed nothing")
+	assert.Equal(t, "ada", got.Nickname())
+}
+
 func TestOrgStore_RoundTripWithCascade(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)

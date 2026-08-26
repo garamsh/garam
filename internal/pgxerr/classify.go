@@ -38,6 +38,21 @@ const (
 	codeRaiseException  = "P0001" // P0001 raise_exception
 )
 
+// IsForeignKeyViolation reports whether err is postgres refusing a
+// statement on a foreign key.
+//
+// It answers what the driver said and not what it meant, because the two
+// are not the same: 23503 on an insert means the row the new one names
+// is missing, and on a delete it means a row still references the one
+// being removed. [Classify] sees the code and never the statement, so a
+// caller whose statement gives 23503 the second reading reads it here
+// and answers for itself. That keeps the driver's own vocabulary inside
+// this package, which is what it is for.
+func IsForeignKeyViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == codeForeignKey
+}
+
 // Classify maps a postgres driver error to an errorx error. op is the
 // caller's own label for the operation (e.g. "create org"); it
 // appears in the wrap message so the operation is recoverable from

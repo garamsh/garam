@@ -2,13 +2,36 @@
 # adopting it requires of a pin. Each entry states what it covers and
 # what it does not.
 #
-# No entry reaches the Makefile's helm pin,
-# deploy/charts/garam/values.yaml, or the images pinned in
-# deploy/local/minikube/garam.yaml and postgres.yaml; each of those
-# records at the pin that it has no mover of any form §Verify admits —
-# no bot, and no owner or scheduled review named either. Nothing here
-# reaches web/package.json at all, and go.mod's `go` directive has no
-# mover on the same terms.
+# A pin belongs on the list below when two things hold: §Verify reaches
+# it, and no entry here moves it.
+#
+# §Verify reaches what the pipeline pulls in from outside this
+# repository — a published component, container image or tool version.
+# A reference to something this repository builds itself is not one:
+# nothing published it, so there is no upstream release for a mover to
+# propose. That is what leaves the garam:local and garam-web:local
+# images in deploy/local/minikube/garam.yaml and migrate-job.yaml off
+# the list, correctly recording nothing, while the alpine image beside
+# them in the same file is on it.
+#
+# Five pins meet both tests, and each records the absence at the pin
+# rather than only here, so the list is checked against the tree rather
+# than trusted:
+#
+#   - the Makefile's HELM and CNPG_MANIFEST
+#   - machine.copyImage in deploy/charts/garam/values.yaml, the one pin
+#     in that file: image.server.tag and image.web.tag are empty
+#   - the key-material container's image in
+#     deploy/local/minikube/garam.yaml
+#   - imageName in deploy/local/minikube/postgres.yaml
+#
+# Each says at the pin that it has no mover of any form §Verify admits —
+# no bot, and no owner or scheduled review named either. A sixth such
+# record, or a sixth pin without one, is what this list going stale
+# looks like.
+#
+# Nothing here reaches web/package.json at all, and go.mod's `go`
+# directive has no mover on the same terms.
 #
 # What each entry covers was read from github/docs at commit
 # 0dddeeb8cce75425f9ca0cdffd6a1cbd94926c07 and dependabot/dependabot-core

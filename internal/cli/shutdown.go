@@ -25,9 +25,10 @@ func serveSignalContext(ctx context.Context) (context.Context, context.CancelFun
 }
 
 // serveHTTP runs serve until it fails or ctx is cancelled. Cancellation
-// shuts the server down — the listener closes at once and in-flight
-// requests finish within shutdownGrace — and returns nil, because a
-// requested stop is not a failure.
+// shuts the server down — the listener closes at once, in-flight
+// requests get shutdownGrace to finish, and whatever has not finished
+// by then is dropped — and returns nil either way, because a requested
+// stop is not a failure.
 func serveHTTP(ctx context.Context, srv *http.Server, serve func() error) error {
 	errCh := make(chan error, 1)
 	go func() { errCh <- serve() }()
@@ -40,9 +41,12 @@ func serveHTTP(ctx context.Context, srv *http.Server, serve func() error) error 
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		// Past the bound the connections still open are dropped, not
-		// held.
+		// held. Neither this error nor Close's is returned: the stop
+		// was requested, and abandoning what did not finish is this
+		// function's decision rather than a failure of it, so the
+		// process exits 0 as serveGRPC does below
+		// (deployment-contract.md §Termination).
 		_ = srv.Close()
-		return err
 	}
 	return nil
 }

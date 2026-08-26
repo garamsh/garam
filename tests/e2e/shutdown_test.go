@@ -92,6 +92,61 @@ func TestServe_ExitsZeroOnSIGTERM(t *testing.T) {
 	}
 }
 
+// TestServeAPI_ExitsZeroWhenTheGraceExpiresWithWorkInFlight holds one
+// request open across the SIGTERM, so the grace expires instead of the
+// server stopping cleanly. The elapsed time is the control: a run that
+// returns early proves the request was not in flight, and the exit code
+// would then be the idle path's rather than this one's.
+func TestServeAPI_ExitsZeroWhenTheGraceExpiresWithWorkInFlight(t *testing.T) {
+	_ = pool(t)
+	bin := buildGaram(t)
+	addr := freeAddr(t)
+
+	var logs bytes.Buffer
+	cmd := exec.Command(bin, "serve", "api")
+	cmd.Env = []string{
+		"GARAM_DATABASE_URL=" + os.Getenv("GARAM_TEST_DATABASE_URL"),
+		"GARAM_HTTP_ADDR=" + addr,
+	}
+	cmd.Stdout = &logs
+	cmd.Stderr = &logs
+	require.NoError(t, cmd.Start())
+	t.Cleanup(func() { _ = cmd.Process.Kill() })
+
+	waitForProbe(t, "http://"+addr+"/healthz", &logs)
+
+	// A body shorter than its Content-Length on an unauthenticated
+	// endpoint that decodes before it does anything else: the handler
+	// blocks reading a request that never completes, so it is still in
+	// flight when the signal lands.
+	conn, err := net.Dial("tcp", addr)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close() })
+	_, err = conn.Write([]byte("POST /auth/password/register HTTP/1.1\r\n" +
+		"Host: garam\r\n" +
+		"Content-Type: application/json\r\n" +
+		"Content-Length: 200\r\n\r\n" +
+		`{"username":"a"`))
+	require.NoError(t, err)
+	// Long enough for the server to accept and dispatch it. Too short
+	// and the elapsed assertion below fails rather than passing quietly.
+	time.Sleep(500 * time.Millisecond)
+
+	start := time.Now()
+	require.NoError(t, cmd.Process.Signal(syscall.SIGTERM))
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	select {
+	case err := <-done:
+		elapsed := time.Since(start)
+		assert.NoError(t, err, "a requested stop is not a failure; logs:\n%s", logs.String())
+		assert.Greater(t, elapsed, 9*time.Second,
+			"the grace did not expire, so the exit code above is the idle path's; logs:\n%s", logs.String())
+	case <-time.After(30 * time.Second):
+		t.Fatalf("still running 30s after SIGTERM; logs:\n%s", logs.String())
+	}
+}
+
 // buildGaram builds the binary under test: this layer exercises what
 // `go build` produces, not the packages compiled into the test.
 func buildGaram(t *testing.T) string {

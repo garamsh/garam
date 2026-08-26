@@ -223,8 +223,8 @@ collaborate on a shared plan.
   Whether that command should require a registered operator is a real
   question ADR-0045 raises and leaves open.
 - Telling a sender that its message exhausted its attempts. ADR-0018
-  makes that garam's obligation because the agent platform notifies
-  nobody (`gagent@40ef7ac`); the queue stops redelivering an exhausted
+  makes that garam's obligation because the agent platform notifies no
+  sender (`gagent@40ef7ac`); the queue stops redelivering an exhausted
   message and nothing yet reports one.
 - The two ends of watching an agent work. garam's half is built (see In
   scope): the stream a browser reads, the watcher count on the poll, and

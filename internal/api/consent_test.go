@@ -166,6 +166,8 @@ func TestConsents_RefusesAnOrgThatIsNotThereOrIsItself(t *testing.T) {
 
 	rec = f.do(t, "PUT", base+"/no-such-org", "", owner)
 	assert.Equal(t, http.StatusNotFound, rec.Code)
+	assert.Equal(t, "org not found", decodeBody[apigen.Error](t, rec).Message,
+		"the answer names the organization, not the constraint an insert would have violated")
 
 	rec = f.do(t, "PUT", base+"/"+slug, "", owner)
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
@@ -194,6 +196,36 @@ func TestConsents_WithdrawRefusesTheOrgItself(t *testing.T) {
 
 	rec = f.do(t, "DELETE", base+"/"+slug, "", owner)
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+// TestConsents_WithdrawRefusesAnOrgThatIsNotThere is withdraw's half of
+// the refusal the grant above carries, and it is the half the store
+// cannot make. Grant inserts, so a partner that does not exist violates
+// the pair's foreign key and the store classifies that as not found
+// (#703). Withdraw updates by the pair and touches no foreign key, so
+// the row it fails to match is not an error: without consentPartner's
+// lookup this answers 204 and the caller is told the withdraw stood.
+//
+// The withdraw toward a real organization is the control — that route
+// answers, so the refusal is the absent organization rather than a
+// route that refuses everything.
+func TestConsents_WithdrawRefusesAnOrgThatIsNotThere(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
+	f.permit(permission{ownerGRN, org.ActionConsentWithdraw})
+
+	otherGRN := orgGRNForTest("globex")
+	require.NoError(t, f.orgs.CreateOrg(testCtx(t), org.NewOrganization(otherGRN, "globex")))
+
+	base := "/orgs/" + slug + "/consents"
+	rec := f.do(t, "DELETE", base+"/globex", "", owner)
+	require.Equal(t, http.StatusNoContent, rec.Code)
+
+	rec = f.do(t, "DELETE", base+"/no-such-org", "", owner)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+	assert.Equal(t, "org not found", decodeBody[apigen.Error](t, rec).Message)
 }
 
 // orgGRNForTest builds the GRN of the org the slug names, as the

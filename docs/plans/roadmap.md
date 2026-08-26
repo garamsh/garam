@@ -26,7 +26,8 @@ workflow last. Each tier depends only on the tier below it.
 - Single cobra CLI (`cmd/garam`): `serve api` (OpenAPI HTTP) and
   `serve authz` (gRPC policy engine) run as independent packages
   (ADR-0003).
-- The `agent` domain stayed excluded (still being planned).
+- The `agent` domain stayed excluded, and was decided after this tier
+  (ADR-0012, ADR-0013, ADR-0026, ADR-0033).
 - Postgres-backed `Store` implementations via sqlc. No in-memory
   domain stores.
 - OpenAPI spec as the source of truth for the HTTP API; server code
@@ -85,11 +86,20 @@ already expose, built in parallel rather than gating P3.
 - Structured logging (`log/slog`) with `trace_id` propagation — done.
   Handlers log the route pattern, never the concrete path, so an
   invitation token cannot reach a log line.
-- Prometheus metrics and OpenTelemetry tracing — metrics done, both
-  servers exporting on their own endpoints. Spans are minted and
-  propagated but not exported: there is nowhere to ship them yet.
-- Container image and a minimal deploy path — not started. The compose
-  file under `deploy/local/` is a dev stack, not a deploy path.
+- Prometheus metrics and OpenTelemetry tracing — metrics done for
+  `serve api` and `serve authz`, which export on the listener each
+  already runs; `serve machine` collects and serves none
+  ([api-surface.md](../architecture/api-surface.md) §The surfaces).
+  Spans are minted and propagated but not exported: there is nowhere to
+  ship them yet.
+- Container image and a minimal deploy path — built. Both images come
+  from `deploy/local/Dockerfile` and `Dockerfile.web`, and the chart at
+  `deploy/charts/garam/` is the description of a deployment (ADR-0042),
+  checked by `make chart` inside `make ci`. What a deployment must plan
+  for is [deployment-contract.md](../architecture/deployment-contract.md).
+  What is not started is publishing: ADR-0039 fixes the two registry
+  repository names and creates neither, and `.github/workflows/` holds
+  `ci.yml` alone.
 
 ## Sequencing rules
 

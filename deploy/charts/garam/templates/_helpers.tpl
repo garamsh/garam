@@ -51,11 +51,11 @@ app.kubernetes.io/managed-by: {{ .root.Release.Service }}
 {{- end -}}
 
 {{- define "garam.serverImage" -}}
-{{ .Values.image.server.repository }}:{{ required "image.server.tag is required: no release exists, so no default names an image that can be pulled (ADR-0039)" .Values.image.server.tag }}
+{{ required "image.server.repository is required: an empty one renders `image: :<tag>`, which is not a reference any registry resolves" .Values.image.server.repository }}:{{ required "image.server.tag is required: no release exists, so no default names an image that can be pulled (ADR-0039)" .Values.image.server.tag }}
 {{- end -}}
 
 {{- define "garam.webImage" -}}
-{{ .Values.image.web.repository }}:{{ required "image.web.tag is required: no release exists, so no default names an image that can be pulled (ADR-0039)" .Values.image.web.tag }}
+{{ required "image.web.repository is required: an empty one renders `image: :<tag>`, which is not a reference any registry resolves" .Values.image.web.repository }}:{{ required "image.web.tag is required: no release exists, so no default names an image that can be pulled (ADR-0039)" .Values.image.web.tag }}
 {{- end -}}
 
 {{/*
@@ -107,6 +107,17 @@ hook annotations that put its account in the same phase.
 */}}
 {{- define "garam.serviceAccount" -}}
 {{- $account := index .root.Values .component "serviceAccount" -}}
+{{/*
+Annotations reach an account this chart creates, and there is nothing
+for them to reach when it creates none: under `create: false` the
+account is a subject another repository owns, so an annotation written
+here would be dropped without a diagnostic and the role it binds would
+never arrive. Refused rather than dropped — the annotation belongs
+wherever that account is created.
+*/}}
+{{- if and (not $account.create) $account.annotations -}}
+{{- fail (printf "%s.serviceAccount.annotations is set with create: false. The chart renders no ServiceAccount under create: false, so these annotations would reach nothing: set them where that account is created, or set create: true." .component) -}}
+{{- end -}}
 {{- if $account.create }}
 ---
 apiVersion: v1

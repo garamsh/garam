@@ -43,16 +43,17 @@ spec:
               value: {{ required "api.sessionTTL is required" .Values.api.sessionTTL | quote }}
             - name: GARAM_COOKIE_SECURE
               value: {{ .Values.api.cookieSecure | quote }}
-            {{- if .Values.api.google.clientId }}
+            {{- $google := .Values.api.google }}
+            {{- if or $google.clientId $google.redirectUrl $google.clientSecret.secretName $google.clientSecret.secretKey }}
             - name: GOOGLE_CLIENT_ID
-              value: {{ .Values.api.google.clientId | quote }}
+              value: {{ required "api.google.clientId is required once any api.google value is set: garam refuses to start holding one half of the credential, so the render refuses first" $google.clientId | quote }}
             - name: GOOGLE_REDIRECT_URL
-              value: {{ required "api.google.redirectUrl is required when api.google.clientId is set" .Values.api.google.redirectUrl | quote }}
+              value: {{ required "api.google.redirectUrl is required once any api.google value is set" $google.redirectUrl | quote }}
             - name: GOOGLE_CLIENT_SECRET
               valueFrom:
                 secretKeyRef:
-                  name: {{ required "api.google.clientSecret.secretName is required when api.google.clientId is set: the secret is a Secret reference, never a value" .Values.api.google.clientSecret.secretName }}
-                  key: {{ required "api.google.clientSecret.secretKey is required when api.google.clientId is set" .Values.api.google.clientSecret.secretKey }}
+                  name: {{ required "api.google.clientSecret.secretName is required once any api.google value is set: the secret is a Secret reference, never a value" $google.clientSecret.secretName }}
+                  key: {{ required "api.google.clientSecret.secretKey is required once any api.google value is set" $google.clientSecret.secretKey }}
             {{- end }}
           ports:
             - name: http

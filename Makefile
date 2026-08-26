@@ -59,7 +59,7 @@ TEST_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)
 WEB_E2E_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)/garam?sslmode=disable)
 
 .PHONY: lint format test build gen check-gen e2e db-up db-down backend-up ci template-diff
-.PHONY: chart chart-lint chart-render chart-identity chart-names chart-package
+.PHONY: chart chart-lint chart-render chart-identity chart-names chart-guards chart-package
 .PHONY: web-install web-lint web-format web-test web-build web-gen web-check-gen web-e2e web-image-e2e web-ci
 .PHONY: minikube-up minikube-down minikube-start minikube-images minikube-db
 .PHONY: minikube-secret minikube-migrate minikube-apps minikube-rebuild minikube-forward minikube-context
@@ -399,7 +399,7 @@ CHART_DEFAULT_VALUES = $(CHART_DIR)/ci/minimal-values.yaml
 # records as the whole of what that target reaches.
 CHART_RESOURCE_NAMES := cpu memory
 
-chart: chart-lint chart-render chart-identity chart-names chart-package
+chart: chart-lint chart-render chart-identity chart-names chart-guards chart-package
 
 chart-lint:
 	@echo 'chart-lint: $(words $(CHART_TEMPLATES)) templates, $(words $(CHART_VALUES)) value files (helm lint --strict)'
@@ -520,6 +520,39 @@ chart-names:
 		over="$$(awk 'length($$0) > 63 { print length($$0)" "$$0 }' "$$out/names" | sort -u)"; \
 		test -z "$$over" || { echo 'chart-names: over the 63-character limit, which an apply refuses and a render does not:'; echo "$$over"; exit 1; }; \
 		echo "chart-names: $$total distinct object names, longest $$(awk '{ if (length($$0) > m) m = length($$0) } END { print m }' "$$out/names"), none over 63"
+
+# chart-guards renders each values file under $(CHART_DIR)/ci/refused/
+# and holds that the render is refused, naming the value the file is
+# named after. A value documented as guarded and not guarded reads as
+# protection and is worse than none (#726), and rendering under the
+# valid values above cannot see one: the render succeeds, and what is
+# missing arrives at runtime or not at all.
+#
+# The message is checked, not only the exit status. A render refused
+# for an unrelated reason is not this guard firing, and would pass a
+# check that read the status alone.
+#
+# The control is the last line: the values every other check renders
+# must still render. Without it a chart that refused everything would
+# pass every case above.
+CHART_REFUSED = $(wildcard $(CHART_DIR)/ci/refused/*.yaml)
+
+chart-guards:
+	@echo 'chart-guards: $(words $(CHART_REFUSED)) values files that must be refused, each naming the value it is named after'
+	@test -n '$(CHART_REFUSED)' || { echo 'chart-guards: nothing to check — $(CHART_DIR)/ci/refused holds no values file'; exit 1; }
+	@set -e; \
+		out="$$(mktemp -d)"; trap 'rm -rf "$$out"' EXIT; \
+		for v in $(CHART_REFUSED); do \
+			want="$$(basename "$$v" .yaml)"; \
+			if $(HELM) template garam $(CHART_DIR) --values $(CHART_DIR)/ci/minimal-values.yaml --values "$$v" >/dev/null 2>"$$out/err"; then \
+				echo "chart-guards: $$v rendered, and the guard for $$want did not fire"; exit 1; \
+			fi; \
+			grep -q -- "$$want" "$$out/err" \
+				|| { echo "chart-guards: $$v was refused, but not for $$want:"; cat "$$out/err"; exit 1; }; \
+		done; \
+		$(HELM) template garam $(CHART_DIR) --values $(CHART_DIR)/ci/minimal-values.yaml >/dev/null \
+			|| { echo 'chart-guards: the control render was refused too — the guards refuse a chart that should install'; exit 1; }; \
+		echo "chart-guards: $(words $(CHART_REFUSED)) refused as named, and minimal-values.yaml still renders"
 
 chart-package:
 	@echo 'chart-package: $(words $(CHART_RESOURCE_NAMES)) resource names searched for as keys in the packaged artifact — resource quantities only, $(CHART_DIR)/README.md §What the checks are complete over'

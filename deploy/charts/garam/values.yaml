@@ -8,7 +8,9 @@
 # leaves the workload on the namespace `default`, and `create` renders
 # the object under the name given and refuses the render without one.
 # Annotations are how a cloud role binds to an account, and the chart
-# holds none.
+# holds none. They reach an account this chart creates, so setting them
+# under `create: false` is refused: there is no object to carry them and
+# a dropped annotation is a role that never arrives.
 #
 # Both default to off. An account nothing uses is a subject the next
 # reader takes for one that was needed, and an annotated one is worse:
@@ -17,7 +19,10 @@
 
 image:
   # Both tags are required: no release exists, so no default names an
-  # image that can be pulled (ADR-0039).
+  # image that can be pulled (ADR-0039). Both repositories carry a
+  # default and neither may be emptied: an empty one renders
+  # `image: :<tag>`, which no registry resolves and `helm lint` accepts,
+  # so the render refuses it as it refuses a missing tag.
   server:
     repository: 486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam/garam-server
     tag: ""
@@ -46,8 +51,10 @@ api:
   # nothing refuses at startup, every page renders, and sign-in never
   # sticks — see the README, §Exposure is the cluster owner's.
   cookieSecure: true
-  # Set all three or none. One Google credential without the other
-  # refuses the start, which the template rejects rather than deploys.
+  # Set all of these or none of them. Setting any one makes the rest
+  # required: garam refuses to start holding one half of the credential,
+  # so the render refuses first rather than installing a release whose
+  # sign-in method is silently absent.
   google:
     clientId: ""
     redirectUrl: ""

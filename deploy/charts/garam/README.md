@@ -102,6 +102,13 @@ account takes its own through `<workload>.serviceAccount.annotations`.
 The chart carries none: which key binds a role is the deployment's
 platform's.
 
+They reach an account this chart creates. Setting them with
+`create: false` is refused rather than dropped: the chart renders no
+ServiceAccount to carry them, and an annotation silently discarded is a
+role that never arrives — a failure that surfaces at runtime, in a
+credential that is not issued. Annotate that account where it is
+created.
+
 **`create: false` with a name set is the supported pair.** The workload
 runs as that account and the chart renders no object, which is what a
 deployment whose infrastructure repository owns the account needs — it
@@ -160,9 +167,11 @@ fails without them:
   server-rendered route answers 500: `web/src/env.ts` parses at import,
   and only the routes reaching the backend import it.
 
-Setting `api.google.clientId` makes `api.google.redirectUrl` and
-`api.google.clientSecret` required too. One Google credential without
-the other refuses the start, so the chart refuses the render instead.
+Setting any one `api.google` value makes the rest required — the guard
+is on the set, not on `clientId`, so omitting any one of them refuses
+the render and names the one missing. garam refuses to start holding one
+half of the credential, and a release installed without the other half
+is one whose sign-in method is silently absent.
 
 `machine.certificateLifetime` defaults to the binary's own `24h` and is
 a security parameter: it bounds every certificate garam signs for an
@@ -372,6 +381,11 @@ print.
   or any other field an apiserver would refuse, passes. It asks no
   apiserver either — it holds one rule that an apply enforces, which is
   why the rule is written here rather than discovered there.
+- `chart-guards` is complete over **the values named by the files in
+  `ci/refused/`**: each must refuse the render and name the value its
+  filename names, and `minimal-values.yaml` must still render. It reads
+  no other value — a value documented as guarded and given no file
+  there passes, which is why a new guard lands with its file.
 - `chart-package` is complete over **two resource names in the published
   artifact**: no file `helm package` ships sets `cpu` or `memory` as a
   key. It reads no third name, so a figure under `ephemeral-storage` or

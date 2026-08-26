@@ -32,6 +32,7 @@ import (
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1789,17 +1790,6 @@ func attachPolicy(t *testing.T, srv *authz.PolicyGRPCServer, policyGRN string, s
 	require.NoError(t, err)
 }
 
-// roleAllow is the role-derived allow the api server passes for a
-// caller, scoped to the org whose roles granted it (ADR-0007).
-func roleAllow(orgName string) *authzv1.Statement {
-	return &authzv1.Statement{
-		Sid:      "role-" + orgName,
-		Effect:   authzv1.Effect_EFFECT_ALLOW,
-		Action:   []string{"project:*"},
-		Resource: []string{"grn:" + orgName + ":*"},
-	}
-}
-
 // TestCertificateAuthority_RoundTrip issues against real Postgres: an
 // organization's CA is created by the first certificate that needs it,
 // the row holds the private key only in sealed form, and a certificate
@@ -2487,9 +2477,10 @@ func TestConsentStore_RoundTrip(t *testing.T) {
 
 // TestConsent_StaysARealPair covers the schema's rules for the
 // relation: the pair is stored ordered, an org never consents with
-// itself, and a row with neither half standing is not a state the
-// table holds. A row the database accepted and the domain read as
-// something else would be neither writable nor trustworthy.
+// itself, a row with neither half standing is not a state the table
+// holds, and neither half names an org that does not exist. A row the
+// database accepted and the domain read as something else would be
+// neither writable nor trustworthy.
 func TestConsent_StaysARealPair(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
@@ -2498,23 +2489,38 @@ func TestConsent_StaysARealPair(t *testing.T) {
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(acme, "acme")))
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(globex, "globex")))
 
+	ghost := orgRootGRN("ghost")
+	// Each case carries the arguments its own statement has placeholders
+	// for. pgx refuses a mismatched count before the row is built, so a
+	// case whose arguments do not match its statement never reaches the
+	// constraint it names. `constraint` is what Postgres must refuse the
+	// row by, which is what tells a refusal by the named rule from a
+	// refusal by anything upstream of it.
 	rejected := []struct {
-		name string
-		stmt string
+		name       string
+		stmt       string
+		args       []any
+		constraint string
 	}{
 		{"an unordered pair", `INSERT INTO message_consents (org_a, org_b, a_consented_at)
-			VALUES ($2, $1, now())`},
+			VALUES ($2, $1, now())`,
+			[]any{acme.String(), globex.String()}, "message_consents_ordered"},
 		{"an org consenting with itself", `INSERT INTO message_consents (org_a, org_b, a_consented_at)
-			VALUES ($1, $1, now())`},
+			VALUES ($1, $1, now())`,
+			[]any{acme.String()}, "message_consents_ordered"},
 		{"neither half standing", `INSERT INTO message_consents (org_a, org_b)
-			VALUES ($1, $2)`},
+			VALUES ($1, $2)`,
+			[]any{acme.String(), globex.String()}, "message_consents_a_half_stands"},
 		{"an org that does not exist", `INSERT INTO message_consents (org_a, org_b, a_consented_at)
-			VALUES ($1, 'grn:root:default:org:ghost', now())`},
+			VALUES ($1, $2, now())`,
+			[]any{acme.String(), ghost.String()}, "message_consents_org_b_fkey"},
 	}
 	for _, tt := range rejected {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := p.Exec(ctx, tt.stmt, acme.String(), globex.String())
-			assert.Error(t, err)
+			_, err := p.Exec(ctx, tt.stmt, tt.args...)
+			var refused *pgconn.PgError
+			require.ErrorAs(t, err, &refused, "the statement never reached Postgres")
+			assert.Equal(t, tt.constraint, refused.ConstraintName)
 		})
 	}
 
@@ -3439,10 +3445,44 @@ func TestMachineSurface_ARecipientsOwnPolicyAdmitsNoForeignSender(t *testing.T) 
 	// same: the engine holds the boundary here, not the policy. An
 	// engine stuck open answers allow the second time and fails the
 	// pair.
-	crossing := machineapi.EvalInput{Subject: foreignGRN, Object: recipientGRN, Action: message.ActionSend}
+	//
+	// The statement is the one the listener collects for a sender
+	// (`sendingStatements`), aimed at the recipient's own organization
+	// so that it would allow the send if the engine ever read it. What
+	// refuses is therefore the scope check and not a missing grant.
+	sending := []machineapi.Statement{{
+		Sid:      "machine-own-org",
+		Effect:   wire.EffectAllow,
+		Action:   []string{message.ActionSend},
+		Resource: []string{"grn:" + recipientGRN.Organization + ":*"},
+	}}
+	crossing := machineapi.EvalInput{
+		Subject:    foreignGRN,
+		Object:     recipientGRN,
+		Action:     message.ActionSend,
+		Statements: sending,
+		SubjectOrg: orgRootGRN(foreignGRN.Organization),
+	}
 	allowed, err := evaluator.Evaluate(ctx, crossing)
 	require.Error(t, err, "the engine allowed a foreign subject no policy had granted")
+	// By kind, not by presence: an unset SubjectOrg fails the same call
+	// as KindInvalidArgument at the transport boundary, without ever
+	// reaching the scope check this test is about.
+	assert.True(t, errorx.IsKind(err, errorx.KindPermissionDenied),
+		"refused by the scope check (ADR-0038), not by parsing the request")
 	require.False(t, allowed)
+
+	// The control, differing from the question above in the subject and
+	// the organization it asserts and in nothing else: from inside the
+	// recipient's own organization the same statement is read and the
+	// answer is allow. A boundary refusing every call, or a transport
+	// refusing the input, fails here instead of passing.
+	local := crossing
+	local.Subject = neighbourGRN
+	local.SubjectOrg = orgRootGRN(recipientGRN.Organization)
+	allowed, err = evaluator.Evaluate(ctx, local)
+	require.NoError(t, err)
+	require.True(t, allowed, "a subject of the object's own organization is allowed by the same statement")
 
 	// The recipient's organization activates one wildcard policy and
 	// attaches it to nobody, which is what an administrator does by
@@ -3456,6 +3496,8 @@ func TestMachineSurface_ARecipientsOwnPolicyAdmitsNoForeignSender(t *testing.T) 
 	// read.
 	allowed, err = evaluator.Evaluate(ctx, crossing)
 	require.Error(t, err, "the unattached wildcard policy reached a foreign subject")
+	assert.True(t, errorx.IsKind(err, errorx.KindPermissionDenied),
+		"refused by the scope check (ADR-0038), not by parsing the request")
 	require.False(t, allowed)
 
 	// The surface does not store it anyway, which is the whole of the

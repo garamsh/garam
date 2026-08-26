@@ -8,6 +8,7 @@
 - Decision
 - Consequences
 - Rejected alternatives
+- Errata
 
 ## Context
 
@@ -196,3 +197,24 @@ named below is therefore a decision, not a demonstrated mechanism.
   cluster something to deploy before anyone cuts a version, and it
   makes a registry out of a build cache: what a manifest pins is a
   release, and nothing consumes an untagged commit today.
+
+## Errata
+
+- 2026-08-27 — §Context's and §Consequences' "`deployment-contract.md`
+  §Images" name a section that document no longer carries. It carried
+  one when this ADR merged: #362 added it on 2026-08-18 and #500
+  removed it on 2026-08-25, three days later, by making the chart at
+  `deploy/charts/garam/` the description of a deployment and moving the
+  image references into it. What the pointer was carrying is still
+  recorded, at a different address: the references are in
+  `deploy/charts/garam/values.yaml` and the templates beside it — which
+  `deployment-contract.md` says in its own second paragraph — and the
+  chart's `README.md` §Pinning a version is what now states that
+  neither image exists yet. That address is what a reader following
+  §Consequences' "a reader pinning one learns it there rather than from
+  a failed rollout" needs, and it is what the pointer no longer
+  supplies: that second paragraph is reached by reading past the
+  section one came for, not by following anything the pointer carries.
+  The decision is untouched — a version tag still publishes both images
+  to the account's registry, under the names, the tag rule, the trigger
+  and the credential shape decided here.

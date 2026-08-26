@@ -20,7 +20,7 @@ import (
 func (s *PostgresStore) Define(ctx context.Context, d *Definition) error {
 	values, err := json.Marshal(d.values)
 	if err != nil {
-		return errorx.Wrap(err, "agent store: define: values", errorx.KindInternal)
+		return errorx.Wrap(err, "define: values", errorx.KindInternal)
 	}
 	err = s.q.CreateAgentDefinition(ctx, db.CreateAgentDefinitionParams{
 		AgentGrn:    d.agentGRN.String(),
@@ -94,7 +94,7 @@ func (s *PostgresStore) ListDefinitionsByOperator(ctx context.Context, operatorG
 func (s *PostgresStore) Claim(ctx context.Context, agentGRN, operatorGRN grn.GRN) (*Assignment, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return nil, errorx.Wrap(err, "agent store: begin", errorx.KindUnavailable)
+		return nil, errorx.Wrap(err, "begin", errorx.KindUnavailable)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
@@ -142,7 +142,7 @@ func (s *PostgresStore) Claim(ctx context.Context, agentGRN, operatorGRN grn.GRN
 		return nil, pgxerr.Classify(err, "claim", nil, nil)
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return nil, errorx.Wrap(err, "agent store: commit")
+		return nil, errorx.Wrap(err, "commit")
 	}
 	return rowToAssignment(assigned)
 }
@@ -154,33 +154,33 @@ func (s *PostgresStore) Claim(ctx context.Context, agentGRN, operatorGRN grn.GRN
 func rowToDefinition(row db.AgentDefinition) (*Definition, error) {
 	agentGRN, err := grn.Parse(row.AgentGrn)
 	if err != nil {
-		return nil, errorx.Wrap(err, "agent store: definition agent grn", errorx.KindInternal)
+		return nil, errorx.Wrap(err, "definition agent grn", errorx.KindInternal)
 	}
 	orgGRN, err := grn.Parse(row.OrgGrn)
 	if err != nil {
-		return nil, errorx.Wrap(err, "agent store: definition org grn", errorx.KindInternal)
+		return nil, errorx.Wrap(err, "definition org grn", errorx.KindInternal)
 	}
 	if err := validateOwnership(agentGRN, orgGRN); err != nil {
-		return nil, errorx.Wrap(err, "agent store: stored definition", errorx.KindInternal)
+		return nil, errorx.Wrap(err, "stored definition", errorx.KindInternal)
 	}
 	operatorGRN, err := grn.Parse(row.OperatorGrn)
 	if err != nil {
-		return nil, errorx.Wrap(err, "agent store: definition operator grn", errorx.KindInternal)
+		return nil, errorx.Wrap(err, "definition operator grn", errorx.KindInternal)
 	}
 	if err := validateOperator(operatorGRN, orgGRN); err != nil {
-		return nil, errorx.Wrap(err, "agent store: stored definition", errorx.KindInternal)
+		return nil, errorx.Wrap(err, "stored definition", errorx.KindInternal)
 	}
 	definedBy, err := grn.Parse(row.DefinedBy)
 	if err != nil {
-		return nil, errorx.Wrap(err, "agent store: definition defined by", errorx.KindInternal)
+		return nil, errorx.Wrap(err, "definition defined by", errorx.KindInternal)
 	}
 	var raw map[string]string
 	if err := json.Unmarshal(row.AgentValues, &raw); err != nil {
-		return nil, errorx.Wrap(err, "agent store: definition values", errorx.KindInternal)
+		return nil, errorx.Wrap(err, "definition values", errorx.KindInternal)
 	}
 	values, err := ParseValues(raw)
 	if err != nil {
-		return nil, errorx.Wrap(err, "agent store: definition values", errorx.KindInternal)
+		return nil, errorx.Wrap(err, "definition values", errorx.KindInternal)
 	}
 	return &Definition{
 		agentGRN:    agentGRN,

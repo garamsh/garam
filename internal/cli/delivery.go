@@ -50,13 +50,13 @@ func adapt(cmd *cobra.Command) error {
 	}
 
 	loop, err := adapterLoop(
-		envOr("GARAM_ADAPTER_AGENT", ""),
-		envOr("GARAM_ADAPTER_MACHINE_URL", ""),
-		envOr("GARAM_ADAPTER_GATEWAY_URL", defaultGatewayURL),
-		envOr("GARAM_ADAPTER_GATEWAY_AGENT", ""),
-		envOr("GARAM_ADAPTER_TLS_CERT_FILE", ""),
-		envOr("GARAM_ADAPTER_TLS_KEY_FILE", ""),
-		envOr("GARAM_ADAPTER_SERVER_ROOT_FILE", ""),
+		envOr(envAdapterAgent, ""),
+		envOr(envAdapterMachineURL, ""),
+		envOr(envAdapterGatewayURL, defaultGatewayURL),
+		envOr(envAdapterGatewayAgent, ""),
+		envOr(envAdapterTLSCertFile, ""),
+		envOr(envAdapterTLSKeyFile, ""),
+		envOr(envAdapterServerRootFile, ""),
 	)
 	if err != nil {
 		return err
@@ -80,7 +80,7 @@ func adapterLoop(agentRaw, machineURL, gatewayURL, gatewayAgent, certFile, keyFi
 	}
 	agent, err := grn.Parse(agentRaw)
 	if err != nil {
-		return nil, errorx.Wrap(err, "GARAM_ADAPTER_AGENT", errorx.KindInvalidArgument)
+		return nil, errorx.Wrap(err, string(envAdapterAgent), errorx.KindInvalidArgument)
 	}
 	if machineURL == "" {
 		return nil, errorx.New(errorx.KindInvalidArgument, "GARAM_ADAPTER_MACHINE_URL is required")

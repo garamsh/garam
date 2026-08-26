@@ -53,7 +53,7 @@ func serveAPI(cmd *cobra.Command) error {
 		return err
 	}
 
-	databaseURL := envOr("GARAM_DATABASE_URL", "")
+	databaseURL := envOr(envDatabaseURL, "")
 	if databaseURL == "" {
 		return errorx.New(errorx.KindInvalidArgument, "GARAM_DATABASE_URL is required")
 	}
@@ -64,9 +64,9 @@ func serveAPI(cmd *cobra.Command) error {
 	defer pool.Close()
 
 	google, err := googleProvider(ctx, authn.GoogleConfig{
-		ClientID:     envOr("GOOGLE_CLIENT_ID", ""),
-		ClientSecret: envOr("GOOGLE_CLIENT_SECRET", ""),
-		RedirectURL:  envOr("GOOGLE_REDIRECT_URL", ""),
+		ClientID:     envOr(envGoogleClientID, ""),
+		ClientSecret: envOr(envGoogleClientSecret, ""),
+		RedirectURL:  envOr(envGoogleRedirectURL, ""),
 	})
 	if err != nil {
 		return err
@@ -75,7 +75,7 @@ func serveAPI(cmd *cobra.Command) error {
 	// Insecure transport: both processes run inside one trust
 	// boundary; TLS between them is future work.
 	conn, err := grpc.NewClient(
-		envOr("GARAM_AUTHZ_ADDR", "localhost:9090"),
+		envOr(envAuthzAddr, "localhost:9090"),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		// Carries this request's trace id to the engine, so one id
 		// covers both halves of the hop.
@@ -86,11 +86,11 @@ func serveAPI(cmd *cobra.Command) error {
 	}
 	defer func() { _ = conn.Close() }()
 
-	ttl, err := time.ParseDuration(envOr("GARAM_SESSION_TTL", "168h"))
+	ttl, err := time.ParseDuration(envOr(envSessionTTL, "168h"))
 	if err != nil {
-		return errorx.Wrap(err, "GARAM_SESSION_TTL", errorx.KindInvalidArgument)
+		return errorx.Wrap(err, string(envSessionTTL), errorx.KindInvalidArgument)
 	}
-	cookieSecure, err := envBool("GARAM_COOKIE_SECURE", "true")
+	cookieSecure, err := envBool(envCookieSecure, "true")
 	if err != nil {
 		return err
 	}
@@ -160,7 +160,7 @@ func serveAPI(cmd *cobra.Command) error {
 		ErrorHandlerFunc: api.BindingError,
 	})
 
-	addr := envOr("GARAM_HTTP_ADDR", ":8080")
+	addr := envOr(envHTTPAddr, ":8080")
 	// Outermost, so every route this mux carries is answered rather than
 	// dropped — the spec operations, /metrics, the probes, and a path
 	// that matches none of them.
@@ -173,10 +173,10 @@ func serveAPI(cmd *cobra.Command) error {
 // when it is unset. A value it cannot read is refused rather than
 // defaulted: an unreadable value would otherwise land on false, and for
 // GARAM_COOKIE_SECURE that is the weaker setting.
-func envBool(key, fallback string) (bool, error) {
+func envBool(key envName, fallback string) (bool, error) {
 	b, err := strconv.ParseBool(envOr(key, fallback))
 	if err != nil {
-		return false, errorx.Wrap(err, key, errorx.KindInvalidArgument)
+		return false, errorx.Wrap(err, string(key), errorx.KindInvalidArgument)
 	}
 	return b, nil
 }
@@ -249,7 +249,7 @@ func serveAuthz(cmd *cobra.Command) error {
 		return err
 	}
 
-	databaseURL := envOr("GARAM_DATABASE_URL", "")
+	databaseURL := envOr(envDatabaseURL, "")
 	if databaseURL == "" {
 		return errorx.New(errorx.KindInvalidArgument, "GARAM_DATABASE_URL is required")
 	}
@@ -269,7 +269,7 @@ func serveAuthz(cmd *cobra.Command) error {
 		}
 	}()
 
-	addr := envOr("GARAM_GRPC_ADDR", ":9090")
+	addr := envOr(envGRPCAddr, ":9090")
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		return errorx.Wrap(err, "authz listen", errorx.KindUnavailable)
@@ -280,7 +280,7 @@ func serveAuthz(cmd *cobra.Command) error {
 	// one carries no credential either. It starts after the gRPC port
 	// is bound, so an answer here means that port accepts connections.
 	// Losing the listener must not take the engine down.
-	metricsAddr := envOr("GARAM_METRICS_ADDR", ":9091")
+	metricsAddr := envOr(envMetricsAddr, ":9091")
 	go func() {
 		mux := http.NewServeMux()
 		mux.Handle("GET /metrics", obs.metricsHandler())

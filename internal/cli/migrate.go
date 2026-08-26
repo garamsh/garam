@@ -20,11 +20,11 @@ func newMigrateCommand() *cobra.Command {
 		Use:   "migrate",
 		Short: "Apply pending database migrations",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			databaseURL := envOr("GARAM_DATABASE_URL", "")
+			databaseURL := envOr(envDatabaseURL, "")
 			if databaseURL == "" {
 				return errorx.New(errorx.KindInvalidArgument, "GARAM_DATABASE_URL is required")
 			}
-			dir := envOr("GARAM_MIGRATIONS_DIR", "migrations")
+			dir := envOr(envMigrationsDir, "migrations")
 			// The source is opened here rather than inside migrate.New
 			// so that a refusal can ask it which version precedes the
 			// dirty one.

@@ -56,7 +56,7 @@ func serveMachine(cmd *cobra.Command) error {
 		return err
 	}
 
-	databaseURL := envOr("GARAM_DATABASE_URL", "")
+	databaseURL := envOr(envDatabaseURL, "")
 	if databaseURL == "" {
 		return errorx.New(errorx.KindInvalidArgument, "GARAM_DATABASE_URL is required")
 	}
@@ -67,10 +67,10 @@ func serveMachine(cmd *cobra.Command) error {
 	defer pool.Close()
 
 	pair, sealer, serverRoot, err := machineKeyMaterial(
-		envOr("GARAM_MACHINE_TLS_CERT_FILE", ""),
-		envOr("GARAM_MACHINE_TLS_KEY_FILE", ""),
-		envOr("GARAM_CA_KEY_FILE", ""),
-		envOr("GARAM_MACHINE_SERVER_ROOT_FILE", ""),
+		envOr(envMachineTLSCertFile, ""),
+		envOr(envMachineTLSKeyFile, ""),
+		envOr(envCAKeyFile, ""),
+		envOr(envMachineServerRootFile, ""),
 	)
 	if err != nil {
 		return err
@@ -119,7 +119,7 @@ func serveMachine(cmd *cobra.Command) error {
 	// Insecure transport: both processes run inside one trust boundary;
 	// TLS between them is future work.
 	conn, err := grpc.NewClient(
-		envOr("GARAM_AUTHZ_ADDR", "localhost:9090"),
+		envOr(envAuthzAddr, "localhost:9090"),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		// Carries this request's trace id to the engine, so one id
 		// covers both halves of the hop.
@@ -153,7 +153,7 @@ func serveMachine(cmd *cobra.Command) error {
 	// identity check outside the handler it is given and that check
 	// runs per request too.
 	srv.Handler = obs.recoverPanics(srv.Handler)
-	srv.Addr = envOr("GARAM_MACHINE_ADDR", ":8443")
+	srv.Addr = envOr(envMachineAddr, ":8443")
 	// A refused handshake is the only refusal this listener makes, and
 	// net/http reports one here rather than through a handler.
 	srv.ErrorLog = slog.NewLogLogger(obs.logger.Handler(), slog.LevelWarn)
@@ -163,7 +163,7 @@ func serveMachine(cmd *cobra.Command) error {
 	// the shape `serve authz` already uses for what a machine reaches
 	// without a session. Nothing unauthenticated joins the TLS
 	// listener, and losing this one must not take that one down.
-	healthAddr := envOr("GARAM_MACHINE_HEALTH_ADDR", ":8444")
+	healthAddr := envOr(envMachineHealthAddr, ":8444")
 	go func() {
 		mux := http.NewServeMux()
 		// The authorities a presented certificate is verified against,
@@ -215,7 +215,7 @@ func machineKeyMaterial(certFile, keyFile, caKeyFile, serverRootFile string) (*k
 	}
 	sealer, err := ca.NewSealerFromKeyFile(caKeyFile)
 	if err != nil {
-		return nil, nil, nil, errorx.Wrap(err, "GARAM_CA_KEY_FILE")
+		return nil, nil, nil, errorx.Wrap(err, string(envCAKeyFile))
 	}
 	pair, err := keyfile.NewPair(certFile, keyFile)
 	if err != nil {
@@ -223,7 +223,7 @@ func machineKeyMaterial(certFile, keyFile, caKeyFile, serverRootFile string) (*k
 	}
 	serverRoot, err := os.ReadFile(serverRootFile)
 	if err != nil {
-		return nil, nil, nil, errorx.Wrap(err, "GARAM_MACHINE_SERVER_ROOT_FILE", errorx.KindInvalidArgument)
+		return nil, nil, nil, errorx.Wrap(err, string(envMachineServerRootFile), errorx.KindInvalidArgument)
 	}
 	// A root an agent cannot verify garam against reaches every agent
 	// and works for none, so it is parsed here rather than handed on as

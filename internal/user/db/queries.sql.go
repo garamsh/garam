@@ -67,44 +67,6 @@ func (q *Queries) GetUser(ctx context.Context, grn string) (User, error) {
 	return i, err
 }
 
-const listUsers = `-- name: ListUsers :many
-SELECT grn, nickname, roles, policies, created_at, updated_at FROM users
-ORDER BY grn
-LIMIT $2 OFFSET $1
-`
-
-type ListUsersParams struct {
-	RowOffset int32
-	RowLimit  pgtype.Int4
-}
-
-func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error) {
-	rows, err := q.db.Query(ctx, listUsers, arg.RowOffset, arg.RowLimit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []User
-	for rows.Next() {
-		var i User
-		if err := rows.Scan(
-			&i.Grn,
-			&i.Nickname,
-			&i.Roles,
-			&i.Policies,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listUsersByGRNs = `-- name: ListUsersByGRNs :many
 SELECT grn, nickname, roles, policies, created_at, updated_at FROM users
 WHERE grn = ANY($1::text[])

@@ -9,7 +9,6 @@ import (
 
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/listfilter"
 	"github.com/garamsh/garam/internal/pgxerr"
 	"github.com/garamsh/garam/internal/user/db"
 )
@@ -48,26 +47,6 @@ func (s *PostgresStore) Get(ctx context.Context, g grn.GRN) (*User, error) {
 		return nil, pgxerr.Classify(err, "get", ErrUserNotFound, nil)
 	}
 	return rowToUser(row)
-}
-
-// List returns Users ordered by GRN.
-func (s *PostgresStore) List(ctx context.Context, f listfilter.Filter) ([]*User, error) {
-	rows, err := s.q.ListUsers(ctx, db.ListUsersParams{
-		RowOffset: int32(f.Offset),
-		RowLimit:  limit(f.Limit),
-	})
-	if err != nil {
-		return nil, pgxerr.Classify(err, "list", nil, nil)
-	}
-	users := make([]*User, 0, len(rows))
-	for _, row := range rows {
-		u, err := rowToUser(row)
-		if err != nil {
-			return nil, err
-		}
-		users = append(users, u)
-	}
-	return users, nil
 }
 
 // ListByGRNs returns the Users with the given GRNs, ordered by GRN.
@@ -167,12 +146,4 @@ func text(s *string) pgtype.Text {
 		return pgtype.Text{}
 	}
 	return pgtype.Text{String: *s, Valid: true}
-}
-
-// limit converts a list filter's limit: 0 means "no limit" (SQL NULL).
-func limit(n int) pgtype.Int4 {
-	if n <= 0 {
-		return pgtype.Int4{}
-	}
-	return pgtype.Int4{Int32: int32(n), Valid: true}
 }

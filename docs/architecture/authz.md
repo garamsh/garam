@@ -294,8 +294,12 @@ The api server never imports this package; it calls the engine over
 gRPC (`Check` / `Explain` in `proto/garam/authz/v1`) and supplies the
 role-derived statements it collected. The machine listener reaches the
 same engine the same way, over a seam of its own, and supplies the
-identity-derived ones. The in-process `Evaluator` remains for tests and
-local dev.
+identity-derived ones. Each listener's `Evaluator` seam has one
+non-test implementation, the gRPC client, and that is what both
+composition roots wire (`internal/cli/serve.go`,
+`internal/cli/machine.go`). The in-process evaluator is the engine's
+own rather than a test substitute: `StatementEvaluator` is what `Check`
+runs on every request (`internal/authz/server.go`).
 
 ## Roles vs policies
 
@@ -317,8 +321,8 @@ reproducible after the fact.
 
 - Resource-based policies (attaching a policy to a resource) are
   deferred; identity-based only (ADR-0008).
-- `Condition` is parsed but not evaluated in the MVP.
-- The earlier Rego/OPA direction is superseded (ADR-0002); preserved
-  WIP is reference only.
+- The earlier Rego/OPA direction is superseded (ADR-0002), and no Rego
+  source is in this repository. The WIP that ADR calls reference
+  material is at a path outside it, so nothing here preserves it.
 - Domain types do not satisfy `authz.Object`; the engine adapts a
   parsed GRN at the transport boundary.

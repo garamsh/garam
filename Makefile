@@ -367,10 +367,13 @@ CHART_VALUES = $(wildcard $(CHART_DIR)/ci/*-values.yaml)
 
 # Every environment variable garam reads, derived from the two files that
 # read them rather than listed here: envOr wraps the Go module's only
-# os.Getenv call, and web/src/env.ts is the web app's only reader. The
-# call's opening parenthesis is matched as `.` because make counts the
-# parentheses inside $(shell ...) and an unbalanced one ends it early.
-CHART_GO_ENV = $(shell grep -rho 'envOr."[A-Z_]*"' --include=*.go internal cmd | sed 's/.*"\([A-Z_]*\)"/\1/' | sort -u)
+# os.Getenv call, and web/src/env.ts is the web app's only reader. Both
+# Go readers are swept — envOr returns the raw string and envBool parses
+# one through it — because a name reached through either is a name the
+# source reads. The call's opening parenthesis is matched as `.` because
+# make counts the parentheses inside $(shell ...) and an unbalanced one
+# ends it early.
+CHART_GO_ENV = $(shell grep -rhoE 'env(Or|Bool)."[A-Z_]*"' --include=*.go internal cmd | sed 's/.*"\([A-Z_]*\)"/\1/' | sort -u)
 CHART_WEB_ENV = $(shell sed -n 's/^ *\([A-Z][A-Z0-9_]*\): process\.env\.\1,$$/\1/p' web/src/env.ts)
 
 # What the chart declares it does not set, read from the table that

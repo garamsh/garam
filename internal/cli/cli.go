@@ -33,7 +33,9 @@
 //	                       GARAM_HTTP_ADDR)
 //	GARAM_AUTHZ_ADDR       authz engine address for serve api (default "localhost:9090")
 //	GARAM_SESSION_TTL      session lifetime (default "168h")
-//	GARAM_COOKIE_SECURE    "true" to mark cookies Secure (default true)
+//	GARAM_COOKIE_SECURE    mark cookies Secure (default true); accepts
+//	                       what strconv.ParseBool does and refuses the
+//	                       rest rather than falling back
 //	GOOGLE_CLIENT_ID       Google OAuth client ID (optional; both
 //	                       credentials or neither — unset, the google
 //	                       provider is not registered)

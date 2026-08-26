@@ -245,7 +245,11 @@ projection satisfies neither half of that rule
 about key material). `templates/machine.yaml` renders the shape that
 does satisfy it: an initContainer running as UID 10001 copies the
 projected Secret with `install -m 0600` onto a memory-backed
-`emptyDir`, with `fsGroup` set so it can write there.
+`emptyDir`. The Secret is projected `0440`, so `fsGroup: 10001` is what
+gives that copy a group it can read the source under. The `emptyDir` it
+writes to is world-writable with or without `fsGroup`, so the write is
+not what the setting buys (measured 2026-08-26 on Kubernetes v1.36.3;
+this repository pins no Kubernetes version).
 
 The Secret holds four files, and `machine.keyMaterial` names the key
 each is under: the listener's certificate and key, the garam server root

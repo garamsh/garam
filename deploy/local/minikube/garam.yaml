@@ -161,10 +161,9 @@ spec:
       annotations:
         image-id: "GARAM_IMAGE_ID"
     spec:
-      # A Secret volume belongs to root, and the process that reads key
-      # material has to own the file it reads (ADR-0015). fsGroup is
-      # what lets the unprivileged init container below write to the
-      # volume it copies into; the copy is what it then owns.
+      # The Secret below is projected 0440, so its group owner decides
+      # who reads it. fsGroup makes that group the init container's,
+      # without which the copy cannot open its source.
       securityContext:
         fsGroup: 10001
       initContainers:
@@ -172,7 +171,7 @@ spec:
         # it as the same UID `serve machine` runs as, so what the
         # process opens is owned by it and readable by nobody else —
         # which the key-encryption key is checked for at startup and
-        # refused without.
+        # refused without (ADR-0015).
         #
         # The runAsUser pins declare the UID both sides share; the
         # image's USER only implies it. The startup check compares the

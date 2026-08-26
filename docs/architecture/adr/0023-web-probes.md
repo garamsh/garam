@@ -8,6 +8,7 @@
 - Decision
 - Consequences
 - Rejected alternatives
+- Errata
 
 ## Decision
 
@@ -94,3 +95,26 @@ tidies the probes.
   (`docs/architecture/README.md` §Rules 2), and the scope line there
   is a fact about what was decided that day. This one names it rather
   than overwriting it.
+
+## Errata
+
+- 2026-08-27 — §Consequences' "this was measured rather than assumed:
+  with the API unreachable, `/login` answers 500 and the console pages
+  answer 200 with no content, all three landing on the last-resort
+  error boundary that says only that something went wrong" was true
+  when written and is false since #286, which landed two hours after
+  #249 merged this ADR: `/login` answers 200 carrying a named notice,
+  and `/console/orgs` renders a `role="alert"` region in place of an
+  empty page. #299 reached the four org-scoped pages the same
+  afternoon and #310 wrote the wording once, while #506 later moved
+  the login page's card into the component `/register` shares. Today
+  `web/src/lib/garam.ts` tells `GaramUnreachableError` from
+  `GaramApiError`, `web/src/app/(auth)/login/page.tsx` returns
+  `ApiUnreachableCard`, and `web/src/components/api-unreachable.tsx`
+  holds the one wording both route groups render. So the sentence
+  after it — "The other half is a defect in the pages, tracked
+  separately" — names a defect that was closed. The decision is
+  untouched and so is what it buys: both probes are route handlers
+  that read nothing (`web/src/lib/probe.ts`), the console still stays
+  in rotation during an API outage, and what changed is that it now
+  says so.

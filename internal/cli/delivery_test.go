@@ -3,14 +3,21 @@
 package cli
 
 import (
+	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"net"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/internal/machine"
 )
 
 // adapterArgs is one set of what the environment names the adapter.
@@ -115,4 +122,77 @@ func TestRootCommand_CarriesTheAdapter(t *testing.T) {
 	adapter, _, err := NewRootCommand().Find([]string{"adapter"})
 	require.NoError(t, err)
 	assert.Equal(t, "adapter", adapter.Name())
+}
+
+// anyMachineIdentity authenticates whatever a handshake presents. What
+// this file measures is the protocol the connection ends up on, and a
+// refusal here would end the handshake before there is one.
+type anyMachineIdentity struct{}
+
+func (anyMachineIdentity) Authenticate(context.Context, [][]byte) (machine.Identity, error) {
+	return machine.Identity{}, nil
+}
+
+// heldCertificate is the pair the listener presents, held rather than
+// reloaded — the seam ADR-0040 put there, in the form a test can hold.
+type heldCertificate struct{ pair *tls.Certificate }
+
+func (h heldCertificate) Get() (*tls.Certificate, error) { return h.pair, nil }
+
+// TestAdapterClient_MeetsTheMachineListenerOverHTTP11 pins the protocol
+// the shipped client and the shipped listener actually agree on. The
+// listener offers h2 — machine.NewServer sets no NextProtos and
+// ServeTLS configures HTTP/2 when TLSNextProto is nil — and the client
+// declines it, because a Transport carrying a TLSClientConfig has
+// HTTP/2 disabled unless ForceAttemptHTTP2 says otherwise, which
+// adapterClient does not set.
+//
+// The control is the same connection made by a client differing in that
+// one field: it negotiates HTTP/2, which is what says the listener
+// offers it and that the subject's answer is the client's doing. It is
+// also what fails if the listener ever stops offering h2, so this test
+// cannot quietly become a tautology.
+func TestAdapterClient_MeetsTheMachineListenerOverHTTP11(t *testing.T) {
+	dir := t.TempDir()
+	certFile, keyFile := writeTLSKeyPair(t, dir)
+	// The listener's certificate is self-signed, so it is also the root
+	// the caller pins it by.
+	certPEM, err := os.ReadFile(certFile)
+	require.NoError(t, err)
+	rootFile := filepath.Join(dir, "server-root.pem")
+	require.NoError(t, os.WriteFile(rootFile, certPEM, 0o644))
+
+	pair, err := tls.LoadX509KeyPair(certFile, keyFile)
+	require.NoError(t, err)
+	srv := machine.NewServer(anyMachineIdentity{}, heldCertificate{pair: &pair},
+		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	go func() { _ = srv.ServeTLS(ln, "", "") }()
+	t.Cleanup(func() { _ = srv.Close() })
+	// The certificate names localhost, so that is the name to reach it
+	// by; the port is whatever the listener took.
+	url := "https://localhost:" + strconv.Itoa(ln.Addr().(*net.TCPAddr).Port)
+
+	subject, err := adapterClient(certFile, keyFile, rootFile)
+	require.NoError(t, err)
+	resp, err := subject.Get(url)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = resp.Body.Close() })
+	assert.Equal(t, "HTTP/1.1", resp.Proto, "the shipped adapter client")
+
+	roots := x509.NewCertPool()
+	require.True(t, roots.AppendCertsFromPEM(certPEM))
+	control := &http.Client{Transport: &http.Transport{
+		ForceAttemptHTTP2: true,
+		TLSClientConfig: &tls.Config{
+			Certificates: []tls.Certificate{pair},
+			RootCAs:      roots,
+			MinVersion:   tls.VersionTLS13,
+		},
+	}}
+	controlResp, err := control.Get(url)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = controlResp.Body.Close() })
+	assert.Equal(t, "HTTP/2.0", controlResp.Proto, "the control: the listener does offer h2")
 }

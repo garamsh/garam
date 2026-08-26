@@ -8,6 +8,7 @@
 - Decision
 - Consequences
 - Rejected alternatives
+- Errata
 
 ## Context
 

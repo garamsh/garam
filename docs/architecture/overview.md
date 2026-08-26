@@ -170,10 +170,7 @@ collaborate on a shared plan.
   policy-change listener is reconnecting stays in rotation and answers
   from a cache that is reloading (ADR-0029). The web app answers the
   same two paths, and neither of its probes reads the API, so an API
-  outage leaves the console in rotation rather than dark (ADR-0023). It
-  stays up without reporting the outage: `/login` answers 500 and the
-  console pages answer empty, which is a defect in the pages rather
-  than in the probes.
+  outage leaves the console in rotation rather than dark (ADR-0023).
 - One identifier system across every resource (GRN).
 
 ## Out of scope (today)
@@ -251,8 +248,8 @@ collaborate on a shared plan.
   subject is decimal and fits; `auth0|abc123` would not. A subject
   under the reserved `local-` prefix is refused rather than adopted,
   because that prefix names a password account (ADR-0041).
-- Editing groups, projects and policies from the web console; those
-  endpoints exist, the console reads them but does not write them.
+- Editing groups and projects from the web console; those endpoints
+  exist, the console reads them but does not write them.
 
 ## Module boundaries
 

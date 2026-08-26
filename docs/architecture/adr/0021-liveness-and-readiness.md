@@ -116,3 +116,18 @@ there is nothing to ask on at all.
   rather than TCP connects, so `service_healthy` still means the process
   can serve a request — and the decision is untouched: both probes still
   answer on a port that carries no credential.
+- 2026-08-27 — §Decision's "Readiness is what a dependency reaches"
+  gives the engine channel to `serve api`, and `serve machine` reports
+  it too. The sentence was true when written and is false since #253,
+  which added `authzChannel` to that process's health listener eight
+  hours after #231 merged this ADR: at `da50c58`,
+  `internal/cli/machine.go:99` registered `health.Database(pool)` and
+  nothing else. The gap is what makes this an event rather than an
+  oversight — the bullet described the tree it was written against, and
+  that tree moved the same day. What holds today is that all three
+  commands report the database, and two of them report the engine
+  channel as well: `serve api` and `serve machine`, in
+  `internal/cli/serve.go` and `internal/cli/machine.go`. `serve authz`
+  reports the database alone. The decision is untouched and so is the
+  bullet's own rule — readiness is still what a dependency reaches, and
+  what moved is how many processes reach the engine.

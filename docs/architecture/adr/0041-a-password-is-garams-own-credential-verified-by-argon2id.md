@@ -300,16 +300,21 @@ until each such account next signs in.
 
 - 2026-08-26 — §Decision's "A password is not a `Provider`" says the
   endpoint "asserts the same `Identity` the interface produces". It
-  asserts none, and did not when this ADR merged. `Identity` is what a
+  asserts none, and did not when this ADR merged: `Identity` is what a
   `Provider` returns from `Exchange` (`internal/authn/provider.go`,
-  `internal/authn/google.go`); `internal/api/password.go` resolves the
-  user itself, `verifyPassword` returning a `*user.User` that
-  `LoginPassword` hands straight to `startSession` — the shape #499
-  merged alongside this ADR. `docs/architecture/domains.md` states it
-  correctly. The decision stands, and the sentence overstates it rather
-  than weakening it: what a password sign-in shares with a callback
-  begins one step later than written, at the user row, and ADR-0005 is
-  untouched either way.
+  `internal/authn/google.go`), while `internal/api/password.go`
+  resolves the user itself, `verifyPassword` returning a `*user.User`
+  that `LoginPassword` hands straight to `startSession`. #499 merged
+  that file and this ADR together, and the file read that way then.
+  `docs/architecture/domains.md` carries the correct version today —
+  "Password sign-in is its own endpoint, and it asserts no `Identity`
+  — an `Identity` is what a provider asserts, and this path resolves
+  the user directly" — so a responsibility document and this ADR
+  contradict each other in the live repository, and the responsibility
+  document is the half to believe. The decision stands, and the
+  sentence overstates it rather than weakening it: what a password
+  sign-in shares with a callback begins one step later than written,
+  at the user row, and ADR-0005 is untouched either way.
 - 2026-08-26 — §Consequences' "The console has no password form. The
   endpoints exist and no browser UI reaches them, which is deliberate
   and left to a separate issue" was true when written and is false

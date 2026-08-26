@@ -1,7 +1,9 @@
 package machineapi_test
 
 import (
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -95,4 +97,29 @@ func TestServer_AnswersEachErrorKindWithItsOwnStatus(t *testing.T) {
 			assert.JSONEq(t, `{"kind":"`+tc.kind.String()+`","message":"`+tc.message+`"}`, body)
 		})
 	}
+}
+
+// TestRecoverPanics_AnswersInsteadOfDroppingTheConnection is this
+// surface's half of the test testing.md §Failing asks the change for.
+// Without the middleware net/http abandons the response, the client's
+// own Do fails, and the require below never reaches a status. Plain
+// HTTP is enough for it: the middleware answers before the client
+// certificate this listener requires decides anything, and the answer
+// is what is under test.
+//
+// The body is asserted beside the status: a 500 carrying the panic's
+// text would leak what a 5xx withholds on every other path.
+func TestRecoverPanics_AnswersInsteadOfDroppingTheConnection(t *testing.T) {
+	server := httptest.NewServer(machineapi.RecoverPanics(http.HandlerFunc(
+		func(http.ResponseWriter, *http.Request) { panic("handler defect") })))
+	t.Cleanup(server.Close)
+
+	resp, err := server.Client().Get(server.URL + "/messages")
+	require.NoError(t, err, "the caller read no answer at all")
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+
+	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	assert.JSONEq(t, `{"kind":"internal","message":"internal error"}`, string(body))
 }

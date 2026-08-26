@@ -2,7 +2,9 @@ package api_test
 
 import (
 	"context"
+	"io"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -54,4 +56,28 @@ func TestServer_TellsAnEngineThatIsNotThereFromADecisionThatRefused(t *testing.T
 	require.Equal(t, http.StatusServiceUnavailable, rec.Code)
 	assert.Equal(t, apigen.Error{Kind: "unavailable", Message: "internal error"},
 		decodeBody[apigen.Error](t, rec))
+}
+
+// TestRecoverPanics_AnswersInsteadOfDroppingTheConnection is the test
+// testing.md §Failing asks this change for. Without the middleware
+// net/http abandons the response, the client's own Do fails, and the
+// require below never reaches a status — so the request runs through a
+// real server and a real client rather than a recorder, which would
+// surface the panic on the test's own goroutine instead.
+//
+// The body is asserted beside the status: a 500 carrying the panic's
+// text would leak what a 5xx withholds on every other path.
+func TestRecoverPanics_AnswersInsteadOfDroppingTheConnection(t *testing.T) {
+	server := httptest.NewServer(api.RecoverPanics(http.HandlerFunc(
+		func(http.ResponseWriter, *http.Request) { panic("handler defect") })))
+	t.Cleanup(server.Close)
+
+	resp, err := server.Client().Get(server.URL + "/orgs")
+	require.NoError(t, err, "the client read no answer at all")
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+
+	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	assert.JSONEq(t, `{"kind":"internal","message":"internal error"}`, string(body))
 }

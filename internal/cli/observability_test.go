@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
+	apigen "github.com/garamsh/garam/api"
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/api"
@@ -546,4 +547,48 @@ func TestTraceIDOf_PrefersTheSpan(t *testing.T) {
 func TestTraceIDOf_FallsBackToAUUID(t *testing.T) {
 	_, err := uuid.Parse(traceIDOf(context.Background()))
 	assert.NoError(t, err)
+}
+
+// panickingSessions is an authn.SessionStore whose Delete is the
+// programmer bug a recover middleware exists for.
+type panickingSessions struct{ authn.SessionStore }
+
+func (panickingSessions) Delete(context.Context, string) error { panic("session store defect") }
+
+// TestLogRequests_ReportsARecoveredPanicOnce holds the order the serve
+// commands list the two middlewares in. Recovery is innermost, so the
+// panic becomes a 500 this line reports; reversed, it unwinds past
+// logServed and decodeLine finds no line at all. The cause carries the
+// stack because net/http, having never seen the panic, no longer logs
+// one — and decodeLine parses the whole buffer, so a second line would
+// fail it. logMachineRequests shares logServed, so the machine listener
+// is the same wiring.
+func TestLogRequests_ReportsARecoveredPanicOnce(t *testing.T) {
+	var out lines
+	obs := recordingObservability(&out)
+	srv := api.NewServer(nil, nil, nil, nil, nil, nil, panickingSessions{}, nil, nil, nil, nil, nil, nil, api.Config{})
+	server := httptest.NewServer(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{
+		Middlewares: []apigen.MiddlewareFunc{api.RecoverPanics, obs.logRequests},
+	}))
+	t.Cleanup(server.Close)
+
+	req, err := http.NewRequest(http.MethodPost, server.URL+"/auth/logout", nil)
+	require.NoError(t, err)
+	req.AddCookie(&http.Cookie{Name: "garam_session", Value: "tok-1"})
+	resp, err := server.Client().Do(req)
+	require.NoError(t, err, "the client read no answer at all")
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+
+	require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	assert.JSONEq(t, `{"kind":"internal","message":"internal error"}`, string(body),
+		"the client body still withholds the cause")
+
+	line := decodeLine(t, &out)
+	assert.Equal(t, "POST /auth/logout", line["operation"])
+	assert.Equal(t, float64(http.StatusInternalServerError), line["status"])
+	assert.Contains(t, line["error"], "panic: session store defect")
+	assert.Contains(t, line["error"], "panickingSessions.Delete",
+		"the stack net/http no longer logs travels in the cause")
 }

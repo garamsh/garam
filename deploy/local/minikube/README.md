@@ -204,7 +204,8 @@ to prevent.
 The operator generates the database role's password and publishes it,
 with a ready-made connection URI, in a Secret it maintains
 (CloudNativePG 1.30.0). Every process reads `GARAM_DATABASE_URL` from
-that Secret, so no database credential is written in this repository.
+that Secret, so no file under `deploy/local/minikube/` holds a database
+credential.
 
 ## What this proves and what it does not
 

@@ -3,9 +3,11 @@ package authz_test
 import (
 	"context"
 	"net"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -14,6 +16,7 @@ import (
 	"google.golang.org/grpc/test/bufconn"
 
 	"github.com/garamsh/garam/internal/authz"
+	"github.com/garamsh/garam/internal/authz/mocks"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/wire"
 	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
@@ -379,4 +382,57 @@ func TestGRPCServer_RefusesForeignSubjectWhenSubjectOrgUnset(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, resp.GetAllowed(), "the unattached Allow in globex reaches a globex subject")
 	})
+}
+
+// TestGRPCServer_RefusesFromAPolicyArchivedDuringAFill is what the
+// cache's lost invalidation costs at the surface that answers: the
+// engine allowed an action from a policy that had been archived, and
+// went on allowing it because nothing dropped the entry a second time.
+//
+// The archive lands while a check is inside the store, which is the one
+// interleaving that reaches it — PolicyGRPCServer.ArchivePolicy
+// invalidates after its commit, and the same process serves checks
+// against that cache. The decision the in-flight check returned is the
+// control: the policy did allow before it was archived, so the refusal
+// afterwards is the archive rather than an engine that refuses
+// everything.
+func TestGRPCServer_RefusesFromAPolicyArchivedDuringAFill(t *testing.T) {
+	acme := orgGRN("acme")
+	gate := newGatedFill()
+	live := authz.ActivePolicy{Document: authz.PolicyDocument{
+		Version: "2026-07-25",
+		Statement: []authz.Statement{{
+			Sid:      "archived-allow",
+			Effect:   wire.EffectAllow,
+			Action:   []string{"org:update"},
+			Resource: []string{"grn:root:default:org:acme"},
+		}},
+	}}
+
+	store := mocks.NewMockStore(t)
+	store.EXPECT().ActivePolicies(mock.Anything, acme).
+		RunAndReturn(gate.answer([]authz.ActivePolicy{live}))
+
+	cache := authz.NewPolicyCache(store)
+	engine := authz.NewGRPCServer(cache)
+
+	var allowedBefore bool
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		resp, err := engine.Check(context.Background(), checkRequest())
+		assert.NoError(t, err)
+		allowedBefore = resp.GetAllowed()
+	}()
+
+	<-gate.inStore
+	cache.Invalidate(acme)
+	close(gate.release)
+	wg.Wait()
+	assert.True(t, allowedBefore, "the policy allowed while it was still active")
+
+	resp, err := engine.Check(context.Background(), checkRequest())
+	require.NoError(t, err)
+	assert.False(t, resp.GetAllowed(), "the archived policy still allows")
 }

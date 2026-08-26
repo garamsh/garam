@@ -5,6 +5,7 @@ import (
 	"crypto/x509"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -18,6 +19,12 @@ import (
 // nothing says otherwise: the loopback address it binds unless mTLS is
 // configured for it (ADR-0012, ADR-0013).
 const defaultGatewayURL = "http://127.0.0.1:8080"
+
+// gatewayHeaderTimeout bounds how long the gateway has to begin
+// answering. It covers opening the event stream and nothing after, so
+// it is generous against a platform starting up rather than tight
+// against a slow one.
+const gatewayHeaderTimeout = 30 * time.Second
 
 // newAdapterCommand constructs `garam adapter`: the delivery loop of
 // docs/architecture/adapter.md, running beside one agent. It claims a
@@ -100,11 +107,26 @@ func adapterLoop(agentRaw, machineURL, gatewayURL, gatewayAgent, certFile, keyFi
 	// certificate. What it buys is that the platform stays a separable
 	// product rather than a library, which is the boundary ADR-0013
 	// pays for.
-	gateway, err := delivery.NewHTTPGateway(&http.Client{}, gatewayURL, gatewayAgent)
+	gateway, err := delivery.NewHTTPGateway(gatewayClient(), gatewayURL, gatewayAgent)
 	if err != nil {
 		return nil, err
 	}
 	return delivery.NewService(queue, gateway, delivery.Config{})
+}
+
+// gatewayClient reaches the platform beside this adapter. It carries no
+// Timeout for the reason adapterClient carries none, and bounds opening
+// a response instead: ResponseHeaderTimeout runs until the headers
+// arrive and stops there, so a stream held open for the agent's life is
+// untouched while a peer that accepts and never answers is not.
+func gatewayClient() *http.Client {
+	transport, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		return &http.Client{}
+	}
+	bounded := transport.Clone()
+	bounded.ResponseHeaderTimeout = gatewayHeaderTimeout
+	return &http.Client{Transport: bounded}
 }
 
 // adapterClient is the connection garam sees: the agent's own
@@ -123,9 +145,11 @@ func adapterLoop(agentRaw, machineURL, gatewayURL, gatewayAgent, certFile, keyFi
 // rule every key file here is read under (ADR-0015); the certificate
 // and the root beside it are public and are read plainly.
 //
-// The client carries no timeout: a claim is a long poll and the event
-// stream is held open for as long as the agent runs, so what bounds a
-// call is the context rather than the client.
+// The client carries no timeout, because one would bound the whole
+// call: a claim is a long poll and the event stream is held open for as
+// long as the agent runs. Each call carries its own deadline instead —
+// delivery.Config's ClaimTimeout and CallTimeout, applied per call in
+// internal/delivery/service.go.
 func adapterClient(certFile, keyFile, serverRootFile string) (*http.Client, error) {
 	if certFile == "" || keyFile == "" || serverRootFile == "" {
 		return nil, errorx.New(errorx.KindInvalidArgument,

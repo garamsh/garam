@@ -1058,7 +1058,10 @@ func TestAgent_GRNNamesAnAgentOfItsOrg(t *testing.T) {
 	require.NoError(t, s.Create(ctx, a))
 
 	// agent.New refuses both pairings, so only a direct statement reaches
-	// the constraint.
+	// the constraint. Both cases name the same rule — the GRN names an
+	// agent, and it names one of this row's org — and naming it is what
+	// says that rule refused the row rather than a column check or the
+	// org foreign key.
 	rejected := []struct {
 		name string
 		grn  grn.GRN
@@ -1070,7 +1073,9 @@ func TestAgent_GRNNamesAnAgentOfItsOrg(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := p.Exec(ctx, `INSERT INTO agents (grn, org_grn, provisioning_state, runtime_state, created_at, updated_at)
 				VALUES ($1, $2, 'pending', 'unknown', now(), now())`, tt.grn.String(), orgGRN.String())
-			assert.Error(t, err)
+			var refused *pgconn.PgError
+			require.ErrorAs(t, err, &refused, "the row was not refused by Postgres")
+			assert.Equal(t, "agents_grn_ownership", refused.ConstraintName)
 		})
 	}
 }
@@ -1294,25 +1299,58 @@ func TestAgentDefinition_StaysInsideItsOrgAndHoldsAnObject(t *testing.T) {
 	require.NoError(t, err)
 	registered := registerOperator(t, p, grnOf(agent.ServiceTypeOperator, "one"))
 
+	// A second organization with an operator of its own, so a case that
+	// names one rule violates that rule alone. Reaching across the
+	// boundary with this org's operator would break the ownership rule
+	// and the same-org rule together, and dropping either would leave
+	// the other still refusing the row.
+	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx,
+		org.NewOrganization(orgRootGRN("globex"), "globex")))
+	globexOperator := registerOperator(t, p, scopedGRN("globex", agent.ServiceTypeOperator, "one"))
+
+	// A case naming an operator or a value rule takes an agent GRN of its
+	// own. agent_grn is the primary key, so two cases sharing one collide
+	// the moment a dropped rule lets the first row in — the sibling then
+	// fails on the key rather than on the rule it names, and this test
+	// stops isolating the thing it exists to isolate.
+	acmeAgent := func() grn.GRN {
+		minted, err := agent.NewGRN(orgGRN)
+		require.NoError(t, err)
+		return minted
+	}
+
+	// `constraint` is the rule Postgres must refuse the row by. Asserting
+	// it is what separates these cases: five rules share one statement,
+	// and a bare error cannot say which of them did the refusing, so any
+	// one could stop being enforced while its siblings kept this green.
 	rejected := []struct {
-		name     string
-		agentGRN grn.GRN
-		operator grn.GRN
-		values   string
+		name       string
+		agentGRN   grn.GRN
+		operator   grn.GRN
+		values     string
+		constraint string
 	}{
-		{"another org's agent", scopedGRN("globex", agent.ServiceType, "deadbeef"), registered, `{}`},
-		{"an identity that is not an agent", grnOf("user", "ada"), registered, `{}`},
-		{"another org's operator", g, scopedGRN("globex", agent.ServiceTypeOperator, "one"), `{}`},
-		{"an identity that is not an operator", g, grnOf(agent.ServiceType, "deadbeef"), `{}`},
-		{"an operator this org has not registered", g, grnOf(agent.ServiceTypeOperator, "two"), `{}`},
-		{"values that are not an object", g, registered, `[]`},
+		{"another org's agent", scopedGRN("globex", agent.ServiceType, "deadbeef"), globexOperator, `{}`,
+			"agent_definitions_grn_ownership"},
+		{"an identity that is not an agent", grnOf("user", "ada"), registered, `{}`,
+			"agent_definitions_grn_ownership"},
+		{"another org's operator", acmeAgent(), globexOperator, `{}`,
+			"agent_definitions_same_org"},
+		{"an identity that is not an operator", acmeAgent(), grnOf(agent.ServiceType, "deadbeef"), `{}`,
+			"agent_definitions_operator_service_type"},
+		{"an operator this org has not registered", acmeAgent(), grnOf(agent.ServiceTypeOperator, "two"), `{}`,
+			"agent_definitions_operator_registered"},
+		{"values that are not an object", acmeAgent(), registered, `[]`,
+			"agent_definitions_values_object"},
 	}
 	for _, tt := range rejected {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := p.Exec(ctx, `INSERT INTO agent_definitions (agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at)
 				VALUES ($1, $2, $3, $4::jsonb, $5, now())`,
 				tt.agentGRN.String(), orgGRN.String(), tt.operator.String(), tt.values, grn.New(grn.RootOwner, grn.DefaultProject, "user", "ada").String())
-			assert.Error(t, err)
+			var refused *pgconn.PgError
+			require.ErrorAs(t, err, &refused, "the row was not refused by Postgres")
+			assert.Equal(t, tt.constraint, refused.ConstraintName)
 		})
 	}
 
@@ -1468,10 +1506,21 @@ func TestPolicyVersions_AppendOnly(t *testing.T) {
 	_, err = s.CreatePolicy(ctx, authz.NewPolicy(g, orgGRN, "read-only"), policyDoc("v1", wire.EffectAllow), grnOf("user", "ada"))
 	require.NoError(t, err)
 
+	// The trigger raises rather than violating a constraint, so there is
+	// no constraint name to read: what names this mechanism is the
+	// SQLSTATE plpgsql raises under and the message
+	// migrations/000002_policies.up.sql gives it. A refusal by anything
+	// else — a missing row, a type error — carries neither.
 	_, err = p.Exec(ctx, `UPDATE policy_versions SET document = '{}'::jsonb WHERE policy_grn = $1`, g.String())
-	assert.Error(t, err, "a stored version must not be rewritten")
+	var rewritten *pgconn.PgError
+	require.ErrorAs(t, err, &rewritten, "a stored version must not be rewritten")
+	assert.Equal(t, "P0001", rewritten.Code, "raised by the append-only trigger")
+	assert.Equal(t, "policy_versions is append-only", rewritten.Message)
 	_, err = p.Exec(ctx, `DELETE FROM policy_versions WHERE policy_grn = $1`, g.String())
-	assert.Error(t, err, "a stored version must not be deleted on its own")
+	var deleted *pgconn.PgError
+	require.ErrorAs(t, err, &deleted, "a stored version must not be deleted on its own")
+	assert.Equal(t, "P0001", deleted.Code, "raised by the append-only trigger")
+	assert.Equal(t, "policy_versions is append-only", deleted.Message)
 
 	// Versions do disappear with the policy that owns them.
 	require.NoError(t, org.NewPostgresStore(p).DeleteOrg(ctx, orgGRN))

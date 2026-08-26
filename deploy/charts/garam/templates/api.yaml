@@ -28,11 +28,14 @@ spec:
     spec:
 {{- include "garam.serviceAccountName" (dict "root" $ "component" "api") }}
 {{- include "garam.imagePullSecrets" . }}
+      # 10001 is the account deploy/local/Dockerfile creates.
+{{- include "garam.podSecurityContext" (dict "uid" 10001) }}
       containers:
         - name: api
           image: {{ include "garam.serverImage" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args: ["serve", "api"]
+{{- include "garam.containerSecurityContext" . }}
           env:
             {{- include "garam.databaseEnv" . | nindent 12 }}
             - name: GARAM_HTTP_ADDR

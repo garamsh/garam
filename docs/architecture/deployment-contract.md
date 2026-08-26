@@ -9,6 +9,7 @@ What a garam deployment must plan for that no manifest can carry: what readiness
 - The key-encryption key cannot be regenerated
 - The migrate job
 - Termination
+- The PodSecurity level is the deployment's
 - Not established
 - Decisions this rests on
 
@@ -348,6 +349,29 @@ reading rather than a handler — a watch stream and a message claim both
 outlive it by design — so what it disconnects is a client that has
 stopped sending, which would otherwise hold a connection open until the
 shutdown bound above expired.
+
+## The PodSecurity level is the deployment's
+
+The workloads the chart renders are written to satisfy PodSecurity
+`restricted`, and the chart renders no namespace — so the level itself is
+set where the namespace is created, which is the deployment's. A cluster
+enforcing `baseline`, or enforcing nothing, admits them equally: the
+fields the level reads narrow what a pod asks for and require nothing of
+the cluster in return.
+
+Nothing in this repository asks an apiserver whether that holds. The
+render is checked here and the admission is not, so a deployment
+declaring the level is what turns the sentence above into a result. The
+one measurement behind it was made on a cluster this repository does not
+own, against the render rather than against what runs there (#636).
+
+A deployment writing its own manifests rather than installing the chart
+needs one fact neither image carries: **`runAsNonRoot` is not implied by
+the user an image declares.** Both images declare that user by name, and
+the kubelet resolves the image's own user only when no numeric
+`runAsUser` is set — a name it cannot read as a number is refused at
+container start rather than at admission. A manifest that asserts
+`runAsNonRoot` supplies the numeric UID with it.
 
 ## Not established
 

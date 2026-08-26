@@ -69,18 +69,18 @@ func (s *PostgresStore) ListByOrg(ctx context.Context, orgGRN grn.GRN) ([]*Opera
 func rowToOperator(row db.Operator) (*Operator, error) {
 	g, err := grn.Parse(row.Grn)
 	if err != nil {
-		return nil, errorx.Wrap(err, "operator store: grn", errorx.KindInternal)
+		return nil, errorx.Wrap(err, "grn", errorx.KindInternal)
 	}
 	orgGRN, err := grn.Parse(row.OrgGrn)
 	if err != nil {
-		return nil, errorx.Wrap(err, "operator store: org grn", errorx.KindInternal)
+		return nil, errorx.Wrap(err, "org grn", errorx.KindInternal)
 	}
 	if err := validateOwnership(g, orgGRN); err != nil {
-		return nil, errorx.Wrap(err, "operator store: stored operator", errorx.KindInternal)
+		return nil, errorx.Wrap(err, "stored operator", errorx.KindInternal)
 	}
 	registeredBy, err := grn.Parse(row.RegisteredBy)
 	if err != nil {
-		return nil, errorx.Wrap(err, "operator store: registered by", errorx.KindInternal)
+		return nil, errorx.Wrap(err, "registered by", errorx.KindInternal)
 	}
 	return &Operator{
 		grn:          g,

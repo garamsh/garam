@@ -55,7 +55,7 @@ func (s *PostgresStore) Get(ctx context.Context, orgGRN grn.GRN) (*Authority, er
 func rowToAuthority(row db.CertificateAuthority) (*Authority, error) {
 	orgGRN, err := grn.Parse(row.OrgGrn)
 	if err != nil {
-		return nil, errorx.Wrap(err, "ca store: org grn", errorx.KindInternal)
+		return nil, errorx.Wrap(err, "org grn", errorx.KindInternal)
 	}
 	return &Authority{
 		orgGRN:      orgGRN,

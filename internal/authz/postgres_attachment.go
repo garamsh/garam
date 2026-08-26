@@ -34,7 +34,7 @@ func (s *PostgresStore) AttachPolicy(ctx context.Context, policyGRN, subjectGRN 
 func (s *PostgresStore) DetachPolicy(ctx context.Context, policyGRN, subjectGRN grn.GRN) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return errorx.Wrap(err, "authz store: begin", errorx.KindUnavailable)
+		return errorx.Wrap(err, "begin", errorx.KindUnavailable)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
@@ -63,7 +63,7 @@ func (s *PostgresStore) DetachPolicy(ctx context.Context, policyGRN, subjectGRN 
 		}
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return errorx.Wrap(err, "authz store: commit")
+		return errorx.Wrap(err, "commit")
 	}
 	return nil
 }
@@ -97,13 +97,13 @@ func (s *PostgresStore) ActivePolicies(ctx context.Context, orgGRN grn.GRN) ([]A
 	for _, row := range rows {
 		doc, err := ParsePolicyDocument(row.Document)
 		if err != nil {
-			return nil, errorx.Wrap(err, "authz store: stored document")
+			return nil, errorx.Wrap(err, "stored document")
 		}
 		subjects := make([]grn.GRN, 0, len(row.SubjectGrns))
 		for _, raw := range row.SubjectGrns {
 			g, err := grn.Parse(raw)
 			if err != nil {
-				return nil, errorx.Wrap(err, "authz store: attachment subject grn")
+				return nil, errorx.Wrap(err, "attachment subject grn")
 			}
 			subjects = append(subjects, g)
 		}
@@ -115,11 +115,11 @@ func (s *PostgresStore) ActivePolicies(ctx context.Context, orgGRN grn.GRN) ([]A
 func rowToAttachment(row db.PolicyAttachment) (*PolicyAttachment, error) {
 	policyGRN, err := grn.Parse(row.PolicyGrn)
 	if err != nil {
-		return nil, errorx.Wrap(err, "authz store: policy grn")
+		return nil, errorx.Wrap(err, "policy grn")
 	}
 	subjectGRN, err := grn.Parse(row.SubjectGrn)
 	if err != nil {
-		return nil, errorx.Wrap(err, "authz store: attachment subject grn")
+		return nil, errorx.Wrap(err, "attachment subject grn")
 	}
 	return NewPolicyAttachment(policyGRN, subjectGRN, row.CreatedAt.Time), nil
 }

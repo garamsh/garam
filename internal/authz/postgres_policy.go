@@ -17,11 +17,11 @@ import (
 func (s *PostgresStore) CreatePolicy(ctx context.Context, p *Policy, doc PolicyDocument, createdBy grn.GRN) (*Policy, error) {
 	raw, err := json.Marshal(doc)
 	if err != nil {
-		return nil, errorx.Wrap(err, "authz store: encode policy document", errorx.KindInvalidArgument)
+		return nil, errorx.Wrap(err, "encode policy document", errorx.KindInvalidArgument)
 	}
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return nil, errorx.Wrap(err, "authz store: begin", errorx.KindUnavailable)
+		return nil, errorx.Wrap(err, "begin", errorx.KindUnavailable)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
@@ -47,7 +47,7 @@ func (s *PostgresStore) CreatePolicy(ctx context.Context, p *Policy, doc PolicyD
 		return nil, pgxerr.Classify(err, "create policy version", nil, nil)
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return nil, errorx.Wrap(err, "authz store: commit")
+		return nil, errorx.Wrap(err, "commit")
 	}
 	return rowToPolicy(row)
 }
@@ -83,7 +83,7 @@ func (s *PostgresStore) ListPolicies(ctx context.Context, orgGRN grn.GRN) ([]*Po
 func (s *PostgresStore) AddPolicyVersion(ctx context.Context, g grn.GRN, doc PolicyDocument, createdBy grn.GRN) (*PolicyVersion, error) {
 	raw, err := json.Marshal(doc)
 	if err != nil {
-		return nil, errorx.Wrap(err, "authz store: encode policy document", errorx.KindInvalidArgument)
+		return nil, errorx.Wrap(err, "encode policy document", errorx.KindInvalidArgument)
 	}
 	row, err := s.q.AddPolicyVersion(ctx, db.AddPolicyVersionParams{
 		PolicyGrn: g.String(),
@@ -150,15 +150,15 @@ func (s *PostgresStore) SetPolicyDefaultVersion(ctx context.Context, g grn.GRN, 
 func rowToPolicy(row db.Policy) (*Policy, error) {
 	g, err := grn.Parse(row.Grn)
 	if err != nil {
-		return nil, errorx.Wrap(err, "authz store: policy grn")
+		return nil, errorx.Wrap(err, "policy grn")
 	}
 	orgGRN, err := grn.Parse(row.OrgGrn)
 	if err != nil {
-		return nil, errorx.Wrap(err, "authz store: policy org grn")
+		return nil, errorx.Wrap(err, "policy org grn")
 	}
 	status, err := ParsePolicyStatus(row.Status)
 	if err != nil {
-		return nil, errorx.Wrap(err, "authz store: policy status")
+		return nil, errorx.Wrap(err, "policy status")
 	}
 	return &Policy{
 		grn:            g,
@@ -174,15 +174,15 @@ func rowToPolicy(row db.Policy) (*Policy, error) {
 func rowToPolicyVersion(row db.PolicyVersion) (*PolicyVersion, error) {
 	g, err := grn.Parse(row.PolicyGrn)
 	if err != nil {
-		return nil, errorx.Wrap(err, "authz store: policy grn")
+		return nil, errorx.Wrap(err, "policy grn")
 	}
 	createdBy, err := grn.Parse(row.CreatedBy)
 	if err != nil {
-		return nil, errorx.Wrap(err, "authz store: policy version author")
+		return nil, errorx.Wrap(err, "policy version author")
 	}
 	doc, err := ParsePolicyDocument(row.Document)
 	if err != nil {
-		return nil, errorx.Wrap(err, "authz store: stored document")
+		return nil, errorx.Wrap(err, "stored document")
 	}
 	return NewPolicyVersion(g, int(row.Version), doc, createdBy, row.CreatedAt.Time), nil
 }

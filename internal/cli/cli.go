@@ -94,10 +94,45 @@ func NewRootCommand() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "garam",
 		Short: "garam is the workflow management core: identity, orgs, authorization",
+		// cmd/garam prints what Execute returns, so cobra printing it
+		// as well is the same line twice. The caller's is the one kept,
+		// because it goes through the logger the process already writes
+		// its other lines with.
+		SilenceErrors: true,
 	}
 	root.AddCommand(newServeCommand(), newMigrateCommand(), newProbeCommand(),
 		newIssueCertificateCommand(), newAdapterCommand())
+	silenceUsageOnRun(root)
 	return root
+}
+
+// silenceUsageOnRun stops a command that fails while running from
+// printing its usage block, and leaves the block on one that fails
+// before it runs. probe.go states the reason and it holds for every
+// command here: usage text is noise a container log pays for each time,
+// and a serve command in a crash loop pays it on every restart.
+//
+// What separates the two is the question the block answers. "How is
+// this invoked" is what a bad flag or a missing argument raises, and it
+// is not what an unreadable GARAM_COOKIE_SECURE raises.
+//
+// The line goes inside RunE because that is the first point every check
+// deciding the first question has passed. cobra parses flags, validates
+// arguments, runs PersistentPreRunE and PreRunE, and only then
+// ValidateRequiredFlags — so a hook would silence `issue-certificate`
+// without --out-dir, which is a usage error and keeps its block.
+func silenceUsageOnRun(cmd *cobra.Command) {
+	for _, child := range cmd.Commands() {
+		silenceUsageOnRun(child)
+	}
+	run := cmd.RunE
+	if run == nil {
+		return
+	}
+	cmd.RunE = func(c *cobra.Command, args []string) error {
+		c.SilenceUsage = true
+		return run(c, args)
+	}
 }
 
 // newServeCommand constructs the serve parent command.

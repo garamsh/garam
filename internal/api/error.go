@@ -2,12 +2,40 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"runtime/debug"
 
 	apigen "github.com/garamsh/garam/api"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/wire"
 )
+
+// RecoverPanics answers a handler that panicked. net/http recovers the
+// panic and logs the stack itself, but abandons the response instead of
+// answering: the caller reads a closed connection and cannot tell a
+// defect here from a network fault. Recovering first is what makes the
+// answer a 500, and the stack travels in the cause because net/http no
+// longer sees the panic to log it.
+//
+// It answers and does not log (stack-go.md §4). The cause reaches the
+// request line through the recorder a handled 5xx already reports on,
+// so a panic costs one line and one answer like every other failure.
+func RecoverPanics(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			v := recover()
+			if v == nil {
+				return
+			}
+			// A recovered panic carries no kind of its own. It is this
+			// process's own defect, which is what KindInternal names.
+			writeError(w, errorx.New(errorx.KindInternal,
+				fmt.Sprintf("panic: %v\n%s", v, debug.Stack())))
+		}()
+		next.ServeHTTP(w, r)
+	})
+}
 
 // causeRecorder is the request-logging middleware's response writer,
 // which records the cause of a 5xx so the line it emits for the

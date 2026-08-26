@@ -141,9 +141,12 @@ func serveAPI(cmd *cobra.Command) error {
 	// A request needs both to be served: rows out of the database, and
 	// the decision that admits it.
 	health.Register(mux, health.Database(pool), authzChannel{conn: conn})
+	// The last middleware listed is the outermost, so recovery runs
+	// inside the logging: a panic becomes the 500 the line reports
+	// rather than an unwind that leaves no line at all.
 	handler := apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{
 		BaseRouter:  mux,
-		Middlewares: []apigen.MiddlewareFunc{obs.logRequests},
+		Middlewares: []apigen.MiddlewareFunc{api.RecoverPanics, obs.logRequests},
 	})
 
 	addr := envOr("GARAM_HTTP_ADDR", ":8080")

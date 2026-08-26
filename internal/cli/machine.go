@@ -131,13 +131,16 @@ func serveMachine(cmd *cobra.Command) error {
 	defer func() { _ = conn.Close() }()
 
 	// The generated router matches before the middleware runs, so the
-	// log line can name the route rather than the path.
+	// log line can name the route rather than the path. The last
+	// middleware listed is the outermost, so recovery runs inside the
+	// logging: a panic becomes the 500 the line reports rather than an
+	// unwind that leaves no line at all.
 	handler := machinegen.HandlerWithOptions(
 		machineapi.NewServer(agents, operators, messages, consents, watches,
 			memberGroups{store: org.NewPostgresStore(pool)},
 			machineapi.NewGRPCEvaluator(conn)),
 		machinegen.StdHTTPServerOptions{
-			Middlewares: []machinegen.MiddlewareFunc{obs.logMachineRequests},
+			Middlewares: []machinegen.MiddlewareFunc{machineapi.RecoverPanics, obs.logMachineRequests},
 		})
 	srv := machine.NewServer(
 		machine.NewService(certificateAuthorities{store: authorities}),

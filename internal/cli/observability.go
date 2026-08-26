@@ -183,6 +183,44 @@ func (o *observability) recoverPanics(next http.Handler) http.Handler {
 	})
 }
 
+// recoverRPCs is the gRPC counterpart of recoverPanics, and it is the
+// one server net/http middleware could not reach. grpc-go carries no
+// recover of its own, so a panicking engine handler reaches no frame
+// that stops it and ends `serve authz` — where every other listener
+// drops one connection. ADR-0029 decided readiness reports what a
+// replica cannot serve without, and a dead process reports nothing.
+//
+// The code is Internal because a panic is this process's own defect,
+// which is the kind #654 chose for the same failure on the HTTP
+// surfaces; codeOf maps that kind to this code by name (ADR-0003).
+//
+// It is the outermost interceptor, so a panic never reaches logRPCs
+// and this line is the only one the call leaves. The stack goes to
+// that line and the caller is told "internal error": a status message
+// travels to the client, and a stack is not something a caller of the
+// engine is owed.
+//
+// Unary only. Both generated ServiceDescs carry an empty Streams
+// (`proto/gen/garam/authz/v1/authz_grpc.pb.go:176`,
+// `policy_grpc.pb.go:506`), so the engine serves no streaming RPC for
+// a StreamServerInterceptor to guard. One added later registers its
+// own.
+func (o *observability) recoverRPCs(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
+	defer func() {
+		v := recover()
+		if v == nil {
+			return
+		}
+		o.logger.LogAttrs(ctx, slog.LevelError, "rpc panic",
+			slog.String("operation", info.FullMethod),
+			slog.String("trace_id", traceIDOf(ctx)),
+			slog.String("code", codes.Internal.String()),
+			slog.String("error", fmt.Sprintf("panic: %v\n%s", v, debug.Stack())))
+		resp, err = nil, status.Error(codes.Internal, "internal error")
+	}()
+	return handler(ctx, req)
+}
+
 // logRPCs is the gRPC counterpart of logRequests. The engine's
 // principal is the subject the request asks about. A refusal already
 // carries its reason to the caller, so the line takes the cause only

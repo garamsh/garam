@@ -641,3 +641,77 @@ func TestRecoverPanics_AnswersARouteTheSliceDoesNotReach(t *testing.T) {
 	assert.Contains(t, line["error"], "panic: collector defect",
 		"the line is the only record this panic leaves")
 }
+
+// panickingEngine is the engine handler a recover interceptor exists
+// for. Check is the programmer bug; Explain answers, so one connection
+// carries both a call that panics and a call that must still be served
+// after it.
+type panickingEngine struct {
+	authzv1.UnimplementedAuthzServiceServer
+}
+
+func (panickingEngine) Check(context.Context, *authzv1.CheckRequest) (*authzv1.CheckResponse, error) {
+	panic("policy engine defect")
+}
+
+func (panickingEngine) Explain(context.Context, *authzv1.ExplainRequest) (*authzv1.ExplainResponse, error) {
+	return &authzv1.ExplainResponse{Allowed: true}, nil
+}
+
+// TestRecoverRPCs_AnswersAPanicAndKeepsServing panics a real handler
+// through a real server, because an interceptor called directly proves
+// the interceptor and not the wiring. The chain is the one serveAuthz
+// builds, in that order.
+//
+// The second call is what makes this evidence. Without the
+// interceptor grpc-go reaches no frame that stops the panic and the
+// process ends — this test binary among them — so a run that gets far
+// enough to answer Explain has already shown the process survived, and
+// answering it on the same connection shows the server did too rather
+// than merely staying alive with nothing left listening.
+//
+// The status message is asserted for what it does not carry. It
+// travels to the caller, and a stack is not something a caller of the
+// engine is owed; the stack goes to the line instead, which decodeLine
+// holds to exactly one by parsing the whole buffer.
+func TestRecoverRPCs_AnswersAPanicAndKeepsServing(t *testing.T) {
+	var out lines
+	obs := recordingObservability(&out)
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	engine := grpc.NewServer(
+		grpc.StatsHandler(otelgrpc.NewServerHandler()),
+		grpc.ChainUnaryInterceptor(obs.recoverRPCs, obs.logRPCs),
+	)
+	authzv1.RegisterAuthzServiceServer(engine, panickingEngine{})
+	go func() { _ = engine.Serve(lis) }()
+	t.Cleanup(engine.Stop)
+
+	conn, err := grpc.NewClient(lis.Addr().String(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close() })
+	client := authzv1.NewAuthzServiceClient(conn)
+
+	_, err = client.Check(context.Background(), &authzv1.CheckRequest{SubjectGrn: testSubject})
+
+	require.Error(t, err, "the caller is answered rather than left with a dead connection")
+	assert.Equal(t, codes.Internal, status.Code(err))
+	assert.Equal(t, "internal error", status.Convert(err).Message())
+	assert.NotContains(t, status.Convert(err).Message(), "policy engine defect",
+		"the panic value does not travel to the caller")
+
+	// Read before the second call, so decodeLine's whole-buffer parse
+	// holds the panic to one line: recovering outside logRPCs is what
+	// keeps it from also emitting the served line for the same call.
+	line := decodeLine(t, &out)
+	assert.Equal(t, "rpc panic", line["msg"])
+	assert.Equal(t, codes.Internal.String(), line["code"])
+	assert.Equal(t, "/garam.authz.v1.AuthzService/Check", line["operation"])
+	assert.Contains(t, line["error"], "policy engine defect", "the panic reaches the line")
+	assert.Contains(t, line["error"], "goroutine", "and so does the stack")
+
+	explained, err := client.Explain(context.Background(), &authzv1.ExplainRequest{SubjectGrn: testSubject})
+	require.NoError(t, err, "the server still serves the connection the panic was answered on")
+	assert.True(t, explained.GetAllowed())
+}

@@ -298,7 +298,11 @@ func serveAuthz(cmd *cobra.Command) error {
 
 	srv := grpc.NewServer(
 		grpc.StatsHandler(otelgrpc.NewServerHandler()),
-		grpc.ChainUnaryInterceptor(obs.logRPCs),
+		// The first interceptor is the outermost, so recovery wraps
+		// the logging rather than the other way round: a panic is
+		// answered before it reaches a frame that would end the
+		// process, and the line it leaves is the only one.
+		grpc.ChainUnaryInterceptor(obs.recoverRPCs, obs.logRPCs),
 	)
 	authzv1.RegisterAuthzServiceServer(srv, authz.NewGRPCServer(cache))
 	authzv1.RegisterPolicyServiceServer(srv, authz.NewPolicyGRPCServer(store, cache))

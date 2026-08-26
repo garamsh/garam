@@ -86,13 +86,13 @@ indistinguishable from a turn that never started.
 
 The adapter never has to tell those apart. Success completes;
 everything else retries; an attempt count ends what would otherwise
-loop forever. The platform notifies nobody — a failed turn leaves a
-line in a log and nothing else — which is why telling the sender at
-exhaustion is **garam's obligation**
+loop forever. The platform notifies no sender (§Foreign facts this
+rests on), which is why telling the sender at exhaustion is **garam's
+obligation**
 ([ADR-0018](./adr/0018-delivery-acknowledgement.md) §Consequences,
 [overview.md](./overview.md) §Out of scope (today)). **It is recorded
 as one and not discharged**: an adapter may not treat an exhausted
-message as reported to anybody.
+message as reported to its sender.
 
 ## The lease
 

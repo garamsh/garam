@@ -1,6 +1,7 @@
 // Package listfilter holds the filter a list call is scoped by. Org,
-// agent and user all page their lists with it, and a domain may not
-// import a sibling to borrow the type, so it lives here once.
+// agent and user page their lists with it, and a concern three
+// boundaries share sits below them rather than inside one
+// (docs/architecture/structure.md §When a new boundary is earned).
 package listfilter
 
 // Filter scopes a List call. Limit of 0 means "no limit".

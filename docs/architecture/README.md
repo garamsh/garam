@@ -38,7 +38,7 @@ Responsibility documents:
 
 - [structure.md](./structure.md) — the shape garam is partitioned into, what may reference what, and when a new boundary is earned
 - [overview.md](./overview.md) — what garam is and is not; module list
-- [domains.md](./domains.md) — the domain packages and their responsibilities
+- [domains.md](./domains.md) — garam's domains named by subject matter, and what else under `internal/` is not one
 - [grn-model.md](./grn-model.md) — the GRN resource naming model
 - [authz.md](./authz.md) — the authorization model
 - [api-surface.md](./api-surface.md) — the listeners garam serves on, what admits a caller to each, and what each one's specification is authoritative for
@@ -94,6 +94,7 @@ ADRs:
 - [0045](./adr/0045-an-organization-registers-an-operator.md) — an organization registers an operator, and a definition may name no other
 - [0046](./adr/0046-an-operator-renews-its-certificate-by-presenting-the-one-it-holds.md) — an operator renews its certificate by presenting the one it holds, and only the newest one renews
 - [0047](./adr/0047-a-domain-reaches-a-sibling-through-its-declared-surface.md) — garam is partitioned by domain, and a boundary reaches a sibling through the surface that sibling declares
+- [0048](./adr/0048-garams-domains-are-named-by-subject-matter.md) — garam's domains are named by subject matter, and the Go package list is not the domain list
 
 ## Rules for edits
 

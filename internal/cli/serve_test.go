@@ -68,6 +68,43 @@ func channelTo(t *testing.T, addr string) *grpc.ClientConn {
 	return conn
 }
 
+// TestEnvBool_RefusesAValueItCannotRead covers the three outcomes the
+// setting has: a spelling that reads as true, "false", the one spelling
+// that must still disable Secure, and a value that reads as neither and
+// stops the process rather than landing silently on the weaker setting.
+func TestEnvBool_RefusesAValueItCannotRead(t *testing.T) {
+	const key = "GARAM_COOKIE_SECURE"
+
+	// The control for the refusal below: these are what stops being
+	// accepted if the parse is what refuses rather than the value.
+	t.Run("a spelling that reads as true", func(t *testing.T) {
+		t.Setenv(key, "True")
+		got, err := envBool(key, "true")
+		require.NoError(t, err)
+		assert.True(t, got)
+	})
+	t.Run("false still disables it", func(t *testing.T) {
+		t.Setenv(key, "false")
+		got, err := envBool(key, "true")
+		require.NoError(t, err)
+		assert.False(t, got)
+	})
+	t.Run("unset takes the fallback", func(t *testing.T) {
+		t.Setenv(key, "")
+		got, err := envBool(key, "true")
+		require.NoError(t, err)
+		assert.True(t, got)
+	})
+
+	t.Run("a value it cannot read", func(t *testing.T) {
+		t.Setenv(key, "yes")
+		_, err := envBool(key, "true")
+		require.Error(t, err)
+		assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
+		assert.Contains(t, err.Error(), key, "the error names the variable, as GARAM_SESSION_TTL's does")
+	})
+}
+
 func TestAuthzChannel_RefusesAChannelThatReachesNoEngine(t *testing.T) {
 	// A gRPC server on a port of the kernel's choosing is the engine;
 	// the address nothing serves is the same channel without one, which

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -89,7 +90,10 @@ func serveAPI(cmd *cobra.Command) error {
 	if err != nil {
 		return errorx.Wrap(err, "GARAM_SESSION_TTL", errorx.KindInvalidArgument)
 	}
-	cookieSecure := envOr("GARAM_COOKIE_SECURE", "true") == "true"
+	cookieSecure, err := envBool("GARAM_COOKIE_SECURE", "true")
+	if err != nil {
+		return err
+	}
 	providers := []authn.Provider{}
 	if google != nil {
 		providers = append(providers, google)
@@ -163,6 +167,18 @@ func serveAPI(cmd *cobra.Command) error {
 	httpSrv := &http.Server{Addr: addr, Handler: obs.recoverPanics(otelhttp.NewHandler(handler, serviceAPI))}
 	obs.logger.Info("serving api", slog.String("addr", addr))
 	return serveHTTP(ctx, httpSrv, httpSrv.ListenAndServe)
+}
+
+// envBool reads a boolean environment variable, taking the fallback
+// when it is unset. A value it cannot read is refused rather than
+// defaulted: an unreadable value would otherwise land on false, and for
+// GARAM_COOKIE_SECURE that is the weaker setting.
+func envBool(key, fallback string) (bool, error) {
+	b, err := strconv.ParseBool(envOr(key, fallback))
+	if err != nil {
+		return false, errorx.Wrap(err, key, errorx.KindInvalidArgument)
+	}
+	return b, nil
 }
 
 // googleProvider resolves the Google sign-in provider: nil unless the

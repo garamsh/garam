@@ -82,6 +82,15 @@ updates:
   # them; go.mod's `go` directive, which this ecosystem never edits; and
   # a tool directive added later, which is reached only once its module
   # is named here.
+  #
+  # It also edits manifests and runs no generator. Bumping a module the
+  # tool block names moves the generator itself, so what `make gen`
+  # writes can stop matching the committed output and the bump arrives
+  # half-done: google.golang.org/protobuf 1.36.11 to 1.36.12 (#682)
+  # moved protoc-gen-go's version stamp in two files under proto/gen/,
+  # while mockery 3.7.3 to 3.7.4 (#681) moved nothing. The bump itself
+  # does not say which of the two it is; `make check-gen` does, and the
+  # regenerated output belongs in the same change as the bump.
   - package-ecosystem: "gomod"
     directory: "/"
     schedule:

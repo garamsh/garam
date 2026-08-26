@@ -160,16 +160,10 @@ Each bullet names the ADR that owns its directory where one does;
 - `docs/` — the conventions, the architecture documents and the plans;
   `docs/README.md` is the index.
 
-Not every package under `internal/` is a domain. `api`, `authz` and
-`machineapi` are request surfaces; `api` and `authz` are independent
-services that never import each other, `machineapi` imports neither,
-and `cli` composes every surface (ADR-0003, ADR-0017). The boundary
-binds a test as it binds shipped code: one surface's test package does
-not import another surface. `grn` and `errorx` are shared
-primitives. `machine` is the listener the machine surface is served on
-(ADR-0014), and `health` is mounted on each surface by `cli` rather
-than by any of them (ADR-0021). A domain package holds its interface
-in `store.go`.
+Not every package under `internal/` is a domain. The boundary binds a
+test as it binds shipped code: one surface's test package does not
+import another surface. A domain package holds its interface in
+`store.go`.
 
 ## 2. Module / package boundary
 

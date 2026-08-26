@@ -1,9 +1,11 @@
 package wire_test
 
 import (
+	"errors"
 	"net/http"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc/codes"
 
@@ -46,6 +48,48 @@ func TestStatusOf(t *testing.T) {
 
 // TestKindOf covers every named code plus one no constant names, so
 // the by-name mapping cannot silently lose a kind.
+// TestMessageOf covers the discriminator that decides what a client
+// reads: the chain's own text where this project wrote every part of
+// it, and this project's sentence for the kind where the chain reaches
+// an error from outside. The authored rows are the control — without
+// them a MessageOf that answered the kind's sentence for everything
+// would pass the rows that matter.
+func TestMessageOf(t *testing.T) {
+	driver := &pgconn.PgError{
+		Severity:       "ERROR",
+		Code:           "23505",
+		Message:        `duplicate key value violates unique constraint "users_pkey"`,
+		ConstraintName: "users_pkey",
+		TableName:      "users",
+	}
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{"a sentinel this project wrote", errorx.New(errorx.KindNotFound, "invitation not found"), "invitation not found"},
+		{"a chain of them", errorx.Wrap(errorx.New(errorx.KindNotFound, "user not found"), "get member"), "get member: user not found"},
+		{"a driver error under a wrap", errorx.Wrap(driver, "create", errorx.KindAlreadyExists), "already exists"},
+		{"a driver error under two", errorx.Wrap(errorx.Wrap(driver, "create", errorx.KindAlreadyExists), "register"), "already exists"},
+		{"a decoder error under a wrap", errorx.Wrap(errors.New(`invalid character 'q'`), "request body", errorx.KindInvalidArgument), "the request is not in the required form"},
+		{"an error with no kind at all", errors.New("bare"), "internal error"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, wire.MessageOf(tt.err))
+		})
+	}
+	assert.Equal(t, "", wire.MessageOf(nil))
+
+	// The property the disclosure turned on, asserted on the text
+	// rather than on the equality above: nothing the driver named
+	// survives.
+	got := wire.MessageOf(errorx.Wrap(driver, "create", errorx.KindAlreadyExists))
+	for _, leaked := range []string{"users_pkey", "users", "SQLSTATE", "23505", "duplicate key"} {
+		assert.NotContains(t, got, leaked)
+	}
+}
+
 func TestKindOf(t *testing.T) {
 	tests := []struct {
 		code codes.Code

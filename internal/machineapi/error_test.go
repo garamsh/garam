@@ -6,12 +6,14 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/machineapi"
+	"github.com/garamsh/garam/internal/pgxerr"
 )
 
 // engineWords is what the engine's own error says. A caller must not
@@ -100,6 +102,36 @@ func TestServer_AnswersEachErrorKindWithItsOwnStatus(t *testing.T) {
 			require.Equal(t, tc.status, status, body)
 			assert.JSONEq(t, `{"kind":"`+tc.kind.String()+`","message":"`+tc.message+`"}`, body)
 		})
+	}
+}
+
+// TestServer_AConflictCarriesNoneOfTheDriversText is this surface's
+// half of the disclosure regression. The table above is its control:
+// the same kinds, below 500, carrying the message where this project
+// wrote every part of it. Here the chain reaches Postgres instead, and
+// what the caller reads must name nothing of the schema.
+func TestServer_AConflictCarriesNoneOfTheDriversText(t *testing.T) {
+	sender := agentGRN("acme", "9f8e7d6c5b4a3021")
+	sibling := agentGRN("acme", "0a1b2c3d4e5f6071")
+	policies := &engine{}
+	url, client := listener(t, &agentService{}, nil, &messageService{}, consenting(), unwatched(t), &memberGroups{}, policies, sender)
+
+	policies.err = pgxerr.Classify(&pgconn.PgError{
+		Severity:       "ERROR",
+		Code:           "23505",
+		Message:        `duplicate key value violates unique constraint "messages_sender_grn_idempotency_key_key"`,
+		ConstraintName: "messages_sender_grn_idempotency_key_key",
+		TableName:      "messages",
+	}, "enqueue", nil, nil)
+
+	status, body := send(t, client, http.MethodPost, url+"/messages", submission(sibling, "duplicate"))
+	require.Equal(t, http.StatusConflict, status, body)
+	// The control for the search: the kind still reaches the caller, so
+	// what is absent is the driver's text and not the body.
+	require.Contains(t, body, `"already_exists"`)
+	for _, leaked := range []string{"messages_sender_grn_idempotency_key_key", "messages", "SQLSTATE", "23505", "duplicate key", "constraint"} {
+		assert.NotContains(t, body, leaked,
+			"the response names something only Postgres and the schema know")
 	}
 }
 

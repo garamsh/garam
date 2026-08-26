@@ -155,6 +155,68 @@ func TestPasswordAttemptStore_PrunesWhatLapsed(t *testing.T) {
 		"the sweep left only the attempt that is live")
 }
 
+// TestRegisterPassword_ADuplicateCarriesNoneOfPostgresText is the
+// disclosure regression against the real driver: registering one
+// username twice reaches users.Create with the row present, and what
+// Postgres says about its own primary key must not reach a caller who
+// holds no credential at all — this route is unauthenticated.
+//
+// The first registration is the control: same route, same body shape,
+// 201, so the refusal is the second row rather than the route. What
+// the assertions turn on is what the body does not carry; a 409 with
+// the right kind and a valid body is what the defect already produced.
+func TestRegisterPassword_ADuplicateCarriesNoneOfPostgresText(t *testing.T) {
+	p := pool(t)
+	truncate(t, p)
+	ctx := context.Background()
+
+	users := user.NewPostgresStore(p)
+	orgs := org.NewPostgresStore(p)
+	owner := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "owner")
+	require.NoError(t, users.Create(ctx, user.New(owner, "Owner")))
+	acme := grn.New(grn.RootOwner, grn.DefaultProject, org.ServiceTypeOrg, "acme")
+	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(acme, "acme")))
+	// Two live invitations, because one is spent by the registration
+	// that lands and the second call has to reach the user row.
+	tokens := make([]string, 2)
+	for i := range tokens {
+		token, err := org.NewInvitationToken()
+		require.NoError(t, err)
+		require.NoError(t, orgs.CreateInvitation(ctx,
+			org.NewInvitation(token, acme, org.RoleMember, owner, time.Now().UTC().Add(time.Hour))))
+		tokens[i] = token
+	}
+
+	srv := api.NewServer(users, orgs, nil, nil, nil, nil,
+		authn.NewPostgresSessionStore(p), nil,
+		authn.NewPostgresPasswordCredentialStore(p),
+		authn.NewPostgresPasswordAttemptStore(p),
+		nil, nil, nil, api.Config{SessionTTL: time.Hour})
+	handler := apigen.Handler(srv)
+	register := func(token string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/auth/password/register", strings.NewReader(
+			fmt.Sprintf(`{"invitationToken":%q,"username":"alice","password":%q}`, token, e2ePassword)))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		return rec
+	}
+
+	require.Equal(t, http.StatusCreated, register(tokens[0]).Code, "the control: the first registration lands")
+
+	rec := register(tokens[1])
+	require.Equal(t, http.StatusConflict, rec.Code, rec.Body.String())
+	// The control for the search: the refusal carries a message, so
+	// what is absent below is the schema and not the whole body.
+	require.Contains(t, rec.Body.String(), `"message"`)
+	for _, leaked := range []string{"users_pkey", "SQLSTATE", "23505", "duplicate key", "constraint"} {
+		assert.NotContains(t, rec.Body.String(), leaked,
+			"the response names something only Postgres and the schema know")
+	}
+	assert.Equal(t, 1, countRows(t, p, "SELECT count(*) FROM users WHERE grn = $1",
+		"grn:root:default:user:local-alice"), "the refused registration wrote no second row")
+}
+
 // TestPasswordSignIn_RoundTripAgainstPostgres walks the whole route
 // against the real database: an invitation becomes an account, a
 // credential, a membership and a session, and the password signs in

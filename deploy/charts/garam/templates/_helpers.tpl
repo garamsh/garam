@@ -9,8 +9,33 @@ Service, so the name has one definition rather than four.
 {{- if eq .Release.Name .Chart.Name -}}
 {{- .Release.Name -}}
 {{- else -}}
-{{- printf "%s-%s" .Release.Name .Chart.Name | trunc 63 | trimSuffix "-" -}}
+{{- printf "%s-%s" .Release.Name .Chart.Name -}}
 {{- end -}}
+{{- end -}}
+
+{{/*
+The name of one workload's objects: the release-scoped base above with
+that workload's own word after it.
+
+The base is truncated here rather than in `garam.fullname`, because the
+63-character limit applies to the whole name and every caller appends
+its word after the helper returns. Truncating the base alone was a
+guard that could not fire: Helm caps a release name at 53, so
+`<release>-garam` reaches 59 and never met a `trunc 63`, while
+`<release>-garam-machine` reached 67 and the apiserver refused it —
+`helm template` renders that name and only an apply reports it.
+
+63 is the limit that binds every object here, though for three
+different reasons: a Service name is a DNS-1035 label; a Job's name is
+copied into its pods' `job-name` label, and a label value is capped at
+63 bytes; a Deployment name is a DNS subdomain, but the apiserver warns
+above 63 because the name reaches pod hostnames.
+
+The word is never truncated. It is what tells one workload's objects
+from another's, and shortening it would collide them.
+*/}}
+{{- define "garam.name" -}}
+{{- printf "%s-%s" (include "garam.fullname" .root | trunc (int (sub 62 (len .word))) | trimSuffix "-") .word -}}
 {{- end -}}
 
 {{- define "garam.selectorLabels" -}}

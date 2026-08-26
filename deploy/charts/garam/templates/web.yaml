@@ -4,7 +4,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "garam.fullname" . }}-web
+  name: {{ include "garam.name" (dict "root" $ "word" "web") }}
   labels:
     {{- include "garam.labels" (dict "root" $ "component" "web") | nindent 4 }}
 spec:
@@ -48,7 +48,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "garam.fullname" . }}-web
+  name: {{ include "garam.name" (dict "root" $ "word" "web") }}
   labels:
     {{- include "garam.labels" (dict "root" $ "component" "web") | nindent 4 }}
 spec:

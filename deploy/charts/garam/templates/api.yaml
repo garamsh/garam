@@ -3,7 +3,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "garam.fullname" . }}-api
+  name: {{ include "garam.name" (dict "root" $ "word" "api") }}
   labels:
     {{- include "garam.labels" (dict "root" $ "component" "api") | nindent 4 }}
 spec:
@@ -30,7 +30,7 @@ spec:
             - name: GARAM_HTTP_ADDR
               value: ":8080"
             - name: GARAM_AUTHZ_ADDR
-              value: {{ printf "%s-authz:9090" (include "garam.fullname" .) | quote }}
+              value: {{ printf "%s:9090" (include "garam.name" (dict "root" $ "word" "authz")) | quote }}
             - name: GARAM_SESSION_TTL
               value: {{ required "api.sessionTTL is required" .Values.api.sessionTTL | quote }}
             - name: GARAM_COOKIE_SECURE
@@ -63,7 +63,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "garam.fullname" . }}-api
+  name: {{ include "garam.name" (dict "root" $ "word" "api") }}
   labels:
     {{- include "garam.labels" (dict "root" $ "component" "api") | nindent 4 }}
 spec:

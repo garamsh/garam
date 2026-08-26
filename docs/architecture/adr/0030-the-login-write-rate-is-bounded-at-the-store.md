@@ -8,6 +8,7 @@
 - Decision
 - Consequences
 - Rejected alternatives
+- Errata
 
 ## Context
 
@@ -87,3 +88,28 @@ whole deployment rather than per process.
   balancer favours.
 - **Dropping the server-side record.** That record is the fix for the
   replayed callback (#279, ADR-0028); reverting it reopens the replay.
+
+## Errata
+
+- 2026-08-27 — §Decision's "The bound is this handler's alone, because
+  this handler is the unauthenticated surface's only unconditional
+  write" was true when written and is false since #499, which merged
+  [ADR-0041](./0041-a-password-is-garams-own-credential-verified-by-argon2id.md)
+  together with the endpoints it decides. `api/openapi.yaml` carries
+  `security: []` on five of its operations today, two of them writes
+  by verb: `POST /auth/password/register` and `POST
+  /auth/password/login`. Password login is the second unconditional
+  write — `internal/api/password.go` records an attempt before a
+  credential is looked up and before anything is hashed — so this
+  handler is no longer the only one. Registration does not make a
+  third: it writes only once the invitation is known live, and a live
+  token is what an unauthenticated caller does not hold (ADR-0006).
+  ADR-0041 §"The rate bound is extended, because ADR-0030 does not
+  reach here" quotes this sentence and gives the attempt a bound of
+  its own, `MaxLivePasswordAttempts`, decided in the statement that
+  writes — the shape §Consequences generalizes, applied to the write
+  ADR-0041 adds. The decision here is untouched: the login write rate
+  is bounded at the store, and `MaxLiveOAuthStates` bounds
+  `/auth/login/{provider}`. Whether one bound belongs to an
+  unauthenticated surface holding two unconditional writes is not
+  decided by this entry.

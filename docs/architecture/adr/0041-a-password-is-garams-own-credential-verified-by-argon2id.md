@@ -8,6 +8,7 @@
 - Decision
 - Consequences
 - Rejected alternatives
+- Errata
 
 ## Context
 
@@ -294,3 +295,31 @@ until each such account next signs in.
   chooses the username and can choose the forwarded address, so each
   buys one budget per value invented — ADR-0030's reasoning, which
   this path does not change.
+
+## Errata
+
+- 2026-08-26 — §Decision's "A password is not a `Provider`" says the
+  endpoint "asserts the same `Identity` the interface produces". It
+  asserts none, and did not when this ADR merged. `Identity` is what a
+  `Provider` returns from `Exchange` (`internal/authn/provider.go`,
+  `internal/authn/google.go`); `internal/api/password.go` resolves the
+  user itself, `verifyPassword` returning a `*user.User` that
+  `LoginPassword` hands straight to `startSession` — the shape #499
+  merged alongside this ADR. `docs/architecture/domains.md` states it
+  correctly. The decision stands, and the sentence overstates it rather
+  than weakening it: what a password sign-in shares with a callback
+  begins one step later than written, at the user row, and ADR-0005 is
+  untouched either way.
+- 2026-08-26 — §Consequences' "The console has no password form. The
+  endpoints exist and no browser UI reaches them, which is deliberate
+  and left to a separate issue" was true when written and is false
+  since #506, which built those pages two hours after #499 merged this
+  ADR: `web/src/app/(auth)/login/page.tsx` renders `PasswordSignInForm`
+  and `web/src/app/(auth)/register/page.tsx` renders
+  `PasswordRegisterForm`.
+  [ADR-0044](./0044-the-development-only-sign-in-provider-is-removed.md)
+  §Context records the same thing. The tail was answered rather than
+  overtaken: the separate issue was raised as #505 an hour after this
+  ADR merged, and #506 closed it. The decision is unchanged — what
+  those pages reach is the credential this ADR specifies, and
+  `docs/architecture/web-app.md` describes the console as it now is.

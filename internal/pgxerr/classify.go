@@ -11,12 +11,12 @@
 // classify is store-error mapping, not wire conversion: internal/wire
 // owns a wire format and the two directions of its conversion, and the
 // mapping here would choose a behaviour rather than convert one
-// (arch-domain.md §When a new boundary is earned). errorx owns kinds
-// and the chain that carries them, but it is transport-agnostic by
-// design — its doc comment pins it that way so the same errors can
-// flow over any surface — and adding a pgx dependency here would
-// break that. The five copies are the evidence this mapping earns a
-// boundary of its own.
+// (docs/architecture/structure.md §When a new boundary is earned).
+// errorx owns kinds and the chain that carries them, but it is
+// transport-agnostic by design — its doc comment pins it that way so
+// the same errors can flow over any surface — and adding a pgx
+// dependency here would break that. The five copies are the evidence
+// this mapping earns a boundary of its own.
 package pgxerr
 
 import (

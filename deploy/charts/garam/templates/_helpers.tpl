@@ -51,11 +51,11 @@ app.kubernetes.io/managed-by: {{ .root.Release.Service }}
 {{- end -}}
 
 {{- define "garam.serverImage" -}}
-{{ .Values.image.server.repository }}:{{ required "image.server.tag is required: no release exists, so no default names an image that can be pulled (ADR-0039)" .Values.image.server.tag }}
+{{ required "image.server.repository is required: an empty one renders `image: :<tag>`, which is not a reference any registry resolves" .Values.image.server.repository }}:{{ required "image.server.tag is required: no release exists, so no default names an image that can be pulled (ADR-0039)" .Values.image.server.tag }}
 {{- end -}}
 
 {{- define "garam.webImage" -}}
-{{ .Values.image.web.repository }}:{{ required "image.web.tag is required: no release exists, so no default names an image that can be pulled (ADR-0039)" .Values.image.web.tag }}
+{{ required "image.web.repository is required: an empty one renders `image: :<tag>`, which is not a reference any registry resolves" .Values.image.web.repository }}:{{ required "image.web.tag is required: no release exists, so no default names an image that can be pulled (ADR-0039)" .Values.image.web.tag }}
 {{- end -}}
 
 {{/*

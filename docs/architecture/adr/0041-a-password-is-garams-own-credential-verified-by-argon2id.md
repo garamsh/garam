@@ -315,6 +315,19 @@ until each such account next signs in.
   sentence overstates it rather than weakening it: what a password
   sign-in shares with a callback begins one step later than written,
   at the user row, and ADR-0005 is untouched either way.
+- 2026-08-26 — §Decision's "A refusal names nothing" says the
+  unknown-username path "spends a computation rather than returning
+  early". One kind of unknown username returns early: a string that
+  cannot name an account never reaches the credential lookup, and
+  `internal/api/password.go` refuses it before an attempt is recorded
+  and before anything is hashed — a carve-out that file names in
+  place, with its reason, and has named since #499. The claim the
+  argument rests on is unaffected and correct: refusing there leaks
+  nothing about which accounts exist, because what it separates is a
+  well-formed username from a malformed one, and the API specification
+  states that rule already. What is wrong is the reach — "the
+  unknown-username path" where the sentence holds of the well-formed
+  half of it, which is the half a verification is spent on.
 - 2026-08-26 — §Consequences' "The console has no password form. The
   endpoints exist and no browser UI reaches them, which is deliberate
   and left to a separate issue" was true when written and is false

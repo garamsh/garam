@@ -12,9 +12,11 @@ Rules every agent follows when writing code, tests, commits, and documents. The 
 
 ## Scope
 
-These rules bind what the project writes. A committed file a generator produced is not that — the project owns the input and the decision to commit it, not the output's internals — and neither is a comment a tool writes into, which is an interface rather than prose.
+These rules bind what the project writes. Committed output a generator produced is not that — the project owns the input and the decision to commit it, not the output's internals.
 
-What makes a file generated is that regenerating it changes nothing. One nobody can regenerate is authored, whatever its header says.
+Where a tool decides an artifact's shape, that shape is an interface and not prose: a comment a tool writes into or parses, a template a forge copies into every issue and pull request opened from it, a file a runtime includes. What such an artifact says is the project's and is bound by these rules. What it must open with, and the order its parts come in, is the tool's.
+
+What makes anything generated is that regenerating it changes nothing. What nobody can regenerate is authored, whatever its header says. The test runs on what a generator writes and not on the file holding it, so one file can be generated in one part and authored in the rest.
 
 ## Stack-neutral
 
@@ -28,7 +30,7 @@ What makes a file generated is that regenerating it changes nothing. One nobody 
 | `style.md` | Naming and pattern consistency in code |
 | `simplicity.md` | Whether to add or to change the shape; when an abstraction earns its place |
 | `review.md` | What a review must carry to be valid, and how an author responds |
-| `documentation.md` | What makes an authored Markdown document or a GitHub artifact valid, review comments included |
+| `documentation.md` | What makes a document or a GitHub artifact valid, review comments included |
 
 Every project keeps all of these. They are the floor; only the tables below are selected from.
 
@@ -60,7 +62,7 @@ Silence in the derived file is not evidence that a base rule survives. A derived
 
 ## Independence
 
-Each convention file is self-contained: reading it alone is enough to apply its rules. Where the Extends column gives it a base, it is that file and its base, and there reading stops.
+Reading a convention file is enough to apply its rules. Where the Extends column gives it a base, it is that file and its base, and there reading stops.
 
 - **One file, one territory.** No artifact is governed by two files, unless one extends the other: the derived file decides the rules it holds and the base decides the rest. Where two files with no such relationship could both decide a case, one of them is holding the wrong rule.
 - **A rule appears once** — inside a file as much as across files. A section that restates earlier rules in the negative is a second site to keep in sync, not a summary. A derived file that repeats a base rule it does not change is that same defect: what it does not hold, it does not copy.
@@ -75,3 +77,5 @@ Each convention file is self-contained: reading it alone is enough to apply its 
 4. This index.
 
 On conflict, the more specific rule wins. Report conflicts to the PM in the PR description — do not resolve them yourself.
+
+§Scope is not a tier in this ladder. It bounds what every tier reaches, so no rule at any rank reaches what §Scope places outside what the project writes.

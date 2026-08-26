@@ -22,8 +22,9 @@ spec:
     spec:
 {{- include "garam.serviceAccountName" (dict "root" $ "component" "machine") }}
 {{- include "garam.imagePullSecrets" . }}
-      # fsGroup is what lets the unprivileged init container write the
-      # volume it copies into; the copy is what it then owns.
+      # The Secret below is projected 0440, so its group owner decides
+      # who reads it. fsGroup makes that group the init container's,
+      # without which the copy cannot open its source.
       securityContext:
         fsGroup: 10001
       initContainers:

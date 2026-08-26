@@ -1,0 +1,10 @@
+# Two of the Google values without the third. The render must refuse and
+# name api.google.clientId: garam refuses to start holding one half of
+# the credential, and a release installed without it is a release whose
+# sign-in method is silently absent.
+api:
+  google:
+    redirectUrl: https://garam.example/auth/callback/google
+    clientSecret:
+      secretName: garam-google
+      secretKey: client-secret

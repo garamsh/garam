@@ -1,0 +1,6 @@
+# An empty repository beside a tag that is required. The render must
+# refuse and name image.server.repository: an empty one renders
+# `image: :<tag>`, which no registry resolves and helm lint accepts.
+image:
+  server:
+    repository: ""

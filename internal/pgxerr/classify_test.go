@@ -184,3 +184,45 @@ func TestClassify_PreservesKindInChain(t *testing.T) {
 	assert.True(t, errorx.IsKind(got, errorx.KindPermissionDenied),
 		"the chain's KindPermissionDenied survives a wrap with no override")
 }
+
+// TestIsForeignKeyViolation_ReadsTheCodeAndNotTheStatement covers the
+// predicate a caller reaches for when 23503 means the opposite of what
+// [pgxerr.Classify] maps it to. Three controls stand with the probe:
+// another constraint code, an error the driver did not raise, and nil —
+// each of which a predicate matching too widely would take.
+//
+// The wrapped row is the one that matters in practice: a store hands
+// over what the driver returned through its own chain, so a predicate
+// reading only the outermost error would answer false everywhere it is
+// actually called.
+func TestIsForeignKeyViolation_ReadsTheCodeAndNotTheStatement(t *testing.T) {
+	tests := map[string]struct {
+		err  error
+		want bool
+	}{
+		"the foreign key code": {pgError("23503"), true},
+		"wrapped in a chain":   {errorx.Wrap(pgError("23503"), "delete"), true},
+		"another constraint":   {pgError("23505"), false},
+		"not a driver error":   {errors.New("dial tcp: connection refused"), false},
+		"no error at all":      {nil, false},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert.Equal(t, tt.want, pgxerr.IsForeignKeyViolation(tt.err))
+		})
+	}
+}
+
+// TestIsForeignKeyViolation_LeavesClassifyAlone holds the two readings
+// apart in one place. The predicate exists because a delete needs the
+// second one; every insert already calling Classify keeps the first,
+// which message.Grant depends on (#703).
+func TestIsForeignKeyViolation_LeavesClassifyAlone(t *testing.T) {
+	err := pgError("23503")
+
+	require.True(t, pgxerr.IsForeignKeyViolation(err))
+	assert.True(t, errorx.IsKind(pgxerr.Classify(err, "grant consent", nil, nil), errorx.KindNotFound),
+		"the insert reading is unchanged")
+	assert.Same(t, sentinelNotFound, pgxerr.Classify(err, "grant consent", sentinelNotFound, nil),
+		"and so is the caller sentinel it returns")
+}

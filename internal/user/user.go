@@ -21,6 +21,18 @@ const ServiceType = "user"
 // ErrUserNotFound is returned when a user lookup misses.
 var ErrUserNotFound = errorx.New(errorx.KindNotFound, "user not found")
 
+// ErrUserReferenced is a delete another row refuses. The user is there
+// and stays there, which is why this is not ErrUserNotFound: a caller
+// told the row is missing has nothing to act on, where one told it is
+// referenced can remove what references it and ask again. That is the
+// state KindFailedPrecondition names — the message is not wrong, the
+// system is not in the state it needs.
+//
+// It names no table and no constraint. What blocks the delete today is
+// an invitation the user created or accepted, and naming that would put
+// the schema in an answer a caller reads (#733).
+var ErrUserReferenced = errorx.New(errorx.KindFailedPrecondition, "user is referenced by another record")
+
 // User is a human account.
 type User struct {
 	grn       grn.GRN

@@ -1,32 +1,49 @@
 # Domains
 
-Per-domain responsibilities and boundaries.
+garam's domains, named by the subject matter each owns, and what else under `internal/` is not one.
 
 ## Contents
-- Common shape
-- `internal/grn`
-- `internal/errorx`
-- `internal/pgxerr`
-- `internal/keyfile`
-- `internal/listfilter`
-- `internal/org`
-- `internal/authz`
-- `internal/authn`
-- `internal/user`
-- `internal/operator`
-- `internal/agent`
-- `internal/ca`
-- `internal/machine`
-- `internal/machineapi`
-- `internal/message`
-- `internal/watch`
+- What a domain is here
+- The shape a domain takes
+- Organizations
+- Users
+- Sign-in
+- Authorization policy
+- Certificate authorities
+- Operators
+- Agents
+- Machine identity
+- Messaging
+- Sub-responsibilities in a boundary of their own
+- Delivery surfaces
+- Shared code below the domains
 - Store implementation status
 - Known gap
+- Open questions
 - Future domains
 
-## Common shape
+## What a domain is here
 
-Each `internal/<domain>/` package contains:
+A domain is a boundary named for the subject matter it owns and never
+for a technical role ([structure.md](./structure.md) §Boundaries and
+dependency direction). garam has nine, and each heading below is the
+subject: the Go package implementing a domain is named under its
+heading and is not the domain's name
+([ADR-0048](./adr/0048-garams-domains-are-named-by-subject-matter.md)).
+
+Three kinds of folder under `internal/` are not domains, and each has a
+section of its own below. A **sub-responsibility** belongs to a
+domain's subject and is held in a boundary of its own for a reason
+recorded there. A **delivery surface** composes several domains, which
+is what stops it being one ([structure.md](./structure.md) §The shape).
+**Shared code** sits below the domains that need it.
+
+Domains cooperate through `grn.GRN`, never through each other's
+concrete types.
+
+## The shape a domain takes
+
+Each domain's package contains:
 
 - `<domain>.go` — aggregate types and sentinels.
 - `store.go` — `Store` interface.
@@ -34,101 +51,58 @@ Each `internal/<domain>/` package contains:
   behaviour to coordinate; a domain that is only types and persistence
   has none.
 - `queries.sql` — the domain's SQL, hand-written. The only place the
-  domain's own queries are written: `migrations/` holds the schema, and
-  the `LISTEN`/`NOTIFY` statements that read no row are issued from Go
-  (`internal/authz`, `internal/watch`).
+  domain's own queries are written: `migrations/` holds the schema.
 - `postgres.go` — hand-written `Store` implementation, calling `db/`.
-  Past the single-file size limit it splits into `postgres_<concept>.go`
-  files beside it, one per aggregate the store persists, inside the same
-  package: the aggregates' fields are unexported, so the store that
-  rehydrates them must share their package.
 - `db/` — sqlc output from `queries.sql`. Generated, never edited.
 - `*_test.go` — tests.
-- `mocks/` — mockery v3 output, for interfaces tests actually consume (testing.md §Mocking strategy).
+- `mocks/` — mockery v3 output, generated from the interfaces
+  `.mockery.yaml` names. Only a package whose interface a test consumes
+  has one.
+
+A store splits into `postgres_<concept>.go` files beside `postgres.go`,
+inside the same package, when the package persists more than one
+aggregate (`org`, `agent`, `authz`) or implements more than one `Store`
+interface (`operator`, `message`). It stays one package because the
+aggregates' fields are unexported and no exported constructor restores a
+stored row's state or timestamps, so whatever rehydrates one shares its
+package.
 
 A domain that persists nothing has none of the storage files above:
-`internal/machine` is its types, its service, and the two seams it
-reads through — a trust root for the caller, a certificate for itself.
+`internal/machine` is its types, its service, the listener it builds,
+and the two seams it reads through — a trust root for the caller, a
+certificate for itself.
 
 `queries.sql` and `db/` are a source and its output, not two copies. Every
 generated file says so in its first line, and `make check-gen` fails on any
 drift between them.
 
-Domains cooperate through `grn.GRN`, never through each other's
-concrete types.
+A change announcement reads no row, so it is not in `queries.sql`, and
+the two domains that use one do not raise it the same way.
+`internal/watch` issues both halves from Go. A policy change is
+announced by triggers the schema carries in `migrations/`, and
+`internal/authz` issues only the `LISTEN`.
 
-## `internal/grn`
+## Organizations
 
-`GRN` value type with `New`, `Parse`, `Validate`, `String`, `IsZero`.
-Depends on `errorx` only.
-
-## `internal/errorx`
-
-`Kind` enum aligned with gRPC status codes, `Error` interface,
-`New` / `Wrap` / `IsKind` / `KindOf`. No domain dependencies.
-
-## `internal/pgxerr`
-
-`Classify(err, op, notFound, conflict)` maps a postgres driver error
-to an `errorx` error. It reads the sql state on a `*pgconn.PgError`:
-`pgx.ErrNoRows` returns the caller's `notFound` (or wraps the chain),
-23505 returns `conflict` (or `KindAlreadyExists`), 23503 returns
-`notFound` (or `KindNotFound` with "<op>: referenced row missing"),
-23514 returns `KindInvalidArgument`, P0001 returns
-`KindFailedPrecondition`, anything else wraps with `op` and the
-chain's kind. `op` is the caller's own label for the operation;
-the wrap message is `op` alone, not prefixed with the store name.
-Depends on `errorx`, `pgx`, `pgconn`. Six domain postgres stores answer
-through here: the five that each held their own copy (`org`, `authz`,
-`ca`, `user`, `agent`), and `operator`, which never had one. The
-`message` store did not have its own copy either — it had inline
-`errors.Is(err, pgx.ErrNoRows)` checks, as `internal/authn` does — and
-remains so; the audit that named it as a fifth copy was wrong on this.
-
-## `internal/keyfile`
-
-The one rule key material is read under (ADR-0015): a file only the
-reading process's owner can reach — owner-only permission bits and an
-owner equal to the process's UID, both read from the open descriptor so
-no window sits between the check and the read. The rule is neither
-certificates nor listeners, so it lives here once for every process that
-opens one: `internal/ca` reads the key-encryption key through it, and
-the composition root reads the machine listener's pair and the adapter's
-through it.
-
-`Pair` is a certificate and its key held as the two paths they arrive
-at rather than as what they held at startup, so every read answers with
-the files as they are now and a replaced pair is presented on the next
-handshake without a restart (ADR-0040). The key goes through the rule
-above on every read; the certificate beside it is public. Depends on
-`errorx` only.
-
-## `internal/listfilter`
-
-`Filter` scopes a domain's list call: an offset and a limit, where a
-limit of 0 means no limit. Org, agent and user all page their lists
-with it — three domains, which is the count at which a shared concern
-is extracted below them ([structure.md](./structure.md) §When a new
-boundary is earned). No dependencies.
-
-## `internal/org`
-
-Top of the tenant hierarchy.
+The tenant hierarchy: the top-level tenant, what is grouped inside it,
+and who belongs to one. Implemented by `internal/org`.
 
 | Type | Responsibility |
 |------|----------------|
 | `Organization` | top-level tenant |
-| `Group` | bundle of users/agents |
+| `Group` | bundle of members addressed by GRN — a user or an agent (ADR-0014) |
 | `Project` | container for a unit of work |
 | `Membership` | user in an org; carries a `Role` (`owner`, `admin`, `member`) |
 | `Invitation` | single-use, expiring bearer token that admits a user into an org with a fixed role |
 
 The `Store` interface covers CRUD on each plus membership and cascade
-delete on `Organization`; group and project listing is scoped to one
-organization, in both directions — the groups of an org, and the
-groups of the org a member belongs to, which a check sends to the
-engine to resolve group-attached policies (ADR-0008). Orgs grow by invitation and acceptance, not open signup.
-The org domain owns its action constants (`ActionOrgRead`,
+delete on `Organization`. Group and project listing is scoped to one
+organization; group listing is scoped in both directions — the groups
+of an org, and the groups of the org a member belongs to, which a check
+sends to the engine to resolve group-attached policies (ADR-0008). A
+project is listed by its organization alone. Orgs grow by invitation and
+acceptance, not open signup.
+This domain owns its action constants (`ActionOrgRead`,
 `ActionGroupRead`, `ActionProjectRead`, `ActionPolicyCreate`, …) —
 including the policy management actions, which the api server enforces
 without importing the engine that stores policies, the consent
@@ -149,36 +123,31 @@ withhold it, and a role naming it would settle that for every
 organization instead. The authz evaluator decides. Groups and projects are addressed under their
 organization's HTTP paths, and their GRNs carry the owning org in the
 organization segment, so a group or project role is scoped to that
-resource alone (authz.md §Statement collection).
+resource alone ([authz.md](./authz.md) §Statement collection).
 
-## `internal/authz`
+## Users
 
-Authorization model and decision engine (IAM-style, ADR-0002), served
-over gRPC (ADR-0003 stage 2), plus the org-scoped policies it
-evaluates.
+Human identity. Implemented by `internal/user`.
 
-| Type | Responsibility |
-|------|----------------|
-| `Statement` / `PolicyDocument` | IAM-style rules: `Effect`, `Action[]`, `Resource[]` patterns |
-| `StatementEvaluator` | native in-process `Evaluator`: explicit Deny > Allow > default Deny |
-| `GRPCServer` | Check/Explain over `proto/garam/authz/v1` |
-| `Policy` / `PolicyVersion` | a versioned org rule set and its immutable revisions |
-| `PolicyAttachment` | binds a policy to the user or group it applies to (ADR-0008) |
-| `Store` / `PostgresStore` | persists policies, their append-only versions, and attachments |
-| `PolicyCache` | an org's active policies and attachments, dropped on write and on `NOTIFY` |
-| `PolicyGRPCServer` | the policy lifecycle over `proto/garam/authz/v1` |
+| Field | Meaning |
+|-------|---------|
+| `grn.GRN` | user identifier (`service_type = "user"`) |
+| `nickname` | display name, not enforced unique |
+| `roles` | directly assigned roles |
+| `policies` | directly assigned policies; not yet evaluated |
 
-The api server authorizes through the gRPC client and manages policies
-through the `PolicyManager` seam over the same connection
-([authz.md](./authz.md) §Managing policies over HTTP); the engine
-matches strings only and never imports a domain. Lifecycle, caching, and
-invalidation are described in [authz.md](./authz.md) §Policy
-persistence.
+A user can belong to multiple orgs; membership is recorded only in the
+organizations domain (`Membership` / `org_members`), never duplicated on
+the user. Roles on the user are direct grants, collected by the api
+server alongside group- and project-derived grants at check time
+([authz.md](./authz.md)). The `policies` field is stored but not
+evaluated: a policy reaches a subject through an attachment the authz
+engine owns (ADR-0008), not through this list.
 
-## `internal/authn`
+## Sign-in
 
-Authentication: the sign-in provider abstraction, password
-verification, and sessions.
+How a person proves who they are, and the session that carries the
+proof afterwards. Implemented by `internal/authn`.
 
 | Type | Responsibility |
 |------|----------------|
@@ -198,9 +167,11 @@ SHA-256 hashes reach the database, the state a login issues included.
 
 A password is not a `Provider` and never becomes one: that interface is
 an authorization-code flow, and satisfying it would mean inventing a
-code. Password sign-in is its own endpoint asserting the same
-`Identity`, after which the path is the callback's — a session row and
-a cookie, unchanged (ADR-0005, ADR-0041). What is stored is an Argon2id
+code. Password sign-in is its own endpoint, and it asserts no
+`Identity` — an `Identity` is what a provider asserts, and this path
+resolves the user directly. After it the path is the callback's: a
+session row and a cookie, unchanged (ADR-0005, ADR-0041). What is
+stored is an Argon2id
 verifier carrying its own parameters, so raising them invalidates no
 row: a sign-in against any other setting re-hashes on its way out.
 Accounts minted this way take the reserved `local-` prefix in the user
@@ -221,178 +192,37 @@ that many rows per flow lifetime, for every replica at once — the bound
 is decided in the statement that writes, not held by any one process
 (ADR-0030).
 
-## `internal/user`
+## Authorization policy
 
-Human identity.
-
-| Field | Meaning |
-|-------|---------|
-| `grn.GRN` | user identifier (`service_type = "user"`) |
-| `nickname` | display name, not enforced unique |
-| `roles` | directly assigned roles |
-| `policies` | directly assigned policies; not yet evaluated |
-
-A user can belong to multiple orgs; membership is recorded only in the
-org domain (`Membership` / `org_members`), never duplicated on the
-user. Roles on the user are direct grants, collected by the api server
-alongside group- and project-derived grants at check time
-([authz.md](./authz.md)). The `policies` field is stored but not
-evaluated: a policy reaches a subject through an attachment the authz
-engine owns (ADR-0008), not through this list.
-
-## `internal/operator`
-
-What an organization records about an operator, and what that operator
-authenticates with: the record that the organization has it (ADR-0045),
-and which certificate garam last issued it, together with what it takes
-to replace that with the next (ADR-0046).
+The rules that decide what a subject may do, and the engine that
+decides. Implemented by `internal/authz`, served over gRPC (ADR-0003
+stage 2) as the IAM-style model ADR-0002 chose.
 
 | Type | Responsibility |
 |------|----------------|
-| `Operator` | an organization's record that it has an operator under this GRN: who registered it and when |
-| `Store` | registers one, answers one by GRN, and lists an organization's own |
-| `Credential` | the certificate a connection authenticated with — the identity it names, which certificate it is, and how long it is good for |
-| `Certificate` | what an operator authenticates with and the garam server root it verifies garam by, as this domain hands them back |
-| `Current` | the certificate garam last issued an operator: the record a renewal is measured against |
-| `CertificateStore` | records what garam last issued, and moves that record to the successor only where the presented certificate is still it |
-| `Service` | mints an operator's certificate out of band and adopts it, and renews the one an operator presents |
-| `Issuer` | signs a certificate for a subject GRN and hands back the garam server root beside it |
+| `Statement` / `PolicyDocument` | IAM-style rules: `Effect`, `Action[]`, `Resource[]` patterns |
+| `StatementEvaluator` | native in-process `Evaluator`: explicit Deny > Allow > default Deny |
+| `GRPCServer` | Check/Explain over `proto/garam/authz/v1` |
+| `Policy` / `PolicyVersion` | a versioned org rule set and its immutable revisions |
+| `PolicyAttachment` | binds a policy to the user or group it applies to (ADR-0008) |
+| `Store` / `PostgresStore` | persists policies, their append-only versions, and attachments |
+| `PolicyCache` | an org's active policies and attachments, dropped on write and on `NOTIFY` |
+| `PolicyGRPCServer` | the policy lifecycle over `proto/garam/authz/v1` |
 
-The identifier is the caller's rather than garam's, which is what makes
-this domain unlike every other org resource. An operator's GRN is
-already the subject of a certificate wherever `issue-certificate` has
-run (ADR-0032), so a minted identifier would name something other than
-the operator that exists. What the domain applies is the GRN segment
-rule, and the schema applies it again where nothing routes around it.
+The api server authorizes through the gRPC client and manages policies
+through the `PolicyManager` seam over the same connection
+([authz.md](./authz.md) §Managing policies over HTTP); the engine
+matches strings and imports no domain. What it does not take on trust
+is the organization a question is asked in: it learns the subject's
+memberships and refuses a question outside the object's organization
+itself (ADR-0038). Lifecycle, caching, and
+invalidation are described in [authz.md](./authz.md) §Policy
+persistence.
 
-A record grants nothing and reports nothing. No listener reads one to
-admit a caller: an operator authenticates with the certificate it holds
-(ADR-0015), and garam never dials one, so there is no state here for
-anybody to report. What the record is read for is the question a
-definition asks — whether this organization has the operator it names —
-which `internal/api` asks there, and the list of what the organization
-has registered, which the console shows and `ListByOrg` exists for. The
-`agent_definitions` foreign key is the copy of the definition's check
-no call path routes around.
+## Certificate authorities
 
-There is no update and no delete. A record carries nothing to change,
-and removing one would stop nothing an operator can already do, which is
-a route ADR-0045 declines to offer until revocation is decided.
-
-The certificate half reads no record above it. An operator renews with
-what it holds, and whether its organization registered it changes
-nothing about that.
-
-An operator's first certificate arrives out of band (ADR-0015,
-ADR-0032). Every one after it is issued here, over the connection the
-certificate being replaced authenticated, so the out-of-band mint is a
-bootstrap rather than a standing obligation.
-
-Four things refuse a renewal, and each is a decision rather than a
-guard. A certificate whose subject is not an operator is refused before
-any window is measured: what this domain renews is an operator's
-certificate. A certificate that has expired renews nothing: the listener
-refuses it a handshake earlier, and the rule states the same boundary as
-the empty end of its window, so what follows expiry is a mint out of
-band. A certificate with more than a third of its validity left is
-refused as too early, measured off the certificate rather than off a
-configured number, so the window holds whatever lifetime signed it. And
-only the certificate garam last issued an operator may renew it: garam
-records that certificate and moves the record to the successor in the
-statement that checks it, so every other copy of that identity stops
-being renewable at once. That last one is what bounds a stolen
-certificate where there is no revocation — the operator it was taken
-from renews, the copy loses the lineage, and it expires. It revokes
-nothing: a certificate that can no longer renew keeps authenticating
-until it runs out.
-
-The mint adopts whatever it issued, so re-running `garam
-issue-certificate` takes the lineage from every certificate that already
-names the operator. That is the recovery from an answer nobody received,
-and the closest thing to a revocation garam has.
-
-`CertificateStore` holds one row per operator and has no read: what the
-rule needs is not the current certificate but whether the presented one
-is still it, and the write answers that itself. Signing happens through
-the `Issuer` seam the composition root satisfies from `internal/ca`, as
-the agent domain's does, so this one never holds key material; the
-successor is signed before the record moves, and a caller that lost the
-lineage receives nothing. The certificate half's HTTP surface is
-`internal/machineapi`, and `internal/cli` is its other caller — `garam
-issue-certificate`, the one bootstrap ADR-0015 leaves out of band. The
-record half's surface is `internal/api`, on the organization's own
-paths, which is the third caller this domain has. The agent's certificate is not
-this domain's: an agent is admitted to its own by the claim its operator
-made (ADR-0033) and renews on the route ADR-0040 gave it.
-
-## `internal/agent`
-
-Autonomous identity, provisioned outside garam (ADR-0012).
-
-| Type | Responsibility |
-|------|----------------|
-| `Agent` | actor owned by an org; carries the state the operator reports about its pod and the state it reports about itself, separately |
-| `Definition` | what an organization says an agent should be: which operator runs it and with what values (ADR-0026). Shares no field with `Agent`, so a reader cannot take one for the other, and writes no `agents` row until the operator it names claims it (ADR-0033) |
-| `Assignment` | which operator runs an agent, and the epoch that binding holds |
-| `Certificate` | what an agent authenticates with and the garam server root it verifies garam by, as this domain hands them back |
-| `Service` | creates an agent for the calling operator, issues the certificate of one assigned to it or renews an agent's own, and answers an operator with the definitions naming it so it can claim one (ADR-0033) |
-| `Issuer` | signs a certificate for a subject GRN and hands back the garam server root beside it |
-
-garam mints an agent's GRN and never changes it, so which operator runs
-the agent is a relation a reassignment moves rather than part of the
-identity. That GRN must name an agent of the organization that owns it:
-ADR-0014 rests tenancy on its organization segment, so the domain
-refuses a pairing that disagrees rather than trusting its callers, and
-the schema refuses it again where nothing routes around it. An
-assignment stays inside that organization and names an operator
-(ADR-0015), which the schema alone decides. A definition names one the
-organization has registered as well, which the browser surface decides
-against `internal/operator` and the schema decides again (ADR-0045);
-this domain reads no record of its own and addresses an operator by GRN. Every assignment raises the
-epoch, and a state report is accepted only at the current one — the
-operator a reassignment replaced reports nothing about the agent it
-lost. An agent is never an organization member (ADR-0014), so nothing
-here references `users`.
-
-`Service` is what an operator does to the agents it runs. It creates
-one in the operator's own organization, garam minting the identifier,
-and it answers with the certificate of an agent assigned to that
-operator at the current epoch and of no other — the whole of the
-authorization on the operator route, which ADR-0015 states is not an
-optimisation and may not be skipped, so no operator reaches an issuer
-without it. Comparing the operator on the row is the epoch fence as
-well, and it is the tenancy check too, since a GRN carries its
-organization. A caller that is not an operator is refused, with one
-exception: an agent asking for its own certificate is renewing over the
-connection that certificate authenticated, which grants it nothing it
-does not already hold (ADR-0040). That branch is the one route the
-assignment comparison does not stand on — the connection is what
-authorizes it, and it reaches the issuer before the comparison is made.
-An expired certificate has no such connection, so the operator route is
-what recovers one.
-
-`Store` answers `Service` and, org by org, the read `internal/api`
-serves people: an organization's agents and the assignments holding
-them, each a batch read rather than one per agent. An agent no operator
-holds contributes no assignment, so the two lists are not one length.
-Both aggregates are constructed through this package's exported
-constructors, which is what lets a `Store` outside it answer with them
-at all.
-
-Signing happens through the `Issuer` seam the composition root
-satisfies from `internal/ca`, so the two domains still cooperate
-through `grn.GRN` alone and this one never holds key material. The
-HTTP surfaces are `internal/machineapi` for the operator and
-`internal/api` for the organization's members, which reads the agents
-and writes only definitions — provisioning is an operator's, from
-outside garam, and a definition writes no `agents` row until the
-operator it names claims it (ADR-0033). The queue a message reaches an
-agent through is `internal/message`.
-
-## `internal/ca`
-
-The certificate authority an organization signs machine identities with
-(ADR-0014).
+The certificate authority an organization signs machine identities
+with (ADR-0014). Implemented by `internal/ca`.
 
 | Type | Responsibility |
 |------|----------------|
@@ -438,10 +268,170 @@ every organization's CA with no recovery short of new authorities and a
 reissue for every certificate — and why it is held this way rather than
 in a KMS is [ADR-0016](./adr/0016-ca-key-custody.md).
 
-## `internal/machine`
+## Operators
+
+What an organization records about an operator, and what that operator
+authenticates with: the record that the organization has it (ADR-0045),
+and which certificate garam last issued it, together with what it takes
+to replace that with the next (ADR-0046). Implemented by
+`internal/operator`.
+
+| Type | Responsibility |
+|------|----------------|
+| `Operator` | an organization's record that it has an operator under this GRN: who registered it and when |
+| `Store` | registers one, answers one by GRN, and lists an organization's own |
+| `Credential` | the certificate a connection authenticated with — the identity it names, which certificate it is, and how long it is good for |
+| `Certificate` | what an operator authenticates with and the garam server root it verifies garam by, as this domain hands them back |
+| `Current` | the certificate garam last issued an operator: the record a renewal is measured against |
+| `CertificateStore` | records what garam last issued, and moves that record to the successor only where the presented certificate is still it |
+| `Service` | mints an operator's certificate out of band and adopts it, and renews the one an operator presents |
+| `Issuer` | signs a certificate for a subject GRN and hands back the garam server root beside it |
+
+The identifier is the caller's rather than garam's, which is what makes
+this domain unlike every other org resource. An operator's GRN is
+already the subject of a certificate wherever `issue-certificate` has
+run (ADR-0032), so a minted identifier would name something other than
+the operator that exists. What the domain applies is the GRN segment
+rule, and the schema applies it again where nothing routes around it.
+
+A record grants nothing and reports nothing. No listener reads one to
+admit a caller: an operator authenticates with the certificate it holds
+(ADR-0015), and garam never dials one, so there is no state here for
+anybody to report. What the record is read for is the question a
+definition asks — whether this organization has the operator it names —
+which the browser surface asks there, and the list of what the
+organization has registered, which the console shows and `ListByOrg`
+exists for. The `agent_definitions` foreign key is the copy of the
+definition's check no call path routes around.
+
+There is no update and no delete. A record carries nothing to change,
+and removing one would stop nothing an operator can already do, which is
+a route ADR-0045 declines to offer until revocation is decided.
+
+The certificate half reads no record above it. An operator renews with
+what it holds, and whether its organization registered it changes
+nothing about that.
+
+An operator's first certificate arrives out of band (ADR-0015,
+ADR-0032). Every one after it is issued here, over the connection the
+certificate being replaced authenticated, so the out-of-band mint is a
+bootstrap rather than a standing obligation.
+
+Four things refuse a renewal, and each is a decision rather than a
+guard. A certificate whose subject is not an operator is refused before
+any window is measured: what this domain renews is an operator's
+certificate. A certificate that has expired renews nothing: the listener
+refuses it a handshake earlier, and the rule states the same boundary as
+the empty end of its window, so what follows expiry is a mint out of
+band. A certificate with more than a third of its validity left is
+refused as too early, measured off the certificate rather than off a
+configured number, so the window holds whatever lifetime signed it. And
+only the certificate garam last issued an operator may renew it: garam
+records that certificate and moves the record to the successor in the
+statement that checks it, so every other copy of that identity stops
+being renewable at once. That last one is what bounds a stolen
+certificate where there is no revocation — the operator it was taken
+from renews, the copy loses the lineage, and it expires. It revokes
+nothing: a certificate that can no longer renew keeps authenticating
+until it runs out.
+
+An operator with no record yet is the one case that comparison has
+nothing to make, and it is not a refusal: the write that moves the
+record inserts one where none exists, so the first renewal adopts the
+lineage. That is what an operator whose certificate predates the record
+needs, and it is why the fourth refusal bounds a copy only once a
+lineage exists to lose.
+
+The mint adopts whatever it issued, so re-running `garam
+issue-certificate` takes the lineage from every certificate that already
+names the operator. That is the recovery from an answer nobody received,
+and the closest thing to a revocation garam has.
+
+`CertificateStore` holds one row per operator and has no read: what the
+rule needs is not the current certificate but whether the presented one
+is still it, and the write answers that itself. Signing happens through
+the `Issuer` seam the composition root satisfies from `internal/ca`, as
+the agents domain's does, so this one never holds key material; the
+successor is signed before the record moves, and a caller that lost the
+lineage receives nothing. The certificate half's HTTP surface is the
+machine listener, and `internal/cli` is its other caller — `garam
+issue-certificate`, the one bootstrap ADR-0015 leaves out of band. The
+record half's surface is the browser-facing listener, on the
+organization's own paths, which is the third caller this domain has. The
+agent's certificate is not
+this domain's: an agent is admitted to its own by the claim its operator
+made (ADR-0033) and renews on the route ADR-0040 gave it.
+
+## Agents
+
+Autonomous identity, provisioned outside garam (ADR-0012). Implemented
+by `internal/agent`.
+
+| Type | Responsibility |
+|------|----------------|
+| `Agent` | actor owned by an org; carries the state the operator reports about its pod and the state it reports about itself, separately |
+| `Definition` | what an organization says an agent should be: which operator runs it and with what values (ADR-0026). It names its subject where an `Agent` names itself, and carries none of the state an `Agent` carries, so a reader cannot take one for the other; it writes no `agents` row until the operator it names claims it (ADR-0033) |
+| `Assignment` | which operator runs an agent, and the epoch that binding holds |
+| `Certificate` | what an agent authenticates with and the garam server root it verifies garam by, as this domain hands them back |
+| `Service` | creates an agent for the calling operator, issues the certificate of one assigned to it or renews an agent's own, and answers an operator with the definitions naming it so it can claim one (ADR-0033) |
+| `Issuer` | signs a certificate for a subject GRN and hands back the garam server root beside it |
+
+garam mints an agent's GRN and never changes it, so which operator runs
+the agent is a relation a reassignment moves rather than part of the
+identity. That GRN must name an agent of the organization that owns it:
+ADR-0014 rests tenancy on its organization segment, so the domain
+refuses a pairing that disagrees rather than trusting its callers, and
+the schema refuses it again where nothing routes around it. An
+assignment stays inside that organization and names an operator
+(ADR-0015), which the schema alone decides. A definition names one the
+organization has registered as well, which the browser surface decides
+against the operators domain and the schema decides again (ADR-0045);
+this domain reads no record of its own and addresses an operator by GRN. Every assignment raises the
+epoch, and a state report is accepted only at the current one — the
+operator a reassignment replaced reports nothing about the agent it
+lost. An agent is never an organization member (ADR-0014), so nothing
+here references `users`.
+
+`Service` is what an operator does to the agents it runs. It creates
+one in the operator's own organization, garam minting the identifier,
+and it answers with the certificate of an agent assigned to that
+operator at the current epoch and of no other — the whole of the
+authorization on the operator route, which ADR-0015 states is not an
+optimisation and may not be skipped, so no operator reaches an issuer
+without it. Comparing the operator on the row is the epoch fence as
+well, and it is the tenancy check too, since a GRN carries its
+organization. A caller that is not an operator is refused, with one
+exception: an agent asking for its own certificate is renewing over the
+connection that certificate authenticated, which grants it nothing it
+does not already hold (ADR-0040). That branch is the one route the
+assignment comparison does not stand on — the connection is what
+authorizes it, and it reaches the issuer before the comparison is made.
+An expired certificate has no such connection, so the operator route is
+what recovers one.
+
+`Store` answers `Service` and, org by org, the read the browser-facing
+listener serves people: an organization's agents and the assignments
+holding them, each a batch read rather than one per agent. An agent no
+operator holds contributes no assignment, so the two lists are not one
+length. Both aggregates are rehydrated inside this package — their
+fields are unexported and no exported constructor restores a stored
+row's state or timestamps — which is why the store that reads them back
+lives here rather than below.
+
+Signing happens through the `Issuer` seam the composition root
+satisfies from `internal/ca`, so the two domains still cooperate
+through `grn.GRN` alone and this one never holds key material. The
+HTTP surfaces are the machine listener for the operator and the
+browser-facing one for the organization's members, which reads the
+agents and writes only definitions — provisioning is an operator's, from
+outside garam, and a definition writes no `agents` row until the
+operator it names claims it (ADR-0033). The queue a message reaches an
+agent through is the messaging domain.
+
+## Machine identity
 
 Who is calling on the listener a machine identity authenticates on
-(ADR-0014, ADR-0015).
+(ADR-0014, ADR-0015). Implemented by `internal/machine`.
 
 | Type | Responsibility |
 |------|----------------|
@@ -453,7 +443,7 @@ Who is calling on the listener a machine identity authenticates on
 An agent and an operator are the same kind of caller here and the
 listener does not branch on which. What the certificate asserts is the
 GRN in its SAN URI and nothing beside it: no user row, no session, no
-membership, so neither foreign key on `users` is touched and no handler
+membership, so no foreign key on `users` is touched and no handler
 taking a `*user.User` changes. The identity carries the certificate's
 own serial and dates as well, which assert nothing and describe which
 certificate authenticated — the one question a caller asking to replace
@@ -491,93 +481,18 @@ owner-only rule `internal/keyfile` holds, and the root that signed that
 pair beside them for every identity it issues a certificate to. It
 terminates TLS itself because a forwarded client-certificate header is
 trustworthy only where every deployment strips it at the edge
-(ADR-0014). What it serves is `internal/machineapi`. It is not part of
-the local Docker stack: its key material is per host, and compose has
+(ADR-0014). It is not part of the local Docker stack: its key material
+is per host, and compose has
 no step that generates it and hands a container a file that container
 owns. The Kubernetes stacks under `deploy/` have that step — an init
 container copies the key material as the UID the listener runs as — so
 what compose lacks is the step, not something a container cannot do.
 
-## `internal/machineapi`
+## Messaging
 
-What `garam serve machine` serves, implementing the ServerInterface
-generated from `api/machine.yaml` (ADR-0019).
-
-| Type | Responsibility |
-|------|----------------|
-| `Server` | the machine listener's handlers, one for every operation `api/machine.yaml` declares |
-| `Evaluator` | the seam the listener asks the policy engine through |
-| `Groups` | the seam the listener reads a caller's group membership through |
-
-A handler's caller is the identity `internal/machine` resolved from the
-client certificate, read back with the comma-ok form and refused where
-a request carries none — no session, no user row, no membership. What
-an operator may reach is not decided here, and neither is whether the
-certificate it presented may be replaced or whose queue a caller may act
-on: `internal/agent`, `internal/operator` and `internal/message` decide
-those, and this package parses what the path names, hands the caller
-over, and renders the answer, turning an `errorx` kind into a status at
-its own boundary as `internal/api` does at the browser-facing one. A poll that
-found nothing is the one answer that is not a kind: it is an empty
-success, so a caller loops on it rather than telling an error apart.
-
-Whom a caller may send to is decided here, because it is a policy
-question rather than a property of the queue: for a recipient of the
-caller's own organization the answer comes from the policy engine over
-`Evaluator`, and a boundary this package composes may not reach past it
-to another process. The listener collects what the caller's own GRN
-grants it — its own organization — and the engine unions that with the
-policies attached to the caller (ADR-0024). A recipient of another
-organization is the consent relation's question and never the engine's
-(ADR-0035). A refusal is answered before anything is stored, so what a
-policy refused is not in the queue.
-
-The question carries the groups the caller belongs to, because an
-attachment names a group as readily as an identity (ADR-0008) and an
-agent is a group member (ADR-0014). Which groups those are is org data,
-so this surface reads them over `Groups` rather than holding a store:
-the composition root satisfies it from `internal/org`, as it satisfies
-the trust root `internal/machine` reads. Membership that cannot be read
-refuses the message rather than deciding it without, because an unread
-group and an empty one are otherwise the same answer.
-
-A recipient of another organization is refused before the engine is
-asked, unless the consent relation between the two organizations stands
-(ADR-0035): the engine is never asked a cross-organization question,
-because an unattached active policy of the recipient's organization
-would otherwise admit every sender there is
-([authz.md](./authz.md) §Policy attachment). The relation is the one
-thing that may open the boundary, because it is no policy — both
-organizations hold it and either withdraws it — and it is read from
-`internal/message`, the domain that owns it. A post the relation does
-not carry is not rejected: the refusal returns to the sender as an
-ordinary inbound message (ADR-0013), written under the intended
-recipient's identity because garam holds none of its own (ADR-0024).
-The same-organization half of the precondition is the one
-`internal/api` gets from org membership, on a listener that has no
-membership to read.
-
-A claim and a renewal answer with how many streams garam is holding for
-the agent, because garam cannot dial an adapter and the poll it already
-holds is the direction that exists (ADR-0022). The field is always
-answered: zero is the ordinary answer, and a shape that changed with it
-would make the agent nobody watches the exceptional one. A count that
-cannot be read answers zero and is logged rather than returned — the live
-view may not cost a message one of its delivery attempts, which is the
-same reason ADR-0022 keeps watching off the subscription completion rests
-on. A poll that found nothing carries no count: there is no turn to
-forward the events of.
-
-It reaches no certificate authority, and it imports neither the engine
-nor `internal/org`: `GRPCEvaluator` is its own client, as
-`internal/api` keeps its own. The one store it holds is the consent
-relation's, which is the message domain's own data and arrives the way
-the queue does. `internal/api` and this package never import each other
-and never run in the same process (ADR-0017).
-
-## `internal/message`
-
-The durable queue a message reaches an agent through (ADR-0013).
+The durable queue a message reaches an agent through (ADR-0013), and
+the consent that lets one cross an organization boundary (ADR-0035).
+Implemented by `internal/message`.
 
 | Type | Responsibility |
 |------|----------------|
@@ -589,7 +504,7 @@ The durable queue a message reaches an agent through (ADR-0013).
 | `ConsentStore` | the consent relation: an organization granting or withdrawing its own half, and the send path asking whether both halves stand |
 | `ActionSend` | the action a policy names to decide what one identity may send to another |
 
-Messages are their own boundary rather than part of `internal/agent`: a
+Messages are their own domain rather than part of the agents one: a
 recipient is addressed by GRN, so nothing here depends on the agent
 aggregate, and a message has a lifecycle no agent's contains. A message
 may cross an organization boundary only where a relation permits it —
@@ -601,8 +516,8 @@ second lands, and is deleted when neither half stands, so the table
 holds live consent only. Both organizations of a pair must exist, which
 the schema holds by reference rather than by a check a caller could
 forget, and an organization that is deleted takes its halves with it.
-Granting and withdrawing is the api server's surface (`internal/api`
-under the org's path); this package owns the relation itself.
+Granting and withdrawing is the browser-facing listener's surface, under
+the org's path; this domain owns the relation itself.
 
 The queue is a table and never a connection, so any garam instance can
 hand any recipient's message to a reader and no process holds anything
@@ -650,9 +565,9 @@ whose queue it names. One comparison decides it: a GRN carries its
 organization, so refusing a caller that is not the recipient refuses
 another organization's agent by the same line, and no path reaches a
 message around it. Whom a sender may post to is not decided here — it
-is a policy question, and `internal/machineapi` asks it (ADR-0024).
-What this package owns of it is the action constant a policy names,
-because it is the package that defines sending. A claim waits for a
+is a policy question the machine listener asks (ADR-0024).
+What this domain owns of it is the action constant a policy names,
+because it is the domain that defines sending. A claim waits for a
 message rather than answering
 an empty queue at once, and it waits by re-reading the queue: a
 message becomes ready when a lease runs out as well as when a sender
@@ -660,17 +575,30 @@ stores one, and a lease running out is a moment passing that nothing
 announces. The interval is the delivery latency ADR-0013 accepted in
 place of a push.
 
-The HTTP surface is `internal/machineapi`, and the reader on the other
+The HTTP surface is the machine listener, and the reader on the other
 side of it is the adapter garam ships ([adapter.md](./adapter.md)).
-The retention above is this package's own work rather than a schedule a
+The retention above is this domain's own work rather than a schedule a
 deployment carries: the sweep rides the enqueue, so a queue being
-written to is a queue being swept (`internal/message/postgres.go`,
-ADR-0034).
+written to is a queue being swept (ADR-0034).
 
-## `internal/watch`
+## Sub-responsibilities in a boundary of their own
+
+Two folders under `internal/` hold a responsibility that belongs to a
+domain's subject rather than to one of its own. Neither is a domain,
+and each is a boundary for a reason recorded below — `structure.md`
+§Boundaries and dependency direction makes a boundary a domain, a
+feature or a bounded context, so being a feature of another subject and
+owning a folder are not in tension.
+
+### Watching an agent work
 
 Who is watching an agent work, and what is carried to them while they
-are (ADR-0022).
+are (ADR-0022). Implemented by `internal/watch`. The subject is the
+agent; the boundary is its own because a watch has a lifecycle neither
+the agents domain nor the messaging one contains — it begins when a
+person opens an agent and ends when they leave, and nothing about it
+survives that — and because the two surfaces that need it may not reach
+each other at all (ADR-0017).
 
 | Type | Responsibility |
 |------|----------------|
@@ -679,13 +607,6 @@ are (ADR-0022).
 | `Service` | opens a watch, carries a forwarded event to the watchers of that agent, and reports how many there are |
 | `Store` | the watches that are open |
 | `Relay` | the announcement that carries an event to the process holding a stream |
-
-Watching is its own boundary rather than part of `internal/message` or
-`internal/agent`. A watch has a lifecycle neither contains — it begins
-when a person opens an agent and ends when they leave, and nothing about
-it survives that — and the two surfaces that need it, `internal/api` and
-`internal/machineapi`, may not reach each other at all (ADR-0017), so it
-is extracted rather than held by either.
 
 Nothing accumulates for an agent nobody watches, which is what the
 boundary exists to keep true: the service holds an entry per open
@@ -714,13 +635,161 @@ proves the connection alive on, and a lease it cannot carry forward ends
 the stream — a stream nothing forwards to any more shows a working agent
 as a quiet one.
 
-The HTTP surfaces are `internal/api` for the browser that watches and
-`internal/machineapi` for the adapter that forwards. Which browser is
-admitted is decided at the first, by a grant separate from reading an
-agent and carried by no role, so a policy allows `agent:watch` or nobody
-watches (ADR-0022); whose events a caller may forward, and whose watchers
-it may count, is decided here by one comparison against the identity the
-caller authenticated as.
+Which browser is admitted is decided at the browser-facing listener, by
+a grant separate from reading an agent and carried by no role, so a
+policy allows `agent:watch` or nobody watches (ADR-0022); whose events a
+caller may forward, and whose watchers it may count, is decided here by
+one comparison against the identity the caller authenticated as.
+
+### The adapter's delivery loop
+
+Claiming a message for one agent, posting it into that agent's gateway,
+and completing the claim the turn that succeeded named (ADR-0018).
+Implemented by `internal/delivery`. The subject is message delivery;
+the boundary is its own because it runs outside garam, beside the
+agent, as a client of the machine listener rather than a part of it —
+it imports no domain and no delivery surface, reading that listener's
+specification through the models generated from it.
+
+What it must do is [adapter.md](./adapter.md), which is the
+responsibility document for it; nothing about the loop is restated
+here.
+
+## Delivery surfaces
+
+Three folders under `internal/` compose several boundaries, which is
+what stops each being one ([structure.md](./structure.md) §The shape).
+They are named here as what they are; what each serves and what admits
+a caller to it is [api-surface.md](./api-surface.md).
+
+- `internal/api` — the browser-facing listener's handlers, implementing
+  the ServerInterface generated from `api/openapi.yaml` (ADR-0004). It
+  composes the organizations, users, sign-in, agents, operators and
+  messaging domains and the watch boundary.
+- `internal/machineapi` — the machine listener's handlers, implementing
+  the ServerInterface generated from `api/machine.yaml` (ADR-0019). It
+  composes the agents, operators, messaging and machine-identity
+  domains and the watch boundary.
+- `internal/cli` — the cobra commands and the composition root behind
+  them. It is what satisfies every seam a domain declares — the
+  `Issuer` the agents and operators domains reach `internal/ca`
+  through, the `TrustRoot` and `ServerCertificate` the machine-identity
+  domain reads, and the `Groups` the machine listener reads org
+  membership through.
+
+A surface parses what a path names, hands the caller over to the domain
+that decides, and renders the answer — turning an `errorx` kind into a
+status at its own boundary. What an operator may reach, whose queue a
+caller may act on and whether a presented certificate may be replaced
+are none of its decisions.
+
+The two listeners reach their domains differently, and what each holds
+shows it. The machine listener holds `Service` contracts and exactly
+one store — the consent relation's, which is the messaging domain's own
+data reached the way the queue is. The browser-facing one holds domain
+stores directly, beside the two seams it asks the policy engine
+through.
+
+Neither listener imports the other and they never run in one process
+(ADR-0017). Neither imports the policy engine: each holds a gRPC client
+of its own, and the conversions onto the wire contract are declared
+once in `internal/wire`. Neither reaches a certificate authority.
+
+Two decisions live at a surface rather than in a domain, because each
+is a question about the caller rather than about the subject. Whom a
+machine caller may send to is decided at the machine listener: for a
+recipient of the caller's own organization the answer comes from the
+policy engine, which the listener unions with what the caller's own GRN
+grants it (ADR-0024), and the question carries the caller's groups
+because an attachment names a group as readily as an identity (ADR-0008,
+ADR-0014). Membership that cannot be read refuses the message rather
+than deciding it without, because an unread group and an empty one are
+otherwise the same answer. A recipient of another organization is
+refused before the engine is asked, unless the consent relation stands
+(ADR-0035): the engine is never asked a cross-organization question,
+because an unattached active policy of the recipient's organization
+would otherwise admit every sender there is
+([authz.md](./authz.md) §Policy attachment). A post the relation does
+not carry is not rejected — the refusal returns to the sender as an
+ordinary inbound message (ADR-0013), written under the intended
+recipient's identity because garam holds none of its own (ADR-0024).
+
+A claim and a renewal answer with how many streams garam is holding for
+the agent, because garam cannot dial an adapter and the poll it already
+holds is the direction that exists (ADR-0022). The field is always
+answered: zero is the ordinary answer, and a shape that changed with it
+would make the agent nobody watches the exceptional one. A count that
+cannot be read answers zero and is logged rather than returned — the live
+view may not cost a message one of its delivery attempts, which is the
+same reason ADR-0022 keeps watching off the subscription completion rests
+on. A poll that found nothing carries no count: there is no turn to
+forward the events of, and the answer is an empty success rather than a
+kind, so a caller loops on it rather than telling an error apart.
+
+## Shared code below the domains
+
+A concern three or more boundaries share is extracted below them
+([structure.md](./structure.md) §When a new boundary is earned). What
+counts is a domain importing the package from a file that is not a
+test: a test import is not a dependency of the domain's code, and
+counting one is what once made `internal/keyfile` look like two
+domains.
+
+| Package | Domains importing it | Standing |
+|---|---|---|
+| `internal/errorx` | 9 — every domain | earns its place |
+| `internal/grn` | 9 — every domain | earns its place |
+| `internal/pgxerr` | 6 — `org` `user` `authz` `ca` `agent` `operator` | earns its place |
+| `internal/listfilter` | 3 — `org` `user` `agent` | earns its place |
+| `internal/wire` | 1 — `authz` | permitted by the wire-format carve-out, not by the count |
+| `internal/keyfile` | 1 — `ca` | under the threshold; belongs with the domain that owns it |
+| `internal/health` | 0 | under the threshold; belongs with the surfaces that mount it |
+
+`internal/grn` holds the `GRN` value type with `New`, `Parse`,
+`Validate`, `String` and `IsZero`, and depends on `errorx` only.
+
+`internal/errorx` holds the `Kind` enum aligned with gRPC status codes,
+the `Error` interface, and `New` / `Wrap` / `IsKind` / `KindOf`. It has
+no dependency of its own.
+
+`internal/pgxerr` maps a postgres driver error to an `errorx` error by
+reading the sql state the driver carries, and labels it with the
+operation the caller names rather than with a store's name. Which
+sqlstate becomes which kind is the package's own doc comment; it is
+code, and a copy here would be a second thing to keep true. Six domain
+stores answer through it: the five that each held their own copy —
+`org`, `authz`, `ca`, `user`, `agent` — and `operator`, which never had
+one. The messaging domain's store did not have a copy either, and
+remains on inline driver checks as the sign-in domain's does.
+
+`internal/listfilter` holds `Filter`, an offset and a limit where a
+limit of 0 means no limit. It has no dependencies.
+
+`internal/wire` holds the conversions onto the wire formats the request
+surfaces share: the statement `Effect` and its authz-proto mapping, and
+`errorx` kinds rendered as HTTP statuses and read back from gRPC codes.
+One domain imports it, so the threshold is not what places it; the
+carve-out is. Its whole exported surface is a wire type and conversions
+in both directions, and nothing in it chooses a behaviour, which is
+what the carve-out names.
+
+`internal/keyfile` holds the one rule key material is read under
+(ADR-0015): a file only the reading process's owner can reach —
+owner-only permission bits and an owner equal to the process's UID,
+both read from the open descriptor so no window sits between the check
+and the read. `Pair` is a certificate and its key held as the two paths
+they arrive at rather than as what they held at startup, so every read
+answers with the files as they are now and a replaced pair is presented
+on the next handshake without a restart (ADR-0040). The key goes
+through the rule above on every read; the certificate beside it is
+public. It depends on `errorx` only. One domain reads it — the
+certificate authorities domain, for the key-encryption key — and the
+composition root reads the machine listener's pair and the adapter's
+through it.
+
+`internal/health` holds what liveness and readiness mean and the two
+probes every serve command mounts (ADR-0021). No domain imports it; the
+composition root does.
 
 ## Store implementation status
 
@@ -740,6 +809,10 @@ caller authenticated as.
 | message.Store | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | message.ConsentStore | yes (`consent.go`) | yes (`postgres_consent.go`) | not planned | — |
 | watch | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
+
+The rows are keyed by the Go package, because a store is named for the
+package that declares its interface rather than for the subject above
+it.
 
 The postgres implementations are written by hand against sqlc output,
 which sqlc generates from each domain's `queries.sql` into
@@ -763,6 +836,23 @@ Domain types (`User`, `Organization`, …) do not satisfy the `authz.Object`
 seam; the engine adapts a parsed GRN at its transport boundary. If a
 future design needs domain-typed subjects or objects, it should define
 the adapter where it is used.
+
+## Open questions
+
+- **Whether the organizations domain holds one responsibility or
+  several.** `#608` counts six concepts in `internal/org` —
+  `Organization`, `Group`, `Project`, `Membership`, `Invitation` and
+  `Role` — each with its own `postgres_<concept>.go`, and the
+  browser-facing surface split the same way. Naming the domain settles
+  what its subject is and not how many subjects there are; nothing
+  recorded here divides it, and until something does, this binds
+  nothing.
+- **What owns a concern once it is extracted below the domains.**
+  [structure.md](./structure.md) §Open questions holds this, and
+  `internal/keyfile` and `internal/health` are the two packages waiting
+  on it: each is under the threshold that would place it below the
+  domains, and no decision here says which boundary should own it
+  instead.
 
 ## Future domains
 

@@ -8,6 +8,7 @@
 - Decision
 - Consequences
 - Rejected alternatives
+- Errata
 
 ## Context
 
@@ -294,3 +295,49 @@ until each such account next signs in.
   chooses the username and can choose the forwarded address, so each
   buys one budget per value invented — ADR-0030's reasoning, which
   this path does not change.
+
+## Errata
+
+- 2026-08-26 — §Decision's "A password is not a `Provider`" says the
+  endpoint "asserts the same `Identity` the interface produces". It
+  asserts none, and did not when this ADR merged: `Identity` is what a
+  `Provider` returns from `Exchange` (`internal/authn/provider.go`,
+  `internal/authn/google.go`), while `internal/api/password.go`
+  resolves the user itself, `verifyPassword` returning a `*user.User`
+  that `LoginPassword` hands straight to `startSession`. #499 merged
+  that file and this ADR together, and the file read that way then.
+  `docs/architecture/domains.md` carries the correct version today —
+  "Password sign-in is its own endpoint, and it asserts no `Identity`
+  — an `Identity` is what a provider asserts, and this path resolves
+  the user directly" — so a responsibility document and this ADR
+  contradict each other in the live repository, and the responsibility
+  document is the half to believe. The decision stands, and the
+  sentence overstates it rather than weakening it: what a password
+  sign-in shares with a callback begins one step later than written,
+  at the user row, and ADR-0005 is untouched either way.
+- 2026-08-26 — §Decision's "A refusal names nothing" says the
+  unknown-username path "spends a computation rather than returning
+  early". One kind of unknown username returns early: a string that
+  cannot name an account never reaches the credential lookup, and
+  `internal/api/password.go` refuses it before an attempt is recorded
+  and before anything is hashed — a carve-out that file names in
+  place, with its reason, and has named since #499. The claim the
+  argument rests on is unaffected and correct: refusing there leaks
+  nothing about which accounts exist, because what it separates is a
+  well-formed username from a malformed one, and the API specification
+  states that rule already. What is wrong is the reach — "the
+  unknown-username path" where the sentence holds of the well-formed
+  half of it, which is the half a verification is spent on.
+- 2026-08-26 — §Consequences' "The console has no password form. The
+  endpoints exist and no browser UI reaches them, which is deliberate
+  and left to a separate issue" was true when written and is false
+  since #506, which built those pages two hours after #499 merged this
+  ADR: `web/src/app/(auth)/login/page.tsx` renders `PasswordSignInForm`
+  and `web/src/app/(auth)/register/page.tsx` renders
+  `PasswordRegisterForm`.
+  [ADR-0044](./0044-the-development-only-sign-in-provider-is-removed.md)
+  §Context records the same thing. The tail was answered rather than
+  overtaken: the separate issue was raised as #505 an hour after this
+  ADR merged, and #506 closed it. The decision is unchanged — what
+  those pages reach is the credential this ADR specifies, and
+  `docs/architecture/web-app.md` describes the console as it now is.

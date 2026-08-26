@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"runtime/debug"
@@ -35,6 +36,56 @@ func RecoverPanics(next http.Handler) http.Handler {
 		}()
 		next.ServeHTTP(w, r)
 	})
+}
+
+// BindingError answers a request the generated router refused while
+// binding its parameters, before any handler ran. The router's own
+// default writes the binding error's text as text/plain, which
+// contradicts the specification and repeats what the caller submitted:
+// the inner error of an unparseable number is a strconv error, and one
+// quotes the value it could not parse.
+//
+// The composition root supplies this as ErrorHandlerFunc. Nothing else
+// answers on this path, so a surface without it has no declared body
+// for a refusal no handler sees.
+func BindingError(w http.ResponseWriter, _ *http.Request, err error) {
+	writeError(w, errorx.New(errorx.KindInvalidArgument, bindingMessage(err)))
+}
+
+// bindingMessage names what the router refused, built from the
+// parameter name the generated error carries and the kind of failure it
+// is — never from the error's own text, which is where the submitted
+// value would travel. A parameter name is the specification's word and
+// not the caller's.
+//
+// The six types below are every one the generated packages declare. The
+// default names no parameter: an error matching none of them carries
+// nothing this function knows the origin of.
+func bindingMessage(err error) string {
+	var (
+		required  *apigen.RequiredParamError
+		header    *apigen.RequiredHeaderError
+		format    *apigen.InvalidParamFormatError
+		tooMany   *apigen.TooManyValuesForParamError
+		cookie    *apigen.UnescapedCookieParamError
+		unmarshal *apigen.UnmarshalingParamError
+	)
+	switch {
+	case errors.As(err, &required):
+		return "query parameter " + required.ParamName + " is required"
+	case errors.As(err, &header):
+		return "header parameter " + header.ParamName + " is required"
+	case errors.As(err, &format):
+		return "parameter " + format.ParamName + " is not in the required format"
+	case errors.As(err, &tooMany):
+		return "parameter " + tooMany.ParamName + " was given more than once"
+	case errors.As(err, &cookie):
+		return "cookie parameter " + cookie.ParamName + " is not correctly escaped"
+	case errors.As(err, &unmarshal):
+		return "parameter " + unmarshal.ParamName + " is not valid JSON"
+	default:
+		return "a request parameter could not be read"
+	}
 }
 
 // causeRecorder is the request-logging middleware's response writer,

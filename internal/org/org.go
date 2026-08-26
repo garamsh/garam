@@ -23,7 +23,6 @@ var (
 	ErrInvitationNotFound    = errorx.New(errorx.KindNotFound, "invitation not found")
 	ErrInvitationAccepted    = errorx.New(errorx.KindFailedPrecondition, "invitation already accepted")
 	ErrInvitationExpired     = errorx.New(errorx.KindFailedPrecondition, "invitation expired")
-	ErrOrgAlreadyExists      = errorx.New(errorx.KindAlreadyExists, "org already exists")
 	ErrMemberAlreadyExists   = errorx.New(errorx.KindAlreadyExists, "org member already exists")
 )
 

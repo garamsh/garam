@@ -259,4 +259,3 @@ type grnObject struct {
 }
 
 func (o grnObject) GRN() grn.GRN { return o.g }
-func (o grnObject) Type() string { return o.g.ServiceType }

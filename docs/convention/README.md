@@ -5,7 +5,6 @@ Rules every agent follows when writing code, tests, commits, and documents. The 
 ## Contents
 - Scope
 - Stack-neutral
-- Architecture
 - Stack-specific
 - Independence
 - Precedence
@@ -32,17 +31,9 @@ What makes anything generated is that regenerating it changes nothing. What nobo
 | `review.md` | What a review must carry to be valid, and how an author responds |
 | `documentation.md` | What makes a document or a GitHub artifact valid, review comments included |
 
-Every project keeps all of these. They are the floor; only the tables below are selected from.
+Every project keeps all of these. They are the floor; only the table below is selected from.
 
-Selection is not once. A change that alters the project's stack or its structure carries the selection with it — the file that now matches added, the one that no longer does dropped, in the same pull request. A worker whose change triggers a selection does not make it.
-
-## Architecture
-
-The shape the system is partitioned into. The project keeps the one it uses; each file states the structure it assumes.
-
-| File | Governs |
-|---|---|
-| `arch-domain.md` | Domain-partitioned systems: boundaries, dependency direction, when a boundary is earned |
+Selection is not once. A change that alters the project's stack carries the selection with it — the file that now matches added, the one that no longer does dropped, in the same pull request. A worker whose change triggers a selection does not make it.
 
 ## Stack-specific
 
@@ -72,9 +63,8 @@ Reading a convention file is enough to apply its rules. Where the Extends column
 ## Precedence
 
 1. The stack-specific file, when one applies; the derived file before the base it extends.
-2. The architecture file, when one applies.
-3. The stack-neutral files.
-4. This index.
+2. The stack-neutral files.
+3. This index.
 
 On conflict, the more specific rule wins. Report conflicts to the PM in the PR description — do not resolve them yourself.
 

@@ -124,22 +124,22 @@ func (s *PostgresStore) fenced(ctx context.Context, err error, op string, agentG
 func rowToAgent(row db.Agent) (*Agent, error) {
 	g, err := grn.Parse(row.Grn)
 	if err != nil {
-		return nil, errorx.Wrap(err, "agent store: agent grn", errorx.KindInternal)
+		return nil, errorx.Wrap(err, "agent grn", errorx.KindInternal)
 	}
 	orgGRN, err := grn.Parse(row.OrgGrn)
 	if err != nil {
-		return nil, errorx.Wrap(err, "agent store: agent org grn", errorx.KindInternal)
+		return nil, errorx.Wrap(err, "agent org grn", errorx.KindInternal)
 	}
 	if err := validateOwnership(g, orgGRN); err != nil {
-		return nil, errorx.Wrap(err, "agent store: stored agent", errorx.KindInternal)
+		return nil, errorx.Wrap(err, "stored agent", errorx.KindInternal)
 	}
 	provisioning, err := ParseProvisioningState(row.ProvisioningState)
 	if err != nil {
-		return nil, errorx.Wrap(err, "agent store: provisioning state", errorx.KindInternal)
+		return nil, errorx.Wrap(err, "provisioning state", errorx.KindInternal)
 	}
 	runtime, err := ParseRuntimeState(row.RuntimeState)
 	if err != nil {
-		return nil, errorx.Wrap(err, "agent store: runtime state", errorx.KindInternal)
+		return nil, errorx.Wrap(err, "runtime state", errorx.KindInternal)
 	}
 	return &Agent{
 		grn:          g,

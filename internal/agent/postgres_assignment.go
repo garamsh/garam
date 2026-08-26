@@ -58,11 +58,11 @@ func (s *PostgresStore) ListAssignmentsByOrg(ctx context.Context, orgGRN grn.GRN
 func rowToAssignment(row db.AgentAssignment) (*Assignment, error) {
 	agentGRN, err := grn.Parse(row.AgentGrn)
 	if err != nil {
-		return nil, errorx.Wrap(err, "agent store: assignment agent grn", errorx.KindInternal)
+		return nil, errorx.Wrap(err, "assignment agent grn", errorx.KindInternal)
 	}
 	operatorGRN, err := grn.Parse(row.OperatorGrn)
 	if err != nil {
-		return nil, errorx.Wrap(err, "agent store: assignment operator grn", errorx.KindInternal)
+		return nil, errorx.Wrap(err, "assignment operator grn", errorx.KindInternal)
 	}
 	return &Assignment{
 		agentGRN:    agentGRN,

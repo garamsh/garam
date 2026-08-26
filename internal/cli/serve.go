@@ -164,7 +164,11 @@ func serveAPI(cmd *cobra.Command) error {
 	// Outermost, so every route this mux carries is answered rather than
 	// dropped — the spec operations, /metrics, the probes, and a path
 	// that matches none of them.
-	httpSrv := &http.Server{Addr: addr, Handler: obs.recoverPanics(otelhttp.NewHandler(handler, serviceAPI))}
+	httpSrv := &http.Server{
+		Addr:        addr,
+		Handler:     obs.recoverPanics(otelhttp.NewHandler(handler, serviceAPI)),
+		ReadTimeout: requestReadTimeout,
+	}
 	obs.logger.Info("serving api", slog.String("addr", addr))
 	return serveHTTP(ctx, httpSrv, httpSrv.ListenAndServe)
 }

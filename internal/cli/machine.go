@@ -157,6 +157,7 @@ func serveMachine(cmd *cobra.Command) error {
 	// A refused handshake is the only refusal this listener makes, and
 	// net/http reports one here rather than through a handler.
 	srv.ErrorLog = slog.NewLogLogger(obs.logger.Handler(), slog.LevelWarn)
+	srv.ReadTimeout = requestReadTimeout
 
 	// The listener above requires a client certificate, which a probe
 	// does not hold, so the probes answer on a listener of their own —

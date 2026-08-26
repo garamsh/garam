@@ -5,11 +5,6 @@ VALUES ($1, $2, $3, $4, $5, $6);
 -- name: GetUser :one
 SELECT * FROM users WHERE grn = $1;
 
--- name: ListUsers :many
-SELECT * FROM users
-ORDER BY grn
-LIMIT sqlc.narg('row_limit') OFFSET sqlc.arg('row_offset');
-
 -- name: ListUsersByGRNs :many
 SELECT * FROM users
 WHERE grn = ANY(sqlc.arg('grns')::text[])

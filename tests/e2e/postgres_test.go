@@ -167,14 +167,6 @@ func TestUserStore_RoundTrip(t *testing.T) {
 	_, err = s.Get(ctx, grnOf("user", "nobody"))
 	assert.True(t, errorx.IsKind(err, errorx.KindNotFound))
 
-	require.NoError(t, s.Create(ctx, user.New(grnOf("user", "bob"), "bob")))
-	list, err := s.List(ctx, listfilter.Filter{})
-	require.NoError(t, err)
-	assert.Len(t, list, 2)
-	list, err = s.List(ctx, listfilter.Filter{Limit: 1, Offset: 1})
-	require.NoError(t, err)
-	assert.Len(t, list, 1)
-
 	// Many GRNs, one query. GRNs without a user are absent, not an error.
 	byGRN, err := s.ListByGRNs(ctx, []grn.GRN{g, grnOf("user", "nobody")})
 	require.NoError(t, err)

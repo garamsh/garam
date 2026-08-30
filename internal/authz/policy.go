@@ -1,9 +1,12 @@
 package authz
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"io"
 	"time"
 
 	"github.com/garamsh/garam/internal/errorx"
@@ -146,11 +149,20 @@ func NewPolicyGRN(orgGRN grn.GRN) (grn.GRN, error) {
 }
 
 // ParsePolicyDocument parses and validates a policy document (ADR-0002)
-// so stored documents are known-good before they reach evaluation.
+// so stored documents are known-good before they reach evaluation. A
+// key outside the document's shape is refused here rather than dropped,
+// so what a caller wrote is what gets stored.
 func ParsePolicyDocument(raw []byte) (PolicyDocument, error) {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
 	var doc PolicyDocument
-	if err := json.Unmarshal(raw, &doc); err != nil {
+	if err := dec.Decode(&doc); err != nil {
 		return PolicyDocument{}, errorx.Wrap(err, "policy document", errorx.KindInvalidArgument)
+	}
+	// Decode stops at the end of the first value and would leave
+	// anything after it unread; io.EOF is what says there was nothing.
+	if err := dec.Decode(new(json.RawMessage)); !errors.Is(err, io.EOF) {
+		return PolicyDocument{}, errorx.New(errorx.KindInvalidArgument, "policy document: unexpected data after the document")
 	}
 	if doc.Version == "" {
 		return PolicyDocument{}, errorx.New(errorx.KindInvalidArgument, "policy document: Version is required")

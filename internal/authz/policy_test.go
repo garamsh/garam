@@ -1,6 +1,7 @@
 package authz_test
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -41,6 +42,50 @@ func TestParsePolicyDocument_Rejects(t *testing.T) {
 			_, err := authz.ParsePolicyDocument([]byte(raw))
 			require.Error(t, err)
 			assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
+		})
+	}
+}
+
+// TestParsePolicyDocument_ReMarshalsToWhatWasSubmitted pins the parse
+// boundary as lossless: what it returns encodes back to the document it
+// was handed. Condition is the reserved field #724 found dropped there;
+// the document without one is beside it so that a Condition appearing
+// where none was written fails too.
+func TestParsePolicyDocument_ReMarshalsToWhatWasSubmitted(t *testing.T) {
+	docs := map[string]string{
+		"carrying a condition": `{"Version":"2026-07-25","Statement":[{"Sid":"OfficeOnly","Effect":"Allow","Action":["org:update"],"Resource":["grn:acme:*"],"Condition":{"IpAddress":{"garam:SourceIp":"203.0.113.0/24"}}}]}`,
+		"carrying none":        `{"Version":"2026-07-25","Statement":[{"Sid":"AllowOrgRead","Effect":"Allow","Action":["org:read"],"Resource":["grn:acme:*"]}]}`,
+	}
+	for name, submitted := range docs {
+		t.Run(name, func(t *testing.T) {
+			doc, err := authz.ParsePolicyDocument([]byte(submitted))
+			require.NoError(t, err)
+			raw, err := json.Marshal(doc)
+			require.NoError(t, err)
+			assert.JSONEq(t, submitted, string(raw))
+		})
+	}
+}
+
+// TestParsePolicyDocument_RefusesWhatItCannotCarry covers the input the
+// boundary can neither carry nor drop in silence. Each case names the
+// same document without what is under test, and that one is accepted: a
+// refusal the control draws as well came from something else.
+func TestParsePolicyDocument_RefusesWhatItCannotCarry(t *testing.T) {
+	const accepted = `{"Version":"v","Statement":[{"Effect":"Allow","Action":["a"],"Resource":["r"]}]}`
+	cases := map[string]string{
+		"a key the statement shape does not name": `{"Version":"v","Statement":[{"Effect":"Allow","Action":["a"],"Resource":["r"],"Conditon":{}}]}`,
+		"a key the document shape does not name":  `{"Version":"v","Id":"p-1","Statement":[{"Effect":"Allow","Action":["a"],"Resource":["r"]}]}`,
+		"a second document after the first":       accepted + `{"Version":"w"}`,
+	}
+	for name, refused := range cases {
+		t.Run(name, func(t *testing.T) {
+			_, err := authz.ParsePolicyDocument([]byte(refused))
+			require.Error(t, err)
+			assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
+
+			_, err = authz.ParsePolicyDocument([]byte(accepted))
+			assert.NoError(t, err, "the same document without it parses, so the refusal above is this boundary's")
 		})
 	}
 }

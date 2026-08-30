@@ -40,7 +40,15 @@ Policies are IAM-style documents (see
   matches strings only.
 - `Resource`: GRN patterns with the same wildcard rules
   (`grn:acme:*` scopes to an org).
-- `Condition`: reserved; not evaluated in the MVP.
+- `Condition`: reserved. It is stored and read back as it was
+  written, and no evaluation reads it in the MVP.
+
+Reserved is not dropped, and neither is anything else. The parse
+boundary refuses a key none of the above names rather than discarding
+it, and what it accepts is stored whole: `policy_versions` is
+append-only, so a field lost on the way in has nothing left to recover
+it from and the version an administrator reads back would not be the
+one they wrote.
 
 ## Evaluation
 

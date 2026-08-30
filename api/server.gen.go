@@ -340,12 +340,12 @@ type PolicyAttachmentCreate struct {
 
 // PolicyCreate defines model for PolicyCreate.
 type PolicyCreate struct {
-	// Document An IAM-style policy document: a `Version` string and a `Statement` list of `Sid` / `Effect` / `Action` / `Resource` entries. The authz engine owns the model and validates the document on write, so it travels this API opaquely.
+	// Document An IAM-style policy document: a `Version` string and a `Statement` list of `Sid` / `Effect` / `Action` / `Resource` / `Condition` entries. The authz engine owns the model and validates the document on write, so it travels this API opaquely; it refuses a key the model does not name rather than storing the document without it.
 	Document PolicyDocument `json:"document"`
 	Name     string         `json:"name"`
 }
 
-// PolicyDocument An IAM-style policy document: a `Version` string and a `Statement` list of `Sid` / `Effect` / `Action` / `Resource` entries. The authz engine owns the model and validates the document on write, so it travels this API opaquely.
+// PolicyDocument An IAM-style policy document: a `Version` string and a `Statement` list of `Sid` / `Effect` / `Action` / `Resource` / `Condition` entries. The authz engine owns the model and validates the document on write, so it travels this API opaquely; it refuses a key the model does not name rather than storing the document without it.
 type PolicyDocument = json.RawMessage
 
 // PolicyRollback defines model for PolicyRollback.
@@ -362,7 +362,7 @@ type PolicyVersion struct {
 	CreatedAt time.Time `json:"createdAt"`
 	CreatedBy string    `json:"createdBy"`
 
-	// Document An IAM-style policy document: a `Version` string and a `Statement` list of `Sid` / `Effect` / `Action` / `Resource` entries. The authz engine owns the model and validates the document on write, so it travels this API opaquely.
+	// Document An IAM-style policy document: a `Version` string and a `Statement` list of `Sid` / `Effect` / `Action` / `Resource` / `Condition` entries. The authz engine owns the model and validates the document on write, so it travels this API opaquely; it refuses a key the model does not name rather than storing the document without it.
 	Document  PolicyDocument `json:"document"`
 	PolicyGrn string         `json:"policyGrn"`
 	Version   int            `json:"version"`
@@ -370,7 +370,7 @@ type PolicyVersion struct {
 
 // PolicyVersionCreate defines model for PolicyVersionCreate.
 type PolicyVersionCreate struct {
-	// Document An IAM-style policy document: a `Version` string and a `Statement` list of `Sid` / `Effect` / `Action` / `Resource` entries. The authz engine owns the model and validates the document on write, so it travels this API opaquely.
+	// Document An IAM-style policy document: a `Version` string and a `Statement` list of `Sid` / `Effect` / `Action` / `Resource` / `Condition` entries. The authz engine owns the model and validates the document on write, so it travels this API opaquely; it refuses a key the model does not name rather than storing the document without it.
 	Document PolicyDocument `json:"document"`
 }
 

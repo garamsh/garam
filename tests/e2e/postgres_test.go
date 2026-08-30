@@ -1566,6 +1566,54 @@ func TestPolicyVersions_AppendOnly(t *testing.T) {
 	assert.Zero(t, count)
 }
 
+// TestPolicyVersions_StoreAndReturnTheSubmittedDocument writes a
+// document carrying the reserved Condition (ADR-0002) and reads it back
+// two ways: out of the append-only column, which is the only copy, and
+// out of the lifecycle RPC an administrator asks. Both answer the bytes
+// that were submitted. A second version carrying none is appended so a
+// Condition surfacing where none was written fails here as well.
+func TestPolicyVersions_StoreAndReturnTheSubmittedDocument(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := authz.NewPostgresStore(p)
+	srv := authz.NewPolicyGRPCServer(s, authz.NewPolicyCache(s))
+	orgGRN := newPolicyOrg(t, p)
+
+	const (
+		conditioned   = `{"Version":"2026-07-25","Statement":[{"Sid":"OfficeOnly","Effect":"Allow","Action":["org:update"],"Resource":["grn:acme:*"],"Condition":{"IpAddress":{"garam:SourceIp":"203.0.113.0/24"}}}]}`
+		unconditioned = `{"Version":"2026-07-25","Statement":[{"Sid":"Anywhere","Effect":"Allow","Action":["org:update"],"Resource":["grn:acme:*"]}]}`
+	)
+
+	created, err := srv.CreatePolicy(ctx, &authzv1.CreatePolicyRequest{
+		OrgGrn:    orgGRN.String(),
+		Name:      "office-only",
+		Document:  conditioned,
+		CreatedBy: grnOf("user", "ada").String(),
+	})
+	require.NoError(t, err)
+	policyGRN := created.GetPolicy().GetGrn()
+
+	_, err = srv.AddPolicyVersion(ctx, &authzv1.AddPolicyVersionRequest{
+		PolicyGrn: policyGRN,
+		Document:  unconditioned,
+		CreatedBy: grnOf("user", "ada").String(),
+	})
+	require.NoError(t, err)
+
+	const storedDocument = `SELECT document::text FROM policy_versions WHERE policy_grn = $1 AND version = $2`
+	var first, second string
+	require.NoError(t, p.QueryRow(ctx, storedDocument, policyGRN, 1).Scan(&first))
+	require.NoError(t, p.QueryRow(ctx, storedDocument, policyGRN, 2).Scan(&second))
+	assert.JSONEq(t, conditioned, first, "the stored column is the document that was submitted")
+	assert.JSONEq(t, unconditioned, second, "the stored column gained no field nobody wrote")
+
+	versions, err := srv.ListPolicyVersions(ctx, &authzv1.ListPolicyVersionsRequest{PolicyGrn: policyGRN})
+	require.NoError(t, err)
+	require.Len(t, versions.GetVersions(), 2)
+	assert.JSONEq(t, conditioned, versions.GetVersions()[0].GetDocument(), "the version read back is the version written")
+	assert.JSONEq(t, unconditioned, versions.GetVersions()[1].GetDocument(), "the version read back gained no field nobody wrote")
+}
+
 func TestPolicyCache_InvalidatedByNotify(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

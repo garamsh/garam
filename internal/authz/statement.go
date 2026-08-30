@@ -1,6 +1,8 @@
 package authz
 
 import (
+	"encoding/json"
+
 	"github.com/garamsh/garam/internal/wire"
 )
 
@@ -13,11 +15,16 @@ type Statement struct {
 	Effect   wire.Effect
 	Action   []string
 	Resource []string
+	// Condition is reserved (ADR-0002): carried through storage and
+	// read-back as written, evaluated by nothing. It stays raw because
+	// the model names nothing that may appear inside it, and a narrower
+	// type would drop what it does not fit.
+	Condition json.RawMessage `json:",omitempty"`
 }
 
-// PolicyDocument is a versioned statement list (ADR-0002). Condition
-// is reserved and not evaluated in the MVP. The field names are the
-// document's JSON keys; [ParsePolicyDocument] is the parse boundary.
+// PolicyDocument is a versioned statement list (ADR-0002). The field
+// names are the document's JSON keys; [ParsePolicyDocument] is the
+// parse boundary.
 type PolicyDocument struct {
 	Version   string
 	Statement []Statement

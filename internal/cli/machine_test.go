@@ -12,7 +12,9 @@ import (
 	"crypto/x509/pkix"
 	"encoding/hex"
 	"encoding/pem"
+	"io"
 	"math/big"
+	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
@@ -24,6 +26,7 @@ import (
 	"github.com/garamsh/garam/internal/ca"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/health"
 )
 
 func machineGRN(org, id string) grn.GRN {
@@ -206,4 +209,72 @@ func TestCertificateAuthorities_ReadsTheOrganizationsOwnAuthority(t *testing.T) 
 	_, err = roots.Get(ctx, machineGRN("nobody", "bot-1"))
 	require.Error(t, err)
 	assert.True(t, errorx.IsKind(err, errorx.KindNotFound))
+}
+
+// TestMachineServer_AnswersAPanicOutsideTheSurfacesOwnMiddleware is
+// `serve machine`'s wiring. The generated middleware slice reaches the
+// spec operations alone, so a panic raised outside them — the identity
+// check machine.NewServer puts around the handler it is given, or a
+// handler reached any other way — meets the recovery machineServer puts
+// outermost or none at all.
+//
+// Without it the connection is dropped rather than answered and the Get
+// below fails outright. The plain-text body is what says this recovery
+// answered: the surface's own writes the specification's Error as JSON.
+// The line names no route, for the reason apiHandler's test gives.
+func TestMachineServer_AnswersAPanicOutsideTheSurfacesOwnMiddleware(t *testing.T) {
+	subject := machineGRN("acme", "bot-1")
+
+	var served lines
+	answering, client := machineListenerAround(t, recordingObservability(&served), subject,
+		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	resp, err := client.Get(answering + "/identity")
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+	// The control: the same listener carries a request to a handler that
+	// does not panic, so what the 500 below reports is the panic rather
+	// than the certificate or the identity check refusing.
+	require.Equal(t, http.StatusNoContent, resp.StatusCode)
+
+	var out lines
+	url, client := machineListenerAround(t, recordingObservability(&out), subject,
+		http.HandlerFunc(func(http.ResponseWriter, *http.Request) { panic("machine listener defect") }))
+
+	resp, err = client.Get(url + "/identity")
+	require.NoError(t, err, "the client read no answer at all")
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+
+	require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	assert.Equal(t, "internal error\n", string(body), "no internals reach the body")
+
+	line := decodeLine(t, &out)
+	assert.Equal(t, "http panic", line["msg"])
+	assert.Equal(t, float64(http.StatusInternalServerError), line["status"])
+	assert.Contains(t, line["error"], "panic: machine listener defect",
+		"the line is the only record this panic leaves")
+}
+
+// TestMachineProbeHandler_AnswersAPanicOnTheListenerBesideTheTLSOne is
+// `serve machine`'s wiring for the port a probe reaches without a
+// certificate. Nothing on that port is a spec operation, so the
+// recovery this assembly puts outermost is the only one a panic here
+// meets.
+func TestMachineProbeHandler_AnswersAPanicOnTheListenerBesideTheTLSOne(t *testing.T) {
+	var served lines
+	status, _ := readiness(t, recordingObservability(&served).machineProbeHandler(presentProbe{}))
+	require.Equal(t, http.StatusOK, status, "the probe this handler mounts is reachable")
+
+	var out lines
+	status, body := readiness(t, recordingObservability(&out).machineProbeHandler(panickingProbe{}))
+
+	require.Equal(t, http.StatusInternalServerError, status)
+	assert.Equal(t, "internal error\n", body, "no internals reach the body")
+
+	line := decodeLine(t, &out)
+	assert.Equal(t, "http panic", line["msg"])
+	assert.Equal(t, "GET "+health.ReadyPath, line["operation"])
+	assert.Contains(t, line["error"], "panic: readiness defect",
+		"the line is the only record this panic leaves")
 }

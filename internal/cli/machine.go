@@ -135,8 +135,8 @@ func serveMachine(cmd *cobra.Command) error {
 	// middleware listed is the outermost, so recovery runs inside the
 	// logging: a panic becomes the 500 the line reports rather than an
 	// unwind that leaves no line at all. The slice reaches the spec
-	// operations alone; recoverPanics below covers the rest of what
-	// this server serves.
+	// operations alone; machineServer covers the rest of what this
+	// server serves.
 	handler := machinegen.HandlerWithOptions(
 		machineapi.NewServer(agents, operators, messages, consents, watches,
 			memberGroups{store: org.NewPostgresStore(pool)},
@@ -144,34 +144,18 @@ func serveMachine(cmd *cobra.Command) error {
 		machinegen.StdHTTPServerOptions{
 			Middlewares: []machinegen.MiddlewareFunc{machineapi.RecoverPanics, obs.logMachineRequests},
 		})
-	srv := machine.NewServer(
-		machine.NewService(certificateAuthorities{store: authorities}),
-		pair,
-		otelhttp.NewHandler(handler, serviceMachine),
-	)
-	// Assigned rather than passed in, because NewServer puts the
-	// identity check outside the handler it is given and that check
-	// runs per request too.
-	srv.Handler = obs.recoverPanics(srv.Handler)
+	srv := obs.machineServer(certificateAuthorities{store: authorities}, pair, handler)
 	srv.Addr = envOr(envMachineAddr, ":8443")
-	// A refused handshake is the only refusal this listener makes, and
-	// net/http reports one here rather than through a handler.
-	srv.ErrorLog = slog.NewLogLogger(obs.logger.Handler(), slog.LevelWarn)
-	srv.ReadTimeout = requestReadTimeout
 
-	// The listener above requires a client certificate, which a probe
-	// does not hold, so the probes answer on a listener of their own —
-	// the shape `serve authz` already uses for what a machine reaches
-	// without a session. Nothing unauthenticated joins the TLS
-	// listener, and losing this one must not take that one down.
+	// Nothing unauthenticated joins the TLS listener, and losing this
+	// one must not take that one down.
 	healthAddr := envOr(envMachineHealthAddr, ":8444")
 	go func() {
-		mux := http.NewServeMux()
 		// The authorities a presented certificate is verified against,
 		// and the agents this surface answers for, are rows; the
 		// decision admitting a message comes from the engine.
-		health.Register(mux, health.Database(pool), authzChannel{conn: conn})
-		if err := http.ListenAndServe(healthAddr, obs.recoverPanics(mux)); err != nil {
+		if err := http.ListenAndServe(healthAddr,
+			obs.machineProbeHandler(health.Database(pool), authzChannel{conn: conn})); err != nil {
 			obs.logger.Error("health listener stopped", slog.String("error", err.Error()))
 		}
 	}()
@@ -181,6 +165,40 @@ func serveMachine(cmd *cobra.Command) error {
 		return errorx.Wrap(err, "machine serve", errorx.KindInternal)
 	}
 	return nil
+}
+
+// machineServer is the listener `serve machine` serves: TLS a client
+// certificate authenticates on (ADR-0014, ADR-0040), the identity check
+// machine.NewServer puts around next, and recoverPanics outermost so a
+// panic in either is answered rather than dropping the connection.
+//
+// The wrapping is assigned rather than passed in, because NewServer
+// puts that check outside the handler it is given and the check runs
+// per request too.
+func (o *observability) machineServer(roots machine.TrustRoot, certificate machine.ServerCertificate, next http.Handler) *http.Server {
+	srv := machine.NewServer(machine.NewService(roots), certificate,
+		otelhttp.NewHandler(next, serviceMachine))
+	srv.Handler = o.recoverPanics(srv.Handler)
+	// A refused handshake is the only refusal this listener makes, and
+	// net/http reports one here rather than through a handler.
+	srv.ErrorLog = slog.NewLogLogger(o.logger.Handler(), slog.LevelWarn)
+	srv.ReadTimeout = requestReadTimeout
+	return srv
+}
+
+// machineProbeHandler is what `serve machine` answers on the port
+// beside its TLS one. The listener above requires a client certificate,
+// which a probe does not hold, so the probes answer on a listener of
+// their own — the shape `serve authz` already uses for what a machine
+// reaches without a session. It carries no /metrics: this process
+// serves none (api-surface.md §The surfaces).
+//
+// recoverPanics is outermost, as on every listener a serve command
+// runs: a route added to this mux is covered by having been added.
+func (o *observability) machineProbeHandler(deps ...health.Dependency) http.Handler {
+	mux := http.NewServeMux()
+	health.Register(mux, deps...)
+	return o.recoverPanics(mux)
 }
 
 // machineKeyMaterial loads what the process serves TLS on: the pair the

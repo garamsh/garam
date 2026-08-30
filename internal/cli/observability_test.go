@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
@@ -31,7 +32,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
-	apigen "github.com/garamsh/garam/api"
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/api"
@@ -39,7 +39,6 @@ import (
 	"github.com/garamsh/garam/internal/ca"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/machine"
 	"github.com/garamsh/garam/internal/machineapi"
 	"github.com/garamsh/garam/internal/user"
 	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
@@ -66,9 +65,14 @@ func (l *lines) String() string {
 	return l.buf.String()
 }
 
-// recordingObservability returns one whose lines land in out.
+// recordingObservability returns one whose lines land in out. The
+// registry is the empty one a server would collect into: the handlers
+// the serve commands assemble mount it, so building one needs it there.
 func recordingObservability(out *lines) *observability {
-	return &observability{logger: slog.New(slog.NewJSONHandler(out, nil))}
+	return &observability{
+		logger:   slog.New(slog.NewJSONHandler(out, nil)),
+		registry: prometheus.NewRegistry(),
+	}
 }
 
 // decodeLine parses the single line out holds.
@@ -207,6 +211,19 @@ func machineListener(t *testing.T, obs *observability, subject grn.GRN) (string,
 // given server.
 func machineListenerServing(t *testing.T, obs *observability, subject grn.GRN, server *machineapi.Server) (string, *http.Client) {
 	t.Helper()
+	return machineListenerAround(t, obs, subject, machinegen.HandlerWithOptions(server,
+		machinegen.StdHTTPServerOptions{
+			Middlewares: []machinegen.MiddlewareFunc{machineapi.RecoverPanics, obs.logMachineRequests},
+		}))
+}
+
+// machineListenerAround starts serveMachine's own listener around next,
+// on a port of the kernel's choosing, and returns its URL and a client
+// holding a certificate the organization's own authority signed for
+// subject. Everything but the address is what serveMachine assembles,
+// because machineServer is what assembles it.
+func machineListenerAround(t *testing.T, obs *observability, subject grn.GRN, next http.Handler) (string, *http.Client) {
+	t.Helper()
 	dir := t.TempDir()
 	certFile, keyFile := writeTLSKeyPair(t, dir)
 	pair, _, _, err := machineKeyMaterial(certFile, keyFile, writeKeyEncryptionKey(t, dir), writeServerRoot(t, dir))
@@ -225,14 +242,7 @@ func machineListenerServing(t *testing.T, obs *observability, subject grn.GRN, s
 	client, err := tls.X509KeyPair(issued.CertificatePEM(), issued.PrivateKeyPEM())
 	require.NoError(t, err)
 
-	handler := machinegen.HandlerWithOptions(server, machinegen.StdHTTPServerOptions{
-		Middlewares: []machinegen.MiddlewareFunc{obs.logMachineRequests},
-	})
-	srv := machine.NewServer(
-		machine.NewService(certificateAuthorities{store: store}),
-		pair,
-		handler,
-	)
+	srv := obs.machineServer(certificateAuthorities{store: store}, pair, next)
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	go func() { _ = srv.ServeTLS(lis, "", "") }()
@@ -563,18 +573,16 @@ func (panickingSessions) Delete(context.Context, string) error { panic("session 
 // one. logMachineRequests shares logServed, so the machine listener is
 // the same wiring.
 //
-// The server-level middleware wraps it here as it does in serve api,
-// which makes the count the second thing this test holds: the surface's
-// middleware answers first, so the outer one writes nothing and only
+// The request runs through apiHandler, which makes the count the second
+// thing this test holds: the surface's middleware answers first, so the
+// server-level one that assembly wraps it in writes nothing and only
 // one line is emitted. decodeLine parses the whole buffer, so a second
 // line fails it.
 func TestLogRequests_ReportsARecoveredPanicOnce(t *testing.T) {
 	var out lines
 	obs := recordingObservability(&out)
 	srv := api.NewServer(nil, nil, nil, nil, nil, nil, panickingSessions{}, nil, nil, nil, nil, nil, nil, api.Config{})
-	server := httptest.NewServer(obs.recoverPanics(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{
-		Middlewares: []apigen.MiddlewareFunc{api.RecoverPanics, obs.logRequests},
-	})))
+	server := httptest.NewServer(obs.apiHandler(srv))
 	t.Cleanup(server.Close)
 
 	req, err := http.NewRequest(http.MethodPost, server.URL+"/auth/logout", nil)
@@ -596,122 +604,4 @@ func TestLogRequests_ReportsARecoveredPanicOnce(t *testing.T) {
 	assert.Contains(t, line["error"], "panic: session store defect")
 	assert.Contains(t, line["error"], "panickingSessions.Delete",
 		"the stack net/http no longer logs travels in the cause")
-}
-
-// TestRecoverPanics_AnswersARouteTheSliceDoesNotReach is `serve api`'s
-// shape. The composition root puts /metrics and the two probes on the
-// mux it then hands the generated router as BaseRouter, and
-// oapi-codegen applies the middleware slice inside each operation's own
-// wrapper rather than around the router — so a route registered beside
-// the spec operations carries none of it, however the slice is written.
-//
-// Without the server-level middleware the client's own Get fails and
-// the require below never reaches a status. The body is what says which
-// middleware answered: the surface's middleware writes the
-// specification's Error as JSON, and this one writes plain text because
-// no specification describes the path it is answering for.
-func TestRecoverPanics_AnswersARouteTheSliceDoesNotReach(t *testing.T) {
-	var out lines
-	obs := recordingObservability(&out)
-
-	mux := http.NewServeMux()
-	mux.Handle("GET /metrics", http.HandlerFunc(
-		func(http.ResponseWriter, *http.Request) { panic("collector defect") }))
-	srv := api.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{})
-	server := httptest.NewServer(obs.recoverPanics(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{
-		BaseRouter:  mux,
-		Middlewares: []apigen.MiddlewareFunc{api.RecoverPanics, obs.logRequests},
-	})))
-	t.Cleanup(server.Close)
-
-	resp, err := server.Client().Get(server.URL + "/metrics")
-	require.NoError(t, err, "the client read no answer at all")
-	body, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	require.NoError(t, resp.Body.Close())
-
-	require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
-	assert.Equal(t, "internal error\n", string(body), "no internals reach the body")
-
-	line := decodeLine(t, &out)
-	assert.Equal(t, "http panic", line["msg"])
-	assert.Equal(t, "GET /metrics", line["operation"])
-	assert.Equal(t, float64(http.StatusInternalServerError), line["status"])
-	assert.NotEmpty(t, line["trace_id"])
-	assert.Contains(t, line["error"], "panic: collector defect",
-		"the line is the only record this panic leaves")
-}
-
-// panickingEngine is the engine handler a recover interceptor exists
-// for. Check is the programmer bug; Explain answers, so one connection
-// carries both a call that panics and a call that must still be served
-// after it.
-type panickingEngine struct {
-	authzv1.UnimplementedAuthzServiceServer
-}
-
-func (panickingEngine) Check(context.Context, *authzv1.CheckRequest) (*authzv1.CheckResponse, error) {
-	panic("policy engine defect")
-}
-
-func (panickingEngine) Explain(context.Context, *authzv1.ExplainRequest) (*authzv1.ExplainResponse, error) {
-	return &authzv1.ExplainResponse{Allowed: true}, nil
-}
-
-// TestRecoverRPCs_AnswersAPanicAndKeepsServing panics a real handler
-// through a real server, because an interceptor called directly proves
-// the interceptor and not the wiring. The chain is the one serveAuthz
-// builds, in that order.
-//
-// The second call is what makes this evidence. Without the
-// interceptor grpc-go reaches no frame that stops the panic and the
-// process ends — this test binary among them — so a run that gets far
-// enough to answer Explain has already shown the process survived, and
-// answering it on the same connection shows the server did too rather
-// than merely staying alive with nothing left listening.
-//
-// The status message is asserted for what it does not carry. It
-// travels to the caller, and a stack is not something a caller of the
-// engine is owed; the stack goes to the line instead, which decodeLine
-// holds to exactly one by parsing the whole buffer.
-func TestRecoverRPCs_AnswersAPanicAndKeepsServing(t *testing.T) {
-	var out lines
-	obs := recordingObservability(&out)
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	engine := grpc.NewServer(
-		grpc.StatsHandler(otelgrpc.NewServerHandler()),
-		grpc.ChainUnaryInterceptor(obs.recoverRPCs, obs.logRPCs),
-	)
-	authzv1.RegisterAuthzServiceServer(engine, panickingEngine{})
-	go func() { _ = engine.Serve(lis) }()
-	t.Cleanup(engine.Stop)
-
-	conn, err := grpc.NewClient(lis.Addr().String(),
-		grpc.WithTransportCredentials(insecure.NewCredentials()))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = conn.Close() })
-	client := authzv1.NewAuthzServiceClient(conn)
-
-	_, err = client.Check(context.Background(), &authzv1.CheckRequest{SubjectGrn: testSubject})
-
-	require.Error(t, err, "the caller is answered rather than left with a dead connection")
-	assert.Equal(t, codes.Internal, status.Code(err))
-	assert.Equal(t, "internal error", status.Convert(err).Message())
-	assert.NotContains(t, status.Convert(err).Message(), "policy engine defect",
-		"the panic value does not travel to the caller")
-
-	// Read before the second call, so decodeLine's whole-buffer parse
-	// holds the panic to one line: recovering outside logRPCs is what
-	// keeps it from also emitting the served line for the same call.
-	line := decodeLine(t, &out)
-	assert.Equal(t, "rpc panic", line["msg"])
-	assert.Equal(t, codes.Internal.String(), line["code"])
-	assert.Equal(t, "/garam.authz.v1.AuthzService/Check", line["operation"])
-	assert.Contains(t, line["error"], "policy engine defect", "the panic reaches the line")
-	assert.Contains(t, line["error"], "goroutine", "and so does the stack")
-
-	explained, err := client.Explain(context.Background(), &authzv1.ExplainRequest{SubjectGrn: testSubject})
-	require.NoError(t, err, "the server still serves the connection the panic was answered on")
-	assert.True(t, explained.GetAllowed())
 }

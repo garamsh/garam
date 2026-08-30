@@ -137,40 +137,46 @@ func serveAPI(cmd *cobra.Command) error {
 		},
 	)
 
-	// The generated router matches before the middleware runs, so the
-	// log line can name the route rather than the path. /metrics and
-	// the two probes share the router; the generated slice reaches
-	// neither, because oapi-codegen applies it inside each operation's
-	// own wrapper rather than around the router, so recoverPanics below
-	// is what covers them.
+	addr := envOr(envHTTPAddr, ":8080")
+	httpSrv := &http.Server{
+		Addr: addr,
+		// A request needs both to be served: rows out of the database,
+		// and the decision that admits it.
+		Handler:     obs.apiHandler(srv, health.Database(pool), authzChannel{conn: conn}),
+		ReadTimeout: requestReadTimeout,
+	}
+	obs.logger.Info("serving api", slog.String("addr", addr))
+	return serveHTTP(ctx, httpSrv, httpSrv.ListenAndServe)
+}
+
+// apiHandler is everything `serve api` answers on its one port: the
+// spec operations, and /metrics and the two probes beside them.
+//
+// The generated router matches before the middleware runs, so the log
+// line can name the route rather than the path. /metrics and the two
+// probes share that router; the generated slice reaches neither,
+// because oapi-codegen applies it inside each operation's own wrapper
+// rather than around the router. The last middleware listed is the
+// outermost, so recovery runs inside the logging: a panic becomes the
+// 500 the line reports rather than an unwind that leaves no line at
+// all.
+//
+// recoverPanics is outermost of all, so every route the mux carries is
+// answered rather than dropped — the spec operations, /metrics, the
+// probes, and a path that matches none of them.
+func (o *observability) apiHandler(srv apigen.ServerInterface, deps ...health.Dependency) http.Handler {
 	mux := http.NewServeMux()
-	mux.Handle("GET /metrics", obs.metricsHandler())
-	// A request needs both to be served: rows out of the database, and
-	// the decision that admits it.
-	health.Register(mux, health.Database(pool), authzChannel{conn: conn})
-	// The last middleware listed is the outermost, so recovery runs
-	// inside the logging: a panic becomes the 500 the line reports
-	// rather than an unwind that leaves no line at all.
+	mux.Handle("GET /metrics", o.metricsHandler())
+	health.Register(mux, deps...)
 	handler := apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{
 		BaseRouter:  mux,
-		Middlewares: []apigen.MiddlewareFunc{api.RecoverPanics, obs.logRequests},
+		Middlewares: []apigen.MiddlewareFunc{api.RecoverPanics, o.logRequests},
 		// A parameter the router cannot bind is refused before any
 		// handler runs, so this is the only place the surface's own
 		// error body reaches that refusal.
 		ErrorHandlerFunc: api.BindingError,
 	})
-
-	addr := envOr(envHTTPAddr, ":8080")
-	// Outermost, so every route this mux carries is answered rather than
-	// dropped — the spec operations, /metrics, the probes, and a path
-	// that matches none of them.
-	httpSrv := &http.Server{
-		Addr:        addr,
-		Handler:     obs.recoverPanics(otelhttp.NewHandler(handler, serviceAPI)),
-		ReadTimeout: requestReadTimeout,
-	}
-	obs.logger.Info("serving api", slog.String("addr", addr))
-	return serveHTTP(ctx, httpSrv, httpSrv.ListenAndServe)
+	return o.recoverPanics(otelhttp.NewHandler(handler, serviceAPI))
 }
 
 // envBool reads a boolean environment variable, taking the fallback
@@ -279,31 +285,19 @@ func serveAuthz(cmd *cobra.Command) error {
 		return errorx.Wrap(err, "authz listen", errorx.KindUnavailable)
 	}
 
-	// The engine speaks gRPC only, so its metrics and its probes need a
-	// listener of their own — a probe carries no gRPC client, and this
-	// one carries no credential either. It starts after the gRPC port
-	// is bound, so an answer here means that port accepts connections.
-	// Losing the listener must not take the engine down.
+	// It starts after the gRPC port is bound, so an answer here means
+	// that port accepts connections. Losing the listener must not take
+	// the engine down.
 	metricsAddr := envOr(envMetricsAddr, ":9091")
 	go func() {
-		mux := http.NewServeMux()
-		mux.Handle("GET /metrics", obs.metricsHandler())
 		// The engine decides from the cache, which fills from the
 		// database and falls back to it on every miss.
-		health.Register(mux, health.Database(pool))
-		if err := http.ListenAndServe(metricsAddr, obs.recoverPanics(mux)); err != nil {
+		if err := http.ListenAndServe(metricsAddr, obs.engineProbeHandler(health.Database(pool))); err != nil {
 			obs.logger.Error("metrics listener stopped", slog.String("error", err.Error()))
 		}
 	}()
 
-	srv := grpc.NewServer(
-		grpc.StatsHandler(otelgrpc.NewServerHandler()),
-		// The first interceptor is the outermost, so recovery wraps
-		// the logging rather than the other way round: a panic is
-		// answered before it reaches a frame that would end the
-		// process, and the line it leaves is the only one.
-		grpc.ChainUnaryInterceptor(obs.recoverRPCs, obs.logRPCs),
-	)
+	srv := obs.engineServer()
 	authzv1.RegisterAuthzServiceServer(srv, authz.NewGRPCServer(cache))
 	authzv1.RegisterPolicyServiceServer(srv, authz.NewPolicyGRPCServer(store, cache))
 	obs.logger.Info("serving authz", slog.String("addr", addr), slog.String("metrics_addr", metricsAddr))
@@ -311,4 +305,33 @@ func serveAuthz(cmd *cobra.Command) error {
 		return errorx.Wrap(err, "authz serve", errorx.KindInternal)
 	}
 	return nil
+}
+
+// engineProbeHandler is what `serve authz` answers on the port beside
+// its gRPC one: the two probes, and /metrics, because the engine speaks
+// gRPC only — a probe carries no gRPC client, and neither does a
+// scraper (api-surface.md §The surfaces). This port carries no
+// credential either.
+//
+// recoverPanics is outermost, as on every listener a serve command
+// runs: a route added to this mux is covered by having been added.
+func (o *observability) engineProbeHandler(deps ...health.Dependency) http.Handler {
+	mux := http.NewServeMux()
+	mux.Handle("GET /metrics", o.metricsHandler())
+	health.Register(mux, deps...)
+	return o.recoverPanics(mux)
+}
+
+// engineServer is the gRPC server `serve authz` serves the policy
+// engine on.
+//
+// The first interceptor is the outermost, so recovery wraps the logging
+// rather than the other way round: a panic is answered before it
+// reaches a frame that would end the process, and the line it leaves is
+// the only one.
+func (o *observability) engineServer() *grpc.Server {
+	return grpc.NewServer(
+		grpc.StatsHandler(otelgrpc.NewServerHandler()),
+		grpc.ChainUnaryInterceptor(o.recoverRPCs, o.logRPCs),
+	)
 }

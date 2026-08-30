@@ -20,6 +20,28 @@ repository that is not Go, it carries a toolchain and a gate of its
 own, and it ships as one of the two images a version tag publishes
 ([ADR-0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)).
 
+It stays its own image for what each of the two holds while it runs.
+This one's final stage is the Node base the build ran on
+(`deploy/local/Dockerfile.web`): a shell, `wget`, and the runtime that
+executes the `server.js` and the `node_modules` subset copied into it —
+the local stack reaches this application's probe through that shell and
+the garam processes' by running the shipped binary
+(`deploy/local/docker-compose.yml`). The other image is `FROM scratch`
+holding five copied paths (`deploy/local/Dockerfile`): certificates, one
+account and no root, `migrations/`, and the `garam` binary that
+`migrate`, `issue-certificate` and every serve subcommand run from.
+Merging the two gives each process what the other holds — a shell and an
+interpreter inside the image whose processes read the key-encryption key
+that seals every organization's certificate authority
+([deployment-contract.md](./deployment-contract.md) §What the binary
+enforces about key material), the schema migrations and that binary
+inside the image whose process renders a browser's input — and that is
+what a proposal to build and pull one image instead of two has to
+answer. [ADR-0020](./adr/0020-published-artifacts.md) §Rejected
+alternatives refused a single image on that ground, and
+[ADR-0042](./adr/0042-a-chart-is-the-description-of-a-garam-deployment.md)
+§Decision leaves the two standing where it supersedes that ADR.
+
 **This document is authoritative for what the application is
 responsible for and where its boundary falls.** Four artifacts already
 own things a reader might come here for, and none of them is restated:

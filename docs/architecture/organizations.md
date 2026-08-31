@@ -39,4 +39,8 @@ withhold it, and a role naming it would settle that for every
 organization instead. The authz evaluator decides. Groups and projects are addressed under their
 organization's HTTP paths, and their GRNs carry the owning org in the
 organization segment, so a group or project role is scoped to that
-resource alone ([authz.md](./authz.md) §Statement collection).
+resource alone ([authz.md](./authz.md) §Statement collection). A `Group` and a
+`Project` each carry `policies` as data as well, exposed by the
+aggregate and stored but not evaluated: a policy reaches a subject
+through an attachment the authz engine owns (ADR-0008), not through
+this list.

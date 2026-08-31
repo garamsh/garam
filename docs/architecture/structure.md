@@ -22,6 +22,7 @@ Nothing here states what goes *inside* a boundary, or how the system is deployed
 - **A boundary is the unit.** A boundary is a part of the system with its own identity: a domain, a feature, a bounded context. It owns one folder, named for its subject matter and never for a technical role, and that folder holds everything the boundary needs and nothing another boundary needs.
 - **A boundary is reached only through what it declares public.** Everything else inside it is private, whether or not the language enforces it.
 - **Reaching past the declared surface is a defect**, even where the language permits it and even where it works.
+- **An aggregate exposes what it persists.** A value a boundary's store writes and reads back is reachable through the surface that boundary declares, by a read-only accessor on the aggregate ([ADR-0051](./adr/0051-an-aggregate-exposes-what-it-persists.md)). A persisted value no caller can reach is a defect and not an open point.
 - **A boundary reaches a sibling directly, through the surface that sibling declares** ([ADR-0047](./adr/0047-a-domain-reaches-a-sibling-through-its-declared-surface.md)). Nothing has to be lifted below both to let one reach the other, and a reference the sibling's surface does not name is the defect above however it is routed.
 - **A decision of its own can still refuse one edge.** The permission above is general; where two boundaries are to stay independent of each other, an ADR says so and names them — [ADR-0003](./adr/0003-single-cli-topology.md) does that for the two services it separates.
 - **Inside a boundary, declarations come first** and implementations depend on them — never the reverse. A file declaring a contract does not import the file that satisfies it.
@@ -46,6 +47,7 @@ A conversion to a wire format the boundaries already share is not a shared kerne
 
 - [ADR-0047](./adr/0047-a-domain-reaches-a-sibling-through-its-declared-surface.md) — domain partitioning is the shape garam takes, and a boundary reaches a sibling through the surface that sibling declares. That last point is the one this shape leaves contested and every project answers for itself; the ADR records which side garam took, what the other side produced here while it went unrecorded, and why the answer decides what counts as a defect rather than a preference.
 - [ADR-0003](./adr/0003-single-cli-topology.md) — the two services stay independent of each other, which is the named exception the reach above allows for.
+- [ADR-0051](./adr/0051-an-aggregate-exposes-what-it-persists.md) — an aggregate exposes what it persists. The shape above says a boundary is reached only through what it declares public and leaves to the project what must be in that surface; the ADR records which side garam took, the three aggregates that gave two answers while it went unrecorded, and why the answer decides what counts as a defect.
 
 ## Open questions
 

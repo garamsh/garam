@@ -1,8 +1,14 @@
+# The versions this repository declares its two toolchains at, read from
+# the file that declares each. `check-toolchain` holds the container
+# bases against them.
+GO_DIRECTIVE := $(shell sed -n 's/^go //p' go.mod)
+NODE_VERSION := $(shell cat web/.nvmrc)
+
 # `go run tool@version` takes the toolchain from the tool's own go
 # directive, which can be older than this module's and then cannot load
 # its packages. The floor is the version go.mod declares; `+auto` still
 # upgrades for a tool that needs a newer one.
-export GOTOOLCHAIN := go$(shell sed -n 's/^go //p' go.mod)+auto
+export GOTOOLCHAIN := go$(GO_DIRECTIVE)+auto
 
 # Tool directives in go.mod: go.sum records each version and
 # Dependabot's gomod ecosystem proposes its bumps, and
@@ -59,7 +65,7 @@ TEST_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)
 # and overridable on the same terms as the line above.
 WEB_E2E_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)/garam?sslmode=disable)
 
-.PHONY: lint format test build gen check-gen e2e db-up db-down backend-up ci template-diff search
+.PHONY: lint format test build gen check-gen check-toolchain e2e db-up db-down backend-up ci template-diff search
 .PHONY: chart chart-lint chart-render chart-identity chart-names chart-guards chart-security chart-package
 .PHONY: web-install web-lint web-format web-test web-build web-gen web-check-gen web-e2e web-image-e2e web-ci
 .PHONY: minikube-up minikube-down minikube-start minikube-images minikube-db
@@ -178,6 +184,21 @@ check-gen:
 	@out="$$(git status --porcelain -- $(GEN_PATHS))"; \
 		test -z "$$out" || { echo "check-gen: uncommitted generated output:"; echo "$$out"; exit 1; }
 
+# The pairs check-toolchain holds together, written as the site
+# declaring a version, that version, the Dockerfile, and the image whose
+# tag has to carry it. `.github/dependabot.yml`'s docker entry moves the
+# FROM line alone, so each pair is a half a bump can arrive without.
+#
+# Both versions reach the script through the environment and never
+# through the command text: each is read out of a file in the tree,
+# which ci.md §Security baseline keeps out of a command line.
+export TOOLCHAIN_PAIRS = \
+	web/.nvmrc,$(NODE_VERSION),deploy/local/Dockerfile.web,node \
+	go.mod,$(GO_DIRECTIVE),deploy/local/Dockerfile,golang
+
+check-toolchain:
+	@scripts/check-toolchain.sh
+
 # The template commit this repository has taken every improvement from,
 # up to. Nothing derives it: an adapted file differs from the template by
 # design, so no comparison separates an improvement this project declined
@@ -251,7 +272,7 @@ e2e:
 # The whole set, both toolchains, under one name (#789). `web-ci` runs
 # last so the cheaper Go half fails first, and it puts pnpm and the node
 # version web/.nvmrc names on every contributor's path.
-ci: format lint test build check-gen chart web-ci
+ci: format lint test build check-gen check-toolchain chart web-ci
 
 # ---------------------------------------------------------------------
 # web/ — the Next.js frontend (ADR-0009). It keeps its own toolchain and

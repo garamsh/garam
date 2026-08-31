@@ -9,6 +9,23 @@ info:
     this listener, and the organization segment of that GRN is the
     whole of the tenancy. This is a different listener from the one
     `api/openapi.yaml` describes and shares nothing with it.
+
+    An operation's `responses` list is what it answers when garam is
+    working, and is not the complete set of statuses it can return. No
+    operation declares a 5xx, because a 5xx belongs to the listener
+    rather than to a route (ADR-0050): every operation can answer
+    `500`, and one that reaches the policy engine or the database
+    answers `503` when that dependency is unreachable. Both carry the
+    `Error` schema with `message` set to `internal error` — a 5xx names
+    no cause, and what a caller does next is on the status line. `501`
+    and `504` are in garam's kind mapping and nothing produces them.
+
+    `version` above is required by OpenAPI and promises nothing
+    (ADR-0049). garam publishes no release of this contract and no
+    compatibility window, and the number does not move when this
+    surface changes: do not read stability, a deprecation notice or a
+    breaking change out of it. The tag garam publishes its images under
+    names a build and not this document (ADR-0039).
 tags:
   - name: identity
     description: >-

@@ -104,6 +104,8 @@ ADRs:
 - [0046](./adr/0046-an-operator-renews-its-certificate-by-presenting-the-one-it-holds.md) — an operator renews its certificate by presenting the one it holds, and only the newest one renews
 - [0047](./adr/0047-a-domain-reaches-a-sibling-through-its-declared-surface.md) — garam is partitioned by domain, and a boundary reaches a sibling through the surface that sibling declares
 - [0048](./adr/0048-garams-domains-are-named-by-subject-matter.md) — garam's domains are named by subject matter, and the Go package list is not the domain list
+- [0049](./adr/0049-neither-published-specification-promises-anything-across-versions.md) — neither published specification promises anything across versions
+- [0050](./adr/0050-a-specification-states-its-listeners-5xx-once-and-declares-none-per-operation.md) — a specification states its listener's 5xx once and declares none per operation
 
 ## Rules for edits
 

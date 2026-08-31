@@ -5,6 +5,7 @@ The shape garam is partitioned into, what may reference what, and when a new bou
 ## Contents
 - The shape
 - Boundaries and dependency direction
+- Where the composition root lives
 - When a new boundary is earned
 - Decisions this rests on
 - Open questions
@@ -30,6 +31,16 @@ Nothing here states what goes *inside* a boundary, or how the system is deployed
 - **Composition stacks.** What composes several boundaries can itself be composed by something above it, and that does not make it a boundary reaching upward. The rule fixes the direction, not the number of layers.
 - **Shared code sits below every boundary, never beside one.** What is extracted is extracted below the boundaries that need it; it never becomes a sibling folder no boundary owns.
 - **A cycle between two boundaries means the split is wrong**, and so does a file that belongs in two of them. Break it by inverting one direction — the side that needs the behaviour declares the contract and the other implements it — or by merging them, or by extracting what both need into a third. What keeps a cycle out is that direction, held when the split is drawn, rather than a reviewer noticing one afterwards ([ADR-0047](./adr/0047-a-domain-reaches-a-sibling-through-its-declared-surface.md)).
+
+## Where the composition root lives
+
+garam's composition root is `internal/cli`, the package `cmd/garam/main.go` calls: the concrete types behind the seams the domains declare are constructed there, and `cmd/garam/main.go` constructs nothing itself.
+
+`docs/convention/stack-go.md` §Project envelope decides this case differently. Its first bullet puts that construction in `cmd/<binary>/main.go` and nowhere else, and asks that the file be kept thin. That rule governs — a stack-specific convention file outranks this document ([README.md](./README.md) §Rules, rule 8) — and what garam does not satisfy is the path it names: `cmd/garam/main.go` is thin because the construction is not in it.
+
+**The placement is what the in-process integration tests rest on.** `package main` cannot be imported, which `docs/convention/stack-go.md` §7 states where it makes a test of one internal by necessity, and the same section designates `tests/` for the integration and E2E tests that wire multiple domains. `tests/e2e/issue_certificate_test.go` and `tests/e2e/migrate_test.go` reach the shipped command tree through `cli.NewRootCommand()`. Construction moved into `cmd/garam/main.go` is construction those two cannot reach: what they exercise goes uncovered, or is rebuilt beside them as a second copy of the wiring — and a copy does not fail when the shipped wiring breaks.
+
+**This records the divergence and does not change the rule.** Nothing here amends `stack-go.md`, and nothing here makes garam compliant. Whether that rule should name a property rather than a path is the convention owner's to answer; #756 carries the referral, and the alternative it rejected — moving the construction up into `cmd/garam/main.go` — with what that would cost. Until the rule is answered, `internal/cli` holding the composition root is a position this project recorded and not a defect nobody noticed.
 
 ## When a new boundary is earned
 

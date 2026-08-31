@@ -14,7 +14,7 @@
 // a sibling of `serve` rather than a subcommand under it. That is as
 // far as it reaches: `serve machine` mints agent identities and issues
 // certificates on the listener it serves
-// (docs/architecture/domains.md §internal/ca).
+// (docs/architecture/certificate-authorities.md).
 //
 // Every serve command answers the two probes internal/health mounts —
 // liveness and readiness — on a listener that asks for no credential:

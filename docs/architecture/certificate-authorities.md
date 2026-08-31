@@ -1,0 +1,48 @@
+# Certificate Authorities
+
+The certificate authority an organization signs machine identities
+with (ADR-0014). Implemented by `internal/ca`.
+
+| Type | Responsibility |
+|------|----------------|
+| `Authority` | an organization's CA: the certificate it signs with, and its private key in sealed form |
+| `Certificate` | an issued client certificate, the private key it was issued with, the CA that signed it, and the serial that tells it from another certificate naming the same subject |
+| `Sealer` | seals key material so what reaches storage is useless without the key-encryption key the process holds |
+| `Service` | issues a certificate for a subject GRN, creating the organization's CA on demand |
+
+A CA is an organization's own rather than shared, so a certificate
+issued by one does not chain against another's and tenancy holds in the
+trust root rather than in a check a caller could forget. It is created
+on the first certificate that organization needs, so an organization
+that has needed none has no authority yet. The subject's GRN travels in a
+SAN URI and the certificate carries nothing else — no name, no roles, no
+claims. Lifetime is the only revocation there is (ADR-0014), so it is
+short by default and bounded at both ends — a service whose configured
+lifetime falls outside them does not start — and it carries jitter that
+only shortens it, which keeps a fleet from expiring together (ADR-0015).
+A lifetime reaching past what the signing CA has left is refused rather
+than signed: such a certificate stops verifying the day the CA expires.
+
+The CA private key reaches Postgres only through `Sealer`, whose one
+implementation is AES-256-GCM under a key-encryption key read from a
+file through `internal/keyfile` (ADR-0015); the sealed bytes name the
+key that opens
+them, and open only in the organization's row they were written for, so
+write access to the database moves no trust root. A subject's own key is
+generated per certificate and returned once, never stored. `garam serve
+machine` is the process that issues, and it reads the key-encryption
+key before it serves: the process that owns the authorities refuses to
+start without the key that opens them rather than failing at the first
+certificate it is asked for. `garam issue-certificate` reads the same
+key the same way and mints an operator's own first certificate — the
+one bootstrap ADR-0015 leaves out of band. It refuses any subject that
+is not an operator, and no serve path reaches it, so no serving process
+mints an operator's first certificate, which is why the command is a
+sibling of `serve` rather than a subcommand under it. That is as far as
+the refusal and the command tree reach: `garam serve machine` mints
+identities and issues certificates on the listener it serves.
+
+That key is as availability-critical as the database — losing it loses
+every organization's CA with no recovery short of new authorities and a
+reissue for every certificate — and why it is held this way rather than
+in a KMS is [ADR-0016](./adr/0016-ca-key-custody.md).

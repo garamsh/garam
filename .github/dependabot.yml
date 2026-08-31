@@ -63,7 +63,9 @@ updates:
   # same Go version Dockerfile does, and web/.nvmrc the same Node major
   # as Dockerfile.web, so every bump this proposes arrives half-done and
   # splits the container's toolchain from the repository's declared
-  # version unless the other half lands with it.
+  # version unless the other half lands with it. `make check-toolchain`
+  # fails on that split (#803); it reads the two pairs and not why they
+  # are pairs, which is what this paragraph is for.
   - package-ecosystem: "docker"
     directory: "/deploy/local"
     schedule:

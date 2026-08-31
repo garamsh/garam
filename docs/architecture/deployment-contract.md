@@ -399,13 +399,6 @@ that would assert one:
   established; nothing in the source bounds startup. A slow start
   reading as a failed deploy is a function of the deployment's probe
   configuration.
-- **What `/api/*` points at in a published web image.** Not established.
-  The rewrite target is a build argument baked into the image (`ARG
-  GARAM_API_URL` in `deploy/local/Dockerfile.web`, read by
-  `web/next.config.ts`), and no release exists to have chosen a value,
-  so a consumer cannot assume a published image carries the local
-  default. The chart's `web.apiUrl` has to match whatever that build
-  used, and nothing checks that.
 - **Whether the adapter answers a probe.** It answers none: it has no
   listener, and [ADR-0021](./adr/0021-liveness-and-readiness.md) decides
   the probes for the three serve processes rather than for a process

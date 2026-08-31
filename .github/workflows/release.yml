@@ -1,0 +1,112 @@
+name: release
+
+# Action pins take the form ci.yml states.
+
+# ADR-0039 fixes this trigger: a merge to `main` publishes nothing, so
+# the registry holds released versions and no build residue. It is also
+# the only trigger the push role admits — its trust policy matches the
+# subject `repo:garamsh@307152666/garam@1307729369:ref:refs/tags/v*`,
+# and a run on any other ref gets no credential.
+on:
+  push:
+    tags: ["v*"]
+
+permissions: read-all
+
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    permissions:
+      # A job's block replaces the workflow's rather than adding to it,
+      # so the read the checkout needs is written here beside the
+      # federated push credential. This job writes nothing back.
+      contents: read
+      id-token: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      registry: ${{ steps.ecr.outputs.registry }}
+      server-digest: ${{ steps.server.outputs.digest }}
+      web-digest: ${{ steps.web.outputs.digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # ADR-0039: a release is a `vX.Y.Z` git tag and the image tag is
+      # that tag without the `v`. The trigger admits every `v*`, and the
+      # repositories are IMMUTABLE, so a tag that is not `vX.Y.Z` is
+      # refused here rather than published under a name nothing can take
+      # back. The tag name reaches the shell through the environment.
+      - id: version
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if ! printf '%s' "$REF_NAME" | grep -Eq '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'; then
+            echo "tag $REF_NAME is not vX.Y.Z: nothing published" >&2
+            exit 1
+          fi
+          echo "version=${REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        with:
+          role-to-assume: arn:aws:iam::486152169996:role/garam-dev-ecr-push
+          aws-region: ap-northeast-2
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
+
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+
+      # One version, two images. A failure on the second leaves the
+      # version half-published and the repair is the next version, never
+      # a re-push of this one (ADR-0039).
+      #
+      # `platforms` names the runner's own platform rather than implying
+      # it, and no attestation is attached: what each repository receives
+      # is one manifest, so the digest recorded below names the image and
+      # not an index over it.
+      - id: server
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: deploy/local/Dockerfile
+          platforms: linux/amd64
+          provenance: false
+          sbom: false
+          push: true
+          tags: ${{ steps.ecr.outputs.registry }}/garam/garam-server:${{ steps.version.outputs.version }}
+
+      - id: web
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: web
+          file: deploy/local/Dockerfile.web
+          platforms: linux/amd64
+          provenance: false
+          sbom: false
+          push: true
+          # ADR-0039 left the value to the change that builds the
+          # release: the `/api/*` rewrite target is baked in, so a
+          # published image is bound to one. This is the api Service a
+          # release named `garam` renders, and the chart's own
+          # `ci/minimal-values.yaml` already sets `web.apiUrl` to it.
+          build-args: |
+            GARAM_API_URL=http://garam-api:8080
+          tags: ${{ steps.ecr.outputs.registry }}/garam/garam-web:${{ steps.version.outputs.version }}
+
+  release:
+    needs: images
+    runs-on: ubuntu-latest
+    permissions:
+      # The release is the only thing this workflow writes back.
+      contents: write
+    steps:
+      # ADR-0039: the release records each image's digest alongside its
+      # tag, so a consumer that would rather pin a digest reads one here
+      # instead of discovering it.
+      - uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          body: |
+            ${{ needs.images.outputs.registry }}/garam/garam-server:${{ needs.images.outputs.version }}
+            ${{ needs.images.outputs.server-digest }}
+
+            ${{ needs.images.outputs.registry }}/garam/garam-web:${{ needs.images.outputs.version }}
+            ${{ needs.images.outputs.web-digest }}

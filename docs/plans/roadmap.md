@@ -97,9 +97,11 @@ already expose, built in parallel rather than gating P3.
   `deploy/charts/garam/` is the description of a deployment (ADR-0042),
   checked by `make chart` inside `make ci`. What a deployment must plan
   for is [deployment-contract.md](../architecture/deployment-contract.md).
-  What is not started is publishing: ADR-0039 fixes the two registry
-  repository names and creates neither, and `.github/workflows/` holds
-  `ci.yml` alone.
+  Publishing is built and unexercised: `.github/workflows/release.yml`
+  publishes both images on a `vX.Y.Z` tag push under the names and the
+  tag rule ADR-0039 fixed, and both ECR repositories existed when they
+  were read on 2026-08-31. No tag has been pushed, so nothing has run
+  it and neither repository holds an image.
 
 ## Sequencing rules
 

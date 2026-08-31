@@ -218,3 +218,20 @@ named below is therefore a decision, not a demonstrated mechanism.
   The decision is untouched — a version tag still publishes both images
   to the account's registry, under the names, the tag rule, the trigger
   and the credential shape decided here.
+
+- 2026-08-31 — §Decision's "None of it is built. No release workflow
+  exists, the role does not exist, and neither repository exists" is
+  false in each of its three parts. `.github/workflows/release.yml`
+  publishes both images on a `vX.Y.Z` tag push, and #791 is what
+  falsified that part. The other two were built outside this repository
+  and were read on 2026-08-31: `aws iam get-role --role-name
+  garam-dev-ecr-push` returns a role trusting the subject
+  `repo:garamsh@307152666/garam@1307729369:ref:refs/tags/v*` and holding
+  `ecr:GetAuthorizationToken` with the push actions on the two
+  repository ARNs and nothing else, and `aws ecr describe-repositories
+  --region ap-northeast-2` returns `garam/garam-server` and
+  `garam/garam-web`, both IMMUTABLE with scan-on-push. The decision is
+  untouched, and so is each of the three: every one was a state this ADR
+  asked to be replaced, and what replaced it is what it specified. What
+  has not happened is a release — `aws ecr list-images` returned an
+  empty list for both repositories the same day, and no `v*` tag exists.

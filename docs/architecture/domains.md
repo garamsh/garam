@@ -282,7 +282,7 @@ go list -f '{{$i:=.ImportPath}}{{range .Imports}}{{if eq . "'"$pkg"'"}}{{$i}}{{e
 | `internal/errorx` | 9 — every domain | earns its place |
 | `internal/grn` | 9 — every domain | earns its place |
 | `internal/pgxerr` | 8 — `org` `user` `authz` `ca` `agent` `operator` `authn` `message` | earns its place |
-| `internal/listfilter` | 2 — `org` `agent` | earns its place |
+| `internal/listfilter` | 2 — `org` `agent` | under the threshold; where it belongs is unsettled |
 | `internal/wire` | 1 — `authz` | permitted by the wire-format carve-out, not by the count |
 | `internal/keyfile` | 1 — `ca` | under the threshold; belongs with the domain that owns it |
 | `internal/health` | 0 | under the threshold; belongs with the surfaces that mount it |
@@ -309,7 +309,20 @@ through it as well and is not a domain, which is why the query above
 names nine importers where the column counts eight.
 
 `internal/listfilter` holds `Filter`, an offset and a limit where a
-limit of 0 means no limit. It has no dependencies.
+limit of 0 means no limit, and `Parse`, which builds one from what a
+request carries and refuses a page the paging columns cannot hold. It
+depends on `errorx` only.
+
+Two domains page with it, which is under the threshold, so what places
+`errorx`, `grn` and `pgxerr` below the domains does not place this
+one. `111bdd5` (#402) extracted the type out of `internal/org`, where
+it was `org.ListFilter`, when the agents domain gained pagination, and
+the reason it recorded beside it is the sibling prohibition
+[ADR-0047](./adr/0047-a-domain-reaches-a-sibling-through-its-declared-surface.md)
+retired. `8392845` (#406) took it to three by collapsing a duplicate
+that had grown in `internal/user`, and `3bd96aa` (#749) removed that
+domain's last list call and took it back to the two it was extracted
+at. Where it belongs is the open question below.
 
 `internal/wire` holds the conversions onto the wire formats the request
 surfaces share: the statement `Effect` and its authz-proto mapping, and
@@ -395,10 +408,19 @@ the adapter where it is used.
   nothing.
 - **What owns a concern once it is extracted below the domains.**
   [structure.md](./structure.md) §Open questions holds this, and
-  `internal/keyfile` and `internal/health` are the two packages waiting
-  on it: each is under the threshold that would place it below the
-  domains, and no decision here says which boundary should own it
-  instead.
+  `internal/keyfile`, `internal/health` and `internal/listfilter` are
+  the three packages waiting on it: each is under the threshold that
+  would place it below the domains, and no decision here says which
+  boundary should own it instead. `listfilter` is the one where two
+  rules recorded here answer differently.
+  [structure.md](./structure.md) §When a new boundary is earned puts a
+  concern shared by two with the boundary that owns it, "reached
+  through its declared surface", and `internal/org` is where this one
+  was. This document's §What a domain is here says domains cooperate
+  through `grn.GRN`, "never through each other's concrete types", and
+  the concern is a concrete type. Satisfying the first breaches the
+  second, which no domain breaches today: `go list` reports no import
+  between any two of the nine.
 
 ## Future domains
 

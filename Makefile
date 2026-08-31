@@ -19,10 +19,11 @@ GOIMPORTS := go tool goimports
 # helm is not a tool directive: helm.sh/helm/v4 requires a
 # google.golang.org/protobuf newer than protoc-gen-go's, and merging its
 # graph into this module's raises that floor and restamps every
-# generated .pb.go header. Nothing parses this line for a pin, so it has
-# no mover of any form docs/convention/ci.md §Verify admits — no bot,
-# and no owner or scheduled review named either. It writes no output
-# this repository commits, so nothing here fails when it goes stale.
+# generated .pb.go header. Nothing parses this line for a pin, so no bot
+# proposes a bump and no scheduled review is named; naming no mover of
+# its own, it is the PM's to move under AGENTS.md §Roles. It writes no
+# output this repository commits, so nothing here fails when it goes
+# stale.
 HELM := go run helm.sh/helm/v4/cmd/helm@v4.2.4
 
 # One dev Postgres per machine, not per worktree:
@@ -615,8 +616,8 @@ MINIKUBE_DIR := deploy/local/minikube
 # is what puts that floor at 1.30.0 rather than 1.29.2, and the GitHub
 # Advisory Database does not carry it — re-check the four at the
 # project's own advisories. Nothing proposes a bump for this pin either,
-# and no owner and no scheduled review is named for it, so it has no
-# mover of any form docs/convention/ci.md §Verify admits.
+# and no scheduled review is named for it; naming no mover of its own,
+# it is the PM's to move under AGENTS.md §Roles.
 #
 # The database's Postgres major is no longer this pin's to move:
 # deploy/local/minikube/postgres.yaml names its own image rather than

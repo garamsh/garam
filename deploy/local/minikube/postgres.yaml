@@ -19,9 +19,9 @@ spec:
   # so this database's major moved with CNPG_MANIFEST and no file here
   # said so. Tag and digest both: the operator reads the major from the
   # tag and the digest fixes the build; no Dependabot ecosystem reads a
-  # key named imageName, and no owner and no scheduled review is named
-  # either, so this pin has no mover of any form
-  # docs/convention/ci.md §Verify admits.
+  # key named imageName, and no scheduled review is named either; naming
+  # no mover of its own, this pin is the PM's to move under
+  # AGENTS.md §Roles.
   imageName: ghcr.io/cloudnative-pg/postgresql:17.11-system-trixie@sha256:d3601aae9a06dd1b8069864ffed80344720e289a98fbf749954d2edeec715fa0
   instances: 1
   bootstrap:

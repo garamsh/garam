@@ -189,9 +189,9 @@ The boundary is as much of the responsibility as the contents.
 
 ## Its own toolchain and gate
 
-`make web-ci` is the gate, and it is not part of `make ci` — the two
-run side by side. In order: `web-format`, `web-lint` (which also
-typechecks), `web-test`, `web-build`, `web-check-gen`.
+`make web-ci` is the gate, and `make ci` runs it last, so the one name
+covers both toolchains. In order: `web-format`, `web-lint`
+(which also typechecks), `web-test`, `web-build`, `web-check-gen`.
 
 Two things are outside it. `make web-e2e` runs the Playwright specs in
 `web/e2e/` against a real built application, a real backend and a real

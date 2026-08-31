@@ -81,8 +81,8 @@ truncating suite behind `make e2e`.
 The Next.js app lives in [`web/`](./web/) and talks to the Go backend
 through a same-origin `/api/*` rewrite
 ([ADR-0009](./docs/architecture/adr/0009-web-frontend.md)). It keeps
-its own toolchain and lockfile; `make web-ci` is its gate, run
-alongside `make ci`.
+its own toolchain and lockfile; `make web-ci` is its gate, and `make
+ci` runs it — so `make ci` needs pnpm and Node as well as Go.
 
 ```sh
 make web-install          # pnpm install --frozen-lockfile

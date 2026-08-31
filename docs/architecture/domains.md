@@ -729,9 +729,9 @@ kind, so a caller loops on it rather than telling an error apart.
 
 A concern three or more boundaries share is extracted below them
 ([structure.md](./structure.md) §When a new boundary is earned). The
-middle column below is a count of domains, and three independent
-counts of it returned three different numbers for want of saying what
-that means, so the rule it is counted under is here:
+middle column below is a count of domains, and #783 records that
+column being counted four times and answering with four different
+numbers for want of saying what it counts, so the rule is here:
 
 - **Only a domain counts.** The nine sections above are the whole
   list. A delivery surface, a sub-responsibility held in a boundary of

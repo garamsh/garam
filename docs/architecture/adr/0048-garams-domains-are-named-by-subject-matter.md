@@ -253,8 +253,9 @@ territory, and this one is architecture's.
   through `pgxerr`, taking it to 8, and `3bd96aa` (#749) removed
   `internal/user`'s `listfilter` import, taking it to 2. The other
   five rows are unchanged. The rule the column is counted under is not
-  stated here, and four independent counts of it returned four
-  different numbers for want of that. It is that an importer counts
+  stated here, and #783 records the same column being counted four
+  times and answering with four different numbers for want of it. It
+  is that an importer counts
   only when it is one of the nine domains — a delivery surface, a
   sub-responsibility held in a boundary of its own and another shared
   package are not domains — read from its non-test files and not from

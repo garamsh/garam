@@ -728,18 +728,42 @@ kind, so a caller loops on it rather than telling an error apart.
 ## Shared code below the domains
 
 A concern three or more boundaries share is extracted below them
-([structure.md](./structure.md) §When a new boundary is earned). What
-counts is a domain importing the package from a file that is not a
-test: a test import is not a dependency of the domain's code, and
-counting one is what once made `internal/keyfile` look like two
-domains.
+([structure.md](./structure.md) §When a new boundary is earned). The
+middle column below is a count of domains, and three independent
+counts of it returned three different numbers for want of saying what
+that means, so the rule it is counted under is here:
+
+- **Only a domain counts.** The nine sections above are the whole
+  list. A delivery surface, a sub-responsibility held in a boundary of
+  its own and another shared package import these packages too, and
+  none of those importers is a domain.
+- **A domain's generated subpackages are not its code.**
+  `internal/<domain>/db/` and `internal/<domain>/mocks/` are generator
+  output, which `docs/convention/README.md` §Scope places outside what
+  the project writes, so an import only one of them carries is not the
+  domain's. Any other subpackage is inside the folder the boundary
+  names and is that domain, counted once with the rest.
+- **A test import is not an import here.** A test import is not a
+  dependency of the domain's code, and counting one is what once made
+  `internal/keyfile` look like two domains. `go list`'s `.Imports`
+  holds what is not a test and `.TestImports` holds the rest, so the
+  query below is already scoped to it.
+
+The query names every importer of one shared package; the rules above
+say which of those importers the column counts.
+
+```
+pkg=github.com/garamsh/garam/internal/pgxerr
+go list -f '{{$i:=.ImportPath}}{{range .Imports}}{{if eq . "'"$pkg"'"}}{{$i}}{{end}}{{end}}' ./... |
+  sed -n 's|.*/garam/||p' | sort
+```
 
 | Package | Domains importing it | Standing |
 |---|---|---|
 | `internal/errorx` | 9 — every domain | earns its place |
 | `internal/grn` | 9 — every domain | earns its place |
-| `internal/pgxerr` | 6 — `org` `user` `authz` `ca` `agent` `operator` | earns its place |
-| `internal/listfilter` | 3 — `org` `user` `agent` | earns its place |
+| `internal/pgxerr` | 8 — `org` `user` `authz` `ca` `agent` `operator` `authn` `message` | earns its place |
+| `internal/listfilter` | 2 — `org` `agent` | earns its place |
 | `internal/wire` | 1 — `authz` | permitted by the wire-format carve-out, not by the count |
 | `internal/keyfile` | 1 — `ca` | under the threshold; belongs with the domain that owns it |
 | `internal/health` | 0 | under the threshold; belongs with the surfaces that mount it |
@@ -755,11 +779,15 @@ no dependency of its own.
 reading the sql state the driver carries, and labels it with the
 operation the caller names rather than with a store's name. Which
 sqlstate becomes which kind is the package's own doc comment; it is
-code, and a copy here would be a second thing to keep true. Six domain
-stores answer through it: the five that each held their own copy —
-`org`, `authz`, `ca`, `user`, `agent` — and `operator`, which never had
-one. The messaging domain's store did not have a copy either, and
-remains on inline driver checks as the sign-in domain's does.
+code, and a copy here would be a second thing to keep true. Every
+postgres-backed store answers through it, which is eight domains: the
+five that each held their own copy — `org`, `authz`, `ca`, `user`,
+`agent` — `operator`, which never had one, and the sign-in and
+messaging domains, whose stores read the driver's error inline until
+they were routed through it too. Machine identity, the ninth domain,
+persists nothing and has no store. The watch boundary's store answers
+through it as well and is not a domain, which is why the query above
+names nine importers where the column counts eight.
 
 `internal/listfilter` holds `Filter`, an offset and a limit where a
 limit of 0 means no limit. It has no dependencies.

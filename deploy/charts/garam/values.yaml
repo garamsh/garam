@@ -100,9 +100,8 @@ machine:
   #
   # Nothing proposes a bump for it: Dependabot's docker and helm
   # ecosystems descend only into keys named `image` or `repository`, and
-  # this is neither. It moves when a contributor moves it. No owner and
-  # no scheduled review is named for it either, so it has no mover of
-  # any form docs/convention/ci.md §Verify admits.
+  # this is neither. No scheduled review is named for it either; naming
+  # no mover of its own, it is the PM's to move under AGENTS.md §Roles.
   copyImage: alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
   resources: {}
 

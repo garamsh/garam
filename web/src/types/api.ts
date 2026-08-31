@@ -790,7 +790,7 @@ export interface components {
             expiresAt: string;
         };
         /**
-         * @description An IAM-style policy document: a `Version` string and a `Statement` list of `Sid` / `Effect` / `Action` / `Resource` entries. The authz engine owns the model and validates the document on write, so it travels this API opaquely.
+         * @description An IAM-style policy document: a `Version` string and a `Statement` list of `Sid` / `Effect` / `Action` / `Resource` / `Condition` entries. The authz engine owns the model and validates the document on write, so it travels this API opaquely; it refuses a key the model does not name rather than storing the document without it.
          * @example {
          *       "Version": "2026-07-25",
          *       "Statement": [

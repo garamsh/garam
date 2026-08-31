@@ -314,6 +314,48 @@ func TestOrgStore_RoundTripWithCascade(t *testing.T) {
 	assert.True(t, errorx.IsKind(err, errorx.KindNotFound))
 }
 
+// TestOrgStore_GroupAndProjectSurrenderTheirPolicies holds that the
+// policies a Group and a Project persist are reachable from the
+// aggregate the store returns (ADR-0051). The column is written by the
+// patch and read back by the store, so the assertion goes through the
+// aggregate rather than through the row: what is under test is whether
+// a caller holding the aggregate can reach the value at all.
+func TestOrgStore_GroupAndProjectSurrenderTheirPolicies(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := org.NewPostgresStore(p)
+	orgGRN := grnOf("org", "acme")
+	require.NoError(t, s.CreateOrg(ctx, org.NewOrganization(orgGRN, "acme")))
+
+	attached := []string{"read-only", "billing"}
+
+	groupGRN := grnOf("group", "eng")
+	require.NoError(t, s.CreateGroup(ctx, org.NewGroup(groupGRN, "eng", orgGRN)))
+	freshGroup, err := s.GetGroup(ctx, groupGRN)
+	require.NoError(t, err)
+	assert.Empty(t, freshGroup.Policies(),
+		"a group stored with none reads back none, so the assertion below reads the patch")
+
+	_, err = s.UpdateGroup(ctx, groupGRN, org.GroupPatch{Policies: attached})
+	require.NoError(t, err)
+	storedGroup, err := s.GetGroup(ctx, groupGRN)
+	require.NoError(t, err)
+	assert.Equal(t, attached, storedGroup.Policies())
+
+	projectGRN := grnOf("project", "web")
+	require.NoError(t, s.CreateProject(ctx, org.NewProject(projectGRN, "web", orgGRN)))
+	freshProject, err := s.GetProject(ctx, projectGRN)
+	require.NoError(t, err)
+	assert.Empty(t, freshProject.Policies(),
+		"a project stored with none reads back none, so the assertion below reads the patch")
+
+	_, err = s.UpdateProject(ctx, projectGRN, org.ProjectPatch{Policies: attached})
+	require.NoError(t, err)
+	storedProject, err := s.GetProject(ctx, projectGRN)
+	require.NoError(t, err)
+	assert.Equal(t, attached, storedProject.Policies())
+}
+
 func TestOrgStore_Membership(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)

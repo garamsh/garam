@@ -28,3 +28,4 @@ func (p *Project) GRN() grn.GRN          { return p.grn }
 func (p *Project) Name() string          { return p.name }
 func (p *Project) Organization() grn.GRN { return p.orgGRN }
 func (p *Project) Roles() []string       { return p.roles }
+func (p *Project) Policies() []string    { return p.policies }

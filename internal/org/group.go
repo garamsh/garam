@@ -28,3 +28,4 @@ func (g *Group) GRN() grn.GRN          { return g.grn }
 func (g *Group) Name() string          { return g.name }
 func (g *Group) Organization() grn.GRN { return g.orgGRN }
 func (g *Group) Roles() []string       { return g.roles }
+func (g *Group) Policies() []string    { return g.policies }

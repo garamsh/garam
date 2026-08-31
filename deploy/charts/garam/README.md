@@ -162,7 +162,8 @@ fails without them:
 - `web.apiUrl` — the address the web process reaches `serve api` on,
   baked into the image at build time as the `/api/*` rewrite target and
   read again at runtime by every server-side render
-  (`web/src/lib/garam.ts`). Absent at runtime the process still starts
+  (`web/src/lib/garam.ts`), and for a published image it is the value
+  §Pinning a version names. Absent at runtime the process still starts
   and answers both probes, `/` and the rewrite keep serving, and every
   server-rendered route answers 500: `web/src/env.ts` parses at import,
   and only the routes reaching the backend import it.
@@ -314,18 +315,26 @@ one version, so a deployment pins one version across the pair
 (ADR-0039). The tags are immutable, so the tag answers what is deployed
 on its own.
 
+Every published web image is built with
+`GARAM_API_URL=http://garam-api:8080` (`.github/workflows/release.yml`),
+which is the api Service a release named `garam` renders. `web.apiUrl`
+must equal what the image was built with and nothing checks that, so a
+deployment pinning `image.web.tag` sets that value and installs under
+that release name, or makes the name resolve some other way. Building
+the image itself is the alternative, and then the value is that build's.
+
 A deployment must be able to pull both references, and how it does that
 is not garam's to decide: the registry admits no anonymous pull and the
 credential it issues expires. `image.pullSecrets` is one way to supply
 one and the chart does not require it; a node credential minted per pull
 is another.
 
-**Neither image exists yet.** No release pipeline exists, no release has
-been cut, and both ECR repositories were empty when ADR-0042 read them
-on 2026-08-25, so the references `values.yaml` carries pull nothing.
-`Chart.yaml` has no `appVersion` for the same reason; the change that
-publishes the first release sets it and makes a default for the two tags
-honest.
+**Neither image exists yet.** `.github/workflows/release.yml` publishes
+both on a `vX.Y.Z` tag push, no such tag has been pushed, and both ECR
+repositories were empty when they were read on 2026-08-31, so the
+references `values.yaml` carries pull nothing. `Chart.yaml` has no
+`appVersion` for the same reason; the commit a first release tag names
+sets it and makes a default for the two tags honest.
 
 ## What keeps it true
 

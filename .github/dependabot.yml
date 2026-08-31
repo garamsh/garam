@@ -72,14 +72,15 @@ updates:
     schedule:
       interval: "weekly"
 
-  # .github/workflows/ci.yml's four action pins.
+  # The action pins in .github/workflows/ — nine actions across ci.yml
+  # and release.yml, one of which both files use.
   #
   # Covers a newer release for an action pinned by full commit SHA,
   # rewriting the SHA and the trailing version comment together.
   #
   # Does not cover an action referenced by a path rather than by
   # repository, and does not keep a version comment that carries
-  # anything besides the version — see the comment in that file.
+  # anything besides the version — see the comment in ci.yml.
   #
   # A CVE reaches this ecosystem, unlike docker, but as a security
   # update rather than as an entry here, and the fix it proposes is the

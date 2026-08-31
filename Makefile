@@ -247,11 +247,14 @@ e2e:
 	@test -n '$(TEST_DATABASE_URL)' || { echo "e2e: no postgres published on this host — run make db-up" >&2; exit 1; }
 	GARAM_TEST_DATABASE_URL='$(TEST_DATABASE_URL)' go test -count=1 $(E2E_PKGS)
 
-ci: format lint test build check-gen chart
+# The whole set, both toolchains, under one name (#789). `web-ci` runs
+# last so the cheaper Go half fails first, and it puts pnpm and the node
+# version web/.nvmrc names on every contributor's path.
+ci: format lint test build check-gen chart web-ci
 
 # ---------------------------------------------------------------------
 # web/ — the Next.js frontend (ADR-0009). It keeps its own toolchain and
-# lockfile; `web-ci` is the gate CI runs alongside `ci`.
+# lockfile; `web-ci` is the half of `ci` that covers it.
 # ---------------------------------------------------------------------
 
 web-install:

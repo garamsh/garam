@@ -103,3 +103,14 @@ are members, which is precisely the assumption under test.
 ## Errata
 
 - 2026-08-18 — §Context's "Neither review nor the test suite would have caught it, and neither would catch the next one. The engine's tests exercise subjects that are members, which is precisely the assumption under test." is false. `TestOrgIsolation_GrantsNeverCrossOrgs` had no membership rows and deliberately asked about a foreign subject; the real omission was that every policy in its fixture was attached, and an attached policy does not match a foreign subject. One fixture line closed the gap — the test is now `TestOrgIsolation_OnlyAttachmentKeepsGrantsInsideAnOrg` (#296). The decision stands; what changes is the remedy's footing: the boundary is observable by the engine's own tests, not only by reviewer vigilance.
+- 2026-08-31 — The 2026-08-18 entry above ends "the test is now
+  `TestOrgIsolation_OnlyAttachmentKeepsGrantsInsideAnOrg` (#296)",
+  which was true when written and is false since `1d67d5c` (#411):
+  that commit deleted the function from `tests/e2e/postgres_test.go`
+  and added `TestGRPCServer_RefusesForeignSubjectWhenSubjectOrgUnset`
+  to `internal/authz/server_test.go`, where the boundary is tested
+  now. The predecessor name that entry also cites,
+  `TestOrgIsolation_GrantsNeverCrossOrgs`, went at `324adea` (#296) —
+  the rename the entry itself records. What the entry concluded still
+  holds: the boundary is observable by the engine's own tests, not
+  only by reviewer vigilance. The decision is untouched.

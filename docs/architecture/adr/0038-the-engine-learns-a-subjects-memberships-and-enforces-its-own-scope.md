@@ -8,6 +8,7 @@
 - Decision
 - Consequences
 - Rejected alternatives
+- Errata
 
 ## Context
 
@@ -78,3 +79,19 @@ on the caller to hold the boundary on its behalf.
   engine to the same boundary [ADR-0007](./0007-hybrid-statement-collection.md)
   was drawn to keep. The membership is the API server's fact; sending
   it across is what the current `subject_groups` flow already does.
+
+## Errata
+
+- 2026-08-31 — §Consequences' "The engine's unit test
+  `TestOrgIsolation_OnlyAttachmentKeepsGrantsInsideAnOrg` … is now a
+  property the engine tests in isolation" names a function that no
+  longer exists. It was true when written and is false since
+  `1d67d5c` (#411), the pull request that implemented this ADR: that
+  commit deleted the function from `tests/e2e/postgres_test.go`
+  nineteen minutes after `01395db` (#409) merged this ADR, and added
+  `TestGRPCServer_RefusesForeignSubjectWhenSubjectOrgUnset` to
+  `internal/authz/server_test.go` in its place. What the bullet
+  asserts is what that commit did — the property is one the engine
+  tests in isolation, in the engine's own package, under that name —
+  so what is stale is the name and not the claim. The decision is
+  untouched.

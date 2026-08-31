@@ -14,6 +14,7 @@ Documentation lives in [`docs/`](./docs/).
 ## Contents
 - Module path
 - Build and test
+- Searching this repository
 - Local stack
 - Web frontend
 - Development model
@@ -33,6 +34,24 @@ go test  ./...
 pipeline that is configured to run it does not run here
 ([AGENTS.md](./AGENTS.md) §This project) — so run it before you push.
 See [docs/convention/ci.md](./docs/convention/ci.md).
+
+## Searching this repository
+
+This repository hard-wraps its prose and its Go comments, so a phrase
+longer than a few words often straddles a line break and sits on no
+single line. `grep`, `git grep` and `grep -z` all report zero hits for
+such a phrase, and that zero reads exactly like absence (#624).
+
+```sh
+make search Q="the phrase to look for"
+```
+
+`make search` joins each tracked text file into one line before
+matching, and names how many files it read. Every run first finds a
+phrase that is there — one spanning a line break that a line-based
+`git grep` cannot find — and fails rather than answering when it
+cannot, so a zero it prints is an answer and not a search that could
+never have matched. It reads tracked files only.
 
 ## Local stack
 

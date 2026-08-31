@@ -188,175 +188,15 @@ check-gen:
 # a diff a reviewer reads rather than in a computation nobody sees.
 TEMPLATE_SYNCED := 6fbfd5d52cb65c20dd8bcc92fc6f24da88f05831
 
-# template-diff reports where every path the conventions template tracks
-# stands here — the question #294 wants answered by a run, not a memory.
-# The path set is the template's own tree, and a path's base is the newest
-# template commit whose blob equals the one HEAD holds. No such commit
-# means the content was never the template's — a local adaptation, or a
-# file the two repositories only share the name of — and no revision
-# describes that, so the path is measured against TEMPLATE_SYNCED
-# instead: the template commits touching it since then are the ones
-# nothing here shows this repository received (#775). A path absent here
-# is reported rather than skipped, which is how a directory the template
-# grows arrives without an edit to this file.
 template-diff:
-	@git fetch template --quiet
-	@git merge-base --is-ancestor $(TEMPLATE_SYNCED) template/main \
-		|| { echo 'template-diff: TEMPLATE_SYNCED $(TEMPLATE_SYNCED) is not in template/main history — the value is wrong, or the template rewrote what it named'; exit 1; }
-	@paths="$$(git ls-tree -r --name-only template/main)"; \
-		test -n "$$paths" || { echo 'template-diff: template/main tracks no path — the tree listing is broken'; exit 1; }; \
-		synced="$$(git rev-parse --short $(TEMPLATE_SYNCED))"; adapted=0; stale=0; \
-		echo "template-diff: $$(printf '%s\n' "$$paths" | wc -l) paths tracked by template/main, adapted paths measured against $$synced"; \
-		for p in $$paths; do \
-			hist="$$(git log --format='%H' --no-renames --raw --abbrev=40 template/main -- "$$p")"; \
-			test "$$(printf '%s\n' "$$hist" | awk 'NF>1{print $$4; exit}')" = "$$(git rev-parse "template/main:$$p")" \
-				|| { echo "template-diff: $$p: the newest commit touching it does not carry the blob template/main holds — the history parse below is reading the wrong field"; exit 1; }; \
-			ours="$$(git rev-parse -q --verify "HEAD:$$p")" || { printf '  absent here  %s\n' "$$p"; continue; }; \
-			base="$$(printf '%s\n' "$$hist" | awk -v ours="$$ours" 'NF==1{c=$$0} $$4==ours{print c; exit}')"; \
-			if test -z "$$base"; then \
-				adapted=$$((adapted+1)); \
-				since="$$(git log --oneline --no-decorate $(TEMPLATE_SYNCED)..template/main -- "$$p")"; \
-				test -n "$$since" || { printf '  adapted      %s  0 template commits since %s\n' "$$p" "$$synced"; continue; }; \
-				stale=$$((stale+1)); \
-				printf '  adapted      %s  %s template commits since %s\n' "$$p" "$$(printf '%s\n' "$$since" | wc -l)" "$$synced"; \
-				printf '%s\n' "$$since" | sed 's/^/                 /'; \
-				continue; \
-			fi; \
-			since="$$(git log --oneline --no-decorate "$$base..template/main" -- "$$p")"; \
-			test -n "$$since" || { printf '  current      %s  %s\n' "$$p" "$$(git rev-parse --short "$$base")"; continue; }; \
-			printf '  behind       %s  ours matches %s\n' "$$p" "$$(git rev-parse --short "$$base")"; \
-			printf '%s\n' "$$since" | sed 's/^/                 /'; \
-		done; \
-		echo "template-diff: $$stale of $$adapted adapted paths carry a template commit since $$synced"
-
-# search finds a phrase this repository hard-wraps. A phrase that
-# straddles a wrap is on no single line, so grep, git grep and any
-# `[^.]{0,N}` span report zero hits, and a reader reads that as absence
-# (#624). One flag does not close it: `grep -z` makes newline an
-# ordinary character, but the continuation line still opens with its
-# comment marker, so the joined text reads `so no file in # this stack`
-# and the phrase is still not there. Each file is joined into one line
-# with leading whitespace and one run of `#`, `//` or `>` dropped; a
-# blank line joins as the double space that keeps two paragraphs apart.
-#
-# The corpus is every tracked file git itself calls text, read from the
-# working tree — an untracked file is outside what a run covers. A
-# corpus that came back a subset reports a smaller zero and reads like
-# the whole sweep, so it is not trusted on its own word: git's diff
-# machinery names the tracked paths it counts lines for, and a corpus
-# that is not exactly that set fails the run.
-#
-# A run that found nothing and a run that searched nothing read alike,
-# so every run first finds a phrase that is there. The control is
-# derived rather than written down — the first phrase spanning a line
-# break that a line-based git grep cannot find — so it cannot go stale,
-# and that failed grep is the contrast: it is the join the control
-# proves, not that the machinery ran.
-#
-# No hits is an answer, so the target prints the count and exits 0.
-# What would make that zero a lie fails instead: an empty corpus, no
-# control candidate, or a control the join cannot find.
+	@TEMPLATE_SYNCED='$(TEMPLATE_SYNCED)' scripts/template-diff.sh
 
 # Q reaches awk through the environment and never through the command
 # text, so a phrase holding a quote is searched for rather than run.
 export SEARCH_Q = $(Q)
 
-# One program holds the join and the control candidates: the same
-# stripping decides both, and a second copy of it would drift.
-define SEARCH_AWK
-function head3(s,   n, a) {
-	n = split(s, a, " ")
-	return n < 3 ? "" : a[1] " " a[2] " " a[3]
-}
-function tail3(s,   n, a) {
-	n = split(s, a, " ")
-	return n < 3 ? "" : a[n-2] " " a[n-1] " " a[n]
-}
-function lineat(pos,   i) {
-	for (i = nlines; i > 1; i--) if (start[i] <= pos) return line[i]
-	return line[1]
-}
-function excerpt(pos,   from) {
-	from = pos - 24 < 1 ? 1 : pos - 24
-	return substr(text, from, qlen + 48)
-}
-function report(   low, p, hit, at, i, before, after) {
-	if (nlines == 0) return
-	if (mode == "candidates") {
-		if (ncand >= 50) return
-		for (i = 2; i <= nlines; i++) {
-			if (raw[i-1] ~ /[.:;,]$$/) continue
-			before = tail3(raw[i-1]); after = head3(raw[i])
-			if (before == "" || after == "") continue
-			printf "%s:%d:%s %s\n", path, line[i-1], before, after
-			if (++ncand >= 50) exit
-		}
-		return
-	}
-	low = tolower(text)
-	for (p = 0; (hit = index(substr(low, p + 1), query)) > 0; p = at + qlen - 1) {
-		at = p + hit
-		printf "%s:%d: %s\n", path, lineat(at), excerpt(at)
-	}
-}
-BEGIN {
-	mode = ENVIRON["SEARCH_MODE"]
-	query = tolower(ENVIRON["SEARCH_Q"])
-	gsub(/[ \t]+/, " ", query); sub(/^ /, "", query); sub(/ $$/, "", query)
-	qlen = length(query)
-	if (mode != "candidates" && qlen == 0) { print "search: the phrase normalised to nothing" > "/dev/stderr"; exit 2 }
-}
-FNR == 1 { report(); path = FILENAME; text = ""; nlines = 0 }
-{
-	s = $$0
-	sub(/^[ \t]*/, "", s)
-	sub(/^(\/\/+|#+|>+)[ \t]*/, "", s)
-	gsub(/[ \t]+/, " ", s); sub(/ $$/, "", s)
-	nlines++
-	start[nlines] = nlines == 1 ? 1 : length(text) + 2
-	line[nlines] = FNR
-	raw[nlines] = s
-	text = nlines == 1 ? s : text " " s
-}
-END { report() }
-endef
-export SEARCH_AWK
-
 search:
-	@test -n "$$(printf '%s' "$$SEARCH_Q" | tr -d '[:space:]')" \
-		|| { echo 'search: no phrase — usage: make search Q="the phrase to look for"'; exit 1; }
-	@set -e; \
-		out="$$(mktemp -d)"; trap 'rm -rf "$$out"' EXIT; \
-		git diff --numstat "$$(git hash-object -t tree /dev/null)" \
-			| awk '$$1 != "-" && $$1 > 0 { print $$3 }' | sort > "$$out/tracked"; \
-		rc=0; git grep -I -l -e '' > "$$out/listed" || rc=$$?; \
-		if test "$$rc" -gt 1; then echo "search: git grep exited $$rc listing the corpus — that is an error, not an empty repository"; exit 1; fi; \
-		sort "$$out/listed" > "$$out/corpus"; \
-		test -s "$$out/corpus" || { echo 'search: no tracked text file — the corpus collection is broken'; exit 1; }; \
-		diff "$$out/tracked" "$$out/corpus" \
-			|| { echo 'search: < tracked and holding lines, > read — the corpus is not the repository'; exit 1; }; \
-		files="$$(cat "$$out/corpus")"; \
-		echo "search: $$(wc -l < "$$out/corpus") tracked text files, $$(cat $$files | wc -l) lines, each joined into one line"; \
-		SEARCH_MODE=candidates awk "$$SEARCH_AWK" $$files > "$$out/candidates"; \
-		test -s "$$out/candidates" \
-			|| { echo 'search: no phrase in the corpus spans a line break — the join read nothing'; exit 1; }; \
-		control=''; site=''; \
-		while IFS= read -r c; do \
-			phrase="$${c#*:*:}"; rc=0; \
-			git grep -I -F -i -q -e "$$phrase" || rc=$$?; \
-			if test "$$rc" -eq 0; then continue; fi; \
-			if test "$$rc" -ne 1; then echo "search: git grep exited $$rc on a control candidate — that is an error, not a clean negative"; exit 1; fi; \
-			control="$$phrase"; site="$$(printf '%s' "$$c" | cut -d: -f1,2)"; break; \
-		done < "$$out/candidates"; \
-		test -n "$$control" \
-			|| { echo "search: every one of $$(wc -l < "$$out/candidates") phrases spanning a line break is on a line too — the contrast the control rests on is gone"; exit 1; }; \
-		found="$$(SEARCH_Q="$$control" awk "$$SEARCH_AWK" $$files | wc -l)"; \
-		test "$$found" -gt 0 \
-			|| { echo "search: control \"$$control\" spans the break at $$site and the join did not find it — the join is broken"; exit 1; }; \
-		echo "search: control \"$$control\" — $$site, 0 hits line-based, $$found joined"; \
-		awk "$$SEARCH_AWK" $$files > "$$out/hits"; \
-		sed 's/^/  /' "$$out/hits"; \
-		echo "search: $$(wc -l < "$$out/hits") hits for \"$$SEARCH_Q\""
+	@scripts/search.sh
 
 # db-up starts the stack's postgres service alone and makes sure the e2e
 # database exists next to `garam`. Postgres has no CREATE DATABASE IF NOT
@@ -722,83 +562,10 @@ chart-guards:
 			|| { echo 'chart-guards: the control render was refused too — the guards refuse a chart that should install'; exit 1; }; \
 		echo "chart-guards: $(words $(CHART_REFUSED)) refused as named, and minimal-values.yaml still renders"
 
-# chart-security reads the PodSecurity `restricted` fields off the
-# render, on every workload and every container. Nothing read them
-# before: #763 put them on all five workloads and checked the render by
-# hand, and deleting one include line afterwards still left `make ci`
-# green — the refusal arrived from an apiserver, one deploy later (#766).
-#
-# The effective runAsUser is the container's own or, where it sets none,
-# the pod's, which is the rule the kubelet applies. Only the two
-# containers in machine.yaml set one, so a check reading the container
-# level alone reports every other container as missing.
-#
-# The workloads are the ones §Workload identities declares, the list
-# chart-identity already counts by, so a sixth is checked the day it is
-# declared. The containers are counted against the render's own `image:`
-# lines, so a parse that stopped seeing them fails instead of passing an
-# empty set.
-
 chart-security:
-	@echo 'chart-security: $(words $(CHART_IDENTITIES)) workloads declared by $(CHART_DIR)/README.md §Workload identities, $(words $(CHART_VALUES)) value files — the PodSecurity restricted fields only, $(CHART_DIR)/README.md §What the checks are complete over'
-	@test -n '$(CHART_IDENTITIES)' \
-		|| { echo 'chart-security: $(CHART_DIR)/README.md §Workload identities declared no workload — the parse is broken'; exit 1; }
-	@set -e; \
-		out="$$(mktemp -d)"; trap 'rm -rf "$$out"' EXIT; \
-		printf '%s\n' $(CHART_IDENTITIES) | cut -d= -f1 | sort -u > "$$out/declared"; \
-		for v in $(CHART_VALUES); do \
-			n="$$(basename "$$v")"; \
-			$(HELM) template garam $(CHART_DIR) --values "$$v" > "$$out/raw"; \
-			awk ' \
-				function flush(   i, u, from) { \
-					if (kind != "Deployment" && kind != "Job") { reset(); return } \
-					printf "pod %s runAsNonRoot=%s seccompProfile=%s\n", comp, nonroot, seccomp; \
-					for (i = 1; i <= n; i++) { \
-						from = (cuid[i] != "unset" ? "container" : (puid != "unset" ? "pod" : "none")); \
-						u = (cuid[i] != "unset" ? cuid[i] : puid); \
-						printf "container %s %s effectiveRunAsUser=%s allowPrivilegeEscalation=%s capabilities.drop=%s from=%s\n", \
-							comp, cname[i], u, cape[i], cdrop[i], from } \
-					reset() } \
-				function reset() { kind = ""; comp = ""; nonroot = "unset"; seccomp = "unset"; puid = "unset"; n = 0; sec = ""; list = "" } \
-				BEGIN { reset() } \
-				/^---$$/ { flush(); next } \
-				/^kind: / { kind = $$2; next } \
-				/app.kubernetes.io\/component: / { if (comp == "") comp = $$2; next } \
-				/^      [a-zA-Z]/ { \
-					list = ($$0 ~ /^      (initContainers|containers):/) ? "yes" : ""; \
-					sec = ($$0 ~ /^      securityContext:/) ? "pod" : ""; next } \
-				sec == "pod" && /^        [a-zA-Z]/ { \
-					psub = ($$0 ~ /^        seccompProfile:/) ? "seccomp" : ""; \
-					if ($$0 ~ /^        runAsNonRoot: /) nonroot = $$2; \
-					if ($$0 ~ /^        runAsUser: /) puid = $$2; next } \
-				sec == "pod" && psub == "seccomp" && /^          type: / { seccomp = $$2; next } \
-				list == "yes" && /^        - name: / { \
-					n++; cname[n] = $$3; cuid[n] = "unset"; cape[n] = "unset"; cdrop[n] = "unset"; sec = ""; next } \
-				list == "yes" && /^          [a-zA-Z]/ { sec = ($$0 ~ /^          securityContext:/) ? "con" : ""; next } \
-				sec == "con" && /^            [a-zA-Z]/ { \
-					csub = ($$0 ~ /^            capabilities:/) ? "caps" : ""; \
-					if ($$0 ~ /^            runAsUser: /) cuid[n] = $$2; \
-					if ($$0 ~ /^            allowPrivilegeEscalation: /) cape[n] = $$2; next } \
-				sec == "con" && csub == "caps" && /^              drop: / { \
-					d = $$0; sub(/^ *drop: */, "", d); gsub(/[][", ]+/, ",", d); sub(/^,/, "", d); sub(/,$$/, "", d); \
-					cdrop[n] = d; next } \
-				END { flush() }' "$$out/raw" > "$$out/fields"; \
-			sed -n 's/^pod \([a-z0-9-]*\) .*/\1/p' "$$out/fields" | sort -u > "$$out/read"; \
-			diff "$$out/declared" "$$out/read" \
-				|| { echo "chart-security: $$n: < workload declared in the README, > carrying a pod spec this check read"; exit 1; }; \
-			containers="$$(grep -c '^container ' "$$out/fields" || true)"; \
-			images="$$(grep -c '^          image: ' "$$out/raw" || true)"; \
-			test "$$containers" -eq "$$images" && test "$$images" -ge $(words $(CHART_IDENTITIES)) \
-				|| { echo "chart-security: $$n: $$containers containers read and $$images rendered — the container parse is broken"; exit 1; }; \
-			short="$$(awk ' \
-				$$1 == "pod" && ($$3 != "runAsNonRoot=true" || $$4 !~ /^seccompProfile=(RuntimeDefault|Localhost)$$/) { print "  " $$0 } \
-				$$1 == "container" { \
-					d = substr($$6, index($$6, "=") + 1); \
-					if ($$4 !~ /^effectiveRunAsUser=[0-9]+$$/ || $$5 != "allowPrivilegeEscalation=false" || ("," d ",") !~ /,ALL,/) print "  " $$0 \
-				}' "$$out/fields")"; \
-			test -z "$$short" || { echo "chart-security: $$n: short of PodSecurity restricted, which an admitting apiserver refuses and a render does not:"; echo "$$short"; exit 1; }; \
-			echo "chart-security: $$n — $$(grep -c '^pod ' "$$out/fields" || true) workloads, $$containers containers, $$(grep -c ' from=pod$$' "$$out/fields" || true) taking the pod's runAsUser"; \
-		done
+	@CHART_DIR='$(CHART_DIR)' HELM='$(HELM)' \
+		CHART_IDENTITIES='$(CHART_IDENTITIES)' CHART_VALUES='$(CHART_VALUES)' \
+		scripts/chart-security.sh
 
 chart-package:
 	@echo 'chart-package: $(words $(CHART_RESOURCE_NAMES)) resource names searched for as keys in the packaged artifact — resource quantities only, $(CHART_DIR)/README.md §What the checks are complete over'

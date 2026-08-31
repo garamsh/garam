@@ -9,6 +9,7 @@
 - What this does not decide
 - Consequences
 - Rejected alternatives
+- Errata
 
 ## Context
 
@@ -160,3 +161,38 @@ so.
   validated, and it would do it by recording registrations no one made,
   attributed to no one. A registry whose first rows are fabrications is
   not a record of what an organization decided.
+
+## Errata
+
+- 2026-09-01 — §What this does not decide's Revocation item ends
+  "Deleting the organization still takes its operators, because a
+  tenant's rows go with the tenant." What it claims about `operators`
+  is correct — `operators.org_grn` is `REFERENCES orgs (grn) ON DELETE
+  CASCADE` (`migrations/000017`) — and the reason given for it reads
+  as a rule over every table a tenant keys, which it is not. One table
+  stood outside it when this ADR merged and stands outside it now:
+  `operator_certificates` (`migrations/000019`) is keyed by an
+  operator's GRN, carries no foreign key, and keeps its row after the
+  organization and the registration are both gone. That is the
+  migration's stated design rather than an omission — "that record
+  grants an operator nothing and its absence stops no certificate
+  already issued, so a certificate is recorded for a registered
+  operator and an unregistered one alike" — so a table deliberately
+  independent of the registry is independent of what deletes the
+  registry with it. It is observed rather than derived: on 2026-08-31
+  the dev cluster held a row for
+  `grn:garam:default:operator:gagent-credproof`, issued 2026-08-25,
+  whose `operators` record was gone, beside one for `gagent-dev` whose
+  record was present. Nothing reaches the surviving row, and the
+  reason #728 gave for that is wrong — it argued an organization's
+  identifier is 8 random bytes, so no later organization takes the GRN
+  back, but the identifier keying this table is the operator segment,
+  and that one is a name a person chose: `gagent-dev` is reusable.
+  What makes the row unreachable is that `Adopt` overwrites it, so the
+  first certificate minted under a reused GRN replaces the stale row
+  in place instead of leaving it to be inherited
+  (`internal/operator/postgres_certificate.go`). The decision is
+  unaffected and this entry changes none of it: no schema moves, the
+  argument `000019` makes against the foreign key stands, and what is
+  wrong is the reach of the sentence's reason rather than what the
+  sentence claims about `operators`.

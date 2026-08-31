@@ -17,6 +17,7 @@ rather than reading a number here as current.
 - What this does not decide
 - Consequences
 - Rejected alternatives
+- Errata
 
 ## Context
 
@@ -241,3 +242,29 @@ territory, and this one is architecture's.
   part of this decision.** Both are moves, and this ADR moves nothing.
   Recording that they fail the threshold is what lets the move be
   proposed against a rule instead of a preference.
+
+## Errata
+
+- 2026-08-31 — §Decision's table under "Five packages are shared code
+  below the domains, and two are not" gives `pgxerr` 6 and
+  `listfilter` 3. Both were true at `5a70c6c`, which the header above
+  names as where every count was measured, and both were falsified on
+  2026-08-27: `8961720` (#703) routed the sign-in and messaging stores
+  through `pgxerr`, taking it to 8, and `3bd96aa` (#749) removed
+  `internal/user`'s `listfilter` import, taking it to 2. The other
+  five rows are unchanged. The rule the column is counted under is not
+  stated here, and four independent counts of it returned four
+  different numbers for want of that. It is that an importer counts
+  only when it is one of the nine domains — a delivery surface, a
+  sub-responsibility held in a boundary of its own and another shared
+  package are not domains — read from its non-test files and not from
+  the generated `db/` and `mocks/` packages the header above already
+  excludes. Under that rule `go list` names nine importers of
+  `pgxerr`, eight of them domains and `internal/watch` the ninth, and
+  three of `listfilter`, two of them domains and `internal/api` the
+  delivery surface; run against `5a70c6c` it returns the 6 and the 3
+  the table has. [domains.md](../domains.md) §Shared code below the
+  domains states the same rule beside the current counts and carries
+  the query. This entry corrects the two counts only: what standing a
+  count of 2 earns `listfilter` is not decided here, and the Standing
+  column stands as the body has it.

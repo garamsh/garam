@@ -43,9 +43,8 @@ the Go package implementing it is in parentheses.
 - [users.md](./users.md) — human identity (`internal/user`)
 - [sign-in.md](./sign-in.md) — how a person proves who they are, and
   the session that carries the proof afterwards (`internal/authn`)
-- [authorization-policy.md](./authorization-policy.md) — the rules that
-  decide what a subject may do, and the engine that decides
-  (`internal/authz`)
+- [authz.md](./authz.md) — the rules that decide what a subject may do,
+  and the engine that decides (`internal/authz`)
 - [certificate-authorities.md](./certificate-authorities.md) — the
   certificate authority an organization signs machine identities with
   (`internal/ca`)

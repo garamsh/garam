@@ -42,14 +42,13 @@ Responsibility documents:
 - [organizations.md](./organizations.md) — the tenant hierarchy: the top-level tenant, what is grouped inside it, and who belongs to one
 - [users.md](./users.md) — human identity
 - [sign-in.md](./sign-in.md) — how a person proves who they are, and the session that carries the proof afterwards
-- [authorization-policy.md](./authorization-policy.md) — the rules that decide what a subject may do, and the engine that decides
 - [certificate-authorities.md](./certificate-authorities.md) — the certificate authority an organization signs machine identities with
 - [operators.md](./operators.md) — what an organization records about an operator, and what that operator authenticates with
 - [agents.md](./agents.md) — autonomous identity, provisioned outside garam
 - [machine-identity.md](./machine-identity.md) — who is calling on the listener a machine identity authenticates on
 - [messaging.md](./messaging.md) — the durable queue a message reaches an agent through, and the consent that lets one cross an organization boundary
 - [grn-model.md](./grn-model.md) — the GRN resource naming model
-- [authz.md](./authz.md) — the authorization model
+- [authz.md](./authz.md) — the authorization policy domain: the rules that decide what a subject may do, and the engine that decides
 - [api-surface.md](./api-surface.md) — the listeners garam serves on, what admits a caller to each, and what each one's specification is authoritative for
 - [adapter.md](./adapter.md) — what the adapter garam ships must do, and what it rests on
 - [deployment-contract.md](./deployment-contract.md) — what a deployment must plan for that no manifest carries: readiness, termination, migration failure, key-material enforcement, and what is not established

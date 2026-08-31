@@ -154,6 +154,22 @@ the committed output and the specifications disagree. A path, a
 parameter or a model therefore cannot diverge from the file describing
 it.
 
+It is authority over the shape of what the listener serves, and not
+over the whole of what a caller can meet. Each specification states two
+limits on itself, in the file rather than here, because the reader they
+address holds the specification and nothing under `docs/`:
+
+- **A declared response set is not the complete set of statuses an
+  operation can answer**, because a 5xx belongs to the listener rather
+  than to a route
+  ([ADR-0050](./adr/0050-a-specification-states-its-listeners-5xx-once-and-declares-none-per-operation.md)).
+- **The `version` field promises nothing across versions**
+  ([ADR-0049](./adr/0049-neither-published-specification-promises-anything-across-versions.md)),
+  and the image tag of ADR-0039 names a build rather than either
+  document.
+
+What each limit covers is in the two files, named here and not copied.
+
 The other two surfaces are fixed differently. The engine's wire
 contract is `proto/garam/authz/v1`, generated and checked the same way.
 The probes have no specification at all: their paths, and the ports
@@ -176,6 +192,19 @@ stated the new behaviour as explicitly not what happens, corrected in
 #530, and the `message` tag's description, corrected in #532. Both were
 found by someone running the service rather than by anything in the
 repository.
+
+**Nor does it cover which statuses an operation declares.** A response
+is not part of what oapi-codegen writes: adding a `'500'` to one
+operation and running `make gen` leaves `api/server.gen.go`
+byte-identical, so `make check-gen` reads a response set in neither
+direction — a status declared that cannot occur, and one that occurs
+undeclared, are both invisible to it. #698 is the same fact in the
+history: it changed four operations' response sets and moved no
+generated Go file. What does move is `web/src/types/api.ts`, generated
+from `api/openapi.yaml` and held against it by `make web-check-gen`, so
+the browser client's types follow a response set while the server's do
+not — and `api/machine.yaml` has no generated consumer in this
+repository at all.
 
 ## Where a change to a surface lands
 
@@ -207,11 +236,6 @@ decided says what closing that would take.
   an ADR that changes an endpoint now has a responsibility document to
   be paired with — and leaves the half only a rule can. What that rule
   should say is the index's to decide and not this document's.
-- **What garam promises a caller across versions.** Nothing records it.
-  Both specifications carry `version: 0.1.0`, the repository holds no
-  tag and no release, and no ADR names a deprecation path or what
-  counts as a breaking change. Treat every surface as unversioned, and
-  do not read that field as a promise.
 - **What decides the metrics surface. Nothing does, on any process.**
   `/metrics` is served by `garam serve api` and `garam serve authz`
   (§The surfaces) and decided by no ADR: every ADR that names it treats
@@ -308,3 +332,9 @@ document owes an update.
   — the development-only sign-in provider is removed
 - [ADR-0046](./adr/0046-an-operator-renews-its-certificate-by-presenting-the-one-it-holds.md)
   — an operator renews its own certificate on the machine listener
+- [ADR-0049](./adr/0049-neither-published-specification-promises-anything-across-versions.md)
+  — neither specification promises anything across versions, and each
+  says so in its own text
+- [ADR-0050](./adr/0050-a-specification-states-its-listeners-5xx-once-and-declares-none-per-operation.md)
+  — a specification states its listener's 5xx once and declares none
+  per operation

@@ -8,6 +8,7 @@
 - Decision
 - Consequences
 - Rejected alternatives
+- Errata
 
 ## Context
 
@@ -78,3 +79,30 @@ on the caller to hold the boundary on its behalf.
   engine to the same boundary [ADR-0007](./0007-hybrid-statement-collection.md)
   was drawn to keep. The membership is the API server's fact; sending
   it across is what the current `subject_groups` flow already does.
+
+## Errata
+
+- 2026-08-31 — §Consequences' "The engine's unit test
+  `TestOrgIsolation_OnlyAttachmentKeepsGrantsInsideAnOrg` … is now a
+  property the engine tests in isolation" carries two errors of
+  different kinds. The name was true when written and is false since
+  `1d67d5c` (#411), the pull request that implemented this ADR: that
+  commit deleted the function from `tests/e2e/postgres_test.go`
+  nineteen minutes after `01395db` (#409) merged this ADR, and added
+  `TestGRPCServer_RefusesForeignSubjectWhenSubjectOrgUnset` to
+  `internal/authz/server_test.go` in its place. The label was wrong
+  when written, and what it was wrong about is the layer: at `01395db`
+  that function sat in `package e2e_test`, wiring the `authz` and
+  `org` stores against the real database `GARAM_TEST_DATABASE_URL`
+  names — the e2e layer by `docs/convention/testing.md` §Placement,
+  which puts a unit test beside the source it tests — while
+  `internal/authz` held six test files, none of them carrying the
+  name. It was the cross-package
+  fixture this same sentence contrasts it with, and never the engine's
+  unit test. The bullet describes the state this decision would
+  produce and labels it against a tree that did not hold it yet: the
+  state arrived with #411, where the property became one the engine
+  tests in isolation, in the engine's own package, under the new name,
+  and the label never became true. So what is stale is the name, what
+  was wrong from the start is the layer, and the decision is
+  untouched.

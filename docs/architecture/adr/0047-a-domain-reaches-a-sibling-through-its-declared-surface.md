@@ -9,6 +9,7 @@
 - What this does not decide
 - Consequences
 - Rejected alternatives
+- Errata
 
 ## Context
 
@@ -176,3 +177,22 @@ could close a cycle; one that permits it holds the direction instead.
   below the domains: the cost of Separate Ways without the consistency
   that at least makes that branch coherent. The threshold at three is
   what stops it.
+
+## Errata
+
+- 2026-08-31 — §Context's "the rules it imposes are in
+  `docs/convention/arch-domain.md`, selected through
+  `docs/convention/README.md` §Architecture" and §Consequences'
+  "**`docs/convention/arch-domain.md` still carries these rules
+  too.** … so until that file is retired the shape's rules are stated
+  in two places" were true when written and are false since `5668576`
+  (#616), which retired that file and removed §Architecture from the
+  convention index nine minutes after `bfcc1f4` (#612) merged this
+  ADR. The §Consequences bullet is the one that misleads rather than
+  dangles: its condition has been met, so the shape's rules stand in
+  one place and not two. That place is
+  [structure.md](../structure.md) — §Boundaries and dependency
+  direction carries the sibling rule and the dependency direction,
+  and §When a new boundary is earned carries the threshold §Context
+  quotes. The decision is untouched: a domain still reaches a sibling
+  through the surface that sibling declares.

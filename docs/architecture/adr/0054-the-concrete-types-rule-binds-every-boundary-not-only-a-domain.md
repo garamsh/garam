@@ -13,6 +13,7 @@ rather than reading a count here as current.
 - What this does not decide
 - Consequences
 - Rejected alternatives
+- Errata
 
 ## Context
 
@@ -169,3 +170,30 @@ a reader to derive it from §The shape.
   `docs/convention/README.md` §Independence forbids inside a file as
   much as across files. The clause kept here points at §The shape
   rather than repeating what it decides.
+
+## Errata
+
+- 2026-09-01 — Three statements here were wrong when written. The
+  author's own review found all three after the pull request carrying
+  this ADR had merged, which is what put them under this heading rather
+  than in the body. **§Context's "Four passes over `internal/`, each
+  with a control"** miscounts its own evidence: what follows is three
+  passes and one control, not four passes each controlled. The
+  measurements themselves are unaffected. **§Consequences' "Both are
+  true today; the second is what a pull request now has to argue
+  against"** names the narrower property where it means the wider one —
+  what a pull request must argue against is zero concrete-type edges
+  between boundaries, not the zero domain-to-domain imports that
+  property supersedes. **§Rejected alternatives' "The clause kept here
+  points at §The shape rather than repeating what it decides"** was
+  false of the clause it described: the rule as this ADR's pull request
+  merged it read "What composes several boundaries is not one of them
+  (§The shape)" against §The shape's own "What composes several
+  boundaries is not itself one of them". The rule has since been
+  reworded to "A composing layer is outside it (§The shape) and holds
+  the concrete types of what it composes", which cites §The shape for
+  the reason and states the consequence without repeating the
+  definition — so the wording that sentence describes is achievable,
+  and it is what [structure.md](../structure.md) now carries. The
+  decision stands unchanged: what the rule binds, and what it excludes,
+  is what §Decision says.

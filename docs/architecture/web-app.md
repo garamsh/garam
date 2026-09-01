@@ -105,7 +105,7 @@ API behind it rather than of the console:
 |---|---|
 | Overview, Groups, Projects, Members | reads |
 | Operators | reads, and registers one ([ADR-0045](./adr/0045-an-organization-registers-an-operator.md)) |
-| Agents | reads definitions and defines one ([ADR-0026](./adr/0026-the-console-defines-an-agent.md)); it does not read the agents the browser API answers |
+| Agents | reads the agents the organization holds with the two states their operator and the agent itself report ([ADR-0053](./adr/0053-an-agent-and-its-operator-report-state-on-the-machine-listener.md)), and reads definitions and defines one ([ADR-0026](./adr/0026-the-console-defines-an-agent.md)) |
 | Policies | neither: the section holds its place and says policies are managed over the HTTP API |
 
 Organizations are created, an invitation is issued from the Members
@@ -305,3 +305,6 @@ The rest bear on it without being about it:
   way in but real credentials or the e2e seed
 - [ADR-0045](./adr/0045-an-organization-registers-an-operator.md) — an
   organization registers an operator, which is the Operators section
+- [ADR-0053](./adr/0053-an-agent-and-its-operator-report-state-on-the-machine-listener.md)
+  — an operator and an agent each report a state elsewhere, and the two
+  are what the Agents section reads and shows

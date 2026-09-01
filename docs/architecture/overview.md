@@ -217,9 +217,7 @@ collaborate on a shared plan.
   certificate route (ADR-0040) and an operator renews its own by
   presenting it (ADR-0046); an operator's first still arrives out of
   band (ADR-0015, ADR-0032), and how it is delivered is not decided
-  here. No console page reads the agents the browser API answers: the
-  console's agents section reads definitions, which are not agents
-  (ADR-0026).
+  here.
 - Revoking anything. A certificate garam signed authenticates until it
   expires, and nothing shortens that: there is no revocation list, no
   serial the listener checks, and no route that removes an operator's

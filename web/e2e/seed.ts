@@ -15,6 +15,10 @@ export type Seed = {
   projectName: string;
   /** The operator the org has registered, which a definition may name. */
   operatorIdentifier: string;
+  /** The agent the org holds, and the states its two parties reported. */
+  agentIdentifier: string;
+  agentProvisioningState: string;
+  agentRuntimeState: string;
 };
 
 /** A signed-in user without an organization: the invitee side of a flow. */
@@ -80,6 +84,9 @@ export async function seedSignedInOrg(): Promise<Seed> {
     groupName: "Engineering",
     projectName: "Frontend",
     operatorIdentifier: "field-one",
+    agentIdentifier: randomBytes(8).toString("hex"),
+    agentProvisioningState: "failed",
+    agentRuntimeState: "disconnected",
   };
   const orgGrn = `grn:root:default:org:${seed.orgSlug}`;
 
@@ -121,6 +128,19 @@ export async function seedSignedInOrg(): Promise<Seed> {
         `grn:${seed.orgSlug}:default:operator:${seed.operatorIdentifier}`,
         orgGrn,
         seed.userGrn,
+      ],
+    );
+    // garam learns an agent exists from an operator on the machine
+    // listener, and both states are reported there too (ADR-0053) —
+    // neither route a browser can reach — so the row is seeded.
+    await client.query(
+      `INSERT INTO agents (grn, org_grn, provisioning_state, runtime_state, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, now(), now())`,
+      [
+        `grn:${seed.orgSlug}:default:agent:${seed.agentIdentifier}`,
+        orgGrn,
+        seed.agentProvisioningState,
+        seed.agentRuntimeState,
       ],
     );
     await client.query("COMMIT");

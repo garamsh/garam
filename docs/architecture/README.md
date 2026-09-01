@@ -39,7 +39,7 @@ What this repository runs against itself. `docs/convention/ci.md` decides how a 
 
 - `.github/workflows/ci.yml` triggers on `pull_request` and on nothing else; `.github/workflows/release.yml` triggers on a `v*` tag (ADR-0039).
 - **The after-merge run is not taken.** A `push: branches: [main]` trigger ran on `ci.yml` until #811. Both triggers read the merge result, so what that one alone covered is a `main` that moved between the pull request's run and the merge.
-- **Nothing mechanical covers that gap. The merger re-runs the checks on current `main` before merging.** The mechanical replacement is a required status check with *branches must be up to date*, which is a repository setting and so the account owner's.
+- **Nothing mechanical covers that gap; the role that merges does.** The obligation is stated once, in `AGENTS.md` §Roles; this bullet records that the gap is covered and is not that statement. The mechanical replacement is a required status check with *branches must be up to date*, which is a repository setting and so the account owner's.
 
 ## Index
 

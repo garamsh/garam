@@ -95,31 +95,39 @@ func (s *PostgresStore) ActivePolicies(ctx context.Context, orgGRN grn.GRN) ([]A
 	}
 	active := make([]ActivePolicy, 0, len(rows))
 	for _, row := range rows {
-		doc, err := ParsePolicyDocument(row.Document)
+		p, err := rowToActivePolicy(row)
 		if err != nil {
-			return nil, errorx.Wrap(err, "stored document")
+			return nil, err
 		}
-		subjects := make([]grn.GRN, 0, len(row.SubjectGrns))
-		for _, raw := range row.SubjectGrns {
-			g, err := grn.Parse(raw)
-			if err != nil {
-				return nil, errorx.Wrap(err, "attachment subject grn")
-			}
-			subjects = append(subjects, g)
-		}
-		active = append(active, ActivePolicy{Document: doc, Subjects: subjects})
+		active = append(active, p)
 	}
 	return active, nil
+}
+
+func rowToActivePolicy(row db.ActivePoliciesRow) (ActivePolicy, error) {
+	doc, err := ParsePolicyDocument(row.Document)
+	if err != nil {
+		return ActivePolicy{}, errorx.Wrap(err, "stored document", errorx.KindInternal)
+	}
+	subjects := make([]grn.GRN, 0, len(row.SubjectGrns))
+	for _, raw := range row.SubjectGrns {
+		g, err := grn.Parse(raw)
+		if err != nil {
+			return ActivePolicy{}, errorx.Wrap(err, "attachment subject grn", errorx.KindInternal)
+		}
+		subjects = append(subjects, g)
+	}
+	return ActivePolicy{Document: doc, Subjects: subjects}, nil
 }
 
 func rowToAttachment(row db.PolicyAttachment) (*PolicyAttachment, error) {
 	policyGRN, err := grn.Parse(row.PolicyGrn)
 	if err != nil {
-		return nil, errorx.Wrap(err, "policy grn")
+		return nil, errorx.Wrap(err, "policy grn", errorx.KindInternal)
 	}
 	subjectGRN, err := grn.Parse(row.SubjectGrn)
 	if err != nil {
-		return nil, errorx.Wrap(err, "attachment subject grn")
+		return nil, errorx.Wrap(err, "attachment subject grn", errorx.KindInternal)
 	}
 	return NewPolicyAttachment(policyGRN, subjectGRN, row.CreatedAt.Time), nil
 }

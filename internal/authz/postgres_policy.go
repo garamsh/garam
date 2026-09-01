@@ -147,18 +147,22 @@ func (s *PostgresStore) SetPolicyDefaultVersion(ctx context.Context, g grn.GRN, 
 	return rowToPolicy(row)
 }
 
+// rowToPolicy converts a sqlc row into the domain aggregate. A stored
+// value that no longer parses is data corruption, hence internal: the
+// parsers below answer the kind a caller's own input earns, and this
+// value passed that boundary before it was stored.
 func rowToPolicy(row db.Policy) (*Policy, error) {
 	g, err := grn.Parse(row.Grn)
 	if err != nil {
-		return nil, errorx.Wrap(err, "policy grn")
+		return nil, errorx.Wrap(err, "policy grn", errorx.KindInternal)
 	}
 	orgGRN, err := grn.Parse(row.OrgGrn)
 	if err != nil {
-		return nil, errorx.Wrap(err, "policy org grn")
+		return nil, errorx.Wrap(err, "policy org grn", errorx.KindInternal)
 	}
 	status, err := ParsePolicyStatus(row.Status)
 	if err != nil {
-		return nil, errorx.Wrap(err, "policy status")
+		return nil, errorx.Wrap(err, "policy status", errorx.KindInternal)
 	}
 	return &Policy{
 		grn:            g,
@@ -174,15 +178,15 @@ func rowToPolicy(row db.Policy) (*Policy, error) {
 func rowToPolicyVersion(row db.PolicyVersion) (*PolicyVersion, error) {
 	g, err := grn.Parse(row.PolicyGrn)
 	if err != nil {
-		return nil, errorx.Wrap(err, "policy grn")
+		return nil, errorx.Wrap(err, "policy grn", errorx.KindInternal)
 	}
 	createdBy, err := grn.Parse(row.CreatedBy)
 	if err != nil {
-		return nil, errorx.Wrap(err, "policy version author")
+		return nil, errorx.Wrap(err, "policy version author", errorx.KindInternal)
 	}
 	doc, err := ParsePolicyDocument(row.Document)
 	if err != nil {
-		return nil, errorx.Wrap(err, "stored document")
+		return nil, errorx.Wrap(err, "stored document", errorx.KindInternal)
 	}
 	return NewPolicyVersion(g, int(row.Version), doc, createdBy, row.CreatedAt.Time), nil
 }

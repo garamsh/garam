@@ -136,8 +136,14 @@ and not in the same place on every surface.
   ([ADR-0038](./adr/0038-the-engine-learns-a-subjects-memberships-and-enforces-its-own-scope.md)).
 - **Watching an agent is its own grant**, separate from reading one
   ([ADR-0022](./adr/0022-watching-an-agent.md)).
-- **No surface serves a secret's value**, this one included
-  ([ADR-0036](./adr/0036-a-secret-in-garam-is-a-reference-not-a-value.md)).
+
+One of ADR-0036's decisions is a commitment rather than a rule deciding
+anything today: **no surface serves a secret's value**, garam's
+listeners included. garam has no secret to serve — `secret` is a domain
+it does not have yet ([domains.md](./domains.md) §Future domains) — so
+what the commitment binds is the surface that serves that domain when it
+arrives
+([ADR-0036](./adr/0036-a-secret-in-garam-is-a-reference-not-a-value.md)).
 
 ## What a specification is authoritative for
 

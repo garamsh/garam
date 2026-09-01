@@ -12,11 +12,19 @@ import (
 	"github.com/garamsh/garam/internal/keyfile"
 )
 
-// writeFile writes a key file with the given mode.
+// writeFile writes a key file and chmods it to mode. The umask masks
+// os.WriteFile's mode argument and not os.Chmod's, and the mode is
+// read back so one that never reached the file fails the setup rather
+// than whatever the caller went on to assert.
 func writeFile(t *testing.T, contents string, mode os.FileMode) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "key")
-	require.NoError(t, os.WriteFile(path, []byte(contents), mode))
+	require.NoError(t, os.WriteFile(path, []byte(contents), 0o600))
+	require.NoError(t, os.Chmod(path, mode))
+	info, err := os.Stat(path)
+	require.NoError(t, err)
+	require.Equalf(t, mode, info.Mode().Perm(),
+		"asked for mode %04o, file has %04o", mode, info.Mode().Perm())
 	return path
 }
 

@@ -30,10 +30,8 @@ go build ./...
 go test  ./...
 ```
 
-`make ci` runs these checks over the packages it lists, and the
-pipeline that is configured to run it does not run here
-([AGENTS.md](./AGENTS.md) §This project) — so run it before you push.
-See [docs/convention/ci.md](./docs/convention/ci.md).
+`make ci` runs these checks over the packages it lists — run it before
+you push. See [docs/convention/ci.md](./docs/convention/ci.md).
 
 ## Searching this repository
 

@@ -1,22 +1,8 @@
-// Package pgxerr maps postgres driver errors to errorx errors.
-//
-// The store error classifier used to be duplicated in five domain
-// postgres stores (org, authz, ca, user, agent); the copies disagreed
-// in signature, in which postgres codes they mapped and what they
-// mapped them to, and in the message they wrapped the driver error
-// with. They all do the same thing — read the sql state on a
-// *pgconn.PgError, choose a kind, attach the operation the caller
-// names — so they belong in one place. This is that place.
-//
-// classify is store-error mapping, not wire conversion: internal/wire
-// owns a wire format and the two directions of its conversion, and the
-// mapping here would choose a behaviour rather than convert one
-// (docs/architecture/structure.md §When a new boundary is earned).
-// errorx owns kinds and the chain that carries them, but it is
-// transport-agnostic by design — its doc comment pins it that way so
-// the same errors can flow over any surface — and adding a pgx
-// dependency here would break that. The five copies are the evidence
-// this mapping earns a boundary of its own.
+// Package pgxerr maps postgres driver errors to errorx errors: it reads
+// the sql state on a *pgconn.PgError, chooses a kind, and attaches the
+// operation the caller names. Every postgres-backed store answers
+// through it (docs/architecture/domains.md §Shared code below the
+// domains).
 package pgxerr
 
 import (

@@ -5,9 +5,16 @@ name: ci
 # while the comment ends with that version, so a note appended to one
 # leaves it naming a version the SHA is not.
 
+# `pull_request` is the only trigger. A push to `main` re-ran what the
+# pull request's own run had just read — both read the merge result, and
+# six merges on 2026-09-01 produced six such runs at three jobs each — so
+# what it alone covered is a `main` that moved between the two. Nothing
+# mechanical covers that: the merger re-runs the checks on current `main`
+# before merging, and the mechanical replacement is a required status
+# check with "branches must be up to date", a repository setting and so
+# the account owner's.
+
 on:
-  push:
-    branches: [main]
   pull_request:
 
 permissions: read-all

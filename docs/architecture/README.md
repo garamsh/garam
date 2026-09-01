@@ -29,9 +29,17 @@ An author who has moved one site cannot find the rest by searching for the decis
 
 Searching for the superseded decision instead is a genuine improvement over searching for the new one, and it is still a search. Two careful searches of `docs/architecture/overview.md` at 7dd0682 for the removed development-only sign-in provider disagreed in opposite directions inside one count: one missed line 268, which reads `dev-only local`, and one counted line 106, an §In scope bullet about org structure that may not carry the claim at all. Between those two searches over that document the unit being counted was not fixed; that is what the disagreement shows, and it is not evidence that no unit could be fixed. What holds either way is rule 1's ground: a document that does not accumulate the sites has nothing to enumerate.
 
-No pipeline stands behind this either. `make ci` reads no file under `docs/`, and this repository's own `ci` workflow does not run at all — AGENTS.md §This project names the command that shows that, and asks for it to be checked here rather than taken on report.
+No pipeline stands behind this either: `make ci` reads no file under `docs/`, so no run of it passes or fails on anything this section describes. What this repository's workflows do run is §Operation.
 
 [api-surface.md](./api-surface.md) §What nothing checks records the same shape for a different artifact, the prose inside the two API specifications. That half is stated there and not here.
+
+## Operation
+
+What this repository runs against itself. `docs/convention/ci.md` decides how a check is named and secured; this section records where one runs.
+
+- `.github/workflows/ci.yml` triggers on `pull_request` and on nothing else; `.github/workflows/release.yml` triggers on a `v*` tag (ADR-0039).
+- **The after-merge run is not taken.** A `push: branches: [main]` trigger ran on `ci.yml` until #811. Both triggers read the merge result, so what that one alone covered is a `main` that moved between the pull request's run and the merge.
+- **Nothing mechanical covers that gap. The merger re-runs the checks on current `main` before merging.** The mechanical replacement is a required status check with *branches must be up to date*, which is a repository setting and so the account owner's.
 
 ## Index
 

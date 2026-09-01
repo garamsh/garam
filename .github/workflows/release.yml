@@ -45,6 +45,29 @@ jobs:
           fi
           echo "version=${REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
+      # The push role has never been assumed. infra measured fifty
+      # AssumeRoleWithWebIdentity events on the account, none of them
+      # this role's and every one successful, and a successful event
+      # does not record the subject presented — so nothing here knows
+      # what a failure of the step below reports, and the `:ref:` half
+      # of the subject quoted at the top of this file is first
+      # exercised by the tag that reached this run. Printing the
+      # presented subject makes that failure readable against the
+      # pattern by eye. It verifies nothing, it calls no AWS API, and
+      # it stands after the version guard so a malformed tag still
+      # costs nothing.
+      #
+      # The token is a credential and this log is permanent, so the
+      # `sub` claim is all that leaves this step: not the token, not
+      # the rest of the payload, and not jq's parse error, which quotes
+      # its input (docs/convention/ci.md §Security baseline).
+      - run: |
+          set -o pipefail
+          curl -sSf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" \
+            | jq -er '.value | split(".")[1] | gsub("-"; "+") | gsub("_"; "/") | @base64d | fromjson | .sub' 2>/dev/null \
+            || { echo 'no sub claim read from the runner OIDC token; nothing further about it is printed' >&2; exit 1; }
+
       - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
         with:
           role-to-assume: arn:aws:iam::486152169996:role/garam-dev-ecr-push

@@ -31,6 +31,12 @@ var (
 	// own. A message is claimed, renewed and completed by the recipient
 	// it is addressed to and by nobody else.
 	ErrNotRecipient = errorx.New(errorx.KindPermissionDenied, "caller is not the recipient")
+	// ErrNoSuchMessage is returned when the caller has no message under
+	// that identifier. A message another identity sent, one that never
+	// existed, and one the sweep deleted are the same answer, so asking
+	// teaches a caller nothing about the queue outside its own messages
+	// (ADR-0055).
+	ErrNoSuchMessage = errorx.New(errorx.KindNotFound, "no such message")
 )
 
 // ActionSend is the action a policy names to decide what one identity
@@ -136,6 +142,50 @@ type Claim struct {
 func (c *Claim) Message() *Message    { return c.message }
 func (c *Claim) ID() ClaimID          { return c.id }
 func (c *Claim) ExpiresAt() time.Time { return c.expiresAt }
+
+// State is how far a message has got, as its sender may observe it
+// (ADR-0055). The four are exhaustive over a stored message: what is
+// not one of them is a message that is no longer stored, which is
+// ErrNoSuchMessage rather than a state.
+type State string
+
+const (
+	// StatePending is a message waiting for a reader, or one whose last
+	// claim lapsed and which will be handed out again.
+	StatePending State = "pending"
+	// StateClaimed is a message a reader holds under a lease that has
+	// not run out.
+	StateClaimed State = "claimed"
+	// StateCompleted is a message a reader reported delivered.
+	StateCompleted State = "completed"
+	// StateExhausted is a message that has spent its attempts without
+	// being completed, so the queue hands it out no further (ADR-0018).
+	StateExhausted State = "exhausted"
+)
+
+// Status is what a sender may observe of a message it sent: what garam
+// knows about it that the sender does not. It carries no body — the
+// sender wrote it, and a completed message no longer has one
+// (ADR-0034) — and no recipient or key, which were the submission's.
+type Status struct {
+	id        ID
+	state     State
+	attempts  int
+	createdAt time.Time
+}
+
+// NewStatus builds the answer to a sender's read from what the queue
+// holds. The state is the store's to decide: the lease it rests on is
+// measured where the queue measures every other one, so no process's
+// clock decides whether a claim still stands.
+func NewStatus(id ID, state State, attempts int, createdAt time.Time) *Status {
+	return &Status{id: id, state: state, attempts: attempts, createdAt: createdAt}
+}
+
+func (s *Status) ID() ID               { return s.id }
+func (s *Status) State() State         { return s.state }
+func (s *Status) Attempts() int        { return s.attempts }
+func (s *Status) CreatedAt() time.Time { return s.createdAt }
 
 // newID mints a message identifier. A message is a queue entry rather
 // than a resource a policy names, so it carries an opaque identifier

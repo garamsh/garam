@@ -79,6 +79,37 @@ UPDATE messages SET
     body         = NULL
 WHERE recipient_grn = sqlc.arg('recipient_grn') AND claim_id = sqlc.arg('claim_id');
 
+-- MessageStatus reads how far one sender's message has got (ADR-0055).
+-- The sender is matched beside the identifier, so the identifier alone
+-- reaches nothing and a message another identity sent is answered like
+-- one that is not there.
+--
+-- The state is decided here rather than in the process, and by the
+-- expressions ClaimMessage picks a message with: whether a claim still
+-- stands is `now()` against the same lease column Postgres already
+-- measures, and the attempt bound is the one the claim filters on,
+-- passed from the same configuration. So a message answered `pending`
+-- is one that claim would pick and a message answered `exhausted` is
+-- one it would skip. The body is not selected: a completed message has
+-- none (ADR-0034) and a sender wrote its own.
+--
+-- No state means expired. The sweep deletes an expired message whole,
+-- and a message past the window it has not reached yet is still handed
+-- out, so absence is the answer and this query returns no row for it.
+-- name: MessageStatus :one
+SELECT
+    id,
+    attempts,
+    created_at,
+    CASE
+        WHEN completed_at IS NOT NULL THEN 'completed'
+        WHEN claim_expires_at > now() THEN 'claimed'
+        WHEN attempts >= sqlc.arg('max_attempts') THEN 'exhausted'
+        ELSE 'pending'
+    END::text AS state
+FROM messages
+WHERE id = sqlc.arg('id') AND sender_grn = sqlc.arg('sender_grn');
+
 -- GrantConsent stands the granting organization's half of the pair's
 -- row, creating the row when this is the first half either side
 -- grants. The pair is stored ordered, which the least/greatest pair

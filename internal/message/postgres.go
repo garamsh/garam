@@ -108,6 +108,38 @@ func (s *PostgresStore) Complete(ctx context.Context, recipient grn.GRN, id Clai
 	return nil
 }
 
+// Status returns how far the sender's message has got. A sender that
+// stored none under the identifier matches no row, hence
+// ErrNoSuchMessage — which is also what a message the sweep deleted
+// answers, because absence is what expiry looks like (ADR-0055).
+func (s *PostgresStore) Status(ctx context.Context, sender grn.GRN, id ID, maxAttempts int) (*Status, error) {
+	row, err := s.q.MessageStatus(ctx, db.MessageStatusParams{
+		MaxAttempts: attemptBound(maxAttempts),
+		ID:          string(id),
+		SenderGrn:   sender.String(),
+	})
+	if err != nil {
+		return nil, pgxerr.Classify(err, "message status", ErrNoSuchMessage, nil)
+	}
+	state, err := parseState(row.State)
+	if err != nil {
+		return nil, err
+	}
+	return NewStatus(ID(row.ID), state, int(row.Attempts), row.CreatedAt.Time), nil
+}
+
+// parseState reads the state the query decided. The set is closed and
+// the query is the only writer of it, so a value outside it is this
+// process reading a statement it no longer matches.
+func parseState(s string) (State, error) {
+	switch State(s) {
+	case StatePending, StateClaimed, StateCompleted, StateExhausted:
+		return State(s), nil
+	default:
+		return "", errorx.New(errorx.KindInternal, "message: unknown state "+s)
+	}
+}
+
 // rowToMessage converts a sqlc row into the domain aggregate. A stored
 // value that no longer parses is data corruption, hence internal.
 func rowToMessage(row db.Message) (*Message, error) {

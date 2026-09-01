@@ -144,17 +144,11 @@ func (s *Server) policyAdmits(ctx context.Context, sender, recipient grn.GRN) (b
 }
 
 // sendingStatements is what a machine identity's own GRN grants it
-// before any policy: sending inside its own organization. It is this
-// listener's half of the union the engine evaluates, as the
-// role-derived statements are the api server's (ADR-0007), and it is
-// why an agent nobody has written a policy for still sends.
-//
-// A policy narrows it with a Deny, which is how every grant in this
-// model is narrowed. The organization segment in the pattern is
-// defence in depth rather than the boundary: the engine is only ever
-// asked about a recipient of the sender's own organization, which the
-// pattern already covers, and a cross-boundary recipient is the consent
-// relation's question, never the engine's (ADR-0035).
+// before any policy: sending inside its own organization, which is why
+// an agent nobody has written a policy for still sends (ADR-0007). A
+// policy narrows it with a Deny. The organization segment in the
+// pattern is defence in depth and not the boundary, which is the
+// consent relation's (ADR-0035).
 func sendingStatements(sender grn.GRN) []Statement {
 	return []Statement{{
 		Sid:      "machine-own-org",
@@ -166,11 +160,8 @@ func sendingStatements(sender grn.GRN) []Statement {
 
 // subjectOrg is the GRN of the organization the sender belongs to, the
 // engine's half of the membership the api server reads for human
-// callers (ADR-0038). A machine identity is not an org member, so the
-// boundary this listener holds is the consent relation's, not a
-// membership lookup's; what the engine sees is the org the sender's
-// GRN already names, asserted in the wire format the api server fills
-// for org members.
+// callers (ADR-0038). A machine identity is not an org member, so what
+// the engine sees is the org the sender's GRN already names.
 func subjectOrg(sender grn.GRN) grn.GRN {
 	return grn.New(grn.RootOwner, grn.DefaultProject, serviceTypeOrg, sender.Organization)
 }

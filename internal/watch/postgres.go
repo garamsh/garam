@@ -142,21 +142,11 @@ func (r *PostgresRelay) Announce(ctx context.Context, agent grn.GRN, e Event) er
 }
 
 // Receive delivers announced events until ctx is done. It holds one
-// connection for the process rather than one per watcher, so what a
-// stream costs is the response it holds open and not a session here.
-//
-// Losing the connection is ordinary rather than exceptional — a
-// Postgres failover breaks it by design — so a lost one is reopened
-// instead of returned, and only ctx ends this. Every failure is
-// answered that same way, which is why a payload nobody can parse
-// costs a reconnect rather than the relay.
-//
-// Reconnecting carries no resynchronisation: the relay carries events,
-// not state, so an event announced while no connection was open is
-// gone and cannot be read back. ADR-0022 already accepts that — a
-// watcher sees from when it opened, and a gap is indistinguishable
-// from a quiet agent — so there is nothing here to refill the way the
-// policy cache refills.
+// connection for the process rather than one per watcher, and every
+// failure — a Postgres failover breaking it, a payload nobody can parse
+// — is answered by reconnecting, so only ctx ends this. Reconnecting
+// carries no resynchronisation: an event announced while no connection
+// was open is gone, which ADR-0022 already accepts.
 func (r *PostgresRelay) Receive(ctx context.Context, deliver func(agent grn.GRN, e Event)) error {
 	delay := relayReconnectMin
 	for {

@@ -30,13 +30,8 @@ const gatewayHeaderTimeout = 30 * time.Second
 // docs/architecture/adapter.md, running beside one agent. It claims a
 // message for that agent, posts it into the platform's gateway over
 // loopback, and completes the claim when a turn reports success and
-// names the message.
-//
-// It is a subcommand of the one CLI, which is the topology ADR-0003
-// fixed and ADR-0017 changed the process count of and nothing else. It
-// serves nothing, so it is not under `serve`: the connection to garam
-// starts here, because no orchestrator exposes an agent to garam
-// (ADR-0012).
+// names the message. It serves nothing, so it is a subcommand of the
+// one CLI but not one of `serve` (ADR-0003, ADR-0012).
 func newAdapterCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "adapter",

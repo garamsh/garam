@@ -23,13 +23,9 @@ type Store interface {
 // CertificateStore persists which certificate garam last issued for an
 // operator. It is separate from Store because the two answer different
 // questions: what the organization has registered, and what the holder
-// of a certificate may still renew — a registered operator renews
-// exactly as an unregistered one does.
-//
-// There is no read: what the rule needs is not the current certificate
-// but whether the presented one is still it, and the write below
-// answers that itself. A read in front of it would answer the same
-// question a moment earlier, and the two can disagree.
+// of a certificate may still renew. It has no read — the write below
+// answers whether the presented certificate is still the current one
+// (ADR-0046).
 type CertificateStore interface {
 	// Adopt records current as the operator's certificate, whatever the
 	// operator held before. This is the out-of-band mint (ADR-0032),

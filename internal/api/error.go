@@ -12,16 +12,10 @@ import (
 	"github.com/garamsh/garam/internal/wire"
 )
 
-// RecoverPanics answers a handler that panicked. net/http recovers the
-// panic and logs the stack itself, but abandons the response instead of
-// answering: the caller reads a closed connection and cannot tell a
-// defect here from a network fault. Recovering first is what makes the
-// answer a 500, and the stack travels in the cause because net/http no
-// longer sees the panic to log it.
-//
-// It answers and does not log (stack-go.md §4). The cause reaches the
-// request line through the recorder a handled 5xx already reports on,
-// so a panic costs one line and one answer like every other failure.
+// RecoverPanics answers a handler that panicked with a 500, which
+// net/http does not do on its own (stack-go.md §4). It answers and does
+// not log: the stack travels in the cause, and reaches the request line
+// through the recorder a handled 5xx already reports on.
 func RecoverPanics(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {

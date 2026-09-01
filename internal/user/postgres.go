@@ -92,10 +92,9 @@ func (s *PostgresStore) Update(ctx context.Context, g grn.GRN, p Patch) (*User, 
 // Delete removes the User with the given GRN.
 //
 // The foreign-key reading is made here because only here is the
-// statement known. [pgxerr.Classify] maps 23503 to not found, which is
-// what it means for the inserts that are almost every caller of it —
-// the row the new one names is missing. On this delete it means the
-// opposite: the row is present and something still points at it.
+// statement known: [pgxerr.Classify] maps 23503 to not found, which is
+// what it means for an insert, and on this delete it means the opposite
+// — the row is present and something still points at it.
 func (s *PostgresStore) Delete(ctx context.Context, g grn.GRN) error {
 	n, err := s.q.DeleteUser(ctx, g.String())
 	if err != nil {

@@ -195,19 +195,11 @@ func envOr(key envName, fallback string) string {
 }
 
 // requestReadTimeout bounds how long a request has to arrive, not how
-// long a handler may run. That is the whole of why a watch stream and a
-// message wait are untouched: net/http applies this to reading, and a
-// claim waiting message.DefaultWait is a handler already running. The
-// two are the same thirty seconds, and that is not a margin — nothing
-// compares them, and raising either changes nothing about the other.
-// What this disconnects is a client that has stopped sending.
-//
-// Which read it governs depends on the protocol the caller negotiated:
-// under HTTP/2 it is disarmed once the headers are read, and under
-// HTTP/1.1 — what the shipped adapter negotiates — it is the
-// connection's read deadline. Generous against the largest body either
-// listener admits (65536 characters, ADR-0034) and against the machine
-// listener's handshake, which is read on the same connection.
+// long a handler may run, so a watch stream and a message wait are
+// untouched and what it disconnects is a client that has stopped
+// sending. Under HTTP/2 it is disarmed once the headers are read; under
+// HTTP/1.1 it is the connection's read deadline. It is generous against
+// the largest body either listener admits (ADR-0034).
 const requestReadTimeout = 30 * time.Second
 
 // certificateLifetime is how long a certificate garam signs stays

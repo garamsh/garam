@@ -187,14 +187,10 @@ func (o *observability) machineServer(roots machine.TrustRoot, certificate machi
 }
 
 // machineProbeHandler is what `serve machine` answers on the port
-// beside its TLS one. The listener above requires a client certificate,
-// which a probe does not hold, so the probes answer on a listener of
-// their own — the shape `serve authz` already uses for what a machine
-// reaches without a session. It carries no /metrics: this process
-// serves none (api-surface.md §The surfaces).
-//
-// recoverPanics is outermost, as on every listener a serve command
-// runs: a route added to this mux is covered by having been added.
+// beside its TLS one, because the listener above requires a client
+// certificate a probe does not hold. It carries no /metrics: this
+// process serves none (api-surface.md §The surfaces). recoverPanics is
+// outermost, as on every listener a serve command runs.
 func (o *observability) machineProbeHandler(deps ...health.Dependency) http.Handler {
 	mux := http.NewServeMux()
 	health.Register(mux, deps...)

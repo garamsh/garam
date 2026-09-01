@@ -37,10 +37,8 @@ import (
 // chained to its own organization's certificate authority.
 //
 // The GRN is the whole of what the certificate asserts — no roles, no
-// claims. The three fields below assert nothing and describe the
-// certificate itself: which one it is and how long it is good for,
-// which is what a caller asking to replace it is answered by
-// (ADR-0046).
+// claims. The three fields below describe the certificate itself, which
+// is what a caller asking to replace it is answered by (ADR-0046).
 type Identity struct {
 	grn       grn.GRN
 	serial    string

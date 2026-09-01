@@ -63,14 +63,11 @@ func (s *Server) IssueAgentCertificate(w http.ResponseWriter, r *http.Request, a
 }
 
 // ReportProvisioningState records what the calling operator says about
-// the agent's pod (ADR-0012). garam learns it from the operator and
-// from nowhere else — it dials no cluster — and `internal/agent`
-// decides which agents an operator may report on, as it decides which
-// certificates it may obtain.
-//
-// The answer carries nothing. What the store returns is the agent as
-// it now stands, which holds the runtime state the agent reports about
-// itself, and that is the other party's fact.
+// the agent's pod, which garam dials no cluster to learn (ADR-0012).
+// `internal/agent` decides which agents an operator may report on. The
+// answer carries nothing: what the store holds beside it is the runtime
+// state the agent reports about itself, which is the other party's
+// fact.
 func (s *Server) ReportProvisioningState(w http.ResponseWriter, r *http.Request, agentGRN machinegen.AgentGrn) {
 	operator, subject, ok := parties(w, r, agentGRN)
 	if !ok {

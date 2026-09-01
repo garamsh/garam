@@ -153,17 +153,10 @@ func serveAPI(cmd *cobra.Command) error {
 // spec operations, and /metrics and the two probes beside them.
 //
 // The generated router matches before the middleware runs, so the log
-// line can name the route rather than the path. /metrics and the two
-// probes share that router; the generated slice reaches neither,
-// because oapi-codegen applies it inside each operation's own wrapper
-// rather than around the router. The last middleware listed is the
-// outermost, so recovery runs inside the logging: a panic becomes the
-// 500 the line reports rather than an unwind that leaves no line at
-// all.
-//
-// recoverPanics is outermost of all, so every route the mux carries is
-// answered rather than dropped — the spec operations, /metrics, the
-// probes, and a path that matches none of them.
+// line can name the route rather than the path. The last middleware
+// listed is the outermost, so recovery runs inside the logging and a
+// panic becomes the 500 the line reports. recoverPanics is outermost of
+// all, so every route the mux carries is answered rather than dropped.
 func (o *observability) apiHandler(srv apigen.ServerInterface, deps ...health.Dependency) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("GET /metrics", o.metricsHandler())

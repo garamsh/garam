@@ -15,14 +15,11 @@ import (
 )
 
 // Sealer seals key material so that what reaches storage is useless
-// without the key-encryption key the process holds. Both methods take a
-// context so an implementation backed by a remote key service replaces
-// this one without touching a caller.
+// without the key-encryption key the process holds.
 //
 // binding names where the sealed bytes belong. It is authenticated but
 // not encrypted, and the same value must be supplied to open them, so
-// bytes moved to another row do not open there. A remote key service
-// takes it as its encryption context.
+// bytes moved to another row do not open there.
 type Sealer interface {
 	Seal(ctx context.Context, binding, plaintext []byte) ([]byte, error)
 	Open(ctx context.Context, binding, sealed []byte) ([]byte, error)

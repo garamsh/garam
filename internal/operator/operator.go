@@ -86,11 +86,9 @@ type Operator struct {
 // New records that orgGRN has an operator under identifier.
 // registeredBy is the member that registered it.
 //
-// The identifier is supplied rather than minted, which is what
-// separates this from every other org resource garam creates. It is
-// already the subject of a certificate wherever an operator holds one
-// (ADR-0032), and garam cannot mint an identifier for a certificate
-// that was issued before it was asked.
+// The identifier is supplied rather than minted, because it is already
+// the subject of a certificate wherever an operator holds one
+// (ADR-0032).
 func New(orgGRN grn.GRN, identifier string, registeredBy grn.GRN) (*Operator, error) {
 	g := grn.New(orgGRN.Identifier, grn.DefaultProject, ServiceType, identifier)
 	if err := g.Validate(); err != nil {

@@ -80,13 +80,9 @@ func isValueKey(k string) bool {
 // operator is to run it, and the values that operator constructs it
 // from (ADR-0026).
 //
-// It is a record and not a command. garam does not learn from it that
-// an agent exists — an operator reports that separately, and until it
-// does, the agent GRN a definition names answers nothing on the agent
-// paths. A definition is written once: garam cannot tell whether an
-// operator has already acted on one, and the epoch that makes
-// reassignment safe fences a holder that presents it (ADR-0012), which
-// nothing reading a definition does yet.
+// It is a record and not a command: garam learns that an agent exists
+// when an operator reports it and not before (ADR-0012), and a
+// definition is written once.
 type Definition struct {
 	agentGRN    grn.GRN
 	orgGRN      grn.GRN
@@ -99,12 +95,10 @@ type Definition struct {
 // NewDefinition mints the identity of the agent orgGRN is defining and
 // records what it should be. definedBy is the member that defined it.
 //
-// It fails unless operatorGRN names an operator of that organization:
-// an operator holds one organization's certificate (ADR-0015), so a
-// definition naming another organization's operator names one that can
-// never read it. Whether the organization registered that operator is
-// a read this constructor does not make; the caller answers it against
-// internal/operator before the definition is stored (ADR-0045).
+// It fails unless operatorGRN names an operator of that organization
+// (ADR-0015). Whether the organization has registered that operator is
+// the caller's read against internal/operator, not this constructor's
+// (ADR-0045).
 func NewDefinition(orgGRN, operatorGRN grn.GRN, values Values, definedBy grn.GRN) (*Definition, error) {
 	g, err := NewGRN(orgGRN)
 	if err != nil {

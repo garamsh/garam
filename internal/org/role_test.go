@@ -24,6 +24,63 @@ func TestParseRole_Unknown(t *testing.T) {
 	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
 }
 
+// TestActionConstants_SpellTheirWireStrings pins the action vocabulary
+// as text. An action string is what a stored policy document names and
+// what `api/openapi.yaml` and `web/src/types/api.ts` spell out, so
+// renaming one breaks a contract already published; every other
+// assertion in this file compares a constant to itself and reports
+// nothing when it moves.
+func TestActionConstants_SpellTheirWireStrings(t *testing.T) {
+	cases := []struct {
+		constant string
+		want     string
+	}{
+		{org.ActionOrgRead, "org:read"},
+		{org.ActionOrgUpdate, "org:update"},
+		{org.ActionOrgDelete, "org:delete"},
+		{org.ActionOrgMemberList, "org:member-list"},
+		{org.ActionOrgInvite, "org:invite"},
+
+		{org.ActionGroupCreate, "group:create"},
+		{org.ActionGroupRead, "group:read"},
+		{org.ActionGroupUpdate, "group:update"},
+		{org.ActionGroupDelete, "group:delete"},
+		{org.ActionGroupMemberList, "group:member-list"},
+		{org.ActionGroupMemberAdd, "group:member-add"},
+		{org.ActionGroupMemberRemove, "group:member-remove"},
+
+		{org.ActionProjectCreate, "project:create"},
+		{org.ActionProjectRead, "project:read"},
+		{org.ActionProjectUpdate, "project:update"},
+		{org.ActionProjectDelete, "project:delete"},
+		{org.ActionProjectMemberList, "project:member-list"},
+		{org.ActionProjectMemberAdd, "project:member-add"},
+		{org.ActionProjectMemberRemove, "project:member-remove"},
+
+		{org.ActionPolicyCreate, "policy:create"},
+		{org.ActionPolicyRead, "policy:read"},
+		{org.ActionPolicyUpdate, "policy:update"},
+		{org.ActionPolicyAttach, "policy:attach"},
+		{org.ActionPolicyDetach, "policy:detach"},
+
+		{org.ActionConsentRead, "consent:read"},
+		{org.ActionConsentGrant, "consent:grant"},
+		{org.ActionConsentWithdraw, "consent:withdraw"},
+
+		{org.ActionOperatorRead, "operator:read"},
+		{org.ActionOperatorRegister, "operator:register"},
+
+		{org.ActionAgentRead, "agent:read"},
+		{org.ActionAgentDefine, "agent:define"},
+		{org.ActionAgentWatch, "agent:watch"},
+	}
+	for _, c := range cases {
+		t.Run(c.want, func(t *testing.T) {
+			assert.Equal(t, c.want, c.constant)
+		})
+	}
+}
+
 func TestRoleActions_GrantSets(t *testing.T) {
 	assert.Equal(t,
 		[]string{

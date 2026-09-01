@@ -173,6 +173,23 @@ func TestGRPCServer_Explain(t *testing.T) {
 	assert.False(t, traces["wrong-action"].GetMatched())
 	assert.True(t, traces["deny-delete"].GetMatched())
 	assert.Equal(t, authzv1.Effect_EFFECT_DENY, traces["deny-delete"].GetEffect())
+
+	// The control for the refusal above: where only an Allow matches,
+	// Explain reports Allowed. The request above matches an Allow and a
+	// Deny, which sets both flags, so it reports false whichever effect
+	// the engine counts as a deny and only this case reads the branch.
+	allowOnly, err := client.Explain(context.Background(), &authzv1.ExplainRequest{
+		SubjectGrn: "grn:root:default:user:alice",
+		ObjectGrn:  "grn:root:default:org:acme",
+		Action:     "org:delete",
+		Statements: []*authzv1.Statement{
+			allowStatement("allow-all", []string{"org:*"}, []string{"grn:root:default:org:*"}),
+			{Sid: "deny-other-org", Effect: authzv1.Effect_EFFECT_DENY, Action: []string{"org:delete"}, Resource: []string{"grn:root:default:org:globex"}},
+		},
+		SubjectOrg: "grn:root:default:org:acme",
+	})
+	require.NoError(t, err)
+	assert.True(t, allowOnly.GetAllowed(), "an Allow matches and the Deny does not")
 }
 
 func orgGRN(id string) grn.GRN {

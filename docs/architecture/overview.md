@@ -99,6 +99,12 @@ collaborate on a shared plan.
   and no other; a claim is a long poll, and a message addressed to an
   agent that does not exist is stored and answered with success rather
   than refused (ADR-0013).
+- A sender reading how far a message it sent has got, on the same
+  listener (ADR-0055). It reads its own messages and no others, and the
+  four states — waiting, held under a live claim, delivered, handed out
+  no further — are derived from columns the queue already wrote.
+  Absence is the answer for a message the thirty-day sweep deleted, and
+  the read carries no body: a completed message has none (ADR-0034).
 - **The adapter's delivery loop**, run beside one agent as `garam
   adapter` ([adapter.md](./adapter.md)): it claims a message for that
   agent, posts it into the agent platform's gateway over loopback, holds
@@ -235,7 +241,10 @@ collaborate on a shared plan.
 - Telling a sender that its message exhausted its attempts. ADR-0018
   makes that garam's obligation because the agent platform notifies no
   sender (`gagent@40ef7ac`); the queue stops redelivering an exhausted
-  message and nothing yet reports one.
+  message and garam announces one to nobody. What a sender can do is
+  ask (see In scope), which answers the question without discharging
+  the obligation: ADR-0018 says garam tells, and a sender that never
+  asks is still told nothing.
 - The two ends of watching an agent work. garam's half is built (see In
   scope): the stream a browser reads, the watcher count on the poll, and
   the fan-out between the two listeners. Neither end of it is — no

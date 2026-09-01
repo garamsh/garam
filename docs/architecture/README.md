@@ -107,6 +107,7 @@ ADRs:
 - [0049](./adr/0049-neither-published-specification-promises-anything-across-versions.md) — neither published specification promises anything across versions
 - [0050](./adr/0050-a-specification-states-its-listeners-5xx-once-and-declares-none-per-operation.md) — a specification states its listener's 5xx once and declares none per operation
 - [0051](./adr/0051-an-aggregate-exposes-what-it-persists.md) — an aggregate exposes what it persists
+- [0052](./adr/0052-a-concern-is-owned-by-the-boundary-whose-subject-matter-it-is.md) — a concern is owned by the boundary whose subject matter it is, not by the one it was extracted from
 
 ## Rules for edits
 

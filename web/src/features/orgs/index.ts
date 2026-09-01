@@ -12,6 +12,7 @@ export {
   listAgents,
   listGroups,
   listOperators,
+  listOrgConsents,
   listOrgMembers,
   listOrgs,
   listProjects,
@@ -21,6 +22,7 @@ export {
   type Group,
   type Member,
   type Operator,
+  type OrgConsent,
   type Organization,
   type Project,
 } from "./api/orgs";

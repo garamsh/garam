@@ -36,6 +36,14 @@ export type AgentDefinition = components["schemas"]["AgentDefinition"];
  * operator is running or reachable (ADR-0045).
  */
 export type Operator = components["schemas"]["Operator"];
+/**
+ * One cross-organization consent relation, from the side the path
+ * named: `orgGrn` is the other organization, and each half says
+ * whether that side's grant stands. A relation is a pair and not one
+ * organization's switch — messages cross only while both halves stand
+ * (ADR-0035).
+ */
+export type OrgConsent = components["schemas"]["OrgConsent"];
 
 /**
  * What a read returned, or the fact that the API never answered. An
@@ -99,6 +107,13 @@ export function listAgentDefinitions(
     garamFetchAuthenticated<AgentDefinition[]>(
       `/orgs/${orgPath(org)}/agent-definitions`,
     ),
+  );
+}
+
+/** The cross-organization consent relations an organization is a side of. */
+export function listOrgConsents(org: string): Promise<OrgRead<OrgConsent[]>> {
+  return catchUnreachable(
+    garamFetchAuthenticated<OrgConsent[]>(`/orgs/${orgPath(org)}/consents`),
   );
 }
 

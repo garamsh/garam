@@ -7,6 +7,7 @@ import type {
   Group,
   Member,
   Operator,
+  OrgConsent,
   Organization,
   Project,
 } from "@/features/orgs";
@@ -75,6 +76,19 @@ export const fieldAgent: AgentDefinition = {
   createdAt: "2026-01-02T03:04:05Z",
 };
 
+/**
+ * The single consent relation Acme is a side of: both halves stand, so
+ * messages cross between Acme and Globex. Globex is not an
+ * organization Alice belongs to — a consent names one this side cannot
+ * otherwise read.
+ */
+export const globexConsent: OrgConsent = {
+  orgGrn: "grn:root:default:org:globex",
+  grantedHere: true,
+  grantedThere: true,
+  stands: true,
+};
+
 /** Alice's membership of Acme, at the role that may invite. */
 export const aliceMembership: Member = {
   userGrn: alice.grn,
@@ -100,6 +114,7 @@ const routes: { path: string; guarded: boolean; body: JsonBodyType }[] = [
   { path: "/orgs/acme/operators", guarded: true, body: [fieldOne] },
   { path: "/orgs/acme/agents", guarded: true, body: [reportedAgent] },
   { path: "/orgs/acme/agent-definitions", guarded: true, body: [fieldAgent] },
+  { path: "/orgs/acme/consents", guarded: true, body: [globexConsent] },
 ];
 
 /** The signed-in happy path: Alice owns Acme, which holds one of each. */

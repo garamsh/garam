@@ -10,6 +10,14 @@ export {
 export { createOrg, type CreateOrgState } from "./api/create-org";
 export { defineAgent, type DefineAgentState } from "./api/define-agent";
 export {
+  grantOrgConsent,
+  type GrantOrgConsentState,
+} from "./api/grant-org-consent";
+export {
   registerOperator,
   type RegisterOperatorState,
 } from "./api/register-operator";
+export {
+  withdrawOrgConsent,
+  type WithdrawOrgConsentState,
+} from "./api/withdraw-org-consent";

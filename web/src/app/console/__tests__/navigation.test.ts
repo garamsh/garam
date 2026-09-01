@@ -24,14 +24,19 @@ describe("parseConsolePath", () => {
     expect(location.kind === "org" && location.section.label).toBe("Overview");
   });
 
-  it.each(["groups", "projects", "operators", "agents", "members", "policies"])(
-    "reads the %s section",
-    (segment) => {
-      const location = parseConsolePath(`/console/orgs/acme/${segment}`);
+  it.each([
+    "groups",
+    "projects",
+    "operators",
+    "agents",
+    "members",
+    "consents",
+    "policies",
+  ])("reads the %s section", (segment) => {
+    const location = parseConsolePath(`/console/orgs/acme/${segment}`);
 
-      expect(location.kind === "org" && location.section.segment).toBe(segment);
-    },
-  );
+    expect(location.kind === "org" && location.section.segment).toBe(segment);
+  });
 
   it("reads an invitation", () => {
     expect(parseConsolePath("/console/invitations/token")).toEqual({

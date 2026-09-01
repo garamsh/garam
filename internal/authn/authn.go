@@ -45,15 +45,10 @@ var ErrPasswordCredentialNotFound = errorx.New(errorx.KindNotFound, "password cr
 // live.
 var ErrPasswordAttemptRateLimited = errorx.New(errorx.KindResourceExhausted, "password attempt rate exceeded")
 
-// MaxLivePasswordAttempts bounds the password verifications live at
-// one time. ADR-0030 bounds the OAuth login endpoint because it writes
-// unconditionally; this path writes nothing until a password verifies,
-// but every attempt costs an Argon2id computation — 19 MiB and
-// deliberate CPU — which the unknown-username path spends too. So the
-// same shape bounds the same kind of lever: the store refuses past this
-// many live attempts, in the statement that writes, and nothing is
-// hashed past it. A verification that succeeds releases its own
-// attempt, so only failures accumulate (ADR-0041).
+// MaxLivePasswordAttempts bounds the password verifications live at one
+// time: the store refuses past this many in the statement that writes,
+// and nothing is hashed past it (ADR-0041). A verification that succeeds
+// releases its own attempt, so only failures accumulate.
 const MaxLivePasswordAttempts = 1024
 
 // Identity is the authenticated identity asserted by a Provider.

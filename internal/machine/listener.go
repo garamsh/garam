@@ -10,16 +10,10 @@ import (
 // NewServer returns the machine-facing HTTP server: it terminates TLS
 // with the certificate that seam answers with, requires a client
 // certificate, and serves next only for a connection whose certificate
-// authenticated (ADR-0014). The caller gives it an address and serves
-// it.
-//
-// The chain is verified here rather than by the TLS stack. ClientCAs
-// verifies against one pool, and which authority may sign is decided by
-// the organization the certificate's own SAN names — a pool holding
-// every organization's CA would accept a certificate against a root
-// that is not its own, which is the tenancy ADR-0014 rests on the trust
-// root. What TLS is left to enforce is that a certificate is presented
-// at all.
+// authenticated (ADR-0014). The chain is verified in next and not by
+// the TLS stack, because which authority may sign is decided by the
+// organization the certificate's own SAN names; what TLS is left to
+// enforce is that a certificate is presented at all.
 func NewServer(s Service, certificate ServerCertificate, next http.Handler) *http.Server {
 	// TLS 1.3 only: both ends of this surface are garam's, so neither
 	// needs an older one.

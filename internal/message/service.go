@@ -66,12 +66,9 @@ type Config struct {
 //
 // Every method between Post and Status takes the calling identity and
 // the recipient whose queue it names, and answers only where the two
-// are the same identity. That is the whole of the authorization here: a
-// GRN carries its organization, so the one comparison refuses another
-// organization's agent as readily as a sibling of the caller's own.
-// Status is bounded the same way from the other side — it reads under
-// the caller as the sender, so a message the caller did not send is not
-// its message to read (ADR-0055).
+// are the same identity — the whole of the authorization here. Status
+// is bounded the same way from the other side: it reads under the
+// caller as the sender (ADR-0055).
 type Service interface {
 	// Post stores a message from sender to recipient and answers with
 	// what is stored. Posting the same idempotency key twice stores one

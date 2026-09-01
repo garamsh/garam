@@ -301,17 +301,20 @@ no dependency of its own.
 
 `internal/pgxerr` maps a postgres driver error to an `errorx` error by
 reading the sql state the driver carries, and labels it with the
-operation the caller names rather than with a store's name. Which
-sqlstate becomes which kind is the package's own doc comment; it is
-code, and a copy here would be a second thing to keep true. Every
-postgres-backed store answers through it, which is eight domains: the
-five that each held their own copy — `org`, `authz`, `ca`, `user`,
-`agent` — `operator`, which never had one, and the sign-in and
-messaging domains, whose stores read the driver's error inline until
-they were routed through it too. Machine identity, the ninth domain,
-persists nothing and has no store. The watch boundary's store answers
-through it as well and is not a domain, which is why the query above
-names nine importers where the column counts eight.
+operation the caller names rather than with a store's name. It is a
+package of its own rather than part of `errorx` because `errorx` is
+transport-agnostic by design, so the same errors flow over any surface,
+and a pgx dependency there would end that. Which sqlstate becomes which
+kind is the package's own doc comment; it is code, and a copy here would
+be a second thing to keep true. Every postgres-backed store answers
+through it, which is eight domains: the five that each held their own
+copy — `org`, `authz`, `ca`, `user`, `agent` — `operator`, which never
+had one, and the sign-in and messaging domains, whose stores read the
+driver's error inline until they were routed through it too. Machine
+identity, the ninth domain, persists nothing and has no store. The watch
+boundary's store answers through it as well and is not a domain, which
+is why the query above names nine importers where the column counts
+eight.
 
 `internal/listfilter` holds `Filter`, an offset and a limit where a
 limit of 0 means no limit, and `Parse`, which builds one from what a

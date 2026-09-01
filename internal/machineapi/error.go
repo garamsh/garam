@@ -11,20 +11,12 @@ import (
 	"github.com/garamsh/garam/internal/wire"
 )
 
-// RecoverPanics answers a handler that panicked. net/http recovers the
-// panic and logs the stack itself, but abandons the response instead of
-// answering, and an abandoned response tells the caller nothing on
-// either protocol: the shipped adapter meets this listener over
-// HTTP/1.1 — its transport declines h2, which
-// internal/cli/delivery_test.go pins — so it reads a closed connection,
-// cannot tell that from a network fault, and, holding a durable queue,
-// retries forever. Recovering first is what makes the answer a 500, and
-// the stack travels in the cause because net/http no longer sees the
-// panic to log it.
-//
-// It answers and does not log (stack-go.md §4). The cause reaches the
-// request line through the recorder a handled 5xx already reports on,
-// so a panic costs one line and one answer like every other failure.
+// RecoverPanics answers a handler that panicked with a 500, which
+// net/http does not do on its own (stack-go.md §4). The caller here
+// holds a durable queue, so an abandoned response is a closed
+// connection it retries forever. It answers and does not log: the stack
+// travels in the cause, and reaches the request line through the
+// recorder a handled 5xx already reports on.
 func RecoverPanics(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {

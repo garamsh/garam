@@ -33,13 +33,8 @@ type Dependency interface {
 }
 
 // Register mounts both probes on mux: liveness, which answers for the
-// process alone, and readiness, which answers for deps as well.
-//
-// Nothing outside the process reaches the liveness answer. A liveness
-// probe that checked a dependency turns one database blip into a
-// restart of every replica at once, which amplifies an outage instead
-// of draining it. A dependency belongs in deps, where the answer is to
-// route traffic elsewhere until it returns.
+// process alone, and readiness, which answers for deps as well. A
+// dependency belongs in deps and never in liveness (ADR-0021).
 func Register(mux *http.ServeMux, deps ...Dependency) {
 	mux.Handle("GET "+LivePath, live())
 	mux.Handle("GET "+ReadyPath, ready(deps))

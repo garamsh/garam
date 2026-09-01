@@ -30,12 +30,10 @@ type Issuer interface {
 // which is renew its own certificate and report its own runtime state.
 //
 // Every method takes the caller, and an operator's answers are bounded
-// by the assignments it holds. That is the whole of the authorization
-// here and there is no path around it — an operator's blast radius is
-// the agents assigned to it, which ADR-0015 states is not an
-// optimisation and may not be skipped. A caller that is not an
-// operator acts on the identity it already authenticated as and
-// reaches nothing else (ADR-0012, ADR-0040).
+// by the assignments it holds — the whole of the authorization here,
+// with no path around it (ADR-0015). A caller that is not an operator
+// acts on the identity it authenticated as and reaches nothing else
+// (ADR-0012, ADR-0040).
 type Service interface {
 	// Create mints an agent in the operator's own organization and
 	// assigns it to that operator.
@@ -123,12 +121,10 @@ func (s *service) IssueCertificate(ctx context.Context, caller, agentGRN grn.GRN
 }
 
 // holds refuses an operator the agent is not assigned to. The row
-// holds one operator at the epoch it is assigned at, so comparing it
-// is the epoch fence as well: a reassignment moves the row, and the
-// operator it replaced stops matching. GRNs carry their organization,
-// so an operator of another organization differs here too. An agent
-// that does not exist has no assignment and is refused the same way,
-// so a caller learns nothing about the agents it does not hold.
+// holds one operator at the epoch it is assigned at, so the comparison
+// is the epoch fence as well. An agent that does not exist has no
+// assignment and is refused the same way, so a caller learns nothing
+// about the agents it does not hold.
 func (s *service) holds(ctx context.Context, operator, agentGRN grn.GRN) error {
 	assignment, err := s.store.GetAssignment(ctx, agentGRN)
 	if err != nil {

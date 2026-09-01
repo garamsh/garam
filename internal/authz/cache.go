@@ -152,13 +152,9 @@ func (c *PolicyCache) InvalidateAll() {
 // ListenPolicyChanges invalidates cache entries as policy and
 // attachment writes arrive on PolicyChannel, until ctx is done. It
 // covers writes made by other processes; writes made through this
-// engine invalidate directly.
-//
-// Losing the connection is ordinary rather than exceptional — a
-// Postgres failover breaks it by design — so a lost one is reopened
-// instead of returned, and only ctx ends this. Every failure is
-// answered that same way, which is why a payload nobody can parse
-// costs a reconnect rather than the listener.
+// engine invalidate directly. Every failure — a Postgres failover
+// breaking the connection, a payload nobody can parse — is answered by
+// reconnecting, and only ctx ends this.
 func ListenPolicyChanges(ctx context.Context, pool *pgxpool.Pool, cache *PolicyCache) error {
 	delay := policyReconnectMin
 	for {

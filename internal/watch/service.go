@@ -56,9 +56,7 @@ type Relay interface {
 // The two ends run in different processes, so no instance holds both
 // halves of one watch. Publish and Watchers take the calling identity
 // beside the agent they name and answer only where the two are the same
-// identity, which is the whole of the authorization on that side: a GRN
-// carries its organization, so the one comparison refuses another
-// organization's agent as readily as a sibling of the caller's own. What
+// identity, which is the whole of the authorization on that side. What
 // admits a browser is a separate grant, decided where the browser is
 // served (ADR-0022).
 type Service interface {

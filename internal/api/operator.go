@@ -11,12 +11,9 @@ import (
 )
 
 // RegisterOperator records that the org has an operator under the
-// identifier given. Requires the admin role.
-//
-// It hands the operator nothing. Registering is garam coming to hold a
-// record that the operator exists (ADR-0045); what the operator
-// authenticates with is a certificate this listener does not mint and
-// this route does not read.
+// identifier given (ADR-0045). Requires the admin role. It hands the
+// operator nothing: what an operator authenticates with is a
+// certificate this route neither mints nor reads.
 func (s *Server) RegisterOperator(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org) {
 	u, err := s.currentUser(r)
 	if err != nil {
@@ -69,15 +66,10 @@ func (s *Server) ListOperators(w http.ResponseWriter, r *http.Request, orgSlug a
 }
 
 // requireRegisteredOperator refuses a GRN the org holds no record of
-// (ADR-0045). The refusal is a bad request rather than a missing
-// resource: the caller named the operator in a body, and a 404 on this
-// path would read as the organization being the thing that is absent.
-//
-// It names the identifier and not the GRN. Every other segment was
-// fixed before the lookup — the org is the path's, the service type is
-// checked — so the identifier is the whole of what was wrong, and the
-// console renders the sentence it gets without printing a GRN
-// (ADR-0011).
+// (ADR-0045). The refusal is a bad request and not a missing resource:
+// the caller named the operator in a body. It names the identifier
+// alone, which is the whole of what was wrong, because the console
+// renders the sentence it gets without printing a GRN (ADR-0011).
 func (s *Server) requireRegisteredOperator(r *http.Request, g grn.GRN) error {
 	_, err := s.operators.Get(r.Context(), g)
 	if errorx.IsKind(err, errorx.KindNotFound) {

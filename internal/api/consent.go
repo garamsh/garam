@@ -89,12 +89,9 @@ func (s *Server) WithdrawOrgConsent(w http.ResponseWriter, r *http.Request, orgS
 // consentPartner resolves the other organization of the pair: an org
 // consents with another org, never with itself.
 //
-// The lookup stays now that the store classifies a foreign key as not
-// found (#703), because only Grant reaches that classification — it
-// inserts, so a partner that does not exist violates the pair's key.
-// Withdraw updates by the pair and touches no foreign key, so without
-// the lookup an organization that is not there matches no row and is
-// answered 204.
+// The lookup is what Withdraw rests on: it updates by the pair and
+// touches no foreign key, so without it an organization that is not
+// there matches no row and is answered 204.
 func (s *Server) consentPartner(r *http.Request, g grn.GRN, otherSlug apigen.OtherSlug) (grn.GRN, error) {
 	other := orgGRN(otherSlug)
 	if other == g {

@@ -113,13 +113,13 @@ func TestMachineKeyMaterial_RefusesWhenAFileIsMissing(t *testing.T) {
 	caKeyFile := writeKeyEncryptionKey(t, dir)
 	rootFile := writeServerRoot(t, dir)
 
-	pair, sealer, serverRoot, err := machineKeyMaterial(certFile, keyFile, caKeyFile, rootFile)
+	keys, err := machineKeyMaterial(certFile, keyFile, caKeyFile, rootFile)
 	require.NoError(t, err, "every file present")
-	presented, err := pair.Get()
+	presented, err := keys.listener.Get()
 	require.NoError(t, err)
 	assert.NotNil(t, presented.PrivateKey)
-	assert.NotNil(t, sealer, "the process keeps the key its authorities are sealed under")
-	assert.NotEmpty(t, serverRoot, "the process keeps the root every agent pins it by")
+	assert.NotNil(t, keys.sealer, "the process keeps the key its authorities are sealed under")
+	assert.NotEmpty(t, keys.serverRoot, "the process keeps the root every agent pins it by")
 
 	tests := map[string]struct{ certFile, keyFile, caKeyFile, rootFile string }{
 		"no key-encryption key":          {certFile, keyFile, "", rootFile},
@@ -132,7 +132,7 @@ func TestMachineKeyMaterial_RefusesWhenAFileIsMissing(t *testing.T) {
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
-			_, _, _, err := machineKeyMaterial(tt.certFile, tt.keyFile, tt.caKeyFile, tt.rootFile)
+			_, err := machineKeyMaterial(tt.certFile, tt.keyFile, tt.caKeyFile, tt.rootFile)
 			require.Error(t, err)
 			assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
 		})
@@ -150,11 +150,11 @@ func TestMachineKeyMaterial_RefusesAGroupReadableKey(t *testing.T) {
 	caKeyFile := writeKeyEncryptionKey(t, dir)
 	rootFile := writeServerRoot(t, dir)
 
-	_, _, _, err := machineKeyMaterial(certFile, keyFile, caKeyFile, rootFile)
+	_, err := machineKeyMaterial(certFile, keyFile, caKeyFile, rootFile)
 	require.NoError(t, err, "owner-only key")
 
 	require.NoError(t, os.Chmod(keyFile, 0o640))
-	_, _, _, err = machineKeyMaterial(certFile, keyFile, caKeyFile, rootFile)
+	_, err = machineKeyMaterial(certFile, keyFile, caKeyFile, rootFile)
 	require.Error(t, err)
 	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
 }

@@ -12,16 +12,10 @@ import (
 	"github.com/garamsh/garam/internal/wire"
 )
 
-// RecoverPanics answers a handler that panicked. net/http recovers the
-// panic and logs the stack itself, but abandons the response instead of
-// answering: the caller reads a closed connection and cannot tell a
-// defect here from a network fault. Recovering first is what makes the
-// answer a 500, and the stack travels in the cause because net/http no
-// longer sees the panic to log it.
-//
-// It answers and does not log (stack-go.md §4). The cause reaches the
-// request line through the recorder a handled 5xx already reports on,
-// so a panic costs one line and one answer like every other failure.
+// RecoverPanics answers a handler that panicked with a 500, which
+// net/http does not do on its own (stack-go.md §4). It answers and does
+// not log: the stack travels in the cause, and reaches the request line
+// through the recorder a handled 5xx already reports on.
 func RecoverPanics(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
@@ -39,15 +33,14 @@ func RecoverPanics(next http.Handler) http.Handler {
 }
 
 // BindingError answers a request the generated router refused while
-// binding its parameters, before any handler ran. The router's own
-// default writes the binding error's text as text/plain, which
-// contradicts the specification and repeats what the caller submitted:
-// the inner error of an unparseable number is a strconv error, and one
-// quotes the value it could not parse.
+// binding its parameters, before any handler ran. It replaces the
+// router's own default, which writes the binding error's text as
+// text/plain and repeats what the caller submitted — the inner error of
+// an unparseable number is a strconv error, and one quotes the value it
+// could not parse.
 //
-// The composition root supplies this as ErrorHandlerFunc. Nothing else
-// answers on this path, so a surface without it has no declared body
-// for a refusal no handler sees.
+// The composition root supplies this as ErrorHandlerFunc, and nothing
+// else answers on this path.
 func BindingError(w http.ResponseWriter, _ *http.Request, err error) {
 	writeError(w, errorx.New(errorx.KindInvalidArgument, bindingMessage(err)))
 }
@@ -57,10 +50,6 @@ func BindingError(w http.ResponseWriter, _ *http.Request, err error) {
 // is — never from the error's own text, which is where the submitted
 // value would travel. A parameter name is the specification's word and
 // not the caller's.
-//
-// The six types below are every one the generated packages declare. The
-// default names no parameter: an error matching none of them carries
-// nothing this function knows the origin of.
 func bindingMessage(err error) string {
 	var (
 		required  *apigen.RequiredParamError

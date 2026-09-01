@@ -105,17 +105,10 @@ func (s *service) rootOf(ctx context.Context, subject grn.GRN) (*x509.Certificat
 // identityOf reads the identity a certificate names from its SAN URI,
 // and the certificate's own dates and serial beside it.
 //
-// The whole URI is parsed, and that one parse is the whole check: every
-// segment of a GRN is lowercase letters, digits and '-' (grn-model.md
-// §identifier), so a URI holding a separator that would move a segment
-// — a colon outside the four, a '?', a '#' — is not a GRN and names no
-// identity. The rule lives in [grn.Parse]; repeating it here would put
-// a second copy where a reader stops looking for the first.
-//
-// Exactly one URI is required. A certificate naming none, or naming a
-// second identity beside the first, has no single answer to who is
-// calling — which is also what refuses a server certificate presented
-// here, since it names a host and not an identity.
+// The whole URI goes through [grn.Parse], and that one parse is the
+// whole check. Exactly one URI is required: a certificate naming none,
+// or naming a second identity beside the first, has no single answer to
+// who is calling.
 func identityOf(leaf *x509.Certificate) (Identity, error) {
 	if len(leaf.URIs) != 1 {
 		return Identity{}, errorx.New(errorx.KindUnauthenticated, "machine: certificate does not name exactly one identity")

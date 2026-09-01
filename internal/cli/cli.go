@@ -108,19 +108,13 @@ func NewRootCommand() *cobra.Command {
 
 // silenceUsageOnRun stops a command that fails while running from
 // printing its usage block, and leaves the block on one that fails
-// before it runs. probe.go states the reason and it holds for every
-// command here: usage text is noise a container log pays for each time,
-// and a serve command in a crash loop pays it on every restart.
+// before it runs. A command in a crash loop writes its usage text to
+// the container log on every restart, and "how is this invoked" answers
+// a bad flag rather than an unreadable GARAM_COOKIE_SECURE.
 //
-// What separates the two is the question the block answers. "How is
-// this invoked" is what a bad flag or a missing argument raises, and it
-// is not what an unreadable GARAM_COOKIE_SECURE raises.
-//
-// The line goes inside RunE because that is the first point every check
-// deciding the first question has passed. cobra parses flags, validates
-// arguments, runs PersistentPreRunE and PreRunE, and only then
-// ValidateRequiredFlags — so a hook would silence `issue-certificate`
-// without --out-dir, which is a usage error and keeps its block.
+// cobra runs ValidateRequiredFlags after every hook, so the line goes
+// inside RunE: from a hook it would silence `issue-certificate` without
+// --out-dir, which is a usage error and keeps its block.
 func silenceUsageOnRun(cmd *cobra.Command) {
 	for _, child := range cmd.Commands() {
 		silenceUsageOnRun(child)
@@ -195,19 +189,11 @@ func envOr(key envName, fallback string) string {
 }
 
 // requestReadTimeout bounds how long a request has to arrive, not how
-// long a handler may run. That is the whole of why a watch stream and a
-// message wait are untouched: net/http applies this to reading, and a
-// claim waiting message.DefaultWait is a handler already running. The
-// two are the same thirty seconds, and that is not a margin — nothing
-// compares them, and raising either changes nothing about the other.
-// What this disconnects is a client that has stopped sending.
-//
-// Which read it governs depends on the protocol the caller negotiated:
-// under HTTP/2 it is disarmed once the headers are read, and under
-// HTTP/1.1 — what the shipped adapter negotiates — it is the
-// connection's read deadline. Generous against the largest body either
-// listener admits (65536 characters, ADR-0034) and against the machine
-// listener's handshake, which is read on the same connection.
+// long a handler may run, so a watch stream and a message wait are
+// untouched and what it disconnects is a client that has stopped
+// sending. Under HTTP/2 it is disarmed once the headers are read; under
+// HTTP/1.1 it is the connection's read deadline. It is generous against
+// the largest body either listener admits (ADR-0034).
 const requestReadTimeout = 30 * time.Second
 
 // certificateLifetime is how long a certificate garam signs stays

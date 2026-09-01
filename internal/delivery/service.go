@@ -206,13 +206,9 @@ func (s *service) hold(ctx context.Context, posted <-chan pairing, ended <-chan 
 
 // claim holds one long poll on garam and posts what it answers with.
 // The pairing travels to hold rather than into the map directly, so one
-// goroutine owns everything in flight.
-//
-// A turn that ends before its pairing arrives completes nothing, and
-// the message is redelivered. That is the at-least-once behaviour
-// ADR-0018 states rather than a case to synchronize away: the platform
-// runs the turn after it accepts the message, so the pairing is a
-// channel send ahead of an event a turn's length behind it.
+// goroutine owns everything in flight. A turn that ends before its
+// pairing arrives completes nothing and the message is redelivered,
+// which is the at-least-once behaviour ADR-0018 states.
 func (s *service) claim(ctx context.Context, posted chan<- pairing) {
 	for ctx.Err() == nil {
 		claimCtx, cancel := context.WithTimeout(ctx, s.cfg.ClaimTimeout)
@@ -255,17 +251,12 @@ func (s *service) claim(ctx context.Context, posted chan<- pairing) {
 }
 
 // readTurns holds one subscription to the platform's events and reports
-// each turn that ends on it, reopening a stream that drops. It closes
-// subscribed once the first one is open.
-//
-// The subscription is this loop's own. Consuming, completing and
-// forwarding each take one, because a reader that falls behind loses
-// events silently, and the one that decides what is completed must not
-// be degraded by another (ADR-0013, ADR-0018).
-//
-// Nothing is recovered across a reopen: the stream carries no cursor,
-// so the turns that ended while it was down complete nothing and their
-// messages arrive again.
+// each turn that ends on it, reopening a stream that drops, and closes
+// subscribed once the first one is open. The subscription is this
+// loop's own, because a reader that falls behind loses events silently
+// (ADR-0013, ADR-0018). Nothing is recovered across a reopen: the
+// stream carries no cursor, so the messages of the turns that ended
+// while it was down arrive again.
 func (s *service) readTurns(ctx context.Context, ended chan<- TurnEnd, subscribed chan<- struct{}) {
 	opened := false
 	for ctx.Err() == nil {

@@ -226,7 +226,7 @@ func machineListenerAround(t *testing.T, obs *observability, subject grn.GRN, ne
 	t.Helper()
 	dir := t.TempDir()
 	certFile, keyFile := writeTLSKeyPair(t, dir)
-	pair, _, _, err := machineKeyMaterial(certFile, keyFile, writeKeyEncryptionKey(t, dir), writeServerRoot(t, dir))
+	keys, err := machineKeyMaterial(certFile, keyFile, writeKeyEncryptionKey(t, dir), writeServerRoot(t, dir))
 	require.NoError(t, err)
 
 	store := authorities{}
@@ -242,7 +242,7 @@ func machineListenerAround(t *testing.T, obs *observability, subject grn.GRN, ne
 	client, err := tls.X509KeyPair(issued.CertificatePEM(), issued.PrivateKeyPEM())
 	require.NoError(t, err)
 
-	srv := obs.machineServer(certificateAuthorities{store: store}, pair, next)
+	srv := obs.machineServer(certificateAuthorities{store: store}, keys.listener, next)
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	go func() { _ = srv.ServeTLS(lis, "", "") }()

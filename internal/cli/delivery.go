@@ -30,13 +30,8 @@ const gatewayHeaderTimeout = 30 * time.Second
 // docs/architecture/adapter.md, running beside one agent. It claims a
 // message for that agent, posts it into the platform's gateway over
 // loopback, and completes the claim when a turn reports success and
-// names the message.
-//
-// It is a subcommand of the one CLI, which is the topology ADR-0003
-// fixed and ADR-0017 changed the process count of and nothing else. It
-// serves nothing, so it is not under `serve`: the connection to garam
-// starts here, because no orchestrator exposes an agent to garam
-// (ADR-0012).
+// names the message. It serves nothing, so it is a subcommand of the
+// one CLI but not one of `serve` (ADR-0003, ADR-0012).
 func newAdapterCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "adapter",
@@ -130,26 +125,15 @@ func gatewayClient() *http.Client {
 }
 
 // adapterClient is the connection garam sees: the agent's own
-// certificate, and the garam server root as what garam's listener is
-// verified against. The two are different roots — the authority that
-// signed the agent signs no server certificate — so the root is an
-// input of its own rather than the issuer travelling beside the
-// certificate (ADR-0040).
+// certificate, presented per handshake so a renewed one needs no
+// restart, and the garam server root as a separate input, because the
+// authority that signed the agent signs no server certificate
+// (ADR-0040).
 //
-// The certificate is presented per handshake rather than frozen at
-// startup, for the reason the listener reads its own per handshake: a
-// renewed one is presented on the next connection and this process
-// keeps running.
-//
-// The private key is key material, so it is read under the owner-only
-// rule every key file here is read under (ADR-0015); the certificate
-// and the root beside it are public and are read plainly.
-//
-// The client carries no timeout, because one would bound the whole
-// call: a claim is a long poll and the event stream is held open for as
-// long as the agent runs. Each call carries its own deadline instead —
-// delivery.Config's ClaimTimeout and CallTimeout, applied per call in
-// internal/delivery/service.go.
+// The client carries no timeout, and one added here breaks the adapter:
+// a claim is a long poll and the event stream is held open for as long
+// as the agent runs. Each call carries its own deadline instead
+// (delivery.Config's ClaimTimeout and CallTimeout).
 func adapterClient(certFile, keyFile, serverRootFile string) (*http.Client, error) {
 	if certFile == "" || keyFile == "" || serverRootFile == "" {
 		return nil, errorx.New(errorx.KindInvalidArgument,

@@ -18,16 +18,11 @@ type Filter struct {
 // Parse builds a Filter from the limit and offset a caller supplied,
 // each nil where the caller sent none.
 //
-// It refuses a value the paging columns cannot hold. They are `integer`,
-// so a wider one reaches SQL through a conversion that truncates rather
-// than fails: 4294967296 becomes 0, and the answer is a first page to a
-// request for a page far past the end — which a caller cannot tell from
-// the page it asked for. A negative one reaches SQL intact and Postgres
-// refuses it there, as a 500 for a mistake the caller made.
-//
-// This is the boundary the values cross (runtime-safety.md §Trust
-// boundaries), so it is the one place they are checked: a Filter from
-// here is within range, and the stores convert it without checking.
+// It refuses a value the `integer` paging columns cannot hold, which
+// SQL would otherwise truncate rather than reject. This is the boundary
+// the values cross (runtime-safety.md §Trust boundaries), so it is the
+// one place they are checked: a Filter from here is within range, and
+// the stores convert it without checking.
 func Parse(limit, offset *int) (Filter, error) {
 	l, err := paging("limit", limit)
 	if err != nil {

@@ -97,11 +97,11 @@ already expose, built in parallel rather than gating P3.
   `deploy/charts/garam/` is the description of a deployment (ADR-0042),
   checked by `make chart` inside `make ci`. What a deployment must plan
   for is [deployment-contract.md](../architecture/deployment-contract.md).
-  Publishing is built and unexercised: `.github/workflows/release.yml`
+  Publishing is built and exercised: `.github/workflows/release.yml`
   publishes both images on a `vX.Y.Z` tag push under the names and the
-  tag rule ADR-0039 fixed, and both ECR repositories existed when they
-  were read on 2026-08-31. No tag has been pushed, so nothing has run
-  it and neither repository holds an image.
+  tag rule ADR-0039 fixed, and `v0.1.0` ran it on 2026-09-01. Both
+  repositories hold `0.1.0`, and the release that tag created records
+  each image's digest beside it.
 
 ## Sequencing rules
 

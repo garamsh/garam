@@ -107,12 +107,17 @@ SHELL_SCRIPTS = $(shell find scripts -type f -name '*.sh')
 # off, so the absence is a decision rather than a property of the
 # machine, and what it leaves uncovered is recorded on #840.
 #
-# Its check that a `with:` key is an input the action declares is keyed
-# on `owner/repo@ref` and holds only for a ref its bundled database
-# names. docs/convention/ci.md §Pinning requires a full commit SHA,
-# which is no such ref, so that one check reaches no action here. What
-# reaches every workflow is the expression, `needs:` and shell-name
-# checking.
+# Three of its checks are keyed on `owner/repo@ref` and hold only for a
+# ref its bundled database names, and that database is keyed on
+# major-version tags: whether a `with:` key is an input the action
+# declares, whether the action's runner is too old, and the expression
+# rule's typing of `steps.<id>.outputs.<name>`, which falls back to
+# `map[string]string` otherwise. Neither the full commit SHA
+# docs/convention/ci.md §Pinning requires nor the exact tag recorded
+# beside it is such a ref, so all three reach no action here,
+# release.yml's four `steps.*.outputs.*` references included (#854).
+# What reaches every workflow whatever the ref is the rest of the
+# expression, `needs:` and shell-name checking.
 #
 # shfmt is a formatter and this repository's shell layout is not the one
 # it prints, so it is run as the POSIX parser it is built on: output

@@ -1,0 +1,35 @@
+name: images
+
+# Action pins take the form ci.yml states.
+
+# A workflow of its own rather than a fourth job in ci.yml: a path
+# filter is evaluated per workflow, so a run this one excludes starts no
+# runner at all, where a job held back by an `if:` has already started
+# one and billed a minute.
+#
+# `docs/**` is the whole ignore list because it is the only path the
+# build itself keeps out of both images: `.dockerignore` names `docs`,
+# and the web image's context is `web/`. A wider one would rest on a
+# property that holds today rather than one the build enforces, and a
+# filter that quietly stops covering a change is what #850 is about.
+on:
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+
+permissions: read-all
+
+jobs:
+  # `make ci` proves the Go module and the web app build, which is not
+  # that the images do — Next.js standalone output is where the two come
+  # apart (#760). This builds both from what release.yml says each is
+  # built from, then checks the web one, whose failure during a release
+  # is the irreversible half (ADR-0039 §Consequences).
+  #
+  # Neither toolchain is reached except through a Dockerfile, so the
+  # runner's own Docker and make are all this needs.
+  images:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: make web-image-e2e

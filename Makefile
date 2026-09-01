@@ -77,6 +77,7 @@ WEB_E2E_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_AD
 .PHONY: lint format test build gen check-gen check-toolchain e2e db-up db-down backend-up ci template-diff search
 .PHONY: chart chart-lint chart-render chart-identity chart-names chart-guards chart-security chart-package
 .PHONY: web-install web-lint web-format web-test web-build web-gen web-check-gen web-e2e web-image-e2e web-ci
+.PHONY: image-build
 .PHONY: minikube-up minikube-down minikube-start minikube-images minikube-db
 .PHONY: minikube-secret minikube-migrate minikube-apps minikube-rebuild minikube-forward minikube-context
 
@@ -119,7 +120,7 @@ SHELL_SCRIPTS = $(shell find scripts -type f -name '*.sh')
 # discarded, exit status read. That status answers whether the file
 # parses and not whether it is formatted — a file diverging from shfmt's
 # layout passes, a syntax error and a bashism fail. `-ln posix` fixes
-# the dialect all five scripts declare rather than taking it from each
+# the dialect all six scripts declare rather than taking it from each
 # shebang, so a script that later says bash fails here instead of being
 # read as bash.
 lint:
@@ -411,13 +412,28 @@ web-e2e:
 	$(PNPM) exec playwright install chromium
 	GARAM_API_URL=http://$(API_HOST_ADDR) GARAM_E2E_DATABASE_URL='$(WEB_E2E_DATABASE_URL)' $(PNPM) e2e
 
+# image-build builds the two images a release publishes, each from what
+# .github/workflows/release.yml says it is built from — the script reads
+# that file rather than restating it. Nothing else builds either: `build`
+# and `web-build` prove the Go module and the web app build, which is
+# not that the images do (#760).
+image-build:
+	scripts/image-build.sh
+
+# What image-build tags the web image: ADR-0039's repository name and
+# the script's tag. A name that stopped matching either fails in
+# tests/image/web.sh on an image docker cannot find, rather than
+# checking a different one.
+WEB_IMAGE = garam-web:ci
+
 # web-image-e2e checks the built image rather than the app: that the
 # standalone server starts, answers both probes and reaches the baked
-# `/api/*` target. It builds the image it checks; GARAM_WEB_IMAGE names
-# one to check instead, which is how an image pulled from ECR by digest
-# is verified.
-web-image-e2e:
-	tests/image/web.sh
+# `/api/*` target. Its subject is the web image image-build produced,
+# carrying the GARAM_API_URL a release bakes. GARAM_WEB_IMAGE names one
+# to check instead, which is how an image pulled from ECR by digest is
+# verified, and then nothing is built here.
+web-image-e2e: $(if $(GARAM_WEB_IMAGE),,image-build)
+	GARAM_WEB_IMAGE='$(or $(GARAM_WEB_IMAGE),$(WEB_IMAGE))' tests/image/web.sh
 
 web-ci: web-format web-lint web-test web-build web-check-gen
 

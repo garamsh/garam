@@ -56,17 +56,7 @@ jobs:
       # pattern by eye. It verifies nothing, it calls no AWS API, and
       # it stands after the version guard so a malformed tag still
       # costs nothing.
-      #
-      # The token is a credential and this log is permanent, so the
-      # `sub` claim is all that leaves this step: not the token, not
-      # the rest of the payload, and not jq's parse error, which quotes
-      # its input (docs/convention/ci.md §Security baseline).
-      - run: |
-          set -o pipefail
-          curl -sSf -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" \
-            | jq -er '.value | split(".")[1] | gsub("-"; "+") | gsub("_"; "/") | @base64d | fromjson | .sub' 2>/dev/null \
-            || { echo 'no sub claim read from the runner OIDC token; nothing further about it is printed' >&2; exit 1; }
+      - run: scripts/oidc-subject.sh
 
       - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
         with:

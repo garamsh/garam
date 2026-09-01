@@ -158,10 +158,20 @@ func TestLogin_Redirects(t *testing.T) {
 	assert.True(t, verifier, "verifier cookie set")
 }
 
+// TestLogin_UnknownProvider holds the refusal the callback half of this
+// flow makes too: a provider nothing registered is not there, and
+// `Login` says so. The registered provider beside it is the control —
+// the same route under a name the fixture registered redirects, so the
+// 404 tracks the provider rather than a surface that refuses every
+// login.
 func TestLogin_UnknownProvider(t *testing.T) {
 	f := newFixture(t)
+
 	rec := f.do(t, "GET", "/auth/login/github", "")
 	assert.Equal(t, http.StatusNotFound, rec.Code)
+
+	rec = f.do(t, "GET", "/auth/login/google", "")
+	assert.Equal(t, http.StatusFound, rec.Code)
 }
 
 // TestOauthCallback_UnknownProvider holds the refusal the other half of
@@ -504,9 +514,16 @@ func TestLoginCallbackMeLogout_RoundTrip(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }
 
+// TestMe_NoSession reads the request with a session against the same
+// request without one: the control is what stops being answered if
+// /me starts refusing every caller.
 func TestMe_NoSession(t *testing.T) {
 	f := newFixture(t)
-	rec := f.do(t, "GET", "/me", "")
+
+	rec := f.do(t, "GET", "/me", "", f.sessionCookieFor(t, "ada", "Ada"))
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	rec = f.do(t, "GET", "/me", "")
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }
 
@@ -654,9 +671,17 @@ func TestListOrgs_OnlyMine(t *testing.T) {
 	assert.Equal(t, "alice-org", orgs[0].Name)
 }
 
+// TestCreateOrg_RequiresAuth reads the same body under a session
+// against the same body without one: the control is what stops being
+// created if the route starts refusing every caller, or if the body
+// itself is what the 401 is really about.
 func TestCreateOrg_RequiresAuth(t *testing.T) {
 	f := newFixture(t)
-	rec := f.do(t, "POST", "/orgs", `{"name":"acme"}`)
+
+	rec := f.do(t, "POST", "/orgs", `{"name":"acme"}`, f.sessionCookieFor(t, "ada", "Ada"))
+	require.Equal(t, http.StatusCreated, rec.Code)
+
+	rec = f.do(t, "POST", "/orgs", `{"name":"acme"}`)
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }
 

@@ -18,8 +18,15 @@ func TestParseRole_KnownRoles(t *testing.T) {
 	}
 }
 
+// TestParseRole_Unknown reads the name the vocabulary has against one
+// it does not: the same call, differing only in the string, so what
+// refuses is the name rather than a parse that refuses every name.
 func TestParseRole_Unknown(t *testing.T) {
-	_, err := org.ParseRole("superuser")
+	r, err := org.ParseRole("member")
+	require.NoError(t, err)
+	require.Equal(t, "member", string(r))
+
+	_, err = org.ParseRole("superuser")
 	require.Error(t, err)
 	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
 }

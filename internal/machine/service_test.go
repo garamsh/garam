@@ -320,18 +320,42 @@ func TestService_RefusesAnExpiredCertificate(t *testing.T) {
 // TestService_RefusesAnOrganizationWithNoAuthority keeps the refusal
 // off the kind that would answer a question the caller did not ask:
 // whether the organization exists.
+//
+// The certificate acme's own authority signs for acme is the control.
+// Both are signed by that authority and read through the same service,
+// and only the organization the SAN names differs, so what refuses the
+// second is the missing authority rather than the signer the test had
+// to borrow to mint it.
 func TestService_RefusesAnOrganizationWithNoAuthority(t *testing.T) {
 	issuer := newIssuer(t)
+	svc := issuer.service()
+	subject := agentGRN("acme", "bot-1")
 	issuer.authority(t, "acme")
 
-	_, err := authenticate(t, issuer.service(),
+	identity, err := authenticate(t, svc, issuer.sign(t, "acme", leaf{uris: []string{subject.String()}}))
+	require.NoError(t, err)
+	require.Equal(t, subject, identity.GRN())
+
+	_, err = authenticate(t, svc,
 		issuer.sign(t, "acme", leaf{uris: []string{agentGRN("nobody", "bot-1").String()}}))
 	require.Error(t, err)
 	assert.True(t, errorx.IsKind(err, errorx.KindUnauthenticated))
 }
 
+// TestService_RefusesAConnectionThatPresentedNothing reads the empty
+// chain against a real one through the same service: without it a
+// service that authenticates nothing at all refuses this connection
+// too, and reads exactly the same.
 func TestService_RefusesAConnectionThatPresentedNothing(t *testing.T) {
-	_, err := newIssuer(t).service().Authenticate(context.Background(), nil)
+	issuer := newIssuer(t)
+	svc := issuer.service()
+	subject := agentGRN("acme", "bot-1")
+
+	identity, err := authenticate(t, svc, issuer.issue(t, subject))
+	require.NoError(t, err)
+	require.Equal(t, subject, identity.GRN())
+
+	_, err = svc.Authenticate(context.Background(), nil)
 	require.Error(t, err)
 	assert.True(t, errorx.IsKind(err, errorx.KindUnauthenticated))
 }

@@ -200,21 +200,33 @@ func TestPolicies_RequireOrgMembership(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }
 
+// TestCreatePolicy_RejectsIncompleteBody reads the complete body
+// against the three that are not: each of those is that body with one
+// part taken away, so a create that refuses everything stops satisfying
+// the first row while still satisfying the rest.
 func TestCreatePolicy_RejectsIncompleteBody(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
 	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
 	f.permit(permission{ownerGRN, org.ActionPolicyCreate})
+	_, p := policyFixture(slug)
+	f.policies.EXPECT().
+		CreatePolicy(mock.Anything, p.OrgGRN, "read-only", json.RawMessage(policyDocument), ownerGRN).
+		Return(p, nil).Once()
 
-	for name, body := range map[string]string{
-		"missing name":     `{"document":` + policyDocument + `}`,
-		"missing document": `{"name":"read-only"}`,
-		"malformed json":   `{"name":`,
+	for name, c := range map[string]struct {
+		body string
+		want int
+	}{
+		"complete":         {`{"name":"read-only","document":` + policyDocument + `}`, http.StatusCreated},
+		"missing name":     {`{"document":` + policyDocument + `}`, http.StatusBadRequest},
+		"missing document": {`{"name":"read-only"}`, http.StatusBadRequest},
+		"malformed json":   {`{"name":`, http.StatusBadRequest},
 	} {
 		t.Run(name, func(t *testing.T) {
-			rec := f.do(t, "POST", "/orgs/"+slug+"/policies", body, owner)
-			assert.Equal(t, http.StatusBadRequest, rec.Code)
+			rec := f.do(t, "POST", "/orgs/"+slug+"/policies", c.body, owner)
+			assert.Equal(t, c.want, rec.Code)
 		})
 	}
 }
@@ -235,6 +247,11 @@ func TestCreatePolicy_RejectsDocumentTheEngineRefuses(t *testing.T) {
 	assert.Equal(t, errorx.KindInvalidArgument.String(), decodeBody[apigen.Error](t, rec).Kind)
 }
 
+// TestAttachPolicy_RejectsMalformedSubject reads the subject GRN that
+// parses against the one that does not, on both halves of the pair: the
+// well-formed subject attaches and detaches through the same routes, so
+// the two refusals track the string rather than a surface that refuses
+// every attachment.
 func TestAttachPolicy_RejectsMalformedSubject(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
@@ -245,16 +262,30 @@ func TestAttachPolicy_RejectsMalformedSubject(t *testing.T) {
 		permission{ownerGRN, org.ActionPolicyDetach},
 	)
 
-	g, _ := policyFixture(slug)
+	g, p := policyFixture(slug)
+	subject := grn.New(slug, "default", org.ServiceTypeGroup, "eng")
 	policyPath := "/orgs/" + slug + "/policies/" + g.Identifier
+	f.policies.EXPECT().AttachPolicy(mock.Anything, g, subject).
+		Return(&api.PolicyAttachment{PolicyGRN: g, SubjectGRN: subject, CreatedAt: p.CreatedAt}, nil).Once()
+	f.policies.EXPECT().DetachPolicy(mock.Anything, g, subject).Return(nil).Once()
 
-	rec := f.do(t, "POST", policyPath+"/attachments", `{"subjectGrn":"eng"}`, owner)
+	rec := f.do(t, "POST", policyPath+"/attachments", `{"subjectGrn":"`+subject.String()+`"}`, owner)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	rec = f.do(t, "DELETE", policyPath+"/attachments/"+subject.String(), "", owner)
+	require.Equal(t, http.StatusNoContent, rec.Code)
+
+	rec = f.do(t, "POST", policyPath+"/attachments", `{"subjectGrn":"eng"}`, owner)
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 
 	rec = f.do(t, "DELETE", policyPath+"/attachments/eng", "", owner)
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
+// TestPolicy_NotFoundFromEngine holds the kind the engine answered
+// against the one it did not: the same route over the same policy,
+// differing only in what the seam returned, so the 404 tracks the
+// engine's answer rather than a route that reports missing whatever it
+// is asked for.
 func TestPolicy_NotFoundFromEngine(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
@@ -262,11 +293,16 @@ func TestPolicy_NotFoundFromEngine(t *testing.T) {
 	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
 	f.permit(permission{ownerGRN, org.ActionPolicyUpdate})
 
-	g, _ := policyFixture(slug)
-	f.policies.EXPECT().ActivatePolicy(mock.Anything, g).
-		Return(nil, errorx.New(errorx.KindNotFound, "policy not found"))
+	g, p := policyFixture(slug)
+	activate := "/orgs/" + slug + "/policies/" + g.Identifier + "/activate"
 
-	rec := f.do(t, "POST", "/orgs/"+slug+"/policies/"+g.Identifier+"/activate", "", owner)
+	f.policies.EXPECT().ActivatePolicy(mock.Anything, g).Return(p, nil).Once()
+	rec := f.do(t, "POST", activate, "", owner)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	f.policies.EXPECT().ActivatePolicy(mock.Anything, g).
+		Return(nil, errorx.New(errorx.KindNotFound, "policy not found")).Once()
+	rec = f.do(t, "POST", activate, "", owner)
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 }
 

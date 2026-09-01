@@ -18,31 +18,31 @@ func runProbe(url string) error {
 	return root.Execute()
 }
 
-func TestProbe_AnswersOK(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+// TestProbe_AnswersOnlyAReadyListener reads the two refusals against
+// the listener that answers: one command, three listeners differing
+// only in what they do with the request, so a probe that fails whatever
+// it is pointed at stops satisfying the first assertion.
+func TestProbe_AnswersOnlyAReadyListener(t *testing.T) {
+	ready := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
-	defer srv.Close()
+	defer ready.Close()
 
-	require.NoError(t, runProbe(srv.URL))
-}
-
-func TestProbe_RefusesUnready(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	unready := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "database unavailable", http.StatusServiceUnavailable)
 	}))
-	defer srv.Close()
+	defer unready.Close()
 
-	err := runProbe(srv.URL)
+	// A listener that is never there: the probe cannot pass on nothing.
+	silent := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	silentURL := silent.URL
+	silent.Close()
+
+	require.NoError(t, runProbe(ready.URL))
+
+	err := runProbe(unready.URL)
 	require.Error(t, err)
 	assert.True(t, errorx.IsKind(err, errorx.KindUnavailable), "want an unavailable kind, got %v", err)
-}
 
-func TestProbe_RefusesSilence(t *testing.T) {
-	// A listener that is never there: the probe cannot pass on nothing.
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {}))
-	addr := srv.URL
-	srv.Close()
-
-	require.Error(t, runProbe(addr))
+	require.Error(t, runProbe(silentURL))
 }

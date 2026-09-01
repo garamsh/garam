@@ -145,7 +145,7 @@ type AgentAssignment struct {
 	Since time.Time `json:"since"`
 }
 
-// AgentDefinition What an organization says an agent should be (ADR-0026). It is a record and not an agent: no state is reported on it, and it carries none of the fields an `Agent` carries. `agentGrn` is the identity garam minted for the agent this definition describes, and no agent answers under it until an operator reports one.
+// AgentDefinition What an organization says an agent should be (ADR-0026). It is a record and not an agent: no state is reported on it, and it carries none of the fields an `Agent` carries. `agentGrn` is the identity garam minted for the agent this definition describes, and no agent answers under it until the claim.
 type AgentDefinition struct {
 	AgentGrn  string    `json:"agentGrn"`
 	CreatedAt time.Time `json:"createdAt"`

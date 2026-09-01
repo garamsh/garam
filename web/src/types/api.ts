@@ -404,7 +404,7 @@ export interface paths {
         };
         /**
          * List an organization's agent definitions. Requires the `member` role.
-         * @description The agents the organization says it should have. An entry here is not an agent, and an agent under `/orgs/{org}/agents` is not a definition; nothing joins the two, because what an operator made from a definition is not reported back yet.
+         * @description The agents the organization says it should have. An entry here is not an agent, and an agent under `/orgs/{org}/agents` is not a definition. No response joins them; a consumer can. A claim writes the agent under the GRN its definition minted (ADR-0033), so `agentGrn` here and that agent's `grn` are one identity, and a definition no operator has claimed has no agent to match.
          */
         get: operations["listAgentDefinitions"];
         put?: never;
@@ -926,7 +926,7 @@ export interface components {
             operatorGrn: string;
             values?: components["schemas"]["AgentValues"];
         };
-        /** @description What an organization says an agent should be (ADR-0026). It is a record and not an agent: no state is reported on it, and it carries none of the fields an `Agent` carries. `agentGrn` is the identity garam minted for the agent this definition describes, and no agent answers under it until an operator reports one. */
+        /** @description What an organization says an agent should be (ADR-0026). It is a record and not an agent: no state is reported on it, and it carries none of the fields an `Agent` carries. `agentGrn` is the identity garam minted for the agent this definition describes, and no agent answers under it until the claim. */
         AgentDefinition: {
             /** @example grn:acme:default:agent:9f2ac1b40d8e7a35 */
             agentGrn: string;

@@ -149,7 +149,7 @@ func validateOperator(operatorGRN, orgGRN grn.GRN) error {
 }
 
 // Agent returns the GRN of the agent this definition describes. No
-// agent exists under it until an operator reports one.
+// agent exists under it until the operator claims it.
 func (d *Definition) Agent() grn.GRN        { return d.agentGRN }
 func (d *Definition) Organization() grn.GRN { return d.orgGRN }
 func (d *Definition) Operator() grn.GRN     { return d.operatorGRN }

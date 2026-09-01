@@ -77,10 +77,16 @@ Two sentences a consumer must plan against:
   leave rotation. Readiness deliberately does not report it
   ([ADR-0029](./adr/0029-readiness-reports-what-a-replica-cannot-serve-without.md)).
 
-garam takes no position on probe tolerance. Every probe field the chart
-does not set — `failureThreshold` and `periodSeconds` among them — is
-the platform's default or the deployment's own choice, never a decision
-made here.
+garam takes one position on probe tolerance and no other. The chart
+sets `timeoutSeconds: 3` on the readiness probe of `api`, `authz` and
+`machine`, because a readiness answer is bounded at two seconds and a
+probe timing out at the platform's one-second default would report its
+own deadline instead of the dependency that failed. That value is
+literal in those templates — no chart value moves it — and `web`'s
+readiness probe carries none of it, so that one workload takes the
+platform's default. Every other probe field —
+`failureThreshold` and `periodSeconds` among them — is the platform's
+default or the deployment's own choice, never a decision made here.
 
 ## What the binary enforces about key material
 
@@ -171,9 +177,10 @@ Four qualifications:
   authority would accept a certificate against a root that is not its
   own — the tenancy hole [ADR-0014](./adr/0014-agent-authentication.md)
   rests on the trust root to close. There is nothing to mount and
-  nothing to rotate; what is mounted is the listener's own pair and the
-  garam server root `GARAM_MACHINE_SERVER_ROOT_FILE` names, and neither
-  is a bundle of client authorities.
+  nothing to rotate for it: what the workload mounts is its own
+  certificate and key, the garam server root
+  `GARAM_MACHINE_SERVER_ROOT_FILE` names, and the key-encryption key —
+  four files, and none of them a bundle of client authorities.
 
 ## The key-encryption key cannot be regenerated
 
@@ -342,11 +349,15 @@ The bound is the binary's, not the deployment's (`shutdownGrace` in
 seconds truncates in-flight work, and nothing the process does at
 shutdown outlasts it.
 
-A request carries a bound of its own, thirty seconds to arrive, on both
-HTTP listeners (`requestReadTimeout` in `internal/cli/cli.go`, and on
-the machine listener it covers the handshake read too). It bounds
-reading rather than a handler — a watch stream and a message claim both
-outlive it by design — so what it disconnects is a client that has
+A request carries a bound of its own, thirty seconds to arrive, on two
+of the four HTTP listeners garam starts: the browser-facing one and the
+machine one (`requestReadTimeout` in `internal/cli/cli.go`, and on the
+machine listener it covers the handshake read too). The other two carry
+no such bound — the machine process's health port and the authz
+process's probe and metrics port — and each of those is reachable on a
+Service the chart renders. It bounds reading rather than a handler — a
+watch stream and a message claim both outlive it by design — so what it
+disconnects is a client that has
 stopped sending, which would otherwise hold a connection open until the
 shutdown bound above expired.
 

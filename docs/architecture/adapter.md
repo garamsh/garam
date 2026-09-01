@@ -103,11 +103,18 @@ turn. Without it, a missed event renews forever and produces a claim
 that is neither completed nor redelivered — a third state, and the
 least visible of the three.
 
-**The lease and the attempt count are configurable and default narrow.**
-The reason is dated, and the date is later than it looks: a repeated
-*turn* is unmeasured — an exact repeated fact is idempotent in the
-platform's addressed store, but a turn re-reads its input and may
-extract differently.
+**The lease and the attempt count are fixed at their defaults, and the
+defaults are narrow.** No deployment moves them: `garam serve machine`
+builds the message service on the zero-value configuration, and no
+flag, environment variable or chart value names a lease, a ceiling, an
+attempt count, a wait or a poll interval. Widening one is an edit to
+the Go defaults, which is what the rest of this section is addressed
+to.
+
+The reason those defaults are narrow is dated, and the date is later
+than it looks: a repeated *turn* is unmeasured — an exact repeated fact
+is idempotent in the platform's addressed store, but a turn re-reads
+its input and may extract differently.
 
 **The reason expires when that idempotency has been measured against
 the real model, not when the store merges.** The two are not the same

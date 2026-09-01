@@ -33,6 +33,23 @@ func RecoverPanics(next http.Handler) http.Handler {
 	})
 }
 
+// BindingError answers a request the generated router refused while
+// binding its parameters, before any handler ran. It replaces the
+// router's own default, which writes the binding error's text as
+// text/plain and repeats what the caller submitted — neither of which
+// this surface's Error response admits.
+//
+// It names no parameter, where the browser surface's counterpart does:
+// every parameter api/machine.yaml declares is a path string, so there
+// is no format for one to fail and nothing to tell a caller beyond that
+// a parameter could not be read.
+//
+// The composition root supplies this as ErrorHandlerFunc, and nothing
+// else answers on this path.
+func BindingError(w http.ResponseWriter, _ *http.Request, _ error) {
+	writeError(w, errorx.New(errorx.KindInvalidArgument, "a request parameter could not be read"))
+}
+
 // causeRecorder is the request-logging middleware's response writer,
 // which records the cause of a 5xx so the line it emits for the
 // request carries it (runtime-safety.md §Errors reach a handler). The

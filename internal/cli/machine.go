@@ -143,6 +143,10 @@ func serveMachine(cmd *cobra.Command) error {
 			machineapi.NewGRPCEvaluator(conn)),
 		machinegen.StdHTTPServerOptions{
 			Middlewares: []machinegen.MiddlewareFunc{machineapi.RecoverPanics, obs.logMachineRequests},
+			// A parameter the router cannot bind is refused before any
+			// handler runs, so this is the only place the surface's own
+			// error body reaches that refusal.
+			ErrorHandlerFunc: machineapi.BindingError,
 		})
 	srv := obs.machineServer(certificateAuthorities{store: authorities}, keys.listener, handler)
 	srv.Addr = envOr(envMachineAddr, ":8443")

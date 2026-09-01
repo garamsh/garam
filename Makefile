@@ -22,6 +22,15 @@ MOCKERY := go tool mockery
 BUF := go tool buf
 GOIMPORTS := go tool goimports
 
+# Two more tool directives, pinned and moved on the terms the block
+# above states and named beside it in `.github/dependabot.yml`. Neither
+# writes output this repository commits, so a bump of either lands on
+# its own and `check-gen` says nothing about it. They read what nothing
+# else here reads: release.yml, whose first execution is the first tag,
+# and the shell scripts, one of which no Make target calls (#840).
+ACTIONLINT := go tool actionlint
+SHFMT := go tool shfmt
+
 # helm is not a tool directive: helm.sh/helm/v4 requires a
 # google.golang.org/protobuf newer than protoc-gen-go's, and merging its
 # graph into this module's raises that floor and restamps every
@@ -82,11 +91,45 @@ GO_PKGS = $(shell go list ./...)
 # comes back empty, which would otherwise print a zero nobody checked.
 PROTO_FILES = $(shell $(BUF) ls-files)
 
+# What actionlint and shfmt will read, counted on lint's line too.
+# actionlint given no path finds the workflows itself and shfmt given a
+# directory walks it, and either sweep coming back empty exits zero
+# reading exactly like the run that read every file — so the paths are
+# listed here and an empty list fails below.
+WORKFLOW_FILES = $(shell find .github/workflows -type f \( -name '*.yml' -o -name '*.yaml' \))
+SHELL_SCRIPTS = $(shell find scripts -type f -name '*.sh')
+
+# actionlint reads a `run:` block with shellcheck, and a python one with
+# pyflakes, when it finds them on PATH, and drops the rule where it does
+# not — reporting that in -verbose and nowhere else. The runner image
+# ships shellcheck and a contributor's machine mostly does not, so left
+# inferred this is not the same check in the two places. Both are named
+# off, so the absence is a decision rather than a property of the
+# machine, and what it leaves uncovered is recorded on #840.
+#
+# Its check that a `with:` key is an input the action declares is keyed
+# on `owner/repo@ref` and holds only for a ref its bundled database
+# names. docs/convention/ci.md §Pinning requires a full commit SHA,
+# which is no such ref, so that one check reaches no action here. What
+# reaches every workflow is the expression, `needs:` and shell-name
+# checking.
+#
+# shfmt is a formatter and this repository's shell layout is not the one
+# it prints, so it is run as the POSIX parser it is built on: output
+# discarded, exit status read. That status answers whether the file
+# parses and not whether it is formatted — a file diverging from shfmt's
+# layout passes, a syntax error and a bashism fail. `-ln posix` fixes
+# the dialect all five scripts declare rather than taking it from each
+# shebang, so a script that later says bash fails here instead of being
+# read as bash.
 lint:
-	@echo 'lint: $(words $(GO_PKGS)) packages (go vet), $(words $(PROTO_FILES)) proto files (buf lint)'
-	@test -n '$(GO_PKGS)' && test -n '$(PROTO_FILES)' || { echo 'lint: nothing to lint — go list or the buf module matched no input'; exit 1; }
+	@echo 'lint: $(words $(GO_PKGS)) packages (go vet), $(words $(PROTO_FILES)) proto files (buf lint), $(words $(WORKFLOW_FILES)) workflows (actionlint), $(words $(SHELL_SCRIPTS)) shell scripts (shfmt)'
+	@test -n '$(GO_PKGS)' && test -n '$(PROTO_FILES)' && test -n '$(WORKFLOW_FILES)' && test -n '$(SHELL_SCRIPTS)' \
+		|| { echo 'lint: nothing to lint — go list, the buf module, .github/workflows or scripts/ matched no input; the counts above name which'; exit 1; }
 	@go vet $(GO_PKGS)
 	@$(BUF) lint
+	@$(ACTIONLINT) -shellcheck= -pyflakes= $(WORKFLOW_FILES)
+	@$(SHFMT) -ln posix $(SHELL_SCRIPTS) >/dev/null
 
 # gofmt and goimports list offending files but exit 0, so the gate is a
 # non-empty-output check. Walking `.` is just as silent when it reaches

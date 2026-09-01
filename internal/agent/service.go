@@ -25,16 +25,17 @@ type Issuer interface {
 }
 
 // Service is what an operator does to the agents it runs — it creates
-// them and obtains the certificates they authenticate with — and the
-// one thing an agent does for itself, which is renew its own.
+// them, obtains the certificates they authenticate with, and reports
+// what it sees of their pods — and what an agent does for itself,
+// which is renew its own certificate and report its own runtime state.
 //
 // Every method takes the caller, and an operator's answers are bounded
 // by the assignments it holds. That is the whole of the authorization
 // here and there is no path around it — an operator's blast radius is
 // the agents assigned to it, which ADR-0015 states is not an
-// optimisation and may not be skipped. The one caller that is not an
-// operator is an agent renewing its own certificate (ADR-0040), which
-// is bounded by the identity it already authenticated as.
+// optimisation and may not be skipped. A caller that is not an
+// operator acts on the identity it already authenticated as and
+// reaches nothing else (ADR-0012, ADR-0040).
 type Service interface {
 	// Create mints an agent in the operator's own organization and
 	// assigns it to that operator.
@@ -54,6 +55,18 @@ type Service interface {
 	// certificate route. A definition is claimed once: a second claim
 	// of the same agent GRN is a conflict.
 	Claim(ctx context.Context, operator, agentGRN grn.GRN) (*Assignment, error)
+	// ReportProvisioningState records what the calling operator says
+	// about the agent's pod, at the epoch it holds the agent
+	// (ADR-0012). It is bounded by the same assignment the certificate
+	// route is, and a report carrying any epoch but the current one is
+	// refused as stale.
+	ReportProvisioningState(ctx context.Context, operator, agentGRN grn.GRN, epoch int, state ProvisioningState) error
+	// ReportRuntimeState records what an agent says about itself, at
+	// the epoch its assignment is on. The caller reports for the
+	// identity it authenticated as and for no other, so no assignment
+	// is read: the connection is what bounds it, and the epoch is what
+	// fences it.
+	ReportRuntimeState(ctx context.Context, caller, agentGRN grn.GRN, epoch int, state RuntimeState) error
 }
 
 type service struct {
@@ -103,22 +116,31 @@ func (s *service) IssueCertificate(ctx context.Context, caller, agentGRN grn.GRN
 	if err := operates(caller); err != nil {
 		return nil, err
 	}
+	if err := s.holds(ctx, caller, agentGRN); err != nil {
+		return nil, err
+	}
+	return s.issuer.Issue(ctx, agentGRN)
+}
+
+// holds refuses an operator the agent is not assigned to. The row
+// holds one operator at the epoch it is assigned at, so comparing it
+// is the epoch fence as well: a reassignment moves the row, and the
+// operator it replaced stops matching. GRNs carry their organization,
+// so an operator of another organization differs here too. An agent
+// that does not exist has no assignment and is refused the same way,
+// so a caller learns nothing about the agents it does not hold.
+func (s *service) holds(ctx context.Context, operator, agentGRN grn.GRN) error {
 	assignment, err := s.store.GetAssignment(ctx, agentGRN)
 	if err != nil {
 		if errorx.IsKind(err, errorx.KindNotFound) {
-			return nil, ErrNotAssigned
+			return ErrNotAssigned
 		}
-		return nil, err
+		return err
 	}
-	// The row holds one operator at the epoch it is assigned at, so
-	// comparing it is the epoch fence as well: a reassignment moves the
-	// row, and the operator it replaced stops matching. GRNs carry
-	// their organization, so an operator of another organization
-	// differs here too.
-	if assignment.Operator() != caller {
-		return nil, ErrNotAssigned
+	if assignment.Operator() != operator {
+		return ErrNotAssigned
 	}
-	return s.issuer.Issue(ctx, agentGRN)
+	return nil
 }
 
 func (s *service) Definitions(ctx context.Context, operator grn.GRN) ([]*DefinitionState, error) {
@@ -133,6 +155,30 @@ func (s *service) Claim(ctx context.Context, operator, agentGRN grn.GRN) (*Assig
 		return nil, err
 	}
 	return s.store.Claim(ctx, agentGRN, operator)
+}
+
+func (s *service) ReportProvisioningState(ctx context.Context, operator, agentGRN grn.GRN, epoch int, state ProvisioningState) error {
+	if err := operates(operator); err != nil {
+		return err
+	}
+	if err := s.holds(ctx, operator, agentGRN); err != nil {
+		return err
+	}
+	// The store writes at the current epoch and matches no row at any
+	// other, which is what refuses the pod a replaced operator left
+	// running. What it answers with is the agent as it now stands, and
+	// that carries the runtime state the other party reports, so it is
+	// not handed back to this caller.
+	_, err := s.store.ReportProvisioningState(ctx, agentGRN, epoch, state)
+	return err
+}
+
+func (s *service) ReportRuntimeState(ctx context.Context, caller, agentGRN grn.GRN, epoch int, state RuntimeState) error {
+	if caller != agentGRN {
+		return ErrNotTheAgent
+	}
+	_, err := s.store.ReportRuntimeState(ctx, agentGRN, epoch, state)
+	return err
 }
 
 // operates refuses a caller that is not an operator. An agent

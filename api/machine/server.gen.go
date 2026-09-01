@@ -13,6 +13,51 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for ProvisioningState.
+const (
+	Failed      ProvisioningState = "failed"
+	Pending     ProvisioningState = "pending"
+	Provisioned ProvisioningState = "provisioned"
+	Ready       ProvisioningState = "ready"
+)
+
+// Valid indicates whether the value is a known member of the ProvisioningState enum.
+func (e ProvisioningState) Valid() bool {
+	switch e {
+	case Failed:
+		return true
+	case Pending:
+		return true
+	case Provisioned:
+		return true
+	case Ready:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for RuntimeState.
+const (
+	Connected    RuntimeState = "connected"
+	Disconnected RuntimeState = "disconnected"
+	Unknown      RuntimeState = "unknown"
+)
+
+// Valid indicates whether the value is a known member of the RuntimeState enum.
+func (e RuntimeState) Valid() bool {
+	switch e {
+	case Connected:
+		return true
+	case Disconnected:
+		return true
+	case Unknown:
+		return true
+	default:
+		return false
+	}
+}
+
 // AgentAssignment An agent and the operator that runs it, at the epoch that binding holds.
 type AgentAssignment struct {
 	// Epoch Rises with every assignment and fences the operator it replaced. An agent presents it when it connects.
@@ -111,6 +156,30 @@ type MessageSubmission struct {
 	Recipient string `json:"recipient"`
 }
 
+// ProvisioningState What the operator reports about the agent's pod. `pending` is an agent no operator has reported on yet.
+type ProvisioningState string
+
+// ProvisioningStateReport One operator's account of an agent's pod, at the epoch it holds the agent. It carries no runtime state: what the agent says about itself is the agent's to report.
+type ProvisioningStateReport struct {
+	// Epoch The epoch the reporter believes the assignment is on, as `createAgent` or `claimDefinition` answered with. garam accepts the report only at the epoch the assignment is currently on.
+	Epoch int `json:"epoch"`
+
+	// State What the operator reports about the agent's pod. `pending` is an agent no operator has reported on yet.
+	State ProvisioningState `json:"state"`
+}
+
+// RuntimeState What the agent reports about itself. `unknown` is an agent that has not reported since it was created.
+type RuntimeState string
+
+// RuntimeStateReport One agent's account of itself, at the epoch its assignment is on. It carries no provisioning state: what the pod looks like from outside is the operator's to report.
+type RuntimeStateReport struct {
+	// Epoch The epoch the reporter believes the assignment is on. An agent is told it by the operator that constructed it; garam serves it to the agent on no route.
+	Epoch int `json:"epoch"`
+
+	// State What the agent reports about itself. `unknown` is an agent that has not reported since it was created.
+	State RuntimeState `json:"state"`
+}
+
 // TurnEvent One event from the agent's monitoring stream, as the agent platform emitted it. garam carries it and never reads it, so what a kind means and what a body holds are the platform's to say.
 type TurnEvent struct {
 	// Body The event itself. It may be empty and it may span lines.
@@ -125,6 +194,12 @@ type AgentGrn = string
 
 // ClaimId defines model for claim.
 type ClaimId = string
+
+// ReportProvisioningStateJSONRequestBody defines body for ReportProvisioningState for application/json ContentType.
+type ReportProvisioningStateJSONRequestBody = ProvisioningStateReport
+
+// ReportRuntimeStateJSONRequestBody defines body for ReportRuntimeState for application/json ContentType.
+type ReportRuntimeStateJSONRequestBody = RuntimeStateReport
 
 // ForwardTurnEventJSONRequestBody defines body for ForwardTurnEvent for application/json ContentType.
 type ForwardTurnEventJSONRequestBody = TurnEvent
@@ -149,6 +224,12 @@ type ServerInterface interface {
 	// RenewClaim Extend a claim while the message is still being worked on.
 	// (POST /agents/{agent}/claims/{claim}/renewal)
 	RenewClaim(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn, claimId ClaimId)
+	// ReportProvisioningState Report what the operator sees of an agent's pod.
+	// (POST /agents/{agent}/provisioning-state)
+	ReportProvisioningState(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn)
+	// ReportRuntimeState Report what an agent says about itself.
+	// (POST /agents/{agent}/runtime-state)
+	ReportRuntimeState(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn)
 	// ForwardTurnEvent Forward one turn event to whoever is watching the agent.
 	// (POST /agents/{agent}/turn-events)
 	ForwardTurnEvent(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn)
@@ -305,6 +386,58 @@ func (siw *ServerInterfaceWrapper) RenewClaim(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RenewClaim(w, r, agentGrn, claimId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReportProvisioningState operation middleware
+func (siw *ServerInterfaceWrapper) ReportProvisioningState(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agent" -------------
+	var agentGrn AgentGrn
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentGrn, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReportProvisioningState(w, r, agentGrn)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReportRuntimeState operation middleware
+func (siw *ServerInterfaceWrapper) ReportRuntimeState(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agent" -------------
+	var agentGrn AgentGrn
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentGrn, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReportRuntimeState(w, r, agentGrn)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -546,6 +679,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/identity/certificate", wrapper.RenewIdentityCertificate)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents", wrapper.CreateAgent)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/certificate", wrapper.IssueAgentCertificate)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/provisioning-state", wrapper.ReportProvisioningState)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/runtime-state", wrapper.ReportRuntimeState)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/definitions", wrapper.ListDefinitions)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/definitions/{agent}/claim", wrapper.ClaimDefinition)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/messages", wrapper.PostMessage)

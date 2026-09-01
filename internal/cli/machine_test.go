@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -27,6 +28,7 @@ import (
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/health"
+	"github.com/garamsh/garam/internal/machineapi"
 )
 
 func machineGRN(org, id string) grn.GRN {
@@ -282,4 +284,47 @@ func TestMachineProbeHandler_AnswersAPanicOnTheListenerBesideTheTLSOne(t *testin
 	assert.Equal(t, "GET "+health.ReadyPath, line["operation"])
 	assert.Contains(t, line["error"], "panic: readiness defect",
 		"the line is the only record this panic leaves")
+}
+
+// submission is a message post carrying a body of n bytes.
+func submission(recipient grn.GRN, n int) string {
+	return `{"recipient":"` + recipient.String() + `","idempotencyKey":"key-1","body":"` +
+		strings.Repeat("x", n) + `"}`
+}
+
+// postSubmission sends one message post and returns the status and the
+// body that came back.
+func postSubmission(t *testing.T, client *http.Client, url, body string) (int, string) {
+	t.Helper()
+	resp, err := client.Post(url+"/messages", "application/json", strings.NewReader(body))
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+	got, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	return resp.StatusCode, string(got)
+}
+
+// TestMachineServer_RefusesARequestBodyPastTheBound holds the machine
+// listener's bound on what one request may weigh. The submission schema
+// bounds a body at 65536 characters (ADR-0034) and nothing enforces
+// that before the whole string is in memory, so the refusal here is the
+// listener's rather than the schema's.
+//
+// The control is the same submission inside the bound, which the engine
+// refuses: without it a refusal would hold as readily for a listener
+// that admits no post at all.
+func TestMachineServer_RefusesARequestBodyPastTheBound(t *testing.T) {
+	sender := machineGRN("acme", "bot-1")
+	recipient := machineGRN("acme", "bot-2")
+	url, client := machineListenerServing(t, recordingObservability(&lines{}), sender,
+		machineapi.NewServer(nil, nil, nil, nil, nil, noGroups{}, deniedEngine{}))
+
+	status, body := postSubmission(t, client, url, submission(recipient, 1024))
+	require.Equal(t, http.StatusForbidden, status, "the control: refused for whom it names")
+	require.JSONEq(t, `{"kind":"permission_denied","message":"sender may not send to this recipient"}`, body)
+
+	status, body = postSubmission(t, client, url, submission(recipient, maxRequestBody))
+
+	assert.Equal(t, http.StatusBadRequest, status, "past the bound the body is not read at all")
+	assert.JSONEq(t, `{"kind":"invalid_argument","message":"the request is not in the required form"}`, body)
 }

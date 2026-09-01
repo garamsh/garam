@@ -169,8 +169,9 @@ func serveMachine(cmd *cobra.Command) error {
 
 // machineServer is the listener `serve machine` serves: TLS a client
 // certificate authenticates on (ADR-0014, ADR-0040), the identity check
-// machine.NewServer puts around next, and recoverPanics outermost so a
-// panic in either is answered rather than dropping the connection.
+// machine.NewServer puts around next, the bound on what one request may
+// weigh, and recoverPanics outermost so a panic in any of them is
+// answered rather than dropping the connection.
 //
 // The wrapping is assigned rather than passed in, because NewServer
 // puts that check outside the handler it is given and the check runs
@@ -178,7 +179,7 @@ func serveMachine(cmd *cobra.Command) error {
 func (o *observability) machineServer(roots machine.TrustRoot, certificate machine.ServerCertificate, next http.Handler) *http.Server {
 	srv := machine.NewServer(machine.NewService(roots), certificate,
 		otelhttp.NewHandler(next, serviceMachine))
-	srv.Handler = o.recoverPanics(srv.Handler)
+	srv.Handler = o.recoverPanics(http.MaxBytesHandler(srv.Handler, maxRequestBody))
 	// A refused handshake is the only refusal this listener makes, and
 	// net/http reports one here rather than through a handler.
 	srv.ErrorLog = slog.NewLogLogger(o.logger.Handler(), slog.LevelWarn)

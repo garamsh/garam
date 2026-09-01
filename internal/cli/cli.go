@@ -191,10 +191,22 @@ func envOr(key envName, fallback string) string {
 // requestReadTimeout bounds how long a request has to arrive, not how
 // long a handler may run, so a watch stream and a message wait are
 // untouched and what it disconnects is a client that has stopped
-// sending. Under HTTP/2 it is disarmed once the headers are read; under
-// HTTP/1.1 it is the connection's read deadline. It is generous against
-// the largest body either listener admits (ADR-0034).
+// sending. Under HTTP/1.1 it is the connection's read deadline; under
+// HTTP/2 a per-stream timer of the same length replaces that deadline
+// once the headers are read, so a body is bounded on both (go1.26.7
+// net/http). How long a body may take is not how much of it there may
+// be, which is maxRequestBody's.
 const requestReadTimeout = 30 * time.Second
+
+// maxRequestBody bounds a request body before a decoder allocates for
+// it. Both listeners read a body whole, so a schema's own maxLength
+// bounds nothing until the string is already in memory, and thirty
+// seconds of a fast link carries more than either process has. The
+// largest body a specification admits is a message submission's 65536
+// characters (ADR-0034), which weighs 768 KiB where a caller spends
+// twelve bytes on each as an escaped surrogate pair; this is the next
+// power of two above that.
+const maxRequestBody = 1 << 20
 
 // certificateLifetime is how long a certificate garam signs stays
 // valid. Expiry is the only revocation there is (ADR-0014), so the

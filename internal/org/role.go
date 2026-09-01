@@ -92,51 +92,49 @@ const (
 	// agent reports that it exists and what two parties say about its
 	// state; watching exposes the content of its work, which an
 	// organization may withhold from someone it lets read. No role
-	// grants it — see Actions.
+	// grants it: a policy carries it or nothing does.
 	ActionAgentWatch = "agent:watch"
+)
+
+// Agent and operator actions are granted one at a time and never as
+// `agent:*` or `operator:*`: ADR-0012 puts provisioning outside garam
+// and ADR-0045 leaves an operator's enrolment undecided, so a wildcard
+// would grant in advance the actions no endpoint may offer.
+var (
+	// adminMachineActions is what an owner or an admin holds.
+	adminMachineActions = []string{
+		ActionOperatorRead, ActionOperatorRegister, ActionAgentRead, ActionAgentDefine,
+	}
+	// memberMachineActions is what a member holds: it reads the
+	// operators an org has registered and registers none, because
+	// standing a machine identity up for the organization is the
+	// administrative act registering already looks like.
+	memberMachineActions = []string{
+		ActionOperatorRead, ActionAgentRead, ActionAgentDefine,
+	}
 )
 
 // Actions returns the action patterns the role grants on an org and
 // on the groups, projects, operators and agents it contains. The
 // patterns feed IAM-style Allow statements; the evaluator resolves
 // wildcards.
-//
-// Agents and operators are named action by action rather than as
-// `agent:*` and `operator:*`, every role over: ADR-0012 puts
-// provisioning outside garam, so a wildcard here would grant in advance
-// the very actions no endpoint may offer. ADR-0045 leaves an operator's
-// enrolment and its revocation undecided, which is more of the same.
-//
-// A member reads the operators an org has registered and does not
-// register one. Defining an agent needs the list to name an operator
-// from, and standing up a machine identity for the organization is the
-// administrative act registering already looks like.
-//
-// No role names ActionAgentWatch. ADR-0022 separates watching from
-// reading so an organization may give one and withhold the other, and
-// a grant arriving with membership is a grant nobody decided — which
-// is the separation being invisible wherever the roles are the whole
-// of the authorization. Watching is carried by a policy or not at all.
 func (r Role) Actions() []string {
 	switch r {
 	case RoleOwner:
-		return []string{
+		return slices.Concat([]string{
 			"org:*", "group:*", "project:*", "policy:*", "consent:*",
-			ActionOperatorRead, ActionOperatorRegister, ActionAgentRead, ActionAgentDefine,
-		}
+		}, adminMachineActions)
 	case RoleAdmin:
-		return []string{
+		return slices.Concat([]string{
 			ActionOrgRead, ActionOrgUpdate, ActionOrgMemberList, ActionOrgInvite,
 			"group:*", "project:*", "policy:*", "consent:*",
-			ActionOperatorRead, ActionOperatorRegister, ActionAgentRead, ActionAgentDefine,
-		}
+		}, adminMachineActions)
 	case RoleMember:
-		return []string{
+		return slices.Concat([]string{
 			ActionOrgRead, ActionOrgMemberList,
 			ActionGroupRead, ActionGroupMemberList,
 			ActionProjectRead, ActionProjectMemberList,
-			ActionOperatorRead, ActionAgentRead, ActionAgentDefine,
-		}
+		}, memberMachineActions)
 	}
 	return nil
 }

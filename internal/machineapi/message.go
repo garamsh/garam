@@ -80,41 +80,16 @@ func (s *Server) refuseCrossing(w http.ResponseWriter, r *http.Request, sender, 
 	writeJSON(w, http.StatusCreated, messageBody(stored))
 }
 
-// authorizeSend admits a recipient of the sender's own organization on
-// the engine's answer, and one across the organization boundary on the
-// consent relation alone — the engine is never asked a cross-
-// organization question, because no answer it could give would hold the
-// boundary (below). A cross-boundary recipient no standing consent
-// covers is not an error: admitted is false, and PostMessage answers
-// the post with the refusal message ADR-0013 asks for.
+// authorizeSend reports whether sender may post to recipient. A
+// recipient of the sender's own organization is admitted on the policy
+// engine's answer; one across the organization boundary is admitted on
+// the consent relation alone. A cross-boundary recipient no standing
+// consent covers is not an error: admitted is false, and PostMessage
+// answers the post with the refusal message ADR-0013 asks for.
 //
-// The same-organization half asks the engine, which unions what the
-// sender's own identity grants with the policies its organization
-// attached to it and to the groups it belongs to, deny-overrides across
-// all three (ADR-0007, ADR-0008).
-//
-// The groups are resolved after the organization comparison and not
-// before. By then the sender and the recipient share an organization,
-// which is both the one whose policies the engine loads and the one an
-// attachment may not leave, so every subject this call hands over —
-// the sender and each of its groups — belongs to the organization
-// owning the object, which is what a caller owes the engine (ADR-0025).
-//
-// The organization boundary is a precondition and not a policy
-// question, because no statement this listener supplies can hold it.
-// The engine resolves the policies of the organization owning the
-// object, and an active policy with no attachment applies to every
-// subject of that check — so one unattached Allow in the recipient's
-// organization admits every sender anywhere, whatever resource pattern
-// arrives beside it, and a document written `Action: ["*"]` before
-// message:send existed names it in advance (ADR-0024). The consent
-// relation is what may open the boundary, because it is no policy:
-// both organizations hold it and either withdraws it (ADR-0035).
-//
-// Both GRNs reached a handler through grn.Parse, and this is where one
-// stops being inert: sendingStatements splices the organization
-// identifier into a resource pattern, where a wildcard would widen the
-// statement past the organization it was scoped to.
+// Both GRNs are validated here because sendingStatements splices the
+// organization identifier into a resource pattern, where a wildcard
+// would widen the statement past the organization it was scoped to.
 func (s *Server) authorizeSend(ctx context.Context, sender, recipient grn.GRN) (bool, error) {
 	if err := sender.Validate(); err != nil {
 		return false, err
@@ -123,12 +98,30 @@ func (s *Server) authorizeSend(ctx context.Context, sender, recipient grn.GRN) (
 		return false, err
 	}
 	if sender.Organization != recipient.Organization {
-		// The relation is keyed by the organizations' GRNs, which are
-		// root-owned (ADR-0001).
-		return s.consents.Stands(ctx,
-			grn.New(grn.RootOwner, grn.DefaultProject, serviceTypeOrg, sender.Organization),
-			grn.New(grn.RootOwner, grn.DefaultProject, serviceTypeOrg, recipient.Organization))
+		return s.consentStands(ctx, sender, recipient)
 	}
+	return s.policyAdmits(ctx, sender, recipient)
+}
+
+// consentStands reports whether both organizations still hold the
+// consent a message crossing between them needs (ADR-0035). The engine
+// is not asked: an active policy with no attachment applies to every
+// subject of the check, so one unattached Allow in the recipient's
+// organization would admit every sender anywhere (ADR-0024).
+func (s *Server) consentStands(ctx context.Context, sender, recipient grn.GRN) (bool, error) {
+	// The relation is keyed by the organizations' GRNs, which are
+	// root-owned (ADR-0001).
+	return s.consents.Stands(ctx,
+		grn.New(grn.RootOwner, grn.DefaultProject, serviceTypeOrg, sender.Organization),
+		grn.New(grn.RootOwner, grn.DefaultProject, serviceTypeOrg, recipient.Organization))
+}
+
+// policyAdmits asks the engine whether sender may post to a recipient
+// of its own organization, unioning what the sender's identity grants
+// with the policies attached to it and to its groups, deny-overrides
+// across all three (ADR-0007, ADR-0008). Sender and recipient share an
+// organization by here, which is what the engine is owed (ADR-0025).
+func (s *Server) policyAdmits(ctx context.Context, sender, recipient grn.GRN) (bool, error) {
 	groups, err := s.groups.List(ctx, sender)
 	if err != nil {
 		return false, err

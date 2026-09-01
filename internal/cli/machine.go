@@ -66,7 +66,7 @@ func serveMachine(cmd *cobra.Command) error {
 	}
 	defer pool.Close()
 
-	pair, sealer, serverRoot, err := machineKeyMaterial(
+	keys, err := machineKeyMaterial(
 		envOr(envMachineTLSCertFile, ""),
 		envOr(envMachineTLSKeyFile, ""),
 		envOr(envCAKeyFile, ""),
@@ -81,17 +81,17 @@ func serveMachine(cmd *cobra.Command) error {
 		return err
 	}
 	authorities := ca.NewPostgresStore(pool)
-	issuer, err := ca.NewService(authorities, sealer, ca.Config{CertificateLifetime: lifetime})
+	issuer, err := ca.NewService(authorities, keys.sealer, ca.Config{CertificateLifetime: lifetime})
 	if err != nil {
 		return err
 	}
 	agents := agent.NewService(agent.NewPostgresStore(pool),
-		certificates{issuer: issuer, serverRoot: serverRoot})
+		certificates{issuer: issuer, serverRoot: keys.serverRoot})
 	// An operator renews its own certificate on this listener, through
 	// the same authority and the same server root its agents are given
 	// (ADR-0046).
 	operators := operator.NewService(operator.NewPostgresStore(pool),
-		operatorCertificates{issuer: issuer, serverRoot: serverRoot}, operator.Config{})
+		operatorCertificates{issuer: issuer, serverRoot: keys.serverRoot}, operator.Config{})
 	// The delivery parameters default narrow (ADR-0018), and the
 	// defaults are what this process runs on until something asks for
 	// another value.
@@ -144,7 +144,7 @@ func serveMachine(cmd *cobra.Command) error {
 		machinegen.StdHTTPServerOptions{
 			Middlewares: []machinegen.MiddlewareFunc{machineapi.RecoverPanics, obs.logMachineRequests},
 		})
-	srv := obs.machineServer(certificateAuthorities{store: authorities}, pair, handler)
+	srv := obs.machineServer(certificateAuthorities{store: authorities}, keys.listener, handler)
 	srv.Addr = envOr(envMachineAddr, ":8443")
 
 	// Nothing unauthenticated joins the TLS listener, and losing this
@@ -201,58 +201,53 @@ func (o *observability) machineProbeHandler(deps ...health.Dependency) http.Hand
 	return o.recoverPanics(mux)
 }
 
-// machineKeyMaterial loads what the process serves TLS on: the pair the
-// listener presents, the key-encryption key every certificate authority
-// is sealed under, and the garam server root every machine identity
-// pins garam by (ADR-0040). Each arrives as a file, because key
-// material never travels in the environment (ADR-0015).
-//
-// The pair holds the two paths rather than the certificate they held at
-// startup, so replacing the files replaces what the next connection is
-// served. The read here is what refuses a start the listener could
-// never have served a handshake from: the listener's own key is key
-// material and is read under the same owner-only rule as the
-// key-encryption key, and a group-readable one refuses the start rather
-// than terminating every machine identity's connection with it.
-//
-// This surface signs certificates, so the key it opens an authority
-// with is what the process runs on: a missing, group-readable,
-// malformed or wrong-length one refuses the start rather than the
-// first certificate asked for (ADR-0016).
-//
-// The server root is a certificate, so it is public and is read
-// plainly. It is read once: a root outlives every certificate it signs
-// by years, and replacing one is a restart.
-func machineKeyMaterial(certFile, keyFile, caKeyFile, serverRootFile string) (*keyfile.Pair, ca.Sealer, []byte, error) {
+// machineKeys is what `serve machine` serves TLS on. Each arrives as a
+// file (ADR-0015), and every field is read before the listener opens.
+type machineKeys struct {
+	// listener is the certificate pair the machine listener presents,
+	// held as its two paths so a replaced file is served on the next
+	// connection (ADR-0040).
+	listener *keyfile.Pair
+	// sealer opens the key-encryption key every certificate authority
+	// is sealed under (ADR-0016).
+	sealer ca.Sealer
+	// serverRoot is the garam root every machine identity pins garam
+	// by (ADR-0040).
+	serverRoot []byte
+}
+
+// machineKeyMaterial reads the key material into a machineKeys,
+// refusing a start the listener could never have served a handshake
+// from.
+func machineKeyMaterial(certFile, keyFile, caKeyFile, serverRootFile string) (machineKeys, error) {
 	if certFile == "" || keyFile == "" {
-		return nil, nil, nil, errorx.New(errorx.KindInvalidArgument,
+		return machineKeys{}, errorx.New(errorx.KindInvalidArgument,
 			"GARAM_MACHINE_TLS_CERT_FILE and GARAM_MACHINE_TLS_KEY_FILE are required")
 	}
 	if serverRootFile == "" {
-		return nil, nil, nil, errorx.New(errorx.KindInvalidArgument,
+		return machineKeys{}, errorx.New(errorx.KindInvalidArgument,
 			"GARAM_MACHINE_SERVER_ROOT_FILE is required: an agent pins the root that signed this listener (ADR-0040)")
 	}
 	sealer, err := ca.NewSealerFromKeyFile(caKeyFile)
 	if err != nil {
-		return nil, nil, nil, errorx.Wrap(err, string(envCAKeyFile))
+		return machineKeys{}, errorx.Wrap(err, string(envCAKeyFile))
 	}
 	pair, err := keyfile.NewPair(certFile, keyFile)
 	if err != nil {
-		return nil, nil, nil, errorx.Wrap(err, "machine listener certificate")
+		return machineKeys{}, errorx.Wrap(err, "machine listener certificate")
 	}
 	serverRoot, err := os.ReadFile(serverRootFile)
 	if err != nil {
-		return nil, nil, nil, errorx.Wrap(err, string(envMachineServerRootFile), errorx.KindInvalidArgument)
+		return machineKeys{}, errorx.Wrap(err, string(envMachineServerRootFile), errorx.KindInvalidArgument)
 	}
 	// A root an agent cannot verify garam against reaches every agent
 	// and works for none, so it is parsed here rather than handed on as
-	// whatever the file held — through the pool the adapter reads the
-	// same file into, so the two agree on what counts as one.
+	// whatever the file held.
 	if !x509.NewCertPool().AppendCertsFromPEM(serverRoot) {
-		return nil, nil, nil, errorx.New(errorx.KindInvalidArgument,
+		return machineKeys{}, errorx.New(errorx.KindInvalidArgument,
 			"GARAM_MACHINE_SERVER_ROOT_FILE: no certificate in "+serverRootFile)
 	}
-	return pair, sealer, serverRoot, nil
+	return machineKeys{listener: pair, sealer: sealer, serverRoot: serverRoot}, nil
 }
 
 // certificateAuthorities reads the authority a presented certificate

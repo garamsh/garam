@@ -196,3 +196,21 @@ could close a cycle; one that permits it holds the direction instead.
   and §When a new boundary is earned carries the threshold §Context
   quotes. The decision is untouched: a domain still reaches a sibling
   through the surface that sibling declares.
+
+- 2026-09-01 — §Consequences' "**`internal/listfilter`'s recorded
+  reason no longer holds.** … The type does not move — three domains
+  page with it and the threshold puts it below them" was true when
+  written and its count is false since `3bd96aa` (#749), which
+  removed the users domain's last list call and took the count to
+  two. ADR-0048's erratum records the same falsification from its own
+  table and leaves what a count of 2 earns undecided. What the
+  erratum here adds is that the clause quoted above no longer
+  follows: at two the threshold does not put the type below the
+  domains, so the sentence gives a reason the type does not move that
+  the count stopped supporting. Where the type belongs is not settled
+  by this correction — [domains.md](../domains.md) §Open questions
+  holds it, beside `internal/keyfile` and `internal/health`. The
+  decision is untouched: a domain still reaches a sibling through the
+  surface that sibling declares, and the clause that would extract a
+  two-boundary concern because no sibling may be reached still does
+  not fire.

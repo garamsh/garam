@@ -282,7 +282,7 @@ go list -f '{{$i:=.ImportPath}}{{range .Imports}}{{if eq . "'"$pkg"'"}}{{$i}}{{e
 | `internal/errorx` | 9 — every domain | earns its place |
 | `internal/grn` | 9 — every domain | earns its place |
 | `internal/pgxerr` | 8 — `org` `user` `authz` `ca` `agent` `operator` `authn` `message` | earns its place |
-| `internal/listfilter` | 2 — `org` `agent` | earns its place |
+| `internal/listfilter` | 2 — `org` `agent` | under the threshold; placed by ADR-0052 and not by the count |
 | `internal/wire` | 1 — `authz` | permitted by the wire-format carve-out, not by the count |
 | `internal/keyfile` | 1 — `ca` | under the threshold; belongs with the domain that owns it |
 | `internal/health` | 0 | under the threshold; belongs with the surfaces that mount it |
@@ -309,7 +309,21 @@ through it as well and is not a domain, which is why the query above
 names nine importers where the column counts eight.
 
 `internal/listfilter` holds `Filter`, an offset and a limit where a
-limit of 0 means no limit. It has no dependencies.
+limit of 0 means no limit, and `Parse`, which builds one from what a
+request carries and refuses a page the paging columns cannot hold. It
+depends on `errorx` only.
+
+Two domains page with it, which is under the threshold, so the count
+does not place it where it places `errorx`, `grn` and `pgxerr`. It
+stays below the domains because paging is the subject matter of
+neither domain that pages with it, and a concern is owned by the
+boundary whose subject it is rather than by the one it was extracted
+from
+([ADR-0052](./adr/0052-a-concern-is-owned-by-the-boundary-whose-subject-matter-it-is.md)).
+`111bdd5` (#402) extracted the type out of `internal/org`, where it
+was `org.ListFilter`, when the agents domain gained pagination; that
+is where it was born and, under the decision above, not what owns
+it.
 
 `internal/wire` holds the conversions onto the wire formats the request
 surfaces share: the statement `Effect` and its authz-proto mapping, and
@@ -399,6 +413,10 @@ the adapter where it is used.
   on it: each is under the threshold that would place it below the
   domains, and no decision here says which boundary should own it
   instead.
+  [ADR-0052](./adr/0052-a-concern-is-owned-by-the-boundary-whose-subject-matter-it-is.md)
+  decides what owning is and not what holds a concern once it is
+  extracted, so it gives these two the test to be read against rather
+  than an answer.
 
 ## Future domains
 

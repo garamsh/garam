@@ -1,7 +1,5 @@
-// Package listfilter holds the filter a list call is scoped by. Org,
-// agent and user page their lists with it, and a concern three
-// boundaries share sits below them rather than inside one
-// (docs/architecture/structure.md §When a new boundary is earned).
+// Package listfilter holds the filter a list call is scoped by, and
+// parses the paging parameters a request carries into one.
 package listfilter
 
 import (

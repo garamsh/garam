@@ -50,7 +50,7 @@ A concept earns its own boundary when all three hold:
 - Something outside it needs to depend on it.
 - It has a surface that can stay stable while its inside changes.
 
-A concern shared by three or more boundaries is extracted. One shared by two stays with the boundary that owns it and is reached through its declared surface — unless a boundary may not reach a sibling at all, in which case it is extracted too. garam's side is the bullet above, so the clause after the dash does not fire here: a concern shared by two is not extracted on that ground.
+A concern shared by three or more boundaries is extracted. One shared by two stays with the boundary that owns it and is reached through its declared surface — unless a boundary may not reach a sibling at all, in which case it is extracted too. garam's side is the bullet above, so the clause after the dash does not fire here: a concern shared by two is not extracted on that ground. The boundary that owns a concern is the one whose subject matter it is, and not the one the concern was extracted from ([ADR-0052](./adr/0052-a-concern-is-owned-by-the-boundary-whose-subject-matter-it-is.md)); where no boundary's subject it is, the destination names nothing and the concern stays below them.
 
 A conversion to a wire format the boundaries already share is not a shared kernel: a package holding it is depended on for the format, not for each other's behaviour, so it does not couple the boundaries that import it. What the format names — a wire type and the two directions of its conversion — belongs to that package; anything that would choose a behaviour rather than convert one does not.
 
@@ -59,6 +59,7 @@ A conversion to a wire format the boundaries already share is not a shared kerne
 - [ADR-0047](./adr/0047-a-domain-reaches-a-sibling-through-its-declared-surface.md) — domain partitioning is the shape garam takes, and a boundary reaches a sibling through the surface that sibling declares. That last point is the one this shape leaves contested and every project answers for itself; the ADR records which side garam took, what the other side produced here while it went unrecorded, and why the answer decides what counts as a defect rather than a preference.
 - [ADR-0003](./adr/0003-single-cli-topology.md) — the two services stay independent of each other, which is the named exception the reach above allows for.
 - [ADR-0051](./adr/0051-an-aggregate-exposes-what-it-persists.md) — an aggregate exposes what it persists. The shape above says a boundary is reached only through what it declares public and leaves to the project what must be in that surface; the ADR records which side garam took, the three aggregates that gave two answers while it went unrecorded, and why the answer decides what counts as a defect.
+- [ADR-0052](./adr/0052-a-concern-is-owned-by-the-boundary-whose-subject-matter-it-is.md) — a concern is owned by the boundary whose subject matter it is. The threshold above names a destination for a concern shared by two and leaves what owning is to the project; the ADR records which reading garam took, the package that made the two readings disagree, and what the other reading would have cost.
 
 ## Open questions
 

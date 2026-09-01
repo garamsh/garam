@@ -200,11 +200,9 @@ func (o *observability) recoverPanics(next http.Handler) http.Handler {
 // travels to the client, and a stack is not something a caller of the
 // engine is owed.
 //
-// Unary only. Both generated ServiceDescs carry an empty Streams
-// (`proto/gen/garam/authz/v1/authz_grpc.pb.go:176`,
-// `policy_grpc.pb.go:506`), so the engine serves no streaming RPC for
-// a StreamServerInterceptor to guard. One added later registers its
-// own.
+// Unary only. Both generated ServiceDescs carry an empty Streams, so
+// the engine serves no streaming RPC for a StreamServerInterceptor to
+// guard. One added later registers its own.
 func (o *observability) recoverRPCs(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
 	defer func() {
 		v := recover()

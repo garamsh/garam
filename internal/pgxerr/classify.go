@@ -72,9 +72,6 @@ func IsForeignKeyViolation(err error) bool {
 //	P0001 (raise_exception)  → KindFailedPrecondition: a trigger that
 //	                          fires is a system-state refusal.
 //	anything else            → wrapped with op and the chain's kind.
-//
-// The wrap message is op alone; the previous "<store> store: <op>"
-// prefix was a duplicate of what the caller already knew.
 func Classify(err error, op string, notFound, conflict error) error {
 	if err == nil {
 		return nil

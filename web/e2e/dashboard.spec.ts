@@ -1,4 +1,27 @@
+import type { Page } from "@playwright/test";
+
 import { expect, test } from "./fixtures";
+
+/**
+ * Adds the session cookie the way the fixture does, at the origin the
+ * run is against. A cookie set on another origin is never sent, and the
+ * app answers that exactly as it answers a session it has revoked.
+ */
+async function addSessionCookie(
+  page: Page,
+  baseURL: string | undefined,
+  token: string,
+): Promise<void> {
+  await page.context().addCookies([
+    {
+      name: "garam_session",
+      value: token,
+      url: baseURL ?? "http://localhost:3000",
+      httpOnly: true,
+      sameSite: "Lax",
+    },
+  ]);
+}
 
 test.describe("signed in", () => {
   test("lists the caller's organizations", async ({ page, signedIn }) => {
@@ -157,8 +180,20 @@ test.describe("signed in", () => {
     await expect(page).toHaveURL("/console/orgs");
   });
 
-  test("signs out back to the login page", async ({ page, signedIn }) => {
+  test("signs out back to the login page", async ({
+    page,
+    baseURL,
+    signedIn,
+  }) => {
+    // The control for the revoked session below: the same token, added
+    // by the same call at the same origin, while the session is still
+    // live. Without it the redirect to /login afterwards is what a
+    // cookie that never reached the app looks like.
+    await page.context().clearCookies();
+    await addSessionCookie(page, baseURL, signedIn.sessionToken);
     await page.goto("/console/orgs");
+    await expect(page).toHaveURL("/console/orgs");
+
     await page.getByRole("button", { name: "Open account menu" }).click();
     await page.getByRole("menuitem", { name: "Sign out" }).click();
 
@@ -172,13 +207,7 @@ test.describe("signed in", () => {
 
     // The session is revoked server-side, not merely dropped by the
     // browser: replacing the cookie does not get back in.
-    await page.context().addCookies([
-      {
-        name: "garam_session",
-        value: signedIn.sessionToken,
-        url: "http://localhost:3000",
-      },
-    ]);
+    await addSessionCookie(page, baseURL, signedIn.sessionToken);
     await page.goto("/console/orgs");
     await expect(page).toHaveURL("/login");
   });

@@ -351,7 +351,7 @@ type PolicyDocument = json.RawMessage
 // PolicyRollback defines model for PolicyRollback.
 type PolicyRollback struct {
 	// Version An existing version of the policy.
-	Version int `json:"version"`
+	Version int32 `json:"version"`
 }
 
 // PolicyStatus A policy's lifecycle state. Only an `active` policy contributes statements to a check.

@@ -842,7 +842,10 @@ export interface components {
             document: components["schemas"]["PolicyDocument"];
         };
         PolicyRollback: {
-            /** @description An existing version of the policy. */
+            /**
+             * Format: int32
+             * @description An existing version of the policy.
+             */
             version: number;
         };
         PolicyAttachment: {

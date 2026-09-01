@@ -1741,6 +1741,7 @@ components:
       properties:
         version:
           type: integer
+          format: int32
           minimum: 1
           description: An existing version of the policy.
     PolicyAttachment:

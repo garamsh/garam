@@ -78,7 +78,7 @@ func TestPolicyFlow_AdminManagesLifecycle(t *testing.T) {
 		Return(version, nil)
 	f.policies.EXPECT().ListPolicyVersions(mock.Anything, g).Return([]*api.PolicyVersion{version}, nil)
 	f.policies.EXPECT().ActivatePolicy(mock.Anything, g).Return(p, nil)
-	f.policies.EXPECT().RollbackPolicy(mock.Anything, g, 1).Return(p, nil)
+	f.policies.EXPECT().RollbackPolicy(mock.Anything, g, int32(1)).Return(p, nil)
 	f.policies.EXPECT().ArchivePolicy(mock.Anything, g).Return(p, nil)
 	f.policies.EXPECT().AttachPolicy(mock.Anything, g, subject).Return(attachment, nil)
 	f.policies.EXPECT().ListPolicyAttachments(mock.Anything, g).Return([]*api.PolicyAttachment{attachment}, nil)
@@ -268,4 +268,37 @@ func TestPolicy_NotFoundFromEngine(t *testing.T) {
 
 	rec := f.do(t, "POST", "/orgs/"+slug+"/policies/"+g.Identifier+"/activate", "", owner)
 	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+// TestRollbackPolicy_RefusesAVersionTheEngineCannotHold holds the
+// refusal against the version that must still be accepted: the
+// specification's `version` is what the engine stores in an int32
+// column, and one wider than that used to be narrowed on the way to the
+// seam — 2^32+1 arriving as 1, which is an existing version and a
+// rollback that was never asked for. The control is version 1 itself,
+// which stops being accepted if the boundary refuses more than the
+// width; the call count is what says the wide one was refused rather
+// than performed under another number.
+func TestRollbackPolicy_RefusesAVersionTheEngineCannotHold(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
+	f.permit(permission{ownerGRN, org.ActionPolicyUpdate})
+
+	g, p := policyFixture(slug)
+	f.policies.EXPECT().RollbackPolicy(mock.Anything, g, mock.Anything).Return(p, nil)
+
+	path := "/orgs/" + slug + "/policies/" + g.Identifier + "/rollback"
+
+	rec := f.do(t, "POST", path, `{"version":1}`, owner)
+	require.Equal(t, http.StatusOK, rec.Code, "a version the engine holds is the control")
+
+	for _, version := range []string{"2147483648", "4294967297", "-2147483649"} {
+		rec = f.do(t, "POST", path, `{"version":`+version+`}`, owner)
+		assert.Equal(t, http.StatusBadRequest, rec.Code, "version %s", version)
+		assert.NotContains(t, decodeBody[apigen.Error](t, rec).Message, version,
+			"the refusal does not repeat what was submitted")
+	}
+	f.policies.AssertNumberOfCalls(t, "RollbackPolicy", 1)
 }

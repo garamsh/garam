@@ -219,6 +219,18 @@ the browser client's types follow a response set while the server's do
 not — and `api/machine.yaml` has no generated consumer in this
 repository at all.
 
+**Nor does it cover a constraint that is not a type.** `minimum`,
+`maxLength` and `pattern` reach no generated Go — oapi-codegen writes
+the field and no check — and neither listener installs a
+request-validation middleware, so a range either specification states
+binds nothing at runtime. What binds is what the generated type can
+hold, because the one decode of the body refuses what does not fit it.
+So a bound a caller must not cross is declared as the field's width,
+where a width is what it is, and otherwise held by the code that owns
+the rule. `PolicyRollback.version` is both: `format: int32` is the
+width the engine stores a version at, and `minimum: 1` is the engine's
+own rule, which it refuses a version below (#865).
+
 ## Where a change to a surface lands
 
 A decision that changes what admits a caller, what a caller may reach,

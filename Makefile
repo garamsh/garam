@@ -316,10 +316,12 @@ WEB_FORMAT_CANDIDATES = $(shell git -C web ls-files --cached --others --exclude-
 # parser. Without that second half an ignore file that swallowed every
 # source would still pass on a count the skipped files held above zero.
 # The exit status is read because a crash prints nothing, and an empty
-# list below has to mean an empty tree and nothing else. Each path is
-# quoted because the App Router puts parentheses and brackets in these
-# names.
-WEB_FORMAT_FILES = $(shell $(PNPM) exec node -e 'const p=require("prettier");(async()=>{for(const f of process.argv.slice(1)){const i=await p.getFileInfo(f,{ignorePath:[".gitignore",".prettierignore"]});if(!i.ignored&&i.inferredParser)console.log(f)}})()' $(patsubst %,'%',$(WEB_FORMAT_CANDIDATES)))$(if $(filter-out 0,$(.SHELLSTATUS)),$(error web-format: prettier could not be asked which files it checks — the getFileInfo run above exited $(.SHELLSTATUS)))
+# list below has to mean an empty tree and nothing else.
+#
+# --silent because pnpm prints the install it verifies before `exec` on
+# stdout, and those lines would be counted as paths. Each path is quoted
+# because the App Router puts parentheses and brackets in these names.
+WEB_FORMAT_FILES = $(shell $(PNPM) --silent exec node -e 'const p=require("prettier");(async()=>{for(const f of process.argv.slice(1)){const i=await p.getFileInfo(f,{ignorePath:[".gitignore",".prettierignore"]});if(!i.ignored&&i.inferredParser)console.log(f)}})()' $(patsubst %,'%',$(WEB_FORMAT_CANDIDATES)))$(if $(filter-out 0,$(.SHELLSTATUS)),$(error web-format: prettier could not be asked which files it checks — the getFileInfo run above exited $(.SHELLSTATUS)))
 
 web-format:
 	@echo 'web-format: $(words $(WEB_FORMAT_FILES)) files (prettier)'

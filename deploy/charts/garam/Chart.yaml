@@ -7,8 +7,7 @@ type: application
 # pins it by a git ref of garamsh/garam and pins the images separately
 # through image.*.tag (ADR-0042).
 version: 0.2.0
-# No appVersion. It would name a released garam, and no release exists —
-# `gh release list --repo garamsh/garam` returns nothing and neither
-# image repository holds a tag (ADR-0039). The change that publishes the
-# first release sets it, and makes a default for image.*.tag honest at
-# the same time.
+# No appVersion. ADR-0042 records that the change publishing the first
+# release sets it; `v0.1.0` published on 2026-09-01 and this change does
+# not set it, so the field is still absent and nothing here decides
+# whether it stays that way.

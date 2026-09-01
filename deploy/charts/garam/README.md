@@ -331,12 +331,15 @@ credential it issues expires. `image.pullSecrets` is one way to supply
 one and the chart does not require it; a node credential minted per pull
 is another.
 
-**Neither image exists yet.** `.github/workflows/release.yml` publishes
-both on a `vX.Y.Z` tag push, no such tag has been pushed, and both ECR
-repositories were empty when they were read on 2026-08-31, so the
-references `values.yaml` carries pull nothing. `Chart.yaml` has no
-`appVersion` for the same reason; the commit a first release tag names
-sets it and makes a default for the two tags honest.
+**`0.1.0` is the first released version.** `v0.1.0` ran
+`.github/workflows/release.yml` on 2026-09-01, and both repositories
+hold `0.1.0` under the digests the release that tag created records
+(ADR-0039). The two tags stay required all the same: the version a
+deployment runs is its own to name, and a default here would go on
+naming `0.1.0` once the next release lands, with nothing in the chart
+changed to say so. `Chart.yaml` still carries no `appVersion` — ADR-0042
+records that the change publishing the first release sets it, and no
+change since has.
 
 ## What keeps it true
 

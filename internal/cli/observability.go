@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -227,13 +228,22 @@ func (o *observability) logRPCs(ctx context.Context, req any, info *grpc.UnarySe
 		principalAttr(principalField(subject), subject),
 	}
 	if err != nil && serverFault(status.Code(err)) {
-		// The status message is the errorx chain the engine rendered;
-		// Convert reads a plain error as its text, so either form
-		// reaches the line whole.
-		attrs = append(attrs, slog.String("error", status.Convert(err).Message()))
+		attrs = append(attrs, slog.String("error", causeText(err)))
 	}
 	o.logger.LogAttrs(ctx, levelOf(err != nil), "rpc", attrs...)
 	return resp, err
+}
+
+// causeText is what a fault's line says about the error. The engine
+// answers with the status a caller may read over the chain it holds
+// (runtime-safety.md §Errors reach a handler), so the chain is what
+// this line takes; an error carrying nothing under it reads as its own
+// status message.
+func causeText(err error) string {
+	if cause := errors.Unwrap(err); cause != nil {
+		return cause.Error()
+	}
+	return status.Convert(err).Message()
 }
 
 // serverFault reports whether a gRPC code is what the HTTP surfaces

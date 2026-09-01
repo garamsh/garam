@@ -108,11 +108,13 @@ func (m *GRPCPolicyManager) ArchivePolicy(ctx context.Context, policyGRN grn.GRN
 	return policyFromProto(resp.GetPolicy())
 }
 
-// RollbackPolicy points the policy at an existing earlier version.
-func (m *GRPCPolicyManager) RollbackPolicy(ctx context.Context, policyGRN grn.GRN, version int) (*Policy, error) {
+// RollbackPolicy points the policy at an existing earlier version. The
+// version is the width the request carried it in, so nothing here
+// narrows it.
+func (m *GRPCPolicyManager) RollbackPolicy(ctx context.Context, policyGRN grn.GRN, version int32) (*Policy, error) {
 	resp, err := m.client.RollbackPolicy(ctx, &authzv1.RollbackPolicyRequest{
 		PolicyGrn: policyGRN.String(),
-		Version:   int32(version),
+		Version:   version,
 	})
 	if err != nil {
 		return nil, statusError(err)

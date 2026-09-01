@@ -8,9 +8,10 @@ Implemented by `internal/message`.
 no consent relation carries across its boundary with the refusal
 message below, and answers nothing else: a message no agent claims, or
 one that spends its attempts, sits until the thirty-day sweep deletes
-it and its sender is told nothing.
-[overview.md](./overview.md) §Out of scope (today) records the attempts
-half.
+it and its sender is told nothing. That report is garam's own
+obligation, taken because the platform makes no such report itself
+(ADR-0018). [overview.md](./overview.md) §Out of scope (today) records
+the attempts half.
 
 | Type | Responsibility |
 |------|----------------|
@@ -74,8 +75,7 @@ count (ADR-0018). A holder renews its claim while it works, and
 renewal carries the claim no further than a ceiling measured from when
 it was taken — a renewal reaching past that is held at it, so a holder
 that renews forever loses the claim rather than leaving a message
-neither completed nor redelivered. Telling the sender that a message
-exhausted its attempts is garam's obligation and is not built.
+neither completed nor redelivered.
 
 `Service` is what a machine identity does to its own queue, and every
 method but posting takes the calling identity beside the recipient

@@ -67,13 +67,15 @@ The rules above bind. This section does not: it is one toolchain — Make for th
 
 ### Entry points as a Makefile
 
-The living list is the `Makefile`. This project has two toolchains, so
-it has two whole-set names rather than one:
+The living list is the `Makefile`. This project has two toolchains and
+one whole-set name over both:
 
-- `ci` — `format lint test build check-gen chart`, the Go module and the
-  chart it ships.
+- `ci` — `format lint test build check-gen check-toolchain chart
+  web-ci`, the Go module, the chart it ships, and the `web/` half
+  below.
 - `web-ci` — `web-format web-lint web-test web-build web-check-gen`,
   the `web/` app, which has its own package manager and its own gate.
+  `ci` runs it last, so the cheaper Go half fails first.
 
 Both run identically on a contributor's machine and in CI. The rest:
 

@@ -15,9 +15,12 @@ none is scheduled.
   (ADR-0008).
 - **Per-org direct roles** — a role stored on the user applies in every
   org it belongs to. Scoping needs subject × role × scope persistence.
-- **`Condition` in policy documents** — reserved, never parsed and
-  never evaluated (ADR-0002); `internal/authz/statement.go` gives
-  `PolicyDocument` no such field.
+- **`Condition` in policy documents** — reserved: a statement carries
+  one through the parse boundary and reads it back as it was written,
+  and nothing evaluates it (ADR-0002). It is the `Statement` type in
+  `internal/authz` that holds it, as raw JSON, because the model names
+  nothing that may appear inside it; no evaluation path reads that
+  field.
 
 ## Known corrections applied
 

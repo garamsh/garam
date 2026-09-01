@@ -103,16 +103,16 @@ API behind it rather than of the console:
 
 | Section | What the console does with it |
 |---|---|
-| Overview, Groups, Projects, Members | reads |
+| Overview, Groups, Projects | reads |
+| Members | reads, and issues the invitation a person joins by ([ADR-0006](./adr/0006-invitation-tokens.md)) |
 | Operators | reads, and registers one ([ADR-0045](./adr/0045-an-organization-registers-an-operator.md)) |
 | Agents | reads the agents the organization holds with the two states their operator and the agent itself report ([ADR-0053](./adr/0053-an-agent-and-its-operator-report-state-on-the-machine-listener.md)), and reads definitions and defines one ([ADR-0026](./adr/0026-the-console-defines-an-agent.md)) |
 | Consents | reads the cross-organization consent relations the organization is a side of, grants its half of one and withdraws it ([ADR-0035](./adr/0035-a-cross-organization-message-needs-both-organizations-consent.md)) |
 | Policies | neither: the section holds its place and says policies are managed over the HTTP API |
 
-Organizations are created, an invitation is issued from the Members
-section and accepted at `/console/invitations/{token}` — which is
-itself behind sign-in, because accepting one joins an existing account
-to an organization.
+Organizations are created, and an invitation is accepted at
+`/console/invitations/{token}` — which is itself behind sign-in,
+because accepting one joins an existing account to an organization.
 
 No organization, group, project or user is addressed by its GRN
 anywhere in the interface. The console shows names and addresses

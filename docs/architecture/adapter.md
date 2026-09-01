@@ -127,6 +127,14 @@ before they do.
 
 ## Watching
 
+**The adapter's half is unbuilt.** garam's is there: a claim and a
+renewal both answer with the watcher count, and the machine listener
+serves the route a forward arrives on. Nothing under
+`internal/delivery/` reads that count or posts a turn event, so what
+follows is the rule the adapter takes when it is built rather than a
+description of what runs. [overview.md](./overview.md) §Out of scope
+(today) records it, beside the §Readiness half.
+
 **Forward turn events only while garam says someone is watching, and read
 that from the claim.** Every claim and every renewal answers with a
 watcher count; forward while it is above zero and forward nothing

@@ -321,6 +321,12 @@ channels.
 
 ## Explain
 
+**Nothing calls this.** The RPC is implemented and served on the policy
+listener (`internal/authz/server.go`), and no caller reaches it:
+neither specification carries the operation, no CLI subcommand asks it,
+and nothing in `web/` does. So the reproducibility below is the RPC's
+own, and not something any surface offers today.
+
 The `Explain` RPC reports which statements matched and which produced
 the final decision, across both origins. A denied request must be
 reproducible after the fact.

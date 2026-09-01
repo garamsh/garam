@@ -110,6 +110,14 @@ owning a folder are not in tension.
 
 ### Watching an agent work
 
+**Both ends of this are unbuilt.** garam's half is built — the stream a
+browser reads, the watcher count on the poll, and the fan-out between
+the two listeners — and nothing reaches either end of it: no route
+under `web/src/app/console/` opens the stream, and nothing under
+`internal/delivery/` forwards an event ([adapter.md](./adapter.md)
+§Watching). [overview.md](./overview.md) §Out of scope (today) records
+it.
+
 Who is watching an agent work, and what is carried to them while they
 are (ADR-0022). Implemented by `internal/watch`. The subject is the
 agent; the boundary is its own because a watch has a lifecycle neither

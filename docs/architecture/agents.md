@@ -3,6 +3,12 @@
 Autonomous identity, provisioned outside garam (ADR-0012). Implemented
 by `internal/agent`.
 
+**Nothing reports the state below.** An agent is created at `pending`
+and `unknown` and stays there: `ReportProvisioningState` and
+`ReportRuntimeState` exist on this domain's store and nothing above it
+calls either, and neither specification carries a state route.
+[overview.md](./overview.md) §Out of scope (today) records it.
+
 | Type | Responsibility |
 |------|----------------|
 | `Agent` | actor owned by an org; carries the state the operator reports about its pod and the state it reports about itself, separately |

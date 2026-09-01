@@ -8,6 +8,7 @@
 - Decision
 - Consequences
 - Rejected alternatives
+- Errata
 
 ## Context
 
@@ -251,3 +252,26 @@ Two facts bound what may be relied on here, each read on 2026-08-25:
   local stack turns on a sign-in provider that must never run elsewhere,
   and it is built to prove processes schedule rather than to reconcile a
   cluster.
+
+## Errata
+
+- 2026-09-02 — §Context's second bounding fact, "No release exists and
+  neither image repository holds a tag", was read on 2026-08-25 and
+  `v0.1.0` falsified it on 2026-09-01. `gh release list --repo
+  garamsh/garam` returns `v0.1.0`, and each of `garam/garam-server` and
+  `garam/garam-web` holds `0.1.0`, published by run 33523193685 of
+  `.github/workflows/release.yml`
+  ([ADR-0039](./0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)).
+  Two statements rest on it and the decision stands under both.
+  §Consequences' "A deployment cannot take this chart and run it today.
+  Both image tags are required and neither repository holds one" is
+  false in its second half: the tags are still required, so a consumer
+  still meets a failed render first, and a tag it supplies now pulls.
+  §Decision's "required rather than defaulted because no default could
+  name an image that exists" has lost that reason and kept its rule —
+  `deploy/charts/garam/README.md` §Values a deployment must supply
+  states the reason that a release does not falsify. The sentence after
+  it, "The change that publishes the first release sets it and makes
+  those defaults honest at once", named a change that has since
+  happened: the release landed and set no `appVersion`. This erratum
+  records that and decides nothing about it.

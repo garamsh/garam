@@ -114,9 +114,10 @@ SHELL_SCRIPTS = $(shell find scripts -type f -name '*.sh')
 # declares, whether the action's runner is too old, and the expression
 # rule's typing of `steps.<id>.outputs.<name>`, which falls back to
 # `map[string]string` otherwise. Neither the full commit SHA
-# docs/convention/ci.md §Pinning requires nor the exact tag recorded
-# beside it is such a ref, so all three reach no action here,
-# release.yml's four `steps.*.outputs.*` references included (#854).
+# docs/convention/ci.md §Reference implementation requires nor the exact
+# tag recorded beside it is such a ref, so all three reach no action
+# here, release.yml's four `steps.*.outputs.*` references included
+# (#854).
 # What reaches every workflow whatever the ref is the rest of the
 # expression, `needs:` and shell-name checking.
 #

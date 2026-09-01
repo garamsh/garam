@@ -382,11 +382,25 @@ count is zero:
   that table declares, every account the chart renders is one a workload
   runs as, the value files that name none render none, and every render
   is repeated under a second release name and must come out identical.
+- `chart-names` — `helm template` under the longest release name Helm
+  accepts, and every object name the renders carry held to 63
+  characters, which an apply enforces and a render does not. A render
+  that fails fails the target: each lands in a file before its names are
+  read, so a failure cannot pass as a value file that named nothing
+  while the other kept the count above zero.
 - `chart-rewrite` — the `/api/*` target `.github/workflows/release.yml`
   bakes into the web image against the api Service this chart renders
   under the release name `garam` (§Choosing a release name). It renders
   again under `chart-names`' release name as the control: that render
   must name something else, so the equality is read rather than assumed.
+- `chart-guards` — each value file under `ci/refused/` rendered on top of
+  `minimal-values.yaml`, and refused by the guard it is named after: the
+  failure must be an `execution error` from a template, opening with the
+  value the file is named for. A refusal for any other reason — a values
+  file helm cannot parse, a template that stopped somewhere else — is
+  not that guard firing. `minimal-values.yaml` must still render, so a
+  chart that refused everything fails here instead of passing every case
+  above.
 - `chart-security` — the PodSecurity `restricted` comparison against
   every workload §Workload identities declares. The pod spec sets
   `runAsNonRoot: true` and a `seccompProfile` type, every container
@@ -398,7 +412,7 @@ count is zero:
 - `chart-package` — `helm package`, then a search of the unpacked
   artifact for `cpu` and `memory` as keys. Every file not excluded ships,
   `ci/` included, so a value file reaches a consumer without passing the
-  four above, each of which reads the source tree instead. This file
+  seven above, each of which reads the source tree instead. This file
   ships in the artifact too, so it names the two as words rather than as
   keys.
 

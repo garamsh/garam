@@ -66,6 +66,7 @@ type garamQueue struct {
 	// other side of it.
 	hangFirstCompletion chan struct{}
 	completionCallsSeen int
+	claimCallsSeen      int
 	renewals            int
 	completions         int
 }
@@ -91,6 +92,7 @@ func (q *garamQueue) claim(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q.mu.Lock()
+	q.claimCallsSeen++
 	held := q.handOut()
 	q.mu.Unlock()
 	if held == nil {
@@ -250,6 +252,18 @@ func (q *garamQueue) renewalsOf(message int) int {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	return q.messages[message].renewals
+}
+
+// claimsAttempted is how many times the loop has asked for work. Claim,
+// post and the handoff of the pairing are one sequence in one goroutine,
+// so a claim beyond the messages already posted is the queue's own
+// evidence that every pairing has reached hold — which the post is not,
+// since the gateway records a message before the loop has the
+// identifier back to pair it with.
+func (q *garamQueue) claimsAttempted() int {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return q.claimCallsSeen
 }
 
 // deliveries is how many times the queue has handed its first message
@@ -417,8 +431,13 @@ func runWith(t *testing.T, queue *garamQueue, gateway *agentGateway, cfg deliver
 }
 
 // eventually is how long a test waits for the loop to get somewhere.
-// Everything it waits on is a call between two processes on this
-// machine, so the bound is generous and the interval is short.
+// The bound is what the loop has to do rather than what the machine is
+// doing: the longest wait here is a lease lapsing and the renewal
+// inside it, no test waits on a lease longer than 200ms, and two
+// seconds leaves an order of magnitude over that for a runner not
+// giving this process the CPU. A condition that wants more is not slow
+// but unreachable — #852 was one the loop would never reach, and no
+// bound is long enough for that.
 func eventually(t *testing.T, condition func() bool, message string) {
 	t.Helper()
 	require.Eventually(t, condition, 2*time.Second, 2*time.Millisecond, message)

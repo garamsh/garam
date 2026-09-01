@@ -45,17 +45,14 @@ jobs:
           fi
           echo "version=${REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
-      # The push role has never been assumed. infra measured fifty
-      # AssumeRoleWithWebIdentity events on the account, none of them
-      # this role's and every one successful, and a successful event
-      # does not record the subject presented — so nothing here knows
-      # what a failure of the step below reports, and the `:ref:` half
-      # of the subject quoted at the top of this file is first
-      # exercised by the tag that reached this run. Printing the
-      # presented subject makes that failure readable against the
-      # pattern by eye. It verifies nothing, it calls no AWS API, and
-      # it stands after the version guard so a malformed tag still
-      # costs nothing.
+      # The push role has been assumed once, by `v0.1.0` on 2026-09-01,
+      # and it succeeded — so no failure of the step below has been
+      # seen, and a successful AssumeRoleWithWebIdentity event does not
+      # record the subject presented. Printing the presented subject
+      # makes such a failure readable by eye against the pattern quoted
+      # at the top of this file. It verifies nothing, it calls no AWS
+      # API, and it stands after the version guard so a malformed tag
+      # still costs nothing.
       - run: scripts/oidc-subject.sh
 
       - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3

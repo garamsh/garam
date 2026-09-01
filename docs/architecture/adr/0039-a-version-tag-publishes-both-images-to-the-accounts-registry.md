@@ -235,3 +235,24 @@ named below is therefore a decision, not a demonstrated mechanism.
   asked to be replaced, and what replaced it is what it specified. What
   has not happened is a release — `aws ecr list-images` returned an
   empty list for both repositories the same day, and no `v*` tag exists.
+
+- 2026-09-02 — the 2026-08-31 erratum above closes "What has not
+  happened is a release — `aws ecr list-images` returned an empty list
+  for both repositories the same day, and no `v*` tag exists", and
+  `v0.1.0` falsified both halves. The tag was pushed on 2026-09-01, run
+  33523193685 of `.github/workflows/release.yml` concluded success, and
+  each repository holds `0.1.0`; the release that tag created records
+  both digests. Three earlier statements go with it: §Context closes "A
+  trigger named below is therefore a decision, not a demonstrated
+  mechanism", and that run demonstrated it; §Consequences' "A cluster
+  cannot pull garam until the workflow, the role and the repositories
+  exist" names a condition every part of which is now met; and the
+  2026-08-27 erratum's pointer at the chart's `README.md` §Pinning a
+  version as "what now states that neither image exists yet" no longer
+  describes that section. The decision is untouched, and `v0.1.0` is the
+  first exercise of exactly what it specifies: a `vX.Y.Z` tag, the image
+  tag without the `v`, both images to the account's registry under the
+  names, on the trigger and the credential shape decided here. The
+  chart's two image tags stay required, for a reason this release does
+  not supply — `deploy/charts/garam/README.md` §Values a deployment must
+  supply states it.

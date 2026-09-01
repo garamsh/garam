@@ -13,6 +13,7 @@ rather than reading a number here as current.
 - What this does not decide
 - Consequences
 - Rejected alternatives
+- Errata
 
 ## Context
 
@@ -187,3 +188,21 @@ decision refuses.
   published one.** `api/openapi.yaml` carries the same undecided
   number, and a reader comparing the two files would read the silence
   in one as the opposite of the sentence in the other.
+
+## Errata
+
+- 2026-09-02 — §Context's "`git tag` returns nothing, `gh api
+  repos/garamsh/garam/releases` returns an empty list" was measured at
+  `86c30e8`, and `v0.1.0` falsified both halves on 2026-09-01. Re-run
+  on 2026-09-02, `git tag` returns `v0.1.0` and `gh api
+  repos/garamsh/garam/releases` returns one release, also `v0.1.0`. The
+  decision is untouched, and what the release moves is the reader
+  rather than the promise: both specifications carry `version: 0.1.0`,
+  and the images that tag published carry `0.1.0`
+  ([ADR-0039](./0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)),
+  so the reading §Decision was written to forestall — "the image tag
+  ADR-0039 publishes under names a build rather than the contract" — is
+  one a reader can now actually make from two numbers that match.
+  Neither specification is what `v0.1.0` released, so the sentence each
+  carries, "garam publishes no release of this contract and no
+  compatibility window", stands as written.

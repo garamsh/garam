@@ -160,7 +160,7 @@ func TestAdapterClient_MeetsTheMachineListenerOverHTTP11(t *testing.T) {
 	certPEM, err := os.ReadFile(certFile)
 	require.NoError(t, err)
 	rootFile := filepath.Join(dir, "server-root.pem")
-	require.NoError(t, os.WriteFile(rootFile, certPEM, 0o644))
+	require.NoError(t, os.WriteFile(rootFile, certPEM, 0o600))
 
 	pair, err := tls.LoadX509KeyPair(certFile, keyFile)
 	require.NoError(t, err)

@@ -221,7 +221,11 @@ func machineKeyMaterialFiles(t *testing.T) (certFile, keyFile, kekFile, rootFile
 	// carries is not what a shutdown is about, so it is the certificate
 	// above: the process reads it, hands it on, and never verifies with
 	// it.
+	//
+	// Owner-only like the three above, though nothing reads this one's
+	// mode: the umask subtracts from os.WriteFile's mode argument, so a
+	// mode reaching past the owner is one the environment decides.
 	rootFile = filepath.Join(dir, "server-root.pem")
-	require.NoError(t, os.WriteFile(rootFile, certPEM, 0o644))
+	require.NoError(t, os.WriteFile(rootFile, certPEM, 0o600))
 	return certFile, keyFile, kekFile, rootFile
 }

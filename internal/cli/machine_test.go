@@ -78,11 +78,16 @@ func selfSigned(t *testing.T, commonName string) (certPEM, keyPEM []byte) {
 // writeServerRoot writes the garam server root a machine identity pins
 // garam by (ADR-0040). It is a certificate of its own rather than the
 // listener's, because the two are what this change separates.
+//
+// Owner-only like the key material beside it, though the reader of this
+// file reads its contents and not its mode: the umask subtracts from
+// os.WriteFile's mode argument, so a mode reaching past the owner is one
+// the environment decides rather than this helper.
 func writeServerRoot(t *testing.T, dir string) string {
 	t.Helper()
 	certPEM, _ := selfSigned(t, "garam server root")
 	path := filepath.Join(dir, "server-root.pem")
-	require.NoError(t, os.WriteFile(path, certPEM, 0o644))
+	require.NoError(t, os.WriteFile(path, certPEM, 0o600))
 	return path
 }
 

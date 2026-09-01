@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { UsersRound } from "lucide-react";
 
-import { listGroups, orgNotFound } from "@/features/orgs";
+import { listGroups } from "@/features/orgs";
 
 import { ApiUnreachable } from "../../../_components/api-unreachable";
 import { EmptyState } from "../../../_components/empty-state";
@@ -16,7 +16,7 @@ type Params = { params: Promise<{ org: string }> };
 /** The organization's groups, or a note that it holds none. */
 export default async function GroupsPage({ params }: Params) {
   const { org } = await params;
-  const groups = await listGroups(org).catch(orgNotFound);
+  const groups = await listGroups(org);
 
   return (
     <>

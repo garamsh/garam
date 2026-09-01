@@ -7,7 +7,6 @@ import {
   listGroups,
   listOrgMembers,
   listProjects,
-  orgNotFound,
 } from "@/features/orgs";
 
 import { ApiUnreachable } from "../../_components/api-unreachable";
@@ -26,7 +25,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 export default async function OrgPage({ params }: Params) {
   const { org: slug } = await params;
   const [org, groups, projects, members] = await Promise.all([
-    getOrg(slug).catch(orgNotFound),
+    getOrg(slug),
     listGroups(slug),
     listProjects(slug),
     listOrgMembers(slug),

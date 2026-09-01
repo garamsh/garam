@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Bot, ClipboardList } from "lucide-react";
 
 import { Separator } from "@/components/ui/separator";
-import { listAgentDefinitions, listAgents, orgNotFound } from "@/features/orgs";
+import { listAgentDefinitions, listAgents } from "@/features/orgs";
 
 import { ApiUnreachable } from "../../../_components/api-unreachable";
 import { EmptyState } from "../../../_components/empty-state";
@@ -30,8 +30,8 @@ type Params = { params: Promise<{ org: string }> };
 export default async function AgentsPage({ params }: Params) {
   const { org } = await params;
   const [agents, definitions] = await Promise.all([
-    listAgents(org).catch(orgNotFound),
-    listAgentDefinitions(org).catch(orgNotFound),
+    listAgents(org),
+    listAgentDefinitions(org),
   ]);
 
   return (

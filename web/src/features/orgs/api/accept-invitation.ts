@@ -4,7 +4,11 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { GaramApiError, garamFetchAuthenticated } from "@/lib/garam";
+import {
+  GaramApiError,
+  GaramUnreachableError,
+  garamFetchAuthenticated,
+} from "@/lib/garam";
 
 import type { Member } from "./orgs";
 
@@ -33,7 +37,14 @@ export async function acceptInvitation(
       { method: "POST" },
     );
   } catch (error) {
-    if (error instanceof GaramApiError) {
+    // An unreachable API is a state the form renders, not a throw: the
+    // token is in the URL and no boundary covers this route, so throwing
+    // replaces the console with `global-error.tsx` and the only retry
+    // path the visitor holds is a page that no longer renders.
+    if (
+      error instanceof GaramApiError ||
+      error instanceof GaramUnreachableError
+    ) {
       return { status: "error", message: error.message };
     }
     throw error;

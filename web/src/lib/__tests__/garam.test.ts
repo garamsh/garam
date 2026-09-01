@@ -10,19 +10,34 @@ describe("garamFetch", () => {
     await expect(garamFetch("/me")).resolves.toEqual(alice);
   });
 
-  it("tells a connection failure apart from a refusal", async () => {
+  it("tells an outage apart from a refusal, whichever way the outage arrives", async () => {
     server.use(http.get(`${API_URL}/me`, () => HttpResponse.error()));
 
     await expect(garamFetch("/me")).rejects.toBeInstanceOf(
       GaramUnreachableError,
     );
 
+    // A dependency garam needs being unreachable arrives as a status
+    // and not as a connection failure (`api/openapi.yaml` §info), and
+    // its body names no cause: it is the same outage to a caller.
     server.use(
       http.get(`${API_URL}/me`, () =>
         HttpResponse.json(
-          { kind: "unavailable", message: "no" },
+          { kind: "unavailable", message: "internal error" },
           { status: 503 },
         ),
+      ),
+    );
+
+    await expect(garamFetch("/me")).rejects.toBeInstanceOf(
+      GaramUnreachableError,
+    );
+
+    // The control: a status garam decided for itself is a refusal the
+    // caller can act on, so the two answers do not collapse into one.
+    server.use(
+      http.get(`${API_URL}/me`, () =>
+        HttpResponse.json({ kind: "denied", message: "no" }, { status: 403 }),
       ),
     );
 

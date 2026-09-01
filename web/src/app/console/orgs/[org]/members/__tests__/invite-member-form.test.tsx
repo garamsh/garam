@@ -108,6 +108,21 @@ describe("invite member form", () => {
     expect(roles).toEqual(["admin"]);
   });
 
+  it("keeps the form when the API never answers", async () => {
+    server.use(
+      http.post(`${API_URL}/orgs/acme/invitations`, () => HttpResponse.error()),
+    );
+    const user = userEvent.setup();
+    render(<InviteMemberForm org="acme" />);
+
+    await user.click(screen.getByRole("button", { name: "Create invitation" }));
+
+    expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Create invitation" }),
+    ).toBeInTheDocument();
+  });
+
   it("shows the backend's error when creation fails", async () => {
     server.use(
       http.post(`${API_URL}/orgs/acme/invitations`, () =>

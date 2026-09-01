@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { FolderGit2 } from "lucide-react";
 
-import { listProjects, orgNotFound } from "@/features/orgs";
+import { listProjects } from "@/features/orgs";
 
 import { ApiUnreachable } from "../../../_components/api-unreachable";
 import { EmptyState } from "../../../_components/empty-state";
@@ -16,7 +16,7 @@ type Params = { params: Promise<{ org: string }> };
 /** The organization's projects, or a note that it owns none. */
 export default async function ProjectsPage({ params }: Params) {
   const { org } = await params;
-  const projects = await listProjects(org).catch(orgNotFound);
+  const projects = await listProjects(org);
 
   return (
     <>

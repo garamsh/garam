@@ -65,6 +65,23 @@ describe("organization overview page", () => {
     ).rejects.toThrow("NEXT_NOT_FOUND");
   });
 
+  // The overview reads four paths and the sections read one each, so a
+  // denial has to answer the same way here as it does there (ADR-0011).
+  it.each(["groups", "projects", "members"])(
+    "renders not-found when the %s read is denied, as that section does",
+    async (segment) => {
+      server.use(
+        http.get(`${API_URL}/orgs/acme/${segment}`, () =>
+          HttpResponse.json({ kind: "denied", message: "no" }, { status: 403 }),
+        ),
+      );
+
+      await expect(
+        renderServerComponent(OrgPage(params("acme"))),
+      ).rejects.toThrow("NEXT_NOT_FOUND");
+    },
+  );
+
   it("says the API is unreachable rather than counting what it cannot read", async () => {
     server.use(http.get(`${API_URL}/*`, () => HttpResponse.error()));
 

@@ -26,7 +26,8 @@ collaborate on a shared plan.
   terminates TLS itself, requires a client certificate, and verifies it
   against the authority of the organization the certificate's own SAN
   names (ADR-0014). An agent and an operator authenticate the same way
-  (ADR-0015), and neither touches a user row, a session or a membership.
+  (ADR-0015), and neither authenticates through a user row, a session or
+  a membership.
   What that listener serves has a specification of its own (ADR-0019).
   The other direction rests on a different root: the listener presents
   one certificate signed by a garam server authority the deployment

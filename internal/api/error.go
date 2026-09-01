@@ -33,15 +33,14 @@ func RecoverPanics(next http.Handler) http.Handler {
 }
 
 // BindingError answers a request the generated router refused while
-// binding its parameters, before any handler ran. The router's own
-// default writes the binding error's text as text/plain, which
-// contradicts the specification and repeats what the caller submitted:
-// the inner error of an unparseable number is a strconv error, and one
-// quotes the value it could not parse.
+// binding its parameters, before any handler ran. It replaces the
+// router's own default, which writes the binding error's text as
+// text/plain and repeats what the caller submitted — the inner error of
+// an unparseable number is a strconv error, and one quotes the value it
+// could not parse.
 //
-// The composition root supplies this as ErrorHandlerFunc. Nothing else
-// answers on this path, so a surface without it has no declared body
-// for a refusal no handler sees.
+// The composition root supplies this as ErrorHandlerFunc, and nothing
+// else answers on this path.
 func BindingError(w http.ResponseWriter, _ *http.Request, err error) {
 	writeError(w, errorx.New(errorx.KindInvalidArgument, bindingMessage(err)))
 }
@@ -51,10 +50,6 @@ func BindingError(w http.ResponseWriter, _ *http.Request, err error) {
 // is — never from the error's own text, which is where the submitted
 // value would travel. A parameter name is the specification's word and
 // not the caller's.
-//
-// The six types below are every one the generated packages declare. The
-// default names no parameter: an error matching none of them carries
-// nothing this function knows the origin of.
 func bindingMessage(err error) string {
 	var (
 		required  *apigen.RequiredParamError

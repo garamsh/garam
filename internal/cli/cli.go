@@ -108,19 +108,13 @@ func NewRootCommand() *cobra.Command {
 
 // silenceUsageOnRun stops a command that fails while running from
 // printing its usage block, and leaves the block on one that fails
-// before it runs. probe.go states the reason and it holds for every
-// command here: usage text is noise a container log pays for each time,
-// and a serve command in a crash loop pays it on every restart.
+// before it runs. A command in a crash loop writes its usage text to
+// the container log on every restart, and "how is this invoked" answers
+// a bad flag rather than an unreadable GARAM_COOKIE_SECURE.
 //
-// What separates the two is the question the block answers. "How is
-// this invoked" is what a bad flag or a missing argument raises, and it
-// is not what an unreadable GARAM_COOKIE_SECURE raises.
-//
-// The line goes inside RunE because that is the first point every check
-// deciding the first question has passed. cobra parses flags, validates
-// arguments, runs PersistentPreRunE and PreRunE, and only then
-// ValidateRequiredFlags — so a hook would silence `issue-certificate`
-// without --out-dir, which is a usage error and keeps its block.
+// cobra runs ValidateRequiredFlags after every hook, so the line goes
+// inside RunE: from a hook it would silence `issue-certificate` without
+// --out-dir, which is a usage error and keeps its block.
 func silenceUsageOnRun(cmd *cobra.Command) {
 	for _, child := range cmd.Commands() {
 		silenceUsageOnRun(child)

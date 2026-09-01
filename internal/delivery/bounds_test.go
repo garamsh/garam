@@ -165,8 +165,19 @@ func TestBounds_ControlBothCompleteWhenNothingHangs(t *testing.T) {
 		"control: the same turn end completes both when nothing hangs")
 }
 
-// twoInFlight runs the loop until both messages are posted, optionally
-// against a queue whose first completion never answers.
+// twoInFlight runs the loop until it holds the pairing for both
+// messages, optionally against a queue whose first completion never
+// answers.
+//
+// Waiting on the second post is not enough, and the lease here is too
+// long for holding to read a renewal: the gateway records a message
+// before the loop has the identifier back, so a turn ending in that
+// window finds nothing to complete. The pairing lands a moment later and
+// is renewed for as long as the loop runs, so the claim never lapses and
+// that turn's end never comes again — which is why the window is shut
+// here rather than waited out (#852). The third claim is what shuts it:
+// the loop asks for work again only once hold has taken the pairing for
+// what it last posted.
 func twoInFlight(t *testing.T, hang bool) (*garamQueue, *agentGateway) {
 	t.Helper()
 	queue := newGaramQueue(t, 10*time.Second, "one", "two")
@@ -178,6 +189,7 @@ func twoInFlight(t *testing.T, hang bool) (*garamQueue, *agentGateway) {
 	cfg.ClaimTimeout = 2 * time.Second
 	cfg.CallTimeout = 150 * time.Millisecond
 	runWith(t, queue, gateway, cfg)
-	eventually(t, func() bool { return len(gateway.posted()) == 2 }, "both messages reach the gateway")
+	eventually(t, func() bool { return len(gateway.posted()) == 2 && queue.claimsAttempted() > 2 },
+		"both messages reach the gateway and the loop holds both pairings")
 	return queue, gateway
 }

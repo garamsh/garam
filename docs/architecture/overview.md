@@ -338,11 +338,9 @@ and the adapter's; `wire` is reached by three packages and no others —
 boundaries and `authz` from its model, where the statement `Effect` it
 declares is the type every surface shares ([authz.md](./authz.md)
 §Components) — and `health` is shared by the three serve commands and
-imported by no domain. Domains
-cooperate
-through `grn.GRN`, never through each other's concrete types — which is
-why `machine` declares the trust root it verifies against and `cli`
-satisfies it from `ca`. `api`
+imported by no domain. `machine` declares the trust root it verifies
+against and `cli` satisfies it from `ca` ([structure.md](./structure.md)
+§Boundaries and dependency direction). `api`
 sees several domains at once and enforces authentication (session
 cookie) at the boundary; org-role checks go through the `Evaluator`
 seam, implemented by the authz gRPC client (ADR-0003 stage 2). The

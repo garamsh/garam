@@ -30,9 +30,6 @@ recorded there. A **delivery surface** composes several domains, which
 is what stops it being one ([structure.md](./structure.md) §The shape).
 **Shared code** sits below the domains that need it.
 
-Domains cooperate through `grn.GRN`, never through each other's
-concrete types.
-
 ## The domains
 
 Each is a responsibility document of its own, named for its subject;

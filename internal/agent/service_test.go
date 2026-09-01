@@ -18,8 +18,8 @@ import (
 // service depends on — one operator per agent, an epoch that rises with
 // every assignment — and the claim rules beside them: a definition is
 // claimed once, and the claim is where its agent comes to exist
-// (ADR-0033). It reports states nowhere: the operator surface writes
-// none.
+// (ADR-0033). A state report is fenced as Postgres fences it: at the
+// epoch the agent is assigned at and at no other.
 type memoryStore struct {
 	agents      map[grn.GRN]*Agent
 	assignments map[grn.GRN]*Assignment
@@ -131,12 +131,37 @@ func (s *memoryStore) Claim(_ context.Context, agentGRN, operatorGRN grn.GRN) (*
 	return assignment, nil
 }
 
-func (s *memoryStore) ReportProvisioningState(context.Context, grn.GRN, int, ProvisioningState) (*Agent, error) {
-	return nil, errorx.New(errorx.KindUnimplemented, "no state is reported here")
+func (s *memoryStore) ReportProvisioningState(_ context.Context, agentGRN grn.GRN, epoch int, state ProvisioningState) (*Agent, error) {
+	a, err := s.reportable(agentGRN, epoch)
+	if err != nil {
+		return nil, err
+	}
+	a.provisioning = state
+	return a, nil
 }
 
-func (s *memoryStore) ReportRuntimeState(context.Context, grn.GRN, int, RuntimeState) (*Agent, error) {
-	return nil, errorx.New(errorx.KindUnimplemented, "no state is reported here")
+func (s *memoryStore) ReportRuntimeState(_ context.Context, agentGRN grn.GRN, epoch int, state RuntimeState) (*Agent, error) {
+	a, err := s.reportable(agentGRN, epoch)
+	if err != nil {
+		return nil, err
+	}
+	a.runtime = state
+	return a, nil
+}
+
+// reportable is the fence both reports pass: the agent exists, and the
+// epoch carried is the one its assignment is on. An agent no operator
+// holds has no current epoch, so every report about it is stale.
+func (s *memoryStore) reportable(agentGRN grn.GRN, epoch int) (*Agent, error) {
+	a, held := s.agents[agentGRN]
+	if !held {
+		return nil, ErrAgentNotFound
+	}
+	assignment, assigned := s.assignments[agentGRN]
+	if !assigned || assignment.epoch != epoch {
+		return nil, ErrStaleEpoch
+	}
+	return a, nil
 }
 
 // signer is an Issuer recording every subject it signed for, so a
@@ -292,6 +317,123 @@ func TestService_IssueCertificateRenewsTheAgentsOwnCertificate(t *testing.T) {
 
 	assert.Equal(t, []grn.GRN{held.Agent()}, issuer.signed,
 		"nothing was signed for a caller that was refused")
+}
+
+// TestService_ReportProvisioningStateIsAcceptedFromTheHolderAtTheCurrentEpoch
+// is the operator's half of the two facts ADR-0012 keeps. Every
+// refusal sits beside the report that lands, because a refusal on its
+// own holds equally for a service that records nothing, and the stored
+// agent is what says whether a call moved anything.
+//
+// The epoch fence is exercised on its own: the holder is reassigned to
+// itself, which raises the epoch without changing who holds the agent,
+// so what refuses the earlier epoch is the epoch and not the operator.
+func TestService_ReportProvisioningStateIsAcceptedFromTheHolderAtTheCurrentEpoch(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryStore()
+	svc := NewService(store, &signer{})
+
+	holder := operatorGRN("acme", "one")
+	sibling := operatorGRN("acme", "two")
+	stranger := operatorGRN("globex", "one")
+
+	held, err := svc.Create(ctx, holder)
+	require.NoError(t, err)
+
+	require.NoError(t, svc.ReportProvisioningState(ctx, holder, held.Agent(), 1, ProvisioningStateReady))
+	stored, err := store.Get(ctx, held.Agent())
+	require.NoError(t, err)
+	assert.Equal(t, ProvisioningStateReady, stored.ProvisioningState())
+	assert.Equal(t, RuntimeStateUnknown, stored.RuntimeState(),
+		"the operator's report moved the fact the agent reports about itself")
+
+	refused := map[string]struct {
+		caller grn.GRN
+		agent  grn.GRN
+		err    error
+	}{
+		"another operator of the same organization": {sibling, held.Agent(), ErrNotAssigned},
+		"an operator of another organization":       {stranger, held.Agent(), ErrNotAssigned},
+		"an agent that does not exist":              {holder, grn.New("acme", grn.DefaultProject, ServiceType, "0f0f0f0f0f0f0f0f"), ErrNotAssigned},
+		"the agent reporting on its own pod":        {held.Agent(), held.Agent(), ErrNotAnOperator},
+	}
+	for name, tt := range refused {
+		t.Run(name, func(t *testing.T) {
+			assert.ErrorIs(t, svc.ReportProvisioningState(ctx, tt.caller, tt.agent, 1, ProvisioningStateFailed), tt.err)
+		})
+	}
+	stored, err = store.Get(ctx, held.Agent())
+	require.NoError(t, err)
+	assert.Equal(t, ProvisioningStateReady, stored.ProvisioningState(), "a refused report was recorded")
+
+	// Reassigning the agent to the operator already holding it raises
+	// the epoch and changes nothing else, so the earlier epoch is
+	// refused by the fence rather than by the operator comparison.
+	reassigned, err := store.Assign(ctx, held.Agent(), holder)
+	require.NoError(t, err)
+	require.Equal(t, 2, reassigned.Epoch())
+	assert.ErrorIs(t, svc.ReportProvisioningState(ctx, holder, held.Agent(), 1, ProvisioningStateFailed), ErrStaleEpoch)
+	require.NoError(t, svc.ReportProvisioningState(ctx, holder, held.Agent(), 2, ProvisioningStateFailed),
+		"the same call at the current epoch")
+	stored, err = store.Get(ctx, held.Agent())
+	require.NoError(t, err)
+	assert.Equal(t, ProvisioningStateFailed, stored.ProvisioningState())
+}
+
+// TestService_ReportRuntimeStateIsAcceptedOnlyFromTheAgentItself is the
+// agent's half of the same two facts. What bounds it is the identity
+// the connection proved, so the refusals beside the report that lands
+// are callers this route would answer if the caller were not compared
+// to the subject at all — and the epoch fence is shown on its own, by
+// an epoch the assignment has moved past.
+func TestService_ReportRuntimeStateIsAcceptedOnlyFromTheAgentItself(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryStore()
+	svc := NewService(store, &signer{})
+
+	operator := operatorGRN("acme", "one")
+	held, err := svc.Create(ctx, operator)
+	require.NoError(t, err)
+	sibling, err := svc.Create(ctx, operator)
+	require.NoError(t, err)
+
+	require.NoError(t, svc.ReportRuntimeState(ctx, held.Agent(), held.Agent(), 1, RuntimeStateConnected))
+	stored, err := store.Get(ctx, held.Agent())
+	require.NoError(t, err)
+	assert.Equal(t, RuntimeStateConnected, stored.RuntimeState())
+	assert.Equal(t, ProvisioningStatePending, stored.ProvisioningState(),
+		"the agent's report moved the fact its operator reports")
+
+	refused := map[string]struct {
+		caller grn.GRN
+		agent  grn.GRN
+		err    error
+	}{
+		"an agent of the same organization": {sibling.Agent(), held.Agent(), ErrNotTheAgent},
+		"the operator that holds the agent": {operator, held.Agent(), ErrNotTheAgent},
+		"an agent garam has no record of":   {grn.New("acme", grn.DefaultProject, ServiceType, "0f0f0f0f0f0f0f0f"), grn.New("acme", grn.DefaultProject, ServiceType, "0f0f0f0f0f0f0f0f"), ErrAgentNotFound},
+	}
+	for name, tt := range refused {
+		t.Run(name, func(t *testing.T) {
+			assert.ErrorIs(t, svc.ReportRuntimeState(ctx, tt.caller, tt.agent, 1, RuntimeStateDisconnected), tt.err)
+		})
+	}
+	stored, err = store.Get(ctx, held.Agent())
+	require.NoError(t, err)
+	assert.Equal(t, RuntimeStateConnected, stored.RuntimeState(), "a refused report was recorded")
+
+	// The epoch the agent carries is its assignment's, and a
+	// reassignment moves it: the agent is still the only caller this
+	// route answers, and it is answered at the current epoch alone.
+	reassigned, err := store.Assign(ctx, held.Agent(), operator)
+	require.NoError(t, err)
+	require.Equal(t, 2, reassigned.Epoch())
+	assert.ErrorIs(t, svc.ReportRuntimeState(ctx, held.Agent(), held.Agent(), 1, RuntimeStateDisconnected), ErrStaleEpoch)
+	require.NoError(t, svc.ReportRuntimeState(ctx, held.Agent(), held.Agent(), 2, RuntimeStateDisconnected),
+		"the same call at the current epoch")
+	stored, err = store.Get(ctx, held.Agent())
+	require.NoError(t, err)
+	assert.Equal(t, RuntimeStateDisconnected, stored.RuntimeState())
 }
 
 // define records a definition of an agent operator is to run, the way

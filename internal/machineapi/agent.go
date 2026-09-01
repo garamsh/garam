@@ -1,9 +1,11 @@
 package machineapi
 
 import (
+	"encoding/json"
 	"net/http"
 
 	machinegen "github.com/garamsh/garam/api/machine"
+	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 )
@@ -58,4 +60,61 @@ func (s *Server) IssueAgentCertificate(w http.ResponseWriter, r *http.Request, a
 		ServerRootPem:  string(certificate.ServerRootPEM),
 		NotAfter:       certificate.NotAfter,
 	})
+}
+
+// ReportProvisioningState records what the calling operator says about
+// the agent's pod (ADR-0012). garam learns it from the operator and
+// from nowhere else — it dials no cluster — and `internal/agent`
+// decides which agents an operator may report on, as it decides which
+// certificates it may obtain.
+//
+// The answer carries nothing. What the store returns is the agent as
+// it now stands, which holds the runtime state the agent reports about
+// itself, and that is the other party's fact.
+func (s *Server) ReportProvisioningState(w http.ResponseWriter, r *http.Request, agentGRN machinegen.AgentGrn) {
+	operator, subject, ok := parties(w, r, agentGRN)
+	if !ok {
+		return
+	}
+	var report machinegen.ProvisioningStateReport
+	if err := json.NewDecoder(r.Body).Decode(&report); err != nil {
+		writeError(w, errorx.Wrap(err, "provisioning state report", errorx.KindInvalidArgument))
+		return
+	}
+	state, err := agent.ParseProvisioningState(string(report.State))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.agents.ReportProvisioningState(r.Context(), operator, subject, report.Epoch, state); err != nil {
+		writeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ReportRuntimeState records what an agent says about itself
+// (ADR-0012). The caller reports for the agent it authenticates as and
+// is refused every other one, as it is on its own queue and its own
+// turn events.
+func (s *Server) ReportRuntimeState(w http.ResponseWriter, r *http.Request, agentGRN machinegen.AgentGrn) {
+	caller, subject, ok := parties(w, r, agentGRN)
+	if !ok {
+		return
+	}
+	var report machinegen.RuntimeStateReport
+	if err := json.NewDecoder(r.Body).Decode(&report); err != nil {
+		writeError(w, errorx.Wrap(err, "runtime state report", errorx.KindInvalidArgument))
+		return
+	}
+	state, err := agent.ParseRuntimeState(string(report.State))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.agents.ReportRuntimeState(r.Context(), caller, subject, report.Epoch, state); err != nil {
+		writeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

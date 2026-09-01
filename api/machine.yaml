@@ -35,11 +35,16 @@ tags:
       a bootstrap rather than a standing obligation (ADR-0046).
   - name: agent
     description: >-
-      The agents an operator creates and holds. What an operator may
-      obtain is exactly the agents assigned to it at the current epoch
-      (ADR-0015). An agent reaches one route of its own here: it renews
-      its own certificate over the connection that certificate
-      authenticated (ADR-0040).
+      The agents an operator creates and holds, and what the two
+      parties report about them. What an operator may obtain is exactly
+      the agents assigned to it at the current epoch (ADR-0015), and
+      what it may report about is bounded the same way. An agent
+      reaches two routes of its own here: it renews its own certificate
+      over the connection that certificate authenticated (ADR-0040),
+      and it reports its own runtime state. Provisioning state and
+      runtime state are separate facts reported by different parties,
+      and each report is accepted only at the assignment's current
+      epoch (ADR-0012).
   - name: definition
     description: >-
       What an organization says its agents should be, read by the
@@ -192,6 +197,103 @@ paths:
         '401':
           $ref: '#/components/responses/Error'
         '403':
+          $ref: '#/components/responses/Error'
+  /agents/{agent}/provisioning-state:
+    post:
+      operationId: reportProvisioningState
+      tags: [agent]
+      summary: Report what the operator sees of an agent's pod.
+      description: >-
+        What the calling operator says about the agent it provisioned
+        outside garam (ADR-0012). garam learns this from the operator
+        and from nowhere else: it dials no cluster and reads no pod, so
+        an agent nobody reports on stays at `pending` and cannot be
+        told from one that never started.
+
+        The report carries the epoch the operator holds the agent at,
+        and garam accepts it only at the epoch the assignment is
+        currently on. A stale one is refused under
+        `failed_precondition`, which is what stops the pod a replaced
+        operator left running from writing over its successor's report;
+        an agent with no assignment has no current epoch, so every
+        report about it is stale. The epoch to send is the one
+        `createAgent` or `claimDefinition` answered with.
+
+        An operator the agent is not assigned to is refused, and an
+        agent that does not exist is refused the same way, so a caller
+        learns nothing about the agents it does not hold. This route
+        never moves the runtime state: that is the agent's own fact and
+        `reportRuntimeState` is where it is reported.
+
+        garam keeps the last report and nothing before it. It expires
+        none of them either, so a state stands until it is reported
+        again — a report is evidence of what the operator saw, never
+        evidence that the operator is still there.
+      parameters:
+        - $ref: '#/components/parameters/agent'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProvisioningStateReport'
+      responses:
+        '204':
+          description: Recorded. garam has nothing to answer with.
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+  /agents/{agent}/runtime-state:
+    post:
+      operationId: reportRuntimeState
+      tags: [agent]
+      summary: Report what an agent says about itself.
+      description: >-
+        The agent's own account of whether it is running (ADR-0012).
+        The caller reports for the agent it authenticates as and is
+        refused every other one, as it is on its own queue and its own
+        turn events.
+
+        The report carries the epoch, and garam accepts it only at the
+        epoch the agent's assignment is currently on; a stale one is
+        refused under `failed_precondition`. The agent is told its
+        epoch by the operator that constructed it — garam answers the
+        operator with it on `createAgent` and `claimDefinition` and
+        serves it to the agent nowhere.
+
+        This route never moves the provisioning state: that is what the
+        operator sees of the pod, and `reportProvisioningState` is
+        where it is reported. The two facts are kept apart and neither
+        substitutes for the other.
+
+        garam keeps the last report and expires none, so an agent that
+        stops reporting stays in the state it last claimed. Silence is
+        not `disconnected`, and nothing here turns one into the other.
+      parameters:
+        - $ref: '#/components/parameters/agent'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RuntimeStateReport'
+      responses:
+        '204':
+          description: Recorded. garam has nothing to answer with.
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
           $ref: '#/components/responses/Error'
   /definitions:
     get:
@@ -500,6 +602,53 @@ components:
           description: >-
             Rises with every assignment and fences the operator it
             replaced. An agent presents it when it connects.
+    ProvisioningState:
+      type: string
+      description: >-
+        What the operator reports about the agent's pod. `pending` is
+        an agent no operator has reported on yet.
+      enum: [pending, provisioned, ready, failed]
+    RuntimeState:
+      type: string
+      description: >-
+        What the agent reports about itself. `unknown` is an agent that
+        has not reported since it was created.
+      enum: [unknown, connected, disconnected]
+    ProvisioningStateReport:
+      type: object
+      description: >-
+        One operator's account of an agent's pod, at the epoch it holds
+        the agent. It carries no runtime state: what the agent says
+        about itself is the agent's to report.
+      required: [epoch, state]
+      properties:
+        epoch:
+          type: integer
+          minimum: 1
+          description: >-
+            The epoch the reporter believes the assignment is on, as
+            `createAgent` or `claimDefinition` answered with. garam
+            accepts the report only at the epoch the assignment is
+            currently on.
+        state:
+          $ref: '#/components/schemas/ProvisioningState'
+    RuntimeStateReport:
+      type: object
+      description: >-
+        One agent's account of itself, at the epoch its assignment is
+        on. It carries no provisioning state: what the pod looks like
+        from outside is the operator's to report.
+      required: [epoch, state]
+      properties:
+        epoch:
+          type: integer
+          minimum: 1
+          description: >-
+            The epoch the reporter believes the assignment is on. An
+            agent is told it by the operator that constructed it; garam
+            serves it to the agent on no route.
+        state:
+          $ref: '#/components/schemas/RuntimeState'
     MachineCertificate:
       type: object
       description: >-

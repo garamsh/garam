@@ -56,6 +56,10 @@ var (
 	// agent authenticates on the same listener (ADR-0015), and holding
 	// an agent is not something an agent does.
 	ErrNotAnOperator = errorx.New(errorx.KindPermissionDenied, "caller is not an operator")
+	// ErrNotTheAgent refuses a caller reporting about an agent other
+	// than the one it authenticated as. What an agent says about
+	// itself is its own to report (ADR-0012).
+	ErrNotTheAgent = errorx.New(errorx.KindPermissionDenied, "caller is not the agent")
 )
 
 // ProvisioningState is what the operator reports about the agent's pod

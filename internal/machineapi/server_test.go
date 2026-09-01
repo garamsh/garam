@@ -46,16 +46,28 @@ func groupGRN(org, name string) grn.GRN {
 // call is one thing the surface asked the agent service for.
 type call struct{ operator, subject grn.GRN }
 
+// stateReport is one state report the surface passed on: who reported,
+// about which agent, at what epoch, and the state it parsed. The state
+// is kept as its string so one shape serves both kinds; which kind it
+// was is the field the report was recorded in.
+type stateReport struct {
+	call
+	epoch int
+	state string
+}
+
 // agentService is an agent.Service recording what the surface passed
 // it. Create answers no assignment: one is constructed by
 // internal/agent alone, and what the real service returns for a
 // created agent is the round trip in tests/e2e.
 type agentService struct {
-	certificate *agent.Certificate
-	err         error
-	calls       []call
-	states      []*agent.DefinitionState
-	assignment  *agent.Assignment
+	certificate  *agent.Certificate
+	err          error
+	calls        []call
+	states       []*agent.DefinitionState
+	assignment   *agent.Assignment
+	provisioning []stateReport
+	runtime      []stateReport
 }
 
 func (s *agentService) Create(_ context.Context, operator grn.GRN) (*agent.Assignment, error) {
@@ -88,6 +100,18 @@ func (s *agentService) Claim(_ context.Context, operator, agentGRN grn.GRN) (*ag
 		return nil, s.err
 	}
 	return s.assignment, nil
+}
+
+func (s *agentService) ReportProvisioningState(_ context.Context, operator, agentGRN grn.GRN, epoch int, state agent.ProvisioningState) error {
+	s.provisioning = append(s.provisioning, stateReport{
+		call: call{operator: operator, subject: agentGRN}, epoch: epoch, state: string(state)})
+	return s.err
+}
+
+func (s *agentService) ReportRuntimeState(_ context.Context, caller, agentGRN grn.GRN, epoch int, state agent.RuntimeState) error {
+	s.runtime = append(s.runtime, stateReport{
+		call: call{operator: caller, subject: agentGRN}, epoch: epoch, state: string(state)})
+	return s.err
 }
 
 // authorities is a ca.Store in memory. The tests need a real

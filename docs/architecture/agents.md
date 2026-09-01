@@ -3,19 +3,13 @@
 Autonomous identity, provisioned outside garam (ADR-0012). Implemented
 by `internal/agent`.
 
-**Nothing reports the state below.** An agent is created at `pending`
-and `unknown` and stays there: `ReportProvisioningState` and
-`ReportRuntimeState` exist on this domain's store and nothing above it
-calls either, and neither specification carries a state route.
-[overview.md](./overview.md) §Out of scope (today) records it.
-
 | Type | Responsibility |
 |------|----------------|
 | `Agent` | actor owned by an org; carries the state the operator reports about its pod and the state it reports about itself, separately |
 | `Definition` | what an organization says an agent should be: which operator runs it and with what values (ADR-0026). It names its subject where an `Agent` names itself, and carries none of the state an `Agent` carries, so a reader cannot take one for the other; it writes no `agents` row until the operator it names claims it (ADR-0033) |
 | `Assignment` | which operator runs an agent, and the epoch that binding holds |
 | `Certificate` | what an agent authenticates with and the garam server root it verifies garam by, as this domain hands them back |
-| `Service` | creates an agent for the calling operator, issues the certificate of one assigned to it or renews an agent's own, and answers an operator with the definitions naming it so it can claim one (ADR-0033) |
+| `Service` | creates an agent for the calling operator, issues the certificate of one assigned to it or renews an agent's own, answers an operator with the definitions naming it so it can claim one (ADR-0033), and records the state each party reports (ADR-0053) |
 | `Issuer` | signs a certificate for a subject GRN and hands back the garam server root beside it |
 
 garam mints an agent's GRN and never changes it, so which operator runs
@@ -42,14 +36,18 @@ authorization on the operator route, which ADR-0015 states is not an
 optimisation and may not be skipped, so no operator reaches an issuer
 without it. Comparing the operator on the row is the epoch fence as
 well, and it is the tenancy check too, since a GRN carries its
-organization. A caller that is not an operator is refused, with one
-exception: an agent asking for its own certificate is renewing over the
-connection that certificate authenticated, which grants it nothing it
-does not already hold (ADR-0040). That branch is the one route the
-assignment comparison does not stand on — the connection is what
-authorizes it, and it reaches the issuer before the comparison is made.
-An expired certificate has no such connection, so the operator route is
-what recovers one.
+organization. What that operator reports about the agent's pod rests
+on the same comparison (ADR-0053), so it writes state exactly where it
+obtains a certificate and nowhere wider. A caller that is not an
+operator is refused, except on the two routes an agent reaches as
+itself: renewing its own certificate over the connection that
+certificate authenticated, which grants it nothing it does not already
+hold (ADR-0040), and reporting its own runtime state. Both are bounded
+by the identity the connection proved rather than by an assignment, and
+the renewal is the one route the assignment comparison does not stand
+on — the connection is what authorizes it, and it reaches the issuer
+before the comparison is made. An expired certificate has no such
+connection, so the operator route is what recovers one.
 
 `Store` answers `Service` and, org by org, the read the browser-facing
 listener serves people: an organization's agents and the assignments
@@ -63,9 +61,11 @@ lives here rather than below.
 Signing happens through the `Issuer` seam the composition root
 satisfies from `internal/ca`, so the two domains still cooperate
 through `grn.GRN` alone and this one never holds key material. The
-HTTP surfaces are the machine listener for the operator and the
-browser-facing one for the organization's members, which reads the
-agents and writes only definitions — provisioning is an operator's, from
-outside garam, and a definition writes no `agents` row until the
-operator it names claims it (ADR-0033). The queue a message reaches an
+HTTP surfaces are the machine listener — where the operator reports the
+pod and the agent reports itself, each on a route of its own and
+neither reaching the other's fact (ADR-0053) — and the browser-facing
+one for the organization's members, which reads the agents and writes
+only definitions: provisioning is an operator's, from outside garam,
+and a definition writes no `agents` row until the operator it names
+claims it (ADR-0033). The queue a message reaches an
 agent through is the messaging domain.

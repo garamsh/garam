@@ -32,11 +32,19 @@ func randomKey(t *testing.T) []byte {
 	return key
 }
 
-// keyFile writes a key-encryption key file with the given mode.
+// keyFile writes a key-encryption key file and chmods it to mode. The
+// umask masks os.WriteFile's mode argument and not os.Chmod's, and the
+// mode is read back so one that never reached the file fails the setup
+// rather than the refusal the caller went on to assert.
 func keyFile(t *testing.T, contents string, mode os.FileMode) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "kek")
-	require.NoError(t, os.WriteFile(path, []byte(contents), mode))
+	require.NoError(t, os.WriteFile(path, []byte(contents), 0o600))
+	require.NoError(t, os.Chmod(path, mode))
+	info, err := os.Stat(path)
+	require.NoError(t, err)
+	require.Equalf(t, mode, info.Mode().Perm(),
+		"asked for mode %04o, file has %04o", mode, info.Mode().Perm())
 	return path
 }
 

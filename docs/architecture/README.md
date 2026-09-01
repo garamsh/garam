@@ -37,7 +37,8 @@ No pipeline stands behind this either: `make ci` reads no file under `docs/`, so
 
 What this repository runs against itself. `docs/convention/ci.md` decides how a check is named and secured; this section records where one runs.
 
-- `.github/workflows/ci.yml` triggers on `pull_request` and on nothing else; `.github/workflows/release.yml` triggers on a `v*` tag (ADR-0039).
+- `.github/workflows/ci.yml` triggers on `pull_request` and on nothing else; `.github/workflows/images.yml` on the same event except where a pull request changes only `docs/`; `.github/workflows/release.yml` triggers on a `v*` tag (ADR-0039).
+- **Both images a release publishes are built on a pull request.** `images.yml` builds each from what `release.yml` says it is built from and then checks the web one, which is the image whose failure during a release is irreversible: the server image is pushed first, and immutability makes the repair the next version (ADR-0039 §Consequences). Until #850 neither image was built by any check.
 - **The after-merge run is not taken.** A `push: branches: [main]` trigger ran on `ci.yml` until #811. Both triggers read the merge result, so what that one alone covered is a `main` that moved between the pull request's run and the merge.
 - **Nothing mechanical covers that gap; the role that merges does.** The obligation is stated once, in `AGENTS.md` §Roles; this bullet records that the gap is covered and is not that statement. The mechanical replacement is a required status check with *branches must be up to date*, which is a repository setting and so the account owner's.
 

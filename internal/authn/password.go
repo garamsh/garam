@@ -192,6 +192,12 @@ func decodeVerifier(v Verifier) (argon2idParams, []byte, []byte, error) {
 	if _, err := fmt.Sscanf(fields[3], "m=%d,t=%d,p=%d", &params.memory, &params.iterations, &params.parallelism); err != nil {
 		return params, nil, nil, ErrPasswordRejected
 	}
+	// argon2 panics on either below one rather than returning, so a row
+	// carrying a zero would answer a sign-in with a 500 instead of the
+	// refusal this function promises. NewVerifier writes neither.
+	if params.iterations < 1 || params.parallelism < 1 {
+		return params, nil, nil, ErrPasswordRejected
+	}
 	salt, err := base64.RawStdEncoding.DecodeString(fields[4])
 	if err != nil {
 		return params, nil, nil, ErrPasswordRejected

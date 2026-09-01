@@ -93,11 +93,14 @@ jobs:
           provenance: false
           sbom: false
           push: true
-          # ADR-0039 left the value to the change that builds the
-          # release: the `/api/*` rewrite target is baked in, so a
-          # published image is bound to one. This is the api Service a
-          # release named `garam` renders, and the chart's own
-          # `ci/minimal-values.yaml` already sets `web.apiUrl` to it.
+          # The `/api/*` rewrite target is baked in, so a published
+          # image is bound to one address: the api Service a release
+          # named `garam` renders, and no other release name (ADR-0056,
+          # taking the choice ADR-0039 left to this workflow).
+          # `make chart` reads this value against that render, so the
+          # two are compared rather than kept equal by hand, and
+          # `deploy/charts/garam/README.md` §Choosing a release name is
+          # where a deployment meets what it binds.
           build-args: |
             GARAM_API_URL=http://garam-api:8080
           tags: ${{ steps.ecr.outputs.registry }}/garam/garam-web:${{ steps.version.outputs.version }}

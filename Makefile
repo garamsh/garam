@@ -75,7 +75,7 @@ TEST_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)
 WEB_E2E_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)/garam?sslmode=disable)
 
 .PHONY: lint format test build gen check-gen check-toolchain e2e db-up db-down backend-up ci template-diff search
-.PHONY: chart chart-lint chart-render chart-identity chart-names chart-guards chart-security chart-package
+.PHONY: chart chart-lint chart-render chart-identity chart-names chart-rewrite chart-guards chart-security chart-package
 .PHONY: web-install web-lint web-format web-test web-build web-gen web-check-gen web-e2e web-image-e2e web-ci
 .PHONY: image-build
 .PHONY: minikube-up minikube-down minikube-start minikube-images minikube-db
@@ -494,7 +494,7 @@ CHART_DEFAULT_VALUES = $(CHART_DIR)/ci/minimal-values.yaml
 # records as the whole of what that target reaches.
 CHART_RESOURCE_NAMES := cpu memory
 
-chart: chart-lint chart-render chart-identity chart-names chart-guards chart-security chart-package
+chart: chart-lint chart-render chart-identity chart-names chart-rewrite chart-guards chart-security chart-package
 
 chart-lint:
 	@echo 'chart-lint: $(words $(CHART_TEMPLATES)) templates, $(words $(CHART_VALUES)) value files (helm lint --strict)'
@@ -614,7 +614,7 @@ chart-identity:
 CHART_LONG_RELEASE := garam-production-eu-west-1-primary-tenant-alpha-01234
 
 chart-names:
-	@echo 'chart-names: $(words $(CHART_VALUES)) value files rendered as $(CHART_LONG_RELEASE) (release length $(shell printf %s '$(CHART_LONG_RELEASE)' | wc -c), Helm caps it at 53)'
+	@echo 'chart-names: $(words $(CHART_VALUES)) value files rendered as $(CHART_LONG_RELEASE) (release length $(shell printf %s '$(CHART_LONG_RELEASE)' | wc -c), Helm caps it at 53) — object names only, $(CHART_DIR)/README.md §What the checks are complete over'
 	@test -n '$(CHART_VALUES)' || { echo 'chart-names: nothing to render — $(CHART_DIR)/ci holds no value file'; exit 1; }
 	@set -e; \
 		out="$$(mktemp -d)"; trap 'rm -rf "$$out"' EXIT; \
@@ -627,6 +627,49 @@ chart-names:
 		over="$$(awk 'length($$0) > 63 { print length($$0)" "$$0 }' "$$out/names" | sort -u)"; \
 		test -z "$$over" || { echo 'chart-names: over the 63-character limit, which an apply refuses and a render does not:'; echo "$$over"; exit 1; }; \
 		echo "chart-names: $$total distinct object names, longest $$(awk '{ if (length($$0) > m) m = length($$0) } END { print m }' "$$out/names"), none over 63"
+
+# chart-rewrite holds the `/api/*` target a release bakes into the web
+# image against the api Service this chart renders under the release
+# name `garam`. Both are true and each is written where the other is not
+# read: the target is a build argument in a workflow, the Service name
+# comes out of a template, and until #861 no check opened two of them at
+# once. Renaming either leaves every published image reaching a name
+# nothing renders, and the failure is a browser request that 404s —
+# every object Ready, no probe on that path (ADR-0023), no log line.
+#
+# The second render is the control. It is the release name chart-names
+# proves the chart survives, and the URL it names is one no published
+# image reaches (ADR-0056), so it is also where the constraint this
+# check records is visible: equality under `garam` proves nothing unless
+# the two renders differ.
+#
+# The build argument is read here and enumerated in
+# scripts/image-build.sh, which asks a different question of the same
+# file — what the release builds, rather than what one image is bound to.
+CHART_BAKED_API_URL = $(shell sed -n 's/^ *GARAM_API_URL=\(.*\)$$/\1/p' .github/workflows/release.yml)
+
+chart-rewrite:
+	@echo 'chart-rewrite: $(CHART_BAKED_API_URL), baked by .github/workflows/release.yml — one URL against the api Service, $(CHART_DIR)/README.md §What the checks are complete over'
+	@test '$(words $(CHART_BAKED_API_URL))' = 1 \
+		|| { echo 'chart-rewrite: .github/workflows/release.yml bakes $(words $(CHART_BAKED_API_URL)) GARAM_API_URL values, expected the one a release is bound to — the parse is broken'; exit 1; }
+	@set -e; \
+		apiurl() { $(HELM) template "$$1" $(CHART_DIR) --values $(CHART_DEFAULT_VALUES) | awk ' \
+			function flush() { if (kind == "Service" && comp == "api") printf "http://%s:%s\n", name, port } \
+			/^---$$/ { flush(); kind = ""; comp = ""; name = ""; port = ""; next } \
+			/^kind: / { kind = $$2 } \
+			/^  name: / { if (name == "") name = $$2 } \
+			/app.kubernetes.io\/component: / { if (comp == "") comp = $$2 } \
+			$$1 == "port:" { if (port == "") port = $$2 } \
+			END { flush() }'; }; \
+		rendered="$$(apiurl garam)"; \
+		test -n "$$rendered" && test "$$(printf '%s\n' "$$rendered" | wc -l)" -eq 1 \
+			|| { echo "chart-rewrite: the render named no single api Service — the parse is broken:"; echo "$$rendered"; exit 1; }; \
+		test "$$rendered" = '$(CHART_BAKED_API_URL)' \
+			|| { echo "chart-rewrite: the release bakes $(CHART_BAKED_API_URL) and release garam renders $$rendered — a published web image reaches a name this chart does not render, and nothing after the install says so"; exit 1; }; \
+		control="$$(apiurl $(CHART_LONG_RELEASE))"; \
+		test "$$control" != '$(CHART_BAKED_API_URL)' \
+			|| { echo "chart-rewrite: release $(CHART_LONG_RELEASE) renders $$control as well, so the equality above holds under every release name and this check reads nothing"; exit 1; }; \
+		echo "chart-rewrite: release garam renders $$rendered; release $(CHART_LONG_RELEASE) renders $$control, which no published web image reaches"
 
 # chart-guards renders each values file under $(CHART_DIR)/ci/refused/
 # and holds that the render is refused, naming the value the file is

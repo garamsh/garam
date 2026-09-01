@@ -5,6 +5,7 @@ The description of how garam is deployed: the five workloads it runs, the ports 
 ## Contents
 - What this is
 - What it renders
+- Choosing a release name
 - Workload identities
 - Values a deployment must supply
 - Not set by this chart
@@ -60,6 +61,37 @@ the workload for the length of the rollout — the state `replicas: 1`
 exists to avoid. The cost is that an upgrade is a gap in service rather
 than a handover, which is the same trade `replicas: 1` already makes for
 a node failure.
+
+## Choosing a release name
+
+Every object here is named after the release, and the name is a
+deployment's to choose — with one exception no render shows. **A
+published web image reaches the api Service a release named `garam`
+renders.** The browser's `/api/*` calls are rewritten to an address baked
+into the image when it is built, and every image
+`.github/workflows/release.yml` publishes is built with
+`http://garam-api:8080`
+([ADR-0056](../../../docs/architecture/adr/0056-a-published-web-image-is-bound-to-the-release-name-garam-and-make-ci-checks-the-binding.md)).
+Under any other release name this chart renders `<release>-garam-api`,
+the rewrite reaches a name that resolves to nothing, and nothing reports
+it: every object is `Ready`, the web app's probes read nothing outside
+the process (ADR-0023), and the first report is a console that shows
+nothing.
+
+So a deployment pinning `image.web.tag` to a published version installs
+under the release name `garam`, or makes `garam-api` resolve to its own
+api Service — a Service of that name over the same selector labels is one
+shape, and rendering it and checking it are that deployment's. A
+deployment that builds its own web image bakes its own address and is
+bound to that one instead.
+
+`make chart` holds the half of this that lives here: what
+`.github/workflows/release.yml` bakes is the api Service this chart
+renders under the release name `garam`, read against a second release
+name that must render something else (§What keeps it true). The other
+half — that the image a deployment pins was built with the address that
+deployment's release renders — is outside every check here (§What the
+checks are complete over).
 
 ## Workload identities
 
@@ -164,11 +196,11 @@ fails without them:
 - `web.apiUrl` — the address the web process reaches `serve api` on,
   baked into the image at build time as the `/api/*` rewrite target and
   read again at runtime by every server-side render
-  (`web/src/lib/garam.ts`), and for a published image it is the value
-  §Pinning a version names. Absent at runtime the process still starts
-  and answers both probes, `/` and the rewrite keep serving, and every
-  server-rendered route answers 500: `web/src/env.ts` parses at import,
-  and only the routes reaching the backend import it.
+  (`web/src/lib/garam.ts`), and for a published image it is the address
+  §Choosing a release name states. Absent at runtime the process still
+  starts and answers both probes, `/` and the rewrite keep serving, and
+  every server-rendered route answers 500: `web/src/env.ts` parses at
+  import, and only the routes reaching the backend import it.
 
 Setting any one `api.google` value makes the rest required — the guard
 is on the set, not on `clientId`, so omitting any one of them refuses
@@ -317,14 +349,6 @@ one version, so a deployment pins one version across the pair
 (ADR-0039). The tags are immutable, so the tag answers what is deployed
 on its own.
 
-Every published web image is built with
-`GARAM_API_URL=http://garam-api:8080` (`.github/workflows/release.yml`),
-which is the api Service a release named `garam` renders. `web.apiUrl`
-must equal what the image was built with and nothing checks that, so a
-deployment pinning `image.web.tag` sets that value and installs under
-that release name, or makes the name resolve some other way. Building
-the image itself is the alternative, and then the value is that build's.
-
 A deployment must be able to pull both references, and how it does that
 is not garam's to decide: the registry admits no anonymous pull and the
 credential it issues expires. `image.pullSecrets` is one way to supply
@@ -358,6 +382,11 @@ count is zero:
   that table declares, every account the chart renders is one a workload
   runs as, the value files that name none render none, and every render
   is repeated under a second release name and must come out identical.
+- `chart-rewrite` — the `/api/*` target `.github/workflows/release.yml`
+  bakes into the web image against the api Service this chart renders
+  under the release name `garam` (§Choosing a release name). It renders
+  again under `chart-names`' release name as the control: that render
+  must name something else, so the equality is read rather than assumed.
 - `chart-security` — the PodSecurity `restricted` comparison against
   every workload §Workload identities declares. The pod spec sets
   `runAsNonRoot: true` and a `seccompProfile` type, every container
@@ -382,8 +411,9 @@ discovered by a deployment.
 
 A check that fires correctly says nothing about what it never reads, so
 what each is complete over is recorded here rather than inferred.
-`chart-render`, `chart-identity`, `chart-security` and `chart-package`
-each point here in the line they print.
+`chart-render`, `chart-identity`, `chart-names`, `chart-rewrite`,
+`chart-security` and `chart-package` each point here in the line they
+print.
 
 - `chart-lint` and `chart-render` are complete over **templates that
   produce YAML**: one that cannot render fails. Neither asks an
@@ -409,7 +439,18 @@ each point here in the line they print.
   reads the name and nothing else: a name inside the limit but wrong,
   or any other field an apiserver would refuse, passes. It asks no
   apiserver either — it holds one rule that an apply enforces, which is
-  why the rule is written here rather than discovered there.
+  why the rule is written here rather than discovered there. It reads no
+  image either, and the release name it renders under is one no published
+  web image serves: the object names survive it and the `/api/*` rewrite
+  does not, which §Choosing a release name states and `chart-rewrite`
+  reads.
+- `chart-rewrite` is complete over **one URL against one rendered
+  Service**: the `GARAM_API_URL` build argument in
+  `.github/workflows/release.yml` against the api Service and port a
+  render under the release name `garam` names. It reads no other build
+  argument, no other workload's address and no image — what a build
+  actually baked is the image's fact, and `make web-image-e2e` is what
+  reads that one.
 - `chart-guards` is complete over **the values named by the files in
   `ci/refused/`**: each must refuse the render and name the value its
   filename names, and `minimal-values.yaml` must still render. It reads
@@ -454,7 +495,11 @@ Two things sit outside any of them:
   binds a role to. That agreement is the contract §Workload identities
   states and no check in this repository can reach.
 - `web.apiUrl` must equal the value the web image was built with, and
-  nothing can check it: the rewrite target is baked in at build time.
+  nothing here can check it: the rewrite target is baked in at build
+  time, so the value is the image's and no render holds it.
+  `chart-rewrite` reaches the published image's half of that — what a
+  release bakes — and a deployment's own image and its own value are
+  outside it.
 
 ## What it is not
 

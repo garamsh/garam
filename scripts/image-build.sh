@@ -5,12 +5,16 @@
 # here would be the copy that goes stale — a check that stops building
 # what the release builds is the divergence it exists to catch.
 #
-# Nothing is pushed. Each image takes `<repository>:ci` locally, which
-# is the name the Makefile hands tests/image/web.sh for the web one.
+# Nothing is pushed. Each image takes `<repository>:ci` locally, and
+# `--names` prints `<context> <repository>:<tag>` for each and builds
+# nothing: a caller needing one image's name reads it from this parse
+# instead of keeping a second copy that goes stale (#870).
 set -eu
 
 workflow=.github/workflows/release.yml
 tag=ci
+names=false
+[ "${1:-}" = --names ] && names=true
 
 # One line per image the release builds:
 #
@@ -58,6 +62,11 @@ images=$(awk '
 	echo "image-build: $workflow builds no image" >&2
 	exit 1
 }
+
+if [ "$names" = true ]; then
+	printf '%s\n' "$images" | awk -v tag="$tag" '{ print $2, $1 ":" tag }'
+	exit 0
+fi
 
 echo "image-build: $(printf '%s\n' "$images" | wc -l | tr -d ' ') images, read from $workflow"
 

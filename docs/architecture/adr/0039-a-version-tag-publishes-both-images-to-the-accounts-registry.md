@@ -256,3 +256,20 @@ named below is therefore a decision, not a demonstrated mechanism.
   chart's two image tags stay required, for a reason this release does
   not supply — `deploy/charts/garam/README.md` §Values a deployment must
   supply states it.
+
+- 2026-09-02 — §Consequences' "A published web image is bound to one API
+  URL" closes "That choice belongs to the change that builds the
+  release, and until it is made `deployment-contract.md` §Not
+  established says the answer is not known", and both halves are spent.
+  #792 made the choice on 2026-09-01, in the same change that built the
+  workflow: `.github/workflows/release.yml` bakes
+  `GARAM_API_URL=http://garam-api:8080`, and that commit (593f5c3)
+  removed the §Not established entry the sentence points at, so the
+  document has answered nothing there since. What the choice was, and
+  what it binds — the api Service a release named `garam` renders, and
+  no other release name — is
+  [ADR-0056](./0056-a-published-web-image-is-bound-to-the-release-name-garam-and-make-ci-checks-the-binding.md),
+  and `deploy/charts/garam/README.md` §Choosing a release name is where
+  a deployer meets it. The rest of the paragraph is untouched and is
+  what ADR-0056 rests on: the target is a build argument baked into the
+  image, so a release fixes one value for every consumer of it.

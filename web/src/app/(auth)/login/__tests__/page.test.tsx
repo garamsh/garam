@@ -133,6 +133,26 @@ describe("login page", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("says the API is unreachable when a dependency garam needs is down", async () => {
+    server.use(
+      http.get(`${API_URL}/me`, () =>
+        HttpResponse.json(
+          { kind: "unavailable", message: "internal error" },
+          { status: 503 },
+        ),
+      ),
+    );
+
+    await renderServerComponent(LoginPage());
+
+    expect(
+      screen.getByRole("heading", { name: "Cannot reach the API" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Sign in" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("sends an already signed-in visitor to the console", async () => {
     await expect(renderServerComponent(LoginPage())).rejects.toThrow(
       "NEXT_REDIRECT:/console",

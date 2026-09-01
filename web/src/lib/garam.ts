@@ -18,9 +18,12 @@ export class GaramApiError extends Error {
 }
 
 /**
- * The backend never answered: the connection failed, so there is no
- * status to carry. It is a different answer from `GaramApiError`, where
- * the backend replied and refused.
+ * garam could not serve the read, for a reason no caller of it can act
+ * on: either the connection failed, so there is no status to carry, or
+ * the backend answered 503 because a dependency it needs — the policy
+ * engine, the database, a sign-in provider — is itself unreachable
+ * (`api/openapi.yaml` §info). It is a different answer from
+ * `GaramApiError`, where the backend reached what it needed and refused.
  */
 export class GaramUnreachableError extends Error {
   constructor(options?: ErrorOptions) {
@@ -58,6 +61,13 @@ export async function garamRequest(
   }).catch((cause: unknown) => {
     throw new GaramUnreachableError({ cause });
   });
+  // A 503 is an outage rather than a refusal: it says a dependency garam
+  // needs is unreachable, and its body names no cause to render
+  // (`api/openapi.yaml` §info). Every reading surface already has a state
+  // for that, so it arrives as the one the connection failure arrives as.
+  if (response.status === 503) {
+    throw new GaramUnreachableError();
+  }
   if (!response.ok) {
     throw new GaramApiError(response.status, await errorMessage(response));
   }

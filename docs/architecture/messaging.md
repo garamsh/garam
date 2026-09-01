@@ -4,6 +4,14 @@ The durable queue a message reaches an agent through (ADR-0013), and
 the consent that lets one cross an organization boundary (ADR-0035).
 Implemented by `internal/message`.
 
+**One of the reports back to a sender is built.** garam answers a post
+no consent relation carries across its boundary with the refusal
+message below, and answers nothing else: a message no agent claims, or
+one that spends its attempts, sits until the thirty-day sweep deletes
+it and its sender is told nothing.
+[overview.md](./overview.md) §Out of scope (today) records the attempts
+half.
+
 | Type | Responsibility |
 |------|----------------|
 | `Message` | one message addressed to a recipient, under an identifier of the queue's own |

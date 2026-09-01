@@ -153,8 +153,10 @@ cannot be regenerated, which carries what the only remedy costs).
 `values.yaml` documents each. These five have no default and the render
 fails without them:
 
-- `image.server.tag`, `image.web.tag` — no release exists, so no default
-  names an image that can be pulled.
+- `image.server.tag`, `image.web.tag` — the version a deployment runs is
+  its own to name. A default would go on naming the release it was
+  written against once the next one lands, with nothing in the chart
+  changed to say so.
 - `database.secretName` — the Secret holding `GARAM_DATABASE_URL`.
 - `machine.keyMaterial.secretName` — the Secret holding the machine
   listener's certificate and key, the garam server root that signed

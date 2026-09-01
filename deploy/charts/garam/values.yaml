@@ -18,11 +18,12 @@
 # runtime rather than at apply.
 
 image:
-  # Both tags are required: no release exists, so no default names an
-  # image that can be pulled (ADR-0039). Both repositories carry a
-  # default and neither may be emptied: an empty one renders
-  # `image: :<tag>`, which no registry resolves and `helm lint` accepts,
-  # so the render refuses it as it refuses a missing tag.
+  # Both tags are required: the version a deployment runs is its own to
+  # name, and a default would go on naming one release after the next
+  # lands (ADR-0039). Both repositories carry a default and neither may
+  # be emptied: an empty one renders `image: :<tag>`, which no registry
+  # resolves and `helm lint` accepts, so the render refuses it as it
+  # refuses a missing tag.
   server:
     repository: 486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam/garam-server
     tag: ""

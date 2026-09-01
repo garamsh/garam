@@ -9,10 +9,10 @@ name: ci
 # pull request's own run had just read — both read the merge result, and
 # six merges on 2026-09-01 produced six such runs at three jobs each — so
 # what it alone covered is a `main` that moved between the two. Nothing
-# mechanical covers that: the merger re-runs the checks on current `main`
-# before merging, and the mechanical replacement is a required status
-# check with "branches must be up to date", a repository setting and so
-# the account owner's.
+# mechanical covers that: AGENTS.md §Roles binds the role that merges to
+# cover it, and the mechanical replacement is a required status check
+# with "branches must be up to date", a repository setting and so the
+# account owner's.
 
 on:
   pull_request:

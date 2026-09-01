@@ -56,3 +56,22 @@ test.describe("agent definitions", () => {
     await expect(page.getByText("be brief", { exact: true })).toBeVisible();
   });
 });
+
+test.describe("agents", () => {
+  test("shows an agent and the states its two parties reported", async ({
+    page,
+    signedIn,
+  }) => {
+    await page.goto(`/console/orgs/${signedIn.orgSlug}/agents`);
+
+    await expect(
+      page.getByText(signedIn.agentIdentifier, { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(signedIn.agentProvisioningState, { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(signedIn.agentRuntimeState, { exact: true }),
+    ).toBeVisible();
+  });
+});

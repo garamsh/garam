@@ -18,6 +18,13 @@ export type Member = components["schemas"]["Member"];
 /** A pending invitation and its bearer token, as the API returns one. */
 export type Invitation = components["schemas"]["Invitation"];
 /**
+ * An agent an operator provisioned outside garam, as the API returns
+ * one. What the operator reports about its pod and what the agent
+ * reports about itself are separate facts, and neither substitutes for
+ * the other (ADR-0053).
+ */
+export type Agent = components["schemas"]["Agent"];
+/**
  * What an organization says an agent should be, as the API returns one.
  * It is a record and not an agent (ADR-0026): no operator has
  * necessarily acted on it, and nothing here reports whether one has.
@@ -74,6 +81,13 @@ export function listProjects(org: string): Promise<OrgRead<Project[]>> {
 export function listOperators(org: string): Promise<OrgRead<Operator[]>> {
   return catchUnreachable(
     garamFetchAuthenticated<Operator[]>(`/orgs/${orgPath(org)}/operators`),
+  );
+}
+
+/** The agents an organization holds. */
+export function listAgents(org: string): Promise<OrgRead<Agent[]>> {
+  return catchUnreachable(
+    garamFetchAuthenticated<Agent[]>(`/orgs/${orgPath(org)}/agents`),
   );
 }
 

@@ -2,6 +2,7 @@ import { HttpResponse, http, type JsonBodyType } from "msw";
 
 import type { User } from "@/features/auth";
 import type {
+  Agent,
   AgentDefinition,
   Group,
   Member,
@@ -50,6 +51,20 @@ export const fieldOne: Operator = {
   createdAt: "2026-01-02T03:04:05Z",
 };
 
+/**
+ * The single agent Acme holds. It is not the agent `fieldAgent`
+ * describes: a definition's GRN is answered here only once an operator
+ * claims it, and nothing joins the two lists.
+ */
+export const reportedAgent: Agent = {
+  grn: "grn:acme:default:agent:1c3d5e7f90a2b4c6",
+  orgGrn: acme.grn,
+  provisioningState: "failed",
+  runtimeState: "disconnected",
+  createdAt: "2026-01-02T03:04:05Z",
+  updatedAt: "2026-01-03T04:05:06Z",
+};
+
 /** The single agent Acme says it should have. */
 export const fieldAgent: AgentDefinition = {
   agentGrn: "grn:acme:default:agent:9f2ac1b40d8e7a35",
@@ -83,6 +98,7 @@ const routes: { path: string; guarded: boolean; body: JsonBodyType }[] = [
   { path: "/orgs/acme/projects", guarded: true, body: [frontend] },
   { path: "/orgs/acme/members", guarded: true, body: [aliceMembership] },
   { path: "/orgs/acme/operators", guarded: true, body: [fieldOne] },
+  { path: "/orgs/acme/agents", guarded: true, body: [reportedAgent] },
   { path: "/orgs/acme/agent-definitions", guarded: true, body: [fieldAgent] },
 ];
 

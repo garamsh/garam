@@ -4,7 +4,12 @@ import { describe, expect, it, vi } from "vitest";
 
 import AgentsPage from "@/app/console/orgs/[org]/agents/page";
 import { renderServerComponent } from "@/testing/render";
-import { API_URL, fieldAgent, signedOut } from "@/testing/mocks/handlers";
+import {
+  API_URL,
+  fieldAgent,
+  reportedAgent,
+  signedOut,
+} from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
 vi.mock("next/navigation", () => ({
@@ -21,6 +26,61 @@ function params(org: string) {
 }
 
 describe("agents section", () => {
+  it("lists an agent by identifier and the two states its parties report", async () => {
+    const { container } = await renderServerComponent(
+      AgentsPage(params("acme")),
+    );
+
+    expect(screen.getByText("1c3d5e7f90a2b4c6")).toBeInTheDocument();
+    expect(screen.getByText("failed")).toBeInTheDocument();
+    expect(screen.getByText("disconnected")).toBeInTheDocument();
+    // ADR-0011: the console addresses a resource by the GRN's last
+    // segment and prints no GRN.
+    expect(container.textContent).not.toContain("grn:");
+  });
+
+  it("marks a state that needs attention apart from one that does not", async () => {
+    server.use(
+      http.get(`${API_URL}/orgs/acme/agents`, () =>
+        HttpResponse.json([
+          reportedAgent,
+          {
+            ...reportedAgent,
+            grn: "grn:acme:default:agent:0a1b2c3d4e5f6071",
+            provisioningState: "ready",
+            runtimeState: "connected",
+          },
+        ]),
+      ),
+    );
+
+    await renderServerComponent(AgentsPage(params("acme")));
+
+    // The property is that the two are told apart without reading the
+    // word, so what is asserted is that their markings differ — not
+    // which colour either one takes.
+    expect(screen.getByText("failed").dataset.variant).not.toEqual(
+      screen.getByText("ready").dataset.variant,
+    );
+    expect(screen.getByText("disconnected").dataset.variant).not.toEqual(
+      screen.getByText("connected").dataset.variant,
+    );
+  });
+
+  it("says the organization holds no agents rather than leaving the area blank", async () => {
+    server.use(
+      http.get(`${API_URL}/orgs/acme/agents`, () => HttpResponse.json([])),
+    );
+
+    await renderServerComponent(AgentsPage(params("acme")));
+
+    expect(
+      screen.getByText(
+        "No operator has reported an agent to this organization.",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("lists a definition by identifier, operator, values and who defined it", async () => {
     const { container } = await renderServerComponent(
       AgentsPage(params("acme")),
@@ -73,9 +133,14 @@ describe("agents section", () => {
     ).toBeInTheDocument();
   });
 
-  it.each([403, 404])("renders not-found on %i", async (status) => {
+  it.each([
+    ["agents", 403],
+    ["agents", 404],
+    ["agent-definitions", 403],
+    ["agent-definitions", 404],
+  ] as const)("renders not-found on %s answering %i", async (path, status) => {
     server.use(
-      http.get(`${API_URL}/orgs/acme/agent-definitions`, () =>
+      http.get(`${API_URL}/orgs/acme/${path}`, () =>
         HttpResponse.json({ kind: "denied", message: "no" }, { status }),
       ),
     );
@@ -95,6 +160,11 @@ describe("agents section", () => {
     ).toBeInTheDocument();
     expect(
       screen.queryByText("This organization has defined no agents."),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "No operator has reported an agent to this organization.",
+      ),
     ).not.toBeInTheDocument();
   });
 

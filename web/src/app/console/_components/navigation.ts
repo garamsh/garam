@@ -1,6 +1,7 @@
 import {
   Bot,
   FolderGit2,
+  Handshake,
   LayoutDashboard,
   ScrollText,
   Server,
@@ -28,6 +29,7 @@ export const CONSOLE_SECTIONS: readonly ConsoleSection[] = [
   { segment: "operators", label: "Operators", icon: Server },
   { segment: "agents", label: "Agents", icon: Bot },
   { segment: "members", label: "Members", icon: UserRound },
+  { segment: "consents", label: "Consents", icon: Handshake },
   { segment: "policies", label: "Policies", icon: ScrollText },
 ];
 

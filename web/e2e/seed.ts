@@ -19,6 +19,13 @@ export type Seed = {
   agentIdentifier: string;
   agentProvisioningState: string;
   agentRuntimeState: string;
+  /**
+   * The organization that has granted its half of a consent pair with
+   * the seeded one, which has not granted its own: the state a relation
+   * waits in until the second half lands (ADR-0035).
+   */
+  partnerOrgSlug: string;
+  partnerOrgName: string;
 };
 
 /** A signed-in user without an organization: the invitee side of a flow. */
@@ -87,8 +94,11 @@ export async function seedSignedInOrg(): Promise<Seed> {
     agentIdentifier: randomBytes(8).toString("hex"),
     agentProvisioningState: "failed",
     agentRuntimeState: "disconnected",
+    partnerOrgSlug: `e2e-partner-${suffix}`,
+    partnerOrgName: `E2E Partner ${suffix}`,
   };
   const orgGrn = `grn:root:default:org:${seed.orgSlug}`;
+  const partnerGrn = `grn:root:default:org:${seed.partnerOrgSlug}`;
 
   const client = new Client({ connectionString: DATABASE_URL });
   await client.connect();
@@ -142,6 +152,26 @@ export async function seedSignedInOrg(): Promise<Seed> {
         seed.agentProvisioningState,
         seed.agentRuntimeState,
       ],
+    );
+    // The partner organization the seeded one may consent with, and
+    // the half that organization has already granted. Consent is
+    // granted per organization by an admin of it, and the seeded user
+    // is an admin of neither side but its own, so the far half is
+    // seeded rather than granted through the console.
+    await client.query(
+      `INSERT INTO orgs (grn, name, created_at, updated_at)
+       VALUES ($1, $2, now(), now())`,
+      [partnerGrn, seed.partnerOrgName],
+    );
+    // The pair is stored ordered and which half a grant moves follows
+    // from where the granter sorts, which is the backend's own rule —
+    // so the row is written the way `GrantConsent` writes it.
+    await client.query(
+      `INSERT INTO message_consents (org_a, org_b, a_consented_at, b_consented_at)
+       VALUES (least($1, $2), greatest($1, $2),
+               CASE WHEN $2 < $1 THEN now() END,
+               CASE WHEN $2 > $1 THEN now() END)`,
+      [orgGrn, partnerGrn],
     );
     await client.query("COMMIT");
   } catch (error) {

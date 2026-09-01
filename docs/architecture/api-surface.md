@@ -121,7 +121,10 @@ and not in the same place on every surface.
   scoped by the caller's own identity, and the renewal route names no
   subject, so there is nothing to authorize past the handshake
   ([ADR-0033](./adr/0033-an-operator-claims-the-agent-a-definition-mints.md),
-  ADR-0046).
+  ADR-0046). A state report is decided the same way and by a second
+  thing besides: the assignment's epoch, which the route refuses a
+  stale one of
+  ([ADR-0053](./adr/0053-an-agent-and-its-operator-report-state-on-the-machine-listener.md)).
 - **What a machine caller may send** is the exception, and it is a
   policy question: the engine is asked about each recipient
   ([ADR-0024](./adr/0024-policy-decides-what-an-agent-sends.md)), after
@@ -338,3 +341,6 @@ document owes an update.
 - [ADR-0050](./adr/0050-a-specification-states-its-listeners-5xx-once-and-declares-none-per-operation.md)
   — a specification states its listener's 5xx once and declares none
   per operation
+- [ADR-0053](./adr/0053-an-agent-and-its-operator-report-state-on-the-machine-listener.md)
+  — an operator and an agent each report state on the machine listener,
+  on a route of its own, fenced by the assignment's epoch

@@ -48,6 +48,14 @@ collaborate on a shared plan.
   follows an expired one is the out-of-band mint (ADR-0032). Nothing
   here revokes a certificate — expiry is still the only revocation
   (ADR-0014).
+- An operator reporting what it sees of an agent's pod, and an agent
+  reporting what it says about itself, each on a route of its own on
+  the machine listener (ADR-0053). They are the two facts ADR-0012 puts
+  on an agent and neither route reaches the other's. A report carries
+  the epoch its assignment is on and is accepted only at the current
+  one, so the pod a replaced operator left running writes nothing; the
+  operator route is bounded by the assignment besides, exactly as the
+  certificate route is.
 - An organization's members reading the agents it holds, over the
   browser API under `/orgs/{org}/agents`. An agent is answered with the
   state its operator reports and the state it reports itself, kept as
@@ -198,12 +206,14 @@ collaborate on a shared plan.
   the chart renders no exposure at all.
 - Workflow execution engine, scheduler, queue.
 - Notifications.
-- The rest of the agent surface. An operator creates an agent and
-  obtains its certificate, and a message is posted, claimed, renewed
-  and completed (see In scope); what the listener does not serve is the
-  state an operator or an agent reports (ADR-0012) and deprovisioning
-  an agent. The adapter carries messages and forwards nothing (see the
-  watching entry below). An agent renews its own certificate on the
+- The rest of the agent surface. An operator creates an agent, obtains
+  its certificate and reports what it sees of the pod, the agent
+  reports itself, and a message is posted, claimed, renewed and
+  completed (see In scope); what the listener does not serve is
+  deprovisioning an agent. A state is reported and never expired, so
+  nothing tells an agent that has gone quiet from one that is running
+  (ADR-0053). The adapter carries messages and forwards nothing (see
+  the watching entry below). An agent renews its own certificate on the
   certificate route (ADR-0040) and an operator renews its own by
   presenting it (ADR-0046); an operator's first still arrives out of
   band (ADR-0015, ADR-0032), and how it is delivered is not decided

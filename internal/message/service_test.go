@@ -21,14 +21,17 @@ import (
 // the round trip in tests/e2e, against the Postgres that decides
 // exclusivity, leases and the attempt bound.
 type queue struct {
-	mu          sync.Mutex
-	stored      []*message.Message
-	claims      int
-	renewals    int
-	completions int
-	lease       time.Duration
-	ceiling     time.Duration
-	maxAttempts int
+	mu           sync.Mutex
+	stored       []*message.Message
+	claims       int
+	renewals     int
+	completions  int
+	statuses     int
+	lease        time.Duration
+	ceiling      time.Duration
+	maxAttempts  int
+	statusSender grn.GRN
+	statusID     message.ID
 }
 
 func (q *queue) Enqueue(_ context.Context, m *message.Message) (*message.Message, error) {
@@ -61,11 +64,19 @@ func (q *queue) Complete(_ context.Context, _ grn.GRN, _ message.ClaimID) error 
 	return nil
 }
 
+func (q *queue) Status(_ context.Context, sender grn.GRN, id message.ID, maxAttempts int) (*message.Status, error) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.statuses++
+	q.statusSender, q.statusID, q.maxAttempts = sender, id, maxAttempts
+	return message.NewStatus(id, message.StatePending, 0, time.Now().UTC()), nil
+}
+
 // reads is how many times the service went to the queue, by any method.
 func (q *queue) reads() int {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	return q.claims + q.renewals + q.completions
+	return q.claims + q.renewals + q.completions + q.statuses
 }
 
 // brief is a configuration a test can wait through. The delivery
@@ -256,4 +267,37 @@ func TestService_RefusesABodyPastTheBoundBeforeStoringIt(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, at, stored.Body())
 	assert.Len(t, store.stored, 1, "a body at the bound is stored")
+}
+
+// TestService_StatusReadsUnderTheCallerAsTheSender is the bound on the
+// read from the sender's side: the queue is asked for the caller's own
+// messages, so an identifier another identity's message carries reaches
+// nothing. The attempt bound travels with the read, so what a sender is
+// told and what the claim predicate would do are one number rather than
+// two readings of the same columns.
+func TestService_StatusReadsUnderTheCallerAsTheSender(t *testing.T) {
+	ctx := context.Background()
+	store := &queue{}
+	s, err := message.NewService(store, brief())
+	require.NoError(t, err)
+
+	status, err := s.Status(ctx, senderGRN(), "message-1")
+	require.NoError(t, err)
+	assert.Equal(t, message.ID("message-1"), status.ID())
+	assert.Equal(t, senderGRN(), store.statusSender, "the read named a sender the caller had not proved")
+	assert.Equal(t, message.ID("message-1"), store.statusID)
+	assert.Equal(t, message.DefaultAttempts, store.maxAttempts,
+		"the read is bounded by the attempts the claim predicate filters on")
+
+	// A configured bound reaches the read as readily as the default one,
+	// so the state and the claim cannot be decided against different
+	// numbers.
+	cfg := brief()
+	cfg.Attempts = message.MaxAttempts
+	configured := &queue{}
+	s, err = message.NewService(configured, cfg)
+	require.NoError(t, err)
+	_, err = s.Status(ctx, senderGRN(), "message-2")
+	require.NoError(t, err)
+	assert.Equal(t, message.MaxAttempts, configured.maxAttempts)
 }

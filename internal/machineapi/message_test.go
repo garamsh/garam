@@ -2,10 +2,12 @@ package machineapi_test
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -130,9 +132,15 @@ type messageCall struct {
 	caller    grn.GRN
 	recipient grn.GRN
 	claim     message.ClaimID
+	id        message.ID
 	key       string
 	body      string
 }
+
+// storedAt is when the queue stored the message this double answers a
+// status for. It is fixed so the wire form is an equality rather than a
+// window.
+var storedAt = time.Date(2026, time.September, 1, 12, 0, 0, 0, time.UTC)
 
 // messageService is a message.Service recording what the surface passed
 // it. It hands back no claim: one is built by the store that read the
@@ -170,6 +178,14 @@ func (s *messageService) Renew(_ context.Context, caller, recipient grn.GRN, id 
 func (s *messageService) Complete(_ context.Context, caller, recipient grn.GRN, id message.ClaimID) error {
 	s.calls = append(s.calls, messageCall{method: "complete", caller: caller, recipient: recipient, claim: id})
 	return s.err
+}
+
+func (s *messageService) Status(_ context.Context, caller grn.GRN, id message.ID) (*message.Status, error) {
+	s.calls = append(s.calls, messageCall{method: "status", caller: caller, id: id})
+	if s.err != nil {
+		return nil, s.err
+	}
+	return message.NewStatus(id, message.StateExhausted, 2, storedAt), nil
 }
 
 // send performs one request carrying a JSON body and returns the status
@@ -555,4 +571,50 @@ func TestServer_StoresNothingWhenGroupMembershipCannotBeRead(t *testing.T) {
 	assert.Equal(t, http.StatusServiceUnavailable, status, body)
 	assert.Equal(t, []messageCall{posted(sender, sibling, "key-1")}, messages.calls,
 		"a message decided without the sender's groups reached the queue")
+}
+
+// TestServer_ReadsAMessageStatusUnderTheSenderTheCertificateNames pins
+// what the surface does with a status read: the sender is the identity
+// the connection proved and the path carries the identifier alone, so
+// nothing a caller writes can name another sender's message. The answer
+// carries no body — a completed message no longer has one (ADR-0034) —
+// so the field set is asserted rather than the one field's absence.
+func TestServer_ReadsAMessageStatusUnderTheSenderTheCertificateNames(t *testing.T) {
+	sender := agentGRN("acme", "9f8e7d6c5b4a3021")
+	messages := &messageService{}
+	url, client := listener(t, &agentService{}, nil, messages, consenting(), unwatched(t), &memberGroups{}, &engine{}, sender)
+
+	status, body := send(t, client, http.MethodGet, url+"/messages/0a1b2c3d", "")
+	require.Equal(t, http.StatusOK, status, body)
+	assert.Equal(t, []messageCall{{method: "status", caller: sender, id: "0a1b2c3d"}}, messages.calls,
+		"the read named a sender the certificate had not")
+
+	var answered map[string]any
+	require.NoError(t, json.Unmarshal([]byte(body), &answered))
+	assert.Equal(t, map[string]any{
+		"id":        "0a1b2c3d",
+		"state":     string(message.StateExhausted),
+		"attempts":  float64(2),
+		"createdAt": storedAt.Format(time.RFC3339),
+	}, answered)
+}
+
+// TestServer_AnswersAMessageItHasNoneOfAsNotFound covers the refusal
+// the bound produces: a message the caller did not send, one that never
+// existed and one the sweep deleted reach the surface as the same
+// domain error and leave as the same status. The read the queue answers
+// is the control beside it — the 404 is the error travelling rather
+// than a route that refuses whoever asks.
+func TestServer_AnswersAMessageItHasNoneOfAsNotFound(t *testing.T) {
+	sender := agentGRN("acme", "9f8e7d6c5b4a3021")
+	messages := &messageService{}
+	url, client := listener(t, &agentService{}, nil, messages, consenting(), unwatched(t), &memberGroups{}, &engine{}, sender)
+
+	status, body := send(t, client, http.MethodGet, url+"/messages/0a1b2c3d", "")
+	require.Equal(t, http.StatusOK, status, body)
+
+	messages.err = message.ErrNoSuchMessage
+	status, body = send(t, client, http.MethodGet, url+"/messages/0a1b2c3d", "")
+	assert.Equal(t, http.StatusNotFound, status)
+	assert.Contains(t, body, `"kind":"`+errorx.KindNotFound.String()+`"`)
 }

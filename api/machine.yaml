@@ -58,7 +58,9 @@ tags:
       posts inside its own organization to the recipients its policies
       reach (ADR-0024), and outside it only where both organizations
       consent (ADR-0035). It acts on messages for the agent it
-      authenticates as and no other.
+      authenticates as and no other, and it reads back the state of the
+      messages it sent and of no others (ADR-0055). garam announces
+      none of that: a sender that wants to know asks.
   - name: watch
     description: >-
       What an agent is saying now, on its way to the people watching it
@@ -431,6 +433,56 @@ paths:
           $ref: '#/components/responses/Error'
         '403':
           $ref: '#/components/responses/Error'
+  /messages/{message}:
+    get:
+      operationId: getMessageStatus
+      tags: [message]
+      summary: Read how far a message the caller sent has got.
+      description: >-
+        What garam knows about the message and the sender does not: the
+        state it is in, how many attempts it has spent, and when garam
+        stored it (ADR-0055). The recipient, the key and the body were
+        the sender's own submission and are not answered back.
+
+        The caller reads the messages it sent and no others. A message
+        another identity sent, one that never existed, and one the
+        thirty-day sweep has deleted are all `404`: nothing about the
+        queue outside the caller's own messages is learnable by asking.
+        That makes the answer to an expired message its absence rather
+        than a state — a sender holding the `201` knows the message was
+        stored, and the sweep is the only thing that removes a stored
+        one (ADR-0034).
+
+        There is no state meaning expired for the same reason: a
+        message past the retention window that the sweep has not
+        reached yet is still handed to a reader, so calling it expired
+        would name something the queue does not do. `createdAt` is what
+        a sender measures the window against.
+
+        The body is never answered. A completed message no longer has
+        one (ADR-0034), so a field carrying it would be present in some
+        states and absent in others, and its absence would mean two
+        things.
+
+        garam reports none of this on its own. A post refused across an
+        organization boundary is answered with the refusal message
+        rather than the one submitted (see `postMessage`), and that
+        refusal's sender is not the caller — so its identifier is not
+        one this route answers, and there is nothing to track: the
+        refusal arrives on the caller's own queue.
+      parameters:
+        - $ref: '#/components/parameters/message'
+      responses:
+        '200':
+          description: How far the message has got.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageStatus'
+        '401':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
   /agents/{agent}/claims:
     post:
       operationId: claimMessage
@@ -573,6 +625,14 @@ components:
       required: true
       description: Agent GRN, as `createAgent` or `listDefinitions` returned it.
       x-go-name: AgentGrn
+      schema:
+        type: string
+    message:
+      name: message
+      in: path
+      required: true
+      description: Message identifier, as `postMessage` returned it.
+      x-go-name: MessageId
       schema:
         type: string
   schemas:
@@ -778,6 +838,45 @@ components:
         createdAt:
           type: string
           format: date-time
+    MessageState:
+      type: string
+      description: >-
+        How far a message has got. `pending` is waiting for a reader or
+        waiting to be handed out again; `claimed` is held by a reader
+        whose lease has not run out; `completed` is reported delivered;
+        `exhausted` has spent its attempts and is handed out no further
+        (ADR-0018). Nothing here means expired — a message the sweep
+        deleted is answered by `getMessageStatus` as one that is not
+        there (ADR-0055).
+      enum: [pending, claimed, completed, exhausted]
+    MessageStatus:
+      type: object
+      description: >-
+        What garam knows about one message and its sender does not. It
+        carries no body: the sender wrote it, and a completed message
+        no longer has one (ADR-0034).
+      required: [id, state, attempts, createdAt]
+      properties:
+        id:
+          type: string
+          description: The queue's identifier for the message, as `postMessage` answered with.
+        state:
+          $ref: '#/components/schemas/MessageState'
+        attempts:
+          type: integer
+          minimum: 0
+          description: >-
+            How many times the message has been handed to a reader.
+            Zero is a message nothing has looked at yet, and a rising
+            count on a message that is not `completed` is a turn
+            failing the same way each time (ADR-0018).
+        createdAt:
+          type: string
+          format: date-time
+          description: >-
+            When garam stored the message. An undelivered message is
+            deleted thirty days after it, so this is what a sender
+            measures the retention window against (ADR-0034).
     Claim:
       type: object
       description: >-

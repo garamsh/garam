@@ -10,9 +10,10 @@ import (
 // Store is the queue itself: every message lives in it, and a reader
 // reaches one only by claiming it (ADR-0013).
 //
-// Every method past Enqueue takes the recipient whose queue it acts on,
-// so what a caller may reach is decided by one GRN rather than by
-// holding an identifier nobody else guessed.
+// Every method past Enqueue takes the GRN whose messages it acts on —
+// the recipient for the queue's own operations, the sender for the read
+// of one message's state — so what a caller may reach is decided by one
+// GRN rather than by holding an identifier nobody else guessed.
 type Store interface {
 	// Enqueue stores the message and returns what is stored. A sender
 	// key already used returns the message stored under it, so a sender
@@ -34,4 +35,10 @@ type Store interface {
 	// ErrStaleClaim when the claim has since been handed on. Completing
 	// twice with the same claim reports the same delivery.
 	Complete(ctx context.Context, recipient grn.GRN, id ClaimID) error
+	// Status returns how far the sender's message has got, or
+	// ErrNoSuchMessage when that sender stored none under the
+	// identifier. maxAttempts is the bound Claim hands the message out
+	// under, so the state answered here and the queue's own decision to
+	// hand it out again read the same bound.
+	Status(ctx context.Context, sender grn.GRN, id ID, maxAttempts int) (*Status, error)
 }

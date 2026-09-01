@@ -125,6 +125,10 @@ and not in the same place on every surface.
   thing besides: the assignment's epoch, which the route refuses a
   stale one of
   ([ADR-0053](./adr/0053-an-agent-and-its-operator-report-state-on-the-machine-listener.md)).
+  A sender reading its own message's state is scoped the same way from
+  the other side — the caller is the sender the row is matched on, so a
+  message it did not send answers as one that is not there
+  ([ADR-0055](./adr/0055-a-sender-reads-the-state-of-a-message-it-sent.md)).
 - **What a machine caller may send** is the exception, and it is a
   policy question: the engine is asked about each recipient
   ([ADR-0024](./adr/0024-policy-decides-what-an-agent-sends.md)), after
@@ -350,3 +354,6 @@ document owes an update.
 - [ADR-0053](./adr/0053-an-agent-and-its-operator-report-state-on-the-machine-listener.md)
   — an operator and an agent each report state on the machine listener,
   on a route of its own, fenced by the assignment's epoch
+- [ADR-0055](./adr/0055-a-sender-reads-the-state-of-a-message-it-sent.md)
+  — a sender reads the state of a message it sent, and garam announces
+  nothing

@@ -4,22 +4,25 @@ The durable queue a message reaches an agent through (ADR-0013), and
 the consent that lets one cross an organization boundary (ADR-0035).
 Implemented by `internal/message`.
 
-**One of the reports back to a sender is built.** garam answers a post
-no consent relation carries across its boundary with the refusal
-message below, and answers nothing else: a message no agent claims, or
-one that spends its attempts, sits until the thirty-day sweep deletes
-it and its sender is told nothing. That report is garam's own
-obligation, taken because the platform makes no such report itself
-(ADR-0018). [overview.md](./overview.md) §Out of scope (today) records
-the attempts half.
+**garam announces nothing to a sender, and one of the two reports it
+owes is built.** It answers a post no consent relation carries across
+its boundary with the refusal message below, and announces nothing
+else: a message no agent claims, or one that spends its attempts, sits
+until the thirty-day sweep deletes it and nobody is told. The
+announcement at exhaustion is garam's own obligation, taken because the
+platform makes no such report itself (ADR-0018), and it is unbuilt —
+[overview.md](./overview.md) §Out of scope (today) records it. What a
+sender can do instead is ask, which it could not before: it reads the
+state of a message it sent, described below (ADR-0055).
 
 | Type | Responsibility |
 |------|----------------|
 | `Message` | one message addressed to a recipient, under an identifier of the queue's own |
 | `Claim` | one reader's hold on a message, and the token that fences it |
+| `Status` | how far one message has got, as the sender that posted it may observe it (ADR-0055) |
 | `Consent` | one pair of organizations and the two halves of their cross-organization consent (ADR-0035); it stands while both halves do |
 | `Config` | the delivery parameters: lease, ceiling, attempts, and how long a claim waits |
-| `Service` | what a machine identity does to its own queue: post, claim, renew, complete |
+| `Service` | what a machine identity does to its own queue: post, claim, renew, complete, and read the state of what it sent |
 | `ConsentStore` | the consent relation: an organization granting or withdrawing its own half, and the send path asking whether both halves stand |
 | `ActionSend` | the action a policy names to decide what one identity may send to another |
 
@@ -77,16 +80,33 @@ it was taken — a renewal reaching past that is held at it, so a holder
 that renews forever loses the claim rather than leaving a message
 neither completed nor redelivered.
 
+A sender reads how far one message it sent has got, and reads no
+other's (ADR-0055). The four states are the ones the row already
+distinguishes: waiting for a reader, held by one whose lease stands,
+reported delivered, or handed out no further because the attempts are
+spent. Nothing was added to record them — the columns the claim and the
+completion write are what the read serves — and the state rests on the
+same lease Postgres measures and the same attempt bound the claim
+filters on, so what a sender is told and what the queue will do next
+cannot disagree. There is no state meaning expired: the sweep deletes
+an expired message whole and nothing else deletes one, so absence is
+the answer, and a message past the window the sweep has not reached is
+still handed out. The read carries no body — a completed message has
+none — and neither the recipient nor the key, which the sender
+submitted.
+
 `Service` is what a machine identity does to its own queue, and every
-method but posting takes the calling identity beside the recipient
-whose queue it names. One comparison decides it: a GRN carries its
-organization, so refusing a caller that is not the recipient refuses
-another organization's agent by the same line, and no path reaches a
-message around it. Whom a sender may post to is not decided here — it
-is a policy question the machine listener asks (ADR-0024).
-What this domain owns of it is the action constant a policy names,
-because it is the domain that defines sending. A claim waits for a
-message rather than answering
+method between posting and the read above takes the calling identity
+beside the recipient whose queue it names. One comparison decides it: a
+GRN carries its organization, so refusing a caller that is not the
+recipient refuses another organization's agent by the same line, and no
+path reaches a message around it. The read is bounded from the other
+side by the same kind of comparison: the caller is the sender the row
+is matched on, so an identifier alone reaches nothing. Whom a sender
+may post to is not decided here — it is a policy question the machine
+listener asks (ADR-0024). What this domain owns of it is the action
+constant a policy names, because it is the domain that defines sending.
+A claim waits for a message rather than answering
 an empty queue at once, and it waits by re-reading the queue: a
 message becomes ready when a lease runs out as well as when a sender
 stores one, and a lease running out is a moment passing that nothing

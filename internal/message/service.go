@@ -61,13 +61,17 @@ type Config struct {
 
 // Service is what a machine identity does to its own queue: it posts a
 // message to a recipient, claims one addressed to itself, holds the
-// claim while it works, and reports the message delivered.
+// claim while it works, reports the message delivered, and reads how
+// far a message it sent has got.
 //
-// Every method but Post takes the calling identity and the recipient
-// whose queue it names, and answers only where the two are the same
-// identity. That is the whole of the authorization here: a GRN carries
-// its organization, so the one comparison refuses another
+// Every method between Post and Status takes the calling identity and
+// the recipient whose queue it names, and answers only where the two
+// are the same identity. That is the whole of the authorization here: a
+// GRN carries its organization, so the one comparison refuses another
 // organization's agent as readily as a sibling of the caller's own.
+// Status is bounded the same way from the other side — it reads under
+// the caller as the sender, so a message the caller did not send is not
+// its message to read (ADR-0055).
 type Service interface {
 	// Post stores a message from sender to recipient and answers with
 	// what is stored. Posting the same idempotency key twice stores one
@@ -82,6 +86,11 @@ type Service interface {
 	Renew(ctx context.Context, caller, recipient grn.GRN, id ClaimID) (*Claim, error)
 	// Complete reports the claimed message delivered.
 	Complete(ctx context.Context, caller, recipient grn.GRN, id ClaimID) error
+	// Status answers how far a message the caller sent has got, or
+	// ErrNoSuchMessage when the caller sent none under the identifier
+	// (ADR-0055). It is the one method a sender rather than a recipient
+	// calls, and the sender it reads under is the caller itself.
+	Status(ctx context.Context, caller grn.GRN, id ID) (*Status, error)
 }
 
 type service struct {
@@ -182,6 +191,15 @@ func (s *service) Complete(ctx context.Context, caller, recipient grn.GRN, id Cl
 		return err
 	}
 	return s.store.Complete(ctx, recipient, id)
+}
+
+// Status reads under the caller as the sender, so there is no second
+// identity to compare and nothing to refuse: a message the caller did
+// not send matches no row. The attempt bound travels with the read, so
+// the state a sender is told is the one the claim predicate would act
+// on rather than a second reading of the same columns.
+func (s *service) Status(ctx context.Context, caller grn.GRN, id ID) (*Status, error) {
+	return s.store.Status(ctx, caller, id, s.cfg.Attempts)
 }
 
 // addresses refuses a caller acting on a queue that is not its own. The

@@ -13,24 +13,48 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for MessageState.
+const (
+	MessageStateClaimed   MessageState = "claimed"
+	MessageStateCompleted MessageState = "completed"
+	MessageStateExhausted MessageState = "exhausted"
+	MessageStatePending   MessageState = "pending"
+)
+
+// Valid indicates whether the value is a known member of the MessageState enum.
+func (e MessageState) Valid() bool {
+	switch e {
+	case MessageStateClaimed:
+		return true
+	case MessageStateCompleted:
+		return true
+	case MessageStateExhausted:
+		return true
+	case MessageStatePending:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ProvisioningState.
 const (
-	Failed      ProvisioningState = "failed"
-	Pending     ProvisioningState = "pending"
-	Provisioned ProvisioningState = "provisioned"
-	Ready       ProvisioningState = "ready"
+	ProvisioningStateFailed      ProvisioningState = "failed"
+	ProvisioningStatePending     ProvisioningState = "pending"
+	ProvisioningStateProvisioned ProvisioningState = "provisioned"
+	ProvisioningStateReady       ProvisioningState = "ready"
 )
 
 // Valid indicates whether the value is a known member of the ProvisioningState enum.
 func (e ProvisioningState) Valid() bool {
 	switch e {
-	case Failed:
+	case ProvisioningStateFailed:
 		return true
-	case Pending:
+	case ProvisioningStatePending:
 		return true
-	case Provisioned:
+	case ProvisioningStateProvisioned:
 		return true
-	case Ready:
+	case ProvisioningStateReady:
 		return true
 	default:
 		return false
@@ -144,6 +168,24 @@ type Message struct {
 	Sender         string `json:"sender"`
 }
 
+// MessageState How far a message has got. `pending` is waiting for a reader or waiting to be handed out again; `claimed` is held by a reader whose lease has not run out; `completed` is reported delivered; `exhausted` has spent its attempts and is handed out no further (ADR-0018). Nothing here means expired — a message the sweep deleted is answered by `getMessageStatus` as one that is not there (ADR-0055).
+type MessageState string
+
+// MessageStatus What garam knows about one message and its sender does not. It carries no body: the sender wrote it, and a completed message no longer has one (ADR-0034).
+type MessageStatus struct {
+	// Attempts How many times the message has been handed to a reader. Zero is a message nothing has looked at yet, and a rising count on a message that is not `completed` is a turn failing the same way each time (ADR-0018).
+	Attempts int `json:"attempts"`
+
+	// CreatedAt When garam stored the message. An undelivered message is deleted thirty days after it, so this is what a sender measures the retention window against (ADR-0034).
+	CreatedAt time.Time `json:"createdAt"`
+
+	// Id The queue's identifier for the message, as `postMessage` answered with.
+	Id string `json:"id"`
+
+	// State How far a message has got. `pending` is waiting for a reader or waiting to be handed out again; `claimed` is held by a reader whose lease has not run out; `completed` is reported delivered; `exhausted` has spent its attempts and is handed out no further (ADR-0018). Nothing here means expired — a message the sweep deleted is answered by `getMessageStatus` as one that is not there (ADR-0055).
+	State MessageState `json:"state"`
+}
+
 // MessageSubmission What a sender supplies. Who is sending is the certificate's to say.
 type MessageSubmission struct {
 	// Body The message itself. The queue carries it and never reads it, so it may be empty. It is bounded (ADR-0034): `maxLength` counts characters, so the bound is 65536 of them — well past any plausible agent turn — and UTF-8 spends up to four bytes on each, so a body weighs up to 256 KiB. The bound is what keeps the table's worst case arithmetic, and 256 KiB is the figure that arithmetic runs on: size a buffer or a row estimate against it, not against the character count.
@@ -194,6 +236,9 @@ type AgentGrn = string
 
 // ClaimId defines model for claim.
 type ClaimId = string
+
+// MessageId defines model for message.
+type MessageId = string
 
 // ReportProvisioningStateJSONRequestBody defines body for ReportProvisioningState for application/json ContentType.
 type ReportProvisioningStateJSONRequestBody = ProvisioningStateReport
@@ -248,6 +293,9 @@ type ServerInterface interface {
 	// PostMessage Post a message to a recipient.
 	// (POST /messages)
 	PostMessage(w http.ResponseWriter, r *http.Request)
+	// GetMessageStatus Read how far a message the caller sent has got.
+	// (GET /messages/{message})
+	GetMessageStatus(w http.ResponseWriter, r *http.Request, messageId MessageId)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -555,6 +603,32 @@ func (siw *ServerInterfaceWrapper) PostMessage(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// GetMessageStatus operation middleware
+func (siw *ServerInterfaceWrapper) GetMessageStatus(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "message" -------------
+	var messageId MessageId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "message", r.PathValue("message"), &messageId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "message", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMessageStatus(w, r, messageId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -684,6 +758,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/definitions", wrapper.ListDefinitions)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/definitions/{agent}/claim", wrapper.ClaimDefinition)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/messages", wrapper.PostMessage)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/messages/{message}", wrapper.GetMessageStatus)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/claims", wrapper.ClaimMessage)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/claims/{claim}/renewal", wrapper.RenewClaim)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/turn-events", wrapper.ForwardTurnEvent)

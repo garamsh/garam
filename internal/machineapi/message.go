@@ -182,6 +182,24 @@ func subjectOrg(sender grn.GRN) grn.GRN {
 	return grn.New(grn.RootOwner, grn.DefaultProject, serviceTypeOrg, sender.Organization)
 }
 
+// GetMessageStatus answers how far a message the caller sent has got.
+// The sender is the identity the connection proved, so the identifier
+// in the path reaches nothing on its own: a message another identity
+// sent is answered as one that is not there, which is also the answer
+// for one the sweep deleted (ADR-0055).
+func (s *Server) GetMessageStatus(w http.ResponseWriter, r *http.Request, messageID machinegen.MessageId) {
+	sender, ok := caller(w, r)
+	if !ok {
+		return
+	}
+	status, err := s.messages.Status(r.Context(), sender, message.ID(messageID))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, statusBody(status))
+}
+
 // ClaimMessage hands the caller the next message addressed to the agent
 // the path names, waiting for one rather than answering an empty queue
 // at once. A caller that is not that agent is refused. The answer
@@ -273,6 +291,18 @@ func claimBody(c *message.Claim, watchers int) machinegen.Claim {
 		Attempt:   c.Message().Attempts(),
 		Watchers:  watchers,
 		Message:   messageBody(c.Message()),
+	}
+}
+
+// statusBody renders a message's state as the spec's MessageStatus. The
+// body is not among the fields: the sender wrote it, and a completed
+// message no longer carries one (ADR-0034).
+func statusBody(s *message.Status) machinegen.MessageStatus {
+	return machinegen.MessageStatus{
+		Id:        string(s.ID()),
+		State:     machinegen.MessageState(s.State()),
+		Attempts:  s.Attempts(),
+		CreatedAt: s.CreatedAt(),
 	}
 }
 

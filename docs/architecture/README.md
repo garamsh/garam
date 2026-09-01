@@ -119,6 +119,7 @@ ADRs:
 - [0052](./adr/0052-a-concern-is-owned-by-the-boundary-whose-subject-matter-it-is.md) — a concern is owned by the boundary whose subject matter it is, not by the one it was extracted from
 - [0053](./adr/0053-an-agent-and-its-operator-report-state-on-the-machine-listener.md) — an operator and an agent each report state on the machine listener, fenced by the assignment's epoch
 - [0054](./adr/0054-the-concrete-types-rule-binds-every-boundary-not-only-a-domain.md) — the concrete-types rule binds every boundary, not only a domain
+- [0055](./adr/0055-a-sender-reads-the-state-of-a-message-it-sent.md) — a sender reads the state of a message it sent, and garam announces nothing
 
 ## Rules for edits
 

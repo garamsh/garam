@@ -280,6 +280,63 @@ func (q *Queries) ListConsents(ctx context.Context, org string) ([]MessageConsen
 	return items, nil
 }
 
+const messageStatus = `-- name: MessageStatus :one
+SELECT
+    id,
+    attempts,
+    created_at,
+    CASE
+        WHEN completed_at IS NOT NULL THEN 'completed'
+        WHEN claim_expires_at > now() THEN 'claimed'
+        WHEN attempts >= $1 THEN 'exhausted'
+        ELSE 'pending'
+    END::text AS state
+FROM messages
+WHERE id = $2 AND sender_grn = $3
+`
+
+type MessageStatusParams struct {
+	MaxAttempts int32
+	ID          string
+	SenderGrn   string
+}
+
+type MessageStatusRow struct {
+	ID        string
+	Attempts  int32
+	CreatedAt pgtype.Timestamptz
+	State     string
+}
+
+// MessageStatus reads how far one sender's message has got (ADR-0055).
+// The sender is matched beside the identifier, so the identifier alone
+// reaches nothing and a message another identity sent is answered like
+// one that is not there.
+//
+// The state is decided here rather than in the process, and by the
+// expressions ClaimMessage picks a message with: whether a claim still
+// stands is `now()` against the same lease column Postgres already
+// measures, and the attempt bound is the one the claim filters on,
+// passed from the same configuration. So a message answered `pending`
+// is one that claim would pick and a message answered `exhausted` is
+// one it would skip. The body is not selected: a completed message has
+// none (ADR-0034) and a sender wrote its own.
+//
+// No state means expired. The sweep deletes an expired message whole,
+// and a message past the window it has not reached yet is still handed
+// out, so absence is the answer and this query returns no row for it.
+func (q *Queries) MessageStatus(ctx context.Context, arg MessageStatusParams) (MessageStatusRow, error) {
+	row := q.db.QueryRow(ctx, messageStatus, arg.MaxAttempts, arg.ID, arg.SenderGrn)
+	var i MessageStatusRow
+	err := row.Scan(
+		&i.ID,
+		&i.Attempts,
+		&i.CreatedAt,
+		&i.State,
+	)
+	return i, err
+}
+
 const renewClaim = `-- name: RenewClaim :one
 UPDATE messages SET
     claim_expires_at = least(now() + $1::interval, claimed_at + $2::interval)

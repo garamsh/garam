@@ -19,11 +19,10 @@ on:
 
 permissions: read-all
 
-# The concurrency group takes the form ci.yml states, and `github.ref`
-# is what a superseded push moves. `paths-ignore` is evaluated before
-# it: a push touching only `docs/` starts no run of this workflow and
-# so cancels none, which leaves the running one reading the image
-# content the new head still has.
+# The concurrency group takes the form ci.yml states. `paths-ignore`
+# is read before it, so a push touching only `docs/` starts no run
+# here and cancels none — leaving the running one reading image
+# content the new head has not changed.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true

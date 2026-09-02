@@ -13,13 +13,12 @@ on:
 
 permissions: read-all
 
-# No concurrency group, and the absence is the guard rather than the
+# No concurrency group, and the absence is the guard rather than a
 # `cancel-in-progress: false` that would read like one. A group cancels
-# a *pending* run of that group when a newer one queues behind it,
-# whichever way `cancel-in-progress` is set, and a release run that
-# never starts publishes nothing under the tag that asked for it. A
-# cancelled one is worse still: the server image is pushed first, the
-# repositories are IMMUTABLE, and the repair is the next version
+# a pending run of that group when a newer one queues behind it,
+# whichever way that key is set, so a `vX.Y.Z` tag could publish
+# nothing; and a run cancelled between the two pushes leaves the
+# version half-published, which only the next version repairs
 # (ADR-0039 §Consequences).
 
 jobs:

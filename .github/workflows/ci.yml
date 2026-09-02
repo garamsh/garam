@@ -20,11 +20,10 @@ on:
 permissions: read-all
 
 # A push that supersedes a head cancels the run reading the old one.
-# `pull_request` is the only trigger, so `github.ref` is
-# `refs/pull/<n>/merge` and names the pull request on its own — the
-# fallback #899 proposed alongside it is unreachable here.
-# `github.workflow` is what keeps this group apart from images.yml's:
-# a group is scoped to the repository, not to the workflow.
+# `pull_request` is the only trigger, so `github.ref` is the pull
+# request's merge ref: one value per pull request, unchanged by a push
+# to it. `github.workflow` keeps this group apart from images.yml's, a
+# group being scoped to the repository.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true

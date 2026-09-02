@@ -1,9 +1,10 @@
-# Build context for deploy/local/Dockerfile: the Go sources, migrations
-# and manifests only.
+# Build context for deploy/local/Dockerfile, the only Dockerfile built
+# from this root. An entry belongs below when the build stage does not
+# compile it and the runtime stage does not ship it.
 .git
 .github
 docs
 web
 deploy
-tests/e2e
+tests
 *.md

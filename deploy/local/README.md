@@ -14,12 +14,12 @@ local Kubernetes stack in `minikube/`, which generates that key material
 and hands the process a file it owns.
 
 This compose file is also what the test gates run against. `make db-up`
-starts only its `postgres` service for the Go e2e tests, and
-`make db-down` removes that service again; `make backend-up` starts
-everything but the profile-gated `web` service, which is the backend
-`make web-e2e` drives. Every concern shares the one compose project
-`garam-local` and its `postgres-data` volume — there is no second
-compose file.
+starts only its `postgres` service for the Go suites `make integration`
+and `make e2e`, and `make db-down` removes that service again; `make
+backend-up` starts everything but the profile-gated `web` service, which
+is the backend `make web-e2e` drives. Every concern shares the one
+compose project `garam-local` and its `postgres-data` volume — there is
+no second compose file.
 
 ## Contents
 - Databases
@@ -32,26 +32,26 @@ compose file.
 
 ## Databases
 
-One Postgres server. `make e2e` truncates every table at test setup, so
-it never shares a database with the running stack, whose data you
-created and keep:
+One Postgres server. `make integration` truncates every table at test
+setup, so neither Go suite shares a database with the running stack,
+whose data you created and keep:
 
 - `garam` — the stack's own database, created by the image from
   `POSTGRES_DB`, migrated by the `migrate` service. `GARAM_DATABASE_URL`
   points here, and so does the Playwright suite (`make web-e2e`), which
   only inserts uniquely suffixed rows and seeds sessions for the same
   api it drives.
-- `garam_test` — the Go store round-trips (`make e2e`), and one
-  suffixed database per linked worktree, so concurrent runs neither
-  truncate nor migrate each other's. `make db-up` creates the one it is
-  told to, and the suite migrates it itself. These are the only
-  databases anything truncates.
+- `garam_test` — both Go suites (`make integration`, which holds the
+  store round-trips, and `make e2e`), and one suffixed database per
+  linked worktree, so concurrent runs neither truncate nor migrate each
+  other's. `make db-up` creates the one it is told to, and each suite
+  migrates it itself. These are the only databases anything truncates.
 
 Postgres publishes host port 25432 by default. `GARAM_DB_PORT` overrides
 it, in `.env` or in the environment
-(`GARAM_DB_PORT=55440 make db-up e2e`). `make e2e` and `make web-e2e`
-ask compose which port it published, so either place moves both suites
-with the server.
+(`GARAM_DB_PORT=55440 make db-up e2e`). `make integration`, `make e2e`
+and `make web-e2e` ask compose which port it published, so either place
+moves every suite with the server.
 
 There is one dev Postgres per machine, not one per worktree. This file
 pins the compose project with `name: garam-local`, which takes

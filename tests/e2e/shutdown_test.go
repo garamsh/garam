@@ -241,7 +241,7 @@ func TestServeAPI_ExitsZeroWhenTheGraceExpiresWithWorkInFlight(t *testing.T) {
 }
 
 // TestServeAuthz_ReadyzAnswersReadyWithItsDatabase is what makes this
-// layer need the Postgres `make e2e` starts. Liveness answers for the
+// layer need the Postgres `make db-up` starts. Liveness answers for the
 // process alone (ADR-0021), so every assertion above holds against a
 // database that is not there; readiness answers only once the
 // dependency ping reaches one (#893).

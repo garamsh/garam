@@ -2,35 +2,11 @@ package machine
 
 import (
 	"context"
-	"crypto/tls"
 	"crypto/x509"
 
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 )
-
-// TrustRoot is where a presented certificate has to chain from: the
-// certificate authority of the organization that owns the identity the
-// certificate names. It takes the subject rather than its organization
-// because which authority may sign for a subject is the tenancy rule
-// itself (ADR-0014), and it yields the certificate alone — verifying
-// one needs no private key.
-type TrustRoot interface {
-	// Get returns, in DER form, the CA certificate of the organization
-	// that owns subject, or a KindNotFound error when it has none.
-	Get(ctx context.Context, subject grn.GRN) ([]byte, error)
-}
-
-// ServerCertificate is the certificate the listener presents. It is
-// asked once per handshake rather than read once at startup, so a
-// replaced certificate is served on the next connection and no process
-// restarts (ADR-0040). What it answers with is garam's own identity,
-// which every machine identity pins — a different trust root from the
-// per-organization one [TrustRoot] answers for the other direction.
-type ServerCertificate interface {
-	// Get returns the certificate to present, or refuses the handshake.
-	Get() (*tls.Certificate, error)
-}
 
 // Service authenticates the machine identity a client certificate
 // names.

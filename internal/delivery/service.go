@@ -56,43 +56,6 @@ type Config struct {
 	CallTimeout time.Duration
 }
 
-// Queue is garam's side of the loop: the claim this adapter holds for
-// its agent, the renewal that keeps it, and the completion that ends
-// it. Every call is for the one agent the adapter runs beside, which is
-// why none of them names it.
-type Queue interface {
-	// Claim waits for a message addressed to the agent and returns the
-	// hold garam gave it, or ErrNoMessageReady when the wait ran out.
-	Claim(ctx context.Context) (*Claim, error)
-	// Renew carries the hold forward and answers with it as it now
-	// stands, or ErrClaimLapsed when it is gone.
-	Renew(ctx context.Context, id ClaimID) (*Claim, error)
-	// Complete reports the claimed message delivered, or answers
-	// ErrClaimLapsed when the hold was handed on.
-	Complete(ctx context.Context, id ClaimID) error
-}
-
-// Gateway is the agent platform's side: the ingress that takes a
-// message and the event stream a turn's end arrives on.
-type Gateway interface {
-	// Post hands one message to the agent and returns the identifier the
-	// gateway minted for it. A caller cannot supply one, so this answer
-	// is the only thing a turn's event can be paired back to.
-	Post(ctx context.Context, body string) (GatewayID, error)
-	// Subscribe opens one stream of the agent's events, which lasts
-	// until it is closed, it drops, or ctx is done.
-	Subscribe(ctx context.Context) (TurnStream, error)
-}
-
-// TurnStream is one open subscription, read to its end by one reader.
-type TurnStream interface {
-	// Next blocks until the agent's next turn ends, and answers an error
-	// once the stream carries nothing more.
-	Next() (TurnEnd, error)
-	// Close ends the subscription.
-	Close() error
-}
-
 // Service is the delivery loop of docs/architecture/adapter.md: claim a
 // message with its lease, post it into the gateway, hold the pairing of
 // the gateway's identifier to garam's, watch for a turn ending, and

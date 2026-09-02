@@ -29,3 +29,5 @@ func (p *Project) Name() string          { return p.name }
 func (p *Project) Organization() grn.GRN { return p.orgGRN }
 func (p *Project) Roles() []string       { return p.roles }
 func (p *Project) Policies() []string    { return p.policies }
+func (p *Project) CreatedAt() time.Time  { return p.createdAt }
+func (p *Project) UpdatedAt() time.Time  { return p.updatedAt }

@@ -47,6 +47,14 @@ func (a *Authority) Certificate() []byte { return a.certificate }
 // it yields no key material.
 func (a *Authority) SealedKey() []byte { return a.sealedKey }
 
+// NotAfter returns when the CA certificate stops being valid. It is the
+// same instant the certificate itself carries, stored beside it.
+func (a *Authority) NotAfter() time.Time { return a.notAfter }
+
+// CreatedAt returns when the organization's CA was created, which is
+// the first time the organization needed one.
+func (a *Authority) CreatedAt() time.Time { return a.createdAt }
+
 // Certificate is an issued client certificate, the private key it was
 // issued with, and the CA that signed it. The private key exists in
 // this value alone — it is generated per certificate and never stored,

@@ -27,6 +27,8 @@ What separates the layers is the subject: integration exercises real modules in 
 
 The exception is a dependency no in-process substitute can stand in for, because the code exists to interact with it: a controller's API server, not a database. Run that as a fixture and the test is still integration, because the subject is still in-process modules.
 
+**This project's integration layer runs against the Postgres `make db-up` starts, because the store implementations are the subject of those suites.** There, substituting the service means substituting the store: the stand-in goes where the code under test is rather than behind it, and the suite is left exercising the stand-in. A suite whose subject survives the substitution is the case the rule above describes; what is still under test once the service is substituted is what tells the two apart. The e2e row's obligation is met separately, by `tests/e2e/`, which drives the built binary and fails without a store (#900).
+
 ## Behavior over implementation
 
 Assert on outputs and side-effects only:

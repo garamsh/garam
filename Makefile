@@ -137,10 +137,12 @@ SHELL_SCRIPTS = $(shell find . -maxdepth 1 -type f -name '*.sh') $(shell find sc
 # it prints, so it is run as the POSIX parser it is built on: output
 # discarded, exit status read. That status answers whether the file
 # parses and not whether it is formatted — a file diverging from shfmt's
-# layout passes, a syntax error and a bashism fail. `-ln posix` fixes
-# the dialect all seven scripts declare rather than taking it from each
-# shebang, so a script that later says bash fails here instead of being
-# read as bash.
+# layout passes, a syntax error fails, and a bashism fails only where
+# the POSIX grammar has no shape for it: `arr=(a b)` and `function f`
+# fail, while `[[ ]]`, `source` and `local` parse as ordinary commands
+# and pass. `-ln posix` fixes the dialect all seven scripts declare
+# rather than taking it from each shebang, so a script that later says
+# bash fails here instead of being read as bash.
 #
 # check-contents-list.sh reads the Markdown, against
 # docs/convention/documentation.md §Format. It selects its own files and

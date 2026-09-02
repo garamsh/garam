@@ -9,9 +9,10 @@ import {
   GaramUnreachableError,
   garamFetchAuthenticated,
 } from "@/lib/garam";
+import type { components } from "@/types/api";
 
 import { slugFromGrn } from "../grn";
-import type { Organization } from "./orgs";
+import { OrganizationParser, type Organization } from "./orgs";
 
 /** What the create form has to show: nothing yet, or a refusal. */
 export type CreateOrgState =
@@ -31,10 +32,12 @@ export async function createOrg(
 
   let org: Organization;
   try {
-    org = await garamFetchAuthenticated<Organization>("/orgs", {
+    org = await garamFetchAuthenticated("/orgs", OrganizationParser, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify(parsed.data),
+      body: JSON.stringify(
+        parsed.data satisfies components["schemas"]["OrganizationCreate"],
+      ),
     });
   } catch (error) {
     // An unreachable API is a state the form renders, not a throw: the

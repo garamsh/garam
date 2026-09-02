@@ -78,6 +78,33 @@ describe("members section", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("refuses a body the specification does not describe", async () => {
+    server.use(
+      http.get(`${API_URL}/orgs/acme/members`, () =>
+        HttpResponse.json([
+          {
+            userGrn: "root:default:user:alice",
+            role: "owner",
+            since: "2026-01-02T03:04:05Z",
+          },
+        ]),
+      ),
+    );
+
+    await expect(
+      renderServerComponent(MembersPage(params("acme"))),
+    ).rejects.toThrow(/outside its specification/);
+
+    // The control: the same read against the body the API answers with
+    // renders, so the refusal above is the GRN and not a parser that
+    // refuses every member.
+    server.resetHandlers();
+
+    await renderServerComponent(MembersPage(params("acme")));
+
+    expect(screen.getByRole("row", { name: /alice/ })).toBeInTheDocument();
+  });
+
   it.each([403, 404])("renders not-found on %i", async (status) => {
     server.use(
       http.get(`${API_URL}/orgs/acme/members`, () =>

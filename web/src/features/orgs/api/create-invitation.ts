@@ -9,7 +9,7 @@ import {
 } from "@/lib/garam";
 import type { components } from "@/types/api";
 
-import type { Invitation } from "./orgs";
+import { InvitationParser } from "./orgs";
 
 /**
  * What the invite form has to show: nothing yet, a refusal, or the
@@ -40,8 +40,9 @@ export async function createInvitation(
   }
 
   try {
-    const invitation = await garamFetchAuthenticated<Invitation>(
+    const invitation = await garamFetchAuthenticated(
       `/orgs/${encodeURIComponent(parsed.data.org)}/invitations`,
+      InvitationParser,
       {
         method: "POST",
         headers: { "content-type": "application/json" },

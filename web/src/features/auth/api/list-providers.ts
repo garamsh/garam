@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 import { garamFetch } from "@/lib/garam";
 
 /**
@@ -13,7 +15,7 @@ import { garamFetch } from "@/lib/garam";
  */
 export async function listProviders(): Promise<string[]> {
   try {
-    return await garamFetch<string[]>("/auth/providers");
+    return await garamFetch("/auth/providers", z.array(z.string()));
   } catch {
     return [];
   }

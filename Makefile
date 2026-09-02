@@ -468,7 +468,12 @@ CHART_VALUES = $(wildcard $(CHART_DIR)/ci/*-values.yaml)
 # (#734). The two guards chart-render runs first are what keep the block
 # equal to the reads. web/src/env.ts is the web app's only reader and is
 # parsed for its own shape.
-CHART_GO_ENV = $(shell grep -rhoE 'envName = "[A-Z_]+"' --include=*.go internal cmd | sed 's/.*"\([A-Z_]*\)"/\1/' | sort -u)
+#
+# Both sides read the same character class. A class the sweep does not
+# accept drops the name out of the enumerated set silently: the chart
+# does not set it either, so the comparison below finds nothing to
+# report and passes on a name neither side ever saw (#864).
+CHART_GO_ENV = $(shell grep -rhoE 'envName = "[A-Z][A-Z0-9_]*"' --include=*.go internal cmd | sed 's/.*"\([A-Z][A-Z0-9_]*\)"/\1/' | sort -u)
 CHART_WEB_ENV = $(shell sed -n 's/^ *\([A-Z][A-Z0-9_]*\): process\.env\.\1,$$/\1/p' web/src/env.ts)
 
 # What the chart declares it does not set, read from the table that
@@ -498,6 +503,7 @@ chart: chart-lint chart-render chart-identity chart-names chart-rewrite chart-gu
 
 chart-lint:
 	@echo 'chart-lint: $(words $(CHART_TEMPLATES)) templates, $(words $(CHART_VALUES)) value files (helm lint --strict)'
+	@test -n '$(CHART_TEMPLATES)' || { echo 'chart-lint: nothing to lint — $(CHART_DIR)/templates holds no template'; exit 1; }
 	@test -n '$(CHART_VALUES)' || { echo 'chart-lint: nothing to lint — $(CHART_DIR)/ci holds no value file'; exit 1; }
 	@set -e; for v in $(CHART_VALUES); do $(HELM) lint --strict --quiet $(CHART_DIR) --values "$$v"; done
 
@@ -598,6 +604,11 @@ chart-identity:
 # included, so a file reaches a consumer without passing through any of
 # them. A resource name set there reads as a figure garam measured, and
 # none is (docs/architecture/deployment-contract.md §Not established).
+# Its zero-guard counts lines that set a `resources:` key: counting any
+# line holding the word counted this README's own prose, so an artifact
+# carrying no workload at all still reported a search that read
+# something (#864).
+#
 # chart-names renders under the longest release name Helm accepts and
 # holds every object name to 63 characters. Rendering cannot see this
 # class on its own: `helm template` produced a 67-character Service
@@ -611,6 +622,10 @@ chart-identity:
 #
 # `^  name: ` is the object's own name at exactly two spaces: a
 # container, an env entry and a secretKeyRef all sit deeper.
+#
+# Each render lands in a file before it is parsed: piped into sed only
+# sed's status reaches set -e, so a render that failed contributed no
+# name and the other value file kept the count above zero (#864).
 CHART_LONG_RELEASE := garam-production-eu-west-1-primary-tenant-alpha-01234
 
 chart-names:
@@ -619,8 +634,8 @@ chart-names:
 	@set -e; \
 		out="$$(mktemp -d)"; trap 'rm -rf "$$out"' EXIT; \
 		for v in $(CHART_VALUES); do \
-			$(HELM) template $(CHART_LONG_RELEASE) $(CHART_DIR) --values "$$v" \
-				| sed -n 's/^  name: \(.*\)$$/\1/p' >> "$$out/names"; \
+			$(HELM) template $(CHART_LONG_RELEASE) $(CHART_DIR) --values "$$v" > "$$out/render"; \
+			sed -n 's/^  name: \(.*\)$$/\1/p' "$$out/render" >> "$$out/names"; \
 		done; \
 		total="$$(sort -u "$$out/names" | wc -l)"; \
 		test "$$total" -gt 0 || { echo 'chart-names: the render named no object — the name parse is broken'; exit 1; }; \
@@ -680,7 +695,12 @@ chart-rewrite:
 #
 # The message is checked, not only the exit status. A render refused
 # for an unrelated reason is not this guard firing, and would pass a
-# check that read the status alone.
+# check that read the status alone. What the message must carry is
+# `execution error at (<template>): <value> ` — helm's own form for a
+# template that stopped itself, opening with the value the guard names.
+# Searching the whole of helm's output for the value instead matched
+# the values file's path, which carries the same string, so any failure
+# that named the file passed (#864).
 #
 # The control is the last line: the values every other check renders
 # must still render. Without it a chart that refused everything would
@@ -697,8 +717,9 @@ chart-guards:
 			if $(HELM) template garam $(CHART_DIR) --values $(CHART_DIR)/ci/minimal-values.yaml --values "$$v" >/dev/null 2>"$$out/err"; then \
 				echo "chart-guards: $$v rendered, and the guard for $$want did not fire"; exit 1; \
 			fi; \
-			grep -q -- "$$want" "$$out/err" \
-				|| { echo "chart-guards: $$v was refused, but not for $$want:"; cat "$$out/err"; exit 1; }; \
+			key="$$(printf %s "$$want" | sed 's/\./\\./g')"; \
+			grep -qE "execution error at \([^)]*\): $$key( |\$$)" "$$out/err" \
+				|| { echo "chart-guards: $$v was refused, but not by the guard for $$want — a refusal for another reason, or one whose message does not open with the value:"; cat "$$out/err"; exit 1; }; \
 		done; \
 		$(HELM) template garam $(CHART_DIR) --values $(CHART_DIR)/ci/minimal-values.yaml >/dev/null \
 			|| { echo 'chart-guards: the control render was refused too — the guards refuse a chart that should install'; exit 1; }; \
@@ -718,13 +739,13 @@ chart-package:
 		mkdir "$$out/unpacked"; tar -xzf "$$tgz" -C "$$out/unpacked"; \
 		cd "$$out/unpacked"; \
 		files="$$(find . -type f | wc -l)"; \
-		named="$$(grep -rn resources . | wc -l)"; \
+		named="$$(grep -rnE '^[[:space:]]*resources:' . | wc -l)"; \
 		test "$$files" -gt 0 && test "$$named" -gt 0 \
-			|| { echo 'chart-package: the unpacked artifact named resources nowhere — the package or the search read nothing'; exit 1; }; \
+			|| { echo 'chart-package: the unpacked artifact sets no resources key — the package or the search read nothing'; exit 1; }; \
 		re="$$(echo '$(CHART_RESOURCE_NAMES)' | tr ' ' '|')"; \
 		found="$$(grep -rnE "\b($$re):" . || true)"; \
 		test -z "$$found" || { echo "chart-package: the artifact sets a resource name, and no figure is published for any garam process (docs/architecture/deployment-contract.md §Not established):"; echo "$$found"; exit 1; }; \
-		echo "chart-package: $$(basename "$$tgz") — $$files files, $$named lines naming resources, 0 setting one of the names"
+		echo "chart-package: $$(basename "$$tgz") — $$files files, $$named lines setting a resources key, 0 setting one of the names"
 
 # ---------------------------------------------------------------------
 # deploy/local/minikube — the whole stack on a local Kubernetes cluster.

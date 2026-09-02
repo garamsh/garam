@@ -222,6 +222,18 @@ any garam process and setting none is not neutral, both of which
 `docs/architecture/deployment-contract.md` §Not established states — so
 the chart publishes no figure and the deployment picks its own.
 
+The machine pod is the one with two containers — the `key-material`
+init container that performs the copy §Key material and secrets
+describes, and the `machine` container beside it — and
+`machine.resources` reaches both. One value rather than two, because
+what reads a figure reads the pod: a namespace with a quota admits a pod
+only when every container carries the resource that quota bounds, and a
+QoS class is decided across every container, init containers included. A
+second value would leave both of those to a deployment that set only the
+one named after the workload. The copy reserves nothing extra either —
+a pod's effective request is the max of its init containers and the sum
+of the rest, so the same figure on both sides is the figure once.
+
 ## Not set by this chart
 
 Every environment variable the source reads is either rendered above or

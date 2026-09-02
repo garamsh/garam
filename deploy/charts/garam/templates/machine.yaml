@@ -68,6 +68,13 @@ spec:
               readOnly: true
             - name: key-material
               mountPath: /run/garam/key-material
+          # The machine container's figure reaches this one too. A quota
+          # admits a pod only when every container carries the resource
+          # it bounds and a QoS class is read across every container, and
+          # the pod's effective request is the max of its init containers
+          # and the sum of the rest — so the copy reserves nothing beyond
+          # the figure below.
+          resources: {{- toYaml .Values.machine.resources | nindent 12 }}
       containers:
         - name: machine
           image: {{ include "garam.serverImage" . }}

@@ -19,6 +19,15 @@ on:
 
 permissions: read-all
 
+# A push that supersedes a head cancels the run reading the old one.
+# `pull_request` is the only trigger, so `github.ref` is the pull
+# request's merge ref: one value per pull request, unchanged by a push
+# to it. `github.workflow` keeps this group apart from images.yml's, a
+# group being scoped to the repository.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # `make ci` covers both toolchains, so both are set up here and the
   # checks are one step (docs/convention/ci.md §One entry point per

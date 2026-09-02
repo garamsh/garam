@@ -29,7 +29,7 @@ An author who has moved one site cannot find the rest by searching for the decis
 
 Searching for the superseded decision instead is a genuine improvement over searching for the new one, and it is still a search. Two careful searches of `docs/architecture/overview.md` at 7dd0682 for the removed development-only sign-in provider disagreed in opposite directions inside one count: one missed line 268, which reads `dev-only local`, and one counted line 106, an §In scope bullet about org structure that may not carry the claim at all. Between those two searches over that document the unit being counted was not fixed; that is what the disagreement shows, and it is not evidence that no unit could be fixed. What holds either way is rule 1's ground: a document that does not accumulate the sites has nothing to enumerate.
 
-No pipeline stands behind this either: `make ci` reads no file under `docs/`, so no run of it passes or fails on anything this section describes. What this repository's workflows do run is §Operation.
+No pipeline stands behind this either: what `make ci` reads a file under `docs/` for is one thing, each Markdown file's `## Contents` list against that file's own `##` headings (`check-contents-list.sh`, #889), so no run of it passes or fails on anything this section describes. What this repository's workflows do run is §Operation.
 
 [api-surface.md](./api-surface.md) §What nothing checks records the same shape for a different artifact, the prose inside the two API specifications. That half is stated there and not here.
 

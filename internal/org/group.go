@@ -29,3 +29,5 @@ func (g *Group) Name() string          { return g.name }
 func (g *Group) Organization() grn.GRN { return g.orgGRN }
 func (g *Group) Roles() []string       { return g.roles }
 func (g *Group) Policies() []string    { return g.policies }
+func (g *Group) CreatedAt() time.Time  { return g.createdAt }
+func (g *Group) UpdatedAt() time.Time  { return g.updatedAt }

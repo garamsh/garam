@@ -236,6 +236,62 @@ func TestUserStore_DeleteRefusedByAReferenceIsNotAMissingRow(t *testing.T) {
 	assert.Equal(t, "ada", got.Nickname())
 }
 
+// timestamps is what an aggregate carrying both stamps surrenders. The
+// assertions below read the same whichever aggregate holds them, so
+// they are written once (ADR-0051).
+type timestamps interface {
+	CreatedAt() time.Time
+	UpdatedAt() time.Time
+}
+
+// assertInserted holds what a row a store has just written carries: a
+// created_at inside the window the insert ran in, and an updated_at
+// equal to it, because the constructor stamps both from one instant.
+// Postgres keeps microseconds and Go keeps nanoseconds, so the lower
+// bound is truncated to what the column can hold.
+func assertInserted(t *testing.T, a timestamps, before, after time.Time) {
+	t.Helper()
+	assert.WithinRange(t, a.CreatedAt(), before.Truncate(time.Microsecond), after)
+	assert.True(t, a.UpdatedAt().Equal(a.CreatedAt()),
+		"a row nothing has updated carries one instant in both columns")
+}
+
+// assertUpdated holds what an update leaves: created_at where the
+// insert put it, and updated_at moved past it. An accessor answering
+// with the zero time, or with the other field, fails one half or the
+// other here rather than passing quietly.
+func assertUpdated(t *testing.T, was, now timestamps) {
+	t.Helper()
+	assert.True(t, now.CreatedAt().Equal(was.CreatedAt()),
+		"an update leaves created_at where the insert put it")
+	assert.True(t, now.UpdatedAt().After(was.UpdatedAt()),
+		"an update moves updated_at past what it was")
+}
+
+// TestUserStore_SurrendersItsTimestamps holds that the two instants a
+// User persists are reachable from the aggregate the store returns
+// (ADR-0051). Both columns are written at the insert and read back by
+// the same store, so the assertion goes through the aggregate rather
+// than through the row: what is under test is whether a caller holding
+// the aggregate can reach the value at all.
+func TestUserStore_SurrendersItsTimestamps(t *testing.T) {
+	ctx := context.Background()
+	s := user.NewPostgresStore(pool(t))
+
+	g := grnOf("user", "ada")
+	before := time.Now().UTC()
+	require.NoError(t, s.Create(ctx, user.New(g, "ada")))
+	after := time.Now().UTC()
+
+	stored, err := s.Get(ctx, g)
+	require.NoError(t, err)
+	assertInserted(t, stored, before, after)
+
+	updated, err := s.Update(ctx, g, user.Patch{Nickname: ptr("ada2")})
+	require.NoError(t, err)
+	assertUpdated(t, stored, updated)
+}
+
 func TestOrgStore_RoundTripWithCascade(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
@@ -354,6 +410,46 @@ func TestOrgStore_GroupAndProjectSurrenderTheirPolicies(t *testing.T) {
 	storedProject, err := s.GetProject(ctx, projectGRN)
 	require.NoError(t, err)
 	assert.Equal(t, attached, storedProject.Policies())
+}
+
+// TestOrgStore_OrgGroupAndProjectSurrenderTheirTimestamps holds the
+// same for the three aggregates this package persists (ADR-0051). All
+// three carry the pair, and all three are written at the insert and
+// read back by the same store.
+func TestOrgStore_OrgGroupAndProjectSurrenderTheirTimestamps(t *testing.T) {
+	ctx := context.Background()
+	s := org.NewPostgresStore(pool(t))
+
+	orgGRN := grnOf("org", "acme")
+	groupGRN := grnOf("group", "eng")
+	projectGRN := grnOf("project", "web")
+
+	before := time.Now().UTC()
+	require.NoError(t, s.CreateOrg(ctx, org.NewOrganization(orgGRN, "acme")))
+	require.NoError(t, s.CreateGroup(ctx, org.NewGroup(groupGRN, "eng", orgGRN)))
+	require.NoError(t, s.CreateProject(ctx, org.NewProject(projectGRN, "web", orgGRN)))
+	after := time.Now().UTC()
+
+	storedOrg, err := s.GetOrg(ctx, orgGRN)
+	require.NoError(t, err)
+	assertInserted(t, storedOrg, before, after)
+	updatedOrg, err := s.UpdateOrg(ctx, orgGRN, org.Patch{Name: ptr("acme2")})
+	require.NoError(t, err)
+	assertUpdated(t, storedOrg, updatedOrg)
+
+	storedGroup, err := s.GetGroup(ctx, groupGRN)
+	require.NoError(t, err)
+	assertInserted(t, storedGroup, before, after)
+	updatedGroup, err := s.UpdateGroup(ctx, groupGRN, org.GroupPatch{Name: ptr("eng2")})
+	require.NoError(t, err)
+	assertUpdated(t, storedGroup, updatedGroup)
+
+	storedProject, err := s.GetProject(ctx, projectGRN)
+	require.NoError(t, err)
+	assertInserted(t, storedProject, before, after)
+	updatedProject, err := s.UpdateProject(ctx, projectGRN, org.ProjectPatch{Name: ptr("web2")})
+	require.NoError(t, err)
+	assertUpdated(t, storedProject, updatedProject)
 }
 
 func TestOrgStore_Membership(t *testing.T) {
@@ -2057,6 +2153,47 @@ func TestCertificateAuthority_RoundTrip(t *testing.T) {
 	assert.True(t, errorx.IsKind(err, errorx.KindDataLoss))
 
 	assert.ErrorIs(t, store.Create(ctx, authority), ca.ErrAuthorityAlreadyExists)
+}
+
+// TestCertificateAuthority_SurrendersItsTimestamps holds that the two
+// instants an Authority persists are reachable from the aggregate the
+// store returns (ADR-0051). The table carries no updated_at, so there
+// is no pair to play against itself; the certificate stands in for one.
+// not_after is written in a column of its own and the same instant
+// travels inside the certificate bytes beside it, so the accessor is
+// read against a value the row carries independently of that column.
+func TestCertificateAuthority_SurrendersItsTimestamps(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	acme := orgRootGRN("acme")
+	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(acme, "acme")))
+
+	key := make([]byte, ca.KeySize)
+	_, err := rand.Read(key)
+	require.NoError(t, err)
+	sealer, err := ca.NewAESGCMSealer(key)
+	require.NoError(t, err)
+	store := ca.NewPostgresStore(p)
+	svc, err := ca.NewService(store, sealer, ca.Config{})
+	require.NoError(t, err)
+
+	// The service stamps the authority from a `now` truncated to the
+	// second, so the window's lower bound is truncated with it.
+	before := time.Now().UTC().Truncate(time.Second)
+	_, err = svc.Issue(ctx, scopedGRN("acme", "agent", "bot-1"))
+	require.NoError(t, err)
+	after := time.Now().UTC()
+
+	authority, err := store.Get(ctx, acme)
+	require.NoError(t, err)
+	certificate, err := x509.ParseCertificate(authority.Certificate())
+	require.NoError(t, err)
+
+	assert.True(t, authority.NotAfter().Equal(certificate.NotAfter),
+		"the stored not_after is the instant the CA certificate itself carries")
+	assert.WithinRange(t, authority.CreatedAt(), before, after)
+	assert.True(t, authority.CreatedAt().Before(authority.NotAfter()),
+		"a CA is created before it expires")
 }
 
 // leafOf parses the issued certificate.

@@ -29,6 +29,8 @@ describe("landing page", () => {
     expect(
       screen.getByRole("heading", { name: "Reachable, not yet watched" }),
     ).toBeInTheDocument();
+    // Presence: the clause sits mid-sentence in a section body that
+    // opens with what is built.
     expect(
       screen.getByText(/the adapter that would run beside the agent/),
     ).toBeInTheDocument();

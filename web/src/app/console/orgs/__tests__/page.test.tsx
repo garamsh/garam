@@ -22,6 +22,7 @@ describe("organizations page", () => {
     expect(
       screen.getByRole("heading", { name: "Organizations" }),
     ).toBeInTheDocument();
+    // Presence: an organization's card names it and then its slug.
     expect(screen.getByRole("link", { name: /Acme/ })).toHaveAttribute(
       "href",
       "/console/orgs/acme",
@@ -35,7 +36,8 @@ describe("organizations page", () => {
     const { container } = await renderServerComponent(OrgsPage());
 
     // The control for the search: the listing rendered, so what is
-    // absent is the GRN and not the page.
+    // absent is the GRN and not the page. Presence: the card names the
+    // organization and then its slug.
     expect(screen.getByRole("link", { name: /Acme/ })).toBeInTheDocument();
     expect(container.textContent).not.toContain("grn:");
   });

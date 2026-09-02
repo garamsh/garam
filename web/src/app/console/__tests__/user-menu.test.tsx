@@ -26,6 +26,8 @@ describe("user menu", () => {
   it("names the signed-in user", () => {
     renderMenu("Alice");
 
+    // Presence: the trigger's name is the sr-only "Open account menu",
+    // the avatar's initials, the nickname and "Signed in".
     expect(screen.getByRole("button", { name: /Alice/ })).toBeInTheDocument();
   });
 
@@ -33,6 +35,7 @@ describe("user menu", () => {
     const user = userEvent.setup();
     renderMenu("Alice");
 
+    // Presence, as above: the nickname is one part of the trigger's.
     await user.click(screen.getByRole("button", { name: /Alice/ }));
     await user.click(await screen.findByRole("menuitem", { name: "Sign out" }));
 

@@ -27,16 +27,19 @@ describe("organization overview page", () => {
     const { container } = await renderServerComponent(OrgPage(params("acme")));
 
     expect(screen.getByRole("heading", { name: "Acme" })).toBeInTheDocument();
+    // Presence: a card's name is its section label and the count
+    // rendered under it, and what this asserts is where the card links.
     expect(screen.getByRole("link", { name: /Groups/ })).toHaveAttribute(
       "href",
       "/console/orgs/acme/groups",
     );
+    // Presence, as above: the count follows the label.
     expect(screen.getByRole("link", { name: /Members/ })).toHaveAttribute(
       "href",
       "/console/orgs/acme/members",
     );
     expect(
-      screen.getByRole("link", { name: /Projects 1/ }),
+      screen.getByRole("link", { name: "Projects 1" }),
     ).toBeInTheDocument();
     expect(container.textContent).not.toContain("grn:");
   });
@@ -50,7 +53,7 @@ describe("organization overview page", () => {
 
     await renderServerComponent(OrgPage(params("acme")));
 
-    expect(screen.getByRole("link", { name: /Groups 0/ })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Groups 0" })).toBeInTheDocument();
   });
 
   it.each([403, 404])("renders not-found on %i", async (status) => {
@@ -90,6 +93,8 @@ describe("organization overview page", () => {
     expect(
       screen.getByRole("heading", { name: "Cannot reach the API" }),
     ).toBeInTheDocument();
+    // Presence: a card's name is the label and its count, so matching
+    // the label alone is what shows no card rendered at all.
     expect(
       screen.queryByRole("link", { name: /Groups/ }),
     ).not.toBeInTheDocument();

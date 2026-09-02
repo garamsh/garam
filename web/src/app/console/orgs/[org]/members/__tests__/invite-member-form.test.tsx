@@ -81,6 +81,50 @@ describe("invite member form", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("says the copy failed rather than leaving the button unchanged", async () => {
+    server.use(
+      http.post(`${API_URL}/orgs/acme/invitations`, () =>
+        HttpResponse.json(
+          {
+            token: "secret-token",
+            orgGrn: "grn:root:default:org:acme",
+            role: "member",
+            expiresAt: "2026-01-09T03:04:05Z",
+          },
+          { status: 201 },
+        ),
+      ),
+    );
+    const user = userEvent.setup();
+    render(<InviteMemberForm org="acme" />);
+
+    await user.click(screen.getByRole("button", { name: "Create invitation" }));
+    expect(await screen.findByLabelText("Invitation link")).toBeInTheDocument();
+
+    // The control for the refusal: the same button, clicked the same
+    // way, with the clipboard answering. Without it a missing "Copied"
+    // is as much a handler that never ran as one that was refused.
+    await user.click(screen.getByRole("button", { name: "Copy" }));
+    expect(
+      await screen.findByRole("button", { name: "Copied" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+
+    // A denied clipboard permission is what the browser answers with.
+    vi.spyOn(navigator.clipboard, "writeText").mockRejectedValue(
+      new DOMException("Write permission denied.", "NotAllowedError"),
+    );
+    await user.click(screen.getByRole("button", { name: "Copied" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Could not copy the link",
+    );
+    expect(screen.getByRole("button", { name: "Copy" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Copied" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("sends the role the owner picked", async () => {
     const roles: unknown[] = [];
     server.use(

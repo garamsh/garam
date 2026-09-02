@@ -36,11 +36,15 @@ describe("console sidebar", () => {
   it("carries the switcher, the org's sections and the signed-in user", async () => {
     await renderSidebar();
 
+    // Presence: the switcher's name is the sr-only "Switch
+    // organization", the org's name and its slug.
     expect(screen.getByRole("button", { name: /Acme/ })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Members" })).toHaveAttribute(
       "href",
       "/console/orgs/acme/members",
     );
+    // Presence: the account menu's name is the sr-only "Open account
+    // menu", the avatar's initials, the nickname and "Signed in".
     expect(screen.getByRole("button", { name: /Alice/ })).toBeInTheDocument();
   });
 
@@ -68,9 +72,13 @@ describe("console sidebar", () => {
     await renderSidebar();
 
     expect(screen.getByRole("link", { name: "Members" })).toBeInTheDocument();
+    // Presence: the sr-only label opens a name the org's own name and
+    // slug complete, so it stays a fragment when the trigger renders.
     expect(
       screen.queryByRole("button", { name: /Switch organization/ }),
     ).not.toBeInTheDocument();
+    // Presence, as above: the initials, the nickname and "Signed in"
+    // complete this one.
     expect(
       screen.queryByRole("button", { name: /Open account menu/ }),
     ).not.toBeInTheDocument();

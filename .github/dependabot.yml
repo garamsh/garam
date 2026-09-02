@@ -102,8 +102,8 @@ updates:
     schedule:
       interval: "weekly"
 
-  # go.mod's requirements, the seven generator pins and the two linter
-  # pins among them.
+  # go.mod's requirements, the seven generator pins, the two linter pins
+  # and the mutation tester among them.
   #
   # Covers a newer version for every direct requirement, and for each
   # tool-directive module named below. Go marks a tool directive's
@@ -129,7 +129,10 @@ updates:
   #
   # The two linter pins are outside that: actionlint and shfmt write no
   # output this repository commits, so `check-gen` says nothing about a
-  # bump of either and what reads it is `make lint` (#840).
+  # bump of either and what reads it is `make lint` (#840). gremlins is
+  # outside it for the same reason, and further outside still: no
+  # whole-set name runs it, so what reads a bump of it is `make
+  # mutation`, which a person invokes (#875).
   - package-ecosystem: "gomod"
     directory: "/"
     schedule:
@@ -137,6 +140,7 @@ updates:
     allow:
       - dependency-type: "direct"
       - dependency-name: "github.com/bufbuild/buf"
+      - dependency-name: "github.com/go-gremlins/gremlins"
       - dependency-name: "github.com/oapi-codegen/oapi-codegen/v2"
       - dependency-name: "github.com/rhysd/actionlint"
       - dependency-name: "github.com/sqlc-dev/sqlc"

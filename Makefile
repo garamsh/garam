@@ -31,6 +31,11 @@ GOIMPORTS := go tool goimports
 ACTIONLINT := go tool actionlint
 SHFMT := go tool shfmt
 
+# A third on the same terms, and the only tool directive here no
+# whole-set name reaches: `mutation` is invoked by hand and by nothing
+# else, for the reasons stated at that target (#875).
+GREMLINS := go tool gremlins
+
 # helm is not a tool directive: helm.sh/helm/v4 requires a
 # google.golang.org/protobuf newer than protoc-gen-go's, and merging its
 # graph into this module's raises that floor and restamps every
@@ -74,7 +79,7 @@ TEST_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)
 # and overridable on the same terms as the line above.
 WEB_E2E_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)/garam?sslmode=disable)
 
-.PHONY: lint format test build gen check-gen check-toolchain e2e db-up db-down backend-up ci template-diff search
+.PHONY: lint format test build gen check-gen check-toolchain e2e mutation db-up db-down backend-up ci template-diff search
 .PHONY: chart chart-lint chart-render chart-identity chart-names chart-guards chart-security chart-package
 .PHONY: web-install web-lint web-format web-test web-build web-gen web-check-gen web-e2e web-image-e2e web-ci
 .PHONY: image-build
@@ -318,6 +323,71 @@ e2e:
 	@test -n '$(E2E_PKGS)' || { echo 'e2e: nothing to run — no package under ./tests/e2e/... holds a test file'; exit 1; }
 	@test -n '$(TEST_DATABASE_URL)' || { echo "e2e: no postgres published on this host — run make db-up" >&2; exit 1; }
 	GARAM_TEST_DATABASE_URL='$(TEST_DATABASE_URL)' go test -count=1 $(E2E_PKGS)
+
+# mutation asks of every line what the hunt behind #875 asked of a few
+# by hand: whether the check at that line can fail. gremlins rewrites
+# one operator at a time and reports the mutants no test noticed.
+#
+# It is in no whole-set name and in no workflow. A full run over
+# internal/ takes minutes of every core it is given, `internal/` holds
+# every package the module ships so a path filter would exclude little,
+# and what the run buys is an audit of the suite rather than a gate on a
+# change. docs/architecture/README.md §Operation records that decision;
+# this target is what a contributor runs when the question is whether a
+# test could have failed.
+#
+# The coefficient is a ratio and not a duration: gremlins allows each
+# mutant's `go test` the coverage run's own duration times this number.
+# That duration is whatever Go's test cache made it — two runs behind
+# #875 measured it at 5.6 seconds and at 0.49 seconds — so 300 buys half
+# an hour per mutant in the first case and two and a half minutes in the
+# second. The smaller is enough for every mutant here that is not a
+# genuine hang. The default of 3 buys a second and a half either way,
+# which is less than compiling one package takes, so every mutant times
+# out and gremlins prints `Test efficacy: 0.00%` and exits 0 having
+# tested nothing.
+#
+# A long budget is paid for only by a mutant that hangs, which holds a
+# worker for the whole of it. Those two runs spent the same 36 minutes
+# of CPU and took 7 and 32 minutes of wall time, and the nine mutants
+# that hang in delivery/gateway.go are the whole difference.
+#
+# A run where every mutant timed out is the one docs/convention/ci.md
+# §One entry point per task says has to be told apart from the one that
+# did the work, and the counts below are what tell them apart. They are
+# read from the report gremlins writes rather than from its stream,
+# which says the same thing on both runs. The report is json.Marshal
+# output, so each key is followed directly by its value; a parse that
+# comes back empty fails the target rather than printing a zero nobody
+# checked.
+#
+# The report is removed first because gremlins writes none at all where
+# it found nothing to run — it prints `No results to report.` and exits
+# 0 — and a report left by the run before would then be read as this
+# one's.
+#
+# gremlins 0.6.0 copies the whole module directory into TMPDIR once per
+# worker (`internal/engine/workdir`), and a worker is a core by default.
+# The Go tree is four megabytes; the `web/node_modules` and `web/.next`
+# that `make web-install` and `make web-build` leave behind are another
+# 856, so a run on twelve cores after `make ci` writes ten gigabytes —
+# to a tmpfs, and so to RAM, wherever TMPDIR is one. Point TMPDIR at a
+# disk, or run this on a tree that has not built the frontend.
+MUTATION_COEFFICIENT := 300
+MUTATION_REPORT := mutation.json
+
+mutation:
+	@echo 'mutation: internal/, coefficient $(MUTATION_COEFFICIENT), report $(MUTATION_REPORT)'
+	@rm -f '$(MUTATION_REPORT)'
+	@$(GREMLINS) unleash --timeout-coefficient $(MUTATION_COEFFICIENT) -o '$(MUTATION_REPORT)' internal
+	@killed="$$(sed -n 's/.*"mutants_killed":\([0-9]*\).*/\1/p' '$(MUTATION_REPORT)')"; \
+		lived="$$(sed -n 's/.*"mutants_lived":\([0-9]*\).*/\1/p' '$(MUTATION_REPORT)')"; \
+		efficacy="$$(sed -n 's/.*"test_efficacy":\([0-9.]*\).*/\1/p' '$(MUTATION_REPORT)')"; \
+		test -n "$$killed" && test -n "$$lived" && test -n "$$efficacy" \
+			|| { echo 'mutation: $(MUTATION_REPORT) carried no counts — the parse above stopped matching'; exit 1; }; \
+		echo "mutation: $$killed killed, $$lived survived, efficacy $$efficacy%"; \
+		test "$$((killed + lived))" -gt 0 \
+			|| { echo 'mutation: no mutant was tested — every one timed out or none was found, and neither is a result'; exit 1; }
 
 # The whole set, both toolchains, under one name (#789). `web-ci` runs
 # last so the cheaper Go half fails first, and it puts pnpm and the node

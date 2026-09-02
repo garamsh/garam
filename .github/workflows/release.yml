@@ -13,6 +13,14 @@ on:
 
 permissions: read-all
 
+# No concurrency group, and the absence is the guard rather than a
+# `cancel-in-progress: false` that would read like one. A group cancels
+# a pending run of that group when a newer one queues behind it,
+# whichever way that key is set, so a `vX.Y.Z` tag could publish
+# nothing; and a run cancelled between the two pushes leaves the
+# version half-published, which only the next version repairs
+# (ADR-0039 §Consequences).
+
 jobs:
   images:
     runs-on: ubuntu-latest

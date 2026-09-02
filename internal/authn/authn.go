@@ -7,6 +7,8 @@
 package authn
 
 import (
+	"fmt"
+
 	"github.com/garamsh/garam/internal/errorx"
 )
 
@@ -50,6 +52,19 @@ var ErrPasswordAttemptRateLimited = errorx.New(errorx.KindResourceExhausted, "pa
 // and nothing is hashed past it (ADR-0041). A verification that succeeds
 // releases its own attempt, so only failures accumulate.
 const MaxLivePasswordAttempts = 1024
+
+// ErrPasswordRejected is the single answer to a password that does not
+// verify and to a username no credential belongs to. Telling the two
+// apart would publish the account list, so one error covers both and
+// names neither (ADR-0041).
+var ErrPasswordRejected = errorx.New(errorx.KindUnauthenticated, "username or password is incorrect")
+
+// ErrPasswordTooShort and ErrPasswordTooLong refuse a password at
+// registration. Neither carries what was sent.
+var (
+	ErrPasswordTooShort = errorx.New(errorx.KindInvalidArgument, fmt.Sprintf("password must be at least %d characters", MinPasswordLength))
+	ErrPasswordTooLong  = errorx.New(errorx.KindInvalidArgument, fmt.Sprintf("password must be at most %d bytes", MaxPasswordLength))
+)
 
 // Identity is the authenticated identity asserted by a Provider.
 type Identity struct {

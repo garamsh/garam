@@ -103,7 +103,16 @@ machine:
   # ecosystems descend only into keys named `image` or `repository`, and
   # this is neither. No scheduled review is named for it either; naming
   # no mover of its own, it is the PM's to move under AGENTS.md §Roles.
+  #
+  # The container that runs it renders no `imagePullPolicy`, and
+  # `image.pullPolicy` above is not it: that value names the two garam
+  # images, and this reference is a digest, so which of the policies a
+  # kubelet applies cannot change what runs.
   copyImage: alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
+  # Reaches both of this pod's containers, the copy above and the process
+  # it prepares for. A quota and a QoS class are each read across every
+  # container of a pod, so one figure here covers both — see the README,
+  # §Values a deployment must supply.
   resources: {}
 
 web:

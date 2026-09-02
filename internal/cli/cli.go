@@ -31,7 +31,8 @@
 //	GARAM_METRICS_ADDR     authz /metrics and probe listen address
 //	                       (default ":9091"; serve api answers both on
 //	                       GARAM_HTTP_ADDR)
-//	GARAM_AUTHZ_ADDR       authz engine address for serve api (default "localhost:9090")
+//	GARAM_AUTHZ_ADDR       authz engine address for serve api and serve
+//	                       machine (default "localhost:9090")
 //	GARAM_SESSION_TTL      session lifetime (default "168h")
 //	GARAM_COOKIE_SECURE    mark cookies Secure (default true); accepts
 //	                       what strconv.ParseBool does and refuses the

@@ -1,0 +1,22 @@
+-- 000009 placed `attempts` between the recipient and the ordering
+-- column, so that the index a claim reads would carry the count it
+-- filters on. The count is filtered as a range, and a range ends the
+-- ordering of every column after it, so a claim could not walk this
+-- index in `created_at` order at all. Once 000014 added
+-- `messages_expirable_idx` on `created_at` alone the planner took that
+-- one instead: it orders exactly the rows a claim reads, by the column
+-- the claim's ORDER BY names. The recipient became a filter over every
+-- live row in the deployment, and the scan ran to the end of it rather
+-- than stopping at the first claimable row — the sort the ORDER BY's
+-- second column requires closes its first group on a later row, and a
+-- recipient holding few claimable messages supplies none. So the poll
+-- that delivers a message pays that scan as well as the poll that finds
+-- nothing.
+--
+-- The shape returns to 000008's. A claim reads one recipient's slice in
+-- `created_at` order and stops inside it, and `attempts` filters the
+-- rows of that slice — which is what it did before 000009 as well.
+-- 000009's sentence describes this index again, without its second
+-- half.
+DROP INDEX messages_claimable_idx;
+CREATE INDEX messages_claimable_idx ON messages (recipient_grn, created_at) WHERE completed_at IS NULL;

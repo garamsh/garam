@@ -13,7 +13,7 @@ import {
 import type { components } from "@/types/api";
 
 import { operatorGrn, slugFromGrn } from "../grn";
-import type { AgentDefinition } from "./orgs";
+import { AgentDefinitionParser, type AgentDefinition } from "./orgs";
 
 /**
  * What the define form has to show: nothing yet, a refusal, or the
@@ -67,8 +67,9 @@ export async function defineAgent(
   const org = parsed.data.org;
   let definition: AgentDefinition;
   try {
-    definition = await garamFetchAuthenticated<AgentDefinition>(
+    definition = await garamFetchAuthenticated(
       `/orgs/${encodeURIComponent(org)}/agent-definitions`,
+      AgentDefinitionParser,
       {
         method: "POST",
         headers: { "content-type": "application/json" },

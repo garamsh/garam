@@ -43,8 +43,9 @@ export async function withdrawOrgConsent(
 
   const { org, other } = parsed.data;
   try {
-    await garamFetchAuthenticated<void>(
+    await garamFetchAuthenticated(
       `/orgs/${encodeURIComponent(org)}/consents/${encodeURIComponent(other)}`,
+      z.unknown(),
       { method: "DELETE" },
     );
   } catch (error) {

@@ -10,8 +10,6 @@ import {
   garamFetchAuthenticated,
 } from "@/lib/garam";
 
-import type { Member } from "./orgs";
-
 /** What the accept form has to show: nothing yet, or a refusal. */
 export type AcceptInvitationState =
   { status: "idle" } | { status: "error"; message: string };
@@ -32,8 +30,11 @@ export async function acceptInvitation(
   }
 
   try {
-    await garamFetchAuthenticated<Member>(
+    // The membership the API answers with is not read: joining is what
+    // was asked for, and the organization list is what shows it.
+    await garamFetchAuthenticated(
       `/invitations/${encodeURIComponent(parsed.data.token)}/accept`,
+      z.unknown(),
       { method: "POST" },
     );
   } catch (error) {

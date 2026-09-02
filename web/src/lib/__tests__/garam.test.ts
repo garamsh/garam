@@ -1,19 +1,59 @@
 import { HttpResponse, http } from "msw";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
-import { GaramApiError, GaramUnreachableError, garamFetch } from "@/lib/garam";
+import {
+  GaramApiError,
+  GaramContractError,
+  GaramUnreachableError,
+  garamFetch,
+} from "@/lib/garam";
 import { API_URL, alice } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
+const User = z.object({ grn: z.string(), nickname: z.string() });
+
 describe("garamFetch", () => {
   it("returns the body the backend sent", async () => {
-    await expect(garamFetch("/me")).resolves.toEqual(alice);
+    await expect(garamFetch("/me", User)).resolves.toEqual(alice);
+  });
+
+  it("refuses a body the parser does not describe", async () => {
+    server.use(
+      http.get(`${API_URL}/me`, () => HttpResponse.json({ grn: alice.grn })),
+    );
+
+    await expect(garamFetch("/me", User)).rejects.toBeInstanceOf(
+      GaramContractError,
+    );
+
+    // The control: the same read against the body the backend answers
+    // with is accepted, so the refusal above is the missing field and
+    // not a parser that refuses everything.
+    server.use(http.get(`${API_URL}/me`, () => HttpResponse.json(alice)));
+
+    await expect(garamFetch("/me", User)).resolves.toEqual(alice);
+  });
+
+  it("refuses a body that is not JSON at all", async () => {
+    server.use(http.get(`${API_URL}/me`, () => HttpResponse.text("not json")));
+
+    await expect(garamFetch("/me", z.unknown())).rejects.toBeInstanceOf(
+      GaramContractError,
+    );
+
+    // The control: `z.unknown()` accepts whatever the backend sends, so
+    // the refusal above is the body not being JSON rather than the
+    // parser refusing.
+    server.use(http.get(`${API_URL}/me`, () => HttpResponse.json(alice)));
+
+    await expect(garamFetch("/me", z.unknown())).resolves.toEqual(alice);
   });
 
   it("tells an outage apart from a refusal, whichever way the outage arrives", async () => {
     server.use(http.get(`${API_URL}/me`, () => HttpResponse.error()));
 
-    await expect(garamFetch("/me")).rejects.toBeInstanceOf(
+    await expect(garamFetch("/me", User)).rejects.toBeInstanceOf(
       GaramUnreachableError,
     );
 
@@ -29,7 +69,7 @@ describe("garamFetch", () => {
       ),
     );
 
-    await expect(garamFetch("/me")).rejects.toBeInstanceOf(
+    await expect(garamFetch("/me", User)).rejects.toBeInstanceOf(
       GaramUnreachableError,
     );
 
@@ -41,8 +81,8 @@ describe("garamFetch", () => {
       ),
     );
 
-    await expect(garamFetch("/me")).rejects.toBeInstanceOf(GaramApiError);
-    await expect(garamFetch("/me")).rejects.not.toBeInstanceOf(
+    await expect(garamFetch("/me", User)).rejects.toBeInstanceOf(GaramApiError);
+    await expect(garamFetch("/me", User)).rejects.not.toBeInstanceOf(
       GaramUnreachableError,
     );
   });
@@ -57,7 +97,7 @@ describe("garamFetch", () => {
       ),
     );
 
-    await expect(garamFetch("/me")).rejects.toMatchObject({
+    await expect(garamFetch("/me", User)).rejects.toMatchObject({
       status: 401,
       message: "no session",
     });

@@ -71,19 +71,6 @@ const (
 	MaxPasswordLength = 128
 )
 
-// ErrPasswordRejected is the single answer to a password that does not
-// verify and to a username no credential belongs to. Telling the two
-// apart would publish the account list, so one error covers both and
-// names neither (ADR-0041).
-var ErrPasswordRejected = errorx.New(errorx.KindUnauthenticated, "username or password is incorrect")
-
-// ErrPasswordTooShort and ErrPasswordTooLong refuse a password at
-// registration. Neither carries what was sent.
-var (
-	ErrPasswordTooShort = errorx.New(errorx.KindInvalidArgument, fmt.Sprintf("password must be at least %d characters", MinPasswordLength))
-	ErrPasswordTooLong  = errorx.New(errorx.KindInvalidArgument, fmt.Sprintf("password must be at most %d bytes", MaxPasswordLength))
-)
-
 // NewVerifier computes the verifier for p under the current policy,
 // with a fresh salt. It refuses a password outside the accepted
 // length; the refusal names the bound, never the password.

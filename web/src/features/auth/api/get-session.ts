@@ -4,19 +4,24 @@ import {
   GaramUnreachableError,
   garamFetch,
   isUnauthenticated,
+  parserFor,
 } from "@/lib/garam";
 import type { components } from "@/types/api";
 
 /** The signed-in user, as the backend describes one. */
 export type User = components["schemas"]["User"];
 
-// Annotated with the type `api/openapi.yaml` generated, so a field the
-// specification adds, drops or retypes fails the typecheck here rather
-// than reaching the shell as a cast.
-const UserParser: z.ZodType<User> = z.object({
-  grn: z.string(),
-  nickname: z.string(),
-});
+// Tied to the type `api/openapi.yaml` generated, in both directions: a
+// field the specification adds, drops or retypes fails the typecheck
+// here rather than reaching the shell as a cast, and a field only the
+// parser demands fails it rather than refusing a valid response as a
+// contract violation.
+const UserParser = parserFor<User>()(
+  z.object({
+    grn: z.string(),
+    nickname: z.string(),
+  }),
+);
 
 /**
  * What the backend was able to say about the caller's session. An API

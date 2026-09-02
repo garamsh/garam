@@ -44,15 +44,7 @@ describe("members section", () => {
     ).toBeInTheDocument();
   });
 
-  it("offers invitations to an owner", async () => {
-    await renderServerComponent(MembersPage(params("acme")));
-
-    expect(
-      screen.getByRole("heading", { name: "Invite a member" }),
-    ).toBeInTheDocument();
-  });
-
-  it("hides invitations from a plain member", async () => {
+  it("offers invitations to a plain member, for the API to refuse", async () => {
     server.use(
       http.get(`${API_URL}/orgs/acme/members`, () =>
         HttpResponse.json([
@@ -67,15 +59,15 @@ describe("members section", () => {
 
     await renderServerComponent(MembersPage(params("acme")));
 
-    // The control for the absence below: the section rendered for this
-    // member, so the missing heading is the role branch and not a page
-    // that failed to render at all.
+    // The control for the presence: the role the console once gated on
+    // is the one rendered here, so the form standing is the absence of
+    // that gate rather than a page that failed to render at all.
     expect(screen.getByRole("row", { name: /alice/ })).toHaveTextContent(
       "member",
     );
     expect(
-      screen.queryByRole("heading", { name: "Invite a member" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("heading", { name: "Invite a member" }),
+    ).toBeInTheDocument();
   });
 
   it("refuses a body the specification does not describe", async () => {
@@ -127,9 +119,6 @@ describe("members section", () => {
     ).toBeInTheDocument();
     expect(
       screen.queryByText("This organization has no members."),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("heading", { name: "Invite a member" }),
     ).not.toBeInTheDocument();
   });
 

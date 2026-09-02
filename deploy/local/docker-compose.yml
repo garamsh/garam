@@ -1,8 +1,8 @@
 # The whole garam stack on one machine, and also the dev/e2e Postgres:
 # `make db-up` starts only the postgres service from this file, so both
 # concerns share the one compose project (and its volume). They do not
-# share a database — the stack owns `garam`, `make e2e` owns
-# `garam_test`, because it truncates. See README.md.
+# share a database — the stack owns `garam`, the two Go suites own
+# `garam_test`, because `make integration` truncates. See README.md.
 name: garam-local
 
 services:

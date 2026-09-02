@@ -1,7 +1,7 @@
 // Package migrations_test guards the schema's source of truth. It needs
 // no database, so `make ci` reports a missing or emptied migrations
 // directory as itself, rather than leaving it to surface as a migration
-// failure in every test of the e2e suite.
+// failure in every test of the two suites that migrate from it.
 package migrations_test
 
 import (

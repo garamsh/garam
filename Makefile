@@ -83,8 +83,11 @@ WEB_E2E_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_AD
 
 # The module's packages, listed once so the targets below report the set
 # they covered rather than name a ./... pattern whose match nobody sees.
-# An empty list is never passed on: given no argument at all these tools
-# read the current directory, so each target fails on one instead.
+# An empty list is never passed on, and each target says so itself
+# rather than resting on what a tool does with no argument: `go test`
+# given none reads the current directory, which fails only while no .go
+# file sits at the module root — a doc.go there is an ordinary idiom and
+# would make an empty list a run of zero tests exiting 0 (#870).
 GO_PKGS = $(shell go list ./...)
 
 # What buf lint will read, counted on lint's line. buf itself fails on a
@@ -160,6 +163,7 @@ TEST_PKGS = $(filter-out %/tests/e2e,$(GO_PKGS))
 
 test:
 	@echo 'test: $(words $(TEST_PKGS)) packages; tests/e2e not covered here — it needs Postgres (make db-up e2e)'
+	@test -n '$(TEST_PKGS)' || { echo 'test: nothing to test — the package list is empty, or the filter above matched all of it'; exit 1; }
 	@go test $(TEST_PKGS)
 
 # `go build ./...` exits 0 having done nothing should that pattern ever
@@ -426,11 +430,16 @@ web-e2e:
 image-build:
 	scripts/image-build.sh
 
-# What image-build tags the web image: ADR-0039's repository name and
-# the script's tag. A name that stopped matching either fails in
-# tests/image/web.sh on an image docker cannot find, rather than
-# checking a different one.
-WEB_IMAGE = garam-web:ci
+# What image-build tagged the web image, asked of the script that tags
+# it. The repository comes from .github/workflows/release.yml's `tags:`,
+# and a second copy here was the copy that went stale: a rename in the
+# release left this naming an image an earlier run had built, which the
+# target then checked instead of the one it had just built (#870).
+#
+# Keyed on the build context, which is what makes an image the web
+# app's. Empty when the release builds none from it, which the target
+# reports rather than run against nothing.
+WEB_IMAGE = $(shell scripts/image-build.sh --names | sed -n 's|^web ||p')
 
 # web-image-e2e checks the built image rather than the app: that the
 # standalone server starts, answers both probes and reaches the baked
@@ -439,7 +448,9 @@ WEB_IMAGE = garam-web:ci
 # to check instead, which is how an image pulled from ECR by digest is
 # verified, and then nothing is built here.
 web-image-e2e: $(if $(GARAM_WEB_IMAGE),,image-build)
-	GARAM_WEB_IMAGE='$(or $(GARAM_WEB_IMAGE),$(WEB_IMAGE))' tests/image/web.sh
+	@image='$(or $(GARAM_WEB_IMAGE),$(WEB_IMAGE))'; \
+		test -n "$$image" || { echo 'web-image-e2e: nothing names the image to check — .github/workflows/release.yml builds none from the web context'; exit 1; }; \
+		GARAM_WEB_IMAGE="$$image" tests/image/web.sh
 
 web-ci: web-format web-lint web-test web-build web-check-gen
 

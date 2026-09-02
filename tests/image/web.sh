@@ -1,9 +1,13 @@
 #!/bin/sh
-# Runs the web image and checks what deploy/charts/garam renders against
-# it: the standalone server starts, /healthz and /readyz answer on the
-# port the chart probes (ADR-0023), and `/api/*` reaches the URL baked at
-# build time (ADR-0009). The subject is the built image, which
-# `web/e2e` never sees — it drives a dev server.
+# Runs the web image and checks it: the standalone server starts,
+# /healthz and /readyz answer (ADR-0023), and `/api/*` reaches the URL
+# baked at build time (ADR-0009). The subject is the image a release
+# publishes, which `web/e2e` never opens — that suite builds this tree's
+# app and serves it.
+#
+# 3000 below is the PORT deploy/local/Dockerfile.web sets. The chart
+# probes 3000 as well and nothing ties the two, so nothing here
+# establishes anything about the chart's probes (#870).
 #
 # GARAM_WEB_IMAGE names an image to check instead of building one, so the
 # same checks run against an image pulled from a registry by digest.

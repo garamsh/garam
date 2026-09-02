@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { UserRound } from "lucide-react";
 
 import { Separator } from "@/components/ui/separator";
-import { getSession } from "@/features/auth";
 import { listOrgMembers } from "@/features/orgs";
 
 import { ApiUnreachable } from "../../../_components/api-unreachable";
@@ -17,22 +16,18 @@ export const metadata: Metadata = { title: "Members — garam" };
 type Params = { params: Promise<{ org: string }> };
 
 /**
- * The organization's members. The invite form appears only for a
- * caller whose own membership carries a role that may invite.
+ * The organization's members, and the form that invites one more.
+ *
+ * Inviting is granted by `org:invite`, which owners and admins hold and
+ * members do not, while every role reads the list. The form is rendered
+ * for all of them and the API refuses a caller that holds only the read
+ * — the same shape the operators and agents sections take. A role is
+ * not the whole of the answer either: a policy grants an action and not
+ * a role (ADR-0002), so only the engine knows who may invite.
  */
 export default async function MembersPage({ params }: Params) {
   const { org } = await params;
-  const [members, session] = await Promise.all([
-    listOrgMembers(org),
-    getSession(),
-  ]);
-
-  const callerGrn = session.status === "signed-in" ? session.user.grn : null;
-  const callerRole =
-    members.status === "ok"
-      ? members.data.find((member) => member.userGrn === callerGrn)?.role
-      : undefined;
-  const canInvite = callerRole === "owner" || callerRole === "admin";
+  const members = await listOrgMembers(org);
 
   return (
     <>
@@ -51,13 +46,8 @@ export default async function MembersPage({ params }: Params) {
       ) : (
         <MemberTable members={members.data} />
       )}
-
-      {canInvite && (
-        <>
-          <Separator />
-          <InviteMemberForm org={org} />
-        </>
-      )}
+      <Separator />
+      <InviteMemberForm org={org} />
     </>
   );
 }

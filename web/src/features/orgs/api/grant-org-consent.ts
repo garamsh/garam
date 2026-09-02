@@ -10,7 +10,7 @@ import {
 } from "@/lib/garam";
 
 import { slugFromGrn } from "../grn";
-import type { OrgConsent } from "./orgs";
+import { OrgConsentParser, type OrgConsent } from "./orgs";
 
 /**
  * What the grant form has to show: nothing yet, a refusal, or the
@@ -53,8 +53,9 @@ export async function grantOrgConsent(
   const { org, other } = parsed.data;
   let consent: OrgConsent;
   try {
-    consent = await garamFetchAuthenticated<OrgConsent>(
+    consent = await garamFetchAuthenticated(
       `/orgs/${encodeURIComponent(org)}/consents/${encodeURIComponent(other)}`,
+      OrgConsentParser,
       { method: "PUT" },
     );
   } catch (error) {

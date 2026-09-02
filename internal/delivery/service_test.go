@@ -67,6 +67,8 @@ type garamQueue struct {
 	hangFirstCompletion chan struct{}
 	completionCallsSeen int
 	claimCallsSeen      int
+	claimsToRefuse      int
+	claimsRefusedSeen   int
 	renewals            int
 	completions         int
 }
@@ -93,6 +95,13 @@ func (q *garamQueue) claim(w http.ResponseWriter, r *http.Request) {
 	}
 	q.mu.Lock()
 	q.claimCallsSeen++
+	if q.claimsToRefuse > 0 {
+		q.claimsToRefuse--
+		q.claimsRefusedSeen++
+		q.mu.Unlock()
+		http.Error(w, "garam is not answering", http.StatusInternalServerError)
+		return
+	}
 	held := q.handOut()
 	q.mu.Unlock()
 	if held == nil {
@@ -194,6 +203,22 @@ func (q *garamQueue) allowRenewals() {
 	q.refusing = false
 }
 
+// refuseClaims makes the next n polls fail as a garam that is not
+// answering does. Nothing is handed out on a refused poll, so nothing
+// is lost by one.
+func (q *garamQueue) refuseClaims(n int) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.claimsToRefuse = n
+}
+
+// claimsRefused is how many polls the queue has failed.
+func (q *garamQueue) claimsRefused() int {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return q.claimsRefusedSeen
+}
+
 // delivered is how many messages the queue holds as delivered.
 func (q *garamQueue) delivered() int {
 	q.mu.Lock()
@@ -285,6 +310,7 @@ type agentGateway struct {
 	mu          sync.Mutex
 	taken       []string
 	subscribers []chan string
+	opened      int
 }
 
 // gatewayAgentID is what the gateway calls the agent. It is not garam's
@@ -326,6 +352,7 @@ func (g *agentGateway) events(w http.ResponseWriter, r *http.Request) {
 	events := make(chan string, 32)
 	g.mu.Lock()
 	g.subscribers = append(g.subscribers, events)
+	g.opened++
 	g.mu.Unlock()
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.WriteHeader(http.StatusOK)
@@ -339,7 +366,10 @@ func (g *agentGateway) events(w http.ResponseWriter, r *http.Request) {
 		select {
 		case <-r.Context().Done():
 			return
-		case event := <-events:
+		case event, live := <-events:
+			if !live {
+				return
+			}
 			fmt.Fprintf(w, "data: %s\n\n", event)
 			flusher.Flush()
 		}
@@ -364,6 +394,25 @@ func (g *agentGateway) endTurn(outcome delivery.TurnOutcome, messages ...string)
 	for _, subscriber := range g.subscribers {
 		subscriber <- string(event)
 	}
+}
+
+// dropStreams ends every open subscription the way a gateway that lost
+// the connection does, leaving whoever was reading to open another.
+func (g *agentGateway) dropStreams() {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	for _, subscriber := range g.subscribers {
+		close(subscriber)
+	}
+	g.subscribers = nil
+}
+
+// subscriptions is how many streams have been opened in all. A second
+// one is the reader's answer to the first ending.
+func (g *agentGateway) subscriptions() int {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.opened
 }
 
 // speak emits an event that is not a turn ending, which names nothing
@@ -537,6 +586,50 @@ func TestRun_LeavesAFailedTurnsMessageForRedelivery(t *testing.T) {
 	gateway.endTurn(delivery.TurnFinished, "msg-1")
 	eventually(t, func() bool { return queue.delivered() == 1 }, "the turn that succeeded completes it")
 	assert.Equal(t, 1, queue.completionCalls(), "the turn that failed completed nothing")
+}
+
+// TestRun_KeepsPollingAfterAPollThatFailed covers the loop's answer to
+// a garam that is not there. Nothing was claimed, so nothing is lost,
+// and the loop waits and asks again. A loop that ended its polling on
+// the failure leaves the adapter up and delivering nothing: the process
+// stays healthy, the queue drains never, and no exit says why.
+//
+// The count of refused polls is the control — without it this passes on
+// a queue that never failed one.
+func TestRun_KeepsPollingAfterAPollThatFailed(t *testing.T) {
+	queue := newGaramQueue(t, time.Second, "first")
+	gateway := newAgentGateway(t)
+	queue.refuseClaims(2)
+	run(t, queue, gateway)
+
+	eventually(t, func() bool { return len(gateway.posted()) == 1 },
+		"the loop asked again past the polls that failed")
+	assert.Equal(t, 2, queue.claimsRefused(), "and the polls it asked past did fail")
+}
+
+// TestRun_ResubscribesAfterTheStreamDrops covers the other loop's
+// answer to the same thing: a gateway stream that ends under it is
+// reopened, because the turns that end afterwards name the messages
+// this adapter is holding. A reader that stopped would hold every
+// pairing until its lease lapsed and let garam redeliver each one, with
+// the agent having already answered it.
+//
+// Nothing is recovered across a reopen (ADR-0013, ADR-0018), so the
+// turn is ended after the second stream is open and not before.
+func TestRun_ResubscribesAfterTheStreamDrops(t *testing.T) {
+	queue := newGaramQueue(t, time.Second, "first")
+	gateway := newAgentGateway(t)
+	run(t, queue, gateway)
+
+	holding(t, queue, 0, 0)
+	require.Equal(t, 1, gateway.subscriptions())
+	gateway.dropStreams()
+	eventually(t, func() bool { return gateway.subscriptions() > 1 },
+		"the loop opened another stream after the first ended")
+
+	gateway.endTurn(delivery.TurnFinished, "msg-0")
+	eventually(t, func() bool { return queue.delivered() == 1 },
+		"a turn ending on the stream it reopened completes the message")
 }
 
 // TestRun_DropsAClaimWhoseLeaseLapsedMidTurn is §The lease from the

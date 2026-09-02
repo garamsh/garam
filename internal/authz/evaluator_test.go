@@ -106,6 +106,12 @@ func TestStatement_MatchesFullPatterns(t *testing.T) {
 		{"star then literal suffix mismatch", "grn:*bob", "grn:acme:default:user:alice", false},
 		{"exact", "org:read", "org:read", true},
 		{"exact mismatch", "org:read", "org:write", false},
+		// A pattern carrying no wildcard has nothing to backtrack to,
+		// so a value it does not match is refused at the first
+		// character that differs rather than realigned past it. The row
+		// above differs late and this one early; a matcher that
+		// realigns passes on the first and not on the second.
+		{"exact mismatch in the first character", "org:read", "arg:read", false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

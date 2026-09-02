@@ -182,6 +182,22 @@ func TestService_IssueNamesTheSubjectInASANURI(t *testing.T) {
 	assert.Empty(t, leaf.EmailAddresses)
 }
 
+// TestService_IssueRecordsTheSerialTheCertificateCarries pins what a
+// renewal is matched by. An operator presents the certificate it holds
+// and garam finds the record by serial (ADR-0046), so a record whose
+// serial is not the one inside the certificate names no certificate at
+// all. x509 draws a serial of its own where a template leaves the field
+// unset, so a certificate that parses and chains is no evidence that
+// garam chose the number in it.
+func TestService_IssueRecordsTheSerialTheCertificateCarries(t *testing.T) {
+	cert, _ := issueForNewOrg(t, agentGRN("acme", "bot-1"), newSealer(t), ca.Config{})
+
+	leaf := parseCertificatePEM(t, cert.CertificatePEM())
+	require.NotNil(t, leaf.SerialNumber)
+	assert.Positive(t, leaf.SerialNumber.Sign(), "a serial is a positive number")
+	assert.Equal(t, leaf.SerialNumber.String(), cert.Serial())
+}
+
 // TestService_StoresTheAuthorityKeySealed demonstrates what a database
 // dump alone yields. The claim is that the bytes are unusable, not that
 // they differ from the key: a reversible encoding differs from it too

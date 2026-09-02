@@ -1,12 +1,15 @@
 package api_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -535,6 +538,39 @@ func TestPrincipal_RecordedOnlyWhenAuthenticated(t *testing.T) {
 	}
 }
 
+// reports collects what the handlers write to the default logger, which
+// is where a failure a handler decided not to raise is the only
+// evidence there is. A handler may still be running on another
+// goroutine when a test reads this, so the buffer is guarded.
+type reports struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (r *reports) Write(p []byte) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.buf.Write(p)
+}
+
+func (r *reports) String() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.buf.String()
+}
+
+// captureReports points the default logger at a buffer for the length
+// of one test. slog.Default is process-wide, so the previous one is put
+// back; nothing in this package runs in parallel.
+func captureReports(t *testing.T) *reports {
+	t.Helper()
+	out := &reports{}
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(out, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	return out
+}
+
 // createOrg creates an org via the API and returns its identifier.
 func createOrg(t *testing.T, f *fixture, owner *http.Cookie, name string) string {
 	t.Helper()
@@ -544,6 +580,29 @@ func createOrg(t *testing.T, f *fixture, owner *http.Cookie, name string) string
 	g, err := grn.Parse(body.Grn)
 	require.NoError(t, err)
 	return g.Identifier
+}
+
+// TestOrgUpdate_RefusesANameThatIsEmpty covers the check between the
+// body and the store. An empty name is well-formed JSON in a
+// well-typed field, so nothing upstream refuses it and the store would
+// take it: what a caller renaming an organization to nothing gets is
+// decided here and nowhere else.
+//
+// The rename that succeeds is the control, so what the refusal answers
+// is the empty name and not a handler refusing every patch.
+func TestOrgUpdate_RefusesANameThatIsEmpty(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	f.permit(permission{grn.New("root", "default", user.ServiceType, "owner-sub"), org.ActionOrgUpdate})
+
+	rec := f.do(t, "PATCH", "/orgs/"+slug, `{"name":""}`, owner)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "invalid_argument", decodeBody[apigen.Error](t, rec).Kind)
+
+	rec = f.do(t, "PATCH", "/orgs/"+slug, `{"name":"acme2"}`, owner)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "acme2", decodeBody[apigen.Organization](t, rec).Name)
 }
 
 func TestOrgFlow_RoleEnforcement(t *testing.T) {

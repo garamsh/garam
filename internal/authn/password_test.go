@@ -109,6 +109,13 @@ func TestNewVerifier_RefusesAPasswordOutsideTheLengthBounds(t *testing.T) {
 	_, err = authn.NewVerifier(long)
 	assert.ErrorIs(t, err, authn.ErrPasswordTooLong)
 
+	// Both bounds are inclusive, and each is asserted at the bound
+	// rather than only past it: a ceiling that refused what it names
+	// would refuse a password the API specification accepts, and the
+	// case a byte over cannot tell that apart.
+	_, err = authn.NewVerifier(authn.Password(strings.Repeat("a", authn.MaxPasswordLength)))
+	assert.NoError(t, err)
+
 	// The floor counts characters rather than bytes, so a passphrase in
 	// a multi-byte script is measured as the person wrote it.
 	_, err = authn.NewVerifier(authn.Password(strings.Repeat("가", authn.MinPasswordLength)))

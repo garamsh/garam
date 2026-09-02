@@ -175,6 +175,43 @@ func TestGRPCServer_Explain(t *testing.T) {
 	assert.Equal(t, authzv1.Effect_EFFECT_DENY, traces["deny-delete"].GetEffect())
 }
 
+// TestGRPCServer_ExplainAllowsWhatOnlyAnAllowMatches covers the answer
+// the two tests around it cannot: both assert a refusal, and a trace
+// that read every effect backwards would still refuse both of them —
+// the allow reads as a deny and the deny as an allow, and
+// `allowed && !denied` comes back false either way. Explain exists to
+// say why a decision went as it did, so the decision it reports has to
+// be right in both directions.
+func TestGRPCServer_ExplainAllowsWhatOnlyAnAllowMatches(t *testing.T) {
+	client := newAuthzClient(t, staticPolicies{})
+
+	resp, err := client.Explain(context.Background(), &authzv1.ExplainRequest{
+		SubjectGrn: "grn:root:default:user:alice",
+		ObjectGrn:  "grn:root:default:org:acme",
+		Action:     "org:delete",
+		Statements: []*authzv1.Statement{
+			allowStatement("allow-delete", []string{"org:delete"}, []string{"grn:root:default:org:acme"}),
+			// The control: a statement that matches nothing, so what
+			// admits the call is the allow above rather than an engine
+			// that admits whatever it is handed.
+			allowStatement("wrong-action", []string{"org:read"}, []string{"grn:root:default:org:acme"}),
+		},
+		SubjectOrg: "grn:root:default:org:acme",
+	})
+	require.NoError(t, err)
+	assert.True(t, resp.GetAllowed(), "an allow matched and nothing denied")
+
+	traces := map[string]*authzv1.StatementTrace{}
+	for _, tr := range resp.GetTraces() {
+		traces[tr.GetSid()] = tr
+	}
+	require.Contains(t, traces, "allow-delete")
+	require.Contains(t, traces, "wrong-action")
+	assert.True(t, traces["allow-delete"].GetMatched())
+	assert.False(t, traces["wrong-action"].GetMatched())
+	assert.Equal(t, authzv1.Effect_EFFECT_ALLOW, traces["allow-delete"].GetEffect())
+}
+
 func orgGRN(id string) grn.GRN {
 	return grn.New(grn.RootOwner, grn.DefaultProject, "org", id)
 }

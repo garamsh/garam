@@ -183,7 +183,7 @@ TEST_PKGS = $(filter-out %/tests/integration %/tests/e2e,$(GO_PKGS))
 test:
 	@echo 'test: $(words $(TEST_PKGS)) packages; tests/integration and tests/e2e not covered here — they need Postgres (make db-up integration e2e)'
 	@test -n '$(TEST_PKGS)' || { echo 'test: nothing to test — the package list is empty, or the filter above matched all of it'; exit 1; }
-	@go test $(TEST_PKGS)
+	@go test -count=1 $(TEST_PKGS)
 
 # `go build ./...` exits 0 having done nothing should that pattern ever
 # resolve to no package, so build names what it compiles too. It skips a

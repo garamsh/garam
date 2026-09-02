@@ -51,3 +51,4 @@ func NewOrganization(g grn.GRN, name string) *Organization {
 func (o *Organization) GRN() grn.GRN         { return o.grn }
 func (o *Organization) Name() string         { return o.name }
 func (o *Organization) CreatedAt() time.Time { return o.createdAt }
+func (o *Organization) UpdatedAt() time.Time { return o.updatedAt }

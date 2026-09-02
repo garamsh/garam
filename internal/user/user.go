@@ -45,7 +45,9 @@ func New(g grn.GRN, nickname string, roles ...string) *User {
 	return &User{grn: g, nickname: nickname, roles: roles, createdAt: now, updatedAt: now}
 }
 
-func (u *User) GRN() grn.GRN       { return u.grn }
-func (u *User) Nickname() string   { return u.nickname }
-func (u *User) Roles() []string    { return u.roles }
-func (u *User) Policies() []string { return u.policies }
+func (u *User) GRN() grn.GRN         { return u.grn }
+func (u *User) Nickname() string     { return u.nickname }
+func (u *User) Roles() []string      { return u.roles }
+func (u *User) Policies() []string   { return u.policies }
+func (u *User) CreatedAt() time.Time { return u.createdAt }
+func (u *User) UpdatedAt() time.Time { return u.updatedAt }

@@ -71,8 +71,8 @@ the first account.
 
 The same compose file provides the dev/e2e Postgres: `make db-up`
 starts only its `postgres` service. The stack and the tests get a
-database each on it — the stack's `garam`, and `garam_test` for the
-truncating suite behind `make e2e`.
+database each on it — the stack's `garam`, and `garam_test` for `make
+integration` and `make e2e`, the first of which truncates.
 
 ## Web frontend
 

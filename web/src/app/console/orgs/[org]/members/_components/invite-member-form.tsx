@@ -19,6 +19,9 @@ import {
 
 const initialState: CreateInvitationState = { status: "idle" };
 
+/** What the clipboard answered for one invitation's link. */
+type CopyAttempt = { token: string; outcome: "copied" | "failed" };
+
 /**
  * Creates invitation links for the org. There is no email sending, so
  * the resulting link is surfaced for the owner/admin to copy.
@@ -28,15 +31,20 @@ export function InviteMemberForm({ org }: { org: string }) {
     createInvitation,
     initialState,
   );
-  // The copied token, not a flag: a freshly created invitation is a
-  // different token, so the button stops claiming it was copied.
-  const [copiedToken, setCopiedToken] = useState<string | null>(null);
+  // Keyed by token, not a flag: a freshly created invitation is a
+  // different token, so neither the claim that it was copied nor the
+  // failure the previous one reported carries over to it.
+  const [attempt, setAttempt] = useState<CopyAttempt | null>(null);
 
-  const invitationUrl =
+  const invitation =
     state.status === "created"
-      ? `${window.location.origin}/console/invitations/${state.token}`
+      ? {
+          token: state.token,
+          url: `${window.location.origin}/console/invitations/${state.token}`,
+        }
       : null;
-  const copied = state.status === "created" && copiedToken === state.token;
+  const outcome =
+    invitation && attempt?.token === invitation.token ? attempt.outcome : null;
 
   return (
     <section className="flex flex-col gap-3">
@@ -64,7 +72,7 @@ export function InviteMemberForm({ org }: { org: string }) {
           {state.message}
         </p>
       )}
-      {invitationUrl && (
+      {invitation && (
         <div className="flex flex-col gap-2">
           <p className="text-sm text-muted-foreground">
             Share this link with the person you invited. It works once and then
@@ -73,7 +81,7 @@ export function InviteMemberForm({ org }: { org: string }) {
           <div className="flex max-w-lg gap-2">
             <Input
               readOnly
-              value={invitationUrl}
+              value={invitation.url}
               aria-label="Invitation link"
               onFocus={(event) => event.target.select()}
               className="min-w-0 flex-1 bg-muted font-mono text-xs"
@@ -82,13 +90,26 @@ export function InviteMemberForm({ org }: { org: string }) {
               type="button"
               variant="outline"
               onClick={async () => {
-                await navigator.clipboard.writeText(invitationUrl);
-                setCopiedToken(state.status === "created" ? state.token : null);
+                // No boundary catches a handler. `navigator.clipboard`
+                // is absent outside a secure context, so the try covers
+                // the property access and not only the rejection.
+                try {
+                  await navigator.clipboard.writeText(invitation.url);
+                  setAttempt({ token: invitation.token, outcome: "copied" });
+                } catch {
+                  setAttempt({ token: invitation.token, outcome: "failed" });
+                }
               }}
             >
-              {copied ? "Copied" : "Copy"}
+              {outcome === "copied" ? "Copied" : "Copy"}
             </Button>
           </div>
+          {outcome === "failed" && (
+            <p role="alert" className="text-sm text-destructive">
+              Could not copy the link. Select it in the field and copy it
+              yourself.
+            </p>
+          )}
         </div>
       )}
     </section>

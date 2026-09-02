@@ -19,6 +19,15 @@ on:
 
 permissions: read-all
 
+# The concurrency group takes the form ci.yml states, and `github.ref`
+# is what a superseded push moves. `paths-ignore` is evaluated before
+# it: a push touching only `docs/` starts no run of this workflow and
+# so cancels none, which leaves the running one reading the image
+# content the new head still has.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # `make ci` proves the Go module and the web app build, which is not
   # that the images do — Next.js standalone output is where the two come

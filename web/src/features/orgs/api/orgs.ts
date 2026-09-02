@@ -5,6 +5,7 @@ import {
   GaramApiError,
   GaramUnreachableError,
   garamFetchAuthenticated,
+  parserFor,
 } from "@/lib/garam";
 import type { components } from "@/types/api";
 
@@ -56,9 +57,11 @@ export type OrgConsent = components["schemas"]["OrgConsent"];
 export type OrgRead<T> = { status: "ok"; data: T } | { status: "unreachable" };
 
 // What the seam parses each of this feature's reads against. Every
-// parser is annotated with the type `api/openapi.yaml` generated, so a
-// field the specification adds, drops or retypes fails the typecheck
-// here rather than reaching a page as a cast.
+// parser is tied to the type `api/openapi.yaml` generated, in both
+// directions: a field the specification adds, drops or retypes fails
+// the typecheck here rather than reaching a page as a cast, and a field
+// only the parser demands fails it rather than refusing a valid
+// response as a contract violation.
 
 /**
  * A GRN the console can read. Refusing a malformed one at the seam is
@@ -68,84 +71,100 @@ export type OrgRead<T> = { status: "ok"; data: T } | { status: "unreachable" };
  */
 const GrnParser = z.string().refine(isGrn);
 
-const RoleParser: z.ZodType<components["schemas"]["Role"]> = z.enum([
-  "owner",
-  "admin",
-  "member",
-]);
+const RoleParser = parserFor<components["schemas"]["Role"]>()(
+  z.enum(["owner", "admin", "member"]),
+);
 
-export const OrganizationParser: z.ZodType<Organization> = z.object({
-  grn: GrnParser,
-  name: z.string(),
-  createdAt: z.string(),
-});
+export const OrganizationParser = parserFor<Organization>()(
+  z.object({
+    grn: GrnParser,
+    name: z.string(),
+    createdAt: z.string(),
+  }),
+);
 
-const GroupParser: z.ZodType<Group> = z.object({
-  grn: GrnParser,
-  name: z.string(),
-  orgGrn: GrnParser,
-  roles: z.array(RoleParser),
-});
+const GroupParser = parserFor<Group>()(
+  z.object({
+    grn: GrnParser,
+    name: z.string(),
+    orgGrn: GrnParser,
+    roles: z.array(RoleParser),
+  }),
+);
 
-const ProjectParser: z.ZodType<Project> = z.object({
-  grn: GrnParser,
-  name: z.string(),
-  orgGrn: GrnParser,
-  roles: z.array(RoleParser),
-});
+const ProjectParser = parserFor<Project>()(
+  z.object({
+    grn: GrnParser,
+    name: z.string(),
+    orgGrn: GrnParser,
+    roles: z.array(RoleParser),
+  }),
+);
 
-const MemberParser: z.ZodType<Member> = z.object({
-  userGrn: GrnParser,
-  nickname: z.string().optional(),
-  role: RoleParser,
-  since: z.string(),
-});
+const MemberParser = parserFor<Member>()(
+  z.object({
+    userGrn: GrnParser,
+    nickname: z.string().optional(),
+    role: RoleParser,
+    since: z.string(),
+  }),
+);
 
-export const InvitationParser: z.ZodType<Invitation> = z.object({
-  token: z.string(),
-  orgGrn: GrnParser,
-  role: RoleParser,
-  expiresAt: z.string(),
-});
+export const InvitationParser = parserFor<Invitation>()(
+  z.object({
+    token: z.string(),
+    orgGrn: GrnParser,
+    role: RoleParser,
+    expiresAt: z.string(),
+  }),
+);
 
-export const AgentParser: z.ZodType<Agent> = z.object({
-  grn: GrnParser,
-  orgGrn: GrnParser,
-  provisioningState: z.enum(["pending", "provisioned", "ready", "failed"]),
-  runtimeState: z.enum(["unknown", "connected", "disconnected"]),
-  assignment: z
-    .object({
-      operatorGrn: GrnParser,
-      epoch: z.number(),
-      since: z.string(),
-    })
-    .optional(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-});
+export const AgentParser = parserFor<Agent>()(
+  z.object({
+    grn: GrnParser,
+    orgGrn: GrnParser,
+    provisioningState: z.enum(["pending", "provisioned", "ready", "failed"]),
+    runtimeState: z.enum(["unknown", "connected", "disconnected"]),
+    assignment: z
+      .object({
+        operatorGrn: GrnParser,
+        epoch: z.number(),
+        since: z.string(),
+      })
+      .optional(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  }),
+);
 
-export const AgentDefinitionParser: z.ZodType<AgentDefinition> = z.object({
-  agentGrn: GrnParser,
-  orgGrn: GrnParser,
-  operatorGrn: GrnParser,
-  values: z.record(z.string(), z.string()),
-  definedBy: GrnParser,
-  createdAt: z.string(),
-});
+export const AgentDefinitionParser = parserFor<AgentDefinition>()(
+  z.object({
+    agentGrn: GrnParser,
+    orgGrn: GrnParser,
+    operatorGrn: GrnParser,
+    values: z.record(z.string(), z.string()),
+    definedBy: GrnParser,
+    createdAt: z.string(),
+  }),
+);
 
-export const OperatorParser: z.ZodType<Operator> = z.object({
-  grn: GrnParser,
-  orgGrn: GrnParser,
-  registeredBy: GrnParser,
-  createdAt: z.string(),
-});
+export const OperatorParser = parserFor<Operator>()(
+  z.object({
+    grn: GrnParser,
+    orgGrn: GrnParser,
+    registeredBy: GrnParser,
+    createdAt: z.string(),
+  }),
+);
 
-export const OrgConsentParser: z.ZodType<OrgConsent> = z.object({
-  orgGrn: GrnParser,
-  grantedHere: z.boolean(),
-  grantedThere: z.boolean(),
-  stands: z.boolean(),
-});
+export const OrgConsentParser = parserFor<OrgConsent>()(
+  z.object({
+    orgGrn: GrnParser,
+    grantedHere: z.boolean(),
+    grantedThere: z.boolean(),
+    stands: z.boolean(),
+  }),
+);
 
 /** Organizations the signed-in user belongs to. */
 export function listOrgs(): Promise<Organization[]> {

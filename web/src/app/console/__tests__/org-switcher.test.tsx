@@ -30,12 +30,16 @@ describe("organization switcher", () => {
   it("names the organization the caller is inside", () => {
     renderSwitcher("/console/orgs/globex/projects");
 
+    // Presence: the trigger's name is the sr-only "Switch organization",
+    // then the org's name and its slug.
     expect(screen.getByRole("button", { name: /Globex/ })).toBeInTheDocument();
   });
 
   it("says so when no organization is selected", () => {
     renderSwitcher("/console/orgs");
 
+    // Presence: the sr-only "Switch organization" opens the trigger's
+    // name and "None selected" closes it.
     expect(
       screen.getByRole("button", { name: /Select organization/ }),
     ).toBeInTheDocument();
@@ -45,6 +49,7 @@ describe("organization switcher", () => {
     const user = userEvent.setup();
     renderSwitcher("/console/orgs/acme");
 
+    // Presence, as above: the org's name is one part of the trigger's.
     await user.click(screen.getByRole("button", { name: /Acme/ }));
 
     expect(
@@ -59,6 +64,7 @@ describe("organization switcher", () => {
     const user = userEvent.setup();
     renderSwitcher("/console/orgs");
 
+    // Presence, as above: "None selected" follows in the trigger's name.
     await user.click(
       screen.getByRole("button", { name: /Select organization/ }),
     );
@@ -72,6 +78,7 @@ describe("organization switcher", () => {
     const user = userEvent.setup();
     renderSwitcher("/console/orgs", []);
 
+    // Presence, as above: "None selected" follows in the trigger's name.
     await user.click(
       screen.getByRole("button", { name: /Select organization/ }),
     );

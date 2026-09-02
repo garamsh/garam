@@ -57,6 +57,8 @@ describe("login page", () => {
     expect(
       screen.getByRole("link", { name: "Sign in with Google" }),
     ).toBeInTheDocument();
+    // Presence: the clause sits in a paragraph that also names the
+    // registered account and how accounts are created.
     expect(
       screen.getByText(/Google account your organization invited/),
     ).toBeInTheDocument();
@@ -67,6 +69,9 @@ describe("login page", () => {
     expect(
       screen.queryByRole("link", { name: "Sign in with Google" }),
     ).not.toBeInTheDocument();
+    // Presence, and wide on purpose: the claim is that no element's
+    // text names the provider, which the paragraph above would satisfy
+    // by matching whole while still naming it.
     expect(screen.queryByText(/Google/)).not.toBeInTheDocument();
     // The password form is the way in that remains, so a deployment
     // that configures no provider is still usable.

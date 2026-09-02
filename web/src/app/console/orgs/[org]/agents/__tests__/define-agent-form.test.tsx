@@ -276,7 +276,8 @@ describe("define agent form", () => {
     render(<DefineAgentForm org="acme" />);
 
     // ADR-0036: garam holds the reference and no surface of its serves
-    // the value, so the form must not invite one.
+    // the value, so the form must not invite one. Presence: the warning
+    // closes a paragraph about what garam stores a value as.
     expect(
       screen.getByText(/Never put a credential in a value/),
     ).toBeInTheDocument();

@@ -164,7 +164,9 @@ func (s *Server) verifyPassword(r *http.Request, username string, p authn.Passwo
 	// The slot is freed only by a verification that succeeded, so what
 	// accumulates against the bound is failures.
 	if err := s.attempts.Release(r.Context(), attempt); err != nil {
-		slog.WarnContext(r.Context(), "password attempt not released", "error", err, "user_id", g.String())
+		slog.WarnContext(r.Context(), "password attempt not released",
+			slog.String("error", err.Error()),
+			slog.String("user_id", g.String()))
 	}
 	return u, nil
 }
@@ -182,11 +184,15 @@ func (s *Server) upgradeVerifier(r *http.Request, g grn.GRN, held authn.Verifier
 	}
 	fresh, err := authn.NewVerifier(p)
 	if err != nil {
-		slog.WarnContext(r.Context(), "password verifier not upgraded", "error", err, "user_id", g.String())
+		slog.WarnContext(r.Context(), "password verifier not upgraded",
+			slog.String("error", err.Error()),
+			slog.String("user_id", g.String()))
 		return
 	}
 	if err := s.credentials.Replace(r.Context(), g, fresh); err != nil {
-		slog.WarnContext(r.Context(), "password verifier not upgraded", "error", err, "user_id", g.String())
+		slog.WarnContext(r.Context(), "password verifier not upgraded",
+			slog.String("error", err.Error()),
+			slog.String("user_id", g.String()))
 	}
 }
 

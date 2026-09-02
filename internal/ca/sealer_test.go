@@ -150,6 +150,41 @@ func TestAESGCMSealer_OpenNamesTheKeyItNeeds(t *testing.T) {
 	assert.NotEqual(t, sealed[:keyIDPrefix], otherSealed[:keyIDPrefix])
 }
 
+// TestAESGCMSealer_OpenReadsAHeaderThatIsAllThereIs pins where
+// truncation stops. Bytes a byte short of the identifier and the nonce
+// carry no identifier to read, so they are corruption; bytes exactly
+// that long carry one, so what they get is the name of the key they
+// need. A guard that refused the second as truncated would report a
+// foreign key as corruption, and the two inputs differ by one byte.
+func TestAESGCMSealer_OpenReadsAHeaderThatIsAllThereIs(t *testing.T) {
+	ctx := context.Background()
+	key := randomKey(t)
+	block, err := aes.NewCipher(key)
+	require.NoError(t, err)
+	aead, err := cipher.NewGCM(block)
+	require.NoError(t, err)
+	header := keyIDPrefix + aead.NonceSize()
+
+	sealer, err := ca.NewAESGCMSealer(randomKey(t))
+	require.NoError(t, err)
+	other, err := ca.NewAESGCMSealer(key)
+	require.NoError(t, err)
+	sealed, err := other.Seal(ctx, acmeRow, []byte("a private key"))
+	require.NoError(t, err)
+	require.Greater(t, len(sealed), header, "a sealed value is longer than its header")
+
+	_, err = sealer.Open(ctx, acmeRow, sealed[:header-1])
+	require.Error(t, err)
+	assert.True(t, errorx.IsKind(err, errorx.KindDataLoss),
+		"a byte short of a header is corruption, got %v", err)
+
+	_, err = sealer.Open(ctx, acmeRow, sealed[:header])
+	require.Error(t, err)
+	assert.True(t, errorx.IsKind(err, errorx.KindFailedPrecondition),
+		"a whole header names the key it needs, got %v", err)
+	assert.Contains(t, err.Error(), hex.EncodeToString(sealed[:keyIDPrefix]))
+}
+
 // TestAESGCMSealer_OpenRejectsAnotherBinding is what stops a sealed key
 // being moved: the bytes open only where they were written, so copying
 // an organization's row onto another organization yields nothing.

@@ -156,6 +156,41 @@ func TestHTTPGateway_SubscribeSkipsAnEventLargerThanItReads(t *testing.T) {
 	assert.Equal(t, []delivery.GatewayID{"msg-0"}, turn.Messages)
 }
 
+// TestHTTPGateway_SubscribeSkipsAnEventJustPastTheBound is the boundary
+// the test above does not reach. Its event is twice the bound, which
+// says an event far past it is dropped and nothing about where the cut
+// falls; this one is a hundred bytes past, and the turn ending after it
+// is again what says the subscription carried on.
+//
+// A hundred and not more: the reader accumulates a line in
+// bufio.Reader-sized pieces, so an event more than one piece past the
+// bound is truncated wherever the cut is, and only an event inside that
+// piece says where it is. What holds this to a hundred rather than to
+// the piece is that bufio's size is not this package's to choose.
+func TestHTTPGateway_SubscribeSkipsAnEventJustPastTheBound(t *testing.T) {
+	// The oversized event is itself a turn ending, so one the reader kept
+	// where it should have dropped it names messages and is answered
+	// here rather than skipped for being something else.
+	const dataLine = 1<<20 + 100
+	const shape = `{"kind":"turn_finished","turn":1,"message_ids":["msg-past-the-bound"],"pad":"%s"}`
+	oversized := fmt.Sprintf(shape, strings.Repeat("x", dataLine-len("data: ")-len(shape)+len("%s")))
+	require.Len(t, "data: "+oversized, dataLine, "the line is the length this test is about")
+
+	gateway := sendingEvents(t,
+		oversized,
+		`{"kind":"turn_finished","turn":2,"message_ids":["msg-0"]}`,
+	)
+
+	stream, err := gateway.Subscribe(context.Background())
+	require.NoError(t, err)
+	defer func() { _ = stream.Close() }()
+
+	turn, err := stream.Next()
+	require.NoError(t, err)
+	assert.Equal(t, []delivery.GatewayID{"msg-0"}, turn.Messages,
+		"the event past the bound was carried rather than dropped")
+}
+
 // TestHTTPGateway_SubscribeReportsARefusedStream keeps a stream that
 // was never opened apart from one that carried nothing: the loop waits
 // and subscribes again rather than reading an error body as events.

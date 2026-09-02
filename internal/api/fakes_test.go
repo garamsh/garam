@@ -764,8 +764,9 @@ func ptrTo[T any](v T) *T { return &v }
 // fakeWatchLeases is a watch.Store in memory: one entry per open watch,
 // which is what says whether a watch outlived the stream it belonged to.
 type fakeWatchLeases struct {
-	mu   sync.Mutex
-	byID map[watch.WatchID]grn.GRN
+	mu           sync.Mutex
+	byID         map[watch.WatchID]grn.GRN
+	closeRefused bool
 }
 
 func newFakeWatchLeases() *fakeWatchLeases {
@@ -791,8 +792,19 @@ func (l *fakeWatchLeases) Refresh(_ context.Context, id watch.WatchID, _ time.Du
 func (l *fakeWatchLeases) Close(_ context.Context, id watch.WatchID) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	if l.closeRefused {
+		return errorx.New(errorx.KindUnavailable, "watch lease store is gone")
+	}
 	delete(l.byID, id)
 	return nil
+}
+
+// refuseClose stands in for a store that held the watch open and is
+// gone by the time the stream ends and the lease is dropped.
+func (l *fakeWatchLeases) refuseClose() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.closeRefused = true
 }
 
 func (l *fakeWatchLeases) Count(_ context.Context, agent grn.GRN) (int, error) {
@@ -851,8 +863,9 @@ func (r *fakeTurnEvents) Receive(ctx context.Context, deliver func(grn.GRN, watc
 // fakePasswordCredentialStore is an in-memory
 // authn.PasswordCredentialStore double.
 type fakePasswordCredentialStore struct {
-	mu     sync.Mutex
-	byUser map[string]authn.Verifier
+	mu             sync.Mutex
+	byUser         map[string]authn.Verifier
+	replaceRefused bool
 }
 
 func newFakePasswordCredentialStore() *fakePasswordCredentialStore {
@@ -884,8 +897,19 @@ func (s *fakePasswordCredentialStore) Get(_ context.Context, userGRN grn.GRN) (a
 func (s *fakePasswordCredentialStore) Replace(_ context.Context, userGRN grn.GRN, v authn.Verifier) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.replaceRefused {
+		return errorx.New(errorx.KindUnavailable, "password credential store is gone")
+	}
 	s.byUser[userGRN.String()] = v
 	return nil
+}
+
+// refuseReplace stands in for a store that answered the read a sign-in
+// needed and is gone by the write that follows it.
+func (s *fakePasswordCredentialStore) refuseReplace() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.replaceRefused = true
 }
 
 // held returns the verifier stored for a user, so a test can read what
@@ -900,8 +924,9 @@ func (s *fakePasswordCredentialStore) held(userGRN grn.GRN) authn.Verifier {
 // authn.PasswordAttemptStore double. It holds each live attempt's
 // expiry, as the table holds a row's.
 type fakePasswordAttemptStore struct {
-	mu       sync.Mutex
-	expiryOf map[string]time.Time
+	mu             sync.Mutex
+	expiryOf       map[string]time.Time
+	releaseRefused bool
 }
 
 func newFakePasswordAttemptStore() *fakePasswordAttemptStore {
@@ -930,8 +955,19 @@ func (s *fakePasswordAttemptStore) Record(_ context.Context, attempt string, ttl
 func (s *fakePasswordAttemptStore) Release(_ context.Context, attempt string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.releaseRefused {
+		return errorx.New(errorx.KindUnavailable, "password attempt store is gone")
+	}
 	delete(s.expiryOf, attempt)
 	return nil
+}
+
+// refuseRelease stands in for a store that recorded the attempt and is
+// gone by the time the verification that succeeded frees it.
+func (s *fakePasswordAttemptStore) refuseRelease() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.releaseRefused = true
 }
 
 // fill records n attempts, standing in for the verifications a caller

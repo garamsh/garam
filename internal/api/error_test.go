@@ -57,6 +57,30 @@ func TestRegisterPassword_ConflictCarriesNoneOfTheDriversText(t *testing.T) {
 	}
 }
 
+// TestDecodeJSON_RefusesABodyThatDoesNotParse covers the parse every
+// handler with a body goes through, on a route whose handler would
+// otherwise answer 200 for a patch naming nothing: a decoder that
+// reported no failure would leave the handler running on a zero value
+// rather than on what was sent, and a caller would read that as the
+// patch having been applied.
+//
+// The same request with a body that parses is the control, so what the
+// refusal answers is the body and not the route.
+func TestDecodeJSON_RefusesABodyThatDoesNotParse(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	f.permit(permission{grn.New("root", "default", user.ServiceType, "owner-sub"), org.ActionOrgUpdate})
+
+	rec := f.do(t, "PATCH", "/orgs/"+slug, `{"name":`, owner)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Equal(t, "invalid_argument", decodeBody[apigen.Error](t, rec).Kind)
+
+	rec = f.do(t, "PATCH", "/orgs/"+slug, `{"name":"acme2"}`, owner)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "acme2", decodeBody[apigen.Organization](t, rec).Name)
+}
+
 // TestServer_TellsAnEngineThatIsNotThereFromADecisionThatRefused keeps
 // the two refusals apart on this listener as well. A denied decision is
 // permanent and an engine that cannot answer is transient, and a caller

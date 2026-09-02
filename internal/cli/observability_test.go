@@ -137,6 +137,37 @@ func TestLogRequests_ReportsTheRouteAndThePrincipal(t *testing.T) {
 	assert.NotContains(t, out.String(), "oauth-code")
 }
 
+// TestLogRequests_LevelsTheLineByWhoseFailureItIs covers the level
+// rather than the fields. A 5xx is the server's own failure and is what
+// an operator is paged on, so the line carries error; everything below
+// it is an answer the server meant to give, so the line carries info.
+// The two are asserted together because each is what the other cannot
+// see: a level read backwards is wrong on both, and one taking 500 for
+// an ordinary answer is wrong only on the first.
+func TestLogRequests_LevelsTheLineByWhoseFailureItIs(t *testing.T) {
+	for name, tc := range map[string]struct {
+		status int
+		want   string
+	}{
+		"the first status the server failed on": {http.StatusInternalServerError, "ERROR"},
+		"a refusal the server meant to give":    {http.StatusNotFound, "INFO"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var out lines
+			obs := recordingObservability(&out)
+
+			mux := http.NewServeMux()
+			mux.Handle("GET /orgs", obs.logRequests(http.HandlerFunc(
+				func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(tc.status) })))
+			mux.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/orgs", nil))
+
+			line := decodeLine(t, &out)
+			assert.Equal(t, float64(tc.status), line["status"])
+			assert.Equal(t, tc.want, line["level"])
+		})
+	}
+}
+
 func TestLogRequests_OmitsAnUnknownPrincipal(t *testing.T) {
 	var out lines
 	obs := recordingObservability(&out)

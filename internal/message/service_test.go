@@ -186,12 +186,20 @@ func TestService_ClaimWaitsForAMessageRatherThanAnsweringAnEmptyQueue(t *testing
 	s, err := message.NewService(store, cfg)
 	require.NoError(t, err)
 
+	// A deadline far above the configured wait and far below the default
+	// one, so a poll that ran on the default rather than on what this
+	// test set is told apart from one that ran its wait out: the first
+	// leaves this context expired and the second does not.
+	ctx, cancel := context.WithTimeout(context.Background(), message.DefaultWait/10)
+	defer cancel()
+
 	start := time.Now()
-	claim, err := s.Claim(context.Background(), recipientGRN(), recipientGRN())
+	claim, err := s.Claim(ctx, recipientGRN(), recipientGRN())
 	waited := time.Since(start)
 
 	assert.Nil(t, claim)
 	assert.ErrorIs(t, err, message.ErrNoMessageReady)
+	assert.NoError(t, ctx.Err(), "the poll ran on a wait this test did not configure")
 	assert.GreaterOrEqual(t, waited, cfg.Wait, "the poll answered an empty queue before its wait ran out")
 	assert.Greater(t, store.claims, 1, "the poll slept through its wait instead of re-reading the queue")
 	assert.Equal(t, message.DefaultLease, store.lease, "the lease Postgres measures is the configured one")

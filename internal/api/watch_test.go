@@ -239,6 +239,36 @@ func TestWatchAgent_RefusesACallerGrantedOnlyTheRead(t *testing.T) {
 	assert.Equal(t, http.StatusOK, granted.StatusCode)
 }
 
+// TestWatchAgent_ReportsALeaseItCouldNotDrop covers the end of a
+// stream, where the request's context is already done: nothing is
+// retried and nobody is answered, the lease lapses on its own, and the
+// line is the only record that one was left behind. The watch that ends
+// cleanly is the control — it drops its lease, so what the report
+// answers is a store that refused rather than a stream that ended.
+func TestWatchAgent_ReportsALeaseItCouldNotDrop(t *testing.T) {
+	reported := captureReports(t)
+	f := newFixture(t)
+	slug, held, watcher, _ := watchers(t, f)
+	server := httptest.NewServer(f.handler)
+	t.Cleanup(server.Close)
+	f.awaitReceiving(t)
+	path := "/orgs/" + slug + "/agents/" + held.Identifier + "/watch"
+
+	resp, _, leave := open(t, server.URL, path, watcher)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	leave()
+	require.Eventually(t, func() bool { return f.leases.held() == 0 },
+		time.Second, 10*time.Millisecond, "a store that answers drops the lease")
+
+	f.leases.refuseClose()
+	resp, _, leave = open(t, server.URL, path, watcher)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	leave()
+	assert.Eventually(t, func() bool { return strings.Contains(reported.String(), "watch not closed") },
+		time.Second, 10*time.Millisecond, "a lease left behind is reported")
+	assert.Equal(t, 1, f.leases.held(), "and it is still held")
+}
+
 // TestWatchAgent_AnswersNotFoundForAnAgentNobodyReported keeps a stream
 // off a GRN no agent answers under: silence on this stream is what an
 // agent that has said nothing looks like, so a typed identifier must not

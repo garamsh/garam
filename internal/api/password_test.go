@@ -214,6 +214,63 @@ func TestLoginPassword_ReleasesTheSlotItVerified(t *testing.T) {
 	assert.Len(t, f.attempts.expiryOf, 1, "one that failed does")
 }
 
+// TestLoginPassword_ReportsASlotItCouldNotRelease covers the failure
+// that arrives after the answer is settled. The verification succeeded,
+// so the sign-in stands either way; what a store that cannot free the
+// slot costs is one held against the live-attempt bound until it
+// lapses, and the line is the only record that it happened. Both
+// directions are asserted, because a report raised on the branch where
+// the release worked is silence exactly where one is needed.
+func TestLoginPassword_ReportsASlotItCouldNotRelease(t *testing.T) {
+	reported := captureReports(t)
+	f := newFixture(t)
+	token := inviteTo(t, f, "acme", "invite-tok")
+	require.Equal(t, http.StatusCreated,
+		f.do(t, "POST", "/auth/password/register", registerBody(token, "alice", registeredPassword)).Code)
+
+	require.Equal(t, http.StatusOK,
+		f.do(t, "POST", "/auth/password/login", loginBody("alice", registeredPassword)).Code)
+	require.NotContains(t, reported.String(), "password attempt not released",
+		"a release that worked is not reported")
+
+	f.attempts.refuseRelease()
+	require.Equal(t, http.StatusOK,
+		f.do(t, "POST", "/auth/password/login", loginBody("alice", registeredPassword)).Code,
+		"the sign-in stands: freeing the slot is what failed")
+	assert.Contains(t, reported.String(), "password attempt not released")
+}
+
+// TestLoginPassword_ReportsAVerifierItCouldNotUpgrade covers the other
+// half of the rule the upgrade is written to: the failure is reported
+// and not raised, because refusing a valid sign-in over maintenance
+// would cost more than carrying the old parameters one login longer
+// (ADR-0041). A sign-in that succeeds is only half of that — one whose
+// upgrade failed silently succeeds too, and leaves nothing saying the
+// stored population stopped converging.
+func TestLoginPassword_ReportsAVerifierItCouldNotUpgrade(t *testing.T) {
+	reported := captureReports(t)
+	f := newFixture(t)
+	token := inviteTo(t, f, "acme", "invite-tok")
+	require.Equal(t, http.StatusCreated,
+		f.do(t, "POST", "/auth/password/register", registerBody(token, "alice", registeredPassword)).Code)
+	alice := grn.New("root", "default", user.ServiceType, "local-alice")
+
+	require.NoError(t, f.credentials.Replace(testCtx(t), alice, supersededVerifier(t, registeredPassword)))
+	require.Equal(t, http.StatusOK,
+		f.do(t, "POST", "/auth/password/login", loginBody("alice", registeredPassword)).Code)
+	require.NotContains(t, reported.String(), "password verifier not upgraded",
+		"an upgrade that worked is not reported")
+
+	require.NoError(t, f.credentials.Replace(testCtx(t), alice, supersededVerifier(t, registeredPassword)))
+	f.credentials.refuseReplace()
+	require.Equal(t, http.StatusOK,
+		f.do(t, "POST", "/auth/password/login", loginBody("alice", registeredPassword)).Code,
+		"the sign-in stands: rewriting the verifier is what failed")
+	assert.Contains(t, reported.String(), "password verifier not upgraded")
+	assert.False(t, f.credentials.held(alice).AtCurrentPolicy(),
+		"and what is stored is still the superseded verifier")
+}
+
 // TestLoginPassword_UpgradesASupersededVerifier holds the upgrade path
 // end to end: a credential stored under weaker parameters still signs
 // in, and is rewritten at the current policy on the way out, so the

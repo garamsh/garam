@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { z } from "zod";
 
 import {
   GaramApiError,
@@ -6,6 +7,8 @@ import {
   garamFetchAuthenticated,
 } from "@/lib/garam";
 import type { components } from "@/types/api";
+
+import { isGrn } from "../grn";
 
 /** An organization, as the API returns one. */
 export type Organization = components["schemas"]["Organization"];
@@ -52,50 +55,157 @@ export type OrgConsent = components["schemas"]["OrgConsent"];
  */
 export type OrgRead<T> = { status: "ok"; data: T } | { status: "unreachable" };
 
+// What the seam parses each of this feature's reads against. Every
+// parser is annotated with the type `api/openapi.yaml` generated, so a
+// field the specification adds, drops or retypes fails the typecheck
+// here rather than reaching a page as a cast.
+
+/**
+ * A GRN the console can read. Refusing a malformed one at the seam is
+ * what makes `slugFromGrn` total everywhere downstream — the field is
+ * otherwise a throw at whichever render or Server Action reaches it
+ * first.
+ */
+const GrnParser = z.string().refine(isGrn);
+
+const RoleParser: z.ZodType<components["schemas"]["Role"]> = z.enum([
+  "owner",
+  "admin",
+  "member",
+]);
+
+export const OrganizationParser: z.ZodType<Organization> = z.object({
+  grn: GrnParser,
+  name: z.string(),
+  createdAt: z.string(),
+});
+
+const GroupParser: z.ZodType<Group> = z.object({
+  grn: GrnParser,
+  name: z.string(),
+  orgGrn: GrnParser,
+  roles: z.array(RoleParser),
+});
+
+const ProjectParser: z.ZodType<Project> = z.object({
+  grn: GrnParser,
+  name: z.string(),
+  orgGrn: GrnParser,
+  roles: z.array(RoleParser),
+});
+
+const MemberParser: z.ZodType<Member> = z.object({
+  userGrn: GrnParser,
+  nickname: z.string().optional(),
+  role: RoleParser,
+  since: z.string(),
+});
+
+export const InvitationParser: z.ZodType<Invitation> = z.object({
+  token: z.string(),
+  orgGrn: GrnParser,
+  role: RoleParser,
+  expiresAt: z.string(),
+});
+
+export const AgentParser: z.ZodType<Agent> = z.object({
+  grn: GrnParser,
+  orgGrn: GrnParser,
+  provisioningState: z.enum(["pending", "provisioned", "ready", "failed"]),
+  runtimeState: z.enum(["unknown", "connected", "disconnected"]),
+  assignment: z
+    .object({
+      operatorGrn: GrnParser,
+      epoch: z.number(),
+      since: z.string(),
+    })
+    .optional(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const AgentDefinitionParser: z.ZodType<AgentDefinition> = z.object({
+  agentGrn: GrnParser,
+  orgGrn: GrnParser,
+  operatorGrn: GrnParser,
+  values: z.record(z.string(), z.string()),
+  definedBy: GrnParser,
+  createdAt: z.string(),
+});
+
+export const OperatorParser: z.ZodType<Operator> = z.object({
+  grn: GrnParser,
+  orgGrn: GrnParser,
+  registeredBy: GrnParser,
+  createdAt: z.string(),
+});
+
+export const OrgConsentParser: z.ZodType<OrgConsent> = z.object({
+  orgGrn: GrnParser,
+  grantedHere: z.boolean(),
+  grantedThere: z.boolean(),
+  stands: z.boolean(),
+});
+
 /** Organizations the signed-in user belongs to. */
 export function listOrgs(): Promise<Organization[]> {
-  return garamFetchAuthenticated<Organization[]>("/orgs");
+  return garamFetchAuthenticated("/orgs", z.array(OrganizationParser));
 }
 
 /** One organization by slug. */
 export function getOrg(org: string): Promise<OrgRead<Organization>> {
   return orgRead(
-    garamFetchAuthenticated<Organization>(`/orgs/${orgPath(org)}`),
+    garamFetchAuthenticated(`/orgs/${orgPath(org)}`, OrganizationParser),
   );
 }
 
 /** The people who belong to an organization. */
 export function listOrgMembers(org: string): Promise<OrgRead<Member[]>> {
   return orgRead(
-    garamFetchAuthenticated<Member[]>(`/orgs/${orgPath(org)}/members`),
+    garamFetchAuthenticated(
+      `/orgs/${orgPath(org)}/members`,
+      z.array(MemberParser),
+    ),
   );
 }
 
 /** The groups an organization holds. */
 export function listGroups(org: string): Promise<OrgRead<Group[]>> {
   return orgRead(
-    garamFetchAuthenticated<Group[]>(`/orgs/${orgPath(org)}/groups`),
+    garamFetchAuthenticated(
+      `/orgs/${orgPath(org)}/groups`,
+      z.array(GroupParser),
+    ),
   );
 }
 
 /** The projects an organization owns. */
 export function listProjects(org: string): Promise<OrgRead<Project[]>> {
   return orgRead(
-    garamFetchAuthenticated<Project[]>(`/orgs/${orgPath(org)}/projects`),
+    garamFetchAuthenticated(
+      `/orgs/${orgPath(org)}/projects`,
+      z.array(ProjectParser),
+    ),
   );
 }
 
 /** The operators an organization has registered. */
 export function listOperators(org: string): Promise<OrgRead<Operator[]>> {
   return orgRead(
-    garamFetchAuthenticated<Operator[]>(`/orgs/${orgPath(org)}/operators`),
+    garamFetchAuthenticated(
+      `/orgs/${orgPath(org)}/operators`,
+      z.array(OperatorParser),
+    ),
   );
 }
 
 /** The agents an organization holds. */
 export function listAgents(org: string): Promise<OrgRead<Agent[]>> {
   return orgRead(
-    garamFetchAuthenticated<Agent[]>(`/orgs/${orgPath(org)}/agents`),
+    garamFetchAuthenticated(
+      `/orgs/${orgPath(org)}/agents`,
+      z.array(AgentParser),
+    ),
   );
 }
 
@@ -104,8 +214,9 @@ export function listAgentDefinitions(
   org: string,
 ): Promise<OrgRead<AgentDefinition[]>> {
   return orgRead(
-    garamFetchAuthenticated<AgentDefinition[]>(
+    garamFetchAuthenticated(
       `/orgs/${orgPath(org)}/agent-definitions`,
+      z.array(AgentDefinitionParser),
     ),
   );
 }
@@ -113,7 +224,10 @@ export function listAgentDefinitions(
 /** The cross-organization consent relations an organization is a side of. */
 export function listOrgConsents(org: string): Promise<OrgRead<OrgConsent[]>> {
   return orgRead(
-    garamFetchAuthenticated<OrgConsent[]>(`/orgs/${orgPath(org)}/consents`),
+    garamFetchAuthenticated(
+      `/orgs/${orgPath(org)}/consents`,
+      z.array(OrgConsentParser),
+    ),
   );
 }
 

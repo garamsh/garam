@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 import {
   GaramUnreachableError,
   garamFetch,
@@ -7,6 +9,14 @@ import type { components } from "@/types/api";
 
 /** The signed-in user, as the backend describes one. */
 export type User = components["schemas"]["User"];
+
+// Annotated with the type `api/openapi.yaml` generated, so a field the
+// specification adds, drops or retypes fails the typecheck here rather
+// than reaching the shell as a cast.
+const UserParser: z.ZodType<User> = z.object({
+  grn: z.string(),
+  nickname: z.string(),
+});
 
 /**
  * What the backend was able to say about the caller's session. An API
@@ -25,7 +35,7 @@ export type SessionState =
  */
 export async function getSession(): Promise<SessionState> {
   try {
-    return { status: "signed-in", user: await garamFetch<User>("/me") };
+    return { status: "signed-in", user: await garamFetch("/me", UserParser) };
   } catch (error) {
     if (isUnauthenticated(error)) {
       return { status: "signed-out" };

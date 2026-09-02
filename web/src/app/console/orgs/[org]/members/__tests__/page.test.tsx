@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import MembersPage from "@/app/console/orgs/[org]/members/page";
 import { renderServerComponent } from "@/testing/render";
-import { API_URL, signedOut } from "@/testing/mocks/handlers";
+import { API_URL, aliceMembership, signedOut } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
 vi.mock("next/navigation", () => ({
@@ -20,22 +20,48 @@ function params(org: string) {
   return { params: Promise.resolve({ org }) };
 }
 
+/** What `/orgs/acme/members` answers with, for one test. */
+function membersAre(...members: unknown[]) {
+  return http.get(`${API_URL}/orgs/acme/members`, () =>
+    HttpResponse.json(members),
+  );
+}
+
 describe("members section", () => {
-  it("lists members by identifier rather than by GRN", async () => {
+  it("shows the member's name over the identifier, and no GRN", async () => {
     const { container } = await renderServerComponent(
       MembersPage(params("acme")),
     );
 
-    const row = screen.getByRole("row", { name: /alice/ });
+    // Presence: a row's accessible name is every cell in it, so the
+    // name of the member is one part of a longer string.
+    const row = screen.getByRole("row", { name: /alice/i });
     expect(row).toHaveTextContent("owner");
     expect(row).toHaveTextContent("2026-01-02");
+    // Exact matches: the fixture's name and its identifier segment
+    // differ only in case, so a loose match cannot tell them apart.
+    expect(screen.getByText("Alice")).toBeInTheDocument();
+    expect(screen.getByText("alice")).toBeInTheDocument();
     expect(container.textContent).not.toContain("grn:");
   });
 
-  it("shows an empty state rather than a bare table", async () => {
+  it("shows the identifier alone when the user row is gone", async () => {
     server.use(
-      http.get(`${API_URL}/orgs/acme/members`, () => HttpResponse.json([])),
+      membersAre({
+        userGrn: "grn:root:default:user:alice",
+        role: "owner",
+        since: "2026-01-02T03:04:05Z",
+      }),
     );
+
+    await renderServerComponent(MembersPage(params("acme")));
+
+    expect(screen.getByText("alice")).toBeInTheDocument();
+    expect(screen.queryByText("Alice")).not.toBeInTheDocument();
+  });
+
+  it("shows an empty state rather than a bare table", async () => {
+    server.use(membersAre());
 
     await renderServerComponent(MembersPage(params("acme")));
 
@@ -44,38 +70,51 @@ describe("members section", () => {
     ).toBeInTheDocument();
   });
 
-  it("offers invitations to an owner", async () => {
+  it("offers invitations to a plain member, for the API to refuse", async () => {
+    server.use(
+      membersAre({
+        userGrn: "grn:root:default:user:alice",
+        nickname: "Alice",
+        role: "member",
+        since: "2026-01-02T03:04:05Z",
+      }),
+    );
+
     await renderServerComponent(MembersPage(params("acme")));
 
+    // The control for the presence: the role the console once gated on
+    // is the one rendered here, so the form standing is the absence of
+    // that gate rather than a page that failed to render at all. The
+    // regex is presence, as above.
+    expect(screen.getByRole("row", { name: /alice/i })).toHaveTextContent(
+      "member",
+    );
     expect(
       screen.getByRole("heading", { name: "Invite a member" }),
     ).toBeInTheDocument();
   });
 
-  it("hides invitations from a plain member", async () => {
+  it("refuses a body the specification does not describe", async () => {
     server.use(
-      http.get(`${API_URL}/orgs/acme/members`, () =>
-        HttpResponse.json([
-          {
-            userGrn: "grn:root:default:user:alice",
-            role: "member",
-            since: "2026-01-02T03:04:05Z",
-          },
-        ]),
-      ),
+      membersAre({
+        userGrn: "root:default:user:alice",
+        role: "owner",
+        since: "2026-01-02T03:04:05Z",
+      }),
     );
+
+    await expect(
+      renderServerComponent(MembersPage(params("acme"))),
+    ).rejects.toThrow(/outside its specification/);
+
+    // The control: the same read against the body the API answers with
+    // renders, so the refusal above is the GRN and not a parser that
+    // refuses every member.
+    server.use(membersAre(aliceMembership));
 
     await renderServerComponent(MembersPage(params("acme")));
 
-    // The control for the absence below: the section rendered for this
-    // member, so the missing heading is the role branch and not a page
-    // that failed to render at all.
-    expect(screen.getByRole("row", { name: /alice/ })).toHaveTextContent(
-      "member",
-    );
-    expect(
-      screen.queryByRole("heading", { name: "Invite a member" }),
-    ).not.toBeInTheDocument();
+    expect(screen.getByText("Alice")).toBeInTheDocument();
   });
 
   it.each([403, 404])("renders not-found on %i", async (status) => {
@@ -100,9 +139,6 @@ describe("members section", () => {
     ).toBeInTheDocument();
     expect(
       screen.queryByText("This organization has no members."),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("heading", { name: "Invite a member" }),
     ).not.toBeInTheDocument();
   });
 

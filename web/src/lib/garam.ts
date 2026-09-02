@@ -2,6 +2,7 @@ import "server-only";
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { z } from "zod";
 
 import { env } from "@/env";
 import { SESSION_COOKIE } from "@/lib/session";
@@ -29,6 +30,20 @@ export class GaramUnreachableError extends Error {
   constructor(options?: ErrorOptions) {
     super("the garam API could not be reached", options);
     this.name = "GaramUnreachableError";
+  }
+}
+
+/**
+ * The backend answered, and what it answered is not what
+ * `api/openapi.yaml` says the operation carries. Neither a refusal nor
+ * an outage: garam broke a contract this repository generates the
+ * client from, so it surfaces as the bug it is rather than as a state a
+ * page renders.
+ */
+export class GaramContractError extends Error {
+  constructor(path: string, options?: ErrorOptions) {
+    super(`the garam API answered ${path} outside its specification`, options);
+    this.name = "GaramContractError";
   }
 }
 
@@ -74,16 +89,31 @@ export async function garamRequest(
   return response;
 }
 
-/** `garamRequest` for a caller that needs only the body it answered. */
+/**
+ * `garamRequest` for a caller that needs only the body it answered,
+ * parsed by `parser`. This is the one place a response body is checked,
+ * so nothing downstream checks a field again. A caller that reads none
+ * of the body passes `z.unknown()`, which asserts nothing because it
+ * uses nothing.
+ */
 export async function garamFetch<T>(
   path: string,
+  parser: z.ZodType<T>,
   init?: RequestInit,
 ): Promise<T> {
   const response = await garamRequest(path, init);
-  if (response.status === 204) {
-    return undefined as T;
+  // A 204 carries no body, and reading one as JSON rejects.
+  const body: unknown =
+    response.status === 204
+      ? undefined
+      : await response.json().catch((cause: unknown) => {
+          throw new GaramContractError(path, { cause });
+        });
+  const parsed = parser.safeParse(body);
+  if (!parsed.success) {
+    throw new GaramContractError(path, { cause: parsed.error });
   }
-  return (await response.json()) as T;
+  return parsed.data;
 }
 
 /**
@@ -93,10 +123,11 @@ export async function garamFetch<T>(
  */
 export async function garamFetchAuthenticated<T>(
   path: string,
+  parser: z.ZodType<T>,
   init?: RequestInit,
 ): Promise<T> {
   try {
-    return await garamFetch<T>(path, init);
+    return await garamFetch(path, parser, init);
   } catch (error) {
     if (isUnauthenticated(error)) redirect("/login");
     throw error;

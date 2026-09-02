@@ -44,6 +44,37 @@ describe("createOrg", () => {
     expect(body).toEqual({ name: "Acme 2" });
   });
 
+  it("refuses a GRN it cannot read where the request is made", async () => {
+    server.use(
+      http.post(`${API_URL}/orgs`, () =>
+        HttpResponse.json(
+          { ...created, grn: "root:default:org:acme2" },
+          { status: 201 },
+        ),
+      ),
+    );
+
+    // Not "malformed GRN": the identifier the redirect is built from is
+    // read at the seam, so nothing between the write and the redirect
+    // is left to throw over a body the console cannot read.
+    await expect(
+      createOrg({ status: "idle" }, form({ name: "Acme 2" })),
+    ).rejects.toThrow(/outside its specification/);
+
+    // The control: the same write against the body the API answers with
+    // redirects, so the refusal above is the GRN and not a parser that
+    // refuses every organization.
+    server.use(
+      http.post(`${API_URL}/orgs`, () =>
+        HttpResponse.json(created, { status: 201 }),
+      ),
+    );
+
+    await expect(
+      createOrg({ status: "idle" }, form({ name: "Acme 2" })),
+    ).rejects.toThrow("NEXT_REDIRECT:/console/orgs/acme2");
+  });
+
   it("rejects an empty name without calling the backend", async () => {
     const state = await createOrg({ status: "idle" }, form({ name: "  " }));
 

@@ -4,11 +4,20 @@
  * that last segment, so routes carry the segment rather than the GRN.
  */
 export function slugFromGrn(grn: string): string {
-  const segments = grn.split(":");
-  if (segments.length !== 5 || segments[0] !== "grn") {
+  if (!isGrn(grn)) {
     throw new Error(`malformed GRN: ${grn}`);
   }
-  return segments[4];
+  return grn.split(":")[4];
+}
+
+/**
+ * Whether `slugFromGrn` can read the string. The seam refuses a GRN
+ * field this rejects, so the throw above guards an invariant rather
+ * than a response body.
+ */
+export function isGrn(value: string): boolean {
+  const segments = value.split(":");
+  return segments.length === 5 && segments[0] === "grn";
 }
 
 /**

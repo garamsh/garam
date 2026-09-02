@@ -2,6 +2,7 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { z } from "zod";
 
 import { garamFetch, isUnauthenticated } from "@/lib/garam";
 import { SESSION_COOKIE } from "@/lib/session";
@@ -15,7 +16,7 @@ import { SESSION_COOKIE } from "@/lib/session";
  */
 export async function logOut() {
   try {
-    await garamFetch("/auth/logout", { method: "POST" });
+    await garamFetch("/auth/logout", z.unknown(), { method: "POST" });
   } catch (error) {
     if (!isUnauthenticated(error)) throw error;
   } finally {

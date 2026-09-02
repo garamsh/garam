@@ -12,7 +12,7 @@ import { parseOperatorIdentifier } from "@/lib/operator";
 import type { components } from "@/types/api";
 
 import { slugFromGrn } from "../grn";
-import type { Operator } from "./orgs";
+import { OperatorParser, type Operator } from "./orgs";
 
 /** What the register form has to show: nothing yet, a refusal, or the
  * operator the organization now holds a record of. */
@@ -49,8 +49,9 @@ export async function registerOperator(
   const org = parsed.data.org;
   let operator: Operator;
   try {
-    operator = await garamFetchAuthenticated<Operator>(
+    operator = await garamFetchAuthenticated(
       `/orgs/${encodeURIComponent(org)}/operators`,
+      OperatorParser,
       {
         method: "POST",
         headers: { "content-type": "application/json" },

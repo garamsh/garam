@@ -13,6 +13,15 @@ on:
 
 permissions: read-all
 
+# No concurrency group, and the absence is the guard rather than the
+# `cancel-in-progress: false` that would read like one. A group cancels
+# a *pending* run of that group when a newer one queues behind it,
+# whichever way `cancel-in-progress` is set, and a release run that
+# never starts publishes nothing under the tag that asked for it. A
+# cancelled one is worse still: the server image is pushed first, the
+# repositories are IMMUTABLE, and the repair is the next version
+# (ADR-0039 §Consequences).
+
 jobs:
   images:
     runs-on: ubuntu-latest

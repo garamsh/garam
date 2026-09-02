@@ -89,9 +89,14 @@ export const globexConsent: OrgConsent = {
   stands: true,
 };
 
-/** Alice's membership of Acme, at the role that may invite. */
+/**
+ * Alice's membership of Acme, at the role that may invite. `nickname`
+ * is her user row's, which is what the members table shows: a fixture
+ * without one cannot tell a name from the identifier segment.
+ */
 export const aliceMembership: Member = {
   userGrn: alice.grn,
+  nickname: alice.nickname,
   role: "owner",
   since: "2026-01-02T03:04:05Z",
 };

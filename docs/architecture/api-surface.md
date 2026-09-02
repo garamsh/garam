@@ -196,6 +196,14 @@ address holds the specification and nothing under `docs/`:
 
 What each limit covers is in the two files, named here and not copied.
 
+A caller meets one more limit, which neither file states. **Both
+listeners bound a request body before anything decodes it** — at a
+figure the composition root holds, `maxRequestBody` in
+`internal/cli/cli.go` — and a body past it is refused as an invalid
+argument. It bounds the request rather than a field, which is what
+leaves it standing where §What nothing checks says a declared
+constraint does not.
+
 The other two surfaces are fixed differently. The engine's wire
 contract is `proto/garam/authz/v1`, generated and checked the same way.
 The probes have no specification at all: their paths, and the ports

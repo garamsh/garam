@@ -2,7 +2,6 @@ package message
 
 import (
 	"context"
-	"errors"
 	"strconv"
 	"time"
 
@@ -160,7 +159,10 @@ func (s *service) Claim(ctx context.Context, caller, recipient grn.GRN) (*Claim,
 	deadline := time.Now().Add(s.cfg.Wait)
 	for {
 		claim, err := s.store.Claim(ctx, recipient, s.cfg.Lease, s.cfg.Attempts)
-		if !errors.Is(err, ErrNoMessageReady) {
+		// The store has one not-found to answer this with, and the kind
+		// is what the chain carries; errors.Is does not read it and is
+		// not mixed with errorx (stack-go.md §4).
+		if !errorx.IsKind(err, errorx.KindNotFound) {
 			return claim, err
 		}
 		if !time.Now().Before(deadline) {

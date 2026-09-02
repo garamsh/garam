@@ -301,3 +301,49 @@ func TestService_StatusReadsUnderTheCallerAsTheSender(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, message.MaxAttempts, configured.maxAttempts)
 }
+
+// answering is a queue whose claim answers err instead of the package's
+// own sentinel, so what the wait reads can be a copy carrying the kind
+// rather than the sentinel itself.
+type answering struct {
+	*queue
+	err error
+}
+
+func (a *answering) Claim(ctx context.Context, recipient grn.GRN, lease time.Duration, maxAttempts int) (*message.Claim, error) {
+	_, _ = a.queue.Claim(ctx, recipient, lease, maxAttempts)
+	return nil, a.err
+}
+
+// TestService_ClaimWaitsOnTheKindTheStoreAnswersWith holds the wait
+// against the shape the store's answer arrives in. `stack-go.md` §4
+// does not admit errors.Is beside errorx, and the reason is here: a
+// sentinel matched by identity stops matching the moment anything
+// replaces it with a kind-carrying copy, and the wait would then hand
+// that copy to a caller as the failure it is not.
+//
+// The control is a failure of another kind, which must be handed back
+// at once: without it the wait would hold as readily for a service that
+// waits out every failure the store reports.
+func TestService_ClaimWaitsOnTheKindTheStoreAnswersWith(t *testing.T) {
+	cfg := brief()
+	store := &answering{queue: &queue{}, err: errorx.New(errorx.KindNotFound, "no message ready")}
+	s, err := message.NewService(store, cfg)
+	require.NoError(t, err)
+
+	claim, err := s.Claim(context.Background(), recipientGRN(), recipientGRN())
+
+	assert.Nil(t, claim)
+	assert.ErrorIs(t, err, message.ErrNoMessageReady, "an empty queue is answered as an empty queue")
+	assert.Greater(t, store.queue.claims, 1, "the wait re-read the queue rather than answering the first read")
+
+	unreachable := errorx.New(errorx.KindUnavailable, "queue unreachable")
+	failing := &answering{queue: &queue{}, err: unreachable}
+	s, err = message.NewService(failing, cfg)
+	require.NoError(t, err)
+
+	_, err = s.Claim(context.Background(), recipientGRN(), recipientGRN())
+
+	assert.ErrorIs(t, err, unreachable, "the control: another kind reaches the caller")
+	assert.Equal(t, 1, failing.queue.claims, "and is not waited on")
+}

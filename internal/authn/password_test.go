@@ -88,6 +88,11 @@ func TestVerifier_Match_RefusesAMalformedVerifier(t *testing.T) {
 		{"unreadable parameters", "$argon2id$v=19$m=x,t=y,p=z$c2FsdHNhbHRzYWx0c2E$dGFndGFndGFndGFn"},
 		{"truncated", "$argon2id$v=19$m=19456,t=2,p=1$c2FsdHNhbHRzYWx0c2E"},
 		{"empty tag", "$argon2id$v=19$m=19456,t=2,p=1$c2FsdHNhbHRzYWx0c2E$"},
+		// The two shapes that read as parameters and are not: argon2
+		// panics on either below one, so an unrefused row answers a
+		// sign-in with a 500 rather than with a refusal.
+		{"zero iterations", "$argon2id$v=19$m=19456,t=0,p=1$c2FsdHNhbHRzYWx0c2E$dGFndGFndGFndGFn"},
+		{"zero lanes", "$argon2id$v=19$m=19456,t=2,p=0$c2FsdHNhbHRzYWx0c2E$dGFndGFndGFndGFn"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			assert.ErrorIs(t, tc.verifier.Match(testPassword), authn.ErrPasswordRejected)

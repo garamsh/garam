@@ -1,6 +1,7 @@
 package machineapi_test
 
 import (
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/machineapi"
@@ -158,4 +160,32 @@ func TestRecoverPanics_AnswersInsteadOfDroppingTheConnection(t *testing.T) {
 
 	assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 	assert.JSONEq(t, `{"kind":"internal","message":"internal error"}`, string(body))
+}
+
+// TestBindingError_AnswersTheErrorTheSpecificationDeclares covers what
+// a caller reads when the generated router refuses a parameter before
+// any handler runs. The router's own default writes the binding error's
+// text as text/plain, and that text quotes the value it could not read;
+// this surface owes the Error `api/machine.yaml` declares and owes the
+// caller none of its own submission back.
+//
+// The kind and the message are asserted beside the absence, because a
+// handler writing nothing at all would carry no submitted value either.
+func TestBindingError_AnswersTheErrorTheSpecificationDeclares(t *testing.T) {
+	submitted := `grn:acme:default:agent:"; drop table messages`
+	recorder := httptest.NewRecorder()
+
+	machineapi.BindingError(recorder,
+		httptest.NewRequest(http.MethodPost, "/agents/x/claims", nil),
+		&machinegen.InvalidParamFormatError{
+			ParamName: "agent",
+			Err:       errors.New("parsing " + submitted + ": invalid syntax"),
+		})
+
+	assert.Equal(t, http.StatusBadRequest, recorder.Code)
+	assert.Equal(t, "application/json", recorder.Header().Get("Content-Type"))
+	assert.JSONEq(t, `{"kind":"invalid_argument","message":"a request parameter could not be read"}`,
+		recorder.Body.String())
+	assert.NotContains(t, recorder.Body.String(), "drop table",
+		"nothing the caller submitted travels back")
 }

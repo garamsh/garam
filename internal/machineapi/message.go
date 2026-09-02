@@ -3,7 +3,6 @@ package machineapi
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 
 	machinegen "github.com/garamsh/garam/api/machine"
@@ -195,12 +194,14 @@ func (s *Server) ClaimMessage(w http.ResponseWriter, r *http.Request, agentGRN m
 		return
 	}
 	claim, err := s.messages.Claim(r.Context(), claimant, recipient)
-	if errors.Is(err, message.ErrNoMessageReady) {
+	if errorx.IsKind(err, errorx.KindNotFound) {
 		// A poll that waited its time and found nothing is the ordinary
 		// answer rather than a refusal, so the caller has an empty
 		// answer to loop on instead of an error to tell apart. It
 		// carries no watcher count either: there is no turn to forward
-		// the events of until a message is handed out.
+		// the events of until a message is handed out. The queue has one
+		// not-found to answer a claim with, and the kind is what reaches
+		// here (stack-go.md §4).
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}

@@ -97,10 +97,16 @@ func TestAdapterClient_RefusesAGroupReadableKey(t *testing.T) {
 
 // TestAdapterClient_RefusesKeyMaterialThatIsNotThere covers the file
 // that was configured and never arrived, which a deployment gets wrong
-// before it gets anything else wrong.
+// before it gets anything else wrong. The material that is all there is
+// the control: each case below replaces one file of it with a path
+// nothing wrote, so what refuses is that file rather than anything
+// beside it.
 func TestAdapterClient_RefusesKeyMaterialThatIsNotThere(t *testing.T) {
 	certFile, keyFile, serverRootFile := adapterKeyMaterial(t)
 	absent := filepath.Join(t.TempDir(), "absent.pem")
+
+	_, err := adapterClient(certFile, keyFile, serverRootFile)
+	require.NoError(t, err, "every file where it was configured")
 
 	for name, args := range map[string][3]string{
 		"a certificate that is not there": {absent, keyFile, serverRootFile},

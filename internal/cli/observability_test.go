@@ -570,9 +570,19 @@ func TestTraceIDOf_PrefersTheSpan(t *testing.T) {
 	assert.Equal(t, id.String(), traceIDOf(ctx))
 }
 
+// TestTraceIDOf_FallsBackToAUUID holds the fallback against what a
+// spanless context renders without one. An empty SpanContext renders a
+// trace id of thirty-two zeroes, which uuid.Parse accepts in its
+// undashed form, so parsing alone passes with the fallback deleted. Two
+// calls differing is the other half: a fallback shared between calls
+// would correlate log lines that have nothing to do with each other.
 func TestTraceIDOf_FallsBackToAUUID(t *testing.T) {
-	_, err := uuid.Parse(traceIDOf(context.Background()))
+	first, second := traceIDOf(context.Background()), traceIDOf(context.Background())
+
+	_, err := uuid.Parse(first)
 	assert.NoError(t, err)
+	assert.NotEqual(t, trace.TraceID{}.String(), first, "the zero trace id is what no fallback renders")
+	assert.NotEqual(t, first, second)
 }
 
 // panickingSessions is an authn.SessionStore whose Delete is the

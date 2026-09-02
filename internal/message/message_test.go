@@ -57,7 +57,15 @@ func TestNew_BoundsTheBodyAtTheSubmissionLimit(t *testing.T) {
 	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), "a body past the bound is refused")
 }
 
+// TestNew_RejectsAMessageNothingCouldBeDoneWith reads each refusal
+// against the message that carries all three: every case below is that
+// message with one part emptied, so what refuses is that part rather
+// than a constructor that refuses everything.
 func TestNew_RejectsAMessageNothingCouldBeDoneWith(t *testing.T) {
+	accepted, err := message.New(recipientGRN(), senderGRN(), "key-1", "hello")
+	require.NoError(t, err)
+	require.NotNil(t, accepted)
+
 	tests := []struct {
 		name      string
 		recipient grn.GRN

@@ -27,15 +27,6 @@ const (
 	policyReconnectMax = 30 * time.Second
 )
 
-// PolicySource yields the statements an org's active policies grant a
-// set of subjects. Check and Explain read through it, so the engine
-// never parses a stored document on the hot path.
-type PolicySource interface {
-	// Statements returns the org-wide statements plus those of the
-	// policies attached to any of subjects (ADR-0008).
-	Statements(ctx context.Context, orgGRN grn.GRN, subjects []grn.GRN) ([]Statement, error)
-}
-
 // cachedPolicy is one active policy's parsed statements and the
 // subjects it is attached to. An empty subject set applies org-wide.
 type cachedPolicy struct {

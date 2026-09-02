@@ -47,6 +47,26 @@ export class GaramContractError extends Error {
   }
 }
 
+/**
+ * The parser `garamFetch` takes for a body, tied to the type
+ * `api/openapi.yaml` generated in both directions: it produces `T`, and
+ * it accepts every body `T` describes. A `z.ZodType<T>` annotation
+ * carries only the first — a parser demanding a key the specification
+ * does not describe still produces `T`, so it typechecks and then
+ * refuses a valid response as a contract violation (#896).
+ *
+ * Written `parserFor<Operator>()(z.object({ ... }))`: `T` is named so
+ * that the parser stays inferred and what it demands can be read off it.
+ */
+export function parserFor<T>() {
+  return <S extends z.ZodType<T>>(
+    parser: S &
+      (T extends z.input<S>
+        ? unknown
+        : { "requires what api/openapi.yaml does not describe": never }),
+  ): z.ZodType<T> => parser;
+}
+
 /** True when the error is the backend rejecting an absent session. */
 export function isUnauthenticated(error: unknown): boolean {
   return error instanceof GaramApiError && error.status === 401;

@@ -130,10 +130,14 @@ asserted: one file to read to know everything the application asks for.
 **It checks what it hands back.** Every read gives the seam a parser
 for what `api/openapi.yaml` says the operation carries, so a body that
 does not match is refused there rather than reaching a page as a field
-nothing proved. That refusal is a third answer beside the two the seam
-already has: a refusal is the backend deciding, an outage is the
-backend not answering, and this is the backend answering outside its
-own specification. Nothing downstream checks a field again.
+nothing proved. A parser may demand no key that operation does not
+carry either, so no field `api/openapi.yaml` does not describe can be
+what the console refuses a body for. A value it can: a GRN field the
+console cannot read is refused here rather than thrown at whichever
+page reached it first. That refusal is a third answer beside the two
+the seam already has: a refusal is the backend deciding, an outage is
+the backend not answering, and this is the backend answering outside
+its own specification. Nothing downstream checks a field again.
 
 It is reached over two paths, and only one of them is the rewrite:
 

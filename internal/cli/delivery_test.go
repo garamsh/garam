@@ -178,7 +178,9 @@ func TestAdapterClient_MeetsTheMachineListenerOverHTTP11(t *testing.T) {
 	t.Cleanup(func() { _ = srv.Close() })
 	// The certificate names localhost, so that is the name to reach it
 	// by; the port is whatever the listener took.
-	url := "https://localhost:" + strconv.Itoa(ln.Addr().(*net.TCPAddr).Port)
+	addr, ok := ln.Addr().(*net.TCPAddr)
+	require.True(t, ok, `net.Listen("tcp", ...) returns a *net.TCPAddr`)
+	url := "https://localhost:" + strconv.Itoa(addr.Port)
 
 	subject, err := adapterClient(certFile, keyFile, rootFile)
 	require.NoError(t, err)

@@ -203,7 +203,7 @@ func (s *Server) AddProjectMember(w http.ResponseWriter, r *http.Request, orgSlu
 
 // RemoveProjectMember removes a member from a project. Requires the
 // admin role.
-func (s *Server) RemoveProjectMember(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, projectSlug apigen.ProjectSlug, memberGrn apigen.MemberGrn) {
+func (s *Server) RemoveProjectMember(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, projectSlug apigen.ProjectSlug, memberGRN apigen.MemberGrn) {
 	u, err := s.currentUser(r)
 	if err != nil {
 		writeError(w, err)
@@ -213,7 +213,7 @@ func (s *Server) RemoveProjectMember(w http.ResponseWriter, r *http.Request, org
 		writeError(w, err)
 		return
 	}
-	member, err := grn.Parse(memberGrn)
+	member, err := grn.Parse(memberGRN)
 	if err != nil {
 		writeError(w, err)
 		return

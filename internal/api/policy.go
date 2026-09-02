@@ -215,13 +215,13 @@ func (s *Server) AttachPolicy(w http.ResponseWriter, r *http.Request, orgSlug ap
 
 // DetachPolicy removes one of a policy's attachments. Requires the
 // admin role.
-func (s *Server) DetachPolicy(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, policySlug apigen.PolicySlug, subjectGrn apigen.SubjectGrn) {
+func (s *Server) DetachPolicy(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, policySlug apigen.PolicySlug, subjectGRN apigen.SubjectGrn) {
 	g, _, err := s.authorizePolicy(r, orgSlug, policySlug, org.ActionPolicyDetach)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	subject, err := grn.Parse(subjectGrn)
+	subject, err := grn.Parse(subjectGRN)
 	if err != nil {
 		writeError(w, err)
 		return

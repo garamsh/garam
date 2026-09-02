@@ -72,8 +72,12 @@ already expose, built in parallel rather than gating P3.
   from an invitation (ADR-0041).
 - Mutations, phase 1: create an organization, invite a member by link,
   accept an invitation.
-- Still read-only in the console: groups, projects, and policies. The
-  policy console the landing page advertises does not exist yet.
+- Read-only in the console: groups and projects. Policies are neither
+  read nor written there — `web/src/app/console/orgs/[org]/policies/`
+  holds the section's place and says they are managed over the HTTP API
+  ([web-app.md](../architecture/web-app.md) §What it serves), and the
+  "In the console today" block of `web/src/app/(marketing)/page.tsx`
+  does not name them.
 
 ## P3 — Workflow core (not started)
 

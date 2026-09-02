@@ -74,11 +74,15 @@ Each domain's package contains:
   `.mockery.yaml` names.
 
 A store splits into `postgres_<concept>.go` files beside `postgres.go`,
-inside the same package, when the package persists more than one
-aggregate (`org`, `agent`, `authz`) or implements more than one `Store`
-interface (`operator`, `message`). It stays one package because the
-aggregates' fields are unexported and no exported constructor restores a
-stored row's state or timestamps, so whatever rehydrates one shares its
+inside the same package, when one Postgres type carries the methods of
+more than one aggregate (`org`, `agent`, `authz`) or of more than one
+`Store` interface (`operator`, `message`). What splits is a receiver's
+methods and not a package's stores: `internal/authn` implements four
+`Store` interfaces on four Postgres types and keeps them in one
+`postgres.go`. `ls internal/*/postgres_*.go` names the five packages
+that split and no others. It stays one package because the aggregates'
+fields are unexported and no exported constructor restores a stored
+row's state or timestamps, so whatever rehydrates one shares its
 package.
 
 A domain that persists nothing has none of the storage files above:

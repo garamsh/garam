@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-import { parseAgentValues, type ValueEntry } from "@/lib/agent-definition";
+import { parseAgentValues } from "@/lib/agent-definition";
 import { parseOperatorIdentifier } from "@/lib/operator";
 import {
   GaramApiError,
@@ -24,13 +24,10 @@ export type DefineAgentState =
   | { status: "error"; message: string }
   | { status: "defined"; agent: string };
 
-// The editor submits one `key` and one `value` field per row, so the
-// two arrays pair up by position.
 const Schema = z.object({
   org: z.string().min(1),
   operator: z.string(),
-  keys: z.array(z.string()),
-  values: z.array(z.string()),
+  entries: z.array(z.object({ key: z.string(), value: z.string() })),
 });
 
 /**
@@ -42,26 +39,26 @@ export async function defineAgent(
   _state: DefineAgentState,
   formData: FormData,
 ): Promise<DefineAgentState> {
+  // The editor submits one `key` and one `value` field per row, so a
+  // submission whose two lists disagree leaves a row with a half
+  // missing and the parse below refuses it.
+  const keyFields = formData.getAll("key");
+  const valueFields = formData.getAll("value");
   const parsed = Schema.safeParse({
     org: formData.get("org"),
     operator: formData.get("operator"),
-    keys: formData.getAll("key"),
-    values: formData.getAll("value"),
+    entries: Array.from(
+      { length: Math.max(keyFields.length, valueFields.length) },
+      (_, index) => ({ key: keyFields[index], value: valueFields[index] }),
+    ),
   });
-  if (
-    !parsed.success ||
-    parsed.data.keys.length !== parsed.data.values.length
-  ) {
+  if (!parsed.success) {
     return { status: "error", message: "The form did not arrive complete." };
   }
 
   const operator = parseOperatorIdentifier(parsed.data.operator);
   if (operator.status === "error") return operator;
-  const entries: ValueEntry[] = parsed.data.keys.map((key, index) => ({
-    key,
-    value: parsed.data.values[index],
-  }));
-  const values = parseAgentValues(entries);
+  const values = parseAgentValues(parsed.data.entries);
   if (values.status === "error") return values;
 
   const org = parsed.data.org;

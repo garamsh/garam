@@ -9,7 +9,7 @@ import {
 } from "@/lib/garam";
 import type { components } from "@/types/api";
 
-import { isGrn } from "../grn";
+import { parseGrn } from "../grn";
 
 /** An organization, as the API returns one. */
 export type Organization = components["schemas"]["Organization"];
@@ -69,7 +69,7 @@ export type OrgRead<T> = { status: "ok"; data: T } | { status: "unreachable" };
  * otherwise a throw at whichever render or Server Action reaches it
  * first.
  */
-const GrnParser = z.string().refine(isGrn);
+const GrnParser = z.string().refine((value) => parseGrn(value) !== null);
 
 const RoleParser = parserFor<components["schemas"]["Role"]>()(
   z.enum(["owner", "admin", "member"]),

@@ -2,7 +2,9 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -62,9 +64,10 @@ type observability struct {
 // otelgrpc instrumentation, which finds the providers set here as
 // globals; the registry is the one place they are collected from.
 func newObservability(service string) (*observability, error) {
-	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil)).With(slog.String("service", service))
+	logger := newLogger(os.Stderr, service)
 	// A line written through the default logger lands in the same
-	// stream as the handler lines below.
+	// stream as the handler lines below, and carries the same trace id:
+	// the surfaces write their error-path lines that way.
 	slog.SetDefault(logger)
 
 	res := resource.NewWithAttributes(semconv.SchemaURL, semconv.ServiceName(service))
@@ -92,6 +95,35 @@ func newObservability(service string) (*observability, error) {
 	))
 
 	return &observability{logger: logger, registry: registry}, nil
+}
+
+// newLogger is the logger one server writes every line through: JSON on
+// w, the service name on each line, and the call's trace id supplied by
+// the handler rather than by the caller.
+func newLogger(w io.Writer, service string) *slog.Logger {
+	return slog.New(tracedHandler{Handler: slog.NewJSONHandler(w, nil)}).
+		With(slog.String("service", service))
+}
+
+// tracedHandler puts trace_id on every record, so a line written
+// anywhere inside a served call carries it without naming it —
+// stack-go.md §Logging & observability asks for the field on handler
+// lines, and a handler that writes one through log/slog reaches this
+// rather than an id of its own. The id is [traceIDOf]'s: the call's
+// span, or the fallback that rule names when nothing started one.
+type tracedHandler struct{ slog.Handler }
+
+func (h tracedHandler) Handle(ctx context.Context, r slog.Record) error {
+	r.AddAttrs(slog.String("trace_id", traceIDOf(ctx)))
+	return h.Handler.Handle(ctx, r)
+}
+
+func (h tracedHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return tracedHandler{Handler: h.Handler.WithAttrs(attrs)}
+}
+
+func (h tracedHandler) WithGroup(name string) slog.Handler {
+	return tracedHandler{Handler: h.Handler.WithGroup(name)}
 }
 
 // metricsHandler serves the registry in the prometheus text format for
@@ -141,7 +173,6 @@ func (o *observability) logServed(w http.ResponseWriter, r *http.Request, next h
 
 	attrs := []slog.Attr{
 		slog.String("operation", r.Pattern),
-		slog.String("trace_id", traceIDOf(r.Context())),
 		slog.Int("status", recorder.status),
 		principalAttr(field, principal()),
 	}
@@ -174,7 +205,6 @@ func (o *observability) recoverPanics(next http.Handler) http.Handler {
 			}
 			o.logger.LogAttrs(r.Context(), slog.LevelError, "http panic",
 				slog.String("operation", r.Pattern),
-				slog.String("trace_id", traceIDOf(r.Context())),
 				slog.Int("status", http.StatusInternalServerError),
 				slog.String("error", fmt.Sprintf("panic: %v\n%s", v, debug.Stack())))
 			http.Error(w, "internal error", http.StatusInternalServerError)
@@ -200,7 +230,6 @@ func (o *observability) recoverRPCs(ctx context.Context, req any, info *grpc.Una
 		}
 		o.logger.LogAttrs(ctx, slog.LevelError, "rpc panic",
 			slog.String("operation", info.FullMethod),
-			slog.String("trace_id", traceIDOf(ctx)),
 			slog.String("code", codes.Internal.String()),
 			slog.String("error", fmt.Sprintf("panic: %v\n%s", v, debug.Stack())))
 		resp, err = nil, status.Error(codes.Internal, "internal error")
@@ -222,18 +251,26 @@ func (o *observability) logRPCs(ctx context.Context, req any, info *grpc.UnarySe
 	}
 	attrs := []slog.Attr{
 		slog.String("operation", info.FullMethod),
-		slog.String("trace_id", traceIDOf(ctx)),
 		slog.String("code", status.Code(err).String()),
 		principalAttr(principalField(subject), subject),
 	}
 	if err != nil && serverFault(status.Code(err)) {
-		// The status message is the errorx chain the engine rendered;
-		// Convert reads a plain error as its text, so either form
-		// reaches the line whole.
-		attrs = append(attrs, slog.String("error", status.Convert(err).Message()))
+		attrs = append(attrs, slog.String("error", causeText(err)))
 	}
 	o.logger.LogAttrs(ctx, levelOf(err != nil), "rpc", attrs...)
 	return resp, err
+}
+
+// causeText is what a fault's line says about the error. The engine
+// answers with the status a caller may read over the chain it holds
+// (runtime-safety.md §Errors reach a handler), so the chain is what
+// this line takes; an error carrying nothing under it reads as its own
+// status message.
+func causeText(err error) string {
+	if cause := errors.Unwrap(err); cause != nil {
+		return cause.Error()
+	}
+	return status.Convert(err).Message()
 }
 
 // serverFault reports whether a gRPC code is what the HTTP surfaces

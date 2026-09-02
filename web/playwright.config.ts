@@ -21,7 +21,10 @@ export default defineConfig({
   webServer: {
     command: "pnpm build && pnpm start",
     url: BASE_URL,
-    reuseExistingServer: !process.env.CI,
+    // The subject is what this tree builds. `url` is answered by
+    // anything listening on the port, so reusing took a stale `next
+    // dev` or an unrelated process as the app under test.
+    reuseExistingServer: false,
     timeout: 180_000,
   },
 });

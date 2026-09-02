@@ -5,14 +5,17 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -21,8 +24,12 @@ import (
 
 	"github.com/garamsh/garam/internal/api"
 	"github.com/garamsh/garam/internal/authn"
+	"github.com/garamsh/garam/internal/authz"
+	authzmocks "github.com/garamsh/garam/internal/authz/mocks"
 	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/health"
+	"github.com/garamsh/garam/internal/wire"
 	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
 )
 
@@ -302,4 +309,127 @@ func TestEngineServer_AnswersAPanicAndKeepsServing(t *testing.T) {
 	explained, err := client.Explain(context.Background(), &authzv1.ExplainRequest{SubjectGrn: testSubject})
 	require.NoError(t, err, "the server still serves the connection the panic was answered on")
 	assert.True(t, explained.GetAllowed())
+}
+
+// enginePolicySeam stands the engine's policy service and the api's
+// seam to it on either side of a real gRPC hop, and answers every store
+// call with err. The two packages never import each other (ADR-0003),
+// so the composition root is where the pair can be held together.
+func enginePolicySeam(t *testing.T, out *lines, err error) api.PolicyManager {
+	t.Helper()
+	store := authzmocks.NewMockStore(t)
+	store.EXPECT().SetPolicyStatus(mock.Anything, mock.Anything, mock.Anything).Return(nil, err)
+
+	lis, listenErr := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, listenErr)
+	engine := recordingObservability(out).engineServer()
+	authzv1.RegisterPolicyServiceServer(engine, authz.NewPolicyGRPCServer(store, authz.NewPolicyCache(store)))
+	go func() { _ = engine.Serve(lis) }()
+	t.Cleanup(engine.Stop)
+
+	conn, dialErr := grpc.NewClient(lis.Addr().String(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()))
+	require.NoError(t, dialErr)
+	t.Cleanup(func() { _ = conn.Close() })
+	return api.NewGRPCPolicyManager(conn)
+}
+
+// TestEngineSeam_DisclosesOverTheHopWhatItWouldInProcess holds the
+// client's answer for one store error against what the same error
+// reads as in process. wire.MessageOf decides what a caller may be
+// told from the type of every link in a chain; a gRPC status carries
+// text and no types, so the hop is where that decision is lost.
+//
+// The driver's error is what must not cross — a plain error stands for
+// it, because wire.authored reads the link's type and never its words.
+// The authored sentinel beside it is the control: withholding
+// everything would pass the first case and fail this one, so the two
+// are read together. The third holds the other half of
+// runtime-safety.md §Errors reach a handler — the client is told
+// nothing, and the engine's own line carries the cause.
+func TestEngineSeam_DisclosesOverTheHopWhatItWouldInProcess(t *testing.T) {
+	driver := errors.New("policy attachment crosses orgs (SQLSTATE P0001)")
+	tests := []struct {
+		name    string
+		stored  error
+		logged  bool
+		refused string
+	}{
+		{
+			name:    "unauthored",
+			stored:  errorx.Wrap(driver, "attach policy", errorx.KindFailedPrecondition),
+			refused: "SQLSTATE",
+		},
+		{
+			name:   "authored",
+			stored: errorx.New(errorx.KindNotFound, "policy not found"),
+		},
+		{
+			name:    "unauthored fault of this process",
+			stored:  errorx.Wrap(driver, "list active policies", errorx.KindInternal),
+			logged:  true,
+			refused: "SQLSTATE",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var out lines
+			seam := enginePolicySeam(t, &out, tc.stored)
+
+			_, err := seam.ActivatePolicy(context.Background(),
+				grn.New("acme", "default", "policy", "9f2ac1b40d8e7a35"))
+
+			require.Error(t, err)
+			assert.Equal(t, errorx.KindOf(tc.stored), errorx.KindOf(err), "the kind crosses the hop")
+			assert.Equal(t, wire.MessageOf(tc.stored), wire.MessageOf(err),
+				"the hop tells a caller what the same error tells one in process")
+			if tc.refused != "" {
+				assert.NotContains(t, wire.MessageOf(err), tc.refused)
+			}
+			if tc.logged {
+				assert.Contains(t, decodeLine(t, &out)["error"], tc.refused,
+					"the cause the client is not told reaches the engine's line")
+			}
+		})
+	}
+}
+
+// passwordLogin is a sign-in body carrying a password of n bytes. The
+// username names no account, so the route's own answer is the same
+// whatever the body weighs.
+func passwordLogin(n int) string {
+	return `{"username":"","password":"` + strings.Repeat("x", n) + `"}`
+}
+
+// postTo runs one POST through handler and returns the status and body.
+func postTo(t *testing.T, handler http.Handler, path, body string) (int, string) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, req)
+	return recorder.Code, recorder.Body.String()
+}
+
+// TestAPIHandler_RefusesARequestBodyPastTheBound holds the browser
+// listener's bound on what one request may weigh. Nothing after the
+// decoder is a bound: `api/openapi.yaml` declares no maxLength at all,
+// and where a specification does the check runs on a string already in
+// memory, so the refusal has to be the listener's.
+//
+// The control is the same body well inside the bound. The route refuses
+// that too — for the username, which names no account — so a refusal
+// alone would hold as readily for a route refusing everything.
+func TestAPIHandler_RefusesARequestBodyPastTheBound(t *testing.T) {
+	srv := api.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{})
+	handler := recordingObservability(&lines{}).apiHandler(srv)
+
+	status, body := postTo(t, handler, "/auth/password/login", passwordLogin(1024))
+	require.Equal(t, http.StatusUnauthorized, status, "the control: refused for what it says")
+	require.JSONEq(t, `{"kind":"unauthenticated","message":"username or password is incorrect"}`, body)
+
+	status, body = postTo(t, handler, "/auth/password/login", passwordLogin(maxRequestBody))
+
+	assert.Equal(t, http.StatusBadRequest, status, "past the bound the body is not read at all")
+	assert.JSONEq(t, `{"kind":"invalid_argument","message":"the request is not in the required form"}`, body)
 }

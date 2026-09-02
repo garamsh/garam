@@ -19,6 +19,10 @@ Policies are IAM-style documents (see
 
 ## Policy document
 
+**Nothing evaluates a `Condition`.** The key is reserved: a document
+carrying one is stored and read back as it was written, and no
+evaluation reads it. Every other key below is read.
+
 ```json
 {
   "Version": "2026-07-25",
@@ -40,8 +44,7 @@ Policies are IAM-style documents (see
   matches strings only.
 - `Resource`: GRN patterns with the same wildcard rules
   (`grn:acme:*` scopes to an org).
-- `Condition`: reserved. It is stored and read back as it was
-  written, and no evaluation reads it in the MVP.
+- `Condition`: reserved, as above.
 
 Reserved is not dropped, and neither is anything else. The parse
 boundary refuses a key none of the above names rather than discarding

@@ -68,6 +68,23 @@ describe("groups section", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("says the API is unreachable when a dependency garam needs is down", async () => {
+    server.use(
+      http.get(`${API_URL}/orgs/acme/groups`, () =>
+        HttpResponse.json(
+          { kind: "unavailable", message: "internal error" },
+          { status: 503 },
+        ),
+      ),
+    );
+
+    await renderServerComponent(GroupsPage(params("acme")));
+
+    expect(
+      screen.getByRole("heading", { name: "Cannot reach the API" }),
+    ).toBeInTheDocument();
+  });
+
   it("sends a rejected session to the login page, not to the notice", async () => {
     server.use(...signedOut());
 

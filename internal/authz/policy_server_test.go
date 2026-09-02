@@ -196,13 +196,31 @@ func TestPolicyGRPCServer_ArchiveInvalidatesTheOrgCache(t *testing.T) {
 	assert.Empty(t, after)
 }
 
+// TestPolicyGRPCServer_ArchiveRejectsBadGRN reads the GRN that parses
+// against the one that does not: the same call over the same server,
+// differing only in the string. An archive that refuses whatever it is
+// given stops satisfying the first row.
 func TestPolicyGRPCServer_ArchiveRejectsBadGRN(t *testing.T) {
+	acme := orgGRN("acme")
+	g := policyGRN(t, acme)
 	store := mocks.NewMockStore(t)
+	store.EXPECT().SetPolicyStatus(mock.Anything, g, authz.PolicyStatusArchived).
+		Return(authz.NewPolicy(g, acme, "read-only"), nil).Once()
 	srv := authz.NewPolicyGRPCServer(store, authz.NewPolicyCache(store))
 
-	_, err := srv.ArchivePolicy(context.Background(), &authzv1.ArchivePolicyRequest{PolicyGrn: "nope"})
-	require.Error(t, err)
-	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+	cases := map[string]struct {
+		policy string
+		want   codes.Code
+	}{
+		"a policy grn that parses": {g.String(), codes.OK},
+		"one that does not":        {"nope", codes.InvalidArgument},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			_, err := srv.ArchivePolicy(context.Background(), &authzv1.ArchivePolicyRequest{PolicyGrn: c.policy})
+			assert.Equal(t, c.want, status.Code(err))
+		})
+	}
 }
 
 // TestPolicyGRPCServer_RollbackRejectsAndReportsMissing reads version 1
@@ -309,39 +327,66 @@ func TestPolicyGRPCServer_DetachReportsMissing(t *testing.T) {
 }
 
 // TestPolicyGRPCServer_DetachRefusesTheLastAttachment maps the store's
-// refusal to failed_precondition, beside the not_found above: a caller
-// telling the two apart can tell "no such attachment" from "this one
-// stays".
+// refusal to failed_precondition: a caller telling that apart from the
+// not_found above can tell "no such attachment" from "this one stays".
+// The detach the store allows is the control — the same call over the
+// same policy, differing only in what the store answers, so a detach
+// that refuses whatever it is given stops satisfying the first row.
 func TestPolicyGRPCServer_DetachRefusesTheLastAttachment(t *testing.T) {
+	acme := orgGRN("acme")
+	g, ada, bob := policyGRN(t, acme), subjectGRN("ada"), subjectGRN("bob")
+	store := mocks.NewMockStore(t)
+	store.EXPECT().GetPolicy(mock.Anything, g).
+		Return(authz.NewPolicy(g, acme, "read-only"), nil).Twice()
+	store.EXPECT().DetachPolicy(mock.Anything, g, bob).Return(nil).Once()
+	store.EXPECT().DetachPolicy(mock.Anything, g, ada).
+		Return(authz.ErrLastAttachment).Once()
+
+	srv := authz.NewPolicyGRPCServer(store, authz.NewPolicyCache(store))
+	cases := map[string]struct {
+		subject grn.GRN
+		want    codes.Code
+	}{
+		"an attachment that is not the last": {bob, codes.OK},
+		"the last one":                       {ada, codes.FailedPrecondition},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			_, err := srv.DetachPolicy(context.Background(), &authzv1.DetachPolicyRequest{
+				PolicyGrn:  g.String(),
+				SubjectGrn: c.subject.String(),
+			})
+			assert.Equal(t, c.want, status.Code(err))
+		})
+	}
+}
+
+// TestPolicyGRPCServer_AttachmentRejectsBadGRN reads the attach whose
+// two GRNs both parse against the two that spoil one of them: an
+// attach that refuses whatever it is given stops satisfying the first
+// row while still satisfying the other two.
+func TestPolicyGRPCServer_AttachmentRejectsBadGRN(t *testing.T) {
 	acme := orgGRN("acme")
 	g, ada := policyGRN(t, acme), subjectGRN("ada")
 	store := mocks.NewMockStore(t)
 	store.EXPECT().GetPolicy(mock.Anything, g).
 		Return(authz.NewPolicy(g, acme, "read-only"), nil).Once()
-	store.EXPECT().DetachPolicy(mock.Anything, g, ada).
-		Return(authz.ErrLastAttachment).Once()
-
-	srv := authz.NewPolicyGRPCServer(store, authz.NewPolicyCache(store))
-	_, err := srv.DetachPolicy(context.Background(), &authzv1.DetachPolicyRequest{
-		PolicyGrn:  g.String(),
-		SubjectGrn: ada.String(),
-	})
-	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
-}
-
-func TestPolicyGRPCServer_AttachmentRejectsBadGRN(t *testing.T) {
-	store := mocks.NewMockStore(t)
+	store.EXPECT().AttachPolicy(mock.Anything, g, ada).
+		Return(&authz.PolicyAttachment{}, nil).Once()
 	srv := authz.NewPolicyGRPCServer(store, authz.NewPolicyCache(store))
 
-	cases := map[string]*authzv1.AttachPolicyRequest{
-		"bad policy grn":  {PolicyGrn: "nope", SubjectGrn: "grn:root:default:user:ada"},
-		"bad subject grn": {PolicyGrn: "grn:acme:default:policy:p1", SubjectGrn: "nope"},
+	cases := map[string]struct {
+		req  *authzv1.AttachPolicyRequest
+		want codes.Code
+	}{
+		"both grns parse": {&authzv1.AttachPolicyRequest{PolicyGrn: g.String(), SubjectGrn: ada.String()}, codes.OK},
+		"bad policy grn":  {&authzv1.AttachPolicyRequest{PolicyGrn: "nope", SubjectGrn: ada.String()}, codes.InvalidArgument},
+		"bad subject grn": {&authzv1.AttachPolicyRequest{PolicyGrn: g.String(), SubjectGrn: "nope"}, codes.InvalidArgument},
 	}
-	for name, req := range cases {
+	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
-			_, err := srv.AttachPolicy(context.Background(), req)
-			require.Error(t, err)
-			assert.Equal(t, codes.InvalidArgument, status.Code(err))
+			_, err := srv.AttachPolicy(context.Background(), c.req)
+			assert.Equal(t, c.want, status.Code(err))
 		})
 	}
 }

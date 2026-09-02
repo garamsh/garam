@@ -2,7 +2,6 @@ package delivery
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"time"
 
@@ -214,9 +213,11 @@ func (s *service) claim(ctx context.Context, posted chan<- pairing) {
 		claimCtx, cancel := context.WithTimeout(ctx, s.cfg.ClaimTimeout)
 		claim, err := s.queue.Claim(claimCtx)
 		cancel()
-		if errors.Is(err, ErrNoMessageReady) {
+		if errorx.IsKind(err, errorx.KindNotFound) {
 			// The poll waited its time at garam, so asking again at once
-			// is the loop rather than a spin.
+			// is the loop rather than a spin. Only the empty answer is
+			// not-found: every other refusal the queue renders is
+			// transient (stack-go.md §4).
 			continue
 		}
 		if err != nil {
@@ -353,7 +354,10 @@ func (s *service) renew(ctx context.Context, held map[GatewayID]pairing) {
 		callCtx, cancel := context.WithTimeout(ctx, s.cfg.CallTimeout)
 		renewed, err := s.queue.Renew(callCtx, p.claim.ID)
 		cancel()
-		if errors.Is(err, ErrClaimLapsed) {
+		// The hold being gone is the only failed precondition garam
+		// reports here, and the kind is what the chain carries
+		// (stack-go.md §4).
+		if errorx.IsKind(err, errorx.KindFailedPrecondition) {
 			slog.WarnContext(ctx, "claim lapsed",
 				slog.String("claim", string(p.claim.ID)),
 				slog.String("gateway_message", string(id)))

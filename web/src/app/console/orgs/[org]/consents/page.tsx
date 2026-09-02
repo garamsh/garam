@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Handshake } from "lucide-react";
 
 import { Separator } from "@/components/ui/separator";
-import { listOrgConsents, orgNotFound } from "@/features/orgs";
+import { listOrgConsents } from "@/features/orgs";
 
 import { ApiUnreachable } from "../../../_components/api-unreachable";
 import { EmptyState } from "../../../_components/empty-state";
@@ -25,7 +25,7 @@ type Params = { params: Promise<{ org: string }> };
  */
 export default async function ConsentsPage({ params }: Params) {
   const { org } = await params;
-  const consents = await listOrgConsents(org).catch(orgNotFound);
+  const consents = await listOrgConsents(org);
 
   return (
     <>

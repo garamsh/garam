@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
@@ -66,13 +67,28 @@ func (l *lines) String() string {
 }
 
 // recordingObservability returns one whose lines land in out. The
-// registry is the empty one a server would collect into: the handlers
-// the serve commands assemble mount it, so building one needs it there.
+// logger is the one a serve command builds, so what a line carries
+// without being asked is what it carries here; the registry is the
+// empty one a server would collect into, because the handlers the
+// serve commands assemble mount it.
 func recordingObservability(out *lines) *observability {
 	return &observability{
-		logger:   slog.New(slog.NewJSONHandler(out, nil)),
+		logger:   newLogger(out, "garam-test"),
 		registry: prometheus.NewRegistry(),
 	}
+}
+
+// decodeLines parses every line out holds, in the order they were
+// written.
+func decodeLines(t *testing.T, out *lines) []map[string]any {
+	t.Helper()
+	var decoded []map[string]any
+	for _, raw := range strings.Split(strings.TrimSpace(out.String()), "\n") {
+		var line map[string]any
+		require.NoError(t, json.Unmarshal([]byte(raw), &line))
+		decoded = append(decoded, line)
+	}
+	return decoded
 }
 
 // decodeLine parses the single line out holds.
@@ -585,9 +601,19 @@ func TestTraceIDOf_PrefersTheSpan(t *testing.T) {
 	assert.Equal(t, id.String(), traceIDOf(ctx))
 }
 
+// TestTraceIDOf_FallsBackToAUUID holds the fallback against what a
+// spanless context renders without one. An empty SpanContext renders a
+// trace id of thirty-two zeroes, which uuid.Parse accepts in its
+// undashed form, so parsing alone passes with the fallback deleted. Two
+// calls differing is the other half: a fallback shared between calls
+// would correlate log lines that have nothing to do with each other.
 func TestTraceIDOf_FallsBackToAUUID(t *testing.T) {
-	_, err := uuid.Parse(traceIDOf(context.Background()))
+	first, second := traceIDOf(context.Background()), traceIDOf(context.Background())
+
+	_, err := uuid.Parse(first)
 	assert.NoError(t, err)
+	assert.NotEqual(t, trace.TraceID{}.String(), first, "the zero trace id is what no fallback renders")
+	assert.NotEqual(t, first, second)
 }
 
 // panickingSessions is an authn.SessionStore whose Delete is the
@@ -635,4 +661,48 @@ func TestLogRequests_ReportsARecoveredPanicOnce(t *testing.T) {
 	assert.Contains(t, line["error"], "panic: session store defect")
 	assert.Contains(t, line["error"], "panickingSessions.Delete",
 		"the stack net/http no longer logs travels in the cause")
+}
+
+// TestNewLogger_JoinsAHandlersLineToTheRequestItRanIn covers the
+// trace_id stack-go.md §Logging & observability asks handler lines to
+// carry. The surfaces write their error-path lines through log/slog
+// with no id of their own — internal/api and internal/machineapi may
+// not import this package to mint one — so the field is the logger's to
+// supply or nobody's.
+//
+// Equality with the request's line is the assertion rather than
+// presence: an id nothing else carries joins nothing, which is what a
+// per-line fallback would leave behind.
+func TestNewLogger_JoinsAHandlersLineToTheRequestItRanIn(t *testing.T) {
+	restore := slog.Default()
+	t.Cleanup(func() { slog.SetDefault(restore) })
+	// The tracer provider is what mints the span the ids come from, and
+	// newObservability is what installs it.
+	_, err := newObservability("garam-test")
+	require.NoError(t, err)
+
+	var out lines
+	obs := recordingObservability(&out)
+	slog.SetDefault(obs.logger)
+
+	mux := http.NewServeMux()
+	mux.Handle("GET /agents/{agent}/watch", obs.logRequests(http.HandlerFunc(
+		func(_ http.ResponseWriter, r *http.Request) {
+			slog.WarnContext(r.Context(), "watch not refreshed")
+		})))
+	server := httptest.NewServer(otelhttp.NewHandler(mux, "garam-test"))
+	t.Cleanup(server.Close)
+
+	resp, err := server.Client().Get(server.URL + "/agents/bot-1/watch")
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+
+	written := decodeLines(t, &out)
+	require.Len(t, written, 2, "the handler's line and the request's")
+	handled, served := written[0], written[1]
+	require.Equal(t, "watch not refreshed", handled["msg"])
+	require.Equal(t, "http request", served["msg"])
+	assert.NotEmpty(t, served["trace_id"], "the request's own line still carries one")
+	assert.Equal(t, served["trace_id"], handled["trace_id"],
+		"the handler's line joins the request rather than minting an id of its own")
 }

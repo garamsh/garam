@@ -3,7 +3,7 @@ import { UserRound } from "lucide-react";
 
 import { Separator } from "@/components/ui/separator";
 import { getSession } from "@/features/auth";
-import { listOrgMembers, orgNotFound } from "@/features/orgs";
+import { listOrgMembers } from "@/features/orgs";
 
 import { ApiUnreachable } from "../../../_components/api-unreachable";
 import { EmptyState } from "../../../_components/empty-state";
@@ -23,7 +23,7 @@ type Params = { params: Promise<{ org: string }> };
 export default async function MembersPage({ params }: Params) {
   const { org } = await params;
   const [members, session] = await Promise.all([
-    listOrgMembers(org).catch(orgNotFound),
+    listOrgMembers(org),
     getSession(),
   ]);
 

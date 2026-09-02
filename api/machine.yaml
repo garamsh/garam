@@ -5,9 +5,10 @@ info:
   description: >-
     What `garam serve machine` serves (ADR-0017). A caller is a client
     certificate whose SAN URI holds its GRN (ADR-0014, ADR-0015): no
-    session cookie, no user row and no organization membership exist on
-    this listener, and the organization segment of that GRN is the
-    whole of the tenancy. This is a different listener from the one
+    session cookie and no user row exist on this listener, a caller
+    presents no membership and none is looked up to admit it, and the
+    organization segment of that GRN is the whole of the tenancy it
+    carries. This is a different listener from the one
     `api/openapi.yaml` describes and shares nothing with it.
 
     An operation's `responses` list is what it answers when garam is

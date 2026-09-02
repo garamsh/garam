@@ -59,42 +59,42 @@ export function listOrgs(): Promise<Organization[]> {
 
 /** One organization by slug. */
 export function getOrg(org: string): Promise<OrgRead<Organization>> {
-  return catchUnreachable(
+  return orgRead(
     garamFetchAuthenticated<Organization>(`/orgs/${orgPath(org)}`),
   );
 }
 
 /** The people who belong to an organization. */
 export function listOrgMembers(org: string): Promise<OrgRead<Member[]>> {
-  return catchUnreachable(
+  return orgRead(
     garamFetchAuthenticated<Member[]>(`/orgs/${orgPath(org)}/members`),
   );
 }
 
 /** The groups an organization holds. */
 export function listGroups(org: string): Promise<OrgRead<Group[]>> {
-  return catchUnreachable(
+  return orgRead(
     garamFetchAuthenticated<Group[]>(`/orgs/${orgPath(org)}/groups`),
   );
 }
 
 /** The projects an organization owns. */
 export function listProjects(org: string): Promise<OrgRead<Project[]>> {
-  return catchUnreachable(
+  return orgRead(
     garamFetchAuthenticated<Project[]>(`/orgs/${orgPath(org)}/projects`),
   );
 }
 
 /** The operators an organization has registered. */
 export function listOperators(org: string): Promise<OrgRead<Operator[]>> {
-  return catchUnreachable(
+  return orgRead(
     garamFetchAuthenticated<Operator[]>(`/orgs/${orgPath(org)}/operators`),
   );
 }
 
 /** The agents an organization holds. */
 export function listAgents(org: string): Promise<OrgRead<Agent[]>> {
-  return catchUnreachable(
+  return orgRead(
     garamFetchAuthenticated<Agent[]>(`/orgs/${orgPath(org)}/agents`),
   );
 }
@@ -103,7 +103,7 @@ export function listAgents(org: string): Promise<OrgRead<Agent[]>> {
 export function listAgentDefinitions(
   org: string,
 ): Promise<OrgRead<AgentDefinition[]>> {
-  return catchUnreachable(
+  return orgRead(
     garamFetchAuthenticated<AgentDefinition[]>(
       `/orgs/${orgPath(org)}/agent-definitions`,
     ),
@@ -112,37 +112,32 @@ export function listAgentDefinitions(
 
 /** The cross-organization consent relations an organization is a side of. */
 export function listOrgConsents(org: string): Promise<OrgRead<OrgConsent[]>> {
-  return catchUnreachable(
+  return orgRead(
     garamFetchAuthenticated<OrgConsent[]>(`/orgs/${orgPath(org)}/consents`),
   );
 }
 
 /**
- * Rejection handler for an org-scoped read: a denied read and a missing
- * organization are the same answer to a visitor — the organization is
- * not theirs to see.
+ * The answers an org-scoped read has, applied by the read itself so
+ * that no section can hold a different set. An unanswered read is a
+ * state the page renders. A denied read and a missing organization are
+ * one answer to a visitor — the organization is not theirs to see — and
+ * 404 is what every section gives for it (ADR-0011). Every other
+ * rejection travels on: a rejected session is already a redirect to the
+ * login page.
  */
-export function orgNotFound(error: unknown): never {
-  if (
-    error instanceof GaramApiError &&
-    (error.status === 403 || error.status === 404)
-  ) {
-    notFound();
-  }
-  throw error;
-}
-
-/**
- * Hands an unanswered read to the caller as a state it has to render.
- * Every other rejection travels on: a refusal is `orgNotFound`'s, and a
- * rejected session is already a redirect to the login page.
- */
-async function catchUnreachable<T>(read: Promise<T>): Promise<OrgRead<T>> {
+async function orgRead<T>(read: Promise<T>): Promise<OrgRead<T>> {
   try {
     return { status: "ok", data: await read };
   } catch (error) {
     if (error instanceof GaramUnreachableError) {
       return { status: "unreachable" };
+    }
+    if (
+      error instanceof GaramApiError &&
+      (error.status === 403 || error.status === 404)
+    ) {
+      notFound();
     }
     throw error;
   }

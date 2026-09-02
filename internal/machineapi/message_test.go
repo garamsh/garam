@@ -618,3 +618,32 @@ func TestServer_AnswersAMessageItHasNoneOfAsNotFound(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, status)
 	assert.Contains(t, body, `"kind":"`+errorx.KindNotFound.String()+`"`)
 }
+
+// TestServer_ReadsAnEmptyPollFromTheKindNotTheSentinel holds the answer
+// to a poll that found nothing against the shape the queue's answer
+// reaches this surface in. `stack-go.md` §4 does not admit errors.Is
+// beside errorx, and the reason is here: a sentinel matched by identity
+// stops matching the moment anything wraps it into a kind-carrying copy
+// — and an empty poll that stops reading as one is answered 404, which
+// the adapter treats as a failure rather than as the loop's ordinary
+// turn.
+//
+// The control is a failure of another kind, which must not become an
+// empty answer: without it a 204 would hold as readily for a surface
+// that answers every failure that way.
+func TestServer_ReadsAnEmptyPollFromTheKindNotTheSentinel(t *testing.T) {
+	caller := agentGRN("acme", "0a1b2c3d4e5f6071")
+	claims := "/agents/" + caller.String() + "/claims"
+
+	empty := &messageService{err: errorx.New(errorx.KindNotFound, "no message ready")}
+	url, client := listener(t, nil, nil, empty, nil, nil, nil, nil, caller)
+	status, body := send(t, client, http.MethodPost, url+claims, "")
+	assert.Equal(t, http.StatusNoContent, status)
+	assert.Empty(t, body)
+
+	unreachable := &messageService{err: errorx.New(errorx.KindUnavailable, "queue unreachable")}
+	url, client = listener(t, nil, nil, unreachable, nil, nil, nil, nil, caller)
+	status, body = send(t, client, http.MethodPost, url+claims, "")
+	assert.Equal(t, http.StatusServiceUnavailable, status, "the control: another kind is not an empty poll")
+	assert.Contains(t, body, `"kind":"unavailable"`)
+}

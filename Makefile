@@ -80,7 +80,7 @@ TEST_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)
 WEB_E2E_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)/garam?sslmode=disable)
 
 .PHONY: lint format test build gen check-gen check-toolchain e2e mutation db-up db-down backend-up ci template-diff search
-.PHONY: chart chart-lint chart-render chart-identity chart-names chart-guards chart-security chart-package
+.PHONY: chart chart-lint chart-render chart-identity chart-names chart-rewrite chart-guards chart-security chart-package
 .PHONY: web-install web-lint web-format web-test web-build web-gen web-check-gen web-e2e web-image-e2e web-ci
 .PHONY: image-build
 .PHONY: minikube-up minikube-down minikube-start minikube-images minikube-db
@@ -88,8 +88,11 @@ WEB_E2E_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_AD
 
 # The module's packages, listed once so the targets below report the set
 # they covered rather than name a ./... pattern whose match nobody sees.
-# An empty list is never passed on: given no argument at all these tools
-# read the current directory, so each target fails on one instead.
+# An empty list is never passed on, and each target says so itself
+# rather than resting on what a tool does with no argument: `go test`
+# given none reads the current directory, which fails only while no .go
+# file sits at the module root — a doc.go there is an ordinary idiom and
+# would make an empty list a run of zero tests exiting 0 (#870).
 GO_PKGS = $(shell go list ./...)
 
 # What buf lint will read, counted on lint's line. buf itself fails on a
@@ -165,6 +168,7 @@ TEST_PKGS = $(filter-out %/tests/e2e,$(GO_PKGS))
 
 test:
 	@echo 'test: $(words $(TEST_PKGS)) packages; tests/e2e not covered here — it needs Postgres (make db-up e2e)'
+	@test -n '$(TEST_PKGS)' || { echo 'test: nothing to test — the package list is empty, or the filter above matched all of it'; exit 1; }
 	@go test $(TEST_PKGS)
 
 # `go build ./...` exits 0 having done nothing should that pattern ever
@@ -496,11 +500,16 @@ web-e2e:
 image-build:
 	scripts/image-build.sh
 
-# What image-build tags the web image: ADR-0039's repository name and
-# the script's tag. A name that stopped matching either fails in
-# tests/image/web.sh on an image docker cannot find, rather than
-# checking a different one.
-WEB_IMAGE = garam-web:ci
+# What image-build tagged the web image, asked of the script that tags
+# it. The repository comes from .github/workflows/release.yml's `tags:`,
+# and a second copy here was the copy that went stale: a rename in the
+# release left this naming an image an earlier run had built, which the
+# target then checked instead of the one it had just built (#870).
+#
+# Keyed on the build context, which is what makes an image the web
+# app's. Empty when the release builds none from it, which the target
+# reports rather than run against nothing.
+WEB_IMAGE = $(shell scripts/image-build.sh --names | sed -n 's|^web ||p')
 
 # web-image-e2e checks the built image rather than the app: that the
 # standalone server starts, answers both probes and reaches the baked
@@ -509,7 +518,9 @@ WEB_IMAGE = garam-web:ci
 # to check instead, which is how an image pulled from ECR by digest is
 # verified, and then nothing is built here.
 web-image-e2e: $(if $(GARAM_WEB_IMAGE),,image-build)
-	GARAM_WEB_IMAGE='$(or $(GARAM_WEB_IMAGE),$(WEB_IMAGE))' tests/image/web.sh
+	@image='$(or $(GARAM_WEB_IMAGE),$(WEB_IMAGE))'; \
+		test -n "$$image" || { echo 'web-image-e2e: nothing names the image to check — .github/workflows/release.yml builds none from the web context'; exit 1; }; \
+		GARAM_WEB_IMAGE="$$image" tests/image/web.sh
 
 web-ci: web-format web-lint web-test web-build web-check-gen
 
@@ -538,7 +549,12 @@ CHART_VALUES = $(wildcard $(CHART_DIR)/ci/*-values.yaml)
 # (#734). The two guards chart-render runs first are what keep the block
 # equal to the reads. web/src/env.ts is the web app's only reader and is
 # parsed for its own shape.
-CHART_GO_ENV = $(shell grep -rhoE 'envName = "[A-Z_]+"' --include=*.go internal cmd | sed 's/.*"\([A-Z_]*\)"/\1/' | sort -u)
+#
+# Both sides read the same character class. A class the sweep does not
+# accept drops the name out of the enumerated set silently: the chart
+# does not set it either, so the comparison below finds nothing to
+# report and passes on a name neither side ever saw (#864).
+CHART_GO_ENV = $(shell grep -rhoE 'envName = "[A-Z][A-Z0-9_]*"' --include=*.go internal cmd | sed 's/.*"\([A-Z][A-Z0-9_]*\)"/\1/' | sort -u)
 CHART_WEB_ENV = $(shell sed -n 's/^ *\([A-Z][A-Z0-9_]*\): process\.env\.\1,$$/\1/p' web/src/env.ts)
 
 # What the chart declares it does not set, read from the table that
@@ -564,10 +580,11 @@ CHART_DEFAULT_VALUES = $(CHART_DIR)/ci/minimal-values.yaml
 # records as the whole of what that target reaches.
 CHART_RESOURCE_NAMES := cpu memory
 
-chart: chart-lint chart-render chart-identity chart-names chart-guards chart-security chart-package
+chart: chart-lint chart-render chart-identity chart-names chart-rewrite chart-guards chart-security chart-package
 
 chart-lint:
 	@echo 'chart-lint: $(words $(CHART_TEMPLATES)) templates, $(words $(CHART_VALUES)) value files (helm lint --strict)'
+	@test -n '$(CHART_TEMPLATES)' || { echo 'chart-lint: nothing to lint — $(CHART_DIR)/templates holds no template'; exit 1; }
 	@test -n '$(CHART_VALUES)' || { echo 'chart-lint: nothing to lint — $(CHART_DIR)/ci holds no value file'; exit 1; }
 	@set -e; for v in $(CHART_VALUES); do $(HELM) lint --strict --quiet $(CHART_DIR) --values "$$v"; done
 
@@ -668,6 +685,11 @@ chart-identity:
 # included, so a file reaches a consumer without passing through any of
 # them. A resource name set there reads as a figure garam measured, and
 # none is (docs/architecture/deployment-contract.md §Not established).
+# Its zero-guard counts lines that set a `resources:` key: counting any
+# line holding the word counted this README's own prose, so an artifact
+# carrying no workload at all still reported a search that read
+# something (#864).
+#
 # chart-names renders under the longest release name Helm accepts and
 # holds every object name to 63 characters. Rendering cannot see this
 # class on its own: `helm template` produced a 67-character Service
@@ -681,22 +703,69 @@ chart-identity:
 #
 # `^  name: ` is the object's own name at exactly two spaces: a
 # container, an env entry and a secretKeyRef all sit deeper.
+#
+# Each render lands in a file before it is parsed: piped into sed only
+# sed's status reaches set -e, so a render that failed contributed no
+# name and the other value file kept the count above zero (#864).
 CHART_LONG_RELEASE := garam-production-eu-west-1-primary-tenant-alpha-01234
 
 chart-names:
-	@echo 'chart-names: $(words $(CHART_VALUES)) value files rendered as $(CHART_LONG_RELEASE) (release length $(shell printf %s '$(CHART_LONG_RELEASE)' | wc -c), Helm caps it at 53)'
+	@echo 'chart-names: $(words $(CHART_VALUES)) value files rendered as $(CHART_LONG_RELEASE) (release length $(shell printf %s '$(CHART_LONG_RELEASE)' | wc -c), Helm caps it at 53) — object names only, $(CHART_DIR)/README.md §What the checks are complete over'
 	@test -n '$(CHART_VALUES)' || { echo 'chart-names: nothing to render — $(CHART_DIR)/ci holds no value file'; exit 1; }
 	@set -e; \
 		out="$$(mktemp -d)"; trap 'rm -rf "$$out"' EXIT; \
 		for v in $(CHART_VALUES); do \
-			$(HELM) template $(CHART_LONG_RELEASE) $(CHART_DIR) --values "$$v" \
-				| sed -n 's/^  name: \(.*\)$$/\1/p' >> "$$out/names"; \
+			$(HELM) template $(CHART_LONG_RELEASE) $(CHART_DIR) --values "$$v" > "$$out/render"; \
+			sed -n 's/^  name: \(.*\)$$/\1/p' "$$out/render" >> "$$out/names"; \
 		done; \
 		total="$$(sort -u "$$out/names" | wc -l)"; \
 		test "$$total" -gt 0 || { echo 'chart-names: the render named no object — the name parse is broken'; exit 1; }; \
 		over="$$(awk 'length($$0) > 63 { print length($$0)" "$$0 }' "$$out/names" | sort -u)"; \
 		test -z "$$over" || { echo 'chart-names: over the 63-character limit, which an apply refuses and a render does not:'; echo "$$over"; exit 1; }; \
 		echo "chart-names: $$total distinct object names, longest $$(awk '{ if (length($$0) > m) m = length($$0) } END { print m }' "$$out/names"), none over 63"
+
+# chart-rewrite holds the `/api/*` target a release bakes into the web
+# image against the api Service this chart renders under the release
+# name `garam`. Both are true and each is written where the other is not
+# read: the target is a build argument in a workflow, the Service name
+# comes out of a template, and until #861 no check opened two of them at
+# once. Renaming either leaves every published image reaching a name
+# nothing renders, and the failure is a browser request that 404s —
+# every object Ready, no probe on that path (ADR-0023), no log line.
+#
+# The second render is the control. It is the release name chart-names
+# proves the chart survives, and the URL it names is one no published
+# image reaches (ADR-0056), so it is also where the constraint this
+# check records is visible: equality under `garam` proves nothing unless
+# the two renders differ.
+#
+# The build argument is read here and enumerated in
+# scripts/image-build.sh, which asks a different question of the same
+# file — what the release builds, rather than what one image is bound to.
+CHART_BAKED_API_URL = $(shell sed -n 's/^ *GARAM_API_URL=\(.*\)$$/\1/p' .github/workflows/release.yml)
+
+chart-rewrite:
+	@echo 'chart-rewrite: $(CHART_BAKED_API_URL), baked by .github/workflows/release.yml — one URL against the api Service, $(CHART_DIR)/README.md §What the checks are complete over'
+	@test '$(words $(CHART_BAKED_API_URL))' = 1 \
+		|| { echo 'chart-rewrite: .github/workflows/release.yml bakes $(words $(CHART_BAKED_API_URL)) GARAM_API_URL values, expected the one a release is bound to — the parse is broken'; exit 1; }
+	@set -e; \
+		apiurl() { $(HELM) template "$$1" $(CHART_DIR) --values $(CHART_DEFAULT_VALUES) | awk ' \
+			function flush() { if (kind == "Service" && comp == "api") printf "http://%s:%s\n", name, port } \
+			/^---$$/ { flush(); kind = ""; comp = ""; name = ""; port = ""; next } \
+			/^kind: / { kind = $$2 } \
+			/^  name: / { if (name == "") name = $$2 } \
+			/app.kubernetes.io\/component: / { if (comp == "") comp = $$2 } \
+			$$1 == "port:" { if (port == "") port = $$2 } \
+			END { flush() }'; }; \
+		rendered="$$(apiurl garam)"; \
+		test -n "$$rendered" && test "$$(printf '%s\n' "$$rendered" | wc -l)" -eq 1 \
+			|| { echo "chart-rewrite: the render named no single api Service — the parse is broken:"; echo "$$rendered"; exit 1; }; \
+		test "$$rendered" = '$(CHART_BAKED_API_URL)' \
+			|| { echo "chart-rewrite: the release bakes $(CHART_BAKED_API_URL) and release garam renders $$rendered — a published web image reaches a name this chart does not render, and nothing after the install says so"; exit 1; }; \
+		control="$$(apiurl $(CHART_LONG_RELEASE))"; \
+		test "$$control" != '$(CHART_BAKED_API_URL)' \
+			|| { echo "chart-rewrite: release $(CHART_LONG_RELEASE) renders $$control as well, so the equality above holds under every release name and this check reads nothing"; exit 1; }; \
+		echo "chart-rewrite: release garam renders $$rendered; release $(CHART_LONG_RELEASE) renders $$control, which no published web image reaches"
 
 # chart-guards renders each values file under $(CHART_DIR)/ci/refused/
 # and holds that the render is refused, naming the value the file is
@@ -707,7 +776,12 @@ chart-names:
 #
 # The message is checked, not only the exit status. A render refused
 # for an unrelated reason is not this guard firing, and would pass a
-# check that read the status alone.
+# check that read the status alone. What the message must carry is
+# `execution error at (<template>): <value> ` — helm's own form for a
+# template that stopped itself, opening with the value the guard names.
+# Searching the whole of helm's output for the value instead matched
+# the values file's path, which carries the same string, so any failure
+# that named the file passed (#864).
 #
 # The control is the last line: the values every other check renders
 # must still render. Without it a chart that refused everything would
@@ -724,8 +798,9 @@ chart-guards:
 			if $(HELM) template garam $(CHART_DIR) --values $(CHART_DIR)/ci/minimal-values.yaml --values "$$v" >/dev/null 2>"$$out/err"; then \
 				echo "chart-guards: $$v rendered, and the guard for $$want did not fire"; exit 1; \
 			fi; \
-			grep -q -- "$$want" "$$out/err" \
-				|| { echo "chart-guards: $$v was refused, but not for $$want:"; cat "$$out/err"; exit 1; }; \
+			key="$$(printf %s "$$want" | sed 's/\./\\./g')"; \
+			grep -qE "execution error at \([^)]*\): $$key( |\$$)" "$$out/err" \
+				|| { echo "chart-guards: $$v was refused, but not by the guard for $$want — a refusal for another reason, or one whose message does not open with the value:"; cat "$$out/err"; exit 1; }; \
 		done; \
 		$(HELM) template garam $(CHART_DIR) --values $(CHART_DIR)/ci/minimal-values.yaml >/dev/null \
 			|| { echo 'chart-guards: the control render was refused too — the guards refuse a chart that should install'; exit 1; }; \
@@ -745,13 +820,13 @@ chart-package:
 		mkdir "$$out/unpacked"; tar -xzf "$$tgz" -C "$$out/unpacked"; \
 		cd "$$out/unpacked"; \
 		files="$$(find . -type f | wc -l)"; \
-		named="$$(grep -rn resources . | wc -l)"; \
+		named="$$(grep -rnE '^[[:space:]]*resources:' . | wc -l)"; \
 		test "$$files" -gt 0 && test "$$named" -gt 0 \
-			|| { echo 'chart-package: the unpacked artifact named resources nowhere — the package or the search read nothing'; exit 1; }; \
+			|| { echo 'chart-package: the unpacked artifact sets no resources key — the package or the search read nothing'; exit 1; }; \
 		re="$$(echo '$(CHART_RESOURCE_NAMES)' | tr ' ' '|')"; \
 		found="$$(grep -rnE "\b($$re):" . || true)"; \
 		test -z "$$found" || { echo "chart-package: the artifact sets a resource name, and no figure is published for any garam process (docs/architecture/deployment-contract.md §Not established):"; echo "$$found"; exit 1; }; \
-		echo "chart-package: $$(basename "$$tgz") — $$files files, $$named lines naming resources, 0 setting one of the names"
+		echo "chart-package: $$(basename "$$tgz") — $$files files, $$named lines setting a resources key, 0 setting one of the names"
 
 # ---------------------------------------------------------------------
 # deploy/local/minikube — the whole stack on a local Kubernetes cluster.

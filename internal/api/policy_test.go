@@ -78,7 +78,7 @@ func TestPolicyFlow_AdminManagesLifecycle(t *testing.T) {
 		Return(version, nil)
 	f.policies.EXPECT().ListPolicyVersions(mock.Anything, g).Return([]*api.PolicyVersion{version}, nil)
 	f.policies.EXPECT().ActivatePolicy(mock.Anything, g).Return(p, nil)
-	f.policies.EXPECT().RollbackPolicy(mock.Anything, g, 1).Return(p, nil)
+	f.policies.EXPECT().RollbackPolicy(mock.Anything, g, int32(1)).Return(p, nil)
 	f.policies.EXPECT().ArchivePolicy(mock.Anything, g).Return(p, nil)
 	f.policies.EXPECT().AttachPolicy(mock.Anything, g, subject).Return(attachment, nil)
 	f.policies.EXPECT().ListPolicyAttachments(mock.Anything, g).Return([]*api.PolicyAttachment{attachment}, nil)
@@ -200,21 +200,33 @@ func TestPolicies_RequireOrgMembership(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, rec.Code)
 }
 
+// TestCreatePolicy_RejectsIncompleteBody reads the complete body
+// against the three that are not: each of those is that body with one
+// part taken away, so a create that refuses everything stops satisfying
+// the first row while still satisfying the rest.
 func TestCreatePolicy_RejectsIncompleteBody(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
 	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
 	f.permit(permission{ownerGRN, org.ActionPolicyCreate})
+	_, p := policyFixture(slug)
+	f.policies.EXPECT().
+		CreatePolicy(mock.Anything, p.OrgGRN, "read-only", json.RawMessage(policyDocument), ownerGRN).
+		Return(p, nil).Once()
 
-	for name, body := range map[string]string{
-		"missing name":     `{"document":` + policyDocument + `}`,
-		"missing document": `{"name":"read-only"}`,
-		"malformed json":   `{"name":`,
+	for name, c := range map[string]struct {
+		body string
+		want int
+	}{
+		"complete":         {`{"name":"read-only","document":` + policyDocument + `}`, http.StatusCreated},
+		"missing name":     {`{"document":` + policyDocument + `}`, http.StatusBadRequest},
+		"missing document": {`{"name":"read-only"}`, http.StatusBadRequest},
+		"malformed json":   {`{"name":`, http.StatusBadRequest},
 	} {
 		t.Run(name, func(t *testing.T) {
-			rec := f.do(t, "POST", "/orgs/"+slug+"/policies", body, owner)
-			assert.Equal(t, http.StatusBadRequest, rec.Code)
+			rec := f.do(t, "POST", "/orgs/"+slug+"/policies", c.body, owner)
+			assert.Equal(t, c.want, rec.Code)
 		})
 	}
 }
@@ -235,6 +247,11 @@ func TestCreatePolicy_RejectsDocumentTheEngineRefuses(t *testing.T) {
 	assert.Equal(t, errorx.KindInvalidArgument.String(), decodeBody[apigen.Error](t, rec).Kind)
 }
 
+// TestAttachPolicy_RejectsMalformedSubject reads the subject GRN that
+// parses against the one that does not, on both halves of the pair: the
+// well-formed subject attaches and detaches through the same routes, so
+// the two refusals track the string rather than a surface that refuses
+// every attachment.
 func TestAttachPolicy_RejectsMalformedSubject(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
@@ -245,16 +262,30 @@ func TestAttachPolicy_RejectsMalformedSubject(t *testing.T) {
 		permission{ownerGRN, org.ActionPolicyDetach},
 	)
 
-	g, _ := policyFixture(slug)
+	g, p := policyFixture(slug)
+	subject := grn.New(slug, "default", org.ServiceTypeGroup, "eng")
 	policyPath := "/orgs/" + slug + "/policies/" + g.Identifier
+	f.policies.EXPECT().AttachPolicy(mock.Anything, g, subject).
+		Return(&api.PolicyAttachment{PolicyGRN: g, SubjectGRN: subject, CreatedAt: p.CreatedAt}, nil).Once()
+	f.policies.EXPECT().DetachPolicy(mock.Anything, g, subject).Return(nil).Once()
 
-	rec := f.do(t, "POST", policyPath+"/attachments", `{"subjectGrn":"eng"}`, owner)
+	rec := f.do(t, "POST", policyPath+"/attachments", `{"subjectGrn":"`+subject.String()+`"}`, owner)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	rec = f.do(t, "DELETE", policyPath+"/attachments/"+subject.String(), "", owner)
+	require.Equal(t, http.StatusNoContent, rec.Code)
+
+	rec = f.do(t, "POST", policyPath+"/attachments", `{"subjectGrn":"eng"}`, owner)
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 
 	rec = f.do(t, "DELETE", policyPath+"/attachments/eng", "", owner)
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
+// TestPolicy_NotFoundFromEngine holds the kind the engine answered
+// against the one it did not: the same route over the same policy,
+// differing only in what the seam returned, so the 404 tracks the
+// engine's answer rather than a route that reports missing whatever it
+// is asked for.
 func TestPolicy_NotFoundFromEngine(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
@@ -262,10 +293,48 @@ func TestPolicy_NotFoundFromEngine(t *testing.T) {
 	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
 	f.permit(permission{ownerGRN, org.ActionPolicyUpdate})
 
-	g, _ := policyFixture(slug)
-	f.policies.EXPECT().ActivatePolicy(mock.Anything, g).
-		Return(nil, errorx.New(errorx.KindNotFound, "policy not found"))
+	g, p := policyFixture(slug)
+	activate := "/orgs/" + slug + "/policies/" + g.Identifier + "/activate"
 
-	rec := f.do(t, "POST", "/orgs/"+slug+"/policies/"+g.Identifier+"/activate", "", owner)
+	f.policies.EXPECT().ActivatePolicy(mock.Anything, g).Return(p, nil).Once()
+	rec := f.do(t, "POST", activate, "", owner)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	f.policies.EXPECT().ActivatePolicy(mock.Anything, g).
+		Return(nil, errorx.New(errorx.KindNotFound, "policy not found")).Once()
+	rec = f.do(t, "POST", activate, "", owner)
 	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+// TestRollbackPolicy_RefusesAVersionTheEngineCannotHold holds the
+// refusal against the version that must still be accepted: the
+// specification's `version` is what the engine stores in an int32
+// column, and one wider than that used to be narrowed on the way to the
+// seam — 2^32+1 arriving as 1, which is an existing version and a
+// rollback that was never asked for. The control is version 1 itself,
+// which stops being accepted if the boundary refuses more than the
+// width; the call count is what says the wide one was refused rather
+// than performed under another number.
+func TestRollbackPolicy_RefusesAVersionTheEngineCannotHold(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	ownerGRN := grn.New("root", "default", user.ServiceType, "owner-sub")
+	f.permit(permission{ownerGRN, org.ActionPolicyUpdate})
+
+	g, p := policyFixture(slug)
+	f.policies.EXPECT().RollbackPolicy(mock.Anything, g, mock.Anything).Return(p, nil)
+
+	path := "/orgs/" + slug + "/policies/" + g.Identifier + "/rollback"
+
+	rec := f.do(t, "POST", path, `{"version":1}`, owner)
+	require.Equal(t, http.StatusOK, rec.Code, "a version the engine holds is the control")
+
+	for _, version := range []string{"2147483648", "4294967297", "-2147483649"} {
+		rec = f.do(t, "POST", path, `{"version":`+version+`}`, owner)
+		assert.Equal(t, http.StatusBadRequest, rec.Code, "version %s", version)
+		assert.NotContains(t, decodeBody[apigen.Error](t, rec).Message, version,
+			"the refusal does not repeat what was submitted")
+	}
+	f.policies.AssertNumberOfCalls(t, "RollbackPolicy", 1)
 }

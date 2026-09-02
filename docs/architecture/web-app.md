@@ -103,16 +103,16 @@ API behind it rather than of the console:
 
 | Section | What the console does with it |
 |---|---|
-| Overview, Groups, Projects, Members | reads |
+| Overview, Groups, Projects | reads |
+| Members | reads, and issues the invitation a person joins by ([ADR-0006](./adr/0006-invitation-tokens.md)) |
 | Operators | reads, and registers one ([ADR-0045](./adr/0045-an-organization-registers-an-operator.md)) |
 | Agents | reads the agents the organization holds with the two states their operator and the agent itself report ([ADR-0053](./adr/0053-an-agent-and-its-operator-report-state-on-the-machine-listener.md)), and reads definitions and defines one ([ADR-0026](./adr/0026-the-console-defines-an-agent.md)) |
 | Consents | reads the cross-organization consent relations the organization is a side of, grants its half of one and withdraws it ([ADR-0035](./adr/0035-a-cross-organization-message-needs-both-organizations-consent.md)) |
 | Policies | neither: the section holds its place and says policies are managed over the HTTP API |
 
-Organizations are created, an invitation is issued from the Members
-section and accepted at `/console/invitations/{token}` — which is
-itself behind sign-in, because accepting one joins an existing account
-to an organization.
+Organizations are created, and an invitation is accepted at
+`/console/invitations/{token}` — which is itself behind sign-in,
+because accepting one joins an existing account to an organization.
 
 No organization, group, project or user is addressed by its GRN
 anywhere in the interface. The console shows names and addresses
@@ -137,6 +137,20 @@ It is reached over two paths, and only one of them is the rewrite:
   because it is not a browser and has no origin to keep. The rewrite
   exists for the browser, not because it is how the application reads
   data.
+
+The two take that address at different times, and that is what binds a
+published image to one deployment. A server-side render reads it when the
+process starts, so a deployment sets it; the browser's rewrite is
+resolved when the image is built, so what is in it is whatever that build
+was given and no environment moves it
+([ADR-0056](./adr/0056-a-published-web-image-is-bound-to-the-release-name-garam-and-make-ci-checks-the-binding.md)). Every image
+`.github/workflows/release.yml` publishes is built with
+`http://garam-api:8080` — the api Service a release named `garam`
+renders and no other — so a deployment running a published image installs
+under that release name or makes the name resolve.
+`deploy/charts/garam/README.md` §Choosing a release name is authoritative
+for what a deployment does about it, and `make ci` compares the value the
+release bakes against what the chart renders.
 
 The address is server-side only and never reaches a browser. It is
 declared once, as a typed schema in `web/src/env.ts`, parsed at import
@@ -231,10 +245,7 @@ files (ADR-0009, `docs/convention/stack-nextjs.md` §12).
   `web/src/app/(auth)/login/page.tsx` both cite ADR-0010 for it.
 - **What the application promises a visitor across versions.** Nothing
   records it, and [api-surface.md](./api-surface.md) §Not decided
-  records the same absence for the API it calls. One released image is
-  bound to one API address, because the rewrite target is baked in at
-  build time and nothing can check the two agree
-  ([ADR-0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)).
+  records the same absence for the API it calls.
 
 ## Decisions this rests on
 
@@ -313,3 +324,6 @@ The rest bear on it without being about it:
 - [ADR-0053](./adr/0053-an-agent-and-its-operator-report-state-on-the-machine-listener.md)
   — an operator and an agent each report a state elsewhere, and the two
   are what the Agents section reads and shows
+- [ADR-0056](./adr/0056-a-published-web-image-is-bound-to-the-release-name-garam-and-make-ci-checks-the-binding.md)
+  — the browser's `/api/*` address is fixed when the image is built, so a
+  published image reaches the api Service a release named `garam` renders

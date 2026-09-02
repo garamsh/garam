@@ -16,7 +16,6 @@ export {
   listOrgMembers,
   listOrgs,
   listProjects,
-  orgNotFound,
   type Agent,
   type AgentDefinition,
   type Group,

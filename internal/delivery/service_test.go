@@ -19,6 +19,7 @@ import (
 
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/delivery"
+	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 )
 
@@ -698,4 +699,167 @@ func TestRun_RedeliversAMessagePostedBeforeARestart(t *testing.T) {
 	gateway.endTurn(delivery.TurnFinished, "msg-1")
 	eventually(t, func() bool { return queue.delivered() == 1 }, "the pairing this process made completes it")
 	assert.Equal(t, 1, queue.completionCalls(), "a message this process never posted is not completed")
+}
+
+// pollingQueue answers every claim with err and hands nothing out, so
+// the loop against it does nothing but poll.
+type pollingQueue struct {
+	mu     sync.Mutex
+	err    error
+	claims int
+}
+
+func (q *pollingQueue) Claim(context.Context) (*delivery.Claim, error) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.claims++
+	return nil, q.err
+}
+
+func (q *pollingQueue) Renew(context.Context, delivery.ClaimID) (*delivery.Claim, error) {
+	return nil, nil
+}
+
+func (q *pollingQueue) Complete(context.Context, delivery.ClaimID) error { return nil }
+
+func (q *pollingQueue) polls() int {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return q.claims
+}
+
+// heldQueue hands out one claim and holds every later poll open, so one
+// pairing is in flight and the renewals are the only other traffic.
+// Every renewal answers err.
+type heldQueue struct {
+	mu       sync.Mutex
+	expires  time.Duration
+	err      error
+	handed   bool
+	renewals int
+}
+
+func (q *heldQueue) Claim(ctx context.Context) (*delivery.Claim, error) {
+	q.mu.Lock()
+	first := !q.handed
+	q.handed = true
+	expires := q.expires
+	q.mu.Unlock()
+	if first {
+		return &delivery.Claim{ID: "claim-1", ExpiresAt: time.Now().Add(expires), Body: "hello"}, nil
+	}
+	<-ctx.Done()
+	return nil, errorx.New(errorx.KindDeadlineExceeded, "delivery: poll cut")
+}
+
+func (q *heldQueue) Renew(context.Context, delivery.ClaimID) (*delivery.Claim, error) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.renewals++
+	return nil, q.err
+}
+
+func (q *heldQueue) Complete(context.Context, delivery.ClaimID) error { return nil }
+
+func (q *heldQueue) renewed() int {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return q.renewals
+}
+
+// idleGateway takes every message and ends no turn: what the loop does
+// with what it is holding is the subject, not what ends a hold.
+type idleGateway struct{ done <-chan struct{} }
+
+func (g idleGateway) Post(context.Context, string) (delivery.GatewayID, error) {
+	return "gateway-1", nil
+}
+
+func (g idleGateway) Subscribe(context.Context) (delivery.TurnStream, error) {
+	return idleStream(g), nil
+}
+
+type idleStream struct{ done <-chan struct{} }
+
+func (s idleStream) Next() (delivery.TurnEnd, error) {
+	<-s.done
+	return delivery.TurnEnd{}, errorx.New(errorx.KindUnavailable, "delivery: stream ended")
+}
+
+func (s idleStream) Close() error { return nil }
+
+// TestService_ReadsAnEmptyPollFromTheKindGaramAnswers holds the claim
+// loop against the shape garam's answer arrives in. `stack-go.md` §4
+// does not admit errors.Is beside errorx, and the reason is here: a
+// sentinel matched by identity stops matching the moment anything
+// replaces it with a kind-carrying copy, and every empty poll would
+// then be logged and waited on as the failure it is not.
+//
+// The control is a failure of another kind, which must be waited on:
+// without it a loop that asked again at once whatever garam said would
+// read exactly like this one.
+func TestService_ReadsAnEmptyPollFromTheKindGaramAnswers(t *testing.T) {
+	empty := runPolling(t, errorx.New(errorx.KindNotFound, "delivery: no message ready"))
+	assert.Greater(t, empty, 1, "an empty poll is asked again at once")
+
+	unreachable := runPolling(t, errorx.New(errorx.KindUnavailable, "delivery: garam answered 503"))
+	assert.Equal(t, 1, unreachable, "the control: another kind waits the retry delay out")
+}
+
+// runPolling runs the loop for one window against a garam answering
+// every poll with err, and returns how many polls it made. The retry
+// delay is far longer than the window, so a poll waited on is a poll not
+// repeated.
+func runPolling(t *testing.T, answer error) int {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	queue := &pollingQueue{err: answer}
+	s, err := delivery.NewService(queue, idleGateway{done: ctx.Done()}, delivery.Config{
+		RetryDelay:       10 * time.Second,
+		MinRenewInterval: time.Second,
+		ClaimTimeout:     10 * time.Second,
+		CallTimeout:      time.Second,
+	})
+	require.NoError(t, err)
+	require.NoError(t, s.Run(ctx))
+	return queue.polls()
+}
+
+// TestService_ReadsALapsedHoldFromTheKindGaramAnswers is the same claim
+// for the renewal half: a hold garam says is gone is dropped, and every
+// other refusal keeps it. Reading that by the sentinel's identity turns
+// a lapsed hold into one renewed forever, against a message garam has
+// already handed to somebody else.
+//
+// The control is a transient refusal, which must keep the hold:
+// without it a loop that dropped every pairing it could not renew would
+// read exactly like this one.
+func TestService_ReadsALapsedHoldFromTheKindGaramAnswers(t *testing.T) {
+	lapsed := runHolding(t, errorx.New(errorx.KindFailedPrecondition, "delivery: claim no longer held"))
+	assert.Equal(t, 1, lapsed, "a hold garam says is gone is dropped rather than carried")
+
+	unreachable := runHolding(t, errorx.New(errorx.KindUnavailable, "delivery: garam answered 503"))
+	assert.Greater(t, unreachable, 1, "the control: another kind keeps the hold and tries again")
+}
+
+// runHolding runs the loop for one window against a garam that hands
+// out one message and refuses every renewal of it with err, and returns
+// how many renewals it made.
+func runHolding(t *testing.T, answer error) int {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
+	defer cancel()
+	// The lease divided by three is the renewal interval, and the floor
+	// below is what a lease this short takes instead.
+	queue := &heldQueue{expires: 30 * time.Millisecond, err: answer}
+	s, err := delivery.NewService(queue, idleGateway{done: ctx.Done()}, delivery.Config{
+		RetryDelay:       20 * time.Millisecond,
+		MinRenewInterval: 10 * time.Millisecond,
+		ClaimTimeout:     10 * time.Second,
+		CallTimeout:      time.Second,
+	})
+	require.NoError(t, err)
+	require.NoError(t, s.Run(ctx))
+	return queue.renewed()
 }

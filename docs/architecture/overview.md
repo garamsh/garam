@@ -26,7 +26,8 @@ collaborate on a shared plan.
   terminates TLS itself, requires a client certificate, and verifies it
   against the authority of the organization the certificate's own SAN
   names (ADR-0014). An agent and an operator authenticate the same way
-  (ADR-0015), and neither touches a user row, a session or a membership.
+  (ADR-0015), and neither authenticates through a user row, a session or
+  a membership.
   What that listener serves has a specification of its own (ADR-0019).
   The other direction rests on a different root: the listener presents
   one certificate signed by a garam server authority the deployment
@@ -171,9 +172,12 @@ collaborate on a shared plan.
 - A web console under `/console` for the org structure the API exposes:
   organizations are listed and created, members are invited by link and
   the invitation accepted, groups and projects are read, an operator is
-  registered and the organization's operators read (ADR-0045), and an
-  agent is defined and the organization's definitions read (ADR-0009,
-  ADR-0026).
+  registered and the organization's operators read (ADR-0045), an agent
+  is defined and the organization's definitions and agents read — each
+  agent with the two states its operator and it report (ADR-0026,
+  ADR-0053) — and the organization's cross-organization consent
+  relations are read, its own half of one granted and withdrawn
+  (ADR-0009, ADR-0035).
   Its shell is a collapsible sidebar over `Organizations → organization →
   section`, and it addresses resources by the GRN's last segment rather
   than printing GRNs (ADR-0011).
@@ -287,12 +291,16 @@ collaborate on a shared plan.
 - `cmd/garam/` — thin entrypoint for the cobra CLI.
 - `migrations/` — SQL migrations (golang-migrate); sqlc schema source.
 - `tests/e2e/` — store round-trips against real Postgres.
+- `tests/image/` — black-box checks against a built image rather than
+  against the app (`make web-image-e2e`).
 - `web/` — Next.js frontend; reaches the API through a same-origin
   `/api/*` rewrite (ADR-0009). Its own toolchain and gate (`make web-ci`).
   `/` is the public landing page, `/login` the sign-in page and
   `/register` where an invitation becomes a password account
   (ADR-0041); the signed-in application lives under `/console`, whose
   shell and route structure are ADR-0011.
+- `deploy/charts/garam/` — the Helm chart a cluster installs garam
+  from (ADR-0042).
 - `deploy/local/` — Docker Compose stack running Postgres, migrations,
   authz, api and (profile-gated) web on one machine; its `postgres`
   service also hosts the e2e tests' database (`make db-up`), kept
@@ -367,8 +375,10 @@ the engine through an `Evaluator` seam of its own to decide what a
 caller may send, and it and `internal/api` never import each other.
 Neither imports `internal/authz`; the wire contract is
 `proto/garam/authz/v1`, and the conversions onto it are declared once
-in `internal/wire`. Both surfaces compose four domains — `agent`,
-`message`, `operator` and `watch`. `watch` is extracted rather than
+in `internal/wire`. Both surfaces compose four boundaries — the
+`agent`, `message` and `operator` domains, and `watch`, which is not a
+domain ([domains.md](./domains.md) §Sub-responsibilities in a boundary
+of their own). `watch` is extracted rather than
 held by either of them because a watch has a lifecycle neither
 `message` nor `agent` contains, and its two ends fall on different
 listeners — opened on the browser one, fed on the machine one — which
@@ -388,7 +398,7 @@ it and imports no request surface and no domain.
 | `operator.Operator` | `internal/operator` | an organization's record that it has an operator |
 | `agent.Agent` | `internal/agent` | autonomous actor an operator provisions |
 | `agent.Assignment` | `internal/agent` | agent-to-operator binding, fenced by an epoch |
-| `agent.Service` | `internal/agent` | creates an agent for an operator, issues the certificate of one assigned to it, and renews an agent's own |
+| `agent.Service` | `internal/agent` | creates an agent for an operator, issues or renews the certificate of one, answers an operator the definitions naming it and claims one, and records the state each party reports |
 | `ca.Authority` | `internal/ca` | an organization's certificate authority, its key sealed |
 | `ca.Certificate` | `internal/ca` | issued client certificate identified by a SAN URI |
 | `ca.Sealer` | `internal/ca` | seals key material against a database dump |

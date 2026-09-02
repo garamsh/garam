@@ -684,7 +684,7 @@ func (_c *MockPolicyManager_ListPolicyVersions_Call) RunAndReturn(run func(ctx c
 }
 
 // RollbackPolicy provides a mock function for the type MockPolicyManager
-func (_mock *MockPolicyManager) RollbackPolicy(ctx context.Context, policyGRN grn.GRN, version int) (*api.Policy, error) {
+func (_mock *MockPolicyManager) RollbackPolicy(ctx context.Context, policyGRN grn.GRN, version int32) (*api.Policy, error) {
 	ret := _mock.Called(ctx, policyGRN, version)
 
 	if len(ret) == 0 {
@@ -693,17 +693,17 @@ func (_mock *MockPolicyManager) RollbackPolicy(ctx context.Context, policyGRN gr
 
 	var r0 *api.Policy
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, int) (*api.Policy, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, int32) (*api.Policy, error)); ok {
 		return returnFunc(ctx, policyGRN, version)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, int) *api.Policy); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, int32) *api.Policy); ok {
 		r0 = returnFunc(ctx, policyGRN, version)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*api.Policy)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, grn.GRN, int) error); ok {
+	if returnFunc, ok := ret.Get(1).(func(context.Context, grn.GRN, int32) error); ok {
 		r1 = returnFunc(ctx, policyGRN, version)
 	} else {
 		r1 = ret.Error(1)
@@ -719,12 +719,12 @@ type MockPolicyManager_RollbackPolicy_Call struct {
 // RollbackPolicy is a helper method to define mock.On call
 //   - ctx context.Context
 //   - policyGRN grn.GRN
-//   - version int
+//   - version int32
 func (_e *MockPolicyManager_Expecter) RollbackPolicy(ctx any, policyGRN any, version any) *MockPolicyManager_RollbackPolicy_Call {
 	return &MockPolicyManager_RollbackPolicy_Call{Call: _e.mock.On("RollbackPolicy", ctx, policyGRN, version)}
 }
 
-func (_c *MockPolicyManager_RollbackPolicy_Call) Run(run func(ctx context.Context, policyGRN grn.GRN, version int)) *MockPolicyManager_RollbackPolicy_Call {
+func (_c *MockPolicyManager_RollbackPolicy_Call) Run(run func(ctx context.Context, policyGRN grn.GRN, version int32)) *MockPolicyManager_RollbackPolicy_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -734,9 +734,9 @@ func (_c *MockPolicyManager_RollbackPolicy_Call) Run(run func(ctx context.Contex
 		if args[1] != nil {
 			arg1 = args[1].(grn.GRN)
 		}
-		var arg2 int
+		var arg2 int32
 		if args[2] != nil {
-			arg2 = args[2].(int)
+			arg2 = args[2].(int32)
 		}
 		run(
 			arg0,
@@ -752,7 +752,7 @@ func (_c *MockPolicyManager_RollbackPolicy_Call) Return(policy *api.Policy, err 
 	return _c
 }
 
-func (_c *MockPolicyManager_RollbackPolicy_Call) RunAndReturn(run func(ctx context.Context, policyGRN grn.GRN, version int) (*api.Policy, error)) *MockPolicyManager_RollbackPolicy_Call {
+func (_c *MockPolicyManager_RollbackPolicy_Call) RunAndReturn(run func(ctx context.Context, policyGRN grn.GRN, version int32) (*api.Policy, error)) *MockPolicyManager_RollbackPolicy_Call {
 	_c.Call.Return(run)
 	return _c
 }

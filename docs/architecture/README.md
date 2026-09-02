@@ -122,6 +122,7 @@ ADRs:
 - [0053](./adr/0053-an-agent-and-its-operator-report-state-on-the-machine-listener.md) — an operator and an agent each report state on the machine listener, fenced by the assignment's epoch
 - [0054](./adr/0054-the-concrete-types-rule-binds-every-boundary-not-only-a-domain.md) — the concrete-types rule binds every boundary, not only a domain
 - [0055](./adr/0055-a-sender-reads-the-state-of-a-message-it-sent.md) — a sender reads the state of a message it sent, and garam announces nothing
+- [0056](./adr/0056-a-published-web-image-is-bound-to-the-release-name-garam-and-make-ci-checks-the-binding.md) — a published web image reaches the api Service a release named `garam` renders, and `make ci` compares the two
 
 ## Rules for edits
 

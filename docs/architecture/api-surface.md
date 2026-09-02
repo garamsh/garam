@@ -84,8 +84,11 @@ names, never against a pool holding every organization's, and both ends
 read their certificate per handshake, so a replaced one is presented on
 the next connection with nothing restarted
 ([ADR-0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)).
-Nothing here has a session, a user row or an organization membership to
-read, and an operator reaches it on the same terms an agent does
+Admission reads that certificate and nothing else: no session and no
+user row exist on this listener, and nothing about the caller is looked
+up to admit it. What an admitted caller may do is decided after that
+(§What decides the rest). An operator reaches the listener on the same
+terms an agent does
 ([ADR-0015](./adr/0015-operator-identity.md)).
 
 **No listener mints a first certificate.** The command that issues one
@@ -129,17 +132,27 @@ and not in the same place on every surface.
   the other side — the caller is the sender the row is matched on, so a
   message it did not send answers as one that is not there
   ([ADR-0055](./adr/0055-a-sender-reads-the-state-of-a-message-it-sent.md)).
-- **What a machine caller may send** is the exception, and it is a
-  policy question: the engine is asked about each recipient
-  ([ADR-0024](./adr/0024-policy-decides-what-an-agent-sends.md)), after
-  a precondition the listener holds itself — the recipient's
-  organization is the caller's, or a consent relation between the two
-  stands
+- **What a machine caller may send** is the exception, and the
+  recipient's organization decides which of two things answers it. A
+  recipient of the caller's own organization is a policy question: the
+  engine is asked about that recipient
+  ([ADR-0024](./adr/0024-policy-decides-what-an-agent-sends.md)). A
+  recipient across the organization boundary is decided by the consent
+  relation the two organizations hold, alone — the engine is not asked
+  a cross-organization question at all
   ([ADR-0035](./adr/0035-a-cross-organization-message-needs-both-organizations-consent.md)).
+  Why no policy may reach past that boundary is
+  [authz.md](./authz.md) §Policy attachment. A restriction meant to
+  bear on a cross-organization send is therefore not something a policy
+  can carry.
 - **Asking the engine has a precondition of its own**: a caller may ask
   only about a subject belonging to the object's organization
-  ([ADR-0025](./adr/0025-engine-scope-is-a-caller-obligation.md)),
-  which the engine now applies itself rather than trusting a caller to
+  ([ADR-0025](./adr/0025-engine-scope-is-a-caller-obligation.md)). The
+  caller is what establishes that membership and names the organization
+  on the call; the engine holds no membership data of its own. What the
+  engine now applies itself is the check on what it was handed — the
+  organization named must be the object's, and a call naming none is
+  refused
   ([ADR-0038](./adr/0038-the-engine-learns-a-subjects-memberships-and-enforces-its-own-scope.md)).
 - **Watching an agent is its own grant**, separate from reading one
   ([ADR-0022](./adr/0022-watching-an-agent.md)).
@@ -183,6 +196,14 @@ address holds the specification and nothing under `docs/`:
 
 What each limit covers is in the two files, named here and not copied.
 
+A caller meets one more limit, which neither file states. **Both
+listeners bound a request body before anything decodes it** — at a
+figure the composition root holds, `maxRequestBody` in
+`internal/cli/cli.go` — and a body past it is refused as an invalid
+argument. It bounds the request rather than a field, which is what
+leaves it standing where §What nothing checks says a declared
+constraint does not.
+
 The other two surfaces are fixed differently. The engine's wire
 contract is `proto/garam/authz/v1`, generated and checked the same way.
 The probes have no specification at all: their paths, and the ports
@@ -216,8 +237,23 @@ history: it changed four operations' response sets and moved no
 generated Go file. What does move is `web/src/types/api.ts`, generated
 from `api/openapi.yaml` and held against it by `make web-check-gen`, so
 the browser client's types follow a response set while the server's do
-not — and `api/machine.yaml` has no generated consumer in this
-repository at all.
+not — and `api/machine.yaml` has no consumer of that kind at all. What
+`make gen` writes from it is the generated Go §What a specification is
+authoritative for names, which a response set leaves as untouched as it
+leaves `api/server.gen.go`.
+
+**Nor does it cover a constraint that is not a type.** The two
+specifications carry 25 of them — `minimum`, `maximum`, `minLength`
+and `maxLength` — and none reaches a running process: oapi-codegen
+writes the field and no check, and neither listener installs a
+request-validation middleware. What does bind is the type the field is
+generated as, because the body is decoded into it exactly once and a
+value that does not fit is refused there. So a bound a caller must not
+cross is declared as the field's `format` where the bound is a width,
+and otherwise held by the code that owns the rule.
+`PolicyRollback.version` is both: `format: int32` is the width the
+engine stores a version at, and `minimum: 1` is the engine's own rule,
+which it refuses a version below (#865).
 
 ## Where a change to a surface lands
 
@@ -331,7 +367,8 @@ document owes an update.
 - [ADR-0036](./adr/0036-a-secret-in-garam-is-a-reference-not-a-value.md)
   — no surface serves a secret's value
 - [ADR-0038](./adr/0038-the-engine-learns-a-subjects-memberships-and-enforces-its-own-scope.md)
-  — the engine applies the organization scope itself
+  — the engine checks the organization it was handed against the
+  object's, and refuses a call naming none
 - [ADR-0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)
   — the machine listener presents a pinned garam server certificate,
   and both ends read theirs per handshake

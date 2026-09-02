@@ -76,6 +76,12 @@ test.describe("password accounts", () => {
       { token, username, password },
       urls,
     );
+    // What the filter at the end of this test rests on. `[].filter()`
+    // is `[]`, so a listener attached to the wrong page or detached
+    // before the first request passes it with full force; the two
+    // counts here say each browser's listener collected something.
+    const afterRegistering = urls.length;
+    expect(afterRegistering).toBeGreaterThan(0);
 
     // A second browser, holding nothing the first one left behind.
     const context = await browser.newContext({ baseURL });
@@ -98,6 +104,7 @@ test.describe("password accounts", () => {
     // The password travelled in a body. No request either browser made
     // carries it in a URL, so none of it reached a query string, a GET,
     // or anything that logs a URL.
+    expect(urls.length).toBeGreaterThan(afterRegistering);
     expect(urls.filter((url) => url.includes(password))).toEqual([]);
     expect(signingIn.url()).not.toContain(password);
 

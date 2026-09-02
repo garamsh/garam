@@ -50,8 +50,17 @@ func TestRead_RefusesAFileReadableBeyondItsOwner(t *testing.T) {
 	}
 }
 
+// TestRead_RefusesAMissingFile asserts the refusal beside the accepted
+// case, so what fails is the absent file rather than the directory it
+// was looked for in: both paths are in the one tmpdir, and only the
+// file at the end of them differs.
 func TestRead_RefusesAMissingFile(t *testing.T) {
-	_, err := keyfile.Read(filepath.Join(t.TempDir(), "absent"))
+	present := writeFile(t, "a key", 0o600)
+	read, err := keyfile.Read(present)
+	require.NoError(t, err, "a file that is there")
+	assert.Equal(t, []byte("a key"), read)
+
+	_, err = keyfile.Read(filepath.Join(filepath.Dir(present), "absent"))
 	require.Error(t, err)
 	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
 }

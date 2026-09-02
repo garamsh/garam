@@ -156,7 +156,9 @@ func serveAPI(cmd *cobra.Command) error {
 // line can name the route rather than the path. The last middleware
 // listed is the outermost, so recovery runs inside the logging and a
 // panic becomes the 500 the line reports. recoverPanics is outermost of
-// all, so every route the mux carries is answered rather than dropped.
+// all, so every route the mux carries is answered rather than dropped,
+// and the body bound sits under it for the same reason: one wrapping
+// covers every route rather than each decoder in turn.
 func (o *observability) apiHandler(srv apigen.ServerInterface, deps ...health.Dependency) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("GET /metrics", o.metricsHandler())
@@ -169,7 +171,7 @@ func (o *observability) apiHandler(srv apigen.ServerInterface, deps ...health.De
 		// error body reaches that refusal.
 		ErrorHandlerFunc: api.BindingError,
 	})
-	return o.recoverPanics(otelhttp.NewHandler(handler, serviceAPI))
+	return o.recoverPanics(http.MaxBytesHandler(otelhttp.NewHandler(handler, serviceAPI), maxRequestBody))
 }
 
 // envBool reads a boolean environment variable, taking the fallback

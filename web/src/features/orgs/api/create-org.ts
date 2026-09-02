@@ -4,7 +4,11 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { GaramApiError, garamFetchAuthenticated } from "@/lib/garam";
+import {
+  GaramApiError,
+  GaramUnreachableError,
+  garamFetchAuthenticated,
+} from "@/lib/garam";
 
 import { slugFromGrn } from "../grn";
 import type { Organization } from "./orgs";
@@ -33,7 +37,12 @@ export async function createOrg(
       body: JSON.stringify(parsed.data),
     });
   } catch (error) {
-    if (error instanceof GaramApiError) {
+    // An unreachable API is a state the form renders, not a throw: the
+    // boundary would replace the form and the name typed into it.
+    if (
+      error instanceof GaramApiError ||
+      error instanceof GaramUnreachableError
+    ) {
       return { status: "error", message: error.message };
     }
     throw error;

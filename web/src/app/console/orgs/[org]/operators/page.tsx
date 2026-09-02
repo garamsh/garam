@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Server } from "lucide-react";
 
 import { Separator } from "@/components/ui/separator";
-import { listOperators, orgNotFound } from "@/features/orgs";
+import { listOperators } from "@/features/orgs";
 
 import { ApiUnreachable } from "../../../_components/api-unreachable";
 import { EmptyState } from "../../../_components/empty-state";
@@ -26,7 +26,7 @@ type Params = { params: Promise<{ org: string }> };
  */
 export default async function OperatorsPage({ params }: Params) {
   const { org } = await params;
-  const operators = await listOperators(org).catch(orgNotFound);
+  const operators = await listOperators(org);
 
   return (
     <>

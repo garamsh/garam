@@ -210,9 +210,35 @@ func effectToProto(e wire.Effect) authzv1.Effect {
 // grpcError renders an errorx error as a gRPC status. Kinds are
 // gRPC-aligned, so the kind carries over the status code by name
 // (ADR-0003); the mapping point is this transport.
+//
+// The message is what a caller may be told (wire.MessageOf) rather
+// than the chain. A status carries text and no types, and it is the
+// types that say whether this project wrote a message — so the peer
+// receiving one cannot tell this project's sentence from a driver's,
+// and the decision is taken here, on the side that still holds the
+// chain.
 func grpcError(err error) error {
-	return status.Error(codeOf(errorx.KindOf(err)), err.Error())
+	return disclosed{
+		status: status.New(codeOf(errorx.KindOf(err)), wire.MessageOf(err)),
+		cause:  err,
+	}
 }
+
+// disclosed is what leaves the engine: the status a peer reads, over
+// the chain this process keeps. grpc-go sends the status; anything on
+// this side that reads the error — the logging interceptor is the one —
+// reads the chain, so a fault of this process is still diagnosable from
+// its own logs (runtime-safety.md §Errors reach a handler).
+type disclosed struct {
+	status *status.Status
+	cause  error
+}
+
+func (d disclosed) Error() string { return d.cause.Error() }
+
+func (d disclosed) Unwrap() error { return d.cause }
+
+func (d disclosed) GRPCStatus() *status.Status { return d.status }
 
 // codeOf maps error kinds to gRPC status codes by name.
 func codeOf(k errorx.Kind) codes.Code {

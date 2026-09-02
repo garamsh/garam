@@ -30,12 +30,16 @@ func TestMigrationsDir_HasUpMigrations(t *testing.T) {
 	assert.NotEmpty(t, up, "no .up.sql migrations beside this test")
 }
 
-// TestMigrationsDir_VersionsAreUnique holds that no two migrations share a
-// version and a direction. golang-migrate refuses the repeat while opening
-// the source, so a collision applies no migration at all rather than one of
-// the two, and the count above passes either way — two files carrying one
-// version between them are still two files.
-func TestMigrationsDir_VersionsAreUnique(t *testing.T) {
+// TestMigrationsDir_EveryMigrationCarriesAUniqueVersion holds two things
+// about the same parse. That every `.sql` file beside this one carries a
+// version golang-migrate can read: a name it cannot parse is a name it
+// skips, so the migration is never applied and its counterpart is
+// orphaned, and the suffix count above passes on it. And that no two
+// share a version and a direction: golang-migrate refuses the repeat
+// while opening the source, so a collision applies no migration at all
+// rather than one of the two, and the count passes either way — two files
+// carrying one version between them are still two files.
+func TestMigrationsDir_EveryMigrationCarriesAUniqueVersion(t *testing.T) {
 	entries, err := os.ReadDir(".")
 	require.NoError(t, err)
 
@@ -45,14 +49,13 @@ func TestMigrationsDir_VersionsAreUnique(t *testing.T) {
 	}
 	seen := make(map[key]string)
 	for _, e := range entries {
-		if e.IsDir() {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".sql") {
 			continue
 		}
 		// The parse golang-migrate applies, which reads the version as a
 		// number: `12_a` and `000012_b` collide here as they collide there.
-		// A name it cannot parse is a name it skips, this file included.
 		m, err := source.DefaultParse(e.Name())
-		if err != nil {
+		if !assert.NoErrorf(t, err, "%s carries no version golang-migrate can read", e.Name()) {
 			continue
 		}
 		k := key{version: m.Version, direction: m.Direction}
@@ -63,4 +66,5 @@ func TestMigrationsDir_VersionsAreUnique(t *testing.T) {
 		}
 		seen[k] = e.Name()
 	}
+	assert.NotEmpty(t, seen, "no migration beside this test carries a version")
 }

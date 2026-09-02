@@ -118,27 +118,32 @@ func TestGRPCServer_Check(t *testing.T) {
 	}
 }
 
+// TestGRPCServer_CheckInvalidInput reads the unmutated request against
+// the six spoiled ones: each of those is that request with one field
+// spoiled, so a Check that refuses everything stops satisfying the
+// first row while still satisfying the rest.
 func TestGRPCServer_CheckInvalidInput(t *testing.T) {
 	client := newAuthzClient(t, staticPolicies{})
 
 	cases := []struct {
 		name   string
 		mutate func(r *authzv1.CheckRequest)
+		want   codes.Code
 	}{
-		{"bad subject grn", func(r *authzv1.CheckRequest) { r.SubjectGrn = "nope" }},
-		{"bad object grn", func(r *authzv1.CheckRequest) { r.ObjectGrn = "nope" }},
-		{"empty action", func(r *authzv1.CheckRequest) { r.Action = "" }},
-		{"unspecified effect", func(r *authzv1.CheckRequest) { r.Statements[0].Effect = authzv1.Effect_EFFECT_UNSPECIFIED }},
-		{"empty patterns", func(r *authzv1.CheckRequest) { r.Statements[0].Action = nil }},
-		{"bad subject group grn", func(r *authzv1.CheckRequest) { r.SubjectGroups = []string{"nope"} }},
+		{"unmutated", func(*authzv1.CheckRequest) {}, codes.OK},
+		{"bad subject grn", func(r *authzv1.CheckRequest) { r.SubjectGrn = "nope" }, codes.InvalidArgument},
+		{"bad object grn", func(r *authzv1.CheckRequest) { r.ObjectGrn = "nope" }, codes.InvalidArgument},
+		{"empty action", func(r *authzv1.CheckRequest) { r.Action = "" }, codes.InvalidArgument},
+		{"unspecified effect", func(r *authzv1.CheckRequest) { r.Statements[0].Effect = authzv1.Effect_EFFECT_UNSPECIFIED }, codes.InvalidArgument},
+		{"empty patterns", func(r *authzv1.CheckRequest) { r.Statements[0].Action = nil }, codes.InvalidArgument},
+		{"bad subject group grn", func(r *authzv1.CheckRequest) { r.SubjectGroups = []string{"nope"} }, codes.InvalidArgument},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			req := checkRequest(allowStatement("s1", []string{"org:*"}, []string{"grn:root:default:org:*"}))
 			c.mutate(req)
 			_, err := client.Check(context.Background(), req)
-			require.Error(t, err)
-			assert.Equal(t, codes.InvalidArgument, status.Code(err))
+			assert.Equal(t, c.want, status.Code(err))
 		})
 	}
 }
@@ -173,6 +178,23 @@ func TestGRPCServer_Explain(t *testing.T) {
 	assert.False(t, traces["wrong-action"].GetMatched())
 	assert.True(t, traces["deny-delete"].GetMatched())
 	assert.Equal(t, authzv1.Effect_EFFECT_DENY, traces["deny-delete"].GetEffect())
+
+	// The control for the refusal above: where only an Allow matches,
+	// Explain reports Allowed. The request above matches an Allow and a
+	// Deny, which sets both flags, so it reports false whichever effect
+	// the engine counts as a deny and only this case reads the branch.
+	allowOnly, err := client.Explain(context.Background(), &authzv1.ExplainRequest{
+		SubjectGrn: "grn:root:default:user:alice",
+		ObjectGrn:  "grn:root:default:org:acme",
+		Action:     "org:delete",
+		Statements: []*authzv1.Statement{
+			allowStatement("allow-all", []string{"org:*"}, []string{"grn:root:default:org:*"}),
+			{Sid: "deny-other-org", Effect: authzv1.Effect_EFFECT_DENY, Action: []string{"org:delete"}, Resource: []string{"grn:root:default:org:globex"}},
+		},
+		SubjectOrg: "grn:root:default:org:acme",
+	})
+	require.NoError(t, err)
+	assert.True(t, allowOnly.GetAllowed(), "an Allow matches and the Deny does not")
 }
 
 // TestGRPCServer_ExplainAllowsWhatOnlyAnAllowMatches covers the answer

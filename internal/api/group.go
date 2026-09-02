@@ -201,7 +201,7 @@ func (s *Server) AddGroupMember(w http.ResponseWriter, r *http.Request, orgSlug 
 
 // RemoveGroupMember removes a member from a group. Requires the admin
 // role.
-func (s *Server) RemoveGroupMember(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, groupSlug apigen.GroupSlug, memberGrn apigen.MemberGrn) {
+func (s *Server) RemoveGroupMember(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, groupSlug apigen.GroupSlug, memberGRN apigen.MemberGrn) {
 	u, err := s.currentUser(r)
 	if err != nil {
 		writeError(w, err)
@@ -211,7 +211,7 @@ func (s *Server) RemoveGroupMember(w http.ResponseWriter, r *http.Request, orgSl
 		writeError(w, err)
 		return
 	}
-	member, err := grn.Parse(memberGrn)
+	member, err := grn.Parse(memberGRN)
 	if err != nil {
 		writeError(w, err)
 		return

@@ -50,11 +50,12 @@ HELM := go run helm.sh/helm/v4/cmd/helm@v4.2.4
 # deploy/local/docker-compose.yml pins `name: garam-local`, so every
 # worktree addresses the same compose project and container.
 #
-# The e2e suite truncates every table and migrates from its own
-# migrations/, so it gets a database per worktree on that one server.
-# The suffix is git's own name for a linked worktree — unique per
-# worktree and fixed for its lifetime — and empty in the main checkout,
-# which keeps garam_test. The local stack keeps `garam`.
+# The integration suite truncates every table and both Go suites
+# migrate from the same migrations/, so they share a database per
+# worktree on that one server. The suffix is git's own name for a
+# linked worktree — unique per worktree and fixed for its lifetime —
+# and empty in the main checkout, which keeps garam_test. The local
+# stack keeps `garam`.
 TEST_DB_NAME ?= garam_test$(shell git rev-parse --git-dir | sed -n 's|.*/worktrees/|_|p')
 
 COMPOSE_LOCAL := docker compose -f deploy/local/docker-compose.yml
@@ -64,14 +65,14 @@ PNPM := pnpm --dir web
 # of compose at the moment each is used. GARAM_LOCAL_API_PORT and
 # GARAM_DB_PORT move them, from deploy/local/.env as readily as from the
 # environment, and a second copy of either here would be the copy that
-# goes stale. Each is empty when nothing is published, which `web-e2e`
-# and `e2e` report rather than dial.
+# goes stale. Each is empty when nothing is published, which `web-e2e`,
+# `integration` and `e2e` report rather than dial.
 API_HOST_ADDR = $(shell $(COMPOSE_LOCAL) port api 8080 2>/dev/null | sed 's/^0\.0\.0\.0/localhost/')
 DB_HOST_ADDR = $(shell $(COMPOSE_LOCAL) port postgres 5432 2>/dev/null | sed 's/^0\.0\.0\.0/localhost/')
 
-# Empty rather than half a URL when no Postgres is published, so `e2e`
-# has one thing to test. Set it in the environment to run the suite
-# against a database outside compose.
+# Empty rather than half a URL when no Postgres is published, so
+# `integration` and `e2e` have one thing to test. Set it in the
+# environment to run them against a database outside compose.
 TEST_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)/$(TEST_DB_NAME)?sslmode=disable)
 
 # The Playwright suite seeds sessions for the api it drives, so its URL
@@ -79,7 +80,7 @@ TEST_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)
 # and overridable on the same terms as the line above.
 WEB_E2E_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)/garam?sslmode=disable)
 
-.PHONY: lint format test build gen check-gen check-toolchain e2e mutation db-up db-down backend-up ci template-diff search
+.PHONY: lint format test build gen check-gen check-toolchain integration e2e mutation db-up db-down backend-up ci template-diff search
 .PHONY: chart chart-lint chart-render chart-identity chart-names chart-rewrite chart-guards chart-security chart-package
 .PHONY: web-install web-lint web-format web-test web-build web-gen web-check-gen web-e2e web-image-e2e web-ci
 .PHONY: image-build
@@ -160,14 +161,15 @@ format:
 	@out="$$($(GOIMPORTS) -l $(FORMAT_FILES))"; test -z "$$out" || { echo "goimports: $$out"; exit 1; }
 
 # go has no negative package pattern, so the sweep is filtered here.
-# tests/e2e needs the Postgres db-up starts and fails without it, so test
-# covers every other package and names the one it left out. Should the
-# filter ever stop matching, the e2e suite is swept back in and fails for
-# want of a database rather than skipping quietly.
-TEST_PKGS = $(filter-out %/tests/e2e,$(GO_PKGS))
+# tests/integration and tests/e2e each need the Postgres db-up starts
+# and fail without it, so test covers every other package and names the
+# two it left out. Should either filter stop matching, that suite is
+# swept back in and fails for want of a database rather than skipping
+# quietly.
+TEST_PKGS = $(filter-out %/tests/integration %/tests/e2e,$(GO_PKGS))
 
 test:
-	@echo 'test: $(words $(TEST_PKGS)) packages; tests/e2e not covered here — it needs Postgres (make db-up e2e)'
+	@echo 'test: $(words $(TEST_PKGS)) packages; tests/integration and tests/e2e not covered here — they need Postgres (make db-up integration e2e)'
 	@test -n '$(TEST_PKGS)' || { echo 'test: nothing to test — the package list is empty, or the filter above matched all of it'; exit 1; }
 	@go test $(TEST_PKGS)
 
@@ -279,9 +281,9 @@ export SEARCH_Q = $(Q)
 search:
 	@scripts/search.sh
 
-# db-up starts the stack's postgres service alone and makes sure the e2e
+# db-up starts the stack's postgres service alone and makes sure the test
 # database exists next to `garam`. Postgres has no CREATE DATABASE IF NOT
-# EXISTS, so ask before creating. The e2e suite migrates it itself.
+# EXISTS, so ask before creating. Each Go suite migrates it itself.
 #
 # Whether the database exists is psql's output; whether there is an answer
 # at all is its exit status. The two are read separately, because one
@@ -311,17 +313,28 @@ db-down:
 backend-up:
 	$(COMPOSE_LOCAL) up -d --build --wait api
 
-# What the e2e suite covers, listed once so the target reports the set it
-# ran rather than name a ./... pattern whose match nobody sees. `go test`
-# prints `[no test files]` and exits 0 for a package holding none — a
-# build tag that stopped matching, a renamed file — which reads exactly
-# like the run that did the work. Only packages holding a test file are
-# listed, so that condition empties the list and fails below instead of
-# reaching go test.
+# What each of the two suites against real Postgres covers, listed once
+# so the targets report the set they ran rather than name a ./... pattern
+# whose match nobody sees. `go test` prints `[no test files]` and exits 0
+# for a package holding none — a build tag that stopped matching, a
+# renamed file — which reads exactly like the run that did the work. Only
+# packages holding a test file are listed, so that condition empties a
+# list and fails below instead of reaching go test.
+INTEGRATION_PKGS = $(shell go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./tests/integration/...)
+INTEGRATION_TEST_FILES = $(shell go list -f '{{range .TestGoFiles}}{{.}} {{end}}{{range .XTestGoFiles}}{{.}} {{end}}' ./tests/integration/...)
 E2E_PKGS = $(shell go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./tests/e2e/...)
 E2E_TEST_FILES = $(shell go list -f '{{range .TestGoFiles}}{{.}} {{end}}{{range .XTestGoFiles}}{{.}} {{end}}' ./tests/e2e/...)
 
-# e2e runs the store round-trips against real Postgres (see db-up).
+# integration runs the store round-trips and the services over them in
+# process, against real Postgres (see db-up).
+integration:
+	@echo 'integration: $(words $(INTEGRATION_PKGS)) packages, $(words $(INTEGRATION_TEST_FILES)) test files, against $(TEST_DB_NAME)'
+	@test -n '$(INTEGRATION_PKGS)' || { echo 'integration: nothing to run — no package under ./tests/integration/... holds a test file'; exit 1; }
+	@test -n '$(TEST_DATABASE_URL)' || { echo "integration: no postgres published on this host — run make db-up" >&2; exit 1; }
+	GARAM_TEST_DATABASE_URL='$(TEST_DATABASE_URL)' go test -count=1 $(INTEGRATION_PKGS)
+
+# e2e runs the built binary as the processes a deployment runs, against
+# the same Postgres (see db-up).
 e2e:
 	@echo 'e2e: $(words $(E2E_PKGS)) packages, $(words $(E2E_TEST_FILES)) test files, against $(TEST_DB_NAME)'
 	@test -n '$(E2E_PKGS)' || { echo 'e2e: nothing to run — no package under ./tests/e2e/... holds a test file'; exit 1; }

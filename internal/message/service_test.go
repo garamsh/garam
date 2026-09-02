@@ -18,8 +18,8 @@ import (
 // queue is a message.Store recording what the service asked of it. It
 // hands out no claim: a claim is built by the store that read the row
 // it holds, so what the service does with a message it was handed is
-// the round trip in tests/e2e, against the Postgres that decides
-// exclusivity, leases and the attempt bound.
+// the round trip in tests/integration, against the Postgres that
+// decides exclusivity, leases and the attempt bound.
 type queue struct {
 	mu           sync.Mutex
 	stored       []*message.Message

@@ -35,8 +35,12 @@ mislead.
 - Authorization was once headed for Rego/OPA. That is superseded by
   IAM-style documents (ADR-0002) and the legacy interfaces were removed
   (#28, #40, #47, #59). No Rego package exists.
-- e2e lives in `tests/e2e/` with a root-relative migrations path, after
-  several attempts to place it (#53, #58, #64, #70).
+- The in-process suite against real Postgres lives in
+  `tests/integration/` with a root-relative migrations path, after
+  several attempts to place it (#53, #58, #64, #70) and a rename out of
+  `tests/e2e/` (#874), which now holds only what drives the built
+  binary.
 - There is one dev Postgres per machine, not per worktree, and `make
-  e2e` owns a separate `garam_test` database because it truncates
-  (#112). `deploy/local/README.md` §Databases is the detail.
+  integration e2e` owns a separate `garam_test` database because the
+  first of the two truncates (#112). `deploy/local/README.md`
+  §Databases is the detail.

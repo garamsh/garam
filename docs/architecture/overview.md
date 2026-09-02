@@ -290,7 +290,10 @@ collaborate on a shared plan.
 - `proto/` — authz gRPC service definition + buf-generated code.
 - `cmd/garam/` — thin entrypoint for the cobra CLI.
 - `migrations/` — SQL migrations (golang-migrate); sqlc schema source.
-- `tests/e2e/` — store round-trips against real Postgres.
+- `tests/integration/` — store round-trips, and the services over
+  them, wired in process against real Postgres.
+- `tests/e2e/` — the built binary run as the processes a deployment
+  runs.
 - `tests/image/` — black-box checks against a built image rather than
   against the app (`make web-image-e2e`).
 - `web/` — Next.js frontend; reaches the API through a same-origin

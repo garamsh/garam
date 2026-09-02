@@ -145,7 +145,7 @@ var storedAt = time.Date(2026, time.September, 1, 12, 0, 0, 0, time.UTC)
 // messageService is a message.Service recording what the surface passed
 // it. It hands back no claim: one is built by the store that read the
 // row it holds, so what a claimed message looks like on the wire is the
-// round trip in tests/e2e, over the real queue.
+// round trip in tests/integration, over the real queue.
 type messageService struct {
 	err   error
 	calls []messageCall

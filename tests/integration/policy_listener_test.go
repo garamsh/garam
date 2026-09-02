@@ -1,4 +1,4 @@
-package e2e_test
+package integration_test
 
 import (
 	"context"
@@ -21,7 +21,7 @@ import (
 // policyListenerAppName is what the listener's connections call
 // themselves, so pg_stat_activity tells them from every other
 // connection this suite holds.
-const policyListenerAppName = "garam-policy-listener-e2e"
+const policyListenerAppName = "garam-policy-listener-integration"
 
 // pgProxy forwards TCP to the test database. What travels through it is
 // unaltered Postgres traffic, so a connection made through it is a real

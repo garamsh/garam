@@ -17,6 +17,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
 	"net"
 	"net/http"
@@ -34,6 +35,15 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+)
+
+// The paths every serve process mounts its probes on. Spelled here
+// rather than imported: this layer reaches the binary as a deployment
+// does, over HTTP, so a path it gets wrong is a defect this suite is
+// meant to catch.
+const (
+	livePath  = "/healthz"
+	readyPath = "/readyz"
 )
 
 var migrateOnce sync.Once
@@ -68,8 +78,8 @@ func moduleRoot(t *testing.T) string {
 }
 
 // migrated brings the test database up to the schema a deployment's
-// Postgres carries, and answers its URL. Nothing on the shutdown path
-// reads that schema or its rows.
+// Postgres carries, and answers its URL. Readiness opens that database;
+// nothing here reads its schema or its rows.
 func migrated(t *testing.T) string {
 	t.Helper()
 	url := os.Getenv("GARAM_TEST_DATABASE_URL")
@@ -108,7 +118,7 @@ func loopbackCertificate(t *testing.T) tls.Certificate {
 
 // TestServe_ExitsZeroOnSIGTERM runs the built binary as each of the
 // three serve processes, stops it the way a rollout does, and asserts
-// the exit code a kubelet would record. The healthz answer is the
+// the exit code a kubelet would record. The liveness answer is the
 // control: the signal reaches a process that was serving, so a pass
 // cannot come from one that never started.
 func TestServe_ExitsZeroOnSIGTERM(t *testing.T) {
@@ -117,14 +127,14 @@ func TestServe_ExitsZeroOnSIGTERM(t *testing.T) {
 
 	tests := []struct {
 		name  string
-		setup func(t *testing.T) (env []string, probeURL string)
+		setup func(t *testing.T) (env []string, probeBase string)
 	}{
 		{"api", func(t *testing.T) ([]string, string) {
 			addr := freeAddr(t)
 			return []string{
 				"GARAM_DATABASE_URL=" + databaseURL,
 				"GARAM_HTTP_ADDR=" + addr,
-			}, "http://" + addr + "/healthz"
+			}, "http://" + addr
 		}},
 		{"authz", func(t *testing.T) ([]string, string) {
 			metricsAddr := freeAddr(t)
@@ -132,7 +142,7 @@ func TestServe_ExitsZeroOnSIGTERM(t *testing.T) {
 				"GARAM_DATABASE_URL=" + databaseURL,
 				"GARAM_GRPC_ADDR=" + freeAddr(t),
 				"GARAM_METRICS_ADDR=" + metricsAddr,
-			}, "http://" + metricsAddr + "/healthz"
+			}, "http://" + metricsAddr
 		}},
 		{"machine", func(t *testing.T) ([]string, string) {
 			certFile, keyFile, kekFile, rootFile := machineKeyMaterialFiles(t)
@@ -145,12 +155,12 @@ func TestServe_ExitsZeroOnSIGTERM(t *testing.T) {
 				"GARAM_MACHINE_TLS_KEY_FILE=" + keyFile,
 				"GARAM_CA_KEY_FILE=" + kekFile,
 				"GARAM_MACHINE_SERVER_ROOT_FILE=" + rootFile,
-			}, "http://" + healthAddr + "/healthz"
+			}, "http://" + healthAddr
 		}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			env, probeURL := tc.setup(t)
+			env, probeBase := tc.setup(t)
 
 			var logs bytes.Buffer
 			cmd := exec.Command(bin, "serve", tc.name)
@@ -160,7 +170,7 @@ func TestServe_ExitsZeroOnSIGTERM(t *testing.T) {
 			require.NoError(t, cmd.Start())
 			t.Cleanup(func() { _ = cmd.Process.Kill() })
 
-			waitForProbe(t, probeURL, &logs)
+			waitForProbe(t, probeBase+livePath, &logs)
 
 			require.NoError(t, cmd.Process.Signal(syscall.SIGTERM))
 			done := make(chan error, 1)
@@ -196,7 +206,7 @@ func TestServeAPI_ExitsZeroWhenTheGraceExpiresWithWorkInFlight(t *testing.T) {
 	require.NoError(t, cmd.Start())
 	t.Cleanup(func() { _ = cmd.Process.Kill() })
 
-	waitForProbe(t, "http://"+addr+"/healthz", &logs)
+	waitForProbe(t, "http://"+addr+livePath, &logs)
 
 	// A body shorter than its Content-Length on an unauthenticated
 	// endpoint that decodes before it does anything else: the handler
@@ -228,6 +238,48 @@ func TestServeAPI_ExitsZeroWhenTheGraceExpiresWithWorkInFlight(t *testing.T) {
 	case <-time.After(30 * time.Second):
 		t.Fatalf("still running 30s after SIGTERM; logs:\n%s", logs.String())
 	}
+}
+
+// TestServeAuthz_ReadyzAnswersReadyWithItsDatabase is what makes this
+// layer need the Postgres `make e2e` starts. Liveness answers for the
+// process alone (ADR-0021), so every assertion above holds against a
+// database that is not there; readiness answers only once the
+// dependency ping reaches one (#893).
+//
+// `serve authz` and not the other two: readiness on api and machine
+// registers the authz channel beside the database, and this suite runs
+// one process at a time, so neither can answer ready without a second
+// process that has nothing to do with the store.
+func TestServeAuthz_ReadyzAnswersReadyWithItsDatabase(t *testing.T) {
+	databaseURL := migrated(t)
+	bin := buildGaram(t)
+	metricsAddr := freeAddr(t)
+
+	var logs bytes.Buffer
+	cmd := exec.Command(bin, "serve", "authz")
+	cmd.Env = []string{
+		"GARAM_DATABASE_URL=" + databaseURL,
+		"GARAM_GRPC_ADDR=" + freeAddr(t),
+		"GARAM_METRICS_ADDR=" + metricsAddr,
+	}
+	cmd.Stdout = &logs
+	cmd.Stderr = &logs
+	require.NoError(t, cmd.Start())
+	t.Cleanup(func() { _ = cmd.Process.Kill() })
+
+	// Liveness first, so a readiness answer that never arrives is
+	// reported against a process that was already serving.
+	waitForProbe(t, "http://"+metricsAddr+livePath, &logs)
+
+	// One request, no polling: pgxpool connects on demand, so readiness
+	// is not a condition that becomes true while the test waits.
+	resp, err := http.Get("http://" + metricsAddr + readyPath)
+	require.NoError(t, err, "readiness did not answer; logs:\n%s", logs.String())
+	defer func() { _ = resp.Body.Close() }()
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, resp.StatusCode,
+		"readiness answered %d %q; logs:\n%s", resp.StatusCode, bytes.TrimSpace(body), logs.String())
 }
 
 // buildGaram builds the binary under test: this layer exercises what

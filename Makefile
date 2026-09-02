@@ -105,9 +105,12 @@ PROTO_FILES = $(shell $(BUF) ls-files)
 # actionlint given no path finds the workflows itself and shfmt given a
 # directory walks it, and either sweep coming back empty exits zero
 # reading exactly like the run that read every file — so the paths are
-# listed here and an empty list fails below.
+# listed here and an empty list fails below. The shell sweep takes two
+# roots: `scripts/`, and the repository root, where the template ships
+# `check-contents-list.sh` and where it stays so template-diff can
+# measure it against the path it comes from.
 WORKFLOW_FILES = $(shell find .github/workflows -type f \( -name '*.yml' -o -name '*.yaml' \))
-SHELL_SCRIPTS = $(shell find scripts -type f -name '*.sh')
+SHELL_SCRIPTS = $(shell find . -maxdepth 1 -type f -name '*.sh') $(shell find scripts -type f -name '*.sh')
 
 # actionlint reads a `run:` block with shellcheck, and a python one with
 # pyflakes, when it finds them on PATH, and drops the rule where it does
@@ -135,17 +138,24 @@ SHELL_SCRIPTS = $(shell find scripts -type f -name '*.sh')
 # discarded, exit status read. That status answers whether the file
 # parses and not whether it is formatted — a file diverging from shfmt's
 # layout passes, a syntax error and a bashism fail. `-ln posix` fixes
-# the dialect all six scripts declare rather than taking it from each
+# the dialect all seven scripts declare rather than taking it from each
 # shebang, so a script that later says bash fails here instead of being
 # read as bash.
+#
+# check-contents-list.sh reads the Markdown, against
+# docs/convention/documentation.md §Format. It selects its own files and
+# prints that selector with the count it produced, and fails when the
+# count is zero, so the line below states no Markdown count — a second
+# selector here would be one more thing to keep equal to the script's.
 lint:
-	@echo 'lint: $(words $(GO_PKGS)) packages (go vet), $(words $(PROTO_FILES)) proto files (buf lint), $(words $(WORKFLOW_FILES)) workflows (actionlint), $(words $(SHELL_SCRIPTS)) shell scripts (shfmt)'
+	@echo 'lint: $(words $(GO_PKGS)) packages (go vet), $(words $(PROTO_FILES)) proto files (buf lint), $(words $(WORKFLOW_FILES)) workflows (actionlint), $(words $(SHELL_SCRIPTS)) shell scripts (shfmt); Markdown counted by check-contents-list.sh below'
 	@test -n '$(GO_PKGS)' && test -n '$(PROTO_FILES)' && test -n '$(WORKFLOW_FILES)' && test -n '$(SHELL_SCRIPTS)' \
-		|| { echo 'lint: nothing to lint — go list, the buf module, .github/workflows or scripts/ matched no input; the counts above name which'; exit 1; }
+		|| { echo 'lint: nothing to lint — go list, the buf module, .github/workflows or the shell sweep matched no input; the counts above name which'; exit 1; }
 	@go vet $(GO_PKGS)
 	@$(BUF) lint
 	@$(ACTIONLINT) -shellcheck= -pyflakes= $(WORKFLOW_FILES)
 	@$(SHFMT) -ln posix $(SHELL_SCRIPTS) >/dev/null
+	@./check-contents-list.sh
 
 # gofmt and goimports list offending files but exit 0, so the gate is a
 # non-empty-output check. Walking `.` is just as silent when it reaches

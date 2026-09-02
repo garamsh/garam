@@ -1,4 +1,4 @@
-package e2e_test
+package integration_test
 
 import (
 	"context"
@@ -23,7 +23,7 @@ import (
 
 // The password these tests register with. It is a fixture of this file
 // and no account outside it is created with one.
-const e2ePassword = "correct-horse-battery-staple"
+const integrationPassword = "correct-horse-battery-staple"
 
 // TestPasswordCredentialStore_RoundTrip exercises the migration, the
 // generated queries and the foreign key together: what the store
@@ -42,16 +42,16 @@ func TestPasswordCredentialStore_RoundTrip(t *testing.T) {
 	_, err := credentials.Get(ctx, alice)
 	require.ErrorIs(t, err, authn.ErrPasswordCredentialNotFound, "absent before it is written")
 
-	first, err := authn.NewVerifier(e2ePassword)
+	first, err := authn.NewVerifier(integrationPassword)
 	require.NoError(t, err)
 	require.NoError(t, credentials.Create(ctx, alice, first))
 
 	held, err := credentials.Get(ctx, alice)
 	require.NoError(t, err)
 	assert.Equal(t, first, held)
-	assert.NoError(t, held.Match(e2ePassword))
+	assert.NoError(t, held.Match(integrationPassword))
 
-	second, err := authn.NewVerifier(e2ePassword)
+	second, err := authn.NewVerifier(integrationPassword)
 	require.NoError(t, err)
 	require.NoError(t, credentials.Replace(ctx, alice, second))
 	held, err = credentials.Get(ctx, alice)
@@ -84,7 +84,7 @@ func TestPasswordCredentialStore_ClassifiesWhatTheSchemaRefuses(t *testing.T) {
 	alice := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "local-alice")
 	require.NoError(t, users.Create(ctx, user.New(alice, "alice")))
 
-	verifier, err := authn.NewVerifier(e2ePassword)
+	verifier, err := authn.NewVerifier(integrationPassword)
 	require.NoError(t, err)
 	credentials := authn.NewPostgresPasswordCredentialStore(p)
 	require.NoError(t, credentials.Create(ctx, alice, verifier), "a first credential for a real user lands")
@@ -195,7 +195,7 @@ func TestRegisterPassword_ADuplicateCarriesNoneOfPostgresText(t *testing.T) {
 	handler := apigen.Handler(srv)
 	register := func(token string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodPost, "/auth/password/register", strings.NewReader(
-			fmt.Sprintf(`{"invitationToken":%q,"username":"alice","password":%q}`, token, e2ePassword)))
+			fmt.Sprintf(`{"invitationToken":%q,"username":"alice","password":%q}`, token, integrationPassword)))
 		req.Header.Set("Content-Type", "application/json")
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
@@ -256,7 +256,7 @@ func TestPasswordSignIn_RoundTripAgainstPostgres(t *testing.T) {
 	}
 
 	rec := post("/auth/password/register",
-		fmt.Sprintf(`{"invitationToken":%q,"username":"alice","password":%q}`, token, e2ePassword))
+		fmt.Sprintf(`{"invitationToken":%q,"username":"alice","password":%q}`, token, integrationPassword))
 	require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
 	assert.Equal(t, 1, countRows(t, p, "SELECT count(*) FROM password_credentials"))
 	assert.Equal(t, 1, countRows(t, p,
@@ -264,7 +264,7 @@ func TestPasswordSignIn_RoundTripAgainstPostgres(t *testing.T) {
 	assert.Equal(t, 1, countRows(t, p,
 		"SELECT count(*) FROM invitations WHERE token = $1 AND accepted_at IS NOT NULL", token))
 
-	accepted := post("/auth/password/login", fmt.Sprintf(`{"username":"alice","password":%q}`, e2ePassword))
+	accepted := post("/auth/password/login", fmt.Sprintf(`{"username":"alice","password":%q}`, integrationPassword))
 	require.Equal(t, http.StatusOK, accepted.Code, accepted.Body.String())
 	assert.Equal(t, 0, countRows(t, p, "SELECT count(*) FROM password_attempts"),
 		"a verification that succeeded holds no slot")

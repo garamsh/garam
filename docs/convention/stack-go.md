@@ -149,8 +149,9 @@ Each bullet names the ADR that owns its directory where one does;
 - `proto/` — `.proto` sources and generated code (ADR-0003).
 - `migrations/` — SQL migrations; the schema's source of truth. The Go
   file beside them tests the migrations and declares no schema.
-- `tests/` — black-box tests: `tests/e2e/` against real infrastructure,
-  `tests/image/` against the built image.
+- `tests/` — black-box tests: `tests/integration/` against modules in
+  process, `tests/e2e/` against the built binary, `tests/image/`
+  against the built image.
 - `web/` — the frontend, which is not Go, so this file does not govern
   it (ADR-0009).
 - `deploy/` — `local/` is what is needed to run the built images
@@ -309,7 +310,7 @@ project says otherwise).
   real services come from containers. This project brings them up from
   `deploy/local/docker-compose.yml` rather than from
   `testcontainers-go`, so one compose project serves the dev stack and
-  both test suites.
+  each suite that needs a real service.
 
 Within `internal/<domain>/`:
 

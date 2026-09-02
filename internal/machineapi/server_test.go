@@ -59,7 +59,7 @@ type stateReport struct {
 // agentService is an agent.Service recording what the surface passed
 // it. Create answers no assignment: one is constructed by
 // internal/agent alone, and what the real service returns for a
-// created agent is the round trip in tests/e2e.
+// created agent is the round trip in tests/integration.
 type agentService struct {
 	certificate  *agent.Certificate
 	err          error

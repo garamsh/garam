@@ -1,4 +1,4 @@
-package e2e_test
+package integration_test
 
 import (
 	"context"
@@ -16,7 +16,7 @@ import (
 // watchRelayAppName is what the relay's connections call themselves, so
 // pg_stat_activity tells them from every other connection this suite
 // holds.
-const watchRelayAppName = "garam-watch-relay-e2e"
+const watchRelayAppName = "garam-watch-relay-integration"
 
 // delivered is one event the relay handed to deliver, with the agent it
 // named.

@@ -1,9 +1,9 @@
-// Package e2e_test exercises the Postgres store implementations, and
-// the services layered over them, against a real database.
-// GARAM_TEST_DATABASE_URL names that database; `make db-up e2e` starts
-// the docker-compose Postgres and sets it. The suite fails without it
-// rather than skipping.
-package e2e_test
+// Package integration_test exercises the Postgres store
+// implementations, and the services layered over them, in process
+// against a real database. GARAM_TEST_DATABASE_URL names that database;
+// `make db-up integration` starts the docker-compose Postgres and sets
+// it. The suite fails without it rather than skipping.
+package integration_test
 
 import (
 	"context"
@@ -79,13 +79,13 @@ func migrationsDir(t *testing.T) string {
 	}
 }
 
-// TestMain requires the test database before any test runs. This layer is
-// defined by real infrastructure, and skipping instead left `go test`
-// printing the same `ok` for a run that touched no database as for one
-// that passed against it.
+// TestMain requires the test database before any test runs. The suite
+// is written against Postgres rather than a substitute, and skipping
+// instead left `go test` printing the same `ok` for a run that touched
+// no database as for one that passed against it.
 func TestMain(m *testing.M) {
 	if os.Getenv("GARAM_TEST_DATABASE_URL") == "" {
-		fmt.Fprintln(os.Stderr, "e2e: GARAM_TEST_DATABASE_URL is not set; run `make db-up e2e`")
+		fmt.Fprintln(os.Stderr, "integration: GARAM_TEST_DATABASE_URL is not set; run `make db-up integration`")
 		os.Exit(1)
 	}
 	os.Exit(m.Run())

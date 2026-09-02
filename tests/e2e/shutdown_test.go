@@ -1,24 +1,110 @@
+// Package e2e_test exercises what the build produces: it builds the
+// garam binary and runs it as the processes a deployment runs.
+// GARAM_TEST_DATABASE_URL names the database those processes open;
+// `make db-up e2e` starts the docker-compose Postgres and sets it. The
+// suite fails without it rather than skipping.
 package e2e_test
 
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/tls"
 	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/hex"
 	"encoding/pem"
+	"errors"
+	"fmt"
+	"math/big"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
 
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+var migrateOnce sync.Once
+
+// TestMain requires the test database before any test runs. Every test
+// here hands its URL to the processes under test, and skipping instead
+// would leave `go test` printing the same `ok` for a run that started
+// none as for one that passed.
+func TestMain(m *testing.M) {
+	if os.Getenv("GARAM_TEST_DATABASE_URL") == "" {
+		fmt.Fprintln(os.Stderr, "e2e: GARAM_TEST_DATABASE_URL is not set; run `make db-up e2e`")
+		os.Exit(1)
+	}
+	os.Exit(m.Run())
+}
+
+// moduleRoot returns the directory holding go.mod. It walks up from
+// this source file, so the suite keeps working wherever the test
+// directory is moved to.
+func moduleRoot(t *testing.T) string {
+	t.Helper()
+	_, file, _, ok := runtime.Caller(0)
+	require.True(t, ok, "cannot locate the test source file")
+	for dir := filepath.Dir(file); ; {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		require.NotEqual(t, dir, parent, "no go.mod above %s", file)
+		dir = parent
+	}
+}
+
+// migrated brings the test database up to the schema a deployment's
+// Postgres carries, and answers its URL. Nothing on the shutdown path
+// reads that schema or its rows.
+func migrated(t *testing.T) string {
+	t.Helper()
+	url := os.Getenv("GARAM_TEST_DATABASE_URL")
+	migrateOnce.Do(func() {
+		m, err := migrate.New("file://"+filepath.Join(moduleRoot(t), "migrations"), url)
+		require.NoError(t, err)
+		err = m.Up()
+		if err != nil && !errors.Is(err, migrate.ErrNoChange) {
+			require.NoError(t, err)
+		}
+	})
+	return url
+}
+
+// loopbackCertificate is what `serve machine` terminates TLS with. What
+// garam presents is not what this suite is about, so it is self-signed
+// and nothing here verifies it.
+func loopbackCertificate(t *testing.T) tls.Certificate {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	template := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "garam machine listener"},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(time.Hour),
+		KeyUsage:              x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		BasicConstraintsValid: true,
+		IPAddresses:           []net.IP{net.ParseIP("127.0.0.1")},
+	}
+	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	require.NoError(t, err)
+	return tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key}
+}
 
 // TestServe_ExitsZeroOnSIGTERM runs the built binary as each of the
 // three serve processes, stops it the way a rollout does, and asserts
@@ -26,11 +112,8 @@ import (
 // control: the signal reaches a process that was serving, so a pass
 // cannot come from one that never started.
 func TestServe_ExitsZeroOnSIGTERM(t *testing.T) {
-	// The processes open the migrated test database; nothing they do
-	// on the shutdown path touches its rows.
-	_ = pool(t)
+	databaseURL := migrated(t)
 	bin := buildGaram(t)
-	databaseURL := os.Getenv("GARAM_TEST_DATABASE_URL")
 
 	tests := []struct {
 		name  string
@@ -98,14 +181,14 @@ func TestServe_ExitsZeroOnSIGTERM(t *testing.T) {
 // returns early proves the request was not in flight, and the exit code
 // would then be the idle path's rather than this one's.
 func TestServeAPI_ExitsZeroWhenTheGraceExpiresWithWorkInFlight(t *testing.T) {
-	_ = pool(t)
+	databaseURL := migrated(t)
 	bin := buildGaram(t)
 	addr := freeAddr(t)
 
 	var logs bytes.Buffer
 	cmd := exec.Command(bin, "serve", "api")
 	cmd.Env = []string{
-		"GARAM_DATABASE_URL=" + os.Getenv("GARAM_TEST_DATABASE_URL"),
+		"GARAM_DATABASE_URL=" + databaseURL,
 		"GARAM_HTTP_ADDR=" + addr,
 	}
 	cmd.Stdout = &logs
@@ -153,7 +236,7 @@ func buildGaram(t *testing.T) string {
 	t.Helper()
 	bin := filepath.Join(t.TempDir(), "garam")
 	build := exec.Command("go", "build", "-o", bin, "./cmd/garam")
-	build.Dir = filepath.Dir(migrationsDir(t))
+	build.Dir = moduleRoot(t)
 	out, err := build.CombinedOutput()
 	require.NoError(t, err, "go build: %s", out)
 	return bin

@@ -82,22 +82,25 @@ Both run identically on a contributor's machine and in CI. The rest:
 - `gen` regenerates oapi-codegen, sqlc, buf and mockery output;
   `check-gen` fails when what is committed is stale.
 - `db-up` / `db-down` bring up and remove the dockerised Postgres the
-  Go e2e suite needs; `GARAM_DB_PORT` moves that one server's host
-  port, default 25432.
+  two Go suites below need; `GARAM_DB_PORT` moves that one server's
+  host port, default 25432.
 - `backend-up` brings up postgres, migrate, authz and api from the
   same compose file — the backend the browser suite drives.
-- `e2e` runs the store round-trips against real Postgres, against a
-  database of its own per worktree. `web-e2e` runs Playwright against
-  the built app and `backend-up`'s backend. `image-build` builds the
-  images a release publishes, each from what the release workflow says
-  it is built from, and `web-image-e2e` runs `tests/image/`'s checks
-  against the web one rather than against the app.
+- `integration` runs the store round-trips and the services over them
+  in process, against real Postgres and a database of its own per
+  worktree; `e2e` runs the built binary against that same database.
+  `web-e2e` runs Playwright against the built app and `backend-up`'s
+  backend. `image-build` builds the images a release publishes, each
+  from what the release workflow says it is built from, and
+  `web-image-e2e` runs `tests/image/`'s checks against the web one
+  rather than against the app.
 
-`ci` and `web-ci` stop short of the three e2e suites, which need
-Docker. Locally they are `make db-up e2e`, `make backend-up web-e2e`
-and `make web-image-e2e`. CI runs each as a job of its own; the third
-builds two images before it checks one, so it runs from a workflow of
-its own that a documentation-only pull request does not start.
+`ci` and `web-ci` stop short of the four suites that need Docker.
+Locally they are `make db-up integration e2e`, `make backend-up
+web-e2e` and `make web-image-e2e`. CI runs each of those three
+commands as a job of its own; the last builds two images before it
+checks one, so it runs from a workflow of its own that a
+documentation-only pull request does not start.
 
 ### GitHub Actions specifics
 

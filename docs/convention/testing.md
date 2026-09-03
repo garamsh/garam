@@ -17,9 +17,9 @@ The concrete in-process client per stack is owned by the project's stack convent
 
 | Layer | Scope | Mocks | Test client | External systems |
 |---|---|---|---|---|
-| **Unit** | single function/class in isolation | replace at module boundaries (DB, HTTP, queue, time, FS) | direct call | none |
+| **Unit** | single function/class in isolation | replace at module boundaries you control (DB, HTTP, queue, time, FS) | direct call | none |
 | **Integration** | modules cooperating | SUT is real | in-process client | substituted, or real; the rules below decide which |
-| **E2E** | built binary against real infra | nothing | real client | **real** (testcontainers OK) |
+| **E2E** | built binary against real infra | nothing | real client | **real** |
 
 What separates the layers is the subject: integration exercises real modules in process, e2e exercises what the build produces.
 
@@ -60,9 +60,8 @@ A test that cannot fail is not evidence. It passes on the day the behaviour is d
 
 ## Mocking strategy
 
-- **Unit**: mock any module boundary you control.
-- **Integration**: external systems mocked or substituted; SUT itself is real.
-- **E2E**: nothing mocked. Real binary, real infrastructure.
+What to mock at each layer is in §Three layers' Mocks column.
+
 - **A generated mock exists only where a test consumes it.** An interface earns its entry in the generator's configuration when the first test needs a double, and loses it when the last one goes. A mock nothing calls is generated code standing in for nothing.
 
 ### Substitutes for state

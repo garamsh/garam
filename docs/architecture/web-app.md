@@ -43,7 +43,7 @@ alternatives refused a single image on that ground, and
 §Decision leaves the two standing where it supersedes that ADR.
 
 **This document is authoritative for what the application is
-responsible for and where its boundary falls.** Four artifacts already
+responsible for and where its boundary falls.** Five artifacts already
 own things a reader might come here for, and none of them is restated:
 
 - `api/openapi.yaml` is the source of truth for every operation the
@@ -64,6 +64,11 @@ own things a reader might come here for, and none of them is restated:
   out inside `web/src/`: which folder holds what, and which tier may
   import which. Nothing here restates a layout rule, and a question
   about where a file belongs is that file's, not this one's.
+- `deploy/local/Dockerfile.web` is authoritative for what the image
+  carries. `output: "standalone"` in `web/next.config.ts` decides what
+  the build emits; that Dockerfile decides what has to be copied in
+  beside it and says what a path missing from the result costs at
+  runtime.
 
 What is left is this document's: which routes exist and what each one
 is for, the single seam the application reaches garam through, and the

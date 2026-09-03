@@ -88,6 +88,14 @@ off the code rather than recalled.
    it and read from there by every request on that connection, so
    nothing derives an identity a second time and a self-signed
    certificate naming any GRN reaches no handler that asks for one.
+   **It is written from `VerifyConnection` and not from
+   `VerifyPeerCertificate`**, because a TLS 1.3 ticket restores the
+   peer certificates without re-running the certificate callbacks:
+   Go documents `VerifyConnection` as running for all connections,
+   resumptions included (`go doc crypto/tls.Config.VerifyConnection`,
+   Go 1.26.7, this module's directive). Written from the other one, a
+   resumed connection carries no identity and every request on it is
+   refused.
 7. **A token stops being spendable ten minutes after it is minted**, a
    constant rather than configuration, and minting sweeps the tokens
    that have expired.
@@ -144,6 +152,10 @@ that ADR-0032 declined is narrower still than what ADR-0032 took.
   The property it replaces is stronger than the one it removes: an
   identity reaching a handler is the one `Authenticate` returned, where
   before it was one `identify` re-read off the certificate.
+- **A resumed connection costs one authentication.** The trust-root
+  lookup runs per connection whether the handshake was full or resumed,
+  which is what it cost before; resumption saves the asymmetric
+  cryptography and not the lookup.
 - **Every handler on that listener now carries the refusal it always
   had.** `caller` refuses a request with no identity, which was true
   before and was defence in depth; it is now the whole defence for
@@ -161,6 +173,13 @@ that ADR-0032 declined is narrower still than what ADR-0032 took.
   across attempts. The person registers again.
 - **The database holds nothing anybody can present.** A dump yields
   token hashes, which enrol nothing.
+- **Nothing bounds the rate of the enrollment route.** A token is a
+  192-bit secret, so guessing one is not the exposure; the exposure is
+  a caller spending the listener's connections and one indexed delete
+  per call. ADR-0030 bounds the login write rate at the store because a
+  password verification costs Argon2id, and nothing here costs that.
+  Bounding it is a decision to take when a deployment meets the load,
+  not a guard to add against a threat this design has.
 - **`gagent-operator` owes the other half**, and this contract is what
   it must meet: generate an ECDSA P-256 key pair in the cluster, write
   it where only its own user can read it (ADR-0015), send the request

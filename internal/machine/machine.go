@@ -12,10 +12,14 @@
 // here however valid it is elsewhere — tenancy holds in the trust root
 // rather than in a check a caller could forget.
 //
-// The listener [NewServer] builds terminates TLS itself and requires a
-// client certificate. Nothing here reads a forwarded
-// client-certificate header: one is trustworthy only where every
-// deployment strips it at the edge (ADR-0014).
+// The listener [NewServer] builds terminates TLS itself and asks for a
+// client certificate. A connection whose certificate does not
+// authenticate carries no [Identity] rather than being refused, which
+// is what leaves room for the one route a caller reaches before it has
+// a certificate (ADR-0063); every other route refuses a request
+// carrying none. Nothing here reads a forwarded client-certificate
+// header: one is trustworthy only where every deployment strips it at
+// the edge (ADR-0014).
 //
 // What it presents in the other direction is one certificate every
 // machine identity pins, asked for per handshake through
@@ -32,9 +36,11 @@ import (
 )
 
 // Identity is the machine identity a verified client certificate
-// names, and which certificate named it. Only this package constructs
-// one, so a handler holding an Identity holds a GRN whose certificate
-// chained to its own organization's certificate authority.
+// names, and which certificate named it. Only [Service.Authenticate]
+// constructs one, and the listener carries what it returned rather
+// than reading the certificate again, so a handler holding an Identity
+// holds a GRN whose certificate chained to its own organization's
+// certificate authority.
 //
 // The GRN is the whole of what the certificate asserts — no roles, no
 // claims. The three fields below describe the certificate itself, which

@@ -3,7 +3,6 @@ package machine
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
 	"net"
 	"net/http"
 )
@@ -37,8 +36,8 @@ func NewServer(s Service, certificate ServerCertificate, next http.Handler) *htt
 	base.GetCertificate = func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
 		return certificate.Get()
 	}
-	// Per connection, because the handshake's context reaches
-	// VerifyPeerCertificate no other way: a lookup then ends with the
+	// Per connection, because the handshake's context reaches the
+	// callback below no other way: a lookup then ends with the
 	// connection that needed it instead of outliving it, and the cell
 	// the outcome is written to is the one this connection's requests
 	// read. Cloning only then also carries what serving the config
@@ -47,8 +46,13 @@ func NewServer(s Service, certificate ServerCertificate, next http.Handler) *htt
 		ctx := hello.Context()
 		cfg := base.Clone()
 		cfg.GetConfigForClient = nil
-		cfg.VerifyPeerCertificate = func(chain [][]byte, _ [][]*x509.Certificate) error {
-			identity, err := s.Authenticate(ctx, chain)
+		// VerifyConnection rather than VerifyPeerCertificate, because
+		// this one also runs on a resumed handshake. A TLS 1.3 ticket
+		// restores the peer certificates without re-running the
+		// certificate callbacks, so a resumed connection would carry no
+		// identity at all and every request on it would be refused.
+		cfg.VerifyConnection = func(state tls.ConnectionState) error {
+			identity, err := s.Authenticate(ctx, chainOf(state))
 			if err != nil {
 				// The handshake completes and the connection stays
 				// anonymous. Refusing here instead would take the
@@ -57,7 +61,7 @@ func NewServer(s Service, certificate ServerCertificate, next http.Handler) *htt
 				return nil
 			}
 			if cell, ok := authenticatedOf(ctx); ok {
-				cell.identity, cell.ok = identity, true
+				cell.identity = &identity
 			}
 			return nil
 		}
@@ -76,16 +80,27 @@ func NewServer(s Service, certificate ServerCertificate, next http.Handler) *htt
 	}
 }
 
+// chainOf renders the certificates a connection presented in the form
+// [Service.Authenticate] reads them, leaf first, as TLS hands them
+// over. A connection that presented none yields none.
+func chainOf(state tls.ConnectionState) [][]byte {
+	chain := make([][]byte, 0, len(state.PeerCertificates))
+	for _, certificate := range state.PeerCertificates {
+		chain = append(chain, certificate.Raw)
+	}
+	return chain
+}
+
 // authenticated is what one connection's handshake proved, written
 // once by [Service.Authenticate] succeeding and read by every request
-// served over that connection. A connection whose certificate did not
-// authenticate leaves it as it was constructed.
+// served over that connection. A nil identity is a connection whose
+// certificate did not authenticate, which is the state it is
+// constructed in — there is no second field to disagree with it.
 //
 // One goroutine writes it, during a handshake that completes before any
 // request on the connection is read, so nothing here is concurrent.
 type authenticated struct {
-	identity Identity
-	ok       bool
+	identity *Identity
 }
 
 type authenticatedKey struct{}
@@ -103,11 +118,11 @@ func authenticatedOf(ctx context.Context) (*authenticated, bool) {
 func identify(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cell, ok := authenticatedOf(r.Context())
-		if !ok || !cell.ok {
+		if !ok || cell.identity == nil {
 			next.ServeHTTP(w, r)
 			return
 		}
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), identityKey{}, cell.identity)))
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), identityKey{}, *cell.identity)))
 	})
 }
 

@@ -210,6 +210,58 @@ func TestNewServer_HandsTheHandlerTheIdentity(t *testing.T) {
 	assert.Equal(t, "HTTP/2.0", resp.Proto)
 }
 
+// TestNewServer_HandsTheHandlerTheIdentityOnAResumedConnection covers
+// the connection a TLS 1.3 ticket resumes. A resumption restores the
+// peer certificates without re-running the certificate callbacks, so a
+// listener reading the identity off a per-connection cell has to write
+// that cell on a callback resumption also runs — otherwise the second
+// connection is anonymous and every request on it is refused.
+//
+// The first connection is the control and the source of the ticket:
+// without it there is nothing to resume, and the second answering
+// correctly would hold for a listener that never resumed at all. The
+// assertion that the second connection did resume is what separates
+// the two.
+func TestNewServer_HandsTheHandlerTheIdentityOnAResumedConnection(t *testing.T) {
+	issuer := newIssuer(t)
+	subject := agentGRN("acme", "bot-1")
+	url, _, roots := listener(t, issuer.service(), identityHandler())
+
+	// One cache across both requests is what carries the ticket, and
+	// closing idle connections between them is what stops the second
+	// request reusing the first connection instead of resuming it.
+	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{
+		RootCAs:            roots,
+		MinVersion:         tls.VersionTLS13,
+		Certificates:       []tls.Certificate{issuer.issue(t, subject)},
+		ClientSessionCache: tls.NewLRUClientSessionCache(4),
+	}}}
+	t.Cleanup(client.CloseIdleConnections)
+
+	first := identityOver(t, client, url)
+	require.Equal(t, http.StatusOK, first.StatusCode)
+	assert.False(t, first.TLS.DidResume, "the connection that mints the ticket")
+
+	client.CloseIdleConnections()
+	second := identityOver(t, client, url)
+	assert.True(t, second.TLS.DidResume, "the second connection resumed the first")
+	assert.Equal(t, http.StatusOK, second.StatusCode,
+		"a resumed connection carries the identity the resumed handshake proved")
+}
+
+// identityOver performs one identity request and returns the response
+// with its body already drained, so the connection is free to be
+// closed and resumed.
+func identityOver(t *testing.T, client *http.Client, url string) *http.Response {
+	t.Helper()
+	resp, err := client.Get(url + "/identity")
+	require.NoError(t, err)
+	_, err = io.Copy(io.Discard, resp.Body)
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+	return resp
+}
+
 // TestNewServer_ServesAReplacedCertificateWithoutARestart is the
 // rotation ADR-0040 decides: the certificate is read per handshake, so
 // replacing the files the running listener was started from replaces

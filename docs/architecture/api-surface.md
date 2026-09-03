@@ -307,13 +307,14 @@ decided says what closing that would take.
 
 ## Not decided
 
-- **Whether rule 3 reaches a specification.** It names responsibility
-  documents. This one is inside its reach; `api/openapi.yaml` and
-  `api/machine.yaml` are not responsibility documents and are not.
-  Listing the API as a concern closes the half a document can close —
-  an ADR that changes an endpoint now has a responsibility document to
-  be paired with — and leaves the half only a rule can. What that rule
-  should say is the index's to decide and not this document's.
+- **Whether rule 3 reaches a specification.** It names the
+  responsibility documents and [README.md](./README.md) itself. This
+  one is inside its reach; `api/openapi.yaml` and `api/machine.yaml`
+  are neither and are not. Listing the API as a concern closes the
+  half a document can close — an ADR that changes an endpoint now has
+  a responsibility document to be paired with — and leaves the half
+  only a rule can. What that rule should say is the index's to decide
+  and not this document's.
 - **What decides the metrics surface. Nothing does, on any process.**
   `/metrics` is served by `garam serve api` and `garam serve authz`
   (§The surfaces) and decided by no ADR: every ADR that names it treats

@@ -307,7 +307,18 @@ collaborate on a shared plan.
 - `deploy/local/` — Docker Compose stack running Postgres, migrations,
   authz, api and (profile-gated) web on one machine; its `postgres`
   service also hosts the e2e tests' database (`make db-up`), kept
-  separate from the stack's own.
+  separate from the stack's own. `deploy/local/README.md` §Databases is
+  authoritative for which databases that one server holds, which of them
+  a suite truncates or migrates, and what collects the ones a removed
+  worktree leaves behind.
+- `deploy/local/minikube/` — the same processes on a Kubernetes cluster
+  on this machine, in the `garam-local` namespace (`make minikube-up`);
+  a development artefact rather than manifests for a cluster garam does
+  not run. `deploy/local/minikube/README.md` is authoritative for what
+  it runs, how it is brought up and torn down, and where its key
+  material and its images come from; that file's §What this proves and
+  what it does not is authoritative for what running it establishes
+  about a real deployment.
 - `internal/grn/` — identifier; shared primitive.
 - `internal/errorx/` — typed errors; shared primitive.
 - `internal/wire/` — the conversions onto the wire formats the request

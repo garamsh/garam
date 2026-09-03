@@ -84,6 +84,9 @@ Both run identically on a contributor's machine and in CI. The rest:
 - `db-up` / `db-down` bring up and remove the dockerised Postgres the
   two Go suites below need; `GARAM_DB_PORT` moves that one server's
   host port, default 25432.
+- `db-prune` drops the per-worktree test databases `db-up` created for
+  worktrees that are gone. Nothing else collects them short of removing
+  the volume, so a stack left up accumulates one per worktree.
 - `backend-up` brings up postgres, migrate, authz and api from the
   same compose file — the backend the browser suite drives.
 - `integration` runs the store round-trips and the services over them

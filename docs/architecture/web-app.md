@@ -43,7 +43,7 @@ alternatives refused a single image on that ground, and
 §Decision leaves the two standing where it supersedes that ADR.
 
 **This document is authoritative for what the application is
-responsible for and where its boundary falls.** Four artifacts already
+responsible for and where its boundary falls.** Five artifacts already
 own things a reader might come here for, and none of them is restated:
 
 - `api/openapi.yaml` is the source of truth for every operation the
@@ -64,6 +64,11 @@ own things a reader might come here for, and none of them is restated:
   out inside `web/src/`: which folder holds what, and which tier may
   import which. Nothing here restates a layout rule, and a question
   about where a file belongs is that file's, not this one's.
+- `deploy/local/Dockerfile.web` is authoritative for what the image
+  carries. `output: "standalone"` in `web/next.config.ts` decides what
+  the build emits; that Dockerfile decides what has to be copied in
+  beside it and says what a path missing from the result costs at
+  runtime.
 
 What is left is this document's: which routes exist and what each one
 is for, the single seam the application reaches garam through, and the
@@ -220,10 +225,13 @@ The boundary is as much of the responsibility as the contents.
 covers both toolchains. In order: `web-format`, `web-lint`
 (which also typechecks), `web-test`, `web-build`, `web-check-gen`.
 
-Two things are outside it. `make web-e2e` runs the Playwright specs in
-`web/e2e/` against a real built application, a real backend and a real
-Postgres, so it needs infrastructure the gate does not start. `make
-web-install` is a prerequisite rather than a check.
+Three things are outside it. `make web-e2e` runs the Playwright specs
+in `web/e2e/` against a real built application, a real backend and a
+real Postgres, so it needs infrastructure the gate does not start.
+`make web-image-e2e`'s subject is the image a release publishes rather
+than this tree's application, and it runs that image, so it needs a
+container runtime the gate never asks for. `make web-install` is a
+prerequisite rather than a check.
 
 Tests are in two locations by decision, not by accident: Vitest owns
 the tests colocated under `web/src/`, Playwright owns `web/e2e/`, and

@@ -13,19 +13,19 @@ Test layers, mocking, and placement — what each layer proves, what to mock, an
 
 ## Three layers — different goals, different scopes
 
-The concrete in-process client per stack is owned by the project's stack convention file; the Test client column states only the shape each layer requires.
-
 | Layer | Scope | Mocks | Test client | External systems |
 |---|---|---|---|---|
-| **Unit** | single function/class in isolation | replace at module boundaries (DB, HTTP, queue, time, FS) | direct call | none |
-| **Integration** | modules cooperating | external systems mocked or substituted; SUT is real | in-process client | mocked |
-| **E2E** | built binary against real infra | nothing | real client | **real** (testcontainers OK) |
+| **Unit** | single function/class in isolation | replace at module boundaries you control (DB, HTTP, queue, time, FS) | direct call | none |
+| **Integration** | modules cooperating | SUT is real | in-process client | substituted, or real; the rules below decide which |
+| **E2E** | built binary against real infra | nothing | real client | **real** |
 
 What separates the layers is the subject: integration exercises real modules in process, e2e exercises what the build produces.
 
-**No testcontainers in integration.** Reaching for a container to get a real service means the test wanted the deployed system. A suite of in-process modules stays an integration test however real its Postgres, so substitute the service — renaming the suite e2e leaves the project with nothing exercising the built artifact, which is what the e2e row is for. Where the deployed system is what you meant, build it and test that.
+**No testcontainers in integration.** Reaching for a container to get a real service **behind the code under test** means the test wanted the deployed system. A suite of in-process modules stays an integration test however real its Postgres, so substitute the service — renaming the suite e2e leaves the project with nothing exercising the built artifact, which is what the e2e row is for. Where the deployed system is what you meant, build it and test that.
 
 The exception is a dependency no in-process substitute can stand in for, because the code exists to interact with it: a controller's API server, not a database. Run that as a fixture and the test is still integration, because the subject is still in-process modules.
+
+**This project's integration layer runs against the Postgres `make db-up` starts, because the store implementations are the subject of those suites.** There, substituting the service means substituting the store: the stand-in goes where the code under test is rather than behind it, and the suite is left exercising the stand-in. The e2e row's obligation is met separately, by `tests/e2e/`, which drives the built binary and fails without a store (#900).
 
 ## Behavior over implementation
 
@@ -33,11 +33,9 @@ Assert on outputs and side-effects only:
 - return values
 - emitted events, log lines
 - HTTP responses (status + body)
-- DB rows (from a testcontainer, at the e2e layer)
+- DB rows — migration bookkeeping and schema catalog included, where the subject is what changes the schema
 
-Do not assert on: call order, unexported helper shape, private type structure, internal refactors. **If an internal refactor forces test updates, the tests were testing implementation.**
-
-The concrete targets for a given stack are owned by the project's stack convention file; the lists above state only the kinds that qualify.
+Do not assert on: call order, unexported helper shape, private type structure, a connection's session state, internal refactors. **If an internal refactor forces test updates, the tests were testing implementation.**
 
 ## Waiting
 
@@ -58,9 +56,8 @@ A test that cannot fail is not evidence. It passes on the day the behaviour is d
 
 ## Mocking strategy
 
-- **Unit**: mock any module boundary you control.
-- **Integration**: external systems mocked or substituted; SUT itself is real.
-- **E2E**: nothing mocked. Real binary, real infrastructure.
+What to mock at each layer is in §Three layers' Mocks column.
+
 - **A generated mock exists only where a test consumes it.** An interface earns its entry in the generator's configuration when the first test needs a double, and loses it when the last one goes. A mock nothing calls is generated code standing in for nothing.
 
 ### Substitutes for state
@@ -70,7 +67,7 @@ Time → inject a clock. Network → substitute. Filesystem → tmpdir. Random �
 ## Coverage and naming
 
 - Target meaningful branches, not 100%.
-- Names read like a spec. Concrete test-name forms follow the project's stack convention file.
+- Names read like a spec.
 - A failing test name should tell you what broke without opening the file.
 
 ## Placement
@@ -78,5 +75,3 @@ Time → inject a clock. Network → substitute. Filesystem → tmpdir. Random �
 - Unit: co-located with the source it tests.
 - Integration: co-located with the boundary it exercises, or in a dedicated integration directory.
 - E2E: a dedicated top-level directory, outside the application source tree.
-
-Concrete directory and file names follow the project's stack convention file — the stack file owns placement specifics.

@@ -22,8 +22,12 @@ Only the PR title reaches `main`, together with the trailer naming the squashed 
 Format: `<type>: <imperative summary>`
 
 - Types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`
+  - A change that alters what an operation costs without altering what it returns is a `fix` when the cost grows with the deployment: the answer is right and how it scales is the defect. Speeding up an operation already bounded by its own answer is not one.
 - Summary: imperative mood, lowercase, no trailing period. `fix: reject empty tokens`, not `fixed some bugs`.
-- One concern per commit. If a change needs "and" to describe it, split it.
+- One concern per commit. An "and" in the title is not the test; what decides is what the "and" joins:
+  - **A list inside one concern.** The rest of the title holds for everything joined — one verb over several objects, or several verbs over one object. `refactor: bring six identifiers, three log calls and one assertion onto the forms stack-go.md states`, `feat: grant, see and withdraw consent from the console`. Leave it whole; splitting a list produces worse commits, not better ones.
+  - **Two concerns.** Each side carries its own verb and its own object, and either would stand as the whole title. `docs: record the chart version decision and define the ProvisioningState members`. Split it.
+  - **Which of the two a title is, a reviewer decides and nothing else does.** The shapes above are what a writer reads first, and two unrelated changes can be written to share a verb. What a reviewer reads the diff for is whether one reason put every part of the change there; parts that do not share one are two concerns however the title is worded.
 - Omit the body unless the reason for the change is invisible in the diff. A body never restates what changed.
 - The message contains only what the project put there — no line a tool appended unasked. A `Co-authored-by:` naming an author of the squashed commits is not such a line: squash drops those authors and the trailer is where they survive.
 - Reversing an earlier decision mid-branch is an ordinary commit describing the new state. Earlier commits are not rewritten to hide that the decision changed.

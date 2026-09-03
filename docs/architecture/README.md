@@ -6,6 +6,11 @@ Current architecture of the system and the decisions behind it. This file is the
 
 - **Responsibility documents** (one `.md` per domain or concern, e.g. `memory.md`, `gateway.md`) — the single source of truth for how the system is shaped *now*. To know the current state, read only these: what one of them does not hold itself, rule 1 requires it to route to.
 - **`adr/`** — the record of individual decisions: direction taken, context, rejected alternatives.
+- **This file** — the index, and not one of those documents: §Index
+  names every file that is one, and the current state stated here is
+  this repository's own rather than the system's — where its checks run
+  (§Operation) and what its record has no detection for (§What nothing
+  detects).
 
 ## Rules
 
@@ -47,6 +52,31 @@ Current architecture of the system and the decisions behind it. This file is the
    refuses to restate a value the chart carries, so writing it into a
    responsibility document to satisfy the pairing would breach that
    document's own boundary.
+   **A pairing that arrives in a later pull request is a breach, and
+   the pull request that performs it is where the breach is
+   recorded.** By the time anyone can see the pairing did not come,
+   the ADR's own pull request is merged and rejecting it reaches
+   nothing; the later one is what a reviewer still holds, and it names
+   the ADR it is pairing and the commit that added it. That puts both
+   ends of the window in the record. Without it a late pairing and a
+   performed one are the same diff, which is why none of the four on
+   record was ever called. **The four sort by what followed the ADR
+   and by nothing visible when it merged.** ADR-0038's pairing arrived
+   in 20 minutes (`1d67d5c`) and ADR-0037's in 4 days 17 hours
+   (`40a0c32`), and each left a responsibility document positively
+   false in between: [authz.md](./authz.md) went on reading that an
+   unattached policy's scope is the caller's obligation and not the
+   engine's, which ADR-0038 had just moved, and
+   [adapter.md](./adapter.md) §Not decided went on calling garam's own
+   server certificate undecided, which ADR-0037 had just decided.
+   Three of the four decisions had a pull request implementing them,
+   which carried the pairing in 34 minutes, 3 hours 45 and 20;
+   ADR-0037's was superseded by ADR-0040 before anything implemented
+   it, so nothing was coming and the false line waited for a reader to
+   meet it in passing. A permission conditioned on the follow-up would
+   admit the four-day window on the terms that admit the twenty-minute
+   one, which is why this is a breach and not a bound
+   ([ADR-0063](./adr/0063-a-late-pairing-is-a-breach-and-the-pull-request-that-performs-it-records-the-window.md)).
 4. Keep this index current: every responsibility document and every ADR is listed here. `structures/` is not — bootstrap deletes it, and an entry for a file that is about to go leaves the index wrong. An ADR covers a decision about garam itself — what the system is, how it is partitioned, what it serves, and what this repository publishes — which is the ground the responsibility documents beside this index describe. A rule in `docs/convention/` is not on that ground and earns no ADR however much it binds: those files govern how the project writes code, tests, commits and documents, whatever system they are written for. That line divides which changes this track records, not which rule governs where a convention file and a structural rule reach one case — rule 8 decides that. A settled choice that changes nothing on the ground this track covers does not earn one either. A change to `docs/architecture/` itself is on neither ground: these rules, and the shape they give the documents under them, govern how the record is written rather than what the system is. Such a change decides what counts as a defect, and earns an ADR, unless both arms hold — no passage that had passed review is in violation after it, and the record it writes down was undivided, every case in it already sorted the way the change sorts it. Either arm alone can be passed by drafting, which is why both are asked ([ADR-0060](./adr/0060-a-rule-change-under-docs-architecture-owes-an-adr-unless-the-record-was-undivided.md)). #946 rewrote this rule and rule 3, put no passage in violation and sorted 40 of 40 the way the history already had, so it earned none. #953 put [deployment-contract.md](./deployment-contract.md) §What it is in violation until the same pull request repaired it, and [ADR-0058](./adr/0058-a-responsibility-document-routes-to-the-artifact-that-enforces-a-rule.md) was owed. This paragraph earned ADR-0060 on the second arm alone: it puts no passage in violation, and #946 and #953 had answered its question opposite ways with both merged.
    Where a rule was first decided is no part of this test. #603 and #612
    adopted rules 5 to 8 from `garamsh/convention-driven-project` and
@@ -176,3 +206,6 @@ ADRs:
 - [0060](./adr/0060-a-rule-change-under-docs-architecture-owes-an-adr-unless-the-record-was-undivided.md) — a change to the rules under `docs/architecture/` earns an ADR unless it puts no passage in violation and the record it writes down was undivided
 - [0061](./adr/0061-adopting-a-rule-the-template-decided-is-a-decision-taken-here.md) — adopting a rule the conventions template decided is a decision taken here, and the ADR records the adoption
 - [0062](./adr/0062-an-adr-deciding-a-rule-of-the-index-pairs-with-the-index.md) — an ADR whose decision is a rule of this index pairs with the index, not with a responsibility document
+- [0063](./adr/0063-a-late-pairing-is-a-breach-and-the-pull-request-that-performs-it-records-the-window.md)
+  — a pairing that arrives in a later pull request is a breach,
+  recorded on the pull request that performs it

@@ -35,9 +35,9 @@ Assert on outputs and side-effects only:
 - return values
 - emitted events, log lines
 - HTTP responses (status + body)
-- DB rows (from a testcontainer, at the e2e layer)
+- DB rows — migration bookkeeping and schema catalog included, where the subject is what changes the schema
 
-Do not assert on: call order, unexported helper shape, private type structure, internal refactors. **If an internal refactor forces test updates, the tests were testing implementation.**
+Do not assert on: call order, unexported helper shape, private type structure, a connection's session state, internal refactors. **If an internal refactor forces test updates, the tests were testing implementation.**
 
 The concrete targets for a given stack are owned by the project's stack convention file; the lists above state only the kinds that qualify.
 

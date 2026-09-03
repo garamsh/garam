@@ -220,10 +220,13 @@ The boundary is as much of the responsibility as the contents.
 covers both toolchains. In order: `web-format`, `web-lint`
 (which also typechecks), `web-test`, `web-build`, `web-check-gen`.
 
-Two things are outside it. `make web-e2e` runs the Playwright specs in
-`web/e2e/` against a real built application, a real backend and a real
-Postgres, so it needs infrastructure the gate does not start. `make
-web-install` is a prerequisite rather than a check.
+Three things are outside it. `make web-e2e` runs the Playwright specs
+in `web/e2e/` against a real built application, a real backend and a
+real Postgres, so it needs infrastructure the gate does not start.
+`make web-image-e2e`'s subject is the image a release publishes rather
+than this tree's application, and it runs that image, so it needs a
+container runtime the gate never asks for. `make web-install` is a
+prerequisite rather than a check.
 
 Tests are in two locations by decision, not by accident: Vitest owns
 the tests colocated under `web/src/`, Playwright owns `web/e2e/`, and

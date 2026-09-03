@@ -10,6 +10,7 @@ import type {
   OrgConsent,
   Organization,
   Project,
+  RegisteredOperator,
 } from "@/features/orgs";
 
 /** The backend base URL the tests run the server-side client against. */
@@ -50,6 +51,19 @@ export const fieldOne: Operator = {
   orgGrn: acme.grn,
   registeredBy: alice.grn,
   createdAt: "2026-01-02T03:04:05Z",
+};
+
+/**
+ * What registering `fieldOne` answered: the record and the one-time
+ * token beside it. The token is in this answer alone, as it is in
+ * garam's (ADR-0063).
+ */
+export const fieldOneRegistered: RegisteredOperator = {
+  operator: fieldOne,
+  enrollment: {
+    token: "8f14e45fceea167a5a36dedd4bea2543a1ba1ffc2fbd07a1",
+    expiresAt: "2026-01-02T03:14:05Z",
+  },
 };
 
 /**

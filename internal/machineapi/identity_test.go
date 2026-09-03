@@ -2,6 +2,7 @@ package machineapi_test
 
 import (
 	"context"
+	"crypto/tls"
 	"crypto/x509"
 	"net/http"
 	"testing"
@@ -13,23 +14,121 @@ import (
 	"github.com/garamsh/garam/internal/operator"
 )
 
-// operatorService is an operator.Service recording the credential the
-// surface read off the connection. Renewing is the whole of what this
-// surface asks for; minting out of band is a command's path (ADR-0032)
-// and reaches no handler, so it panics through the embedded interface.
+// operatorService is an operator.Service recording what the surface
+// passed it: the credential it read off the connection, and the token
+// and request it read off an enrollment body. Minting out of band is a
+// command's path (ADR-0032) and reaches no handler, so it panics
+// through the embedded interface.
 type operatorService struct {
 	operator.Service
 	certificate *operator.Certificate
 	err         error
 	renewed     []operator.Credential
+	enrolled    []enrolment
 }
 
-func (s *operatorService) Renew(_ context.Context, c operator.Credential) (*operator.Certificate, error) {
+// enrolment is one call the enrollment route made, as the domain saw
+// it.
+type enrolment struct {
+	token   string
+	request operator.CertificateRequest
+}
+
+func (s *operatorService) Renew(_ context.Context, c operator.Credential) (*operator.IssuedCertificate, error) {
 	s.renewed = append(s.renewed, c)
 	if s.err != nil {
 		return nil, s.err
 	}
+	return &operator.IssuedCertificate{
+		Certificate:   *s.certificate,
+		PrivateKeyPEM: []byte("private key"),
+	}, nil
+}
+
+func (s *operatorService) Enroll(_ context.Context, token string, request operator.CertificateRequest) (*operator.Certificate, error) {
+	s.enrolled = append(s.enrolled, enrolment{token: token, request: request})
+	if s.err != nil {
+		return nil, s.err
+	}
 	return s.certificate, nil
+}
+
+// anonymous is a client presenting no certificate at all, which is
+// what an operator that has never been issued one has.
+func anonymous(t *testing.T) *http.Client {
+	t.Helper()
+	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{
+		//nolint:gosec // the listener's own certificate is not what is under test.
+		InsecureSkipVerify: true,
+		MinVersion:         tls.VersionTLS13,
+	}}}
+	t.Cleanup(client.CloseIdleConnections)
+	return client
+}
+
+// TestServer_EnrolsWithoutACertificateAndAnswersNoPrivateKey is the
+// enrollment route seen from the wire: a caller holding no certificate
+// reaches it, what it passes on is the token and the request from the
+// body, and what comes back has no private key in it — garam signed a
+// key it never held.
+func TestServer_EnrolsWithoutACertificateAndAnswersNoPrivateKey(t *testing.T) {
+	enrolling := operatorGRN("acme")
+	notAfter := time.Date(2026, time.August, 26, 12, 0, 0, 0, time.UTC)
+	operators := &operatorService{certificate: &operator.Certificate{
+		Subject:        enrolling,
+		Serial:         "first",
+		CertificatePEM: []byte("certificate"),
+		IssuerPEM:      []byte("issuer"),
+		ServerRootPEM:  []byte("server root"),
+		NotAfter:       notAfter,
+	}}
+	url, _ := listener(t, &agentService{}, operators, &messageService{}, consenting(), unwatched(t), &memberGroups{}, &engine{}, enrolling)
+
+	status, body := send(t, anonymous(t), http.MethodPost, url+"/enrollment",
+		`{"token":"a-token","certificateRequestPem":"a request"}`)
+	require.Equal(t, http.StatusCreated, status)
+	assert.JSONEq(t, `{
+		"grn": "`+enrolling.String()+`",
+		"certificatePem": "certificate",
+		"issuerPem": "issuer",
+		"serverRootPem": "server root",
+		"notAfter": "2026-08-26T12:00:00Z"
+	}`, body)
+	assert.NotContains(t, body, "privateKeyPem")
+
+	assert.Equal(t, []enrolment{{token: "a-token", request: operator.CertificateRequest("a request")}},
+		operators.enrolled)
+}
+
+// TestServer_EnrollmentIsTheOnlyRouteAnUncertifiedCallerReaches is the
+// control on the one above: the same client that enrols is refused
+// everywhere else, so what admitted it was the route and not a listener
+// that stopped checking.
+func TestServer_EnrollmentIsTheOnlyRouteAnUncertifiedCallerReaches(t *testing.T) {
+	enrolling := operatorGRN("acme")
+	operators := &operatorService{certificate: &operator.Certificate{Subject: enrolling}}
+	url, _ := listener(t, &agentService{}, operators, &messageService{}, consenting(), unwatched(t), &memberGroups{}, &engine{}, enrolling)
+	client := anonymous(t)
+
+	status, _ := send(t, client, http.MethodPost, url+"/enrollment",
+		`{"token":"a-token","certificateRequestPem":"a request"}`)
+	require.Equal(t, http.StatusCreated, status)
+
+	refused := map[string]struct {
+		method, path, body string
+	}{
+		"reading its own identity": {http.MethodGet, "/identity", ""},
+		"renewing a certificate":   {http.MethodPost, "/identity/certificate", ""},
+		"reading its definitions":  {http.MethodGet, "/definitions", ""},
+		"posting a message":        {http.MethodPost, "/messages", `{"recipient":"` + enrolling.String() + `","idempotencyKey":"k","body":"b"}`},
+	}
+	for name, call := range refused {
+		t.Run(name, func(t *testing.T) {
+			status, body := send(t, client, call.method, url+call.path, call.body)
+			assert.Equal(t, http.StatusUnauthorized, status)
+			assert.Contains(t, body, "no machine identity")
+		})
+	}
 }
 
 // presentedBy returns the certificate the client authenticates with,
@@ -52,9 +151,9 @@ func TestServer_RenewsTheCertificateTheConnectionAuthenticatedWith(t *testing.T)
 	holder := operatorGRN("acme")
 	notAfter := time.Date(2026, time.August, 26, 12, 0, 0, 0, time.UTC)
 	operators := &operatorService{certificate: &operator.Certificate{
+		Subject:        holder,
 		Serial:         "successor",
 		CertificatePEM: []byte("certificate"),
-		PrivateKeyPEM:  []byte("private key"),
 		IssuerPEM:      []byte("issuer"),
 		ServerRootPEM:  []byte("server root"),
 		NotAfter:       notAfter,

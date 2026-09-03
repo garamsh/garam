@@ -4,7 +4,7 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { RegisterOperatorForm } from "@/app/console/orgs/[org]/operators/_components/register-operator-form";
-import { API_URL, fieldOne } from "@/testing/mocks/handlers";
+import { API_URL, fieldOneRegistered } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
 vi.mock("next/navigation", () => ({
@@ -23,14 +23,14 @@ function recordRegistrations() {
   server.use(
     http.post(`${API_URL}/orgs/acme/operators`, async ({ request }) => {
       posted.push(await request.json());
-      return HttpResponse.json(fieldOne, { status: 201 });
+      return HttpResponse.json(fieldOneRegistered, { status: 201 });
     }),
   );
   return posted;
 }
 
 describe("register operator form", () => {
-  it("posts the identifier and reports the operator the organization now holds", async () => {
+  it("posts the identifier and shows the enrollment token once, saying it cannot be shown again", async () => {
     const posted = recordRegistrations();
     const user = userEvent.setup();
     render(<RegisterOperatorForm org="acme" />);
@@ -39,11 +39,28 @@ describe("register operator form", () => {
     await user.click(screen.getByRole("button", { name: "Register operator" }));
 
     expect(
-      await screen.findByText(
-        "Registered field-one. An agent definition may name it now.",
-      ),
+      await screen.findByRole("heading", { name: "Registered field-one" }),
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Enrollment token")).toHaveValue(
+      fieldOneRegistered.enrollment.token,
+    );
+    // Presence rather than identity: the sentence is longer than the
+    // claim under test, which is that the page says the token is gone
+    // after this.
+    expect(
+      screen.getByText(/This is the only time this token is shown/),
     ).toBeInTheDocument();
     expect(posted).toEqual([{ identifier: "field-one" }]);
+  });
+
+  it("shows no token before a registration answers", async () => {
+    recordRegistrations();
+    render(<RegisterOperatorForm org="acme" />);
+
+    // The control on the case above: the field the token is read out of
+    // is absent until the answer that carries one arrives, so what put
+    // it on screen was the registration.
+    expect(screen.queryByLabelText("Enrollment token")).not.toBeInTheDocument();
   });
 
   it("refuses an identifier outside the character rule without a round trip", async () => {

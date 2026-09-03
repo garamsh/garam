@@ -11,6 +11,16 @@ info:
     carries. This is a different listener from the one
     `api/openapi.yaml` describes and shares nothing with it.
 
+    One operation is reached without a certificate, because it is how a
+    caller obtains its first one: `enrollOperator` carries
+    `security: []` and is authenticated by the one-time token the
+    console minted (ADR-0063). Every other operation requires the
+    certificate, and which is which is read from this file rather than
+    remembered. An enrolling caller still verifies garam against the
+    garam server root, which it holds before it calls: the listener
+    presents that root's leaf to everyone (ADR-0040), and a caller that
+    does not check it is talking to whoever answered.
+
     An operation's `responses` list is what it answers when garam is
     working, and is not the complete set of statuses it can return. No
     operation declares a 5xx, because a 5xx belongs to the listener
@@ -31,9 +41,13 @@ tags:
   - name: identity
     description: >-
       The identity a connection authenticated as, and the certificate
-      it authenticated with. An operator replaces that certificate here
-      while it still holds it, which is what makes the out-of-band mint
-      a bootstrap rather than a standing obligation (ADR-0046).
+      it authenticated with. An operator obtains its first certificate
+      here by enrolling with a one-time token (ADR-0063), and replaces
+      that certificate here while it still holds it (ADR-0046). Both
+      routes leave the private key where it was generated: the renewal
+      generates it inside the answer and returns it once, and the
+      enrollment never has it, because the operator made it in its own
+      cluster and sent only the request over it.
   - name: agent
     description: >-
       The agents an operator creates and holds, and what the two
@@ -101,9 +115,10 @@ paths:
         renewed on the route that admits it (ADR-0040).
 
         Three things refuse a renewal. A certificate that has expired
-        never reaches this route, because the handshake refuses it
-        first: an expired operator has no connection left to renew over
-        and its next certificate is minted out of band (ADR-0032). A
+        never reaches this route, because it authenticates nothing and
+        the request carries no identity: an expired operator has no
+        certificate left to renew from, and what follows is a token to
+        enrol with (ADR-0063) or a mint out of band (ADR-0032). A
         certificate with more than a third of its validity still to run
         is refused as too early, under `failed_precondition`, and the
         caller asks again closer to expiry. A certificate garam has
@@ -128,6 +143,58 @@ paths:
         '403':
           $ref: '#/components/responses/Error'
         '409':
+          $ref: '#/components/responses/Error'
+  /enrollment:
+    post:
+      operationId: enrollOperator
+      tags: [identity]
+      summary: Obtain an operator's first certificate with an enrollment token.
+      description: >-
+        Signs the certificate signing request for the operator the
+        token names, and spends the token (ADR-0063). This is the one
+        operation on this listener that requires no client certificate,
+        because it is what a caller with no certificate calls; what
+        authenticates it is the token, which a signed-in member of the
+        organization minted by registering the operator.
+
+        **The token is permission to ask for one certificate, once.** It
+        is not a credential to the operator's identity: it authenticates
+        no other operation here, it is spent by the first call that
+        presents it whether or not that call goes on to succeed, and it
+        stops being spendable ten minutes after it was minted. A token
+        that is refused is a token to register again for, not one to
+        retry with.
+
+        **What the certificate names is the token's to say and never the
+        request's.** Nothing in the certificate signing request is read
+        but the public key it carries and the signature proving the
+        sender holds the private half: a subject name, a SAN or an
+        extension request in it is discarded. So a token cannot be
+        turned into a certificate for any identity but the operator it
+        was minted for, whatever the request asks for.
+
+        The answer carries no private key, because garam never had one.
+        The operator generated the key pair where the certificate will
+        be used, and what crossed the wire was a public key and a
+        signature over it. A caller that loses the key it generated
+        registers again rather than recovering.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Enrollment'
+      responses:
+        '201':
+          description: Certificate signed. The token is spent.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrolledCertificate'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
           $ref: '#/components/responses/Error'
   /agents:
     post:
@@ -719,6 +786,67 @@ components:
             serves it to the agent on no route.
         state:
           $ref: '#/components/schemas/RuntimeState'
+    Enrollment:
+      type: object
+      description: >-
+        What an enrolling operator presents: the token it was given and
+        the certificate signing request over the key it generated. The
+        key itself does not appear here and never leaves the cluster it
+        was made in.
+      required: [token, certificateRequestPem]
+      properties:
+        token:
+          type: string
+          description: >-
+            The one-time enrollment token, as the console showed it
+            once. It names the operator this request obtains a
+            certificate for, so the request names no subject of its own.
+        certificateRequestPem:
+          type: string
+          description: >-
+            A PEM-encoded PKCS#10 certificate signing request over an
+            ECDSA P-256 key the caller generated. Its signature is what
+            proves the caller holds the private half; nothing else in it
+            is read.
+    EnrolledCertificate:
+      type: object
+      description: >-
+        What an enrollment answers: the signed certificate, the
+        authority that signed it, and the garam server root the holder
+        verifies garam by. There is no private key field, and its
+        absence is the property rather than an omission — garam signed a
+        key it never held and cannot return one (ADR-0063). Contrast
+        `MachineCertificate`, which the two routes that generate a key
+        pair answer with.
+      required: [grn, certificatePem, issuerPem, serverRootPem, notAfter]
+      properties:
+        grn:
+          type: string
+          description: >-
+            The identity the certificate names, which is also what its
+            SAN URI holds. It is the operator the token named.
+          example: grn:acme:default:operator:field-one
+        certificatePem:
+          type: string
+        issuerPem:
+          type: string
+          description: >-
+            The authority that signed this certificate. It is not what
+            garam is verified against: the two directions rest on
+            different roots (ADR-0040).
+        serverRootPem:
+          type: string
+          description: >-
+            The garam server root. A holder verifies garam's listener
+            against this and against nothing else — one root for every
+            organization, separate from the authority above and signing
+            only what garam presents (ADR-0040).
+        notAfter:
+          type: string
+          format: date-time
+          description: >-
+            When the certificate stops being valid. It carries jitter,
+            so certificates issued together do not expire together.
     MachineCertificate:
       type: object
       description: >-
@@ -726,9 +854,11 @@ components:
         authority that signed it, and the garam server root the holder
         verifies garam by. garam stores no private key, so this one is
         returned once and a holder that loses it asks for another
-        certificate. One shape for both routes that issue one: what an
-        agent is given and what an operator renews differ in who may
-        ask, not in what comes back.
+        certificate. One shape for both routes that generate a key pair:
+        what an agent is given and what an operator renews differ in who
+        may ask, not in what comes back. An enrollment answers
+        `EnrolledCertificate` instead, because garam generated no key
+        there and has none to return.
       required: [grn, certificatePem, privateKeyPem, issuerPem, serverRootPem, notAfter]
       properties:
         grn:

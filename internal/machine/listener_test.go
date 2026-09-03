@@ -304,13 +304,15 @@ func TestNewServer_IsVerifiedAgainstTheGaramServerRoot(t *testing.T) {
 	assert.Error(t, err, "the organization's own authority does not verify garam")
 }
 
-// TestNewServer_RefusesAConnectionItCannotAuthenticate covers the two
-// refusals the listener itself makes, each beside the connection that
-// succeeds. Without the accepted case a refusal proves nothing: a
-// handshake fails as readily for a certificate the listener never
-// looked at as for one it rejected, and both refusals here are
-// indistinguishable from a listener that is simply unreachable.
-func TestNewServer_RefusesAConnectionItCannotAuthenticate(t *testing.T) {
+// TestNewServer_CarriesNoIdentityForAConnectionItCannotAuthenticate
+// covers what a connection whose certificate does not authenticate
+// reaches, each case beside the one that succeeds. The connection is
+// made either way — that is what leaves room for the enrollment route
+// (ADR-0063) — and what separates them is whether an identity reaches
+// the handler. Without the accepted case a refusal proves nothing: a
+// handler answers 401 as readily for a listener that authenticates
+// nobody.
+func TestNewServer_CarriesNoIdentityForAConnectionItCannotAuthenticate(t *testing.T) {
 	issuer := newIssuer(t)
 	subject := agentGRN("acme", "bot-1")
 	authenticated := issuer.issue(t, subject)
@@ -325,11 +327,19 @@ func TestNewServer_RefusesAConnectionItCannotAuthenticate(t *testing.T) {
 	tests := map[string]tls.Certificate{
 		"no certificate":                   {},
 		"signed by another organization's": issuer.sign(t, "other", leaf{uris: []string{subject.String()}}),
+		// A self-signed certificate naming the identity it wants is
+		// what an attacker would present, and it is what an enrolling
+		// operator's own key would look like. It reaches the listener
+		// and carries no identity: what is read is the chain the
+		// handshake verified and never the SAN on its own.
+		"self-signed, naming the identity it wants": issuer.selfSigned(t, subject),
 	}
 	for name, client := range tests {
 		t.Run(name, func(t *testing.T) {
-			_, _, err := get(t, url, roots, client)
-			assert.Error(t, err)
+			resp, body, err := get(t, url, roots, client)
+			require.NoError(t, err, "the connection is made")
+			assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+			assert.Contains(t, body, "no machine identity")
 		})
 	}
 }

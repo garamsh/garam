@@ -139,7 +139,9 @@ func registerOperator(t *testing.T, p *pgxpool.Pool, g grn.GRN) grn.GRN {
 	t.Helper()
 	o, err := operator.New(orgRootGRN(g.Organization), g.Identifier, scopedGRN(g.Organization, "user", "ada"))
 	require.NoError(t, err)
-	require.NoError(t, operator.NewPostgresStore(p).Register(context.Background(), o))
+	enrollment, err := operator.NewEnrollment(o.GRN(), scopedGRN(g.Organization, "user", "ada"))
+	require.NoError(t, err)
+	require.NoError(t, operator.NewPostgresStore(p).Register(context.Background(), o, enrollment))
 	return o.GRN()
 }
 
@@ -1325,7 +1327,9 @@ func TestOperatorStore_RoundTrip(t *testing.T) {
 	registeredBy := scopedGRN("acme", "user", "ada")
 	one, err := operator.New(orgRootGRN("acme"), "one", registeredBy)
 	require.NoError(t, err)
-	require.NoError(t, s.Register(ctx, one))
+	enrollment, err := operator.NewEnrollment(one.GRN(), registeredBy)
+	require.NoError(t, err)
+	require.NoError(t, s.Register(ctx, one, enrollment))
 
 	stored, err := s.Get(ctx, one.GRN())
 	require.NoError(t, err)
@@ -1334,13 +1338,22 @@ func TestOperatorStore_RoundTrip(t *testing.T) {
 	assert.Equal(t, registeredBy, stored.RegisteredBy())
 	assert.False(t, stored.CreatedAt().IsZero())
 
-	// Registering the same GRN twice is a conflict, not a second row.
-	assert.ErrorIs(t, s.Register(ctx, one), operator.ErrOperatorAlreadyRegistered)
+	// Registering the same GRN twice is a conflict, not a second row —
+	// and it mints no second token either, because the two are one
+	// write.
+	again, err := operator.NewEnrollment(one.GRN(), registeredBy)
+	require.NoError(t, err)
+	assert.ErrorIs(t, s.Register(ctx, one, again), operator.ErrOperatorAlreadyRegistered)
+	_, err = s.Spend(ctx, again.TokenHash())
+	assert.ErrorIs(t, err, operator.ErrEnrollmentInvalid,
+		"the refused registration rolled back the token beside it")
 
 	// A record belongs to the org that registered it.
 	elsewhere, err := operator.New(orgRootGRN("globex"), "one", scopedGRN("globex", "user", "ada"))
 	require.NoError(t, err)
-	require.NoError(t, s.Register(ctx, elsewhere))
+	elsewhereEnrollment, err := operator.NewEnrollment(elsewhere.GRN(), scopedGRN("globex", "user", "ada"))
+	require.NoError(t, err)
+	require.NoError(t, s.Register(ctx, elsewhere, elsewhereEnrollment))
 	listed, err := s.ListByOrg(ctx, orgRootGRN("acme"))
 	require.NoError(t, err)
 	require.Len(t, listed, 1, "this org's operators and no other org's")
@@ -2094,8 +2107,8 @@ func TestCertificateAuthority_RoundTrip(t *testing.T) {
 	authority, err := store.Get(ctx, acme)
 	require.NoError(t, err)
 	assert.Equal(t, acme, authority.Organization())
-	assert.Equal(t, subject.String(), leafOf(t, cert).URIs[0].String())
-	require.NoError(t, chainsTo(t, cert, authority))
+	assert.Equal(t, subject.String(), leafOf(t, &cert.Certificate).URIs[0].String())
+	require.NoError(t, chainsTo(t, &cert.Certificate, authority))
 
 	// What a database dump yields is the sealed form: readable through
 	// the sealer that produced it, and unusable otherwise — it is not a
@@ -2125,9 +2138,9 @@ func TestCertificateAuthority_RoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	foreignAuthority, err := store.Get(ctx, other)
 	require.NoError(t, err)
-	require.NoError(t, chainsTo(t, foreign, foreignAuthority))
-	assert.Error(t, chainsTo(t, cert, foreignAuthority))
-	assert.Error(t, chainsTo(t, foreign, authority))
+	require.NoError(t, chainsTo(t, &foreign.Certificate, foreignAuthority))
+	assert.Error(t, chainsTo(t, &cert.Certificate, foreignAuthority))
+	assert.Error(t, chainsTo(t, &foreign.Certificate, authority))
 
 	// A CA belongs to an organization that exists, and no CA is written
 	// for one that does not.
@@ -2924,19 +2937,35 @@ type operatorCertificates struct {
 	serverRoot []byte
 }
 
-func (c operatorCertificates) Issue(ctx context.Context, subject grn.GRN) (*operator.Certificate, error) {
+func (c operatorCertificates) Issue(ctx context.Context, subject grn.GRN) (*operator.IssuedCertificate, error) {
 	issued, err := c.issuer.Issue(ctx, subject)
 	if err != nil {
 		return nil, err
 	}
-	return &operator.Certificate{
-		Serial:         operator.Serial(issued.Serial()),
-		CertificatePEM: issued.CertificatePEM(),
-		PrivateKeyPEM:  issued.PrivateKeyPEM(),
-		IssuerPEM:      issued.IssuerPEM(),
-		ServerRootPEM:  c.serverRoot,
-		NotAfter:       issued.NotAfter(),
+	return &operator.IssuedCertificate{
+		Certificate:   c.certificate(&issued.Certificate),
+		PrivateKeyPEM: issued.PrivateKeyPEM(),
 	}, nil
+}
+
+func (c operatorCertificates) Sign(ctx context.Context, subject grn.GRN, request operator.CertificateRequest) (*operator.Certificate, error) {
+	signed, err := c.issuer.Sign(ctx, subject, request)
+	if err != nil {
+		return nil, err
+	}
+	certificate := c.certificate(signed)
+	return &certificate, nil
+}
+
+func (c operatorCertificates) certificate(signed *ca.Certificate) operator.Certificate {
+	return operator.Certificate{
+		Subject:        signed.Subject(),
+		Serial:         operator.Serial(signed.Serial()),
+		CertificatePEM: signed.CertificatePEM(),
+		IssuerPEM:      signed.IssuerPEM(),
+		ServerRootPEM:  c.serverRoot,
+		NotAfter:       signed.NotAfter(),
+	}
 }
 
 // machineTrustRoots reads the authority a presented certificate has to
@@ -3034,9 +3063,11 @@ func machineListener(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer, policies m
 	presented := loopbackCertificate(t)
 	agents := agent.NewService(agent.NewPostgresStore(p),
 		certificates{issuer: issuer, serverRoot: certificatePEM(presented)})
-	// An operator renews its own certificate here, recording each one it
-	// is issued (ADR-0046).
-	operators := operator.NewService(operator.NewPostgresStore(p),
+	// An operator enrols here with the token registering it minted
+	// (ADR-0063) and renews here afterwards, recording each certificate
+	// it is issued (ADR-0046).
+	operatorStore := operator.NewPostgresStore(p)
+	operators := operator.NewService(operatorStore, operatorStore,
 		operatorCertificates{issuer: issuer, serverRoot: certificatePEM(presented)}, operator.Config{})
 	messages, err := message.NewService(message.NewPostgresStore(p), briefDelivery())
 	require.NoError(t, err)
@@ -4023,4 +4054,99 @@ func TestMachineSurface_AConsentRelationCarriesAMessageAcrossTheBoundary(t *test
 	require.Equal(t, http.StatusNoContent, status, string(body))
 	status, body = machineSend(t, recipient, http.MethodPost, queue, "")
 	assert.Equal(t, http.StatusNoContent, status, string(body), "a refused message reached the queue")
+}
+
+// enrollmentRequest generates a key pair the way an operator does in
+// its own cluster and returns the certificate signing request over it
+// with the key that stays there.
+func enrollmentRequest(t *testing.T) (string, *ecdsa.PrivateKey) {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	der, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{}, key)
+	require.NoError(t, err)
+	return string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: der})), key
+}
+
+// anonymousMachineClient reaches the listener presenting no certificate
+// at all, which is what an operator that has never held one has.
+func anonymousMachineClient(t *testing.T) *http.Client {
+	t.Helper()
+	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{
+		InsecureSkipVerify: true,
+		MinVersion:         tls.VersionTLS13,
+	}}}
+	t.Cleanup(client.CloseIdleConnections)
+	return client
+}
+
+// TestMachineSurface_EnrolsAnOperatorWithTheTokenRegisteringItMinted
+// covers the whole of what a person's one action buys (ADR-0063).
+// Registering writes the record and mints the token; the operator
+// enrols with a key garam never sees; and the certificate that comes
+// back is what authenticates it afterwards. That last step is the
+// assertion the rest rests on — a signed certificate that does not
+// authenticate would pass every check above it.
+func TestMachineSurface_EnrolsAnOperatorWithTheTokenRegisteringItMinted(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+
+	key := make([]byte, ca.KeySize)
+	_, err := rand.Read(key)
+	require.NoError(t, err)
+	sealer, err := ca.NewAESGCMSealer(key)
+	require.NoError(t, err)
+	_, evaluator := policyEngine(t, p)
+	url := machineListener(t, p, sealer, evaluator)
+
+	registeredBy := scopedGRN("acme", "user", "ada")
+	o, err := operator.New(orgRootGRN("acme"), "one", registeredBy)
+	require.NoError(t, err)
+	enrollment, err := operator.NewEnrollment(o.GRN(), registeredBy)
+	require.NoError(t, err)
+	require.NoError(t, operator.NewPostgresStore(p).Register(ctx, o, enrollment))
+
+	request, operatorKey := enrollmentRequest(t)
+	body, err := json.Marshal(machinegen.Enrollment{
+		Token:                 enrollment.Token(),
+		CertificateRequestPem: request,
+	})
+	require.NoError(t, err)
+
+	status, answered := machineSend(t, anonymousMachineClient(t), http.MethodPost, url+"/enrollment", string(body))
+	require.Equal(t, http.StatusCreated, status, string(answered))
+	var signed machinegen.EnrolledCertificate
+	require.NoError(t, json.Unmarshal(answered, &signed))
+	assert.Equal(t, o.GRN().String(), signed.Grn)
+	assert.NotContains(t, string(answered), "privateKeyPem",
+		"garam signed a key it never held and has none to answer with")
+
+	// The certificate authenticates on the same listener, which is what
+	// makes the enrollment worth anything. The key it is paired with is
+	// the one generated above and never sent.
+	pair, err := tls.X509KeyPair([]byte(signed.CertificatePem), pemKey(t, operatorKey))
+	require.NoError(t, err)
+	status, answered = machineRequest(t, machineClient(t, pair), http.MethodGet, url+"/identity")
+	require.Equal(t, http.StatusOK, status, string(answered))
+	assert.JSONEq(t, `{"grn":"`+o.GRN().String()+`"}`, string(answered))
+
+	// The token is spent. The accepted call above is what says this
+	// refusal is single use rather than a route that enrols nobody.
+	second, _ := enrollmentRequest(t)
+	body, err = json.Marshal(machinegen.Enrollment{
+		Token:                 enrollment.Token(),
+		CertificateRequestPem: second,
+	})
+	require.NoError(t, err)
+	status, answered = machineSend(t, anonymousMachineClient(t), http.MethodPost, url+"/enrollment", string(body))
+	assert.Equal(t, http.StatusUnauthorized, status, string(answered))
+}
+
+// pemKey renders a private key the way tls.X509KeyPair reads one.
+func pemKey(t *testing.T, key *ecdsa.PrivateKey) []byte {
+	t.Helper()
+	der, err := x509.MarshalPKCS8PrivateKey(key)
+	require.NoError(t, err)
+	return pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})
 }

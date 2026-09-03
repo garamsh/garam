@@ -128,3 +128,51 @@ func (q *Queries) ListOperatorsByOrg(ctx context.Context, orgGrn string) ([]Oper
 	}
 	return items, nil
 }
+
+const mintOperatorEnrollment = `-- name: MintOperatorEnrollment :exec
+WITH pruned AS (
+    DELETE FROM operator_enrollment_tokens WHERE expires_at <= now()
+)
+INSERT INTO operator_enrollment_tokens (token_hash, operator_grn, minted_by, minted_at, expires_at)
+VALUES ($1, $2, $3, $4, $5)
+`
+
+type MintOperatorEnrollmentParams struct {
+	TokenHash   string
+	OperatorGrn string
+	MintedBy    string
+	MintedAt    pgtype.Timestamptz
+	ExpiresAt   pgtype.Timestamptz
+}
+
+// Minting sweeps the tokens that have expired, as creating an
+// invitation sweeps its own table: a row is written in one place, so
+// sweeping there keeps the table proportional to what is live.
+func (q *Queries) MintOperatorEnrollment(ctx context.Context, arg MintOperatorEnrollmentParams) error {
+	_, err := q.db.Exec(ctx, mintOperatorEnrollment,
+		arg.TokenHash,
+		arg.OperatorGrn,
+		arg.MintedBy,
+		arg.MintedAt,
+		arg.ExpiresAt,
+	)
+	return err
+}
+
+const spendOperatorEnrollment = `-- name: SpendOperatorEnrollment :one
+DELETE FROM operator_enrollment_tokens
+WHERE token_hash = $1 AND expires_at > now()
+RETURNING operator_grn
+`
+
+// The delete is what makes a token single-use: the row is gone when the
+// statement returns, so two callers presenting one token leave one
+// certificate and the loser sees a token that is not there. Expiry is
+// the same answer for the same reason — a caller that spends nothing
+// learns nothing about which of the two happened.
+func (q *Queries) SpendOperatorEnrollment(ctx context.Context, tokenHash string) (string, error) {
+	row := q.db.QueryRow(ctx, spendOperatorEnrollment, tokenHash)
+	var operator_grn string
+	err := row.Scan(&operator_grn)
+	return operator_grn, err
+}

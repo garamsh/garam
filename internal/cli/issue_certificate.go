@@ -95,7 +95,8 @@ func issueCertificate(cmd *cobra.Command, subjectRaw, outDir string) error {
 	// lineage another holder took (ADR-0046). No server root travels
 	// with it — the command writes the three files below and the root
 	// the deployment already holds arrives beside them.
-	operators := operator.NewService(operator.NewPostgresStore(pool),
+	operatorStore := operator.NewPostgresStore(pool)
+	operators := operator.NewService(operatorStore, operatorStore,
 		operatorCertificates{issuer: issuer}, operator.Config{})
 	issued, err := operators.Issue(ctx, subject)
 	if err != nil {

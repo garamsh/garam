@@ -24,5 +24,6 @@ export {
   type OrgConsent,
   type Organization,
   type Project,
+  type RegisteredOperator,
 } from "./api/orgs";
 export { slugFromGrn } from "./grn";

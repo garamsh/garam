@@ -64,21 +64,40 @@ func (r *records) Advance(_ context.Context, current operator.Current, predecess
 // serial of its own, so a test can tell the successor from what it
 // replaced.
 type signer struct {
-	signed  int
-	err     error
-	subject []grn.GRN
+	signed    int
+	err       error
+	subject   []grn.GRN
+	requested []string
 }
 
-func (s *signer) Issue(_ context.Context, subject grn.GRN) (*operator.Certificate, error) {
+func (s *signer) Issue(_ context.Context, subject grn.GRN) (*operator.IssuedCertificate, error) {
+	certificate, err := s.sign(subject)
+	if err != nil {
+		return nil, err
+	}
+	return &operator.IssuedCertificate{
+		Certificate:   *certificate,
+		PrivateKeyPEM: []byte("private key"),
+	}, nil
+}
+
+// Sign records the request beside the subject, so a test can assert
+// that what garam signed over is what the caller sent.
+func (s *signer) Sign(_ context.Context, subject grn.GRN, request operator.CertificateRequest) (*operator.Certificate, error) {
+	s.requested = append(s.requested, string(request))
+	return s.sign(subject)
+}
+
+func (s *signer) sign(subject grn.GRN) (*operator.Certificate, error) {
 	s.subject = append(s.subject, subject)
 	if s.err != nil {
 		return nil, s.err
 	}
 	s.signed++
 	return &operator.Certificate{
+		Subject:        subject,
 		Serial:         operator.Serial("serial-" + strconv.Itoa(s.signed)),
 		CertificatePEM: []byte("certificate"),
-		PrivateKeyPEM:  []byte("private key"),
 		IssuerPEM:      []byte("issuer"),
 		ServerRootPEM:  []byte("server root"),
 	}, nil
@@ -101,12 +120,42 @@ type clock struct{ at time.Time }
 
 func (c *clock) now() time.Time { return c.at }
 
-// service returns the service under test over its two seams and a
+// tokens is the EnrollmentStore in memory. Spend removes the row, as
+// the statement does, so single use is what the store enforces and not
+// what the test remembers.
+type tokens struct {
+	live map[string]grn.GRN
+}
+
+func newTokens() *tokens { return &tokens{live: map[string]grn.GRN{}} }
+
+// mint records a token for subject and returns the secret, as
+// registering an operator would.
+func (t *tokens) mint(secret string, subject grn.GRN) string {
+	t.live[operator.HashToken(secret)] = subject
+	return secret
+}
+
+func (t *tokens) Spend(_ context.Context, tokenHash string) (grn.GRN, error) {
+	subject, live := t.live[tokenHash]
+	if !live {
+		return grn.GRN{}, operator.ErrEnrollmentInvalid
+	}
+	delete(t.live, tokenHash)
+	return subject, nil
+}
+
+// service returns the service under test over its three seams and a
 // clock, and the clock a test ages a certificate with.
 func service(t *testing.T, store operator.CertificateStore, issuer operator.Issuer) (operator.Service, *clock) {
 	t.Helper()
+	return serviceEnrolling(t, store, newTokens(), issuer)
+}
+
+func serviceEnrolling(t *testing.T, store operator.CertificateStore, enrollments operator.EnrollmentStore, issuer operator.Issuer) (operator.Service, *clock) {
+	t.Helper()
 	c := &clock{at: time.Date(2026, time.August, 25, 12, 0, 0, 0, time.UTC)}
-	return operator.NewService(store, issuer, operator.Config{Now: c.now}), c
+	return operator.NewService(store, enrollments, issuer, operator.Config{Now: c.now}), c
 }
 
 // TestService_IssueAdoptsTheCertificateItMinted is the bootstrap

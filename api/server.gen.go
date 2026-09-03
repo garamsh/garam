@@ -256,9 +256,18 @@ type Operator struct {
 	RegisteredBy string `json:"registeredBy"`
 }
 
+// OperatorEnrollment The one-time token the operator enrols with, and when it stops being spendable. It is permission to ask for one certificate, once, and it authenticates nothing else.
+type OperatorEnrollment struct {
+	// ExpiresAt When the token stops being spendable. A token nobody used by then is swept, and registering again is what replaces it.
+	ExpiresAt time.Time `json:"expiresAt"`
+
+	// Token The token itself, answered once. Show it once and say it cannot be shown again; garam cannot answer it a second time.
+	Token string `json:"token"`
+}
+
 // OperatorRegistration defines model for OperatorRegistration.
 type OperatorRegistration struct {
-	// Identifier Lowercase letters, digits and `-`, at most 64 characters. It becomes the identifier segment of the operator's GRN, which is the subject `garam issue-certificate` mints a certificate for (ADR-0032) — so it is supplied rather than minted, and an operator already holding a certificate is registered under the GRN that certificate names.
+	// Identifier Lowercase letters, digits and `-`, at most 64 characters. It becomes the identifier segment of the operator's GRN, which is what the enrollment token names and what the certificate signed for it holds in its SAN URI — so it is supplied rather than minted, and an operator already holding a certificate is registered under the GRN that certificate names.
 	Identifier string `json:"identifier"`
 }
 
@@ -398,6 +407,13 @@ type ProjectPatch struct {
 
 	// Roles Roles a group or project grants its own members, scoped to that group or project alone. Omitting the field on a patch leaves the roles unchanged; an empty array clears them.
 	Roles *ScopedRoles `json:"roles,omitempty"`
+}
+
+// RegisteredOperator The record the registration wrote, and the enrollment token it minted. This is the only answer carrying the token: garam holds its hash and no route reads one back (ADR-0063).
+type RegisteredOperator struct {
+	// Enrollment The one-time token the operator enrols with, and when it stops being spendable. It is permission to ask for one certificate, once, and it authenticates nothing else.
+	Enrollment OperatorEnrollment `json:"enrollment"`
+	Operator   Operator           `json:"operator"`
 }
 
 // Role defines model for Role.

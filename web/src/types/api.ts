@@ -435,8 +435,9 @@ export interface paths {
         /**
          * Register an operator of an organization. Requires the `admin` role.
          * @description Records that this organization has an operator under the identifier given, so a definition can name one garam holds a record of (ADR-0045). The identifier is supplied and not minted: an operator that already holds a certificate is registered under the GRN that certificate names.
-         *     It grants the operator nothing. How an operator proves itself is unchanged — a registered operator obtains its first certificate exactly as an unregistered one does, through the command ADR-0032 ships, which reads no record here.
-         *     There is no route that removes a record. garam has no revocation: a certificate that has not expired keeps authenticating whatever this organization holds, and a route implying otherwise would be worse than none (ADR-0045).
+         *     It mints the operator's enrollment token in the same write, and answers with it once (ADR-0063). **The token is answered here and nowhere else**: garam stores only its hash, so no route reads it back and a caller that loses it has no way to ask again. Recovering from that is the command ADR-0032 ships, which mints a certificate out of band and reads no record here.
+         *     The token is not a credential to the operator's identity. It is permission to ask for one certificate, once, from `enrollOperator` on the machine listener, and it stops being spendable ten minutes after this call. The operator generates its own key pair in its own cluster and sends a certificate signing request presenting the token: no private key is transmitted here, displayed here, or held by garam at any point.
+         *     There is no route that removes a record. garam has no revocation: a certificate that has not expired keeps authenticating whatever this organization holds, and a route implying otherwise would be worse than none (ADR-0045). An unspent token does go with the record, because the row holding it references the registration.
          */
         post: operations["registerOperator"];
         delete?: never;
@@ -903,9 +904,27 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
         };
+        /** @description The record the registration wrote, and the enrollment token it minted. This is the only answer carrying the token: garam holds its hash and no route reads one back (ADR-0063). */
+        RegisteredOperator: {
+            operator: components["schemas"]["Operator"];
+            enrollment: components["schemas"]["OperatorEnrollment"];
+        };
+        /** @description The one-time token the operator enrols with, and when it stops being spendable. It is permission to ask for one certificate, once, and it authenticates nothing else. */
+        OperatorEnrollment: {
+            /**
+             * @description The token itself, answered once. Show it once and say it cannot be shown again; garam cannot answer it a second time.
+             * @example 8f14e45fceea167a5a36dedd4bea2543a1ba1ffc2fbd07a1
+             */
+            token: string;
+            /**
+             * Format: date-time
+             * @description When the token stops being spendable. A token nobody used by then is swept, and registering again is what replaces it.
+             */
+            expiresAt: string;
+        };
         OperatorRegistration: {
             /**
-             * @description Lowercase letters, digits and `-`, at most 64 characters. It becomes the identifier segment of the operator's GRN, which is the subject `garam issue-certificate` mints a certificate for (ADR-0032) — so it is supplied rather than minted, and an operator already holding a certificate is registered under the GRN that certificate names.
+             * @description Lowercase letters, digits and `-`, at most 64 characters. It becomes the identifier segment of the operator's GRN, which is what the enrollment token names and what the certificate signed for it holds in its SAN URI — so it is supplied rather than minted, and an operator already holding a certificate is registered under the GRN that certificate names.
              * @example field-one
              */
             identifier: string;
@@ -1978,13 +1997,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Operator registered. */
+            /** @description Operator registered, with the enrollment token shown once. */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Operator"];
+                    "application/json": components["schemas"]["RegisteredOperator"];
                 };
             };
             400: components["responses"]["Error"];

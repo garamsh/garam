@@ -114,13 +114,28 @@ func TestServer_EnrollmentIsTheOnlyRouteAnUncertifiedCallerReaches(t *testing.T)
 		`{"token":"a-token","certificateRequestPem":"a request"}`)
 	require.Equal(t, http.StatusCreated, status)
 
+	// Every other operation api/machine.yaml declares, so a route added
+	// without the guard is caught here rather than in production: the
+	// listener stopped making this refusal centrally, and each handler
+	// makes it now.
+	agent := agentGRN("acme", "0a1b2c3d4e5f6071").String()
 	refused := map[string]struct {
 		method, path, body string
 	}{
-		"reading its own identity": {http.MethodGet, "/identity", ""},
-		"renewing a certificate":   {http.MethodPost, "/identity/certificate", ""},
-		"reading its definitions":  {http.MethodGet, "/definitions", ""},
-		"posting a message":        {http.MethodPost, "/messages", `{"recipient":"` + enrolling.String() + `","idempotencyKey":"k","body":"b"}`},
+		"reading its own identity":   {http.MethodGet, "/identity", ""},
+		"renewing its certificate":   {http.MethodPost, "/identity/certificate", ""},
+		"creating an agent":          {http.MethodPost, "/agents", ""},
+		"issuing an agent's":         {http.MethodPost, "/agents/" + agent + "/certificate", ""},
+		"reporting provisioning":     {http.MethodPost, "/agents/" + agent + "/provisioning-state", `{"epoch":1,"state":"provisioned"}`},
+		"reporting runtime state":    {http.MethodPost, "/agents/" + agent + "/runtime-state", `{"epoch":1,"state":"connected"}`},
+		"reading its definitions":    {http.MethodGet, "/definitions", ""},
+		"claiming a definition":      {http.MethodPost, "/definitions/" + agent + "/claim", ""},
+		"posting a message":          {http.MethodPost, "/messages", `{"recipient":"` + agent + `","idempotencyKey":"k","body":"b"}`},
+		"reading a message's status": {http.MethodGet, "/messages/m-1", ""},
+		"claiming a message":         {http.MethodPost, "/agents/" + agent + "/claims", ""},
+		"renewing a claim":           {http.MethodPost, "/agents/" + agent + "/claims/c-1/renewal", ""},
+		"forwarding a turn event":    {http.MethodPost, "/agents/" + agent + "/turn-events", `{"kind":"k","body":"b"}`},
+		"completing a claim":         {http.MethodPost, "/agents/" + agent + "/claims/c-1/completion", `{"outcome":"delivered"}`},
 	}
 	for name, call := range refused {
 		t.Run(name, func(t *testing.T) {

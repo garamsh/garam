@@ -76,8 +76,11 @@ decisions it does not make.
 
 ## What it serves
 
-Three route groups and two probes. A Next.js route group contributes no
-URL segment, so `(marketing)` and `(auth)` are not in any path.
+Three parts of the interface and two probes. Two of the three are
+Next.js route groups, `(marketing)` and `(auth)`: a route group
+contributes no URL segment, so neither is in any path. The third,
+`console`, is an ordinary segment, which is why every console path
+starts with it.
 
 | Path | For | Reached by |
 |---|---|---|

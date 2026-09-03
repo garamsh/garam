@@ -78,8 +78,12 @@ These are documentation too.
   diff, a `git blame` and a review citation address, and a paragraph
   written as one line is a change nobody can point inside of. A heading
   and a table row are each one line by construction. A line passes 72
-  only where a single token no break shortens carries it there — a URL,
-  a path.
+  only where what carries it there cannot be broken without becoming
+  something else: a URL, a path, or a verbatim quotation of a commit
+  title, a declaration, a command. A wrapped commit title is not that
+  commit's title. A quoted sentence is not such a case and neither is
+  prose — both read the same either side of a break, so a long line of
+  either is a violation however awkwardly it breaks.
 - Start each file with one line stating what it governs.
 - A `## Contents` list indexes a file's `##` headings, so how many of
   them there are decides whether it carries one and the file's length

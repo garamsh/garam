@@ -33,8 +33,8 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       registry: ${{ steps.ecr.outputs.registry }}
-      server-digest: ${{ steps.server.outputs.digest }}
-      web-digest: ${{ steps.web.outputs.digest }}
+      server-digest: ${{ steps.push.outputs.server-digest }}
+      web-digest: ${{ steps.push.outputs.web-digest }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -73,14 +73,23 @@ jobs:
 
       - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
-      # One version, two images. A failure on the second leaves the
-      # version half-published and the repair is the next version, never
-      # a re-push of this one (ADR-0039).
+      # One version, two images, and neither repository is written to
+      # until both are built. A build that failed after the first push
+      # would leave `garam/garam-server:X.Y.Z` in an IMMUTABLE
+      # repository naming a release nothing else in it names, and the
+      # repair for that is the next version rather than a re-push of
+      # this one (ADR-0039 §Consequences).
+      #
+      # `load: true` is what leaves anything to push. The builder
+      # docker/setup-buildx-action selects takes the `docker-container`
+      # driver, whose result stays in a build cache `docker push` cannot
+      # reach; `load` writes each image into the runner's image store,
+      # which is where the push step below finds it.
       #
       # `platforms` names the runner's own platform rather than implying
-      # it, and no attestation is attached: what each repository receives
-      # is one manifest, so the digest recorded below names the image and
-      # not an index over it.
+      # it, and no attestation is attached: what each repository
+      # receives is one manifest, which the push step holds each pushed
+      # reference to rather than resting on these two inputs.
       - id: server
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
         with:
@@ -89,7 +98,8 @@ jobs:
           platforms: linux/amd64
           provenance: false
           sbom: false
-          push: true
+          push: false
+          load: true
           tags: ${{ steps.ecr.outputs.registry }}/garam/garam-server:${{ steps.version.outputs.version }}
 
       - id: web
@@ -100,7 +110,8 @@ jobs:
           platforms: linux/amd64
           provenance: false
           sbom: false
-          push: true
+          push: false
+          load: true
           # The `/api/*` rewrite target is baked in, so a published
           # image is bound to one address: the api Service a release
           # named `garam` renders, and no other release name (ADR-0056,
@@ -112,6 +123,19 @@ jobs:
           build-args: |
             GARAM_API_URL=http://garam-api:8080
           tags: ${{ steps.ecr.outputs.registry }}/garam/garam-web:${{ steps.version.outputs.version }}
+
+      # Both images are in the runner's image store and neither
+      # repository has been written to yet. Each reference is named
+      # again here rather than read off the step that built it: the
+      # `tags:` above are also what scripts/image-build.sh parses to
+      # build the same two on a pull request (#870), so they stay
+      # written out, and a rename reaching one site and not the other
+      # fails this step before it pushes anything.
+      - id: push
+        env:
+          SERVER: ${{ steps.ecr.outputs.registry }}/garam/garam-server:${{ steps.version.outputs.version }}
+          WEB: ${{ steps.ecr.outputs.registry }}/garam/garam-web:${{ steps.version.outputs.version }}
+        run: scripts/image-push.sh "server=$SERVER" "web=$WEB"
 
   release:
     needs: images

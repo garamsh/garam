@@ -140,7 +140,7 @@ SHELL_SCRIPTS = $(shell find . -maxdepth 1 -type f -name '*.sh') $(shell find sc
 # layout passes, a syntax error fails, and a bashism fails only where
 # the POSIX grammar has no shape for it: `arr=(a b)` and `function f`
 # fail, while `[[ ]]`, `source` and `local` parse as ordinary commands
-# and pass. `-ln posix` fixes the dialect all seven scripts declare
+# and pass. `-ln posix` fixes the dialect all eight scripts declare
 # rather than taking it from each shebang, so a script that later says
 # bash fails here instead of being read as bash.
 #

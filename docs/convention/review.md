@@ -56,7 +56,7 @@ Decision: approve / request changes / reject
 
 ## Citing violations
 
-- A violation claim cites both sides: `rule file §section` and `diff file:line`.
+- A violation claim cites both sides: `rule file §section` and `diff file:line`. Where the violation is in something the diff does not carry — the title, the branch name, a commit message, the body — the second side is that artifact quoted, since there is no line to cite.
 - If you cannot cite a rule, it is a preference, and preferences never block a merge.
 - A Depth finding is the exception the check exists for. It names no rule by definition, so it cites the diff and the concrete failure it produces instead — the input that breaks, the case the tests miss, the simpler shape passed over. That is citable, and it blocks.
 

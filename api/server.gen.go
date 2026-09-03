@@ -128,10 +128,10 @@ type Agent struct {
 	Grn        string           `json:"grn"`
 	OrgGrn     string           `json:"orgGrn"`
 
-	// ProvisioningState What the operator reports about the agent's pod. `pending` is an agent no operator has reported on yet.
+	// ProvisioningState What the operator reports about the agent's pod. `pending` is an agent no operator has reported on yet. `provisioned` is an agent whose workload an operator built and which reports no ready replica: it says the pod was built and nothing about its health. `ready` is an agent whose workload reports a ready replica, so its containers are running; it says nothing about whether the agent inside them works. `failed` is an agent an operator observed cannot start, which is a stricter observation than an absent ready replica: an operator with only a replica count reports `provisioned`, so a state other than `failed` is not evidence the pod can start. What an operator may report, and when, is `api/machine.yaml`'s — the specification the reporting party holds, not this one.
 	ProvisioningState AgentProvisioningState `json:"provisioningState"`
 
-	// RuntimeState What the agent reports about itself. `unknown` is an agent that has not reported since it was created.
+	// RuntimeState What the agent reports about itself. `unknown` is an agent that has not reported since it was created. `connected` and `disconnected` are what the agent last reported about whether it is running: garam records the report and checks nothing behind it, so each names what the agent last said rather than what is true now.
 	RuntimeState AgentRuntimeState `json:"runtimeState"`
 	UpdatedAt    time.Time         `json:"updatedAt"`
 }
@@ -168,10 +168,10 @@ type AgentDefinitionCreate struct {
 	Values *AgentValues `json:"values,omitempty"`
 }
 
-// AgentProvisioningState What the operator reports about the agent's pod. `pending` is an agent no operator has reported on yet.
+// AgentProvisioningState What the operator reports about the agent's pod. `pending` is an agent no operator has reported on yet. `provisioned` is an agent whose workload an operator built and which reports no ready replica: it says the pod was built and nothing about its health. `ready` is an agent whose workload reports a ready replica, so its containers are running; it says nothing about whether the agent inside them works. `failed` is an agent an operator observed cannot start, which is a stricter observation than an absent ready replica: an operator with only a replica count reports `provisioned`, so a state other than `failed` is not evidence the pod can start. What an operator may report, and when, is `api/machine.yaml`'s — the specification the reporting party holds, not this one.
 type AgentProvisioningState string
 
-// AgentRuntimeState What the agent reports about itself. `unknown` is an agent that has not reported since it was created.
+// AgentRuntimeState What the agent reports about itself. `unknown` is an agent that has not reported since it was created. `connected` and `disconnected` are what the agent last reported about whether it is running: garam records the report and checks nothing behind it, so each names what the agent last said rather than what is true now.
 type AgentRuntimeState string
 
 // AgentValues What an operator constructs the agent from. garam stores the keys and the strings and interprets neither: what the payload means belongs to the operator that reads it. A key is one to 64 characters of lowercase letters, digits and `-`; a value is at most 4096 bytes; at most 32 entries.

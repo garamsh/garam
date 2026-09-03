@@ -134,12 +134,12 @@ Raised on #929 as a Convention concern and measured in #931.
 - **Taking the practice's reading — the version is the contract's
   version.** It is coherent, and it is what a `values.yaml`-shaped API
   would want: what a deployment supplies is unchanged, so nothing it
-  wrote needs revisiting. This chart also ships templates, and the 23
-  documents `chart-render` reported rendering from them on 2026-09-03
-  are what a deployment gets. Under
-  that reading a consumer pinning a ref cannot tell a render that moved
-  from one that did not, which is the reader ADR-0042 wrote
-  §Pinning a version for.
+  wrote needs revisiting. This chart also ships templates, and what a
+  deployment gets is the documents rendered from them —
+  `chart-render` reported 23 of them on 2026-09-03. Under that reading
+  a consumer pinning a ref cannot tell a render that moved from one
+  that did not, which is the reader ADR-0042 wrote §Pinning a version
+  for.
 - **Adding a check that reads the diff.** It is the only shape that
   could catch this: the rule is about what a diff must contain, so a
   check for it needs a base to compare against. A working tree has

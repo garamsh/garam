@@ -87,9 +87,9 @@ collaborate on a shared plan.
   console path and `POST /agents` can never describe the same agent. The
   operator a definition names must be one the organization registered;
   one it has not is refused, naming the identifier that named no record
-  (ADR-0045). Defining is granted by `agent:define`, named action by action
-  because ADR-0012 puts provisioning outside garam and a wildcard would
-  grant in advance what no endpoint may offer.
+  (ADR-0045). Defining is granted by `agent:define`, named action by
+  action because ADR-0012 puts provisioning outside garam and a wildcard
+  would grant in advance what no endpoint may offer.
 - Messages addressed to an agent are held in a queue one reader at a
   time claims from, stored once per sender key and claimable again when
   a reader dies holding one (ADR-0013). A message is bounded by an
@@ -133,18 +133,18 @@ collaborate on a shared plan.
 - Watching an agent work, while somebody is (ADR-0022). A member of the
   organization a policy allows opens a server-sent stream under
   `/orgs/{org}/agents/{agent}/watch` and reads what the agent is saying
-  now; the machine listener takes the turn events an adapter forwards and
-  answers every claim and renewal with how many streams garam holds for
-  that agent, which is what says whether to forward at all. Watching is
-  granted by an action of its own, separate from reading one, and no role
-  carries it: a grant arriving with membership is one nobody decided, so
-  an organization that wants its members to watch says so in a policy and
-  nobody watches until it does. Nothing
-  accumulates for an agent nobody watches — no row, no event carried, no
-  entry in either process's memory — and a stream starts where it was
-  opened, because there was nothing to replay. The view is best effort
-  and never a record: a gap in it cannot be told from an agent that said
-  nothing, so what has to be true afterwards comes from the queue.
+  now; the machine listener takes the turn events an adapter forwards
+  and answers every claim and renewal with how many streams garam holds
+  for that agent, which is what says whether to forward at all. Watching
+  is granted by an action of its own, separate from reading one, and no
+  role carries it: a grant arriving with membership is one nobody
+  decided, so an organization that wants its members to watch says so in
+  a policy and nobody watches until it does. Nothing accumulates for an
+  agent nobody watches — no row, no event carried, no entry in either
+  process's memory — and a stream starts where it was opened, because
+  there was nothing to replay. The view is best effort and never a
+  record: a gap in it cannot be told from an agent that said nothing, so
+  what has to be true afterwards comes from the queue.
 - Org / group / project structure; groups and projects are created,
   read, updated, deleted, and populated with members over the HTTP API
   under their organization's paths.
@@ -178,9 +178,9 @@ collaborate on a shared plan.
   ADR-0053) — and the organization's cross-organization consent
   relations are read, its own half of one granted and withdrawn
   (ADR-0009, ADR-0035).
-  Its shell is a collapsible sidebar over `Organizations → organization →
-  section`, and it addresses resources by the GRN's last segment rather
-  than printing GRNs (ADR-0011).
+  Its shell is a collapsible sidebar over
+  `Organizations → organization → section`, and it addresses resources
+  by the GRN's last segment rather than printing GRNs (ADR-0011).
 - Each of the three processes answers a liveness and a readiness probe
   on a listener a scheduler reaches without credentials, liveness
   reading nothing outside its own process (ADR-0021). Readiness reports
@@ -365,7 +365,8 @@ collaborate on a shared plan.
   Google OIDC alone (ADR-0044), password verification, sessions.
 - `internal/authz/` — policy engine: model, evaluator, policy store
   and per-org cache, gRPC servers.
-- `internal/org/` — organizations, groups, projects, memberships, invitations.
+- `internal/org/` — organizations, groups, projects, memberships,
+  invitations.
 - `internal/user/` — human identities.
 
 `grn`, `errorx` and `listfilter` are the packages domains share with

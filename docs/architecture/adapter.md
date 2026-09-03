@@ -155,7 +155,8 @@ who opened the view mid-turn is first seen.
   forward that fails is dropped rather than retried — a retry would
   compete with the turn it is describing.
 - **Forwarding uses a subscription of its own**, for the reason below: a
-  browser that reads slowly must not cost the completion signal an event.
+  browser that reads slowly must not cost the completion signal an
+  event.
 - **An event garam cannot carry whole is refused**, not shortened. It is
   bounded by what one announcement holds, which `api/machine.yaml`
   states; a refusal is a gap, and this stream already permits one.

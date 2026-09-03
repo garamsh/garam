@@ -215,12 +215,13 @@ argument. It bounds the request rather than a field, which is what
 leaves it standing where §What nothing checks says a declared
 constraint does not.
 
-The other two surfaces are fixed differently. The engine's wire
+The other three surfaces are fixed differently. The engine's wire
 contract is `proto/garam/authz/v1`, generated and checked the same way.
 The probes have no specification at all: their paths, and the ports
 they answer on, are interface rather than implementation, so changing
 one supersedes the ADR that set it instead of editing a handler
-(ADR-0021, [ADR-0023](./adr/0023-web-probes.md)).
+(ADR-0021, [ADR-0023](./adr/0023-web-probes.md)). The metrics surface
+is fixed by nothing at all (§Not decided).
 
 ## What nothing checks
 

@@ -32,6 +32,13 @@ These are documentation too.
 ## Format
 
 - English and Markdown. The H1 takes the case of what it is — a name in title case, an exact file or repository name as spelled, a statement in sentence case (an ADR's H1 states its decision). Every heading below it is sentence case.
+- **Hard-wrap at 72 columns.** A paragraph is a run of lines that each
+  break at or before column 72, never one long line: the line is what a
+  diff, a `git blame` and a review citation address, and a paragraph
+  written as one line is a change nobody can point inside of. A heading
+  and a table row are each one line by construction. A line passes 72
+  only where a single token no break shortens carries it there — a URL,
+  a path.
 - Start each file with one line stating what it governs.
 - A `## Contents` list indexes a file's `##` headings, so how many of them there are decides whether it carries one and the file's length does not: more than eight, it opens with the list; three or fewer, it carries none; between the two, the writer decides. A Contents list is never the remedy for a file that has outgrown one topic — see §Keep it maintainable.
 - A file whose headings come from a template owes no Contents list, however many it has. Those headings are the same in every file written from that template, so listing them tells a reader only what the template already told them.

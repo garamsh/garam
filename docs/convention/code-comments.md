@@ -14,6 +14,17 @@ When you do comment, write the shortest version that conveys the essential point
 
 Long comments drift out of sync with the code they explain; short ones age well. If a comment needs more than 2–3 sentences, refactor the code first — extract the explanation into a doc comment on a named function or type where readers can find it.
 
+## Line width
+
+No comment line runs past column 72, its indentation and its marker
+counted; a comment longer than that continues on the next line with the
+marker repeated. A comment is read in the diff beside the code it
+explains, and one written as a single long line is a line a reader
+scrolls and a change no reviewer can cite a position inside.
+
+A line passes 72 only where a single token no break shortens carries it
+there — a URL, an identifier, a path.
+
 ## Voice
 
 Write comments in declarative or imperative mood, stating facts: `returns the cached token`, `retries once on timeout`. Never narrate ("this will now…", or `// loop through users` above a for-loop), apologize ("unfortunately we have to…"), or justify the author's choices ("I chose this because…") — rationale belongs in the commit message or an ADR.

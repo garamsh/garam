@@ -14,8 +14,32 @@ Current architecture of the system and the decisions behind it. This file is the
 
 ## Rules
 
-1. **Responsibility document skeleton**: current decisions (consolidated) / rationale summary with links to the relevant ADRs / open questions. Do not copy ADR content — synthesize the present state. **Current state a working artifact carries and enforces stays in that artifact, and the document that owns the concern routes to it** — naming the artifact, the section of it, and what that section is authoritative for. That route is what lets §Structure promise the current state to a reader of these documents alone: either the state is in these documents, or the route to it is. A boundary saying only what a document will not restate is not one, because a reader meets the refusal and learns neither that the state exists nor where to reach it — which is how the chart version rule came to sit in no responsibility document at all ([ADR-0058](./adr/0058-a-responsibility-document-routes-to-the-artifact-that-enforces-a-rule.md)). [web-app.md](./web-app.md) and [api-surface.md](./api-surface.md) route that way to `deploy/charts/garam/README.md`, and [deployment-contract.md](./deployment-contract.md) §What it is names that file's §Pinning a version.
-2. **ADRs are append-only.** Once merged, the body is frozen. Exceptions: updating the status field (`accepted` → `superseded by ADR-XXXX`), fixing typos or broken links, and appending a dated entry under `## Errata` when a decision stands but a fact supporting it was wrong — the erratum names what falsified the fact, or where the fact was wrong when written, what it was wrong about, and the original text stays intact. A changed decision means a new ADR that supersedes the old one — never an edit.
+1. **Responsibility document skeleton**: current decisions
+   (consolidated) / rationale summary with links to the relevant ADRs /
+   open questions. Do not copy ADR content — synthesize the present
+   state. **Current state a working artifact carries and enforces stays
+   in that artifact, and the document that owns the concern routes to
+   it** — naming the artifact, the section of it, and what that section
+   is authoritative for. That route is what lets §Structure promise the
+   current state to a reader of these documents alone: either the state
+   is in these documents, or the route to it is. A boundary saying only
+   what a document will not restate is not one, because a reader meets
+   the refusal and learns neither that the state exists nor where to
+   reach it — which is how the chart version rule came to sit in no
+   responsibility document at all
+   ([ADR-0058](./adr/0058-a-responsibility-document-routes-to-the-artifact-that-enforces-a-rule.md)).
+   [web-app.md](./web-app.md) and [api-surface.md](./api-surface.md)
+   route that way to `deploy/charts/garam/README.md`, and
+   [deployment-contract.md](./deployment-contract.md) §What it is names
+   that file's §Pinning a version.
+2. **ADRs are append-only.** Once merged, the body is frozen.
+   Exceptions: updating the status field (`accepted` → `superseded by
+   ADR-XXXX`), fixing typos or broken links, and appending a dated entry
+   under `## Errata` when a decision stands but a fact supporting it was
+   wrong — the erratum names what falsified the fact, or where the fact
+   was wrong when written, what it was wrong about, and the original
+   text stays intact. A changed decision means a new ADR that supersedes
+   the old one — never an edit.
 3. **Decisions land in pairs.** A PR that adds or supersedes an ADR
    must update the affected responsibility documents in the same PR. A
    PR with only one of the two is rejected — the final state lives
@@ -77,22 +101,86 @@ Current architecture of the system and the decisions behind it. This file is the
    admit the four-day window on the terms that admit the twenty-minute
    one, which is why this is a breach and not a bound
    ([ADR-0063](./adr/0063-a-late-pairing-is-a-breach-and-the-pull-request-that-performs-it-records-the-window.md)).
-4. Keep this index current: every responsibility document and every ADR is listed here. `structures/` is not — bootstrap deletes it, and an entry for a file that is about to go leaves the index wrong. An ADR covers a decision about garam itself — what the system is, how it is partitioned, what it serves, and what this repository publishes — which is the ground the responsibility documents beside this index describe. A rule in `docs/convention/` is not on that ground and earns no ADR however much it binds: those files govern how the project writes code, tests, commits and documents, whatever system they are written for. That line divides which changes this track records, not which rule governs where a convention file and a structural rule reach one case — rule 8 decides that. A settled choice that changes nothing on the ground this track covers does not earn one either. A change to `docs/architecture/` itself is on neither ground: these rules, and the shape they give the documents under them, govern how the record is written rather than what the system is. Such a change decides what counts as a defect, and earns an ADR, unless both arms hold — no passage that had passed review is in violation after it, and the record it writes down was undivided, every case in it already sorted the way the change sorts it. Either arm alone can be passed by drafting, which is why both are asked ([ADR-0060](./adr/0060-a-rule-change-under-docs-architecture-owes-an-adr-unless-the-record-was-undivided.md)). #946 rewrote this rule and rule 3, put no passage in violation and sorted 40 of 40 the way the history already had, so it earned none. #953 put [deployment-contract.md](./deployment-contract.md) §What it is in violation until the same pull request repaired it, and [ADR-0058](./adr/0058-a-responsibility-document-routes-to-the-artifact-that-enforces-a-rule.md) was owed. This paragraph earned ADR-0060 on the second arm alone: it puts no passage in violation, and #946 and #953 had answered its question opposite ways with both merged.
-   Where a rule was first decided is no part of this test. #603 and #612
-   adopted rules 5 to 8 from `garamsh/convention-driven-project` and
-   recorded the adoption nowhere; under this line both would have owed
-   an ADR, and neither is a breach, since it binds only what is written
-   after it. What binds a contributor here is this project taking a rule
-   in, which those two did oppositely within the hour, so an adoption is
-   read by the same two arms as any other change — and the ADR one owes
-   records the taking in, routing to the template commit rather than
+4. Keep this index current: every responsibility document and every ADR
+   is listed here. `structures/` is not — bootstrap deletes it, and an
+   entry for a file that is about to go leaves the index wrong. An ADR
+   covers a decision about garam itself — what the system is, how it is
+   partitioned, what it serves, and what this repository publishes —
+   which is the ground the responsibility documents beside this index
+   describe. A rule in `docs/convention/` is not on that ground and
+   earns no ADR however much it binds: those files govern how the
+   project writes code, tests, commits and documents, whatever system
+   they are written for. That line divides which changes this track
+   records, not which rule governs where a convention file and a
+   structural rule reach one case — rule 8 decides that. A settled
+   choice that changes nothing on the ground this track covers does not
+   earn one either. A change to `docs/architecture/` itself is on
+   neither ground: these rules, and the shape they give the documents
+   under them, govern how the record is written rather than what the
+   system is. Such a change decides what counts as a defect, and earns
+   an ADR, unless both arms hold — no passage that had passed review is
+   in violation after it, and the record it writes down was undivided,
+   every case in it already sorted the way the change sorts it. Either
+   arm alone can be passed by drafting, which is why both are asked
+   ([ADR-0060](./adr/0060-a-rule-change-under-docs-architecture-owes-an-adr-unless-the-record-was-undivided.md)).
+   #946 rewrote this rule and rule 3, put no passage in violation and
+   sorted 40 of 40 the way the history already had, so it earned none.
+   #953 put [deployment-contract.md](./deployment-contract.md) §What it
+   is in violation until the same pull request repaired it, and
+   [ADR-0058](./adr/0058-a-responsibility-document-routes-to-the-artifact-that-enforces-a-rule.md)
+   was owed. This paragraph earned ADR-0060 on the second arm alone: it
+   puts no passage in violation, and #946 and #953 had answered its
+   question opposite ways with both merged. Where a rule was first
+   decided is no part of this test. #603 and #612 adopted rules 5 to 8
+   from `garamsh/convention-driven-project` and recorded the adoption
+   nowhere; under this line both would have owed an ADR, and neither is
+   a breach, since it binds only what is written after it. What binds a
+   contributor here is this project taking a rule in, which those two
+   did oppositely within the hour, so an adoption is read by the same
+   two arms as any other change — and the ADR one owes records the
+   taking in, routing to the template commit rather than
    restating the rule
    ([ADR-0061](./adr/0061-adopting-a-rule-the-template-decided-is-a-decision-taken-here.md)).
-5. **Every domain or concern has a responsibility document.** The PR that introduces one adds its document; the PR that removes one deletes it. A system with no code yet has no more than `structure.md` (rule 6), and that is the correct state.
-6. **Structural rules live in `structure.md`.** The shape chosen at bootstrap imposes rules — what the unit is, what may reference what, when a new one is earned — and they belong in the responsibility document for that concern, where a reviewer cites one by line and a correction is an ordinary edit. Not the ADR: rule 2 freezes that body, so superseding the choice of shape would be the price of fixing a rule's wording.
-7. **A point the structural rules leave to the project is settled in an ADR** — the one recording the shape where the question is met at bootstrap, a later one where it is met later. Which side is taken decides what counts as a defect, so it is a decision under rule 4, and the ADR still holds the record after bootstrap. Nothing obliges a project to settle a question it has not met: until then the point waits under `structure.md`'s open questions, where it binds nothing, and moves into that document's current decisions when the project takes a side.
-8. **Structural rules rank between the convention tiers.** Where `structure.md` and a convention file decide the same case differently, the stack-specific file that applies governs; `structure.md` governs against the tiers below it in `docs/convention/README.md` §Precedence — the stack-neutral files, then that index itself. A stack file carries the shape its framework imposes and the project cannot restate; the shape chosen at bootstrap is this project's own refinement of what a stack-neutral file states for every project. A project with no `structure.md` meets no such conflict, and this rule asks nothing of it.
-9. **A responsibility document says a mechanism is unbuilt before it describes it.** A section describing a mechanism nothing implements, or one built in part, opens with that fact; underneath the description it reaches a reader who has already believed the mechanism is there. [adapter.md](./adapter.md) §Readiness and §Subscriptions open that way. A document with no `##` heading is one section: the fact opens its body, below the line naming what the document governs, as [messaging.md](./messaging.md) does. An ADR is outside this: a decision is unbuilt when it is taken, and rule 2 freezes the body afterwards.
+5. **Every domain or concern has a responsibility document.** The PR
+   that introduces one adds its document; the PR that removes one
+   deletes it. A system with no code yet has no more than `structure.md`
+   (rule 6), and that is the correct state.
+6. **Structural rules live in `structure.md`.** The shape chosen at
+   bootstrap imposes rules — what the unit is, what may reference what,
+   when a new one is earned — and they belong in the responsibility
+   document for that concern, where a reviewer cites one by line and a
+   correction is an ordinary edit. Not the ADR: rule 2 freezes that
+   body, so superseding the choice of shape would be the price of fixing
+   a rule's wording.
+7. **A point the structural rules leave to the project is settled in an
+   ADR** — the one recording the shape where the question is met at
+   bootstrap, a later one where it is met later. Which side is taken
+   decides what counts as a defect, so it is a decision under rule 4,
+   and the ADR still holds the record after bootstrap. Nothing obliges a
+   project to settle a question it has not met: until then the point
+   waits under `structure.md`'s open questions, where it binds nothing,
+   and moves into that document's current decisions when the project
+   takes a side.
+8. **Structural rules rank between the convention tiers.** Where
+   `structure.md` and a convention file decide the same case
+   differently, the stack-specific file that applies governs;
+   `structure.md` governs against the tiers below it in
+   `docs/convention/README.md` §Precedence — the stack-neutral files,
+   then that index itself. A stack file carries the shape its framework
+   imposes and the project cannot restate; the shape chosen at bootstrap
+   is this project's own refinement of what a stack-neutral file states
+   for every project. A project with no `structure.md` meets no such
+   conflict, and this rule asks nothing of it.
+9. **A responsibility document says a mechanism is unbuilt before it
+   describes it.** A section describing a mechanism nothing implements,
+   or one built in part, opens with that fact; underneath the
+   description it reaches a reader who has already believed the
+   mechanism is there. [adapter.md](./adapter.md) §Readiness and
+   §Subscriptions open that way. A document with no `##` heading is one
+   section: the fact opens its body, below the line naming what the
+   document governs, as [messaging.md](./messaging.md) does. An ADR is
+   outside this: a decision is unbuilt when it is taken, and rule 2
+   freezes the body afterwards.
 
 ## What nothing detects
 

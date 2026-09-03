@@ -198,7 +198,7 @@ type MessageSubmission struct {
 	Recipient string `json:"recipient"`
 }
 
-// ProvisioningState What the operator reports about the agent's pod. `pending` is an agent no operator has reported on yet.
+// ProvisioningState What the operator reports about the agent's pod. `pending` is an agent no operator has reported on yet. `provisioned` is an agent whose workload an operator built and which reports no ready replica: it says the pod was built and nothing about its health. `ready` is an agent whose workload reports a ready replica, so its containers are running; it says nothing about whether the agent inside them works. `failed` is reserved — report it only from an observation that separates a workload that cannot start from one that is still starting, which a ready replica count does not, so a reporter reading that count alone reports `provisioned`.
 type ProvisioningState string
 
 // ProvisioningStateReport One operator's account of an agent's pod, at the epoch it holds the agent. It carries no runtime state: what the agent says about itself is the agent's to report.
@@ -206,7 +206,7 @@ type ProvisioningStateReport struct {
 	// Epoch The epoch the reporter believes the assignment is on, as `createAgent` or `claimDefinition` answered with. garam accepts the report only at the epoch the assignment is currently on.
 	Epoch int `json:"epoch"`
 
-	// State What the operator reports about the agent's pod. `pending` is an agent no operator has reported on yet.
+	// State What the operator reports about the agent's pod. `pending` is an agent no operator has reported on yet. `provisioned` is an agent whose workload an operator built and which reports no ready replica: it says the pod was built and nothing about its health. `ready` is an agent whose workload reports a ready replica, so its containers are running; it says nothing about whether the agent inside them works. `failed` is reserved — report it only from an observation that separates a workload that cannot start from one that is still starting, which a ready replica count does not, so a reporter reading that count alone reports `provisioned`.
 	State ProvisioningState `json:"state"`
 }
 

@@ -46,6 +46,18 @@ whose data you created and keep:
   linked worktree, so concurrent runs neither truncate nor migrate each
   other's. `make db-up` creates the one it is told to, and each suite
   migrates it itself. These are the only databases anything truncates.
+  Neither suite creates a database of its own: both connect to the one
+  `GARAM_TEST_DATABASE_URL` names and truncate it.
+
+A worktree's database outlives the worktree, and `make db-prune` is what
+collects it. It keeps `garam_test` and one database per worktree still
+on disk, drops the rest, and names each one. Nothing else removes them
+short of `docker compose down -v`, and that the destructive escape hatch
+worked is what kept the accumulation out of sight: a stack left up
+gathers a database per worktree indefinitely, which reached 89 of them
+and 777 MB on one machine before anything counted (#934). It is not part
+of `make ci` — a runner starts empty and its databases go with it, so
+this is a local cost only.
 
 Postgres publishes host port 25432 by default. `GARAM_DB_PORT` overrides
 it, in `.env` or in the environment

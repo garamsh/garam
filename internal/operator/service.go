@@ -43,7 +43,7 @@ type Service interface {
 	// names, adopting the certificate as that operator's current one.
 	// No key is generated and none is returned: the operator made the
 	// key where it will be used, and garam signs what it is sent
-	// (ADR-0063).
+	// (ADR-0064).
 	Enroll(ctx context.Context, token string, request CertificateRequest) (*Certificate, error)
 }
 

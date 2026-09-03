@@ -14,7 +14,7 @@ info:
     One operation is reached without a certificate, because it is how a
     caller obtains its first one: `enrollOperator` carries
     `security: []` and is authenticated by the one-time token the
-    console minted (ADR-0063). Every other operation requires the
+    console minted (ADR-0064). Every other operation requires the
     certificate, and which is which is read from this file rather than
     remembered. An enrolling caller still verifies garam against the
     garam server root, which it holds before it calls: the listener
@@ -42,7 +42,7 @@ tags:
     description: >-
       The identity a connection authenticated as, and the certificate
       it authenticated with. An operator obtains its first certificate
-      here by enrolling with a one-time token (ADR-0063), and replaces
+      here by enrolling with a one-time token (ADR-0064), and replaces
       that certificate here while it still holds it (ADR-0046). Both
       routes leave the private key where it was generated: the renewal
       generates it inside the answer and returns it once, and the
@@ -118,7 +118,7 @@ paths:
         never reaches this route, because it authenticates nothing and
         the request carries no identity: an expired operator has no
         certificate left to renew from, and what follows is a token to
-        enrol with (ADR-0063) or a mint out of band (ADR-0032). A
+        enrol with (ADR-0064) or a mint out of band (ADR-0032). A
         certificate with more than a third of its validity still to run
         is refused as too early, under `failed_precondition`, and the
         caller asks again closer to expiry. A certificate garam has
@@ -151,7 +151,7 @@ paths:
       summary: Obtain an operator's first certificate with an enrollment token.
       description: >-
         Signs the certificate signing request for the operator the
-        token names, and spends the token (ADR-0063). This is the one
+        token names, and spends the token (ADR-0064). This is the one
         operation on this listener that requires no client certificate,
         because it is what a caller with no certificate calls; what
         authenticates it is the token, which a signed-in member of the
@@ -815,7 +815,7 @@ components:
         authority that signed it, and the garam server root the holder
         verifies garam by. There is no private key field, and its
         absence is the property rather than an omission — garam signed a
-        key it never held and cannot return one (ADR-0063). Contrast
+        key it never held and cannot return one (ADR-0064). Contrast
         `MachineCertificate`, which the two routes that generate a key
         pair answer with.
       required: [grn, certificatePem, issuerPem, serverRootPem, notAfter]

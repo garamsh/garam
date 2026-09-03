@@ -17,7 +17,7 @@ type Store interface {
 	// organization already has one under that GRN. The two are one
 	// write: a record that arrived without its token would be an
 	// operator nothing here can enrol and no route can re-mint for
-	// (ADR-0063).
+	// (ADR-0064).
 	Register(ctx context.Context, o *Operator, e *Enrollment) error
 	Get(ctx context.Context, g grn.GRN) (*Operator, error)
 	// ListByOrg returns the organization's operators, ordered by GRN.

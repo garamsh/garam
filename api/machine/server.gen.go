@@ -126,7 +126,7 @@ type DefinitionClaim struct {
 	Epoch int `json:"epoch"`
 }
 
-// EnrolledCertificate What an enrollment answers: the signed certificate, the authority that signed it, and the garam server root the holder verifies garam by. There is no private key field, and its absence is the property rather than an omission — garam signed a key it never held and cannot return one (ADR-0063). Contrast `MachineCertificate`, which the two routes that generate a key pair answer with.
+// EnrolledCertificate What an enrollment answers: the signed certificate, the authority that signed it, and the garam server root the holder verifies garam by. There is no private key field, and its absence is the property rather than an omission — garam signed a key it never held and cannot return one (ADR-0064). Contrast `MachineCertificate`, which the two routes that generate a key pair answer with.
 type EnrolledCertificate struct {
 	CertificatePem string `json:"certificatePem"`
 

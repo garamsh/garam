@@ -21,7 +21,7 @@ func (s *Server) GetIdentity(w http.ResponseWriter, r *http.Request) {
 }
 
 // EnrollOperator answers with the certificate signed for the operator
-// the token names, and spends the token (ADR-0063).
+// the token names, and spends the token (ADR-0064).
 //
 // It is the one handler here that reads no identity off the
 // connection, because the caller has none yet: what authenticates the

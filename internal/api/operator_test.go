@@ -121,7 +121,7 @@ func TestOperatorRegister_RefusesWhatItCannotStore(t *testing.T) {
 }
 
 // TestOperatorRegister_AnswersATokenThatEnrolsThatOperatorAndNothingElse
-// covers what the registration hands back (ADR-0063): a token that
+// covers what the registration hands back (ADR-0064): a token that
 // enrols the operator just registered, minted afresh each time, and
 // held nowhere a route can read it out again.
 func TestOperatorRegister_AnswersATokenThatEnrolsThatOperatorAndNothingElse(t *testing.T) {

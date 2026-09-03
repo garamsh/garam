@@ -63,7 +63,7 @@ func generateKey() (*ecdsa.PrivateKey, error) {
 // Nothing else in the request is read. A subject name, a SAN, an
 // extension request: all discarded, because what the certificate names
 // is the caller's argument and never the sender's suggestion
-// (ADR-0063).
+// (ADR-0064).
 func requestedKey(request []byte) (*ecdsa.PublicKey, error) {
 	block, rest := pem.Decode(request)
 	if block == nil || block.Type != certificateRequestPEMType || len(bytes.TrimSpace(rest)) != 0 {

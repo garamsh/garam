@@ -12,7 +12,7 @@ import (
 
 // RegisterOperator records that the org has an operator under the
 // identifier given (ADR-0045) and mints the one-time token it enrols
-// with (ADR-0063). Requires the admin role.
+// with (ADR-0064). Requires the admin role.
 //
 // The token is answered here and nowhere else. garam stores its hash,
 // so this response is the only place it exists in a form anyone can

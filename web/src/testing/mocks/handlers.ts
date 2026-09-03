@@ -56,7 +56,7 @@ export const fieldOne: Operator = {
 /**
  * What registering `fieldOne` answered: the record and the one-time
  * token beside it. The token is in this answer alone, as it is in
- * garam's (ADR-0063).
+ * garam's (ADR-0064).
  */
 export const fieldOneRegistered: RegisteredOperator = {
   operator: fieldOne,

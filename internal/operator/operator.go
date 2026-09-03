@@ -16,7 +16,7 @@
 // by enrolling: registering mints a one-time token, the operator
 // generates a key pair in its own cluster and sends a certificate
 // signing request presenting that token, and garam signs a key it never
-// holds (ADR-0063). The command ADR-0032 ships still mints one out of
+// holds (ADR-0064). The command ADR-0032 ships still mints one out of
 // band, and is what recovers an operator that has no token left. Every
 // certificate after the first is issued here, over the connection the
 // certificate being replaced authenticated.

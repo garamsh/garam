@@ -35,7 +35,7 @@ test.describe("operators", () => {
     ).toBeVisible();
 
     // The token the operator enrols with is shown once, beside the
-    // sentence saying so (ADR-0063). Substring, because the sentence is
+    // sentence saying so (ADR-0064). Substring, because the sentence is
     // longer than the claim under test.
     const token = page.getByLabel("Enrollment token");
     await expect(token).toHaveValue(/^[0-9a-f]{48}$/);

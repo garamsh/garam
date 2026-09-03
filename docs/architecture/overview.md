@@ -226,7 +226,7 @@ collaborate on a shared plan.
   the watching entry below). An agent renews its own certificate on the
   certificate route (ADR-0040) and an operator renews its own by
   presenting it (ADR-0046); an operator's first is obtained by enrolling
-  with the token registering it minted (ADR-0063), and an agent's first
+  with the token registering it minted (ADR-0064), and an agent's first
   still arrives on the route its operator's claim admits it to.
 - Revoking anything. A certificate garam signed authenticates until it
   expires, and nothing shortens that: there is no revocation list, no
@@ -236,7 +236,7 @@ collaborate on a shared plan.
 - Proving an operator is the operator a record names by any means but
   the certificate. There is no service-account token and no exchange
   route: what registering hands over is a one-time enrollment ticket,
-  which buys one certificate and authenticates nothing else (ADR-0063).
+  which buys one certificate and authenticates nothing else (ADR-0064).
   `garam issue-certificate` still mints one out of band reading no
   record, and whether it should require a registered operator is a real
   question ADR-0045 raises and leaves open.

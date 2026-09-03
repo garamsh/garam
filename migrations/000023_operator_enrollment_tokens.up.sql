@@ -1,4 +1,4 @@
--- The one-time token an operator enrols with (ADR-0063). Registering an
+-- The one-time token an operator enrols with (ADR-0064). Registering an
 -- operator mints one; the operator presents it with a certificate
 -- signing request and garam signs the key the operator generated in its
 -- own cluster. Nothing here is a credential to the operator's identity:

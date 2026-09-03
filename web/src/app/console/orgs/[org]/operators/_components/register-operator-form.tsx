@@ -24,7 +24,7 @@ const initialState: RegisterOperatorState = { status: "idle" };
  * The enrollment token comes back with the record and is rendered
  * once. Nothing can fetch it again — garam stores its hash — so the
  * panel says so where the person reads the token rather than
- * afterwards (ADR-0063).
+ * afterwards (ADR-0064).
  */
 export function RegisterOperatorForm({ org }: { org: string }) {
   const [state, formAction, pending] = useActionState(

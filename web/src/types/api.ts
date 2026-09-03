@@ -435,9 +435,9 @@ export interface paths {
         /**
          * Register an operator of an organization. Requires the `admin` role.
          * @description Records that this organization has an operator under the identifier given, so a definition can name one garam holds a record of (ADR-0045). The identifier is supplied and not minted: an operator that already holds a certificate is registered under the GRN that certificate names.
-         *     It mints the operator's enrollment token in the same write, and answers with it once (ADR-0063). **The token is answered here and nowhere else**: garam stores only its hash, so no route reads it back and a caller that loses it has no way to ask again. Recovering from that is the command ADR-0032 ships, which mints a certificate out of band and reads no record here.
+         *     It mints the operator's enrollment token in the same write, and answers with it once (ADR-0064). **The token is answered here and nowhere else**: garam stores only its hash, so no route reads it back and a caller that loses it has no way to ask again. Recovering from that is the command ADR-0032 ships, which mints a certificate out of band and reads no record here.
          *     The token is not a credential to the operator's identity. It is permission to ask for one certificate, once, from `enrollOperator` on the machine listener, and it stops being spendable ten minutes after this call. The operator generates its own key pair in its own cluster and sends a certificate signing request presenting the token: no private key is transmitted here, displayed here, or held by garam at any point.
-         *     There is no route that removes a record. garam has no revocation: a certificate that has not expired keeps authenticating whatever this organization holds, and a route implying otherwise would be worse than none (ADR-0045). An unspent token does go with the record, because the row holding it references the registration.
+         *     There is no route that removes a record, and a route that did would look like revoking an operator while revoking nothing: a handshake is checked against the certificate and this organization's certificate authority, never against this record (ADR-0045). What does stop an operator, short of expiry, is deleting the organization — that takes the certificate authority with it and every certificate it signed fails from then on. An unspent token goes with the record either way, because the row holding it references the registration.
          */
         post: operations["registerOperator"];
         delete?: never;
@@ -904,7 +904,7 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
         };
-        /** @description The record the registration wrote, and the enrollment token it minted. This is the only answer carrying the token: garam holds its hash and no route reads one back (ADR-0063). */
+        /** @description The record the registration wrote, and the enrollment token it minted. This is the only answer carrying the token: garam holds its hash and no route reads one back (ADR-0064). */
         RegisteredOperator: {
             operator: components["schemas"]["Operator"];
             enrollment: components["schemas"]["OperatorEnrollment"];

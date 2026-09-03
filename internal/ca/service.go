@@ -63,7 +63,7 @@ type Service interface {
 	// request. Only that key is read from it: what the certificate
 	// names is the caller's argument, so a request asking for another
 	// identity is signed for the one named here and for no other
-	// (ADR-0063).
+	// (ADR-0064).
 	Sign(ctx context.Context, subject grn.GRN, request []byte) (*Certificate, error)
 }
 

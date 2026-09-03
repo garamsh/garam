@@ -1,4 +1,4 @@
-# ADR 0063: An operator enrols with a one-time token and keeps its key in its own cluster
+# ADR 0064: An operator enrols with a one-time token and keeps its key in its own cluster
 
 > Status: accepted
 > Date: 2026-09-04

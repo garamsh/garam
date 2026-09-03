@@ -16,7 +16,7 @@
 // client certificate. A connection whose certificate does not
 // authenticate carries no [Identity] rather than being refused, which
 // is what leaves room for the one route a caller reaches before it has
-// a certificate (ADR-0063); every other route refuses a request
+// a certificate (ADR-0064); every other route refuses a request
 // carrying none. Nothing here reads a forwarded client-certificate
 // header: one is trustworthy only where every deployment strips it at
 // the edge (ADR-0014).

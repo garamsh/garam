@@ -3064,7 +3064,7 @@ func machineListener(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer, policies m
 	agents := agent.NewService(agent.NewPostgresStore(p),
 		certificates{issuer: issuer, serverRoot: certificatePEM(presented)})
 	// An operator enrols here with the token registering it minted
-	// (ADR-0063) and renews here afterwards, recording each certificate
+	// (ADR-0064) and renews here afterwards, recording each certificate
 	// it is issued (ADR-0046).
 	operatorStore := operator.NewPostgresStore(p)
 	operators := operator.NewService(operatorStore, operatorStore,
@@ -4081,7 +4081,7 @@ func anonymousMachineClient(t *testing.T) *http.Client {
 }
 
 // TestMachineSurface_EnrolsAnOperatorWithTheTokenRegisteringItMinted
-// covers the whole of what a person's one action buys (ADR-0063).
+// covers the whole of what a person's one action buys (ADR-0064).
 // Registering writes the record and mints the token; the operator
 // enrols with a key garam never sees; and the certificate that comes
 // back is what authenticates it afterwards. That last step is the

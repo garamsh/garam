@@ -409,7 +409,7 @@ type ProjectPatch struct {
 	Roles *ScopedRoles `json:"roles,omitempty"`
 }
 
-// RegisteredOperator The record the registration wrote, and the enrollment token it minted. This is the only answer carrying the token: garam holds its hash and no route reads one back (ADR-0063).
+// RegisteredOperator The record the registration wrote, and the enrollment token it minted. This is the only answer carrying the token: garam holds its hash and no route reads one back (ADR-0064).
 type RegisteredOperator struct {
 	// Enrollment The one-time token the operator enrols with, and when it stops being spendable. It is permission to ask for one certificate, once, and it authenticates nothing else.
 	Enrollment OperatorEnrollment `json:"enrollment"`

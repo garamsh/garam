@@ -360,7 +360,7 @@ func TestNewServer_IsVerifiedAgainstTheGaramServerRoot(t *testing.T) {
 // covers what a connection whose certificate does not authenticate
 // reaches, each case beside the one that succeeds. The connection is
 // made either way — that is what leaves room for the enrollment route
-// (ADR-0063) — and what separates them is whether an identity reaches
+// (ADR-0064) — and what separates them is whether an identity reaches
 // the handler. Without the accepted case a refusal proves nothing: a
 // handler answers 401 as readily for a listener that authenticates
 // nobody.

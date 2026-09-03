@@ -88,7 +88,7 @@ func serveMachine(cmd *cobra.Command) error {
 	agents := agent.NewService(agent.NewPostgresStore(pool),
 		certificates{issuer: issuer, serverRoot: keys.serverRoot})
 	// An operator obtains its first certificate on this listener by
-	// enrolling (ADR-0063) and renews it here afterwards (ADR-0046),
+	// enrolling (ADR-0064) and renews it here afterwards (ADR-0046),
 	// through the same authority and the same server root its agents
 	// are given. One store answers both halves: what garam last issued
 	// an operator, and the token an enrollment spends.

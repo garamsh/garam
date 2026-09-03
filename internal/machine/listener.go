@@ -17,7 +17,7 @@ import (
 // A connection whose certificate does not authenticate is not refused
 // here, and carries no identity instead. That is what leaves room for
 // the one route a caller reaches before it has a certificate at all —
-// an operator enrolling with a token (ADR-0063) — and it costs nothing
+// an operator enrolling with a token (ADR-0064) — and it costs nothing
 // elsewhere: what an admitted caller may do is decided by the identity
 // it holds, and a request that carries none reaches no handler that
 // asks for one.

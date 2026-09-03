@@ -20,6 +20,6 @@ type Issuer interface {
 	// carries. What is signed is the subject named here and never the
 	// one the request asks for, so a request is a public key and a
 	// proof that its sender holds the private half, and nothing else
-	// (ADR-0063).
+	// (ADR-0064).
 	Sign(ctx context.Context, subject grn.GRN, request CertificateRequest) (*Certificate, error)
 }

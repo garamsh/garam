@@ -300,7 +300,7 @@ alone. What binds instead is who signs them
   the only file it needs.** Registering the operator answers a one-time
   token, the operator generates its own key pair in its own cluster and
   presents the token with a certificate signing request, and garam signs
-  ([ADR-0063](./adr/0063-an-operator-enrols-with-a-one-time-token-and-keeps-its-key-in-its-own-cluster.md)).
+  ([ADR-0064](./adr/0064-an-operator-enrols-with-a-one-time-token-and-keeps-its-key-in-its-own-cluster.md)).
   The root is what the operator verifies garam by on that call, so it
   reaches the operator's cluster ahead of the token — one public file
   per deployment rather than one per operator. **An enrollment made
@@ -497,7 +497,7 @@ that would assert one:
 - [ADR-0058](./adr/0058-a-responsibility-document-routes-to-the-artifact-that-enforces-a-rule.md)
   — state a working artifact carries and enforces stays there, and the
   document that owns the concern names what it hands over
-- [ADR-0063](./adr/0063-an-operator-enrols-with-a-one-time-token-and-keeps-its-key-in-its-own-cluster.md)
+- [ADR-0064](./adr/0064-an-operator-enrols-with-a-one-time-token-and-keeps-its-key-in-its-own-cluster.md)
   — an operator enrols with a one-time token and keeps its key in its
   own cluster, so the first certificate is a call rather than a file a
   deployment moves

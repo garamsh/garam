@@ -30,7 +30,7 @@ const enrollmentTokenBytes = 24
 // It is not a credential to the operator's identity and cannot be made
 // into one. Presenting it obtains a certificate over a key the
 // presenter generated and garam never sees; it authenticates no other
-// call, and it is gone the moment it is spent (ADR-0063).
+// call, and it is gone the moment it is spent (ADR-0064).
 //
 // The token exists in this value alone. What reaches the database is
 // [HashToken] of it, so a row read out of a dump enrols nothing.

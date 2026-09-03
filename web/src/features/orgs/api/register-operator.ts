@@ -20,7 +20,7 @@ import { RegisteredOperatorParser, type RegisteredOperator } from "./orgs";
  *
  * The token is carried in this state because the answer that created it
  * is the only place it exists: garam stores its hash, so nothing can
- * fetch it again once this state is replaced (ADR-0063). */
+ * fetch it again once this state is replaced (ADR-0064). */
 export type RegisterOperatorState =
   | { status: "idle" }
   | { status: "error"; message: string }
@@ -38,7 +38,7 @@ const Schema = z.object({
 
 /**
  * Registers an operator of the organization (ADR-0045) and returns the
- * one-time token it enrols with (ADR-0063).
+ * one-time token it enrols with (ADR-0064).
  *
  * No private key passes through here. The operator generates its own
  * key pair in its own cluster and presents this token with a

@@ -2,7 +2,7 @@
 
 What an organization records about an operator, and what that operator
 authenticates with: the record that the organization has it (ADR-0045),
-the one-time token registering it mints (ADR-0063), and which
+the one-time token registering it mints (ADR-0064), and which
 certificate garam last issued it, together with what it takes to replace
 that with the next (ADR-0046). Implemented by `internal/operator`.
 
@@ -50,7 +50,7 @@ The certificate half reads no record above it. An operator renews with
 what it holds, and whether its organization registered it changes
 nothing about that.
 
-An operator's first certificate is obtained by enrolling (ADR-0063).
+An operator's first certificate is obtained by enrolling (ADR-0064).
 Registering mints a token, the operator generates its key pair where the
 certificate will be used, and this domain spends the token and signs the
 request. **The subject is the token's and never the request's**, so a

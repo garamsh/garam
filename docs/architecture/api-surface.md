@@ -94,7 +94,7 @@ terms an agent does
 A connection whose certificate does not authenticate is not refused at
 the handshake; it carries no identity instead, and every operation but
 one refuses a request that carries none
-([ADR-0063](./adr/0063-an-operator-enrols-with-a-one-time-token-and-keeps-its-key-in-its-own-cluster.md)).
+([ADR-0064](./adr/0064-an-operator-enrols-with-a-one-time-token-and-keeps-its-key-in-its-own-cluster.md)).
 The identity a handler holds is the one the handshake's own
 verification returned, so nothing derives it a second time and a
 certificate naming any GRN under a chain nothing signed reaches no
@@ -106,7 +106,7 @@ handler that asks for one. Which operation opts out is read from
 An operator's is obtained by enrolling: registering it on the
 browser-facing listener mints a one-time token, the operator generates
 its key pair in its own cluster, and `enrollOperator` signs the request
-that presents the token and spends it (ADR-0063). **What the
+that presents the token and spends it (ADR-0064). **What the
 certificate names is the token's to say and never the request's**, and
 no private key is generated or answered. The command ADR-0032 ships
 still mints one out of band and is what recovers an operator with no
@@ -445,7 +445,7 @@ document owes an update.
   — the two specifications' prose is written for different callers and
   is not held to agree, and each defines every member its own caller
   meets
-- [ADR-0063](./adr/0063-an-operator-enrols-with-a-one-time-token-and-keeps-its-key-in-its-own-cluster.md)
+- [ADR-0064](./adr/0064-an-operator-enrols-with-a-one-time-token-and-keeps-its-key-in-its-own-cluster.md)
   — one operation on the machine listener is reached without a
   certificate, authenticated by the one-time token registering an
   operator minted, and a connection that does not authenticate carries

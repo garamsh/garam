@@ -28,7 +28,7 @@ type Credential struct {
 // it, and the garam server root, each in PEM form (ADR-0014,
 // ADR-0040). It carries no key, because the key may be one garam never
 // saw — an enrolling operator generates its own and sends the request
-// garam signs (ADR-0063).
+// garam signs (ADR-0064).
 //
 // Subject is the identity it names, which the enrollment route answers
 // with: the caller learns which operator the token it spent was for.

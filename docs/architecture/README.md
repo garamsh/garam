@@ -129,7 +129,3 @@ ADRs:
 - [0058](./adr/0058-a-responsibility-document-routes-to-the-artifact-that-enforces-a-rule.md) — a responsibility document routes to the artifact that enforces a rule, and a boundary that only refuses is not a route
 - [0059](./adr/0059-the-two-specifications-prose-is-not-held-to-agree-and-each-defines-every-member-its-own-caller-meets.md) — the two specifications' prose is not held to agree, and each defines every member its own caller meets
 - [0060](./adr/0060-a-rule-change-under-docs-architecture-owes-an-adr-unless-the-record-was-undivided.md) — a change to the rules under `docs/architecture/` earns an ADR unless it puts no passage in violation and the record it writes down was undivided
-
-## Rules for edits
-
-- A PR that changes module boundaries updates the responsibility documents; a PR that changes a decision adds an ADR. Same PR, always.

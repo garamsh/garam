@@ -15,39 +15,40 @@
 [ADR-0042](./0042-a-chart-is-the-description-of-a-garam-deployment.md)
 §Decision states the rule in one sentence: `Chart.yaml`'s `version`
 "moves when the chart changes and names no garam version".
-`deploy/charts/garam/README.md` §Pinning a version carries the same
-sentence, and no responsibility document in `docs/architecture/` states
-it at all.
+`deploy/charts/garam/README.md` §Pinning a version carries it, and so
+does `deploy/charts/garam/Chart.yaml`'s own comment above the field. No
+responsibility document in `docs/architecture/` states it at all.
 
 Two readings of "the chart changes" answer one case differently: a
 template edit that changes what an install renders without changing any
-value a deployment supplies. The chart's own history took both. Read on
-2026-09-03 over `deploy/charts/garam/`:
+value a deployment supplies. Read on 2026-09-03, the 23 commits touching
+`deploy/charts/garam/` split four ways:
 
-| Commit | What it changed | `Chart.yaml`'s `version` |
+| Commits | What they changed | `Chart.yaml`'s `version` |
 |---|---|---|
-| c8b6123 (#500) | the chart's publication | set to `0.1.0` |
-| 583076e (#504) | the account each workload runs as — a value a deployment supplies | `0.1.0` to `0.2.0` |
-| ff185d8 (#763) | PodSecurity fields on five templates and `_helpers.tpl` | unchanged |
-| 0a0bfb9 (#732) | object names and a pod field, across six templates | unchanged |
-| cedb376 (#635) | `fsGroup` on `templates/machine.yaml` | unchanged |
+| c8b6123 (#500), 583076e (#504), aa36303 (#929) | the chart's publication; the account each workload runs as; what an existing `machine.resources` renders | moved, to `0.1.0`, `0.2.0` and `0.2.1` |
+| ff185d8 (#763), 0a0bfb9 (#732), cedb376 (#635) | what a complete values file renders — PodSecurity fields across six templates, object names and a pod field across six, `fsGroup` on one | unchanged |
+| 9363454 (#860), 21b5f24 (#740), 1de1fcb (#516) | a template, leaving every successful render identical — the text of a `required` message, or a guard that fires only on a values file omitting the value | unchanged |
+| the other 14 | no template: the README, the value files, the checks | unchanged |
 
-The last three change what an install renders and left the version where
-it stood. So the practice reads the rule as *moves when what a consumer
-supplies changes*, and the sentence reads as *moves when the chart
-changes*; the two agree everywhere except on the case above, which is
-the ordinary one.
+The second row is the case that divided. Those three changed what an
+install renders and left the version where it stood, so the practice
+reads the rule as *moves when what a consumer supplies changes* while
+the sentence reads as *moves when the chart changes*. The first row is
+the same rule obeyed, #929 included — which is the change that raised
+the question rather than one settled by it. The third row is a case
+neither reading was put to.
 
-Nothing here detects the difference. `make chart` runs eight sub-checks
-— `chart-lint`, `chart-render`, `chart-identity`, `chart-names`,
-`chart-rewrite`, `chart-guards`, `chart-security` and `chart-package` —
-and no target compares `Chart.yaml`'s `version` against anything:
+The rule is written in three places and enforced in none. `make chart`
+runs eight sub-checks — `chart-lint`, `chart-render`, `chart-identity`,
+`chart-names`, `chart-rewrite`, `chart-guards`, `chart-security` and
+`chart-package` — and no target compares the version against anything:
 `grep -rn 'Chart\.yaml' Makefile scripts/ *.sh` returns nothing, while
-the same search for `values.yaml` returns the targets that render them.
-`chart-package` runs `helm package`, which reads the file to name the
-artifact, and that reading cannot fail on a version that did not move.
-So a contributor meets this rule nowhere, which is how three changes
-took the other reading without anyone noticing.
+the same search for `values.yaml` returns the targets that render it.
+`chart-package` prints the packaged artifact's name, which carries the
+version, and compares it with nothing. A contributor editing a template
+meets the rule in none of the three places it is written, which is how
+three changes took the other reading without anyone noticing.
 
 Raised on #929 as a Convention concern and measured in #931.
 
@@ -66,10 +67,11 @@ Raised on #929 as a Convention concern and measured in #931.
   to pin a git ref, and the version is the only thing that tells it the
   render underneath that pin has moved. A pin whose output changes
   silently is not a pin.
-- **The three commits are not revisited.** ff185d8, 0a0bfb9 and cedb376
-  keep the version they merged with. A version is not retroactively
-  bumped: it names what the chart was at the ref a consumer pinned, and
-  rewriting it now would make two different charts claim one number.
+- **§Context's second row is not revisited.** ff185d8, 0a0bfb9 and
+  cedb376 keep the version they merged with. A version is not
+  retroactively bumped: it names what the chart was at the ref a
+  consumer pinned, and rewriting it now would make two different charts
+  claim one number.
   This clause exists so the question is closed rather than reopened
   against each of them in turn.
 - **Nothing checks this, and nothing is added to.** It is held by
@@ -87,6 +89,12 @@ Raised on #929 as a Convention concern and measured in #931.
 - **Whether `Chart.yaml` ever gains an `appVersion`.** ADR-0042 decided
   it carries none and its 2026-09-02 erratum records that `v0.1.0`
   landed and set none; this ADR reads only `version`.
+- **A template edit that leaves every successful render identical.**
+  §Context's third row — the text of a `required` message, a guard that
+  fires only on a values file omitting the value — changes the chart
+  and changes nothing a complete install produces. It is not the case
+  that divided and no reading was put to it, so it stays open rather
+  than being settled here by implication.
 - **Whether a check could be built later.** The rejected alternative
   below states what makes one hard, not that it may never exist. What
   would change the answer is a way to run it that satisfies
@@ -106,9 +114,10 @@ Raised on #929 as a Convention concern and measured in #931.
   correct-looking green on a change that skipped the bump. What this
   buys is that the reviewer now has a decision to cite instead of two
   defensible readings.
-- **The three commits stay as evidence.** A reader comparing the
-  history against this rule finds three counter-examples, which is why
-  §Decision names them rather than leaving them to be discovered.
+- **The three stay in the history as counter-examples.** A reader
+  comparing the chart's history against this rule finds them, which is
+  why §Context tabulates all 23 commits and §Decision names those three
+  rather than leaving either to be discovered.
 
 ## Rejected alternatives
 

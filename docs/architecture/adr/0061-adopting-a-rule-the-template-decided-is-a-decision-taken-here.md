@@ -82,12 +82,12 @@ it or by nobody.
   in six rules and owes an ADR owes one, naming the six. The decision
   being recorded is that this project takes these rules now, and it is
   taken once per pull request.
-- **This does not make a sync expensive, because both arms still have to
-  fail.** An adoption that puts no passage in violation and settles
-  nothing the record had divided earns nothing. #762 adopted the
-  template's index rules — including the clause rule 7 needed — and is
-  that case; ADR-0060 §Consequences sorts it as earning none, and this
-  decision leaves that sorting standing.
+- **This does not make a sync expensive: an adoption that passes both
+  arms earns nothing.** One that puts no passage in violation and
+  settles nothing the record had divided is such an adoption. #762
+  adopted the template's index rules — including the clause rule 7
+  needed — and is that case; ADR-0060 §Consequences sorts it as earning
+  none, and this decision leaves that sorting standing.
 - **Nothing checks this.** `make ci` reads `docs/` for one thing, each
   Markdown file's `## Contents` list against its own `##` headings, and
   no target can tell an adoption from an authored rule. Review holds it,

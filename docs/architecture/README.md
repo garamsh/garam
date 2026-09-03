@@ -6,6 +6,11 @@ Current architecture of the system and the decisions behind it. This file is the
 
 - **Responsibility documents** (one `.md` per domain or concern, e.g. `memory.md`, `gateway.md`) — the single source of truth for how the system is shaped *now*. To know the current state, read only these: what one of them does not hold itself, rule 1 requires it to route to.
 - **`adr/`** — the record of individual decisions: direction taken, context, rejected alternatives.
+- **This file** — the index, and not one of those documents: §Index
+  names every file that is one, and the current state stated here is
+  this repository's own rather than the system's — where its checks run
+  (§Operation) and what its record has no detection for (§What nothing
+  detects).
 
 ## Rules
 

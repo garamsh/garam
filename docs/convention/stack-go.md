@@ -135,8 +135,10 @@ Multiple root-level files are fine: `errors.go` + `logger.go` +
 
 ### Project envelope
 
-- `cmd/<binary>/main.go` is the **only place** that constructs concrete types and passes them to interfaces. Keep it thin.
-- `internal/` is enforced by the Go toolchain. Use it for everything not explicitly public.
+- `cmd/<binary>/main.go` is the **only place** that constructs concrete
+  types and passes them to interfaces. Keep it thin.
+- `internal/` is enforced by the Go toolchain. Use it for everything not
+  explicitly public.
 - `pkg/` is for code other modules import. Most services don't need it.
 
 This project adds seven directories the layout above does not name.

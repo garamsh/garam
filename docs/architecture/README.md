@@ -127,6 +127,7 @@ ADRs:
 - [0056](./adr/0056-a-published-web-image-is-bound-to-the-release-name-garam-and-make-ci-checks-the-binding.md) — a published web image reaches the api Service a release named `garam` renders, and `make ci` compares the two
 - [0057](./adr/0057-a-template-edit-moves-the-chart-version-and-a-reviewer-is-what-checks-it.md) — a template edit that changes the render moves the chart version, confirming ADR-0042 rather than superseding it, and review is what holds it
 - [0058](./adr/0058-a-responsibility-document-routes-to-the-artifact-that-enforces-a-rule.md) — a responsibility document routes to the artifact that enforces a rule, and a boundary that only refuses is not a route
+- [0059](./adr/0059-the-two-specifications-prose-is-not-held-to-agree-and-each-defines-every-member-its-own-caller-meets.md) — the two specifications' prose is not held to agree, and each defines every member its own caller meets
 
 ## Rules for edits
 

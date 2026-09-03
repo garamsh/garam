@@ -7,6 +7,14 @@ info:
     Authentication is cookie-based: the OAuth callback sets a
     `garam_session` cookie that all other endpoints require.
 
+    This is what `garam serve api` serves, and a person's browser is
+    what reaches it. `api/machine.yaml` describes a different listener,
+    whose callers are the operators and agents that report the state
+    this one reads back. Each file is written for its own caller, so a
+    value both describe is described here for the caller that reads it
+    and there for the one that writes it: neither file is a copy of the
+    other, and neither is complete for the other's caller.
+
     An operation's `responses` list is what it answers when garam is
     working, and is not the complete set of statuses it can return. No
     operation declares a 5xx, because a 5xx belongs to the listener
@@ -1768,13 +1776,28 @@ components:
       type: string
       description: >-
         What the operator reports about the agent's pod. `pending` is an
-        agent no operator has reported on yet.
+        agent no operator has reported on yet. `provisioned` is an agent
+        whose workload an operator built and which reports no ready
+        replica: it says the pod was built and nothing about its health.
+        `ready` is an agent whose workload reports a ready replica, so
+        its containers are running; it says nothing about whether the
+        agent inside them works. `failed` is an agent an operator
+        observed cannot start, which is a stricter observation than an
+        absent ready replica: an operator with only a replica count
+        reports `provisioned`, so a state other than `failed` is not
+        evidence the pod can start. What an operator may report, and
+        when, is `api/machine.yaml`'s — the specification the reporting
+        party holds, not this one.
       enum: [pending, provisioned, ready, failed]
     AgentRuntimeState:
       type: string
       description: >-
         What the agent reports about itself. `unknown` is an agent that
-        has not reported since it was created.
+        has not reported since it was created. `connected` and
+        `disconnected` are what the agent last reported about whether it
+        is running: garam records the report and checks nothing behind
+        it, so each names what the agent last said rather than what is
+        true now.
       enum: [unknown, connected, disconnected]
     AgentAssignment:
       type: object

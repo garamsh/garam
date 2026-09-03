@@ -861,12 +861,12 @@ export interface components {
             subjectGrn: string;
         };
         /**
-         * @description What the operator reports about the agent's pod. `pending` is an agent no operator has reported on yet.
+         * @description What the operator reports about the agent's pod. `pending` is an agent no operator has reported on yet. `provisioned` is an agent whose workload an operator built and which reports no ready replica: it says the pod was built and nothing about its health. `ready` is an agent whose workload reports a ready replica, so its containers are running; it says nothing about whether the agent inside them works. `failed` is an agent an operator observed cannot start, which is a stricter observation than an absent ready replica: an operator with only a replica count reports `provisioned`, so a state other than `failed` is not evidence the pod can start. What an operator may report, and when, is `api/machine.yaml`'s — the specification the reporting party holds, not this one.
          * @enum {string}
          */
         AgentProvisioningState: "pending" | "provisioned" | "ready" | "failed";
         /**
-         * @description What the agent reports about itself. `unknown` is an agent that has not reported since it was created.
+         * @description What the agent reports about itself. `unknown` is an agent that has not reported since it was created. `connected` and `disconnected` are what the agent last reported about whether it is running: garam records the report and checks nothing behind it, so each names what the agent last said rather than what is true now.
          * @enum {string}
          */
         AgentRuntimeState: "unknown" | "connected" | "disconnected";

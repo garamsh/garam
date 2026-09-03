@@ -20,7 +20,7 @@ What makes a PR review valid, and how authors respond. Applies to every review a
 | Check | Result | Evidence |
 |---|---|---|
 | Scope | pass / fail / unverified | — |
-| Conventions | … | rule file §section — diff file:line |
+| Conventions | … | rule file §section — diff file:line, or the artifact outside the diff |
 | Architecture | … | … |
 | Documentation | … | … |
 | Verification | … | … |
@@ -29,7 +29,7 @@ What makes a PR review valid, and how authors respond. Applies to every review a
 Decision: approve / request changes / reject
 ```
 
-- An approve requires the Scope, Verification, and Depth rows to read `pass`. The other three may read `unverified`, with a stated reason (some PRs touch nothing a convention governs). A `fail` in any row is a request-changes or a reject, never an approve.
+- An approve requires the Scope, Verification, and Depth rows to read `pass`. The other three may read `unverified`, with a stated reason (some PRs change nothing a responsibility document describes). A `fail` in any row is a request-changes or a reject, never an approve.
 - A check you did not verify is marked `unverified` — never guessed. Skipping a check is allowed; hiding the skip is not. A review full of `unverified` rows tells the reader the review did not really happen.
 - **The evidence has to test the claim it is offered for**, in a table row or anywhere else in the review. A cheap instrument — a command, or a sentence quoted out of the section that scopes it — usually answers a question adjacent to the one asked, and a clean answer looks the same either way. A checksum answers whether a file changed; where the row asks whether a measured value changed, it is the wrong instrument even on every file where the two agree.
 - **A running system reports what is in effect, not what was decided.** Where a claim is about a decision — a configured value, a chosen limit, a deliberate default — evidence read from a live object does not establish it: a tool that fills in defaults renders them indistinguishably from authored ones. Read the authored artifact, and say which one you read.
@@ -44,7 +44,7 @@ Decision: approve / request changes / reject
 | Check | Fails when |
 |---|---|
 | Scope | The diff carries a line the stated task did not ask for. |
-| Conventions | A changed line breaks a rule in a file that governs it. |
+| Conventions | Anything the pull request carries breaks a rule in a file that governs it: a changed line, the title, the body, the branch name, a commit message. |
 | Architecture | A decision or a domain changed without the documents that describe it, or a changed line contradicts what a responsibility document in `docs/architecture/` states. |
 | Documentation | A change to structure, workflow, or conventions left an affected document stale. |
 | Verification | The PR claims a check the reviewer cannot confirm ran. |
@@ -56,7 +56,7 @@ Decision: approve / request changes / reject
 
 ## Citing violations
 
-- A violation claim cites both sides: `rule file §section` and `diff file:line`.
+- A violation claim cites both sides: `rule file §section` and `diff file:line`. Where the violation is in something the diff does not carry — the title, the branch name, a commit message, the body — the second side is that artifact quoted, since there is no line to cite.
 - If you cannot cite a rule, it is a preference, and preferences never block a merge.
 - A Depth finding is the exception the check exists for. It names no rule by definition, so it cites the diff and the concrete failure it produces instead — the input that breaks, the case the tests miss, the simpler shape passed over. That is citable, and it blocks.
 

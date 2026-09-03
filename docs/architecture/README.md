@@ -124,88 +124,189 @@ What this repository runs against itself. `docs/convention/ci.md` decides how a 
 
 Responsibility documents:
 
-- [structure.md](./structure.md) — the shape garam is partitioned into, what may reference what, and when a new boundary is earned
+- [structure.md](./structure.md) — the shape garam is partitioned into,
+  what may reference what, and when a new boundary is earned
 - [overview.md](./overview.md) — what garam is and is not; module list
-- [domains.md](./domains.md) — garam's domains named by subject matter, and what else under `internal/` is not one
-- [organizations.md](./organizations.md) — the tenant hierarchy: the top-level tenant, what is grouped inside it, and who belongs to one
+- [domains.md](./domains.md) — garam's domains named by subject matter,
+  and what else under `internal/` is not one
+- [organizations.md](./organizations.md) — the tenant hierarchy: the
+  top-level tenant, what is grouped inside it, and who belongs to one
 - [users.md](./users.md) — human identity
-- [sign-in.md](./sign-in.md) — how a person proves who they are, and the session that carries the proof afterwards
-- [certificate-authorities.md](./certificate-authorities.md) — the certificate authority an organization signs machine identities with
-- [operators.md](./operators.md) — what an organization records about an operator, and what that operator authenticates with
-- [agents.md](./agents.md) — autonomous identity, provisioned outside garam
-- [machine-identity.md](./machine-identity.md) — who is calling on the listener a machine identity authenticates on
-- [messaging.md](./messaging.md) — the durable queue a message reaches an agent through, and the consent that lets one cross an organization boundary
+- [sign-in.md](./sign-in.md) — how a person proves who they are, and the
+  session that carries the proof afterwards
+- [certificate-authorities.md](./certificate-authorities.md) — the
+  certificate authority an organization signs machine identities with
+- [operators.md](./operators.md) — what an organization records about an
+  operator, and what that operator authenticates with
+- [agents.md](./agents.md) — autonomous identity, provisioned outside
+  garam
+- [machine-identity.md](./machine-identity.md) — who is calling on the
+  listener a machine identity authenticates on
+- [messaging.md](./messaging.md) — the durable queue a message reaches
+  an agent through, and the consent that lets one cross an organization
+  boundary
 - [grn-model.md](./grn-model.md) — the GRN resource naming model
-- [authz.md](./authz.md) — the authorization policy domain: the rules that decide what a subject may do, and the engine that decides
-- [api-surface.md](./api-surface.md) — the listeners garam serves on, what admits a caller to each, and what each one's specification is authoritative for
-- [adapter.md](./adapter.md) — what the adapter garam ships must do, and what it rests on
-- [deployment-contract.md](./deployment-contract.md) — what a deployment must plan for that no manifest carries: readiness, termination, migration failure, key-material enforcement, and what is not established
-- [web-app.md](./web-app.md) — what the application a person uses garam through is responsible for, the one seam it reaches the backend through, and what it does not decide
+- [authz.md](./authz.md) — the authorization policy domain: the rules
+  that decide what a subject may do, and the engine that decides
+- [api-surface.md](./api-surface.md) — the listeners garam serves on,
+  what admits a caller to each, and what each one's specification is
+  authoritative for
+- [adapter.md](./adapter.md) — what the adapter garam ships must do, and
+  what it rests on
+- [deployment-contract.md](./deployment-contract.md) — what a deployment
+  must plan for that no manifest carries: readiness, termination,
+  migration failure, key-material enforcement, and what is not
+  established
+- [web-app.md](./web-app.md) — what the application a person uses garam
+  through is responsible for, the one seam it reaches the backend
+  through, and what it does not decide
 
 ADRs:
 
-- [0001](./adr/0001-grn-segments.md) — GRN segments identify owning resources
-- [0002](./adr/0002-iam-style-policy-model.md) — IAM-style policy documents, native evaluator
-- [0003](./adr/0003-single-cli-topology.md) — single cobra CLI, independent api/authz packages
-- [0004](./adr/0004-openapi-first-api.md) — OpenAPI spec as source of truth
+- [0001](./adr/0001-grn-segments.md) — GRN segments identify owning
+  resources
+- [0002](./adr/0002-iam-style-policy-model.md) — IAM-style policy
+  documents, native evaluator
+- [0003](./adr/0003-single-cli-topology.md) — single cobra CLI,
+  independent api/authz packages
+- [0004](./adr/0004-openapi-first-api.md) — OpenAPI spec as source of
+  truth
 - [0005](./adr/0005-server-side-sessions.md) — server-side sessions
 - [0006](./adr/0006-invitation-tokens.md) — invitation tokens
-- [0007](./adr/0007-hybrid-statement-collection.md) — hybrid statement collection
-- [0008](./adr/0008-identity-based-policy-attachments.md) — identity-based policy attachments
+- [0007](./adr/0007-hybrid-statement-collection.md) — hybrid statement
+  collection
+- [0008](./adr/0008-identity-based-policy-attachments.md) —
+  identity-based policy attachments
 - [0009](./adr/0009-web-frontend.md) — Next.js web frontend in `web/`
-- [0010](./adr/0010-dev-auth-provider.md) — development-only sign-in provider behind GARAM_DEV_AUTH; superseded by 0044
-- [0011](./adr/0011-console-shell.md) — console sidebar shell over org sections
-- [0012](./adr/0012-agent-operator-model.md) — agents provisioned by operators garam never dials
-- [0013](./adr/0013-agent-messaging.md) — agent messaging through a garam API an adapter polls
-- [0014](./adr/0014-agent-authentication.md) — agents authenticate with mTLS on a listener of their own
-- [0015](./adr/0015-operator-identity.md) — operators authenticate as agents do; key material travels as files
-- [0016](./adr/0016-ca-key-custody.md) — a certificate authority's key is sealed by a key the process holds
-- [0017](./adr/0017-machine-process.md) — machine identities are served by a process of their own
-- [0018](./adr/0018-delivery-acknowledgement.md) — a message is completed by the turn-end event that names it
-- [0019](./adr/0019-machine-openapi-spec.md) — the machine listener carries an OpenAPI specification of its own
-- [0020](./adr/0020-published-artifacts.md) — garam publishes images and a contract, not manifests; superseded by 0042
-- [0021](./adr/0021-liveness-and-readiness.md) — liveness and readiness answer on a port that carries no credential
-- [0022](./adr/0022-watching-an-agent.md) — an agent is watched only while someone is watching
-- [0023](./adr/0023-web-probes.md) — the web app answers the same two probes as the rest
-- [0024](./adr/0024-policy-decides-what-an-agent-sends.md) — a policy decides what an agent may send
-- [0025](./adr/0025-engine-scope-is-a-caller-obligation.md) — an unattached policy's org scope is the caller's to hold
-- [0026](./adr/0026-the-console-defines-an-agent.md) — the console defines an agent and an operator reads that definition
-- [0027](./adr/0027-a-watch-crosses-processes-through-postgres.md) — a watch crosses between processes through Postgres
-- [0028](./adr/0028-oauth-state-is-a-server-side-record.md) — a login's state is a server-side record the callback spends
-- [0029](./adr/0029-readiness-reports-what-a-replica-cannot-serve-without.md) — readiness reports what a replica cannot serve without, so not the policy listener
-- [0030](./adr/0030-the-login-write-rate-is-bounded-at-the-store.md) — the login write rate is bounded at the store
-- [0031](./adr/0031-detaching-an-active-policys-last-attachment-is-refused.md) — detaching an active policy's last attachment is refused
-- [0032](./adr/0032-garam-ships-the-command-that-mints-an-operators-first-certificate.md) — garam ships the command that mints an operator's first certificate
-- [0033](./adr/0033-an-operator-claims-the-agent-a-definition-mints.md) — an operator claims the agent a definition mints
-- [0034](./adr/0034-a-delivered-message-keeps-its-key-and-drops-its-body.md) — a delivered message keeps its key and drops its body
-- [0035](./adr/0035-a-cross-organization-message-needs-both-organizations-consent.md) — a cross-organization message needs both organizations' consent
-- [0036](./adr/0036-a-secret-in-garam-is-a-reference-not-a-value.md) — a secret in garam is a reference, not a value
-- [0037](./adr/0037-the-machine-listener-presents-a-per-organization-certificate.md) — the machine listener presents a per-organization certificate (superseded by 0040)
-- [0038](./adr/0038-the-engine-learns-a-subjects-memberships-and-enforces-its-own-scope.md) — the engine learns a subject's memberships and enforces its own scope
-- [0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md) — a version tag publishes both images to the account's registry
-- [0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md) — the machine listener presents a pinned garam server certificate, and certificates rotate without a restart
-- [0041](./adr/0041-a-password-is-garams-own-credential-verified-by-argon2id.md) — a password is garam's own credential, verified by Argon2id and minted by an invitation
-- [0042](./adr/0042-a-chart-is-the-description-of-a-garam-deployment.md) — a chart at `deploy/charts/garam/` describes the deployment, superseding ADR-0020
-- [0043](./adr/0043-a-workloads-account-is-named-by-a-value-and-the-chart-creates-none-by-default.md) — a workload's account is named by a value the deployment sets, and the chart creates none by default
-- [0044](./adr/0044-the-development-only-sign-in-provider-is-removed.md) — the development-only sign-in provider is removed, superseding ADR-0010
-- [0045](./adr/0045-an-organization-registers-an-operator.md) — an organization registers an operator, and a definition may name no other
-- [0046](./adr/0046-an-operator-renews-its-certificate-by-presenting-the-one-it-holds.md) — an operator renews its certificate by presenting the one it holds, and only the newest one renews
-- [0047](./adr/0047-a-domain-reaches-a-sibling-through-its-declared-surface.md) — garam is partitioned by domain, and a boundary reaches a sibling through the surface that sibling declares
-- [0048](./adr/0048-garams-domains-are-named-by-subject-matter.md) — garam's domains are named by subject matter, and the Go package list is not the domain list
-- [0049](./adr/0049-neither-published-specification-promises-anything-across-versions.md) — neither published specification promises anything across versions
-- [0050](./adr/0050-a-specification-states-its-listeners-5xx-once-and-declares-none-per-operation.md) — a specification states its listener's 5xx once and declares none per operation
-- [0051](./adr/0051-an-aggregate-exposes-what-it-persists.md) — an aggregate exposes what it persists
-- [0052](./adr/0052-a-concern-is-owned-by-the-boundary-whose-subject-matter-it-is.md) — a concern is owned by the boundary whose subject matter it is, not by the one it was extracted from
-- [0053](./adr/0053-an-agent-and-its-operator-report-state-on-the-machine-listener.md) — an operator and an agent each report state on the machine listener, fenced by the assignment's epoch
-- [0054](./adr/0054-the-concrete-types-rule-binds-every-boundary-not-only-a-domain.md) — the concrete-types rule binds every boundary, not only a domain
-- [0055](./adr/0055-a-sender-reads-the-state-of-a-message-it-sent.md) — a sender reads the state of a message it sent, and garam announces nothing
-- [0056](./adr/0056-a-published-web-image-is-bound-to-the-release-name-garam-and-make-ci-checks-the-binding.md) — a published web image reaches the api Service a release named `garam` renders, and `make ci` compares the two
-- [0057](./adr/0057-a-template-edit-moves-the-chart-version-and-a-reviewer-is-what-checks-it.md) — a template edit that changes the render moves the chart version, confirming ADR-0042 rather than superseding it, and review is what holds it
-- [0058](./adr/0058-a-responsibility-document-routes-to-the-artifact-that-enforces-a-rule.md) — a responsibility document routes to the artifact that enforces a rule, and a boundary that only refuses is not a route
-- [0059](./adr/0059-the-two-specifications-prose-is-not-held-to-agree-and-each-defines-every-member-its-own-caller-meets.md) — the two specifications' prose is not held to agree, and each defines every member its own caller meets
-- [0060](./adr/0060-a-rule-change-under-docs-architecture-owes-an-adr-unless-the-record-was-undivided.md) — a change to the rules under `docs/architecture/` earns an ADR unless it puts no passage in violation and the record it writes down was undivided
-- [0061](./adr/0061-adopting-a-rule-the-template-decided-is-a-decision-taken-here.md) — adopting a rule the conventions template decided is a decision taken here, and the ADR records the adoption
-- [0062](./adr/0062-an-adr-deciding-a-rule-of-the-index-pairs-with-the-index.md) — an ADR whose decision is a rule of this index pairs with the index, not with a responsibility document
+- [0010](./adr/0010-dev-auth-provider.md) — development-only sign-in
+  provider behind GARAM_DEV_AUTH; superseded by 0044
+- [0011](./adr/0011-console-shell.md) — console sidebar shell over org
+  sections
+- [0012](./adr/0012-agent-operator-model.md) — agents provisioned by
+  operators garam never dials
+- [0013](./adr/0013-agent-messaging.md) — agent messaging through a
+  garam API an adapter polls
+- [0014](./adr/0014-agent-authentication.md) — agents authenticate with
+  mTLS on a listener of their own
+- [0015](./adr/0015-operator-identity.md) — operators authenticate as
+  agents do; key material travels as files
+- [0016](./adr/0016-ca-key-custody.md) — a certificate authority's key
+  is sealed by a key the process holds
+- [0017](./adr/0017-machine-process.md) — machine identities are served
+  by a process of their own
+- [0018](./adr/0018-delivery-acknowledgement.md) — a message is
+  completed by the turn-end event that names it
+- [0019](./adr/0019-machine-openapi-spec.md) — the machine listener
+  carries an OpenAPI specification of its own
+- [0020](./adr/0020-published-artifacts.md) — garam publishes images and
+  a contract, not manifests; superseded by 0042
+- [0021](./adr/0021-liveness-and-readiness.md) — liveness and readiness
+  answer on a port that carries no credential
+- [0022](./adr/0022-watching-an-agent.md) — an agent is watched only
+  while someone is watching
+- [0023](./adr/0023-web-probes.md) — the web app answers the same two
+  probes as the rest
+- [0024](./adr/0024-policy-decides-what-an-agent-sends.md) — a policy
+  decides what an agent may send
+- [0025](./adr/0025-engine-scope-is-a-caller-obligation.md) — an
+  unattached policy's org scope is the caller's to hold
+- [0026](./adr/0026-the-console-defines-an-agent.md) — the console
+  defines an agent and an operator reads that definition
+- [0027](./adr/0027-a-watch-crosses-processes-through-postgres.md) — a
+  watch crosses between processes through Postgres
+- [0028](./adr/0028-oauth-state-is-a-server-side-record.md) — a login's
+  state is a server-side record the callback spends
+- [0029](./adr/0029-readiness-reports-what-a-replica-cannot-serve-without.md)
+  — readiness reports what a replica cannot serve without, so not the
+  policy listener
+- [0030](./adr/0030-the-login-write-rate-is-bounded-at-the-store.md) —
+  the login write rate is bounded at the store
+- [0031](./adr/0031-detaching-an-active-policys-last-attachment-is-refused.md)
+  — detaching an active policy's last attachment is refused
+- [0032](./adr/0032-garam-ships-the-command-that-mints-an-operators-first-certificate.md)
+  — garam ships the command that mints an operator's first certificate
+- [0033](./adr/0033-an-operator-claims-the-agent-a-definition-mints.md)
+  — an operator claims the agent a definition mints
+- [0034](./adr/0034-a-delivered-message-keeps-its-key-and-drops-its-body.md)
+  — a delivered message keeps its key and drops its body
+- [0035](./adr/0035-a-cross-organization-message-needs-both-organizations-consent.md)
+  — a cross-organization message needs both organizations' consent
+- [0036](./adr/0036-a-secret-in-garam-is-a-reference-not-a-value.md) — a
+  secret in garam is a reference, not a value
+- [0037](./adr/0037-the-machine-listener-presents-a-per-organization-certificate.md)
+  — the machine listener presents a per-organization certificate
+  (superseded by 0040)
+- [0038](./adr/0038-the-engine-learns-a-subjects-memberships-and-enforces-its-own-scope.md)
+  — the engine learns a subject's memberships and enforces its own scope
+- [0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)
+  — a version tag publishes both images to the account's registry
+- [0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)
+  — the machine listener presents a pinned garam server certificate, and
+  certificates rotate without a restart
+- [0041](./adr/0041-a-password-is-garams-own-credential-verified-by-argon2id.md)
+  — a password is garam's own credential, verified by Argon2id and
+  minted by an invitation
+- [0042](./adr/0042-a-chart-is-the-description-of-a-garam-deployment.md)
+  — a chart at `deploy/charts/garam/` describes the deployment,
+  superseding ADR-0020
+- [0043](./adr/0043-a-workloads-account-is-named-by-a-value-and-the-chart-creates-none-by-default.md)
+  — a workload's account is named by a value the deployment sets, and
+  the chart creates none by default
+- [0044](./adr/0044-the-development-only-sign-in-provider-is-removed.md)
+  — the development-only sign-in provider is removed, superseding
+  ADR-0010
+- [0045](./adr/0045-an-organization-registers-an-operator.md) — an
+  organization registers an operator, and a definition may name no other
+- [0046](./adr/0046-an-operator-renews-its-certificate-by-presenting-the-one-it-holds.md)
+  — an operator renews its certificate by presenting the one it holds,
+  and only the newest one renews
+- [0047](./adr/0047-a-domain-reaches-a-sibling-through-its-declared-surface.md)
+  — garam is partitioned by domain, and a boundary reaches a sibling
+  through the surface that sibling declares
+- [0048](./adr/0048-garams-domains-are-named-by-subject-matter.md) —
+  garam's domains are named by subject matter, and the Go package list
+  is not the domain list
+- [0049](./adr/0049-neither-published-specification-promises-anything-across-versions.md)
+  — neither published specification promises anything across versions
+- [0050](./adr/0050-a-specification-states-its-listeners-5xx-once-and-declares-none-per-operation.md)
+  — a specification states its listener's 5xx once and declares none per
+  operation
+- [0051](./adr/0051-an-aggregate-exposes-what-it-persists.md) — an
+  aggregate exposes what it persists
+- [0052](./adr/0052-a-concern-is-owned-by-the-boundary-whose-subject-matter-it-is.md)
+  — a concern is owned by the boundary whose subject matter it is, not
+  by the one it was extracted from
+- [0053](./adr/0053-an-agent-and-its-operator-report-state-on-the-machine-listener.md)
+  — an operator and an agent each report state on the machine listener,
+  fenced by the assignment's epoch
+- [0054](./adr/0054-the-concrete-types-rule-binds-every-boundary-not-only-a-domain.md)
+  — the concrete-types rule binds every boundary, not only a domain
+- [0055](./adr/0055-a-sender-reads-the-state-of-a-message-it-sent.md) —
+  a sender reads the state of a message it sent, and garam announces
+  nothing
+- [0056](./adr/0056-a-published-web-image-is-bound-to-the-release-name-garam-and-make-ci-checks-the-binding.md)
+  — a published web image reaches the api Service a release named
+  `garam` renders, and `make ci` compares the two
+- [0057](./adr/0057-a-template-edit-moves-the-chart-version-and-a-reviewer-is-what-checks-it.md)
+  — a template edit that changes the render moves the chart version,
+  confirming ADR-0042 rather than superseding it, and review is what
+  holds it
+- [0058](./adr/0058-a-responsibility-document-routes-to-the-artifact-that-enforces-a-rule.md)
+  — a responsibility document routes to the artifact that enforces a
+  rule, and a boundary that only refuses is not a route
+- [0059](./adr/0059-the-two-specifications-prose-is-not-held-to-agree-and-each-defines-every-member-its-own-caller-meets.md)
+  — the two specifications' prose is not held to agree, and each defines
+  every member its own caller meets
+- [0060](./adr/0060-a-rule-change-under-docs-architecture-owes-an-adr-unless-the-record-was-undivided.md)
+  — a change to the rules under `docs/architecture/` earns an ADR unless
+  it puts no passage in violation and the record it writes down was
+  undivided
+- [0061](./adr/0061-adopting-a-rule-the-template-decided-is-a-decision-taken-here.md)
+  — adopting a rule the conventions template decided is a decision taken
+  here, and the ADR records the adoption
+- [0062](./adr/0062-an-adr-deciding-a-rule-of-the-index-pairs-with-the-index.md)
+  — an ADR whose decision is a rule of this index pairs with the index,
+  not with a responsibility document
 - [0063](./adr/0063-a-late-pairing-is-a-breach-and-the-pull-request-that-performs-it-records-the-window.md)
   — a pairing that arrives in a later pull request is a breach,
   recorded on the pull request that performs it

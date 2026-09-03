@@ -11,7 +11,42 @@ Current architecture of the system and the decisions behind it. This file is the
 
 1. **Responsibility document skeleton**: current decisions (consolidated) / rationale summary with links to the relevant ADRs / open questions. Do not copy ADR content — synthesize the present state. **Current state a working artifact carries and enforces stays in that artifact, and the document that owns the concern routes to it** — naming the artifact, the section of it, and what that section is authoritative for. That route is what lets §Structure promise the current state to a reader of these documents alone: either the state is in these documents, or the route to it is. A boundary saying only what a document will not restate is not one, because a reader meets the refusal and learns neither that the state exists nor where to reach it — which is how the chart version rule came to sit in no responsibility document at all ([ADR-0058](./adr/0058-a-responsibility-document-routes-to-the-artifact-that-enforces-a-rule.md)). [web-app.md](./web-app.md) and [api-surface.md](./api-surface.md) route that way to `deploy/charts/garam/README.md`, and [deployment-contract.md](./deployment-contract.md) §What it is names that file's §Pinning a version.
 2. **ADRs are append-only.** Once merged, the body is frozen. Exceptions: updating the status field (`accepted` → `superseded by ADR-XXXX`), fixing typos or broken links, and appending a dated entry under `## Errata` when a decision stands but a fact supporting it was wrong — the erratum names what falsified the fact, or where the fact was wrong when written, what it was wrong about, and the original text stays intact. A changed decision means a new ADR that supersedes the old one — never an edit.
-3. **Decisions land in pairs.** A PR that adds or supersedes an ADR must update the affected responsibility documents in the same PR. A PR with only one of the two is rejected — the final state must always live in the responsibility documents. **One ADR pairs with nothing: the one that confirms a decision already in the record.** It settles which reading of an existing ADR was right, leaves that ADR `accepted` with its decision standing unqualified, and moves no current state — so nothing a responsibility document says becomes wrong or incomplete when it merges, and there is no affected document to update. For that ADR the final state stays where the confirmed decision already put it, which is why this is an exemption from the pairing and not from rule 1. An author tells the two apart before writing a line, and an ADR that supersedes, or that decides anything the record did not already hold, is not this case whatever it says about itself. [ADR-0057](./adr/0057-a-template-edit-moves-the-chart-version-and-a-reviewer-is-what-checks-it.md) is one, confirming [ADR-0042](./adr/0042-a-chart-is-the-description-of-a-garam-deployment.md)'s version rule. That rule is carried by `deploy/charts/garam/README.md` §Pinning a version and by `Chart.yaml`, and [deployment-contract.md](./deployment-contract.md) §What it is refuses to restate a value the chart carries, so writing it into a responsibility document to satisfy the pairing would breach that document's own boundary.
+3. **Decisions land in pairs.** A PR that adds or supersedes an ADR
+   must update the affected responsibility documents in the same PR. A
+   PR with only one of the two is rejected — the final state lives
+   outside the ADR, in the document a reader of the present state
+   opens. **Where the decision is a rule of this index, that document
+   is this index**
+   ([ADR-0062](./adr/0062-an-adr-deciding-a-rule-of-the-index-pairs-with-the-index.md)).
+   The rules this index carries are written in it and in no
+   responsibility document, so such an ADR affects none and still lands
+   its final state in the same PR, in the rule it changes: the pairing
+   is performed against the index rather than waived, which is what
+   holds this apart from the exemption below. ADR-0060 and ADR-0061
+   each landed in rule 4 that way. An ADR whose decision is anything
+   else is outside this line and owes the responsibility documents it
+   affects.
+   **One ADR pairs with nothing: the one that confirms a decision
+   already in the record.** It settles which reading of an existing ADR
+   was right, leaves that ADR `accepted` with its decision standing
+   unqualified, and moves no current state — so nothing a
+   responsibility document says becomes wrong or incomplete when it
+   merges, and there is no affected document to update. For that ADR
+   the final state stays where the confirmed decision already put it,
+   which is why this is an exemption from the pairing and not from rule
+   1. An author tells the two apart before writing a line, and an ADR
+   that supersedes, or that decides anything the record did not already
+   hold, is not this case whatever it says about itself.
+   [ADR-0057](./adr/0057-a-template-edit-moves-the-chart-version-and-a-reviewer-is-what-checks-it.md)
+   is one, confirming
+   [ADR-0042](./adr/0042-a-chart-is-the-description-of-a-garam-deployment.md)'s
+   version rule. That rule is carried by
+   `deploy/charts/garam/README.md` §Pinning a version and by
+   `Chart.yaml`, and
+   [deployment-contract.md](./deployment-contract.md) §What it is
+   refuses to restate a value the chart carries, so writing it into a
+   responsibility document to satisfy the pairing would breach that
+   document's own boundary.
 4. Keep this index current: every responsibility document and every ADR is listed here. `structures/` is not — bootstrap deletes it, and an entry for a file that is about to go leaves the index wrong. An ADR covers a decision about garam itself — what the system is, how it is partitioned, what it serves, and what this repository publishes — which is the ground the responsibility documents beside this index describe. A rule in `docs/convention/` is not on that ground and earns no ADR however much it binds: those files govern how the project writes code, tests, commits and documents, whatever system they are written for. That line divides which changes this track records, not which rule governs where a convention file and a structural rule reach one case — rule 8 decides that. A settled choice that changes nothing on the ground this track covers does not earn one either. A change to `docs/architecture/` itself is on neither ground: these rules, and the shape they give the documents under them, govern how the record is written rather than what the system is. Such a change decides what counts as a defect, and earns an ADR, unless both arms hold — no passage that had passed review is in violation after it, and the record it writes down was undivided, every case in it already sorted the way the change sorts it. Either arm alone can be passed by drafting, which is why both are asked ([ADR-0060](./adr/0060-a-rule-change-under-docs-architecture-owes-an-adr-unless-the-record-was-undivided.md)). #946 rewrote this rule and rule 3, put no passage in violation and sorted 40 of 40 the way the history already had, so it earned none. #953 put [deployment-contract.md](./deployment-contract.md) §What it is in violation until the same pull request repaired it, and [ADR-0058](./adr/0058-a-responsibility-document-routes-to-the-artifact-that-enforces-a-rule.md) was owed. This paragraph earned ADR-0060 on the second arm alone: it puts no passage in violation, and #946 and #953 had answered its question opposite ways with both merged.
    Where a rule was first decided is no part of this test. #603 and #612
    adopted rules 5 to 8 from `garamsh/convention-driven-project` and
@@ -140,3 +175,4 @@ ADRs:
 - [0059](./adr/0059-the-two-specifications-prose-is-not-held-to-agree-and-each-defines-every-member-its-own-caller-meets.md) — the two specifications' prose is not held to agree, and each defines every member its own caller meets
 - [0060](./adr/0060-a-rule-change-under-docs-architecture-owes-an-adr-unless-the-record-was-undivided.md) — a change to the rules under `docs/architecture/` earns an ADR unless it puts no passage in violation and the record it writes down was undivided
 - [0061](./adr/0061-adopting-a-rule-the-template-decided-is-a-decision-taken-here.md) — adopting a rule the conventions template decided is a decision taken here, and the ADR records the adoption
+- [0062](./adr/0062-an-adr-deciding-a-rule-of-the-index-pairs-with-the-index.md) — an ADR whose decision is a rule of this index pairs with the index, not with a responsibility document

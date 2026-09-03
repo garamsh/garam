@@ -77,13 +77,17 @@ These are documentation too.
   break at or before column 72, never one long line: the line is what a
   diff, a `git blame` and a review citation address, and a paragraph
   written as one line is a change nobody can point inside of. A heading
-  and a table row are each one line by construction. A line passes 72
-  only where what carries it there cannot be broken without becoming
-  something else: a URL, a path, or a verbatim quotation of a commit
-  title, a declaration, a command. A wrapped commit title is not that
-  commit's title. A quoted sentence is not such a case and neither is
-  prose — both read the same either side of a break, so a long line of
-  either is a violation however awkwardly it breaks.
+  and a table row are each one line by construction. A list entry is
+  neither: broken, it is still that entry, so it is a paragraph — its
+  marker occupies the first line's opening columns and the lines under
+  it indent to where that marker's text begins. Nesting changes that
+  indent and nothing else. A line passes 72 only where what carries it
+  there cannot be broken without becoming something else: a URL, a
+  path, or a verbatim quotation of a commit title, a declaration, a
+  command. A wrapped commit title is not that commit's title. A quoted
+  sentence is not such a case and neither is prose — both read the same
+  either side of a break, so a long line of either is a violation
+  however awkwardly it breaks.
 - Start each file with one line stating what it governs.
 - A `## Contents` list indexes a file's `##` headings, so how many of
   them there are decides whether it carries one and the file's length

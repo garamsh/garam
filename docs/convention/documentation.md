@@ -26,6 +26,7 @@ These are documentation too.
 
 - **Facts only.** No rhetoric, no self-assessment, no inflated language ("perfect", "massive improvement"). State what changed, where, and why.
 - **Stay inside the template.** No extra sections beyond the template fields; leave no field empty — write `N/A` with a reason.
+- **A closing keyword precedes each issue number.** `Closes #1, closes #2` links both; `Closes #1 and #2` links the first, and `Issue #1` links neither.
 - **One comment, one point.** A comment carries a single request, instruction, or question. Ground it by citing a path or a rule, not by arguing.
 
 ## Format

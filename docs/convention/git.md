@@ -22,6 +22,7 @@ Only the PR title reaches `main`, together with the trailer naming the squashed 
 Format: `<type>: <imperative summary>`
 
 - Types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`
+  - A change that alters what an operation costs without altering what it returns is a `fix` when the cost grows with the deployment: the answer is right and how it scales is the defect. Speeding up an operation already bounded by its own answer is not one.
 - Summary: imperative mood, lowercase, no trailing period. `fix: reject empty tokens`, not `fixed some bugs`.
 - One concern per commit. An "and" in the title is not the test; what decides is what the "and" joins:
   - **A list inside one concern.** The rest of the title holds for everything joined — one verb over several objects, or several verbs over one object. `refactor: bring six identifiers, three log calls and one assertion onto the forms stack-go.md states`, `feat: grant, see and withdraw consent from the console`. Leave it whole; splitting a list produces worse commits, not better ones.

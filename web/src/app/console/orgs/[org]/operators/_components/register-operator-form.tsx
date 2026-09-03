@@ -43,9 +43,15 @@ export function RegisterOperatorForm({ org }: { org: string }) {
       <p className="max-w-2xl text-sm text-muted-foreground">
         Use the identifier the operator&apos;s certificate was issued for.
         Registering records that this organization has the operator; it issues
-        nothing and stops nothing. garam has no revocation, so an operator whose
-        certificate has not expired keeps authenticating either way — which is
-        why there is no way to remove a record here.
+        nothing and stops nothing. A record cannot be removed, so a mistyped
+        identifier stays in the list — a control that removed one would look
+        like revoking an operator and would revoke nothing, because a handshake
+        is checked against the certificate and this organization&apos;s
+        certificate authority and never against this record. Short of expiry,
+        what does stop an operator is deleting this organization: that takes the
+        certificate authority with it, every certificate the authority signed
+        fails the handshake from then on, and garam does not bring the authority
+        back.
       </p>
       <form action={formAction} className="flex max-w-2xl flex-col gap-6">
         <input type="hidden" name="org" value={org} />

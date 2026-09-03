@@ -30,8 +30,10 @@ marker repeated. A comment is read in the diff beside the code it
 explains, and one written as a single long line is a line a reader
 scrolls and a change no reviewer can cite a position inside.
 
-A line passes 72 only where a single token no break shortens carries it
-there — a URL, an identifier, a path.
+A line passes 72 only where what carries it there cannot be broken
+without becoming something else: a URL, an identifier, a path, or a
+command or a message quoted verbatim. A quoted sentence is not such a
+case and neither is prose — both read the same either side of a break.
 
 ## Voice
 

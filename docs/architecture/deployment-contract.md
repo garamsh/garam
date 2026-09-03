@@ -31,6 +31,18 @@ references and the database connection each moved into
 two descriptions of one deployment is the defect ADR-0042 exists to
 remove.
 
+Where the chart answers, this document names what it answers for rather
+than leaving a boundary that says only what is absent here
+([ADR-0058](./adr/0058-a-responsibility-document-routes-to-the-artifact-that-enforces-a-rule.md)).
+`deploy/charts/garam/README.md` §Pinning a version is authoritative for
+what `Chart.yaml`'s `version` names and when it moves (ADR-0042,
+[ADR-0057](./adr/0057-a-template-edit-moves-the-chart-version-and-a-reviewer-is-what-checks-it.md)) —
+a rule no responsibility document held or reached before this route.
+The same file's §What it renders is authoritative for what each
+template renders and for what follows from that — the update strategy
+every Deployment sets and what an upgrade costs in service under it,
+and the hook phase the migration Job runs in.
+
 It records what is. Changing any behaviour named below is a decision,
 not an edit here. Every claim names the path it can be checked against,
 per `docs/convention/documentation.md` §Keep it current; where the
@@ -460,9 +472,15 @@ that would assert one:
 - [ADR-0042](./adr/0042-a-chart-is-the-description-of-a-garam-deployment.md)
   — the chart describes the deployment and this document keeps what a
   chart cannot carry; it supersedes ADR-0020
+- [ADR-0057](./adr/0057-a-template-edit-moves-the-chart-version-and-a-reviewer-is-what-checks-it.md)
+  — which change to the chart moves `Chart.yaml`'s `version`, and that a
+  reviewer rather than a check is what holds it
 - [ADR-0043](./adr/0043-a-workloads-account-is-named-by-a-value-and-the-chart-creates-none-by-default.md)
   — a workload's account is named by a value the deployment sets, which
   is the subject a role is scoped to
 - [ADR-0046](./adr/0046-an-operator-renews-its-certificate-by-presenting-the-one-it-holds.md)
   — an operator renews its own certificate, so the out-of-band mint is a
   bootstrap and not a schedule
+- [ADR-0058](./adr/0058-a-responsibility-document-routes-to-the-artifact-that-enforces-a-rule.md)
+  — state a working artifact carries and enforces stays there, and the
+  document that owns the concern names what it hands over

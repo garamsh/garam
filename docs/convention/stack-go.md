@@ -306,9 +306,9 @@ project says otherwise).
 - **`tests/` at module root:** integration / E2E tests that wire
   multiple domains. Separate binary.
 - **In-process integration test client:** `httptest.NewServer`.
-- **E2E tooling:** the binary under test is what `go build` produces;
-  real services come from containers. This project brings them up from
-  `deploy/local/docker-compose.yml` rather than from
+- **E2E tooling:** the binary under test is what `go build` produces.
+- **Real services:** they come from containers. This project brings
+  them up from `deploy/local/docker-compose.yml` rather than from
   `testcontainers-go`, so one compose project serves the dev stack and
   each suite that needs a real service.
 

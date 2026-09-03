@@ -57,8 +57,10 @@ HELM := go run helm.sh/helm/v4/cmd/helm@v4.2.4
 # and empty in the main checkout, which keeps garam_test. The local
 # stack keeps `garam`.
 TEST_DB_NAME ?= garam_test$(shell git rev-parse --git-dir | sed -n 's|.*/worktrees/|_|p')
+export TEST_DB_NAME
 
 COMPOSE_LOCAL := docker compose -f deploy/local/docker-compose.yml
+export COMPOSE_LOCAL
 PNPM := pnpm --dir web
 
 # Where the api and the dev Postgres are published on this host, asked
@@ -80,7 +82,7 @@ TEST_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)
 # and overridable on the same terms as the line above.
 WEB_E2E_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)/garam?sslmode=disable)
 
-.PHONY: lint format test build gen check-gen check-toolchain integration e2e mutation db-up db-down backend-up ci template-diff search
+.PHONY: lint format test build gen check-gen check-toolchain integration e2e mutation db-up db-down db-prune backend-up ci template-diff search
 .PHONY: chart chart-lint chart-render chart-identity chart-names chart-rewrite chart-guards chart-security chart-package
 .PHONY: web-install web-lint web-format web-test web-build web-gen web-check-gen web-e2e web-image-e2e web-ci
 .PHONY: image-build
@@ -140,7 +142,7 @@ SHELL_SCRIPTS = $(shell find . -maxdepth 1 -type f -name '*.sh') $(shell find sc
 # layout passes, a syntax error fails, and a bashism fails only where
 # the POSIX grammar has no shape for it: `arr=(a b)` and `function f`
 # fail, while `[[ ]]`, `source` and `local` parse as ordinary commands
-# and pass. `-ln posix` fixes the dialect all seven scripts declare
+# and pass. `-ln posix` fixes the dialect all eight scripts declare
 # rather than taking it from each shebang, so a script that later says
 # bash fails here instead of being read as bash.
 #
@@ -309,6 +311,18 @@ db-up:
 
 db-down:
 	$(COMPOSE_LOCAL) rm -sf postgres
+
+# db-prune drops the per-worktree databases db-up created for worktrees
+# that are gone. It is in no whole-set name and in no workflow: a runner
+# starts empty and its databases go with it, so nothing there
+# accumulates and there would be nothing for a run to drop. It is
+# destructive on a developer machine, which is the other reason a person
+# invokes it.
+#
+# COMPOSE_LOCAL and TEST_DB_NAME are exported above; the script holds
+# what it keeps, the controls the keep set rests on, and the counts.
+db-prune:
+	@scripts/db-prune.sh
 
 # backend-up starts the backend `make web-e2e` drives — postgres, the
 # one-shot migration, authz and api — from the same compose file, and

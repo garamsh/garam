@@ -13,8 +13,6 @@ Test layers, mocking, and placement — what each layer proves, what to mock, an
 
 ## Three layers — different goals, different scopes
 
-The concrete in-process client per stack is owned by the project's stack convention file; the Test client column states only the shape each layer requires.
-
 | Layer | Scope | Mocks | Test client | External systems |
 |---|---|---|---|---|
 | **Unit** | single function/class in isolation | replace at module boundaries you control (DB, HTTP, queue, time, FS) | direct call | none |
@@ -38,8 +36,6 @@ Assert on outputs and side-effects only:
 - DB rows — migration bookkeeping and schema catalog included, where the subject is what changes the schema
 
 Do not assert on: call order, unexported helper shape, private type structure, a connection's session state, internal refactors. **If an internal refactor forces test updates, the tests were testing implementation.**
-
-The concrete targets for a given stack are owned by the project's stack convention file; the lists above state only the kinds that qualify.
 
 ## Waiting
 
@@ -71,7 +67,7 @@ Time → inject a clock. Network → substitute. Filesystem → tmpdir. Random �
 ## Coverage and naming
 
 - Target meaningful branches, not 100%.
-- Names read like a spec. Concrete test-name forms follow the project's stack convention file.
+- Names read like a spec.
 - A failing test name should tell you what broke without opening the file.
 
 ## Placement
@@ -79,5 +75,3 @@ Time → inject a clock. Network → substitute. Filesystem → tmpdir. Random �
 - Unit: co-located with the source it tests.
 - Integration: co-located with the boundary it exercises, or in a dedicated integration directory.
 - E2E: a dedicated top-level directory, outside the application source tree.
-
-Concrete directory and file names follow the project's stack convention file — the stack file owns placement specifics.

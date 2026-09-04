@@ -23,11 +23,16 @@ collaborate on a shared plan.
   reaches Postgres sealed under a key-encryption key.
 - A listener machine identities authenticate on, `garam serve machine` —
   a process of its own, the third from the one image (ADR-0017). It
-  terminates TLS itself, requires a client certificate, and verifies it
-  against the authority of the organization the certificate's own SAN
-  names (ADR-0014). An agent and an operator authenticate the same way
-  (ADR-0015), and neither authenticates through a user row, a session or
-  a membership.
+  terminates TLS itself, asks for a client certificate, and verifies
+  the one it is given against the authority of the organization the
+  certificate's own SAN names (ADR-0014). A connection that presents
+  none, and one whose certificate does not verify, completes the
+  handshake carrying no identity rather than being refused there —
+  which is what leaves enrolling reachable to an operator that holds
+  none yet, and costs nothing elsewhere, because every other operation
+  refuses a request carrying no identity (ADR-0064). An agent and an
+  operator authenticate the same way (ADR-0015), and neither
+  authenticates through a user row, a session or a membership.
   What that listener serves has a specification of its own (ADR-0019).
   The other direction rests on a different root: the listener presents
   one certificate signed by a garam server authority the deployment

@@ -182,17 +182,18 @@ Four qualifications:
     certificate that can no longer renew keeps authenticating until it
     expires, because expiry is still the only revocation there is.
 - **There is no client CA bundle, and creating one is forbidden.** The
-  machine listener requires a certificate and verifies it per connection
-  against the certificate authority of the organization the
-  certificate's own SAN names, read from the database at handshake time
-  (`internal/machine/listener.go`). A pool holding every organization's
-  authority would accept a certificate against a root that is not its
-  own — the tenancy hole [ADR-0014](./adr/0014-agent-authentication.md)
-  rests on the trust root to close. There is nothing to mount and
-  nothing to rotate for it: what the workload mounts is its own
-  certificate and key, the garam server root
-  `GARAM_MACHINE_SERVER_ROOT_FILE` names, and the key-encryption key —
-  four files, and none of them a bundle of client authorities.
+  machine listener asks for a certificate and verifies the one it is
+  given, per connection, against the certificate authority of the
+  organization the certificate's own SAN names, read from the database
+  at handshake time (`internal/machine/listener.go`). A pool holding
+  every organization's authority would accept a certificate against a
+  root that is not its own — the tenancy hole
+  [ADR-0014](./adr/0014-agent-authentication.md) rests on the trust
+  root to close. There is nothing to mount and nothing to rotate for
+  it: what the workload mounts is its own certificate and key, the
+  garam server root `GARAM_MACHINE_SERVER_ROOT_FILE` names, and the
+  key-encryption key — four files, and none of them a bundle of client
+  authorities.
 
 ## The key-encryption key cannot be regenerated
 

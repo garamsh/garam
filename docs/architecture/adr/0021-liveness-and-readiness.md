@@ -131,3 +131,18 @@ there is nothing to ask on at all.
   reports the database alone. The decision is untouched and so is the
   bullet's own rule — readiness is still what a dependency reaches, and
   what moved is how many processes reach the engine.
+- 2026-09-05 — §Decision's "because its own listener admits no caller
+  without a client certificate" was true when written and is false since
+  `b16a896` (#1005), which on 2026-09-04 set the machine listener's
+  `ClientAuth` to `tls.RequestClientCert` and made the verification it
+  runs in the handshake return no error when the chain does not verify
+  (`internal/machine/listener.go`). A connection presenting no
+  certificate completes the handshake and carries no identity instead,
+  which is what leaves the enrollment route reachable to an operator
+  that holds no certificate yet
+  ([ADR-0064](./0064-an-operator-enrols-with-a-one-time-token-and-keeps-its-key-in-its-own-cluster.md)).
+  The decision is untouched and so is the clause beside this one: the
+  mTLS listener still gains no route, `api/machine.yaml` declaring none
+  for either probe, and `serve machine` still answers both on a
+  plaintext listener of its own. What moved is the reason — the refusal
+  a probe would meet is now each handler's rather than the handshake's.

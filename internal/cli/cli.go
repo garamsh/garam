@@ -19,8 +19,7 @@
 // Every serve command answers the two probes internal/health mounts —
 // liveness and readiness — on a listener that asks for no credential:
 // the api's own HTTP port, the authz engine's metrics port, and a port
-// of its own for `serve machine`, whose listener admits nobody without
-// a certificate.
+// of its own for `serve machine`, whose listener serves no probe route.
 //
 // Configuration is entirely via environment variables:
 //
@@ -45,7 +44,7 @@
 //	GARAM_MACHINE_ADDR     machine listener address (default ":8443")
 //	GARAM_MACHINE_HEALTH_ADDR  serve machine's probe listen address
 //	                       (default ":8444"); the machine listener
-//	                       itself admits no caller without a certificate
+//	                       itself serves no probe route
 //	GARAM_MACHINE_TLS_CERT_FILE  the listener's own certificate, PEM
 //	                       (required for serve machine)
 //	GARAM_MACHINE_TLS_KEY_FILE   its private key, PEM, readable by its

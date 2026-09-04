@@ -114,6 +114,33 @@ describe("login page", () => {
     expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
   });
 
+  // The account clause renders inside the provider branch and the
+  // membership clause outside it, so the same page with the provider
+  // registered is the control: it is where the account clause has to
+  // appear for its absence below to be the branch (`testing.md`
+  // §Failing).
+  it("says what a sign-in creates only where a provider is registered, and says what an invitation joins either way", async () => {
+    server.use(...signedOutWith(["google"]));
+    const registered = await renderServerComponent(LoginPage());
+    // Presence: each clause shares a paragraph with the others.
+    expect(
+      screen.getByText(/Signing in with Google creates an account/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Membership in an organization is by invitation/),
+    ).toBeInTheDocument();
+    registered.unmount();
+
+    server.use(...signedOutWith([]));
+    await renderServerComponent(LoginPage());
+    expect(
+      screen.queryByText(/Signing in with Google creates an account/),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/Membership in an organization is by invitation/),
+    ).toBeInTheDocument();
+  });
+
   it("sends a visitor holding an invitation to the registration page", async () => {
     server.use(...signedOutWith(["google"]));
 

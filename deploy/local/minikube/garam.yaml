@@ -223,9 +223,8 @@ spec:
             # engine, so it dials the same one the api server does.
             - name: GARAM_AUTHZ_ADDR
               value: "authz:9090"
-            # The listener above admits no caller without a client
-            # certificate, and a kubelet holds none, so the probes get a
-            # plaintext listener of their own (ADR-0021).
+            # The listener above serves no probe route, so the probes
+            # get a plaintext listener of their own (ADR-0021).
             - name: GARAM_MACHINE_HEALTH_ADDR
               value: ":8444"
             # These four name files and carry none of their contents. A

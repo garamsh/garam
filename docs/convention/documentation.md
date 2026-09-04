@@ -92,7 +92,12 @@ added since.
   command. A wrapped commit title is not that commit's title. A quoted
   sentence is not such a case and neither is prose — both read the same
   either side of a break, so a long line of either is a violation
-  however awkwardly it breaks.
+  however awkwardly it breaks. A column is a character, not a byte: an
+  em dash is one column and three bytes. Counting the lines past 72 is
+  not this rule's check — every line the exception permits is one of
+  them, so that count reports violations in a file that has none and
+  diverges from the rule exactly where the exception applies.
+  `scripts/check-line-width.sh` counts what the rule forbids.
 - Start each file with one line stating what it governs.
 - A `## Contents` list indexes a file's `##` headings, so how many of
   them there are decides whether it carries one and the file's length

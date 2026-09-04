@@ -100,6 +100,10 @@ func (s *memoryStore) ListDefinitionsByOrg(context.Context, grn.GRN) ([]*Definit
 	return nil, errorx.New(errorx.KindUnimplemented, "the operator reads by operator, not by org")
 }
 
+func (s *memoryStore) CountByOrg(context.Context, grn.GRN) (OrgCounts, error) {
+	return OrgCounts{}, errorx.New(errorx.KindUnimplemented, "the operator reads by operator, not by org")
+}
+
 func (s *memoryStore) ListDefinitionsByOperator(_ context.Context, operatorGRN grn.GRN) ([]*DefinitionState, error) {
 	states := make([]*DefinitionState, 0, len(s.definitions))
 	for _, d := range s.definitions {

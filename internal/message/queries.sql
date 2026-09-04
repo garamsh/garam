@@ -171,3 +171,11 @@ SELECT EXISTS (
 SELECT * FROM message_consents
 WHERE org_a = sqlc.arg('org') OR org_b = sqlc.arg('org')
 ORDER BY org_a, org_b;
+
+-- name: CountConsentsByOrg :one
+-- The consent relations the organization is a side of, which deleting
+-- the organization removes. A relation is a pair, so each one counted
+-- here is also the other organization's, and deleting this one takes
+-- that side's half with it.
+SELECT count(*) FROM message_consents
+WHERE org_a = sqlc.arg('org') OR org_b = sqlc.arg('org');

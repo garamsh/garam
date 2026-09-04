@@ -60,6 +60,22 @@ func (q *Queries) AdvanceOperatorCertificate(ctx context.Context, arg AdvanceOpe
 	return result.RowsAffected(), nil
 }
 
+const countOperatorsByOrg = `-- name: CountOperatorsByOrg :one
+SELECT count(*) FROM operators WHERE org_grn = $1
+`
+
+// The operators the organization has registered, which deleting the
+// organization removes with it, along with any enrollment token that
+// has not been spent. A certificate already issued is not counted:
+// `operator_certificates` carries no foreign key and keeps its row
+// (ADR-0045 errata).
+func (q *Queries) CountOperatorsByOrg(ctx context.Context, orgGrn string) (int64, error) {
+	row := q.db.QueryRow(ctx, countOperatorsByOrg, orgGrn)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createOperator = `-- name: CreateOperator :exec
 INSERT INTO operators (grn, org_grn, registered_by, created_at)
 VALUES ($1, $2, $3, $4)

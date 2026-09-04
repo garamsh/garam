@@ -519,7 +519,7 @@ func (s brokenSessions) Delete(context.Context, string) error { return s.err }
 // holds leaves no cause on the line.
 func TestLogServed_CarriesTheCauseOfAnAPIFailure(t *testing.T) {
 	cause := errorx.Wrap(errorx.New(errorx.KindInternal, "connection reset by peer"), "session delete")
-	srv := api.NewServer(nil, nil, nil, nil, nil, nil, brokenSessions{err: cause}, nil, nil, nil, nil, nil, nil, api.Config{})
+	srv := api.NewServer(nil, nil, nil, nil, nil, nil, brokenSessions{err: cause}, nil, nil, nil, nil, nil, nil, nil, api.Config{})
 
 	var out lines
 	mux := http.NewServeMux()
@@ -638,7 +638,7 @@ func (panickingSessions) Delete(context.Context, string) error { panic("session 
 func TestLogRequests_ReportsARecoveredPanicOnce(t *testing.T) {
 	var out lines
 	obs := recordingObservability(&out)
-	srv := api.NewServer(nil, nil, nil, nil, nil, nil, panickingSessions{}, nil, nil, nil, nil, nil, nil, api.Config{})
+	srv := api.NewServer(nil, nil, nil, nil, nil, nil, panickingSessions{}, nil, nil, nil, nil, nil, nil, nil, api.Config{})
 	server := httptest.NewServer(obs.apiHandler(srv))
 	t.Cleanup(server.Close)
 

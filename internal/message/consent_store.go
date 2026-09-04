@@ -26,4 +26,8 @@ type ConsentStore interface {
 	// List reads every relation org is a side of, standing or
 	// half-withdrawn.
 	List(ctx context.Context, org grn.GRN) ([]*Consent, error)
+	// CountByOrg counts the relations org is a side of, which deleting
+	// org removes. A relation is a pair, so every one counted here is
+	// also the other organization's, and it goes for both of them.
+	CountByOrg(ctx context.Context, org grn.GRN) (int, error)
 }

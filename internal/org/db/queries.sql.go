@@ -89,6 +89,39 @@ func (q *Queries) AddProjectMember(ctx context.Context, arg AddProjectMemberPara
 	return err
 }
 
+const countOrgContents = `-- name: CountOrgContents :one
+SELECT
+    (SELECT count(*) FROM groups      g WHERE g.org_grn = $1) AS group_count,
+    (SELECT count(*) FROM projects    p WHERE p.org_grn = $1) AS project_count,
+    (SELECT count(*) FROM org_members m WHERE m.org_grn = $1) AS member_count,
+    (SELECT count(*) FROM invitations i WHERE i.org_grn = $1) AS invitation_count
+`
+
+type CountOrgContentsRow struct {
+	GroupCount      int64
+	ProjectCount    int64
+	MemberCount     int64
+	InvitationCount int64
+}
+
+// What this organization holds of what DeleteOrg's cascade removes,
+// counted in one round trip so the four numbers describe one moment.
+// Each count is of the rows keyed on the organization itself; the rows
+// keyed on those in turn -- group_members, project_members,
+// policy_versions, policy_attachments -- go with their parent and are
+// not counted separately.
+func (q *Queries) CountOrgContents(ctx context.Context, orgGrn string) (CountOrgContentsRow, error) {
+	row := q.db.QueryRow(ctx, countOrgContents, orgGrn)
+	var i CountOrgContentsRow
+	err := row.Scan(
+		&i.GroupCount,
+		&i.ProjectCount,
+		&i.MemberCount,
+		&i.InvitationCount,
+	)
+	return i, err
+}
+
 const createGroup = `-- name: CreateGroup :exec
 INSERT INTO groups (grn, org_grn, name, roles, policies, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7)

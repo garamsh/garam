@@ -45,3 +45,11 @@ VALUES ($1, $2, $3, $4, $5);
 DELETE FROM operator_enrollment_tokens
 WHERE token_hash = $1 AND expires_at > now()
 RETURNING operator_grn;
+
+-- name: CountOperatorsByOrg :one
+-- The operators the organization has registered, which deleting the
+-- organization removes with it, along with any enrollment token that
+-- has not been spent. A certificate already issued is not counted:
+-- `operator_certificates` carries no foreign key and keeps its row
+-- (ADR-0045 errata).
+SELECT count(*) FROM operators WHERE org_grn = $1;

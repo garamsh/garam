@@ -334,6 +334,54 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
+  /orgs/{org}/deletion-preview:
+    get:
+      operationId: getOrgDeletionPreview
+      tags: [org]
+      summary: What deleting the organization would destroy. Requires the `owner` role.
+      description: >-
+        What `deleteOrg` would remove, counted on the server at the
+        moment of the read. Nothing here deletes anything and nothing
+        here reserves the counts: an organization written to after this
+        answers is deleted with what it holds then.
+
+
+        The counts are of the resources keyed on the organization
+        itself. What is keyed on those in turn goes with its parent and
+        is not counted apart from it — a group's members with the
+        group, a project's members with the project, a policy's
+        versions and attachments with the policy, an agent's assignment
+        with the agent, and an operator's unspent enrollment tokens
+        with the operator.
+
+
+        `certificateAuthority` is outside `counts` because it is the
+        one thing on this answer that cannot be created again. The rest
+        can be re-made by whoever made them; the authority's private
+        key is stored sealed and goes with the row, no route imports or
+        restores one, and every certificate it ever signed stops
+        verifying for good (ADR-0014, ADR-0016).
+
+
+        A certificate an operator already holds is not counted and does
+        not go: that row carries no foreign key to the registration or
+        the organization (ADR-0045). It stops authenticating all the
+        same, because the authority that signed it is gone.
+      parameters:
+        - $ref: '#/components/parameters/org'
+      responses:
+        '200':
+          description: What deleting the organization would destroy.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrgDeletionPreview'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
   /orgs/{org}/members:
     get:
       operationId: listOrgMembers
@@ -1632,6 +1680,110 @@ components:
         since:
           type: string
           format: date-time
+    OrgDeletionPreview:
+      type: object
+      description: >-
+        What deleting one organization would destroy, read from the
+        server rather than assembled from what a caller happens to
+        hold. A count taken from a list the caller already has is wrong
+        exactly when that list is filtered or stale, which is when the
+        answer matters most.
+      required: [certificateAuthority, counts]
+      properties:
+        certificateAuthority:
+          type: boolean
+          description: >-
+            The organization holds a certificate authority, which the
+            deletion destroys and nothing restores. It is its own field
+            and not an entry in `counts` because it is the only thing
+            here that cannot be created again: the private key is
+            stored sealed under a key-encryption key and goes with the
+            row, `internal/ca` has no import, restore or recreate
+            route, and every certificate the authority signed stops
+            verifying permanently (ADR-0014, ADR-0016). False where the
+            organization has needed no certificate yet, because the
+            authority is created on the first one it needs.
+        counts:
+          $ref: '#/components/schemas/OrgDeletionCounts'
+    OrgDeletionCounts:
+      type: object
+      description: >-
+        How many of each kind the deletion removes. Every one of these
+        can be created again; what cannot is on `OrgDeletionPreview`
+        itself.
+
+
+        A zero means the organization holds none of that kind. It never
+        means the caller may not see them: no count here is filtered by
+        what the caller could list, because the deletion is not
+        filtered either — the cascade takes every row whatever the
+        caller may read. A count narrowed to what one caller can see
+        would under-report what the deletion destroys, which is the
+        failure this operation exists to prevent. The one permission is
+        on the operation itself.
+      required:
+        - groups
+        - projects
+        - members
+        - invitations
+        - policies
+        - agents
+        - agentDefinitions
+        - operators
+        - consents
+      properties:
+        groups:
+          type: integer
+          minimum: 0
+          description: Groups, each taking its membership rows with it.
+        projects:
+          type: integer
+          minimum: 0
+          description: Projects, each taking its membership rows with it.
+        members:
+          type: integer
+          minimum: 0
+          description: >-
+            Memberships of this organization. The user accounts
+            themselves are not owned by the organization and stay.
+        invitations:
+          type: integer
+          minimum: 0
+          description: >-
+            Invitations issued for this organization, accepted and
+            pending alike. A pending one stops admitting anybody.
+        policies:
+          type: integer
+          minimum: 0
+          description: >-
+            Policies, each taking its versions and its attachments with
+            it (ADR-0008).
+        agents:
+          type: integer
+          minimum: 0
+          description: Agents, each taking its operator assignment with it.
+        agentDefinitions:
+          type: integer
+          minimum: 0
+          description: >-
+            Agent definitions, which are records of what the
+            organization said an agent should be (ADR-0026).
+        operators:
+          type: integer
+          minimum: 0
+          description: >-
+            Registered operators, each taking its unspent enrollment
+            tokens with it (ADR-0064). A certificate an operator
+            already holds is not counted and outlives the record
+            (ADR-0045).
+        consents:
+          type: integer
+          minimum: 0
+          description: >-
+            Cross-organization consent relations this organization is a
+            side of (ADR-0035). Each is a pair, so deleting this
+            organization removes it for the other organization too,
+            which loses the relation without acting.
     OrgConsent:
       type: object
       description: >-

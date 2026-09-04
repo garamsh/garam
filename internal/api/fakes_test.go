@@ -1057,3 +1057,104 @@ func (s *fakeOperatorStore) ListByOrg(_ context.Context, orgGRN grn.GRN) ([]*ope
 	})
 	return out, nil
 }
+
+// CountOrgContents counts what this fake holds for the organization.
+// It counts the same maps the List methods read, so a test that writes
+// rows through the fake and then previews sees its own writes.
+func (s *fakeOrgStore) CountOrgContents(_ context.Context, orgGRN grn.GRN) (org.Contents, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var c org.Contents
+	for _, gr := range s.groups {
+		if gr.Organization() == orgGRN {
+			c.Groups++
+		}
+	}
+	for _, p := range s.projects {
+		if p.Organization() == orgGRN {
+			c.Projects++
+		}
+	}
+	for _, m := range s.members {
+		if m.Organization() == orgGRN {
+			c.Members++
+		}
+	}
+	for _, inv := range s.invitations {
+		if inv.Organization() == orgGRN {
+			c.Invitations++
+		}
+	}
+	return c, nil
+}
+
+// CountByOrg counts the organization's agents and definitions.
+func (s *fakeAgentStore) CountByOrg(_ context.Context, orgGRN grn.GRN) (agent.OrgCounts, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var c agent.OrgCounts
+	for _, a := range s.agents {
+		if a.Organization() == orgGRN {
+			c.Agents++
+		}
+	}
+	for _, d := range s.definitions {
+		if d.Organization() == orgGRN {
+			c.Definitions++
+		}
+	}
+	return c, nil
+}
+
+// CountByOrg counts the organization's registered operators.
+func (s *fakeOperatorStore) CountByOrg(_ context.Context, orgGRN grn.GRN) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	n := 0
+	for _, o := range s.operators {
+		if o.Organization() == orgGRN {
+			n++
+		}
+	}
+	return n, nil
+}
+
+// CountByOrg counts the relations the organization is a side of,
+// reading the same map List does so both sides of a pair are counted
+// once from either organization.
+func (s *fakeConsentStore) CountByOrg(ctx context.Context, orgGRN grn.GRN) (int, error) {
+	relations, err := s.List(ctx, orgGRN)
+	if err != nil {
+		return 0, err
+	}
+	return len(relations), nil
+}
+
+// fakeAuthorityReader stands in for the certificate authority the
+// composition root reads through (api.AuthorityReader). A test sets
+// which organizations hold one; the default is that none does, which
+// is the state of an organization that has needed no certificate.
+type fakeAuthorityReader struct {
+	mu    sync.Mutex
+	holds map[string]bool
+	err   error
+}
+
+func newFakeAuthorityReader() *fakeAuthorityReader {
+	return &fakeAuthorityReader{holds: map[string]bool{}}
+}
+
+func (s *fakeAuthorityReader) give(orgGRN grn.GRN) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.holds[orgGRN.String()] = true
+}
+
+func (s *fakeAuthorityReader) HasAuthority(_ context.Context, orgGRN grn.GRN) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.err != nil {
+		return false, s.err
+	}
+	return s.holds[orgGRN.String()], nil
+}

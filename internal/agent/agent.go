@@ -124,6 +124,15 @@ type Certificate struct {
 	NotAfter       time.Time
 }
 
+// OrgCounts counts what this domain holds for one organization that
+// deleting that organization removes. It is a count and not a listing
+// because the caller is stating a consequence rather than reading the
+// rows, and a list that pages would answer for one page.
+type OrgCounts struct {
+	Agents      int
+	Definitions int
+}
+
 // Agent is an autonomous actor owned by an organization. Which operator
 // runs it is an Assignment, not part of the Agent.
 type Agent struct {

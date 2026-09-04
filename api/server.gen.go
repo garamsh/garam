@@ -284,6 +284,49 @@ type OrgConsent struct {
 	Stands bool `json:"stands"`
 }
 
+// OrgDeletionCounts How many of each kind the deletion removes. Every one of these can be created again; what cannot is on `OrgDeletionPreview` itself.
+//
+// A zero means the organization holds none of that kind. It never means the caller may not see them: no count here is filtered by what the caller could list, because the deletion is not filtered either — the cascade takes every row whatever the caller may read. A count narrowed to what one caller can see would under-report what the deletion destroys, which is the failure this operation exists to prevent. The one permission is on the operation itself.
+type OrgDeletionCounts struct {
+	// AgentDefinitions Agent definitions, which are records of what the organization said an agent should be (ADR-0026).
+	AgentDefinitions int `json:"agentDefinitions"`
+
+	// Agents Agents, each taking its operator assignment with it.
+	Agents int `json:"agents"`
+
+	// Consents Cross-organization consent relations this organization is a side of (ADR-0035). Each is a pair, so deleting this organization removes it for the other organization too, which loses the relation without acting.
+	Consents int `json:"consents"`
+
+	// Groups Groups, each taking its membership rows with it.
+	Groups int `json:"groups"`
+
+	// Invitations Invitations issued for this organization, accepted and pending alike. A pending one stops admitting anybody.
+	Invitations int `json:"invitations"`
+
+	// Members Memberships of this organization. The user accounts themselves are not owned by the organization and stay.
+	Members int `json:"members"`
+
+	// Operators Registered operators, each taking its unspent enrollment tokens with it (ADR-0064). A certificate an operator already holds is not counted and outlives the record (ADR-0045).
+	Operators int `json:"operators"`
+
+	// Policies Policies, each taking its versions and its attachments with it (ADR-0008).
+	Policies int `json:"policies"`
+
+	// Projects Projects, each taking its membership rows with it.
+	Projects int `json:"projects"`
+}
+
+// OrgDeletionPreview What deleting one organization would destroy, read from the server rather than assembled from what a caller happens to hold. A count taken from a list the caller already has is wrong exactly when that list is filtered or stale, which is when the answer matters most.
+type OrgDeletionPreview struct {
+	// CertificateAuthority The organization holds a certificate authority, which the deletion destroys and nothing restores. It is its own field and not an entry in `counts` because it is the only thing here that cannot be created again: the private key is stored sealed under a key-encryption key and goes with the row, `internal/ca` has no import, restore or recreate route, and every certificate the authority signed stops verifying permanently (ADR-0014, ADR-0016). False where the organization has needed no certificate yet, because the authority is created on the first one it needs.
+	CertificateAuthority bool `json:"certificateAuthority"`
+
+	// Counts How many of each kind the deletion removes. Every one of these can be created again; what cannot is on `OrgDeletionPreview` itself.
+	//
+	// A zero means the organization holds none of that kind. It never means the caller may not see them: no count here is filtered by what the caller could list, because the deletion is not filtered either — the cascade takes every row whatever the caller may read. A count narrowed to what one caller can see would under-report what the deletion destroys, which is the failure this operation exists to prevent. The one permission is on the operation itself.
+	Counts OrgDeletionCounts `json:"counts"`
+}
+
 // Organization defines model for Organization.
 type Organization struct {
 	CreatedAt time.Time `json:"createdAt"`
@@ -611,6 +654,9 @@ type ServerInterface interface {
 	// GrantOrgConsent Grant the org's half of a cross-organization consent. Requires the `admin` role.
 	// (PUT /orgs/{org}/consents/{other})
 	GrantOrgConsent(w http.ResponseWriter, r *http.Request, org Org, otherSlug OtherSlug)
+	// GetOrgDeletionPreview What deleting the organization would destroy. Requires the `owner` role.
+	// (GET /orgs/{org}/deletion-preview)
+	GetOrgDeletionPreview(w http.ResponseWriter, r *http.Request, org Org)
 	// ListGroups List an organization's groups. Requires the `member` role.
 	// (GET /orgs/{org}/groups)
 	ListGroups(w http.ResponseWriter, r *http.Request, org Org, params ListGroupsParams)
@@ -1291,6 +1337,32 @@ func (siw *ServerInterfaceWrapper) GrantOrgConsent(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GrantOrgConsent(w, r, org, otherSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetOrgDeletionPreview operation middleware
+func (siw *ServerInterfaceWrapper) GetOrgDeletionPreview(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetOrgDeletionPreview(w, r, org)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2477,6 +2549,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}", wrapper.DeleteOrg)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}", wrapper.GetOrg)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}", wrapper.UpdateOrg)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/deletion-preview", wrapper.GetOrgDeletionPreview)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/members", wrapper.ListOrgMembers)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/groups", wrapper.ListGroups)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/groups", wrapper.CreateGroup)

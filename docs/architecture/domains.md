@@ -214,13 +214,21 @@ The two listeners reach their domains differently, and what each holds
 shows it. The machine listener holds `Service` contracts and exactly
 one store — the consent relation's, which is the messaging domain's own
 data reached the way the queue is. The browser-facing one holds domain
-stores directly, beside the two seams it asks the policy engine
-through.
+stores directly, beside the three seams it declares: the two it asks
+the policy engine through, and `AuthorityReader`.
 
 Neither listener imports the other and they never run in one process
 (ADR-0017). Neither imports the policy engine: each holds a gRPC client
 of its own, and the conversions onto the wire contract are declared
-once in `internal/wire`. Neither reaches a certificate authority.
+once in `internal/wire`. Neither imports `internal/ca` either, and
+neither issues or opens anything a certificate authority holds. What
+the browser-facing one reads of an authority is whether an
+organization has one, through `AuthorityReader`, which the composition
+root satisfies as it satisfies the `Issuer` the agents and operators
+domains sign through. Presence is the whole of that seam: the question
+is asked to say what deleting an organization would destroy, it needs
+no key to answer, and `garam serve api` still reads no key-encryption
+key.
 
 Two decisions live at a surface rather than in a domain, because each
 is a question about the caller rather than about the subject. Whom a

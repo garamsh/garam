@@ -42,6 +42,7 @@ type Server struct {
 	providers   map[string]authn.Provider
 	evaluator   Evaluator
 	policies    PolicyManager
+	authorities AuthorityReader
 	cfg         Config
 }
 
@@ -50,10 +51,10 @@ var _ apigen.ServerInterface = (*Server)(nil)
 
 // NewServer constructs the API server. providers are keyed by their
 // Name; unknown provider paths 404 without the providers knowing.
-func NewServer(users user.Store, orgs org.Store, agents agent.Store, operators operator.Store, consents message.ConsentStore, watches watch.Service, sessions authn.SessionStore, states authn.OAuthStateStore, credentials authn.PasswordCredentialStore, attempts authn.PasswordAttemptStore, providers []authn.Provider, evaluator Evaluator, policies PolicyManager, cfg Config) *Server {
+func NewServer(users user.Store, orgs org.Store, agents agent.Store, operators operator.Store, consents message.ConsentStore, watches watch.Service, sessions authn.SessionStore, states authn.OAuthStateStore, credentials authn.PasswordCredentialStore, attempts authn.PasswordAttemptStore, providers []authn.Provider, evaluator Evaluator, policies PolicyManager, authorities AuthorityReader, cfg Config) *Server {
 	byName := make(map[string]authn.Provider, len(providers))
 	for _, p := range providers {
 		byName[p.Name()] = p
 	}
-	return &Server{users: users, orgs: orgs, agents: agents, operators: operators, consents: consents, watches: watches, sessions: sessions, states: states, credentials: credentials, attempts: attempts, providers: byName, evaluator: evaluator, policies: policies, cfg: cfg}
+	return &Server{users: users, orgs: orgs, agents: agents, operators: operators, consents: consents, watches: watches, sessions: sessions, states: states, credentials: credentials, attempts: attempts, providers: byName, evaluator: evaluator, policies: policies, authorities: authorities, cfg: cfg}
 }

@@ -49,6 +49,28 @@ func (q *Queries) AssignAgent(ctx context.Context, arg AssignAgentParams) (Agent
 	return i, err
 }
 
+const countAgentsByOrg = `-- name: CountAgentsByOrg :one
+SELECT
+    (SELECT count(*) FROM agents            a WHERE a.org_grn = $1) AS agent_count,
+    (SELECT count(*) FROM agent_definitions d WHERE d.org_grn = $1) AS definition_count
+`
+
+type CountAgentsByOrgRow struct {
+	AgentCount      int64
+	DefinitionCount int64
+}
+
+// The agents and the definitions the organization holds, which
+// deleting the organization removes with it. One row, so the two
+// numbers describe one moment. An agent's assignment goes with the
+// agent and is not counted apart from it.
+func (q *Queries) CountAgentsByOrg(ctx context.Context, orgGrn string) (CountAgentsByOrgRow, error) {
+	row := q.db.QueryRow(ctx, countAgentsByOrg, orgGrn)
+	var i CountAgentsByOrgRow
+	err := row.Scan(&i.AgentCount, &i.DefinitionCount)
+	return i, err
+}
+
 const createAgent = `-- name: CreateAgent :exec
 INSERT INTO agents (grn, org_grn, provisioning_state, runtime_state, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5, $6)

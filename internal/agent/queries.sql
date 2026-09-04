@@ -80,3 +80,12 @@ ORDER BY d.agent_grn;
 -- assignment the first wrote.
 -- name: LockAgentDefinition :one
 SELECT * FROM agent_definitions WHERE agent_grn = $1 FOR UPDATE;
+
+-- name: CountAgentsByOrg :one
+-- The agents and the definitions the organization holds, which
+-- deleting the organization removes with it. One row, so the two
+-- numbers describe one moment. An agent's assignment goes with the
+-- agent and is not counted apart from it.
+SELECT
+    (SELECT count(*) FROM agents            a WHERE a.org_grn = $1) AS agent_count,
+    (SELECT count(*) FROM agent_definitions d WHERE d.org_grn = $1) AS definition_count;

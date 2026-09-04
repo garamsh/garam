@@ -53,3 +53,25 @@ That key is as availability-critical as the database — losing it loses
 every organization's CA with no recovery short of new authorities and a
 reissue for every certificate — and why it is held this way rather than
 in a KMS is [ADR-0016](./adr/0016-ca-key-custody.md).
+
+**An authority is lost the same way when its organization is deleted,
+and nothing here brings one back.** The row is keyed on the
+organization and goes with it, sealed key included
+(`migrations/000005`). `Store` declares `Create` and `Get` and no
+more: there is no import, no restore, and no route that re-creates an
+authority for an organization that is gone — and `Create` would need
+an organization row the same delete removed. What the service creates
+on demand is a *new* authority for an organization that exists, which
+verifies nothing the old one signed. So every certificate that
+authority issued stops authenticating permanently, an operator's
+included: `operator_certificates` keeps its row (ADR-0045 errata) and
+that row's certificate no longer chains to anything.
+
+The browser API states this before the act rather than after it.
+`getOrgDeletionPreview` reports whether the organization holds an
+authority, as its own field and not as one entry among counts, because
+it is the only thing a deletion takes that cannot be made again;
+[organizations.md](./organizations.md) holds the rest of what that
+deletion reaches. The listener reads presence alone, through a seam
+the composition root satisfies, so it holds no key and opens nothing
+([domains.md](./domains.md)).

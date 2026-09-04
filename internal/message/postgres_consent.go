@@ -70,6 +70,17 @@ func (s *PostgresStore) List(ctx context.Context, org grn.GRN) ([]*Consent, erro
 	return consents, nil
 }
 
+// CountByOrg counts the relations org is a side of, which deleting org
+// removes. Each one is a pair, so what is counted here is also the
+// other organization's half.
+func (s *PostgresStore) CountByOrg(ctx context.Context, org grn.GRN) (int, error) {
+	n, err := s.q.CountConsentsByOrg(ctx, org.String())
+	if err != nil {
+		return 0, pgxerr.Classify(err, "count consents by org", nil, nil)
+	}
+	return int(n), nil
+}
+
 // rowToConsent converts a sqlc row into the domain aggregate. A stored
 // value that no longer parses is data corruption, hence internal.
 func rowToConsent(row db.MessageConsent) (*Consent, error) {

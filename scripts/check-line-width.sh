@@ -10,10 +10,12 @@
 # A line is a violation when the token straddling column 72 would fit
 # inside 72 on a line of its own at that line's own indent: a break was
 # available and was not taken. Where that token would not fit there, no
-# break shortens the line and the exception covers it. A code span and
-# a Markdown link destination are each one token, because a break
-# inside either makes it something else. A fenced block, a heading and
-# a table row are exempt as shapes the rule does not reach.
+# break shortens the line and the exception covers it. A code span is
+# one token however many spaces it holds, because a break inside a
+# verbatim quotation makes it another quotation; every other kind the
+# exception names — a URL, a path, a Markdown link — already is one by
+# holding no space. A fenced block, a heading and a table row are
+# exempt as shapes the rule does not reach.
 #
 # Counted in characters. LC_ALL=C fixes awk to bytes in every
 # implementation and the count then subtracts UTF-8 continuation bytes,
@@ -23,10 +25,12 @@
 #
 # Every run first classifies four lines whose verdicts are known, so a
 # zero here is readable as a zero and not as a query that matched
-# nothing: one ordinary violation, one carried past 72 by a link and
-# one by a code span, and one sitting at 72 characters and 74 bytes
-# that must not be reported at all. The run fails if any of the four
-# comes back otherwise.
+# nothing. Two pin the boundary one column apart: breakable prose at 73
+# characters, which must be reported, and a line at 72 characters and
+# 74 bytes, which must not — the second fails the moment anything here
+# counts bytes. The other two are carried past 72 by a link and by a
+# code span and must come back exempt. The run fails if any of the four
+# classifies otherwise.
 #
 # Nothing runs this. #975 declined a width gate with its own
 # measurement and named what would change that; a helper a reviewer
@@ -53,10 +57,6 @@ function crossing(m, start,   i, n, c, j, ts) {
 			if (c == "`") {
 				j = index(substr(m, i + 1), "`")
 				if (j > 0) { i = i + j + 1; continue }
-			}
-			if (c == "]" && substr(m, i + 1, 1) == "(") {
-				j = index(substr(m, i + 2), ")")
-				if (j > 0) { i = i + j + 2; continue }
 			}
 			i++
 		}
@@ -91,14 +91,14 @@ FNR == 1 { fence = 0 }
 '
 
 verdicts="$(awk "$classify" <<'CONTROL' | cut -f1,2,3,5
-this control line is ordinary prose, every word of it breakable, and it runs past column 72
+control: ordinary prose, every word of it breakable, sitting at column 73
 - [0000](./adr/0000-a-name-long-enough-to-carry-one-line-past-column-72.md)
   `docs: a commit title quoted verbatim that no break shortens without making it another title`
 control — this line is 72 characters, and one em dash makes it 74 bytes.
 CONTROL
 )"
 expected="$(printf '%s\n' \
-	'91	91	violation	1' \
+	'73	73	violation	1' \
 	'75	75	unbreakable	2' \
 	'95	95	unbreakable	3' \
 	'72	74	within	4')"
@@ -107,7 +107,7 @@ if [ "$verdicts" != "$expected" ]; then
 	printf 'expected:\n%s\ngot:\n%s\n' "$expected" "$verdicts" >&2
 	exit 1
 fi
-echo 'check-line-width: control passed — a breakable line flagged, a link and a code span exempt, and 72 characters at 74 bytes not reported'
+echo 'check-line-width: control passed — 73 characters of breakable prose flagged, 72 characters at 74 bytes not, a link and a code span exempt'
 
 files="$($scope)"
 if [ -z "$files" ]; then

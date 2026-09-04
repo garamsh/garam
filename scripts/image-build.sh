@@ -26,6 +26,11 @@ names=false
 # version. `platforms:`, `provenance:` and `sbom:` are not read: they
 # shape what a release publishes, not what a build proves.
 #
+# A build argument a run resolves is named and passed nothing. Its
+# value is not something the file states, so no build outside a run
+# reproduces it, and passing the text as written would bake a literal
+# `${{` where the release records a commit (#1020).
+#
 # The steps seen are counted against the lines written, so a step whose
 # shape this no longer reads fails here instead of leaving a run that
 # built one image looking like the run that built both.
@@ -41,7 +46,16 @@ images=$(awk '
 	$1 == "uses:" && $2 ~ /^docker\/build-push-action@/ { build = 1; seen++ }
 	$1 == "context:" { context = $2 }
 	$1 == "file:" { file = $2 }
-	$1 ~ /^[A-Za-z_][A-Za-z0-9_]*=/ { args = args (args == "" ? "" : " ") $1 }
+	$1 ~ /^[A-Za-z_][A-Za-z0-9_]*=/ {
+		if ($0 ~ /\$\{\{/) {
+			argname = $1
+			sub(/=.*/, "", argname)
+			printf "image-build: %s is resolved per run in %s; nothing here passes it a value\n", \
+				argname, FILENAME > "/dev/stderr"
+		} else {
+			args = args (args == "" ? "" : " ") $1
+		}
+	}
 	$1 == "tags:" {
 		name = $0
 		sub(/^.*\//, "", name)

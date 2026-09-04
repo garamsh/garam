@@ -41,6 +41,18 @@ COPY --from=build /out/group /etc/group
 COPY --from=build /out/garam /usr/local/bin/garam
 COPY migrations /app/migrations
 
+# The commit and the version the build was given, recorded on the image
+# so a deployment resolves back to a source without going through the
+# git tag, which moves. Both are strings the builder passes in and
+# neither is derived from the layers, so each records what the build
+# claimed rather than what the image is. Unset, both labels are present
+# and empty, so a build that claimed nothing reads differently from an
+# image built before they existed.
+ARG IMAGE_REVISION
+ARG IMAGE_VERSION
+LABEL org.opencontainers.image.revision=$IMAGE_REVISION \
+  org.opencontainers.image.version=$IMAGE_VERSION
+
 WORKDIR /app
 USER garam
 ENTRYPOINT ["garam"]

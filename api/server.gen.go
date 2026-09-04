@@ -17,22 +17,22 @@ import (
 
 // Defines values for AgentProvisioningState.
 const (
-	Failed      AgentProvisioningState = "failed"
-	Pending     AgentProvisioningState = "pending"
-	Provisioned AgentProvisioningState = "provisioned"
-	Ready       AgentProvisioningState = "ready"
+	AgentProvisioningStateFailed      AgentProvisioningState = "failed"
+	AgentProvisioningStatePending     AgentProvisioningState = "pending"
+	AgentProvisioningStateProvisioned AgentProvisioningState = "provisioned"
+	AgentProvisioningStateReady       AgentProvisioningState = "ready"
 )
 
 // Valid indicates whether the value is a known member of the AgentProvisioningState enum.
 func (e AgentProvisioningState) Valid() bool {
 	switch e {
-	case Failed:
+	case AgentProvisioningStateFailed:
 		return true
-	case Pending:
+	case AgentProvisioningStatePending:
 		return true
-	case Provisioned:
+	case AgentProvisioningStateProvisioned:
 		return true
-	case Ready:
+	case AgentProvisioningStateReady:
 		return true
 	default:
 		return false
@@ -72,6 +72,27 @@ func (e InvitationCreateRole) Valid() bool {
 	case InvitationCreateRoleAdmin:
 		return true
 	case InvitationCreateRoleMember:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OperatorEnrollmentState.
+const (
+	OperatorEnrollmentStateEnrolled OperatorEnrollmentState = "enrolled"
+	OperatorEnrollmentStateExpired  OperatorEnrollmentState = "expired"
+	OperatorEnrollmentStatePending  OperatorEnrollmentState = "pending"
+)
+
+// Valid indicates whether the value is a known member of the OperatorEnrollmentState enum.
+func (e OperatorEnrollmentState) Valid() bool {
+	switch e {
+	case OperatorEnrollmentStateEnrolled:
+		return true
+	case OperatorEnrollmentStateExpired:
+		return true
+	case OperatorEnrollmentStatePending:
 		return true
 	default:
 		return false
@@ -246,11 +267,16 @@ type MemberRef struct {
 	MemberGrn string `json:"memberGrn"`
 }
 
-// Operator defines model for Operator.
+// Operator An operator this organization has registered, and where that operator stands in obtaining a certificate. The record grants nothing and admits nothing (ADR-0045); the enrollment state is what garam knows from its own tables and never a report from the operator.
 type Operator struct {
-	CreatedAt time.Time `json:"createdAt"`
-	Grn       string    `json:"grn"`
-	OrgGrn    string    `json:"orgGrn"`
+	// CertificateIssuedAt When garam last issued this operator a certificate, absent where it has issued none. It is the certificate the operator holds now and not the one it enrolled with — a renewal moves the record this is read from — so it answers when garam last signed for the operator rather than when the operator enrolled. Which certificate that is decides a renewal and is the machine listener's alone (ADR-0046); no part of it is answered here.
+	CertificateIssuedAt *time.Time `json:"certificateIssuedAt,omitempty"`
+	CreatedAt           time.Time  `json:"createdAt"`
+
+	// EnrollmentState Where an operator stands in obtaining a certificate from garam. It is derived from what garam already holds and reported by nobody, so no member says whether the operator is running. `enrolled` is an operator garam has issued a certificate for: it says one was obtained, not that it is still valid — garam records no expiry beside the record and asks the operator nothing. `pending` is an operator with no certificate whose enrollment token is still spendable, which lasts at most the ten minutes the token does. `expired` is an operator with no certificate and no spendable token: the token was lost or ran out, no route mints a second one, and what recovers the operator is the out-of-band command (ADR-0032). An operator that holds a certificate reads `enrolled` however much of its token is left, because the certificate is the outcome the token exists to produce.
+	EnrollmentState OperatorEnrollmentState `json:"enrollmentState"`
+	Grn             string                  `json:"grn"`
+	OrgGrn          string                  `json:"orgGrn"`
 
 	// RegisteredBy The member that registered the operator.
 	RegisteredBy string `json:"registeredBy"`
@@ -264,6 +290,9 @@ type OperatorEnrollment struct {
 	// Token The token itself, answered once. Show it once and say it cannot be shown again; garam cannot answer it a second time.
 	Token string `json:"token"`
 }
+
+// OperatorEnrollmentState Where an operator stands in obtaining a certificate from garam. It is derived from what garam already holds and reported by nobody, so no member says whether the operator is running. `enrolled` is an operator garam has issued a certificate for: it says one was obtained, not that it is still valid — garam records no expiry beside the record and asks the operator nothing. `pending` is an operator with no certificate whose enrollment token is still spendable, which lasts at most the ten minutes the token does. `expired` is an operator with no certificate and no spendable token: the token was lost or ran out, no route mints a second one, and what recovers the operator is the out-of-band command (ADR-0032). An operator that holds a certificate reads `enrolled` however much of its token is left, because the certificate is the outcome the token exists to produce.
+type OperatorEnrollmentState string
 
 // OperatorRegistration defines model for OperatorRegistration.
 type OperatorRegistration struct {
@@ -456,7 +485,9 @@ type ProjectPatch struct {
 type RegisteredOperator struct {
 	// Enrollment The one-time token the operator enrols with, and when it stops being spendable. It is permission to ask for one certificate, once, and it authenticates nothing else.
 	Enrollment OperatorEnrollment `json:"enrollment"`
-	Operator   Operator           `json:"operator"`
+
+	// Operator An operator this organization has registered, and where that operator stands in obtaining a certificate. The record grants nothing and admits nothing (ADR-0045); the enrollment state is what garam knows from its own tables and never a report from the operator.
+	Operator Operator `json:"operator"`
 }
 
 // Role defines model for Role.

@@ -30,11 +30,14 @@ func NewPostgresStore(pool *pgxpool.Pool) *PostgresStore {
 
 // Register persists the record and the enrollment token beside it in
 // one transaction, so a registration never exists without the token
-// that enrols it.
-func (s *PostgresStore) Register(ctx context.Context, o *Operator, e *Enrollment) error {
+// that enrols it, and reads the stored operator back inside the same
+// transaction: the enrollment state is derived from tables this write
+// does not touch, so assuming it here would answer `pending` for a GRN
+// that already holds a certificate.
+func (s *PostgresStore) Register(ctx context.Context, o *Operator, e *Enrollment) (*Operator, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return errorx.Wrap(err, "begin", errorx.KindUnavailable)
+		return nil, errorx.Wrap(err, "begin", errorx.KindUnavailable)
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
@@ -45,7 +48,7 @@ func (s *PostgresStore) Register(ctx context.Context, o *Operator, e *Enrollment
 		RegisteredBy: o.registeredBy.String(),
 		CreatedAt:    stamp(o.createdAt),
 	}); err != nil {
-		return pgxerr.Classify(err, "register operator", nil, ErrOperatorAlreadyRegistered)
+		return nil, pgxerr.Classify(err, "register operator", nil, ErrOperatorAlreadyRegistered)
 	}
 	if err := q.MintOperatorEnrollment(ctx, db.MintOperatorEnrollmentParams{
 		TokenHash:   e.TokenHash(),
@@ -54,12 +57,20 @@ func (s *PostgresStore) Register(ctx context.Context, o *Operator, e *Enrollment
 		MintedAt:    stamp(e.mintedAt),
 		ExpiresAt:   stamp(e.expiresAt),
 	}); err != nil {
-		return pgxerr.Classify(err, "mint enrollment token", nil, nil)
+		return nil, pgxerr.Classify(err, "mint enrollment token", nil, nil)
+	}
+	row, err := q.GetOperator(ctx, o.grn.String())
+	if err != nil {
+		return nil, pgxerr.Classify(err, "read registered operator", nil, nil)
+	}
+	registered, err := rowToOperator(row.Operator, row.CertificateIssuedAt, row.LiveToken)
+	if err != nil {
+		return nil, err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return errorx.Wrap(err, "commit")
+		return nil, errorx.Wrap(err, "commit")
 	}
-	return nil
+	return registered, nil
 }
 
 // Get returns the organization's record of the operator.
@@ -68,7 +79,7 @@ func (s *PostgresStore) Get(ctx context.Context, g grn.GRN) (*Operator, error) {
 	if err != nil {
 		return nil, pgxerr.Classify(err, "get operator", ErrOperatorNotFound, nil)
 	}
-	return rowToOperator(row)
+	return rowToOperator(row.Operator, row.CertificateIssuedAt, row.LiveToken)
 }
 
 // ListByOrg returns the organization's operators.
@@ -79,7 +90,7 @@ func (s *PostgresStore) ListByOrg(ctx context.Context, orgGRN grn.GRN) ([]*Opera
 	}
 	operators := make([]*Operator, 0, len(rows))
 	for _, row := range rows {
-		o, err := rowToOperator(row)
+		o, err := rowToOperator(row.Operator, row.CertificateIssuedAt, row.LiveToken)
 		if err != nil {
 			return nil, err
 		}
@@ -101,9 +112,10 @@ func (s *PostgresStore) CountByOrg(ctx context.Context, orgGRN grn.GRN) (int, er
 	return int(n), nil
 }
 
-// rowToOperator converts a sqlc row into the domain aggregate. A stored
-// GRN that no longer parses is data corruption, hence internal.
-func rowToOperator(row db.Operator) (*Operator, error) {
+// rowToOperator converts a sqlc row and the two facts joined beside it
+// into the domain aggregate. A stored GRN that no longer parses is data
+// corruption, hence internal.
+func rowToOperator(row db.Operator, certificateIssuedAt pgtype.Timestamptz, liveToken bool) (*Operator, error) {
 	g, err := grn.Parse(row.Grn)
 	if err != nil {
 		return nil, errorx.Wrap(err, "grn", errorx.KindInternal)
@@ -124,6 +136,10 @@ func rowToOperator(row db.Operator) (*Operator, error) {
 		orgGRN:       orgGRN,
 		registeredBy: registeredBy,
 		createdAt:    row.CreatedAt.Time,
+		// An absent certificate leaves the zero time, which is what
+		// EnrollmentState reads as "garam has issued none".
+		certificateIssuedAt: certificateIssuedAt.Time,
+		liveToken:           liveToken,
 	}, nil
 }
 

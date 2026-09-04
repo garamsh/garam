@@ -44,12 +44,13 @@ func (s *Server) RegisterOperator(w http.ResponseWriter, r *http.Request, orgSlu
 		writeError(w, err)
 		return
 	}
-	if err := s.operators.Register(r.Context(), o, enrollment); err != nil {
+	registered, err := s.operators.Register(r.Context(), o, enrollment)
+	if err != nil {
 		writeError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, apigen.RegisteredOperator{
-		Operator: operatorToAPI(o),
+		Operator: operatorToAPI(registered),
 		Enrollment: apigen.OperatorEnrollment{
 			Token:     enrollment.Token(),
 			ExpiresAt: enrollment.ExpiresAt(),
@@ -95,14 +96,24 @@ func (s *Server) requireRegisteredOperator(r *http.Request, g grn.GRN) error {
 	return err
 }
 
-// operatorToAPI renders an Operator. It carries no state: garam never
-// dials an operator (ADR-0012), so a record says the organization
-// registered one and nothing about whether it is running.
+// operatorToAPI renders an Operator. The enrollment state is what garam
+// holds about the operator rather than anything the operator reports:
+// garam never dials one (ADR-0012), so `enrolled` says a certificate
+// was issued and nothing about whether the operator is running.
+//
+// certificateIssuedAt is answered only where garam has issued one,
+// because an absent timestamp and a zero one are different states and
+// only the absence is the property.
 func operatorToAPI(o *operator.Operator) apigen.Operator {
-	return apigen.Operator{
-		Grn:          o.GRN().String(),
-		OrgGrn:       o.Organization().String(),
-		RegisteredBy: o.RegisteredBy().String(),
-		CreatedAt:    o.CreatedAt(),
+	out := apigen.Operator{
+		Grn:             o.GRN().String(),
+		OrgGrn:          o.Organization().String(),
+		RegisteredBy:    o.RegisteredBy().String(),
+		CreatedAt:       o.CreatedAt(),
+		EnrollmentState: apigen.OperatorEnrollmentState(o.EnrollmentState()),
 	}
+	if issuedAt := o.CertificateIssuedAt(); !issuedAt.IsZero() {
+		out.CertificateIssuedAt = &issuedAt
+	}
+	return out
 }

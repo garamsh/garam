@@ -141,7 +141,8 @@ func registerOperator(t *testing.T, p *pgxpool.Pool, g grn.GRN) grn.GRN {
 	require.NoError(t, err)
 	enrollment, err := operator.NewEnrollment(o.GRN(), scopedGRN(g.Organization, "user", "ada"))
 	require.NoError(t, err)
-	require.NoError(t, operator.NewPostgresStore(p).Register(context.Background(), o, enrollment))
+	_, err = operator.NewPostgresStore(p).Register(context.Background(), o, enrollment)
+	require.NoError(t, err)
 	return o.GRN()
 }
 
@@ -1329,7 +1330,8 @@ func TestOperatorStore_RoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	enrollment, err := operator.NewEnrollment(one.GRN(), registeredBy)
 	require.NoError(t, err)
-	require.NoError(t, s.Register(ctx, one, enrollment))
+	_, err = s.Register(ctx, one, enrollment)
+	require.NoError(t, err)
 
 	stored, err := s.Get(ctx, one.GRN())
 	require.NoError(t, err)
@@ -1343,7 +1345,8 @@ func TestOperatorStore_RoundTrip(t *testing.T) {
 	// write.
 	again, err := operator.NewEnrollment(one.GRN(), registeredBy)
 	require.NoError(t, err)
-	assert.ErrorIs(t, s.Register(ctx, one, again), operator.ErrOperatorAlreadyRegistered)
+	_, err = s.Register(ctx, one, again)
+	assert.ErrorIs(t, err, operator.ErrOperatorAlreadyRegistered)
 	_, err = s.Spend(ctx, again.TokenHash())
 	assert.ErrorIs(t, err, operator.ErrEnrollmentInvalid,
 		"the refused registration rolled back the token beside it")
@@ -1353,7 +1356,8 @@ func TestOperatorStore_RoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	elsewhereEnrollment, err := operator.NewEnrollment(elsewhere.GRN(), scopedGRN("globex", "user", "ada"))
 	require.NoError(t, err)
-	require.NoError(t, s.Register(ctx, elsewhere, elsewhereEnrollment))
+	_, err = s.Register(ctx, elsewhere, elsewhereEnrollment)
+	require.NoError(t, err)
 	listed, err := s.ListByOrg(ctx, orgRootGRN("acme"))
 	require.NoError(t, err)
 	require.Len(t, listed, 1, "this org's operators and no other org's")
@@ -4105,7 +4109,8 @@ func TestMachineSurface_EnrolsAnOperatorWithTheTokenRegisteringItMinted(t *testi
 	require.NoError(t, err)
 	enrollment, err := operator.NewEnrollment(o.GRN(), registeredBy)
 	require.NoError(t, err)
-	require.NoError(t, operator.NewPostgresStore(p).Register(ctx, o, enrollment))
+	_, err = operator.NewPostgresStore(p).Register(ctx, o, enrollment)
+	require.NoError(t, err)
 
 	request, operatorKey := enrollmentRequest(t)
 	body, err := json.Marshal(machinegen.Enrollment{

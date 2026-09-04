@@ -18,7 +18,13 @@ type Store interface {
 	// write: a record that arrived without its token would be an
 	// operator nothing here can enrol and no route can re-mint for
 	// (ADR-0064).
-	Register(ctx context.Context, o *Operator, e *Enrollment) error
+	//
+	// It answers the operator as stored, carrying the enrollment state
+	// read in the same transaction rather than assumed from the write.
+	// A GRN that already holds a certificate is registered under the
+	// GRN that certificate names, and answers `enrolled` on the
+	// registration that minted it a token it does not need.
+	Register(ctx context.Context, o *Operator, e *Enrollment) (*Operator, error)
 	Get(ctx context.Context, g grn.GRN) (*Operator, error)
 	// ListByOrg returns the organization's operators, ordered by GRN.
 	ListByOrg(ctx context.Context, orgGRN grn.GRN) ([]*Operator, error)

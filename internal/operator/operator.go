@@ -83,18 +83,54 @@ var (
 	ErrEnrollmentInvalid = errorx.New(errorx.KindUnauthenticated, "enrollment token is not valid")
 )
 
+// EnrollmentState is where an operator stands in obtaining a
+// certificate from garam. It is derived from what garam holds — a
+// certificate it issued, a token still spendable — and reported by
+// nobody: garam never dials an operator (ADR-0012), so no member of
+// this type says whether one is running.
+//
+// What the members mean to a browser caller is
+// `api/openapi.yaml` §OperatorEnrollmentState, which is authoritative
+// for that (ADR-0059).
+type EnrollmentState string
+
+const (
+	// EnrollmentStateEnrolled is an operator garam has issued a
+	// certificate for. It says one was obtained, not that the operator
+	// still holds a valid one: no expiry is recorded beside the record
+	// and nothing is asked (ADR-0046).
+	EnrollmentStateEnrolled EnrollmentState = "enrolled"
+	// EnrollmentStatePending is an operator with no certificate and a
+	// token still inside its window. It lasts at most EnrollmentTTL
+	// from the registration that minted it.
+	EnrollmentStatePending EnrollmentState = "pending"
+	// EnrollmentStateExpired is an operator with no certificate and no
+	// spendable token. The token was lost or ran out, and no route
+	// mints a second one (ADR-0064): what recovers the operator is the
+	// command ADR-0032 ships.
+	EnrollmentStateExpired EnrollmentState = "expired"
+)
+
 // Operator is an organization's record that it has an operator under
-// this GRN.
+// this GRN, and where that operator stands in obtaining a certificate.
 //
 // It carries no state the operator reports and no credential. What an
 // operator does is reported against the agents it holds (ADR-0012), and
 // what it authenticates with is the certificate this package's Service
-// issues — which reads no row here.
+// issues. The two fields below are what garam already knows about that
+// certificate, read beside the record and persisted nowhere on it: the
+// state is a property of the tables together rather than of this row.
 type Operator struct {
 	grn          grn.GRN
 	orgGRN       grn.GRN
 	registeredBy grn.GRN
 	createdAt    time.Time
+
+	// When garam last issued the operator a certificate, zero where it
+	// has issued none.
+	certificateIssuedAt time.Time
+	// Whether a token minted for the operator is still spendable.
+	liveToken bool
 }
 
 // New records that orgGRN has an operator under identifier.
@@ -116,6 +152,12 @@ func New(orgGRN grn.GRN, identifier string, registeredBy grn.GRN) (*Operator, er
 		orgGRN:       orgGRN,
 		registeredBy: registeredBy,
 		createdAt:    time.Now().UTC(),
+		// The record and the token it enrols with are one write
+		// (ADR-0064), so a registration never exists without a live
+		// token beside it. Whether a certificate already exists is
+		// what this value cannot know, which is why [Store.Register]
+		// answers the operator it stored rather than this one.
+		liveToken: true,
 	}, nil
 }
 
@@ -139,3 +181,32 @@ func (o *Operator) Organization() grn.GRN { return o.orgGRN }
 // RegisteredBy returns the member that registered the operator.
 func (o *Operator) RegisteredBy() grn.GRN { return o.registeredBy }
 func (o *Operator) CreatedAt() time.Time  { return o.createdAt }
+
+// EnrollmentState reports where the operator stands in obtaining a
+// certificate.
+//
+// A certificate outranks a token, because it is the outcome the token
+// exists to produce: an operator holding one has nothing left to do,
+// whatever is still unspent beside it. That case is reachable — a GRN
+// `garam issue-certificate` already minted for is registered under the
+// GRN that certificate names, and the registration mints a token
+// anyway — and it is not a fourth state, it is this order deciding it.
+func (o *Operator) EnrollmentState() EnrollmentState {
+	switch {
+	case !o.certificateIssuedAt.IsZero():
+		return EnrollmentStateEnrolled
+	case o.liveToken:
+		return EnrollmentStatePending
+	default:
+		return EnrollmentStateExpired
+	}
+}
+
+// CertificateIssuedAt returns when garam last issued the operator a
+// certificate, and the zero time where it has issued none.
+//
+// It is the current certificate's and not the first one's: a renewal
+// moves the record this reads (ADR-0046) and what came before is not
+// kept, so this answers when garam last signed for the operator rather
+// than when the operator enrolled.
+func (o *Operator) CertificateIssuedAt() time.Time { return o.certificateIssuedAt }

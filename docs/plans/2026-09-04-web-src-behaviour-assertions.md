@@ -14,6 +14,7 @@ that commit and for nothing later, except the comment sweep under
 - The count
 - The assertions
 - The strata outside the population
+- What re-checking the clean rows found
 - What this does not settle
 
 ## How a string was selected
@@ -96,8 +97,8 @@ siblings, one imperative and one declarative, sorted opposite ways.
 
 ## The count
 
-The denominator, so that seven is readable as seven out of eighty-five
-rather than seven out of a query that matched little.
+The denominator, so that nine is readable as nine out of eighty-five
+rather than nine out of a query that matched little.
 
 The two mechanical stages ran as a throwaway script, which this pull
 request does not add, so 818 and 368 are not reproducible from this
@@ -125,27 +126,31 @@ Of the 85:
 
 | Verdict | Strings |
 |---|---|
-| Verifiable | 73 |
-| False | 7 |
+| Verifiable | 71 |
+| False | 9 |
 | Unverifiable as written | 5 |
 
-The seven false strings carry six distinct claims: `page.tsx:149` is
-the heading over `page.tsx:150` and says the same thing.
+The nine false strings carry eight distinct claims. `page.tsx:149` is
+the heading over `page.tsx:150` and says the same thing, and
+`page.tsx:93` and `page.tsx:150` assert the same proposition about the
+adapter at two places on one page.
 
-Where the six sit matters more than the count. Four are on pages a
-visitor reads without signing in — three on the landing page, one on
-the shell that carries `/login` and `/register`. The other two are
-inside the console, and both sit where a person is about to act: one in
-the confirmation that withdraws consent, one in the paragraph above the
-register-operator button, which is the position the sentence #1002
-removed sat in.
+Where the eight sit matters more than the count. Six are on pages a
+visitor reads without signing in — four on the landing page, one on the
+shell that carries `/login` and `/register`, and one on `/login`
+itself. The other two are inside the console, and both sit where a
+person is about to act: one in the confirmation that withdraws consent,
+one in the paragraph above the register-operator button, which is the
+position the sentence #1002 removed sat in.
 
 | Claim | Where |
 |---|---|
+| `the adapter that would run beside it is not built` | landing page, at `:93` and again at `:150` |
 | `or any way to watch one work` | landing page, agents section |
 | `Sign in with the Google account your organization invited.` | landing page, above the console link |
 | `Policy-based authorization on every request` | sign-in shell, on `/login` and `/register` |
 | `In the console today` and the three sections it names | landing page, closing section |
+| `Accounts are created by invitation, not by signup.` | the login page (#1028) |
 | `every certificate the authority signed fails the handshake from then on` | above the register-operator button |
 | `Messages between this organization and {other} stop at once.` | inside the withdraw-consent confirmation |
 
@@ -162,11 +167,11 @@ removed sat in.
 | `web/src/app/(marketing)/page.tsx:52` | A message reaches an agent when an adapter beside it long-polls a queue held in Postgres, so any garam instance can answer any poll. | verifiable | `internal/message/service.go:149-179`; `internal/machineapi/message.go:191-206`; claim state is columns, not process memory: `migrations/000008_messages.up.sql:10-30` |
 | `web/src/app/(marketing)/page.tsx:52` | Channels such as Slack are consumers of that API rather than part of it. | unverifiable-as-written | `grep -rn slack` over Go, SQL, YAML and `web/src` matches only this string. Absence is consistent with the claim and settles nothing; the tree exercises no channel either way. |
 | `web/src/app/(marketing)/page.tsx:57` | An agent presents a client certificate whose SAN URI is its GRN, on a listener that takes no session cookie. It holds no user row and no org membership; that GRN is what lets it message every recipient in its own organization, a policy attached to it narrows that with a Deny, and no policy widens it past the organization (ADR-0024). | verifiable | `internal/ca/signing.go:73-97`; `internal/machine/service.go:81-93`; `internal/machine/listener.go:57-61`; `internal/machineapi/message.go:99-102,151-158`; `internal/authz/server.go:80-86` |
-| `web/src/app/(marketing)/page.tsx:93` | garam holds the identities, the structure they belong to, and the policy documents that decide what each may do. The people are here today; an agent already has an identity, is a subject of the same policies, and exchanges messages on a listener of its own — the adapter that would run beside it is not built. | verifiable | `migrations/000004_agents.up.sql:5`; `migrations/000003_policy_attachments.up.sql:1-8`; `internal/machineapi/message.go:123-142`; `internal/cli/machine.go:174-192`; `internal/adapter` does not exist |
+| `web/src/app/(marketing)/page.tsx:93` | garam holds the identities, the structure they belong to, and the policy documents that decide what each may do. The people are here today; an agent already has an identity, is a subject of the same policies, and exchanges messages on a listener of its own — the adapter that would run beside it is not built. | false | Every clause but the last holds (`migrations/000004_agents.up.sql:5`; `migrations/000003_policy_attachments.up.sql:1-8`; `internal/machineapi/message.go:123-142`; `internal/cli/machine.go:174-192`). The adapter is built. `internal/delivery/` is seven implementation files carrying a `Gateway` interface and an `HTTPGateway`, and its package comment says so outright: "It is what docs/architecture/adapter.md calls the adapter (ADR-0013, ADR-0018), named here for what it owns" (`internal/delivery/delivery.go:1-12`). `garam adapter` runs that loop beside one agent (`internal/cli/cli.go:6-8`; `internal/cli/delivery.go`), and `docs/architecture/overview.md:109-119` lists it under In scope. `internal/adapter` does not exist is a path check standing in for a capability check: the package is named `delivery`, "named here for what it owns", so a query on the name found nothing and nothing-found was read as not-built. What is unbuilt is the watching half alone (`overview.md:250-255`). |
 | `web/src/app/(marketing)/page.tsx:108` | Sign in with the Google account your organization invited. | false | A password credential of garam's own always renders beside it (`web/src/app/(auth)/login/page.tsx:56`, `internal/api/password.go:100-110`, ADR-0041), and Google is registered only when both credentials are configured (`internal/cli/serve.go:196-206`; `deploy/charts/garam/values.yaml:59-61` defaults them empty). The login page states the conditional version at `web/src/app/(auth)/login/page.tsx:49-51`; this page did not follow. |
 | `web/src/app/(marketing)/page.tsx:123` | The structure people are invited into, and the policy documents that decide what anything in it may reach. | verifiable | `migrations/000001_init.up.sql:57-66`; `internal/authz/server.go:69-86` |
 | `web/src/app/(marketing)/page.tsx:149` | Reachable, not yet watched | false | The heading of the same claim as line 150. `GET /orgs/{org}/agents/{agent}/watch` is served: `internal/api/watch.go:32-100`, registered `api/server.gen.go:2483`, wired `internal/cli/serve.go:108-126`. |
-| `web/src/app/(marketing)/page.tsx:150` | The listener, the certificate authority behind it, and the message queue are built. What is not is the adapter that would run beside the agent, or any way to watch one work. | false | The adapter half is true (`internal/adapter` absent). The watch half is not: the stream is implemented (`internal/api/watch.go:32-100`), registered (`api/server.gen.go:2483`), wired in `serve api` (`internal/cli/serve.go:108-126`), crosses processes (`migrations/000011_agent_watches.up.sql:16-31`; `internal/watch/postgres.go:18-20,138`) and is covered end to end (`tests/integration/watch_test.go:44-110`). `docs/architecture/overview.md:133-136` lists it under In scope; `:250-255` puts only the console route and the adapter out of scope. |
+| `web/src/app/(marketing)/page.tsx:150` | The listener, the certificate authority behind it, and the message queue are built. What is not is the adapter that would run beside the agent, or any way to watch one work. | false | Both halves are false. The adapter's delivery loop is built, on the evidence in the `page.tsx:93` row above; `internal/adapter` absent is a path check and not a capability check. The watch half: the stream is implemented (`internal/api/watch.go:32-100`), registered (`api/server.gen.go:2483`), wired in `serve api` (`internal/cli/serve.go:108-126`), crosses processes (`migrations/000011_agent_watches.up.sql:16-31`; `internal/watch/postgres.go:18-20,138`) and is covered end to end (`tests/integration/watch_test.go:44-110`). `docs/architecture/overview.md:133-136` lists it under In scope. `:250-255` says in its own words that "its delivery loop is built and the §Watching half of adapter.md is not", so what it puts out of scope is the console route and the adapter's watching half — not the adapter. |
 | `web/src/app/(marketing)/page.tsx:174` | A GRN names every resource in the system. | unverifiable-as-written | The code defines no "resource". Seven GRN service types exist (`internal/org/org.go:32-34`, `internal/authz/policy.go:18`, `internal/user/user.go:19`, `internal/operator/operator.go:40`, `internal/agent/agent.go:23`), and seven persisted tables are keyed by something else — messages, invitations, sessions, agent watches, certificate authorities, message consents, policy versions. Under the narrow reading the sentence is circular; under the broad reading it is false. |
 | `web/src/app/(marketing)/page.tsx:174` | Its organization and project segments name the resources that own it, so an agent is addressed inside an organization the way a group or a project is. | verifiable | `internal/grn/grn.go:7-14,42-47` |
 | `web/src/app/(marketing)/page.tsx:187` | `default` is the project segment of an org-level resource. API paths address organizations, groups, projects, and policies by the last segment. | verifiable | `internal/grn/grn.go:36-37`; `internal/api/org.go:245-247`, `group.go:229-231`, `project.go:231`, `policy.go:254-256`; `api/openapi.yaml:274,411,598,1012` |
@@ -177,18 +182,18 @@ removed sat in.
 | `web/src/app/(auth)/layout.tsx:42` | `grn:<organization>:<project>:<service_type>:<identifier>` | verifiable | `internal/grn/grn.go:5,42-47` |
 | `web/src/app/(auth)/login/page.tsx:50` | Use the account you registered, or the Google account your organization invited. | verifiable | Rendered only when `listProviders()` holds `google` (`:41`), which is the backend's registered set (`internal/api/auth.go:111-121`). |
 | `web/src/app/(auth)/login/page.tsx:51` | Use the account you registered. | verifiable | The password form renders unconditionally (`:56`); `internal/api/password.go:100-110` |
-| `web/src/app/(auth)/login/page.tsx:52` | Accounts are created by invitation, not by signup. | verifiable | `internal/api/password.go:53-65`; `internal/api/invitation.go:68-97`; no open signup operation in `api/openapi.yaml` |
+| `web/src/app/(auth)/login/page.tsx:52` | Accounts are created by invitation, not by signup. | false | `internal/api/password.go:53-65` and `internal/api/invitation.go:68-97` hold for garam's own password accounts, which an invitation mints. "No open signup operation in `api/openapi.yaml`" is a check on the specification's operation names, and it does not reach the path that creates an account without one: `internal/api/auth.go:148-172` `upsertUser` "returns the user for the identity, creating it on first login", so completing OAuth writes a `users` row with no invitation consulted. The sentence is false as written. Filed as #1028. |
 | `web/src/app/(auth)/register/page.tsx:40` | Registration takes an invitation: organizations grow by invitation, not by signup. The account this creates is garam's own, separate from any Google account you hold. | verifiable | `api/openapi.yaml:1475-1481`; `internal/api/password.go:17-23,53-65`; `internal/api/auth.go:150-153` |
 | `web/src/features/auth/components/password-register-form.tsx:57` | The last part of the invitation link you were sent. | verifiable | The link is built as `/console/invitations/${token}` (`web/src/app/console/orgs/[org]/members/_components/invite-member-form.tsx:43`) |
 | `web/src/features/auth/components/password-register-form.tsx:74` | Lowercase letters, digits and hyphens, at most 58 characters. It names the account and does not change. | verifiable | `internal/grn/grn.go:28,139-145`; `internal/api/password.go:23,222-224`; `UpdateUser` cannot move a `grn` (`internal/user/queries.sql:13-20`) |
 | `web/src/features/auth/components/password-register-form.tsx:89` | At least 15 characters. | verifiable | `internal/authn/password.go:66,81` |
 | `web/src/app/console/orgs/[org]/agents/_components/define-agent-form.tsx:80` | The identifier of the operator that is to run this agent. | verifiable | `internal/agent/definition.go:102-123,132-143`; `internal/api/agent.go:110-113` |
 | `web/src/app/console/orgs/[org]/agents/_components/define-agent-form.tsx:81` | It reads the definition and builds the agent in its own cluster | unverifiable-as-written | garam serves the read (`internal/machineapi/definition.go:15-35`), but what an operator does with it is software this repository does not contain. Nothing here can make the sentence true or false. |
-| `web/src/app/console/orgs/[org]/agents/_components/define-agent-form.tsx:82` | garam never dials it. | verifiable | No outbound client to an operator exists; the only `http.Client` constructions under `internal/` belong to `garam adapter` calling garam (`internal/cli/delivery.go:117,137`) |
+| `web/src/app/console/orgs/[org]/agents/_components/define-agent-form.tsx:82` | garam never dials it. | verifiable | No outbound client to an operator exists, which is what the sentence claims. The clause this row first gave for it was wrong on its own terms: of the two `http.Client` constructions at `internal/cli/delivery.go:117,137`, only `adapterClient` (`:137`) calls garam — `gatewayClient` (`:117`) "reaches the platform beside this adapter", which is the agent platform's gateway. `internal/cli/probe.go:37` makes a third outbound call through `http.DefaultClient`, which a query for `http.Client` constructions does not reach. None of the three dials an operator, so the verdict rests on the capability rather than on the query. |
 | `web/src/app/console/orgs/[org]/agents/_components/define-agent-form.tsx:90` | What the operator constructs the agent from. garam stores the keys and the strings and interprets neither, so the keys are the operator's to choose. | verifiable | `internal/agent/definition.go:41-43,65-77` checks shape and never a name; values pass through at `internal/api/agent.go:218` and `internal/machineapi/definition.go:29`; storage is opaque `jsonb` (`migrations/000010_agent_definitions.up.sql:70-71`). Remark: "to choose" is bounded by the segment character rule. |
 | `web/src/app/console/orgs/[org]/agents/_components/define-agent-form.tsx:131` | {bytes} of 4096 bytes | verifiable | `internal/agent/definition.go:18,43` (`valueMax = 4096`, bytes on both sides) |
 | `web/src/app/console/orgs/[org]/agents/_components/define-agent-form.tsx:170` | {n} of 32 values — a definition carries no more. | verifiable | `internal/agent/definition.go:16,37` (`valuesMax = 32`) |
-| `web/src/app/console/orgs/[org]/agents/_components/define-agent-form.tsx:192` | Defined. garam minted this identifier for the agent; the operator builds it and no agent answers under it until one does. | verifiable | `internal/agent/definition.go:103` → `internal/agent/agent.go:179-185`; the client cannot supply one (`api/openapi.yaml:1889-1903`); only a definition row is written (`internal/agent/postgres_definition.go:17-19`) |
+| `web/src/app/console/orgs/[org]/agents/_components/define-agent-form.tsx:192` | Defined. garam minted this identifier for the agent; the operator builds it and no agent answers under it until one does. | verifiable | `internal/agent/definition.go:103` → `internal/agent/agent.go:179-185`; the client cannot supply one — `AgentDefinitionCreate` carries `operatorGrn` and `values` and no identifier (`api/openapi.yaml:1939-1953`; the range this row first cited, `:1889-1903`, is `OperatorEnrollment`); only a definition row is written (`internal/agent/postgres_definition.go:17-19`, whose comment reads "It writes no agent row") |
 | `web/src/app/console/orgs/[org]/consents/_components/consent-list.tsx:18` | Both halves stand, so messages cross between this organization and {other} in either direction. | verifiable | `internal/message/queries.sql:161-162` normalises with `least`/`greatest`; `migrations/000015_cross_org_consent.up.sql:19-20` stores one row per unordered pair |
 | `web/src/app/console/orgs/[org]/consents/_components/consent-list.tsx:21` | This organization has granted its half. Messages stay refused until {other} grants its own. | verifiable | `internal/message/queries.sql:163-164`; `internal/machineapi/message.go:49-50` |
 | `web/src/app/console/orgs/[org]/consents/_components/consent-list.tsx:23` | {other} has granted its half. Messages stay refused until this organization grants its own. | verifiable | Same evidence as the row above |
@@ -221,7 +226,7 @@ removed sat in.
 | `web/src/app/console/orgs/[org]/policies/page.tsx:20` | Not readable here yet | verifiable | No file under `web/src` calls a policy read |
 | `web/src/app/console/orgs/[org]/policies/page.tsx:21` | Policies are managed over the HTTP API; the console does not read them yet. | verifiable | `api/openapi.yaml:1012-1198` serves the policy operations; nothing under `web/src` calls one |
 | `web/src/app/console/orgs/[org]/operators/page.tsx:35` | The operators this organization has registered. A record is what garam holds — an operator authenticates with the certificate it holds, and registering hands it a one-time token to obtain its first one with. | verifiable | `internal/machine/service.go:30-58` consults only the leaf and the org CA; `internal/api/operator.go:38-57` mints an enrollment and writes it with the record; `internal/operator/enrollment.go:20` sets the ten-minute window |
-| `web/src/app/console/orgs/[org]/agents/page.tsx:41` | The agents this organization holds and the definitions it says they should be made from. garam learns an agent exists when an operator reports one. | verifiable | The only two writers of `agents` are `internal/agent/postgres_agent.go:18-28` and `postgres_definition.go:125-134`, both behind `operates()` (`internal/agent/service.go:170-175`); `api/openapi.yaml:732-733` serves only a read |
+| `web/src/app/console/orgs/[org]/agents/page.tsx:41` | The agents this organization holds and the definitions it says they should be made from. garam learns an agent exists when an operator reports one. | verifiable | The only two creators of `agents` are `internal/agent/postgres_agent.go:18-28` and `postgres_definition.go:125-134`, both behind `operates()` (`internal/agent/service.go:170-175`); `api/openapi.yaml:732-733` serves only a read. "The only two writers" was wrong: `ReportAgentProvisioningState` and `ReportAgentRuntimeState` each `UPDATE agents` (`internal/agent/queries.sql:38-58`, ADR-0053). Both move an existing row's state and create none, so what this sentence asserts is unaffected. |
 | `web/src/app/console/orgs/[org]/agents/page.tsx:54` | No operator has reported an agent to this organization. | verifiable | `internal/agent/queries.sql:8-12` reads the `agents` table alone; a defined-but-unclaimed agent has no row (`migrations/000010_agent_definitions.up.sql:39-43`) |
 | `web/src/app/console/orgs/[org]/agents/page.tsx:63` | What this organization says its agents should be. A definition is a record: an operator reads it and builds the agent elsewhere. | verifiable | `internal/agent/queries.sql:60-64` is the only write and there is no update or delete; the operator reads it at `internal/machineapi/definition.go:15-35` |
 | `web/src/app/console/orgs/[org]/consents/page.tsx:34` | The organizations this one exchanges messages with. A relation is a pair: a message crosses only while both organizations hold their half, and either side can withdraw its own. | verifiable | `internal/machineapi/message.go:99-101`; `internal/message/queries.sql:137-142,158-165` |
@@ -328,34 +333,113 @@ must not exist, a migration that must name a table, an ADR that must be
 because the fact it pins that claim to is the absence of the console
 route `web/src/app/console/orgs/[org]/agents/[agent]` and of
 `internal/adapter` (`claims.test.ts:91-104`), while the sentence a
-reader meets says `any way to watch one work`. The harness holds the
-claim the author meant; the page states a wider one. No such harness
-exists for the console pages at all.
+reader meets says `any way to watch one work`. On the watch half the
+harness holds the claim the author meant and the page states a wider
+one. On the adapter half it holds nothing: `internal/adapter` absent is
+the path check the rows above correct, so the check is green on a fact
+that does not carry the claim, and `make ci` has been running it that
+way (§What re-checking the clean rows found). No such harness exists
+for the console pages at all.
+
+## What re-checking the clean rows found
+
+#1025 found the `internal/adapter` verdict wrong and asked what else in
+this file rested on the same kind of evidence. The miss was in a row
+marked `verifiable`, and the review that merged this file sampled three
+of the seven `false` verdicts and no `verifiable` one, so the clean
+rows are the ones nothing looked at twice.
+
+**The population is every `verifiable` row in §The assertions, and all
+73 were read rather than filtered.** A row is counted here when at
+least one clause of its Checked against cell is a negative existential
+— an assertion that nothing in the tree does X — such that the verdict
+would change if such a thing turned out to exist. That is the class
+exposed to the failure #1025 names: a query on a name finds nothing,
+and nothing-found is read as the capability being absent. Fifteen of
+the 73 are in that class.
+
+**The control on the fifteen.** Parsing the tables in this file returns
+73 `verifiable`, 7 `false` and 5 unverifiable in §The assertions and 8
+rows in §The strata outside the population, which are the totals this
+file stated for itself before the corrections above — so 73 is the
+whole population and not what one query happened to match. Filtering
+those 73 by negative vocabulary instead of reading them returned 17: it
+missed two whose evidence opens on a negative the pattern did not carry
+(`No suspend or revoke exists`, and `internal/machine` imports no
+`internal/operator`) and admitted four whose absence sits in a Remark
+rather than under the verdict. The regex is reported beside the reading
+because the disagreement between them is the measure of how much
+judgement the boundary takes, and a filtered population would have
+reported a smaller number with nothing to say it was short.
+
+**Each row was re-checked at `d748465`**, the commit this file is
+pinned to, so a verdict that was wrong when it was written is not
+confused with one that has drifted since.
+
+| Row | What its evidence rested on | Outcome |
+|---|---|---|
+| `page.tsx:93` | `internal/adapter` does not exist | **Moved to `false`.** The row above carries the evidence. |
+| `login/page.tsx:52` | no open signup operation in `api/openapi.yaml` | **Moved to `false`.** A check on the specification's operation names, which does not reach `upsertUser` (`internal/api/auth.go:148-172`). Filed as #1028. |
+| `define-agent-form.tsx:82` | no outbound client to an operator exists | Verdict holds; **evidence was wrong**. `internal/cli/delivery.go:117` is `gatewayClient`, which reaches the agent platform rather than garam, and `internal/cli/probe.go:37` dials through `http.DefaultClient`, which a query for `http.Client` constructions does not reach. Corrected in the row. |
+| `agents/page.tsx:41` | the only two writers of `agents` | Verdict holds; **evidence was wrong**. `agents` has four writers: the two named create rows, and `ReportAgentProvisioningState` and `ReportAgentRuntimeState` each update one (ADR-0053). Corrected in the row. |
+| `define-agent-form.tsx:192` | the client cannot supply one | Verdict holds; **citation was wrong**. `api/openapi.yaml:1889-1903` is `OperatorEnrollment`; the schema meant is `AgentDefinitionCreate` at `:1939-1953`. Corrected in the row. |
+| `password-register-form.tsx:74` | `UpdateUser` cannot move a `grn` | Holds. `internal/user/queries.sql` read whole: `CreateUser` is the only insert and `UpdateUser` sets no `grn`. |
+| `register-operator-form.tsx:51` | no key material on the path | Holds, and the clause is scoped to the path rather than to the tree: enrollment generates and returns none, while renewal does return one — which the sentence does not reach. |
+| `register-operator-form.tsx:52` | no delete of `operators` | Holds. `internal/operator/queries.sql` read whole, and `Store` offers `Register`, `Get` and `ListByOrg` and nothing else. A record does go when its organization does, by the `ON DELETE CASCADE` on `orgs` — which is the mechanism the row at `:57` describes. |
+| `register-operator-form.tsx:53` | `internal/machine` imports no `internal/operator` | Holds. |
+| `register-operator-form.tsx:57` | no suspend or revoke exists | Holds. |
+| `register-operator-form.tsx:131` | no operation reads a token back | Holds. `MintOperatorEnrollment` writes `token_hash` alone and `SpendOperatorEnrollment` returns `operator_grn` alone. |
+| `register-operator-form.tsx:132` | no route re-mints a token | Holds. `Register` is the only writer and refuses a second registration of one identifier. |
+| `policies/page.tsx:20` | no file under `web/src` calls a policy read | Holds. No policy path is fetched anywhere under `web/src`. |
+| `policies/page.tsx:21` | nothing under `web/src` calls one | Holds. Same evidence. |
+| `agents/page.tsx:63` | the only write, and no update or delete | Holds. `LockAgentDefinition` is a `SELECT … FOR UPDATE` and writes nothing. |
+
+So: fifteen rows exposed, two moved, three held on evidence that had to
+be corrected under them, ten sound. **The count is the result whether
+or not any row moved**, because what it says is how much of this file
+rested on nothing-found — and a fifth of the clean rows did.
+
+Four further rows carry a negative existential in a Remark rather than
+under the verdict — `page.tsx:47`, `grant-consent-form.tsx:31`,
+`agent-definition.ts:79` and `password-credentials.ts:60`. They are
+named here so that a reader who counts them gets nineteen rather than
+concluding the fifteen was drawn narrowly. None of the four rests its
+verdict on the remark.
+
+**This file contradicted itself, and that is worth more than either
+half.** The `define-agent-form.tsx:82` row cites
+`internal/cli/delivery.go` as `garam adapter` — in a row marked
+`verifiable` — while `page.tsx:93` and `page.tsx:150` said the adapter
+was not built. One evidence cell named the thing another two said did
+not exist. Nothing reads across the rows of a table, which is why a
+document is capable of holding both.
 
 ## What this does not settle
 
 The scope question is not answered here, and this survey is capable of
 supporting either answer, so both readings are stated.
 
-**Toward binding it.** Six false claims on one surface is not one file
-that slipped. Four of the seven strings are on pages a signed-out
+**Toward binding it.** Eight false claims on one surface is not one
+file that slipped. Seven of the nine strings are on pages a signed-out
 visitor reads, and two sit where a person is about to act — the
 position the sentence #1002 removed sat in.
 
-Four of the six drifted and two were false the day they were written,
-and the split is what review reaches and what it does not.
+Five of the eight drifted and three were false the day they were
+written, and the split is what review reaches and what it does not.
 
 | Claim | Written | Falsified by |
 |---|---|---|
 | `or any way to watch one work` (`page.tsx:149`, `:150`) | `a20035b`, 2026-08-17 | `7090dd8`, later the same day, which added `internal/api/watch.go` |
+| `the adapter … is not built` (`page.tsx:93`, `:150`) | `a20035b`, 2026-08-17 | `40a0c32`, 2026-08-24, which added `internal/delivery` and the `garam adapter` command in one commit |
 | `In the console today` (`page.tsx:200`) | `1f06749`, 2026-08-03 | `f779293` 2026-08-24, `1fc41f2` 2026-08-25, `96557e5` 2026-09-02 — the agents, operators and consents sections |
 | `Sign in with the Google account…` (`page.tsx:108`) | `ffcef60`, 2026-08-03 | `2458d48`, 2026-08-25, which added password sign-in |
 | `every certificate … fails the handshake from then on` (`register-operator-form.tsx:58`) | `5873d77` (#1002), 2026-09-04 | `b16a896` (#1005), the same day |
 | `Policy-based authorization on every request` (`layout.tsx:7`) | `ffcef60`, 2026-08-03 | nothing — `/auth/login/{provider}` was served and `internal/api/auth.go` held no `authorize` call at that commit |
 | `Messages … stop at once.` (`withdraw-consent-form.tsx:47`) | `96557e5`, 2026-09-02 | nothing — `ClaimMessage` has never carried a consent predicate |
+| `Accounts are created by invitation, not by signup.` (`login/page.tsx:52`) | `cff3049`, 2026-08-26 | nothing — `upsertUser` has created a user on first login since `d0b2e4d`, 2026-07-25, the commit that added OAuth sign-in |
 
-A reviewer can catch the two that were wrong on arrival. Three of the
-four that drifted were true when they merged, and the pull request that
+A reviewer can catch the three that were wrong on arrival. Four of the
+five that drifted were true when they merged, and the pull request that
 falsified each one touched neither the page nor anything a reviewer of
 that page would open.
 
@@ -368,7 +452,7 @@ one day after #1002 corrected the sentence beside it and the day #1003
 was filed about it. That is the case where "review catches it" was
 tested directly.
 
-**Toward leaving it.** 73 of 85 hold, several of them precisely, and
+**Toward leaving it.** 71 of 85 hold, several of them precisely, and
 the whole cross-organization consent surface — ten assertions in front
 of a destructive control — is accurate but for one clause. That is not
 the profile of prose nobody checks. The two `false` calls that rest on

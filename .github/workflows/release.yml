@@ -53,6 +53,16 @@ jobs:
           fi
           echo "version=${REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
+      # The commit the build reads, taken from the checked-out tree
+      # rather than from `github.sha`. The two agree on this trigger —
+      # a tag push carries the commit the tag names — and what the
+      # image records is what was compiled, so it is read from what
+      # was compiled. A run reaching here on another ref, or a
+      # checkout given one, then records the commit it built rather
+      # than the one the event mentioned.
+      - id: revision
+        run: echo "revision=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
       # The push role has been assumed once, by `v0.1.0` on 2026-09-01,
       # and it succeeded — so no failure of the step below has been
       # seen, and a successful AssumeRoleWithWebIdentity event does not
@@ -100,6 +110,18 @@ jobs:
           sbom: false
           push: false
           load: true
+          # IMAGE_REVISION and IMAGE_VERSION reach
+          # org.opencontainers.image.revision and …version through
+          # the ARG/LABEL pair each Dockerfile ends with, so a build
+          # of the same file outside this workflow records them the
+          # same way. What a label carries is what the build claimed
+          # rather than a property of the bytes — nothing derives it
+          # from the layers. Both values are resolved per run, which
+          # is why scripts/image-build.sh names them and passes
+          # neither (#1020).
+          build-args: |
+            IMAGE_REVISION=${{ steps.revision.outputs.revision }}
+            IMAGE_VERSION=${{ steps.version.outputs.version }}
           tags: ${{ steps.ecr.outputs.registry }}/garam/garam-server:${{ steps.version.outputs.version }}
 
       - id: web
@@ -122,6 +144,8 @@ jobs:
           # where a deployment meets what it binds.
           build-args: |
             GARAM_API_URL=http://garam-api:8080
+            IMAGE_REVISION=${{ steps.revision.outputs.revision }}
+            IMAGE_VERSION=${{ steps.version.outputs.version }}
           tags: ${{ steps.ecr.outputs.registry }}/garam/garam-web:${{ steps.version.outputs.version }}
 
       # Both images are in the runner's image store and neither

@@ -203,7 +203,37 @@ What this repository runs against itself. `docs/convention/ci.md` decides how a 
 - `.github/workflows/ci.yml` triggers on `pull_request` and on nothing else; `.github/workflows/images.yml` on the same event except where a pull request changes only `docs/`; `.github/workflows/release.yml` triggers on a `v*` tag (ADR-0039).
 - **A superseded run is cancelled; a release run is not.** `ci.yml` and `images.yml` each declare a concurrency group keyed on `github.workflow` and `github.ref` — under their one trigger that ref is the pull request's merge ref, one value per pull request — with `cancel-in-progress`, so a push that replaces a head stops the run reading the old one, up to the four job-runs a full merge costs. `release.yml` declares none, and the absence is what enforces it: a group cancels a pending run of that group when a newer one queues behind it, whichever way `cancel-in-progress` is set, so a group there could leave a `vX.Y.Z` tag publishing nothing at all, and a run cancelled mid-publish leaves the version half-published with the next version as the only repair (ADR-0039 §Consequences). What reads the guard is that `grep -n '^concurrency:' .github/workflows/*.yml` names two files and not three (#899).
 - **Both images a release publishes are built on a pull request.** `images.yml` builds each from what `release.yml` says it is built from and then checks the web one, which is the image a release used to be able to fail on irreversibly: the server image was pushed before the web image was built, and immutability makes the repair the next version (ADR-0039 §Consequences). `release.yml` builds both and pushes neither until both are built (#945), so what a build failure there now costs is the run. Until #850 neither image was built by any check.
-- **No run here reaches a deployment, so `main` is not what a caller meets.** `release.yml` publishes two images on a `vX.Y.Z` tag and no other workflow pushes one, so a merge to `main` publishes nothing; the only cluster a recipe here reaches is the local minikube, and what it runs there it built from the working tree (`Makefile`, `minikube-images`). What a running garam serves is fixed by the image reference its deployment set, and that reference is the deployment's record rather than this repository's — for the cluster this project's own agents call, it lives in `garamsh/gitops`. Resolving one back to a surface is the half this repository holds: an image published here carries the version of the `vX.Y.Z` tag it was built from (ADR-0039), so `api/openapi.yaml` and `api/machine.yaml` at that tag are what a caller of that deployment meets, and a reference this repository did not publish is one only its builder can resolve. An answer to "does this route exist" therefore names where it exists, and `main` answers a different question than the caller asked (#886).
+- **No run here reaches a deployment, so `main` is not what a caller
+  meets.** `release.yml` publishes two images on a `vX.Y.Z` tag and no
+  other workflow pushes one, so a merge to `main` publishes nothing;
+  the only cluster a recipe here reaches is the local minikube, and
+  what it runs there it built from the working tree (`Makefile`,
+  `minikube-images`). What a running garam serves is fixed by the image
+  reference its deployment set, and that reference is the deployment's
+  record rather than this repository's — for the cluster this project's
+  own agents call, it lives in `garamsh/gitops`. Resolving one back to
+  a surface is the half this repository holds, and #1020 moved it from
+  the tag onto the artifact: `release.yml` passes the commit
+  `git rev-parse HEAD` names in the run that built the image, and the
+  version of its `vX.Y.Z` tag (ADR-0039), to both Dockerfiles, which
+  record the pair as `org.opencontainers.image.revision` and
+  `…version` — so `docker image inspect -f '{{json .Config.Labels}}'`
+  names the commit whose `api/openapi.yaml` and `api/machine.yaml` a
+  caller of that deployment meets. **A label is what the build claimed
+  and not a property of the bytes.** Nothing derives it from the
+  layers, so this replaces an unenforced step with a readable one
+  rather than removing it: both repositories are IMMUTABLE, which makes
+  a tag's digest a fact the registry enforces, and the single link left
+  resting on trust is the git tag still naming the commit it named.
+  What the registry holds was published before the change — `0.1.0`
+  carries no labels at all and `0.2.0` a pair a person passed by
+  hand — so the first image carrying them because these files say so is
+  the next release. A reference this repository did not publish is
+  still one only its builder can vouch for, which after the label is a
+  claim about where it came from and no longer about what code is in
+  it. An answer to "does this route exist" therefore names where it
+  exists, and `main` answers a different question than the caller asked
+  (#886).
 - **The after-merge run is not taken.** A `push: branches: [main]` trigger ran on `ci.yml` until #811. Both triggers read the merge result, so what that one alone covered is a `main` that moved between the pull request's run and the merge.
 - **Nothing mechanical covers that gap; the role that merges does.** The obligation is stated once, in `AGENTS.md` §Roles; this bullet records that the gap is covered and is not that statement. The mechanical replacement is a required status check with *branches must be up to date*, which is a repository setting and so the account owner's.
 - **Mutation testing runs in no workflow, and that is the decision rather than an omission.** `make mutation` rewrites one operator at a time under `internal/` and reports the mutants no test noticed. Four full runs on 2026-09-02 each spent around 35 minutes of CPU on twelve cores and took between 5 minutes 42 seconds and 32 minutes of wall time; the spread is the per-mutant timeout, which the target's own comment accounts for. A runner with four cores has a third of those and slower ones. `internal/` holds 33 of the module's 40 Go packages; the seven outside it are `cmd/garam`, the three generated from `api/openapi.yaml`, `api/machine.yaml` and `proto/`, and `migrations`, `tests/e2e` and `tests/integration`, which hold test files only (`go list ./... | grep -v /internal/`). So triggering on changes under it would exclude a pull request that changes Go outside `internal/` as well as the ones that change no Go at all, and would still fire on almost every pull request that changes Go and roughly double what it costs: of the 120 commits to 3fbcf93, 47 changed a Go, specification or migration file, and 41 of those touch `internal/` while six do not. A schedule spends the same minutes on a report no pull request is waiting for, and attributes a new survivor to no change rather than to the one that raised it. What the run buys is an audit of the suite rather than a gate on one change, which is why a person invokes it (#875).

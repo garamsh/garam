@@ -56,8 +56,9 @@ export function RegisterOperatorForm({ org }: { org: string }) {
         and this organization&apos;s certificate authority and never against
         this record. Short of expiry, what does stop an operator is deleting
         this organization: that takes the certificate authority with it, every
-        certificate the authority signed fails the handshake from then on, and
-        garam does not bring the authority back.
+        certificate the authority signed stops authenticating from then on, so
+        every request that operator makes is refused, and garam does not bring
+        the authority back.
       </p>
       <form action={formAction} className="flex max-w-2xl flex-col gap-6">
         <input type="hidden" name="org" value={org} />

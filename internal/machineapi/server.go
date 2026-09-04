@@ -59,7 +59,9 @@ func NewServer(agents agent.Service, operators operator.Service, messages messag
 }
 
 // caller returns the GRN the connection authenticated as, and writes
-// the refusal itself when there is none.
+// the refusal itself when there is none. It is what a handler needing
+// only the identity takes it through; see callerCertificate for why
+// taking it is not optional.
 func caller(w http.ResponseWriter, r *http.Request) (grn.GRN, bool) {
 	identity, ok := callerCertificate(w, r)
 	return identity.GRN(), ok
@@ -67,8 +69,14 @@ func caller(w http.ResponseWriter, r *http.Request) (grn.GRN, bool) {
 
 // callerCertificate returns the identity and the certificate it
 // authenticated with, and writes the refusal itself when there is none.
-// Every request the machine listener serves carries an identity, so the
-// refusal is what a request that reached a handler any other way gets.
+//
+// The listener admits a connection whose certificate does not
+// authenticate, so that an operator with no certificate yet can reach
+// the enrollment route (ADR-0064). That makes this refusal the only one
+// standing between such a connection and a handler: every handler but
+// EnrollOperator has to take its identity through here, or through
+// parties, and a new one that does not is a route an unauthenticated
+// caller reaches.
 //
 // One route reads the certificate rather than the GRN alone: what may
 // replace a certificate is decided by the certificate presented

@@ -25,3 +25,23 @@ VALUES (sqlc.arg('operator_grn'), sqlc.arg('serial'), sqlc.arg('issued_at'))
 ON CONFLICT (operator_grn) DO UPDATE
     SET serial = EXCLUDED.serial, issued_at = EXCLUDED.issued_at
     WHERE operator_certificates.serial = sqlc.arg('predecessor');
+
+-- Minting sweeps the tokens that have expired, as creating an
+-- invitation sweeps its own table: a row is written in one place, so
+-- sweeping there keeps the table proportional to what is live.
+-- name: MintOperatorEnrollment :exec
+WITH pruned AS (
+    DELETE FROM operator_enrollment_tokens WHERE expires_at <= now()
+)
+INSERT INTO operator_enrollment_tokens (token_hash, operator_grn, minted_by, minted_at, expires_at)
+VALUES ($1, $2, $3, $4, $5);
+
+-- The delete is what makes a token single-use: the row is gone when the
+-- statement returns, so two callers presenting one token leave one
+-- certificate and the loser sees a token that is not there. Expiry is
+-- the same answer for the same reason — a caller that spends nothing
+-- learns nothing about which of the two happened.
+-- name: SpendOperatorEnrollment :one
+DELETE FROM operator_enrollment_tokens
+WHERE token_hash = $1 AND expires_at > now()
+RETURNING operator_grn;

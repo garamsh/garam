@@ -3,23 +3,30 @@ package machine
 import (
 	"context"
 	"crypto/tls"
-	"crypto/x509"
+	"net"
 	"net/http"
 )
 
 // NewServer returns the machine-facing HTTP server: it terminates TLS
-// with the certificate that seam answers with, requires a client
-// certificate, and serves next only for a connection whose certificate
-// authenticated (ADR-0014). The chain is verified in next and not by
-// the TLS stack, because which authority may sign is decided by the
-// organization the certificate's own SAN names; what TLS is left to
-// enforce is that a certificate is presented at all.
+// with the certificate that seam answers with, asks for a client
+// certificate, and hands next the identity that certificate proved
+// (ADR-0014). The chain is verified in next's Service and not by the
+// TLS stack, because which authority may sign is decided by the
+// organization the certificate's own SAN names.
+//
+// A connection whose certificate does not authenticate is not refused
+// here, and carries no identity instead. That is what leaves room for
+// the one route a caller reaches before it has a certificate at all —
+// an operator enrolling with a token (ADR-0064) — and it costs nothing
+// elsewhere: what an admitted caller may do is decided by the identity
+// it holds, and a request that carries none reaches no handler that
+// asks for one.
 func NewServer(s Service, certificate ServerCertificate, next http.Handler) *http.Server {
 	// TLS 1.3 only: both ends of this surface are garam's, so neither
 	// needs an older one.
 	base := &tls.Config{
 		MinVersion: tls.VersionTLS13,
-		ClientAuth: tls.RequireAnyClientCert,
+		ClientAuth: tls.RequestClientCert,
 	}
 	// Asked per handshake rather than frozen into Certificates, so a
 	// replaced certificate is presented on the next connection with
@@ -29,49 +36,103 @@ func NewServer(s Service, certificate ServerCertificate, next http.Handler) *htt
 	base.GetCertificate = func(*tls.ClientHelloInfo) (*tls.Certificate, error) {
 		return certificate.Get()
 	}
-	// Per connection, because the handshake's context reaches
-	// VerifyPeerCertificate no other way: a lookup then ends with the
-	// connection that needed it instead of outliving it. Cloning only
-	// then also carries what serving the config added to it, the ALPN
-	// protocols among them.
+	// Per connection, because the handshake's context reaches the
+	// callback below no other way: a lookup then ends with the
+	// connection that needed it instead of outliving it, and the cell
+	// the outcome is written to is the one this connection's requests
+	// read. Cloning only then also carries what serving the config
+	// added to it, the ALPN protocols among them.
 	base.GetConfigForClient = func(hello *tls.ClientHelloInfo) (*tls.Config, error) {
 		ctx := hello.Context()
 		cfg := base.Clone()
 		cfg.GetConfigForClient = nil
-		cfg.VerifyPeerCertificate = func(chain [][]byte, _ [][]*x509.Certificate) error {
-			_, err := s.Authenticate(ctx, chain)
-			return err
+		// VerifyConnection rather than VerifyPeerCertificate, because
+		// this one also runs on a resumed handshake. A TLS 1.3 ticket
+		// restores the peer certificates without re-running the
+		// certificate callbacks, so a resumed connection would carry no
+		// identity at all and every request on it would be refused.
+		cfg.VerifyConnection = func(state tls.ConnectionState) error {
+			identity, err := s.Authenticate(ctx, chainOf(state))
+			if err != nil {
+				// The handshake completes and the connection stays
+				// anonymous. Refusing here instead would take the
+				// enrollment route down with every caller that has no
+				// certificate yet, which is all of them.
+				return nil
+			}
+			if cell, ok := authenticatedOf(ctx); ok {
+				cell.identity = &identity
+			}
+			return nil
 		}
 		return cfg, nil
 	}
-	return &http.Server{Handler: identify(next), TLSConfig: base}
+	return &http.Server{
+		Handler:   identify(next),
+		TLSConfig: base,
+		// The cell has to exist before the handshake writes to it, and
+		// this is the one hook that runs first: net/http derives the
+		// connection's context here and hands that same context to the
+		// TLS handshake and to every request served over it.
+		ConnContext: func(ctx context.Context, _ net.Conn) context.Context {
+			return context.WithValue(ctx, authenticatedKey{}, &authenticated{})
+		},
+	}
 }
 
-// identify hands next the identity the connection authenticated as.
-// The certificate it reads is the one the handshake verified, and it
-// reads it by the same rule, so what reaches a handler is the identity
-// [Service.Authenticate] returned. The refusal is what a request that
-// reached here any other way gets instead.
+// chainOf renders the certificates a connection presented in the form
+// [Service.Authenticate] reads them, leaf first, as TLS hands them
+// over. A connection that presented none yields none.
+func chainOf(state tls.ConnectionState) [][]byte {
+	chain := make([][]byte, 0, len(state.PeerCertificates))
+	for _, certificate := range state.PeerCertificates {
+		chain = append(chain, certificate.Raw)
+	}
+	return chain
+}
+
+// authenticated is what one connection's handshake proved, written
+// once by [Service.Authenticate] succeeding and read by every request
+// served over that connection. A nil identity is a connection whose
+// certificate did not authenticate, which is the state it is
+// constructed in — there is no second field to disagree with it.
+//
+// One goroutine writes it, during a handshake that completes before any
+// request on the connection is read, so nothing here is concurrent.
+type authenticated struct {
+	identity *Identity
+}
+
+type authenticatedKey struct{}
+
+func authenticatedOf(ctx context.Context) (*authenticated, bool) {
+	cell, ok := ctx.Value(authenticatedKey{}).(*authenticated)
+	return cell, ok
+}
+
+// identify hands next the identity the connection authenticated as,
+// where it authenticated as one. What it passes on is what
+// [Service.Authenticate] returned during the handshake, so an identity
+// reaching a handler is one whose chain was verified — nothing here
+// reads the presented certificate a second time.
 func identify(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
-			http.Error(w, "no client certificate", http.StatusUnauthorized)
+		cell, ok := authenticatedOf(r.Context())
+		if !ok || cell.identity == nil {
+			next.ServeHTTP(w, r)
 			return
 		}
-		identity, err := identityOf(r.TLS.PeerCertificates[0])
-		if err != nil {
-			http.Error(w, "certificate does not authenticate", http.StatusUnauthorized)
-			return
-		}
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), identityKey{}, identity)))
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), identityKey{}, *cell.identity)))
 	})
 }
 
 type identityKey struct{}
 
 // IdentityOf returns the machine identity the request authenticated
-// as. Every request a server from [NewServer] serves carries one; the
-// comma-ok is what a request served any other way reads instead.
+// as. The comma-ok is the whole of the distinction this listener
+// makes: a request that carries no identity presented no certificate
+// this organization's authority signed, and what such a request may
+// reach is the handler's to decide.
 func IdentityOf(r *http.Request) (Identity, bool) {
 	identity, ok := r.Context().Value(identityKey{}).(Identity)
 	return identity, ok

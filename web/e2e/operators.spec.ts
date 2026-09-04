@@ -31,14 +31,24 @@ test.describe("operators", () => {
     await page.getByLabel("Identifier").fill("field-two");
     await page.getByRole("button", { name: "Register operator" }).click();
     await expect(
-      page.getByText(
-        "Registered field-two. An agent definition may name it now.",
-        { exact: true },
-      ),
+      page.getByRole("heading", { name: "Registered field-two", exact: true }),
     ).toBeVisible();
 
+    // The token the operator enrols with is shown once, beside the
+    // sentence saying so (ADR-0064). Substring, because the sentence is
+    // longer than the claim under test.
+    const token = page.getByLabel("Enrollment token");
+    await expect(token).toHaveValue(/^[0-9a-f]{48}$/);
+    await expect(
+      page.getByText("This is the only time this token is shown"),
+    ).toBeVisible();
+
+    // A reload is what a person who navigated away does, and it is
+    // where the token stops existing: the record survives it and the
+    // token does not.
     await page.reload();
     await expect(page.getByText("field-two", { exact: true })).toBeVisible();
+    await expect(token).toBeHidden();
 
     // An operator this organization has not registered is refused where
     // the identifier can still be corrected, and the refusal names it.

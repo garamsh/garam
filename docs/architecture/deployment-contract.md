@@ -296,24 +296,37 @@ alone. What binds instead is who signs them
   holds**, and garam reads it once, so it is a restart plus a reissue
   rather than a rotation. Nothing in garam schedules it; it should
   outlive the certificates it signs by years.
-- **An operator bootstrapped by `issue-certificate` needs that root
-  too, and the command does not write it**: it writes
+- **An enrolling operator needs that root before it calls, and it is
+  the only file it needs.** Registering the operator answers a one-time
+  token, the operator generates its own key pair in its own cluster and
+  presents the token with a certificate signing request, and garam signs
+  ([ADR-0064](./adr/0064-an-operator-enrols-with-a-one-time-token-and-keeps-its-key-in-its-own-cluster.md)).
+  The root is what the operator verifies garam by on that call, so it
+  reaches the operator's cluster ahead of the token — one public file
+  per deployment rather than one per operator. **An enrollment made
+  without verifying garam against it hands the token to whoever
+  answered.** No private key travels on this path at all: garam never
+  holds one, and a deployment has nothing to write.
+- **An operator bootstrapped by `issue-certificate` instead needs that
+  root too, and the command does not write it**: it writes
   `certificate.pem`, `key.pem` and `issuer.pem` and no more
   (`internal/cli/issue_certificate.go`). The root is public and the
   deployment already holds it, so whoever installs that first
   certificate out of band installs the same file
-  `GARAM_MACHINE_SERVER_ROOT_FILE` names beside it.
-- **Registering that operator is a second act, and the command does not
-  perform it.** `issue-certificate` mints the certificate; an owner or
-  an admin of the organization registers the operator over the browser
-  API (`POST /orgs/{org}/operators`), under the same identifier the
-  certificate's subject GRN carries
-  ([ADR-0045](./adr/0045-an-organization-registers-an-operator.md)). The
-  order between the two is free, but a deployment that skips the
-  registration has an operator that authenticates and no definition can
-  name: `POST /orgs/{org}/agent-definitions` refuses an operator the
-  organization has not registered. Nothing registers one automatically —
-  no listener, no migration, and no command.
+  `GARAM_MACHINE_SERVER_ROOT_FILE` names beside it. That path stays
+  available and is the recovery from a token nobody received.
+- **Registering the operator is what the enrollment path starts with,
+  and what the out-of-band path still owes separately.** An owner or an
+  admin of the organization registers the operator over the browser API
+  (`POST /orgs/{org}/operators`), under the identifier the certificate's
+  subject GRN carries
+  ([ADR-0045](./adr/0045-an-organization-registers-an-operator.md)); on
+  the enrollment path that call is also what mints the token, and it
+  answers the token once. A deployment that bootstraps out of band and
+  skips the registration has an operator that authenticates and no
+  definition can name: `POST /orgs/{org}/agent-definitions` refuses an
+  operator the organization has not registered. Nothing registers one
+  automatically — no listener, no migration, and no command.
 
 ## The migrate job
 
@@ -484,3 +497,7 @@ that would assert one:
 - [ADR-0058](./adr/0058-a-responsibility-document-routes-to-the-artifact-that-enforces-a-rule.md)
   — state a working artifact carries and enforces stays there, and the
   document that owns the concern names what it hands over
+- [ADR-0064](./adr/0064-an-operator-enrols-with-a-one-time-token-and-keeps-its-key-in-its-own-cluster.md)
+  — an operator enrols with a one-time token and keeps its key in its
+  own cluster, so the first certificate is a call rather than a file a
+  deployment moves

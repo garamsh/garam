@@ -190,7 +190,9 @@ func registerOperator(t *testing.T, f *fixture, orgSlug, id string) grn.GRN {
 	t.Helper()
 	o, err := operator.New(orgGRNOf(orgSlug), id, userGRNOf("owner-sub"))
 	require.NoError(t, err)
-	require.NoError(t, f.operators.Register(testCtx(t), o))
+	enrollment, err := operator.NewEnrollment(o.GRN(), userGRNOf("owner-sub"))
+	require.NoError(t, err)
+	require.NoError(t, f.operators.Register(testCtx(t), o, enrollment))
 	return o.GRN()
 }
 
@@ -427,7 +429,7 @@ func TestAgentDefine_RefusesAnOperatorTheOrgHasNotRegistered(t *testing.T) {
 
 	rec = f.do(t, "POST", "/orgs/"+slug+"/operators", `{"identifier":"gagent-dev"}`, member)
 	require.Equal(t, http.StatusCreated, rec.Code)
-	assert.Equal(t, unregistered.String(), decodeBody[apigen.Operator](t, rec).Grn)
+	assert.Equal(t, unregistered.String(), decodeBody[apigen.RegisteredOperator](t, rec).Operator.Grn)
 
 	rec = f.do(t, "POST", "/orgs/"+slug+"/agent-definitions", body, member)
 	assert.Equal(t, http.StatusCreated, rec.Code)

@@ -152,6 +152,30 @@ func (i *issuer) sign(t *testing.T, org string, l leaf) tls.Certificate {
 	return tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key}
 }
 
+// selfSigned returns a certificate nothing but its own key signed,
+// naming subject. It is what a caller with no certificate can always
+// make for itself, so it is what a check reading the SAN without the
+// chain would accept.
+func (i *issuer) selfSigned(t *testing.T, subject grn.GRN) tls.Certificate {
+	t.Helper()
+	uri, err := url.Parse(subject.String())
+	require.NoError(t, err)
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	template := &x509.Certificate{
+		SerialNumber:          big.NewInt(time.Now().UnixNano()),
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(time.Hour),
+		KeyUsage:              x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		BasicConstraintsValid: true,
+		URIs:                  []*url.URL{uri},
+	}
+	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	require.NoError(t, err)
+	return tls.Certificate{Certificate: [][]byte{der}, PrivateKey: key}
+}
+
 // open returns an organization's authority and the private key behind
 // it, which is sealed exactly as the column holds it.
 func (i *issuer) open(t *testing.T, org string) (*x509.Certificate, *ecdsa.PrivateKey) {

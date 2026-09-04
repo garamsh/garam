@@ -43,7 +43,7 @@ func newService(t *testing.T, store ca.Store, sealer ca.Sealer, cfg ca.Config) c
 // issueForNewOrg issues through a service whose store holds no
 // authority yet, and returns the certificate with the authority the
 // service created on demand.
-func issueForNewOrg(t *testing.T, subject grn.GRN, sealer ca.Sealer, cfg ca.Config) (*ca.Certificate, *ca.Authority) {
+func issueForNewOrg(t *testing.T, subject grn.GRN, sealer ca.Sealer, cfg ca.Config) (*ca.IssuedCertificate, *ca.Authority) {
 	t.Helper()
 	store := mocks.NewMockStore(t)
 	store.EXPECT().Get(mock.Anything, orgOf(subject)).Return(nil, ca.ErrAuthorityNotFound).Once()
@@ -114,7 +114,7 @@ func TestService_IssueCreatesTheOrganizationAuthorityOnDemand(t *testing.T) {
 
 	assert.Equal(t, orgOf(subject), authority.Organization())
 	assert.Equal(t, subject, cert.Subject())
-	require.NoError(t, verifyAgainst(t, cert, authority))
+	require.NoError(t, verifyAgainst(t, &cert.Certificate, authority))
 
 	// The CA travels with the certificate: its holder needs it to
 	// verify the other side of the connection.
@@ -235,7 +235,7 @@ func TestService_IssueReusesTheOrganizationAuthority(t *testing.T) {
 		Issue(context.Background(), agentGRN("acme", "bot-2"))
 	require.NoError(t, err)
 
-	require.NoError(t, verifyAgainst(t, second, authority))
+	require.NoError(t, verifyAgainst(t, &second.Certificate, authority))
 	assert.NotEqual(t,
 		parseCertificatePEM(t, first.CertificatePEM()).SerialNumber,
 		parseCertificatePEM(t, second.CertificatePEM()).SerialNumber)
@@ -256,16 +256,16 @@ func TestService_CertificateDoesNotChainToAnotherOrganization(t *testing.T) {
 	require.NoError(t, err)
 
 	// Same organization, same trust root.
-	require.NoError(t, verifyAgainst(t, acmeCert, acme))
-	require.NoError(t, verifyAgainst(t, sibling, acme))
-	require.NoError(t, verifyAgainst(t, otherCert, other))
+	require.NoError(t, verifyAgainst(t, &acmeCert.Certificate, acme))
+	require.NoError(t, verifyAgainst(t, &sibling.Certificate, acme))
+	require.NoError(t, verifyAgainst(t, &otherCert.Certificate, other))
 
 	// Another organization, neither direction.
-	err = verifyAgainst(t, acmeCert, other)
+	err = verifyAgainst(t, &acmeCert.Certificate, other)
 	require.Error(t, err)
 	assert.IsType(t, x509.UnknownAuthorityError{}, err)
-	assert.Error(t, verifyAgainst(t, sibling, other))
-	assert.Error(t, verifyAgainst(t, otherCert, acme))
+	assert.Error(t, verifyAgainst(t, &sibling.Certificate, other))
+	assert.Error(t, verifyAgainst(t, &otherCert.Certificate, acme))
 }
 
 // TestService_IssueRefusesAnAuthorityFromAnotherOrganization covers the
@@ -372,7 +372,7 @@ func TestService_IssueTakesTheAuthorityAConcurrentWriterCreated(t *testing.T) {
 
 	cert, err := newService(t, store, sealer, ca.Config{}).Issue(context.Background(), subject)
 	require.NoError(t, err)
-	assert.NoError(t, verifyAgainst(t, cert, winner))
+	assert.NoError(t, verifyAgainst(t, &cert.Certificate, winner))
 }
 
 // TestService_IssueRefusesToOutliveTheAuthority covers a lifetime

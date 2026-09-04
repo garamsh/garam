@@ -11,9 +11,14 @@ import (
 )
 
 // RegisterOperator records that the org has an operator under the
-// identifier given (ADR-0045). Requires the admin role. It hands the
-// operator nothing: what an operator authenticates with is a
-// certificate this route neither mints nor reads.
+// identifier given (ADR-0045) and mints the one-time token it enrols
+// with (ADR-0064). Requires the admin role.
+//
+// The token is answered here and nowhere else. garam stores its hash,
+// so this response is the only place it exists in a form anyone can
+// present, and the record and the token are written together — a
+// registration that arrived without one would be an operator nothing
+// can enrol.
 func (s *Server) RegisterOperator(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org) {
 	u, err := s.currentUser(r)
 	if err != nil {
@@ -34,11 +39,22 @@ func (s *Server) RegisterOperator(w http.ResponseWriter, r *http.Request, orgSlu
 		writeError(w, err)
 		return
 	}
-	if err := s.operators.Register(r.Context(), o); err != nil {
+	enrollment, err := operator.NewEnrollment(o.GRN(), u.GRN())
+	if err != nil {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, operatorToAPI(o))
+	if err := s.operators.Register(r.Context(), o, enrollment); err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, apigen.RegisteredOperator{
+		Operator: operatorToAPI(o),
+		Enrollment: apigen.OperatorEnrollment{
+			Token:     enrollment.Token(),
+			ExpiresAt: enrollment.ExpiresAt(),
+		},
+	})
 }
 
 // ListOperators lists the operators the org has registered. Requires

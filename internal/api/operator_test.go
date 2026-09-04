@@ -3,11 +3,13 @@ package api_test
 import (
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	apigen "github.com/garamsh/garam/api"
+	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
 )
 
@@ -41,10 +43,10 @@ func TestOperatorRegister_AdminRegistersWhereOthersAreRefused(t *testing.T) {
 
 	rec := f.do(t, "POST", "/orgs/"+slug+"/operators", `{"identifier":"field-one"}`, admin)
 	require.Equal(t, http.StatusCreated, rec.Code)
-	registered := decodeBody[apigen.Operator](t, rec)
-	assert.Equal(t, operatorGRNOf(slug, "field-one").String(), registered.Grn)
-	assert.Equal(t, orgGRNOf(slug).String(), registered.OrgGrn)
-	assert.Equal(t, userGRNOf("admin-sub").String(), registered.RegisteredBy)
+	registered := decodeBody[apigen.RegisteredOperator](t, rec)
+	assert.Equal(t, operatorGRNOf(slug, "field-one").String(), registered.Operator.Grn)
+	assert.Equal(t, orgGRNOf(slug).String(), registered.Operator.OrgGrn)
+	assert.Equal(t, userGRNOf("admin-sub").String(), registered.Operator.RegisteredBy)
 
 	// A member of another org is refused the action it is permitted,
 	// and their own org answers the same request.
@@ -116,4 +118,46 @@ func TestOperatorRegister_RefusesWhatItCannotStore(t *testing.T) {
 	// second record: the caller learns the identifier is taken.
 	rec = f.do(t, "POST", "/orgs/"+slug+"/operators", `{"identifier":"field-one"}`, admin)
 	assert.Equal(t, http.StatusConflict, rec.Code)
+}
+
+// TestOperatorRegister_AnswersATokenThatEnrolsThatOperatorAndNothingElse
+// covers what the registration hands back (ADR-0064): a token that
+// enrols the operator just registered, minted afresh each time, and
+// held nowhere a route can read it out again.
+func TestOperatorRegister_AnswersATokenThatEnrolsThatOperatorAndNothingElse(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	f.permit(
+		permission{userGRNOf("admin-sub"), org.ActionOperatorRegister},
+		permission{userGRNOf("admin-sub"), org.ActionOperatorRead},
+	)
+	admin := f.sessionCookieFor(t, "admin-sub", "Admin")
+	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(slug), userGRNOf("admin-sub"), org.RoleAdmin)))
+
+	rec := f.do(t, "POST", "/orgs/"+slug+"/operators", `{"identifier":"field-one"}`, admin)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	first := decodeBody[apigen.RegisteredOperator](t, rec)
+	require.NotEmpty(t, first.Enrollment.Token)
+
+	// The token enrols the operator it was minted for and no other.
+	enrolled, ok := f.operators.enrolls(first.Enrollment.Token)
+	require.True(t, ok)
+	assert.Equal(t, operatorGRNOf(slug, "field-one"), enrolled)
+	assert.Equal(t, operator.EnrollmentTTL,
+		first.Enrollment.ExpiresAt.Sub(first.Operator.CreatedAt).Round(time.Second))
+
+	// A second registration mints a second token, so no two operators
+	// share one.
+	rec = f.do(t, "POST", "/orgs/"+slug+"/operators", `{"identifier":"field-two"}`, admin)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	second := decodeBody[apigen.RegisteredOperator](t, rec)
+	assert.NotEqual(t, first.Enrollment.Token, second.Enrollment.Token)
+
+	// The list answers the records and carries no token: this is the
+	// only response the token was ever in.
+	rec = f.do(t, "GET", "/orgs/"+slug+"/operators", "", admin)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.NotContains(t, rec.Body.String(), first.Enrollment.Token)
+	assert.NotContains(t, rec.Body.String(), "token")
 }

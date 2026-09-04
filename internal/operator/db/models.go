@@ -47,6 +47,14 @@ type OperatorCertificate struct {
 	IssuedAt    pgtype.Timestamptz
 }
 
+type OperatorEnrollmentToken struct {
+	TokenHash   string
+	OperatorGrn string
+	MintedBy    string
+	MintedAt    pgtype.Timestamptz
+	ExpiresAt   pgtype.Timestamptz
+}
+
 type Org struct {
 	Grn       string
 	Name      string

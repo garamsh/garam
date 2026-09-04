@@ -91,12 +91,29 @@ up to admit it. What an admitted caller may do is decided after that
 terms an agent does
 ([ADR-0015](./adr/0015-operator-identity.md)).
 
-**No listener mints a first certificate.** The command that issues one
-is a root-level subcommand no serve path references, so a running
-server cannot be made to grant an identity
+A connection whose certificate does not authenticate is not refused at
+the handshake; it carries no identity instead, and every operation but
+one refuses a request that carries none
+([ADR-0064](./adr/0064-an-operator-enrols-with-a-one-time-token-and-keeps-its-key-in-its-own-cluster.md)).
+The identity a handler holds is the one the handshake's own
+verification returned, so nothing derives it a second time and a
+certificate naming any GRN under a chain nothing signed reaches no
+handler that asks for one. Which operation opts out is read from
+`api/machine.yaml` rather than remembered: `enrollOperator` carries
+`security: []`, as an operation on the browser-facing listener does.
+
+**One listener mints one kind of first certificate, once per token.**
+An operator's is obtained by enrolling: registering it on the
+browser-facing listener mints a one-time token, the operator generates
+its key pair in its own cluster, and `enrollOperator` signs the request
+that presents the token and spends it (ADR-0064). **What the
+certificate names is the token's to say and never the request's**, and
+no private key is generated or answered. The command ADR-0032 ships
+still mints one out of band and is what recovers an operator with no
+token left; it remains a root-level subcommand no serve path references
 ([ADR-0032](./adr/0032-garam-ships-the-command-that-mints-an-operators-first-certificate.md)).
-Every certificate after it is replaced over the connection the previous
-one authenticated: an operator's on the machine listener
+Every certificate after the first is replaced over the connection the
+previous one authenticated: an operator's on the machine listener
 ([ADR-0046](./adr/0046-an-operator-renews-its-certificate-by-presenting-the-one-it-holds.md)),
 an agent's on the route its claim admits it to (ADR-0040).
 
@@ -428,3 +445,8 @@ document owes an update.
   — the two specifications' prose is written for different callers and
   is not held to agree, and each defines every member its own caller
   meets
+- [ADR-0064](./adr/0064-an-operator-enrols-with-a-one-time-token-and-keeps-its-key-in-its-own-cluster.md)
+  — one operation on the machine listener is reached without a
+  certificate, authenticated by the one-time token registering an
+  operator minted, and a connection that does not authenticate carries
+  no identity rather than being refused

@@ -225,20 +225,20 @@ collaborate on a shared plan.
   (ADR-0053). The adapter carries messages and forwards nothing (see
   the watching entry below). An agent renews its own certificate on the
   certificate route (ADR-0040) and an operator renews its own by
-  presenting it (ADR-0046); an operator's first still arrives out of
-  band (ADR-0015, ADR-0032), and how it is delivered is not decided
-  here.
+  presenting it (ADR-0046); an operator's first is obtained by enrolling
+  with the token registering it minted (ADR-0064), and an agent's first
+  still arrives on the route its operator's claim admits it to.
 - Revoking anything. A certificate garam signed authenticates until it
   expires, and nothing shortens that: there is no revocation list, no
   serial the listener checks, and no route that removes an operator's
   record — which is why registering one is not offered as a way to
   withdraw it (ADR-0045).
-- How an operator proves it is the operator a record names. Registering
-  is method-independent by decision: there is no enrolment ticket, no
-  service-account token, and no exchange route, and an operator obtains
-  its first certificate exactly as it did before there was a registry —
-  `garam issue-certificate`, which reads no record (ADR-0032, ADR-0045).
-  Whether that command should require a registered operator is a real
+- Proving an operator is the operator a record names by any means but
+  the certificate. There is no service-account token and no exchange
+  route: what registering hands over is a one-time enrollment ticket,
+  which buys one certificate and authenticates nothing else (ADR-0064).
+  `garam issue-certificate` still mints one out of band reading no
+  record, and whether it should require a registered operator is a real
   question ADR-0045 raises and leaves open.
 - Telling a sender that its message exhausted its attempts. ADR-0018
   makes that garam's obligation because the agent platform notifies no
@@ -415,10 +415,11 @@ it and imports no request surface and no domain.
 | `agent.Assignment` | `internal/agent` | agent-to-operator binding, fenced by an epoch |
 | `agent.Service` | `internal/agent` | creates an agent for an operator, issues or renews the certificate of one, answers an operator the definitions naming it and claims one, and records the state each party reports |
 | `ca.Authority` | `internal/ca` | an organization's certificate authority, its key sealed |
-| `ca.Certificate` | `internal/ca` | issued client certificate identified by a SAN URI |
+| `ca.Certificate` | `internal/ca` | signed client certificate identified by a SAN URI, over a key garam generated or one a request carried |
 | `ca.Sealer` | `internal/ca` | seals key material against a database dump |
 | `operator.Credential` | `internal/operator` | the certificate a connection authenticated with, as the renewal rule reads it |
-| `operator.Service` | `internal/operator` | mints an operator's certificate out of band, and renews the one an operator presents |
+| `operator.Service` | `internal/operator` | signs an enrolling operator's certificate request, mints one out of band, and renews the one an operator presents |
+| `operator.Enrollment` | `internal/operator` | the one-time token an operator obtains its first certificate with |
 | `machine.Identity` | `internal/machine` | the GRN a verified client certificate names, and which certificate named it |
 | `machine.Service` | `internal/machine` | verifies a presented certificate against its organization's authority |
 | `machine.ServerCertificate` | `internal/machine` | what the listener presents, asked per handshake so a replaced one needs no restart |

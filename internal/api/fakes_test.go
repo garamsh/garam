@@ -996,22 +996,41 @@ func (s *fakePasswordAttemptStore) releaseOne() {
 
 type fakeOperatorStore struct {
 	operator.Store
-	mu        sync.Mutex
-	operators map[string]*operator.Operator
+	mu          sync.Mutex
+	operators   map[string]*operator.Operator
+	enrollments map[string]*operator.Enrollment
 }
 
 func newFakeOperatorStore() *fakeOperatorStore {
-	return &fakeOperatorStore{operators: map[string]*operator.Operator{}}
+	return &fakeOperatorStore{
+		operators:   map[string]*operator.Operator{},
+		enrollments: map[string]*operator.Enrollment{},
+	}
 }
 
-func (s *fakeOperatorStore) Register(_ context.Context, o *operator.Operator) error {
+// Register writes the record and the token together, as the statement
+// does: a refused registration mints nothing.
+func (s *fakeOperatorStore) Register(_ context.Context, o *operator.Operator, e *operator.Enrollment) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.operators[o.GRN().String()]; ok {
 		return operator.ErrOperatorAlreadyRegistered
 	}
 	s.operators[o.GRN().String()] = o
+	s.enrollments[e.TokenHash()] = e
 	return nil
+}
+
+// enrolls returns the operator a token enrols, which is what the fake
+// holds instead of the secret the caller was answered with.
+func (s *fakeOperatorStore) enrolls(token string) (grn.GRN, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	e, ok := s.enrollments[operator.HashToken(token)]
+	if !ok {
+		return grn.GRN{}, false
+	}
+	return e.Operator(), true
 }
 
 func (s *fakeOperatorStore) Get(_ context.Context, g grn.GRN) (*operator.Operator, error) {

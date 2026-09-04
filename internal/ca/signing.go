@@ -1,6 +1,7 @@
 package ca
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -27,16 +28,61 @@ const (
 	jitterFraction = 10
 	// serialBits sizes the random serial number.
 	serialBits = 128
+	// certificateRequestPEMType is the PEM block a PKCS#10 certificate
+	// signing request arrives in.
+	certificateRequestPEMType = "CERTIFICATE REQUEST"
 )
 
-// generateKey returns a fresh P-256 key. Both the CA and what it signs
-// use one curve, so an agent needs no negotiation to read either.
+// certificateCurve is the one curve this package issues on, for a key
+// it generates and for a key an enrolling caller sends alike.
+var certificateCurve = elliptic.P256()
+
+// generateKey returns a fresh key on certificateCurve. Both the CA and
+// what it signs use one curve, so an agent needs no negotiation to read
+// either.
 func generateKey() (*ecdsa.PrivateKey, error) {
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	key, err := ecdsa.GenerateKey(certificateCurve, rand.Reader)
 	if err != nil {
 		return nil, errorx.Wrap(err, "ca: generate key", errorx.KindInternal)
 	}
 	return key, nil
+}
+
+// requestedKey returns the public key a PEM-encoded PKCS#10 certificate
+// signing request carries, and refuses one that proves nothing.
+//
+// Three refusals, and each is what makes signing a stranger's key safe.
+// The bytes must be one certificate request and nothing else, so a file
+// of another kind is not read as one. The request's own signature must
+// verify, which is what says the sender holds the private key behind
+// the public one — without it garam would sign a key copied from
+// somewhere else, and hand the certificate to whoever asked. And the
+// key must be on the curve this package issues on, so that what comes
+// back verifies on the listener that asked for it.
+//
+// Nothing else in the request is read. A subject name, a SAN, an
+// extension request: all discarded, because what the certificate names
+// is the caller's argument and never the sender's suggestion
+// (ADR-0064).
+func requestedKey(request []byte) (*ecdsa.PublicKey, error) {
+	block, rest := pem.Decode(request)
+	if block == nil || block.Type != certificateRequestPEMType || len(bytes.TrimSpace(rest)) != 0 {
+		return nil, errorx.New(errorx.KindInvalidArgument,
+			"ca: not a single pem-encoded certificate request")
+	}
+	csr, err := x509.ParseCertificateRequest(block.Bytes)
+	if err != nil {
+		return nil, errorx.Wrap(err, "ca: certificate request", errorx.KindInvalidArgument)
+	}
+	if err := csr.CheckSignature(); err != nil {
+		return nil, errorx.Wrap(err, "ca: certificate request signature", errorx.KindInvalidArgument)
+	}
+	public, ok := csr.PublicKey.(*ecdsa.PublicKey)
+	if !ok || public.Curve != certificateCurve {
+		return nil, errorx.New(errorx.KindInvalidArgument,
+			"ca: certificate request key is not an ecdsa p-256 key")
+	}
+	return public, nil
 }
 
 // createAuthorityCertificate self-signs the CA certificate of orgGRN

@@ -53,10 +53,18 @@ type Config struct {
 // Service issues the certificates a machine identity authenticates
 // with (ADR-0014).
 type Service interface {
-	// Issue returns a client certificate for subject, signed by the CA
-	// of the organization that owns it. The organization's CA is
-	// created on the first certificate it needs.
-	Issue(ctx context.Context, subject grn.GRN) (*Certificate, error)
+	// Issue returns a client certificate for subject over a key pair
+	// generated here, signed by the CA of the organization that owns
+	// it. The organization's CA is created on the first certificate it
+	// needs.
+	Issue(ctx context.Context, subject grn.GRN) (*IssuedCertificate, error)
+	// Sign returns a client certificate for subject over the public key
+	// carried by request, a PEM-encoded PKCS#10 certificate signing
+	// request. Only that key is read from it: what the certificate
+	// names is the caller's argument, so a request asking for another
+	// identity is signed for the one named here and for no other
+	// (ADR-0064).
+	Sign(ctx context.Context, subject grn.GRN, request []byte) (*Certificate, error)
 }
 
 type service struct {
@@ -86,7 +94,36 @@ func NewService(store Store, sealer Sealer, cfg Config) (Service, error) {
 	return &service{store: store, sealer: sealer, lifetime: lifetime, now: now}, nil
 }
 
-func (s *service) Issue(ctx context.Context, subject grn.GRN) (*Certificate, error) {
+func (s *service) Issue(ctx context.Context, subject grn.GRN) (*IssuedCertificate, error) {
+	key, err := generateKey()
+	if err != nil {
+		return nil, err
+	}
+	certificate, err := s.sign(ctx, subject, &key.PublicKey)
+	if err != nil {
+		return nil, err
+	}
+	keyDER, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		return nil, errorx.Wrap(err, "ca: marshal private key", errorx.KindInternal)
+	}
+	return &IssuedCertificate{
+		Certificate: *certificate,
+		keyPEM:      encodePEM("PRIVATE KEY", keyDER),
+	}, nil
+}
+
+func (s *service) Sign(ctx context.Context, subject grn.GRN, request []byte) (*Certificate, error) {
+	public, err := requestedKey(request)
+	if err != nil {
+		return nil, err
+	}
+	return s.sign(ctx, subject, public)
+}
+
+// sign issues the certificate that names subject over public, whoever
+// generated the key behind it.
+func (s *service) sign(ctx context.Context, subject grn.GRN, public *ecdsa.PublicKey) (*Certificate, error) {
 	if err := subject.Validate(); err != nil {
 		return nil, errorx.Wrap(err, "ca: subject")
 	}
@@ -106,10 +143,6 @@ func (s *service) Issue(ctx context.Context, subject grn.GRN) (*Certificate, err
 		return nil, err
 	}
 
-	key, err := generateKey()
-	if err != nil {
-		return nil, err
-	}
 	serial, err := serialNumber()
 	if err != nil {
 		return nil, err
@@ -130,19 +163,14 @@ func (s *service) Issue(ctx context.Context, subject grn.GRN) (*Certificate, err
 	case notAfter.After(issuer.NotAfter):
 		return nil, errorx.New(errorx.KindFailedPrecondition, "ca: certificate would outlive the authority that signs it")
 	}
-	der, err := createCertificate(serial, uri, &key.PublicKey, issuer, issuerKey, now, notAfter)
+	der, err := createCertificate(serial, uri, public, issuer, issuerKey, now, notAfter)
 	if err != nil {
 		return nil, err
-	}
-	keyDER, err := x509.MarshalPKCS8PrivateKey(key)
-	if err != nil {
-		return nil, errorx.Wrap(err, "ca: marshal private key", errorx.KindInternal)
 	}
 	return &Certificate{
 		subject:   subject,
 		serial:    serial.String(),
 		certPEM:   encodePEM("CERTIFICATE", der),
-		keyPEM:    encodePEM("PRIVATE KEY", keyDER),
 		issuerPEM: encodePEM("CERTIFICATE", authority.certificate),
 		notAfter:  notAfter,
 	}, nil

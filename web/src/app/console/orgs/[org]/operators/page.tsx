@@ -32,7 +32,7 @@ export default async function OperatorsPage({ params }: Params) {
     <>
       <PageHeader
         title="Operators"
-        description="The operators this organization has registered. A record is what garam holds — an operator still authenticates with the certificate it was issued, and registering grants it nothing."
+        description="The operators this organization has registered. A record is what garam holds — an operator authenticates with the certificate it holds, and registering hands it a one-time token to obtain its first one with."
       />
       {operators.status === "unreachable" ? (
         <ApiUnreachable subject="this organization's operators" />

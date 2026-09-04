@@ -12,11 +12,19 @@
 // admits nothing, and a registered operator proves itself exactly as
 // an unregistered one does.
 //
-// The certificate is what proving itself takes. The first arrives out
-// of band, from the command ADR-0032 ships. Every one after it is
-// issued here, over the connection the certificate being replaced
-// authenticated — so out-of-band delivery is a bootstrap rather than a
-// standing obligation.
+// The certificate is what proving itself takes. The first is obtained
+// by enrolling: registering mints a one-time token, the operator
+// generates a key pair in its own cluster and sends a certificate
+// signing request presenting that token, and garam signs a key it never
+// holds (ADR-0064). The command ADR-0032 ships still mints one out of
+// band, and is what recovers an operator that has no token left. Every
+// certificate after the first is issued here, over the connection the
+// certificate being replaced authenticated.
+//
+// A token is permission to ask for a certificate, once. It is not a
+// credential to the operator's identity: it authenticates no other
+// call, it names the operator garam minted it for and no other, and
+// spending it removes it.
 //
 // Only the newest certificate an operator holds may be renewed, and
 // renewing moves that record. garam has no revocation (ADR-0014), so
@@ -67,6 +75,12 @@ var (
 	// renewed first, or an answer this caller never received did. Both
 	// are recovered the same way, by minting out of band again.
 	ErrSuperseded = errorx.New(errorx.KindAlreadyExists, "a newer certificate has already been issued for this operator")
+	// ErrEnrollmentInvalid refuses an enrollment token that is not
+	// spendable. Unknown, already spent and expired are one refusal:
+	// the caller presented no credential either way, and telling the
+	// three apart would answer questions about tokens the caller does
+	// not hold.
+	ErrEnrollmentInvalid = errorx.New(errorx.KindUnauthenticated, "enrollment token is not valid")
 )
 
 // Operator is an organization's record that it has an operator under

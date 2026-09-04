@@ -310,3 +310,6 @@ ADRs:
 - [0063](./adr/0063-a-late-pairing-is-a-breach-and-the-pull-request-that-performs-it-records-the-window.md)
   — a pairing that arrives in a later pull request is a breach,
   recorded on the pull request that performs it
+- [0064](./adr/0064-an-operator-enrols-with-a-one-time-token-and-keeps-its-key-in-its-own-cluster.md)
+  — an operator enrols with a one-time token, generates its own key pair
+  in its own cluster, and garam signs a key it never holds

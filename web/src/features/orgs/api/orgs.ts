@@ -41,6 +41,12 @@ export type AgentDefinition = components["schemas"]["AgentDefinition"];
  */
 export type Operator = components["schemas"]["Operator"];
 /**
+ * What registering an operator answered: the record, and the one-time
+ * token that enrols it. The token is in this answer and in no other —
+ * garam stores its hash, so no route reads it back (ADR-0064).
+ */
+export type RegisteredOperator = components["schemas"]["RegisteredOperator"];
+/**
  * One cross-organization consent relation, from the side the path
  * named: `orgGrn` is the other organization, and each half says
  * whether that side's grant stands. A relation is a pair and not one
@@ -154,6 +160,16 @@ export const OperatorParser = parserFor<Operator>()(
     orgGrn: GrnParser,
     registeredBy: GrnParser,
     createdAt: z.string(),
+  }),
+);
+
+export const RegisteredOperatorParser = parserFor<RegisteredOperator>()(
+  z.object({
+    operator: OperatorParser,
+    enrollment: z.object({
+      token: z.string().min(1),
+      expiresAt: z.string(),
+    }),
   }),
 );
 

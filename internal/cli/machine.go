@@ -87,10 +87,13 @@ func serveMachine(cmd *cobra.Command) error {
 	}
 	agents := agent.NewService(agent.NewPostgresStore(pool),
 		certificates{issuer: issuer, serverRoot: keys.serverRoot})
-	// An operator renews its own certificate on this listener, through
-	// the same authority and the same server root its agents are given
-	// (ADR-0046).
-	operators := operator.NewService(operator.NewPostgresStore(pool),
+	// An operator obtains its first certificate on this listener by
+	// enrolling (ADR-0064) and renews it here afterwards (ADR-0046),
+	// through the same authority and the same server root its agents
+	// are given. One store answers both halves: what garam last issued
+	// an operator, and the token an enrollment spends.
+	operatorStore := operator.NewPostgresStore(pool)
+	operators := operator.NewService(operatorStore, operatorStore,
 		operatorCertificates{issuer: issuer, serverRoot: keys.serverRoot}, operator.Config{})
 	// The delivery parameters default narrow (ADR-0018), and the
 	// defaults are what this process runs on until something asks for
@@ -151,8 +154,8 @@ func serveMachine(cmd *cobra.Command) error {
 	srv := obs.machineServer(certificateAuthorities{store: authorities}, keys.listener, handler)
 	srv.Addr = envOr(envMachineAddr, ":8443")
 
-	// Nothing unauthenticated joins the TLS listener, and losing this
-	// one must not take that one down.
+	// A probe holds no certificate and reaches no route on the TLS
+	// listener, and losing this one must not take that one down.
 	healthAddr := envOr(envMachineHealthAddr, ":8444")
 	go func() {
 		// The authorities a presented certificate is verified against,
@@ -184,16 +187,17 @@ func (o *observability) machineServer(roots machine.TrustRoot, certificate machi
 	srv := machine.NewServer(machine.NewService(roots), certificate,
 		otelhttp.NewHandler(next, serviceMachine))
 	srv.Handler = o.recoverPanics(http.MaxBytesHandler(srv.Handler, maxRequestBody))
-	// A refused handshake is the only refusal this listener makes, and
-	// net/http reports one here rather than through a handler.
+	// A handshake that fails outright — a client that speaks no TLS
+	// 1.3, or a certificate the listener cannot present — is reported
+	// here rather than through a handler.
 	srv.ErrorLog = slog.NewLogLogger(o.logger.Handler(), slog.LevelWarn)
 	srv.ReadTimeout = requestReadTimeout
 	return srv
 }
 
 // machineProbeHandler is what `serve machine` answers on the port
-// beside its TLS one, because the listener above requires a client
-// certificate a probe does not hold. It carries no /metrics: this
+// beside its TLS one, because the listener above answers a probe on no
+// route: what it serves is the machine specification's operations. It carries no /metrics: this
 // process serves none (api-surface.md §The surfaces). recoverPanics is
 // outermost, as on every listener a serve command runs.
 func (o *observability) machineProbeHandler(deps ...health.Dependency) http.Handler {
@@ -314,17 +318,36 @@ type operatorCertificates struct {
 	serverRoot []byte
 }
 
-func (c operatorCertificates) Issue(ctx context.Context, subject grn.GRN) (*operator.Certificate, error) {
+func (c operatorCertificates) Issue(ctx context.Context, subject grn.GRN) (*operator.IssuedCertificate, error) {
 	issued, err := c.issuer.Issue(ctx, subject)
 	if err != nil {
 		return nil, err
 	}
-	return &operator.Certificate{
-		Serial:         operator.Serial(issued.Serial()),
-		CertificatePEM: issued.CertificatePEM(),
-		PrivateKeyPEM:  issued.PrivateKeyPEM(),
-		IssuerPEM:      issued.IssuerPEM(),
-		ServerRootPEM:  c.serverRoot,
-		NotAfter:       issued.NotAfter(),
+	return &operator.IssuedCertificate{
+		Certificate:   c.certificate(&issued.Certificate),
+		PrivateKeyPEM: issued.PrivateKeyPEM(),
 	}, nil
+}
+
+func (c operatorCertificates) Sign(ctx context.Context, subject grn.GRN, request operator.CertificateRequest) (*operator.Certificate, error) {
+	signed, err := c.issuer.Sign(ctx, subject, request)
+	if err != nil {
+		return nil, err
+	}
+	certificate := c.certificate(signed)
+	return &certificate, nil
+}
+
+// certificate renders what the authority signed in the shape the
+// operator domain hands back, with the server root this process was
+// given beside it (ADR-0040).
+func (c operatorCertificates) certificate(signed *ca.Certificate) operator.Certificate {
+	return operator.Certificate{
+		Subject:        signed.Subject(),
+		Serial:         operator.Serial(signed.Serial()),
+		CertificatePEM: signed.CertificatePEM(),
+		IssuerPEM:      signed.IssuerPEM(),
+		ServerRootPEM:  c.serverRoot,
+		NotAfter:       signed.NotAfter(),
+	}
 }

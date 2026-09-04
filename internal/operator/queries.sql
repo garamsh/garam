@@ -2,13 +2,35 @@
 INSERT INTO operators (grn, org_grn, registered_by, created_at)
 VALUES ($1, $2, $3, $4);
 
+-- Where an operator stands in obtaining a certificate is derived from
+-- the two tables beside the record and stored in neither: a row in
+-- `operator_certificates` says garam issued one, and a token still
+-- inside its window says one was asked for and not yet obtained.
+--
+-- The token join carries `expires_at > now()`, so a token nobody spent
+-- answers as no token at all. Without that predicate an expired token
+-- and a live one are one answer, which is the whole of what the state
+-- is read for.
 -- name: GetOperator :one
-SELECT * FROM operators WHERE grn = $1;
+SELECT sqlc.embed(o),
+       c.issued_at AS certificate_issued_at,
+       (t.token_hash IS NOT NULL)::boolean AS live_token
+FROM operators o
+LEFT JOIN operator_certificates c ON c.operator_grn = o.grn
+LEFT JOIN operator_enrollment_tokens t
+       ON t.operator_grn = o.grn AND t.expires_at > now()
+WHERE o.grn = $1;
 
 -- name: ListOperatorsByOrg :many
-SELECT * FROM operators
-WHERE org_grn = $1
-ORDER BY grn;
+SELECT sqlc.embed(o),
+       c.issued_at AS certificate_issued_at,
+       (t.token_hash IS NOT NULL)::boolean AS live_token
+FROM operators o
+LEFT JOIN operator_certificates c ON c.operator_grn = o.grn
+LEFT JOIN operator_enrollment_tokens t
+       ON t.operator_grn = o.grn AND t.expires_at > now()
+WHERE o.org_grn = $1
+ORDER BY o.grn;
 
 -- name: AdoptOperatorCertificate :exec
 INSERT INTO operator_certificates (operator_grn, serial, issued_at)

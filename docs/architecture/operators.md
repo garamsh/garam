@@ -1,16 +1,18 @@
 # Operators
 
-What an organization records about an operator, and what that operator
-authenticates with: the record that the organization has it (ADR-0045),
-the one-time token registering it mints (ADR-0064), and which
-certificate garam last issued it, together with what it takes to replace
-that with the next (ADR-0046). Implemented by `internal/operator`.
+What an organization records about an operator, where that operator
+stands in obtaining a certificate, and what it authenticates with: the
+record that the organization has it (ADR-0045), the one-time token
+registering it mints (ADR-0064), and which certificate garam last issued
+it, together with what it takes to replace that with the next
+(ADR-0046). Implemented by `internal/operator`.
 
 | Type | Responsibility |
 |------|----------------|
-| `Operator` | an organization's record that it has an operator under this GRN: who registered it and when |
+| `Operator` | an organization's record that it has an operator under this GRN: who registered it and when, and where that operator stands in obtaining a certificate |
+| `EnrollmentState` | where an operator stands: holding a certificate, holding a token nobody has spent, or holding neither |
 | `Enrollment` | the one-time token an operator obtains its first certificate with: which operator it enrols, who minted it, and when it stops being spendable |
-| `Store` | registers one with the token it enrols with, answers one by GRN, and lists an organization's own |
+| `Store` | registers one with the token it enrols with and answers what it stored, answers one by GRN, and lists an organization's own |
 | `EnrollmentStore` | spends a token, answering the operator it enrols |
 | `Credential` | the certificate a connection authenticated with — the identity it names, which certificate it is, and how long it is good for |
 | `CertificateRequest` | a certificate signing request as it arrived, holding the public key an enrolling operator generated |
@@ -28,16 +30,45 @@ run (ADR-0032), so a minted identifier would name something other than
 the operator that exists. What the domain applies is the GRN segment
 rule, and the schema applies it again where nothing routes around it.
 
-A record grants nothing and reports nothing, and the token minted beside
-it grants no more: it is permission to ask for one certificate, once. No
-listener reads a record to admit a caller — an operator authenticates
-with the certificate it holds (ADR-0015), and garam never dials one, so
-there is no state here for anybody to report. What the record is read
-for is the question a definition asks — whether this organization has
-the operator it names — which the browser surface asks there, and the
-list of what the organization has registered, which the console shows
-and `ListByOrg` exists for. The `agent_definitions` foreign key is the
-copy of the definition's check no call path routes around.
+A record grants nothing, and the token minted beside it grants no more:
+it is permission to ask for one certificate, once. No listener reads a
+record to admit a caller — an operator authenticates with the
+certificate it holds (ADR-0015), and garam never dials one, so nothing
+an operator says reaches this domain and no state here is a report of
+one. What the record is read for is the question a definition asks —
+whether this organization has the operator it names — which the browser
+surface asks there, and the list of what the organization has
+registered, which the console shows and `ListByOrg` exists for. The
+`agent_definitions` foreign key is the copy of the definition's check no
+call path routes around.
+
+That list also answers where each operator stands in obtaining a
+certificate, derived from the two tables beside the record and stored in
+neither: a certificate garam issued is `enrolled`, a token still inside
+its window is `pending`, and neither is `expired`. The order is the
+whole of it. A certificate outranks a token, because it is the outcome
+the token exists to produce, so an operator holding one reads `enrolled`
+however much of its token is left — a case that is reachable rather than
+hypothetical, since `garam issue-certificate` records a certificate for
+a GRN nobody registered and registering that GRN afterwards mints a
+token beside it. What the three mean to a browser caller is
+`api/openapi.yaml` §OperatorEnrollmentState, which is authoritative for
+that (ADR-0059).
+
+Registering therefore answers the record as stored rather than the one
+it was handed: the state is read in the same transaction, so a GRN that
+already holds a certificate answers `enrolled` on the call that minted
+it a token it does not need.
+
+`enrolled` says a certificate was obtained and not that the operator is
+alive. garam records no expiry beside the row and asks the operator
+nothing, so an operator that enrolled and then died reads `enrolled` and
+that is correct. The timestamp beside the state is the current
+certificate's issue time, which a renewal moves (ADR-0046): it answers
+when garam last signed for the operator and never when the operator
+enrolled. Recording the latter would be a history nothing else reads,
+which is what `operator_certificates` declines by keeping the newest row
+alone.
 
 There is no update and no delete. A record carries nothing to change,
 and removing one would stop nothing an operator can already do, which is
@@ -48,7 +79,10 @@ record rather than outliving the GRN.
 
 The certificate half reads no record above it. An operator renews with
 what it holds, and whether its organization registered it changes
-nothing about that.
+nothing about that. What crosses between the two halves goes the other
+way: the record half's two queries join both tables under the
+certificate half to derive the state above, in the direction a renewal
+never takes.
 
 An operator's first certificate is obtained by enrolling (ADR-0064).
 Registering mints a token, the operator generates its key pair where the
@@ -114,7 +148,11 @@ has.
 
 `CertificateStore` holds one row per operator and has no read: what the
 rule needs is not the current certificate but whether the presented one
-is still it, and the write answers that itself. `EnrollmentStore` has no
+is still it, and the write answers that itself. Its table is read by the
+record half, for whether a row is there and when it was written; that is
+not a read on this interface, and nothing the record half answers names
+which certificate the row holds — the serial is what decides a renewal
+and stays on the machine listener. `EnrollmentStore` has no
 read for the same shape of reason: nothing can answer a token without
 also spending it, which is what makes single use the store's rather than
 a check a caller performs. Signing happens through the `Issuer` seam the

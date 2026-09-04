@@ -45,12 +45,18 @@ export const frontend: Project = {
   roles: [],
 };
 
-/** The single operator Acme has registered. */
+/**
+ * The single operator Acme has registered, which enrolled: it holds a
+ * certificate, and `certificateIssuedAt` is when garam last signed for
+ * it rather than when it enrolled.
+ */
 export const fieldOne: Operator = {
   grn: "grn:acme:default:operator:field-one",
   orgGrn: acme.grn,
   registeredBy: alice.grn,
   createdAt: "2026-01-02T03:04:05Z",
+  enrollmentState: "enrolled",
+  certificateIssuedAt: "2026-03-04T05:06:07Z",
 };
 
 /**
@@ -59,7 +65,11 @@ export const fieldOne: Operator = {
  * garam's (ADR-0064).
  */
 export const fieldOneRegistered: RegisteredOperator = {
-  operator: fieldOne,
+  operator: {
+    ...fieldOne,
+    enrollmentState: "pending",
+    certificateIssuedAt: undefined,
+  },
   enrollment: {
     token: "8f14e45fceea167a5a36dedd4bea2543a1ba1ffc2fbd07a1",
     expiresAt: "2026-01-02T03:14:05Z",

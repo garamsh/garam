@@ -3,7 +3,7 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import OperatorsPage from "@/app/console/orgs/[org]/operators/page";
-import { API_URL, signedOut } from "@/testing/mocks/handlers";
+import { API_URL, fieldOne, signedOut } from "@/testing/mocks/handlers";
 import { renderServerComponent } from "@/testing/render";
 import { server } from "@/testing/setup";
 
@@ -34,6 +34,50 @@ describe("operators section", () => {
     // ADR-0011: the console addresses a resource by the GRN's last
     // segment and prints no GRN.
     expect(container.textContent).not.toContain("grn:");
+  });
+
+  it("says whether an operator enrolled and when garam last signed for it", async () => {
+    await renderServerComponent(OperatorsPage(params("acme")));
+
+    expect(screen.getByText("enrolled")).toBeInTheDocument();
+    expect(screen.getByText("2026-03-04")).toBeInTheDocument();
+    // The registration date is the control: both are rendered, so the
+    // certificate's date is a fact of its own rather than the record's
+    // under another label.
+    expect(screen.getByText("2026-01-02")).toBeInTheDocument();
+    expect(screen.getByText("Certificate")).toBeInTheDocument();
+  });
+
+  it("tells a token that ran out from one still outstanding", async () => {
+    server.use(
+      http.get(`${API_URL}/orgs/acme/operators`, () =>
+        HttpResponse.json([
+          {
+            ...fieldOne,
+            grn: "grn:acme:default:operator:lapsed",
+            enrollmentState: "expired",
+            certificateIssuedAt: undefined,
+          },
+          {
+            ...fieldOne,
+            grn: "grn:acme:default:operator:waiting",
+            enrollmentState: "pending",
+            certificateIssuedAt: undefined,
+          },
+        ]),
+      ),
+    );
+
+    await renderServerComponent(OperatorsPage(params("acme")));
+
+    // Three states, three words. A list rendering one word for two of
+    // them is the defect the state exists to remove.
+    expect(screen.getByText("expired")).toBeInTheDocument();
+    expect(screen.getByText("pending")).toBeInTheDocument();
+    expect(screen.queryByText("enrolled")).not.toBeInTheDocument();
+    // Neither holds a certificate, so neither shows the row that says
+    // when garam signed one.
+    expect(screen.queryByText("Certificate")).not.toBeInTheDocument();
   });
 
   it("shows an empty state rather than a bare list", async () => {

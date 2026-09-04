@@ -1009,16 +1009,19 @@ func newFakeOperatorStore() *fakeOperatorStore {
 }
 
 // Register writes the record and the token together, as the statement
-// does: a refused registration mints nothing.
-func (s *fakeOperatorStore) Register(_ context.Context, o *operator.Operator, e *operator.Enrollment) error {
+// does: a refused registration mints nothing. It answers the operator
+// it stored, which is what the real store reads back inside the same
+// transaction; this one holds no certificates, so the state it answers
+// is the token's.
+func (s *fakeOperatorStore) Register(_ context.Context, o *operator.Operator, e *operator.Enrollment) (*operator.Operator, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.operators[o.GRN().String()]; ok {
-		return operator.ErrOperatorAlreadyRegistered
+		return nil, operator.ErrOperatorAlreadyRegistered
 	}
 	s.operators[o.GRN().String()] = o
 	s.enrollments[e.TokenHash()] = e
-	return nil
+	return o, nil
 }
 
 // enrolls returns the operator a token enrols, which is what the fake

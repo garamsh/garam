@@ -454,7 +454,7 @@ export interface paths {
         };
         /**
          * List an organization's operators. Requires the `member` role.
-         * @description The operators this organization has registered. An entry says garam holds the record; it does not say the operator is running, reachable, or holds a certificate — garam never dials one (ADR-0012) and learns nothing about it until it calls.
+         * @description The operators this organization has registered, each with where it stands in obtaining a certificate. An entry says garam holds the record and what garam already knows about the operator's enrollment; it does not say the operator is running or reachable — garam never dials one (ADR-0012) and learns nothing about it until it calls, so `enrolled` is an operator that obtained a certificate and not one that is alive.
          */
         get: operations["listOperators"];
         put?: never;
@@ -952,6 +952,12 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        /**
+         * @description Where an operator stands in obtaining a certificate from garam. It is derived from what garam already holds and reported by nobody, so no member says whether the operator is running. `enrolled` is an operator garam has issued a certificate for: it says one was obtained, not that it is still valid — garam records no expiry beside the record and asks the operator nothing. `pending` is an operator with no certificate whose enrollment token is still spendable, which lasts at most the ten minutes the token does. `expired` is an operator with no certificate and no spendable token: the token was lost or ran out, no route mints a second one, and what recovers the operator is the out-of-band command (ADR-0032). An operator that holds a certificate reads `enrolled` however much of its token is left, because the certificate is the outcome the token exists to produce.
+         * @enum {string}
+         */
+        OperatorEnrollmentState: "enrolled" | "pending" | "expired";
+        /** @description An operator this organization has registered, and where that operator stands in obtaining a certificate. The record grants nothing and admits nothing (ADR-0045); the enrollment state is what garam knows from its own tables and never a report from the operator. */
         Operator: {
             /** @example grn:acme:default:operator:field-one */
             grn: string;
@@ -960,6 +966,12 @@ export interface components {
             registeredBy: string;
             /** Format: date-time */
             createdAt: string;
+            enrollmentState: components["schemas"]["OperatorEnrollmentState"];
+            /**
+             * Format: date-time
+             * @description When garam last issued this operator a certificate, absent where it has issued none. It is the certificate the operator holds now and not the one it enrolled with — a renewal moves the record this is read from — so it answers when garam last signed for the operator rather than when the operator enrolled. Which certificate that is decides a renewal and is the machine listener's alone (ADR-0046); no part of it is answered here.
+             */
+            certificateIssuedAt?: string;
         };
         /** @description The record the registration wrote, and the enrollment token it minted. This is the only answer carrying the token: garam holds its hash and no route reads one back (ADR-0064). */
         RegisteredOperator: {

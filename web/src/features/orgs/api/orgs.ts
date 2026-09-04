@@ -35,9 +35,11 @@ export type Agent = components["schemas"]["Agent"];
  */
 export type AgentDefinition = components["schemas"]["AgentDefinition"];
 /**
- * An operator an organization has registered, as the API returns one.
- * The record says garam holds one; it says nothing about whether the
- * operator is running or reachable (ADR-0045).
+ * An operator an organization has registered, as the API returns one,
+ * and where it stands in obtaining a certificate. The record says garam
+ * holds one; neither it nor the state says whether the operator is
+ * running or reachable (ADR-0045) — `enrolled` is an operator that
+ * obtained a certificate and not one that is alive.
  */
 export type Operator = components["schemas"]["Operator"];
 /**
@@ -160,6 +162,8 @@ export const OperatorParser = parserFor<Operator>()(
     orgGrn: GrnParser,
     registeredBy: GrnParser,
     createdAt: z.string(),
+    enrollmentState: z.enum(["enrolled", "pending", "expired"]),
+    certificateIssuedAt: z.string().optional(),
   }),
 );
 

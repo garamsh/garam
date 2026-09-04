@@ -99,41 +99,79 @@ func (q *Queries) CreateOperator(ctx context.Context, arg CreateOperatorParams) 
 }
 
 const getOperator = `-- name: GetOperator :one
-SELECT grn, org_grn, registered_by, created_at FROM operators WHERE grn = $1
+SELECT o.grn, o.org_grn, o.registered_by, o.created_at,
+       c.issued_at AS certificate_issued_at,
+       (t.token_hash IS NOT NULL)::boolean AS live_token
+FROM operators o
+LEFT JOIN operator_certificates c ON c.operator_grn = o.grn
+LEFT JOIN operator_enrollment_tokens t
+       ON t.operator_grn = o.grn AND t.expires_at > now()
+WHERE o.grn = $1
 `
 
-func (q *Queries) GetOperator(ctx context.Context, grn string) (Operator, error) {
+type GetOperatorRow struct {
+	Operator            Operator
+	CertificateIssuedAt pgtype.Timestamptz
+	LiveToken           bool
+}
+
+// Where an operator stands in obtaining a certificate is derived from
+// the two tables beside the record and stored in neither: a row in
+// `operator_certificates` says garam issued one, and a token still
+// inside its window says one was asked for and not yet obtained.
+//
+// The token join carries `expires_at > now()`, so a token nobody spent
+// answers as no token at all. Without that predicate an expired token
+// and a live one are one answer, which is the whole of what the state
+// is read for.
+func (q *Queries) GetOperator(ctx context.Context, grn string) (GetOperatorRow, error) {
 	row := q.db.QueryRow(ctx, getOperator, grn)
-	var i Operator
+	var i GetOperatorRow
 	err := row.Scan(
-		&i.Grn,
-		&i.OrgGrn,
-		&i.RegisteredBy,
-		&i.CreatedAt,
+		&i.Operator.Grn,
+		&i.Operator.OrgGrn,
+		&i.Operator.RegisteredBy,
+		&i.Operator.CreatedAt,
+		&i.CertificateIssuedAt,
+		&i.LiveToken,
 	)
 	return i, err
 }
 
 const listOperatorsByOrg = `-- name: ListOperatorsByOrg :many
-SELECT grn, org_grn, registered_by, created_at FROM operators
-WHERE org_grn = $1
-ORDER BY grn
+SELECT o.grn, o.org_grn, o.registered_by, o.created_at,
+       c.issued_at AS certificate_issued_at,
+       (t.token_hash IS NOT NULL)::boolean AS live_token
+FROM operators o
+LEFT JOIN operator_certificates c ON c.operator_grn = o.grn
+LEFT JOIN operator_enrollment_tokens t
+       ON t.operator_grn = o.grn AND t.expires_at > now()
+WHERE o.org_grn = $1
+ORDER BY o.grn
 `
 
-func (q *Queries) ListOperatorsByOrg(ctx context.Context, orgGrn string) ([]Operator, error) {
+type ListOperatorsByOrgRow struct {
+	Operator            Operator
+	CertificateIssuedAt pgtype.Timestamptz
+	LiveToken           bool
+}
+
+func (q *Queries) ListOperatorsByOrg(ctx context.Context, orgGrn string) ([]ListOperatorsByOrgRow, error) {
 	rows, err := q.db.Query(ctx, listOperatorsByOrg, orgGrn)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Operator
+	var items []ListOperatorsByOrgRow
 	for rows.Next() {
-		var i Operator
+		var i ListOperatorsByOrgRow
 		if err := rows.Scan(
-			&i.Grn,
-			&i.OrgGrn,
-			&i.RegisteredBy,
-			&i.CreatedAt,
+			&i.Operator.Grn,
+			&i.Operator.OrgGrn,
+			&i.Operator.RegisteredBy,
+			&i.Operator.CreatedAt,
+			&i.CertificateIssuedAt,
+			&i.LiveToken,
 		); err != nil {
 			return nil, err
 		}

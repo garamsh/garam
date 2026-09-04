@@ -84,7 +84,7 @@ func TestAgentRead_MemberReadsWhereOthersAreRefused(t *testing.T) {
 	assert.Equal(t, orgGRNOf(slug).String(), got.OrgGrn)
 	// What the operator reports and what the agent reports are separate
 	// fields carrying separate values (ADR-0012).
-	assert.Equal(t, apigen.Pending, got.ProvisioningState)
+	assert.Equal(t, apigen.AgentProvisioningStatePending, got.ProvisioningState)
 	assert.Equal(t, apigen.Unknown, got.RuntimeState)
 	require.NotNil(t, got.Assignment)
 	assert.Equal(t, operator.String(), got.Assignment.OperatorGrn)
@@ -192,7 +192,8 @@ func registerOperator(t *testing.T, f *fixture, orgSlug, id string) grn.GRN {
 	require.NoError(t, err)
 	enrollment, err := operator.NewEnrollment(o.GRN(), userGRNOf("owner-sub"))
 	require.NoError(t, err)
-	require.NoError(t, f.operators.Register(testCtx(t), o, enrollment))
+	_, err = f.operators.Register(testCtx(t), o, enrollment)
+	require.NoError(t, err)
 	return o.GRN()
 }
 

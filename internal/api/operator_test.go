@@ -1,7 +1,9 @@
 package api_test
 
 import (
+	"encoding/json"
 	"net/http"
+	"slices"
 	"testing"
 	"time"
 
@@ -160,4 +162,56 @@ func TestOperatorRegister_AnswersATokenThatEnrolsThatOperatorAndNothingElse(t *t
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.NotContains(t, rec.Body.String(), first.Enrollment.Token)
 	assert.NotContains(t, rec.Body.String(), "token")
+}
+
+// TestOperatorList_CarriesTheEnrollmentStateAndNoCertificateDetail
+// covers what the listing now says about enrolment. A registration
+// answers `pending` because it minted a token nobody has spent, which
+// is the one state this fixture reaches: what tells the three apart is
+// the query, and that is covered against real Postgres in
+// tests/integration.
+//
+// certificateIssuedAt is absent rather than zero. The two are different
+// states and only the absence is the property — a zero date renders as
+// a date. The response carries no serial either: which certificate an
+// operator holds decides a renewal and belongs to the machine listener
+// (ADR-0046).
+func TestOperatorList_CarriesTheEnrollmentStateAndNoCertificateDetail(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	f.permit(
+		permission{userGRNOf("admin-sub"), org.ActionOperatorRegister},
+		permission{userGRNOf("admin-sub"), org.ActionOperatorRead},
+	)
+	admin := f.sessionCookieFor(t, "admin-sub", "Admin")
+	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(slug), userGRNOf("admin-sub"), org.RoleAdmin)))
+
+	rec := f.do(t, "POST", "/orgs/"+slug+"/operators", `{"identifier":"field-one"}`, admin)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	registered := decodeBody[apigen.RegisteredOperator](t, rec)
+	assert.Equal(t, apigen.OperatorEnrollmentStatePending, registered.Operator.EnrollmentState)
+	assert.Nil(t, registered.Operator.CertificateIssuedAt)
+
+	rec = f.do(t, "GET", "/orgs/"+slug+"/operators", "", admin)
+	require.Equal(t, http.StatusOK, rec.Code)
+	listed := decodeBody[[]apigen.Operator](t, rec)
+	require.Len(t, listed, 1)
+	assert.Equal(t, apigen.OperatorEnrollmentStatePending, listed[0].EnrollmentState)
+	assert.Nil(t, listed[0].CertificateIssuedAt)
+	assert.NotContains(t, rec.Body.String(), "certificateIssuedAt",
+		"an absent timestamp is omitted rather than answered as a zero date")
+	assert.NotContains(t, rec.Body.String(), "serial")
+
+	// The fields an entry answers with, so one added without a decision
+	// is visible here. `registeredBy` and `createdAt` are what the
+	// state was added beside, not what it replaces.
+	entries := decodeBody[[]map[string]json.RawMessage](t, rec)
+	require.Len(t, entries, 1)
+	fields := make([]string, 0, len(entries[0]))
+	for k := range entries[0] {
+		fields = append(fields, k)
+	}
+	slices.Sort(fields)
+	assert.Equal(t, []string{"createdAt", "enrollmentState", "grn", "orgGrn", "registeredBy"}, fields)
 }

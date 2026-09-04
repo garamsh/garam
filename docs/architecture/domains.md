@@ -46,8 +46,8 @@ the Go package implementing it is in parentheses.
   certificate authority an organization signs machine identities with
   (`internal/ca`)
 - [operators.md](./operators.md) — what an organization records about
-  an operator, and what that operator authenticates with
-  (`internal/operator`)
+  an operator, where that operator stands in obtaining a certificate,
+  and what it authenticates with (`internal/operator`)
 - [agents.md](./agents.md) — autonomous identity, provisioned outside
   garam (`internal/agent`)
 - [machine-identity.md](./machine-identity.md) — who is calling on the

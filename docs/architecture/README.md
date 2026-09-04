@@ -225,7 +225,8 @@ Responsibility documents:
 - [certificate-authorities.md](./certificate-authorities.md) — the
   certificate authority an organization signs machine identities with
 - [operators.md](./operators.md) — what an organization records about an
-  operator, and what that operator authenticates with
+  operator, where that operator stands in obtaining a certificate, and
+  what it authenticates with
 - [agents.md](./agents.md) — autonomous identity, provisioned outside
   garam
 - [machine-identity.md](./machine-identity.md) — who is calling on the

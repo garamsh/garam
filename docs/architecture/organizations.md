@@ -17,13 +17,41 @@ this list.
 | `Membership` | user in an org; carries a `Role` (`owner`, `admin`, `member`) |
 | `Invitation` | single-use, expiring bearer token that admits a user into an org with a fixed role |
 
-The `Store` interface covers CRUD on each plus membership and cascade
-delete on `Organization`. Group and project listing is scoped to one
+The `Store` interface covers CRUD on each plus membership, cascade
+delete on `Organization`, and a count of what that delete would take
+from this domain. Group and project listing is scoped to one
 organization; group listing is scoped in both directions — the groups
 of an org, and the groups of the org a member belongs to, which a check
 sends to the engine to resolve group-attached policies (ADR-0008). A
 project is listed by its organization alone. Orgs grow by invitation and
 acceptance, not open signup.
+
+**Deleting an organization reaches past this domain, and the schema is
+what performs it.** `DeleteOrg` issues one statement against `orgs`;
+every row that goes does so through a foreign key declared `ON DELETE
+CASCADE`, so what is taken is fixed by the migrations rather than by
+any code path. Directly: this domain's groups, projects, memberships
+and invitations, the policies the engine stores, the agents and agent
+definitions `internal/agent` owns, the operators `internal/operator`
+registers, and the organization's certificate authority. Through
+those: a group's and a project's members, a policy's versions and
+attachments, an agent's assignment, and an operator's unspent
+enrollment tokens.
+
+Two of those reach further than one organization. A consent relation
+is a pair, so deleting one organization removes the relation the other
+is still a side of, without that organization acting (ADR-0035). And
+the certificate authority is the one row nothing can put back —
+[certificate-authorities.md](./certificate-authorities.md) holds why.
+What does **not** go is a certificate an operator already holds
+(ADR-0045 errata), and the user accounts of the members, which the
+organization does not own.
+
+`getOrgDeletionPreview` is what states this to a caller before the
+act, counted on the server rather than assembled from a list the
+caller happens to hold; [api-surface.md](./api-surface.md) §What
+decides the rest holds what authorizes it.
+
 This domain owns its action constants (`ActionOrgRead`,
 `ActionGroupRead`, `ActionProjectRead`, `ActionPolicyCreate`, …) —
 including the policy management actions, which the api server enforces

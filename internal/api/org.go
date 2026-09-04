@@ -139,6 +139,84 @@ func (s *Server) DeleteOrg(w http.ResponseWriter, r *http.Request, orgSlug apige
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// GetOrgDeletionPreview answers what deleting the organization would
+// destroy. Requires the owner role, which is the role DeleteOrg
+// requires: the preview is authorized as the act it describes, so it
+// tells nobody the size of an organization they could not delete.
+//
+// It reads and changes nothing. Each domain counts what it owns, and
+// this handler composes the answers because the cascade crosses
+// boundaries no one of them may reach across (ADR-0047). The counts
+// are separate reads, so an organization written to while they run can
+// answer from either side of that write; what the answer must not be
+// is the length of a page, which is what a caller assembling this from
+// its own lists would get.
+func (s *Server) GetOrgDeletionPreview(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org) {
+	u, err := s.currentUser(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	g := orgGRN(orgSlug)
+	if err := s.authorize(r, g, u, org.ActionOrgDelete); err != nil {
+		writeError(w, err)
+		return
+	}
+	// Membership is authorize's precondition and a membership row goes
+	// with the organization, so reaching here is already proof the
+	// organization existed: an organization that does not exist has no
+	// members and is refused above, which is the same answer a
+	// non-member gets (ADR-0011). Nothing below can answer a page of
+	// zeros for an organization that is not there.
+	ctx := r.Context()
+	contents, err := s.orgs.CountOrgContents(ctx, g)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	agents, err := s.agents.CountByOrg(ctx, g)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	operators, err := s.operators.CountByOrg(ctx, g)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	consents, err := s.consents.CountByOrg(ctx, g)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	// The engine owns policies and returns the organization's whole
+	// list rather than a page, so its length is the count.
+	policies, err := s.policies.ListPolicies(ctx, g)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	authority, err := s.authorities.HasAuthority(ctx, g)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, apigen.OrgDeletionPreview{
+		CertificateAuthority: authority,
+		Counts: apigen.OrgDeletionCounts{
+			Groups:           contents.Groups,
+			Projects:         contents.Projects,
+			Members:          contents.Members,
+			Invitations:      contents.Invitations,
+			Policies:         len(policies),
+			Agents:           agents.Agents,
+			AgentDefinitions: agents.Definitions,
+			Operators:        operators,
+			Consents:         consents,
+		},
+	})
+}
+
 // ListOrgMembers lists an organization's members. Requires the member
 // role.
 func (s *Server) ListOrgMembers(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org) {

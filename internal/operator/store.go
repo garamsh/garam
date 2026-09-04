@@ -22,4 +22,9 @@ type Store interface {
 	Get(ctx context.Context, g grn.GRN) (*Operator, error)
 	// ListByOrg returns the organization's operators, ordered by GRN.
 	ListByOrg(ctx context.Context, orgGRN grn.GRN) ([]*Operator, error)
+	// CountByOrg counts the organization's registered operators, which
+	// deleting the organization removes with it. A certificate one of
+	// them already holds is not counted, because that row outlives the
+	// registration and the organization both (ADR-0045 errata).
+	CountByOrg(ctx context.Context, orgGRN grn.GRN) (int, error)
 }

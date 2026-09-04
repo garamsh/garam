@@ -39,6 +39,12 @@ type Store interface {
 	ListOrgs(ctx context.Context, f listfilter.Filter) ([]*Organization, error)
 	UpdateOrg(ctx context.Context, g grn.GRN, p Patch) (*Organization, error)
 	DeleteOrg(ctx context.Context, g grn.GRN) error
+	// CountOrgContents counts what the Organization holds of what
+	// DeleteOrg removes with it. An Organization that does not exist
+	// holds nothing, so the zero Contents is its answer and not an
+	// error: the caller asking what a delete would take is told it
+	// would take nothing.
+	CountOrgContents(ctx context.Context, g grn.GRN) (Contents, error)
 
 	// Group
 	CreateGroup(ctx context.Context, g *Group) error

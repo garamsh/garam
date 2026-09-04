@@ -125,6 +125,22 @@ func (q *Queries) ConsentStands(ctx context.Context, arg ConsentStandsParams) (b
 	return stands, err
 }
 
+const countConsentsByOrg = `-- name: CountConsentsByOrg :one
+SELECT count(*) FROM message_consents
+WHERE org_a = $1 OR org_b = $1
+`
+
+// The consent relations the organization is a side of, which deleting
+// the organization removes. A relation is a pair, so each one counted
+// here is also the other organization's, and deleting this one takes
+// that side's half with it.
+func (q *Queries) CountConsentsByOrg(ctx context.Context, org string) (int64, error) {
+	row := q.db.QueryRow(ctx, countConsentsByOrg, org)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const deleteExpiredMessages = `-- name: DeleteExpiredMessages :exec
 DELETE FROM messages
 WHERE completed_at IS NULL

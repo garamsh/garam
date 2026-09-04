@@ -39,6 +39,11 @@ type Store interface {
 	// creates no agent and assigns none: a definition is a record, and
 	// the agent it describes exists when an operator says so.
 	Define(ctx context.Context, d *Definition) error
+	// CountByOrg counts the organization's agents and definitions,
+	// which deleting the organization removes with it. An organization
+	// that does not exist holds neither, so the zero OrgCounts is its
+	// answer rather than an error.
+	CountByOrg(ctx context.Context, orgGRN grn.GRN) (OrgCounts, error)
 	// ListDefinitionsByOrg returns the organization's definitions,
 	// ordered by the agent GRN each one names.
 	ListDefinitionsByOrg(ctx context.Context, orgGRN grn.GRN) ([]*Definition, error)

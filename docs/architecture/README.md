@@ -401,3 +401,7 @@ ADRs:
 - [0064](./adr/0064-an-operator-enrols-with-a-one-time-token-and-keeps-its-key-in-its-own-cluster.md)
   — an operator enrols with a one-time token, generates its own key pair
   in its own cluster, and garam signs a key it never holds
+- [0065](./adr/0065-garam-states-what-deleting-an-organization-destroys-before-the-act.md)
+  — garam answers what deleting an organization would destroy before
+  the act, counting on the server and naming the certificate authority
+  separately as the one thing that cannot be made again

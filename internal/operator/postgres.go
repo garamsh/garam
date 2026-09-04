@@ -88,6 +88,19 @@ func (s *PostgresStore) ListByOrg(ctx context.Context, orgGRN grn.GRN) ([]*Opera
 	return operators, nil
 }
 
+// CountByOrg counts the organization's registered operators, which
+// deleting the organization removes with it. A certificate one of them
+// already holds is not counted: that row carries no foreign key and
+// survives both the registration and the organization (ADR-0045
+// errata).
+func (s *PostgresStore) CountByOrg(ctx context.Context, orgGRN grn.GRN) (int, error) {
+	n, err := s.q.CountOperatorsByOrg(ctx, orgGRN.String())
+	if err != nil {
+		return 0, pgxerr.Classify(err, "count operators by org", nil, nil)
+	}
+	return int(n), nil
+}
+
 // rowToOperator converts a sqlc row into the domain aggregate. A stored
 // GRN that no longer parses is data corruption, hence internal.
 func rowToOperator(row db.Operator) (*Operator, error) {

@@ -52,3 +52,18 @@ func (o *Organization) GRN() grn.GRN         { return o.grn }
 func (o *Organization) Name() string         { return o.name }
 func (o *Organization) CreatedAt() time.Time { return o.createdAt }
 func (o *Organization) UpdatedAt() time.Time { return o.updatedAt }
+
+// Contents counts what this domain holds for one Organization that
+// deleting that Organization removes. It is a count and not a listing
+// because the caller is stating a consequence rather than reading the
+// rows: a number is what survives a page that a listing does not.
+//
+// It covers this domain alone. The cascade reaches further, into rows
+// the agents, operators and messaging domains own, and each of those
+// answers for its own.
+type Contents struct {
+	Groups      int
+	Projects    int
+	Members     int
+	Invitations int
+}

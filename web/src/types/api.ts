@@ -178,6 +178,32 @@ export interface paths {
         patch: operations["updateOrg"];
         trace?: never;
     };
+    "/orgs/{org}/deletion-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What deleting the organization would destroy. Requires the `owner` role.
+         * @description What `deleteOrg` would remove, counted on the server at the moment of the read. Nothing here deletes anything and nothing here reserves the counts: an organization written to after this answers is deleted with what it holds then.
+         *
+         *     The counts are of the resources keyed on the organization itself. What is keyed on those in turn goes with its parent and is not counted apart from it — a group's members with the group, a project's members with the project, a policy's versions and attachments with the policy, an agent's assignment with the agent, and an operator's unspent enrollment tokens with the operator.
+         *
+         *     `certificateAuthority` is outside `counts` because it is the one thing on this answer that cannot be created again. The rest can be re-made by whoever made them; the authority's private key is stored sealed and goes with the row, no route imports or restores one, and every certificate it ever signed stops verifying for good (ADR-0014, ADR-0016).
+         *
+         *     A certificate an operator already holds is not counted and does not go: that row carries no foreign key to the registration or the organization (ADR-0045). It stops authenticating all the same, because the authority that signed it is gone.
+         */
+        get: operations["getOrgDeletionPreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orgs/{org}/members": {
         parameters: {
             query?: never;
@@ -762,6 +788,37 @@ export interface components {
             /** Format: date-time */
             since: string;
         };
+        /** @description What deleting one organization would destroy, read from the server rather than assembled from what a caller happens to hold. A count taken from a list the caller already has is wrong exactly when that list is filtered or stale, which is when the answer matters most. */
+        OrgDeletionPreview: {
+            /** @description The organization holds a certificate authority, which the deletion destroys and nothing restores. It is its own field and not an entry in `counts` because it is the only thing here that cannot be created again: the private key is stored sealed under a key-encryption key and goes with the row, `internal/ca` has no import, restore or recreate route, and every certificate the authority signed stops verifying permanently (ADR-0014, ADR-0016). False where the organization has needed no certificate yet, because the authority is created on the first one it needs. */
+            certificateAuthority: boolean;
+            counts: components["schemas"]["OrgDeletionCounts"];
+        };
+        /**
+         * @description How many of each kind the deletion removes. Every one of these can be created again; what cannot is on `OrgDeletionPreview` itself.
+         *
+         *     A zero means the organization holds none of that kind. It never means the caller may not see them: no count here is filtered by what the caller could list, because the deletion is not filtered either — the cascade takes every row whatever the caller may read. A count narrowed to what one caller can see would under-report what the deletion destroys, which is the failure this operation exists to prevent. The one permission is on the operation itself.
+         */
+        OrgDeletionCounts: {
+            /** @description Groups, each taking its membership rows with it. */
+            groups: number;
+            /** @description Projects, each taking its membership rows with it. */
+            projects: number;
+            /** @description Memberships of this organization. The user accounts themselves are not owned by the organization and stay. */
+            members: number;
+            /** @description Invitations issued for this organization, accepted and pending alike. A pending one stops admitting anybody. */
+            invitations: number;
+            /** @description Policies, each taking its versions and its attachments with it (ADR-0008). */
+            policies: number;
+            /** @description Agents, each taking its operator assignment with it. */
+            agents: number;
+            /** @description Agent definitions, which are records of what the organization said an agent should be (ADR-0026). */
+            agentDefinitions: number;
+            /** @description Registered operators, each taking its unspent enrollment tokens with it (ADR-0064). A certificate an operator already holds is not counted and outlives the record (ADR-0045). */
+            operators: number;
+            /** @description Cross-organization consent relations this organization is a side of (ADR-0035). Each is a pair, so deleting this organization removes it for the other organization too, which loses the relation without acting. */
+            consents: number;
+        };
         /** @description One organization's view of a cross-organization consent relation (ADR-0035), from the side the path names: `orgGrn` is the other organization, and each half says whether that side's grant stands. `stands` is both halves at once — the only state under which a message crosses. */
         OrgConsent: {
             /** @example grn:root:default:org:globex */
@@ -1304,6 +1361,32 @@ export interface operations {
                 };
             };
             400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    getOrgDeletionPreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What deleting the organization would destroy. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgDeletionPreview"];
+                };
+            };
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];

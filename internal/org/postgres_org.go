@@ -72,6 +72,23 @@ func (s *PostgresStore) DeleteOrg(ctx context.Context, g grn.GRN) error {
 	return classifyRows(n, err, "delete org", ErrOrgNotFound)
 }
 
+// CountOrgContents counts the Groups, Projects, Memberships and
+// Invitations that DeleteOrg's cascade would remove with the
+// Organization. One query, so the four numbers describe one moment
+// rather than four.
+func (s *PostgresStore) CountOrgContents(ctx context.Context, g grn.GRN) (Contents, error) {
+	row, err := s.q.CountOrgContents(ctx, g.String())
+	if err != nil {
+		return Contents{}, pgxerr.Classify(err, "count org contents", nil, nil)
+	}
+	return Contents{
+		Groups:      int(row.GroupCount),
+		Projects:    int(row.ProjectCount),
+		Members:     int(row.MemberCount),
+		Invitations: int(row.InvitationCount),
+	}, nil
+}
+
 // rowToOrg converts a sqlc row into the domain aggregate. A stored
 // GRN that no longer parses is data corruption, hence internal.
 func rowToOrg(row db.Org) (*Organization, error) {

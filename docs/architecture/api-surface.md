@@ -173,6 +173,17 @@ and not in the same place on every surface.
   ([ADR-0038](./adr/0038-the-engine-learns-a-subjects-memberships-and-enforces-its-own-scope.md)).
 - **Watching an agent is its own grant**, separate from reading one
   ([ADR-0022](./adr/0022-watching-an-agent.md)).
+- **A read describing a write is decided on that write's action.**
+  `getOrgDeletionPreview` answers what deleting an organization would
+  destroy — a count per resource kind, and whether the organization
+  holds a certificate authority — and is decided on `org:delete`
+  rather than `org:read`. It reads and changes nothing, so `org:read`
+  would be the shape to reach for; what that would publish is the size
+  of an organization to every member who cannot delete it. Authorizing
+  the description as the act keeps the two answers together: a caller
+  who may not perform the delete is told nothing about it. No role
+  gained an action for this, because the owner already holds `org:*`
+  ([authz.md](./authz.md) §Statement collection).
 
 One of ADR-0036's decisions is a commitment rather than a rule deciding
 anything today: **no surface serves a secret's value**, garam's

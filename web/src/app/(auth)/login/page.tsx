@@ -46,10 +46,14 @@ export default async function LoginPage() {
           Sign in to garam
         </h1>
         <p className="text-sm text-pretty text-muted-foreground">
+          {/* Only where the backend registered a provider can a
+              sign-in create an account, and a failed read is not
+              told apart from none. The membership sentence below
+              holds in every configuration. */}
           {offersGoogle
-            ? "Use the account you registered, or the Google account your organization invited."
+            ? "Use the account you registered, or the Google account your organization invited. Signing in with Google creates an account the first time."
             : "Use the account you registered."}{" "}
-          Accounts are created by invitation, not by signup.
+          Membership in an organization is by invitation, not by signup.
         </p>
       </CardHeader>
       <CardContent className="flex flex-col gap-6">

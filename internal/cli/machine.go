@@ -168,7 +168,7 @@ func serveMachine(cmd *cobra.Command) error {
 	}()
 
 	obs.logger.Info("serving machine", slog.String("addr", srv.Addr), slog.String("health_addr", healthAddr))
-	if err := serveHTTP(ctx, srv, func() error { return srv.ListenAndServeTLS("", "") }); err != nil {
+	if err := obs.serveHTTP(ctx, shutdownGrace, srv, func() error { return srv.ListenAndServeTLS("", "") }); err != nil {
 		return errorx.Wrap(err, "machine serve", errorx.KindInternal)
 	}
 	return nil

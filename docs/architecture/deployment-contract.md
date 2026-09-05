@@ -370,6 +370,11 @@ not `Error` (#338 settled this; the assertion is
 `tests/e2e/shutdown_test.go`, which SIGTERMs the built binary as each of
 the three serve processes and requires exit 0).
 
+Both terminations exit 0, so which of the two happened is in the log and
+nowhere else: one that reached the bound and dropped what was still in
+flight writes a line at warn naming the bound, and one that finished
+inside it writes none (#1064).
+
 The bound is the binary's, not the deployment's (`shutdownGrace` in
 `internal/cli/shutdown.go`): a `terminationGracePeriodSeconds` below ten
 seconds truncates in-flight work, and nothing the process does at

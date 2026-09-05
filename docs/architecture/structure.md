@@ -35,6 +35,12 @@ Nothing here states what goes *inside* a boundary, or how the system is deployed
   declares, by a read-only accessor on the aggregate
   ([ADR-0051](./adr/0051-an-aggregate-exposes-what-it-persists.md)). A
   persisted value no caller can reach is a defect and not an open point.
+  **The write half stays closed, and a layout rule is not a reason to
+  open it.** Whether an aggregate gains an exported way to be restored
+  from a stored row is decided on evidence about that surface and never
+  as a side effect of where a file sits
+  ([ADR-0066](./adr/0066-no-aggregate-gains-an-exported-restore-path-to-satisfy-a-layout-rule.md)),
+  so ADR-0051's reservation stands until an ADR argues it.
 - **A boundary reaches a sibling directly, through the surface that
   sibling declares**
   ([ADR-0047](./adr/0047-a-domain-reaches-a-sibling-through-its-declared-surface.md)).
@@ -116,6 +122,16 @@ A conversion to a wire format the boundaries already share is not a shared kerne
   what must be in that surface; the ADR records which side garam took,
   the three aggregates that gave two answers while it went unrecorded,
   and why the answer decides what counts as a defect.
+- [ADR-0066](./adr/0066-no-aggregate-gains-an-exported-restore-path-to-satisfy-a-layout-rule.md)
+  — no aggregate gains an exported restore path in order to satisfy a
+  layout rule. ADR-0051 reserved the write half and the bullet above
+  records that it stays reserved; this ADR records what the project
+  declines to do about it, what conforming to
+  `docs/convention/stack-go.md` §1 would cost on 15 aggregate types,
+  and that answering the reserved question is what would reopen it. It
+  amends no convention rule: rule 8 leaves the stack file
+  governing the layout, the way §Where the composition root lives
+  already records for §Project envelope.
 - [ADR-0052](./adr/0052-a-concern-is-owned-by-the-boundary-whose-subject-matter-it-is.md)
   — a concern is owned by the boundary whose subject matter it is. The
   threshold above names a destination for a concern shared by two and

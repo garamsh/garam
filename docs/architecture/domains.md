@@ -83,7 +83,14 @@ methods and not a package's stores: `internal/authn` implements four
 that split and no others. It stays one package because the aggregates'
 fields are unexported and no exported constructor restores a stored
 row's state or timestamps, so whatever rehydrates one shares its
-package.
+package. That is a position the project holds and not a state it
+drifted into: no aggregate gains an exported restore path in order to
+satisfy a layout rule, so a store beside its aggregate is not a defect,
+and `docs/convention/stack-go.md` §1's `internal/<domain>/<name>/`
+layout stays out of reach for the eight domains whose store files write
+their own aggregates' unexported fields
+([ADR-0066](./adr/0066-no-aggregate-gains-an-exported-restore-path-to-satisfy-a-layout-rule.md)).
+`internal/watch` is the ninth and is not one of them.
 
 A domain that persists nothing has none of the storage files above:
 `internal/machine` is its types, its service, the listener it builds,

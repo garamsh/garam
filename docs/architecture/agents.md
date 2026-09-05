@@ -6,7 +6,7 @@ by `internal/agent`.
 | Type | Responsibility |
 |------|----------------|
 | `Agent` | actor owned by an org; carries the state the operator reports about its pod and the state it reports about itself, separately |
-| `Definition` | what an organization says an agent should be: which operator runs it and with what values (ADR-0026). It names its subject where an `Agent` names itself, and carries none of the state an `Agent` carries, so a reader cannot take one for the other; it writes no `agents` row until the operator it names claims it (ADR-0033) |
+| `Definition` | what an organization says an agent should be: which operator runs it and with what values (ADR-0026), and not what it is built from — it names no image. It names its subject where an `Agent` names itself, and carries none of the state an `Agent` carries, so a reader cannot take one for the other; it writes no `agents` row until the operator it names claims it (ADR-0033) |
 | `Assignment` | which operator runs an agent, and the epoch that binding holds |
 | `Certificate` | what an agent authenticates with and the garam server root it verifies garam by, as this domain hands them back |
 | `Service` | creates an agent for the calling operator, issues the certificate of one assigned to it or renews an agent's own, answers an operator with the definitions naming it so it can claim one (ADR-0033), and records the state each party reports (ADR-0053) |
@@ -69,3 +69,39 @@ only definitions: provisioning is an operator's, from outside garam,
 and a definition writes no `agents` row until the operator it names
 claims it (ADR-0033). The queue a message reaches an
 agent through is the messaging domain.
+
+What an agent is built from is the operator's. A `Definition` names no
+image, and `values` is not a way around that: garam stores the keys and
+the strings and interprets neither (`api/machine.yaml` §Definition), so
+a value that happened to name an image would be one garam still never
+reads — which leaves the shape of that payload where ADR-0026 left it,
+undecided, rather than deciding it here. The images an agent's Pod is
+built from and the size of the volume it keeps state on are named by
+the `--agent-image`, `--agent-copy-image`, `--agent-tools-image` and
+`--agent-storage-size` flags that `gagent-operator`'s `cmd/main.go`
+declares (`gagent-operator@2d795f5`), which is authoritative for what
+every agent that operator constructs is built from.
+
+The boundary is drawn by what each side can check rather than by what
+either owns. An image reference is a fact about a registry some cluster
+can reach — a mirror, an air-gapped copy, the pull secret that admits
+it, the network policy in front of it — and garam observes none of
+that: ADR-0012 keeps it from dialing into a cluster, so a digest
+entered here would be a claim garam has no way to test and whose
+failure, at deploy time, it would never see. The operator does not test
+one either; it takes the reference as given and leaves it to the API
+server to refuse on the object, which is the first party in the chain
+that can. garam is on no part of that chain. `gagent` states the same
+boundary from the agent's own side, for the tool set it loads:
+`internal/config/config.go:79-82` (`gagent@eeea6a9`).
+
+Nothing in garam requires a version or a capability of an agent, and
+nothing here is being added that would. Such a requirement is the one
+thing on this boundary garam could properly make, because what its own
+machine contract needs is a fact garam holds rather than one about
+somebody's registry. It has had no occasion to: garam publishes no
+release of that contract and no compatibility window (ADR-0049), so no
+version of it has diverged from another, and
+`docs/convention/simplicity.md` §Rules asks for a second real case
+before an abstraction where this has not had a first. That is a bound
+on this record and not a plan.

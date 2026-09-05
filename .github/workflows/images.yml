@@ -12,8 +12,14 @@ name: images
 # and the web image's context is `web/`. A wider one would rest on a
 # property that holds today rather than one the build enforces, and a
 # filter that quietly stops covering a change is what #850 is about.
+#
+# `branches` is inert while `main` is the only branch on `origin`, and
+# `dev` is what makes it live: a pull request into `dev` then starts no
+# runner at all, the property the paragraph above buys for `docs/**`.
+# Adding it after `dev` exists would leave a window where one does.
 on:
   pull_request:
+    branches: [main]
     paths-ignore:
       - "docs/**"
 

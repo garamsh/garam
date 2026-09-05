@@ -14,8 +14,15 @@ name: ci
 # replacement is a required status check with "branches must be up
 # to date", a repository setting and so the account owner's.
 
+# `branches` is inert while `main` is the only branch on `origin`:
+# every pull request targets `main`, so filtered and unfiltered select
+# the same set. Creating `dev` is what makes it exclude, and a filter
+# added after `dev` exists leaves a window in which a pull request
+# into `dev` starts these three jobs.
+
 on:
   pull_request:
+    branches: [main]
 
 permissions: read-all
 

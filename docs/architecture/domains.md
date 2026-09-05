@@ -90,7 +90,11 @@ and `docs/convention/stack-go.md` §1's `internal/<domain>/<name>/`
 layout stays out of reach for the eight domains whose store files write
 their own aggregates' unexported fields
 ([ADR-0066](./adr/0066-no-aggregate-gains-an-exported-restore-path-to-satisfy-a-layout-rule.md)).
-`internal/watch` is the ninth and is not one of them.
+`internal/watch` is the ninth and is not one of them. This records the
+divergence and does not change the rule: whether §1 should name a path
+or a property is referred to the convention owner in #1035, as
+[structure.md](./structure.md) §Where the composition root lives refers
+§Project envelope in #756.
 
 A domain that persists nothing has none of the storage files above:
 `internal/machine` is its types, its service, the listener it builds,

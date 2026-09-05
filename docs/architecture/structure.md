@@ -131,7 +131,8 @@ A conversion to a wire format the boundaries already share is not a shared kerne
   and that answering the reserved question is what would reopen it. It
   amends no convention rule: rule 8 leaves the stack file
   governing the layout, the way §Where the composition root lives
-  already records for §Project envelope.
+  already records for §Project envelope, and the wording question goes
+  to the convention owner in #1035 as that section's goes in #756.
 - [ADR-0052](./adr/0052-a-concern-is-owned-by-the-boundary-whose-subject-matter-it-is.md)
   — a concern is owned by the boundary whose subject matter it is. The
   threshold above names a destination for a concern shared by two and

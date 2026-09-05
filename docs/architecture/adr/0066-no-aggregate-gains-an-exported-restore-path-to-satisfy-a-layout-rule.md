@@ -142,9 +142,11 @@ what goes *inside* a boundary to the stack in its own words. What this
 ADR decides is what garam will not do to reach §1's layout — which is
 this record's own ground, and reaches the same answer for a reviewer
 without claiming an authority the index withholds. Whether §1 should
-say anything about a domain's own aggregate store is the convention
-owner's question, and the pull request carrying this ADR refers it
-rather than settling it.
+name a path or a property for a domain's own aggregate store is the
+convention owner's question, and it is referred in #1035 rather than
+settled here — the same move §Where the composition root lives makes
+for §Project envelope in #756, and #1035 is the second instance #756
+asked for.
 
 ## What this does not decide
 
@@ -181,8 +183,8 @@ rather than settling it.
 - **The repository keeps a §1 clause its own stores do not satisfy.**
   That is the cost this decision accepts and does not hide. A reader of
   §1 alone still meets a rule the tree breaks and learns nothing about
-  why; the referral to the convention owner is what bounds that, and
-  until it is answered the gap is real.
+  why; #1035 is what bounds that, and until it is answered the gap is
+  real.
 - **The measurement drifts, so it is dated rather than stated.**
   `operator` moved from 13 crossings to 16 in nine days without anyone
   intending it. A reader who needs a current figure re-runs the probe

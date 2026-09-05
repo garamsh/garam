@@ -24,12 +24,16 @@ These documents assign authority to two roles. One party may hold both; the rule
   anything: `docs/convention/`, `docs/architecture/`, the templates
   under `.github/`, this file, and the issue tracker. Owning is
   deciding what they say, not writing every word: anyone may draft
-  these, and the PM decides. Reviews every pull request and is the
-  only role that merges one. Merges only a branch that is zero commits
-  behind `main`, having taken the run that followed bringing it up to
-  date: `ci.yml` triggers on `pull_request` and so reads the branch
-  merged into `main` as `main` then stood, and nothing recomputes that
-  when `main` moves before the merge. One exception, stated below.
+  these, and the PM decides. Reserves in the issue the ADR number its
+  work will introduce, and dispatches no two issues holding the same
+  one; a worker who finds that number taken on `main` by the time they
+  write stops and asks the PM rather than taking the next free one,
+  which is the choice that collides. Reviews every pull request and is
+  the only role that merges one. Merges only a branch that is zero
+  commits behind `main`, having taken the run that followed bringing it
+  up to date: `ci.yml` triggers on `pull_request` and so reads the
+  branch merged into `main` as `main` then stood, and nothing recomputes
+  that when `main` moves before the merge. One exception, stated below.
   Decides the convention questions a pull request raises. Proposes a
   change to a convention rather than making it alone. Owns moving a
   pinned dependency that names no other mover. Does not implement.

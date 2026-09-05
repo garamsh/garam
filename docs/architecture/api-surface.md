@@ -91,16 +91,38 @@ up to admit it. What an admitted caller may do is decided after that
 terms an agent does
 ([ADR-0015](./adr/0015-operator-identity.md)).
 
-A connection whose certificate does not authenticate is not refused at
-the handshake; it carries no identity instead, and every operation but
-one refuses a request that carries none
+**The listener requests a client certificate and does not require
+one** — `tls.RequestClientCert` in `internal/machine/listener.go` — so
+a handshake completes for a caller that presents none at all. It has
+to: an operator enrolling holds no certificate yet, so the route
+serving `POST /enrollment` cannot demand from that caller the thing
+enrolling exists to issue
 ([ADR-0064](./adr/0064-an-operator-enrols-with-a-one-time-token-and-keeps-its-key-in-its-own-cluster.md)).
-The identity a handler holds is the one the handshake's own
-verification returned, so nothing derives it a second time and a
-certificate naming any GRN under a chain nothing signed reaches no
-handler that asks for one. Which operation opts out is read from
-`api/machine.yaml` rather than remembered: `enrollOperator` carries
-`security: []`, as an operation on the browser-facing listener does.
+A connection whose certificate does not authenticate is not refused
+there either; it carries no identity instead, and every operation but
+one refuses a request that carries none. The identity a handler holds
+is the one the handshake's own verification returned, so nothing
+derives it a second time and a certificate naming any GRN under a
+chain nothing signed reaches no handler that asks for one. Which
+operation opts out is read from `api/machine.yaml` rather than
+remembered: `enrollOperator` carries `security: []`, as an operation on
+the browser-facing listener does.
+
+**Each handler makes that refusal itself, and a test is what makes it
+true of every route.** `internal/machineapi/identity_test.go`, in
+`TestServer_EnrollmentIsTheOnlyRouteAnUncertifiedCallerReaches`, is
+authoritative for that: every operation `api/machine.yaml` declares
+except `POST /enrollment` answers `401` to a caller carrying no
+identity, sent from the same client that enrols, so what admitted that
+one was the route rather than a listener that had stopped checking.
+The routes it sends to are derived and not listed — read off the
+registration `make gen` writes from that specification, and held
+against the operation count of the generated interface — so an
+operation added there arrives in the test with no case added by hand,
+and one added without the guard fails it. That derivation is the whole
+of its value: read as a fixture the test is a handful of paths someone
+chose, and a route added unauthenticated would read as one nobody
+thought to cover rather than as one this already covers.
 
 **One listener mints one kind of first certificate, once per token.**
 An operator's is obtained by enrolling: registering it on the

@@ -102,7 +102,8 @@ Prefer functions that handle every case explicitly.
   frame that knew what it meant and surfaces at whatever catch-all is
   outermost, as an unhandled failure rather than the specific one it
   was.
-- **A handled error that becomes a 5xx is logged with its cause.** The
-  client answer withholds the internals; the server side may not. The
-  log line carries the error chain — never row values — on the request's
-  existing trace, so the failure is diagnosable from the logs alone.
+- **A handled error whose answer withholds its cause is logged with that
+  cause.** The client answer withholds the internals; the server side
+  may not. The log line carries the error chain — never row values — on
+  the request's existing trace, so the failure is diagnosable from the
+  logs alone.

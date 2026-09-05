@@ -436,6 +436,11 @@ ADRs:
   — garam answers what deleting an organization would destroy before
   the act, counting on the server and naming the certificate authority
   separately as the one thing that cannot be made again
+- [0066](./adr/0066-no-aggregate-gains-an-exported-restore-path-to-satisfy-a-layout-rule.md)
+  — no aggregate gains an exported restore path in order to satisfy a
+  layout rule, so a domain's store stays beside its aggregate and
+  ADR-0051's reserved question is answered on its own evidence or not
+  at all
 - [0067](./adr/0067-a-member-mints-a-second-enrollment-token-where-the-operator-holds-no-certificate.md)
   — a member mints an operator another enrollment token where it holds
   no certificate, superseding ADR-0064's open item, and the refusal

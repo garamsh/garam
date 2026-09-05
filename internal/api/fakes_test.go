@@ -999,12 +999,17 @@ type fakeOperatorStore struct {
 	mu          sync.Mutex
 	operators   map[string]*operator.Operator
 	enrollments map[string]*operator.Enrollment
+	// The operators a certificate has been recorded for. The real
+	// store derives this from a table beside the record; nothing here
+	// issues certificates, so a test says which operators hold one.
+	enrolled map[string]bool
 }
 
 func newFakeOperatorStore() *fakeOperatorStore {
 	return &fakeOperatorStore{
 		operators:   map[string]*operator.Operator{},
 		enrollments: map[string]*operator.Enrollment{},
+		enrolled:    map[string]bool{},
 	}
 }
 
@@ -1022,6 +1027,40 @@ func (s *fakeOperatorStore) Register(_ context.Context, o *operator.Operator, e 
 	s.operators[o.GRN().String()] = o
 	s.enrollments[e.TokenHash()] = e
 	return o, nil
+}
+
+// Remint replaces the operator's token with the one minted, which is
+// what the statement's upsert does: the previous hash is dropped, so
+// the token it stood for stops enrolling anything. The refusal for an
+// operator holding a certificate is the real store's, derived inside
+// its own transaction; this one answers it off what markEnrolled
+// recorded, so what these tests cover is the handler's half — the
+// status and the sentence a refused caller reads.
+func (s *fakeOperatorStore) Remint(_ context.Context, e *operator.Enrollment) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	g := e.Operator().String()
+	if _, ok := s.operators[g]; !ok {
+		return operator.ErrOperatorNotFound
+	}
+	if s.enrolled[g] {
+		return operator.ErrOperatorAlreadyEnrolled
+	}
+	for hash, held := range s.enrollments {
+		if held.Operator() == e.Operator() {
+			delete(s.enrollments, hash)
+		}
+	}
+	s.enrollments[e.TokenHash()] = e
+	return nil
+}
+
+// markEnrolled records that garam issued the operator a certificate,
+// which is the state a re-mint is refused for.
+func (s *fakeOperatorStore) markEnrolled(g grn.GRN) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.enrolled[g.String()] = true
 }
 
 // enrolls returns the operator a token enrols, which is what the fake

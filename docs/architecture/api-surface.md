@@ -108,9 +108,22 @@ browser-facing listener mints a one-time token, the operator generates
 its key pair in its own cluster, and `enrollOperator` signs the request
 that presents the token and spends it (ADR-0064). **What the
 certificate names is the token's to say and never the request's**, and
-no private key is generated or answered. The command ADR-0032 ships
-still mints one out of band and is what recovers an operator with no
-token left; it remains a root-level subcommand no serve path references
+no private key is generated or answered.
+
+**A token is minted on the browser-facing listener and nowhere else,
+by two operations rather than one.** `registerOperator` mints the
+first beside the record, and `mintOperatorEnrollment` mints another for
+an operator that holds no certificate, which is what recovers one whose
+token was lost or ran out before it was spent
+([ADR-0067](./adr/0067-a-member-mints-a-second-enrollment-token-where-the-operator-holds-no-certificate.md)).
+Both answer the token once and neither reads one back. The second is
+authorized as the first is, on `operator:register`, and is refused for
+an operator that already enrolled — with a reason, because whether a
+member may issue a second credential path to an identity that has one
+is not decided. No console page reaches it; #1036 is where that is
+decided. The command ADR-0032 ships still mints out of band and is what
+recovers the operator that already holds a certificate; it remains a
+root-level subcommand no serve path references
 ([ADR-0032](./adr/0032-garam-ships-the-command-that-mints-an-operators-first-certificate.md)).
 Every certificate after the first is replaced over the connection the
 previous one authenticated: an operator's on the machine listener
@@ -461,3 +474,7 @@ document owes an update.
   certificate, authenticated by the one-time token registering an
   operator minted, and a connection that does not authenticate carries
   no identity rather than being refused
+- [ADR-0067](./adr/0067-a-member-mints-a-second-enrollment-token-where-the-operator-holds-no-certificate.md)
+  — a member mints an operator another enrollment token where it holds
+  no certificate, and the refusal where it holds one is where that
+  question stays open

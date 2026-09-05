@@ -44,8 +44,10 @@ export type AgentDefinition = components["schemas"]["AgentDefinition"];
 export type Operator = components["schemas"]["Operator"];
 /**
  * What registering an operator answered: the record, and the one-time
- * token that enrols it. The token is in this answer and in no other —
- * garam stores its hash, so no route reads it back (ADR-0064).
+ * token that enrols it. garam stores the token's hash and no route
+ * reads one back (ADR-0064), so this answer is the only place this
+ * token exists — the operation that mints an operator another one
+ * answers that one the same way (ADR-0067).
  */
 export type RegisteredOperator = components["schemas"]["RegisteredOperator"];
 /**

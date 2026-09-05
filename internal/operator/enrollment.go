@@ -17,7 +17,7 @@ import (
 //
 // It is a constant rather than configuration. What a deployment would
 // tune it for is the same act every time, and a longer window buys the
-// person nothing they cannot get by registering again.
+// person nothing they cannot get by minting again (ADR-0067).
 const EnrollmentTTL = 10 * time.Minute
 
 // enrollmentTokenBytes sizes the secret. The same width as an

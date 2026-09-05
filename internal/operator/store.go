@@ -16,8 +16,8 @@ type Store interface {
 	// starts with, or ErrOperatorAlreadyRegistered when the
 	// organization already has one under that GRN. The two are one
 	// write: a record that arrived without its token would be an
-	// operator nothing here can enrol and no route can re-mint for
-	// (ADR-0064).
+	// operator nothing here can enrol until somebody re-mints for it
+	// (ADR-0064, ADR-0067).
 	//
 	// It answers the operator as stored, carrying the enrollment state
 	// read in the same transaction rather than assumed from the write.
@@ -25,6 +25,18 @@ type Store interface {
 	// GRN that certificate names, and answers `enrolled` on the
 	// registration that minted it a token it does not need.
 	Register(ctx context.Context, o *Operator, e *Enrollment) (*Operator, error)
+	// Remint replaces the operator's enrollment token with the one
+	// minted here, so what was live before it stops being spendable
+	// and one identity is never reachable by two (ADR-0067).
+	//
+	// It answers ErrOperatorNotFound where the organization has no
+	// record under that GRN, and ErrOperatorAlreadyEnrolled where the
+	// operator holds a certificate: that is the outcome the token
+	// exists to produce, so an operator holding one has nothing a
+	// token would buy, and whether it may hold a second credential
+	// path is undecided. The state is read in the same transaction as
+	// the write, by the derivation Register reads it by.
+	Remint(ctx context.Context, e *Enrollment) error
 	Get(ctx context.Context, g grn.GRN) (*Operator, error)
 	// ListByOrg returns the organization's operators, ordered by GRN.
 	ListByOrg(ctx context.Context, orgGRN grn.GRN) ([]*Operator, error)

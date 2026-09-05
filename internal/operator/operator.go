@@ -16,15 +16,19 @@
 // by enrolling: registering mints a one-time token, the operator
 // generates a key pair in its own cluster and sends a certificate
 // signing request presenting that token, and garam signs a key it never
-// holds (ADR-0064). The command ADR-0032 ships still mints one out of
-// band, and is what recovers an operator that has no token left. Every
-// certificate after the first is issued here, over the connection the
-// certificate being replaced authenticated.
+// holds (ADR-0064). An operator that lost its token before obtaining a
+// certificate is re-minted one (ADR-0067); the command ADR-0032 ships
+// still mints out of band, and is what recovers the operator that
+// already holds a certificate, for which no token is minted again.
+// Every certificate after the first is issued here, over the connection
+// the certificate being replaced authenticated.
 //
 // A token is permission to ask for a certificate, once. It is not a
 // credential to the operator's identity: it authenticates no other
 // call, it names the operator garam minted it for and no other, and
-// spending it removes it.
+// spending it removes it. An operator holds at most one at a time: a
+// re-mint replaces what was there, so one identity never has two live
+// credential paths.
 //
 // Only the newest certificate an operator holds may be renewed, and
 // renewing moves that record. garam has no revocation (ADR-0014), so
@@ -75,6 +79,15 @@ var (
 	// renewed first, or an answer this caller never received did. Both
 	// are recovered the same way, by minting out of band again.
 	ErrSuperseded = errorx.New(errorx.KindAlreadyExists, "a newer certificate has already been issued for this operator")
+	// ErrOperatorAlreadyEnrolled refuses a re-mint for an operator that
+	// holds a certificate. Whether a member may issue a second
+	// credential path to an identity that already has one is not
+	// decided, and this refusal is where that stands rather than a
+	// gap somebody has to find out about (ADR-0067). The message says
+	// so, because a person meeting it should learn a decision was
+	// made and not that something broke.
+	ErrOperatorAlreadyEnrolled = errorx.New(errorx.KindFailedPrecondition,
+		"this operator has already enrolled: a second token would be a second credential path to an identity that has one, which garam does not decide to issue")
 	// ErrEnrollmentInvalid refuses an enrollment token that is not
 	// spendable. Unknown, already spent and expired are one refusal:
 	// the caller presented no credential either way, and telling the
@@ -105,9 +118,9 @@ const (
 	// from the registration that minted it.
 	EnrollmentStatePending EnrollmentState = "pending"
 	// EnrollmentStateExpired is an operator with no certificate and no
-	// spendable token. The token was lost or ran out, and no route
-	// mints a second one (ADR-0064): what recovers the operator is the
-	// command ADR-0032 ships.
+	// spendable token. The token was lost or ran out, and this is the
+	// state a re-mint answers: it is refused for an operator holding a
+	// certificate and for no other (ADR-0067).
 	EnrollmentStateExpired EnrollmentState = "expired"
 )
 
@@ -140,11 +153,8 @@ type Operator struct {
 // the subject of a certificate wherever an operator holds one
 // (ADR-0032).
 func New(orgGRN grn.GRN, identifier string, registeredBy grn.GRN) (*Operator, error) {
-	g := grn.New(orgGRN.Identifier, grn.DefaultProject, ServiceType, identifier)
-	if err := g.Validate(); err != nil {
-		return nil, errorx.Wrap(err, "operator: identifier", errorx.KindInvalidArgument)
-	}
-	if err := validateOwnership(g, orgGRN); err != nil {
+	g, err := GRNOf(orgGRN, identifier)
+	if err != nil {
 		return nil, err
 	}
 	return &Operator{
@@ -159,6 +169,23 @@ func New(orgGRN grn.GRN, identifier string, registeredBy grn.GRN) (*Operator, er
 		// answers the operator it stored rather than this one.
 		liveToken: true,
 	}, nil
+}
+
+// GRNOf names the operator of orgGRN registered under identifier.
+//
+// It is the one derivation of that name: registering builds the GRN it
+// stores through this, and a route addressing an operator by its path
+// segment builds the same one, so a segment either route refuses is
+// refused by both.
+func GRNOf(orgGRN grn.GRN, identifier string) (grn.GRN, error) {
+	g := grn.New(orgGRN.Identifier, grn.DefaultProject, ServiceType, identifier)
+	if err := g.Validate(); err != nil {
+		return grn.GRN{}, errorx.Wrap(err, "operator: identifier", errorx.KindInvalidArgument)
+	}
+	if err := validateOwnership(g, orgGRN); err != nil {
+		return grn.GRN{}, err
+	}
+	return g, nil
 }
 
 // validateOwnership returns nil if g names an operator of the

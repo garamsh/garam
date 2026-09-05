@@ -215,3 +215,134 @@ func TestOperatorList_CarriesTheEnrollmentStateAndNoCertificateDetail(t *testing
 	slices.Sort(fields)
 	assert.Equal(t, []string{"createdAt", "enrollmentState", "grn", "orgGrn", "registeredBy"}, fields)
 }
+
+// TestOperatorMintEnrollment_AdminMintsWhereOthersAreRefused holds the
+// re-mint to the authorization registration already has (ADR-0067). The
+// two are the same action on the same object, so the shape here is the
+// registration test's and the cases are chosen for the same reason: the
+// outsider holds the action in another org, the stranger holds
+// membership and not the action, and the admin is what stops being
+// answered if either half of the check goes.
+func TestOperatorMintEnrollment_AdminMintsWhereOthersAreRefused(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	otherOwner := f.sessionCookieFor(t, "other-owner-sub", "Other Owner")
+	otherSlug := createOrg(t, f, otherOwner, "globex")
+
+	f.permit(
+		permission{userGRNOf("admin-sub"), org.ActionOperatorRegister},
+		permission{userGRNOf("outsider-sub"), org.ActionOperatorRegister},
+		permission{userGRNOf("stranger-sub"), org.ActionOperatorRead},
+	)
+	admin := f.sessionCookieFor(t, "admin-sub", "Admin")
+	outsider := f.sessionCookieFor(t, "outsider-sub", "Outsider")
+	stranger := f.sessionCookieFor(t, "stranger-sub", "Stranger")
+	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(slug), userGRNOf("admin-sub"), org.RoleAdmin)))
+	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(slug), userGRNOf("stranger-sub"), org.RoleMember)))
+	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(otherSlug), userGRNOf("outsider-sub"), org.RoleMember)))
+	require.Equal(t, http.StatusCreated,
+		f.do(t, "POST", "/orgs/"+slug+"/operators", `{"identifier":"field-one"}`, admin).Code)
+	require.Equal(t, http.StatusCreated,
+		f.do(t, "POST", "/orgs/"+otherSlug+"/operators", `{"identifier":"field-one"}`, outsider).Code)
+
+	path := "/orgs/" + slug + "/operators/field-one/enrollment"
+
+	// A member of another org is refused the action it is permitted,
+	// and the same request in its own org is answered.
+	rec := f.do(t, "POST", path, "", outsider)
+	assert.Equal(t, http.StatusForbidden, rec.Code)
+	rec = f.do(t, "POST", "/orgs/"+otherSlug+"/operators/field-one/enrollment", "", outsider)
+	assert.Equal(t, http.StatusCreated, rec.Code)
+
+	// A member of this org the evaluator denies the write is refused,
+	// so membership alone does not admit. It may read the operators.
+	rec = f.do(t, "POST", path, "", stranger)
+	assert.Equal(t, http.StatusForbidden, rec.Code)
+	rec = f.do(t, "GET", "/orgs/"+slug+"/operators", "", stranger)
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	// Signed out is refused, and the same request carrying a session is
+	// answered — the control for every refusal above.
+	rec = f.do(t, "POST", path, "")
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	rec = f.do(t, "POST", path, "", admin)
+	assert.Equal(t, http.StatusCreated, rec.Code)
+}
+
+// TestOperatorMintEnrollment_ReplacesTheTokenAndRefusesAnEnrolledOne
+// covers what the route answers and what it refuses (ADR-0067).
+//
+// The two refusals carry the accepted mint as their control: an
+// operator with no certificate is minted for on the same call that the
+// unregistered one and the enrolled one are refused on, so what refuses
+// them is the case each names rather than the route refusing everything.
+//
+// That a replaced token stops enrolling is asserted through the store
+// rather than through a second HTTP call, because no route spends one:
+// spending is the machine listener's, and this fixture serves the
+// browser-facing one.
+func TestOperatorMintEnrollment_ReplacesTheTokenAndRefusesAnEnrolledOne(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	f.permit(permission{userGRNOf("admin-sub"), org.ActionOperatorRegister})
+	admin := f.sessionCookieFor(t, "admin-sub", "Admin")
+	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(slug), userGRNOf("admin-sub"), org.RoleAdmin)))
+
+	rec := f.do(t, "POST", "/orgs/"+slug+"/operators", `{"identifier":"field-one"}`, admin)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	registered := decodeBody[apigen.RegisteredOperator](t, rec)
+
+	// The registration's token enrols the operator, which is what has
+	// to stop being true below.
+	enrolls, ok := f.operators.enrolls(registered.Enrollment.Token)
+	require.True(t, ok)
+	require.Equal(t, operatorGRNOf(slug, "field-one"), enrolls)
+
+	rec = f.do(t, "POST", "/orgs/"+slug+"/operators/field-one/enrollment", "", admin)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	minted := decodeBody[apigen.OperatorEnrollment](t, rec)
+	require.NotEmpty(t, minted.Token)
+	assert.NotEqual(t, registered.Enrollment.Token, minted.Token)
+	assert.Equal(t, operator.EnrollmentTTL,
+		minted.ExpiresAt.Sub(registered.Operator.CreatedAt).Round(time.Second))
+
+	// The new token enrols the operator and the old one no longer
+	// enrols anything: two live tokens would be two credential paths
+	// for one identity.
+	enrolls, ok = f.operators.enrolls(minted.Token)
+	require.True(t, ok)
+	assert.Equal(t, operatorGRNOf(slug, "field-one"), enrolls)
+	_, ok = f.operators.enrolls(registered.Enrollment.Token)
+	assert.False(t, ok, "the token the re-mint replaced enrols nothing")
+
+	// An operator the org never registered is a miss, not a mint.
+	rec = f.do(t, "POST", "/orgs/"+slug+"/operators/never-registered/enrollment", "", admin)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+
+	// An identifier no GRN segment can hold is refused before any
+	// record is looked for.
+	rec = f.do(t, "POST", "/orgs/"+slug+"/operators/Field-One/enrollment", "", admin)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+
+	// An operator that already enrolled is refused, and the refusal
+	// says a decision was taken rather than reporting a failure.
+	f.operators.markEnrolled(operatorGRNOf(slug, "field-one"))
+	rec = f.do(t, "POST", "/orgs/"+slug+"/operators/field-one/enrollment", "", admin)
+	require.Equal(t, http.StatusConflict, rec.Code)
+	refused := decodeBody[apigen.Error](t, rec)
+	assert.Equal(t, "failed_precondition", refused.Kind)
+	assert.Contains(t, refused.Message, "already enrolled")
+	assert.Contains(t, refused.Message, "second credential path")
+	assert.NotContains(t, rec.Body.String(), minted.Token,
+		"a refusal answers no token")
+
+	// The control: the operator beside it holds no certificate and is
+	// minted for on the same call, so what refused the one above is the
+	// certificate and not the route.
+	require.Equal(t, http.StatusCreated,
+		f.do(t, "POST", "/orgs/"+slug+"/operators", `{"identifier":"field-two"}`, admin).Code)
+	rec = f.do(t, "POST", "/orgs/"+slug+"/operators/field-two/enrollment", "", admin)
+	assert.Equal(t, http.StatusCreated, rec.Code)
+}

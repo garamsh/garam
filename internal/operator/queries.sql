@@ -51,12 +51,37 @@ ON CONFLICT (operator_grn) DO UPDATE
 -- Minting sweeps the tokens that have expired, as creating an
 -- invitation sweeps its own table: a row is written in one place, so
 -- sweeping there keeps the table proportional to what is live.
+--
+-- The upsert is what makes a re-mint leave one live token (ADR-0067),
+-- and the unique key it arbitrates on (000024) is what makes two
+-- unrepresentable, so this holds for whatever mints next as well.
+-- Registering never reaches the conflict: its operator row is created
+-- in the same transaction, so nothing has minted for that GRN yet.
+--
+-- The sweep excludes the operator being minted for, so the row it
+-- would delete and the row the upsert lands on are never the same one.
+-- PostgreSQL 17 documentation §7.8.4 is why: sub-statements in WITH
+-- "cannot 'see' one another's effects on the target tables", and
+-- "trying to update the same row twice in a single statement is not
+-- supported. Only one of the modifications takes place, but it is not
+-- easy (and sometimes not possible) to reliably predict which one."
+-- Should the delete be the one that takes, the mint returns a token
+-- with no row behind it and the caller is answered a secret that
+-- enrols nothing. This predicate removes the overlap rather than
+-- resting on which way the server resolves it.
 -- name: MintOperatorEnrollment :exec
 WITH pruned AS (
-    DELETE FROM operator_enrollment_tokens WHERE expires_at <= now()
+    DELETE FROM operator_enrollment_tokens
+    WHERE expires_at <= now() AND operator_grn <> sqlc.arg('operator_grn')
 )
 INSERT INTO operator_enrollment_tokens (token_hash, operator_grn, minted_by, minted_at, expires_at)
-VALUES ($1, $2, $3, $4, $5);
+VALUES (sqlc.arg('token_hash'), sqlc.arg('operator_grn'), sqlc.arg('minted_by'),
+        sqlc.arg('minted_at'), sqlc.arg('expires_at'))
+ON CONFLICT (operator_grn) DO UPDATE
+    SET token_hash = EXCLUDED.token_hash,
+        minted_by  = EXCLUDED.minted_by,
+        minted_at  = EXCLUDED.minted_at,
+        expires_at = EXCLUDED.expires_at;
 
 -- The delete is what makes a token single-use: the row is gone when the
 -- statement returns, so two callers presenting one token leave one

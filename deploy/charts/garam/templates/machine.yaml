@@ -123,9 +123,8 @@ spec:
               containerPort: 8443
             - name: health
               containerPort: 8444
-          # The mtls listener admits no caller without a client
-          # certificate and a kubelet holds none, so the probes answer on
-          # a plaintext listener of their own (ADR-0021).
+          # The mtls listener serves no probe route, so the probes
+          # answer on a plaintext listener of their own (ADR-0021).
           livenessProbe:
             httpGet:
               path: /healthz

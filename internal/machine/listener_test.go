@@ -1,6 +1,7 @@
 package machine_test
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -10,11 +11,14 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"io"
+	"log/slog"
 	"math/big"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -392,6 +396,132 @@ func TestNewServer_CarriesNoIdentityForAConnectionItCannotAuthenticate(t *testin
 			require.NoError(t, err, "the connection is made")
 			assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 			assert.Contains(t, body, "no machine identity")
+		})
+	}
+}
+
+// notAuthenticated is the message the listener writes a connection
+// carrying no identity under.
+const notAuthenticated = "connection not authenticated"
+
+// logged is one line the listener wrote, as the deployed JSON handler
+// renders it.
+type logged struct {
+	Level string `json:"level"`
+	Msg   string `json:"msg"`
+	Error string `json:"error"`
+}
+
+// reports collects what the listener writes to the default logger,
+// which is the only place the reason a connection carries no identity
+// is kept. The handshake runs on the server's own goroutine, so the
+// buffer is guarded.
+type reports struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (r *reports) Write(p []byte) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.buf.Write(p)
+}
+
+// notAuthenticated returns the lines written under that message, in
+// the order the listener wrote them.
+func (r *reports) notAuthenticated(t *testing.T) []logged {
+	t.Helper()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var found []logged
+	for _, line := range strings.Split(r.buf.String(), "\n") {
+		if line == "" {
+			continue
+		}
+		var record logged
+		require.NoError(t, json.Unmarshal([]byte(line), &record))
+		if record.Msg == notAuthenticated {
+			found = append(found, record)
+		}
+	}
+	return found
+}
+
+// captureReports points the default logger at a buffer for the length
+// of one test. slog.Default is process-wide, so the previous one is
+// put back; nothing in this package runs in parallel. The handler is
+// built the way the served one is, at its default level, so a line
+// the listener writes below info is missing here as it would be
+// missing from a deployment.
+func captureReports(t *testing.T) *reports {
+	t.Helper()
+	out := &reports{}
+	previous := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(out, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+	return out
+}
+
+// TestNewServer_RecordsWhyAConnectionCarriesNoIdentity covers what the
+// listener writes down when Authenticate refuses. The connection is
+// admitted either way and the refusal a handler answers with names no
+// reason, so the server's own log is the only place one is kept.
+//
+// The authenticated connection is the control: it writes no such line.
+// Without it a listener writing one on every handshake reads exactly
+// like one that writes the reason it had.
+//
+// The level is asserted with the reason. A connection presenting no
+// certificate is how an operator reaches enrollment (ADR-0064), so it
+// is ordinary traffic; recorded above info it would make an ordinary
+// enrollment read as a failure.
+func TestNewServer_RecordsWhyAConnectionCarriesNoIdentity(t *testing.T) {
+	issuer := newIssuer(t)
+	subject := agentGRN("acme", "bot-1")
+	authenticated := issuer.issue(t, subject)
+	url, _, roots := listener(t, issuer.service(), identityHandler())
+
+	control := captureReports(t)
+	resp, body, err := get(t, url, roots, authenticated)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.JSONEq(t, `{"grn":"`+subject.String()+`"}`, body)
+	assert.Empty(t, control.notAuthenticated(t),
+		"a connection that authenticated is not recorded")
+
+	tests := map[string]struct {
+		client tls.Certificate
+		level  string
+		reason string
+	}{
+		"no certificate": {
+			client: tls.Certificate{},
+			level:  slog.LevelInfo.String(),
+			reason: "machine: no client certificate",
+		},
+		// The organization named in the SAN holds no authority, which
+		// is a refusal rather than a missing row: what the caller
+		// learns is that its certificate did not authenticate and
+		// nothing about which organizations exist.
+		"the organization has no authority": {
+			client: issuer.sign(t, "acme", leaf{uris: []string{agentGRN("nobody", "bot-1").String()}}),
+			level:  slog.LevelWarn.String(),
+			reason: "machine: the organization has no certificate authority",
+		},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			out := captureReports(t)
+			resp, body, err := get(t, url, roots, tt.client)
+			require.NoError(t, err, "the connection is made")
+			require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+			require.Contains(t, body, "no machine identity",
+				"what crosses the wire names no reason")
+
+			lines := out.notAuthenticated(t)
+			require.Len(t, lines, 1)
+			assert.Equal(t, tt.level, lines[0].Level)
+			assert.Contains(t, lines[0].Error, tt.reason)
 		})
 	}
 }

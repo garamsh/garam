@@ -58,14 +58,13 @@ is a gap in the rule.** Which of the two a case is gets measured and
 not read, because "cannot" is the verdict that ends the work: the
 measurement names what inside this project would satisfy the rule.
 Where it comes back holding work, the rule is followable and the
-question is the price — #1022 asked what conforming `internal/` to
-`stack-go.md`'s package layout would take, and the measurement priced
-it at 177 boundary crossings rather than finding it impossible. Where
-it comes back empty, the rule has no defined behaviour for a state the
-world put it in, and `steps=0` with the dispatch annotation is that
-measurement rather than a report of it: nothing inside this project
-starts a GitHub runner. A clause of this shape owes the same
-measurement.
+question is the price — conforming `internal/` to `stack-go.md`'s
+package layout came back priced at 177 boundary crossings rather than
+impossible, which is what makes #1022 a debt case. Where it comes back
+empty, the rule has no defined behaviour for a state the world put it
+in, and `steps=0` with the dispatch annotation is that measurement
+rather than a report of it: nothing inside this project starts a
+GitHub runner. A clause of this shape owes the same measurement.
 
 ## What this file outranks
 

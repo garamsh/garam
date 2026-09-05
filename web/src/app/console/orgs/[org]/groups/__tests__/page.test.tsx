@@ -41,6 +41,21 @@ describe("groups section", () => {
     expect(
       screen.getByText("This organization has no groups."),
     ).toBeInTheDocument();
+    // The empty state names the absence and no next step; the next
+    // step is the form standing under it, which is where every
+    // section that creates in place puts one.
+    expect(
+      screen.getByRole("button", { name: "Create group" }),
+    ).toBeInTheDocument();
+  });
+
+  it("offers the create form to anyone who may read the section", async () => {
+    await renderServerComponent(GroupsPage(params("acme")));
+
+    expect(screen.getByLabelText("Group name")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Create group" }),
+    ).toBeInTheDocument();
   });
 
   it.each([403, 404])("renders not-found on %i", async (status) => {

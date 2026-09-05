@@ -93,7 +93,7 @@ export const OrganizationParser = parserFor<Organization>()(
   }),
 );
 
-const GroupParser = parserFor<Group>()(
+export const GroupParser = parserFor<Group>()(
   z.object({
     grn: GrnParser,
     name: z.string(),
@@ -102,7 +102,7 @@ const GroupParser = parserFor<Group>()(
   }),
 );
 
-const ProjectParser = parserFor<Project>()(
+export const ProjectParser = parserFor<Project>()(
   z.object({
     grn: GrnParser,
     name: z.string(),

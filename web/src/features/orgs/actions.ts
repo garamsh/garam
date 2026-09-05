@@ -8,6 +8,11 @@ export {
   type CreateInvitationState,
 } from "./api/create-invitation";
 export { createOrg, type CreateOrgState } from "./api/create-org";
+export {
+  createGroup,
+  createProject,
+  type CreateResourceState,
+} from "./api/create-resource";
 export { defineAgent, type DefineAgentState } from "./api/define-agent";
 export {
   grantOrgConsent,

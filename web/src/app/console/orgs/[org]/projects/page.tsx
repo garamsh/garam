@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import { FolderGit2 } from "lucide-react";
 
+import { Separator } from "@/components/ui/separator";
 import { listProjects } from "@/features/orgs";
 
 import { ApiUnreachable } from "../../../_components/api-unreachable";
 import { EmptyState } from "../../../_components/empty-state";
 import { PageHeader } from "../../../_components/page-header";
+import { CreateResourceForm } from "../_components/create-resource-form";
 import { ResourceList } from "../_components/resource-list";
 
 /** Head metadata for the projects route; Next.js reads it by name. */
@@ -13,7 +15,14 @@ export const metadata: Metadata = { title: "Projects — garam" };
 
 type Params = { params: Promise<{ org: string }> };
 
-/** The organization's projects, or a note that it owns none. */
+/**
+ * The organization's projects, and the form that creates one more.
+ *
+ * Creating is granted by the `admin` role, which `api/openapi.yaml`
+ * names on the operation, while every member reads the list. The form
+ * is rendered for all of them and the API refuses a caller that holds
+ * only the read — the same shape the operators section takes.
+ */
 export default async function ProjectsPage({ params }: Params) {
   const { org } = await params;
   const projects = await listProjects(org);
@@ -35,6 +44,8 @@ export default async function ProjectsPage({ params }: Params) {
       ) : (
         <ResourceList resources={projects.data} />
       )}
+      <Separator />
+      <CreateResourceForm org={org} kind="project" />
     </>
   );
 }

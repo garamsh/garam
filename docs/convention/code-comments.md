@@ -26,7 +26,8 @@ or type where readers can find it.
 
 No comment line runs past column 72, its indentation and its marker
 counted; a comment longer than that continues on the next line with the
-marker repeated. A comment is read in the diff beside the code it
+marker repeated. A column is a character, not a byte: an em dash is one
+column and three bytes. A comment is read in the diff beside the code it
 explains, and one written as a single long line is a line a reader
 scrolls and a change no reviewer can cite a position inside.
 

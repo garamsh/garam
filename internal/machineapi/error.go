@@ -51,11 +51,11 @@ func BindingError(w http.ResponseWriter, _ *http.Request, _ error) {
 }
 
 // causeRecorder is the request-logging middleware's response writer,
-// which records the cause of a 5xx so the line it emits for the
-// request carries it (runtime-safety.md §Errors reach a handler). The
-// seam is declared here rather than imported because the surfaces
-// never import the composition root (ADR-0003); a writer without it —
-// a test's recorder is one — keeps the cause to itself.
+// which records the cause the answer withheld so the line it emits
+// for the request carries it (runtime-safety.md §Errors reach a
+// handler). The seam is declared here rather than imported because
+// the surfaces never import the composition root (ADR-0003); a writer
+// without it — a test's recorder is one — keeps the cause to itself.
 type causeRecorder interface {
 	RecordCause(err error)
 }
@@ -70,15 +70,20 @@ func writeError(w http.ResponseWriter, err error) {
 	// names a table, a constraint and a SQLSTATE, and a decoder quotes
 	// the body it could not read.
 	body := machinegen.Error{Kind: errorx.KindOf(err).String(), Message: wire.MessageOf(err)}
+	disclosed := wire.IsAuthored(err)
 	if status >= http.StatusInternalServerError {
 		// Above 500 nothing of the chain reaches the client, authored
 		// or not: this project's own message can still carry a GRN,
-		// never a row value. The chain reaches the request log
-		// instead.
+		// never a row value.
 		body.Message = "internal error"
-		if recorder, ok := w.(causeRecorder); ok {
-			recorder.RecordCause(err)
-		}
+		disclosed = false
+	}
+	// Whatever the body withheld reaches the request log instead, at
+	// every status rather than above 500 alone: below it the kind's
+	// own sentence replaced a chain naming the constraint and the
+	// SQLSTATE a conflict was refused on.
+	if recorder, ok := w.(causeRecorder); ok && !disclosed {
+		recorder.RecordCause(err)
 	}
 	writeJSON(w, status, body)
 }

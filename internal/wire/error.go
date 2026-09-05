@@ -48,22 +48,25 @@ func StatusOf(k errorx.Kind) int {
 // table, a constraint and a SQLSTATE, a decoder quoting the body it
 // could not read — carries text nobody here wrote for a caller, so the
 // client reads this project's own sentence for the kind instead. The
-// chain is not changed and still reaches the request log.
+// chain is not changed; what it replaced reaches the request log
+// instead, at whatever status, because the surface records the chain
+// wherever [IsAuthored] is false.
 func MessageOf(err error) string {
 	if err == nil {
 		return ""
 	}
-	if authored(err) {
+	if IsAuthored(err) {
 		return err.Error()
 	}
 	return messageOfKind(errorx.KindOf(err))
 }
 
-// authored reports whether every error in the chain was constructed
+// IsAuthored reports whether every error in the chain was constructed
 // here, through errorx. The type of each link decides it, never the
 // text: a message that has to be read to be judged is one that will be
-// misjudged, and a driver's message reads like prose.
-func authored(err error) bool {
+// misjudged, and a driver's message reads like prose. It is also what
+// a surface asks to know whether the client's body carried the chain.
+func IsAuthored(err error) bool {
 	for err != nil {
 		e, ok := err.(errorx.Error)
 		if !ok {

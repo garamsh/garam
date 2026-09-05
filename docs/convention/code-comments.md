@@ -35,6 +35,10 @@ A line passes 72 only where what carries it there cannot be broken
 without becoming something else: a URL, an identifier, a path, or a
 command or a message quoted verbatim. A quoted sentence is not such a
 case and neither is prose — both read the same either side of a break.
+Counting the comment lines past 72 is not this rule's check — every
+line the exception permits is one of them, so that count reports
+violations in a file that has none; `scripts/check-line-width.sh`
+counts what the rule forbids.
 
 ## Voice
 

@@ -108,6 +108,13 @@ operation opts out is read from `api/machine.yaml` rather than
 remembered: `enrollOperator` carries `security: []`, as an operation on
 the browser-facing listener does.
 
+Why a connection did not authenticate is written to the listener's own
+log and nowhere else: what crosses the wire says only that no identity
+was resolved, and nothing about which organizations exist. A connection
+presenting no certificate is the enrollment path above and is recorded
+as ordinary traffic; one presenting a certificate that did not
+authenticate is recorded as an anomaly.
+
 **Each handler makes that refusal itself, and a test is what makes it
 true of every route.** `internal/machineapi/identity_test.go`, in
 `TestServer_EnrollmentIsTheOnlyRouteAnUncertifiedCallerReaches`, is

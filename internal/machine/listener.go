@@ -3,6 +3,7 @@ package machine
 import (
 	"context"
 	"crypto/tls"
+	"log/slog"
 	"net"
 	"net/http"
 )
@@ -52,12 +53,14 @@ func NewServer(s Service, certificate ServerCertificate, next http.Handler) *htt
 		// certificate callbacks, so a resumed connection would carry no
 		// identity at all and every request on it would be refused.
 		cfg.VerifyConnection = func(state tls.ConnectionState) error {
-			identity, err := s.Authenticate(ctx, chainOf(state))
+			chain := chainOf(state)
+			identity, err := s.Authenticate(ctx, chain)
 			if err != nil {
 				// The handshake completes and the connection stays
 				// anonymous. Refusing here instead would take the
 				// enrollment route down with every caller that has no
 				// certificate yet, which is all of them.
+				recordNoIdentity(ctx, chain, err)
 				return nil
 			}
 			if cell, ok := authenticatedOf(ctx); ok {
@@ -89,6 +92,24 @@ func chainOf(state tls.ConnectionState) [][]byte {
 		chain = append(chain, certificate.Raw)
 	}
 	return chain
+}
+
+// recordNoIdentity writes down why a connection carries no identity.
+// The listener's own log is the only place that reason is kept: what
+// reaches the caller is that its certificate did not authenticate,
+// and nothing about which organizations exist.
+//
+// A connection that presented no certificate is how a caller reaches
+// enrollment (ADR-0064), so it is ordinary traffic and is recorded at
+// info. One that presented a certificate which did not authenticate
+// is not, and is recorded at warn.
+func recordNoIdentity(ctx context.Context, chain [][]byte, err error) {
+	level := slog.LevelWarn
+	if len(chain) == 0 {
+		level = slog.LevelInfo
+	}
+	slog.Log(ctx, level, "connection not authenticated",
+		slog.String("error", err.Error()))
 }
 
 // authenticated is what one connection's handshake proved, written

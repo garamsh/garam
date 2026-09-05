@@ -2,7 +2,10 @@
 
 What makes documentation valid in this project. Applies to every
 Markdown document in this repository, and to GitHub artifacts (issues,
-PRs, comments). Violations are grounds for PR rejection.
+PRs, comments). §Keep it current's rule on claims about this repository
+reaches further: it also binds authored prose the product renders to a
+user, wherever that prose lives, and no other rule in this file does.
+Violations are grounds for PR rejection.
 
 ## Keep it maintainable
 

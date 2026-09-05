@@ -200,7 +200,13 @@ No pipeline stands behind this either: what `make ci` reads a file under `docs/`
 
 What this repository runs against itself. `docs/convention/ci.md` decides how a check is named and secured; this section records where one runs.
 
-- `.github/workflows/ci.yml` triggers on `pull_request` and on nothing else; `.github/workflows/images.yml` on the same event except where a pull request changes only `docs/`; `.github/workflows/release.yml` triggers on a `v*` tag (ADR-0039).
+- `.github/workflows/ci.yml` triggers on `pull_request` into `main` and
+  on nothing else; `.github/workflows/images.yml` on the same event and
+  base except where a pull request changes only `docs/`;
+  `.github/workflows/release.yml` triggers on a `v*` tag (ADR-0039).
+  The base filter selects every pull request while `main` is the only
+  branch on `origin`; it is in place before `dev` is, so that no pull
+  request into `dev` starts a runner (#1059).
 - **A superseded run is cancelled; a release run is not.** `ci.yml` and `images.yml` each declare a concurrency group keyed on `github.workflow` and `github.ref` — under their one trigger that ref is the pull request's merge ref, one value per pull request — with `cancel-in-progress`, so a push that replaces a head stops the run reading the old one, up to the four job-runs a full merge costs. `release.yml` declares none, and the absence is what enforces it: a group cancels a pending run of that group when a newer one queues behind it, whichever way `cancel-in-progress` is set, so a group there could leave a `vX.Y.Z` tag publishing nothing at all, and a run cancelled mid-publish leaves the version half-published with the next version as the only repair (ADR-0039 §Consequences). What reads the guard is that `grep -n '^concurrency:' .github/workflows/*.yml` names two files and not three (#899).
 - **Both images a release publishes are built on a pull request.** `images.yml` builds each from what `release.yml` says it is built from and then checks the web one, which is the image a release used to be able to fail on irreversibly: the server image was pushed before the web image was built, and immutability makes the repair the next version (ADR-0039 §Consequences). `release.yml` builds both and pushes neither until both are built (#945), so what a build failure there now costs is the run. Until #850 neither image was built by any check.
 - **No run here reaches a deployment, so `main` is not what a caller

@@ -208,3 +208,160 @@ func TestOperatorCertificateIssuedAt_MovesWithEachRenewal(t *testing.T) {
 	assert.Equal(t, operator.EnrollmentStateEnrolled, stateOf(t, s, g).EnrollmentState(),
 		"a renewal leaves the state where it was")
 }
+
+// remint mints the operator another token through the store and answers
+// it, so a test holds the secret the caller would have been answered.
+func remint(t *testing.T, s *operator.PostgresStore, g grn.GRN) (*operator.Enrollment, error) {
+	t.Helper()
+	e, err := operator.NewEnrollment(g, scopedGRN("acme", "user", "ada"))
+	require.NoError(t, err)
+	return e, s.Remint(context.Background(), e)
+}
+
+// TestOperatorRemint_ReplacesALiveTokenAndRefusesAnEnrolledOperator
+// covers the re-mint against the tables it is decided by (ADR-0067).
+//
+// The three cases are the decision: an operator with no certificate is
+// minted for whether or not a token is already live, and one holding a
+// certificate is refused. The two accepted cases are the control on the
+// refusal — they run against the same store on the same call, so what
+// refuses `enrolled` is the certificate rather than the method refusing
+// everything; and the refusal is the control on them, since a method
+// that minted unconditionally would pass both accepted cases alone.
+//
+// `lapsed` is the case the statement's shape is chosen for. Its token
+// row is still there and past its window, so the sweep inside the mint
+// and the row the upsert lands on would be the same row if the sweep
+// did not exclude the operator being minted for — an overlap whose
+// outcome Postgres does not define, because a data-modifying CTE and
+// the statement around it do not see each other's effects.
+func TestOperatorRemint_ReplacesALiveTokenAndRefusesAnEnrolledOperator(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := operator.NewPostgresStore(p)
+	orgs := org.NewPostgresStore(p)
+	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+
+	// No certificate, no token: the registration's token was spent on an
+	// attempt that signed nothing, which is how an operator reaches this
+	// without waiting out the window.
+	swept, sweptToken := register(t, s, "swept")
+	_, err := s.Spend(ctx, sweptToken.TokenHash())
+	require.NoError(t, err)
+	require.Equal(t, operator.EnrollmentStateExpired, stateOf(t, s, swept).EnrollmentState())
+
+	// No certificate, a live token nobody has spent.
+	live, liveToken := register(t, s, "live")
+	require.Equal(t, operator.EnrollmentStatePending, stateOf(t, s, live).EnrollmentState())
+
+	// A certificate, which is the outcome the token exists to produce.
+	enrolled, enrolledToken := register(t, s, "enrolled")
+	_, err = s.Spend(ctx, enrolledToken.TokenHash())
+	require.NoError(t, err)
+	require.NoError(t, s.Adopt(ctx, operator.Current{
+		Operator: enrolled, Serial: "41", IssuedAt: time.Now().UTC().Add(-time.Hour),
+	}))
+
+	// No certificate, a token row past its window and not yet swept.
+	lapsed, lapsedToken := register(t, s, "lapsed")
+	expireToken(t, p, lapsed)
+	require.Equal(t, operator.EnrollmentStateExpired, stateOf(t, s, lapsed).EnrollmentState())
+
+	// An operator with neither is minted for, and the token spends.
+	sweptAgain, err := remint(t, s, swept)
+	require.NoError(t, err)
+	assert.Equal(t, operator.EnrollmentStatePending, stateOf(t, s, swept).EnrollmentState(),
+		"a re-mint moves the operator back to pending")
+
+	// An operator holding a live token is minted for too, and what it
+	// held stops being spendable: two live tokens would be two
+	// credential paths for one identity.
+	replacement, err := remint(t, s, live)
+	require.NoError(t, err)
+	assert.NotEqual(t, liveToken.Token(), replacement.Token())
+	_, err = s.Spend(ctx, liveToken.TokenHash())
+	assert.ErrorIs(t, err, operator.ErrEnrollmentInvalid,
+		"the token the re-mint replaced enrols nothing")
+	spent, err := s.Spend(ctx, replacement.TokenHash())
+	require.NoError(t, err, "the token that replaced it does")
+	assert.Equal(t, live, spent)
+
+	// The lapsed row is replaced rather than swept out from under the
+	// insert, and the token that replaced it spends.
+	lapsedReplacement, err := remint(t, s, lapsed)
+	require.NoError(t, err)
+	assert.NotEqual(t, lapsedToken.Token(), lapsedReplacement.Token())
+	assert.Equal(t, operator.EnrollmentStatePending, stateOf(t, s, lapsed).EnrollmentState())
+	spent, err = s.Spend(ctx, lapsedReplacement.TokenHash())
+	require.NoError(t, err)
+	assert.Equal(t, lapsed, spent)
+
+	// An operator that already enrolled is refused, and the operators
+	// beside it were minted for on the same store: the certificate is
+	// what refuses, not the method.
+	_, err = remint(t, s, enrolled)
+	assert.ErrorIs(t, err, operator.ErrOperatorAlreadyEnrolled)
+	assert.Equal(t, operator.EnrollmentStateEnrolled, stateOf(t, s, enrolled).EnrollmentState())
+	assert.Equal(t, 0, countRows(t,
+		p, `SELECT count(*) FROM operator_enrollment_tokens WHERE operator_grn = $1`, enrolled.String()),
+		"the refused mint wrote no row")
+
+	// An operator the organization never registered is a miss.
+	_, err = remint(t, s, scopedGRN("acme", operator.ServiceType, "never-registered"))
+	assert.ErrorIs(t, err, operator.ErrOperatorNotFound)
+
+	// One token per operator, which is the schema's (000024) and not
+	// this method's to remember. `swept` still holds the one it was
+	// minted above, so the count is over a table that has rows.
+	assert.Equal(t, 1, countRows(t,
+		p, `SELECT count(*) FROM operator_enrollment_tokens WHERE operator_grn = $1`, swept.String()))
+	assert.Equal(t, 0, countRows(t,
+		p, `SELECT count(*) FROM operator_enrollment_tokens
+		    WHERE operator_grn IS NOT NULL
+		      AND operator_grn IN (
+		            SELECT operator_grn FROM operator_enrollment_tokens
+		            GROUP BY operator_grn HAVING count(*) > 1)`),
+		"no operator holds two")
+	_, err = s.Spend(ctx, sweptAgain.TokenHash())
+	assert.NoError(t, err, "the token minted for the swept operator spends")
+}
+
+// TestOperatorRemint_SweepsEveryOtherOperatorsExpiredToken is the
+// control on the predicate that keeps the sweep off the row the mint
+// upserts. Excluding the operator being minted for must not stop the
+// sweep reaching the rest, which is what ADR-0064 decision 7 has
+// minting do.
+func TestOperatorRemint_SweepsEveryOtherOperatorsExpiredToken(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := operator.NewPostgresStore(p)
+	orgs := org.NewPostgresStore(p)
+	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+
+	// Every registration is made before any token is aged, because
+	// minting sweeps: ageing between two registrations would leave the
+	// second one having taken the row this test is about to count.
+	minting, _ := register(t, s, "minting")
+	elsewhere, _ := register(t, s, "elsewhere")
+	untouched, untouchedToken := register(t, s, "untouched")
+	expireToken(t, p, minting)
+	expireToken(t, p, elsewhere)
+
+	require.Equal(t, 3, countRows(t, p, `SELECT count(*) FROM operator_enrollment_tokens`),
+		"three rows before the mint, so a sweep has something to take")
+
+	_, err := remint(t, s, minting)
+	require.NoError(t, err)
+
+	assert.Equal(t, 0, countRows(t,
+		p, `SELECT count(*) FROM operator_enrollment_tokens WHERE operator_grn = $1`, elsewhere.String()),
+		"another operator's expired token is swept by the mint")
+	assert.Equal(t, 1, countRows(t,
+		p, `SELECT count(*) FROM operator_enrollment_tokens WHERE operator_grn = $1`, minting.String()),
+		"the minting operator's own row is replaced rather than swept and re-inserted")
+	assert.Equal(t, 1, countRows(t,
+		p, `SELECT count(*) FROM operator_enrollment_tokens WHERE operator_grn = $1`, untouched.String()),
+		"a live token is not swept, which is what separates the sweep from a truncate")
+	_, err = s.Spend(ctx, untouchedToken.TokenHash())
+	assert.NoError(t, err)
+}

@@ -461,11 +461,34 @@ export interface paths {
         /**
          * Register an operator of an organization. Requires the `admin` role.
          * @description Records that this organization has an operator under the identifier given, so a definition can name one garam holds a record of (ADR-0045). The identifier is supplied and not minted: an operator that already holds a certificate is registered under the GRN that certificate names.
-         *     It mints the operator's enrollment token in the same write, and answers with it once (ADR-0064). **The token is answered here and nowhere else**: garam stores only its hash, so no route reads it back and a caller that loses it has no way to ask again. Recovering from that is the command ADR-0032 ships, which mints a certificate out of band and reads no record here.
+         *     It mints the operator's enrollment token in the same write, and answers with it once (ADR-0064). **No route reads a token back**: garam stores only its hash, so a caller that loses this one asks for another rather than for this one again. `mintOperatorEnrollment` is that ask, and it answers only for an operator that holds no certificate (ADR-0067); for one that already enrolled, the recovery is the command ADR-0032 ships, which mints a certificate out of band and reads no record here.
          *     The token is not a credential to the operator's identity. It is permission to ask for one certificate, once, from `enrollOperator` on the machine listener, and it stops being spendable ten minutes after this call. The operator generates its own key pair in its own cluster and sends a certificate signing request presenting the token: no private key is transmitted here, displayed here, or held by garam at any point.
          *     There is no route that removes a record, and a route that did would look like revoking an operator while revoking nothing: a handshake is checked against the certificate and this organization's certificate authority, never against this record (ADR-0045). What does stop an operator, short of expiry, is deleting the organization — that takes the certificate authority with it and every certificate it signed fails from then on. An unspent token goes with the record either way, because the row holding it references the registration.
          */
         post: operations["registerOperator"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/operators/{operator}/enrollment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mint a fresh enrollment token for a registered operator. Requires the `admin` role.
+         * @description Mints the operator a new one-time token and answers it once, for an operator that holds no certificate (ADR-0067). It is what recovers a registration whose token was lost or ran out before it was spent, which until this operation meant registering the same operator under a second identifier — ADR-0045 offers no delete, so the first one stayed in the list forever.
+         *     **The token this answers is the operator's only live one.** Whatever was minted before it stops being spendable at the moment this returns, so one operator is never reachable by two tokens at once. It grants nothing a registration does not: re-minting where no certificate exists is what deleting the record and registering the same identifier again would be, and it is authorized on the action that registers.
+         *     **It is refused where the operator already enrolled**, with a reason rather than a bare conflict. That operator holds a certificate, which is the outcome a token exists to produce, so a second token would be a second credential path to one identity — closer to issuing another credential for an existing subject than to registering. Whether a member may do that is undecided, and garam cannot tell a member recovering from a compromise from the compromise itself. What replaces a certificate an operator still holds is `renewOperatorCertificate` on the machine listener; what recovers one it has lost is the out-of-band command (ADR-0032).
+         *     Enrolling is unchanged: the operator generates its key pair in its own cluster and presents this token to `enrollOperator`, and garam signs a key it never holds (ADR-0064). Reaching this operation from the console is not built — the token is answered to the caller of this route and to nobody else.
+         */
+        post: operations["mintOperatorEnrollment"];
         delete?: never;
         options?: never;
         head?: never;
@@ -953,7 +976,7 @@ export interface components {
             updatedAt: string;
         };
         /**
-         * @description Where an operator stands in obtaining a certificate from garam. It is derived from what garam already holds and reported by nobody, so no member says whether the operator is running. `enrolled` is an operator garam has issued a certificate for: it says one was obtained, not that it is still valid — garam records no expiry beside the record and asks the operator nothing. `pending` is an operator with no certificate whose enrollment token is still spendable, which lasts at most the ten minutes the token does. `expired` is an operator with no certificate and no spendable token: the token was lost or ran out, no route mints a second one, and what recovers the operator is the out-of-band command (ADR-0032). An operator that holds a certificate reads `enrolled` however much of its token is left, because the certificate is the outcome the token exists to produce.
+         * @description Where an operator stands in obtaining a certificate from garam. It is derived from what garam already holds and reported by nobody, so no member says whether the operator is running. `enrolled` is an operator garam has issued a certificate for: it says one was obtained, not that it is still valid — garam records no expiry beside the record and asks the operator nothing. `pending` is an operator with no certificate whose enrollment token is still spendable, which lasts at most the ten minutes the token does. `expired` is an operator with no certificate and no spendable token: the token was lost or ran out, and `mintOperatorEnrollment` answers such an operator a fresh one (ADR-0067), which is the state that operation exists for. An operator that holds a certificate reads `enrolled` however much of its token is left, because the certificate is the outcome the token exists to produce.
          * @enum {string}
          */
         OperatorEnrollmentState: "enrolled" | "pending" | "expired";
@@ -973,7 +996,7 @@ export interface components {
              */
             certificateIssuedAt?: string;
         };
-        /** @description The record the registration wrote, and the enrollment token it minted. This is the only answer carrying the token: garam holds its hash and no route reads one back (ADR-0064). */
+        /** @description The record the registration wrote, and the enrollment token it minted. garam holds the token's hash and no route reads one back (ADR-0064), so this answer and `mintOperatorEnrollment`'s are the only places a token exists in a form anyone can present. */
         RegisteredOperator: {
             operator: components["schemas"]["Operator"];
             enrollment: components["schemas"]["OperatorEnrollment"];
@@ -987,7 +1010,7 @@ export interface components {
             token: string;
             /**
              * Format: date-time
-             * @description When the token stops being spendable. A token nobody used by then is swept, and registering again is what replaces it.
+             * @description When the token stops being spendable. A token nobody used by then is swept, and minting the operator another is what replaces it (ADR-0067).
              */
             expiresAt: string;
         };
@@ -1067,6 +1090,8 @@ export interface components {
         policy: string;
         /** @description Agent identifier (the last GRN segment). */
         agent: string;
+        /** @description Operator identifier (the last GRN segment). */
+        operator: string;
         /** @description Subject GRN a policy is attached to. */
         subject: string;
         /** @description Maximum entries to return; 0 means no limit. */
@@ -2099,6 +2124,36 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RegisteredOperator"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    mintOperatorEnrollment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description Operator identifier (the last GRN segment). */
+                operator: components["parameters"]["operator"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Token minted, shown once. Any token minted before it is spent or dead. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperatorEnrollment"];
                 };
             };
             400: components["responses"]["Error"];

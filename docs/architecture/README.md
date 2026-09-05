@@ -436,3 +436,7 @@ ADRs:
   — garam answers what deleting an organization would destroy before
   the act, counting on the server and naming the certificate authority
   separately as the one thing that cannot be made again
+- [0067](./adr/0067-a-member-mints-a-second-enrollment-token-where-the-operator-holds-no-certificate.md)
+  — a member mints an operator another enrollment token where it holds
+  no certificate, superseding ADR-0064's open item, and the refusal
+  where it holds one is where that question stays open

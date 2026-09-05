@@ -14,11 +14,11 @@ import (
 // identifier given (ADR-0045) and mints the one-time token it enrols
 // with (ADR-0064). Requires the admin role.
 //
-// The token is answered here and nowhere else. garam stores its hash,
-// so this response is the only place it exists in a form anyone can
-// present, and the record and the token are written together — a
+// garam stores the token's hash, so no route reads one back and this
+// response is the only place this token exists in a form anyone can
+// present. The record and the token are written together — a
 // registration that arrived without one would be an operator nothing
-// can enrol.
+// can enrol until [Server.MintOperatorEnrollment] mints for it.
 func (s *Server) RegisterOperator(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org) {
 	u, err := s.currentUser(r)
 	if err != nil {
@@ -55,6 +55,48 @@ func (s *Server) RegisterOperator(w http.ResponseWriter, r *http.Request, orgSlu
 			Token:     enrollment.Token(),
 			ExpiresAt: enrollment.ExpiresAt(),
 		},
+	})
+}
+
+// MintOperatorEnrollment mints the operator a fresh enrollment token
+// and answers it once, refusing an operator that already enrolled
+// (ADR-0067). Requires the admin role.
+//
+// It is authorized exactly as registration is, on the org and on the
+// action that registers: re-minting where no certificate exists grants
+// what registering the same identifier again would grant, so a member
+// who may do the one may do the other, and no action was added for it.
+//
+// The refusal for an enrolled operator is the store's, decided beside
+// the write rather than here: this handler holds no second reading of
+// what a certificate outranks.
+func (s *Server) MintOperatorEnrollment(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, operatorSlug apigen.OperatorSlug) {
+	u, err := s.currentUser(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.authorize(r, orgGRN(orgSlug), u, org.ActionOperatorRegister); err != nil {
+		writeError(w, err)
+		return
+	}
+	g, err := operator.GRNOf(orgGRN(orgSlug), operatorSlug)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	enrollment, err := operator.NewEnrollment(g, u.GRN())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.operators.Remint(r.Context(), enrollment); err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, apigen.OperatorEnrollment{
+		Token:     enrollment.Token(),
+		ExpiresAt: enrollment.ExpiresAt(),
 	})
 }
 

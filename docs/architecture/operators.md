@@ -3,8 +3,9 @@
 What an organization records about an operator, where that operator
 stands in obtaining a certificate, and what it authenticates with: the
 record that the organization has it (ADR-0045), the one-time token
-registering it mints (ADR-0064), and which certificate garam last issued
-it, together with what it takes to replace that with the next
+registering it mints and a member mints again where it has not enrolled
+(ADR-0064, ADR-0067), and which certificate garam last issued it,
+together with what it takes to replace that with the next
 (ADR-0046). Implemented by `internal/operator`.
 
 | Type | Responsibility |
@@ -12,7 +13,7 @@ it, together with what it takes to replace that with the next
 | `Operator` | an organization's record that it has an operator under this GRN: who registered it and when, and where that operator stands in obtaining a certificate |
 | `EnrollmentState` | where an operator stands: holding a certificate, holding a token nobody has spent, or holding neither |
 | `Enrollment` | the one-time token an operator obtains its first certificate with: which operator it enrols, who minted it, and when it stops being spendable |
-| `Store` | registers one with the token it enrols with and answers what it stored, answers one by GRN, and lists an organization's own |
+| `Store` | registers one with the token it enrols with and answers what it stored, mints that token again for one that has not enrolled, answers one by GRN, and lists an organization's own |
 | `EnrollmentStore` | spends a token, answering the operator it enrols |
 | `Credential` | the certificate a connection authenticated with — the identity it names, which certificate it is, and how long it is good for |
 | `CertificateRequest` | a certificate signing request as it arrived, holding the public key an enrolling operator generated |
@@ -100,7 +101,30 @@ that reads it, so two callers presenting one token leave one
 certificate. And the attempt spends it whether or not the signing
 succeeds, so a caller cannot hold one open across malformed requests —
 what a refused enrollment costs is the token, and the recovery is to
-register again.
+mint another.
+
+Minting another is a member's to do, for an operator that holds no
+certificate (ADR-0067). It grants nothing a registration does not:
+where nothing was ever issued, it is what deleting the record and
+registering the same identifier again would be, which is why it is
+authorized on the action that registers rather than on one of its own.
+An operator holds at most one token whatever mints it — the schema
+carries a unique key on the operator and the minting statement upserts
+on it, so the newest token replaces what was there and one identity is
+never reachable by two.
+
+It is refused for an operator that already enrolled, and the refusal
+says why. That operator holds a certificate, which is the outcome the
+token exists to produce, so a second token would be a second credential
+path to one identity — closer to issuing another credential for an
+existing subject than to registering. Whether a member may do that is
+undecided: it has no forcing case, and garam cannot tell a member
+recovering from a compromise from the compromise itself. The message
+the refusal carries is where that stands, so a person meeting it learns
+a decision was taken rather than that something broke. Which half a
+request falls in is the certificate-outranks-token order above, read
+inside the same transaction as the write, by the derivation the
+registration reads it by and not a second one.
 
 Unknown, spent and expired are one refusal. A caller that spends nothing
 presented no credential either way, and telling the three apart would
@@ -109,7 +133,9 @@ reaches the database, as it does for a session, so a row read out of a
 dump enrols nothing.
 
 The command ADR-0032 ships still mints a first certificate out of band,
-and it is what recovers an operator with no token left. Every
+and it is what recovers the operator that already holds one, for which
+no token is minted again. An operator with no certificate and no token
+is recovered by minting another instead. Every
 certificate after the first is issued here, over the connection the
 certificate being replaced authenticated, so neither bootstrap is a
 standing obligation.
@@ -166,7 +192,8 @@ enrollment reached without one — and `internal/cli` is its other caller,
 browser-facing listener, on the organization's own paths, and that is
 also where a token is minted: registering writes the record and the
 token in one transaction, so a registration never exists without the
-token that enrols it. The
+token that enrols it, and the same surface mints another where the
+operator has not enrolled — a route no console page reaches yet. The
 agent's certificate is not
 this domain's: an agent is admitted to its own by the claim its operator
 made (ADR-0033) and renews on the route ADR-0040 gave it.

@@ -273,7 +273,7 @@ type Operator struct {
 	CertificateIssuedAt *time.Time `json:"certificateIssuedAt,omitempty"`
 	CreatedAt           time.Time  `json:"createdAt"`
 
-	// EnrollmentState Where an operator stands in obtaining a certificate from garam. It is derived from what garam already holds and reported by nobody, so no member says whether the operator is running. `enrolled` is an operator garam has issued a certificate for: it says one was obtained, not that it is still valid — garam records no expiry beside the record and asks the operator nothing. `pending` is an operator with no certificate whose enrollment token is still spendable, which lasts at most the ten minutes the token does. `expired` is an operator with no certificate and no spendable token: the token was lost or ran out, no route mints a second one, and what recovers the operator is the out-of-band command (ADR-0032). An operator that holds a certificate reads `enrolled` however much of its token is left, because the certificate is the outcome the token exists to produce.
+	// EnrollmentState Where an operator stands in obtaining a certificate from garam. It is derived from what garam already holds and reported by nobody, so no member says whether the operator is running. `enrolled` is an operator garam has issued a certificate for: it says one was obtained, not that it is still valid — garam records no expiry beside the record and asks the operator nothing. `pending` is an operator with no certificate whose enrollment token is still spendable, which lasts at most the ten minutes the token does. `expired` is an operator with no certificate and no spendable token: the token was lost or ran out, and `mintOperatorEnrollment` answers such an operator a fresh one (ADR-0067), which is the state that operation exists for. An operator that holds a certificate reads `enrolled` however much of its token is left, because the certificate is the outcome the token exists to produce.
 	EnrollmentState OperatorEnrollmentState `json:"enrollmentState"`
 	Grn             string                  `json:"grn"`
 	OrgGrn          string                  `json:"orgGrn"`
@@ -284,14 +284,14 @@ type Operator struct {
 
 // OperatorEnrollment The one-time token the operator enrols with, and when it stops being spendable. It is permission to ask for one certificate, once, and it authenticates nothing else.
 type OperatorEnrollment struct {
-	// ExpiresAt When the token stops being spendable. A token nobody used by then is swept, and registering again is what replaces it.
+	// ExpiresAt When the token stops being spendable. A token nobody used by then is swept, and minting the operator another is what replaces it (ADR-0067).
 	ExpiresAt time.Time `json:"expiresAt"`
 
 	// Token The token itself, answered once. Show it once and say it cannot be shown again; garam cannot answer it a second time.
 	Token string `json:"token"`
 }
 
-// OperatorEnrollmentState Where an operator stands in obtaining a certificate from garam. It is derived from what garam already holds and reported by nobody, so no member says whether the operator is running. `enrolled` is an operator garam has issued a certificate for: it says one was obtained, not that it is still valid — garam records no expiry beside the record and asks the operator nothing. `pending` is an operator with no certificate whose enrollment token is still spendable, which lasts at most the ten minutes the token does. `expired` is an operator with no certificate and no spendable token: the token was lost or ran out, no route mints a second one, and what recovers the operator is the out-of-band command (ADR-0032). An operator that holds a certificate reads `enrolled` however much of its token is left, because the certificate is the outcome the token exists to produce.
+// OperatorEnrollmentState Where an operator stands in obtaining a certificate from garam. It is derived from what garam already holds and reported by nobody, so no member says whether the operator is running. `enrolled` is an operator garam has issued a certificate for: it says one was obtained, not that it is still valid — garam records no expiry beside the record and asks the operator nothing. `pending` is an operator with no certificate whose enrollment token is still spendable, which lasts at most the ten minutes the token does. `expired` is an operator with no certificate and no spendable token: the token was lost or ran out, and `mintOperatorEnrollment` answers such an operator a fresh one (ADR-0067), which is the state that operation exists for. An operator that holds a certificate reads `enrolled` however much of its token is left, because the certificate is the outcome the token exists to produce.
 type OperatorEnrollmentState string
 
 // OperatorRegistration defines model for OperatorRegistration.
@@ -481,7 +481,7 @@ type ProjectPatch struct {
 	Roles *ScopedRoles `json:"roles,omitempty"`
 }
 
-// RegisteredOperator The record the registration wrote, and the enrollment token it minted. This is the only answer carrying the token: garam holds its hash and no route reads one back (ADR-0064).
+// RegisteredOperator The record the registration wrote, and the enrollment token it minted. garam holds the token's hash and no route reads one back (ADR-0064), so this answer and `mintOperatorEnrollment`'s are the only places a token exists in a form anyone can present.
 type RegisteredOperator struct {
 	// Enrollment The one-time token the operator enrols with, and when it stops being spendable. It is permission to ask for one certificate, once, and it authenticates nothing else.
 	Enrollment OperatorEnrollment `json:"enrollment"`
@@ -516,6 +516,9 @@ type MemberGrn = string
 
 // Offset defines model for offset.
 type Offset = int
+
+// OperatorSlug defines model for operator.
+type OperatorSlug = string
 
 // Org defines model for org.
 type Org = string
@@ -724,6 +727,9 @@ type ServerInterface interface {
 	// RegisterOperator Register an operator of an organization. Requires the `admin` role.
 	// (POST /orgs/{org}/operators)
 	RegisterOperator(w http.ResponseWriter, r *http.Request, org Org)
+	// MintOperatorEnrollment Mint a fresh enrollment token for a registered operator. Requires the `admin` role.
+	// (POST /orgs/{org}/operators/{operator}/enrollment)
+	MintOperatorEnrollment(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug)
 	// ListPolicies List an organization's policies. Requires the `admin` role.
 	// (GET /orgs/{org}/policies)
 	ListPolicies(w http.ResponseWriter, r *http.Request, org Org)
@@ -1807,6 +1813,41 @@ func (siw *ServerInterfaceWrapper) RegisterOperator(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// MintOperatorEnrollment operation middleware
+func (siw *ServerInterfaceWrapper) MintOperatorEnrollment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "operator" -------------
+	var operatorSlug OperatorSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "operator", r.PathValue("operator"), &operatorSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "operator", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MintOperatorEnrollment(w, r, org, operatorSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListPolicies operation middleware
 func (siw *ServerInterfaceWrapper) ListPolicies(w http.ResponseWriter, r *http.Request) {
 
@@ -2605,6 +2646,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/agent-definitions", wrapper.DefineAgent)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/operators", wrapper.ListOperators)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/operators", wrapper.RegisterOperator)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/enrollment", wrapper.MintOperatorEnrollment)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/policies", wrapper.ListPolicies)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/policies", wrapper.CreatePolicy)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/policies/{policy}/versions", wrapper.ListPolicyVersions)

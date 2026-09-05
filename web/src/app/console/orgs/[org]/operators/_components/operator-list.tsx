@@ -9,8 +9,9 @@ type BadgeVariant = React.ComponentProps<typeof Badge>["variant"];
  * Where the operator stands in obtaining a certificate, and the marking
  * each state takes. Only a state that needs attention is drawn loudly:
  * `expired` is the one nobody can act on from here — the token was lost
- * or ran out and no route mints a second — while `pending` is a
- * registration somebody is still working through.
+ * or ran out, and the route that mints another (ADR-0067) has no
+ * control on this page yet — while `pending` is a registration somebody
+ * is still working through.
  */
 const ENROLLMENT_BADGE: Record<Operator["enrollmentState"], BadgeVariant> = {
   enrolled: "secondary",

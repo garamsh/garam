@@ -73,6 +73,55 @@ func (s *PostgresStore) Register(ctx context.Context, o *Operator, e *Enrollment
 	return registered, nil
 }
 
+// Remint replaces the operator's enrollment token, refusing the
+// operator that holds a certificate.
+//
+// The read and the write are one transaction for the reason
+// [PostgresStore.Register]'s are: the state is derived from tables
+// this write does not touch, so a refusal decided outside the
+// transaction would be decided on a row that may have moved. It is the
+// aggregate's own [Operator.EnrollmentState] that decides, not a second
+// derivation written in SQL beside it — a certificate outranks a token
+// in one place or it eventually does so in two ways.
+//
+// Replacing is the statement's, not this method's: the upsert in
+// MintOperatorEnrollment carries the operator's row over to the new
+// token, and 000024's unique constraint is what leaves no second row to
+// carry (ADR-0067).
+func (s *PostgresStore) Remint(ctx context.Context, e *Enrollment) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return errorx.Wrap(err, "begin", errorx.KindUnavailable)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	q := s.q.WithTx(tx)
+	row, err := q.GetOperator(ctx, e.operator.String())
+	if err != nil {
+		return pgxerr.Classify(err, "read operator", ErrOperatorNotFound, nil)
+	}
+	registered, err := rowToOperator(row.Operator, row.CertificateIssuedAt, row.LiveToken)
+	if err != nil {
+		return err
+	}
+	if registered.EnrollmentState() == EnrollmentStateEnrolled {
+		return ErrOperatorAlreadyEnrolled
+	}
+	if err := q.MintOperatorEnrollment(ctx, db.MintOperatorEnrollmentParams{
+		TokenHash:   e.TokenHash(),
+		OperatorGrn: e.operator.String(),
+		MintedBy:    e.mintedBy.String(),
+		MintedAt:    stamp(e.mintedAt),
+		ExpiresAt:   stamp(e.expiresAt),
+	}); err != nil {
+		return pgxerr.Classify(err, "mint enrollment token", nil, nil)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return errorx.Wrap(err, "commit")
+	}
+	return nil
+}
+
 // Get returns the organization's record of the operator.
 func (s *PostgresStore) Get(ctx context.Context, g grn.GRN) (*Operator, error) {
 	row, err := s.q.GetOperator(ctx, g.String())

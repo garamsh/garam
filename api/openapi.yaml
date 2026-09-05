@@ -46,10 +46,12 @@ tags:
   - name: operator
     description: >-
       The operators an organization has registered, and the one-time
-      token registering one mints. A record says garam holds the
-      operator and nothing more (ADR-0045); the token beside it is
-      permission to ask for one certificate, once, and is shown once
-      because garam keeps no copy of it (ADR-0064).
+      token each enrols with. A record says garam holds the operator
+      and nothing more (ADR-0045); the token beside it is permission to
+      ask for one certificate, once, and is shown once because garam
+      keeps no copy of it (ADR-0064). Registering mints the first, and
+      an operator that has not enrolled is minted another on request
+      (ADR-0067).
   - name: agent
     description: >-
       The agents an organization holds, and the definitions of the
@@ -947,10 +949,12 @@ paths:
         the GRN that certificate names.
 
         It mints the operator's enrollment token in the same write, and
-        answers with it once (ADR-0064). **The token is answered here
-        and nowhere else**: garam stores only its hash, so no route
-        reads it back and a caller that loses it has no way to ask
-        again. Recovering from that is the command ADR-0032 ships,
+        answers with it once (ADR-0064). **No route reads a token
+        back**: garam stores only its hash, so a caller that loses this
+        one asks for another rather than for this one again.
+        `mintOperatorEnrollment` is that ask, and it answers only for
+        an operator that holds no certificate (ADR-0067); for one that
+        already enrolled, the recovery is the command ADR-0032 ships,
         which mints a certificate out of band and reads no record here.
 
         The token is not a credential to the operator's identity. It is
@@ -1024,6 +1028,65 @@ paths:
         '403':
           $ref: '#/components/responses/Error'
         '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/operators/{operator}/enrollment:
+    post:
+      operationId: mintOperatorEnrollment
+      tags: [operator]
+      summary: Mint a fresh enrollment token for a registered operator. Requires the `admin` role.
+      description: >-
+        Mints the operator a new one-time token and answers it once,
+        for an operator that holds no certificate (ADR-0067). It is
+        what recovers a registration whose token was lost or ran out
+        before it was spent, which until this operation meant
+        registering the same operator under a second identifier —
+        ADR-0045 offers no delete, so the first one stayed in the list
+        forever.
+
+        **The token this answers is the operator's only live one.**
+        Whatever was minted before it stops being spendable at the
+        moment this returns, so one operator is never reachable by two
+        tokens at once. It grants nothing a registration does not:
+        re-minting where no certificate exists is what deleting the
+        record and registering the same identifier again would be, and
+        it is authorized on the action that registers.
+
+        **It is refused where the operator already enrolled**, with a
+        reason rather than a bare conflict. That operator holds a
+        certificate, which is the outcome a token exists to produce, so
+        a second token would be a second credential path to one
+        identity — closer to issuing another credential for an existing
+        subject than to registering. Whether a member may do that is
+        undecided, and garam cannot tell a member recovering from a
+        compromise from the compromise itself. What replaces a
+        certificate an operator still holds is `renewOperatorCertificate`
+        on the machine listener; what recovers one it has lost is the
+        out-of-band command (ADR-0032).
+
+        Enrolling is unchanged: the operator generates its key pair in
+        its own cluster and presents this token to `enrollOperator`,
+        and garam signs a key it never holds (ADR-0064). Reaching this
+        operation from the console is not built — the token is answered
+        to the caller of this route and to nobody else.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/operator'
+      responses:
+        '201':
+          description: Token minted, shown once. Any token minted before it is spent or dead.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperatorEnrollment'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
           $ref: '#/components/responses/Error'
   /orgs/{org}/policies:
     post:
@@ -1489,6 +1552,14 @@ components:
       required: true
       description: Agent identifier (the last GRN segment).
       x-go-name: AgentSlug
+      schema:
+        type: string
+    operator:
+      name: operator
+      in: path
+      required: true
+      description: Operator identifier (the last GRN segment).
+      x-go-name: OperatorSlug
       schema:
         type: string
     subject:
@@ -2029,8 +2100,9 @@ components:
         enrollment token is still spendable, which lasts at most the ten
         minutes the token does. `expired` is an operator with no
         certificate and no spendable token: the token was lost or ran
-        out, no route mints a second one, and what recovers the operator
-        is the out-of-band command (ADR-0032). An operator that holds a
+        out, and `mintOperatorEnrollment` answers such an operator a
+        fresh one (ADR-0067), which is the state that operation exists
+        for. An operator that holds a
         certificate reads `enrolled` however much of its token is left,
         because the certificate is the outcome the token exists to
         produce.
@@ -2074,8 +2146,10 @@ components:
       type: object
       description: >-
         The record the registration wrote, and the enrollment token it
-        minted. This is the only answer carrying the token: garam holds
-        its hash and no route reads one back (ADR-0064).
+        minted. garam holds the token's hash and no route reads one
+        back (ADR-0064), so this answer and
+        `mintOperatorEnrollment`'s are the only places a token exists
+        in a form anyone can present.
       required: [operator, enrollment]
       properties:
         operator:
@@ -2101,7 +2175,8 @@ components:
           format: date-time
           description: >-
             When the token stops being spendable. A token nobody used by
-            then is swept, and registering again is what replaces it.
+            then is swept, and minting the operator another is what
+            replaces it (ADR-0067).
     OperatorRegistration:
       type: object
       required: [identifier]

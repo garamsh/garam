@@ -59,12 +59,12 @@ read, because "cannot" is the verdict that ends the work: the
 measurement names what inside this project would satisfy the rule. Where
 it comes back holding work, the rule is followable and the question is
 the price — conforming `internal/` to `stack-go.md`'s package layout
-came back priced at 177 boundary crossings rather than impossible
-(#1022). Where it comes back empty, the rule has no defined behaviour
-for a state the world put it in, and `steps=0` with the dispatch
-annotation is that measurement rather than a report of it: nothing
-inside this project starts a GitHub runner. A clause of this shape owes
-the same measurement.
+came back priced in boundary crossings rather than impossible (#1022).
+Where it comes back empty, the rule has no defined behaviour for a state
+the world put it in, and `steps=0` with the dispatch annotation is that
+measurement rather than a report of it: nothing inside this project
+starts a GitHub runner. A clause of this shape owes the same
+measurement.
 
 ## What this file outranks
 

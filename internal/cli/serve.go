@@ -149,7 +149,7 @@ func serveAPI(cmd *cobra.Command) error {
 		ReadTimeout: requestReadTimeout,
 	}
 	obs.logger.Info("serving api", slog.String("addr", addr))
-	return serveHTTP(ctx, httpSrv, httpSrv.ListenAndServe)
+	return obs.serveHTTP(ctx, shutdownGrace, httpSrv, httpSrv.ListenAndServe)
 }
 
 // apiHandler is everything `serve api` answers on its one port: the
@@ -299,7 +299,7 @@ func serveAuthz(cmd *cobra.Command) error {
 	authzv1.RegisterAuthzServiceServer(srv, authz.NewGRPCServer(cache))
 	authzv1.RegisterPolicyServiceServer(srv, authz.NewPolicyGRPCServer(store, cache))
 	obs.logger.Info("serving authz", slog.String("addr", addr), slog.String("metrics_addr", metricsAddr))
-	if err := serveGRPC(ctx, srv, func() error { return srv.Serve(lis) }); err != nil {
+	if err := obs.serveGRPC(ctx, shutdownGrace, srv, func() error { return srv.Serve(lis) }); err != nil {
 		return errorx.Wrap(err, "authz serve", errorx.KindInternal)
 	}
 	return nil

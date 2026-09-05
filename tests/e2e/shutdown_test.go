@@ -46,6 +46,11 @@ const (
 	readyPath = "/readyz"
 )
 
+// The message a serve process writes when its grace ran out with work
+// still in flight. Spelled here for the reason the paths above are:
+// this layer reads what the built binary emits.
+const abandonedRecord = "shutdown abandoned work in flight"
+
 var migrateOnce sync.Once
 
 // TestMain requires the test database before any test runs. Every test
@@ -121,6 +126,10 @@ func loopbackCertificate(t *testing.T) tls.Certificate {
 // the exit code a kubelet would record. The liveness answer is the
 // control: the signal reaches a process that was serving, so a pass
 // cannot come from one that never started.
+//
+// It is also the control for the record the test below asserts: these
+// processes hold nothing when the signal lands, so a line saying they
+// dropped something is one written for having stopped at all.
 func TestServe_ExitsZeroOnSIGTERM(t *testing.T) {
 	databaseURL := migrated(t)
 	bin := buildGaram(t)
@@ -178,6 +187,8 @@ func TestServe_ExitsZeroOnSIGTERM(t *testing.T) {
 			select {
 			case err := <-done:
 				assert.NoError(t, err, "exit on SIGTERM; logs:\n%s", logs.String())
+				assert.NotContains(t, logs.String(), abandonedRecord,
+					"nothing was in flight, so nothing was dropped")
 			case <-time.After(20 * time.Second):
 				t.Fatalf("still running 20s after SIGTERM; logs:\n%s", logs.String())
 			}
@@ -190,6 +201,9 @@ func TestServe_ExitsZeroOnSIGTERM(t *testing.T) {
 // server stopping cleanly. The elapsed time is the control: a run that
 // returns early proves the request was not in flight, and the exit code
 // would then be the idle path's rather than this one's.
+//
+// The exit code is the same 0 either way, so the line is what says the
+// request was dropped (#1064).
 func TestServeAPI_ExitsZeroWhenTheGraceExpiresWithWorkInFlight(t *testing.T) {
 	databaseURL := migrated(t)
 	bin := buildGaram(t)
@@ -235,6 +249,8 @@ func TestServeAPI_ExitsZeroWhenTheGraceExpiresWithWorkInFlight(t *testing.T) {
 		assert.NoError(t, err, "a requested stop is not a failure; logs:\n%s", logs.String())
 		assert.Greater(t, elapsed, 9*time.Second,
 			"the grace did not expire, so the exit code above is the idle path's; logs:\n%s", logs.String())
+		assert.Contains(t, logs.String(), abandonedRecord,
+			"exit 0 alone does not say the request was dropped; logs:\n%s", logs.String())
 	case <-time.After(30 * time.Second):
 		t.Fatalf("still running 30s after SIGTERM; logs:\n%s", logs.String())
 	}

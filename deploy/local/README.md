@@ -138,7 +138,7 @@ outside its process, so a database outage does not restart the stack.
 
 `garam serve machine` is not part of this stack; it answers both on
 `GARAM_MACHINE_HEALTH_ADDR`, a port of its own, because its own
-listener admits no caller without a client certificate.
+listener serves no probe route.
 
 ## Metrics
 

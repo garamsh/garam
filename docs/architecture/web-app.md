@@ -111,12 +111,22 @@ API behind it rather than of the console:
 
 | Section | What the console does with it |
 |---|---|
-| Overview, Groups, Projects | reads |
+| Overview | reads |
+| Groups | reads the groups the organization holds, and creates one |
+| Projects | reads the projects the organization owns, and creates one — an agent's GRN names the project it was minted in ([ADR-0001](./adr/0001-grn-segments.md)), so an organization holding none cannot reach that path from the console |
 | Members | reads, and issues the invitation a person joins by ([ADR-0006](./adr/0006-invitation-tokens.md)) |
 | Operators | reads the operators the organization registered with where each stands in obtaining a certificate, which garam derives rather than is told ([ADR-0045](./adr/0045-an-organization-registers-an-operator.md), [ADR-0064](./adr/0064-an-operator-enrols-with-a-one-time-token-and-keeps-its-key-in-its-own-cluster.md)), and registers one |
 | Agents | reads the agents the organization holds with the two states their operator and the agent itself report ([ADR-0053](./adr/0053-an-agent-and-its-operator-report-state-on-the-machine-listener.md)), and reads definitions and defines one ([ADR-0026](./adr/0026-the-console-defines-an-agent.md)) |
 | Consents | reads the cross-organization consent relations the organization is a side of, grants its half of one and withdraws it ([ADR-0035](./adr/0035-a-cross-organization-message-needs-both-organizations-consent.md)) |
 | Policies | neither: the section holds its place and says policies are managed over the HTTP API |
+
+Every section's empty state names the absence and no next step. Where
+a section creates in place, that next step is the form standing under
+it; `/console/orgs` states one in words instead, because its create
+path is a route of its own rather than a form on the page. What an
+empty state can carry is
+`web/src/app/console/_components/empty-state.tsx`, which is
+authoritative for it and holds no control.
 
 Organizations are created, and an invitation is accepted at
 `/console/invitations/{token}` — which is itself behind sign-in,

@@ -20,7 +20,19 @@ When two conventions genuinely disagree, stop and report it. Choosing one yourse
 
 These documents assign authority to two roles. One party may hold both; the rules do not relax when it does.
 
-- **PM** — owns what binds a contributor without implementing anything: `docs/convention/`, `docs/architecture/`, the templates under `.github/`, this file, and the issue tracker. Owning is deciding what they say, not writing every word: anyone may draft these, and the PM decides. Reviews every pull request and is the only role that merges one. Merges only a branch that is zero commits behind `main`, having taken the run that followed bringing it up to date: `ci.yml` triggers on `pull_request` and so reads the branch merged into `main` as `main` then stood, and nothing recomputes that when `main` moves before the merge. Decides the convention questions a pull request raises. Proposes a change to a convention rather than making it alone. Owns moving a pinned dependency that names no other mover. Does not implement.
+- **PM** — owns what binds a contributor without implementing
+  anything: `docs/convention/`, `docs/architecture/`, the templates
+  under `.github/`, this file, and the issue tracker. Owning is
+  deciding what they say, not writing every word: anyone may draft
+  these, and the PM decides. Reviews every pull request and is the
+  only role that merges one. Merges only a branch that is zero commits
+  behind `main`, having taken the run that followed bringing it up to
+  date: `ci.yml` triggers on `pull_request` and so reads the branch
+  merged into `main` as `main` then stood, and nothing recomputes that
+  when `main` moves before the merge. One exception, stated below.
+  Decides the convention questions a pull request raises. Proposes a
+  change to a convention rather than making it alone. Owns moving a
+  pinned dependency that names no other mover. Does not implement.
 - **Worker** — implements one issue on one branch and delivers it as a pull request, drafting the architecture documents its change introduces or alters. Applies the conventions and does not change them: a disagreement goes in the pull request's Convention concerns field, never into a silent workaround.
 
 **A run that was never dispatched is an absent check, not a failed
@@ -28,28 +40,32 @@ one.** A job that never started produced no result: it did not pass and
 it did not fail, and reading the forge's `failure` as a verdict on the
 diff attributes to the change a defect that is not in it. Where every
 job of a run shows `steps=0` and the run's annotation names the account
-rather than the diff, the PM may merge on a local run that (i) executes
-on a detached worktree at the pull request's head, (ii) confirms the
-branch is zero commits behind `main`, (iii) invokes the same entry
-points `.github/workflows/ci.yml` invokes, and (iv) states in the
-review what it did not cover. Both halves of the trigger are read off
-the run, and "CI is unavailable" is a judgement that does not reach
-this. The permission ends by itself the moment a run is dispatched, and
-(iv) is owed again by every pull request merged under it rather than
-settled once.
+rather than the diff, the PM may merge on a local run that:
+
+- (i) executes on a detached worktree at the pull request's head;
+- (ii) confirms the branch is zero commits behind `main`;
+- (iii) invokes the same entry points `.github/workflows/ci.yml`
+  invokes;
+- (iv) states in the review what it did not cover.
+
+Both halves of the trigger are read off the run, and "CI is
+unavailable" is a judgement that does not reach this. The permission
+ends by itself the moment a run is dispatched, and (iv) is owed again
+by every pull request merged under it rather than settled once.
 
 **A rule you could follow and do not is debt; a rule you cannot follow
 is a gap in the rule.** Which of the two a case is gets measured and
 not read, because "cannot" is the verdict that ends the work: the
 measurement names what inside this project would satisfy the rule.
 Where it comes back holding work, the rule is followable and the
-question is the price — #1022 said `internal/` could not conform to
-`stack-go.md`'s package layout, and measuring it returned work rather
-than nothing. Where it comes back empty, the rule has no defined
-behaviour for a state the world put it in, and `steps=0` with the
-dispatch annotation is that measurement rather than a report of it:
-nothing inside this project starts a GitHub runner. A clause of this
-shape owes the same measurement.
+question is the price — #1022 asked what conforming `internal/` to
+`stack-go.md`'s package layout would take, and the measurement priced
+it at 177 boundary crossings rather than finding it impossible. Where
+it comes back empty, the rule has no defined behaviour for a state the
+world put it in, and `steps=0` with the dispatch annotation is that
+measurement rather than a report of it: nothing inside this project
+starts a GitHub runner. A clause of this shape owes the same
+measurement.
 
 ## What this file outranks
 

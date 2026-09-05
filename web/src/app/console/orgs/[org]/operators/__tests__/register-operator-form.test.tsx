@@ -53,6 +53,33 @@ describe("register operator form", () => {
     expect(posted).toEqual([{ identifier: "field-one" }]);
   });
 
+  it("keeps only what has to be read before typing over the input", async () => {
+    recordRegistrations();
+    const user = userEvent.setup();
+    render(<RegisterOperatorForm org="acme" />);
+
+    // Presence: each is one clause of a longer sentence. What a person
+    // needs before typing stays; what the operator does with the token
+    // and what a record cannot do have gone to the token and to the
+    // list of records.
+    expect(
+      screen.getByText(/A record cannot be removed, so a mistyped identifier/),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/no private key is ever shown here/),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/certificate authority/)).not.toBeInTheDocument();
+
+    await user.type(screen.getByLabelText("Identifier"), "field-one");
+    await user.click(screen.getByRole("button", { name: "Register operator" }));
+
+    // The control: the key pair is beside the token that needs it, so
+    // its absence above is a move rather than a deletion.
+    expect(
+      await screen.findByText(/no private key is ever shown here/),
+    ).toBeInTheDocument();
+  });
+
   it("shows no token before a registration answers", async () => {
     recordRegistrations();
     render(<RegisterOperatorForm org="acme" />);

@@ -33,6 +33,10 @@ const ENROLLMENT_BADGE: Record<Operator["enrollmentState"], BadgeVariant> = {
  * it (`api/openapi.yaml` §Operator), so the identifier is monospaced
  * as an address and the list says what it is rather than leaving an
  * identity subject to read as somebody's name.
+ *
+ * What a record cannot do is said under the records rather than over
+ * the form that writes one: a reader meets it here, where the list it
+ * describes is on screen.
  */
 export function OperatorList({ operators }: { operators: Operator[] }) {
   return (
@@ -79,6 +83,16 @@ export function OperatorList({ operators }: { operators: Operator[] }) {
       <p className="max-w-2xl text-sm text-muted-foreground">
         Registered by is the user identifier the record holds; it carries no
         display name.
+      </p>
+      <p className="max-w-2xl text-sm text-muted-foreground">
+        A control that removed a record would look like revoking an operator and
+        would revoke nothing, because a handshake is checked against the
+        certificate and this organization&apos;s certificate authority and never
+        against this record. Short of expiry, what does stop an operator is
+        deleting this organization: that takes the certificate authority with
+        it, every certificate the authority signed stops authenticating from
+        then on, so every request that operator makes is refused, and garam does
+        not bring the authority back.
       </p>
     </div>
   );

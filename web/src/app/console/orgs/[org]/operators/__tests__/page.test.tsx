@@ -104,6 +104,41 @@ describe("operators section", () => {
     ).toBeInTheDocument();
   });
 
+  it("says under the records what a record cannot do", async () => {
+    await renderServerComponent(OperatorsPage(params("acme")));
+
+    // Presence, as above.
+    expect(
+      screen.getByText(/would look like revoking an operator/),
+    ).toBeInTheDocument();
+    // The control: what a person has to read before typing stays over
+    // the input rather than travelling to the list with the rest.
+    expect(
+      screen.getByText(/so a mistyped identifier stays in the list/),
+    ).toBeInTheDocument();
+  });
+
+  it("leaves the notes with the records, so the form is not behind them", async () => {
+    server.use(
+      http.get(`${API_URL}/orgs/acme/operators`, () => HttpResponse.json([])),
+    );
+
+    await renderServerComponent(OperatorsPage(params("acme")));
+
+    // The control: the form renders, so what is absent below is the
+    // notes and not the section that would carry them.
+    expect(screen.getByLabelText("Identifier")).toBeInTheDocument();
+    expect(
+      screen.getByText(/so a mistyped identifier stays in the list/),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/would look like revoking an operator/),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/Registered by is the user identifier/),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows an empty state rather than a bare list", async () => {
     server.use(
       http.get(`${API_URL}/orgs/acme/operators`, () => HttpResponse.json([])),

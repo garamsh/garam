@@ -25,6 +25,11 @@ const initialState: RegisterOperatorState = { status: "idle" };
  * once. Nothing can fetch it again — garam stores its hash — so the
  * panel says so where the person reads the token rather than
  * afterwards (ADR-0064).
+ *
+ * Only what has to be read before typing stands above the field: what
+ * registering does, and that a record cannot be removed. What the
+ * operator does with the token is beside the token, and what a record
+ * cannot do is under the list of records.
  */
 export function RegisterOperatorForm({ org }: { org: string }) {
   const [state, formAction, pending] = useActionState(
@@ -47,18 +52,8 @@ export function RegisterOperatorForm({ org }: { org: string }) {
       </h2>
       <p className="max-w-2xl text-sm text-muted-foreground">
         Registering records that this organization has the operator and hands
-        back a one-time token it enrols with. The operator generates its own key
-        pair in its own cluster and presents the token to get a certificate
-        signed — no private key is ever shown here or held by garam. A record
-        cannot be removed, so a mistyped identifier stays in the list — a
-        control that removed one would look like revoking an operator and would
-        revoke nothing, because a handshake is checked against the certificate
-        and this organization&apos;s certificate authority and never against
-        this record. Short of expiry, what does stop an operator is deleting
-        this organization: that takes the certificate authority with it, every
-        certificate the authority signed stops authenticating from then on, so
-        every request that operator makes is refused, and garam does not bring
-        the authority back.
+        back a one-time token it enrols with. A record cannot be removed, so a
+        mistyped identifier stays in the list.
       </p>
       <form action={formAction} className="flex max-w-2xl flex-col gap-6">
         <input type="hidden" name="org" value={org} />
@@ -165,6 +160,11 @@ function EnrollmentToken({
           Could not copy the token. Select it in the field and copy it yourself.
         </p>
       )}
+      <p className="text-sm text-muted-foreground">
+        The operator generates its own key pair in its own cluster and presents
+        the token to get a certificate signed — no private key is ever shown
+        here or held by garam.
+      </p>
       <p className="text-sm text-muted-foreground">
         Give it to the operator, which presents it with a certificate signing
         request to <code className="font-mono">POST /enrollment</code> on

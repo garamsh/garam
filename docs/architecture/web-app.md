@@ -111,7 +111,7 @@ API behind it rather than of the console:
 
 | Section | What the console does with it |
 |---|---|
-| Overview | reads |
+| Overview | counts what the sections it summarises hold, names the failing states inside them rather than folding them into a count, and says which sections it does not summarise and why |
 | Groups | reads the groups the organization holds, and creates one |
 | Projects | reads the projects the organization owns, and creates one — an agent's GRN names the project it was minted in ([ADR-0001](./adr/0001-grn-segments.md)), so an organization holding none cannot reach that path from the console |
 | Members | reads, and issues the invitation a person joins by ([ADR-0006](./adr/0006-invitation-tokens.md)) |

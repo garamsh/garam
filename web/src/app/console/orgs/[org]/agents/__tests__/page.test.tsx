@@ -67,6 +67,30 @@ describe("agents section", () => {
     );
   });
 
+  it("says what Defined by holds rather than leaving a subject bare", async () => {
+    server.use(
+      http.get(`${API_URL}/orgs/acme/agent-definitions`, () =>
+        HttpResponse.json([
+          {
+            ...fieldAgent,
+            definedBy: "grn:root:default:user:112727439469584391833",
+          },
+        ]),
+      ),
+    );
+
+    await renderServerComponent(AgentsPage(params("acme")));
+
+    // The record carries a user GRN and no name beside it
+    // (`api/openapi.yaml` §AgentDefinition), so the subject is shown
+    // and the list says what it is. Presence: the note is one clause
+    // of a longer sentence.
+    expect(screen.getByText("112727439469584391833")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Defined by is the user identifier/),
+    ).toBeInTheDocument();
+  });
+
   it("says the organization holds no agents rather than leaving the area blank", async () => {
     server.use(
       http.get(`${API_URL}/orgs/acme/agents`, () => HttpResponse.json([])),

@@ -7,6 +7,11 @@ import { slugFromGrn, type AgentDefinition } from "@/features/orgs";
  * The organization's agent definitions: the agent each one minted, the
  * operator that is to run it, the values that operator constructs it
  * from, and who said so when.
+ *
+ * `definedBy` is a user GRN and the record carries no name beside it
+ * (`api/openapi.yaml` §AgentDefinition), so the identifier is
+ * monospaced as an address and the list says what it is rather than
+ * leaving an identity subject to read as somebody's name.
  */
 export function DefinitionList({
   definitions,
@@ -14,32 +19,40 @@ export function DefinitionList({
   definitions: AgentDefinition[];
 }) {
   return (
-    <ul className="flex flex-col gap-3">
-      {definitions.map((definition) => (
-        <li key={definition.agentGrn}>
-          <Card className="gap-4 p-4">
-            <CardTitle className="font-mono text-base">
-              {slugFromGrn(definition.agentGrn)}
-            </CardTitle>
-            <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
-              <dt className="text-muted-foreground">Operator</dt>
-              <dd className="font-mono">
-                {slugFromGrn(definition.operatorGrn)}
-              </dd>
-              <dt className="text-muted-foreground">Defined by</dt>
-              <dd>{slugFromGrn(definition.definedBy)}</dd>
-              <dt className="text-muted-foreground">Defined</dt>
-              <dd>
-                <time dateTime={definition.createdAt}>
-                  {definition.createdAt.slice(0, 10)}
-                </time>
-              </dd>
-            </dl>
-            <Values values={definition.values} />
-          </Card>
-        </li>
-      ))}
-    </ul>
+    <div className="flex flex-col gap-3">
+      <ul className="flex flex-col gap-3">
+        {definitions.map((definition) => (
+          <li key={definition.agentGrn}>
+            <Card className="gap-4 p-4">
+              <CardTitle className="font-mono text-base">
+                {slugFromGrn(definition.agentGrn)}
+              </CardTitle>
+              <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+                <dt className="text-muted-foreground">Operator</dt>
+                <dd className="font-mono">
+                  {slugFromGrn(definition.operatorGrn)}
+                </dd>
+                <dt className="text-muted-foreground">Defined by</dt>
+                <dd className="font-mono">
+                  {slugFromGrn(definition.definedBy)}
+                </dd>
+                <dt className="text-muted-foreground">Defined</dt>
+                <dd>
+                  <time dateTime={definition.createdAt}>
+                    {definition.createdAt.slice(0, 10)}
+                  </time>
+                </dd>
+              </dl>
+              <Values values={definition.values} />
+            </Card>
+          </li>
+        ))}
+      </ul>
+      <p className="max-w-2xl text-sm text-muted-foreground">
+        Defined by is the user identifier the record holds; it carries no
+        display name.
+      </p>
+    </div>
   );
 }
 

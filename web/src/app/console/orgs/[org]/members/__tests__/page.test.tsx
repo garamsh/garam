@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
@@ -45,19 +45,35 @@ describe("members section", () => {
     expect(container.textContent).not.toContain("grn:");
   });
 
-  it("shows the identifier alone when the user row is gone", async () => {
+  it("says there is no name rather than putting the subject in its place", async () => {
     server.use(
       membersAre({
-        userGrn: "grn:root:default:user:alice",
+        userGrn: "grn:root:default:user:112727439469584391833",
         role: "owner",
         since: "2026-01-02T03:04:05Z",
       }),
     );
 
-    await renderServerComponent(MembersPage(params("acme")));
+    const gone = await renderServerComponent(MembersPage(params("acme")));
 
-    expect(screen.getByText("alice")).toBeInTheDocument();
-    expect(screen.queryByText("Alice")).not.toBeInTheDocument();
+    expect(
+      within(gone.container).getByText("No name on record"),
+    ).toBeInTheDocument();
+    expect(
+      within(gone.container).getByText("112727439469584391833"),
+    ).toBeInTheDocument();
+
+    // The control: the same row carrying a nickname names the person
+    // and drops the phrase, so what the phrase above reports is the
+    // absent nickname rather than something the cell always renders.
+    server.use(membersAre(aliceMembership));
+
+    const named = await renderServerComponent(MembersPage(params("acme")));
+
+    expect(within(named.container).getByText("Alice")).toBeInTheDocument();
+    expect(
+      within(named.container).queryByText("No name on record"),
+    ).not.toBeInTheDocument();
   });
 
   it("shows an empty state rather than a bare table", async () => {

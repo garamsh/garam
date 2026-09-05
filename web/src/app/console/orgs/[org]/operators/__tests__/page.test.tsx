@@ -80,6 +80,30 @@ describe("operators section", () => {
     expect(screen.queryByText("Certificate")).not.toBeInTheDocument();
   });
 
+  it("says what Registered by holds rather than leaving a subject bare", async () => {
+    server.use(
+      http.get(`${API_URL}/orgs/acme/operators`, () =>
+        HttpResponse.json([
+          {
+            ...fieldOne,
+            registeredBy: "grn:root:default:user:112727439469584391833",
+          },
+        ]),
+      ),
+    );
+
+    await renderServerComponent(OperatorsPage(params("acme")));
+
+    // The record carries a user GRN and no name beside it
+    // (`api/openapi.yaml` §Operator), so the subject is shown and the
+    // list says what it is. Presence: each note is one clause of a
+    // longer sentence.
+    expect(screen.getByText("112727439469584391833")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Registered by is the user identifier/),
+    ).toBeInTheDocument();
+  });
+
   it("shows an empty state rather than a bare list", async () => {
     server.use(
       http.get(`${API_URL}/orgs/acme/operators`, () => HttpResponse.json([])),

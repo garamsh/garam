@@ -28,11 +28,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # `make ci` proves the Go module and the web app build, which is not
-  # that the images do — Next.js standalone output is where the two come
-  # apart (#760). This builds both from what release.yml says each is
-  # built from, then checks the web one, whose failure during a release
-  # is the irreversible half (ADR-0039 §Consequences).
+  # `make ci` proves the Go module and the web app build, which is
+  # not that the images do — Next.js standalone output is where the
+  # two come apart (#760). This builds both from what release.yml
+  # says each is built from, then checks the web one, whose failure
+  # during a release is the irreversible half (ADR-0039
+  # §Consequences).
   #
   # Neither toolchain is reached except through a Dockerfile, so the
   # runner's own Docker and make are all this needs.

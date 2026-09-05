@@ -289,7 +289,7 @@ func listener(t *testing.T, agents agent.Service, operators operator.Service, me
 	t.Cleanup(func() { _ = srv.Close() })
 
 	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{
-		//nolint:gosec // the listener's own certificate is not what is under test.
+		//nolint:gosec // the listener's own certificate is not under test.
 		InsecureSkipVerify: true,
 		MinVersion:         tls.VersionTLS13,
 		Certificates:       []tls.Certificate{pair},

@@ -62,7 +62,7 @@ func (s *operatorService) Enroll(_ context.Context, token string, request operat
 func anonymous(t *testing.T) *http.Client {
 	t.Helper()
 	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{
-		//nolint:gosec // the listener's own certificate is not what is under test.
+		//nolint:gosec // the listener's own certificate is not under test.
 		InsecureSkipVerify: true,
 		MinVersion:         tls.VersionTLS13,
 	}}}

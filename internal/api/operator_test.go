@@ -276,7 +276,8 @@ func TestOperatorMintEnrollment_AdminMintsWhereOthersAreRefused(t *testing.T) {
 // The two refusals carry the accepted mint as their control: an
 // operator with no certificate is minted for on the same call that the
 // unregistered one and the enrolled one are refused on, so what refuses
-// them is the case each names rather than the route refusing everything.
+// them is the case each names rather than the route refusing
+// everything.
 //
 // That a replaced token stops enrolling is asserted through the store
 // rather than through a second HTTP call, because no route spends one:

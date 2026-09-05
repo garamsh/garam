@@ -113,6 +113,12 @@ a defect no convention happens to name. Marking it `pass` asserts the
 reviewer looked for those and found none, so it is the one row that
 cannot be filled without reading the change itself.
 
+Where a change makes something refuse less, record less, or distinguish
+less, Depth asks what else it was doing. `git show <sha>^` is where the
+previous behaviour is, and the answer may be elsewhere in the same
+change — and a comment updated to describe the new behaviour is not
+evidence that the old evidence was replaced.
+
 ## Citing violations
 
 - A violation claim cites both sides: `rule file §section` and

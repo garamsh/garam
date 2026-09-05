@@ -69,11 +69,6 @@ These are documentation too.
 
 ## Format
 
-Every rule in this file binds the pull request that writes a line rather
-than the line that stands, so a document no pull request may write again
-is held to these rules as they stood when it was written and to nothing
-added since.
-
 - English and Markdown. The H1 takes the case of what it is — a name in
   title case, an exact file or repository name as spelled, a statement
   in sentence case (an ADR's H1 states its decision). Every heading

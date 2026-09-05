@@ -28,6 +28,11 @@ What nobody can regenerate is authored, whatever its header says. The
 test runs on what a generator writes and not on the file holding it, so
 one file can be generated in one part and authored in the rest.
 
+Every one of these rules binds the pull request that writes a line
+rather than the line that stands, so an artifact no pull request may
+write again is held to them as they stood when it was written and to
+nothing added since.
+
 ## Stack-neutral
 
 | File | Governs |

@@ -94,3 +94,9 @@ The template asks which convention files you opened, and a reviewer checks that 
 
 - Secrets never enter a commit. `ci.md` covers them once they reach a pipeline; before that, the `.gitignore` and your own attention are the whole defence.
 - Conversation follows the user's language. Code, comments, and documents are English regardless.
+- The stash belongs to the repository, not to the worktree, so
+  `git stash pop` in your worktree can consume an entry another worker
+  pushed. Read `git stash list` and pop by name (#1055).
+- `gh pr edit` does not apply on this repository; the call fails on
+  Projects (classic) and can still read as having worked. Edit through
+  `gh api -X PATCH` and read the field back (#1055).

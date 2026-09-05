@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -37,10 +38,13 @@ import (
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/api"
 	"github.com/garamsh/garam/internal/authn"
+	"github.com/garamsh/garam/internal/authz"
 	"github.com/garamsh/garam/internal/ca"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/machineapi"
+	"github.com/garamsh/garam/internal/org"
+	"github.com/garamsh/garam/internal/pgxerr"
 	"github.com/garamsh/garam/internal/user"
 	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
 )
@@ -547,6 +551,249 @@ func TestLogServed_CarriesTheCauseOfAnAPIFailure(t *testing.T) {
 	refusedMux.ServeHTTP(refusedRecorder, httptest.NewRequest(http.MethodPost, "/auth/logout", nil))
 	require.Equal(t, http.StatusUnauthorized, refusedRecorder.Code)
 	assert.NotContains(t, decodeLine(t, &refusedOut), "error")
+}
+
+// driverConflict is a duplicate row as a store here answers one:
+// pgxerr.Classify over the driver's own error, which names the
+// constraint, the table and the SQLSTATE. #733 stopped that text
+// reaching a client, and nothing replaced it on the server's side.
+func driverConflict(op string) error {
+	return pgxerr.Classify(&pgconn.PgError{
+		Severity:       "ERROR",
+		Code:           "23505",
+		Message:        `duplicate key value violates unique constraint "sessions_pkey"`,
+		ConstraintName: "sessions_pkey",
+		TableName:      "sessions",
+	}, op, nil, nil)
+}
+
+// driverConflictText is what that error's whole chain reads as. The
+// question #1064 opens with — which constraint, on which table, under
+// which SQLSTATE — is answerable from this string and from nothing
+// else the line carries.
+const driverConflictText = `delete session: ERROR: duplicate key value ` +
+	`violates unique constraint "sessions_pkey" (SQLSTATE 23505)`
+
+// TestLogServed_CarriesTheCauseAnAPIAnswerWithheld is the half of
+// runtime-safety.md §Errors reach a handler that #733 left without a
+// record. Below 500 the client reads the kind's own sentence wherever
+// the chain reaches an error from outside this project, so the
+// constraint that refused the request is on this line or nowhere.
+//
+// The rows are read against each other. The authored refusal answers
+// the same status from the same route, so what puts the cause on the
+// line is the chain and not the status; the served answer is the
+// control that keeps this from passing on a line that carries a cause
+// for every request, which would point at nothing. Each row asserts
+// the body exactly, because what the client reads may not move.
+func TestLogServed_CarriesTheCauseAnAPIAnswerWithheld(t *testing.T) {
+	tests := []struct {
+		name   string
+		err    error
+		status int
+		body   string
+		cause  string
+	}{
+		{
+			name:   "a conflict the driver raised",
+			err:    driverConflict("delete session"),
+			status: http.StatusConflict,
+			body:   `{"kind":"already_exists","message":"already exists"}`,
+			cause:  driverConflictText,
+		},
+		{
+			name:   "a refusal this project wrote",
+			err:    errorx.New(errorx.KindAlreadyExists, "the session is already gone"),
+			status: http.StatusConflict,
+			body:   `{"kind":"already_exists","message":"the session is already gone"}`,
+		},
+		{
+			name:   "an answer the server meant to give",
+			status: http.StatusNoContent,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := api.NewServer(nil, nil, nil, nil, nil, nil, brokenSessions{err: tt.err},
+				nil, nil, nil, nil, nil, nil, nil, api.Config{})
+
+			var out lines
+			mux := http.NewServeMux()
+			mux.Handle("POST /auth/logout", recordingObservability(&out).logRequests(http.HandlerFunc(srv.Logout)))
+			req := httptest.NewRequest(http.MethodPost, "/auth/logout", nil)
+			req.AddCookie(&http.Cookie{Name: "garam_session", Value: "tok-1"})
+			recorder := httptest.NewRecorder()
+			mux.ServeHTTP(recorder, req)
+
+			require.Equal(t, tt.status, recorder.Code)
+			if tt.body == "" {
+				require.Empty(t, recorder.Body.String(), "204 writes no body")
+			} else {
+				assert.JSONEq(t, tt.body, recorder.Body.String(), "what the client reads")
+			}
+
+			line := decodeLine(t, &out)
+			assert.Equal(t, float64(tt.status), line["status"])
+			assert.Equal(t, slog.LevelInfo.String(), line["level"],
+				"a 4xx is an answer the server meant to give, cause or no cause")
+			if tt.cause == "" {
+				assert.NotContains(t, line, "error")
+				return
+			}
+			assert.Equal(t, tt.cause, line["error"], "the line names the constraint and the SQLSTATE")
+		})
+	}
+}
+
+// TestLogServed_CarriesTheCauseAMachineAnswerWithheld is the machine
+// listener's half of the same rule, driven through the real listener
+// so the surface's own error writer is what records the cause. The
+// rows are the ones the browser API's test holds, chosen from what
+// this listener can refuse: a policy the engine could not read
+// against one it refused, and an answered request.
+func TestLogServed_CarriesTheCauseAMachineAnswerWithheld(t *testing.T) {
+	sender := machineGRN("acme", "bot-1")
+	recipient := machineGRN("acme", "bot-2")
+	submission := `{"recipient":"` + recipient.String() + `","idempotencyKey":"key-1","body":"x"}`
+
+	tests := []struct {
+		name   string
+		engine machineapi.Evaluator
+		status int
+		body   string
+		cause  string
+	}{
+		{
+			name:   "a conflict the driver raised",
+			engine: unreachableEngine{err: driverConflict("delete session")},
+			status: http.StatusConflict,
+			body:   `{"kind":"already_exists","message":"already exists"}`,
+			cause:  driverConflictText,
+		},
+		{
+			name:   "a refusal this project wrote",
+			engine: deniedEngine{},
+			status: http.StatusForbidden,
+			body:   `{"kind":"permission_denied","message":"sender may not send to this recipient"}`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var out lines
+			url, client := machineListenerServing(t, recordingObservability(&out), sender,
+				machineapi.NewServer(nil, nil, nil, nil, nil, noGroups{}, tt.engine))
+
+			resp, err := client.Post(url+"/messages", "application/json", strings.NewReader(submission))
+			require.NoError(t, err)
+			body, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+			require.NoError(t, resp.Body.Close())
+
+			require.Equal(t, tt.status, resp.StatusCode)
+			assert.JSONEq(t, tt.body, string(body), "what the caller reads")
+
+			line := decodeLine(t, &out)
+			assert.Equal(t, float64(tt.status), line["status"])
+			assert.Equal(t, slog.LevelInfo.String(), line["level"])
+			if tt.cause == "" {
+				assert.NotContains(t, line, "error")
+				return
+			}
+			assert.Equal(t, tt.cause, line["error"])
+		})
+	}
+
+	// The control the two rows cannot supply between them: a request
+	// this listener answered leaves a line with no cause at all.
+	t.Run("an answer the server meant to give", func(t *testing.T) {
+		var out lines
+		url, client := machineListener(t, recordingObservability(&out), sender)
+		resp, err := client.Get(url + "/identity")
+		require.NoError(t, err)
+		require.NoError(t, resp.Body.Close())
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		assert.NotContains(t, decodeLine(t, &out), "error")
+	})
+}
+
+// enginePolicies is an authz.PolicySource answering every Check with
+// err. The engine's own error writer is what the interceptor then
+// reads, so what is under test is the shape grpcError produces rather
+// than one assembled here.
+type enginePolicies struct{ err error }
+
+func (p enginePolicies) Statements(context.Context, grn.GRN, []grn.GRN) ([]authz.Statement, error) {
+	return nil, p.err
+}
+
+// TestLogRPCs_CarriesTheCauseTheEngineWithheld is the engine's half.
+// It answers with wire.MessageOf too (#877), so a chain reaching
+// outside this project reads to the caller as the kind's sentence and
+// survives on this line alone — for a code that is no fault of this
+// process as much as for one that is.
+//
+// The rows share a route and a kind and differ in who wrote the
+// chain, and the answered check is the control: an interceptor
+// carrying a cause on every call would pass both refusals.
+func TestLogRPCs_CarriesTheCauseTheEngineWithheld(t *testing.T) {
+	object := grn.New(grn.RootOwner, grn.DefaultProject, org.ServiceTypeOrg, "acme")
+	tests := []struct {
+		name    string
+		err     error
+		code    codes.Code
+		message string
+		cause   string
+	}{
+		{
+			name:    "a conflict the driver raised",
+			err:     driverConflict("delete session"),
+			code:    codes.AlreadyExists,
+			message: "already exists",
+			cause:   driverConflictText,
+		},
+		{
+			name:    "a refusal this project wrote",
+			err:     errorx.New(errorx.KindAlreadyExists, "the policy is already attached"),
+			code:    codes.AlreadyExists,
+			message: "the policy is already attached",
+		},
+		{
+			name: "a decision the engine reached",
+			code: codes.OK,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var out lines
+			engine := authz.NewGRPCServer(enginePolicies{err: tt.err})
+
+			_, err := recordingObservability(&out).logRPCs(
+				context.Background(),
+				&authzv1.CheckRequest{
+					SubjectGrn: testSubject,
+					ObjectGrn:  object.String(),
+					SubjectOrg: object.String(),
+					Action:     "org:read",
+				},
+				&grpc.UnaryServerInfo{FullMethod: "/garam.authz.v1.AuthzService/Check"},
+				func(ctx context.Context, req any) (any, error) {
+					return engine.Check(ctx, req.(*authzv1.CheckRequest))
+				},
+			)
+
+			require.Equal(t, tt.code, status.Code(err))
+			assert.Equal(t, tt.message, status.Convert(err).Message(), "what the peer reads")
+
+			line := decodeLine(t, &out)
+			assert.Equal(t, tt.code.String(), line["code"])
+			if tt.cause == "" {
+				assert.NotContains(t, line, "error")
+				return
+			}
+			assert.Equal(t, tt.cause, line["error"])
+		})
+	}
 }
 
 // stubEngine answers Check so the interceptor has a call to observe.

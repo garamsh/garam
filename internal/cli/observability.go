@@ -31,6 +31,7 @@ import (
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/machine"
+	"github.com/garamsh/garam/internal/wire"
 )
 
 // The service name every trace, metric and log line carries, so one
@@ -162,10 +163,14 @@ func (o *observability) logMachineRequests(next http.Handler) http.Handler {
 }
 
 // logServed runs next and emits the line, asking for the principal
-// once the handler has had its chance to resolve one. A 5xx's cause,
-// which the surface's error writer recorded on the recorder, rides
-// the same line: the client body withholds it and the rule in
+// once the handler has had its chance to resolve one. The cause the
+// surface's error writer recorded rides the same line, at whatever
+// status: the client body withheld it and the rule in
 // runtime-safety.md §Errors reach a handler puts it here instead.
+//
+// The level is not raised with it. A 4xx is an answer the server
+// meant to give, and a duplicate registration that pages an operator
+// is worse than one that is merely diagnosable.
 func (o *observability) logServed(w http.ResponseWriter, r *http.Request, next http.Handler, field string, principal func() string) {
 	recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 
@@ -238,10 +243,11 @@ func (o *observability) recoverRPCs(ctx context.Context, req any, info *grpc.Una
 }
 
 // logRPCs is the gRPC counterpart of logRequests. The engine's
-// principal is the subject the request asks about. A refusal already
-// carries its reason to the caller, so the line takes the cause only
-// when the code is this process's fault — the 5xx counterpart of the
-// HTTP surfaces (runtime-safety.md §Errors reach a handler).
+// principal is the subject the request asks about. The line takes the
+// cause on a fault of this process, and on any code whose chain
+// reaches an error from outside — wire.MessageOf gave that caller the
+// kind's own sentence, so the line is where the chain survives
+// (runtime-safety.md §Errors reach a handler).
 func (o *observability) logRPCs(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 	resp, err := handler(ctx, req)
 
@@ -254,7 +260,7 @@ func (o *observability) logRPCs(ctx context.Context, req any, info *grpc.UnarySe
 		slog.String("code", status.Code(err).String()),
 		principalAttr(principalField(subject), subject),
 	}
-	if err != nil && serverFault(status.Code(err)) {
+	if err != nil && (serverFault(status.Code(err)) || hasForeignCause(err)) {
 		attrs = append(attrs, slog.String("error", causeText(err)))
 	}
 	o.logger.LogAttrs(ctx, levelOf(err != nil), "rpc", attrs...)
@@ -271,6 +277,16 @@ func causeText(err error) string {
 		return cause.Error()
 	}
 	return status.Convert(err).Message()
+}
+
+// hasForeignCause reports whether err carries a chain reaching an
+// error this project did not write. grpcError keeps that chain under
+// the status a peer reads, and wire.MessageOf replaced its text
+// there, so what named the constraint and the SQLSTATE is on this
+// line or nowhere.
+func hasForeignCause(err error) bool {
+	cause := errors.Unwrap(err)
+	return cause != nil && !wire.IsAuthored(cause)
 }
 
 // serverFault reports whether a gRPC code is what the HTTP surfaces
@@ -334,7 +350,7 @@ func traceIDOf(ctx context.Context) string {
 
 // statusRecorder remembers the status an inner handler wrote, which
 // net/http otherwise keeps to itself, and the cause a surface's error
-// writer reported for a 5xx.
+// writer reported for an answer that withheld one.
 type statusRecorder struct {
 	http.ResponseWriter
 	status int
@@ -347,8 +363,8 @@ func (s *statusRecorder) WriteHeader(code int) {
 }
 
 // RecordCause is the recording half of the seam the surfaces' error
-// writers declare: a handled error that becomes a 5xx reaches the
-// line logServed emits, never the client body.
+// writers declare: a chain the answer's body does not carry reaches
+// the line logServed emits instead of the client.
 func (s *statusRecorder) RecordCause(err error) {
 	s.cause = err
 }

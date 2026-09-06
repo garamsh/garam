@@ -32,32 +32,23 @@ var (
 )
 
 // Authority is an organization's certificate authority: the certificate
-// it signs with, and the private key behind it in sealed form.
+// it signs with, and the private key behind it in sealed form. Every
+// field is one the store writes and reads back, and the aggregate
+// holds no invariant over any of them, so they are exported and
+// whatever restores a row does it from outside this package
+// (ADR-0069).
+//
+// SealedKey is the private key as [Sealer] sealed it, so reading it
+// yields no key material. NotAfter is the same instant the certificate
+// itself carries, stored beside it. CreatedAt is the first time the
+// organization needed a CA.
 type Authority struct {
-	orgGRN      grn.GRN
-	certificate []byte
-	sealedKey   []byte
-	notAfter    time.Time
-	createdAt   time.Time
+	Organization grn.GRN
+	Certificate  []byte
+	SealedKey    []byte
+	NotAfter     time.Time
+	CreatedAt    time.Time
 }
-
-// Organization returns the GRN of the organization the CA belongs to.
-func (a *Authority) Organization() grn.GRN { return a.orgGRN }
-
-// Certificate returns the CA certificate in DER form.
-func (a *Authority) Certificate() []byte { return a.certificate }
-
-// SealedKey returns the CA private key as [Sealer] sealed it. Reading
-// it yields no key material.
-func (a *Authority) SealedKey() []byte { return a.sealedKey }
-
-// NotAfter returns when the CA certificate stops being valid. It is the
-// same instant the certificate itself carries, stored beside it.
-func (a *Authority) NotAfter() time.Time { return a.notAfter }
-
-// CreatedAt returns when the organization's CA was created, which is
-// the first time the organization needed one.
-func (a *Authority) CreatedAt() time.Time { return a.createdAt }
 
 // Certificate is a signed client certificate and the CA that signed
 // it. It holds no private key, and the value has nowhere to put one:

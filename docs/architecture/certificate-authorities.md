@@ -1,7 +1,8 @@
 # Certificate Authorities
 
 The certificate authority an organization signs machine identities
-with (ADR-0014). Implemented by `internal/ca`.
+with (ADR-0014). Implemented by `internal/ca`, whose PostgreSQL store
+is `internal/ca/postgres`.
 
 | Type | Responsibility |
 |------|----------------|
@@ -10,6 +11,14 @@ with (ADR-0014). Implemented by `internal/ca`.
 | `IssuedCertificate` | a `Certificate` garam generated the key pair for, carrying the private key it returns once |
 | `Sealer` | seals key material so what reaches storage is useless without the key-encryption key the process holds |
 | `Service` | issues a certificate for a subject GRN over a key it generates, or signs one a certificate request carries, creating the organization's CA on demand |
+
+`Authority`'s fields are exported and it has no accessors: every one
+of them is a value the store writes and reads back, and the aggregate
+holds no invariant over any of them
+([ADR-0069](./adr/0069-the-aggregates-are-data-carriers-so-the-driver-leaves-the-domain-package.md),
+superseding ADR-0051's accessor for this aggregate). `Certificate` and
+`IssuedCertificate` keep theirs: no store here writes either, so
+neither is a value that decision reaches.
 
 A CA is an organization's own rather than shared, so a certificate
 issued by one does not chain against another's and tenancy holds in the

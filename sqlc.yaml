@@ -65,11 +65,11 @@ sql:
     schema:
       - migrations/000001_init.up.sql
       - migrations/000005_certificate_authorities.up.sql
-    queries: internal/ca/queries.sql
+    queries: internal/ca/postgres/queries.sql
     gen:
       go:
         package: db
-        out: internal/ca/db
+        out: internal/ca/postgres/db
         sql_package: pgx/v5
   - engine: postgresql
     schema:

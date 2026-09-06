@@ -175,7 +175,7 @@ func (s *service) sign(ctx context.Context, subject grn.GRN, public *ecdsa.Publi
 		subject:   subject,
 		serial:    serial.String(),
 		certPEM:   encodePEM("CERTIFICATE", der),
-		issuerPEM: encodePEM("CERTIFICATE", authority.certificate),
+		issuerPEM: encodePEM("CERTIFICATE", authority.Certificate),
 		notAfter:  notAfter,
 	}, nil
 }
@@ -218,7 +218,7 @@ func ownedBy(a *Authority, orgGRN grn.GRN) (*Authority, error) {
 	switch {
 	case a == nil:
 		return nil, errorx.New(errorx.KindInternal, "ca: store returned no authority and no error")
-	case a.orgGRN != orgGRN:
+	case a.Organization != orgGRN:
 		return nil, errorx.New(errorx.KindInternal, "ca: store returned another organization's authority")
 	}
 	return a, nil
@@ -246,11 +246,11 @@ func (s *service) newAuthority(ctx context.Context, orgGRN grn.GRN) (*Authority,
 		return nil, errorx.Wrap(err, "ca: seal authority key")
 	}
 	return &Authority{
-		orgGRN:      orgGRN,
-		certificate: der,
-		sealedKey:   sealed,
-		notAfter:    now.Add(authorityLifetime),
-		createdAt:   now,
+		Organization: orgGRN,
+		Certificate:  der,
+		SealedKey:    sealed,
+		NotAfter:     now.Add(authorityLifetime),
+		CreatedAt:    now,
 	}, nil
 }
 
@@ -263,11 +263,11 @@ func binding(orgGRN grn.GRN) []byte {
 // open unseals the CA's private key and parses its certificate. A
 // stored value that no longer parses is corruption, hence internal.
 func (s *service) open(ctx context.Context, a *Authority) (*x509.Certificate, *ecdsa.PrivateKey, error) {
-	certificate, err := x509.ParseCertificate(a.certificate)
+	certificate, err := x509.ParseCertificate(a.Certificate)
 	if err != nil {
 		return nil, nil, errorx.Wrap(err, "ca: authority certificate", errorx.KindInternal)
 	}
-	keyDER, err := s.sealer.Open(ctx, binding(a.orgGRN), a.sealedKey)
+	keyDER, err := s.sealer.Open(ctx, binding(a.Organization), a.SealedKey)
 	if err != nil {
 		return nil, nil, errorx.Wrap(err, "ca: open authority key")
 	}

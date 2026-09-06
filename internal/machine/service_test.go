@@ -36,10 +36,10 @@ func orgOf(subject grn.GRN) grn.GRN {
 type authorities map[grn.GRN]*ca.Authority
 
 func (a authorities) Create(_ context.Context, authority *ca.Authority) error {
-	if _, held := a[authority.Organization()]; held {
+	if _, held := a[authority.Organization]; held {
 		return ca.ErrAuthorityAlreadyExists
 	}
-	a[authority.Organization()] = authority
+	a[authority.Organization] = authority
 	return nil
 }
 
@@ -62,7 +62,7 @@ func (r trustRoots) Get(ctx context.Context, subject grn.GRN) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return authority.Certificate(), nil
+	return authority.Certificate, nil
 }
 
 // registrations is the record an identity authenticates on, as a test
@@ -213,9 +213,9 @@ func (i *issuer) open(t *testing.T, org string) (*x509.Certificate, *ecdsa.Priva
 	ctx := context.Background()
 	authority, err := i.store.Get(ctx, grn.New(grn.RootOwner, grn.DefaultProject, "org", org))
 	require.NoError(t, err)
-	certificate, err := x509.ParseCertificate(authority.Certificate())
+	certificate, err := x509.ParseCertificate(authority.Certificate)
 	require.NoError(t, err)
-	keyDER, err := i.sealer.Open(ctx, []byte(authority.Organization().String()), authority.SealedKey())
+	keyDER, err := i.sealer.Open(ctx, []byte(authority.Organization.String()), authority.SealedKey)
 	require.NoError(t, err)
 	parsed, err := x509.ParsePKCS8PrivateKey(keyDER)
 	require.NoError(t, err)

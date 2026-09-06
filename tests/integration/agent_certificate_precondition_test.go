@@ -12,6 +12,7 @@ import (
 
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/ca"
+	capg "github.com/garamsh/garam/internal/ca/postgres"
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
 )
@@ -48,7 +49,7 @@ func TestAgentCertificate_TheAssignmentIsTheWholePrecondition(t *testing.T) {
 	_, evaluator := policyEngine(t, p)
 	url := machineListener(t, p, sealer, evaluator)
 
-	outOfBand, err := ca.NewService(ca.NewPostgresStore(p), sealer, ca.Config{})
+	outOfBand, err := ca.NewService(capg.New(p), sealer, ca.Config{})
 	require.NoError(t, err)
 	holder := machineClient(t, installed(t, p, outOfBand, scopedGRN("acme", operator.ServiceType, "one")))
 

@@ -65,7 +65,7 @@ func issueForNewOrg(t *testing.T, subject grn.GRN, sealer ca.Sealer, cfg ca.Conf
 func serviceHolding(t *testing.T, authority *ca.Authority, sealer ca.Sealer, cfg ca.Config) ca.Service {
 	t.Helper()
 	store := mocks.NewMockStore(t)
-	store.EXPECT().Get(mock.Anything, authority.Organization()).Return(authority, nil)
+	store.EXPECT().Get(mock.Anything, authority.Organization).Return(authority, nil)
 	return newService(t, store, sealer, cfg)
 }
 
@@ -97,7 +97,7 @@ func parseKeyPEM(t *testing.T, encoded []byte) *ecdsa.PrivateKey {
 // listener would.
 func verifyAgainst(t *testing.T, cert *ca.Certificate, authority *ca.Authority) error {
 	t.Helper()
-	root, err := x509.ParseCertificate(authority.Certificate())
+	root, err := x509.ParseCertificate(authority.Certificate)
 	require.NoError(t, err)
 	roots := x509.NewCertPool()
 	roots.AddCert(root)
@@ -112,13 +112,13 @@ func TestService_IssueCreatesTheOrganizationAuthorityOnDemand(t *testing.T) {
 	subject := agentGRN("acme", "bot-1")
 	cert, authority := issueForNewOrg(t, subject, newSealer(t), ca.Config{})
 
-	assert.Equal(t, orgOf(subject), authority.Organization())
+	assert.Equal(t, orgOf(subject), authority.Organization)
 	assert.Equal(t, subject, cert.Subject())
 	require.NoError(t, verifyAgainst(t, &cert.Certificate, authority))
 
 	// The CA travels with the certificate: its holder needs it to
 	// verify the other side of the connection.
-	assert.Equal(t, authority.Certificate(), parseCertificatePEM(t, cert.IssuerPEM()).Raw)
+	assert.Equal(t, authority.Certificate, parseCertificatePEM(t, cert.IssuerPEM()).Raw)
 
 	leaf := parseCertificatePEM(t, cert.CertificatePEM())
 	assert.Equal(t, cert.NotAfter(), leaf.NotAfter.UTC())
@@ -143,7 +143,7 @@ func TestService_IssuedCertificateCannotSign(t *testing.T) {
 
 	// The CA is the other half of that: it may sign certificates, and
 	// only leaves of them.
-	issuer, err := x509.ParseCertificate(authority.Certificate())
+	issuer, err := x509.ParseCertificate(authority.Certificate)
 	require.NoError(t, err)
 	assert.True(t, issuer.IsCA)
 	assert.True(t, issuer.BasicConstraintsValid, "basic constraints are not encoded")
@@ -208,20 +208,20 @@ func TestService_StoresTheAuthorityKeySealed(t *testing.T) {
 	sealer := newSealer(t)
 	_, authority := issueForNewOrg(t, agentGRN("acme", "bot-1"), sealer, ca.Config{})
 
-	row := []byte(authority.Organization().String())
-	opened, err := sealer.Open(ctx, row, authority.SealedKey())
+	row := []byte(authority.Organization.String())
+	opened, err := sealer.Open(ctx, row, authority.SealedKey)
 	require.NoError(t, err)
 	key, err := x509.ParsePKCS8PrivateKey(opened)
 	require.NoError(t, err)
 	private, ok := key.(*ecdsa.PrivateKey)
 	require.True(t, ok)
-	authorityCert, err := x509.ParseCertificate(authority.Certificate())
+	authorityCert, err := x509.ParseCertificate(authority.Certificate)
 	require.NoError(t, err)
 	assert.Equal(t, authorityCert.PublicKey, private.Public())
 
-	_, err = x509.ParsePKCS8PrivateKey(authority.SealedKey())
+	_, err = x509.ParsePKCS8PrivateKey(authority.SealedKey)
 	assert.Error(t, err, "the stored bytes parse as a private key")
-	_, err = newSealer(t).Open(ctx, row, authority.SealedKey())
+	_, err = newSealer(t).Open(ctx, row, authority.SealedKey)
 	assert.Error(t, err, "the stored bytes open under a key-encryption key that never sealed them")
 }
 
@@ -382,7 +382,7 @@ func TestService_IssueRefusesToOutliveTheAuthority(t *testing.T) {
 	subject := agentGRN("acme", "bot-1")
 	sealer := newSealer(t)
 	_, authority := issueForNewOrg(t, subject, sealer, ca.Config{})
-	issuer, err := x509.ParseCertificate(authority.Certificate())
+	issuer, err := x509.ParseCertificate(authority.Certificate)
 	require.NoError(t, err)
 
 	// An hour before the CA expires, a certificate of any permitted
@@ -482,7 +482,7 @@ func TestService_IssueBackdatesAgainstClockSkew(t *testing.T) {
 	assert.True(t, leaf.NotBefore.Before(now), "a peer whose clock trails the issuer cannot use it")
 	assert.Equal(t, now.Add(-time.Minute), leaf.NotBefore.UTC())
 
-	issuer, err := x509.ParseCertificate(authority.Certificate())
+	issuer, err := x509.ParseCertificate(authority.Certificate)
 	require.NoError(t, err)
 	assert.Equal(t, now.Add(-time.Minute), issuer.NotBefore.UTC())
 }

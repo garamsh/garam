@@ -23,6 +23,7 @@ import (
 	"github.com/garamsh/garam/internal/authn"
 	"github.com/garamsh/garam/internal/authz"
 	"github.com/garamsh/garam/internal/ca"
+	capg "github.com/garamsh/garam/internal/ca/postgres"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/health"
@@ -133,7 +134,7 @@ func serveAPI(cmd *cobra.Command) error {
 		providers,
 		api.NewGRPCEvaluator(conn),
 		api.NewGRPCPolicyManager(conn),
-		authorityPresence{store: ca.NewPostgresStore(pool)},
+		authorityPresence{store: capg.New(pool)},
 		api.Config{
 			SessionTTL:   ttl,
 			CookieSecure: cookieSecure,

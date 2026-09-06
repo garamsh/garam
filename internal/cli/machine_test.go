@@ -166,10 +166,10 @@ func TestMachineKeyMaterial_RefusesAGroupReadableKey(t *testing.T) {
 type authorities map[grn.GRN]*ca.Authority
 
 func (a authorities) Create(_ context.Context, authority *ca.Authority) error {
-	if _, held := a[authority.Organization()]; held {
+	if _, held := a[authority.Organization]; held {
 		return ca.ErrAuthorityAlreadyExists
 	}
-	a[authority.Organization()] = authority
+	a[authority.Organization] = authority
 	return nil
 }
 
@@ -209,8 +209,8 @@ func TestCertificateAuthorities_ReadsTheOrganizationsOwnAuthority(t *testing.T) 
 	other, err := roots.Get(ctx, machineGRN("other", "bot-1"))
 	require.NoError(t, err)
 
-	assert.Equal(t, store[orgGRN("acme")].Certificate(), acme)
-	assert.Equal(t, store[orgGRN("other")].Certificate(), other)
+	assert.Equal(t, store[orgGRN("acme")].Certificate, acme)
+	assert.Equal(t, store[orgGRN("other")].Certificate, other)
 	assert.NotEqual(t, acme, other, "two organizations share one authority")
 
 	_, err = roots.Get(ctx, machineGRN("nobody", "bot-1"))

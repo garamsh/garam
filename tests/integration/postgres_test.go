@@ -46,6 +46,7 @@ import (
 	"github.com/garamsh/garam/internal/authn"
 	"github.com/garamsh/garam/internal/authz"
 	"github.com/garamsh/garam/internal/ca"
+	capg "github.com/garamsh/garam/internal/ca/postgres"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/listfilter"
@@ -2123,7 +2124,7 @@ func TestCertificateAuthority_RoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	sealer, err := ca.NewAESGCMSealer(key)
 	require.NoError(t, err)
-	store := ca.NewPostgresStore(p)
+	store := capg.New(p)
 	svc, err := ca.NewService(store, sealer, ca.Config{})
 	require.NoError(t, err)
 
@@ -2136,7 +2137,7 @@ func TestCertificateAuthority_RoundTrip(t *testing.T) {
 
 	authority, err := store.Get(ctx, acme)
 	require.NoError(t, err)
-	assert.Equal(t, acme, authority.Organization())
+	assert.Equal(t, acme, authority.Organization)
 	assert.Equal(t, subject.String(), leafOf(t, &cert.Certificate).URIs[0].String())
 	require.NoError(t, chainsTo(t, &cert.Certificate, authority))
 
@@ -2203,8 +2204,8 @@ func TestCertificateAuthority_RoundTrip(t *testing.T) {
 // store returns (ADR-0051). The table carries no updated_at, so there
 // is no pair to play against itself; the certificate stands in for one.
 // not_after is written in a column of its own and the same instant
-// travels inside the certificate bytes beside it, so the accessor is
-// read against a value the row carries independently of that column.
+// travels inside the certificate bytes beside it, so the field is read
+// against a value the row carries independently of that column.
 func TestCertificateAuthority_SurrendersItsTimestamps(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
@@ -2216,7 +2217,7 @@ func TestCertificateAuthority_SurrendersItsTimestamps(t *testing.T) {
 	require.NoError(t, err)
 	sealer, err := ca.NewAESGCMSealer(key)
 	require.NoError(t, err)
-	store := ca.NewPostgresStore(p)
+	store := capg.New(p)
 	svc, err := ca.NewService(store, sealer, ca.Config{})
 	require.NoError(t, err)
 
@@ -2229,13 +2230,13 @@ func TestCertificateAuthority_SurrendersItsTimestamps(t *testing.T) {
 
 	authority, err := store.Get(ctx, acme)
 	require.NoError(t, err)
-	certificate, err := x509.ParseCertificate(authority.Certificate())
+	certificate, err := x509.ParseCertificate(authority.Certificate)
 	require.NoError(t, err)
 
-	assert.True(t, authority.NotAfter().Equal(certificate.NotAfter),
+	assert.True(t, authority.NotAfter.Equal(certificate.NotAfter),
 		"the stored not_after is the instant the CA certificate itself carries")
-	assert.WithinRange(t, authority.CreatedAt(), before, after)
-	assert.True(t, authority.CreatedAt().Before(authority.NotAfter()),
+	assert.WithinRange(t, authority.CreatedAt, before, after)
+	assert.True(t, authority.CreatedAt.Before(authority.NotAfter),
 		"a CA is created before it expires")
 }
 
@@ -2254,7 +2255,7 @@ func leafOf(t *testing.T, cert *ca.Certificate) *x509.Certificate {
 // way a listener requiring client auth would.
 func chainsTo(t *testing.T, cert *ca.Certificate, authority *ca.Authority) error {
 	t.Helper()
-	root, err := x509.ParseCertificate(authority.Certificate())
+	root, err := x509.ParseCertificate(authority.Certificate)
 	require.NoError(t, err)
 	roots := x509.NewCertPool()
 	roots.AddCert(root)
@@ -3021,7 +3022,7 @@ func (r machineTrustRoots) Get(ctx context.Context, subject grn.GRN) ([]byte, er
 	if err != nil {
 		return nil, err
 	}
-	return authority.Certificate(), nil
+	return authority.Certificate, nil
 }
 
 // listenerCertificate is what garam presents, as the listener asks for
@@ -3101,7 +3102,7 @@ func policyEngine(t *testing.T, p *pgxpool.Pool) (*authz.PolicyGRPCServer, machi
 // gRPC.
 func machineListener(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer, policies machineapi.Evaluator) string {
 	t.Helper()
-	authorities := ca.NewPostgresStore(p)
+	authorities := capg.New(p)
 	issuer, err := ca.NewService(authorities, sealer, ca.Config{})
 	require.NoError(t, err)
 	presented := loopbackCertificate(t)
@@ -3258,7 +3259,7 @@ func TestMachineSurface_OperatorCreatesAnAgentThatThenAuthenticates(t *testing.T
 	require.NoError(t, err)
 	sealer, err := ca.NewAESGCMSealer(key)
 	require.NoError(t, err)
-	outOfBand, err := ca.NewService(ca.NewPostgresStore(p), sealer, ca.Config{})
+	outOfBand, err := ca.NewService(capg.New(p), sealer, ca.Config{})
 	require.NoError(t, err)
 
 	_, evaluator := policyEngine(t, p)
@@ -3380,7 +3381,7 @@ func TestMachineSurface_AnAgentActsOnItsOwnQueueAndNoOther(t *testing.T) {
 	require.NoError(t, err)
 	sealer, err := ca.NewAESGCMSealer(key)
 	require.NoError(t, err)
-	outOfBand, err := ca.NewService(ca.NewPostgresStore(p), sealer, ca.Config{})
+	outOfBand, err := ca.NewService(capg.New(p), sealer, ca.Config{})
 	require.NoError(t, err)
 
 	_, evaluator := policyEngine(t, p)
@@ -3493,7 +3494,7 @@ func TestMachineSurface_AnotherOrganizationsAgentReachesNothingOnThisQueue(t *te
 	require.NoError(t, err)
 	sealer, err := ca.NewAESGCMSealer(key)
 	require.NoError(t, err)
-	outOfBand, err := ca.NewService(ca.NewPostgresStore(p), sealer, ca.Config{})
+	outOfBand, err := ca.NewService(capg.New(p), sealer, ca.Config{})
 	require.NoError(t, err)
 
 	policies, evaluator := policyEngine(t, p)
@@ -3622,7 +3623,7 @@ func TestMachineSurface_AnAttachedPolicyDecidesWhatAnAgentSends(t *testing.T) {
 	require.NoError(t, err)
 	sealer, err := ca.NewAESGCMSealer(key)
 	require.NoError(t, err)
-	outOfBand, err := ca.NewService(ca.NewPostgresStore(p), sealer, ca.Config{})
+	outOfBand, err := ca.NewService(capg.New(p), sealer, ca.Config{})
 	require.NoError(t, err)
 
 	policies, evaluator := policyEngine(t, p)
@@ -3720,7 +3721,7 @@ func TestMachineSurface_AGroupAttachedPolicyDecidesWhatItsMembersSend(t *testing
 	require.NoError(t, err)
 	sealer, err := ca.NewAESGCMSealer(key)
 	require.NoError(t, err)
-	outOfBand, err := ca.NewService(ca.NewPostgresStore(p), sealer, ca.Config{})
+	outOfBand, err := ca.NewService(capg.New(p), sealer, ca.Config{})
 	require.NoError(t, err)
 
 	policies, evaluator := policyEngine(t, p)
@@ -3839,7 +3840,7 @@ func TestMachineSurface_ARecipientsOwnPolicyAdmitsNoForeignSender(t *testing.T) 
 	require.NoError(t, err)
 	sealer, err := ca.NewAESGCMSealer(key)
 	require.NoError(t, err)
-	outOfBand, err := ca.NewService(ca.NewPostgresStore(p), sealer, ca.Config{})
+	outOfBand, err := ca.NewService(capg.New(p), sealer, ca.Config{})
 	require.NoError(t, err)
 
 	policies, evaluator := policyEngine(t, p)
@@ -4018,7 +4019,7 @@ func TestMachineSurface_AConsentRelationCarriesAMessageAcrossTheBoundary(t *test
 	require.NoError(t, err)
 	sealer, err := ca.NewAESGCMSealer(key)
 	require.NoError(t, err)
-	outOfBand, err := ca.NewService(ca.NewPostgresStore(p), sealer, ca.Config{})
+	outOfBand, err := ca.NewService(capg.New(p), sealer, ca.Config{})
 	require.NoError(t, err)
 
 	_, evaluator := policyEngine(t, p)

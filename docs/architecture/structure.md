@@ -41,12 +41,13 @@ Nothing here states what goes *inside* a boundary, or how the system is deployed
   ([ADR-0069](./adr/0069-the-aggregates-are-data-carriers-so-the-driver-leaves-the-domain-package.md)). That ADR supersedes ADR-0051's accessor and ends
   ADR-0066's reservation; an aggregate that does hold an invariant over
   its fields is not decided by it.
-- **One domain of ten has converted.** `internal/user` carries exported
-  fields and its store sits in `internal/user/postgres/`. The other
-  nine keep their accessors and keep their store beside the aggregate
-  until each follows in its own pull request (#1083), so the tree
-  reads in two shapes meanwhile and the rule above is what both are
-  measured against.
+- **Two domains of ten have converted.** `internal/user` and
+  `internal/ca` carry exported fields on what their stores persist, and
+  each store sits in `internal/<domain>/postgres/`. The other eight
+  keep their accessors and keep their store beside the aggregate until
+  each follows in its own pull request (#1083), so the tree reads in
+  two shapes meanwhile and the rule above is what both are measured
+  against.
 - **A boundary reaches a sibling directly, through the surface that
   sibling declares**
   ([ADR-0047](./adr/0047-a-domain-reaches-a-sibling-through-its-declared-surface.md)).

@@ -17,6 +17,7 @@ import (
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/ca"
+	capg "github.com/garamsh/garam/internal/ca/postgres"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/health"
@@ -80,7 +81,7 @@ func serveMachine(cmd *cobra.Command) error {
 	if err != nil {
 		return err
 	}
-	authorities := ca.NewPostgresStore(pool)
+	authorities := capg.New(pool)
 	issuer, err := ca.NewService(authorities, keys.sealer, ca.Config{CertificateLifetime: lifetime})
 	if err != nil {
 		return err
@@ -269,7 +270,7 @@ func (c certificateAuthorities) Get(ctx context.Context, subject grn.GRN) ([]byt
 	if err != nil {
 		return nil, err
 	}
-	return authority.Certificate(), nil
+	return authority.Certificate, nil
 }
 
 // operatorRegistrations reads whether an organization still holds the

@@ -11,6 +11,7 @@ import (
 
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/ca"
+	capg "github.com/garamsh/garam/internal/ca/postgres"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/listfilter"
@@ -210,7 +211,7 @@ func TestOrgDeletionPreview_CertificateAuthorityGoesAndDoesNotReturn(t *testing.
 	ctx := context.Background()
 	p := pool(t)
 	orgs := org.NewPostgresStore(p)
-	authorities := ca.NewPostgresStore(p)
+	authorities := capg.New(p)
 
 	withCA := orgRootGRN("preview-ca-holder")
 	withoutCA := orgRootGRN("preview-ca-none")
@@ -242,7 +243,7 @@ func TestOrgDeletionPreview_CertificateAuthorityGoesAndDoesNotReturn(t *testing.
 	// first assertion alone.
 	held, err := authorities.Get(ctx, withCA)
 	require.NoError(t, err)
-	require.NotEmpty(t, held.SealedKey(), "the private key is stored sealed and goes with the row")
+	require.NotEmpty(t, held.SealedKey, "the private key is stored sealed and goes with the row")
 	_, err = authorities.Get(ctx, withoutCA)
 	assert.True(t, errorx.IsKind(err, errorx.KindNotFound),
 		"an organization that has needed no certificate has no authority")

@@ -14,6 +14,7 @@ import (
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/ca"
+	capg "github.com/garamsh/garam/internal/ca/postgres"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
@@ -63,7 +64,7 @@ func TestAgentState_TwoPartiesReportTwoFactsEachFencedByTheEpoch(t *testing.T) {
 	_, evaluator := policyEngine(t, p)
 	url := machineListener(t, p, sealer, evaluator)
 
-	outOfBand, err := ca.NewService(ca.NewPostgresStore(p), sealer, ca.Config{})
+	outOfBand, err := ca.NewService(capg.New(p), sealer, ca.Config{})
 	require.NoError(t, err)
 	holds := scopedGRN("acme", operator.ServiceType, "one")
 	holder := machineClient(t, installed(t, p, outOfBand, holds))

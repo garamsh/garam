@@ -72,9 +72,7 @@ See §0 for the banned-name list.
 - **Its implementations go in `internal/<domain>/<technology>/`**, a
   package named for the technology it implements against rather than
   for the interface it satisfies: `postgres/`, `memory/`. Two
-  technologies are two sibling packages and not two files in one, which
-  costs one import line — the domain imports neither and the
-  composition root imports both.
+  technologies are two sibling packages and not two files in one.
 
 **One file vs several** inside `internal/<domain>/<technology>/`:
 

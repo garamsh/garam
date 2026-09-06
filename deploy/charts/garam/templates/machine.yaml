@@ -30,31 +30,20 @@ spec:
     spec:
 {{- include "garam.serviceAccountName" (dict "root" $ "component" "machine") }}
 {{- include "garam.imagePullSecrets" . }}
-      # The Secret below is projected 0440, so its group owner decides
-      # who reads it. fsGroup makes that group the init container's,
-      # without which the copy cannot open its source.
-      #
-      # runAsNonRoot is asserted here rather than left to the UIDs below:
-      # the kubelet reads it as set or unset and infers it from no
-      # number. Both containers set a numeric runAsUser, which is what
-      # makes it admissible for an image whose USER is a name.
-      securityContext:
-        fsGroup: 10001
-        runAsNonRoot: true
-        seccompProfile:
-          type: RuntimeDefault
+      # The volume below is projected 0440, so its group owner decides
+      # who reads it. fsGroup makes that group the containers', without
+      # which the copy cannot open its source. It is the server image's
+      # group because both containers here run under that account.
+{{- include "garam.podSecurityContext" (dict "root" $ "name" "server" "fsGroup" .Values.image.server.runAsGroup) }}
       initContainers:
         # A projected Secret is root-owned and group-readable, and the
-        # process refuses a key file it does not own or that any group or
-        # other bit is set on (ADR-0015). This copies it as the same UID.
+        # process refuses a key file it does not own or that any group
+        # or other bit is set on (ADR-0015). This copies it as the same
+        # UID: the copy runs under the pod's account, which is the one
+        # the machine container beside it reads under.
         - name: key-material
           image: {{ required "machine.copyImage is required" .Values.machine.copyImage }}
-          securityContext:
-            runAsUser: 10001
-            runAsGroup: 10001
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop: ["ALL"]
+{{- include "garam.containerSecurityContext" . }}
           command: ["/bin/sh", "-ec"]
           args:
             - |
@@ -77,16 +66,9 @@ spec:
           resources: {{- toYaml .Values.machine.resources | nindent 12 }}
       containers:
         - name: machine
-          image: {{ include "garam.serverImage" . }}
+          image: {{ include "garam.image" (dict "root" $ "name" "server") }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          # The UID both sides share. The image's USER only implies it,
-          # and the startup check compares the file's owner against the
-          # reader's UID.
-          securityContext:
-            runAsUser: 10001
-            allowPrivilegeEscalation: false
-            capabilities:
-              drop: ["ALL"]
+{{- include "garam.containerSecurityContext" . }}
           args: ["serve", "machine"]
           env:
             {{- include "garam.databaseEnv" . | nindent 12 }}
@@ -139,11 +121,39 @@ spec:
               mountPath: /run/garam/key-material
               readOnly: true
           resources: {{- toYaml .Values.machine.resources | nindent 12 }}
+{{- $km := .Values.machine.keyMaterial }}
+{{- $secret := required "machine.keyMaterial.secretName is required: it names the Secret holding the listener's certificate and key, the root that signed them, and the key-encryption key, less whichever of the four names a Secret of its own" $km.secretName }}
       volumes:
+        # One source per file, so material a deployment holds in more
+        # than one Secret arrives in one directory: what issues the
+        # pair and what holds the key-encryption key are different
+        # systems, and neither is this chart's to move. Each source
+        # names one key, so nothing else its Secret carries is
+        # projected.
         - name: key-material-secret
-          secret:
-            secretName: {{ required "machine.keyMaterial.secretName is required: it names the Secret holding the listener's certificate and key, the root that signed them, and the key-encryption key" .Values.machine.keyMaterial.secretName }}
+          projected:
             defaultMode: 0440
+            sources:
+              - secret:
+                  name: {{ default $secret $km.certSecretName }}
+                  items:
+                    - key: {{ $km.certKey }}
+                      path: {{ $km.certKey }}
+              - secret:
+                  name: {{ default $secret $km.keySecretName }}
+                  items:
+                    - key: {{ $km.keyKey }}
+                      path: {{ $km.keyKey }}
+              - secret:
+                  name: {{ default $secret $km.serverRootSecretName }}
+                  items:
+                    - key: {{ $km.serverRootKey }}
+                      path: {{ $km.serverRootKey }}
+              - secret:
+                  name: {{ default $secret $km.kekSecretName }}
+                  items:
+                    - key: {{ $km.kekKey }}
+                      path: {{ $km.kekKey }}
         # Memory-backed, so the copy the process owns never reaches the
         # node's disk.
         - name: key-material

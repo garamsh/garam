@@ -50,12 +50,19 @@ app.kubernetes.io/managed-by: {{ .root.Release.Service }}
 {{ include "garam.selectorLabels" . }}
 {{- end -}}
 
-{{- define "garam.serverImage" -}}
-{{ required "image.server.repository is required: an empty one renders `image: :<tag>`, which is not a reference any registry resolves" .Values.image.server.repository }}:{{ required "image.server.tag is required: the version a deployment runs is its own to name, and a default would go on naming one release after the next lands (ADR-0039)" .Values.image.server.tag }}
-{{- end -}}
-
-{{- define "garam.webImage" -}}
-{{ required "image.web.repository is required: an empty one renders `image: :<tag>`, which is not a reference any registry resolves" .Values.image.web.repository }}:{{ required "image.web.tag is required: the version a deployment runs is its own to name, and a default would go on naming one release after the next lands (ADR-0039)" .Values.image.web.tag }}
+{{/*
+One image reference, read from the block under `image` the caller
+names. A digest is optional and renders after the tag rather than in
+place of it: `repository:tag@digest` is the form a kubelet resolves by
+digest, so the tag goes on naming the version a deployment chose and
+the digest decides which bytes that name resolves to.
+*/}}
+{{- define "garam.image" -}}
+{{- $image := index .root.Values.image .name -}}
+{{- $repository := required (printf "image.%s.repository is required: an empty one renders `image: :<tag>`, which is not a reference any registry resolves" .name) $image.repository -}}
+{{- $tag := required (printf "image.%s.tag is required: the version a deployment runs is its own to name, and a default would go on naming one release after the next lands (ADR-0039)" .name) $image.tag -}}
+{{- printf "%s:%s" $repository $tag -}}
+{{- with $image.digest -}}@{{ . }}{{- end -}}
 {{- end -}}
 
 {{/*
@@ -91,14 +98,14 @@ capability, so dropping all of them and refusing escalation costs the
 workloads nothing.
 
 The other two fields `restricted` requires — runAsNonRoot and
-seccompProfile — sit on the pod spec, where each workload writes them
-beside the UID that makes runAsNonRoot admissible for its own image.
+seccompProfile — sit on the pod spec, beside the UID that makes
+runAsNonRoot admissible for the image a workload runs.
 
 Indented for a container in a pod spec.
 */}}
 {{/*
-The two fields PodSecurity `restricted` reads on a pod spec, and the UID
-that makes the first of them admissible.
+The two fields PodSecurity `restricted` reads on a pod spec, and the
+account the containers under it run as.
 
 runAsNonRoot is not implied by a UID: the kubelet reads it as set or
 unset, and with it set and no numeric runAsUser it resolves the image's
@@ -106,15 +113,25 @@ own user instead. Both images declare that user by name — `USER garam`
 and `USER node` — and a name it cannot resolve to a number is refused
 at container start, not at admission ("image has non-numeric user",
 kubernetes v1.34.0 `pkg/kubelet/kuberuntime/security_context_others.go`).
-So the number is written here, and each caller passes the one its own
-image was built with.
+The numbers are values under the image block the caller names, because
+the account is the image's rather than the workload's and four of the
+five workloads run one image.
+
+fsGroup is the caller's own and only the machine pod passes one: it is
+what gives that pod's containers a group they can read a projected
+Secret under.
 
 Indented for a pod spec.
 */}}
-{{- define "garam.podSecurityContext" }}
+{{- define "garam.podSecurityContext" -}}
+{{- $image := index .root.Values.image .name }}
       securityContext:
+{{- with .fsGroup }}
+        fsGroup: {{ . }}
+{{- end }}
         runAsNonRoot: true
-        runAsUser: {{ .uid }}
+        runAsUser: {{ required (printf "image.%s.runAsUser is required: runAsNonRoot is asserted beside it, and the kubelet resolves the image's own user only where no number is set" .name) $image.runAsUser }}
+        runAsGroup: {{ required (printf "image.%s.runAsGroup is required: the GID is the other half of the account, and a pod naming only the UID leaves it to the image" .name) $image.runAsGroup }}
         seccompProfile:
           type: RuntimeDefault
 {{- end -}}

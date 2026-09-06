@@ -6,7 +6,7 @@ type: application
 # garam version: nothing packages or publishes this chart, so a consumer
 # pins it by a git ref of garamsh/garam and pins the images separately
 # through image.*.tag (ADR-0042).
-version: 0.2.2
+version: 0.3.0
 # No appVersion. ADR-0042 records that the change publishing the first
 # release sets it; `v0.1.0` published on 2026-09-01 and this change does
 # not set it, so the field is still absent and nothing here decides

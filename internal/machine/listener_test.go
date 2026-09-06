@@ -536,3 +536,45 @@ func TestIdentityOf_ReadsNothingOffARequestServedAnyOtherWay(t *testing.T) {
 	assert.False(t, ok)
 	assert.Equal(t, grn.GRN{}, identity.GRN())
 }
+
+// TestNewServer_RefusesAWithdrawnRecordOnAResumedConnection is what
+// makes the withdrawal reach a caller that is already talking to
+// garam. A TLS 1.3 ticket restores the peer certificates without
+// re-running the certificate callbacks, so a check hung on
+// VerifyPeerCertificate would let a deleted operator keep connecting
+// for as long as its tickets last (ADR-0064 §Decision 6, ADR-0070).
+//
+// The first connection is the control: it mints the ticket the second
+// resumes, and it is admitted, so what refuses the second is the
+// record being withdrawn in between rather than a client that could
+// never connect. The assertion is on the resumption too — without it
+// the second connection could be a full handshake and prove nothing
+// about the one this test is named for.
+func TestNewServer_RefusesAWithdrawnRecordOnAResumedConnection(t *testing.T) {
+	issuer := newIssuer(t)
+	subject := operatorGRNOf("acme", "one")
+	records := held()
+	url, _, roots := listener(t, issuer.serviceHolding(records), identityHandler())
+
+	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{
+		RootCAs:            roots,
+		MinVersion:         tls.VersionTLS13,
+		Certificates:       []tls.Certificate{issuer.issue(t, subject)},
+		ClientSessionCache: tls.NewLRUClientSessionCache(4),
+	}}}
+	t.Cleanup(client.CloseIdleConnections)
+
+	first := identityOver(t, client, url)
+	require.Equal(t, http.StatusOK, first.StatusCode)
+	require.False(t, first.TLS.DidResume, "the connection that mints the ticket")
+
+	// The record goes while the ticket is still good. The service holds
+	// the same map, so this is the delete as the listener meets it.
+	records.withdrawn[subject] = true
+
+	client.CloseIdleConnections()
+	second := identityOver(t, client, url)
+	assert.True(t, second.TLS.DidResume, "the second connection resumed the first")
+	assert.Equal(t, http.StatusUnauthorized, second.StatusCode,
+		"a resumed connection carries no identity once the record is withdrawn")
+}

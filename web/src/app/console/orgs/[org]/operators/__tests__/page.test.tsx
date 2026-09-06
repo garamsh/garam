@@ -104,17 +104,21 @@ describe("operators section", () => {
     ).toBeInTheDocument();
   });
 
-  it("says under the records what a record cannot do", async () => {
+  it("says under the records what deleting one does, beside the control", async () => {
     await renderServerComponent(OperatorsPage(params("acme")));
 
-    // Presence, as above.
+    // Presence, as above. The note and the control that does the thing
+    // it describes are on screen together.
     expect(
-      screen.getByText(/would look like revoking an operator/),
+      screen.getByText(/Deleting a record stops that operator/),
     ).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("button", { name: "Delete" }).length,
+    ).toBeGreaterThan(0);
     // The control: what a person has to read before typing stays over
     // the input rather than travelling to the list with the rest.
     expect(
-      screen.getByText(/so a mistyped identifier stays in the list/),
+      screen.getByText(/Registering records that this organization has/),
     ).toBeInTheDocument();
   });
 
@@ -129,13 +133,16 @@ describe("operators section", () => {
     // notes and not the section that would carry them.
     expect(screen.getByLabelText("Identifier")).toBeInTheDocument();
     expect(
-      screen.getByText(/so a mistyped identifier stays in the list/),
+      screen.getByText(/Registering records that this organization has/),
     ).toBeInTheDocument();
     expect(
-      screen.queryByText(/would look like revoking an operator/),
+      screen.queryByText(/Deleting a record stops that operator/),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByText(/Registered by is the user identifier/),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Delete" }),
     ).not.toBeInTheDocument();
   });
 

@@ -460,3 +460,11 @@ ADRs:
   named for the technology it implements against. Supersedes ADR-0066
   whole and ADR-0051 in part; `internal/user` is the pilot and the other
   nine domains follow in their own pull requests
+- [0070](./adr/0070-an-organization-deletes-an-operator-and-the-record-it-withdraws-is-what-that-operator-authenticated-on.md)
+  — an organization deletes an operator, and the record it withdraws is
+  what that operator authenticated on: the machine listener reads the
+  registration per connection through a seam of the trust root's shape,
+  so deleting stops the operator with no revocation list, no responder
+  and no stored serial. Supersedes ADR-0045's refusal of a delete route
+  and, for an operator alone, ADR-0014's "revocation is by lifetime";
+  an agent is answered without a read and its certificate is untouched

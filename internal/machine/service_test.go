@@ -65,6 +65,30 @@ func (r trustRoots) Get(ctx context.Context, subject grn.GRN) ([]byte, error) {
 	return authority.Certificate(), nil
 }
 
+// registrations is the record an identity authenticates on, as a test
+// holds it: the set of GRNs the organizations still have. A GRN absent
+// from it is one whose record was withdrawn, which is what deleting an
+// operator does (ADR-0070).
+//
+// held is what a test starts from, because the check is not what most
+// of these tests are about: an authority that signed a certificate has
+// a record behind it unless a test says otherwise.
+type registrations struct{ withdrawn map[grn.GRN]bool }
+
+func held() registrations { return registrations{withdrawn: map[grn.GRN]bool{}} }
+
+func (r registrations) without(subject grn.GRN) registrations {
+	r.withdrawn[subject] = true
+	return r
+}
+
+func (r registrations) Holds(_ context.Context, subject grn.GRN) error {
+	if r.withdrawn[subject] {
+		return errorx.New(errorx.KindNotFound, "no record of this identity")
+	}
+	return nil
+}
+
 // issuer is garam's issuing side as the tests hold it: real
 // authorities created on demand by internal/ca, and the key of one
 // when a test has to sign what the issuing side refuses to sign.
@@ -84,9 +108,15 @@ func newIssuer(t *testing.T) *issuer {
 }
 
 // service returns the authentication service over the authorities
-// issued from.
+// issued from, admitting every identity they signed for.
 func (i *issuer) service() machine.Service {
-	return machine.NewService(trustRoots{store: i.store})
+	return i.serviceHolding(held())
+}
+
+// serviceHolding is the same service over the records the
+// organizations still hold.
+func (i *issuer) serviceHolding(records registrations) machine.Service {
+	return machine.NewService(trustRoots{store: i.store}, records)
 }
 
 // issue returns the client certificate garam signs for subject,
@@ -323,7 +353,8 @@ func TestService_RefusesASANThatIsNotOneWholeGRN(t *testing.T) {
 // TestService_RefusesAnExpiredCertificate holds everything but the
 // expiry still: both certificates carry the same identity and are
 // signed by the same authority, so the one that is refused is refused
-// for having run out. Expiry is the only revocation ADR-0014 leaves.
+// for having run out, which is what bounds an agent's certificate and
+// the one refusal ADR-0070 leaves untouched.
 func TestService_RefusesAnExpiredCertificate(t *testing.T) {
 	issuer := newIssuer(t)
 	svc := issuer.service()
@@ -382,4 +413,62 @@ func TestService_RefusesAConnectionThatPresentedNothing(t *testing.T) {
 	_, err = svc.Authenticate(context.Background(), nil)
 	require.Error(t, err)
 	assert.True(t, errorx.IsKind(err, errorx.KindUnauthenticated))
+}
+
+// operatorGRNOf names an operator of org, which is the identity a
+// withdrawn record reaches (ADR-0070).
+func operatorGRNOf(org, id string) grn.GRN {
+	return grn.New(org, grn.DefaultProject, "operator", id)
+}
+
+// TestService_RefusesAnIdentityWhoseRecordWasWithdrawn is the reversal
+// ADR-0070 takes: a certificate that chains to its organization's
+// authority and has not expired stops authenticating once the
+// organization withdraws its record of the identity. Nothing about the
+// certificate changes between the two calls.
+//
+// The admitted call is the control. Both present the same certificate
+// through a service over the same authority, and only the record
+// differs, so what refuses the second is the withdrawal rather than
+// anything the certificate carries — which is what a refusal for an
+// expiry, a chain or a SAN would look like too.
+func TestService_RefusesAnIdentityWhoseRecordWasWithdrawn(t *testing.T) {
+	issuer := newIssuer(t)
+	subject := operatorGRNOf("acme", "one")
+	issuer.authority(t, "acme")
+	certificate := issuer.sign(t, "acme", leaf{uris: []string{subject.String()}})
+
+	identity, err := authenticate(t, issuer.service(), certificate)
+	require.NoError(t, err)
+	require.Equal(t, subject, identity.GRN())
+
+	_, err = authenticate(t, issuer.serviceHolding(held().without(subject)), certificate)
+	require.Error(t, err)
+	assert.True(t, errorx.IsKind(err, errorx.KindUnauthenticated),
+		"a withdrawn record is answered as a certificate that did not authenticate")
+}
+
+// TestService_WithdrawingOneRecordLeavesEveryOtherIdentity is
+// constraint 3 of #1085, asserted rather than left to be discovered: a
+// withdrawal reaches the identity it names and no other. The agent
+// here belongs to the same organization and is signed by the same
+// authority, so nothing but the GRN separates it from the operator
+// that was refused.
+func TestService_WithdrawingOneRecordLeavesEveryOtherIdentity(t *testing.T) {
+	issuer := newIssuer(t)
+	withdrawn := operatorGRNOf("acme", "one")
+	issuer.authority(t, "acme")
+	svc := issuer.serviceHolding(held().without(withdrawn))
+
+	_, err := authenticate(t, svc, issuer.sign(t, "acme", leaf{uris: []string{withdrawn.String()}}))
+	require.Error(t, err)
+
+	for _, subject := range []grn.GRN{
+		agentGRN("acme", "bot-1"),
+		operatorGRNOf("acme", "two"),
+	} {
+		identity, err := authenticate(t, svc, issuer.sign(t, "acme", leaf{uris: []string{subject.String()}}))
+		require.NoError(t, err, subject.String())
+		assert.Equal(t, subject, identity.GRN())
+	}
 }

@@ -27,9 +27,12 @@ type Config struct {
 //
 // Both record the certificate they issued, and that record is the whole
 // of the authorization here: a renewal is admitted for the certificate
-// garam last issued and for no other copy of the same identity. There
-// is no revocation to fall back on (ADR-0014), so a chain of renewals
-// nothing narrows would make any stolen certificate permanent.
+// garam last issued and for no other copy of the same identity. That
+// is what a renewal has to bound by itself — deleting the operator
+// ends every copy at once (ADR-0070), but it ends the operator too, so
+// a chain of renewals nothing narrows would make a stolen certificate
+// permanent for as long as the organization still wants the operator
+// it was taken from.
 type Service interface {
 	// Issue mints an operator's certificate out of band and adopts it,
 	// taking the lineage from whatever the operator held before

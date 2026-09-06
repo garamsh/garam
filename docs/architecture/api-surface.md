@@ -154,6 +154,19 @@ decided. The command ADR-0032 ships still mints out of band and is what
 recovers the operator that already holds a certificate; it remains a
 root-level subcommand no serve path references
 ([ADR-0032](./adr/0032-garam-ships-the-command-that-mints-an-operators-first-certificate.md)).
+
+**`deleteOperator` is on the same listener and is the one operation
+here that stops a machine identity.** It removes the organization's
+record, which the machine listener reads per connection, so the
+operator's certificate is refused from its next connection
+([ADR-0070](./adr/0070-an-organization-deletes-an-operator-and-the-record-it-withdraws-is-what-that-operator-authenticated-on.md)).
+It is authorized on `operator:delete` rather than on the action the
+other two take, because registering grants nothing and this withdraws
+what an operator runs on. It answers 204, and refuses with a reason
+while an agent definition names the operator — nothing is deleted in
+that case. No operation on `api/machine.yaml` deletes an operator: an
+operator does not delete itself, and the one that would meet the
+refusal is the one being deleted.
 Every certificate after the first is replaced over the connection the
 previous one authenticated: an operator's on the machine listener
 ([ADR-0046](./adr/0046-an-operator-renews-its-certificate-by-presenting-the-one-it-holds.md)),

@@ -122,6 +122,50 @@ func (s *PostgresStore) Remint(ctx context.Context, e *Enrollment) error {
 	return nil
 }
 
+// Delete removes the record and the record of the certificate garam
+// last issued the operator, in one transaction. An unspent token needs
+// no statement: it references the registration and goes with it
+// (000023).
+//
+// The foreign-key reading is made here because only here is the
+// statement known: [pgxerr.Classify] maps 23503 to not found, which is
+// what it means for an insert, and on this delete it means the
+// opposite — the row is present and an agent definition still names
+// it (000018).
+//
+// The two statements are one transaction, which is what leaves both
+// rows standing when the foreign key refuses the second: the order
+// they run in decides nothing, and without the transaction the
+// certificate row would already be gone by the time the refusal
+// arrived, costing an operator its lineage on a call that deleted
+// nothing.
+func (s *PostgresStore) Delete(ctx context.Context, g grn.GRN) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return errorx.Wrap(err, "begin", errorx.KindUnavailable)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	q := s.q.WithTx(tx)
+	if err := q.DeleteOperatorCertificate(ctx, g.String()); err != nil {
+		return pgxerr.Classify(err, "delete operator certificate", nil, nil)
+	}
+	n, err := q.DeleteOperator(ctx, g.String())
+	if err != nil {
+		if pgxerr.IsForeignKeyViolation(err) {
+			return ErrOperatorNamedByDefinition
+		}
+		return pgxerr.Classify(err, "delete operator", nil, nil)
+	}
+	if n == 0 {
+		return ErrOperatorNotFound
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return errorx.Wrap(err, "commit")
+	}
+	return nil
+}
+
 // Get returns the organization's record of the operator.
 func (s *PostgresStore) Get(ctx context.Context, g grn.GRN) (*Operator, error) {
 	row, err := s.q.GetOperator(ctx, g.String())

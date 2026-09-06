@@ -727,6 +727,9 @@ type ServerInterface interface {
 	// RegisterOperator Register an operator of an organization. Requires the `admin` role.
 	// (POST /orgs/{org}/operators)
 	RegisterOperator(w http.ResponseWriter, r *http.Request, org Org)
+	// DeleteOperator Delete an operator, which stops it authenticating. Requires the `admin` role.
+	// (DELETE /orgs/{org}/operators/{operator})
+	DeleteOperator(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug)
 	// MintOperatorEnrollment Mint a fresh enrollment token for a registered operator. Requires the `admin` role.
 	// (POST /orgs/{org}/operators/{operator}/enrollment)
 	MintOperatorEnrollment(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug)
@@ -1813,6 +1816,41 @@ func (siw *ServerInterfaceWrapper) RegisterOperator(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// DeleteOperator operation middleware
+func (siw *ServerInterfaceWrapper) DeleteOperator(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "operator" -------------
+	var operatorSlug OperatorSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "operator", r.PathValue("operator"), &operatorSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "operator", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteOperator(w, r, org, operatorSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // MintOperatorEnrollment operation middleware
 func (siw *ServerInterfaceWrapper) MintOperatorEnrollment(w http.ResponseWriter, r *http.Request) {
 
@@ -2646,6 +2684,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/agent-definitions", wrapper.DefineAgent)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/operators", wrapper.ListOperators)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/operators", wrapper.RegisterOperator)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/operators/{operator}", wrapper.DeleteOperator)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/enrollment", wrapper.MintOperatorEnrollment)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/policies", wrapper.ListPolicies)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/policies", wrapper.CreatePolicy)

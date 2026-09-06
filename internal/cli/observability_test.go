@@ -58,6 +58,13 @@ type lines struct {
 	buf bytes.Buffer
 }
 
+// everyRecordHeld admits every identity, because what a withdrawn
+// record does to a handshake is internal/machine's and these tests are
+// about the wrapping this file assembles around it (ADR-0070).
+type everyRecordHeld struct{}
+
+func (everyRecordHeld) Holds(context.Context, grn.GRN) error { return nil }
+
 func (l *lines) Write(p []byte) (int, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -293,7 +300,7 @@ func machineListenerAround(t *testing.T, obs *observability, subject grn.GRN, ne
 	client, err := tls.X509KeyPair(issued.CertificatePEM(), issued.PrivateKeyPEM())
 	require.NoError(t, err)
 
-	srv := obs.machineServer(certificateAuthorities{store: store}, keys.listener, next)
+	srv := obs.machineServer(certificateAuthorities{store: store}, everyRecordHeld{}, keys.listener, next)
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	go func() { _ = srv.ServeTLS(lis, "", "") }()

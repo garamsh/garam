@@ -2,6 +2,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardTitle } from "@/components/ui/card";
 import { slugFromGrn, type Operator } from "@/features/orgs";
 
+import { DeleteOperatorForm } from "./delete-operator-form";
+
 /** How a state is drawn, out of what the badge offers. */
 type BadgeVariant = React.ComponentProps<typeof Badge>["variant"];
 
@@ -34,11 +36,17 @@ const ENROLLMENT_BADGE: Record<Operator["enrollmentState"], BadgeVariant> = {
  * as an address and the list says what it is rather than leaving an
  * identity subject to read as somebody's name.
  *
- * What a record cannot do is said under the records rather than over
- * the form that writes one: a reader meets it here, where the list it
- * describes is on screen.
+ * What deleting a record does is said under the records rather than
+ * over the form that writes one: a reader meets it here, where the
+ * list it describes and the control that does it are on screen.
  */
-export function OperatorList({ operators }: { operators: Operator[] }) {
+export function OperatorList({
+  org,
+  operators,
+}: {
+  org: string;
+  operators: Operator[];
+}) {
   return (
     <div className="flex flex-col gap-3">
       <ul className="flex flex-col gap-3">
@@ -76,6 +84,11 @@ export function OperatorList({ operators }: { operators: Operator[] }) {
                   </time>
                 </dd>
               </dl>
+              <DeleteOperatorForm
+                org={org}
+                operator={slugFromGrn(operator.grn)}
+                enrolled={operator.enrollmentState === "enrolled"}
+              />
             </Card>
           </li>
         ))}
@@ -85,14 +98,14 @@ export function OperatorList({ operators }: { operators: Operator[] }) {
         display name.
       </p>
       <p className="max-w-2xl text-sm text-muted-foreground">
-        A control that removed a record would look like revoking an operator and
-        would revoke nothing, because a handshake is checked against the
-        certificate and this organization&apos;s certificate authority and never
-        against this record. Short of expiry, what does stop an operator is
-        deleting this organization: that takes the certificate authority with
-        it, every certificate the authority signed stops authenticating from
-        then on, so every request that operator makes is refused, and garam does
-        not bring the authority back.
+        Deleting a record stops that operator: a handshake is checked against
+        this record as well as against the certificate and this
+        organization&apos;s certificate authority, so the certificate it holds
+        is refused from its next connection. It is not a certificate revocation
+        — nothing is published and no other certificate is affected, and agents
+        the operator provisioned keep their own. garam does not bring a deleted
+        record back, and an operator an agent definition names is refused until
+        no definition names it.
       </p>
     </div>
   );

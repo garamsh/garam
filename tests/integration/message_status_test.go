@@ -71,7 +71,7 @@ func TestMessageStatus_ASenderReadsItsOwnMessageThroughEveryStateItReaches(t *te
 
 	_, evaluator := policyEngine(t, p)
 	url := machineListener(t, p, sealer, evaluator)
-	operator := machineClient(t, installed(t, outOfBand, scopedGRN("acme", agent.ServiceTypeOperator, "one")))
+	operator := machineClient(t, installed(t, p, outOfBand, scopedGRN("acme", agent.ServiceTypeOperator, "one")))
 	_, sender := provisioned(t, url, operator)
 	recipientGRN, recipient := provisioned(t, url, operator)
 	queue := url + "/agents/" + recipientGRN.String() + "/claims"

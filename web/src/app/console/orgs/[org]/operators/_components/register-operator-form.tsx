@@ -27,9 +27,9 @@ const initialState: RegisterOperatorState = { status: "idle" };
  * afterwards (ADR-0064).
  *
  * Only what has to be read before typing stands above the field: what
- * registering does, and that a record cannot be removed. What the
- * operator does with the token is beside the token, and what a record
- * cannot do is under the list of records.
+ * registering does. What the operator does with the token is beside
+ * the token, and what deleting a record does is under the list of
+ * records, beside the control that does it.
  */
 export function RegisterOperatorForm({ org }: { org: string }) {
   const [state, formAction, pending] = useActionState(
@@ -52,8 +52,7 @@ export function RegisterOperatorForm({ org }: { org: string }) {
       </h2>
       <p className="max-w-2xl text-sm text-muted-foreground">
         Registering records that this organization has the operator and hands
-        back a one-time token it enrols with. A record cannot be removed, so a
-        mistyped identifier stays in the list.
+        back a one-time token it enrols with.
       </p>
       <form action={formAction} className="flex max-w-2xl flex-col gap-6">
         <input type="hidden" name="org" value={org} />
@@ -125,9 +124,9 @@ function EnrollmentToken({
       </h3>
       <p className="text-sm text-destructive">
         This is the only time this token is shown. garam keeps no copy and no
-        page can retrieve it. If you lose it, register the operator again under
-        a different identifier, or have an administrator issue a certificate out
-        of band.
+        page can retrieve it. If you lose it, delete this record and register
+        the operator again, or have an administrator issue a certificate out of
+        band.
       </p>
       <div className="flex gap-2">
         <Input

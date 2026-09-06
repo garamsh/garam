@@ -8,9 +8,11 @@
 // (ADR-0012) and authenticates with a certificate of its own
 // (ADR-0015). Neither of those left garam holding a record that the
 // operator exists, so a definition could name one that never would.
-// The registration is that record and no more: it issues nothing and
-// admits nothing, and a registered operator proves itself exactly as
-// an unregistered one does.
+// The registration is that record, and it is what the certificate
+// authenticates on: an operator the organization no longer holds a
+// record of does not authenticate, which is what deleting one
+// withdraws (ADR-0070). It still issues nothing — the record admits a
+// certificate and mints none.
 //
 // The certificate is what proving itself takes. The first is obtained
 // by enrolling: registering mints a one-time token, the operator
@@ -31,10 +33,13 @@
 // credential paths.
 //
 // Only the newest certificate an operator holds may be renewed, and
-// renewing moves that record. garam has no revocation (ADR-0014), so
-// that is what bounds a stolen certificate: the operator it was taken
-// from renews, the theft loses the lineage and expires, and whichever
-// of the two is cut off learns of it at its next renewal.
+// renewing moves that record. That is what bounds a stolen
+// certificate while the operator is still wanted: the operator it was
+// taken from renews, the theft loses the lineage and expires, and
+// whichever of the two is cut off learns of it at its next renewal.
+// It narrows a theft rather than ending one, and what ends one is
+// deleting the operator, which stops every certificate naming it at
+// once (ADR-0070).
 //
 // The agent's certificate is not this package's. An agent is admitted
 // to its own by the claim its operator made (ADR-0033) and renews on
@@ -59,6 +64,14 @@ var (
 	// caller learns the identifier is taken rather than being told it
 	// registered what somebody else did.
 	ErrOperatorAlreadyRegistered = errorx.New(errorx.KindAlreadyExists, "operator is already registered")
+	// ErrOperatorNamedByDefinition refuses deleting an operator an
+	// agent definition names. The definition says which operator is to
+	// run its agent, so removing the operator underneath it would
+	// leave the definition naming a record garam no longer holds —
+	// the state registering an operator exists to prevent (ADR-0045).
+	// Nothing is deleted, and the definitions go or move first.
+	ErrOperatorNamedByDefinition = errorx.New(errorx.KindFailedPrecondition,
+		"an agent definition names this operator: point it at another operator or delete it first")
 	// ErrNotAnOperator refuses a caller whose certificate names
 	// something else. An agent authenticates on the same listener
 	// (ADR-0015) and renews on the route of its own that the claim

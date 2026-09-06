@@ -148,12 +148,18 @@ Four qualifications:
 - **`GARAM_CERTIFICATE_LIFETIME` is a security parameter.** It bounds
   every certificate garam signs — an agent's and an operator's, not the
   listener's own pair, which garam does not issue
-  (`internal/ca/service.go`). Expiry is the only revocation garam has —
-  no CRL, no responder
-  ([ADR-0014](./adr/0014-agent-authentication.md)) — so the value is the
-  window a stolen certificate stays usable in. `internal/ca/service.go`
-  bounds it at one hour and thirty days and refuses the start outside
-  them. The default is deliberately loose while rotation is new
+  (`internal/ca/service.go`). Expiry is what bounds an agent's
+  certificate and there is no CRL and no responder for any of them
+  ([ADR-0014](./adr/0014-agent-authentication.md)), so the value is the
+  window a stolen agent certificate stays usable in. A stolen
+  operator certificate has a shorter one available: deleting the
+  operator refuses it from the next connection
+  ([ADR-0070](./adr/0070-an-organization-deletes-an-operator-and-the-record-it-withdraws-is-what-that-operator-authenticated-on.md)),
+  and a deployment weighing this value for an operator is weighing
+  what happens before somebody notices rather than the whole exposure.
+  `internal/ca/service.go` bounds it at one hour and thirty days and
+  refuses the start outside them. The default is deliberately loose
+  while rotation is new
   ([ADR-0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md));
   lowering it is safe only where the two obligations above are met on
   the files each renewed certificate is written to, because an identity
@@ -178,9 +184,11 @@ Four qualifications:
   - **Re-running `issue-certificate` is the recovery**, and it is the
     same act as the bootstrap. It takes the lineage from every
     certificate that already names the operator, which is what recovers
-    from a renewal answer that never arrived. It revokes nothing: a
+    from a renewal answer that never arrived. It withdraws nothing: a
     certificate that can no longer renew keeps authenticating until it
-    expires, because expiry is still the only revocation there is.
+    expires. What withdraws one is deleting the operator, which is a
+    different act with a different purpose — recovery keeps the
+    operator, deletion ends it (ADR-0070).
 - **There is no client CA bundle, and creating one is forbidden.** The
   machine listener asks for a certificate and verifies the one it is
   given, per connection, against the certificate authority of the
@@ -323,11 +331,21 @@ alone. What binds instead is who signs them
   subject GRN carries
   ([ADR-0045](./adr/0045-an-organization-registers-an-operator.md)); on
   the enrollment path that call is also what mints the token, and it
-  answers the token once. A deployment that bootstraps out of band and
-  skips the registration has an operator that authenticates and no
-  definition can name: `POST /orgs/{org}/agent-definitions` refuses an
-  operator the organization has not registered. Nothing registers one
-  automatically — no listener, no migration, and no command.
+  answers the token once. Nothing registers one automatically — no
+  listener, no migration, and no command.
+- **An operator with no registration does not authenticate.** The
+  machine listener reads the record per connection, so the registration
+  is a precondition for the certificate rather than a separate tidiness
+  the definition route happens to want
+  ([ADR-0070](./adr/0070-an-organization-deletes-an-operator-and-the-record-it-withdraws-is-what-that-operator-authenticated-on.md)).
+  **This is what a deployment carrying operators registered before that
+  decision has to act on**: one that bootstrapped out of band and
+  skipped the registration had an operator that authenticated and no
+  definition could name, and now has one that does not authenticate at
+  all. Registering the identifier is the whole repair, it needs no
+  certificate operation, and registering a GRN that already holds a
+  certificate is permitted — the token it mints beside the record is
+  one that operator does not need and does not have to spend.
 
 ## The migrate job
 
@@ -469,6 +487,9 @@ that would assert one:
   files, never the environment
 - [ADR-0045](./adr/0045-an-organization-registers-an-operator.md) — an
   organization registers an operator, which no command does for it
+- [ADR-0070](./adr/0070-an-organization-deletes-an-operator-and-the-record-it-withdraws-is-what-that-operator-authenticated-on.md)
+  — the record is what an operator's certificate authenticates on, so
+  deleting it stops the operator and an unregistered one never starts
 - [ADR-0016](./adr/0016-ca-key-custody.md) — the key-encryption key the
   authorities are sealed under
 - [ADR-0017](./adr/0017-machine-process.md) — three serve processes from

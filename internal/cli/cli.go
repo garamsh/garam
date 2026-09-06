@@ -209,10 +209,11 @@ const requestReadTimeout = 30 * time.Second
 const maxRequestBody = 1 << 20
 
 // certificateLifetime is how long a certificate garam signs stays
-// valid. Expiry is the only revocation there is (ADR-0014), so the
-// value is a security parameter rather than a tuning knob, and the two
-// commands that sign read it the same way. An unset value is zero,
-// which takes internal/ca's own default rather than restating it here;
+// valid. It is what bounds an agent's, which nothing withdraws
+// (ADR-0014), so the value is a security parameter rather than a
+// tuning knob, and the two commands that sign read it the same way. An
+// unset value is zero, which takes internal/ca's own default rather
+// than restating it here;
 // a value outside the bounds that package states refuses the start.
 func certificateLifetime() (time.Duration, error) {
 	raw := envOr(envCertificateLifetime, "")

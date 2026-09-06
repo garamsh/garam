@@ -15,6 +15,10 @@ export {
 } from "./api/create-resource";
 export { defineAgent, type DefineAgentState } from "./api/define-agent";
 export {
+  deleteOperator,
+  type DeleteOperatorState,
+} from "./api/delete-operator";
+export {
   grantOrgConsent,
   type GrantOrgConsentState,
 } from "./api/grant-org-consent";

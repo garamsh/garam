@@ -274,10 +274,11 @@ func TestService_RenewRefusesAnExpiredCertificate(t *testing.T) {
 }
 
 // TestService_RenewRefusesACertificateAlreadyReplaced is what bounds a
-// stolen certificate where there is no revocation: two holders of one
-// identity, and only the one holding the certificate garam last issued
-// carries the lineage on. The other still authenticates — nothing here
-// takes that away — and renews nothing, so it expires.
+// stolen certificate while the organization still wants the operator
+// it was taken from: two holders of one identity, and only the one
+// holding the certificate garam last issued carries the lineage on.
+// The other still authenticates — nothing here takes that away — and
+// renews nothing, so it expires.
 func TestService_RenewRefusesACertificateAlreadyReplaced(t *testing.T) {
 	store, issuer := newRecords(), &signer{}
 	svc, c := service(t, store, issuer)

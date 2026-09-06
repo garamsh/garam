@@ -463,10 +463,34 @@ export interface paths {
          * @description Records that this organization has an operator under the identifier given, so a definition can name one garam holds a record of (ADR-0045). The identifier is supplied and not minted: an operator that already holds a certificate is registered under the GRN that certificate names.
          *     It mints the operator's enrollment token in the same write, and answers with it once (ADR-0064). **No route reads a token back**: garam stores only its hash, so a caller that loses this one asks for another rather than for this one again. `mintOperatorEnrollment` is that ask, and it answers only for an operator that holds no certificate (ADR-0067); for one that already enrolled, the recovery is the command ADR-0032 ships, which mints a certificate out of band and reads no record here.
          *     The token is not a credential to the operator's identity. It is permission to ask for one certificate, once, from `enrollOperator` on the machine listener, and it stops being spendable ten minutes after this call. The operator generates its own key pair in its own cluster and sends a certificate signing request presenting the token: no private key is transmitted here, displayed here, or held by garam at any point.
-         *     There is no route that removes a record, and a route that did would look like revoking an operator while revoking nothing: a handshake is checked against the certificate and this organization's certificate authority, never against this record (ADR-0045). What does stop an operator, short of expiry, is deleting the organization — that takes the certificate authority with it and every certificate it signed fails from then on. An unspent token goes with the record either way, because the row holding it references the registration.
+         *     The record is what the operator authenticates on. A handshake presenting its certificate is checked against this record as well as against the organization's certificate authority, so `deleteOperator` stops the operator rather than only tidying a list (ADR-0070). An unspent token goes with the record, because the row holding it references the registration, and so does the record of the certificate garam last issued.
          */
         post: operations["registerOperator"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/operators/{operator}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete an operator, which stops it authenticating. Requires the `admin` role.
+         * @description Removes the organization's record of the operator, and with it what the operator authenticates on. A handshake presenting that operator's certificate is refused from the moment this returns: the machine listener reads this record per connection, so the certificate stops being an identity rather than staying valid until it expires (ADR-0070). This reverses what ADR-0014 called revocation by lifetime, for an operator and for nothing else.
+         *     **It is not a certificate revocation.** There is no revocation list and no responder, nothing is published, and no other certificate is affected — an agent the operator provisioned keeps its own, which garam admits by the claim the operator made while it still held the record (ADR-0033). What is withdrawn is the organization's statement that this operator is theirs, and refusing the certificate is what that statement turning out to be load-bearing means.
+         *     The operator's unspent enrollment token goes with the record, and so does garam's record of the certificate it last issued, so the identifier is left holding nothing. Registering it again is therefore a clean start rather than an operator that reads as already enrolled.
+         *     **It is refused while an agent definition names the operator.** Nothing is deleted in that case: a definition names the operator that is to run its agent, and deleting the operator underneath it would leave the definition naming a record garam no longer holds, which is the state registering an operator exists to prevent. `listAgentDefinitions` is what names them. Point those definitions at another operator first, or delete them.
+         *     Deleting an operator that never enrolled is the same call and the same answer. Nothing here asks whether a certificate was ever issued.
+         */
+        delete: operations["deleteOperator"];
         options?: never;
         head?: never;
         patch?: never;
@@ -483,8 +507,8 @@ export interface paths {
         put?: never;
         /**
          * Mint a fresh enrollment token for a registered operator. Requires the `admin` role.
-         * @description Mints the operator a new one-time token and answers it once, for an operator that holds no certificate (ADR-0067). It is what recovers a registration whose token was lost or ran out before it was spent, which until this operation meant registering the same operator under a second identifier — ADR-0045 offers no delete, so the first one stayed in the list forever.
-         *     **The token this answers is the operator's only live one.** Whatever was minted before it stops being spendable at the moment this returns, so one operator is never reachable by two tokens at once. It grants nothing a registration does not: re-minting where no certificate exists is what deleting the record and registering the same identifier again would be, and it is authorized on the action that registers.
+         * @description Mints the operator a new one-time token and answers it once, for an operator that holds no certificate (ADR-0067). It is what recovers a registration whose token was lost or ran out before it was spent, without minting a certificate out of band or standing the operator up under a second identifier.
+         *     **The token this answers is the operator's only live one.** Whatever was minted before it stops being spendable at the moment this returns, so one operator is never reachable by two tokens at once. It grants nothing a registration does not: re-minting where no certificate exists is what `deleteOperator` and registering the same identifier again would be, and it is authorized on the action that registers rather than on the one that deletes.
          *     **It is refused where the operator already enrolled**, with a reason rather than a bare conflict. That operator holds a certificate, which is the outcome a token exists to produce, so a second token would be a second credential path to one identity — closer to issuing another credential for an existing subject than to registering. Whether a member may do that is undecided, and garam cannot tell a member recovering from a compromise from the compromise itself. What replaces a certificate an operator still holds is `renewOperatorCertificate` on the machine listener; what recovers one it has lost is the out-of-band command (ADR-0032).
          *     Enrolling is unchanged: the operator generates its key pair in its own cluster and presents this token to `enrollOperator`, and garam signs a key it never holds (ADR-0064). Reaching this operation from the console is not built — the token is answered to the caller of this route and to nobody else.
          */
@@ -2125,6 +2149,34 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["RegisteredOperator"];
                 };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    deleteOperator: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description Operator identifier (the last GRN segment). */
+                operator: components["parameters"]["operator"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Operator deleted; its certificate no longer authenticates. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];

@@ -189,3 +189,18 @@ renews as readily as the operator does.
   is the noun — "three refusals" where the three counts kinds. The same
   count was corrected in `docs/architecture/domains.md`, which had
   stated three refusals rather than four (#571).
+- 2026-09-06 — §Context's "What makes this a security decision rather
+  than a convenience is that garam has no revocation", and
+  §Consequences' "This is not revocation, and it does not add one",
+  were true when written and are now qualified:
+  [ADR-0070](./0070-an-organization-deletes-an-operator-and-the-record-it-withdraws-is-what-that-operator-authenticated-on.md)
+  gives an organization one, for an operator, by deleting the record
+  its certificate authenticates on. **The decision here is unaffected
+  and was measured to be**: ADR-0070 §Decision records that a caller
+  holding the certificate garam has just replaced is still answered 200
+  under the mechanism chosen, and that the alternative which would have
+  answered 401 was refused on exactly that ground. So §Consequences' "A
+  superseded certificate still authenticates for the rest of its life"
+  stands, and the lineage rule is still what bounds a stolen
+  certificate belonging to an operator the organization still wants.
+  What deleting adds is an end for one it does not.

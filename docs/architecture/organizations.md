@@ -74,9 +74,9 @@ maps each role to the action patterns it grants; `ActionsFor` does the same for
 the role names a `Group` or `Project` carries as data. No role holds a
 wildcard over agents, and none holds one over operators: ADR-0012 keeps
 provisioning outside garam, so each agent action a role grants is granted
-by name and a later one is a decision rather than an increment, and
-ADR-0045 leaves an operator's enrolment and its revocation undecided,
-which is more of the same.
+by name and a later one is a decision rather than an increment, and an
+operator's three are named the same way — a wildcard would have granted
+deleting an operator before anybody decided it (ADR-0045, ADR-0070).
 `agent:watch` is granted by no role at all, which is that reason carried
 further — ADR-0022 separates watching from reading so an organization may
 withhold it, and a role naming it would settle that for every

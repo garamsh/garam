@@ -18,13 +18,14 @@ type Service interface {
 }
 
 type service struct {
-	roots TrustRoot
+	roots         TrustRoot
+	registrations Registration
 }
 
 // NewService constructs the authentication service over the trust
-// roots it verifies against.
-func NewService(roots TrustRoot) Service {
-	return &service{roots: roots}
+// roots it verifies against and the records it admits against.
+func NewService(roots TrustRoot, registrations Registration) Service {
+	return &service{roots: roots, registrations: registrations}
 }
 
 func (s *service) Authenticate(ctx context.Context, chain [][]byte) (Identity, error) {
@@ -55,7 +56,32 @@ func (s *service) Authenticate(ctx context.Context, chain [][]byte) (Identity, e
 	}); err != nil {
 		return Identity{}, errorx.Wrap(err, "machine: certificate does not chain to its organization's authority", errorx.KindUnauthenticated)
 	}
+	if err := s.held(ctx, identity.grn); err != nil {
+		return Identity{}, err
+	}
 	return identity, nil
+}
+
+// held returns nil where the organization still holds its record of
+// subject. A certificate that chains is not enough on its own: the
+// organization can withdraw the record, and from then on the
+// certificate names an identity garam does not admit (ADR-0070).
+//
+// It runs after the chain is verified rather than before it, so a
+// certificate no authority signed is refused without reading anything
+// about whom this deployment holds records for.
+//
+// The refusal is the same one an unverifiable chain gets, for the same
+// reason [service.rootOf]'s is: the caller learns its certificate did
+// not authenticate and nothing about which identities exist.
+func (s *service) held(ctx context.Context, subject grn.GRN) error {
+	if err := s.registrations.Holds(ctx, subject); err != nil {
+		if errorx.IsKind(err, errorx.KindNotFound) {
+			return errorx.Wrap(err, "machine: the organization holds no record of this identity", errorx.KindUnauthenticated)
+		}
+		return err
+	}
+	return nil
 }
 
 // rootOf returns the parsed certificate of the authority that may sign

@@ -98,6 +98,38 @@ func (q *Queries) CreateOperator(ctx context.Context, arg CreateOperatorParams) 
 	return err
 }
 
+const deleteOperator = `-- name: DeleteOperator :execrows
+DELETE FROM operators WHERE grn = $1
+`
+
+// Deleting the record is what stops the operator authenticating
+// (ADR-0070). A definition naming the operator refuses it, through the
+// foreign key 000018 declared NO ACTION, which is the copy no call
+// path routes around.
+func (q *Queries) DeleteOperator(ctx context.Context, grn string) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteOperator, grn)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const deleteOperatorCertificate = `-- name: DeleteOperatorCertificate :exec
+DELETE FROM operator_certificates WHERE operator_grn = $1
+`
+
+// The record of the certificate garam last issued goes with the
+// registration. The unspent token has a cascade to go by (000023) and
+// this row has none (000019), so the delete removes it and the two
+// statements are one transaction. Left standing it would outlive the
+// registration exactly as the row ADR-0045's errata found did, and the
+// next registration of the same identifier would read `enrolled`
+// against it and be refused the token it needs.
+func (q *Queries) DeleteOperatorCertificate(ctx context.Context, operatorGrn string) error {
+	_, err := q.db.Exec(ctx, deleteOperatorCertificate, operatorGrn)
+	return err
+}
+
 const getOperator = `-- name: GetOperator :one
 SELECT o.grn, o.org_grn, o.registered_by, o.created_at,
        c.issued_at AS certificate_issued_at,

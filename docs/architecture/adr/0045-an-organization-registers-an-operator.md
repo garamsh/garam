@@ -1,6 +1,8 @@
 # ADR 0045: An organization registers an operator, and a definition may name no other
 
-> Status: accepted
+> Status: accepted — the Revocation item of §What this does not decide,
+> and the delete-route item of §Rejected alternatives, are superseded by
+> [ADR-0070](./0070-an-organization-deletes-an-operator-and-the-record-it-withdraws-is-what-that-operator-authenticated-on.md)
 > Date: 2026-08-25
 
 ## Contents
@@ -196,3 +198,26 @@ so.
   argument `000019` makes against the foreign key stands, and what is
   wrong is the reach of the sentence's reason rather than what the
   sentence claims about `operators`.
+- 2026-09-06 — §What this does not decide's Revocation item argues
+  "removing a record would stop nothing" and concludes "there is no
+  delete route". That was true of the design as this ADR left it and
+  is now false:
+  [ADR-0070](./0070-an-organization-deletes-an-operator-and-the-record-it-withdraws-is-what-that-operator-authenticated-on.md)
+  makes the record what an operator's certificate authenticates on, so
+  removing it stops the operator. What falsified it is that decision,
+  taken on the condition this ADR itself named — "When revocation is
+  decided, the route that removes a record can arrive with the thing
+  that makes it mean something." The rest of the item stands: an
+  unspent token still goes with the record, deleting the organization
+  still takes its operators, and the sentence about
+  `operator_certificates` the 2026-09-01 entry corrects is unaffected —
+  that table still carries no foreign key, and ADR-0070 empties its row
+  by naming it rather than by adding one.
+- 2026-09-06 — §Decision's "A registration grants nothing. It issues no
+  credential, and no listener reads it to decide anything" is false
+  from ADR-0070 on. The machine listener reads it per connection. The
+  first sentence still holds in the sense this ADR meant it: a
+  registration mints no certificate and hands out no secret. What
+  changed is the second — a listener reads it now — and the
+  registration is the same row, written by the same call, with the same
+  shape.

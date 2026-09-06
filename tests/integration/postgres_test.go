@@ -135,14 +135,27 @@ func countRows(t *testing.T, p *pgxpool.Pool, query string, args ...any) int {
 }
 
 // registerOperator records that the org owning g has an operator under
-// it, which a definition naming one now requires (ADR-0045).
+// it, which a definition naming one requires (ADR-0045) and which the
+// machine listener reads per connection to admit its certificate
+// (ADR-0070).
+//
+// A GRN the org already holds is left as it is rather than refused.
+// Registering is what standing an operator up takes, and more than one
+// helper here does it for the same subject; a second call meaning
+// "make sure this is registered" is what those callers want, and the
+// refusal for a genuine second registration is asserted where that is
+// the subject.
 func registerOperator(t *testing.T, p *pgxpool.Pool, g grn.GRN) grn.GRN {
 	t.Helper()
+	store := operator.NewPostgresStore(p)
+	if _, err := store.Get(context.Background(), g); err == nil {
+		return g
+	}
 	o, err := operator.New(orgRootGRN(g.Organization), g.Identifier, scopedGRN(g.Organization, "user", "ada"))
 	require.NoError(t, err)
 	enrollment, err := operator.NewEnrollment(o.GRN(), scopedGRN(g.Organization, "user", "ada"))
 	require.NoError(t, err)
-	_, err = operator.NewPostgresStore(p).Register(context.Background(), o, enrollment)
+	_, err = store.Register(context.Background(), o, enrollment)
 	require.NoError(t, err)
 	return o.GRN()
 }
@@ -2985,6 +2998,20 @@ func (c operatorCertificates) certificate(signed *ca.Certificate) operator.Certi
 	}
 }
 
+// operatorRegistrations is the record an identity authenticates on, in
+// the shape the composition root satisfies it: an operator is admitted
+// while its organization still holds the record, and every other
+// identity is admitted without a read (ADR-0070).
+type operatorRegistrations struct{ store operator.Store }
+
+func (r operatorRegistrations) Holds(ctx context.Context, subject grn.GRN) error {
+	if subject.ServiceType != operator.ServiceType {
+		return nil
+	}
+	_, err := r.store.Get(ctx, subject)
+	return err
+}
+
 // machineTrustRoots reads the authority a presented certificate has to
 // chain to out of the ones Postgres holds.
 type machineTrustRoots struct{ store ca.Store }
@@ -3095,7 +3122,8 @@ func machineListener(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer, policies m
 	require.NoError(t, err)
 
 	srv := machine.NewServer(
-		machine.NewService(machineTrustRoots{store: authorities}),
+		machine.NewService(machineTrustRoots{store: authorities},
+			operatorRegistrations{store: operatorStore}),
 		presented,
 		machinegen.Handler(machineapi.NewServer(agents, operators, messages, message.NewPostgresStore(p), watches, memberGroups{store: org.NewPostgresStore(p)}, policies)),
 	)
@@ -3110,8 +3138,17 @@ func machineListener(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer, policies m
 // process holding it presents one. An operator's own first certificate
 // arrives out of band (ADR-0015); an agent's comes from the surface
 // under test.
-func installed(t *testing.T, issuer ca.Service, subject grn.GRN) tls.Certificate {
+//
+// An operator is registered here as well, because a certificate is
+// half of what one needs: the machine listener reads the organization's
+// record per connection, so an operator nobody registered does not
+// authenticate however it obtained its certificate (ADR-0070). An
+// agent has no such record and is left alone.
+func installed(t *testing.T, p *pgxpool.Pool, issuer ca.Service, subject grn.GRN) tls.Certificate {
 	t.Helper()
+	if subject.ServiceType == operator.ServiceType {
+		registerOperator(t, p, subject)
+	}
 	issued, err := issuer.Issue(context.Background(), subject)
 	require.NoError(t, err)
 	pair, err := tls.X509KeyPair(issued.CertificatePEM(), issued.PrivateKeyPEM())
@@ -3229,7 +3266,7 @@ func TestMachineSurface_OperatorCreatesAnAgentThatThenAuthenticates(t *testing.T
 	assignments := agent.NewPostgresStore(p)
 
 	operatorGRN := scopedGRN("acme", agent.ServiceTypeOperator, "one")
-	operator := machineClient(t, installed(t, outOfBand, operatorGRN))
+	operator := machineClient(t, installed(t, p, outOfBand, operatorGRN))
 
 	status, body := machineRequest(t, operator, http.MethodPost, url+"/agents")
 	require.Equal(t, http.StatusCreated, status, string(body))
@@ -3271,7 +3308,7 @@ func TestMachineSurface_OperatorCreatesAnAgentThatThenAuthenticates(t *testing.T
 	// authority, holds the agent it created there, and is refused the
 	// one it does not hold.
 	strangerGRN := scopedGRN("globex", agent.ServiceTypeOperator, "one")
-	stranger := machineClient(t, installed(t, outOfBand, strangerGRN))
+	stranger := machineClient(t, installed(t, p, outOfBand, strangerGRN))
 	status, body = machineRequest(t, stranger, http.MethodPost, url+"/agents")
 	require.Equal(t, http.StatusCreated, status, string(body))
 	var strangers machinegen.AgentAssignment
@@ -3284,7 +3321,7 @@ func TestMachineSurface_OperatorCreatesAnAgentThatThenAuthenticates(t *testing.T
 	// An operator of the agent's own organization that holds nothing is
 	// refused the same way.
 	siblingGRN := scopedGRN("acme", agent.ServiceTypeOperator, "two")
-	sibling := machineClient(t, installed(t, outOfBand, siblingGRN))
+	sibling := machineClient(t, installed(t, p, outOfBand, siblingGRN))
 	status, _ = machineRequest(t, sibling, http.MethodPost, url+"/agents/"+created.Grn+"/certificate")
 	assert.Equal(t, http.StatusForbidden, status, "an agent of its organization it was not assigned")
 
@@ -3348,7 +3385,7 @@ func TestMachineSurface_AnAgentActsOnItsOwnQueueAndNoOther(t *testing.T) {
 
 	_, evaluator := policyEngine(t, p)
 	url := machineListener(t, p, sealer, evaluator)
-	operator := machineClient(t, installed(t, outOfBand, scopedGRN("acme", agent.ServiceTypeOperator, "one")))
+	operator := machineClient(t, installed(t, p, outOfBand, scopedGRN("acme", agent.ServiceTypeOperator, "one")))
 	senderGRN, sender := provisioned(t, url, operator)
 	recipientGRN, recipient := provisioned(t, url, operator)
 	queue := url + "/agents/" + recipientGRN.String() + "/claims"
@@ -3461,8 +3498,8 @@ func TestMachineSurface_AnotherOrganizationsAgentReachesNothingOnThisQueue(t *te
 
 	policies, evaluator := policyEngine(t, p)
 	url := machineListener(t, p, sealer, evaluator)
-	acmeOperator := machineClient(t, installed(t, outOfBand, scopedGRN("acme", agent.ServiceTypeOperator, "one")))
-	globexOperator := machineClient(t, installed(t, outOfBand, scopedGRN("globex", agent.ServiceTypeOperator, "one")))
+	acmeOperator := machineClient(t, installed(t, p, outOfBand, scopedGRN("acme", agent.ServiceTypeOperator, "one")))
+	globexOperator := machineClient(t, installed(t, p, outOfBand, scopedGRN("globex", agent.ServiceTypeOperator, "one")))
 	senderGRN, sender := provisioned(t, url, acmeOperator)
 	recipientGRN, recipient := provisioned(t, url, acmeOperator)
 	strangerGRN, stranger := provisioned(t, url, globexOperator)
@@ -3590,7 +3627,7 @@ func TestMachineSurface_AnAttachedPolicyDecidesWhatAnAgentSends(t *testing.T) {
 
 	policies, evaluator := policyEngine(t, p)
 	url := machineListener(t, p, sealer, evaluator)
-	operator := machineClient(t, installed(t, outOfBand, scopedGRN("acme", agent.ServiceTypeOperator, "one")))
+	operator := machineClient(t, installed(t, p, outOfBand, scopedGRN("acme", agent.ServiceTypeOperator, "one")))
 	senderGRN, sender := provisioned(t, url, operator)
 	_, other := provisioned(t, url, operator)
 	recipientGRN, recipient := provisioned(t, url, operator)
@@ -3688,7 +3725,7 @@ func TestMachineSurface_AGroupAttachedPolicyDecidesWhatItsMembersSend(t *testing
 
 	policies, evaluator := policyEngine(t, p)
 	url := machineListener(t, p, sealer, evaluator)
-	operator := machineClient(t, installed(t, outOfBand, scopedGRN("acme", agent.ServiceTypeOperator, "one")))
+	operator := machineClient(t, installed(t, p, outOfBand, scopedGRN("acme", agent.ServiceTypeOperator, "one")))
 	senderGRN, sender := provisioned(t, url, operator)
 	_, outsider := provisioned(t, url, operator)
 	recipientGRN, recipient := provisioned(t, url, operator)
@@ -3807,8 +3844,8 @@ func TestMachineSurface_ARecipientsOwnPolicyAdmitsNoForeignSender(t *testing.T) 
 
 	policies, evaluator := policyEngine(t, p)
 	url := machineListener(t, p, sealer, evaluator)
-	alphaOperator := machineClient(t, installed(t, outOfBand, scopedGRN("alpha", agent.ServiceTypeOperator, "one")))
-	betaOperator := machineClient(t, installed(t, outOfBand, scopedGRN("beta", agent.ServiceTypeOperator, "one")))
+	alphaOperator := machineClient(t, installed(t, p, outOfBand, scopedGRN("alpha", agent.ServiceTypeOperator, "one")))
+	betaOperator := machineClient(t, installed(t, p, outOfBand, scopedGRN("beta", agent.ServiceTypeOperator, "one")))
 	foreignGRN, foreign := provisioned(t, url, alphaOperator)
 	recipientGRN, recipient := provisioned(t, url, betaOperator)
 	neighbourGRN, neighbour := provisioned(t, url, betaOperator)
@@ -3986,9 +4023,9 @@ func TestMachineSurface_AConsentRelationCarriesAMessageAcrossTheBoundary(t *test
 
 	_, evaluator := policyEngine(t, p)
 	url := machineListener(t, p, sealer, evaluator)
-	acmeOperator := machineClient(t, installed(t, outOfBand, scopedGRN("acme", agent.ServiceTypeOperator, "one")))
-	globexOperator := machineClient(t, installed(t, outOfBand, scopedGRN("globex", agent.ServiceTypeOperator, "one")))
-	initechOperator := machineClient(t, installed(t, outOfBand, scopedGRN("initech", agent.ServiceTypeOperator, "one")))
+	acmeOperator := machineClient(t, installed(t, p, outOfBand, scopedGRN("acme", agent.ServiceTypeOperator, "one")))
+	globexOperator := machineClient(t, installed(t, p, outOfBand, scopedGRN("globex", agent.ServiceTypeOperator, "one")))
+	initechOperator := machineClient(t, installed(t, p, outOfBand, scopedGRN("initech", agent.ServiceTypeOperator, "one")))
 	senderGRN, sender := provisioned(t, url, acmeOperator)
 	siblingGRN, _ := provisioned(t, url, acmeOperator)
 	recipientGRN, recipient := provisioned(t, url, globexOperator)

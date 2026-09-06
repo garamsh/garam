@@ -57,7 +57,7 @@ func TestWatchSurface_AWatchInOneProcessIsCountedAndFedByAnother(t *testing.T) {
 	require.NoError(t, err)
 	_, evaluator := policyEngine(t, p)
 	url := machineListener(t, p, sealer, evaluator)
-	operator := machineClient(t, installed(t, outOfBand, scopedGRN("acme", agent.ServiceTypeOperator, "one")))
+	operator := machineClient(t, installed(t, p, outOfBand, scopedGRN("acme", agent.ServiceTypeOperator, "one")))
 	watched, adapter := provisioned(t, url, operator)
 
 	// The process serving browsers: its own watch service over the same

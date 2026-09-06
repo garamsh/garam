@@ -10,10 +10,14 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 )
 
-// Certificate lifetime bounds. ADR-0014 accepted expiry as the only
-// revocation there is — no CRL, no OCSP — so the lifetime is the whole
-// window a compromised certificate stays usable in, and an unbounded
-// one is that mechanism switched off rather than a setting. What the
+// Certificate lifetime bounds. There is no CRL and no OCSP (ADR-0014),
+// so for an agent's certificate the lifetime is the whole window a
+// compromised one stays usable in, and an unbounded lifetime is that
+// mechanism switched off rather than a setting. An operator's has a
+// second end — deleting the operator refuses it from the next
+// connection (ADR-0070) — which shortens the window a deployment
+// notices in and does not move these bounds: nothing here reads a
+// record, and a compromise nobody sees still runs to expiry. What the
 // deployment picks inside these bounds is configuration (ADR-0040).
 const (
 	// DefaultCertificateLifetime is what [Config] takes when it says

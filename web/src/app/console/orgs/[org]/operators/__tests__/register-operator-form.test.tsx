@@ -60,11 +60,14 @@ describe("register operator form", () => {
 
     // Presence: each is one clause of a longer sentence. What a person
     // needs before typing stays; what the operator does with the token
-    // and what a record cannot do have gone to the token and to the
-    // list of records.
+    // and what deleting a record does have gone to the token and to
+    // the list of records.
     expect(
-      screen.getByText(/A record cannot be removed, so a mistyped identifier/),
+      screen.getByText(/Registering records that this organization has/),
     ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Deleting a record stops that operator/),
+    ).not.toBeInTheDocument();
     expect(
       screen.queryByText(/no private key is ever shown here/),
     ).not.toBeInTheDocument();

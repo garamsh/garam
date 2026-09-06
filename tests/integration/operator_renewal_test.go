@@ -99,7 +99,7 @@ func TestOperatorRenewal_ReplacesTheCertificateThePresenterHolds(t *testing.T) {
 	subject := scopedGRN("acme", operator.ServiceType, "one")
 	// Three quarters through an hour-long certificate, so what is left
 	// is inside the last third the rule admits.
-	held := installed(t, aged(t, p, sealer, time.Hour, time.Now().Add(-45*time.Minute)), subject)
+	held := installed(t, p, aged(t, p, sealer, time.Hour, time.Now().Add(-45*time.Minute)), subject)
 	client := machineClient(t, held)
 
 	status, body := renew(t, client, url)
@@ -130,7 +130,7 @@ func TestOperatorRenewal_ReplacesTheCertificateThePresenterHolds(t *testing.T) {
 	// A certificate with its whole life ahead of it is refused as too
 	// early, under a kind that says to ask again. It names an operator
 	// with no record at all, so what refuses it is the window.
-	fresh := machineClient(t, installed(t, aged(t, p, sealer, time.Hour, time.Now()), scopedGRN("acme", operator.ServiceType, "two")))
+	fresh := machineClient(t, installed(t, p, aged(t, p, sealer, time.Hour, time.Now()), scopedGRN("acme", operator.ServiceType, "two")))
 	status, body = renew(t, fresh, url)
 	assert.Equal(t, http.StatusConflict, status)
 	assert.Contains(t, string(body), `"kind":"failed_precondition"`)

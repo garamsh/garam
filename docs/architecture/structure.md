@@ -144,13 +144,8 @@ A conversion to a wire format the boundaries already share is not a shared kerne
   about the surface rather than about the layout: 122 one-line getters
   across the ten domain packages and no method that assigns a field.
   The store moves to `internal/<domain>/postgres/`, named for the
-  technology it implements against. That diverges from
-  `docs/convention/stack-go.md` §1, which names the sub-package for the
-  interface; the divergence is recorded and the rule is not changed —
-  rule 8 leaves the stack file governing the layout, the way §Where the
-  composition root lives already records for §Project envelope, and the
-  wording question goes to the convention owner in #1035 as that
-  section's goes in #756.
+  technology it implements against, which is what
+  `docs/convention/stack-go.md` §1 requires.
 - [ADR-0052](./adr/0052-a-concern-is-owned-by-the-boundary-whose-subject-matter-it-is.md)
   — a concern is owned by the boundary whose subject matter it is. The
   threshold above names a destination for a concern shared by two and

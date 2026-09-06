@@ -1,6 +1,6 @@
 # ADR 0014: Agents authenticate with mTLS on a listener of their own
 
-> Status: accepted — §Decision's rotation term is superseded by [ADR-0040](./0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)
+> Status: accepted — §Decision's rotation term is superseded by [ADR-0040](./0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md); §Consequences' revocation term is superseded, for an operator, by [ADR-0070](./0070-an-organization-deletes-an-operator-and-the-record-it-withdraws-is-what-that-operator-authenticated-on.md)
 > Date: 2026-08-16
 
 ## Contents
@@ -126,3 +126,14 @@ not in Go:
 ## Errata
 
 - 2026-08-18 — §Consequences' "Policy attachments extend that rule and do not gate it" predates ADR-0024: on the machine listener an attached Deny narrows what an identity may send, so an attachment can gate. The authentication decision this ADR takes is unchanged.
+- 2026-09-06 — §Consequences' "Revocation is by lifetime, not by list"
+  ends "so a compromised certificate stays valid until it expires".
+  That was true of every identity when it was written and is now false
+  of one: [ADR-0070](./0070-an-organization-deletes-an-operator-and-the-record-it-withdraws-is-what-that-operator-authenticated-on.md)
+  makes an operator's certificate authenticate only while the
+  organization holds its record, so deleting the operator stops the
+  certificate before it expires. What falsified it is that decision and
+  nothing observed. The rest of the sentence stands and ADR-0070 rests
+  on it: there is still no CRL and no OCSP responder, nothing is
+  published, and the reversal reaches an operator alone — an agent's
+  certificate is bounded by its lifetime exactly as this ADR says.

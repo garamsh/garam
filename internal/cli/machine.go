@@ -151,7 +151,8 @@ func serveMachine(cmd *cobra.Command) error {
 			// error body reaches that refusal.
 			ErrorHandlerFunc: machineapi.BindingError,
 		})
-	srv := obs.machineServer(certificateAuthorities{store: authorities}, keys.listener, handler)
+	srv := obs.machineServer(certificateAuthorities{store: authorities},
+		operatorRegistrations{store: operator.NewPostgresStore(pool)}, keys.listener, handler)
 	srv.Addr = envOr(envMachineAddr, ":8443")
 
 	// A probe holds no certificate and reaches no route on the TLS
@@ -183,8 +184,8 @@ func serveMachine(cmd *cobra.Command) error {
 // The wrapping is assigned rather than passed in, because NewServer
 // puts that check outside the handler it is given and the check runs
 // per request too.
-func (o *observability) machineServer(roots machine.TrustRoot, certificate machine.ServerCertificate, next http.Handler) *http.Server {
-	srv := machine.NewServer(machine.NewService(roots), certificate,
+func (o *observability) machineServer(roots machine.TrustRoot, registrations machine.Registration, certificate machine.ServerCertificate, next http.Handler) *http.Server {
+	srv := machine.NewServer(machine.NewService(roots, registrations), certificate,
 		otelhttp.NewHandler(next, serviceMachine))
 	srv.Handler = o.recoverPanics(http.MaxBytesHandler(srv.Handler, maxRequestBody))
 	// A handshake that fails outright — a client that speaks no TLS
@@ -269,6 +270,29 @@ func (c certificateAuthorities) Get(ctx context.Context, subject grn.GRN) ([]byt
 		return nil, err
 	}
 	return authority.Certificate(), nil
+}
+
+// operatorRegistrations reads whether an organization still holds the
+// record an identity authenticates on (machine.Registration). An
+// operator is the one identity a record admits, so it is the one this
+// reads for; an agent is admitted by the claim its operator made
+// (ADR-0033) and is answered without a read, which is the decision
+// ADR-0070 takes rather than a saving it discovers.
+type operatorRegistrations struct{ store operator.Store }
+
+func (r operatorRegistrations) Holds(ctx context.Context, subject grn.GRN) error {
+	if subject.ServiceType != operator.ServiceType {
+		return nil
+	}
+	// Store.Get answers the record's presence and joins the two tables
+	// the enrollment state is derived from, which this has no question
+	// about. It is read through rather than narrowed because a second
+	// way to ask whether an organization holds an operator is a second
+	// answer to keep agreeing with the first: measured at 306µs against
+	// 222µs for the presence alone, inside the run-to-run spread of the
+	// handshake it runs on.
+	_, err := r.store.Get(ctx, subject)
+	return err
 }
 
 // memberGroups reads the groups a machine identity belongs to

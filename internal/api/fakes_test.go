@@ -1003,6 +1003,10 @@ type fakeOperatorStore struct {
 	// store derives this from a table beside the record; nothing here
 	// issues certificates, so a test says which operators hold one.
 	enrolled map[string]bool
+	// The operators an agent definition names. The real store reads
+	// this off the foreign key the delete trips; nothing here writes
+	// definitions, so a test says which operators one names.
+	namedByDefinition map[string]bool
 }
 
 func newFakeOperatorStore() *fakeOperatorStore {
@@ -1010,6 +1014,8 @@ func newFakeOperatorStore() *fakeOperatorStore {
 		operators:   map[string]*operator.Operator{},
 		enrollments: map[string]*operator.Enrollment{},
 		enrolled:    map[string]bool{},
+
+		namedByDefinition: map[string]bool{},
 	}
 }
 
@@ -1073,6 +1079,39 @@ func (s *fakeOperatorStore) enrolls(token string) (grn.GRN, bool) {
 		return grn.GRN{}, false
 	}
 	return e.Operator(), true
+}
+
+// Delete removes the record and the certificate the fake holds beside
+// it, as the statement pair does. The refusal for an operator a
+// definition names is the real store's, read off the foreign key
+// inside its own transaction; this one answers it off what
+// markNamedByDefinition recorded, so what these tests cover is the
+// handler's half — the status and the sentence a refused caller reads.
+func (s *fakeOperatorStore) Delete(_ context.Context, g grn.GRN) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.operators[g.String()]; !ok {
+		return operator.ErrOperatorNotFound
+	}
+	if s.namedByDefinition[g.String()] {
+		return operator.ErrOperatorNamedByDefinition
+	}
+	delete(s.operators, g.String())
+	delete(s.enrolled, g.String())
+	for hash, held := range s.enrollments {
+		if held.Operator() == g {
+			delete(s.enrollments, hash)
+		}
+	}
+	return nil
+}
+
+// markNamedByDefinition records that an agent definition names the
+// operator, which is the state a delete is refused for.
+func (s *fakeOperatorStore) markNamedByDefinition(g grn.GRN) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.namedByDefinition[g.String()] = true
 }
 
 func (s *fakeOperatorStore) Get(_ context.Context, g grn.GRN) (*operator.Operator, error) {

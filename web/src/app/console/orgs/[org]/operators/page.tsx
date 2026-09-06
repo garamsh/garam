@@ -19,10 +19,11 @@ type Params = { params: Promise<{ org: string }> };
  * The operators the organization has registered, and the form that
  * registers one more.
  *
- * Registering is granted by `operator:register`, which owners and
- * admins hold and members do not, while every role reads the list. The
- * form is rendered for all of them and the API refuses a caller that
- * holds only the read — the same shape the agents section takes.
+ * Registering is granted by `operator:register` and deleting by
+ * `operator:delete`, which owners and admins hold and members do not,
+ * while every role reads the list. The form and the delete control are
+ * rendered for all of them and the API refuses a caller that holds
+ * only the read — the same shape the agents section takes.
  */
 export default async function OperatorsPage({ params }: Params) {
   const { org } = await params;
@@ -43,7 +44,7 @@ export default async function OperatorsPage({ params }: Params) {
           description="This organization has registered no operators."
         />
       ) : (
-        <OperatorList operators={operators.data} />
+        <OperatorList org={org} operators={operators.data} />
       )}
       <Separator />
       <RegisterOperatorForm org={org} />

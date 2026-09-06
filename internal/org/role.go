@@ -72,10 +72,16 @@ const (
 	// policy ones, and internal/operator does not import this package.
 	ActionOperatorRead = "operator:read"
 	// ActionOperatorRegister is recording that the org has an operator.
-	// It is not enrolling one and not granting it anything: what an
-	// operator authenticates with is a certificate no action here
-	// mints.
+	// It mints no certificate: what the record admits, it admits for a
+	// certificate the org's authority signed and this action does not
+	// sign (ADR-0070).
 	ActionOperatorRegister = "operator:register"
+	// ActionOperatorDelete is withdrawing that record, which stops the
+	// operator authenticating (ADR-0070). It is an action of its own
+	// rather than the registering one, because it is the first thing a
+	// member does here that takes a machine identity away: registering
+	// grants nothing and this withdraws what an operator runs on.
+	ActionOperatorDelete = "operator:delete"
 
 	// Reading the agents an org holds, defining one, and watching one
 	// work. The org owns the constants for the reason it owns the
@@ -97,13 +103,16 @@ const (
 )
 
 // Agent and operator actions are granted one at a time and never as
-// `agent:*` or `operator:*`: ADR-0012 puts provisioning outside garam
-// and ADR-0045 leaves an operator's enrolment undecided, so a wildcard
-// would grant in advance the actions no endpoint may offer.
+// `agent:*` or `operator:*`: ADR-0012 puts provisioning outside garam,
+// so a wildcard would grant in advance the actions no endpoint may
+// offer. Deleting an operator is what that caution was for — it
+// arrived after registering and reading, and a wildcard would have
+// granted it before anyone decided it (ADR-0070).
 var (
 	// adminMachineActions is what an owner or an admin holds.
 	adminMachineActions = []string{
-		ActionOperatorRead, ActionOperatorRegister, ActionAgentRead, ActionAgentDefine,
+		ActionOperatorRead, ActionOperatorRegister, ActionOperatorDelete,
+		ActionAgentRead, ActionAgentDefine,
 	}
 	// memberMachineActions is what a member holds: it reads the
 	// operators an org has registered and registers none, because

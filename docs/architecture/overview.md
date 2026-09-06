@@ -52,8 +52,9 @@ collaborate on a shared plan.
   it stops renewing the moment the operator does; a certificate outside
   its renewal window and one that has expired are both refused, and what
   follows an expired one is the out-of-band mint (ADR-0032). Nothing
-  here revokes a certificate — expiry is still the only revocation
-  (ADR-0014).
+  on this route withdraws a certificate: it narrows what a copy may do
+  next and leaves it authenticating, and what withdraws one is deleting
+  the operator (ADR-0070).
 - An operator reporting what it sees of an agent's pod, and an agent
   reporting what it says about itself, each on a route of its own on
   the machine listener (ADR-0053). They are the two facts ADR-0012 puts
@@ -71,14 +72,18 @@ collaborate on a shared plan.
 - An organization **registering** an operator, under
   `/orgs/{org}/operators`, and its members reading the list (ADR-0045).
   A record is a GRN, who registered it and when: it carries no
-  credential, grants nothing, and reports nothing, because garam never
-  dials an operator. The identifier is supplied rather than minted,
-  since an operator that already holds a certificate has to be
-  registered under the GRN that certificate names. Registering is
-  granted by `operator:register` and reading by `operator:read`, both
-  named action by action for the reason the agent actions are. There is
-  no route that removes a record: garam has no revocation, so removing
-  one would stop nothing (see Out of scope).
+  credential and reports nothing, because garam never dials an
+  operator. What it does grant is admission: the machine listener reads
+  it per connection, so an operator authenticates while its
+  organization holds the record and stops when the record goes
+  (ADR-0070). The identifier is supplied rather than minted, since an
+  operator that already holds a certificate has to be registered under
+  the GRN that certificate names. Registering is granted by
+  `operator:register`, reading by `operator:read` and deleting by
+  `operator:delete`, each named action by action for the reason the
+  agent actions are — deleting separately from registering, because
+  registering grants nothing and deleting withdraws what an operator
+  runs on.
 - An organization's members **defining** an agent, under
   `/orgs/{org}/agent-definitions` — which operator is to run it, and
   with what values (ADR-0026). A definition is a record rather than a
@@ -233,11 +238,13 @@ collaborate on a shared plan.
   presenting it (ADR-0046); an operator's first is obtained by enrolling
   with the token registering it minted (ADR-0064), and an agent's first
   still arrives on the route its operator's claim admits it to.
-- Revoking anything. A certificate garam signed authenticates until it
-  expires, and nothing shortens that: there is no revocation list, no
-  serial the listener checks, and no route that removes an operator's
-  record — which is why registering one is not offered as a way to
-  withdraw it (ADR-0045).
+- Revoking a certificate. There is still no revocation list, no
+  responder, and no serial the listener checks, so an agent's
+  certificate authenticates until it expires and nothing shortens that
+  (ADR-0014). An operator is the exception and it is not a certificate
+  mechanism: deleting the operator withdraws the record its certificate
+  authenticates on, so every certificate naming it is refused from the
+  next connection while none of them is revoked (ADR-0070).
 - Proving an operator is the operator a record names by any means but
   the certificate. There is no service-account token and no exchange
   route: what registering hands over is a one-time enrollment ticket,
@@ -469,6 +476,7 @@ it and imports no request surface and no domain.
 | Agents authenticate by mTLS on a listener of their own | A GRN in a SAN needs no user row; a separate listener needs no trusted proxy header. | [adr/0014-agent-authentication.md](./adr/0014-agent-authentication.md) |
 | garam presents one pinned server certificate and certificates rotate without a restart | A server picks its certificate before the client sends one, so per-organization selection is unreachable; expiry is the only revocation, and a lifetime short enough to be one is unusable when every rotation is a restart. | [adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md) |
 | An organization registers an operator, and a definition may name no other | A definition naming an operator nobody registered was a definition no operator would ever claim, and nothing reported it. | [adr/0045-an-organization-registers-an-operator.md](./adr/0045-an-organization-registers-an-operator.md) |
+| An organization deletes an operator, and the record it withdraws is what that operator authenticated on | A route that removed a record and left the certificate working was what ADR-0045 refused; making the record what admits the certificate reverses ADR-0014's revocation-by-lifetime for an operator without a list, a responder or a stored serial. | [adr/0070-an-organization-deletes-an-operator-and-the-record-it-withdraws-is-what-that-operator-authenticated-on.md](./adr/0070-an-organization-deletes-an-operator-and-the-record-it-withdraws-is-what-that-operator-authenticated-on.md) |
 | An operator renews its certificate by presenting the one it holds | Provisioning one on a schedule needs a standing write path to the key-encryption key, for every tenant; and with no revocation, only a record of the certificate garam last issued keeps a stolen copy from renewing forever. | [adr/0046-an-operator-renews-its-certificate-by-presenting-the-one-it-holds.md](./adr/0046-an-operator-renews-its-certificate-by-presenting-the-one-it-holds.md) |
 | An operator is a machine identity of the same kind as an agent | One mechanism to secure and rotate; the assignment row already bounds what an operator may fetch. | [adr/0015-operator-identity.md](./adr/0015-operator-identity.md) |
 | A CA's key is sealed by a key the process holds, not by a KMS | A database dump opens nothing; issuing depends on no hosted service, which is what lets a user bring their own operator. | [adr/0016-ca-key-custody.md](./adr/0016-ca-key-custody.md) |

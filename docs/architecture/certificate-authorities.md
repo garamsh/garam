@@ -17,10 +17,14 @@ trust root rather than in a check a caller could forget. It is created
 on the first certificate that organization needs, so an organization
 that has needed none has no authority yet. The subject's GRN travels in a
 SAN URI and the certificate carries nothing else — no name, no roles, no
-claims. Lifetime is the only revocation there is (ADR-0014), so it is
-short by default and bounded at both ends — a service whose configured
-lifetime falls outside them does not start — and it carries jitter that
-only shortens it, which keeps a fleet from expiring together (ADR-0015).
+claims. Lifetime is what bounds an agent's certificate and nothing
+withdraws one (ADR-0014), so it is short by default and bounded at both
+ends — a service whose configured lifetime falls outside them does not
+start — and it carries jitter that only shortens it, which keeps a
+fleet from expiring together (ADR-0015). An operator's certificate is
+bounded at the other end as well: it stops authenticating when the
+organization deletes the operator, which is decided against the record
+rather than against anything this domain signs or holds (ADR-0070).
 A lifetime reaching past what the signing CA has left is refused rather
 than signed: such a certificate stops verifying the day the CA expires.
 

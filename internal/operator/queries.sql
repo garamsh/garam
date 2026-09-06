@@ -93,6 +93,23 @@ DELETE FROM operator_enrollment_tokens
 WHERE token_hash = $1 AND expires_at > now()
 RETURNING operator_grn;
 
+-- Deleting the record is what stops the operator authenticating
+-- (ADR-0070). A definition naming the operator refuses it, through the
+-- foreign key 000018 declared NO ACTION, which is the copy no call
+-- path routes around.
+-- name: DeleteOperator :execrows
+DELETE FROM operators WHERE grn = $1;
+
+-- The record of the certificate garam last issued goes with the
+-- registration. The unspent token has a cascade to go by (000023) and
+-- this row has none (000019), so the delete removes it and the two
+-- statements are one transaction. Left standing it would outlive the
+-- registration exactly as the row ADR-0045's errata found did, and the
+-- next registration of the same identifier would read `enrolled`
+-- against it and be refused the token it needs.
+-- name: DeleteOperatorCertificate :exec
+DELETE FROM operator_certificates WHERE operator_grn = $1;
+
 -- name: CountOperatorsByOrg :one
 -- The operators the organization has registered, which deleting the
 -- organization removes with it, along with any enrollment token that

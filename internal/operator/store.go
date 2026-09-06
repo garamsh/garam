@@ -8,9 +8,11 @@ import (
 
 // Store persists the operators an organization has registered.
 //
-// It is a registry and not a lifecycle: there is no update, because a
-// record carries nothing to change, and no delete, because deleting one
-// would stop nothing an operator can already do (ADR-0045).
+// There is no update, because a record carries nothing to change.
+// There is a delete, and it is the one write here that takes something
+// away: the record is what an operator's certificate authenticates on,
+// so removing it stops the operator rather than tidying a list
+// (ADR-0070).
 type Store interface {
 	// Register records the operator and mints the enrollment token it
 	// starts with, or ErrOperatorAlreadyRegistered when the
@@ -37,6 +39,13 @@ type Store interface {
 	// path is undecided. The state is read in the same transaction as
 	// the write, by the derivation Register reads it by.
 	Remint(ctx context.Context, e *Enrollment) error
+	// Delete removes the record, and with it the record of the
+	// certificate garam last issued the operator and any token still
+	// unspent. It answers ErrOperatorNotFound where the organization
+	// holds no record under that GRN, and
+	// ErrOperatorNamedByDefinition where an agent definition names the
+	// operator — nothing is deleted in that case.
+	Delete(ctx context.Context, g grn.GRN) error
 	Get(ctx context.Context, g grn.GRN) (*Operator, error)
 	// ListByOrg returns the organization's operators, ordered by GRN.
 	ListByOrg(ctx context.Context, orgGRN grn.GRN) ([]*Operator, error)

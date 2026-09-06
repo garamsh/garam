@@ -138,6 +138,14 @@ func (a authorities) Get(_ context.Context, orgGRN grn.GRN) (*ca.Authority, erro
 // trustRoots reads what a presented certificate must chain to out of
 // the authorities it was issued from — the adapter the composition
 // root builds over ca.Store, in the form a test can hold.
+// everyRecordHeld admits every identity its authority signed for.
+// What a withdrawn record does to a handshake is the machine
+// package's, and these tests are about what the surface answers a
+// caller that has one (ADR-0070).
+type everyRecordHeld struct{}
+
+func (everyRecordHeld) Holds(context.Context, grn.GRN) error { return nil }
+
 type trustRoots struct{ store authorities }
 
 func (r trustRoots) Get(ctx context.Context, subject grn.GRN) ([]byte, error) {
@@ -279,7 +287,7 @@ func listener(t *testing.T, agents agent.Service, operators operator.Service, me
 	require.NoError(t, err)
 
 	srv := machine.NewServer(
-		machine.NewService(trustRoots{store: store}),
+		machine.NewService(trustRoots{store: store}, everyRecordHeld{}),
 		loopback(t),
 		machinegen.Handler(machineapi.NewServer(agents, operators, messages, standing, watches, groups, engine)),
 	)

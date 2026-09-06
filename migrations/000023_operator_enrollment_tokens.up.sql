@@ -9,13 +9,13 @@
 -- property the design is for: garam holds no value anybody can present.
 --
 -- The foreign key is what answers what becomes of an unspent token when
--- the registration goes. `operators` (000017) carries no delete today
--- (ADR-0045), so the cascade decides the question before the route that
--- would raise it exists, rather than leaving a token behind for a GRN
--- the organization no longer holds. That is the opposite of
--- `operator_certificates` (000019), which deliberately has no such key:
--- a certificate already issued outlives the record, and a token that
--- has not been spent grants nothing once the record is gone.
+-- the registration goes. It was declared before any route removed a
+-- registration, so that the question was decided ahead of the route
+-- rather than left to it; ADR-0070 added that route and the cascade
+-- answered it unchanged. `operator_certificates` (000019) deliberately
+-- has no such key, so that delete removes its row by naming it: the
+-- table stays independent of the registry, which is what lets a
+-- certificate be recorded for an unregistered operator.
 CREATE TABLE operator_enrollment_tokens (
     token_hash   text PRIMARY KEY,
     operator_grn text NOT NULL REFERENCES operators (grn) ON DELETE CASCADE,

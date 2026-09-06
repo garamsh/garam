@@ -2985,6 +2985,20 @@ func (c operatorCertificates) certificate(signed *ca.Certificate) operator.Certi
 	}
 }
 
+// operatorRegistrations is the record an identity authenticates on, in
+// the shape the composition root satisfies it: an operator is admitted
+// while its organization still holds the record, and every other
+// identity is admitted without a read (ADR-0070).
+type operatorRegistrations struct{ store operator.Store }
+
+func (r operatorRegistrations) Holds(ctx context.Context, subject grn.GRN) error {
+	if subject.ServiceType != operator.ServiceType {
+		return nil
+	}
+	_, err := r.store.Get(ctx, subject)
+	return err
+}
+
 // machineTrustRoots reads the authority a presented certificate has to
 // chain to out of the ones Postgres holds.
 type machineTrustRoots struct{ store ca.Store }
@@ -3095,7 +3109,8 @@ func machineListener(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer, policies m
 	require.NoError(t, err)
 
 	srv := machine.NewServer(
-		machine.NewService(machineTrustRoots{store: authorities}),
+		machine.NewService(machineTrustRoots{store: authorities},
+			operatorRegistrations{store: operatorStore}),
 		presented,
 		machinegen.Handler(machineapi.NewServer(agents, operators, messages, message.NewPostgresStore(p), watches, memberGroups{store: org.NewPostgresStore(p)}, policies)),
 	)

@@ -347,3 +347,112 @@ func TestOperatorMintEnrollment_ReplacesTheTokenAndRefusesAnEnrolledOne(t *testi
 	rec = f.do(t, "POST", "/orgs/"+slug+"/operators/field-two/enrollment", "", admin)
 	assert.Equal(t, http.StatusCreated, rec.Code)
 }
+
+// TestOperatorDelete_AdminDeletesWhereOthersAreRefused holds the
+// authorization the delete takes, which is not the one that registers:
+// ADR-0070 gives it an action of its own, so a member permitted to
+// register is not thereby permitted to stop an operator.
+//
+// The registrar is that control. It is permitted `operator:register`
+// and refused here, and its own registration is answered, so what
+// refuses its delete is the action rather than the membership or the
+// session. The outsider and the signed-out caller isolate the other
+// two halves the same way.
+func TestOperatorDelete_AdminDeletesWhereOthersAreRefused(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+
+	f.permit(
+		permission{userGRNOf("admin-sub"), org.ActionOperatorRegister},
+		permission{userGRNOf("admin-sub"), org.ActionOperatorDelete},
+		permission{userGRNOf("owner-sub"), org.ActionOperatorRead},
+		permission{userGRNOf("registrar-sub"), org.ActionOperatorRegister},
+	)
+	admin := f.sessionCookieFor(t, "admin-sub", "Admin")
+	registrar := f.sessionCookieFor(t, "registrar-sub", "Registrar")
+	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(slug), userGRNOf("admin-sub"), org.RoleAdmin)))
+	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(slug), userGRNOf("registrar-sub"), org.RoleMember)))
+
+	register := func(identifier string, cookie *http.Cookie) {
+		t.Helper()
+		rec := f.do(t, "POST", "/orgs/"+slug+"/operators", `{"identifier":"`+identifier+`"}`, cookie)
+		require.Equal(t, http.StatusCreated, rec.Code)
+	}
+	register("field-one", admin)
+
+	// A member holding the action that registers may register and may
+	// not delete.
+	register("field-two", registrar)
+	rec := f.do(t, "DELETE", "/orgs/"+slug+"/operators/field-one", "", registrar)
+	assert.Equal(t, http.StatusForbidden, rec.Code,
+		"registering an operator does not carry deleting one")
+
+	// Signed out is refused, and the same request carrying the admin's
+	// session is answered.
+	rec = f.do(t, "DELETE", "/orgs/"+slug+"/operators/field-one", "")
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	rec = f.do(t, "DELETE", "/orgs/"+slug+"/operators/field-one", "", admin)
+	assert.Equal(t, http.StatusNoContent, rec.Code)
+
+	// The record is gone from the list, and the identifier is free
+	// again: registering it a second time is answered rather than
+	// refused as already registered.
+	rec = f.do(t, "GET", "/orgs/"+slug+"/operators", "", owner)
+	require.Equal(t, http.StatusOK, rec.Code)
+	listed := decodeBody[[]apigen.Operator](t, rec)
+	for _, o := range listed {
+		assert.NotEqual(t, operatorGRNOf(slug, "field-one").String(), o.Grn)
+	}
+	register("field-one", admin)
+}
+
+// TestOperatorDelete_AnswersTheStateTheOperatorIsIn covers the three
+// answers the route gives beside the deletion itself. Each sits beside
+// a delete that succeeds, because a route refusing every call would
+// answer all three the same way.
+func TestOperatorDelete_AnswersTheStateTheOperatorIsIn(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	f.permit(
+		permission{userGRNOf("owner-sub"), org.ActionOperatorRegister},
+		permission{userGRNOf("owner-sub"), org.ActionOperatorDelete},
+		permission{userGRNOf("owner-sub"), org.ActionOperatorRead},
+	)
+
+	// An operator that never enrolled is deleted by the same call and
+	// is not a special case: nothing here asks whether a certificate
+	// was ever issued.
+	rec := f.do(t, "POST", "/orgs/"+slug+"/operators", `{"identifier":"never-enrolled"}`, owner)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	rec = f.do(t, "DELETE", "/orgs/"+slug+"/operators/never-enrolled", "", owner)
+	assert.Equal(t, http.StatusNoContent, rec.Code)
+
+	// An operator that enrolled is deleted by that same call.
+	rec = f.do(t, "POST", "/orgs/"+slug+"/operators", `{"identifier":"enrolled"}`, owner)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	f.operators.markEnrolled(operatorGRNOf(slug, "enrolled"))
+	rec = f.do(t, "DELETE", "/orgs/"+slug+"/operators/enrolled", "", owner)
+	assert.Equal(t, http.StatusNoContent, rec.Code)
+
+	// An operator the org holds no record of is a missing resource.
+	rec = f.do(t, "DELETE", "/orgs/"+slug+"/operators/never-registered", "", owner)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+
+	// An operator a definition names is refused, with the sentence that
+	// says what to do rather than a bare conflict, and nothing is
+	// deleted: the same operator is still there to delete once the
+	// definition is not naming it.
+	rec = f.do(t, "POST", "/orgs/"+slug+"/operators", `{"identifier":"named"}`, owner)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	f.operators.markNamedByDefinition(operatorGRNOf(slug, "named"))
+	rec = f.do(t, "DELETE", "/orgs/"+slug+"/operators/named", "", owner)
+	require.Equal(t, http.StatusConflict, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"kind":"failed_precondition"`)
+	assert.Contains(t, rec.Body.String(), "agent definition names this operator")
+	rec = f.do(t, "GET", "/orgs/"+slug+"/operators", "", owner)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), operatorGRNOf(slug, "named").String(),
+		"a refused delete removes nothing")
+}

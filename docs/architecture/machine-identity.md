@@ -6,12 +6,16 @@ Who is calling on the listener a machine identity authenticates on
 | Type | Responsibility |
 |------|----------------|
 | `Identity` | the GRN a verified client certificate names, and the certificate's own serial and dates — which is what a caller asking to replace it is answered by (ADR-0046) |
-| `Service` | recovers that GRN and verifies the certificate against the organization's authority |
+| `Service` | recovers that GRN, verifies the certificate against the organization's authority, and refuses an identity the organization no longer holds a record of |
 | `TrustRoot` | supplies the authority a presented certificate has to chain to |
+| `Registration` | answers whether the organization still holds its record of the identity a certificate names (ADR-0070) |
 | `ServerCertificate` | supplies the certificate the listener presents, asked per handshake so a replaced one needs no restart (ADR-0040) |
 
 An agent and an operator are the same kind of caller here and the
-listener does not branch on which. What the certificate asserts is the
+listener does not branch on which. It asks one question of each and
+the branch is in the seam that answers it: an operator is admitted
+while its organization still holds the record, and every other identity
+is held without a read (ADR-0070). What the certificate asserts is the
 GRN in its SAN URI and nothing beside it: no user row, no session, no
 membership, so no foreign key on `users` is touched and no handler
 taking a `*user.User` changes. The identity carries the certificate's
@@ -38,7 +42,16 @@ repository holds.
 The package holds no store and reaches no database: `TrustRoot` is the
 seam the composition root satisfies from `internal/ca`, which keeps the
 two domains cooperating through `grn.GRN` alone. Verification needs the
-authority's certificate and never its key. `ServerCertificate` is the
+authority's certificate and never its key. `Registration` is a seam of
+the same shape, satisfied from `internal/operator`, and it is what
+turns an organization deleting an operator into a certificate that
+stops authenticating — no list, no responder and no stored serial, just
+the record the organization already keeps, read once per connection
+after the chain verifies. Both reads are per connection and a resumed
+handshake takes them too, because `Authenticate` runs from
+`VerifyConnection` (ADR-0064): a check that ran only on a full
+handshake would let a deleted operator keep connecting for as long as
+its tickets lasted. `ServerCertificate` is the
 other seam, satisfied from `internal/keyfile`, and what it answers with
 is a different trust root: garam verifies an identity by its
 organization's authority, and an identity verifies garam by the one

@@ -4,10 +4,14 @@
 -- definition could name one that was never going to exist and nothing
 -- reported it.
 --
--- A row grants the operator nothing. It is not a credential, not an
--- enrolment, and not a revocation point: an operator still authenticates
--- with the certificate it holds (ADR-0015), and a row that is absent
--- stops no certificate that was already issued.
+-- A row is not a credential and not an enrolment: it mints nothing and
+-- carries no secret. It is what admits one. The machine listener reads
+-- it per connection, so an operator authenticates with the certificate
+-- it holds only while this row is here, and deleting the row stops
+-- every certificate naming it from the next connection (ADR-0070).
+-- That reverses what this comment said when it was written — "not a
+-- revocation point ... a row that is absent stops no certificate that
+-- was already issued" — which held until ADR-0070 and holds no longer.
 CREATE TABLE operators (
     grn           text PRIMARY KEY,
     org_grn       text NOT NULL REFERENCES orgs (grn) ON DELETE CASCADE,

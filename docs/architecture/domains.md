@@ -111,8 +111,11 @@ lives refers §Project envelope in #756.
 
 A domain that persists nothing has none of the storage files above:
 `internal/machine` is its types, its service, the listener it builds,
-and the two seams it reads through — a trust root for the caller, a
-certificate for itself.
+and the three seams it reads through — a trust root for the caller, the
+registration that admits the caller (ADR-0070), and a certificate for
+itself. All three are satisfied by the composition root, so the package
+imports neither `internal/ca` nor `internal/operator` and the domains
+cooperate through `grn.GRN` alone.
 
 `queries.sql` and `db/` are a source and its output, not two copies. Every
 generated file says so in its first line, and `make check-gen` fails on any

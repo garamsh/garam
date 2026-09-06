@@ -14,6 +14,7 @@ here as current.
 - What this does not decide
 - Consequences
 - Rejected alternatives
+- Errata
 
 ## Context
 
@@ -260,3 +261,28 @@ next reader meets them before meeting the sub-package that owns them.
   nine shapes. The cost is that the tree spends the interval in two
   shapes at once, which the responsibility documents state rather than
   hide.
+
+## Errata
+
+- 2026-09-06 — `#1087` changed `docs/convention/stack-go.md` §1 to name
+  an implementation sub-package for the technology it implements
+  against rather than for the interface it satisfies, which is the
+  shape §Decision chose. Three passages here were written against the
+  rule as it then stood and are wrong after it: §Decision's "The store
+  moves to a sub-package named for the technology" closes by recording
+  a divergence from §1 and referring the wording to the convention
+  owner in `#1035`; §What this does not decide reserves "Whether
+  `stack-go.md` §1's text should change" and says this ADR adds a
+  second instance to that referral rather than answering it; and
+  §Rejected alternatives rejects "Name the sub-package `store`, as
+  `stack-go.md` §1 says". There is no divergence left to record, §1's
+  own examples are `postgres/` and `memory/` where they were
+  `repository/`, and `#1035` is closed by the pull request that
+  changed the rule. The decision is unaffected
+  and this entry changes none of it: the layout it chose is the layout
+  it chose, and what moved is the rule it was measured against. The
+  other two references to §1 stand — §Context's opening, that §1 puts
+  the implementation in a sub-package, and §Decision's "The reason
+  `stack-go.md` §1 gives is satisfied either way" — because the change
+  moved the sub-package's name and neither its existence nor the
+  reason for it.

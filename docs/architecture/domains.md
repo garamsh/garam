@@ -66,12 +66,13 @@ Each domain's package contains:
   behaviour to coordinate; a domain that is only types and persistence
   has none.
 - `postgres/` — the `Store` implementation against PostgreSQL, in a
-  package named for the technology it implements against
-  ([ADR-0069](./adr/0069-the-aggregates-are-data-carriers-so-the-driver-leaves-the-domain-package.md)). It holds the hand-written `postgres.go`, the
-  domain's hand-written `queries.sql`, and the `db/` package sqlc
-  generates from that file and never edits by hand. The domain package
-  imports none of it, which is the point: `go list -deps` on the domain
-  reports no `jackc/pgx`.
+  package named for the technology it implements against, which is what
+  `docs/convention/stack-go.md` §1 requires
+  ([ADR-0069](./adr/0069-the-aggregates-are-data-carriers-so-the-driver-leaves-the-domain-package.md)).
+  It holds the hand-written `postgres.go`, the domain's hand-written
+  `queries.sql`, and the `db/` package sqlc generates from that file and
+  never edits by hand. The domain package imports none of it, which is
+  the point: `go list -deps` on the domain reports no `jackc/pgx`.
 - `*_test.go` — tests.
 - `mocks/` — mockery v3 output, generated from the interfaces
   `.mockery.yaml` names.
@@ -102,12 +103,6 @@ it rested on. It supersedes
 which had refused that change while a layout rule was the only reason
 offered for it. A store beside its aggregate is therefore not a defect
 in a domain that has not converted, and is one in a domain that has.
-Naming the package for the technology diverges from
-`docs/convention/stack-go.md` §1, which names it for the interface;
-this records the divergence and does not change the rule, and whether
-§1 should name a path or a property is referred to the convention owner
-in #1035, as [structure.md](./structure.md) §Where the composition root
-lives refers §Project envelope in #756.
 
 A domain that persists nothing has none of the storage files above:
 `internal/machine` is its types, its service, the listener it builds,

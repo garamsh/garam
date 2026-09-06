@@ -30,17 +30,23 @@ Nothing here states what goes *inside* a boundary, or how the system is deployed
   enforces it.
 - **Reaching past the declared surface is a defect**, even where the
   language permits it and even where it works.
-- **An aggregate exposes what it persists.** A value a boundary's store
-  writes and reads back is reachable through the surface that boundary
-  declares, by a read-only accessor on the aggregate
-  ([ADR-0051](./adr/0051-an-aggregate-exposes-what-it-persists.md)). A
-  persisted value no caller can reach is a defect and not an open point.
-  **The write half stays closed, and a layout rule is not a reason to
-  open it.** Whether an aggregate gains an exported way to be restored
-  from a stored row is decided on evidence about that surface and never
-  as a side effect of where a file sits
-  ([ADR-0066](./adr/0066-no-aggregate-gains-an-exported-restore-path-to-satisfy-a-layout-rule.md)),
-  so ADR-0051's reservation stands until an ADR argues it.
+- **An aggregate exposes what it persists, and the field itself is the
+  exposure.** A value a boundary's store writes and reads back is
+  reachable through the surface that boundary declares, as an exported
+  field on the aggregate. A persisted value no caller can reach is a
+  defect and not an open point. **The write half is open because
+  nothing stood behind it**: no method on any of these aggregates
+  assigns a field, so there is no invariant for an accessor to protect,
+  and whatever restores a stored row does it from outside the package
+  ([ADR-0069](./adr/0069-the-aggregates-are-data-carriers-so-the-driver-leaves-the-domain-package.md)). That ADR supersedes ADR-0051's accessor and ends
+  ADR-0066's reservation; an aggregate that does hold an invariant over
+  its fields is not decided by it.
+- **One domain of ten has converted.** `internal/user` carries exported
+  fields and its store sits in `internal/user/postgres/`. The other
+  nine keep their accessors and keep their store beside the aggregate
+  until each follows in its own pull request (#1083), so the tree
+  reads in two shapes meanwhile and the rule above is what both are
+  measured against.
 - **A boundary reaches a sibling directly, through the surface that
   sibling declares**
   ([ADR-0047](./adr/0047-a-domain-reaches-a-sibling-through-its-declared-surface.md)).
@@ -121,18 +127,30 @@ A conversion to a wire format the boundaries already share is not a shared kerne
   reached only through what it declares public and leaves to the project
   what must be in that surface; the ADR records which side garam took,
   the three aggregates that gave two answers while it went unrecorded,
-  and why the answer decides what counts as a defect.
+  and why the answer decides what counts as a defect. Its first two
+  decisions are superseded by ADR-0069 — the accessor it chose is now
+  the field — and its third, that the `policies` field and column stay
+  where they are, still stands.
 - [ADR-0066](./adr/0066-no-aggregate-gains-an-exported-restore-path-to-satisfy-a-layout-rule.md)
   — no aggregate gains an exported restore path in order to satisfy a
-  layout rule. ADR-0051 reserved the write half and the bullet above
-  records that it stays reserved; this ADR records what the project
-  declines to do about it, what conforming to
-  `docs/convention/stack-go.md` §1 would cost on 15 aggregate types,
-  and that answering the reserved question is what would reopen it. It
-  amends no convention rule: rule 8 leaves the stack file
-  governing the layout, the way §Where the composition root lives
-  already records for §Project envelope, and the wording question goes
-  to the convention owner in #1035 as that section's goes in #756.
+  layout rule. Superseded by ADR-0069, on the condition ADR-0066 wrote
+  for itself: it was contingent on ADR-0051's reservation and lasted as
+  long as that reservation did. Read it for what conforming to
+  `docs/convention/stack-go.md` §1 would have cost while the fields
+  were closed, and for why a layout rule is still not a reason to open
+  one.
+- [ADR-0069](./adr/0069-the-aggregates-are-data-carriers-so-the-driver-leaves-the-domain-package.md) — the aggregates are data carriers, so the driver
+  leaves the domain package. It answers the write half on evidence
+  about the surface rather than about the layout: 122 one-line getters
+  across the ten domain packages and no method that assigns a field.
+  The store moves to `internal/<domain>/postgres/`, named for the
+  technology it implements against. That diverges from
+  `docs/convention/stack-go.md` §1, which names the sub-package for the
+  interface; the divergence is recorded and the rule is not changed —
+  rule 8 leaves the stack file governing the layout, the way §Where the
+  composition root lives already records for §Project envelope, and the
+  wording question goes to the convention owner in #1035 as that
+  section's goes in #756.
 - [ADR-0052](./adr/0052-a-concern-is-owned-by-the-boundary-whose-subject-matter-it-is.md)
   — a concern is owned by the boundary whose subject matter it is. The
   threshold above names a destination for a concern shared by two and

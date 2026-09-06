@@ -4,10 +4,20 @@ The tenant hierarchy: the top-level tenant, what is grouped inside it,
 and who belongs to one. Implemented by `internal/org`.
 
 **A `Group`'s and a `Project`'s `policies` are built in part.** Each
-carries them as data, exposed by the aggregate (ADR-0051) and stored,
-and nothing collects them into a decision: a policy reaches a subject
-through an attachment the authz engine owns (ADR-0008), not through
-this list.
+carries them as data and stores them, and nothing collects them into a
+decision: a policy reaches a subject through an attachment the authz
+engine owns (ADR-0008), not through this list.
+
+**These aggregates have not converted yet, and the decision that
+governs them has moved.** A value a store writes and reads back is
+exposed as an exported field on the aggregate
+([ADR-0069](./adr/0069-the-aggregates-are-data-carriers-so-the-driver-leaves-the-domain-package.md)),
+which supersedes the accessor ADR-0051 chose. `Organization`, `Group`,
+`Project`, `Membership` and `Invitation` still carry unexported fields
+behind accessors, and `internal/org`'s store still sits beside them
+rather than in `internal/org/postgres/`. That is the unconverted shape,
+not a second answer: this domain follows `internal/user` in its own
+pull request under #1083.
 
 | Type | Responsibility |
 |------|----------------|

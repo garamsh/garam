@@ -40,7 +40,7 @@ func (s *Server) CreatePolicy(w http.ResponseWriter, r *http.Request, orgSlug ap
 		writeError(w, errorx.New(errorx.KindInvalidArgument, "document is required"))
 		return
 	}
-	p, err := s.policies.CreatePolicy(r.Context(), orgGRN(orgSlug), body.Name, body.Document, u.GRN())
+	p, err := s.policies.CreatePolicy(r.Context(), orgGRN(orgSlug), body.Name, body.Document, u.GRN)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -108,7 +108,7 @@ func (s *Server) AddPolicyVersion(w http.ResponseWriter, r *http.Request, orgSlu
 		writeError(w, errorx.New(errorx.KindInvalidArgument, "document is required"))
 		return
 	}
-	v, err := s.policies.AddPolicyVersion(r.Context(), g, body.Document, u.GRN())
+	v, err := s.policies.AddPolicyVersion(r.Context(), g, body.Document, u.GRN)
 	if err != nil {
 		writeError(w, err)
 		return

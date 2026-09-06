@@ -1,6 +1,6 @@
 # ADR 0066: No aggregate gains an exported restore path in order to satisfy a layout rule
 
-> Status: accepted
+> Status: superseded by [ADR-0069](./0069-the-aggregates-are-data-carriers-so-the-driver-leaves-the-domain-package.md)
 > Date: 2026-09-05
 
 ## Contents

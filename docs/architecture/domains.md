@@ -65,13 +65,22 @@ Each domain's package contains:
 - `service.go` — the `Service` contract, where the domain has
   behaviour to coordinate; a domain that is only types and persistence
   has none.
-- `queries.sql` — the domain's SQL, hand-written. The only place the
-  domain's own queries are written: `migrations/` holds the schema.
-- `postgres.go` — hand-written `Store` implementation, calling `db/`.
-- `db/` — sqlc output from `queries.sql`. Generated, never edited.
+- `postgres/` — the `Store` implementation against PostgreSQL, in a
+  package named for the technology it implements against
+  ([ADR-0069](./adr/0069-the-aggregates-are-data-carriers-so-the-driver-leaves-the-domain-package.md)). It holds the hand-written `postgres.go`, the
+  domain's hand-written `queries.sql`, and the `db/` package sqlc
+  generates from that file and never edits by hand. The domain package
+  imports none of it, which is the point: `go list -deps` on the domain
+  reports no `jackc/pgx`.
 - `*_test.go` — tests.
 - `mocks/` — mockery v3 output, generated from the interfaces
   `.mockery.yaml` names.
+
+**Only `internal/user` has this shape today.** The other nine keep
+`queries.sql`, `postgres.go` and `db/` directly under the domain, and
+each moves in its own pull request following #1083. Until then
+`ls internal/*/postgres/` names the converted domains and the shape
+above describes one of ten.
 
 A store splits into `postgres_<concept>.go` files beside `postgres.go`,
 inside the same package, when one Postgres type carries the methods of
@@ -80,21 +89,25 @@ more than one aggregate (`org`, `agent`, `authz`) or of more than one
 methods and not a package's stores: `internal/authn` implements four
 `Store` interfaces on four Postgres types and keeps them in one
 `postgres.go`. `ls internal/*/postgres_*.go` names the five packages
-that split and no others. It stays one package because the aggregates'
-fields are unexported and no exported constructor restores a stored
-row's state or timestamps, so whatever rehydrates one shares its
-package. That is a position the project holds and not a state it
-drifted into: no aggregate gains an exported restore path in order to
-satisfy a layout rule, so a store beside its aggregate is not a defect,
-and `docs/convention/stack-go.md` §1's `internal/<domain>/<name>/`
-layout stays out of reach for the eight domains whose store files write
-their own aggregates' unexported fields
-([ADR-0066](./adr/0066-no-aggregate-gains-an-exported-restore-path-to-satisfy-a-layout-rule.md)).
-`internal/watch` is the ninth and is not one of them. This records the
-divergence and does not change the rule: whether §1 should name a path
-or a property is referred to the convention owner in #1035, as
-[structure.md](./structure.md) §Where the composition root lives refers
-§Project envelope in #756.
+that split and no others. Those files stay under the domain because
+their aggregates' fields are still unexported, so whatever rehydrates
+one shares its package — and that is now a state the nine are passing
+through rather than a position the project holds.
+[ADR-0069](./adr/0069-the-aggregates-are-data-carriers-so-the-driver-leaves-the-domain-package.md) settled the write half on evidence about the surface:
+no method on any of these aggregates assigns a field, so the fields are
+exported, the store leaves for `internal/<domain>/postgres/`, and the
+argument that kept it beside the aggregate ends with the encapsulation
+it rested on. It supersedes
+[ADR-0066](./adr/0066-no-aggregate-gains-an-exported-restore-path-to-satisfy-a-layout-rule.md),
+which had refused that change while a layout rule was the only reason
+offered for it. A store beside its aggregate is therefore not a defect
+in a domain that has not converted, and is one in a domain that has.
+Naming the package for the technology diverges from
+`docs/convention/stack-go.md` §1, which names it for the interface;
+this records the divergence and does not change the rule, and whether
+§1 should name a path or a property is referred to the convention owner
+in #1035, as [structure.md](./structure.md) §Where the composition root
+lives refers §Project envelope in #756.
 
 A domain that persists nothing has none of the storage files above:
 `internal/machine` is its types, its service, the listener it builds,
@@ -103,7 +116,8 @@ certificate for itself.
 
 `queries.sql` and `db/` are a source and its output, not two copies. Every
 generated file says so in its first line, and `make check-gen` fails on any
-drift between them.
+drift between them. `sqlc.yaml` names where each pair lives, so a domain
+that has moved its store is read there rather than assumed.
 
 A change announcement reads no row, so it is not in `queries.sql`, and
 the two domains that use one do not raise it the same way.
@@ -387,7 +401,7 @@ composition root does.
 | Domain | Interface | postgres | memory | other |
 |--------|-----------|----------|--------|-------|
 | org | yes (`store.go`) | yes (`postgres.go` + `postgres_<concept>.go`) | not planned | — |
-| user | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
+| user | yes (`store.go`) | yes (`postgres/postgres.go`) | not planned | — |
 | authn.SessionStore | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | authn.OAuthStateStore | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | authn.PasswordCredentialStore | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
@@ -406,10 +420,12 @@ package that declares its interface rather than for the subject above
 it.
 
 The postgres implementations are written by hand against sqlc output,
-which sqlc generates from each domain's `queries.sql` into
-`internal/<domain>/db/`; the schema source is `migrations/`. Domain
-stores go straight to Postgres — no domain `memory.go` files are
-planned.
+which sqlc generates from each domain's `queries.sql`; the schema
+source is `migrations/`. A converted domain keeps both under
+`internal/<domain>/postgres/` and an unconverted one keeps them at
+`internal/<domain>/`, and `sqlc.yaml` is where each pair's path is
+declared. Domain stores go straight to Postgres — no domain `memory.go`
+files are planned.
 
 sqlc rather than an ORM, re-examined and unchanged: it parses the real
 schema and the real query at build time, so a renamed column fails the

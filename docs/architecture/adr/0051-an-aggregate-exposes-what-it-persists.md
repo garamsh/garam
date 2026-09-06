@@ -1,6 +1,7 @@
 # ADR 0051: An aggregate exposes what it persists
 
-> Status: accepted
+> Status: accepted — §Decision's first two headings are superseded by
+> [ADR-0069](./0069-the-aggregates-are-data-carriers-so-the-driver-leaves-the-domain-package.md)
 > Date: 2026-09-01
 
 Every measurement below was taken at `51ea014`. The commands are in

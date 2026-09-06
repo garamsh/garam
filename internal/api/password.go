@@ -96,7 +96,7 @@ func (s *Server) RegisterPassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	nickname := u.Nickname()
+	nickname := u.Nickname
 	writeJSON(w, http.StatusCreated, memberToAPI(m, &nickname))
 }
 
@@ -117,7 +117,7 @@ func (s *Server) LoginPassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, apigen.User{Grn: u.GRN().String(), Nickname: u.Nickname()})
+	writeJSON(w, http.StatusOK, apigen.User{Grn: u.GRN.String(), Nickname: u.Nickname})
 }
 
 // verifyPassword resolves the username to the user its password
@@ -205,7 +205,7 @@ func (s *Server) startSession(w http.ResponseWriter, r *http.Request, u *user.Us
 	if err != nil {
 		return err
 	}
-	if err := s.sessions.Create(r.Context(), token, authn.NewSession(u.GRN(), s.cfg.SessionTTL)); err != nil {
+	if err := s.sessions.Create(r.Context(), token, authn.NewSession(u.GRN, s.cfg.SessionTTL)); err != nil {
 		return err
 	}
 	s.setCookie(w, sessionCookie, token, s.cfg.SessionTTL)

@@ -52,7 +52,7 @@ func (s *Server) CreateInvitation(w http.ResponseWriter, r *http.Request, orgSlu
 		writeError(w, err)
 		return
 	}
-	inv := org.NewInvitation(token, g, role, u.GRN(), time.Now().UTC().Add(ttl))
+	inv := org.NewInvitation(token, g, role, u.GRN, time.Now().UTC().Add(ttl))
 	if err := s.orgs.CreateInvitation(r.Context(), inv); err != nil {
 		writeError(w, err)
 		return
@@ -88,15 +88,15 @@ func (s *Server) AcceptInvitation(w http.ResponseWriter, r *http.Request, token 
 	}
 	// Membership first: a duplicate membership rejects the accept
 	// without burning the invitation.
-	m := org.NewMembership(inv.Organization(), u.GRN(), inv.Role())
+	m := org.NewMembership(inv.Organization(), u.GRN, inv.Role())
 	if err := s.orgs.AddMember(r.Context(), m); err != nil {
 		writeError(w, err)
 		return
 	}
-	if _, err := s.orgs.AcceptInvitation(r.Context(), token, u.GRN()); err != nil {
+	if _, err := s.orgs.AcceptInvitation(r.Context(), token, u.GRN); err != nil {
 		writeError(w, err)
 		return
 	}
-	nickname := u.Nickname()
+	nickname := u.Nickname
 	writeJSON(w, http.StatusOK, memberToAPI(m, &nickname))
 }

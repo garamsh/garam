@@ -18,6 +18,7 @@ import (
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
 	"github.com/garamsh/garam/internal/user"
+	userpg "github.com/garamsh/garam/internal/user/postgres"
 )
 
 // The counts the preview reads are of every row the organization
@@ -71,7 +72,7 @@ func TestOrgDeletionPreview_CountsMatchWhatTheCascadeTakes(t *testing.T) {
 	agents := agent.NewPostgresStore(p)
 	operators := operator.NewPostgresStore(p)
 	consents := message.NewPostgresStore(p)
-	users := user.NewPostgresStore(p)
+	users := userpg.New(p)
 
 	orgGRN := orgRootGRN("preview-cascade")
 	otherGRN := orgRootGRN("preview-cascade-other")

@@ -34,12 +34,12 @@ func (s *Server) RegisterOperator(w http.ResponseWriter, r *http.Request, orgSlu
 		writeError(w, err)
 		return
 	}
-	o, err := operator.New(orgGRN(orgSlug), body.Identifier, u.GRN())
+	o, err := operator.New(orgGRN(orgSlug), body.Identifier, u.GRN)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	enrollment, err := operator.NewEnrollment(o.GRN(), u.GRN())
+	enrollment, err := operator.NewEnrollment(o.GRN(), u.GRN)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -85,7 +85,7 @@ func (s *Server) MintOperatorEnrollment(w http.ResponseWriter, r *http.Request, 
 		writeError(w, err)
 		return
 	}
-	enrollment, err := operator.NewEnrollment(g, u.GRN())
+	enrollment, err := operator.NewEnrollment(g, u.GRN)
 	if err != nil {
 		writeError(w, err)
 		return

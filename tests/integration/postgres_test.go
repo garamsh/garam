@@ -55,6 +55,7 @@ import (
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
 	"github.com/garamsh/garam/internal/user"
+	userpg "github.com/garamsh/garam/internal/user/postgres"
 	"github.com/garamsh/garam/internal/watch"
 	"github.com/garamsh/garam/internal/wire"
 	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
@@ -156,7 +157,7 @@ func grnOf(serviceType, id string) grn.GRN {
 
 func TestUserStore_RoundTrip(t *testing.T) {
 	ctx := context.Background()
-	s := user.NewPostgresStore(pool(t))
+	s := userpg.New(pool(t))
 
 	g := grnOf("user", "ada")
 	u := user.New(g, "ada")
@@ -164,8 +165,8 @@ func TestUserStore_RoundTrip(t *testing.T) {
 
 	got, err := s.Get(ctx, g)
 	require.NoError(t, err)
-	assert.Equal(t, g, got.GRN())
-	assert.Equal(t, "ada", got.Nickname())
+	assert.Equal(t, g, got.GRN)
+	assert.Equal(t, "ada", got.Nickname)
 
 	_, err = s.Get(ctx, grnOf("user", "nobody"))
 	assert.True(t, errorx.IsKind(err, errorx.KindNotFound))
@@ -174,7 +175,7 @@ func TestUserStore_RoundTrip(t *testing.T) {
 	byGRN, err := s.ListByGRNs(ctx, []grn.GRN{g, grnOf("user", "nobody")})
 	require.NoError(t, err)
 	require.Len(t, byGRN, 1)
-	assert.Equal(t, "ada", byGRN[0].Nickname())
+	assert.Equal(t, "ada", byGRN[0].Nickname)
 
 	byGRN, err = s.ListByGRNs(ctx, nil)
 	require.NoError(t, err)
@@ -185,8 +186,8 @@ func TestUserStore_RoundTrip(t *testing.T) {
 		Roles:    []string{"admin"},
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "ada2", updated.Nickname())
-	assert.Equal(t, []string{"admin"}, updated.Roles())
+	assert.Equal(t, "ada2", updated.Nickname)
+	assert.Equal(t, []string{"admin"}, updated.Roles)
 
 	require.NoError(t, s.Delete(ctx, g))
 	_, err = s.Get(ctx, g)
@@ -210,7 +211,7 @@ func TestUserStore_RoundTrip(t *testing.T) {
 func TestUserStore_DeleteRefusedByAReferenceIsNotAMissingRow(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	users := user.NewPostgresStore(p)
+	users := userpg.New(p)
 	orgs := org.NewPostgresStore(p)
 
 	referenced, free := grnOf("user", "ada"), grnOf("user", "bob")
@@ -236,15 +237,19 @@ func TestUserStore_DeleteRefusedByAReferenceIsNotAMissingRow(t *testing.T) {
 
 	got, err := users.Get(ctx, referenced)
 	require.NoError(t, err, "the refused delete removed nothing")
-	assert.Equal(t, "ada", got.Nickname())
+	assert.Equal(t, "ada", got.Nickname)
 }
 
-// timestamps is what an aggregate carrying both stamps surrenders. The
-// assertions below read the same whichever aggregate holds them, so
-// they are written once (ADR-0051).
-type timestamps interface {
-	CreatedAt() time.Time
-	UpdatedAt() time.Time
+// stamps is the created/updated pair an aggregate carrying both
+// surrenders. It is a value the caller reads off the aggregate rather
+// than an interface over it: an aggregate surrenders the pair as
+// exported fields (ADR-0069) or as accessors, and a field satisfies no
+// method set, so only a value serves both shapes while the domains
+// convert. The assertions below read the same whichever aggregate
+// holds them, so they are written once.
+type stamps struct {
+	created time.Time
+	updated time.Time
 }
 
 // assertInserted holds what a row a store has just written carries: a
@@ -252,22 +257,22 @@ type timestamps interface {
 // equal to it, because the constructor stamps both from one instant.
 // Postgres keeps microseconds and Go keeps nanoseconds, so the lower
 // bound is truncated to what the column can hold.
-func assertInserted(t *testing.T, a timestamps, before, after time.Time) {
+func assertInserted(t *testing.T, a stamps, before, after time.Time) {
 	t.Helper()
-	assert.WithinRange(t, a.CreatedAt(), before.Truncate(time.Microsecond), after)
-	assert.True(t, a.UpdatedAt().Equal(a.CreatedAt()),
+	assert.WithinRange(t, a.created, before.Truncate(time.Microsecond), after)
+	assert.True(t, a.updated.Equal(a.created),
 		"a row nothing has updated carries one instant in both columns")
 }
 
 // assertUpdated holds what an update leaves: created_at where the
-// insert put it, and updated_at moved past it. An accessor answering
-// with the zero time, or with the other field, fails one half or the
-// other here rather than passing quietly.
-func assertUpdated(t *testing.T, was, now timestamps) {
+// insert put it, and updated_at moved past it. A field or an accessor
+// answering with the zero time, or with the other of the two, fails
+// one half or the other here rather than passing quietly.
+func assertUpdated(t *testing.T, was, now stamps) {
 	t.Helper()
-	assert.True(t, now.CreatedAt().Equal(was.CreatedAt()),
+	assert.True(t, now.created.Equal(was.created),
 		"an update leaves created_at where the insert put it")
-	assert.True(t, now.UpdatedAt().After(was.UpdatedAt()),
+	assert.True(t, now.updated.After(was.updated),
 		"an update moves updated_at past what it was")
 }
 
@@ -279,7 +284,7 @@ func assertUpdated(t *testing.T, was, now timestamps) {
 // the aggregate can reach the value at all.
 func TestUserStore_SurrendersItsTimestamps(t *testing.T) {
 	ctx := context.Background()
-	s := user.NewPostgresStore(pool(t))
+	s := userpg.New(pool(t))
 
 	g := grnOf("user", "ada")
 	before := time.Now().UTC()
@@ -288,11 +293,13 @@ func TestUserStore_SurrendersItsTimestamps(t *testing.T) {
 
 	stored, err := s.Get(ctx, g)
 	require.NoError(t, err)
-	assertInserted(t, stored, before, after)
+	assertInserted(t, stamps{created: stored.CreatedAt, updated: stored.UpdatedAt}, before, after)
 
 	updated, err := s.Update(ctx, g, user.Patch{Nickname: ptr("ada2")})
 	require.NoError(t, err)
-	assertUpdated(t, stored, updated)
+	assertUpdated(t,
+		stamps{created: stored.CreatedAt, updated: stored.UpdatedAt},
+		stamps{created: updated.CreatedAt, updated: updated.UpdatedAt})
 }
 
 func TestOrgStore_RoundTripWithCascade(t *testing.T) {
@@ -328,7 +335,7 @@ func TestOrgStore_RoundTripWithCascade(t *testing.T) {
 	assert.Contains(t, org.ActionsFor(gotProject.Roles()), org.ActionProjectRead)
 
 	userGRN := grnOf("user", "ada")
-	require.NoError(t, user.NewPostgresStore(p).Create(ctx, user.New(userGRN, "ada")))
+	require.NoError(t, userpg.New(p).Create(ctx, user.New(userGRN, "ada")))
 	require.NoError(t, s.AddGroupMember(ctx, groupGRN, userGRN))
 	require.NoError(t, s.AddProjectMember(ctx, projectGRN, userGRN))
 
@@ -435,24 +442,30 @@ func TestOrgStore_OrgGroupAndProjectSurrenderTheirTimestamps(t *testing.T) {
 
 	storedOrg, err := s.GetOrg(ctx, orgGRN)
 	require.NoError(t, err)
-	assertInserted(t, storedOrg, before, after)
+	assertInserted(t, stamps{created: storedOrg.CreatedAt(), updated: storedOrg.UpdatedAt()}, before, after)
 	updatedOrg, err := s.UpdateOrg(ctx, orgGRN, org.Patch{Name: ptr("acme2")})
 	require.NoError(t, err)
-	assertUpdated(t, storedOrg, updatedOrg)
+	assertUpdated(t,
+		stamps{created: storedOrg.CreatedAt(), updated: storedOrg.UpdatedAt()},
+		stamps{created: updatedOrg.CreatedAt(), updated: updatedOrg.UpdatedAt()})
 
 	storedGroup, err := s.GetGroup(ctx, groupGRN)
 	require.NoError(t, err)
-	assertInserted(t, storedGroup, before, after)
+	assertInserted(t, stamps{created: storedGroup.CreatedAt(), updated: storedGroup.UpdatedAt()}, before, after)
 	updatedGroup, err := s.UpdateGroup(ctx, groupGRN, org.GroupPatch{Name: ptr("eng2")})
 	require.NoError(t, err)
-	assertUpdated(t, storedGroup, updatedGroup)
+	assertUpdated(t,
+		stamps{created: storedGroup.CreatedAt(), updated: storedGroup.UpdatedAt()},
+		stamps{created: updatedGroup.CreatedAt(), updated: updatedGroup.UpdatedAt()})
 
 	storedProject, err := s.GetProject(ctx, projectGRN)
 	require.NoError(t, err)
-	assertInserted(t, storedProject, before, after)
+	assertInserted(t, stamps{created: storedProject.CreatedAt(), updated: storedProject.UpdatedAt()}, before, after)
 	updatedProject, err := s.UpdateProject(ctx, projectGRN, org.ProjectPatch{Name: ptr("web2")})
 	require.NoError(t, err)
-	assertUpdated(t, storedProject, updatedProject)
+	assertUpdated(t,
+		stamps{created: storedProject.CreatedAt(), updated: storedProject.UpdatedAt()},
+		stamps{created: updatedProject.CreatedAt(), updated: updatedProject.UpdatedAt()})
 }
 
 func TestOrgStore_Membership(t *testing.T) {
@@ -462,7 +475,7 @@ func TestOrgStore_Membership(t *testing.T) {
 	orgGRN := grnOf("org", "acme")
 	userGRN := grnOf("user", "ada")
 
-	require.NoError(t, user.NewPostgresStore(p).Create(ctx, user.New(userGRN, "ada")))
+	require.NoError(t, userpg.New(p).Create(ctx, user.New(userGRN, "ada")))
 	require.NoError(t, s.CreateOrg(ctx, org.NewOrganization(orgGRN, "acme")))
 
 	m := org.NewMembership(orgGRN, userGRN, org.RoleOwner)
@@ -503,7 +516,7 @@ func TestOrgStore_InvitationLifecycle(t *testing.T) {
 	owner := grnOf("user", "ada")
 	invitee := grnOf("user", "bob")
 
-	users := user.NewPostgresStore(p)
+	users := userpg.New(p)
 	require.NoError(t, users.Create(ctx, user.New(owner, "ada")))
 	require.NoError(t, users.Create(ctx, user.New(invitee, "bob")))
 	require.NoError(t, s.CreateOrg(ctx, org.NewOrganization(orgGRN, "acme")))
@@ -554,7 +567,7 @@ func TestOrgStore_CreateInvitationPrunesExpiredPending(t *testing.T) {
 	owner := grnOf("user", "ada")
 	invitee := grnOf("user", "bob")
 
-	users := user.NewPostgresStore(p)
+	users := userpg.New(p)
 	require.NoError(t, users.Create(ctx, user.New(owner, "ada")))
 	require.NoError(t, users.Create(ctx, user.New(invitee, "bob")))
 	require.NoError(t, s.CreateOrg(ctx, org.NewOrganization(orgGRN, "acme")))
@@ -646,7 +659,7 @@ func TestOrgStore_GroupQueriesStayInsideTheirGroupAndOrg(t *testing.T) {
 	require.NoError(t, s.CreateGroup(ctx, org.NewGroup(opsAcme, "ops", acme, string(org.RoleMember))))
 	require.NoError(t, s.CreateGroup(ctx, org.NewGroup(engGlobex, "eng", globex, string(org.RoleMember))))
 
-	users := user.NewPostgresStore(p)
+	users := userpg.New(p)
 	ada, bob := scopedGRN("acme", "user", "ada"), scopedGRN("acme", "user", "bob")
 	require.NoError(t, users.Create(ctx, user.New(ada, "ada")))
 	require.NoError(t, users.Create(ctx, user.New(bob, "bob")))
@@ -739,7 +752,7 @@ func TestOrgStore_ProjectQueriesStayInsideTheirProjectAndOrg(t *testing.T) {
 	require.NoError(t, s.CreateProject(ctx, org.NewProject(webAcme, "web", acme, string(org.RoleMember))))
 	require.NoError(t, s.CreateProject(ctx, org.NewProject(webGlobex, "web", globex, string(org.RoleMember))))
 
-	users := user.NewPostgresStore(p)
+	users := userpg.New(p)
 	ada, bob := scopedGRN("acme", "user", "ada"), scopedGRN("acme", "user", "bob")
 	require.NoError(t, users.Create(ctx, user.New(ada, "ada")))
 	require.NoError(t, users.Create(ctx, user.New(bob, "bob")))
@@ -847,7 +860,7 @@ func grnsOf[T interface{ GRN() grn.GRN }](items []T) []grn.GRN {
 func TestSessionStore_RoundTrip(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	users := user.NewPostgresStore(p)
+	users := userpg.New(p)
 	s := authn.NewPostgresSessionStore(p)
 	userGRN := grnOf("user", "ada")
 	require.NoError(t, users.Create(ctx, user.New(userGRN, "ada")))
@@ -889,7 +902,7 @@ func TestSessionStore_RoundTrip(t *testing.T) {
 func TestSessionStore_CreatePrunesExpired(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
-	users := user.NewPostgresStore(p)
+	users := userpg.New(p)
 	s := authn.NewPostgresSessionStore(p)
 	userGRN := grnOf("user", "ada")
 	require.NoError(t, users.Create(ctx, user.New(userGRN, "ada")))

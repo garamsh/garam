@@ -2,11 +2,11 @@ version: "2"
 sql:
   - engine: postgresql
     schema: migrations/000001_init.up.sql
-    queries: internal/user/queries.sql
+    queries: internal/user/postgres/queries.sql
     gen:
       go:
         package: db
-        out: internal/user/db
+        out: internal/user/postgres/db
         sql_package: pgx/v5
   - engine: postgresql
     schema: migrations/000001_init.up.sql

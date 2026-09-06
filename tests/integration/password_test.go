@@ -19,6 +19,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/org"
 	"github.com/garamsh/garam/internal/user"
+	userpg "github.com/garamsh/garam/internal/user/postgres"
 )
 
 // The password these tests register with. It is a fixture of this file
@@ -34,7 +35,7 @@ func TestPasswordCredentialStore_RoundTrip(t *testing.T) {
 	truncate(t, p)
 	ctx := context.Background()
 
-	users := user.NewPostgresStore(p)
+	users := userpg.New(p)
 	alice := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "local-alice")
 	require.NoError(t, users.Create(ctx, user.New(alice, "alice")))
 
@@ -80,7 +81,7 @@ func TestPasswordCredentialStore_ClassifiesWhatTheSchemaRefuses(t *testing.T) {
 	truncate(t, p)
 	ctx := context.Background()
 
-	users := user.NewPostgresStore(p)
+	users := userpg.New(p)
 	alice := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "local-alice")
 	require.NoError(t, users.Create(ctx, user.New(alice, "alice")))
 
@@ -170,7 +171,7 @@ func TestRegisterPassword_ADuplicateCarriesNoneOfPostgresText(t *testing.T) {
 	truncate(t, p)
 	ctx := context.Background()
 
-	users := user.NewPostgresStore(p)
+	users := userpg.New(p)
 	orgs := org.NewPostgresStore(p)
 	owner := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "owner")
 	require.NoError(t, users.Create(ctx, user.New(owner, "Owner")))
@@ -229,7 +230,7 @@ func TestPasswordSignIn_RoundTripAgainstPostgres(t *testing.T) {
 	truncate(t, p)
 	ctx := context.Background()
 
-	users := user.NewPostgresStore(p)
+	users := userpg.New(p)
 	orgs := org.NewPostgresStore(p)
 	owner := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "owner")
 	require.NoError(t, users.Create(ctx, user.New(owner, "Owner")))

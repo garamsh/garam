@@ -104,7 +104,7 @@ func (s *Server) DefineAgent(w http.ResponseWriter, r *http.Request, orgSlug api
 		writeError(w, err)
 		return
 	}
-	d, err := agent.NewDefinition(orgGRN(orgSlug), operatorGRN, values, u.GRN())
+	d, err := agent.NewDefinition(orgGRN(orgSlug), operatorGRN, values, u.GRN)
 	if err != nil {
 		writeError(w, err)
 		return

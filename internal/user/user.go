@@ -28,26 +28,23 @@ var ErrUserNotFound = errorx.New(errorx.KindNotFound, "user not found")
 // schema in an answer a caller reads (#733).
 var ErrUserReferenced = errorx.New(errorx.KindFailedPrecondition, "user is referenced by another record")
 
-// User is a human account.
+// User is a human account. Every field is one the store writes and
+// reads back, and the aggregate holds no invariant over any of them,
+// so they are exported and whatever restores a row does it from
+// outside this package (ADR-0069).
 type User struct {
-	grn       grn.GRN
-	nickname  string
-	roles     []string
-	policies  []string
-	createdAt time.Time
-	updatedAt time.Time
+	GRN       grn.GRN
+	Nickname  string
+	Roles     []string
+	Policies  []string
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
-// New constructs a User. The optional roles are the ones granted
-// directly to the User.
+// New constructs a User, stamping CreatedAt and UpdatedAt from one
+// instant. The optional roles are the ones granted directly to the
+// User.
 func New(g grn.GRN, nickname string, roles ...string) *User {
 	now := time.Now().UTC()
-	return &User{grn: g, nickname: nickname, roles: roles, createdAt: now, updatedAt: now}
+	return &User{GRN: g, Nickname: nickname, Roles: roles, CreatedAt: now, UpdatedAt: now}
 }
-
-func (u *User) GRN() grn.GRN         { return u.grn }
-func (u *User) Nickname() string     { return u.nickname }
-func (u *User) Roles() []string      { return u.roles }
-func (u *User) Policies() []string   { return u.policies }
-func (u *User) CreatedAt() time.Time { return u.createdAt }
-func (u *User) UpdatedAt() time.Time { return u.updatedAt }

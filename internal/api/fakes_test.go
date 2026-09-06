@@ -62,7 +62,7 @@ func newFakeUserStore() *fakeUserStore {
 func (s *fakeUserStore) Create(_ context.Context, u *user.User) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if _, held := s.byID[u.GRN().String()]; held {
+	if _, held := s.byID[u.GRN.String()]; held {
 		return pgxerr.Classify(&pgconn.PgError{
 			Severity:       "ERROR",
 			Code:           "23505",
@@ -71,7 +71,7 @@ func (s *fakeUserStore) Create(_ context.Context, u *user.User) error {
 			TableName:      "users",
 		}, "create", nil, nil)
 	}
-	s.byID[u.GRN().String()] = u
+	s.byID[u.GRN.String()] = u
 	return nil
 }
 
@@ -110,7 +110,7 @@ func (s *fakeUserStore) remove(g grn.GRN) {
 func (s *fakeUserStore) grantRoles(g grn.GRN, roles ...string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.byID[g.String()] = user.New(g, s.byID[g.String()].Nickname(), roles...)
+	s.byID[g.String()] = user.New(g, s.byID[g.String()].Nickname, roles...)
 }
 
 // fakeSessionStore is an in-memory authn.SessionStore double.

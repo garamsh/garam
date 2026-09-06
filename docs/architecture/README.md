@@ -397,7 +397,9 @@ ADRs:
   — a specification states its listener's 5xx once and declares none per
   operation
 - [0051](./adr/0051-an-aggregate-exposes-what-it-persists.md) — an
-  aggregate exposes what it persists
+  aggregate exposes what it persists; its accessor and its answer for
+  the three aggregates are superseded by ADR-0069, and its ruling that
+  the `policies` field and column stay where they are still stands
 - [0052](./adr/0052-a-concern-is-owned-by-the-boundary-whose-subject-matter-it-is.md)
   — a concern is owned by the boundary whose subject matter it is, not
   by the one it was extracted from
@@ -446,8 +448,15 @@ ADRs:
   — no aggregate gains an exported restore path in order to satisfy a
   layout rule, so a domain's store stays beside its aggregate and
   ADR-0051's reserved question is answered on its own evidence or not
-  at all
+  at all; superseded by ADR-0069, which answered it on that evidence
 - [0067](./adr/0067-a-member-mints-a-second-enrollment-token-where-the-operator-holds-no-certificate.md)
   — a member mints an operator another enrollment token where it holds
   no certificate, superseding ADR-0064's open item, and the refusal
   where it holds one is where that question stays open
+- [0069](./adr/0069-the-aggregates-are-data-carriers-so-the-driver-leaves-the-domain-package.md)
+  — the aggregates are data carriers, so the driver leaves the domain
+  package: no method on one assigns a field, so the fields are exported,
+  the accessors go, and the store moves to `internal/<domain>/postgres/`
+  named for the technology it implements against. Supersedes ADR-0066
+  whole and ADR-0051 in part; `internal/user` is the pilot and the other
+  nine domains follow in their own pull requests

@@ -26,9 +26,9 @@ func (s *Server) scopedStatements(r *http.Request, orgGRN grn.GRN, m *org.Member
 	var err error
 	switch target.ServiceType {
 	case org.ServiceTypeGroup:
-		derived, err = s.groupStatements(r, target, u.GRN())
+		derived, err = s.groupStatements(r, target, u.GRN)
 	case org.ServiceTypeProject:
-		derived, err = s.projectStatements(r, target, u.GRN())
+		derived, err = s.projectStatements(r, target, u.GRN)
 	}
 	if err != nil {
 		return nil, err
@@ -40,12 +40,12 @@ func (s *Server) scopedStatements(r *http.Request, orgGRN grn.GRN, m *org.Member
 // scoped like the membership role. Unknown names grant nothing;
 // attached policies belong to the engine (ADR-0008).
 func userStatements(orgGRN grn.GRN, u *user.User) []Statement {
-	actions := org.ActionsFor(u.Roles())
+	actions := org.ActionsFor(u.Roles)
 	if len(actions) == 0 {
 		return nil
 	}
 	return []Statement{{
-		Sid:      "user-role-" + u.GRN().Identifier,
+		Sid:      "user-role-" + u.GRN.Identifier,
 		Effect:   wire.EffectAllow,
 		Action:   actions,
 		Resource: []string{orgGRN.String(), orgScope(orgGRN)},

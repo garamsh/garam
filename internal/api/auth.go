@@ -96,7 +96,7 @@ func (s *Server) OauthCallback(w http.ResponseWriter, r *http.Request, provider 
 		writeError(w, err)
 		return
 	}
-	if err := s.sessions.Create(r.Context(), token, authn.NewSession(u.GRN(), s.cfg.SessionTTL)); err != nil {
+	if err := s.sessions.Create(r.Context(), token, authn.NewSession(u.GRN, s.cfg.SessionTTL)); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -142,7 +142,7 @@ func (s *Server) Me(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, apigen.User{Grn: u.GRN().String(), Nickname: u.Nickname()})
+	writeJSON(w, http.StatusOK, apigen.User{Grn: u.GRN.String(), Nickname: u.Nickname})
 }
 
 // upsertUser returns the user for the identity, creating it on first
@@ -218,7 +218,7 @@ func PrincipalFrom(r *http.Request) *Principal {
 // identify records u as the request's principal.
 func identify(r *http.Request, u *user.User) {
 	if p := PrincipalFrom(r); p != nil {
-		p.GRN = u.GRN().String()
+		p.GRN = u.GRN.String()
 	}
 }
 

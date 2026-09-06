@@ -40,7 +40,7 @@ func (s *Server) CreateOrg(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	if err := s.orgs.AddMember(r.Context(), org.NewMembership(g, u.GRN(), org.RoleOwner)); err != nil {
+	if err := s.orgs.AddMember(r.Context(), org.NewMembership(g, u.GRN, org.RoleOwner)); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -59,7 +59,7 @@ func (s *Server) ListOrgs(w http.ResponseWriter, r *http.Request, params apigen.
 		writeError(w, err)
 		return
 	}
-	orgs, err := s.orgs.ListOrgsByMember(r.Context(), u.GRN(), f)
+	orgs, err := s.orgs.ListOrgsByMember(r.Context(), u.GRN, f)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -262,8 +262,8 @@ func (s *Server) nicknamesOf(ctx context.Context, members []*org.Membership) (ma
 	}
 	byGRN := make(map[string]*string, len(users))
 	for _, u := range users {
-		nickname := u.Nickname()
-		byGRN[u.GRN().String()] = &nickname
+		nickname := u.Nickname
+		byGRN[u.GRN.String()] = &nickname
 	}
 	return byGRN, nil
 }
@@ -287,7 +287,7 @@ func (s *Server) authorizeOn(r *http.Request, orgGRN, target grn.GRN, u *user.Us
 	if err := target.Validate(); err != nil {
 		return err
 	}
-	m, err := s.orgs.GetMember(r.Context(), orgGRN, u.GRN())
+	m, err := s.orgs.GetMember(r.Context(), orgGRN, u.GRN)
 	if errorx.IsKind(err, errorx.KindNotFound) {
 		return errorx.New(errorx.KindPermissionDenied, "not a member of this org")
 	}
@@ -298,12 +298,12 @@ func (s *Server) authorizeOn(r *http.Request, orgGRN, target grn.GRN, u *user.Us
 	if err != nil {
 		return err
 	}
-	groups, err := s.orgs.ListGroupsByMember(r.Context(), orgGRN, u.GRN())
+	groups, err := s.orgs.ListGroupsByMember(r.Context(), orgGRN, u.GRN)
 	if err != nil {
 		return err
 	}
 	allowed, err := s.evaluator.Evaluate(r.Context(), EvalInput{
-		Subject:       u.GRN(),
+		Subject:       u.GRN,
 		Object:        target,
 		Action:        action,
 		SubjectGroups: groups,

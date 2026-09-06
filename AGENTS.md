@@ -30,10 +30,11 @@ These documents assign authority to two roles. One party may hold both; the rule
   write stops and asks the PM rather than taking the next free one,
   which is the choice that collides. Reviews every pull request and is
   the only role that merges one. Merges only a branch that is zero
-  commits behind `main`, having taken the run that followed bringing it
-  up to date: `ci.yml` triggers on `pull_request` and so reads the
-  branch merged into `main` as `main` then stood, and nothing recomputes
-  that when `main` moves before the merge. One exception, stated below.
+  commits behind the pull request's base, having taken the run that
+  followed bringing it up to date: where `ci.yml` triggers, it reads
+  the branch merged into that base as the base then stood, and nothing
+  recomputes that when the base moves before the merge. One exception,
+  stated below.
   Decides the convention questions a pull request raises. Proposes a
   change to a convention rather than making it alone. Owns moving a
   pinned dependency that names no other mover. Does not implement.

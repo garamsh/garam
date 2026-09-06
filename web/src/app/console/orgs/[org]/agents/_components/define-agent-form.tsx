@@ -11,7 +11,6 @@ import { defineAgent, type DefineAgentState } from "@/features/orgs/actions";
 import {
   AGENT_VALUES_MAX_ENTRIES,
   AGENT_VALUE_MAX_BYTES,
-  SUGGESTED_VALUE_KEYS,
   parseAgentValues,
   valueBytes,
 } from "@/lib/agent-definition";
@@ -25,16 +24,14 @@ type Row = { id: number; key: string; value: string };
 
 const initialRows: Row[] = [{ id: 0, key: "", value: "" }];
 
-/** The datalist the key fields draw their suggestions from. */
-const KEY_LIST = "agent-value-keys";
-
 /**
  * Defines an agent: the operator that is to run it, and the values that
  * operator constructs it from.
  *
- * The values are a free key/value map. garam interprets no key, so this
- * form offers a few and accepts any — a fixed set of fields here would
- * decide for the operator what its payload means.
+ * The values are a free key/value map. garam interprets no key and the
+ * operator that reads one is not garam's to speak for, so this form
+ * names none and accepts any — a fixed set of fields here would decide
+ * for the operator what its payload means.
  */
 export function DefineAgentForm({ org }: { org: string }) {
   const [state, formAction, pending] = useActionState(
@@ -94,12 +91,6 @@ export function DefineAgentForm({ org }: { org: string }) {
             </p>
           </div>
 
-          <datalist id={KEY_LIST}>
-            {SUGGESTED_VALUE_KEYS.map((key) => (
-              <option key={key} value={key} />
-            ))}
-          </datalist>
-
           <ul className="flex flex-col gap-4">
             {rows.map((row, index) => {
               const bytes = valueBytes(row.value);
@@ -107,13 +98,11 @@ export function DefineAgentForm({ org }: { org: string }) {
                 <li key={row.id} className="flex flex-col gap-2 sm:flex-row">
                   <Input
                     name="key"
-                    list={KEY_LIST}
                     value={row.key}
                     onChange={(event) =>
                       update(row.id, "key", event.target.value)
                     }
                     aria-label={`Key ${index + 1}`}
-                    placeholder="model"
                     className="font-mono sm:w-56"
                   />
                   <div className="flex min-w-0 flex-1 flex-col gap-1">

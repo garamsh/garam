@@ -103,17 +103,17 @@ describe("define agent form", () => {
     ]);
   });
 
-  it("accepts a key nobody suggested, so the suggestions are not the set", async () => {
+  it("names no key of its own, and takes whichever key is typed", async () => {
     const posted = recordDefinitions();
     const user = userEvent.setup();
     render(<DefineAgentForm org="acme" />);
 
-    // The suggestions the key field offers, neither of which is used
-    // here: they are a starting point, not the set of keys accepted.
-    const suggested = Array.from(
-      document.querySelectorAll<HTMLOptionElement>("datalist option"),
-    ).map((option) => option.value);
-    expect(suggested).toEqual(["model", "system-prompt"]);
+    // The form names no key: garam interprets none, and the contract
+    // that would give one meaning belongs to an operator garam has
+    // never seen (ADR-0012). No suggestion offered, and no sample key
+    // standing in the field either.
+    expect(document.querySelectorAll("datalist option")).toHaveLength(0);
+    expect(screen.getByLabelText("Key 1")).not.toHaveAttribute("placeholder");
 
     await user.type(screen.getByLabelText("Operator"), "field-one");
     await user.type(screen.getByLabelText("Key 1"), "cluster-region");

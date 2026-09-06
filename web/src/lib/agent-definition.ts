@@ -23,12 +23,6 @@ export const AGENT_VALUE_MAX_BYTES = 4096;
 /** How long a value key is, in characters. */
 export const AGENT_KEY_MAX_LENGTH = 64;
 
-/**
- * Keys the form offers. garam interprets no key, so these are a
- * starting point and never the set a definition is limited to.
- */
-export const SUGGESTED_VALUE_KEYS = ["model", "system-prompt"] as const;
-
 /** One row of the values editor, before it is known to be a value. */
 export type ValueEntry = { key: string; value: string };
 

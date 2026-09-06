@@ -42,20 +42,37 @@ These documents assign authority to two roles. One party may hold both; the rule
 **A run that was never dispatched is an absent check, not a failed
 one.** A job that never started produced no result: it did not pass and
 it did not fail, and reading the forge's `failure` as a verdict on the
-diff attributes to the change a defect that is not in it. Where every
-job of a run shows `steps=0` and the run's annotation names the account
-rather than the diff, the PM may merge on a local run that:
+diff attributes to the change a defect that is not in it. Two states
+are that, and each is read off an artifact rather than judged:
+
+- **The run started nothing.** Every job of it shows `steps=0` and the
+  run's annotation names the account rather than the diff. Both halves
+  are read off the run.
+- **No workflow watches the base.** Every workflow that runs on
+  `pull_request` — `ci.yml` and `images.yml` — carries
+  `branches: [main]`, which selects a pull request by the branch it
+  targets, so a pull request into any other branch starts nothing. The
+  filter is read off those two files and the base off the pull request.
+
+In either state the PM may merge on a local run that:
 
 - (i) executes on a detached worktree at the pull request's head;
-- (ii) confirms the branch is zero commits behind `main`;
+- (ii) confirms the branch is zero commits behind the pull request's
+  base;
 - (iii) invokes the same entry points `.github/workflows/ci.yml`
   invokes;
 - (iv) states in the review what it did not cover.
 
-Both halves of the trigger are read off the run, and "CI is
-unavailable" is a judgement that does not reach this. The permission
-ends by itself the moment a run is dispatched, and (iv) is owed again
-by every pull request merged under it rather than settled once.
+"CI is unavailable" is a judgement and reaches neither state: where a
+`branches:` line names the base, the run it dispatched is a verdict on
+the diff until `steps=0` and the annotation are read off that run.
+Adding `dev` to those two lines is what would make a run exist for a
+pull request into `dev`, at the price of the runs the filter exists to
+exclude — the measurement the paragraph below asks of a clause of this
+shape. Each permission ends by itself, the first the moment a run is
+dispatched and the second the moment a `branches:` line names the base,
+and (iv) is owed again by every pull request merged under it rather
+than settled once.
 
 **A rule you could follow and do not is debt; a rule you cannot follow
 is a gap in the rule.** Which of the two a case is gets measured and not

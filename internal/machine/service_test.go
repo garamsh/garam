@@ -353,7 +353,8 @@ func TestService_RefusesASANThatIsNotOneWholeGRN(t *testing.T) {
 // TestService_RefusesAnExpiredCertificate holds everything but the
 // expiry still: both certificates carry the same identity and are
 // signed by the same authority, so the one that is refused is refused
-// for having run out. Expiry is the only revocation ADR-0014 leaves.
+// for having run out, which is what bounds an agent's certificate and
+// the one refusal ADR-0070 leaves untouched.
 func TestService_RefusesAnExpiredCertificate(t *testing.T) {
 	issuer := newIssuer(t)
 	svc := issuer.service()

@@ -66,8 +66,8 @@ func TestAgentState_TwoPartiesReportTwoFactsEachFencedByTheEpoch(t *testing.T) {
 	outOfBand, err := ca.NewService(ca.NewPostgresStore(p), sealer, ca.Config{})
 	require.NoError(t, err)
 	holds := scopedGRN("acme", operator.ServiceType, "one")
-	holder := machineClient(t, installed(t, outOfBand, holds))
-	sibling := machineClient(t, installed(t, outOfBand, scopedGRN("acme", operator.ServiceType, "two")))
+	holder := machineClient(t, installed(t, p, outOfBand, holds))
+	sibling := machineClient(t, installed(t, p, outOfBand, scopedGRN("acme", operator.ServiceType, "two")))
 
 	// The epoch a report carries is the one garam answered the operator
 	// with, so it is read off the create rather than assumed.

@@ -50,7 +50,7 @@ func TestAgentCertificate_TheAssignmentIsTheWholePrecondition(t *testing.T) {
 
 	outOfBand, err := ca.NewService(ca.NewPostgresStore(p), sealer, ca.Config{})
 	require.NoError(t, err)
-	holder := machineClient(t, installed(t, outOfBand, scopedGRN("acme", operator.ServiceType, "one")))
+	holder := machineClient(t, installed(t, p, outOfBand, scopedGRN("acme", operator.ServiceType, "one")))
 
 	status, body := machineRequest(t, holder, http.MethodPost, url+"/agents")
 	require.Equal(t, http.StatusCreated, status, string(body))
@@ -80,7 +80,7 @@ func TestAgentCertificate_TheAssignmentIsTheWholePrecondition(t *testing.T) {
 	// are what it admits rather than what the route answers anybody. An
 	// operator of the agent's own organization holding nothing asks and
 	// is refused.
-	stranger := machineClient(t, installed(t, outOfBand, scopedGRN("acme", operator.ServiceType, "two")))
+	stranger := machineClient(t, installed(t, p, outOfBand, scopedGRN("acme", operator.ServiceType, "two")))
 	status, body = machineRequest(t, stranger, http.MethodPost, url+"/agents/"+created.Grn+"/certificate")
 	assert.Equal(t, http.StatusForbidden, status, string(body))
 	assert.Contains(t, string(body), `"kind":"permission_denied"`)
@@ -89,7 +89,7 @@ func TestAgentCertificate_TheAssignmentIsTheWholePrecondition(t *testing.T) {
 	// whole life ahead of it is refused as too early on the route that
 	// has a window — the refusal the agent route above would have
 	// carried if it had one, from the same process a moment later.
-	tooEarly := machineClient(t, installed(t,
+	tooEarly := machineClient(t, installed(t, p,
 		aged(t, p, sealer, time.Hour, time.Now()), scopedGRN("acme", operator.ServiceType, "three")))
 	status, body = renew(t, tooEarly, url)
 	assert.Equal(t, http.StatusConflict, status, string(body))
@@ -99,7 +99,7 @@ func TestAgentCertificate_TheAssignmentIsTheWholePrecondition(t *testing.T) {
 	// certificate is inside the window, so this one is replaced — and
 	// the certificate it replaced asks again and is refused as
 	// superseded, where the agent's fourth call above was answered.
-	inWindow := machineClient(t, installed(t,
+	inWindow := machineClient(t, installed(t, p,
 		aged(t, p, sealer, time.Hour, time.Now().Add(-45*time.Minute)), scopedGRN("acme", operator.ServiceType, "four")))
 	status, body = renew(t, inWindow, url)
 	require.Equal(t, http.StatusCreated, status, string(body))

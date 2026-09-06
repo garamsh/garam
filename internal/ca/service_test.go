@@ -439,9 +439,10 @@ func TestService_CertificateLifetimeCarriesJitter(t *testing.T) {
 }
 
 // TestNewService_RefusesALifetimeOutsideTheBounds covers the parameter
-// that is the revocation mechanism: expiry is all there is (ADR-0014),
-// so a lifetime long enough to defeat it, or short enough to expire
-// before the certificate is installed, fails construction.
+// that bounds a certificate nobody withdraws: expiry is all an agent's
+// has (ADR-0014), so a lifetime long enough to defeat it, or short
+// enough to expire before the certificate is installed, fails
+// construction.
 func TestNewService_RefusesALifetimeOutsideTheBounds(t *testing.T) {
 	tests := map[string]time.Duration{
 		"a nanosecond":          time.Nanosecond,

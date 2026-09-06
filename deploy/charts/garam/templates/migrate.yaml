@@ -23,11 +23,10 @@ spec:
       restartPolicy: Never
 {{- include "garam.serviceAccountName" (dict "root" $ "component" "migrate") }}
 {{- include "garam.imagePullSecrets" . }}
-      # 10001 is the account deploy/local/Dockerfile creates.
-{{- include "garam.podSecurityContext" (dict "uid" 10001) }}
+{{- include "garam.podSecurityContext" (dict "root" $ "name" "server") }}
       containers:
         - name: migrate
-          image: {{ include "garam.serverImage" . }}
+          image: {{ include "garam.image" (dict "root" $ "name" "server") }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           args: ["migrate"]
 {{- include "garam.containerSecurityContext" . }}

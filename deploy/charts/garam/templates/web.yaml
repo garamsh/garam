@@ -29,11 +29,10 @@ spec:
     spec:
 {{- include "garam.serviceAccountName" (dict "root" $ "component" "web") }}
 {{- include "garam.imagePullSecrets" . }}
-      # 1000 is the account the base image deploy/local/Dockerfile.web builds on carries as `node`.
-{{- include "garam.podSecurityContext" (dict "uid" 1000) }}
+{{- include "garam.podSecurityContext" (dict "root" $ "name" "web") }}
       containers:
         - name: web
-          image: {{ include "garam.webImage" . }}
+          image: {{ include "garam.image" (dict "root" $ "name" "web") }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
 {{- include "garam.containerSecurityContext" . }}
           env:

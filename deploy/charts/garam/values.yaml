@@ -24,12 +24,33 @@ image:
   # be emptied: an empty one renders `image: :<tag>`, which no registry
   # resolves and `helm lint` accepts, so the render refuses it as it
   # refuses a missing tag.
+  #
+  # A digest is optional and renders after the tag, never in place of
+  # it, so the tag goes on naming the version and the digest decides
+  # which bytes that name resolves to — see the README, §Pinning a
+  # version.
+  #
+  # `runAsUser` and `runAsGroup` are the account the image declares,
+  # written as numbers because a kubelet resolves a name to none. They
+  # sit under the image rather than under a workload because the
+  # account is the image's: four of the five workloads run the server
+  # image, so a deployment running it under another account moves one
+  # pair rather than four.
   server:
     repository: 486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam/garam-server
     tag: ""
+    digest: ""
+    # `USER garam`, the uid and gid deploy/local/Dockerfile creates.
+    runAsUser: 10001
+    runAsGroup: 10001
   web:
     repository: 486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam/garam-web
     tag: ""
+    digest: ""
+    # `USER node`, the uid and gid the node base image carries
+    # (deploy/local/Dockerfile.web).
+    runAsUser: 1000
+    runAsGroup: 1000
   pullPolicy: IfNotPresent
   # Secret names, never a credential. How a node obtains the one ECR
   # requires is the deployment's to decide.
@@ -76,18 +97,28 @@ machine:
     name: ""
     create: false
     annotations: {}
-  # The Secret holding the listener's certificate and key, the garam
-  # server root that signed them, and the key-encryption key, and the
-  # key each is under. The chart generates none of them: a regenerated
-  # key-encryption key opens no certificate authority already sealed
-  # (ADR-0016), and one authority signs the pair and nothing else
-  # (ADR-0040).
+  # The listener's certificate and key, the garam server root that
+  # signed them, and the key-encryption key: the Secret each is read
+  # from and the key it is under. The chart generates none of them: a
+  # regenerated key-encryption key opens no certificate authority
+  # already sealed (ADR-0016), and one authority signs the pair and
+  # nothing else (ADR-0040).
+  #
+  # `secretName` is where a file is read from unless that file names a
+  # Secret of its own. What issues the pair and what holds the
+  # key-encryption key are different systems, and one Secret carrying
+  # all four is a layout rather than a requirement — see the README,
+  # §Key material and secrets.
   keyMaterial:
     secretName: ""
     certKey: tls.crt
+    certSecretName: ""
     keyKey: tls.key
+    keySecretName: ""
     serverRootKey: server-root.pem
+    serverRootSecretName: ""
     kekKey: ca-kek.hex
+    kekSecretName: ""
   # How long a certificate garam signs for an agent or an operator
   # lives. Expiry is the only revocation garam has, so this is the
   # window a stolen certificate stays usable in; the binary refuses the

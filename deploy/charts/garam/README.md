@@ -190,9 +190,9 @@ fails without them:
   written against once the next one lands, with nothing in the chart
   changed to say so.
 - `database.secretName` — the Secret holding `GARAM_DATABASE_URL`.
-- `machine.keyMaterial.secretName` — the Secret holding the machine
-  listener's certificate and key, the garam server root that signed
-  them, and the key-encryption key.
+- `machine.keyMaterial.secretName` — the Secret each of the machine
+  listener's four key-material files is read from, less whichever of
+  them names a Secret of its own (§Key material and secrets).
 - `web.apiUrl` — the address the web process reaches `serve api` on,
   baked into the image at build time as the `/api/*` rewrite target and
   read again at runtime by every server-side render
@@ -201,6 +201,16 @@ fails without them:
   starts and answers both probes, `/` and the rewrite keep serving, and
   every server-rendered route answers 500: `web/src/env.ts` parses at
   import, and only the routes reaching the backend import it.
+
+**Each image carries the account it declares**, as `runAsUser` and
+`runAsGroup` under `image.server` and under `image.web`. The defaults
+are what the two Dockerfiles build — 10001 for the server image, 1000
+for the web image's `node` — and a deployment running either under
+another account moves the pair there rather than one pair per
+workload, because four of the five workloads run the server image. The
+machine pod takes the server pair for its `fsGroup` as well: the copy
+its init container makes has to be owned by the UID the container
+beside it reads under (§Key material and secrets).
 
 Setting any one `api.google` value makes the rest required — the guard
 is on the set, not on `clientId`, so omitting any one of them refuses
@@ -307,20 +317,35 @@ Key material reaches a process as a file readable only by its owner
 projection satisfies neither half of that rule
 (`docs/architecture/deployment-contract.md` §What the binary enforces
 about key material). `templates/machine.yaml` renders the shape that
-does satisfy it: an initContainer running as UID 10001 copies the
-projected Secret with `install -m 0600` onto a memory-backed
-`emptyDir`. The Secret is projected `0440`, so `fsGroup: 10001` is what
-gives that copy a group it can read the source under. The `emptyDir` it
-writes to is world-writable with or without `fsGroup`, so the write is
-not what the setting buys (measured 2026-08-26 on Kubernetes v1.36.3;
-this repository pins no Kubernetes version).
+does satisfy it: an initContainer running as `image.server.runAsUser`
+copies the projected volume with `install -m 0600` onto a memory-backed
+`emptyDir`. That volume is projected `0440`, so the pod's `fsGroup` —
+`image.server.runAsGroup`, the same account — is what gives the copy a
+group it can read the source under. The `emptyDir` it writes to is
+world-writable with or without `fsGroup`, so the write is not what the
+setting buys (measured 2026-08-26 on Kubernetes v1.36.3; this
+repository pins no Kubernetes version).
 
-The Secret holds four files, and `machine.keyMaterial` names the key
-each is under: the listener's certificate and key, the garam server root
-that signed them and that every identity garam issues to pins garam by,
-and the key-encryption key. One authority signs that pair and nothing
-else, so an issuer that also signs other workloads must not mint it
-(ADR-0040).
+Four files reach the process, and `machine.keyMaterial` names the
+Secret each is read from and the key it is under: the listener's
+certificate and key, the garam server root that signed them and that
+every identity garam issues to pins garam by, and the key-encryption
+key. One authority signs that pair and nothing else, so an issuer that
+also signs other workloads must not mint it (ADR-0040).
+
+**The four need not sit in one Secret.** A file takes
+`machine.keyMaterial.secretName` unless it names its own —
+`certSecretName`, `keySecretName`, `serverRootSecretName`,
+`kekSecretName` — and the pod projects each named key, from the Secret
+holding it, into one directory: that key alone, so nothing else the
+Secret carries is projected. Two Secrets is the layout of the one
+deployment this chart has been rendered against (#1093): what issues
+the listener's pair and what holds the key-encryption key are
+different systems there. Moving the key-encryption key into the issued
+Secret to fit one name would change how every organization's authority
+is sealed, which is not a packaging decision to take
+(`docs/architecture/deployment-contract.md` §The key-encryption key
+cannot be regenerated).
 
 **The copy is made once, and rotation is the deployment's other half.**
 The listener re-reads its certificate and key on every handshake, so a
@@ -360,6 +385,15 @@ that tag with the `v` dropped; one commit publishes both images under
 one version, so a deployment pins one version across the pair
 (ADR-0039). The tags are immutable, so the tag answers what is deployed
 on its own.
+
+**A digest is optional and names the bytes.** `image.server.digest` and
+`image.web.digest` render after the tag rather than in place of it —
+`repository:tag@digest`, the form a kubelet resolves by digest — so the
+tag goes on naming the version a deployment chose and the two are one
+value a reader holds in one place. Against the two repositories above
+it restates what an immutable tag already fixes; what it is for is an
+image mirrored into a registry that is not, and a deployment whose
+policy is that a reference names bytes.
 
 A deployment must be able to pull both references, and how it does that
 is not garam's to decide: the registry admits no anonymous pull and the
@@ -520,6 +554,11 @@ Two things sit outside any of them:
   whether the name it sets is the one its infrastructure repository
   binds a role to. That agreement is the contract §Workload identities
   states and no check in this repository can reach.
+- A digest a deployment sets is a value no check here reads. Nothing
+  pairs it with the tag beside it either: which digest a tag resolves
+  to is the registry's fact and no target opens a registry, so a pair
+  naming two different images renders, pulls the digest, and leaves the
+  tag naming a version that is not running.
 - `web.apiUrl` must equal the value the web image was built with, and
   nothing here can check it: the rewrite target is baked in at build
   time, so the value is the image's and no render holds it.
@@ -528,6 +567,25 @@ Two things sit outside any of them:
   outside it.
 
 ## What it is not
+
+**It renders nothing that refreshes the key-material copy.** §Key
+material and secrets states what a deployment adds and what that
+addition owes. Rendering it here would move an obligation
+`docs/architecture/deployment-contract.md` §What the binary enforces
+about key material places on the deployment, and what a refresher
+reads, how often, and what it does with a renewed pair that does not
+chain to the root already loaded are decisions rather than packaging.
+#1093 carries the case for taking them; until they are taken, rotation
+under this chart alone is a pod restart and no value here changes that.
+
+**It offers no Secret reference for `api.google.clientId`.** The client
+identifier is not a credential — `client_id` is a parameter of the
+authorization request the browser is redirected to (RFC 6749 §4.1.1) —
+so the chart renders it as a literal beside `redirectUrl`, and only
+the client secret is a Secret reference. A deployment holding the
+identifier in a Secret today supplies it here as a value instead,
+where it lands in that deployment's values file beside every Service
+and Secret name the chart already asks for.
 
 `deploy/local/` is untouched by this chart and is not derived from it.
 The compose stack and the minikube manifests there are development

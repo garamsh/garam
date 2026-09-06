@@ -1,23 +1,29 @@
-# The configuration the minimal file leaves out — Google sign-in, and an
-# account created and annotated for every workload, two of the branches
-# in the templates — so the render `make chart` checks covers both sides
-# of each. The minimal file covers the other side of the second: no
-# name, so no account and no binding.
+# The configuration the minimal file leaves out — Google sign-in, an
+# account created and annotated for every workload, an image pinned by
+# digest as well as by tag, and key material split across two Secrets,
+# the four branches in the templates — so the render `make chart`
+# checks covers both sides of each. The minimal file covers the other
+# side of each: no name, so no account and no binding; no digest; and
+# one Secret holding all four files.
 #
 # `resources` is set nowhere here. No template branches on it, so a
 # value covers nothing, and `helm package` ships this file inside the
 # chart, where a quantity reads as a figure garam measured. None is
 # (`docs/architecture/deployment-contract.md` §Not established).
 #
-# Each name and annotation below is a fixture. A deployment's names are
-# whatever its own infrastructure repository binds a role to, and which
-# key performs the binding is that deployment's platform's; the chart
-# holds neither.
+# Each name, annotation and digest below is a fixture. A deployment's
+# names are whatever its own infrastructure repository binds a role to,
+# and which key performs the binding is that deployment's platform's;
+# the chart holds neither. Neither digest resolves anywhere either:
+# what a render reads is that one follows the tag, and no check here
+# pulls an image.
 image:
   server:
     tag: "0.0.0-ci"
+    digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"
   web:
     tag: "0.0.0-ci"
+    digest: "sha256:1111111111111111111111111111111111111111111111111111111111111111"
   pullPolicy: Always
   pullSecrets:
     - garam-registry
@@ -50,12 +56,15 @@ machine:
     create: true
     annotations:
       eks.amazonaws.com/role-arn: arn:aws:iam::000000000000:role/garam-ci-machine
+  # The split layout: three files from the Secret an issuer writes and
+  # the key-encryption key from the one that holds it alone.
   keyMaterial:
     secretName: garam-machine-key-material
     certKey: tls.crt
     keyKey: tls.key
     serverRootKey: server-root.pem
     kekKey: ca-kek.hex
+    kekSecretName: garam-machine-ca-kek
   certificateLifetime: 1h
 web:
   serviceAccount:

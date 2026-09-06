@@ -11,6 +11,7 @@ import (
 
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/ca"
+	capg "github.com/garamsh/garam/internal/ca/postgres"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
@@ -85,7 +86,7 @@ func issueCertificate(cmd *cobra.Command, subjectRaw, outDir string) error {
 	if err != nil {
 		return err
 	}
-	issuer, err := ca.NewService(ca.NewPostgresStore(pool), sealer, ca.Config{CertificateLifetime: lifetime})
+	issuer, err := ca.NewService(capg.New(pool), sealer, ca.Config{CertificateLifetime: lifetime})
 	if err != nil {
 		return err
 	}

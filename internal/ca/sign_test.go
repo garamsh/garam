@@ -116,7 +116,7 @@ func TestService_SignRefusesARequestThatProvesNothing(t *testing.T) {
 	unsigned := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: block.Bytes})
 
 	wrongCurve, _ := certificateRequest(t, elliptic.P384(), nil)
-	certificatePEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: authority.Certificate()})
+	certificatePEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: authority.Certificate})
 
 	tests := map[string][]byte{
 		"a request whose signature does not verify": unsigned,

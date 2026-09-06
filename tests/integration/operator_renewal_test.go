@@ -19,6 +19,7 @@ import (
 
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/ca"
+	capg "github.com/garamsh/garam/internal/ca/postgres"
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
 )
@@ -47,7 +48,7 @@ func keyEncryptionKey(t *testing.T) (string, ca.Sealer) {
 // course.
 func aged(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer, lifetime time.Duration, issuedAt time.Time) ca.Service {
 	t.Helper()
-	issuer, err := ca.NewService(ca.NewPostgresStore(p), sealer, ca.Config{
+	issuer, err := ca.NewService(capg.New(p), sealer, ca.Config{
 		CertificateLifetime: lifetime,
 		Now:                 func() time.Time { return issuedAt },
 	})

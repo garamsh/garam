@@ -77,11 +77,11 @@ Each domain's package contains:
 - `mocks/` — mockery v3 output, generated from the interfaces
   `.mockery.yaml` names.
 
-**Only `internal/user` has this shape today.** The other nine keep
-`queries.sql`, `postgres.go` and `db/` directly under the domain, and
-each moves in its own pull request following #1083. Until then
-`ls internal/*/postgres/` names the converted domains and the shape
-above describes one of ten.
+**Two of the ten have this shape today: `internal/user` and
+`internal/ca`.** The other eight keep `queries.sql`, `postgres.go` and
+`db/` directly under the domain, and each moves in its own pull request
+following #1083. Until then `ls internal/*/postgres/` names the
+converted domains and the shape above describes two of ten.
 
 A store splits into `postgres_<concept>.go` files beside `postgres.go`,
 inside the same package, when one Postgres type carries the methods of
@@ -408,7 +408,7 @@ composition root does.
 | operator.Store | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | operator.CertificateStore | yes (`store.go`) | yes (`postgres_certificate.go`) | not planned | — |
 | agent | yes (`store.go`) | yes (`postgres.go` + `postgres_<concept>.go`) | not planned | — |
-| ca | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
+| ca | yes (`store.go`) | yes (`postgres/postgres.go`) | not planned | — |
 | message.Store | yes (`store.go`) | yes (`postgres.go`) | not planned | — |
 | message.ConsentStore | yes (`consent.go`) | yes (`postgres_consent.go`) | not planned | — |
 | watch | yes (`store.go`) | yes (`postgres.go`) | not planned | — |

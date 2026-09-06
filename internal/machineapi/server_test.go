@@ -120,10 +120,10 @@ func (s *agentService) ReportRuntimeState(_ context.Context, caller, agentGRN gr
 type authorities map[grn.GRN]*ca.Authority
 
 func (a authorities) Create(_ context.Context, authority *ca.Authority) error {
-	if _, held := a[authority.Organization()]; held {
+	if _, held := a[authority.Organization]; held {
 		return ca.ErrAuthorityAlreadyExists
 	}
-	a[authority.Organization()] = authority
+	a[authority.Organization] = authority
 	return nil
 }
 
@@ -154,7 +154,7 @@ func (r trustRoots) Get(ctx context.Context, subject grn.GRN) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return authority.Certificate(), nil
+	return authority.Certificate, nil
 }
 
 // memberGroups is the machineapi.Groups seam in memory: which groups

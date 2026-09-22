@@ -15,7 +15,7 @@ services:
     # and the dev cluster in garamsh/gitops — read there on 2026-08-26 —
     # run that same major, so a bump crossing it lands at all three sites
     # or at none.
-    image: postgres:17.11-alpine3.24@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
+    image: postgres:18.4-alpine3.24@sha256:9a8afca54e7861fd90fab5fdf4c42477a6b1cb7d293595148e674e0a3181de15
     environment:
       POSTGRES_USER: garam
       POSTGRES_PASSWORD: garam

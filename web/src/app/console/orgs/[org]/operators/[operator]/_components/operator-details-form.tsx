@@ -94,7 +94,7 @@ export function OperatorDetailsForm({
         <Button
           type="submit"
           variant="outline"
-          disabled={pending || problem !== null}
+          disabled={!hydrated || pending || problem !== null}
         >
           {pending ? "Saving…" : "Save details"}
         </Button>

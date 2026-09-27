@@ -133,7 +133,10 @@ export function RegisterOperatorForm({ org }: { org: string }) {
         )}
 
         <div>
-          <Button type="submit" disabled={pending || problem !== null}>
+          <Button
+            type="submit"
+            disabled={!hydrated || pending || problem !== null}
+          >
             {pending ? "Registering…" : "Register operator"}
           </Button>
         </div>

@@ -92,6 +92,11 @@ func TestOperatorUpdateDetails_MovesNothingTheOperatorAuthenticatesOrEnrolsBy(t 
 	assert.Equal(t, tokenHash,
 		rowOf(t, p, `SELECT token_hash FROM operator_enrollment_tokens WHERE operator_grn = $1`, pending))
 	enrol(t, url, pendingToken)
+
+	// The control for the refusal above: the other operator, which no
+	// definition names, is deleted by the same store, so what refused
+	// the first is its definition and not a delete refused for all.
+	require.NoError(t, store.Delete(ctx, pending))
 }
 
 // TestOperatorUpdateDetails_ReachesOneOrganizationsRecord covers the

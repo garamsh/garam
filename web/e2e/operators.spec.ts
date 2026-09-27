@@ -119,6 +119,29 @@ test.describe("operators", () => {
       page.getByText("an agent definition names this operator"),
     ).toBeVisible();
     await expect(page).toHaveURL(`${operators}/field-two`);
+
+    // The control: the seeded operator, which no definition names, is
+    // deleted by the same controls, so what refused the one above is
+    // its definition and not a delete that is refused for everyone.
+    await page.goto(`${operators}/${signedIn.operatorIdentifier}`);
+    await expect(
+      page.getByText("No agent definition names this operator.", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Delete operator", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Confirm deletion", exact: true })
+      .click();
+    await expect(page).toHaveURL(operators);
+    await expect(
+      page.getByRole("link", { name: signedIn.operatorName, exact: true }),
+    ).toBeHidden();
+    await expect(
+      page.getByRole("link", { name: "Staging cluster", exact: true }),
+    ).toBeVisible();
   });
 
   test("opens, renames and deletes an operator registered as new", async ({
@@ -167,33 +190,6 @@ test.describe("operators", () => {
     // above is the delete and not an empty page.
     await expect(
       page.getByRole("link", { name: signedIn.operatorName, exact: true }),
-    ).toBeVisible();
-  });
-
-  test("deletes an operator no definition names and returns to the list", async ({
-    page,
-    signedIn,
-  }) => {
-    const operators = `/console/orgs/${signedIn.orgSlug}/operators`;
-    await page.goto(`${operators}/${signedIn.operatorIdentifier}`);
-    await expect(
-      page.getByText("No agent definition names this operator.", {
-        exact: true,
-      }),
-    ).toBeVisible();
-
-    await page
-      .getByRole("button", { name: "Delete operator", exact: true })
-      .click();
-    await page
-      .getByRole("button", { name: "Confirm deletion", exact: true })
-      .click();
-
-    await expect(page).toHaveURL(operators);
-    await expect(
-      page.getByText("This organization has registered no operators.", {
-        exact: true,
-      }),
     ).toBeVisible();
   });
 });

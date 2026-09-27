@@ -227,7 +227,10 @@ export function DefineAgentForm({
         )}
 
         <div>
-          <Button type="submit" disabled={pending || problem !== null}>
+          <Button
+            type="submit"
+            disabled={!hydrated || pending || problem !== null}
+          >
             {pending ? "Defining…" : "Define agent"}
           </Button>
         </div>

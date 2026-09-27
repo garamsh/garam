@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { renderToString } from "react-dom/server";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
@@ -30,6 +31,30 @@ function recordDefinitions() {
 }
 
 describe("define agent form", () => {
+  it("submits nothing before hydration: the server render disables Define agent", () => {
+    // A form submitted before React hydrates posts fields React never
+    // held, so the button waits with the fields it submits.
+    const server = document.createElement("div");
+    server.innerHTML = renderToString(
+      <DefineAgentForm
+        org="acme"
+        operators={[{ identifier: "field-one", name: "Field one" }]}
+      />,
+    );
+    expect(
+      server.querySelector('button[type="submit"]')?.hasAttribute("disabled"),
+    ).toBe(true);
+
+    // The control: rendered in the browser, the same button is enabled.
+    render(
+      <DefineAgentForm
+        org="acme"
+        operators={[{ identifier: "field-one", name: "Field one" }]}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Define agent" })).toBeEnabled();
+  });
+
   it("chooses the operator by name and posts the identifier beside it", async () => {
     const posted = recordDefinitions();
     const user = userEvent.setup();

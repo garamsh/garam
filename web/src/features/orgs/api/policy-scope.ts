@@ -12,12 +12,15 @@ import { slugFromGrn } from "../grn";
 import { PolicyAttachmentParser, PolicyParser } from "./policies";
 
 /**
- * Whether a lifecycle write may go ahead: it may, it waits for the
- * organization-wide confirmation, or reading the scope failed.
+ * Whether a lifecycle write may go ahead: it may; it waits for the
+ * confirmation because the policy has no attachment, or because garam
+ * refused to list its attachments and the scope is unknown; or reading
+ * the scope failed.
  */
 export type ScopeCheck =
   | { status: "proceed" }
-  | { status: "confirm" }
+  | { status: "confirm-org-wide" }
+  | { status: "confirm-unknown-scope" }
   | { status: "error"; message: string };
 
 /**
@@ -26,8 +29,10 @@ export type ScopeCheck =
  * organization-wide confirmation it was not given. A policy with no
  * attachment applies to every subject (`docs/architecture/authz.md`
  * §Policy attachment), so the scope is read here rather than taken
- * from a page that may be stale; a list garam refuses shows no
- * subject and counts as organization-wide.
+ * from a page that may be stale. A list garam refuses is not an empty
+ * one: its scope is unknown, and it is confirmed as possibly reaching
+ * everyone. The read and the write are two requests with no condition
+ * joining them, so an attachment removed between the two is not seen.
  */
 export async function checkOrgWideScope(
   org: string,
@@ -55,10 +60,10 @@ export async function checkOrgWideScope(
     );
     return attachments.length > 0
       ? { status: "proceed" }
-      : { status: "confirm" };
+      : { status: "confirm-org-wide" };
   } catch (error) {
     if (error instanceof GaramApiError && error.status === 403) {
-      return { status: "confirm" };
+      return { status: "confirm-unknown-scope" };
     }
     if (
       error instanceof GaramApiError ||

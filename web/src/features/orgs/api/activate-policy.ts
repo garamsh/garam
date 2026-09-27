@@ -14,13 +14,14 @@ import { checkOrgWideScope } from "./policy-scope";
 
 /**
  * What an activation control has to show: nothing yet, a refusal, or
- * that the policy has no attachment and the organization-wide
- * application was not confirmed.
+ * that the confirmation is missing — because the policy has no
+ * attachment, or because its attachments are not listed to the caller.
  */
 export type ActivatePolicyState =
   | { status: "idle" }
   | { status: "error"; message: string }
-  | { status: "confirm-org-wide" };
+  | { status: "confirm-org-wide" }
+  | { status: "confirm-unknown-scope" };
 
 const Schema = z.object({
   org: z.string().min(1),
@@ -31,8 +32,8 @@ const Schema = z.object({
 /**
  * Activates a draft or archived policy, so its default version takes
  * part in every check its scope reaches. With no attachment that scope
- * is the whole organization, and the activation waits until the form
- * confirms it.
+ * is the whole organization, and with attachments garam will not list
+ * it may be; either way the activation waits until the form confirms.
  */
 export async function activatePolicy(
   _state: ActivatePolicyState,
@@ -53,9 +54,9 @@ export async function activatePolicy(
     onlyIfActive: false,
   });
   if (scope.status === "error") return scope;
-  if (scope.status === "confirm") {
+  if (scope.status !== "proceed") {
     revalidatePath(`/console/orgs/${org}/permissions`, "layout");
-    return { status: "confirm-org-wide" };
+    return scope;
   }
   try {
     await garamFetchAuthenticated(

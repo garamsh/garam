@@ -33,6 +33,7 @@ describe("activate policy form", () => {
         version={1}
         reach={EVERYONE}
         orgWide
+        conditioned={false}
       />,
     );
 
@@ -62,6 +63,7 @@ describe("activate policy form", () => {
         version={1}
         reach="Applies to Engineering (Team)."
         orgWide={false}
+        conditioned={false}
       />,
     );
 
@@ -71,6 +73,34 @@ describe("activate policy form", () => {
     expect(
       screen.getByRole("button", { name: "Activate" }),
     ).toBeInTheDocument();
+  });
+});
+
+describe("confirmations and Conditions", () => {
+  it("says the version to evaluate carries a Condition that restricts nothing", async () => {
+    const user = userEvent.setup();
+    const props = {
+      org: "acme",
+      policy: "d1e2f3a4b5c6d7e8",
+      current: 1,
+      target: 2,
+      active: true,
+      reach: "Applies to Engineering (Team).",
+      orgWide: false,
+    };
+    // The control: without a Condition, the confirmation carries no
+    // such notice.
+    const plain = render(<MakeDefaultForm {...props} conditioned={false} />);
+    await user.click(screen.getByRole("button", { name: "Make default" }));
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
+    plain.unmount();
+
+    render(<MakeDefaultForm {...props} conditioned />);
+    await user.click(screen.getByRole("button", { name: "Make default" }));
+
+    expect(screen.getByRole("note")).toHaveTextContent(
+      "This document has a Condition. garam does not evaluate Conditions, so the statement applies without it.",
+    );
   });
 });
 
@@ -94,6 +124,7 @@ describe("make default form", () => {
         active
         reach="Applies to Engineering (Team)."
         orgWide={false}
+        conditioned={false}
       />,
     );
 
@@ -121,6 +152,7 @@ describe("make default form", () => {
         active
         reach={EVERYONE}
         orgWide
+        conditioned={false}
       />,
     );
     await user.click(screen.getByRole("button", { name: "Make default" }));
@@ -142,6 +174,7 @@ describe("make default form", () => {
         active={false}
         reach={EVERYONE}
         orgWide
+        conditioned={false}
       />,
     );
     await user.click(screen.getByRole("button", { name: "Make default" }));

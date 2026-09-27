@@ -15,13 +15,14 @@ import { checkOrgWideScope } from "./policy-scope";
 
 /**
  * What a make-default control has to show: nothing yet, a refusal, or
- * that the policy is active with no attachment and the
- * organization-wide application was not confirmed.
+ * that the policy is active and the confirmation is missing — because
+ * it has no attachment, or because its attachments are not listed.
  */
 export type RollbackPolicyState =
   | { status: "idle" }
   | { status: "error"; message: string }
-  | { status: "confirm-org-wide" };
+  | { status: "confirm-org-wide" }
+  | { status: "confirm-unknown-scope" };
 
 const Schema = z.object({
   org: z.string().min(1),
@@ -34,8 +35,9 @@ const Schema = z.object({
  * Makes one stored version the policy's default — the one it evaluates
  * while active. The operation is garam's rollback, which accepts any
  * stored version, older or newer (ADR-0073). An active policy with no
- * attachment evaluates it for the whole organization, so the change
- * waits until the form confirms that.
+ * attachment evaluates it for the whole organization, and one whose
+ * attachments are not listed may, so the change waits until the form
+ * confirms that.
  */
 export async function rollbackPolicy(
   _state: RollbackPolicyState,
@@ -57,9 +59,9 @@ export async function rollbackPolicy(
     onlyIfActive: true,
   });
   if (scope.status === "error") return scope;
-  if (scope.status === "confirm") {
+  if (scope.status !== "proceed") {
     revalidatePath(`/console/orgs/${org}/permissions`, "layout");
-    return { status: "confirm-org-wide" };
+    return scope;
   }
   try {
     await garamFetchAuthenticated(

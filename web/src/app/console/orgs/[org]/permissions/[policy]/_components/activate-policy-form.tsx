@@ -8,7 +8,11 @@ import {
   type ActivatePolicyState,
 } from "@/features/orgs/actions";
 
-import { OrgWideConfirmation } from "../../_components/org-wide-confirmation";
+import { ConditionNotice } from "../../_components/condition-notice";
+import {
+  OrgWideConfirmation,
+  ScopeConfirmationNotice,
+} from "../../_components/org-wide-confirmation";
 
 const initialState: ActivatePolicyState = { status: "idle" };
 
@@ -26,6 +30,7 @@ export function ActivatePolicyForm({
   version,
   reach,
   orgWide,
+  conditioned,
 }: {
   org: string;
   policy: string;
@@ -35,13 +40,18 @@ export function ActivatePolicyForm({
   reach: string;
   /** Whether that may be everyone in this organization. */
   orgWide: boolean;
+  /** Whether the version it would evaluate carries a Condition. */
+  conditioned: boolean;
 }) {
   const [state, formAction, pending] = useActionState(
     activatePolicy,
     initialState,
   );
   const [confirming, setConfirming] = useState(false);
-  const needsConfirmation = orgWide || state.status === "confirm-org-wide";
+  const needsConfirmation =
+    orgWide ||
+    state.status === "confirm-org-wide" ||
+    state.status === "confirm-unknown-scope";
 
   return (
     <div className="flex flex-col gap-2">
@@ -52,12 +62,8 @@ export function ActivatePolicyForm({
           <p className="text-sm">
             Activate {policyName} with version {version}? {reach}
           </p>
-          {state.status === "confirm-org-wide" && (
-            <p role="alert" className="text-sm text-destructive">
-              It has no attachments now, so it would apply to everyone in this
-              organization.
-            </p>
-          )}
+          {conditioned && <ConditionNotice />}
+          <ScopeConfirmationNotice state={state} />
           {needsConfirmation && <OrgWideConfirmation id="activate-org-wide" />}
           <div className="flex flex-wrap gap-2">
             <Button type="submit" disabled={pending}>

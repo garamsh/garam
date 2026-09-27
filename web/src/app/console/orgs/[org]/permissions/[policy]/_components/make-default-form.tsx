@@ -8,7 +8,11 @@ import {
   type RollbackPolicyState,
 } from "@/features/orgs/actions";
 
-import { OrgWideConfirmation } from "../../_components/org-wide-confirmation";
+import { ConditionNotice } from "../../_components/condition-notice";
+import {
+  OrgWideConfirmation,
+  ScopeConfirmationNotice,
+} from "../../_components/org-wide-confirmation";
 
 const initialState: RollbackPolicyState = { status: "idle" };
 
@@ -27,6 +31,7 @@ export function MakeDefaultForm({
   active,
   reach,
   orgWide,
+  conditioned,
 }: {
   org: string;
   policy: string;
@@ -35,6 +40,8 @@ export function MakeDefaultForm({
   active: boolean;
   reach: string;
   orgWide: boolean;
+  /** Whether the version it would evaluate carries a Condition. */
+  conditioned: boolean;
 }) {
   const [state, formAction, pending] = useActionState(
     rollbackPolicy,
@@ -46,7 +53,9 @@ export function MakeDefaultForm({
     ? `Roll back to version ${target}`
     : `Make version ${target} default`;
   const needsConfirmation =
-    (active && orgWide) || state.status === "confirm-org-wide";
+    (active && orgWide) ||
+    state.status === "confirm-org-wide" ||
+    state.status === "confirm-unknown-scope";
 
   return (
     <div className="flex flex-col items-end gap-2">
@@ -61,12 +70,8 @@ export function MakeDefaultForm({
               ? `This applies at once. ${reach}`
               : "Nothing changes until the policy is activated."}
           </p>
-          {state.status === "confirm-org-wide" && (
-            <p role="alert" className="text-sm text-destructive">
-              It is active with no attachments, so this applies to everyone in
-              this organization.
-            </p>
-          )}
+          {conditioned && <ConditionNotice />}
+          <ScopeConfirmationNotice state={state} />
           {needsConfirmation && (
             <OrgWideConfirmation id={`default-${target}-org-wide`} />
           )}

@@ -131,6 +131,13 @@ describe("createPolicy", () => {
       message: "The document must be a JSON object.",
     });
     expect(posted).toEqual([]);
+
+    // The control: the same form carrying an object reaches garam, so
+    // the refusal above is the array and not a form read as nothing.
+    await expect(
+      createPolicy({ status: "idle" }, form({ name: "X", document: DOCUMENT })),
+    ).rejects.toThrow("NEXT_REDIRECT:");
+    expect(posted).toHaveLength(1);
   });
 });
 
@@ -199,16 +206,44 @@ describe("activatePolicy", () => {
     expect(activated).toEqual(["deny"]);
   });
 
-  it("treats attachments garam refuses to list as organization-wide", async () => {
-    server.use(
-      http.get(`${DENY}/attachments`, () =>
+  it.each([
+    [
+      "a known empty list asks to confirm everyone",
+      () => HttpResponse.json([]),
+      { status: "confirm-org-wide" },
+    ],
+    [
+      "a refused list asks to confirm a scope it cannot know",
+      () =>
         HttpResponse.json({ kind: "denied", message: "no" }, { status: 403 }),
-      ),
+      { status: "confirm-unknown-scope" },
+    ],
+    [
+      "an unavailable list refuses to guess",
+      () => HttpResponse.error(),
+      { status: "error", message: "the garam API could not be reached" },
+    ],
+  ])("reads the scope before activating: %s", async (_, answer, state) => {
+    const activated: string[] = [];
+    server.use(
+      http.post(`${DENY}/activate`, () => {
+        activated.push("deny");
+        return HttpResponse.json(denyDeletes);
+      }),
     );
+    // The control: with its attachment listed, the same activation
+    // goes through, so each state below is the read's answer.
+    await expect(
+      activatePolicy({ status: "idle" }, form({ policy: "d1e2f3a4b5c6d7e8" })),
+    ).resolves.toEqual({ status: "idle" });
+    expect(activated).toEqual(["deny"]);
+
+    server.use(http.get(`${DENY}/attachments`, answer));
 
     await expect(
       activatePolicy({ status: "idle" }, form({ policy: "d1e2f3a4b5c6d7e8" })),
-    ).resolves.toEqual({ status: "confirm-org-wide" });
+    ).resolves.toEqual(state);
+    expect(activated).toEqual(["deny"]);
   });
 });
 

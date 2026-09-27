@@ -9,7 +9,9 @@ import {
   addPolicyVersion,
   type AddPolicyVersionState,
 } from "@/features/orgs/actions";
-import { parsePolicyDocument } from "@/lib/policy-document";
+import { hasCondition, parsePolicyDocument } from "@/lib/policy-document";
+
+import { ConditionNotice } from "../../_components/condition-notice";
 
 const initialState: AddPolicyVersionState = { status: "idle" };
 
@@ -58,6 +60,9 @@ export function AddVersionForm({
         onChange={(event) => setDocument(event.target.value)}
         className="font-mono text-sm"
       />
+      {parsed.status === "ok" && hasCondition(parsed.value) && (
+        <ConditionNotice />
+      )}
       {message !== null && (
         <p role="alert" className="text-sm text-destructive">
           {message}

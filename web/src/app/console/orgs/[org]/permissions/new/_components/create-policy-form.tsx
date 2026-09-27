@@ -9,8 +9,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { createPolicy, type CreatePolicyState } from "@/features/orgs/actions";
 import {
   formatPolicyDocument,
+  hasCondition,
   parsePolicyDocument,
 } from "@/lib/policy-document";
+
+import { ConditionNotice } from "../../_components/condition-notice";
 
 const initialState: CreatePolicyState = { status: "idle" };
 
@@ -80,6 +83,9 @@ export function CreatePolicyForm({ org }: { org: string }) {
       <p className="text-sm text-muted-foreground">
         Saved as a draft. A draft grants no access until you activate it.
       </p>
+      {parsed.status === "ok" && hasCondition(parsed.value) && (
+        <ConditionNotice />
+      )}
       {message !== null && (
         <p role="alert" className="text-sm text-destructive">
           {message}

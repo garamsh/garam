@@ -32,3 +32,22 @@ export function parsePolicyDocument(text: string): Parsed<PolicyDocument> {
 export function formatPolicyDocument(document: PolicyDocument): string {
   return JSON.stringify(document, null, 2);
 }
+
+/**
+ * Whether any statement of `document` carries a `Condition`. garam
+ * stores the key and evaluates nothing from it
+ * (`docs/architecture/authz.md` §Policy document), so such a statement
+ * applies as if it had none.
+ */
+export function hasCondition(document: PolicyDocument): boolean {
+  const statements = document.Statement;
+  return (
+    Array.isArray(statements) &&
+    statements.some(
+      (statement: unknown) =>
+        typeof statement === "object" &&
+        statement !== null &&
+        "Condition" in statement,
+    )
+  );
+}

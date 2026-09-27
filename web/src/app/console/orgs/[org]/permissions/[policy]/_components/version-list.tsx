@@ -1,7 +1,8 @@
 import { Badge } from "@/components/ui/badge";
 import type { PolicyVersion } from "@/features/orgs";
-import { formatPolicyDocument } from "@/lib/policy-document";
+import { formatPolicyDocument, hasCondition } from "@/lib/policy-document";
 
+import { ConditionNotice } from "../../_components/condition-notice";
 import { MakeDefaultForm } from "./make-default-form";
 
 /**
@@ -62,9 +63,11 @@ export function VersionList({
                 active={active}
                 reach={reach}
                 orgWide={orgWide}
+                conditioned={hasCondition(version.document)}
               />
             )}
           </div>
+          {hasCondition(version.document) && <ConditionNotice />}
           <details>
             <summary className="cursor-pointer text-sm text-muted-foreground">
               Document

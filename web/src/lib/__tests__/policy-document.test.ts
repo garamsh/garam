@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parsePolicyDocument } from "@/lib/policy-document";
+import { hasCondition, parsePolicyDocument } from "@/lib/policy-document";
 
 describe("parsePolicyDocument", () => {
   it.each([
@@ -16,5 +16,19 @@ describe("parsePolicyDocument", () => {
       status: "ok",
       value: { Version: "2026-07-25", X: 1 },
     });
+  });
+});
+
+describe("hasCondition", () => {
+  it("finds a Condition on any statement, and none where there is none", () => {
+    const statement = { Effect: "Deny", Action: ["x:y"], Resource: ["*"] };
+    expect(
+      hasCondition({
+        Statement: [statement, { ...statement, Condition: { a: 1 } }],
+      }),
+    ).toBe(true);
+    // The control: the same statements without the key.
+    expect(hasCondition({ Statement: [statement, statement] })).toBe(false);
+    expect(hasCondition({ Statement: "not a list" })).toBe(false);
   });
 });

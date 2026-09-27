@@ -13,7 +13,7 @@ import {
   slugFromGrn,
   type Policy,
 } from "@/features/orgs";
-import { formatPolicyDocument } from "@/lib/policy-document";
+import { formatPolicyDocument, hasCondition } from "@/lib/policy-document";
 
 import { ApiUnreachable } from "../../../../_components/api-unreachable";
 import { ItemCrumb } from "../../../../_components/item-crumb";
@@ -158,6 +158,9 @@ export default async function PolicyPage({ params }: Params) {
               version={policy.defaultVersion}
               reach={sentence}
               orgWide={orgWide}
+              conditioned={
+                defaultDocument !== undefined && hasCondition(defaultDocument)
+              }
             />
             {policy.status === "draft" && (
               <ArchivePolicyForm

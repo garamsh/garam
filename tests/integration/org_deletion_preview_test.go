@@ -95,7 +95,7 @@ func TestOrgDeletionPreview_CountsMatchWhatTheCascadeTakes(t *testing.T) {
 	require.NoError(t, orgs.CreateInvitation(ctx, org.NewInvitation(
 		"preview-cascade-token", orgGRN, org.RoleMember, ownerGRN, time.Now().Add(time.Hour))))
 
-	op, err := operator.New(orgGRN, "preview-op", ownerGRN)
+	op, err := operator.New(orgGRN, "preview-op", ownerGRN, operator.DetailsPatch{})
 	require.NoError(t, err)
 	enrollment, err := operator.NewEnrollment(op.GRN(), ownerGRN)
 	require.NoError(t, err)

@@ -188,7 +188,7 @@ func TestAgentRead_AssignmentIsAbsentWhileNoOperatorHolds(t *testing.T) {
 // (ADR-0045), so every test that defines an agent needs one first.
 func registerOperator(t *testing.T, f *fixture, orgSlug, id string) grn.GRN {
 	t.Helper()
-	o, err := operator.New(orgGRNOf(orgSlug), id, userGRNOf("owner-sub"))
+	o, err := operator.New(orgGRNOf(orgSlug), id, userGRNOf("owner-sub"), operator.DetailsPatch{})
 	require.NoError(t, err)
 	enrollment, err := operator.NewEnrollment(o.GRN(), userGRNOf("owner-sub"))
 	require.NoError(t, err)

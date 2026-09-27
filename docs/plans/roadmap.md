@@ -104,8 +104,11 @@ already expose, built in parallel rather than gating P3.
   Publishing is built and exercised: `.github/workflows/release.yml`
   publishes both images on a `vX.Y.Z` tag push under the names and the
   tag rule ADR-0039 fixed, and `v0.1.0` ran it on 2026-09-01. Both
-  repositories hold `0.1.0`, and the release that tag created records
-  each image's digest beside it.
+  repositories held `0.1.0` when ADR-0039's erratum of 2026-09-02 read
+  them, and the release that tag created records each image's digest
+  beside it. A development build goes into the same two repositories
+  under a commit-derived or prerelease tag: `make image-build` builds
+  one locally and a person pushes it (ADR-0071).
 
 ## Sequencing rules
 

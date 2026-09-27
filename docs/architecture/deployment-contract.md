@@ -43,6 +43,17 @@ template renders and for what follows from that — the update strategy
 every Deployment sets and what an upgrade costs in service under it,
 and the hook phase the migration Job runs in.
 
+Each image has one repository, the one the chart's
+`image.*.repository` names, and the tag says what a build is: a bare
+`X.Y.Z` is a release, which only a `vX.Y.Z` git tag publishes
+([ADR-0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)),
+and a commit-derived or prerelease tag is a development build a person
+made and pushed
+([ADR-0071](./adr/0071-a-development-image-shares-the-release-repository-and-its-tag-says-it-is-not-a-release.md)).
+`scripts/image-build.sh` is authoritative for which development tags
+this repository produces, and refuses every other one before it
+builds; `README.md` §Development images is the procedure.
+
 It records what is. Changing any behaviour named below is a decision,
 not an edit here. Every claim names the path it can be checked against,
 per `docs/convention/documentation.md` §Keep it current; where the
@@ -504,7 +515,11 @@ that would assert one:
   — readiness reports what a replica cannot serve without
 - [ADR-0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)
   — where the two images are published, under what names, and what
-  triggers a push
+  triggers a release
+- [ADR-0071](./adr/0071-a-development-image-shares-the-release-repository-and-its-tag-says-it-is-not-a-release.md)
+  — a development build shares each image's repository and is told
+  apart by its tag, which this repository refuses to make a bare
+  release version
 - [ADR-0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)
   — the listener presents one certificate signed by a garam server
   authority the deployment holds, every identity pins that root, and a

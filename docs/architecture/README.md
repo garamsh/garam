@@ -231,15 +231,19 @@ What this repository runs against itself. `docs/convention/ci.md` decides how a 
   rather than removing it: both repositories are IMMUTABLE, which makes
   a tag's digest a fact the registry enforces, and the single link left
   resting on trust is the git tag still naming the commit it named.
-  What the registry holds was published before the change — `0.1.0`
-  carries no labels at all and `0.2.0` a pair a person passed by
-  hand — so the first image carrying them because these files say so is
-  the next release. A reference this repository did not publish is
-  still one only its builder can vouch for, which after the label is a
-  claim about where it came from and no longer about what code is in
-  it. An answer to "does this route exist" therefore names where it
-  exists, and `main` answers a different question than the caller asked
-  (#886).
+  What the registry held when #1033 merged, 2026-09-04T16:44Z, was
+  published before the change — `0.1.0` carried no labels at all and
+  `0.2.0` a pair a person passed by hand — so the first image carrying
+  them because these files say so is a release after that reading.
+  A development build, which `make image-build` produces when given
+  `IMAGE_REGISTRY`, carries the same two labels, the version being its
+  tag, and reaches a repository only by a person's push (ADR-0071);
+  without it the target tags `:ci` and passes neither label a value.
+  A reference this repository did not publish is still one only its
+  builder can vouch for, which after the label is a claim about where
+  it came from and no longer about what code is in it. An answer to
+  "does this route exist" therefore names where it exists, and `main`
+  answers a different question than the caller asked (#886).
 - **The after-merge run is not taken.** A `push: branches: [main]` trigger ran on `ci.yml` until #811. Both triggers read the merge result, so what that one alone covered is a `main` that moved between the pull request's run and the merge.
 - **Nothing mechanical covers that gap; the role that merges does.** The obligation is stated once, in `AGENTS.md` §Roles; this bullet records that the gap is covered and is not that statement. The mechanical replacement is a required status check with *branches must be up to date*, which is a repository setting and so the account owner's.
 - **Mutation testing runs in no workflow, and that is the decision rather than an omission.** `make mutation` rewrites one operator at a time under `internal/` and reports the mutants no test noticed. Four full runs on 2026-09-02 each spent around 35 minutes of CPU on twelve cores and took between 5 minutes 42 seconds and 32 minutes of wall time; the spread is the per-mutant timeout, which the target's own comment accounts for. A runner with four cores has a third of those and slower ones. `internal/` holds 33 of the module's 40 Go packages; the seven outside it are `cmd/garam`, the three generated from `api/openapi.yaml`, `api/machine.yaml` and `proto/`, and `migrations`, `tests/e2e` and `tests/integration`, which hold test files only (`go list ./... | grep -v /internal/`). So triggering on changes under it would exclude a pull request that changes Go outside `internal/` as well as the ones that change no Go at all, and would still fire on almost every pull request that changes Go and roughly double what it costs: of the 120 commits to 3fbcf93, 47 changed a Go, specification or migration file, and 41 of those touch `internal/` while six do not. A schedule spends the same minutes on a report no pull request is waiting for, and attributes a new survivor to no change rather than to the one that raised it. What the run buys is an audit of the suite rather than a gate on one change, which is why a person invokes it (#875).
@@ -364,7 +368,9 @@ ADRs:
 - [0038](./adr/0038-the-engine-learns-a-subjects-memberships-and-enforces-its-own-scope.md)
   — the engine learns a subject's memberships and enforces its own scope
 - [0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)
-  — a version tag publishes both images to the account's registry
+  — a version tag publishes both images to the account's registry;
+  superseded in part by 0071, which lets the same repositories hold a
+  development build
 - [0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)
   — the machine listener presents a pinned garam server certificate, and
   certificates rotate without a restart
@@ -468,3 +474,9 @@ ADRs:
   and no stored serial. Supersedes ADR-0045's refusal of a delete route
   and, for an operator alone, ADR-0014's "revocation is by lifetime";
   an agent is answered without a read and its certificate is untouched
+- [0071](./adr/0071-a-development-image-shares-the-release-repository-and-its-tag-says-it-is-not-a-release.md)
+  — a development image shares the release repository, and its tag says
+  it is not a release: one repository per image, a bare `X.Y.Z` for a
+  release alone, a commit-derived or prerelease tag for a development
+  build `make image-build` produces locally and pushes nowhere.
+  Supersedes ADR-0039's "the only trigger that publishes" in part

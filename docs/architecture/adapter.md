@@ -26,8 +26,9 @@ thin binary and an orchestrator deploys it
 they own its placement.
 
 It runs beside exactly one agent, in that agent's pod. It has to,
-because the gateway binds loopback unless mTLS is configured
-(`gagent@40ef7ac`) and because it must outlive the agent process during
+because the gateway binds loopback unless mTLS is configured (Sherlock
+at `sherlock@40ef7ac`, the historical reading §Foreign facts this rests
+on anchors) and because it must outlive the agent process during
 shutdown — a native sidecar rather than an ordinary container, for the
 reason in [ADR-0018](./adr/0018-delivery-acknowledgement.md).
 
@@ -218,7 +219,7 @@ is undecided ([deployment-contract.md](./deployment-contract.md)).
 Idempotency and reconciliation are garam's, not the adapter's and not
 the platform's ([ADR-0013](./adr/0013-agent-messaging.md)). The
 platform cannot be asked whether a message was processed
-(`gagent@40ef7ac`), and the adapter's knowledge is deliberately
+(`sherlock@40ef7ac`), and the adapter's knowledge is deliberately
 volatile, so **"has this already been handled" can only live on garam's
 side.** A design that puts it in the pod or in an orchestrator's status
 is inventing a distinction that does not exist there.
@@ -226,11 +227,16 @@ is inventing a distinction that does not exist there.
 ## Foreign facts this rests on
 
 Named because this contract would be **wrong** if any of them changed,
-not because they were mentioned. Read at `gagent@40ef7ac`; that
-repository carries no tags, so a commit is the only anchor, and an
-unanchored citation goes on looking valid after it has lost what it
-points at. The sections above restate several of these rows, and the
-same commit is the anchor for those restatements.
+not because they were mentioned. Read in Sherlock
+([`garamsh/sherlock`](https://github.com/garamsh/sherlock)) at
+[`40ef7ac`](https://github.com/garamsh/sherlock/tree/40ef7ac), when the
+repository was named `gagent`; each path below is the one it had at
+that commit, and none is claimed to hold on the current branch. The
+repository carries no tags — none on 2026-09-27 either — so a commit is
+the only anchor, and an unanchored citation goes on looking valid after
+it has lost what it points at. The sections above restate several of
+these rows as `sherlock@40ef7ac`, and the same commit is the anchor for
+those restatements.
 
 The last two rows are not that reading's. They arrived on 2026-08-25
 from [ADR-0013](./adr/0013-agent-messaging.md) §Decision, which is
@@ -257,8 +263,8 @@ know anyone depends on it.
 ## Not decided
 
 - A durable inbox on the platform's side was unbuilt and unscheduled at
-  `gagent@40ef7ac` — treat it as unavailable rather than refused. If it
-  arrives, the completion rule does not change; the redelivery causes
+  `sherlock@40ef7ac` — treat it as unavailable rather than refused. If
+  it arrives, the completion rule does not change; the redelivery causes
   reduce by one.
 - A caller-supplied message identifier was considered and declined: it
   would remove the adapter's pairing, which is a simplification rather

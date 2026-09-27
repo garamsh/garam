@@ -17,6 +17,7 @@ Documentation lives in [`docs/`](./docs/).
 - Searching this repository
 - Local stack
 - Web frontend
+- Development images
 - Development model
 
 ## Module path
@@ -129,6 +130,41 @@ GARAM_WEB_IMAGE=<ref> make web-image-e2e  # checks that image instead
 The override is how an image pulled from a registry by digest is
 verified. Like `make e2e` and `make web-e2e` it needs Docker, so it
 stays outside `make web-ci`.
+
+## Development images
+
+A development image goes into the same repository as a release,
+`garam/garam-server` or `garam/garam-web`, and its tag is what says it
+is not a release
+([ADR-0071](./docs/architecture/adr/0071-a-development-image-shares-the-release-repository-and-its-tag-says-it-is-not-a-release.md)).
+A bare `X.Y.Z` belongs to `.github/workflows/release.yml`, which
+publishes one on a `vX.Y.Z` git tag and on nothing else. Build one
+from a clean checkout of the commit you mean to name:
+
+```sh
+make image-build IMAGE_REGISTRY=<registry>                     # tag: HEAD's first 12 hex digits
+make image-build IMAGE_REGISTRY=<registry> IMAGE_TAG=0.4.0-rc.1  # a prerelease tag
+```
+
+`<registry>` is the host in the chart's `image.*.repository`
+(`deploy/charts/garam/values.yaml`); the path under it is the one the
+release pushes to, and so are the contexts, the Dockerfiles and the
+build arguments. Each image is labelled with HEAD and the tag.
+`scripts/image-build.sh` refuses, before building anything, a bare
+release version, a tag of any other form, a commit prefix that is not
+HEAD's, and a working tree that differs from HEAD; its last line names
+the commit built.
+
+Nothing here pushes the result. Both repositories are IMMUTABLE, so a
+tag you push is spent: it names that image for good. Pushing takes a
+credential for the registry that this repository neither holds nor
+grants, and the release's push role admits `v*` tags only.
+`GARAM_WEB_IMAGE=<registry>/garam/garam-web:<tag> make web-image-e2e`
+checks the web image you built before you push it.
+
+Without `IMAGE_REGISTRY`, `make image-build` builds both images as
+`garam-server:ci` and `garam-web:ci`, which is what
+`.github/workflows/images.yml` runs through `make web-image-e2e`.
 
 ## Development model
 

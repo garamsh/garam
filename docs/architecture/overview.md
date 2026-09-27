@@ -254,11 +254,13 @@ collaborate on a shared plan.
   question ADR-0045 raises and leaves open.
 - Telling a sender that its message exhausted its attempts. ADR-0018
   makes that garam's obligation because the agent platform notifies no
-  sender (`gagent@40ef7ac`); the queue stops redelivering an exhausted
-  message and garam announces one to nobody. What a sender can do is
-  ask (see In scope), which answers the question without discharging
-  the obligation: ADR-0018 says garam tells, and a sender that never
-  asks is still told nothing.
+  sender (Sherlock at
+  [`40ef7ac`](https://github.com/garamsh/sherlock/tree/40ef7ac), read
+  when the repository was named `gagent`); the queue stops redelivering
+  an exhausted message and garam announces one to nobody. What a
+  sender can do is ask (see In scope), which answers the question
+  without discharging the obligation: ADR-0018 says garam tells, and a
+  sender that never asks is still told nothing.
 - The two ends of watching an agent work. garam's half is built (see In
   scope): the stream a browser reads, the watcher count on the poll, and
   the fan-out between the two listeners. Neither end of it is — no

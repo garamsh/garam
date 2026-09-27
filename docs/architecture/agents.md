@@ -77,10 +77,15 @@ a value that happened to name an image would be one garam still never
 reads — which leaves the shape of that payload where ADR-0026 left it,
 undecided, rather than deciding it here. The images an agent's Pod is
 built from and the size of the volume it keeps state on are named by
-the `--agent-image`, `--agent-copy-image`, `--agent-tools-image` and
-`--agent-storage-size` flags that `gagent-operator`'s `cmd/main.go`
-declares (`gagent-operator@2d795f5`), which is authoritative for what
-every agent that operator constructs is built from.
+flags that Garam Agent Operator's `cmd/main.go` declares
+([`garamsh/garam-agent-operator`](https://github.com/garamsh/garam-agent-operator)),
+which is authoritative for what every agent that operator constructs
+is built from. Read at
+[`2d795f5`](https://github.com/garamsh/garam-agent-operator/blob/2d795f5/cmd/main.go),
+when the repository was named `gagent-operator`, they were
+`--agent-image`, `--agent-copy-image`, `--agent-tools-image` and
+`--agent-storage-size`; that list is the reading at that commit and not
+the operator's current set.
 
 The boundary is drawn by what each side can check rather than by what
 either owns. An image reference is a fact about a registry some cluster
@@ -91,9 +96,12 @@ entered here would be a claim garam has no way to test and whose
 failure, at deploy time, it would never see. The operator does not test
 one either; it takes the reference as given and leaves it to the API
 server to refuse on the object, which is the first party in the chain
-that can. garam is on no part of that chain. `gagent` states the same
-boundary from the agent's own side, for the tool set it loads:
-`internal/config/config.go:79-82` (`gagent@eeea6a9`).
+that can. garam is on no part of that chain. Sherlock
+([`garamsh/sherlock`](https://github.com/garamsh/sherlock)) stated the
+same boundary from the agent's own side, for the tool set it loads, at
+`internal/config/config.go:79-82` in
+[`eeea6a9`](https://github.com/garamsh/sherlock/blob/eeea6a9/internal/config/config.go#L79-L82),
+read when the repository was named `gagent`.
 
 Nothing in garam requires a version or a capability of an agent, and
 nothing here is being added that would. Such a requirement is the one

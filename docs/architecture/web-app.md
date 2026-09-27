@@ -18,7 +18,10 @@ strict, Tailwind and shadcn/ui
 ([ADR-0009](./adr/0009-web-frontend.md)). It is the one part of this
 repository that is not Go, it carries a toolchain and a gate of its
 own, and it ships as one of the two images a version tag publishes
-([ADR-0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)).
+([ADR-0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)),
+into the one repository its development builds share under a tag that
+is not a release version
+([ADR-0071](./adr/0071-a-development-image-shares-the-release-repository-and-its-tag-says-it-is-not-a-release.md)).
 
 It stays its own image for what each of the two holds while it runs.
 This one's final stage is the Node base the build ran on
@@ -360,3 +363,6 @@ The rest bear on it without being about it:
 - [ADR-0056](./adr/0056-a-published-web-image-is-bound-to-the-release-name-garam-and-make-ci-checks-the-binding.md)
   — the browser's `/api/*` address is fixed when the image is built, so a
   published image reaches the api Service a release named `garam` renders
+- [ADR-0071](./adr/0071-a-development-image-shares-the-release-repository-and-its-tag-says-it-is-not-a-release.md)
+  — a development build of this image bakes the same address, since it
+  is built from what the release builds, and is told apart by its tag

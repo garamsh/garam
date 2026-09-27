@@ -231,12 +231,15 @@ What this repository runs against itself. `docs/convention/ci.md` decides how a 
   rather than removing it: both repositories are IMMUTABLE, which makes
   a tag's digest a fact the registry enforces, and the single link left
   resting on trust is the git tag still naming the commit it named.
-  What the registry holds was published before the change — `0.1.0`
-  carries no labels at all and `0.2.0` a pair a person passed by
-  hand — so the first image carrying them because these files say so is
-  the next release. A reference this repository did not publish is
-  still one only its builder can vouch for, which after the label is a
-  claim about where it came from and no longer about what code is in
+  What the registry held when #1033 merged, 2026-09-04T16:44Z, was
+  published before the change — `0.1.0` carried no labels at all and
+  `0.2.0` a pair a person passed by hand — so the first image carrying
+  them because these files say so is a release after that reading.
+  A development build `make image-build` produces carries the same two
+  labels, the version being its tag, and reaches a repository only by a
+  person's push (ADR-0071). A reference this repository did not publish
+  is still one only its builder can vouch for, which after the label is
+  a claim about where it came from and no longer about what code is in
   it. An answer to "does this route exist" therefore names where it
   exists, and `main` answers a different question than the caller asked
   (#886).
@@ -364,7 +367,9 @@ ADRs:
 - [0038](./adr/0038-the-engine-learns-a-subjects-memberships-and-enforces-its-own-scope.md)
   — the engine learns a subject's memberships and enforces its own scope
 - [0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)
-  — a version tag publishes both images to the account's registry
+  — a version tag publishes both images to the account's registry;
+  superseded in part by 0071, which lets the same repositories hold a
+  development build
 - [0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)
   — the machine listener presents a pinned garam server certificate, and
   certificates rotate without a restart
@@ -468,3 +473,9 @@ ADRs:
   and no stored serial. Supersedes ADR-0045's refusal of a delete route
   and, for an operator alone, ADR-0014's "revocation is by lifetime";
   an agent is answered without a read and its certificate is untouched
+- [0071](./adr/0071-a-development-image-shares-the-release-repository-and-its-tag-says-it-is-not-a-release.md)
+  — a development image shares the release repository, and its tag says
+  it is not a release: one repository per image, a bare `X.Y.Z` for a
+  release alone, a commit-derived or prerelease tag for a development
+  build `make image-build` produces locally and pushes nowhere.
+  Supersedes ADR-0039's "the only trigger that publishes" in part

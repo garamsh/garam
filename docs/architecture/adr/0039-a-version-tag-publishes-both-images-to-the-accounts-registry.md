@@ -1,6 +1,8 @@
 # ADR 0039: A version tag publishes both images to the account's registry
 
-> Status: accepted
+> Status: accepted — §Decision's "Pushing that tag to GitHub is the
+> only trigger that publishes" is superseded in part by
+> [ADR-0071](./0071-a-development-image-shares-the-release-repository-and-its-tag-says-it-is-not-a-release.md)
 > Date: 2026-08-22
 
 ## Contents

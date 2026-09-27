@@ -164,7 +164,9 @@ subscription and none per agent, the table holds a row per watch, and an
 event announced while nobody watches reaches no one and is not kept. A
 watcher sees from when it opened, and one that falls behind loses events
 rather than holding up the rest — the platform these events come from
-drops them for a slow subscriber already (ADR-0013, `gagent@40ef7ac`),
+drops them for a slow subscriber already (ADR-0013; Sherlock at
+[`40ef7ac`](https://github.com/garamsh/sherlock/tree/40ef7ac), read
+when the repository was named `gagent`),
 so the same answer one hop later is not a new failure mode.
 
 The two ends of a watch are in different processes — a browser opens the

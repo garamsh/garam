@@ -142,7 +142,7 @@ SHELL_SCRIPTS = $(shell find . -maxdepth 1 -type f -name '*.sh') $(shell find sc
 # layout passes, a syntax error fails, and a bashism fails only where
 # the POSIX grammar has no shape for it: `arr=(a b)` and `function f`
 # fail, while `[[ ]]`, `source` and `local` parse as ordinary commands
-# and pass. `-ln posix` fixes the dialect all eight scripts declare
+# and pass. `-ln posix` fixes the dialect every script here declares
 # rather than taking it from each shebang, so a script that later says
 # bash fails here instead of being read as bash.
 #
@@ -180,12 +180,17 @@ format:
 # two it left out. Should either filter stop matching, that suite is
 # swept back in and fails for want of a database rather than skipping
 # quietly.
+#
+# scripts/image-build-test.sh is the one test outside Go: which tags a
+# development image-build accepts (ADR-0071). It needs git and no
+# Docker, and prints its own count.
 TEST_PKGS = $(filter-out %/tests/integration %/tests/e2e,$(GO_PKGS))
 
 test:
 	@echo 'test: $(words $(TEST_PKGS)) packages; tests/integration and tests/e2e not covered here — they need Postgres (make db-up integration e2e)'
 	@test -n '$(TEST_PKGS)' || { echo 'test: nothing to test — the package list is empty, or the filter above matched all of it'; exit 1; }
 	@go test -count=1 $(TEST_PKGS)
+	@scripts/image-build-test.sh
 
 # `go build ./...` exits 0 having done nothing should that pattern ever
 # resolve to no package, so build names what it compiles too. It skips a
@@ -536,8 +541,15 @@ web-e2e:
 # that file rather than restating it. Nothing else builds either: `build`
 # and `web-build` prove the Go module and the web app build, which is
 # not that the images do (#760).
+#
+# IMAGE_REGISTRY makes it a development build (ADR-0071): the release's
+# repositories under that registry, tagged IMAGE_TAG or, when that is
+# empty, the first twelve hex digits of HEAD. The script refuses a bare
+# release version or any other tag before it builds, and pushes nothing.
+IMAGE_BUILD_ARGS = $(if $(IMAGE_REGISTRY),--registry '$(IMAGE_REGISTRY)') $(if $(IMAGE_TAG),--tag '$(IMAGE_TAG)')
+
 image-build:
-	scripts/image-build.sh
+	scripts/image-build.sh $(IMAGE_BUILD_ARGS)
 
 # What image-build tagged the web image, asked of the script that tags
 # it. The repository comes from .github/workflows/release.yml's `tags:`,
@@ -548,7 +560,7 @@ image-build:
 # Keyed on the build context, which is what makes an image the web
 # app's. Empty when the release builds none from it, which the target
 # reports rather than run against nothing.
-WEB_IMAGE = $(shell scripts/image-build.sh --names | sed -n 's|^web ||p')
+WEB_IMAGE = $(shell scripts/image-build.sh --names $(IMAGE_BUILD_ARGS) | sed -n 's|^web ||p')
 
 # web-image-e2e checks the built image rather than the app: that the
 # standalone server starts, answers both probes and reaches the baked

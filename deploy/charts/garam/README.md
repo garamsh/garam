@@ -384,7 +384,9 @@ The images are pinned separately, through `image.server.tag` and
 that tag with the `v` dropped; one commit publishes both images under
 one version, so a deployment pins one version across the pair
 (ADR-0039). The tags are immutable, so the tag answers what is deployed
-on its own.
+on its own. The same repositories hold development builds, tagged by a
+commit prefix or `X.Y.Z-<prerelease>` rather than a bare version
+(ADR-0071), so a tag of either form pins a build nobody released.
 
 **A digest is optional and names the bytes.** `image.server.digest` and
 `image.web.digest` render after the tag rather than in place of it —

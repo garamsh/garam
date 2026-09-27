@@ -31,13 +31,17 @@ type TemplateContent struct {
 // agents (ADR-0075). It names no operator and no agent, and nothing
 // records which definitions were started from it: a definition copies
 // the values once, so editing or deleting a template reaches no agent.
+//
+// Its fields are exported: it is a data carrier with no invariant a
+// method holds, so the field is the exposure (ADR-0069).
 type Template struct {
-	grn       grn.GRN
-	orgGRN    grn.GRN
-	content   TemplateContent
-	createdBy grn.GRN
-	createdAt time.Time
-	updatedAt time.Time
+	GRN    grn.GRN
+	OrgGRN grn.GRN
+	TemplateContent
+	// CreatedBy is the member that created the template.
+	CreatedBy grn.GRN
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // NewTemplate mints the identity of a template orgGRN keeps and records
@@ -54,12 +58,12 @@ func NewTemplate(orgGRN grn.GRN, content TemplateContent, createdBy grn.GRN) (*T
 	}
 	now := time.Now().UTC()
 	return &Template{
-		grn:       grn.New(orgGRN.Identifier, grn.DefaultProject, ServiceTypeTemplate, hex.EncodeToString(b)),
-		orgGRN:    orgGRN,
-		content:   content,
-		createdBy: createdBy,
-		createdAt: now,
-		updatedAt: now,
+		GRN:             grn.New(orgGRN.Identifier, grn.DefaultProject, ServiceTypeTemplate, hex.EncodeToString(b)),
+		OrgGRN:          orgGRN,
+		TemplateContent: content,
+		CreatedBy:       createdBy,
+		CreatedAt:       now,
+		UpdatedAt:       now,
 	}, nil
 }
 
@@ -74,12 +78,3 @@ func validateTemplateOwnership(g, orgGRN grn.GRN) error {
 	}
 	return nil
 }
-
-func (t *Template) GRN() grn.GRN             { return t.grn }
-func (t *Template) Organization() grn.GRN    { return t.orgGRN }
-func (t *Template) Content() TemplateContent { return t.content }
-
-// CreatedBy returns the member that created the template.
-func (t *Template) CreatedBy() grn.GRN   { return t.createdBy }
-func (t *Template) CreatedAt() time.Time { return t.createdAt }
-func (t *Template) UpdatedAt() time.Time { return t.updatedAt }

@@ -13,19 +13,19 @@ import (
 
 // CreateTemplate persists a template.
 func (s *PostgresStore) CreateTemplate(ctx context.Context, t *Template) error {
-	values, err := json.Marshal(t.content.Values)
+	values, err := json.Marshal(t.Values)
 	if err != nil {
 		return errorx.Wrap(err, "create template: values", errorx.KindInternal)
 	}
 	err = s.q.CreateAgentTemplate(ctx, db.CreateAgentTemplateParams{
-		Grn:         t.grn.String(),
-		OrgGrn:      t.orgGRN.String(),
-		Name:        string(t.content.Name),
-		Description: string(t.content.Description),
+		Grn:         t.GRN.String(),
+		OrgGrn:      t.OrgGRN.String(),
+		Name:        string(t.Name),
+		Description: string(t.Description),
 		AgentValues: values,
-		CreatedBy:   t.createdBy.String(),
-		CreatedAt:   stamp(t.createdAt),
-		UpdatedAt:   stamp(t.updatedAt),
+		CreatedBy:   t.CreatedBy.String(),
+		CreatedAt:   stamp(t.CreatedAt),
+		UpdatedAt:   stamp(t.UpdatedAt),
 	})
 	return pgxerr.Classify(err, "create template", nil, nil)
 }
@@ -124,11 +124,11 @@ func rowToTemplate(row db.AgentTemplate) (*Template, error) {
 		return nil, errorx.Wrap(err, "template created by", errorx.KindInternal)
 	}
 	return &Template{
-		grn:       g,
-		orgGRN:    orgGRN,
-		content:   TemplateContent{Name: name, Description: description, Values: values},
-		createdBy: createdBy,
-		createdAt: row.CreatedAt.Time,
-		updatedAt: row.UpdatedAt.Time,
+		GRN:             g,
+		OrgGRN:          orgGRN,
+		TemplateContent: TemplateContent{Name: name, Description: description, Values: values},
+		CreatedBy:       createdBy,
+		CreatedAt:       row.CreatedAt.Time,
+		UpdatedAt:       row.UpdatedAt.Time,
 	}, nil
 }

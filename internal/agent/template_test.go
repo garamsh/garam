@@ -21,21 +21,21 @@ func TestNewTemplate_MintsAnIdentityOfItsOwnInTheOrganization(t *testing.T) {
 
 	tpl, err := agent.NewTemplate(orgGRN, content, createdBy)
 	require.NoError(t, err)
-	assert.Equal(t, "acme", tpl.GRN().Organization)
-	assert.Equal(t, agent.ServiceTypeTemplate, tpl.GRN().ServiceType)
-	assert.Len(t, tpl.GRN().Identifier, 16, "eight random bytes, hex-encoded")
-	require.NoError(t, tpl.GRN().Validate())
-	assert.Equal(t, orgGRN, tpl.Organization())
-	assert.Equal(t, content, tpl.Content())
-	assert.Equal(t, createdBy, tpl.CreatedBy())
-	assert.Equal(t, tpl.CreatedAt(), tpl.UpdatedAt())
+	assert.Equal(t, "acme", tpl.GRN.Organization)
+	assert.Equal(t, agent.ServiceTypeTemplate, tpl.GRN.ServiceType)
+	assert.Len(t, tpl.GRN.Identifier, 16, "eight random bytes, hex-encoded")
+	require.NoError(t, tpl.GRN.Validate())
+	assert.Equal(t, orgGRN, tpl.OrgGRN)
+	assert.Equal(t, content, tpl.TemplateContent)
+	assert.Equal(t, createdBy, tpl.CreatedBy)
+	assert.Equal(t, tpl.CreatedAt, tpl.UpdatedAt)
 
 	// A template names no agent: the identity a definition mints is
 	// its own, so no agent can share one with the template it copied.
 	other, err := agent.NewTemplate(orgGRN, content, createdBy)
 	require.NoError(t, err)
-	assert.NotEqual(t, tpl.GRN(), other.GRN())
-	assert.NotEqual(t, agent.ServiceType, tpl.GRN().ServiceType)
+	assert.NotEqual(t, tpl.GRN, other.GRN)
+	assert.NotEqual(t, agent.ServiceType, tpl.GRN.ServiceType)
 }
 
 func TestNewTemplate_HoldsAnEmptyPayloadRatherThanNone(t *testing.T) {
@@ -43,6 +43,6 @@ func TestNewTemplate_HoldsAnEmptyPayloadRatherThanNone(t *testing.T) {
 	tpl, err := agent.NewTemplate(orgGRN, agent.TemplateContent{Name: "Blank"},
 		grn.New(grn.RootOwner, grn.DefaultProject, "user", "ada"))
 	require.NoError(t, err)
-	assert.NotNil(t, tpl.Content().Values)
-	assert.Empty(t, tpl.Content().Values)
+	assert.NotNil(t, tpl.TemplateContent.Values)
+	assert.Empty(t, tpl.TemplateContent.Values)
 }

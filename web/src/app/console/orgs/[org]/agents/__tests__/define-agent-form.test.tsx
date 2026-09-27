@@ -76,7 +76,7 @@ describe("define agent form", () => {
 
     expect(
       screen.getByRole("link", { name: "Register an operator" }),
-    ).toHaveAttribute("href", "/console/orgs/acme/operators/new");
+    ).toHaveAttribute("href", "/console/orgs/acme/operators");
     // The control: with an operator to choose, the offer is gone, so
     // what put it there is the empty list.
     render(
@@ -108,7 +108,9 @@ describe("define agent form", () => {
       ),
     );
     const user = userEvent.setup();
-    const { container } = render(<DefineAgentForm org="acme" operators={null} />);
+    const { container } = render(
+      <DefineAgentForm org="acme" operators={null} />,
+    );
 
     await user.type(screen.getByLabelText("Operator"), "gagent-dev");
     await user.click(screen.getByRole("button", { name: "Define agent" }));

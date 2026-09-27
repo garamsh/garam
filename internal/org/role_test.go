@@ -142,8 +142,9 @@ func TestRoleActions_NoRoleReachesAgentWatch(t *testing.T) {
 // the two administrative roles register one. Deleting one goes with
 // registering it and is named separately, because it is the action
 // that stops an operator rather than records one (ADR-0070), and so is
-// changing what the org calls one (ADR-0074). The read is the control — without it the member's refusals would also hold
-// for a role that reaches no operator action at all.
+// changing what the org calls one (ADR-0074). The read is the control
+// — without it the member's refusals would also hold for a role that
+// reaches no operator action at all.
 func TestRoleActions_OnlyOwnerAndAdminRegisterAnOperator(t *testing.T) {
 	for _, r := range []org.Role{org.RoleOwner, org.RoleAdmin, org.RoleMember} {
 		assert.Contains(t, r.Actions(), org.ActionOperatorRead, string(r))

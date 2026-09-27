@@ -101,9 +101,7 @@ describe("operator page", () => {
     const definitions = within(section as HTMLElement);
     expect(definitions.getByText("9f2ac1b40d8e7a35")).toBeInTheDocument();
     // A definition naming another operator is not this one's.
-    expect(
-      definitions.queryByText("0000000000000001"),
-    ).not.toBeInTheDocument();
+    expect(definitions.queryByText("0000000000000001")).not.toBeInTheDocument();
     expect(
       definitions.getByText(
         "Deleting is refused while this definition names this operator.",
@@ -146,6 +144,30 @@ describe("operator page", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "Field cluster one" }),
     ).toBeInTheDocument();
+  });
+
+  it("opens the operator registered under the identifier new", async () => {
+    // `new` is a valid identifier, so no create route may take it.
+    server.use(
+      http.get(`${API_URL}/orgs/acme/operators/new`, () =>
+        HttpResponse.json({
+          ...fieldOne,
+          grn: "grn:acme:default:operator:new",
+          name: "New cluster",
+        }),
+      ),
+    );
+
+    await renderServerComponent(
+      OperatorPage({
+        params: Promise.resolve({ org: "acme", operator: "new" }),
+      }),
+    );
+
+    expect(
+      screen.getByRole("heading", { level: 1, name: "New cluster" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("new", { selector: "dd" })).toBeInTheDocument();
   });
 
   it("offers editing the details and deleting the registration", async () => {

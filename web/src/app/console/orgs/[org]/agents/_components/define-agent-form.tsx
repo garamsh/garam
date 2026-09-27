@@ -19,7 +19,7 @@ import { parseOperatorIdentifier } from "@/lib/operator";
 import { useHydrated } from "@/hooks/use-hydrated";
 import type { Parsed } from "@/lib/parsed";
 
-import { NEW_ITEM, orgHref } from "../../../../_components/navigation";
+import { orgHref } from "../../../../_components/navigation";
 
 const initialState: DefineAgentState = { status: "idle" };
 
@@ -128,7 +128,7 @@ export function DefineAgentForm({
           {operators?.length === 0 && (
             <p className="text-sm">
               <Link
-                href={`${orgHref(org, "operators")}/${NEW_ITEM}`}
+                href={orgHref(org, "operators")}
                 className="underline underline-offset-4"
               >
                 Register an operator

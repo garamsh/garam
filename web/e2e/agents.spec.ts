@@ -16,7 +16,7 @@ test.describe("agent definitions", () => {
     // (ADR-0074). The field is disabled until React hydrates, so
     // waiting for it to be enabled waits on the form being able to
     // hold the choice.
-    const operator = page.getByLabel("Operator");
+    const operator = page.getByLabel("Operator", { exact: true });
     await expect(operator).toBeEnabled();
     await operator.selectOption({
       label: `${signedIn.operatorName} (${signedIn.operatorIdentifier})`,

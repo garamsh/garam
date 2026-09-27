@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
-import { RegisterOperatorForm } from "@/app/console/orgs/[org]/operators/new/_components/register-operator-form";
+import { RegisterOperatorForm } from "@/app/console/orgs/[org]/operators/_components/register-operator-form";
 import { API_URL, fieldOneRegistered } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
@@ -111,8 +111,8 @@ describe("register operator form", () => {
 
     // Presence: each is one clause of a longer sentence. What a person
     // needs before typing stays; what the operator does with the token
-    // and what deleting a record does have gone to the token and to
-    // the list of records.
+    // is beside the token, and what deleting a record does is on the
+    // operator's page.
     expect(
       screen.getByText(/Registering records that this organization has/),
     ).toBeInTheDocument();
@@ -120,17 +120,22 @@ describe("register operator form", () => {
       screen.queryByText(/Deleting a record stops that operator/),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByText(/no private key is ever shown here/),
+      screen.queryByText(/on garam's machine listener/),
     ).not.toBeInTheDocument();
     expect(screen.queryByText(/certificate authority/)).not.toBeInTheDocument();
 
     await user.type(screen.getByLabelText("Identifier"), "field-one");
     await user.click(screen.getByRole("button", { name: "Register operator" }));
 
-    // The control: the key pair is beside the token that needs it, so
-    // its absence above is a move rather than a deletion.
+    // The control: how the operator enrols is beside the token that it
+    // enrols with, so its absence above is a move rather than a
+    // deletion. The recovery named beside it is a new token, which the
+    // API mints (ADR-0067), and not a deletion.
     expect(
-      await screen.findByText(/no private key is ever shown here/),
+      await screen.findByText(/on garam's machine listener/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/ask an administrator to mint a new enrollment token/),
     ).toBeInTheDocument();
   });
 

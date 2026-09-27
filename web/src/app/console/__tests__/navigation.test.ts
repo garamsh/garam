@@ -159,7 +159,7 @@ describe("consoleCrumbs", () => {
     ).toEqual({ label: "New policy" });
   });
 
-  it("names an operator's page and the page that registers one", () => {
+  it("names an operator's page, the identifier new included", () => {
     const operator = parseConsolePath("/console/orgs/acme/operators/field-one");
 
     expect(consoleCrumbs(operator, orgs).at(-2)).toEqual({
@@ -170,12 +170,20 @@ describe("consoleCrumbs", () => {
     expect(consoleCrumbs(operator, orgs, "Field cluster").at(-1)).toEqual({
       label: "Field cluster",
     });
+    // Operators has no create page: `new` is a valid identifier, so it
+    // is an operator's page and takes the name that page reads.
+    const named = parseConsolePath("/console/orgs/acme/operators/new");
+    expect(consoleCrumbs(named, orgs, "New cluster").at(-1)).toEqual({
+      label: "New cluster",
+    });
+    // The control: a section with a create page still names it.
     expect(
       consoleCrumbs(
-        parseConsolePath("/console/orgs/acme/operators/new"),
+        parseConsolePath("/console/orgs/acme/teams/new"),
         orgs,
+        "x",
       ).at(-1),
-    ).toEqual({ label: "New operator" });
+    ).toEqual({ label: "New team" });
   });
 
   it("falls back to the slug for an organization not in the list", () => {

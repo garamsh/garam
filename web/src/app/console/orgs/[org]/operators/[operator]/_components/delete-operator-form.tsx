@@ -48,7 +48,7 @@ export function DeleteOperatorForm({
           <input type="hidden" name="operator" value={operator} />
           <p className="text-sm wrap-anywhere">
             {enrolled
-              ? `Delete ${name}? It stops authenticating to garam at once. Work already running in its cluster does not stop, and agents it provisioned keep their own certificates.`
+              ? `Delete ${name}? Its new connections to garam are refused. Work already running in its cluster does not stop, and agents it provisioned keep their own certificates.`
               : `Delete ${name}? It never obtained a certificate, so nothing stops. Its identifier becomes free to register again.`}
           </p>
           <div className="flex flex-wrap gap-2">

@@ -19,7 +19,7 @@ import {
 import { useHydrated } from "@/hooks/use-hydrated";
 import type { Parsed } from "@/lib/parsed";
 
-import { orgHref } from "../../../../../_components/navigation";
+import { orgHref } from "../../../../_components/navigation";
 
 const initialState: RegisterOperatorState = { status: "idle" };
 
@@ -43,6 +43,10 @@ const initialState: RegisterOperatorState = { status: "idle" };
  * registering does. What the operator does with the token is beside
  * the token, and what deleting a record does is on the operator's own
  * page, beside the control that does it.
+ *
+ * It stands under the list rather than on a page of its own: an
+ * identifier is typed, `new` is a valid one, and a create route would
+ * take that operator's page (ADR-0074).
  */
 export function RegisterOperatorForm({ org }: { org: string }) {
   const [state, formAction, pending] = useActionState(
@@ -178,10 +182,8 @@ function EnrollmentToken({
         Registered {name}
       </h3>
       <p className="text-sm text-destructive">
-        This is the only time this token is shown. garam keeps no copy and no
-        page can retrieve it. If you lose it, delete this record and register
-        the operator again, or have an administrator issue a certificate out of
-        band.
+        This is the only time this token is shown; garam keeps no copy. If it is
+        lost, ask an administrator to mint a new enrollment token.
       </p>
       <div className="flex gap-2">
         <Input
@@ -215,15 +217,10 @@ function EnrollmentToken({
         </p>
       )}
       <p className="text-sm text-muted-foreground">
-        The operator generates its own key pair in its own cluster and presents
-        the token to get a certificate signed — no private key is ever shown
-        here or held by garam.
-      </p>
-      <p className="text-sm text-muted-foreground">
-        Give it to the operator, which presents it with a certificate signing
-        request to <code className="font-mono">POST /enrollment</code> on
-        garam&apos;s machine listener. It is spent by the first attempt and
-        stops working at <ExpiresAt at={expiresAt} />.
+        Give it to the operator to enrol with at{" "}
+        <code className="font-mono">POST /enrollment</code> on garam&apos;s
+        machine listener. It works once and expires at{" "}
+        <ExpiresAt at={expiresAt} />.
       </p>
       <div>
         <Button asChild variant="outline">

@@ -163,8 +163,8 @@ func (s *Server) GetOperator(w http.ResponseWriter, r *http.Request, orgSlug api
 	writeJSON(w, http.StatusOK, operatorToAPI(o))
 }
 
-// UpdateOperator changes the operator's name and description (ADR-0074).
-// Requires the admin role.
+// UpdateOperator changes the operator's name and description
+// (ADR-0074). Requires the admin role.
 //
 // It is authorized on an action of its own: renaming grants nothing a
 // registration does and withdraws nothing a delete does, so neither of

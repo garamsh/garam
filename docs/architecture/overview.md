@@ -78,12 +78,14 @@ collaborate on a shared plan.
   organization holds the record and stops when the record goes
   (ADR-0070). The identifier is supplied rather than minted, since an
   operator that already holds a certificate has to be registered under
-  the GRN that certificate names. Registering is granted by
-  `operator:register`, reading by `operator:read` and deleting by
-  `operator:delete`, each named action by action for the reason the
-  agent actions are — deleting separately from registering, because
-  registering grants nothing and deleting withdraws what an operator
-  runs on.
+  the GRN that certificate names. A name and description beside it are
+  the organization's words about the record and not its identity
+  (ADR-0074). Registering is granted by `operator:register`, reading by
+  `operator:read`, renaming and describing by `operator:update` and
+  deleting by `operator:delete`, each named action by action for the
+  reason the agent actions are — deleting separately from registering,
+  because registering grants nothing and deleting withdraws what an
+  operator runs on.
 - An organization's members **defining** an agent, under
   `/orgs/{org}/agent-definitions` — which operator is to run it, and
   with what values (ADR-0026). A definition is a record rather than a

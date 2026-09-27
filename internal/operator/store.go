@@ -11,9 +11,9 @@ import (
 // Its one update is to what the organization says about the operator,
 // which moves nothing the operator authenticates or enrols by
 // (ADR-0074). There is a delete, and it is the one write here that
-// takes something away: the record is what an operator's certificate authenticates on,
-// so removing it stops the operator rather than tidying a list
-// (ADR-0070).
+// takes something away: the record is what an operator's certificate
+// authenticates on, so removing it stops the operator rather than
+// tidying a list (ADR-0070).
 type Store interface {
 	// Register records the operator and mints the enrollment token it
 	// starts with, or ErrOperatorAlreadyRegistered when the

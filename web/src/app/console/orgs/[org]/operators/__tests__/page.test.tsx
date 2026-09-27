@@ -95,12 +95,18 @@ describe("operators section", () => {
     ).toBeInTheDocument();
   });
 
-  it("opens registering on a page of its own, and deletes from none of the rows", async () => {
+  it("registers under the list, and deletes from none of the rows", async () => {
     await renderServerComponent(OperatorsPage(params("acme")));
 
+    // Registering has no route of its own: `new` is a valid identifier,
+    // so that segment is an operator's page (ADR-0074).
+    expect(screen.getByLabelText("Identifier")).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Register operator" }),
-    ).toHaveAttribute("href", "/console/orgs/acme/operators/new");
+      screen.getByRole("button", { name: "Register operator" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Register operator" }),
+    ).not.toBeInTheDocument();
     const table = screen.getByRole("table");
     expect(
       within(table).queryByRole("button", { name: /Delete/ }),
@@ -117,9 +123,7 @@ describe("operators section", () => {
     expect(
       screen.getByText("This organization has registered no operators."),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("link", { name: "Register operator" }),
-    ).toBeInTheDocument();
+    expect(screen.getByLabelText("Identifier")).toBeInTheDocument();
   });
 
   it.each([403, 404])("renders not-found on %i", async (status) => {

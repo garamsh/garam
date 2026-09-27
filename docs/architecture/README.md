@@ -238,12 +238,12 @@ What this repository runs against itself. `docs/convention/ci.md` decides how a 
   A development build, which `make image-build` produces when given
   `IMAGE_REGISTRY`, carries the same two labels, the version being its
   tag, and reaches a repository only by a person's push (ADR-0071);
-  without it the target tags `:ci` and passes neither label a value. A reference this repository did not publish
-  is still one only its builder can vouch for, which after the label is
-  a claim about where it came from and no longer about what code is in
-  it. An answer to "does this route exist" therefore names where it
-  exists, and `main` answers a different question than the caller asked
-  (#886).
+  without it the target tags `:ci` and passes neither label a value.
+  A reference this repository did not publish is still one only its
+  builder can vouch for, which after the label is a claim about where
+  it came from and no longer about what code is in it. An answer to
+  "does this route exist" therefore names where it exists, and `main`
+  answers a different question than the caller asked (#886).
 - **The after-merge run is not taken.** A `push: branches: [main]` trigger ran on `ci.yml` until #811. Both triggers read the merge result, so what that one alone covered is a `main` that moved between the pull request's run and the merge.
 - **Nothing mechanical covers that gap; the role that merges does.** The obligation is stated once, in `AGENTS.md` §Roles; this bullet records that the gap is covered and is not that statement. The mechanical replacement is a required status check with *branches must be up to date*, which is a repository setting and so the account owner's.
 - **Mutation testing runs in no workflow, and that is the decision rather than an omission.** `make mutation` rewrites one operator at a time under `internal/` and reports the mutants no test noticed. Four full runs on 2026-09-02 each spent around 35 minutes of CPU on twelve cores and took between 5 minutes 42 seconds and 32 minutes of wall time; the spread is the per-mutant timeout, which the target's own comment accounts for. A runner with four cores has a third of those and slower ones. `internal/` holds 33 of the module's 40 Go packages; the seven outside it are `cmd/garam`, the three generated from `api/openapi.yaml`, `api/machine.yaml` and `proto/`, and `migrations`, `tests/e2e` and `tests/integration`, which hold test files only (`go list ./... | grep -v /internal/`). So triggering on changes under it would exclude a pull request that changes Go outside `internal/` as well as the ones that change no Go at all, and would still fire on almost every pull request that changes Go and roughly double what it costs: of the 120 commits to 3fbcf93, 47 changed a Go, specification or migration file, and 41 of those touch `internal/` while six do not. A schedule spends the same minutes on a report no pull request is waiting for, and attributes a new survivor to no change rather than to the one that raised it. What the run buys is an audit of the suite rather than a gate on one change, which is why a person invokes it (#875).

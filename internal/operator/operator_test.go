@@ -87,15 +87,15 @@ func TestNew_StartsPending(t *testing.T) {
 func TestNew_CallsAnOperatorItsIdentifierUntilItIsNamed(t *testing.T) {
 	unnamed, err := operator.New(acmeGRN(), "field-one", aliceGRN(), operator.DetailsPatch{})
 	require.NoError(t, err)
-	assert.Equal(t, "field-one", unnamed.Name())
-	assert.Empty(t, unnamed.Description())
+	assert.Equal(t, "field-one", unnamed.Name)
+	assert.Empty(t, unnamed.Description)
 
 	details, err := operator.NewDetailsPatch(ptr("Field cluster one"), ptr("Runs the batch agents."))
 	require.NoError(t, err)
 	named, err := operator.New(acmeGRN(), "field-one", aliceGRN(), details)
 	require.NoError(t, err)
-	assert.Equal(t, "Field cluster one", named.Name())
-	assert.Equal(t, "Runs the batch agents.", named.Description())
+	assert.Equal(t, "Field cluster one", named.Name)
+	assert.Equal(t, "Runs the batch agents.", named.Description)
 	assert.Equal(t, unnamed.GRN(), named.GRN(), "a name is not part of the identity")
 }
 

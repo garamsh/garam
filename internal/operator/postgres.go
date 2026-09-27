@@ -47,8 +47,8 @@ func (s *PostgresStore) Register(ctx context.Context, o *Operator, e *Enrollment
 		OrgGrn:       o.orgGRN.String(),
 		RegisteredBy: o.registeredBy.String(),
 		CreatedAt:    stamp(o.createdAt),
-		Name:         o.name,
-		Description:  o.description,
+		Name:         o.Name,
+		Description:  o.Description,
 	}); err != nil {
 		return nil, pgxerr.Classify(err, "register operator", nil, ErrOperatorAlreadyRegistered)
 	}
@@ -267,8 +267,8 @@ func rowToOperator(row db.Operator, certificateIssuedAt pgtype.Timestamptz, live
 		orgGRN:       orgGRN,
 		registeredBy: registeredBy,
 		createdAt:    row.CreatedAt.Time,
-		name:         row.Name,
-		description:  row.Description,
+		Name:         row.Name,
+		Description:  row.Description,
 		// An absent certificate leaves the zero time, which is what
 		// EnrollmentState reads as "garam has issued none".
 		certificateIssuedAt: certificateIssuedAt.Time,

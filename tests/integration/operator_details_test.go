@@ -74,8 +74,8 @@ func TestOperatorUpdateDetails_MovesNothingTheOperatorAuthenticatesOrEnrolsBy(t 
 
 	updated, err := store.UpdateDetails(ctx, enrolled, detailsPatch(t, "Field cluster", "Runs the batch agents."))
 	require.NoError(t, err)
-	assert.Equal(t, "Field cluster", updated.Name())
-	assert.Equal(t, "Runs the batch agents.", updated.Description())
+	assert.Equal(t, "Field cluster", updated.Name)
+	assert.Equal(t, "Runs the batch agents.", updated.Description)
 	assert.Equal(t, operator.EnrollmentStateEnrolled, updated.EnrollmentState())
 	assert.Equal(t, before.CertificateIssuedAt(), updated.CertificateIssuedAt())
 	assert.Equal(t, serial, rowOf(t, p, `SELECT serial FROM operator_certificates WHERE operator_grn = $1`, enrolled),
@@ -87,7 +87,7 @@ func TestOperatorUpdateDetails_MovesNothingTheOperatorAuthenticatesOrEnrolsBy(t 
 
 	renamed, err := store.UpdateDetails(ctx, pending, detailsPatch(t, "Staging", ""))
 	require.NoError(t, err)
-	assert.Equal(t, "Staging", renamed.Name())
+	assert.Equal(t, "Staging", renamed.Name)
 	assert.Equal(t, operator.EnrollmentStatePending, renamed.EnrollmentState())
 	assert.Equal(t, tokenHash,
 		rowOf(t, p, `SELECT token_hash FROM operator_enrollment_tokens WHERE operator_grn = $1`, pending))
@@ -124,20 +124,20 @@ func TestOperatorUpdateDetails_ReachesOneOrganizationsRecord(t *testing.T) {
 	require.NoError(t, err)
 	got, err := store.UpdateDetails(ctx, mine, onlyDescription)
 	require.NoError(t, err)
-	assert.Equal(t, "Acme one", got.Name(), "a field left out keeps its value")
-	assert.Equal(t, description, got.Description())
+	assert.Equal(t, "Acme one", got.Name, "a field left out keeps its value")
+	assert.Equal(t, description, got.Description)
 	name := "Acme renamed"
 	onlyName, err := operator.NewDetailsPatch(&name, nil)
 	require.NoError(t, err)
 	got, err = store.UpdateDetails(ctx, mine, onlyName)
 	require.NoError(t, err)
-	assert.Equal(t, name, got.Name())
-	assert.Equal(t, description, got.Description(), "a field left out keeps its value")
+	assert.Equal(t, name, got.Name)
+	assert.Equal(t, description, got.Description, "a field left out keeps its value")
 
 	other, err := store.Get(ctx, theirs.GRN())
 	require.NoError(t, err)
-	assert.Equal(t, "one", other.Name(), "another organization's record of the same identifier is untouched")
-	assert.Empty(t, other.Description())
+	assert.Equal(t, "one", other.Name, "another organization's record of the same identifier is untouched")
+	assert.Empty(t, other.Description)
 
 	_, err = store.UpdateDetails(ctx, scopedGRN("acme", operator.ServiceType, "never"), detailsPatch(t, "Ghost", ""))
 	assert.ErrorIs(t, err, operator.ErrOperatorNotFound)

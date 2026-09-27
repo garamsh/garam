@@ -211,16 +211,23 @@ func (p DetailsPatch) Description() *string { return p.description }
 // It carries no state the operator reports and no credential. What an
 // operator does is reported against the agents it holds (ADR-0012), and
 // what it authenticates with is the certificate this package's Service
-// issues. The two fields below are what garam already knows about that
+// issues. The last two fields are what garam already knows about that
 // certificate, read beside the record and persisted nowhere on it: the
 // state is a property of the tables together rather than of this row.
+// Name and Description are persisted on the row and exported, as
+// structure.md asks of what an aggregate persists (ADR-0074).
 type Operator struct {
 	grn          grn.GRN
 	orgGRN       grn.GRN
 	registeredBy grn.GRN
 	createdAt    time.Time
-	name         string
-	description  string
+
+	// Name is what the organization calls the operator. Two operators
+	// may share one; the GRN is what tells them apart (ADR-0074).
+	Name string
+	// Description is what the organization says the operator is for,
+	// empty where it says nothing.
+	Description string
 
 	// When garam last issued the operator a certificate, zero where it
 	// has issued none.
@@ -254,8 +261,8 @@ func New(orgGRN grn.GRN, identifier string, registeredBy grn.GRN, details Detail
 		orgGRN:       orgGRN,
 		registeredBy: registeredBy,
 		createdAt:    time.Now().UTC(),
-		name:         name,
-		description:  description,
+		Name:         name,
+		Description:  description,
 		// The record and the token it enrols with are one write
 		// (ADR-0064), so a registration never exists without a live
 		// token beside it. Whether a certificate already exists is
@@ -302,14 +309,6 @@ func (o *Operator) Organization() grn.GRN { return o.orgGRN }
 // RegisteredBy returns the member that registered the operator.
 func (o *Operator) RegisteredBy() grn.GRN { return o.registeredBy }
 func (o *Operator) CreatedAt() time.Time  { return o.createdAt }
-
-// Name returns what the organization calls the operator. Two operators
-// may share one; the GRN is what tells them apart.
-func (o *Operator) Name() string { return o.name }
-
-// Description returns what the organization says the operator is for,
-// empty where it says nothing.
-func (o *Operator) Description() string { return o.description }
 
 // EnrollmentState reports where the operator stands in obtaining a
 // certificate.

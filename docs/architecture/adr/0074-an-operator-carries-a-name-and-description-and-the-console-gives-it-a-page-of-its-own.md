@@ -37,7 +37,10 @@ already open a page per entry
   characters, and not unique; a description is trimmed, up to 1000
   characters, and may be empty. Both must be text PostgreSQL stores,
   so NUL and invalid UTF-8 are refused as the caller's error. Migration
-  000025 adds the columns and checks the same bounds.
+  000025 adds the columns and checks the same bounds. Both are exported
+  fields of the aggregate, as `structure.md` asks of what an aggregate
+  persists; the operator's other fields keep their accessors until
+  #1083 converts the domain.
 - **A registration that names none is called by its identifier**,
   including every one made before this decision: 000025 fills the name
   from the GRN's last segment, and `registerOperator` takes the name

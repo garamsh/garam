@@ -1125,7 +1125,7 @@ func (s *fakeOperatorStore) UpdateDetails(_ context.Context, g grn.GRN, patch op
 	if !ok {
 		return nil, operator.ErrOperatorNotFound
 	}
-	name, description := o.Name(), o.Description()
+	name, description := o.Name, o.Description
 	if n := patch.Name(); n != nil {
 		name = *n
 	}

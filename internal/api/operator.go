@@ -251,8 +251,8 @@ func (s *Server) requireRegisteredOperator(r *http.Request, g grn.GRN) error {
 func operatorToAPI(o *operator.Operator) apigen.Operator {
 	out := apigen.Operator{
 		Grn:             o.GRN().String(),
-		Name:            o.Name(),
-		Description:     o.Description(),
+		Name:            o.Name,
+		Description:     o.Description,
 		OrgGrn:          o.Organization().String(),
 		RegisteredBy:    o.RegisteredBy().String(),
 		CreatedAt:       o.CreatedAt(),

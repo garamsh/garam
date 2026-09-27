@@ -9,6 +9,7 @@ import {
   addPolicyVersion,
   type AddPolicyVersionState,
 } from "@/features/orgs/actions";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { hasCondition, parsePolicyDocument } from "@/lib/policy-document";
 
 import { ConditionNotice } from "../../_components/condition-notice";
@@ -20,7 +21,7 @@ const initialState: AddPolicyVersionState = { status: "idle" };
  * Versions are append-only and the policy goes on evaluating its
  * default, so saving changes no check; the answer says which version
  * is still in use. The editor is held by the form, so a refusal leaves
- * the document as typed.
+ * the document as typed, and it takes no input before it can hold it.
  */
 export function AddVersionForm({
   org,
@@ -37,6 +38,7 @@ export function AddVersionForm({
     addPolicyVersion,
     initialState,
   );
+  const hydrated = useHydrated();
   const [document, setDocument] = useState(initialDocument);
   const parsed = parsePolicyDocument(document);
   const message =
@@ -56,6 +58,7 @@ export function AddVersionForm({
         name="document"
         rows={12}
         spellCheck={false}
+        disabled={!hydrated}
         value={document}
         onChange={(event) => setDocument(event.target.value)}
         className="font-mono text-sm"

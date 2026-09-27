@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { createPolicy, type CreatePolicyState } from "@/features/orgs/actions";
+import { useHydrated } from "@/hooks/use-hydrated";
 import {
   formatPolicyDocument,
   hasCondition,
@@ -21,14 +22,16 @@ const initialState: CreatePolicyState = { status: "idle" };
  * Creates a policy from a name and its first document. garam stores it
  * as a draft, so what is typed here grants nothing until the policy is
  * activated. Both fields are held by the form, so a refusal leaves
- * them as typed. The starting document names the resource the API
- * authorizes a project write against, so it matches what it says.
+ * them as typed, and neither takes input before the form can hold it.
+ * The starting document names the resource the API authorizes a
+ * project write against, so it matches what it says.
  */
 export function CreatePolicyForm({ org }: { org: string }) {
   const [state, formAction, pending] = useActionState(
     createPolicy,
     initialState,
   );
+  const hydrated = useHydrated();
   const [name, setName] = useState("");
   const [document, setDocument] = useState(() =>
     formatPolicyDocument({
@@ -59,6 +62,7 @@ export function CreatePolicyForm({ org }: { org: string }) {
           id="name"
           name="name"
           required
+          disabled={!hydrated}
           value={name}
           onChange={(event) => setName(event.target.value)}
           className="max-w-sm"
@@ -71,6 +75,7 @@ export function CreatePolicyForm({ org }: { org: string }) {
           name="document"
           rows={14}
           spellCheck={false}
+          disabled={!hydrated}
           value={document}
           onChange={(event) => setDocument(event.target.value)}
           className="font-mono text-sm"

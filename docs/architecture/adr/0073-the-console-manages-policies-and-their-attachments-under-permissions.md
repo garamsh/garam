@@ -89,7 +89,19 @@ effect. The PM confirmed the schema and implementation reading on
 - **What was not read is said to be unchecked.** A refused attachment
   list makes a policy neither attached nor organization-wide; a refused
   team membership is named as unchecked where a policy is attached to
-  that team, and no absence of inheritance is claimed then.
+  that team, and no absence of inheritance is claimed then. While any
+  policy's attachments are unread, an empty source says only that no
+  policy the caller can read is in it.
+- **A document is authored text, and GRNs in it are what was
+  written.** The engine matches resources by GRN pattern, so the
+  editor and a version's document show the patterns as typed; that is
+  content, not addressing. Navigation, choices and the subject query
+  still name teams, people and agents and address them by identifier
+  (ADR-0011). The create page starts from an example whose resource is
+  the one garam authorizes its action against, so it matches what it
+  names.
+- **An editor takes input only once it can hold it.** It is disabled
+  until the page is interactive, so text typed before then is not lost.
 - **A Condition is shown as restricting nothing.** Where a document
   being edited, a stored version, or the version about to be evaluated
   carries one, the console says garam does not evaluate it.

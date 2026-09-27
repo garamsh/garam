@@ -153,7 +153,10 @@ Organizations are created, and an invitation is accepted at
 because accepting one joins an existing account to an organization.
 
 No organization, group, project or user is addressed by its GRN
-anywhere in the interface. The console shows names and addresses
+anywhere in the interface. A policy document is authored text naming
+resources by GRN pattern, and the console shows it as written, which
+is content rather than addressing
+([ADR-0073](./adr/0073-the-console-manages-policies-and-their-attachments-under-permissions.md)). The console shows names and addresses
 resources by the identifier segment the API's own paths take
 ([ADR-0011](./adr/0011-console-shell.md),
 [ADR-0001](./adr/0001-grn-segments.md)).

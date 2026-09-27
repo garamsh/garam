@@ -191,9 +191,14 @@ fi
 
 # The revision label is read off HEAD, so a tree that differs from HEAD
 # would be labelled and tagged as a commit it is not. The check covers
-# untracked files as well, since the build context reads them.
-if [ "$dev" = true ] && [ -n "$(git status --porcelain)" ]; then
-	refuse "the working tree differs from HEAD ($revision), which the tag and the revision label would both name"
+# untracked files as well, since the build context reads them. A
+# status that fails says nothing about the tree, so it refuses too
+# rather than reading as an empty, clean answer.
+if [ "$dev" = true ]; then
+	status=$(git status --porcelain) \
+		|| refuse "git status failed, so whether the working tree matches HEAD ($revision) is unknown"
+	[ -z "$status" ] \
+		|| refuse "the working tree differs from HEAD ($revision), which the tag and the revision label would both name"
 fi
 
 echo "image-build: $(printf '%s\n' "$images" | wc -l | tr -d ' ') images, read from $workflow"

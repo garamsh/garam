@@ -123,6 +123,26 @@ touch "$repo/untracked"
 refused 'differs from HEAD' --registry "$reg" --tag 1.2.3-rc.1
 rm "$repo/untracked"
 
+# A `git` whose status fails and prints nothing, every other command
+# reaching the real one: the failure is refused, not read as clean,
+# and the same wrapper with status passed through builds.
+realgit=$(command -v git)
+cat >"$scratch/bin/git" <<EOF
+#!/bin/sh
+[ "\$1" != status ] || [ -z "\${GIT_STATUS_FAILS:-}" ] || exit 128
+exec "$realgit" "\$@"
+EOF
+chmod +x "$scratch/bin/git"
+GIT_STATUS_FAILS=1
+export GIT_STATUS_FAILS
+refused 'git status failed' --registry "$reg" --tag 1.2.3-rc.1
+unset GIT_STATUS_FAILS
+cases=$((cases + 1))
+if ! run --registry "$reg" --tag 1.2.3-rc.1 || ! grep -q '^build ' "$log"; then
+	fail 'refused a clean build through the git wrapper'
+fi
+rm "$scratch/bin/git"
+
 # The check's build passes neither per-run argument.
 cases=$((cases + 1))
 if ! run; then

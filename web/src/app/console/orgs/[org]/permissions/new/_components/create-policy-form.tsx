@@ -21,7 +21,8 @@ const initialState: CreatePolicyState = { status: "idle" };
  * Creates a policy from a name and its first document. garam stores it
  * as a draft, so what is typed here grants nothing until the policy is
  * activated. Both fields are held by the form, so a refusal leaves
- * them as typed.
+ * them as typed. The starting document names the resource the API
+ * authorizes a project write against, so it matches what it says.
  */
 export function CreatePolicyForm({ org }: { org: string }) {
   const [state, formAction, pending] = useActionState(
@@ -34,9 +35,9 @@ export function CreatePolicyForm({ org }: { org: string }) {
       Version: "2026-07-25",
       Statement: [
         {
-          Effect: "Allow",
-          Action: ["org:read"],
-          Resource: [`grn:${org}:*`],
+          Effect: "Deny",
+          Action: ["project:update"],
+          Resource: [`grn:${org}:default:project:*`],
         },
       ],
     }),

@@ -55,13 +55,13 @@ describe("organization overview page", () => {
       screen.queryByRole("link", { name: /^Consents\b/ }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("link", { name: /^Policies\b/ }),
+      screen.queryByRole("link", { name: /^Permissions\b/ }),
     ).not.toBeInTheDocument();
     // Presence: the note is one sentence and each reason is a clause of
     // it, so neither reason is the whole string.
     const note = screen.getByText(/not counted here/);
+    expect(note).toHaveTextContent("Consents and Permissions");
     expect(note).toHaveTextContent("requires the admin role");
-    expect(note).toHaveTextContent("does not read policies at all");
   });
 
   it("names the failing states a count on its own hides", async () => {

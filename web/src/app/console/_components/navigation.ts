@@ -3,8 +3,8 @@ import {
   FolderGit2,
   Handshake,
   LayoutDashboard,
-  ScrollText,
   Server,
+  ShieldCheck,
   UserRound,
   UsersRound,
   type LucideIcon,
@@ -25,6 +25,11 @@ export type ConsoleSection = {
    * calls an entry's page before that page has named the entry.
    */
   items?: { create: string; fallback: string };
+  /**
+   * Named pages below the section beside its entries, each a view of
+   * the section rather than an entry of it.
+   */
+  views?: readonly { segment: string; label: string }[];
 };
 
 /** The segment below an item section that opens its create page. */
@@ -44,13 +49,19 @@ export const CONSOLE_SECTIONS: readonly ConsoleSection[] = [
   { segment: "projects", label: "Projects", icon: FolderGit2 },
   { segment: "operators", label: "Operators", icon: Server },
   { segment: "consents", label: "Consents", icon: Handshake },
-  { segment: "policies", label: "Policies", icon: ScrollText },
+  {
+    segment: "permissions",
+    label: "Permissions",
+    icon: ShieldCheck,
+    items: { create: "New policy", fallback: "Policy" },
+    views: [{ segment: "attachments", label: "Attachments" }],
+  },
 ];
 
 /**
  * Where a console pathname sits in the console's structure. `item` is
  * the segment below a section that has item pages: `NEW_ITEM` for its
- * create page, an entry's identifier otherwise.
+ * create page, a named view's segment, or an entry's identifier.
  */
 export type ConsoleLocation =
   | { kind: "orgs" }
@@ -123,14 +134,16 @@ export function consoleCrumbs(
       if (item === undefined || !section.items) {
         return [...trail, { label: section.label }];
       }
+      const view = section.views?.find((entry) => entry.segment === item);
       return [
         ...trail,
         { label: section.label, href: orgHref(location.org, section.segment) },
         {
           label:
-            item === NEW_ITEM
+            view?.label ??
+            (item === NEW_ITEM
               ? section.items.create
-              : (itemName ?? section.items.fallback),
+              : (itemName ?? section.items.fallback)),
         },
       ];
     }

@@ -253,6 +253,19 @@ export function getGroup(
   );
 }
 
+/**
+ * The groups of an organization, for a page that only looks names up
+ * in them: a refusal is returned rather than answered with not-found.
+ */
+export function lookupGroups(org: string): Promise<RefusableRead<Group[]>> {
+  return refusableRead(
+    garamFetchAuthenticated(
+      `/orgs/${orgPath(org)}/groups`,
+      z.array(GroupParser),
+    ),
+  );
+}
+
 /** The members of one group of an organization. */
 export function listGroupMembers(
   org: string,
@@ -355,7 +368,7 @@ export function listOrgConsents(org: string): Promise<OrgRead<OrgConsent[]>> {
  * rejection travels on: a rejected session is already a redirect to the
  * login page.
  */
-async function orgRead<T>(read: Promise<T>): Promise<OrgRead<T>> {
+export async function orgRead<T>(read: Promise<T>): Promise<OrgRead<T>> {
   try {
     return { status: "ok", data: await read };
   } catch (error) {
@@ -377,7 +390,9 @@ async function orgRead<T>(read: Promise<T>): Promise<OrgRead<T>> {
  * not-found (`RefusableRead`). A missing resource is still
  * `notFound()`.
  */
-async function refusableRead<T>(read: Promise<T>): Promise<RefusableRead<T>> {
+export async function refusableRead<T>(
+  read: Promise<T>,
+): Promise<RefusableRead<T>> {
   try {
     return { status: "ok", data: await read };
   } catch (error) {
@@ -392,6 +407,6 @@ async function refusableRead<T>(read: Promise<T>): Promise<RefusableRead<T>> {
  * Org and group identifiers arrive from the URL, so they are escaped
  * before reuse.
  */
-function orgPath(org: string): string {
+export function orgPath(org: string): string {
   return encodeURIComponent(org);
 }

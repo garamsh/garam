@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { UsersRound } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
   getGroup,
@@ -13,6 +15,7 @@ import {
 import { ApiUnreachable } from "../../../../_components/api-unreachable";
 import { EmptyState } from "../../../../_components/empty-state";
 import { ItemCrumb } from "../../../../_components/item-crumb";
+import { orgHref } from "../../../../_components/navigation";
 import { PageHeader } from "../../../../_components/page-header";
 import { AddTeamMemberForm } from "./_components/add-team-member-form";
 import { DeleteTeamForm } from "./_components/delete-team-form";
@@ -92,7 +95,15 @@ export default async function TeamPage({ params }: Params) {
       <PageHeader
         title={name}
         description="People and agents of this organization in one team."
-      />
+      >
+        <Button asChild variant="outline">
+          <Link
+            href={`${orgHref(org, "permissions")}/attachments?subject=${encodeURIComponent(`team:${team}`)}`}
+          >
+            Manage policies
+          </Link>
+        </Button>
+      </PageHeader>
       <section className="flex flex-col gap-3">
         <h2 className="font-heading text-lg font-semibold">Members</h2>
         {resolved.length === 0 ? (

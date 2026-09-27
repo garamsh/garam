@@ -31,7 +31,7 @@ describe("parseConsolePath", () => {
     "projects",
     "operators",
     "consents",
-    "policies",
+    "permissions",
   ])("reads the %s section", (segment) => {
     const location = parseConsolePath(`/console/orgs/acme/${segment}`);
 
@@ -50,6 +50,21 @@ describe("parseConsolePath", () => {
     });
   });
 
+  it("reads a policy's page and the Attachments view of Permissions", () => {
+    expect(
+      parseConsolePath("/console/orgs/acme/permissions/9f2ac1b4"),
+    ).toMatchObject({
+      section: { segment: "permissions" },
+      item: "9f2ac1b4",
+    });
+    expect(
+      parseConsolePath("/console/orgs/acme/permissions/attachments"),
+    ).toMatchObject({
+      section: { segment: "permissions" },
+      item: "attachments",
+    });
+  });
+
   it("reads an invitation", () => {
     expect(parseConsolePath("/console/invitations/token")).toEqual({
       kind: "invitation",
@@ -59,6 +74,8 @@ describe("parseConsolePath", () => {
   it.each([
     "/login",
     "/console/orgs/acme/nothing",
+    // The section's former address redirects before the shell reads it.
+    "/console/orgs/acme/policies",
     // A section without item pages has nothing below it.
     "/console/orgs/acme/people/deeper",
     "/console/orgs/acme/teams/eng/deeper",
@@ -113,6 +130,33 @@ describe("consoleCrumbs", () => {
     );
 
     expect(crumbs.at(-1)).toEqual({ label: "New team" });
+  });
+
+  it("names the Attachments view by its label, not as a policy", () => {
+    const crumbs = consoleCrumbs(
+      parseConsolePath("/console/orgs/acme/permissions/attachments"),
+      orgs,
+    );
+
+    expect(crumbs.slice(2)).toEqual([
+      { label: "Permissions", href: "/console/orgs/acme/permissions" },
+      { label: "Attachments" },
+    ]);
+  });
+
+  it("names a policy's page and the page that creates one", () => {
+    const policy = parseConsolePath("/console/orgs/acme/permissions/9f2ac1b4");
+
+    expect(consoleCrumbs(policy, orgs).at(-1)).toEqual({ label: "Policy" });
+    expect(consoleCrumbs(policy, orgs, "Deny exports").at(-1)).toEqual({
+      label: "Deny exports",
+    });
+    expect(
+      consoleCrumbs(
+        parseConsolePath("/console/orgs/acme/permissions/new"),
+        orgs,
+      ).at(-1),
+    ).toEqual({ label: "New policy" });
   });
 
   it("falls back to the slug for an organization not in the list", () => {

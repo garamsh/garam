@@ -10,6 +10,9 @@ import type {
   Operator,
   OrgConsent,
   Organization,
+  Policy,
+  PolicyAttachment,
+  PolicyVersion,
   Project,
   RegisteredOperator,
 } from "@/features/orgs";
@@ -136,6 +139,58 @@ export const engineeringMembers: GroupMember[] = [
 ];
 
 /**
+ * An active policy of Acme attached to Engineering, evaluating the
+ * first of its two versions.
+ */
+export const denyDeletes: Policy = {
+  grn: "grn:acme:default:policy:d1e2f3a4b5c6d7e8",
+  orgGrn: acme.grn,
+  name: "Deny project deletion",
+  status: "active",
+  defaultVersion: 1,
+  createdAt: "2026-01-02T03:04:05Z",
+  updatedAt: "2026-01-02T03:04:05Z",
+};
+
+/** The two versions `denyDeletes` holds, oldest first. */
+export const denyDeletesVersions: PolicyVersion[] = [1, 2].map((version) => ({
+  policyGrn: denyDeletes.grn,
+  version,
+  document: {
+    Version: "2026-07-25",
+    Statement: [
+      {
+        Effect: "Deny",
+        Action: version === 1 ? ["project:delete"] : ["project:*"],
+        Resource: ["grn:acme:*"],
+      },
+    ],
+  },
+  createdBy: alice.grn,
+  createdAt: "2026-01-02T03:04:05Z",
+}));
+
+/** `denyDeletes`'s one attachment, to Engineering. */
+export const denyDeletesAttachments: PolicyAttachment[] = [
+  {
+    policyGrn: denyDeletes.grn,
+    subjectGrn: engineering.grn,
+    createdAt: "2026-01-02T03:04:05Z",
+  },
+];
+
+/** An active policy of Acme with no attachment: it reaches everyone. */
+export const baselineRead: Policy = {
+  grn: "grn:acme:default:policy:0a1b2c3d4e5f6071",
+  orgGrn: acme.grn,
+  name: "Baseline read",
+  status: "active",
+  defaultVersion: 1,
+  createdAt: "2026-01-02T03:04:05Z",
+  updatedAt: "2026-01-02T03:04:05Z",
+};
+
+/**
  * Every route the fixtures model: what it answers signed in, and
  * whether the backend guards it. The split is the one
  * `api/openapi.yaml` records — an operation carrying `security: []`
@@ -160,6 +215,31 @@ const routes: { path: string; guarded: boolean; body: JsonBodyType }[] = [
   { path: "/orgs/acme/agents", guarded: true, body: [reportedAgent] },
   { path: "/orgs/acme/agent-definitions", guarded: true, body: [fieldAgent] },
   { path: "/orgs/acme/consents", guarded: true, body: [globexConsent] },
+  {
+    path: "/orgs/acme/policies",
+    guarded: true,
+    body: [denyDeletes, baselineRead],
+  },
+  {
+    path: "/orgs/acme/policies/d1e2f3a4b5c6d7e8/versions",
+    guarded: true,
+    body: denyDeletesVersions,
+  },
+  {
+    path: "/orgs/acme/policies/d1e2f3a4b5c6d7e8/attachments",
+    guarded: true,
+    body: denyDeletesAttachments,
+  },
+  {
+    path: "/orgs/acme/policies/0a1b2c3d4e5f6071/versions",
+    guarded: true,
+    body: [{ ...denyDeletesVersions[0], policyGrn: baselineRead.grn }],
+  },
+  {
+    path: "/orgs/acme/policies/0a1b2c3d4e5f6071/attachments",
+    guarded: true,
+    body: [],
+  },
 ];
 
 /** The signed-in happy path: Alice owns Acme, which holds one of each. */

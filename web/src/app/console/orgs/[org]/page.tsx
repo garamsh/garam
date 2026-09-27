@@ -150,9 +150,9 @@ export default async function OrgPage({ params }: Params) {
         ))}
       </ul>
       <p className="max-w-2xl text-sm text-muted-foreground">
-        Consents and Policies are not counted here. Reading a consent relation
-        requires the admin role, which not every member of this organization
-        holds, and the console does not read policies at all.
+        Consents and Permissions are not counted here. Reading consent relations
+        and policies requires the admin role, which not every member of this
+        organization holds.
       </p>
     </>
   );

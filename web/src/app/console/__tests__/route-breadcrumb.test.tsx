@@ -35,10 +35,10 @@ describe("route breadcrumb", () => {
   it("follows the route when it changes", () => {
     const { rerender } = renderBreadcrumb("/console/orgs/acme/teams");
 
-    route.pathname = "/console/orgs/acme/policies";
+    route.pathname = "/console/orgs/acme/permissions";
     rerender(<RouteBreadcrumb orgs={orgs} />);
 
-    expect(screen.getByText("Policies")).toHaveAttribute(
+    expect(screen.getByText("Permissions")).toHaveAttribute(
       "aria-current",
       "page",
     );

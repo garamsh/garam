@@ -31,7 +31,14 @@ describe("add team member form", () => {
       }),
     );
     const user = userEvent.setup();
-    render(<AddTeamMemberForm org="acme" team="eng" candidates={candidates} />);
+    render(
+      <AddTeamMemberForm
+        org="acme"
+        team="eng"
+        candidates={candidates}
+        unlisted={[]}
+      />,
+    );
 
     await user.selectOptions(
       screen.getByLabelText("Person or agent"),
@@ -45,16 +52,29 @@ describe("add team member form", () => {
   });
 
   it("shows a failed addition rather than treating it as done", async () => {
+    let refusing = true;
+    const posted: unknown[] = [];
     server.use(
-      http.post(MEMBERS, () =>
-        HttpResponse.json(
-          { kind: "permission_denied", message: "permission denied" },
-          { status: 403 },
-        ),
-      ),
+      http.post(MEMBERS, async ({ request }) => {
+        if (refusing) {
+          return HttpResponse.json(
+            { kind: "permission_denied", message: "permission denied" },
+            { status: 403 },
+          );
+        }
+        posted.push(await request.json());
+        return new HttpResponse(null, { status: 204 });
+      }),
     );
     const user = userEvent.setup();
-    render(<AddTeamMemberForm org="acme" team="eng" candidates={candidates} />);
+    render(
+      <AddTeamMemberForm
+        org="acme"
+        team="eng"
+        candidates={candidates}
+        unlisted={[]}
+      />,
+    );
 
     await user.selectOptions(
       screen.getByLabelText("Person or agent"),
@@ -65,10 +85,23 @@ describe("add team member form", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "permission denied",
     );
+
+    // The control: the same choice garam accepts is added and the
+    // refusal clears.
+    refusing = false;
+    await user.selectOptions(
+      screen.getByLabelText("Person or agent"),
+      "Alice · Person",
+    );
+    await user.click(screen.getByRole("button", { name: "Add to team" }));
+    await vi.waitFor(() => expect(posted).toEqual([{ memberGrn: alice.grn }]));
+    expect(screen.queryByText("permission denied")).not.toBeInTheDocument();
   });
 
   it("says there is no one left to add instead of an empty choice", () => {
-    render(<AddTeamMemberForm org="acme" team="eng" candidates={[]} />);
+    render(
+      <AddTeamMemberForm org="acme" team="eng" candidates={[]} unlisted={[]} />,
+    );
 
     expect(
       screen.getByText(
@@ -76,5 +109,30 @@ describe("add team member form", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+  });
+
+  it("says which lists were refused rather than claiming no one is left", () => {
+    render(
+      <AddTeamMemberForm
+        org="acme"
+        team="eng"
+        candidates={[]}
+        unlisted={["agents"]}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        "This organization's agents are not listed to you, so none of them can be chosen here.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("No one you can list is outside this team."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(
+        "Every person and agent of this organization is already in this team.",
+      ),
+    ).not.toBeInTheDocument();
   });
 });

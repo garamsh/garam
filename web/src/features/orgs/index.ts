@@ -18,6 +18,8 @@ export {
   listOrgMembers,
   listOrgs,
   listProjects,
+  lookupAgents,
+  lookupOrgMembers,
   type Agent,
   type AgentDefinition,
   type Group,

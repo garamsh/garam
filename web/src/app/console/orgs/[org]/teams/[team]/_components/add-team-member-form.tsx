@@ -22,10 +22,13 @@ export function AddTeamMemberForm({
   org,
   team,
   candidates,
+  unlisted,
 }: {
   org: string;
   team: string;
   candidates: Candidate[];
+  /** The kinds whose list garam refused the caller, as plural nouns. */
+  unlisted: string[];
 }) {
   const [state, formAction, pending] = useActionState(
     addGroupMember,
@@ -37,9 +40,17 @@ export function AddTeamMemberForm({
   return (
     <section className="flex flex-col gap-3">
       <h2 className="font-heading text-lg font-semibold">Add a member</h2>
+      {unlisted.length > 0 && (
+        <p className="text-sm text-muted-foreground">
+          This organization&apos;s {unlisted.join(" and ")} are not listed to
+          you, so none of them can be chosen here.
+        </p>
+      )}
       {candidates.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          Every person and agent of this organization is already in this team.
+          {unlisted.length > 0
+            ? "No one you can list is outside this team."
+            : "Every person and agent of this organization is already in this team."}
         </p>
       ) : (
         <form

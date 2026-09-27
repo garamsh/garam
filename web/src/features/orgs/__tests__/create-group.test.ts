@@ -52,20 +52,37 @@ describe("createGroup", () => {
       message: "Give the team a name.",
     });
     expect(posted).toEqual([]);
+
+    // The control: the same form carrying a name reaches garam, so the
+    // refusal above is the empty name and not a form read as nothing.
+    await expect(
+      createGroup({ status: "idle" }, form("Engineering")),
+    ).rejects.toThrow("NEXT_REDIRECT:/console/orgs/acme/teams/eng");
+    expect(posted).toEqual([{ name: "Engineering" }]);
   });
 
   it("renders the refusal garam answered rather than throwing", async () => {
+    let refusing = true;
     server.use(
       http.post(GROUPS, () =>
-        HttpResponse.json(
-          { kind: "permission_denied", message: "permission denied" },
-          { status: 403 },
-        ),
+        refusing
+          ? HttpResponse.json(
+              { kind: "permission_denied", message: "permission denied" },
+              { status: 403 },
+            )
+          : HttpResponse.json(engineering, { status: 201 }),
       ),
     );
 
     await expect(
       createGroup({ status: "idle" }, form("Engineering")),
     ).resolves.toEqual({ status: "error", message: "permission denied" });
+
+    // The control: the same submission garam accepts opens the team,
+    // so the error above is garam's refusal and not the form's.
+    refusing = false;
+    await expect(
+      createGroup({ status: "idle" }, form("Engineering")),
+    ).rejects.toThrow("NEXT_REDIRECT:/console/orgs/acme/teams/eng");
   });
 });

@@ -73,12 +73,14 @@ export type OrgConsent = components["schemas"]["OrgConsent"];
 export type OrgRead<T> = { status: "ok"; data: T } | { status: "unreachable" };
 
 /**
- * What a read of one group returned. Unlike an organization, a group
- * the caller is refused is a state of its own: its organization is one
- * the caller reads, where the group's name is listed already, so a
- * refusal hides nothing that a 404 would.
+ * What a read inside an organization returned where a refusal is a
+ * state of its own rather than not-found: a group, its members, or a
+ * list a page only looks names up in. It is for a page that also reads
+ * the organization itself, whose refusal stays not-found (ADR-0011),
+ * so a refusal here tells nothing about an organization that is not
+ * the caller's.
  */
-export type GroupRead<T> = OrgRead<T> | { status: "forbidden" };
+export type RefusableRead<T> = OrgRead<T> | { status: "forbidden" };
 
 // What the seam parses each of this feature's reads against. Every
 // parser is tied to the type `api/openapi.yaml` generated, in both
@@ -242,8 +244,8 @@ export function listGroups(org: string): Promise<OrgRead<Group[]>> {
 export function getGroup(
   org: string,
   group: string,
-): Promise<GroupRead<Group>> {
-  return groupRead(
+): Promise<RefusableRead<Group>> {
+  return refusableRead(
     garamFetchAuthenticated(
       `/orgs/${orgPath(org)}/groups/${orgPath(group)}`,
       GroupParser,
@@ -255,11 +257,39 @@ export function getGroup(
 export function listGroupMembers(
   org: string,
   group: string,
-): Promise<GroupRead<GroupMember[]>> {
-  return groupRead(
+): Promise<RefusableRead<GroupMember[]>> {
+  return refusableRead(
     garamFetchAuthenticated(
       `/orgs/${orgPath(org)}/groups/${orgPath(group)}/members`,
       z.array(GroupMemberParser),
+    ),
+  );
+}
+
+/**
+ * The people of an organization, for a page that only looks names up
+ * in them: a refusal is returned rather than answered with not-found.
+ */
+export function lookupOrgMembers(
+  org: string,
+): Promise<RefusableRead<Member[]>> {
+  return refusableRead(
+    garamFetchAuthenticated(
+      `/orgs/${orgPath(org)}/members`,
+      z.array(MemberParser),
+    ),
+  );
+}
+
+/**
+ * The agents of an organization, for a page that only looks names up
+ * in them: a refusal is returned rather than answered with not-found.
+ */
+export function lookupAgents(org: string): Promise<RefusableRead<Agent[]>> {
+  return refusableRead(
+    garamFetchAuthenticated(
+      `/orgs/${orgPath(org)}/agents`,
+      z.array(AgentParser),
     ),
   );
 }
@@ -343,12 +373,11 @@ async function orgRead<T>(read: Promise<T>): Promise<OrgRead<T>> {
 }
 
 /**
- * `orgRead` for a read of one group, where a refusal is rendered
- * rather than folded into not-found (`GroupRead`). A missing group is
- * still `notFound()`, and an organization the caller cannot read is
- * answered by the page's own org-scoped reads.
+ * `orgRead` where a refusal is returned rather than folded into
+ * not-found (`RefusableRead`). A missing resource is still
+ * `notFound()`.
  */
-async function groupRead<T>(read: Promise<T>): Promise<GroupRead<T>> {
+async function refusableRead<T>(read: Promise<T>): Promise<RefusableRead<T>> {
   try {
     return { status: "ok", data: await read };
   } catch (error) {

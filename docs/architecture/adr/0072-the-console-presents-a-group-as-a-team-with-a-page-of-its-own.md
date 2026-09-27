@@ -56,24 +56,30 @@ name is #1125's.
   listed and removable, marked as not found rather than dropped or
   shown as someone known. Adding offers only people and agents the
   team does not hold, by name and type; no GRN is typed or shown.
-- **A refused team is not a missing one.** Inside an organization the
-  caller reads, a 403 on the team renders a refusal and a 404 renders
-  not-found. An organization the caller cannot read still answers
-  404 through the page's org-scoped reads, as ADR-0011 decided.
+- **A refusal inside a readable organization is not a missing
+  resource.** The team page reads the organization itself, and one the
+  caller cannot read answers 404, as ADR-0011 decided. Inside one it
+  can read, a 403 on the team renders a refusal and a 404 renders
+  not-found. A refused list of the organization's people or agents
+  leaves the team readable: the members that list would name are shown
+  by identifier and type, marked as not checked rather than not found,
+  and none of that kind is offered for adding.
 - **Old addresses redirect.** `…/groups` and `…/members` redirect to
   `…/teams` and `…/people` (`web/next.config.ts`), temporarily rather
   than permanently, since the #1122 direction is still arriving.
 
 ## Consequences
 
-- A person manages a team's mixed membership without an API call, and
-  removing a membership removes that one row and nothing else.
+- A person manages a team's mixed membership from the console without
+  calling the API themselves, and removing a membership removes that
+  one row and nothing else.
 - Nothing in the console can show a team description or an agent's
   friendly name until the API carries one; the page does not render a
   field for either.
 - The team page reads the organization's people and agents on every
-  render, so a caller refused either read meets 404 on the team page
-  as on the overview.
+  render. A caller refused either list still reads the team, with those
+  members unnamed; the overview, which counts both, still answers 404
+  to that caller.
 - The console and the API now name one resource two ways. The mapping
   is this ADR's; a later rename of the backend group is a separate
   decision.

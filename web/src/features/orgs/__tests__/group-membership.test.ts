@@ -38,13 +38,17 @@ describe("addGroupMember", () => {
   });
 
   it("says a member added since the page was read is already there", async () => {
+    // garam holds Alice already and nobody else.
     server.use(
-      http.post(MEMBERS, () =>
-        HttpResponse.json(
-          { kind: "already_exists", message: "already exists" },
-          { status: 409 },
-        ),
-      ),
+      http.post(MEMBERS, async ({ request }) => {
+        const { memberGrn } = (await request.json()) as { memberGrn: string };
+        return memberGrn === alice.grn
+          ? HttpResponse.json(
+              { kind: "already_exists", message: "already exists" },
+              { status: 409 },
+            )
+          : new HttpResponse(null, { status: 204 });
+      }),
     );
 
     await expect(
@@ -53,21 +57,36 @@ describe("addGroupMember", () => {
       status: "error",
       message: "Already a member of this team. The list now shows it.",
     });
+
+    // The control: a member garam does not hold yet is added, so the
+    // error above is the conflict and not every addition.
+    await expect(
+      addGroupMember({ status: "idle" }, form(reportedAgent.grn)),
+    ).resolves.toEqual({ status: "idle" });
   });
 
   it("renders any other refusal in garam's words", async () => {
+    let refusing = true;
     server.use(
       http.post(MEMBERS, () =>
-        HttpResponse.json(
-          { kind: "permission_denied", message: "permission denied" },
-          { status: 403 },
-        ),
+        refusing
+          ? HttpResponse.json(
+              { kind: "permission_denied", message: "permission denied" },
+              { status: 403 },
+            )
+          : new HttpResponse(null, { status: 204 }),
       ),
     );
 
     await expect(
       addGroupMember({ status: "idle" }, form(alice.grn)),
     ).resolves.toEqual({ status: "error", message: "permission denied" });
+
+    // The control: the same addition garam accepts succeeds.
+    refusing = false;
+    await expect(
+      addGroupMember({ status: "idle" }, form(alice.grn)),
+    ).resolves.toEqual({ status: "idle" });
   });
 
   it("refuses a choice that names no identity, without asking garam", async () => {
@@ -83,6 +102,12 @@ describe("addGroupMember", () => {
       { status: "error", message: "Choose a person or an agent to add." },
     );
     expect(posted).toEqual([]);
+
+    // The control: the same form naming an identity reaches garam.
+    await expect(
+      addGroupMember({ status: "idle" }, form(alice.grn)),
+    ).resolves.toEqual({ status: "idle" });
+    expect(posted).toEqual([{ memberGrn: alice.grn }]);
   });
 });
 
@@ -105,7 +130,14 @@ describe("removeGroupMember", () => {
   });
 
   it("renders a failed removal rather than throwing it at the boundary", async () => {
-    server.use(http.delete(`${MEMBERS}/:member`, () => HttpResponse.error()));
+    let failing = true;
+    server.use(
+      http.delete(`${MEMBERS}/:member`, () =>
+        failing
+          ? HttpResponse.error()
+          : new HttpResponse(null, { status: 204 }),
+      ),
+    );
 
     await expect(
       removeGroupMember({ status: "idle" }, form(alice.grn)),
@@ -113,5 +145,11 @@ describe("removeGroupMember", () => {
       status: "error",
       message: "the garam API could not be reached",
     });
+
+    // The control: the same removal, answered, succeeds.
+    failing = false;
+    await expect(
+      removeGroupMember({ status: "idle" }, form(alice.grn)),
+    ).resolves.toEqual({ status: "idle" });
   });
 });

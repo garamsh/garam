@@ -9,7 +9,24 @@ import {
 } from "@/components/ui/table";
 
 import { RemoveTeamMemberForm } from "./remove-team-member-form";
-import { KIND_LABEL, memberLabel, type TeamMember } from "./team-member";
+import {
+  KIND_LABEL,
+  memberLabel,
+  type Lookup,
+  type TeamMember,
+} from "./team-member";
+
+/**
+ * What stands where a member without a name would have one: a person
+ * found with no name on record, one the organization does not hold,
+ * one whose list was refused, and an identity of neither type.
+ */
+const PLACEHOLDER: Record<Lookup | "unknown", string> = {
+  found: "No name on record",
+  missing: "Unknown person",
+  refused: "Name not available",
+  unknown: "Unknown identity",
+};
 
 /**
  * A team's members by name and type, each removable from this team.
@@ -17,7 +34,8 @@ import { KIND_LABEL, memberLabel, type TeamMember } from "./team-member";
  * A member without a name says so rather than lifting its identifier
  * into the name's place, and one the organization no longer holds is
  * marked rather than dropped: either would otherwise read as someone
- * the organization knows.
+ * the organization knows. One whose list the caller may not read is
+ * marked unchecked, never missing.
  */
 export function TeamMemberTable({
   org,
@@ -50,11 +68,11 @@ export function TeamMemberTable({
               ) : (
                 (member.name ?? (
                   <span className="font-normal text-muted-foreground">
-                    {member.kind === "unknown"
-                      ? "Unknown identity"
-                      : member.resolved
-                        ? "No name on record"
-                        : "Unknown person"}
+                    {
+                      PLACEHOLDER[
+                        member.kind === "unknown" ? "unknown" : member.lookup
+                      ]
+                    }
                   </span>
                 ))
               )}
@@ -63,9 +81,16 @@ export function TeamMemberTable({
                   {member.identifier}
                 </span>
               )}
-              {!member.resolved && (
+              {member.lookup === "missing" && (
                 <span className="block text-xs font-normal text-destructive">
                   Not found in this organization
+                </span>
+              )}
+              {member.lookup === "refused" && (
+                <span className="block text-xs font-normal text-muted-foreground">
+                  Not checked: this organization&apos;s{" "}
+                  {member.kind === "agent" ? "agents are" : "people are"} not
+                  listed to you
                 </span>
               )}
             </TableCell>

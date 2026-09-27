@@ -10,18 +10,32 @@ import {
 export type MemberKind = "person" | "agent" | "unknown";
 
 /**
+ * A list the page looks members up in, or the fact that garam refused
+ * the caller that list. A refused list resolves nobody and names no
+ * one missing.
+ */
+export type Catalog<T> =
+  { status: "ok"; data: readonly T[] } | { status: "forbidden" };
+
+/**
+ * What looking a member up found: the identity, no such identity in
+ * the organization, or nothing, because the list it would be in was
+ * refused to the caller.
+ */
+export type Lookup = "found" | "missing" | "refused";
+
+/**
  * One membership of a team, as the page shows it. `name` is what this
- * organization calls the member, null where it has no name for it;
- * `resolved` says whether the organization still holds the identity
- * the membership names. Neither is inferred from the other: a person
- * whose user row is gone is resolved and nameless.
+ * organization calls the member, null where it has no name for it.
+ * Neither it nor `lookup` is inferred from the other: a person whose
+ * user row is gone is found and nameless.
  */
 export type TeamMember = {
   grn: string;
   identifier: string;
   kind: MemberKind;
   name: string | null;
-  resolved: boolean;
+  lookup: Lookup;
 };
 
 /** A person or an agent the team does not hold yet. */
@@ -43,35 +57,49 @@ function kindOf(grn: string): MemberKind {
   }
 }
 
+/** Looks `grn` up in `catalog` by the key `keyOf` reads. */
+function lookUp<T>(
+  catalog: Catalog<T>,
+  grn: string,
+  keyOf: (entry: T) => string,
+): { lookup: Lookup; entry?: T } {
+  if (catalog.status === "forbidden") return { lookup: "refused" };
+  const entry = catalog.data.find((candidate) => keyOf(candidate) === grn);
+  return entry === undefined
+    ? { lookup: "missing" }
+    : { lookup: "found", entry };
+}
+
 /**
  * Reads each membership against the organization's people and agents.
- * A GRN neither list holds stays in the result, marked unresolved, so a
- * membership that names nobody any more is still visible and removable.
+ * A GRN neither list holds stays in the result, marked missing, so a
+ * membership that names nobody any more is still visible and
+ * removable; one whose list was refused is marked refused instead.
  */
 export function resolveTeamMembers(
   members: readonly GroupMember[],
-  people: readonly Member[],
-  agents: readonly Agent[],
+  people: Catalog<Member>,
+  agents: Catalog<Agent>,
 ): TeamMember[] {
   return members.map(({ memberGrn }) => {
     const identifier = slugFromGrn(memberGrn);
     const kind = kindOf(memberGrn);
     switch (kind) {
       case "person": {
-        const person = people.find((p) => p.userGrn === memberGrn);
+        const { lookup, entry } = lookUp(people, memberGrn, (p) => p.userGrn);
         return {
           grn: memberGrn,
           identifier,
           kind,
-          name: person?.nickname ?? null,
-          resolved: person !== undefined,
+          name: entry?.nickname ?? null,
+          lookup,
         };
       }
       case "agent": {
         // An agent carries no name of its own (#1125), so its
         // identifier is the name the console has for it.
-        const resolved = agents.some((a) => a.grn === memberGrn);
-        return { grn: memberGrn, identifier, kind, name: identifier, resolved };
+        const { lookup } = lookUp(agents, memberGrn, (a) => a.grn);
+        return { grn: memberGrn, identifier, kind, name: identifier, lookup };
       }
       case "unknown":
         return {
@@ -79,7 +107,7 @@ export function resolveTeamMembers(
           identifier,
           kind,
           name: null,
-          resolved: false,
+          lookup: "missing",
         };
     }
   });
@@ -88,16 +116,16 @@ export function resolveTeamMembers(
 /**
  * The people and agents of the organization the team does not hold,
  * people first. A person without a name on record is offered under
- * their identifier, said to be one.
+ * their identifier, said to be one. A refused list offers no one.
  */
 export function teamCandidates(
   members: readonly GroupMember[],
-  people: readonly Member[],
-  agents: readonly Agent[],
+  people: Catalog<Member>,
+  agents: Catalog<Agent>,
 ): Candidate[] {
   const held = new Set(members.map((member) => member.memberGrn));
   return [
-    ...people
+    ...(people.status === "ok" ? people.data : [])
       .filter((person) => !held.has(person.userGrn))
       .map((person) => ({
         grn: person.userGrn,
@@ -106,7 +134,7 @@ export function teamCandidates(
           person.nickname ??
           `No name on record (${slugFromGrn(person.userGrn)})`,
       })),
-    ...agents
+    ...(agents.status === "ok" ? agents.data : [])
       .filter((agent) => !held.has(agent.grn))
       .map((agent) => ({
         grn: agent.grn,

@@ -34,17 +34,27 @@ describe("updateGroup", () => {
   });
 
   it("renders a refusal in place of the saved name", async () => {
+    let refusing = true;
     server.use(
       http.patch(GROUP, () =>
-        HttpResponse.json(
-          { kind: "permission_denied", message: "permission denied" },
-          { status: 403 },
-        ),
+        refusing
+          ? HttpResponse.json(
+              { kind: "permission_denied", message: "permission denied" },
+              { status: 403 },
+            )
+          : HttpResponse.json({ ...engineering, name: "Platform" }),
       ),
     );
 
     await expect(
       updateGroup({ status: "idle" }, form("Platform")),
     ).resolves.toEqual({ status: "error", message: "permission denied" });
+
+    // The control: the same rename garam accepts is saved, so the
+    // error above is garam's refusal.
+    refusing = false;
+    await expect(
+      updateGroup({ status: "idle" }, form("Platform")),
+    ).resolves.toEqual({ status: "saved", name: "Platform" });
   });
 });

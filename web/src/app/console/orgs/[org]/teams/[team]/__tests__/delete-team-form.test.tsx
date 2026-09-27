@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import { Component, type ReactNode } from "react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
@@ -15,6 +16,23 @@ vi.mock("next/navigation", () => ({
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
 const GROUP = `${API_URL}/orgs/acme/groups/eng`;
+
+/**
+ * Shows what the form's action threw. A delete that succeeds ends in
+ * `redirect()`, which throws to navigate; this is where it lands.
+ */
+class Navigation extends Component<
+  { children: ReactNode },
+  { to: string | null }
+> {
+  state = { to: null };
+  static getDerivedStateFromError(error: Error) {
+    return { to: error.message };
+  }
+  render() {
+    return this.state.to ?? this.props.children;
+  }
+}
 
 function renderForm() {
   return render(
@@ -54,16 +72,28 @@ describe("delete team form", () => {
   });
 
   it("keeps the team and shows why when garam refuses the delete", async () => {
+    let refusing = true;
     server.use(
       http.delete(GROUP, () =>
-        HttpResponse.json(
-          { kind: "permission_denied", message: "permission denied" },
-          { status: 403 },
-        ),
+        refusing
+          ? HttpResponse.json(
+              { kind: "permission_denied", message: "permission denied" },
+              { status: 403 },
+            )
+          : new HttpResponse(null, { status: 204 }),
       ),
     );
     const user = userEvent.setup();
-    renderForm();
+    render(
+      <Navigation>
+        <DeleteTeamForm
+          org="acme"
+          team="eng"
+          teamName="Engineering"
+          memberCount={2}
+        />
+      </Navigation>,
+    );
 
     await user.click(screen.getByRole("button", { name: "Delete team" }));
     await user.click(
@@ -73,5 +103,15 @@ describe("delete team form", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "permission denied",
     );
+
+    // The control: the same confirmation garam accepts returns to the
+    // list, so staying above is garam's refusal and not the form.
+    refusing = false;
+    await user.click(
+      screen.getByRole("button", { name: "Delete Engineering" }),
+    );
+    expect(
+      await screen.findByText("NEXT_REDIRECT:/console/orgs/acme/teams"),
+    ).toBeInTheDocument();
   });
 });

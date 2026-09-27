@@ -124,6 +124,50 @@ describe("team page", () => {
     ).not.toBeInTheDocument();
   });
 
+  // A caller may read the team and still be refused a list its members
+  // are looked up in. The team is not missing, and a member the list
+  // was not read for is not missing either.
+  it.each([
+    ["agents", "Agent", "agents are"],
+    ["members", "Person", "people are"],
+  ])(
+    "keeps the team readable when the %s list is refused",
+    async (segment, type, marker) => {
+      // The control: with the list answered, no member is unchecked, so
+      // the mark below is the refusal and not every render.
+      const allowed = await renderTeam();
+      expect(screen.queryByText(/^Not checked:/)).not.toBeInTheDocument();
+      allowed.unmount();
+
+      server.use(
+        http.get(`${API_URL}/orgs/acme/${segment}`, () =>
+          HttpResponse.json({ kind: "denied", message: "no" }, { status: 403 }),
+        ),
+      );
+
+      await renderTeam();
+
+      expect(
+        screen.getByRole("heading", { level: 1, name: "Engineering" }),
+      ).toBeInTheDocument();
+      const refused = screen
+        .getAllByRole("row")
+        .find((row) => within(row).queryByText(type) !== null);
+      expect(refused).toBeDefined();
+      if (refused === undefined) return;
+      // Presence: the mark continues with the list it could not read.
+      expect(
+        within(refused).getByText(new RegExp(`^Not checked: .*${marker}`)),
+      ).toBeInTheDocument();
+      expect(
+        within(refused).queryByText("Not found in this organization"),
+      ).not.toBeInTheDocument();
+      expect(
+        within(refused).getByRole("button", { name: /^Remove / }),
+      ).toBeInTheDocument();
+    },
+  );
+
   it("says the team has no members rather than showing an empty table", async () => {
     server.use(membersAre());
 
@@ -134,6 +178,13 @@ describe("team page", () => {
   });
 
   it("says the team is refused rather than missing when garam answers 403", async () => {
+    // The control: the same team, answered, renders under its name.
+    const allowed = await renderTeam();
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Engineering" }),
+    ).toBeInTheDocument();
+    allowed.unmount();
+
     server.use(
       http.get(`${API_URL}/orgs/acme/groups/eng`, () =>
         HttpResponse.json({ kind: "denied", message: "no" }, { status: 403 }),
@@ -163,6 +214,9 @@ describe("team page", () => {
 
   it("renders not-found when the organization is not the caller's", async () => {
     server.use(
+      http.get(`${API_URL}/orgs/acme`, () =>
+        HttpResponse.json({ kind: "denied", message: "no" }, { status: 403 }),
+      ),
       http.get(`${API_URL}/orgs/acme/*`, () =>
         HttpResponse.json({ kind: "denied", message: "no" }, { status: 403 }),
       ),

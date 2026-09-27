@@ -84,13 +84,19 @@ describe("remove team member form", () => {
   });
 
   it("shows a failed removal beside the member", async () => {
+    let refusing = true;
+    const removed: string[] = [];
     server.use(
-      http.delete(MEMBER, () =>
-        HttpResponse.json(
-          { kind: "permission_denied", message: "permission denied" },
-          { status: 403 },
-        ),
-      ),
+      http.delete(MEMBER, ({ request }) => {
+        if (refusing) {
+          return HttpResponse.json(
+            { kind: "permission_denied", message: "permission denied" },
+            { status: 403 },
+          );
+        }
+        removed.push(new URL(request.url).pathname);
+        return new HttpResponse(null, { status: 204 });
+      }),
     );
     const user = userEvent.setup();
     renderForm();
@@ -103,5 +109,12 @@ describe("remove team member form", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "permission denied",
     );
+
+    // The control: the same confirmation garam accepts removes the
+    // member and clears the refusal.
+    refusing = false;
+    await user.click(screen.getByRole("button", { name: "Confirm removal" }));
+    await vi.waitFor(() => expect(removed).toHaveLength(1));
+    expect(screen.queryByText("permission denied")).not.toBeInTheDocument();
   });
 });

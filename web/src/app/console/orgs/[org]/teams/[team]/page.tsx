@@ -4,9 +4,10 @@ import { UsersRound } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import {
   getGroup,
-  listAgents,
+  getOrg,
   listGroupMembers,
-  listOrgMembers,
+  lookupAgents,
+  lookupOrgMembers,
 } from "@/features/orgs";
 
 import { ApiUnreachable } from "../../../../_components/api-unreachable";
@@ -29,23 +30,26 @@ type Params = { params: Promise<{ org: string; team: string }> };
  *
  * The organization's people and agents are read beside the team so
  * each membership, which is a bare GRN, can be shown by name and type.
- * An organization the caller cannot read answers 404 through those
- * reads (ADR-0011); a team the caller is refused inside one it can read
- * says so instead (ADR-0072).
+ * The organization is read for itself, so one the caller cannot read
+ * answers 404 (ADR-0011). Inside one it can read, a refused team says
+ * so, and a refused list of people or agents leaves those members
+ * shown by identifier and marked unchecked (ADR-0072).
  *
  * The write controls are rendered for every reader and the API refuses
  * a caller that holds only the read, as in the other sections.
  */
 export default async function TeamPage({ params }: Params) {
   const { org, team } = await params;
-  const [group, members, people, agents] = await Promise.all([
+  const [organization, group, members, people, agents] = await Promise.all([
+    getOrg(org),
     getGroup(org, team),
     listGroupMembers(org, team),
-    listOrgMembers(org),
-    listAgents(org),
+    lookupOrgMembers(org),
+    lookupAgents(org),
   ]);
 
   if (
+    organization.status === "unreachable" ||
     group.status === "unreachable" ||
     members.status === "unreachable" ||
     people.status === "unreachable" ||
@@ -76,7 +80,11 @@ export default async function TeamPage({ params }: Params) {
   }
 
   const name = group.data.name;
-  const resolved = resolveTeamMembers(members.data, people.data, agents.data);
+  const resolved = resolveTeamMembers(members.data, people, agents);
+  const unlisted = [
+    ...(people.status === "forbidden" ? ["people"] : []),
+    ...(agents.status === "forbidden" ? ["agents"] : []),
+  ];
 
   return (
     <>
@@ -105,7 +113,8 @@ export default async function TeamPage({ params }: Params) {
       <AddTeamMemberForm
         org={org}
         team={team}
-        candidates={teamCandidates(members.data, people.data, agents.data)}
+        candidates={teamCandidates(members.data, people, agents)}
+        unlisted={unlisted}
       />
       <Separator />
       <section className="flex flex-col gap-4">

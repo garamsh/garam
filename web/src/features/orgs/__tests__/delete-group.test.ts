@@ -38,12 +38,15 @@ describe("deleteGroup", () => {
   });
 
   it("stays on the team and says why when garam refuses", async () => {
+    let refusing = true;
     server.use(
       http.delete(GROUP, () =>
-        HttpResponse.json(
-          { kind: "permission_denied", message: "permission denied" },
-          { status: 403 },
-        ),
+        refusing
+          ? HttpResponse.json(
+              { kind: "permission_denied", message: "permission denied" },
+              { status: 403 },
+            )
+          : new HttpResponse(null, { status: 204 }),
       ),
     );
 
@@ -51,5 +54,12 @@ describe("deleteGroup", () => {
       status: "error",
       message: "permission denied",
     });
+
+    // The control: the same delete garam accepts returns to the list,
+    // so staying above is garam's refusal.
+    refusing = false;
+    await expect(deleteGroup({ status: "idle" }, form())).rejects.toThrow(
+      "NEXT_REDIRECT:/console/orgs/acme/teams",
+    );
   });
 });

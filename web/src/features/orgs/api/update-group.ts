@@ -12,7 +12,10 @@ import type { components } from "@/types/api";
 
 import { GroupParser } from "./orgs";
 
-/** What the rename form has to show: nothing yet, a refusal, or the name saved. */
+/**
+ * What the rename form has to show: nothing yet, a refusal, or the name
+ * saved.
+ */
 export type UpdateGroupState =
   | { status: "idle" }
   | { status: "error"; message: string }

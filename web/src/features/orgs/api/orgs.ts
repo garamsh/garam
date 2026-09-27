@@ -368,7 +368,7 @@ export function listOrgConsents(org: string): Promise<OrgRead<OrgConsent[]>> {
  * rejection travels on: a rejected session is already a redirect to the
  * login page.
  */
-export async function orgRead<T>(read: Promise<T>): Promise<OrgRead<T>> {
+async function orgRead<T>(read: Promise<T>): Promise<OrgRead<T>> {
   try {
     return { status: "ok", data: await read };
   } catch (error) {

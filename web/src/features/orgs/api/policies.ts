@@ -32,6 +32,7 @@ export type PolicyAttachment = components["schemas"]["PolicyAttachment"];
 
 const GrnParser = z.string().refine((value) => parseGrn(value) !== null);
 
+/** Parses a policy as `api/openapi.yaml` describes one. */
 export const PolicyParser = parserFor<Policy>()(
   z.object({
     grn: GrnParser,
@@ -44,6 +45,10 @@ export const PolicyParser = parserFor<Policy>()(
   }),
 );
 
+/**
+ * Parses a policy version: the generated fields, and the document as a
+ * JSON object rather than the generated `Record<string, never>`.
+ */
 export const PolicyVersionParser = parserFor<
   Omit<components["schemas"]["PolicyVersion"], "document">
 >()(
@@ -55,6 +60,7 @@ export const PolicyVersionParser = parserFor<
   }),
 ).and(z.object({ document: z.record(z.string(), z.unknown()) }));
 
+/** Parses one attachment of a policy to a subject. */
 export const PolicyAttachmentParser = parserFor<PolicyAttachment>()(
   z.object({
     policyGrn: GrnParser,

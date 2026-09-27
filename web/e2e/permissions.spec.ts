@@ -16,22 +16,6 @@ async function clickUntil(control: Locator, opened: Locator): Promise<void> {
   }).toPass({ timeout: 15_000 });
 }
 
-/**
- * Waits until React has hydrated `field`. A controlled editor filled
- * before then keeps the server-rendered text in React's state, and
- * hydration merges the two, so a fill depends on this and not on the
- * field being visible.
- */
-async function hydrated(field: Locator): Promise<void> {
-  await expect
-    .poll(() =>
-      field.evaluate((element) =>
-        Object.keys(element).some((key) => key.startsWith("__reactFiber")),
-      ),
-    )
-    .toBe(true);
-}
-
 /** A document denying one action across the seeded organization. */
 function denyDocument(orgSlug: string, actions: string[]): string {
   return JSON.stringify({
@@ -88,7 +72,7 @@ function heading(page: Page, name: string): Locator {
 }
 
 test.describe("permissions", () => {
-  test("creates a draft, attaches it to a team and sees it reach a member", async ({
+  test("creates a draft, attaches it to a team and sees it deny a member", async ({
     page,
     signedIn,
   }) => {
@@ -111,14 +95,17 @@ test.describe("permissions", () => {
     // A document the engine refuses leaves what was typed in place.
     const name = page.getByLabel("Policy name", { exact: true });
     const document = page.getByLabel("Document", { exact: true });
-    await hydrated(document);
+    // The editor takes input once it can hold it, and a fill waits for
+    // that. The starting document is kept to be sent unchanged below.
+    await expect(document).toBeEnabled();
+    const seeded = await document.inputValue();
     const refused = JSON.stringify({
       Version: "2026-07-25",
       Statement: [
         { Effect: "Maybe", Action: ["project:delete"], Resource: ["*"] },
       ],
     });
-    await name.fill("Deny project deletion");
+    await name.fill("Deny project renames");
     await document.fill(refused);
     await page
       .getByRole("button", { name: "Create draft", exact: true })
@@ -129,14 +116,14 @@ test.describe("permissions", () => {
         { exact: true },
       ),
     ).toBeVisible();
-    await expect(name).toHaveValue("Deny project deletion");
+    await expect(name).toHaveValue("Deny project renames");
     await expect(document).toHaveValue(refused);
 
-    await document.fill(denyDocument(signedIn.orgSlug, ["project:delete"]));
+    await document.fill(seeded);
     await page
       .getByRole("button", { name: "Create draft", exact: true })
       .click();
-    await expect(heading(page, "Deny project deletion")).toBeVisible();
+    await expect(heading(page, "Deny project renames")).toBeVisible();
     await expect(
       page.getByText("Draft: grants no access until it is activated.", {
         exact: true,
@@ -163,11 +150,21 @@ test.describe("permissions", () => {
     );
     await expect(
       page.getByText(
-        `Activate Deny project deletion with version 1? Applies to ${signedIn.groupName} (Team).`,
+        `Activate Deny project renames with version 1? Applies to ${signedIn.groupName} (Team).`,
         { exact: true },
       ),
     ).toBeVisible();
     await expect(page.getByRole("checkbox")).toHaveCount(0);
+
+    // The control: while the policy is a draft, the seeded person may
+    // still rename the seeded project, so the refusal below is the
+    // policy taking effect.
+    const rename = (name: string) =>
+      page.request.patch(`/api/orgs/${signedIn.orgSlug}/projects/frontend`, {
+        data: { name },
+      });
+    expect((await rename("Frontend draft")).status()).toBe(200);
+
     await activate.click();
     await expect(
       page.getByText(
@@ -175,6 +172,9 @@ test.describe("permissions", () => {
         { exact: true },
       ),
     ).toBeVisible();
+    // The starting document names the resource garam authorizes a
+    // project rename against, so activated it denies the rename.
+    expect((await rename("Frontend active")).status()).toBe(403);
 
     // The person reaches it through the team, not directly.
     await page.goto(
@@ -185,7 +185,7 @@ test.describe("permissions", () => {
       exact: true,
     });
     await expect(
-      through.getByRole("link", { name: "Deny project deletion", exact: true }),
+      through.getByRole("link", { name: "Deny project renames", exact: true }),
     ).toBeVisible();
     await expect(
       through.getByRole("link", { name: signedIn.groupName, exact: true }),
@@ -213,7 +213,7 @@ test.describe("permissions", () => {
     await expect(
       page
         .getByRole("region", { name: "Attached directly", exact: true })
-        .getByRole("link", { name: "Deny project deletion", exact: true }),
+        .getByRole("link", { name: "Deny project renames", exact: true }),
     ).toBeVisible();
   });
 
@@ -302,12 +302,33 @@ test.describe("permissions", () => {
       denyDocument(signedIn.orgSlug, ["project:delete"]),
     );
     await attachToTeamAndActivate(page.request, signedIn, policy);
+    const second = await page.request.post(
+      `/api/orgs/${signedIn.orgSlug}/policies/${policy}/attachments`,
+      { data: { subjectGrn: signedIn.userGrn } },
+    );
+    expect(second.status()).toBe(201);
 
     await page.goto(policyUrl(signedIn, policy));
     const confirm = page.getByRole("button", {
       name: "Confirm detach",
       exact: true,
     });
+    // The control: with the team still attached, detaching the person
+    // goes through, so the refusal below is the last attachment's.
+    await clickUntil(
+      page.getByRole("button", {
+        name: `Detach Deny project deletion from ${signedIn.nickname}`,
+        exact: true,
+      }),
+      confirm,
+    );
+    await confirm.click();
+    // Substring on purpose: a row's accessible name is all of its
+    // cells.
+    await expect(
+      page.getByRole("row", { name: signedIn.nickname }),
+    ).toHaveCount(0);
+
     await clickUntil(
       page.getByRole("button", {
         name: `Detach Deny project deletion from ${signedIn.groupName}`,
@@ -357,7 +378,7 @@ test.describe("permissions", () => {
     await page.goto(policyUrl(signedIn, policy));
 
     const editor = page.getByLabel("New version", { exact: true });
-    await hydrated(editor);
+    await expect(editor).toBeEnabled();
     await editor.fill(
       denyDocument(signedIn.orgSlug, ["project:delete", "project:update"]),
     );

@@ -134,11 +134,20 @@ describe("inspectSubject", () => {
   });
 
   it("says inheritance is unchecked where the teams list was refused", () => {
-    const inspection = inspectSubject(
-      alice,
-      [attached(denyDeletes, engineering.grn)],
-      { status: "forbidden" },
-    );
+    const scopes = [attached(denyDeletes, engineering.grn)];
+    // The control: with the teams listed, the same policy reaches Alice
+    // through Engineering.
+    expect(
+      inspectSubject(alice, scopes, {
+        status: "ok",
+        data: [membersOf(engineering, alice.grn)],
+      }).inherited,
+    ).toEqual({
+      via: [{ policy: denyDeletes, team: engineering }],
+      uncheckedTeams: [],
+    });
+
+    const inspection = inspectSubject(alice, scopes, { status: "forbidden" });
 
     expect(inspection.inherited).toEqual({ via: [], uncheckedTeams: null });
   });

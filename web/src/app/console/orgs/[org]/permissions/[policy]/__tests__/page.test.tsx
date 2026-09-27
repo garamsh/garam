@@ -113,6 +113,13 @@ describe("policy page", () => {
   });
 
   it("renders not-found for a policy the organization's list does not hold", async () => {
+    // The control: a policy the list holds renders under its name.
+    const listed = await renderPolicy();
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Deny project deletion" }),
+    ).toBeInTheDocument();
+    listed.unmount();
+
     // garam answers an empty list of versions and attachments for any
     // identifier, so only the policy list can say it does not exist.
     server.use(

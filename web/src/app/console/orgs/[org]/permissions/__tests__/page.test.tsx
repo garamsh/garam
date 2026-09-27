@@ -63,6 +63,13 @@ describe("permissions page", () => {
   });
 
   it("says the policies are refused rather than empty when garam answers 403", async () => {
+    // The control: answered, the same page lists the policies.
+    const allowed = await renderPolicies();
+    expect(
+      screen.getByRole("link", { name: "Deny project deletion" }),
+    ).toBeInTheDocument();
+    allowed.unmount();
+
     server.use(http.get(POLICIES, refuse));
 
     await renderPolicies();
@@ -94,6 +101,13 @@ describe("permissions page", () => {
   });
 
   it("says the API is unreachable rather than showing no policies", async () => {
+    // The control: answered, the same page lists the policies.
+    const allowed = await renderPolicies();
+    expect(
+      screen.getByRole("link", { name: "Deny project deletion" }),
+    ).toBeInTheDocument();
+    allowed.unmount();
+
     server.use(http.get(POLICIES, () => HttpResponse.error()));
 
     await renderPolicies();

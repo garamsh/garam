@@ -1,11 +1,8 @@
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
-import {
-  createGroup,
-  createProject,
-} from "@/features/orgs/api/create-resource";
-import { API_URL, engineering, frontend } from "@/testing/mocks/handlers";
+import { createProject } from "@/features/orgs/api/create-project";
+import { API_URL, frontend } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
 // `revalidatePath` only works inside a Next.js request store.
@@ -22,19 +19,8 @@ function form(name: string): FormData {
   return data;
 }
 
-/**
- * The two resources one action creates, and what garam answers for
- * each.
- */
+/** What the action creates, and what garam answers for it. */
 const RESOURCES = [
-  {
-    action: createGroup,
-    kind: "group",
-    path: `${API_URL}/orgs/acme/groups`,
-    typed: "Engineering",
-    answer: engineering,
-    identifier: "eng",
-  },
   {
     action: createProject,
     kind: "project",

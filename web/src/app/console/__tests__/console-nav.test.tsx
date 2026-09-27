@@ -28,9 +28,9 @@ describe("console navigation", () => {
       "href",
       "/console/orgs/acme",
     );
-    expect(screen.getByRole("link", { name: "Groups" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Teams" })).toHaveAttribute(
       "href",
-      "/console/orgs/acme/groups",
+      "/console/orgs/acme/teams",
     );
     expect(screen.getByRole("link", { name: "Policies" })).toHaveAttribute(
       "href",
@@ -39,14 +39,23 @@ describe("console navigation", () => {
   });
 
   it("marks the section the caller is on", () => {
-    renderNav("/console/orgs/acme/members");
+    renderNav("/console/orgs/acme/people");
 
-    expect(screen.getByRole("link", { name: "Members" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "People" })).toHaveAttribute(
       "aria-current",
       "page",
     );
-    expect(screen.getByRole("link", { name: "Groups" })).not.toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Teams" })).not.toHaveAttribute(
       "aria-current",
+    );
+  });
+
+  it("marks the section, not the page, while on one team's page", () => {
+    renderNav("/console/orgs/acme/teams/eng");
+
+    expect(screen.getByRole("link", { name: "Teams" })).toHaveAttribute(
+      "aria-current",
+      "location",
     );
   });
 

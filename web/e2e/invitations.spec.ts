@@ -35,7 +35,7 @@ test.describe("organization mutations", () => {
     signedIn,
   }) => {
     // The owner creates an invitation and copies its link.
-    await page.goto(`/console/orgs/${signedIn.orgSlug}/members`);
+    await page.goto(`/console/orgs/${signedIn.orgSlug}/people`);
     await page.getByLabel("Role").click();
     await page.getByRole("option", { name: "Member" }).click();
     await page.getByRole("button", { name: "Create invitation" }).click();
@@ -67,8 +67,8 @@ test.describe("organization mutations", () => {
       inviteePage.getByRole("link", { name: signedIn.orgName }),
     ).toBeVisible();
 
-    // The members section now lists both members.
-    await page.goto(`/console/orgs/${signedIn.orgSlug}/members`);
+    // The People section now lists both members.
+    await page.goto(`/console/orgs/${signedIn.orgSlug}/people`);
     // Substring on purpose: a row's accessible name is all of its
     // cells, and the assertion asks which role one of them shows.
     await expect(

@@ -480,3 +480,8 @@ ADRs:
   release alone, a commit-derived or prerelease tag for a development
   build `make image-build` produces locally and pushes nowhere.
   Supersedes ADR-0039's "the only trigger that publishes" in part
+- [0072](./adr/0072-the-console-presents-a-group-as-a-team-with-a-page-of-its-own.md)
+  — the console presents a group as a team with a page of its own:
+  Teams and People replace Groups and Members in the console, a team
+  list opens a page per team for its membership and settings, and the
+  group's API, identity and authorization are unchanged

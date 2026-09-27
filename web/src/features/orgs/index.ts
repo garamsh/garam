@@ -7,18 +7,23 @@
  * server-only backend client into the browser bundle.
  */
 export {
+  getGroup,
   getOrg,
   listAgentDefinitions,
   listAgents,
+  listGroupMembers,
   listGroups,
   listOperators,
   listOrgConsents,
   listOrgMembers,
   listOrgs,
   listProjects,
+  lookupAgents,
+  lookupOrgMembers,
   type Agent,
   type AgentDefinition,
   type Group,
+  type GroupMember,
   type Member,
   type Operator,
   type OrgConsent,
@@ -26,4 +31,4 @@ export {
   type Project,
   type RegisteredOperator,
 } from "./api/orgs";
-export { slugFromGrn } from "./grn";
+export { parseGrn, slugFromGrn } from "./grn";

@@ -17,7 +17,7 @@ function newPassword(): string {
  * the token its link carries — what a person registering is holding.
  */
 async function invitationToken(page: Page, orgSlug: string): Promise<string> {
-  await page.goto(`/console/orgs/${orgSlug}/members`);
+  await page.goto(`/console/orgs/${orgSlug}/people`);
   await page.getByRole("button", { name: "Create invitation" }).click();
 
   const link = page.getByLabel("Invitation link");

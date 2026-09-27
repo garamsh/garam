@@ -61,7 +61,7 @@ test.describe("signed in", () => {
     // the count, and a trailing count must not break the navigation
     // assertion — the count itself is what the assertion fixes.
     await expect(
-      page.getByRole("main").getByRole("link", { name: "Groups" }),
+      page.getByRole("main").getByRole("link", { name: "Teams" }),
     ).toContainText("1");
   });
 
@@ -73,8 +73,8 @@ test.describe("signed in", () => {
     const breadcrumb = page.getByRole("navigation", { name: "breadcrumb" });
     await page.goto(`/console/orgs/${signedIn.orgSlug}`);
 
-    await nav.getByRole("link", { name: "Groups" }).click();
-    await expect(page).toHaveURL(`/console/orgs/${signedIn.orgSlug}/groups`);
+    await nav.getByRole("link", { name: "Teams", exact: true }).click();
+    await expect(page).toHaveURL(`/console/orgs/${signedIn.orgSlug}/teams`);
     await expect(
       page.getByText(signedIn.groupName, { exact: true }),
     ).toBeVisible();
@@ -85,26 +85,25 @@ test.describe("signed in", () => {
       page.getByText(signedIn.projectName, { exact: true }),
     ).toBeVisible();
 
-    await nav.getByRole("link", { name: "Members" }).click();
-    await expect(page).toHaveURL(`/console/orgs/${signedIn.orgSlug}/members`);
+    await nav.getByRole("link", { name: "People", exact: true }).click();
+    await expect(page).toHaveURL(`/console/orgs/${signedIn.orgSlug}/people`);
     // Substring on purpose: a row's accessible name is all of its
     // cells, and the assertion asks which role one of them shows.
     await expect(
       page.getByRole("row", { name: signedIn.userSlug }),
     ).toContainText("owner");
 
-    await expect(breadcrumb).toContainText("Members");
-    await expect(nav.getByRole("link", { name: "Members" })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
+    await expect(breadcrumb).toContainText("People");
+    await expect(
+      nav.getByRole("link", { name: "People", exact: true }),
+    ).toHaveAttribute("aria-current", "page");
   });
 
   test("switches organizations from the sidebar header", async ({
     page,
     signedIn,
   }) => {
-    await page.goto(`/console/orgs/${signedIn.orgSlug}/groups`);
+    await page.goto(`/console/orgs/${signedIn.orgSlug}/teams`);
 
     await page.getByRole("button", { name: "Switch organization" }).click();
     await expect(
@@ -118,7 +117,9 @@ test.describe("signed in", () => {
   test("collapses the sidebar to icons", async ({ page, signedIn }) => {
     const nav = page.getByRole("list", { name: "Organization sections" });
     await page.goto(`/console/orgs/${signedIn.orgSlug}`);
-    await expect(nav.getByRole("link", { name: "Groups" })).toBeVisible();
+    await expect(
+      nav.getByRole("link", { name: "Teams", exact: true }),
+    ).toBeVisible();
 
     await page.getByRole("button", { name: "Toggle Sidebar" }).first().click();
 
@@ -126,7 +127,9 @@ test.describe("signed in", () => {
       page.locator('[data-slot="sidebar"][data-state="collapsed"]'),
     ).toHaveCount(1);
     // Collapsing to icons hides the labels, not the links.
-    await expect(nav.getByRole("link", { name: "Groups" })).toBeVisible();
+    await expect(
+      nav.getByRole("link", { name: "Teams", exact: true }),
+    ).toBeVisible();
   });
 
   test("keeps the collapsed sidebar collapsed across a reload", async ({

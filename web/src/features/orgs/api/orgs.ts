@@ -15,6 +15,12 @@ import { parseGrn } from "../grn";
 export type Organization = components["schemas"]["Organization"];
 /** A group inside an organization, as the API returns one. */
 export type Group = components["schemas"]["Group"];
+/**
+ * One member of a group, as the API returns one: a GRN and nothing
+ * else. It may name a user or an agent, and nothing guarantees it
+ * still names either — resolving it is the reader's job.
+ */
+export type GroupMember = components["schemas"]["MemberRef"];
 /** A project inside an organization, as the API returns one. */
 export type Project = components["schemas"]["Project"];
 /** One person's membership of an organization, as the API returns one. */
@@ -66,6 +72,16 @@ export type OrgConsent = components["schemas"]["OrgConsent"];
  */
 export type OrgRead<T> = { status: "ok"; data: T } | { status: "unreachable" };
 
+/**
+ * What a read inside an organization returned where a refusal is a
+ * state of its own rather than not-found: a group, its members, or a
+ * list a page only looks names up in. It is for a page that also reads
+ * the organization itself, whose refusal stays not-found (ADR-0011),
+ * so a refusal here tells nothing about an organization that is not
+ * the caller's.
+ */
+export type RefusableRead<T> = OrgRead<T> | { status: "forbidden" };
+
 // What the seam parses each of this feature's reads against. Every
 // parser is tied to the type `api/openapi.yaml` generated, in both
 // directions: a field the specification adds, drops or retypes fails
@@ -100,6 +116,10 @@ export const GroupParser = parserFor<Group>()(
     orgGrn: GrnParser,
     roles: z.array(RoleParser),
   }),
+);
+
+const GroupMemberParser = parserFor<GroupMember>()(
+  z.object({ memberGrn: GrnParser }),
 );
 
 export const ProjectParser = parserFor<Project>()(
@@ -220,6 +240,60 @@ export function listGroups(org: string): Promise<OrgRead<Group[]>> {
   );
 }
 
+/** One group of an organization, by its identifier. */
+export function getGroup(
+  org: string,
+  group: string,
+): Promise<RefusableRead<Group>> {
+  return refusableRead(
+    garamFetchAuthenticated(
+      `/orgs/${orgPath(org)}/groups/${orgPath(group)}`,
+      GroupParser,
+    ),
+  );
+}
+
+/** The members of one group of an organization. */
+export function listGroupMembers(
+  org: string,
+  group: string,
+): Promise<RefusableRead<GroupMember[]>> {
+  return refusableRead(
+    garamFetchAuthenticated(
+      `/orgs/${orgPath(org)}/groups/${orgPath(group)}/members`,
+      z.array(GroupMemberParser),
+    ),
+  );
+}
+
+/**
+ * The people of an organization, for a page that only looks names up
+ * in them: a refusal is returned rather than answered with not-found.
+ */
+export function lookupOrgMembers(
+  org: string,
+): Promise<RefusableRead<Member[]>> {
+  return refusableRead(
+    garamFetchAuthenticated(
+      `/orgs/${orgPath(org)}/members`,
+      z.array(MemberParser),
+    ),
+  );
+}
+
+/**
+ * The agents of an organization, for a page that only looks names up
+ * in them: a refusal is returned rather than answered with not-found.
+ */
+export function lookupAgents(org: string): Promise<RefusableRead<Agent[]>> {
+  return refusableRead(
+    garamFetchAuthenticated(
+      `/orgs/${orgPath(org)}/agents`,
+      z.array(AgentParser),
+    ),
+  );
+}
+
 /** The projects an organization owns. */
 export function listProjects(org: string): Promise<OrgRead<Project[]>> {
   return orgRead(
@@ -298,7 +372,26 @@ async function orgRead<T>(read: Promise<T>): Promise<OrgRead<T>> {
   }
 }
 
-/** Org slugs arrive from the URL, so they are escaped before reuse. */
+/**
+ * `orgRead` where a refusal is returned rather than folded into
+ * not-found (`RefusableRead`). A missing resource is still
+ * `notFound()`.
+ */
+async function refusableRead<T>(read: Promise<T>): Promise<RefusableRead<T>> {
+  try {
+    return { status: "ok", data: await read };
+  } catch (error) {
+    if (error instanceof GaramApiError && error.status === 403) {
+      return { status: "forbidden" };
+    }
+    return orgRead(Promise.reject(error));
+  }
+}
+
+/**
+ * Org and group identifiers arrive from the URL, so they are escaped
+ * before reuse.
+ */
 function orgPath(org: string): string {
   return encodeURIComponent(org);
 }

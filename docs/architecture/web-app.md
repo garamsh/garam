@@ -107,7 +107,15 @@ carried by a collapsible sidebar shell over every `/console/*` route
 ([ADR-0011](./adr/0011-console-shell.md)). Its org-scoped sections are
 declared in one place, `web/src/app/console/_components/navigation.ts`,
 which is what the sidebar, the breadcrumb and the active marking all
-read; adding one is an entry there and a route folder.
+read; adding one is an entry there and a route folder. A section whose
+entries each have a page of their own declares it there too, and Teams
+is the one that does: `/console/orgs/{org}/teams/{team}` is a team's
+page and `…/teams/new` creates one. On such a page the sidebar marks
+the section as the location, and the breadcrumb links the section and
+names the entry with the name the page read, handed to it through
+`web/src/app/console/_components/item-crumb.tsx` because the layout
+cannot read the entry
+([ADR-0072](./adr/0072-the-console-presents-a-group-as-a-team-with-a-page-of-its-own.md)).
 
 What a section can do differs, and the difference is the state of the
 API behind it rather than of the console:
@@ -115,21 +123,24 @@ API behind it rather than of the console:
 | Section | What the console does with it |
 |---|---|
 | Overview | counts what the sections it summarises hold, names the failing states inside them rather than folding them into a count, and says which sections it does not summarise and why |
-| Groups | reads the groups the organization holds, and creates one |
-| Projects | reads the projects the organization owns, and creates one — an agent's GRN names the project it was minted in ([ADR-0001](./adr/0001-grn-segments.md)), so an organization holding none cannot reach that path from the console |
-| Members | reads, and issues the invitation a person joins by ([ADR-0006](./adr/0006-invitation-tokens.md)) |
-| Operators | reads the operators the organization registered with where each stands in obtaining a certificate, which garam derives rather than is told ([ADR-0045](./adr/0045-an-organization-registers-an-operator.md), [ADR-0064](./adr/0064-an-operator-enrols-with-a-one-time-token-and-keeps-its-key-in-its-own-cluster.md)), and registers one |
+| Teams | the organization's groups, presented as teams ([ADR-0072](./adr/0072-the-console-presents-a-group-as-a-team-with-a-page-of-its-own.md)): lists them, creates one, and on a team's page reads its members, adds and removes people and agents, renames it and deletes it. A member is shown by the name and type the organization's people and agents give it, and one neither holds stays listed and removable, marked as not found; where the caller is refused the people or agents list, those members are marked not checked and the team stays readable |
+| People | reads the organization's members, and issues the invitation a person joins by ([ADR-0006](./adr/0006-invitation-tokens.md)) |
 | Agents | reads the agents the organization holds with the two states their operator and the agent itself report ([ADR-0053](./adr/0053-an-agent-and-its-operator-report-state-on-the-machine-listener.md)), and reads definitions and defines one ([ADR-0026](./adr/0026-the-console-defines-an-agent.md)) |
+| Projects | reads the projects the organization owns, and creates one — an agent's GRN names the project it was minted in ([ADR-0001](./adr/0001-grn-segments.md)), so an organization holding none cannot reach that path from the console |
+| Operators | reads the operators the organization registered with where each stands in obtaining a certificate, which garam derives rather than is told ([ADR-0045](./adr/0045-an-organization-registers-an-operator.md), [ADR-0064](./adr/0064-an-operator-enrols-with-a-one-time-token-and-keeps-its-key-in-its-own-cluster.md)), and registers one |
 | Consents | reads the cross-organization consent relations the organization is a side of, grants its half of one and withdraws it ([ADR-0035](./adr/0035-a-cross-organization-message-needs-both-organizations-consent.md)) |
 | Policies | neither: the section holds its place and says policies are managed over the HTTP API |
 
 Every section's empty state names the absence and no next step. Where
 a section creates in place, that next step is the form standing under
-it; `/console/orgs` states one in words instead, because its create
-path is a route of its own rather than a form on the page. What an
-empty state can carry is
+it; Teams carries it as the header's create link, and `/console/orgs`
+states one in words, because each one's create path is a route of its
+own rather than a form on the page. What an empty state can carry is
 `web/src/app/console/_components/empty-state.tsx`, which is
 authoritative for it and holds no control.
+
+`/console/orgs/{org}/groups` and `…/members`, the two sections' former
+addresses, redirect to Teams and People (`web/next.config.ts`).
 
 Organizations are created, and an invitation is accepted at
 `/console/invitations/{token}` — which is itself behind sign-in,
@@ -290,7 +301,7 @@ application serves, what it reaches, or what it may not decide belongs
 on this list, which is the quickest test of whether a change is one
 this document owes an update.
 
-Three decide the application itself:
+Four decide the application itself:
 
 - [ADR-0009](./adr/0009-web-frontend.md) — a Next.js application in
   `web/` in this repository, reaching the API through a same-origin
@@ -301,6 +312,9 @@ Three decide the application itself:
 - [ADR-0023](./adr/0023-web-probes.md) — the application answers the
   same two probes as every other process, as route handlers, reading
   nothing
+- [ADR-0072](./adr/0072-the-console-presents-a-group-as-a-team-with-a-page-of-its-own.md)
+  — the console names groups teams and members people, and a team has
+  a page of its own below the Teams section
 
 The rest bear on it without being about it:
 

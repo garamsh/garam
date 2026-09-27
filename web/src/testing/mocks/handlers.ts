@@ -5,6 +5,7 @@ import type {
   Agent,
   AgentDefinition,
   Group,
+  GroupMember,
   Member,
   Operator,
   OrgConsent,
@@ -126,6 +127,15 @@ export const aliceMembership: Member = {
 };
 
 /**
+ * Who Engineering holds: Alice and Acme's reported agent, one of each
+ * type a team can hold.
+ */
+export const engineeringMembers: GroupMember[] = [
+  { memberGrn: alice.grn },
+  { memberGrn: reportedAgent.grn },
+];
+
+/**
  * Every route the fixtures model: what it answers signed in, and
  * whether the backend guards it. The split is the one
  * `api/openapi.yaml` records — an operation carrying `security: []`
@@ -138,6 +148,12 @@ const routes: { path: string; guarded: boolean; body: JsonBodyType }[] = [
   { path: "/orgs", guarded: true, body: [acme] },
   { path: "/orgs/acme", guarded: true, body: acme },
   { path: "/orgs/acme/groups", guarded: true, body: [engineering] },
+  { path: "/orgs/acme/groups/eng", guarded: true, body: engineering },
+  {
+    path: "/orgs/acme/groups/eng/members",
+    guarded: true,
+    body: engineeringMembers,
+  },
   { path: "/orgs/acme/projects", guarded: true, body: [frontend] },
   { path: "/orgs/acme/members", guarded: true, body: [aliceMembership] },
   { path: "/orgs/acme/operators", guarded: true, body: [fieldOne] },

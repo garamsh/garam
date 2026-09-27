@@ -3,29 +3,16 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
-import { CreateResourceForm } from "@/app/console/orgs/[org]/_components/create-resource-form";
-import { API_URL, engineering, frontend } from "@/testing/mocks/handlers";
+import { CreateProjectForm } from "@/app/console/orgs/[org]/projects/_components/create-project-form";
+import { API_URL, frontend } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
 // `revalidatePath` needs a request scope the test does not run in; the
 // action's own answer is what the form renders.
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
-/**
- * The two resources one form creates, and what garam answers for
- * each.
- */
+/** What the form creates, and what garam answers for it. */
 const RESOURCES = [
-  {
-    kind: "group",
-    path: `${API_URL}/orgs/acme/groups`,
-    heading: "Create a group",
-    label: "Group name",
-    submit: "Create group",
-    typed: "Engineering",
-    answer: engineering,
-    identifier: "eng",
-  },
   {
     kind: "project",
     path: `${API_URL}/orgs/acme/projects`,
@@ -54,7 +41,7 @@ describe.each(RESOURCES)(
     }
 
     it("asks for a name and nothing else", () => {
-      render(<CreateResourceForm org="acme" kind={kind} />);
+      render(<CreateProjectForm org="acme" />);
 
       expect(
         screen.getByRole("heading", { name: heading }),
@@ -66,9 +53,7 @@ describe.each(RESOURCES)(
     it("posts the name typed into it and reports the identifier back", async () => {
       const posted = recordCreates();
       const user = userEvent.setup();
-      const { container } = render(
-        <CreateResourceForm org="acme" kind={kind} />,
-      );
+      const { container } = render(<CreateProjectForm org="acme" />);
 
       await user.type(screen.getByLabelText(label), typed);
       await user.click(screen.getByRole("button", { name: submit }));
@@ -93,7 +78,7 @@ describe.each(RESOURCES)(
         ),
       );
       const user = userEvent.setup();
-      render(<CreateResourceForm org="acme" kind={kind} />);
+      render(<CreateProjectForm org="acme" />);
 
       await user.type(screen.getByLabelText(label), typed);
       await user.click(screen.getByRole("button", { name: submit }));

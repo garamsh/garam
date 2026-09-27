@@ -109,13 +109,18 @@ declared in one place, `web/src/app/console/_components/navigation.ts`,
 which is what the sidebar, the breadcrumb and the active marking all
 read; adding one is an entry there and a route folder. A section whose
 entries each have a page of their own declares it there too, and Teams
-is the one that does: `/console/orgs/{org}/teams/{team}` is a team's
-page and `…/teams/new` creates one. On such a page the sidebar marks
+and Permissions do: `/console/orgs/{org}/teams/{team}` is a team's
+page and `…/teams/new` creates one, and `…/permissions/{policy}` and
+`…/permissions/new` are a policy's. On such a page the sidebar marks
 the section as the location, and the breadcrumb links the section and
 names the entry with the name the page read, handed to it through
 `web/src/app/console/_components/item-crumb.tsx` because the layout
 cannot read the entry
 ([ADR-0072](./adr/0072-the-console-presents-a-group-as-a-team-with-a-page-of-its-own.md)).
+A section may also declare named views beside its entries, which the
+breadcrumb names by label: Permissions declares Attachments, at
+`…/permissions/attachments`
+([ADR-0073](./adr/0073-the-console-manages-policies-and-their-attachments-under-permissions.md)).
 
 What a section can do differs, and the difference is the state of the
 API behind it rather than of the console:
@@ -129,7 +134,7 @@ API behind it rather than of the console:
 | Projects | reads the projects the organization owns, and creates one — an agent's GRN names the project it was minted in ([ADR-0001](./adr/0001-grn-segments.md)), so an organization holding none cannot reach that path from the console |
 | Operators | reads the operators the organization registered with where each stands in obtaining a certificate, which garam derives rather than is told ([ADR-0045](./adr/0045-an-organization-registers-an-operator.md), [ADR-0064](./adr/0064-an-operator-enrols-with-a-one-time-token-and-keeps-its-key-in-its-own-cluster.md)), and registers one |
 | Consents | reads the cross-organization consent relations the organization is a side of, grants its half of one and withdraws it ([ADR-0035](./adr/0035-a-cross-organization-message-needs-both-organizations-consent.md)) |
-| Policies | neither: the section holds its place and says policies are managed over the HTTP API |
+| Permissions | the organization's policies and their attachments ([ADR-0073](./adr/0073-the-console-manages-policies-and-their-attachments-under-permissions.md)), through the existing policy operations only. The Policies view lists policies and opens a page per policy, where one is created as a draft, its versions are read and appended, any stored version is made the default, it is activated and archived, and it is attached to and detached from teams, people and agents chosen by name. A write that makes a policy evaluate states the version and whom it reaches first, and one reaching everyone, or reaching a scope garam will not list, needs an explicit confirmation. The Attachments view shows each policy's attachments and, for one chosen subject, the policies attached to it, to its teams and to no one, without calling that its access. A list the caller is refused is shown as unchecked, never as empty; a Condition is shown as not evaluated. Neither view deletes a policy or explains a decision, since no operation does |
 
 Every section's empty state names the absence and no next step. Where
 a section creates in place, that next step is the form standing under
@@ -139,15 +144,19 @@ own rather than a form on the page. What an empty state can carry is
 `web/src/app/console/_components/empty-state.tsx`, which is
 authoritative for it and holds no control.
 
-`/console/orgs/{org}/groups` and `…/members`, the two sections' former
-addresses, redirect to Teams and People (`web/next.config.ts`).
+`/console/orgs/{org}/groups`, `…/members` and `…/policies`, three
+sections' former addresses, redirect to Teams, People and Permissions
+(`web/next.config.ts`).
 
 Organizations are created, and an invitation is accepted at
 `/console/invitations/{token}` — which is itself behind sign-in,
 because accepting one joins an existing account to an organization.
 
 No organization, group, project or user is addressed by its GRN
-anywhere in the interface. The console shows names and addresses
+anywhere in the interface. A policy document is authored text naming
+resources by GRN pattern, and the console shows it as written, which
+is content rather than addressing
+([ADR-0073](./adr/0073-the-console-manages-policies-and-their-attachments-under-permissions.md)). The console shows names and addresses
 resources by the identifier segment the API's own paths take
 ([ADR-0011](./adr/0011-console-shell.md),
 [ADR-0001](./adr/0001-grn-segments.md)).
@@ -278,9 +287,6 @@ files (ADR-0009, `docs/convention/stack-nextjs.md` §12).
   of the stream, reading it as it arrives and seeing only from when it
   opened. No console route opens one, so the view that ADR describes
   does not exist yet, and where it would live is undecided.
-- **Reading policies.** The section exists and says it cannot. Whether
-  the console reads them, and whether it ever writes one, is not
-  recorded either way.
 - **Which ADR holds the sign-in page's provider discovery.** The
   behaviour is live and is stated under §What it serves.
   [ADR-0010](./adr/0010-dev-auth-provider.md) decided it, and
@@ -301,7 +307,7 @@ application serves, what it reaches, or what it may not decide belongs
 on this list, which is the quickest test of whether a change is one
 this document owes an update.
 
-Four decide the application itself:
+Five decide the application itself:
 
 - [ADR-0009](./adr/0009-web-frontend.md) — a Next.js application in
   `web/` in this repository, reaching the API through a same-origin
@@ -315,6 +321,10 @@ Four decide the application itself:
 - [ADR-0072](./adr/0072-the-console-presents-a-group-as-a-team-with-a-page-of-its-own.md)
   — the console names groups teams and members people, and a team has
   a page of its own below the Teams section
+- [ADR-0073](./adr/0073-the-console-manages-policies-and-their-attachments-under-permissions.md)
+  — Permissions holds policies and their attachments through the
+  existing operations, states a policy's scope before it evaluates, and
+  sorts a subject's policies by source without calling them its access
 
 The rest bear on it without being about it:
 

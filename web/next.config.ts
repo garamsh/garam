@@ -17,7 +17,8 @@ const nextConfig: NextConfig = {
     ],
   },
   // The console's Groups and Members sections became Teams and People
-  // (ADR-0072); a bookmark of either old address lands on the new one.
+  // (ADR-0072), and Policies became Permissions (ADR-0073); a bookmark
+  // of an old address lands on the new one.
   async redirects() {
     return [
       {
@@ -28,6 +29,11 @@ const nextConfig: NextConfig = {
       {
         source: "/console/orgs/:org/members",
         destination: "/console/orgs/:org/people",
+        permanent: false,
+      },
+      {
+        source: "/console/orgs/:org/policies",
+        destination: "/console/orgs/:org/permissions",
         permanent: false,
       },
     ];

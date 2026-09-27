@@ -59,6 +59,17 @@ describe("team page", () => {
     expect(container.textContent).not.toContain("grn:");
   });
 
+  it("links to the management of the team's policy attachments", async () => {
+    await renderTeam();
+
+    expect(
+      screen.getByRole("link", { name: "Manage policies" }),
+    ).toHaveAttribute(
+      "href",
+      "/console/orgs/acme/permissions/attachments?subject=team%3Aeng",
+    );
+  });
+
   it("offers only the people and agents the team does not hold", async () => {
     server.use(
       membersAre(alice.grn),

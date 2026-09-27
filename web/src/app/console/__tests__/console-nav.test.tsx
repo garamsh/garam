@@ -32,9 +32,9 @@ describe("console navigation", () => {
       "href",
       "/console/orgs/acme/teams",
     );
-    expect(screen.getByRole("link", { name: "Policies" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Permissions" })).toHaveAttribute(
       "href",
-      "/console/orgs/acme/policies",
+      "/console/orgs/acme/permissions",
     );
   });
 

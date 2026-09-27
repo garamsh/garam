@@ -1,5 +1,6 @@
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 import { addGroupMember } from "@/features/orgs/api/add-group-member";
 import { removeGroupMember } from "@/features/orgs/api/remove-group-member";
@@ -7,6 +8,9 @@ import { API_URL, alice, reportedAgent } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
+
+/** The body an addition posts, parsed rather than asserted. */
+const MemberRef = z.object({ memberGrn: z.string() });
 
 const MEMBERS = `${API_URL}/orgs/acme/groups/eng/members`;
 
@@ -41,7 +45,7 @@ describe("addGroupMember", () => {
     // garam holds Alice already and nobody else.
     server.use(
       http.post(MEMBERS, async ({ request }) => {
-        const { memberGrn } = (await request.json()) as { memberGrn: string };
+        const { memberGrn } = MemberRef.parse(await request.json());
         return memberGrn === alice.grn
           ? HttpResponse.json(
               { kind: "already_exists", message: "already exists" },

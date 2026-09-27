@@ -4,6 +4,7 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { AddTeamMemberForm } from "@/app/console/orgs/[org]/teams/[team]/_components/add-team-member-form";
+import type { Candidate } from "@/app/console/orgs/[org]/teams/[team]/_components/team-member";
 import { API_URL, alice, reportedAgent } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
@@ -16,9 +17,9 @@ vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
 const MEMBERS = `${API_URL}/orgs/acme/groups/eng/members`;
 
-const candidates = [
-  { grn: alice.grn, kind: "person" as const, label: "Alice" },
-  { grn: reportedAgent.grn, kind: "agent" as const, label: "field-agent" },
+const candidates: Candidate[] = [
+  { grn: alice.grn, kind: "person", label: "Alice" },
+  { grn: reportedAgent.grn, kind: "agent", label: "field-agent" },
 ];
 
 describe("add team member form", () => {

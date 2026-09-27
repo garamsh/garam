@@ -51,6 +51,7 @@ describe("team page", () => {
     // Presence: a row's accessible name is all of its cells.
     const person = screen.getByRole("row", { name: /Alice/ });
     expect(within(person).getByText("Person")).toBeInTheDocument();
+    // Presence, for the same reason.
     const agent = screen.getByRole("row", {
       name: new RegExp(slugFromGrn(reportedAgent.grn)),
     });
@@ -105,11 +106,14 @@ describe("team page", () => {
       expect(
         within(row).getByText("Not found in this organization"),
       ).toBeInTheDocument();
+      // Presence: the button's name goes on to name the member and
+      // the team, and the row already fixes which member.
       expect(
         within(row).getByRole("button", { name: /^Remove / }),
       ).toBeInTheDocument();
     }
     // A person nobody resolves is not given a name-shaped placeholder.
+    // Rows are found by presence, as above.
     const gone = screen.getByRole("row", { name: /gone/ });
     expect(within(gone).getByText("Unknown person")).toBeInTheDocument();
     // A GRN no known type claims is not shown as a person or an agent.
@@ -135,6 +139,7 @@ describe("team page", () => {
     async (segment, type, marker) => {
       // The control: with the list answered, no member is unchecked, so
       // the mark below is the refusal and not every render.
+      // Presence: the mark is a sentence that goes on to name the list.
       const allowed = await renderTeam();
       expect(screen.queryByText(/^Not checked:/)).not.toBeInTheDocument();
       allowed.unmount();
@@ -162,6 +167,7 @@ describe("team page", () => {
       expect(
         within(refused).queryByText("Not found in this organization"),
       ).not.toBeInTheDocument();
+      // Presence: the button's name goes on to name the member.
       expect(
         within(refused).getByRole("button", { name: /^Remove / }),
       ).toBeInTheDocument();

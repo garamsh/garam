@@ -127,18 +127,18 @@ export function teamCandidates(
   return [
     ...(people.status === "ok" ? people.data : [])
       .filter((person) => !held.has(person.userGrn))
-      .map((person) => ({
+      .map((person): Candidate => ({
         grn: person.userGrn,
-        kind: "person" as const,
+        kind: "person",
         label:
           person.nickname ??
           `No name on record (${slugFromGrn(person.userGrn)})`,
       })),
     ...(agents.status === "ok" ? agents.data : [])
       .filter((agent) => !held.has(agent.grn))
-      .map((agent) => ({
+      .map((agent): Candidate => ({
         grn: agent.grn,
-        kind: "agent" as const,
+        kind: "agent",
         label: slugFromGrn(agent.grn),
       })),
   ];

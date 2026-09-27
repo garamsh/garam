@@ -219,6 +219,13 @@ describe("team page", () => {
   });
 
   it("renders not-found when the organization is not the caller's", async () => {
+    // The control: the same team, answered, renders under its name.
+    const allowed = await renderTeam();
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Engineering" }),
+    ).toBeInTheDocument();
+    allowed.unmount();
+
     server.use(
       http.get(`${API_URL}/orgs/acme`, () =>
         HttpResponse.json({ kind: "denied", message: "no" }, { status: 403 }),
@@ -245,6 +252,13 @@ describe("team page", () => {
   });
 
   it("sends a rejected session to the login page", async () => {
+    // The control: the same team, answered, renders under its name.
+    const allowed = await renderTeam();
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Engineering" }),
+    ).toBeInTheDocument();
+    allowed.unmount();
+
     server.use(...signedOut());
 
     await expect(renderTeam()).rejects.toThrow("NEXT_REDIRECT:/login");

@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
-import { RegisterOperatorForm } from "@/app/console/orgs/[org]/operators/_components/register-operator-form";
+import { RegisterOperatorForm } from "@/app/console/orgs/[org]/operators/new/_components/register-operator-form";
 import { API_URL, fieldOneRegistered } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
@@ -30,7 +30,7 @@ function recordRegistrations() {
 }
 
 describe("register operator form", () => {
-  it("posts the identifier and shows the enrollment token once, saying it cannot be shown again", async () => {
+  it("posts the identifier alone when no name is given, and shows the enrollment token once", async () => {
     const posted = recordRegistrations();
     const user = userEvent.setup();
     render(<RegisterOperatorForm org="acme" />);
@@ -39,7 +39,9 @@ describe("register operator form", () => {
     await user.click(screen.getByRole("button", { name: "Register operator" }));
 
     expect(
-      await screen.findByRole("heading", { name: "Registered field-one" }),
+      await screen.findByRole("heading", {
+        name: `Registered ${fieldOneRegistered.operator.name}`,
+      }),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Enrollment token")).toHaveValue(
       fieldOneRegistered.enrollment.token,
@@ -50,7 +52,56 @@ describe("register operator form", () => {
     expect(
       screen.getByText(/This is the only time this token is shown/),
     ).toBeInTheDocument();
-    expect(posted).toEqual([{ identifier: "field-one" }]);
+    // No name is sent, so the API calls the operator by its
+    // identifier (ADR-0074).
+    expect(posted).toEqual([{ identifier: "field-one", description: "" }]);
+  });
+
+  it("posts the name and description typed, and links to the operator's page", async () => {
+    const posted = recordRegistrations();
+    const user = userEvent.setup();
+    render(<RegisterOperatorForm org="acme" />);
+
+    await user.type(screen.getByLabelText("Identifier"), "field-one");
+    await user.type(screen.getByLabelText("Name"), "  Field cluster one ");
+    await user.type(screen.getByLabelText("Description"), "Batch agents.");
+    await user.click(screen.getByRole("button", { name: "Register operator" }));
+
+    expect(
+      await screen.findByRole("link", { name: "Open operator" }),
+    ).toHaveAttribute("href", "/console/orgs/acme/operators/field-one");
+    expect(posted).toEqual([
+      {
+        identifier: "field-one",
+        name: "Field cluster one",
+        description: "Batch agents.",
+      },
+    ]);
+  });
+
+  it("refuses a name past 100 characters without a round trip", async () => {
+    const posted = recordRegistrations();
+    const user = userEvent.setup();
+    render(<RegisterOperatorForm org="acme" />);
+
+    await user.type(screen.getByLabelText("Identifier"), "field-one");
+    await user.type(screen.getByLabelText("Name"), "a".repeat(101));
+
+    expect(
+      screen.getByText(
+        "An operator's name holds at most 100 characters; this one holds 101.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Register operator" }),
+    ).toBeDisabled();
+
+    // The control: one character fewer is taken.
+    await user.type(screen.getByLabelText("Name"), "{Backspace}");
+    expect(
+      screen.getByRole("button", { name: "Register operator" }),
+    ).toBeEnabled();
+    expect(posted).toEqual([]);
   });
 
   it("keeps only what has to be read before typing over the input", async () => {

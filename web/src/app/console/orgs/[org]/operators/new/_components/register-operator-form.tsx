@@ -1,25 +1,38 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   registerOperator,
   type RegisterOperatorState,
 } from "@/features/orgs/actions";
-import { parseOperatorIdentifier } from "@/lib/operator";
+import {
+  parseOperatorDescription,
+  parseOperatorIdentifier,
+  parseOperatorName,
+} from "@/lib/operator";
+import { useHydrated } from "@/hooks/use-hydrated";
+import type { Parsed } from "@/lib/parsed";
+
+import { orgHref } from "../../../../../_components/navigation";
 
 const initialState: RegisterOperatorState = { status: "idle" };
 
 /**
  * Registers an operator: the identifier the organization addresses it
- * by, which is also the last segment of the GRN its certificate names.
+ * by, which is also the last segment of the GRN its certificate names,
+ * and the name and description it is shown by (ADR-0074).
  *
  * The identifier is typed rather than minted, because an operator that
  * already holds a certificate has to be registered under the GRN that
- * certificate carries.
+ * certificate carries. It cannot change afterwards, so it is marked as
+ * the identity; the name can, so it is optional and falls back to the
+ * identifier.
  *
  * The enrollment token comes back with the record and is rendered
  * once. Nothing can fetch it again — garam stores its hash — so the
@@ -28,21 +41,26 @@ const initialState: RegisterOperatorState = { status: "idle" };
  *
  * Only what has to be read before typing stands above the field: what
  * registering does. What the operator does with the token is beside
- * the token, and what deleting a record does is under the list of
- * records, beside the control that does it.
+ * the token, and what deleting a record does is on the operator's own
+ * page, beside the control that does it.
  */
 export function RegisterOperatorForm({ org }: { org: string }) {
   const [state, formAction, pending] = useActionState(
     registerOperator,
     initialState,
   );
+  const hydrated = useHydrated();
   const [identifier, setIdentifier] = useState("");
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
 
-  // The refusal the form can make without a round trip. An empty field
-  // is left to its own `required`, so an untouched form says nothing.
-  const parsed = parseOperatorIdentifier(identifier);
+  // The refusal the form can make without a round trip. An empty
+  // identifier is left to its own `required` and an empty name is the
+  // identifier's, so an untouched form says nothing.
   const problem =
-    identifier === "" || parsed.status !== "error" ? null : parsed.message;
+    (identifier === "" ? null : errorOf(parseOperatorIdentifier(identifier))) ??
+    (name === "" ? null : errorOf(parseOperatorName(name))) ??
+    errorOf(parseOperatorDescription(description));
   const message = problem ?? (state.status === "error" ? state.message : null);
 
   return (
@@ -63,10 +81,44 @@ export function RegisterOperatorForm({ org }: { org: string }) {
             id="identifier"
             name="identifier"
             required
+            disabled={!hydrated}
             value={identifier}
             onChange={(event) => setIdentifier(event.target.value)}
             placeholder="field-one"
             className="max-w-sm font-mono"
+            aria-describedby="identifier-hint"
+          />
+          <p id="identifier-hint" className="text-sm text-muted-foreground">
+            Its certificate identity. It cannot change.
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="operator-name">Name</Label>
+          <Input
+            id="operator-name"
+            name="name"
+            disabled={!hydrated}
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder={identifier || "Field cluster one"}
+            className="max-w-sm"
+            aria-describedby="operator-name-hint"
+          />
+          <p id="operator-name-hint" className="text-sm text-muted-foreground">
+            Optional. Defaults to the identifier.
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="operator-description">Description</Label>
+          <Textarea
+            id="operator-description"
+            name="description"
+            rows={3}
+            disabled={!hydrated}
+            value={description}
+            onChange={(event) => setDescription(event.target.value)}
           />
         </div>
 
@@ -85,7 +137,8 @@ export function RegisterOperatorForm({ org }: { org: string }) {
 
       {state.status === "registered" && (
         <EnrollmentToken
-          operator={state.operator}
+          href={`${orgHref(org, "operators")}/${state.operator}`}
+          name={state.name}
           token={state.token}
           expiresAt={state.expiresAt}
         />
@@ -103,11 +156,13 @@ export function RegisterOperatorForm({ org }: { org: string }) {
  * before the panel is dismissed.
  */
 function EnrollmentToken({
-  operator,
+  href,
+  name,
   token,
   expiresAt,
 }: {
-  operator: string;
+  href: string;
+  name: string;
   token: string;
   expiresAt: string;
 }) {
@@ -119,8 +174,8 @@ function EnrollmentToken({
 
   return (
     <div className="flex max-w-2xl flex-col gap-3 rounded-md border border-border p-4">
-      <h3 className="font-heading text-sm font-semibold">
-        Registered {operator}
+      <h3 className="font-heading text-sm font-semibold wrap-anywhere">
+        Registered {name}
       </h3>
       <p className="text-sm text-destructive">
         This is the only time this token is shown. garam keeps no copy and no
@@ -170,8 +225,18 @@ function EnrollmentToken({
         garam&apos;s machine listener. It is spent by the first attempt and
         stops working at <ExpiresAt at={expiresAt} />.
       </p>
+      <div>
+        <Button asChild variant="outline">
+          <Link href={href}>Open operator</Link>
+        </Button>
+      </div>
     </div>
   );
+}
+
+/** The refusal a parse carried, or null when it carried none. */
+function errorOf<T>(parsed: Parsed<T>): string | null {
+  return parsed.status === "error" ? parsed.message : null;
 }
 
 /** What the clipboard answered for one enrollment token. */

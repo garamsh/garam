@@ -8,7 +8,11 @@ import {
   GaramUnreachableError,
   garamFetchAuthenticated,
 } from "@/lib/garam";
-import { parseOperatorIdentifier } from "@/lib/operator";
+import {
+  parseOperatorDescription,
+  parseOperatorIdentifier,
+  parseOperatorName,
+} from "@/lib/operator";
 import type { components } from "@/types/api";
 
 import { slugFromGrn } from "../grn";
@@ -27,6 +31,7 @@ export type RegisterOperatorState =
   | {
       status: "registered";
       operator: string;
+      name: string;
       token: string;
       expiresAt: string;
     };
@@ -34,6 +39,8 @@ export type RegisterOperatorState =
 const Schema = z.object({
   org: z.string().min(1),
   identifier: z.string(),
+  name: z.string(),
+  description: z.string(),
 });
 
 /**
@@ -52,6 +59,8 @@ export async function registerOperator(
   const parsed = Schema.safeParse({
     org: formData.get("org"),
     identifier: formData.get("identifier"),
+    name: formData.get("name"),
+    description: formData.get("description"),
   });
   if (!parsed.success) {
     return { status: "error", message: "The form did not arrive complete." };
@@ -59,6 +68,15 @@ export async function registerOperator(
 
   const identifier = parseOperatorIdentifier(parsed.data.identifier);
   if (identifier.status === "error") return identifier;
+  // A name left empty is the identifier's, which is what the API calls
+  // an operator registered without one (ADR-0074).
+  const name =
+    parsed.data.name.trim() === ""
+      ? undefined
+      : parseOperatorName(parsed.data.name);
+  if (name?.status === "error") return name;
+  const description = parseOperatorDescription(parsed.data.description);
+  if (description.status === "error") return description;
 
   const org = parsed.data.org;
   let registered: RegisteredOperator;
@@ -71,6 +89,8 @@ export async function registerOperator(
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           identifier: identifier.value,
+          name: name?.value,
+          description: description.value,
         } satisfies components["schemas"]["OperatorRegistration"]),
       },
     );
@@ -86,10 +106,12 @@ export async function registerOperator(
     throw error;
   }
 
-  revalidatePath(`/console/orgs/${org}/operators`);
+  revalidatePath(`/console/orgs/${org}/operators`, "layout");
+  revalidatePath(`/console/orgs/${org}/agents`);
   return {
     status: "registered",
     operator: slugFromGrn(registered.operator.grn),
+    name: registered.operator.name,
     token: registered.enrollment.token,
     expiresAt: registered.enrollment.expiresAt,
   };

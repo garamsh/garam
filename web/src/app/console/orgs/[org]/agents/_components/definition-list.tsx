@@ -1,7 +1,14 @@
+import Link from "next/link";
 import { Fragment } from "react";
 
 import { Card, CardTitle } from "@/components/ui/card";
-import { slugFromGrn, type AgentDefinition } from "@/features/orgs";
+import {
+  slugFromGrn,
+  type AgentDefinition,
+  type Operator,
+} from "@/features/orgs";
+
+import { orgHref } from "../../../../_components/navigation";
 
 /**
  * The organization's agent definitions: the agent each one minted, the
@@ -12,12 +19,24 @@ import { slugFromGrn, type AgentDefinition } from "@/features/orgs";
  * (`api/openapi.yaml` §AgentDefinition), so the identifier is
  * monospaced as an address and the list says what it is rather than
  * leaving an identity subject to read as somebody's name.
+ *
+ * The operator is shown by the name the organization gave it, with the
+ * identifier the definition stores under it and a link to its page
+ * (ADR-0074). One not among `operators` — a list refused to the
+ * caller — is shown by identifier alone.
  */
 export function DefinitionList({
+  org,
   definitions,
+  operators,
 }: {
+  org: string;
   definitions: AgentDefinition[];
+  operators: Operator[];
 }) {
+  const names = new Map(
+    operators.map((operator) => [operator.grn, operator.name]),
+  );
   return (
     <div className="flex flex-col gap-3">
       <ul className="flex flex-col gap-3">
@@ -29,8 +48,12 @@ export function DefinitionList({
               </CardTitle>
               <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
                 <dt className="text-muted-foreground">Operator</dt>
-                <dd className="font-mono">
-                  {slugFromGrn(definition.operatorGrn)}
+                <dd>
+                  <OperatorName
+                    org={org}
+                    identifier={slugFromGrn(definition.operatorGrn)}
+                    name={names.get(definition.operatorGrn)}
+                  />
                 </dd>
                 <dt className="text-muted-foreground">Defined by</dt>
                 <dd className="font-mono">
@@ -53,6 +76,34 @@ export function DefinitionList({
         display name.
       </p>
     </div>
+  );
+}
+
+/** An operator by name and identifier, or by identifier alone. */
+function OperatorName({
+  org,
+  identifier,
+  name,
+}: {
+  org: string;
+  identifier: string;
+  name: string | undefined;
+}) {
+  if (name === undefined) {
+    return <span className="font-mono">{identifier}</span>;
+  }
+  return (
+    <>
+      <Link
+        href={`${orgHref(org, "operators")}/${identifier}`}
+        className="wrap-anywhere underline-offset-4 hover:underline focus-visible:underline"
+      >
+        {name}
+      </Link>
+      <span className="block font-mono text-xs text-muted-foreground">
+        {identifier}
+      </span>
+    </>
   );
 }
 

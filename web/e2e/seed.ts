@@ -15,6 +15,8 @@ export type Seed = {
   projectName: string;
   /** The operator the org has registered, which a definition may name. */
   operatorIdentifier: string;
+  /** What the org calls that operator (ADR-0074). */
+  operatorName: string;
   /** The agent the org holds, and the states its two parties reported. */
   agentIdentifier: string;
   agentProvisioningState: string;
@@ -91,6 +93,7 @@ export async function seedSignedInOrg(): Promise<Seed> {
     groupName: "Engineering",
     projectName: "Frontend",
     operatorIdentifier: "field-one",
+    operatorName: "Field one",
     agentIdentifier: randomBytes(8).toString("hex"),
     agentProvisioningState: "failed",
     agentRuntimeState: "disconnected",
@@ -132,12 +135,13 @@ export async function seedSignedInOrg(): Promise<Seed> {
     // An agent definition may only name an operator the organization
     // has registered (ADR-0045), so the record comes with the org.
     await client.query(
-      `INSERT INTO operators (grn, org_grn, registered_by, created_at)
-       VALUES ($1, $2, $3, now())`,
+      `INSERT INTO operators (grn, org_grn, registered_by, created_at, name)
+       VALUES ($1, $2, $3, now(), $4)`,
       [
         `grn:${seed.orgSlug}:default:operator:${seed.operatorIdentifier}`,
         orgGrn,
         seed.userGrn,
+        seed.operatorName,
       ],
     );
     // garam learns an agent exists from an operator on the machine

@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
@@ -21,7 +21,7 @@ function params(org: string) {
 }
 
 describe("operators section", () => {
-  it("lists an operator by identifier and who registered it", async () => {
+  it("lists an operator by name, linking to its page, with its identifier beneath", async () => {
     const { container } = await renderServerComponent(
       OperatorsPage(params("acme")),
     );
@@ -29,29 +29,41 @@ describe("operators section", () => {
     expect(
       screen.getByRole("heading", { name: "Operators" }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Field cluster one" }),
+    ).toHaveAttribute("href", "/console/orgs/acme/operators/field-one");
     expect(screen.getByText("field-one")).toBeInTheDocument();
-    expect(screen.getByText("alice")).toBeInTheDocument();
     // ADR-0011: the console addresses a resource by the GRN's last
     // segment and prints no GRN.
     expect(container.textContent).not.toContain("grn:");
   });
 
-  it("says whether an operator enrolled and when garam last signed for it", async () => {
-    await renderServerComponent(OperatorsPage(params("acme")));
-
-    expect(screen.getByText("enrolled")).toBeInTheDocument();
-    expect(screen.getByText("2026-03-04")).toBeInTheDocument();
-    // The registration date is the control: both are rendered, so the
-    // certificate's date is a fact of its own rather than the record's
-    // under another label.
-    expect(screen.getByText("2026-01-02")).toBeInTheDocument();
-    expect(screen.getByText("Certificate")).toBeInTheDocument();
-  });
-
-  it("tells a token that ran out from one still outstanding", async () => {
+  it("tells two operators of one name apart by identifier", async () => {
     server.use(
       http.get(`${API_URL}/orgs/acme/operators`, () =>
         HttpResponse.json([
+          fieldOne,
+          { ...fieldOne, grn: "grn:acme:default:operator:field-two" },
+        ]),
+      ),
+    );
+
+    await renderServerComponent(OperatorsPage(params("acme")));
+
+    const links = screen.getAllByRole("link", { name: "Field cluster one" });
+    expect(links.map((link) => link.getAttribute("href"))).toEqual([
+      "/console/orgs/acme/operators/field-one",
+      "/console/orgs/acme/operators/field-two",
+    ]);
+    expect(screen.getByText("field-one")).toBeInTheDocument();
+    expect(screen.getByText("field-two")).toBeInTheDocument();
+  });
+
+  it("tells the three enrollment states apart and never calls one live", async () => {
+    server.use(
+      http.get(`${API_URL}/orgs/acme/operators`, () =>
+        HttpResponse.json([
+          fieldOne,
           {
             ...fieldOne,
             grn: "grn:acme:default:operator:lapsed",
@@ -70,79 +82,28 @@ describe("operators section", () => {
 
     await renderServerComponent(OperatorsPage(params("acme")));
 
-    // Three states, three words. A list rendering one word for two of
-    // them is the defect the state exists to remove.
+    // Three states, three words, under a column that says enrollment
+    // rather than status.
+    expect(
+      screen.getByRole("columnheader", { name: "Enrollment" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("enrolled")).toBeInTheDocument();
     expect(screen.getByText("expired")).toBeInTheDocument();
     expect(screen.getByText("pending")).toBeInTheDocument();
-    expect(screen.queryByText("enrolled")).not.toBeInTheDocument();
-    // Neither holds a certificate, so neither shows the row that says
-    // when garam signed one.
-    expect(screen.queryByText("Certificate")).not.toBeInTheDocument();
-  });
-
-  it("says what Registered by holds rather than leaving a subject bare", async () => {
-    server.use(
-      http.get(`${API_URL}/orgs/acme/operators`, () =>
-        HttpResponse.json([
-          {
-            ...fieldOne,
-            registeredBy: "grn:root:default:user:112727439469584391833",
-          },
-        ]),
-      ),
-    );
-
-    await renderServerComponent(OperatorsPage(params("acme")));
-
-    // The record carries a user GRN and no name beside it
-    // (`api/openapi.yaml` §Operator), so the subject is shown and the
-    // list says what it is. Presence: each note is one clause of a
-    // longer sentence.
-    expect(screen.getByText("112727439469584391833")).toBeInTheDocument();
     expect(
-      screen.getByText(/Registered by is the user identifier/),
+      screen.getByText("Enrollment is not a sign an operator is running."),
     ).toBeInTheDocument();
   });
 
-  it("says under the records what deleting one does, beside the control", async () => {
+  it("opens registering on a page of its own, and deletes from none of the rows", async () => {
     await renderServerComponent(OperatorsPage(params("acme")));
 
-    // Presence, as above. The note and the control that does the thing
-    // it describes are on screen together.
     expect(
-      screen.getByText(/Deleting a record stops that operator/),
-    ).toBeInTheDocument();
+      screen.getByRole("link", { name: "Register operator" }),
+    ).toHaveAttribute("href", "/console/orgs/acme/operators/new");
+    const table = screen.getByRole("table");
     expect(
-      screen.getAllByRole("button", { name: "Delete" }).length,
-    ).toBeGreaterThan(0);
-    // The control: what a person has to read before typing stays over
-    // the input rather than travelling to the list with the rest.
-    expect(
-      screen.getByText(/Registering records that this organization has/),
-    ).toBeInTheDocument();
-  });
-
-  it("leaves the notes with the records, so the form is not behind them", async () => {
-    server.use(
-      http.get(`${API_URL}/orgs/acme/operators`, () => HttpResponse.json([])),
-    );
-
-    await renderServerComponent(OperatorsPage(params("acme")));
-
-    // The control: the form renders, so what is absent below is the
-    // notes and not the section that would carry them.
-    expect(screen.getByLabelText("Identifier")).toBeInTheDocument();
-    expect(
-      screen.getByText(/Registering records that this organization has/),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByText(/Deleting a record stops that operator/),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByText(/Registered by is the user identifier/),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Delete" }),
+      within(table).queryByRole("button", { name: /Delete/ }),
     ).not.toBeInTheDocument();
   });
 
@@ -156,14 +117,8 @@ describe("operators section", () => {
     expect(
       screen.getByText("This organization has registered no operators."),
     ).toBeInTheDocument();
-  });
-
-  it("offers the register form to anyone who may read the section", async () => {
-    await renderServerComponent(OperatorsPage(params("acme")));
-
-    expect(screen.getByLabelText("Identifier")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Register operator" }),
+      screen.getByRole("link", { name: "Register operator" }),
     ).toBeInTheDocument();
   });
 

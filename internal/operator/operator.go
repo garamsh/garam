@@ -163,12 +163,16 @@ type DetailsPatch struct {
 // NewDetailsPatch parses what a caller said. A name is trimmed and must
 // keep at least one character; a description is trimmed and may be
 // empty, which clears it. Both are bounded in characters rather than
-// bytes, so the bound a person reads is the one applied.
+// bytes, so the bound a person reads is the one applied, and both
+// must be text PostgreSQL stores: valid UTF-8 without NUL, which it
+// refuses as a storage error rather than as the caller's.
 func NewDetailsPatch(name, description *string) (DetailsPatch, error) {
 	var p DetailsPatch
 	if name != nil {
 		n := strings.TrimSpace(*name)
 		switch {
+		case !storable(n):
+			return DetailsPatch{}, errorx.New(errorx.KindInvalidArgument, "an operator's name must be text without NUL characters")
 		case n == "":
 			return DetailsPatch{}, errorx.New(errorx.KindInvalidArgument, "an operator's name must not be empty")
 		case utf8.RuneCountInString(n) > NameMaxLength:
@@ -178,12 +182,20 @@ func NewDetailsPatch(name, description *string) (DetailsPatch, error) {
 	}
 	if description != nil {
 		d := strings.TrimSpace(*description)
-		if utf8.RuneCountInString(d) > DescriptionMaxLength {
+		switch {
+		case !storable(d):
+			return DetailsPatch{}, errorx.New(errorx.KindInvalidArgument, "an operator's description must be text without NUL characters")
+		case utf8.RuneCountInString(d) > DescriptionMaxLength:
 			return DetailsPatch{}, errorx.New(errorx.KindInvalidArgument, "an operator's description is at most 1000 characters")
 		}
 		p.description = &d
 	}
 	return p, nil
+}
+
+// storable reports whether s is text a PostgreSQL text column holds.
+func storable(s string) bool {
+	return utf8.ValidString(s) && !strings.ContainsRune(s, 0)
 }
 
 // Name returns the name the patch sets, or nil where it leaves it.

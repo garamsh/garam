@@ -47,7 +47,12 @@ export const CONSOLE_SECTIONS: readonly ConsoleSection[] = [
   { segment: "people", label: "People", icon: UserRound },
   { segment: "agents", label: "Agents", icon: Bot },
   { segment: "projects", label: "Projects", icon: FolderGit2 },
-  { segment: "operators", label: "Operators", icon: Server },
+  {
+    segment: "operators",
+    label: "Operators",
+    icon: Server,
+    items: { create: "New operator", fallback: "Operator" },
+  },
   { segment: "consents", label: "Consents", icon: Handshake },
   {
     segment: "permissions",

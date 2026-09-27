@@ -602,6 +602,9 @@ func TestOperatorUpdate_ChangesTheFieldsItNamesAndNothingElse(t *testing.T) {
 
 	rec = f.do(t, "PATCH", path, `{"name":""}`, owner)
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	rec = f.do(t, "PATCH", path, `{"description":"a\u0000b"}`, owner)
+	assert.Equal(t, http.StatusBadRequest, rec.Code,
+		"NUL is the caller's error and not a storage one")
 	rec = f.do(t, "GET", path, "", owner)
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "Renamed", decodeBody[apigen.Operator](t, rec).Name, "a refused patch changes nothing")

@@ -159,6 +159,25 @@ describe("consoleCrumbs", () => {
     ).toEqual({ label: "New policy" });
   });
 
+  it("names an operator's page and the page that registers one", () => {
+    const operator = parseConsolePath("/console/orgs/acme/operators/field-one");
+
+    expect(consoleCrumbs(operator, orgs).at(-2)).toEqual({
+      label: "Operators",
+      href: "/console/orgs/acme/operators",
+    });
+    expect(consoleCrumbs(operator, orgs).at(-1)).toEqual({ label: "Operator" });
+    expect(consoleCrumbs(operator, orgs, "Field cluster").at(-1)).toEqual({
+      label: "Field cluster",
+    });
+    expect(
+      consoleCrumbs(
+        parseConsolePath("/console/orgs/acme/operators/new"),
+        orgs,
+      ).at(-1),
+    ).toEqual({ label: "New operator" });
+  });
+
   it("falls back to the slug for an organization not in the list", () => {
     const crumbs = consoleCrumbs(parseConsolePath("/console/orgs/other"), []);
 

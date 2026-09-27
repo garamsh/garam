@@ -100,10 +100,11 @@ func TestNew_CallsAnOperatorItsIdentifierUntilItIsNamed(t *testing.T) {
 }
 
 // TestNewDetailsPatch_RefusesWhatItCannotStore holds the bounds
-// migrations/000025 also holds. They count characters rather than
-// bytes, so the accepted cases at each bound are written in a script
-// whose characters take three bytes each: a byte count would refuse
-// them, and they are the control that tells the two apart.
+// migrations/000025 also holds, and the text PostgreSQL refuses on its
+// own. The bounds count characters rather than bytes, so the accepted
+// cases at each bound are written in a script whose characters take
+// three bytes each: a byte count would refuse them, and they are the
+// control that tells the two apart.
 func TestNewDetailsPatch_RefusesWhatItCannotStore(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -114,6 +115,10 @@ func TestNewDetailsPatch_RefusesWhatItCannotStore(t *testing.T) {
 		{"a name that is only space", ptr("   "), nil},
 		{"a name past 100 characters", ptr(strings.Repeat("가", operator.NameMaxLength+1)), nil},
 		{"a description past 1000 characters", nil, ptr(strings.Repeat("가", operator.DescriptionMaxLength+1))},
+		{"a name holding NUL", ptr("a\x00b"), nil},
+		{"a description holding NUL", nil, ptr("a\x00b")},
+		{"a name that is not UTF-8", ptr("a\xffb"), nil},
+		{"a description that is not UTF-8", nil, ptr("a\xffb")},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -128,6 +133,11 @@ func TestNewDetailsPatch_RefusesWhatItCannotStore(t *testing.T) {
 		ptr(strings.Repeat("가", operator.DescriptionMaxLength)))
 	require.NoError(t, err)
 	assert.Equal(t, operator.NameMaxLength, utf8.RuneCountInString(*p.Name()))
+
+	// The control for the NUL and UTF-8 cases: the same text without
+	// the offending byte is taken.
+	_, err = operator.NewDetailsPatch(ptr("ab"), ptr("ab"))
+	assert.NoError(t, err)
 }
 
 // TestNewDetailsPatch_TrimsAndKeepsWhatItWasNotGiven covers the two

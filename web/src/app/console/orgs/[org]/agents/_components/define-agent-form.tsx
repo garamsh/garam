@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useState } from "react";
 import { Plus, X } from "lucide-react";
 
@@ -15,9 +16,15 @@ import {
   valueBytes,
 } from "@/lib/agent-definition";
 import { parseOperatorIdentifier } from "@/lib/operator";
+import { useHydrated } from "@/hooks/use-hydrated";
 import type { Parsed } from "@/lib/parsed";
 
+import { NEW_ITEM, orgHref } from "../../../../_components/navigation";
+
 const initialState: DefineAgentState = { status: "idle" };
+
+/** An operator the form offers: its identifier and what it is called. */
+export type OperatorChoice = { identifier: string; name: string };
 
 /** One row of the values editor; `id` keeps React on the same row. */
 type Row = { id: number; key: string; value: string };
@@ -28,16 +35,31 @@ const initialRows: Row[] = [{ id: 0, key: "", value: "" }];
  * Defines an agent: the operator that is to run it, and the values that
  * operator constructs it from.
  *
+ * The operator is chosen by name from those the organization registered
+ * (ADR-0074). A name is not unique, so each is offered with its
+ * identifier, which is what the definition stores. Where the list was
+ * not answered to the caller, the identifier is typed instead: a
+ * definition is `agent:define`'s to write whether or not the caller
+ * holds `operator:read`.
+ *
  * The values are a free key/value map. garam interprets no key and the
  * operator that reads one is not garam's to speak for, so this form
  * names none and accepts any — a fixed set of fields here would decide
  * for the operator what its payload means.
  */
-export function DefineAgentForm({ org }: { org: string }) {
+export function DefineAgentForm({
+  org,
+  operators,
+}: {
+  org: string;
+  /** The operators to choose from, or null where none were listed. */
+  operators: OperatorChoice[] | null;
+}) {
   const [state, formAction, pending] = useActionState(
     defineAgent,
     initialState,
   );
+  const hydrated = useHydrated();
   const [operator, setOperator] = useState("");
   const [rows, setRows] = useState(initialRows);
 
@@ -64,20 +86,56 @@ export function DefineAgentForm({ org }: { org: string }) {
 
         <div className="flex flex-col gap-2">
           <Label htmlFor="operator">Operator</Label>
-          <Input
-            id="operator"
-            name="operator"
-            required
-            value={operator}
-            onChange={(event) => setOperator(event.target.value)}
-            className="max-w-sm font-mono"
-            aria-describedby="operator-hint"
-          />
+          {operators === null ? (
+            <Input
+              id="operator"
+              name="operator"
+              required
+              disabled={!hydrated}
+              value={operator}
+              onChange={(event) => setOperator(event.target.value)}
+              className="max-w-sm font-mono"
+              aria-describedby="operator-hint"
+            />
+          ) : (
+            <select
+              id="operator"
+              name="operator"
+              required
+              disabled={!hydrated}
+              value={operator}
+              onChange={(event) => setOperator(event.target.value)}
+              aria-describedby="operator-hint"
+              className="h-9 w-full max-w-sm min-w-0 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+            >
+              <option value="" disabled>
+                {operators.length === 0
+                  ? "No operators registered"
+                  : "Choose an operator"}
+              </option>
+              {operators.map(({ identifier, name }) => (
+                <option key={identifier} value={identifier}>
+                  {name === identifier ? identifier : `${name} (${identifier})`}
+                </option>
+              ))}
+            </select>
+          )}
           <p id="operator-hint" className="text-sm text-muted-foreground">
-            The identifier of the operator that is to run this agent. It reads
-            the definition and builds the agent in its own cluster; garam never
-            dials it.
+            {operators === null
+              ? "The identifier of the operator that builds this agent in its own cluster. Operators are not listed to you."
+              : "The operator that builds this agent in its own cluster."}
           </p>
+          {operators?.length === 0 && (
+            <p className="text-sm">
+              <Link
+                href={`${orgHref(org, "operators")}/${NEW_ITEM}`}
+                className="underline underline-offset-4"
+              >
+                Register an operator
+              </Link>{" "}
+              before defining an agent.
+            </p>
+          )}
         </div>
 
         <div className="flex flex-col gap-3">

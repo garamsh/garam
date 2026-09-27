@@ -30,6 +30,66 @@ function recordDefinitions() {
 }
 
 describe("define agent form", () => {
+  it("chooses the operator by name and posts the identifier beside it", async () => {
+    const posted = recordDefinitions();
+    const user = userEvent.setup();
+    render(
+      <DefineAgentForm
+        org="acme"
+        operators={[
+          { identifier: "field-one", name: "Field cluster" },
+          { identifier: "field-two", name: "Field cluster" },
+          { identifier: "staging", name: "staging" },
+        ]}
+      />,
+    );
+
+    // Two operators share a name, so each option carries the
+    // identifier that tells them apart; one named by its identifier is
+    // not written twice.
+    const options = screen
+      .getAllByRole("option")
+      .map((option) => option.textContent);
+    expect(options).toEqual([
+      "Choose an operator",
+      "Field cluster (field-one)",
+      "Field cluster (field-two)",
+      "staging",
+    ]);
+
+    await user.selectOptions(
+      screen.getByLabelText("Operator"),
+      "Field cluster (field-two)",
+    );
+    await user.click(screen.getByRole("button", { name: "Define agent" }));
+
+    expect(
+      await screen.findByLabelText("Agent identifier"),
+    ).toBeInTheDocument();
+    expect(posted).toEqual([
+      { operatorGrn: "grn:acme:default:operator:field-two", values: {} },
+    ]);
+  });
+
+  it("offers registering when there is no operator to choose", async () => {
+    render(<DefineAgentForm org="acme" operators={[]} />);
+
+    expect(
+      screen.getByRole("link", { name: "Register an operator" }),
+    ).toHaveAttribute("href", "/console/orgs/acme/operators/new");
+    // The control: with an operator to choose, the offer is gone, so
+    // what put it there is the empty list.
+    render(
+      <DefineAgentForm
+        org="acme"
+        operators={[{ identifier: "field-one", name: "Field one" }]}
+      />,
+    );
+    expect(
+      screen.getAllByRole("link", { name: "Register an operator" }),
+    ).toHaveLength(1);
+  });
+
   it("renders the refusal an unregistered operator gets, and prints no GRN", async () => {
     // The API refuses a definition naming an operator the organization
     // has not registered (ADR-0045) and names the identifier rather
@@ -48,7 +108,7 @@ describe("define agent form", () => {
       ),
     );
     const user = userEvent.setup();
-    const { container } = render(<DefineAgentForm org="acme" />);
+    const { container } = render(<DefineAgentForm org="acme" operators={null} />);
 
     await user.type(screen.getByLabelText("Operator"), "gagent-dev");
     await user.click(screen.getByRole("button", { name: "Define agent" }));
@@ -63,7 +123,7 @@ describe("define agent form", () => {
   it("builds the operator GRN from the organization and posts the values as a map", async () => {
     const posted = recordDefinitions();
     const user = userEvent.setup();
-    render(<DefineAgentForm org="acme" />);
+    render(<DefineAgentForm org="acme" operators={null} />);
 
     await user.type(screen.getByLabelText("Operator"), "field-one");
     await user.type(screen.getByLabelText("Key 1"), "model");
@@ -87,7 +147,7 @@ describe("define agent form", () => {
   it("defines an agent carrying no values at all", async () => {
     const posted = recordDefinitions();
     const user = userEvent.setup();
-    render(<DefineAgentForm org="acme" />);
+    render(<DefineAgentForm org="acme" operators={null} />);
 
     await user.type(screen.getByLabelText("Operator"), "field-one");
     await user.click(screen.getByRole("button", { name: "Define agent" }));
@@ -106,7 +166,7 @@ describe("define agent form", () => {
   it("names no key of its own, and takes whichever key is typed", async () => {
     const posted = recordDefinitions();
     const user = userEvent.setup();
-    render(<DefineAgentForm org="acme" />);
+    render(<DefineAgentForm org="acme" operators={null} />);
 
     // The form names no key: garam interprets none, and the contract
     // that would give one meaning belongs to an operator garam has
@@ -134,7 +194,7 @@ describe("define agent form", () => {
   it("says which key the character rule refuses, without a round trip", async () => {
     const posted = recordDefinitions();
     const user = userEvent.setup();
-    render(<DefineAgentForm org="acme" />);
+    render(<DefineAgentForm org="acme" operators={null} />);
     const define = screen.getByRole("button", { name: "Define agent" });
 
     await user.type(screen.getByLabelText("Operator"), "field-one");
@@ -161,7 +221,7 @@ describe("define agent form", () => {
   it("refuses a repeated key, and takes the same two rows under distinct keys", async () => {
     const posted = recordDefinitions();
     const user = userEvent.setup();
-    render(<DefineAgentForm org="acme" />);
+    render(<DefineAgentForm org="acme" operators={null} />);
 
     await user.type(screen.getByLabelText("Operator"), "field-one");
     await user.type(screen.getByLabelText("Key 1"), "model");
@@ -183,7 +243,7 @@ describe("define agent form", () => {
   it("counts a value's bytes as it is typed and refuses one past the ceiling", async () => {
     const posted = recordDefinitions();
     const user = userEvent.setup();
-    render(<DefineAgentForm org="acme" />);
+    render(<DefineAgentForm org="acme" operators={null} />);
 
     await user.type(screen.getByLabelText("Operator"), "field-one");
     await user.type(screen.getByLabelText("Key 1"), "system-prompt");
@@ -205,7 +265,7 @@ describe("define agent form", () => {
 
   it("stops at thirty-two values and says that is all a definition carries", async () => {
     const user = userEvent.setup();
-    render(<DefineAgentForm org="acme" />);
+    render(<DefineAgentForm org="acme" operators={null} />);
     const add = screen.getByRole("button", { name: "Add value" });
 
     expect(screen.getByText("1 of 32 values")).toBeInTheDocument();
@@ -222,7 +282,7 @@ describe("define agent form", () => {
   it("names the character rule an operator identifier breaks", async () => {
     const posted = recordDefinitions();
     const user = userEvent.setup();
-    render(<DefineAgentForm org="acme" />);
+    render(<DefineAgentForm org="acme" operators={null} />);
 
     await user.type(screen.getByLabelText("Operator"), "acme:field");
 
@@ -246,7 +306,7 @@ describe("define agent form", () => {
       ),
     );
     const user = userEvent.setup();
-    render(<DefineAgentForm org="acme" />);
+    render(<DefineAgentForm org="acme" operators={null} />);
 
     await user.type(screen.getByLabelText("Operator"), "field-one");
     await user.click(screen.getByRole("button", { name: "Define agent" }));
@@ -259,7 +319,7 @@ describe("define agent form", () => {
   it("keeps what was typed when the API does not answer", async () => {
     server.use(http.post(`${API_URL}/*`, () => HttpResponse.error()));
     const user = userEvent.setup();
-    render(<DefineAgentForm org="acme" />);
+    render(<DefineAgentForm org="acme" operators={null} />);
 
     await user.type(screen.getByLabelText("Operator"), "field-one");
     await user.type(screen.getByLabelText("Key 1"), "system-prompt");
@@ -273,7 +333,7 @@ describe("define agent form", () => {
   });
 
   it("tells a person a credential is never a value", async () => {
-    render(<DefineAgentForm org="acme" />);
+    render(<DefineAgentForm org="acme" operators={null} />);
 
     // ADR-0036: garam holds the reference and no surface of its serves
     // the value, so the form must not invite one. Presence: the warning

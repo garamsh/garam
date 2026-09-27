@@ -12,25 +12,15 @@ test.describe("agent definitions", () => {
       }),
     ).toBeVisible();
 
-    // The refusal is the form's own, so it appears only once the form
-    // is interactive: a fill taken before React hydrates is dropped,
-    // not queued. Waiting on the refusal waits on exactly that, and on
-    // the way past it the spec sees the constraint enforced without a
-    // round trip. It is located by its text rather than by its `alert`
-    // role, which Next.js's route announcer also carries.
-    const refusal = page.getByText(
-      "An operator identifier holds only lowercase letters, digits and hyphens.",
-      { exact: true },
-    );
-    await expect(async () => {
-      await page.getByLabel("Operator").fill("Field-One");
-      await expect(refusal).toBeVisible({ timeout: 1_000 });
-    }).toPass({ timeout: 15_000 });
-    await expect(
-      page.getByRole("button", { name: "Define agent" }),
-    ).toBeDisabled();
-
-    await page.getByLabel("Operator").fill(signedIn.operatorIdentifier);
+    // The operator is chosen by name, with the identifier beside it
+    // (ADR-0074). The field is disabled until React hydrates, so
+    // waiting for it to be enabled waits on the form being able to
+    // hold the choice.
+    const operator = page.getByLabel("Operator");
+    await expect(operator).toBeEnabled();
+    await operator.selectOption({
+      label: `${signedIn.operatorName} (${signedIn.operatorIdentifier})`,
+    });
     await page.getByLabel("Key 1", { exact: true }).fill("model");
     // Exact on purpose: the row's remove button is named "Remove value
     // 1", which carries the field's own name as a substring.
@@ -51,7 +41,7 @@ test.describe("agent definitions", () => {
 
     await expect(page.getByText(identifier, { exact: true })).toBeVisible();
     await expect(
-      page.getByText(signedIn.operatorIdentifier, { exact: true }),
+      page.getByRole("link", { name: signedIn.operatorName, exact: true }),
     ).toBeVisible();
     await expect(page.getByText("be brief", { exact: true })).toBeVisible();
   });

@@ -93,6 +93,9 @@ export function SubjectInspection({
   subjectHref: (query: string) => string;
 }) {
   const { direct, inherited, orgWide, unread } = inspection;
+  // With a policy's attachments unread, an empty list says only that
+  // no policy the caller can read is in it.
+  const readable = unread.length > 0 ? " you can read" : "";
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
@@ -112,7 +115,7 @@ export function SubjectInspection({
         </h3>
         {direct.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No policy is attached to {subject.label}.
+            No policy{readable} is attached to {subject.label}.
           </p>
         ) : (
           <ul className="flex flex-col divide-y rounded-lg border">
@@ -181,7 +184,7 @@ export function SubjectInspection({
             // where every attached team was read.
             inherited.uncheckedTeams.length === 0 && (
               <p className="text-sm text-muted-foreground">
-                No policy reaches {subject.label} through a team.
+                No policy{readable} reaches {subject.label} through a team.
               </p>
             )
           ) : (
@@ -220,7 +223,7 @@ export function SubjectInspection({
         </h3>
         {orgWide.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            No active policy applies to everyone in this organization.
+            No active policy{readable} applies to everyone in this organization.
           </p>
         ) : (
           <ul className="flex flex-col divide-y rounded-lg border">

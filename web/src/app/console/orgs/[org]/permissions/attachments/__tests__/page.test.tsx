@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import AttachmentsPage from "@/app/console/orgs/[org]/permissions/attachments/page";
 import { renderServerComponent } from "@/testing/render";
-import { API_URL, alice } from "@/testing/mocks/handlers";
+import { API_URL, alice, reportedAgent } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
 vi.mock("next/navigation", () => ({
@@ -109,16 +109,53 @@ describe("attachments page", () => {
     ).toHaveTextContent("Engineering");
   });
 
-  it("does not call a policy with refused attachments organization-wide", async () => {
-    server.use(http.get(`${POLICIES}/0a1b2c3d4e5f6071/attachments`, refuse));
+  it("claims no absence for a subject while a policy's attachments are unread", async () => {
+    const BASELINE = `${POLICIES}/0a1b2c3d4e5f6071/attachments`;
+    // The control: with every policy's attachments read and none
+    // reaching everyone, the empty sections say so without qualifying.
+    server.use(
+      http.get(BASELINE, () =>
+        HttpResponse.json([
+          {
+            policyGrn: "grn:acme:default:policy:0a1b2c3d4e5f6071",
+            subjectGrn: reportedAgent.grn,
+            createdAt: "2026-01-02T03:04:05Z",
+          },
+        ]),
+      ),
+    );
+    const read = await renderAttachments("person:alice");
+    expect(
+      within(section("Organization-wide")).getByText(
+        "No active policy applies to everyone in this organization.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(section("Attached directly")).getByText(
+        "No policy is attached to Alice.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
+    read.unmount();
+
+    server.use(http.get(BASELINE, refuse));
 
     await renderAttachments("person:alice");
 
+    const orgWide = section("Organization-wide");
     expect(
-      within(section("Organization-wide")).queryByRole("link", {
-        name: "Baseline read",
-      }),
+      within(orgWide).getByText(
+        "No active policy you can read applies to everyone in this organization.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(orgWide).queryByRole("link", { name: "Baseline read" }),
     ).not.toBeInTheDocument();
+    expect(
+      within(section("Attached directly")).getByText(
+        "No policy you can read is attached to Alice.",
+      ),
+    ).toBeInTheDocument();
     // Presence: the note names the policy inside a sentence.
     expect(screen.getByRole("note")).toHaveTextContent(
       "Not checked: the attachments of Baseline read are not listed to you",
@@ -126,6 +163,13 @@ describe("attachments page", () => {
   });
 
   it("says a subject whose list was refused cannot be shown, not that it is missing", async () => {
+    // The control: with the people listed, the same address shows her.
+    const listed = await renderAttachments("person:alice");
+    expect(
+      screen.getByRole("heading", { level: 2, name: "Alice · Person" }),
+    ).toBeInTheDocument();
+    listed.unmount();
+
     server.use(http.get(`${API_URL}/orgs/acme/members`, refuse));
 
     await renderAttachments("person:alice");

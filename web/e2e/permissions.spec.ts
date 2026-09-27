@@ -147,7 +147,8 @@ test.describe("permissions", () => {
       .getByLabel("Team, person or agent", { exact: true })
       .selectOption({ label: `${signedIn.groupName} · Team` });
     await page.getByRole("button", { name: "Attach", exact: true }).click();
-    // Substring on purpose: a row's accessible name is all of its cells.
+    // Substring on purpose: a row's accessible name is all of its
+    // cells.
     await expect(
       page.getByRole("row", { name: signedIn.groupName }),
     ).toContainText("Team");
@@ -330,7 +331,8 @@ test.describe("permissions", () => {
     ).toBeVisible();
 
     await page.reload();
-    // Substring on purpose: a row's accessible name is all of its cells.
+    // Substring on purpose: a row's accessible name is all of its
+    // cells.
     await expect(
       page.getByRole("row", { name: signedIn.groupName }),
     ).toContainText("Team");

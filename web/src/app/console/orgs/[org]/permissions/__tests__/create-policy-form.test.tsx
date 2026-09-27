@@ -61,7 +61,8 @@ describe("create policy form", () => {
     const user = userEvent.setup();
     render(<CreatePolicyForm org="acme" />);
     const submit = screen.getByRole("button", { name: "Create draft" });
-    // The control: the starting document parses, so the form can be sent.
+    // The control: the starting document parses, so the form can be
+    // sent.
     expect(submit).toBeEnabled();
 
     await user.type(screen.getByLabelText("Document"), "oops");

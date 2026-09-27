@@ -39,9 +39,9 @@ describe("console sidebar", () => {
     // Presence: the switcher's name is the sr-only "Switch
     // organization", the org's name and its slug.
     expect(screen.getByRole("button", { name: /Acme/ })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Members" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "People" })).toHaveAttribute(
       "href",
-      "/console/orgs/acme/members",
+      "/console/orgs/acme/people",
     );
     // Presence: the account menu's name is the sr-only "Open account
     // menu", the avatar's initials, the nickname and "Signed in".
@@ -53,7 +53,7 @@ describe("console sidebar", () => {
 
     // The control for the search: the sidebar rendered, so what is
     // absent is the GRN and not the whole tree.
-    expect(screen.getByRole("link", { name: "Members" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "People" })).toBeInTheDocument();
     expect(container.textContent).not.toContain("grn:");
   });
 
@@ -71,7 +71,7 @@ describe("console sidebar", () => {
 
     await renderSidebar();
 
-    expect(screen.getByRole("link", { name: "Members" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "People" })).toBeInTheDocument();
     // Presence: the sr-only label opens a name the org's own name and
     // slug complete, so it stays a fragment when the trigger renders.
     expect(

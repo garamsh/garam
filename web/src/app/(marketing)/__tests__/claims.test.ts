@@ -174,12 +174,12 @@ const CLAIMS: Claim[] = [
     facts: [
       {
         kind: "path",
-        path: "web/src/app/console/orgs/[org]/groups",
+        path: "web/src/app/console/orgs/[org]/teams",
         exists: true,
       },
       {
         kind: "path",
-        path: "web/src/app/console/orgs/[org]/members",
+        path: "web/src/app/console/orgs/[org]/people",
         exists: true,
       },
       {

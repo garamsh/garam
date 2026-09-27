@@ -15,6 +15,12 @@ import { parseGrn } from "../grn";
 export type Organization = components["schemas"]["Organization"];
 /** A group inside an organization, as the API returns one. */
 export type Group = components["schemas"]["Group"];
+/**
+ * One member of a group, as the API returns one: a GRN and nothing
+ * else. It may name a user or an agent, and nothing guarantees it
+ * still names either — resolving it is the reader's job.
+ */
+export type GroupMember = components["schemas"]["MemberRef"];
 /** A project inside an organization, as the API returns one. */
 export type Project = components["schemas"]["Project"];
 /** One person's membership of an organization, as the API returns one. */
@@ -66,6 +72,14 @@ export type OrgConsent = components["schemas"]["OrgConsent"];
  */
 export type OrgRead<T> = { status: "ok"; data: T } | { status: "unreachable" };
 
+/**
+ * What a read of one group returned. Unlike an organization, a group
+ * the caller is refused is a state of its own: its organization is one
+ * the caller reads, where the group's name is listed already, so a
+ * refusal hides nothing that a 404 would.
+ */
+export type GroupRead<T> = OrgRead<T> | { status: "forbidden" };
+
 // What the seam parses each of this feature's reads against. Every
 // parser is tied to the type `api/openapi.yaml` generated, in both
 // directions: a field the specification adds, drops or retypes fails
@@ -100,6 +114,10 @@ export const GroupParser = parserFor<Group>()(
     orgGrn: GrnParser,
     roles: z.array(RoleParser),
   }),
+);
+
+const GroupMemberParser = parserFor<GroupMember>()(
+  z.object({ memberGrn: GrnParser }),
 );
 
 export const ProjectParser = parserFor<Project>()(
@@ -220,6 +238,32 @@ export function listGroups(org: string): Promise<OrgRead<Group[]>> {
   );
 }
 
+/** One group of an organization, by its identifier. */
+export function getGroup(
+  org: string,
+  group: string,
+): Promise<GroupRead<Group>> {
+  return groupRead(
+    garamFetchAuthenticated(
+      `/orgs/${orgPath(org)}/groups/${orgPath(group)}`,
+      GroupParser,
+    ),
+  );
+}
+
+/** The members of one group of an organization. */
+export function listGroupMembers(
+  org: string,
+  group: string,
+): Promise<GroupRead<GroupMember[]>> {
+  return groupRead(
+    garamFetchAuthenticated(
+      `/orgs/${orgPath(org)}/groups/${orgPath(group)}/members`,
+      z.array(GroupMemberParser),
+    ),
+  );
+}
+
 /** The projects an organization owns. */
 export function listProjects(org: string): Promise<OrgRead<Project[]>> {
   return orgRead(
@@ -298,7 +342,27 @@ async function orgRead<T>(read: Promise<T>): Promise<OrgRead<T>> {
   }
 }
 
-/** Org slugs arrive from the URL, so they are escaped before reuse. */
+/**
+ * `orgRead` for a read of one group, where a refusal is rendered
+ * rather than folded into not-found (`GroupRead`). A missing group is
+ * still `notFound()`, and an organization the caller cannot read is
+ * answered by the page's own org-scoped reads.
+ */
+async function groupRead<T>(read: Promise<T>): Promise<GroupRead<T>> {
+  try {
+    return { status: "ok", data: await read };
+  } catch (error) {
+    if (error instanceof GaramApiError && error.status === 403) {
+      return { status: "forbidden" };
+    }
+    return orgRead(Promise.reject(error));
+  }
+}
+
+/**
+ * Org and group identifiers arrive from the URL, so they are escaped
+ * before reuse.
+ */
 function orgPath(org: string): string {
   return encodeURIComponent(org);
 }

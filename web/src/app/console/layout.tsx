@@ -11,6 +11,7 @@ import {
   ConsoleSidebarFallback,
 } from "./_components/console-sidebar";
 import { ConsoleSidebarProvider } from "./_components/console-sidebar-provider";
+import { ItemCrumbProvider } from "./_components/item-crumb";
 
 /**
  * The authenticated shell (ADR-0011). Every read it needs sits behind
@@ -29,23 +30,25 @@ export default function ConsoleLayout({
           <Suspense fallback={<ConsoleSidebarFallback />}>
             <ConsoleSidebar />
           </Suspense>
-          <SidebarInset>
-            <header className="flex h-14 shrink-0 items-center border-b">
-              <div className="mx-auto flex w-full max-w-shell items-center gap-2 px-4">
-                <SidebarTrigger className="-ml-1" />
-                <Separator
-                  orientation="vertical"
-                  className="mr-1 data-vertical:h-4 data-vertical:self-auto"
-                />
-                <Suspense fallback={<Skeleton className="h-4 w-40" />}>
-                  <ConsoleBreadcrumb />
-                </Suspense>
+          <ItemCrumbProvider>
+            <SidebarInset>
+              <header className="flex h-14 shrink-0 items-center border-b">
+                <div className="mx-auto flex w-full max-w-shell items-center gap-2 px-4">
+                  <SidebarTrigger className="-ml-1" />
+                  <Separator
+                    orientation="vertical"
+                    className="mr-1 data-vertical:h-4 data-vertical:self-auto"
+                  />
+                  <Suspense fallback={<Skeleton className="h-4 w-40" />}>
+                    <ConsoleBreadcrumb />
+                  </Suspense>
+                </div>
+              </header>
+              <div className="mx-auto flex w-full max-w-shell flex-1 flex-col gap-6 px-4 py-8">
+                {children}
               </div>
-            </header>
-            <div className="mx-auto flex w-full max-w-shell flex-1 flex-col gap-6 px-4 py-8">
-              {children}
-            </div>
-          </SidebarInset>
+            </SidebarInset>
+          </ItemCrumbProvider>
         </ConsoleSidebarProvider>
       </Suspense>
     </TooltipProvider>

@@ -33,11 +33,11 @@ describe("organization overview page", () => {
   // Presence: a card's accessible name is its label, its count and any
   // failing state under it, so the label alone cannot be identity.
   it.each([
-    ["Groups", "/console/orgs/acme/groups"],
+    ["Teams", "/console/orgs/acme/teams"],
     ["Projects", "/console/orgs/acme/projects"],
     ["Operators", "/console/orgs/acme/operators"],
     ["Agents", "/console/orgs/acme/agents"],
-    ["Members", "/console/orgs/acme/members"],
+    ["People", "/console/orgs/acme/people"],
   ])("summarises %s and links to it", async (label, href) => {
     await renderServerComponent(OrgPage(params("acme")));
 
@@ -103,7 +103,7 @@ describe("organization overview page", () => {
     expect(
       screen.getByRole("link", { name: "Operators 1" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Groups 1" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Teams 1" })).toBeInTheDocument();
   });
 
   it("counts zero rather than leaving blank space", async () => {
@@ -115,7 +115,7 @@ describe("organization overview page", () => {
 
     await renderServerComponent(OrgPage(params("acme")));
 
-    expect(screen.getByRole("link", { name: "Groups 0" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Teams 0" })).toBeInTheDocument();
   });
 
   it.each([403, 404])("renders not-found on %i", async (status) => {
@@ -160,7 +160,7 @@ describe("organization overview page", () => {
     // Presence: a card's name is the label and its count, so matching
     // the label alone is what shows no card rendered at all.
     expect(
-      screen.queryByRole("link", { name: /Groups/ }),
+      screen.queryByRole("link", { name: /Teams/ }),
     ).not.toBeInTheDocument();
   });
 

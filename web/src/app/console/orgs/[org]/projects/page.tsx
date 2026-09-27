@@ -7,8 +7,8 @@ import { listProjects } from "@/features/orgs";
 import { ApiUnreachable } from "../../../_components/api-unreachable";
 import { EmptyState } from "../../../_components/empty-state";
 import { PageHeader } from "../../../_components/page-header";
-import { CreateResourceForm } from "../_components/create-resource-form";
-import { ResourceList } from "../_components/resource-list";
+import { CreateProjectForm } from "./_components/create-project-form";
+import { ProjectList } from "./_components/project-list";
 
 /** Head metadata for the projects route; Next.js reads it by name. */
 export const metadata: Metadata = { title: "Projects — garam" };
@@ -42,10 +42,10 @@ export default async function ProjectsPage({ params }: Params) {
           description="This organization has no projects."
         />
       ) : (
-        <ResourceList resources={projects.data} />
+        <ProjectList projects={projects.data} />
       )}
       <Separator />
-      <CreateResourceForm org={org} kind="project" />
+      <CreateProjectForm org={org} />
     </>
   );
 }

@@ -99,7 +99,7 @@ export default async function OrgPage({ params }: Params) {
   }
 
   const summaries = new Map<string, Summary>([
-    ["groups", { count: groups.data.length, attention: [] }],
+    ["teams", { count: groups.data.length, attention: [] }],
     ["projects", { count: projects.data.length, attention: [] }],
     [
       "operators",
@@ -112,7 +112,7 @@ export default async function OrgPage({ params }: Params) {
       "agents",
       { count: agents.data.length, attention: agentAttention(agents.data) },
     ],
-    ["members", { count: members.data.length, attention: [] }],
+    ["people", { count: members.data.length, attention: [] }],
   ]);
   // Label, icon and order come from the sidebar's own list, so a card
   // cannot drift from the section it links to.

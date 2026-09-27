@@ -13,6 +13,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 
+import { useItemCrumb } from "./item-crumb";
 import { consoleCrumbs, parseConsolePath, type ConsoleOrg } from "./navigation";
 
 /**
@@ -20,7 +21,12 @@ import { consoleCrumbs, parseConsolePath, type ConsoleOrg } from "./navigation";
  * crumb, which is the one naming the page on screen.
  */
 export function RouteBreadcrumb({ orgs }: { orgs: ConsoleOrg[] }) {
-  const crumbs = consoleCrumbs(parseConsolePath(usePathname()), orgs);
+  const pathname = usePathname();
+  const crumbs = consoleCrumbs(
+    parseConsolePath(pathname),
+    orgs,
+    useItemCrumb(pathname),
+  );
 
   return (
     <Breadcrumb>

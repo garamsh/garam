@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
-import { InviteMemberForm } from "@/app/console/orgs/[org]/members/_components/invite-member-form";
+import { InviteMemberForm } from "@/app/console/orgs/[org]/people/_components/invite-member-form";
 import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 

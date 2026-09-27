@@ -22,7 +22,7 @@ pull request under #1083.
 | Type | Responsibility |
 |------|----------------|
 | `Organization` | top-level tenant |
-| `Group` | bundle of members addressed by GRN — a user or an agent (ADR-0014) |
+| `Group` | bundle of members addressed by GRN — a user or an agent (ADR-0014); the console calls it a team (ADR-0072) |
 | `Project` | container for a unit of work |
 | `Membership` | user in an org; carries a `Role` (`owner`, `admin`, `member`) |
 | `Invitation` | single-use, expiring bearer token that admits a user into an org with a fixed role |

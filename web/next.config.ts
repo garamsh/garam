@@ -20,6 +20,22 @@ const nextConfig: NextConfig = {
   // `garam_session` cookie stays same-origin and no CORS layer is
   // needed (ADR-0009). The backend's own paths are unprefixed, so the
   // `/api` segment is stripped here.
+  // The console's Groups and Members sections became Teams and People
+  // (ADR-0072); a bookmark of either old address lands on the new one.
+  async redirects() {
+    return [
+      {
+        source: "/console/orgs/:org/groups",
+        destination: "/console/orgs/:org/teams",
+        permanent: false,
+      },
+      {
+        source: "/console/orgs/:org/members",
+        destination: "/console/orgs/:org/people",
+        permanent: false,
+      },
+    ];
+  },
   async rewrites() {
     return [
       {

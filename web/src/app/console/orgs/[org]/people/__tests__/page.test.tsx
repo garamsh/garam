@@ -2,7 +2,7 @@ import { screen, within } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
-import MembersPage from "@/app/console/orgs/[org]/members/page";
+import PeoplePage from "@/app/console/orgs/[org]/people/page";
 import { renderServerComponent } from "@/testing/render";
 import { API_URL, aliceMembership, signedOut } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
@@ -27,10 +27,10 @@ function membersAre(...members: unknown[]) {
   );
 }
 
-describe("members section", () => {
+describe("people section", () => {
   it("shows the member's name over the identifier, and no GRN", async () => {
     const { container } = await renderServerComponent(
-      MembersPage(params("acme")),
+      PeoplePage(params("acme")),
     );
 
     // Presence: a row's accessible name is every cell in it, so the
@@ -54,7 +54,7 @@ describe("members section", () => {
       }),
     );
 
-    const gone = await renderServerComponent(MembersPage(params("acme")));
+    const gone = await renderServerComponent(PeoplePage(params("acme")));
 
     expect(
       within(gone.container).getByText("No name on record"),
@@ -68,7 +68,7 @@ describe("members section", () => {
     // absent nickname rather than something the cell always renders.
     server.use(membersAre(aliceMembership));
 
-    const named = await renderServerComponent(MembersPage(params("acme")));
+    const named = await renderServerComponent(PeoplePage(params("acme")));
 
     expect(within(named.container).getByText("Alice")).toBeInTheDocument();
     expect(
@@ -79,10 +79,10 @@ describe("members section", () => {
   it("shows an empty state rather than a bare table", async () => {
     server.use(membersAre());
 
-    await renderServerComponent(MembersPage(params("acme")));
+    await renderServerComponent(PeoplePage(params("acme")));
 
     expect(
-      screen.getByText("This organization has no members."),
+      screen.getByText("No one belongs to this organization."),
     ).toBeInTheDocument();
   });
 
@@ -96,7 +96,7 @@ describe("members section", () => {
       }),
     );
 
-    await renderServerComponent(MembersPage(params("acme")));
+    await renderServerComponent(PeoplePage(params("acme")));
 
     // The control for the presence: the role the console once gated on
     // is the one rendered here, so the form standing is the absence of
@@ -120,7 +120,7 @@ describe("members section", () => {
     );
 
     await expect(
-      renderServerComponent(MembersPage(params("acme"))),
+      renderServerComponent(PeoplePage(params("acme"))),
     ).rejects.toThrow(/outside its specification/);
 
     // The control: the same read against the body the API answers with
@@ -128,7 +128,7 @@ describe("members section", () => {
     // refuses every member.
     server.use(membersAre(aliceMembership));
 
-    await renderServerComponent(MembersPage(params("acme")));
+    await renderServerComponent(PeoplePage(params("acme")));
 
     expect(screen.getByText("Alice")).toBeInTheDocument();
   });
@@ -141,20 +141,20 @@ describe("members section", () => {
     );
 
     await expect(
-      renderServerComponent(MembersPage(params("acme"))),
+      renderServerComponent(PeoplePage(params("acme"))),
     ).rejects.toThrow("NEXT_NOT_FOUND");
   });
 
-  it("says the API is unreachable rather than reporting no members", async () => {
+  it("says the API is unreachable rather than reporting no people", async () => {
     server.use(http.get(`${API_URL}/*`, () => HttpResponse.error()));
 
-    await renderServerComponent(MembersPage(params("acme")));
+    await renderServerComponent(PeoplePage(params("acme")));
 
     expect(
       screen.getByRole("heading", { name: "Cannot reach the API" }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByText("This organization has no members."),
+      screen.queryByText("No one belongs to this organization."),
     ).not.toBeInTheDocument();
   });
 
@@ -162,7 +162,7 @@ describe("members section", () => {
     server.use(...signedOut());
 
     await expect(
-      renderServerComponent(MembersPage(params("acme"))),
+      renderServerComponent(PeoplePage(params("acme"))),
     ).rejects.toThrow("NEXT_REDIRECT:/login");
   });
 });

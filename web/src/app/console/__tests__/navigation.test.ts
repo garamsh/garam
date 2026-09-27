@@ -25,17 +25,29 @@ describe("parseConsolePath", () => {
   });
 
   it.each([
-    "groups",
+    "teams",
+    "people",
+    "agents",
     "projects",
     "operators",
-    "agents",
-    "members",
     "consents",
     "policies",
   ])("reads the %s section", (segment) => {
     const location = parseConsolePath(`/console/orgs/acme/${segment}`);
 
     expect(location.kind === "org" && location.section.segment).toBe(segment);
+  });
+
+  it("reads a team's own page, and the page that creates one", () => {
+    expect(parseConsolePath("/console/orgs/acme/teams/eng")).toMatchObject({
+      kind: "org",
+      org: "acme",
+      section: { segment: "teams" },
+      item: "eng",
+    });
+    expect(parseConsolePath("/console/orgs/acme/teams/new")).toMatchObject({
+      item: "new",
+    });
   });
 
   it("reads an invitation", () => {
@@ -47,7 +59,9 @@ describe("parseConsolePath", () => {
   it.each([
     "/login",
     "/console/orgs/acme/nothing",
-    "/console/orgs/acme/groups/deeper",
+    // A section without item pages has nothing below it.
+    "/console/orgs/acme/people/deeper",
+    "/console/orgs/acme/teams/eng/deeper",
   ])("does not place %s", (pathname) => {
     expect(parseConsolePath(pathname)).toEqual({ kind: "unknown" });
   });
@@ -56,15 +70,49 @@ describe("parseConsolePath", () => {
 describe("consoleCrumbs", () => {
   it("names the organization and the section", () => {
     const crumbs = consoleCrumbs(
-      parseConsolePath("/console/orgs/acme/members"),
+      parseConsolePath("/console/orgs/acme/people"),
       orgs,
     );
 
     expect(crumbs).toEqual([
       { label: "Organizations", href: "/console/orgs" },
       { label: "Acme", href: "/console/orgs/acme" },
-      { label: "Members" },
+      { label: "People" },
     ]);
+  });
+
+  it("links the section above a team and names the team", () => {
+    const crumbs = consoleCrumbs(
+      parseConsolePath("/console/orgs/acme/teams/eng"),
+      orgs,
+      "Engineering",
+    );
+
+    expect(crumbs).toEqual([
+      { label: "Organizations", href: "/console/orgs" },
+      { label: "Acme", href: "/console/orgs/acme" },
+      { label: "Teams", href: "/console/orgs/acme/teams" },
+      { label: "Engineering" },
+    ]);
+  });
+
+  it("calls a team page 'Team' until the page has named it", () => {
+    const crumbs = consoleCrumbs(
+      parseConsolePath("/console/orgs/acme/teams/eng"),
+      orgs,
+    );
+
+    expect(crumbs.at(-1)).toEqual({ label: "Team" });
+  });
+
+  it("names the page that creates a team", () => {
+    const crumbs = consoleCrumbs(
+      parseConsolePath("/console/orgs/acme/teams/new"),
+      orgs,
+      "Engineering",
+    );
+
+    expect(crumbs.at(-1)).toEqual({ label: "New team" });
   });
 
   it("falls back to the slug for an organization not in the list", () => {

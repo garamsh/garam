@@ -24,6 +24,13 @@ export function ConsoleNav() {
       <SidebarMenu aria-label="Organization sections">
         {CONSOLE_SECTIONS.map((section) => {
           const current = section === location.section;
+          // On an item page the section is where the visitor is, not
+          // the page they are on.
+          const ariaCurrent = !current
+            ? undefined
+            : location.item === undefined
+              ? "page"
+              : "location";
           return (
             <SidebarMenuItem key={section.label}>
               <SidebarMenuButton
@@ -33,7 +40,7 @@ export function ConsoleNav() {
               >
                 <Link
                   href={orgHref(location.org, section.segment)}
-                  aria-current={current ? "page" : undefined}
+                  aria-current={ariaCurrent}
                 >
                   <section.icon />
                   <span>{section.label}</span>

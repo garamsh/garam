@@ -485,3 +485,9 @@ ADRs:
   Teams and People replace Groups and Members in the console, a team
   list opens a page per team for its membership and settings, and the
   group's API, identity and authorization are unchanged
+- [0073](./adr/0073-the-console-manages-policies-and-their-attachments-under-permissions.md)
+  — the console manages policies and their attachments under
+  Permissions: a Policies and an Attachments view over the existing
+  policy operations, any stored version made the default, a stated and
+  confirmed scope before a policy evaluates, and a subject's policies
+  sorted by source with what was not read marked unchecked

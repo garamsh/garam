@@ -235,9 +235,10 @@ What this repository runs against itself. `docs/convention/ci.md` decides how a 
   published before the change — `0.1.0` carried no labels at all and
   `0.2.0` a pair a person passed by hand — so the first image carrying
   them because these files say so is a release after that reading.
-  A development build `make image-build` produces carries the same two
-  labels, the version being its tag, and reaches a repository only by a
-  person's push (ADR-0071). A reference this repository did not publish
+  A development build, which `make image-build` produces when given
+  `IMAGE_REGISTRY`, carries the same two labels, the version being its
+  tag, and reaches a repository only by a person's push (ADR-0071);
+  without it the target tags `:ci` and passes neither label a value. A reference this repository did not publish
   is still one only its builder can vouch for, which after the label is
   a claim about where it came from and no longer about what code is in
   it. An answer to "does this route exist" therefore names where it

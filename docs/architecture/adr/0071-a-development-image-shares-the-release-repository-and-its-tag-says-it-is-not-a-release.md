@@ -25,9 +25,12 @@ has one repository, a development build goes into the same repository
 as the release, and what tells the two apart is an immutable tag — a
 commit-derived or prerelease tag for development, the bare version for
 a release. Under ADR-0039's closing sentence such a build has no place
-in either repository, and this repository gives a person no way to
-produce one: `scripts/image-build.sh` tags each image `<name>:ci`, a
-name no registry holds, and nothing else here builds either image.
+in either repository, and this repository gives a person no path that
+tags one for it: `scripts/image-build.sh`, the one target building
+what the release builds, tags each image `<name>:ci`, a name no
+registry holds, and passes neither label a value; the other builds of
+the same Dockerfiles, `backend-up` and `minikube-images` in the
+`Makefile`, tag images for a local stack.
 
 The environment-specific repositories that stood in for this were never
 garam's decision. #1050 measured `garam/garam-server-dev` and

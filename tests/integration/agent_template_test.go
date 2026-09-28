@@ -72,7 +72,7 @@ func TestAgentTemplate_AnAgentKeepsWhatItCopied(t *testing.T) {
 
 	after, err := s.GetDefinition(ctx, d.Agent())
 	require.NoError(t, err)
-	assert.Equal(t, agent.Name("Scout"), after.Name())
+	assert.Equal(t, agent.Name("Scout"), after.Name)
 	assert.Equal(t, agent.Values{"workspace": "papers", "notes": "daily"}, after.Values(),
 		"the template's edit reached no agent")
 
@@ -83,7 +83,7 @@ func TestAgentTemplate_AnAgentKeepsWhatItCopied(t *testing.T) {
 
 	after, err = s.GetDefinition(ctx, d.Agent())
 	require.NoError(t, err)
-	assert.Equal(t, agent.Name("Scout"), after.Name())
+	assert.Equal(t, agent.Name("Scout"), after.Name)
 	assert.Equal(t, operatorGRN, after.Operator())
 	assert.Equal(t, agent.Values{"workspace": "papers", "notes": "daily"}, after.Values(),
 		"the template's deletion reached no agent")
@@ -148,14 +148,14 @@ func TestAgentDefinition_RenameMovesOnlyTheName(t *testing.T) {
 
 	renamed, err := s.RenameDefinition(ctx, d.Agent(), "Scout")
 	require.NoError(t, err)
-	assert.Equal(t, agent.Name("Scout"), renamed.Name())
+	assert.Equal(t, agent.Name("Scout"), renamed.Name)
 	assert.Equal(t, d.Agent(), renamed.Agent())
 	assert.Equal(t, d.Operator(), renamed.Operator())
 	assert.Equal(t, d.Values(), renamed.Values())
 
 	read, err := s.GetDefinition(ctx, d.Agent())
 	require.NoError(t, err)
-	assert.Equal(t, agent.Name("Scout"), read.Name())
+	assert.Equal(t, agent.Name("Scout"), read.Name)
 	assignment, err := s.GetAssignment(ctx, d.Agent())
 	require.NoError(t, err)
 	assert.Equal(t, claim.Epoch(), assignment.Epoch(), "the claim's binding is where it was")

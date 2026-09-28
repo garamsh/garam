@@ -27,7 +27,7 @@ func TestNewDefinition_MintsTheAgentItDescribes(t *testing.T) {
 	assert.Len(t, d.Agent().Identifier, 16, "eight random bytes, hex-encoded")
 	assert.Equal(t, orgGRN, d.Organization())
 	assert.Equal(t, operator, d.Operator())
-	assert.Equal(t, agent.Name("Research assistant"), d.Name())
+	assert.Equal(t, agent.Name("Research assistant"), d.Name)
 	assert.Equal(t, agent.Values{"model": "haiku"}, d.Values())
 	assert.Equal(t, definedBy, d.DefinedBy())
 
@@ -150,10 +150,10 @@ func TestNewDefinition_CallsAnUnnamedAgentByItsIdentifier(t *testing.T) {
 
 	d, err := agent.NewDefinition(orgGRN, operator, "", agent.Values{}, definedBy)
 	require.NoError(t, err)
-	assert.Equal(t, agent.Name(d.Agent().Identifier), d.Name())
+	assert.Equal(t, agent.Name(d.Agent().Identifier), d.Name)
 
 	// The control: a name given is the name kept.
 	named, err := agent.NewDefinition(orgGRN, operator, "Scout", agent.Values{}, definedBy)
 	require.NoError(t, err)
-	assert.Equal(t, agent.Name("Scout"), named.Name())
+	assert.Equal(t, agent.Name("Scout"), named.Name)
 }

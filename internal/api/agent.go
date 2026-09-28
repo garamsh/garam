@@ -277,7 +277,7 @@ func definitionToAPI(d *agent.Definition) apigen.AgentDefinition {
 	return apigen.AgentDefinition{
 		AgentGrn:    d.Agent().String(),
 		OrgGrn:      d.Organization().String(),
-		Name:        string(d.Name()),
+		Name:        string(d.Name),
 		OperatorGrn: d.Operator().String(),
 		Values:      apigen.AgentValues(d.Values()),
 		DefinedBy:   d.DefinedBy().String(),

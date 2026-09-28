@@ -85,14 +85,21 @@ func isValueKey(k string) bool {
 // operator and values are written once. Its name is what the
 // organization calls the agent, which it may change without touching
 // either (ADR-0075).
+//
+// Name is an exported field, as `structure.md` asks of what an
+// aggregate persists; the fields before it keep their accessors until
+// #1083 converts this domain.
 type Definition struct {
 	agentGRN    grn.GRN
 	orgGRN      grn.GRN
 	operatorGRN grn.GRN
-	name        Name
-	values      Values
-	definedBy   grn.GRN
-	createdAt   time.Time
+	// Name is what the organization calls the agent. It identifies
+	// nothing: two definitions may share one, and the GRN is the
+	// agent's identity.
+	Name      Name
+	values    Values
+	definedBy grn.GRN
+	createdAt time.Time
 }
 
 // NewDefinition mints the identity of the agent orgGRN is defining and
@@ -125,7 +132,7 @@ func NewDefinition(orgGRN, operatorGRN grn.GRN, name Name, values Values, define
 		agentGRN:    g,
 		orgGRN:      orgGRN,
 		operatorGRN: operatorGRN,
-		name:        name,
+		Name:        name,
 		values:      values,
 		definedBy:   definedBy,
 		createdAt:   time.Now().UTC(),
@@ -158,11 +165,6 @@ func (d *Definition) Agent() grn.GRN        { return d.agentGRN }
 func (d *Definition) Organization() grn.GRN { return d.orgGRN }
 func (d *Definition) Operator() grn.GRN     { return d.operatorGRN }
 func (d *Definition) Values() Values        { return d.values }
-
-// Name returns what the organization calls the agent. It identifies
-// nothing: two definitions may share one, and the GRN is the agent's
-// identity.
-func (d *Definition) Name() Name { return d.name }
 
 // DefinedBy returns the member that defined the agent.
 func (d *Definition) DefinedBy() grn.GRN   { return d.definedBy }

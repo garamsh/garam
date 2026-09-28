@@ -65,7 +65,8 @@ length. Both aggregates are rehydrated inside this package — their
 fields are unexported and no exported constructor restores a stored
 row's state or timestamps — which is why the store that reads them back
 lives here rather than below. A `Template` is a data carrier with
-exported fields (ADR-0069); its store stays beside the others until
+exported fields (ADR-0069), and a `Definition`'s name is an exported
+field beside its accessors; the stores stay beside the others until
 #1083 moves this domain's store out of the package.
 
 Signing happens through the `Issuer` seam the composition root

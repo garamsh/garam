@@ -69,7 +69,7 @@ describe("mintOperatorEnrollment", () => {
     expect(minted).toEqual(["a/b"]);
   });
 
-  it("says why when the operator already enrolled, and re-reads the page that showed it without a certificate", async () => {
+  it("answers an operator that already enrolled as that refusal, and re-reads the page that showed it without a certificate", async () => {
     let enrolled = true;
     server.use(
       http.post(ENROLLMENT, () =>
@@ -81,7 +81,7 @@ describe("mintOperatorEnrollment", () => {
 
     await expect(
       mintOperatorEnrollment({ status: "idle" }, form()),
-    ).resolves.toEqual({ status: "error", message: ALREADY_ENROLLED.message });
+    ).resolves.toEqual({ status: "already-enrolled" });
     expect(revalidated).toEqual([SECTION]);
 
     // The control: the same form minted for an operator without a

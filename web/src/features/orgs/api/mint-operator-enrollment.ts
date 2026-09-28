@@ -12,8 +12,9 @@ import {
 import type { components } from "@/types/api";
 
 /**
- * What the mint control has to show: nothing yet, a refusal, or the
- * token just minted and when it stops being spendable.
+ * What the mint control has to show: nothing yet, a refusal, garam's
+ * refusal for an operator that already enrolled, or the token just
+ * minted and when it stops being spendable.
  *
  * The token is carried in this state because the answer that minted it
  * is the only place it exists: garam stores its hash, so nothing can
@@ -22,6 +23,7 @@ import type { components } from "@/types/api";
 export type MintOperatorEnrollmentState =
   | { status: "idle" }
   | { status: "error"; message: string }
+  | { status: "already-enrolled" }
   | { status: "minted"; token: string; expiresAt: string };
 
 const OperatorEnrollmentParser = parserFor<
@@ -42,9 +44,10 @@ const Schema = z.object({
  * Mints a registered operator a new one-time enrollment token, which
  * replaces any token minted before it (ADR-0067).
  *
- * garam refuses it for an operator that holds a certificate, and that
- * refusal is rendered beside the control rather than thrown. Minting
- * says nothing about whether the operator picks the token up.
+ * garam refuses it with a 409 for an operator that holds a
+ * certificate; that refusal is its own state, so the control can say
+ * it in a sentence of its own rather than garam's. Minting says
+ * nothing about whether the operator picks the token up.
  */
 export async function mintOperatorEnrollment(
   _state: MintOperatorEnrollmentState,
@@ -68,15 +71,16 @@ export async function mintOperatorEnrollment(
       { method: "POST" },
     );
   } catch (error) {
+    // The operator enrolled since the page was read, so the page is
+    // re-read to show the certificate it now holds.
+    if (error instanceof GaramApiError && error.status === 409) {
+      revalidatePath(section, "layout");
+      return { status: "already-enrolled" };
+    }
     if (
       error instanceof GaramApiError ||
       error instanceof GaramUnreachableError
     ) {
-      // A 409 means the operator enrolled since the page was read, so
-      // the page is re-read to show the certificate it now holds.
-      if (error instanceof GaramApiError && error.status === 409) {
-        revalidatePath(section, "layout");
-      }
       return { status: "error", message: error.message };
     }
     throw error;

@@ -99,10 +99,11 @@ func (s *PostgresStore) ReportConfiguration(ctx context.Context, operator, agent
 
 // refusedConfiguration says why an acknowledgement matched no row, in
 // the order the statement's conditions guard: the agent is gone,
-// another operator holds it, the epoch is not the current one, no definition describes the agent, the
-// revision is one the definition has not reached, or the same epoch
-// already acknowledged a later one. The reads are not the statement's
-// snapshot, so a state that moved in between is named as it now is.
+// another operator holds it, the epoch is not the current one, no
+// definition describes the agent, the revision is one the definition
+// has not reached, or the same epoch already acknowledged a later one.
+// The reads are not the statement's snapshot, so a state that moved in
+// between is named as it now is.
 func (s *PostgresStore) refusedConfiguration(ctx context.Context, operator, agentGRN grn.GRN, epoch, revision int32) error {
 	const op = "report configuration"
 	if _, err := s.q.GetAgent(ctx, agentGRN.String()); err != nil {

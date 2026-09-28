@@ -54,10 +54,11 @@ type Store interface {
 	// ReportConfiguration records the acknowledgement operator gives of
 	// revision, where it holds the agent at epoch; the two are checked
 	// in the write itself. It answers ErrNotAssigned where another
-	// operator holds the agent, ErrStaleEpoch at any other epoch, ErrDefinitionNotFound for an agent no definition
-	// describes, ErrRevisionAhead for a revision the definition has not
-	// reached, and ErrRevisionSuperseded for one older than what the
-	// same epoch already acknowledged.
+	// operator holds the agent, ErrStaleEpoch at any other epoch,
+	// ErrDefinitionNotFound for an agent no definition describes,
+	// ErrRevisionAhead for a revision the definition has not reached,
+	// and ErrRevisionSuperseded for one older than what the same epoch
+	// already acknowledged.
 	ReportConfiguration(ctx context.Context, operator, agentGRN grn.GRN, epoch int, revision Revision, outcome ConfigurationOutcome) (*Agent, error)
 	// CountByOrg counts the organization's agents, definitions and
 	// templates, which deleting the organization removes with it. An

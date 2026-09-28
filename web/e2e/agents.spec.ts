@@ -236,7 +236,7 @@ test.describe("agent settings", () => {
   }) => {
     const identifier = await defineAgent(page, signedIn, "Scout");
 
-    // Claimed and ready, but no revision reported: unknown, not applied.
+    // Claimed and ready, with no revision reported: unknown.
     await seedOperatorReport(signedIn, identifier, 1, null);
     await page.reload();
     await expect(page.getByText("ready", { exact: true })).toBeVisible();

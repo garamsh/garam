@@ -88,15 +88,27 @@ describe("agent page", () => {
   });
 
   it("says a refused definition is refused rather than missing", async () => {
+    let refusing = false;
     server.use(
       http.get(ONE, () =>
-        HttpResponse.json(
-          { kind: "permission_denied", message: "no" },
-          { status: 403 },
-        ),
+        refusing
+          ? HttpResponse.json(
+              { kind: "permission_denied", message: "no" },
+              { status: 403 },
+            )
+          : HttpResponse.json(fieldAgent),
       ),
     );
+    // The control: answered, the same agent renders under its name and
+    // says nothing is refused.
+    const allowed = await renderServerComponent(AgentPage(params));
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Scout" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    allowed.unmount();
 
+    refusing = true;
     await renderServerComponent(AgentPage(params));
 
     expect(screen.getByRole("alert")).toHaveTextContent(

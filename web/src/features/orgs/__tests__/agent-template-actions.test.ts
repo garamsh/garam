@@ -93,17 +93,38 @@ describe("createAgentTemplate", () => {
       message: "Give the template a name.",
     });
     expect(called).toBe(false);
+
+    // The control: the same form with a name reaches garam through the
+    // same action.
+    await expect(
+      createAgentTemplate(
+        { status: "idle" },
+        form({ name: "Researcher", description: "" }, []),
+      ),
+    ).rejects.toThrow("NEXT_REDIRECT:");
+    expect(called).toBe(true);
   });
 
   it("renders garam's refusal rather than throwing", async () => {
-    server.use(http.post(TEMPLATES, refusal));
-
-    const state = await createAgentTemplate(
-      { status: "idle" },
-      form({ name: "Researcher", description: "" }, []),
+    let refusing = true;
+    server.use(
+      http.post(TEMPLATES, () =>
+        refusing ? refusal() : HttpResponse.json(researcher, { status: 201 }),
+      ),
     );
+    const submission = () => form({ name: "Researcher", description: "" }, []);
+
+    const state = await createAgentTemplate({ status: "idle" }, submission());
 
     expect(state).toEqual({ status: "error", message: "permission denied" });
+
+    // The control: accepted, the same submission opens the template.
+    refusing = false;
+    await expect(
+      createAgentTemplate({ status: "idle" }, submission()),
+    ).rejects.toThrow(
+      "NEXT_REDIRECT:/console/orgs/acme/agents/templates/7c1e2a9b3d4f5a60",
+    );
   });
 });
 
@@ -161,13 +182,22 @@ describe("deleteAgentTemplate", () => {
   });
 
   it("stays on the template and says why when garam refuses", async () => {
-    server.use(http.delete(`${TEMPLATES}/:template`, refusal));
-
-    const state = await deleteAgentTemplate(
-      { status: "idle" },
-      form({ template: "7c1e2a9b3d4f5a60" }, []),
+    let refusing = true;
+    server.use(
+      http.delete(`${TEMPLATES}/:template`, () =>
+        refusing ? refusal() : new HttpResponse(null, { status: 204 }),
+      ),
     );
+    const submission = () => form({ template: "7c1e2a9b3d4f5a60" }, []);
+
+    const state = await deleteAgentTemplate({ status: "idle" }, submission());
 
     expect(state).toEqual({ status: "error", message: "permission denied" });
+
+    // The control: accepted, the same delete returns to the list.
+    refusing = false;
+    await expect(
+      deleteAgentTemplate({ status: "idle" }, submission()),
+    ).rejects.toThrow("NEXT_REDIRECT:/console/orgs/acme/agents/templates");
   });
 });

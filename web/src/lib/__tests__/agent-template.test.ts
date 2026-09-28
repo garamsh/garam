@@ -28,6 +28,11 @@ describe("parseTemplateFields", () => {
       status: "error",
       message: "Give the template a name.",
     });
+    // The control: one character among the same spaces is a name.
+    expect(parseTemplateFields(" R ", "", [])).toEqual({
+      status: "ok",
+      value: { name: "R", description: "", values: {} },
+    });
   });
 
   it("counts characters as garam does, not UTF-16 units", () => {
@@ -49,7 +54,15 @@ describe("parseTemplateFields", () => {
 
   it("refuses values a definition could not carry", () => {
     expect(
-      parseTemplateFields("T", "", [{ key: "Model", value: "haiku" }]).status,
+      parseTemplateFields("T", "", [{ key: "Workspace", value: "papers" }])
+        .status,
     ).toBe("error");
+    // The control: the same row with the key cased down is carried.
+    expect(
+      parseTemplateFields("T", "", [{ key: "workspace", value: "papers" }]),
+    ).toEqual({
+      status: "ok",
+      value: { name: "T", description: "", values: { workspace: "papers" } },
+    });
   });
 });

@@ -24,6 +24,23 @@ const params = {
   params: Promise.resolve({ org: "acme", template: "7c1e2a9b3d4f5a60" }),
 };
 
+/** What the template's own read answers for the rest of the test. */
+function answer(status: 200 | 403 | 404) {
+  server.use(
+    http.get(ONE, () =>
+      status === 200
+        ? HttpResponse.json(researcher)
+        : HttpResponse.json(
+            {
+              kind: status === 403 ? "permission_denied" : "not_found",
+              message: "no",
+            },
+            { status },
+          ),
+    ),
+  );
+}
+
 describe("agent template page", () => {
   it("opens the template's fields for editing and offers creating an agent from it", async () => {
     await renderServerComponent(AgentTemplatePage(params));
@@ -82,15 +99,17 @@ describe("agent template page", () => {
   });
 
   it("says a refused template is refused rather than missing", async () => {
-    server.use(
-      http.get(ONE, () =>
-        HttpResponse.json(
-          { kind: "permission_denied", message: "no" },
-          { status: 403 },
-        ),
-      ),
-    );
+    // The control: answered, the same template renders under its name
+    // and says nothing is refused.
+    answer(200);
+    const allowed = await renderServerComponent(AgentTemplatePage(params));
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Researcher" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    allowed.unmount();
 
+    answer(403);
     await renderServerComponent(AgentTemplatePage(params));
 
     expect(screen.getByRole("alert")).toHaveTextContent(
@@ -99,15 +118,15 @@ describe("agent template page", () => {
   });
 
   it("renders not-found for a template the organization does not keep", async () => {
-    server.use(
-      http.get(ONE, () =>
-        HttpResponse.json(
-          { kind: "not_found", message: "agent template not found" },
-          { status: 404 },
-        ),
-      ),
-    );
+    // The control: answered, the same address renders the template.
+    answer(200);
+    const allowed = await renderServerComponent(AgentTemplatePage(params));
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Researcher" }),
+    ).toBeInTheDocument();
+    allowed.unmount();
 
+    answer(404);
     await expect(
       renderServerComponent(AgentTemplatePage(params)),
     ).rejects.toThrow("NEXT_NOT_FOUND");

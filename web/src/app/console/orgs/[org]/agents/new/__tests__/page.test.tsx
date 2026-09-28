@@ -89,6 +89,13 @@ describe("new agent page", () => {
   });
 
   it("says the template list is refused and still copies a chosen template it can read", async () => {
+    // The control: with the list answered, no refusal is said.
+    const allowed = await renderServerComponent(page("7c1e2a9b3d4f5a60"));
+    expect(
+      screen.queryByText("Templates are not listed to you."),
+    ).not.toBeInTheDocument();
+    allowed.unmount();
+
     server.use(
       http.get(`${API_URL}/orgs/acme/agent-templates`, () =>
         HttpResponse.json(

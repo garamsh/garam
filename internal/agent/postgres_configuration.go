@@ -56,9 +56,9 @@ func (s *PostgresStore) ReviseDefinition(ctx context.Context, agentGRN grn.GRN, 
 	return nil, ErrRevisionConflict
 }
 
-// ReportConfiguration records the acknowledgement the operator
-// assigned at epoch gives of revision.
-func (s *PostgresStore) ReportConfiguration(ctx context.Context, agentGRN grn.GRN, epoch int, revision Revision, outcome ConfigurationOutcome) (*Agent, error) {
+// ReportConfiguration records the acknowledgement operator gives of
+// revision, where it holds the agent at epoch.
+func (s *PostgresStore) ReportConfiguration(ctx context.Context, operator, agentGRN grn.GRN, epoch int, revision Revision, outcome ConfigurationOutcome) (*Agent, error) {
 	e, err := narrowEpoch(epoch)
 	if err != nil {
 		return nil, err
@@ -68,8 +68,9 @@ func (s *PostgresStore) ReportConfiguration(ctx context.Context, agentGRN grn.GR
 		return nil, ErrRevisionAhead
 	}
 	params := db.ReportAgentConfigurationParams{
-		Grn:        agentGRN.String(),
-		Epoch:      e,
+		Grn:         agentGRN.String(),
+		OperatorGrn: operator.String(),
+		Epoch:       e,
 		Revision:   r,
 		ReportedAt: stamp(time.Now().UTC()),
 	}
@@ -93,16 +94,16 @@ func (s *PostgresStore) ReportConfiguration(ctx context.Context, agentGRN grn.GR
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return nil, pgxerr.Classify(err, "report configuration", nil, nil)
 	}
-	return nil, s.refusedConfiguration(ctx, agentGRN, e, r)
+	return nil, s.refusedConfiguration(ctx, operator, agentGRN, e, r)
 }
 
 // refusedConfiguration says why an acknowledgement matched no row, in
-// the order the statement's conditions guard: the agent is gone, the
-// epoch is not the current one, no definition describes the agent, the
+// the order the statement's conditions guard: the agent is gone,
+// another operator holds it, the epoch is not the current one, no definition describes the agent, the
 // revision is one the definition has not reached, or the same epoch
 // already acknowledged a later one. The reads are not the statement's
 // snapshot, so a state that moved in between is named as it now is.
-func (s *PostgresStore) refusedConfiguration(ctx context.Context, agentGRN grn.GRN, epoch, revision int32) error {
+func (s *PostgresStore) refusedConfiguration(ctx context.Context, operator, agentGRN grn.GRN, epoch, revision int32) error {
 	const op = "report configuration"
 	if _, err := s.q.GetAgent(ctx, agentGRN.String()); err != nil {
 		return pgxerr.Classify(err, op, ErrAgentNotFound, nil)
@@ -113,6 +114,9 @@ func (s *PostgresStore) refusedConfiguration(ctx context.Context, agentGRN grn.G
 			return ErrStaleEpoch
 		}
 		return pgxerr.Classify(err, op, nil, nil)
+	}
+	if assignment.OperatorGrn != operator.String() {
+		return ErrNotAssigned
 	}
 	if assignment.Epoch != epoch {
 		return ErrStaleEpoch

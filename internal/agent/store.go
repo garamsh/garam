@@ -51,13 +51,14 @@ type Store interface {
 	// answers ErrRevisionConflict where another save moved it on and
 	// ErrDefinitionNotFound where none names the agent (ADR-0076).
 	ReviseDefinition(ctx context.Context, agentGRN grn.GRN, expected Revision, values Values, by grn.GRN) (*Definition, error)
-	// ReportConfiguration records the acknowledgement the operator
-	// assigned at epoch gives of revision. It answers ErrStaleEpoch at
-	// any other epoch, ErrDefinitionNotFound for an agent no definition
+	// ReportConfiguration records the acknowledgement operator gives of
+	// revision, where it holds the agent at epoch; the two are checked
+	// in the write itself. It answers ErrNotAssigned where another
+	// operator holds the agent, ErrStaleEpoch at any other epoch, ErrDefinitionNotFound for an agent no definition
 	// describes, ErrRevisionAhead for a revision the definition has not
 	// reached, and ErrRevisionSuperseded for one older than what the
 	// same epoch already acknowledged.
-	ReportConfiguration(ctx context.Context, agentGRN grn.GRN, epoch int, revision Revision, outcome ConfigurationOutcome) (*Agent, error)
+	ReportConfiguration(ctx context.Context, operator, agentGRN grn.GRN, epoch int, revision Revision, outcome ConfigurationOutcome) (*Agent, error)
 	// CountByOrg counts the organization's agents, definitions and
 	// templates, which deleting the organization removes with it. An
 	// organization that does not exist holds none, so the zero

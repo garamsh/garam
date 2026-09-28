@@ -173,10 +173,13 @@ func (s *memoryStore) ReviseDefinition(context.Context, grn.GRN, Revision, Value
 // ReportConfiguration keeps the fence the other reports pass and
 // records the acknowledgement; which revisions it accepts is the
 // Postgres store's, which tests/integration exercises.
-func (s *memoryStore) ReportConfiguration(_ context.Context, agentGRN grn.GRN, epoch int, revision Revision, outcome ConfigurationOutcome) (*Agent, error) {
+func (s *memoryStore) ReportConfiguration(_ context.Context, operator, agentGRN grn.GRN, epoch int, revision Revision, outcome ConfigurationOutcome) (*Agent, error) {
 	a, err := s.reportable(agentGRN, epoch)
 	if err != nil {
 		return nil, err
+	}
+	if s.assignments[agentGRN].operatorGRN != operator {
+		return nil, ErrNotAssigned
 	}
 	a.Configuration = &ConfigurationReport{Epoch: epoch, Revision: revision, Outcome: outcome}
 	return a, nil

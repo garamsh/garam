@@ -94,6 +94,8 @@ func TestAgentDefinition_ASaveIsARevisionOfTheOneTheEditorRead(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, agent.Revision(2), stored.Revision)
 	assert.Equal(t, agent.Values{"model": "sonnet"}, stored.Values(), "the stale save wrote over the saved one")
+	assert.True(t, second.RevisedAt.Equal(stored.RevisedAt), "the stale save moved the revision time")
+	assert.Equal(t, editor, stored.RevisedBy)
 
 	third, err := s.ReviseDefinition(ctx, d.Agent(), 2, agent.Values{"model": "opus"}, editor)
 	require.NoError(t, err)
@@ -170,7 +172,7 @@ func TestAgentConfiguration_WhatAnAcknowledgementMayMove(t *testing.T) {
 	assert.Nil(t, ready.Configuration, "a health report acknowledged a revision")
 
 	// A revision the definition has not reached was never served.
-	_, err = s.ReportConfiguration(ctx, d.Agent(), epoch, 2, applied(t))
+	_, err = s.ReportConfiguration(ctx, operatorGRN, d.Agent(), epoch, 2, applied(t))
 	assert.ErrorIs(t, err, agent.ErrRevisionAhead)
 	unmoved, err := s.Get(ctx, d.Agent())
 	require.NoError(t, err)
@@ -178,7 +180,7 @@ func TestAgentConfiguration_WhatAnAcknowledgementMayMove(t *testing.T) {
 
 	// The revision it holds is acknowledged, at the epoch the report
 	// carried.
-	one, err := s.ReportConfiguration(ctx, d.Agent(), epoch, 1, applied(t, "model"))
+	one, err := s.ReportConfiguration(ctx, operatorGRN, d.Agent(), epoch, 1, applied(t, "model"))
 	require.NoError(t, err)
 	require.NotNil(t, one.Configuration)
 	assert.Equal(t, epoch, one.Configuration.Epoch)
@@ -195,13 +197,13 @@ func TestAgentConfiguration_WhatAnAcknowledgementMayMove(t *testing.T) {
 	require.NoError(t, err)
 	_, err = s.ReviseDefinition(ctx, d.Agent(), 2, agent.Values{"model": "opus"}, editor)
 	require.NoError(t, err)
-	two, err := s.ReportConfiguration(ctx, d.Agent(), epoch, 2, applied(t))
+	two, err := s.ReportConfiguration(ctx, operatorGRN, d.Agent(), epoch, 2, applied(t))
 	require.NoError(t, err)
 	assert.Equal(t, agent.Revision(2), two.Configuration.Revision)
 
 	// An older revision would write over the newer acknowledgement, so
 	// it is refused and the row keeps both the revision and its time.
-	_, err = s.ReportConfiguration(ctx, d.Agent(), epoch, 1, applied(t))
+	_, err = s.ReportConfiguration(ctx, operatorGRN, d.Agent(), epoch, 1, applied(t))
 	assert.ErrorIs(t, err, agent.ErrRevisionSuperseded)
 	kept, err := s.Get(ctx, d.Agent())
 	require.NoError(t, err)
@@ -210,34 +212,40 @@ func TestAgentConfiguration_WhatAnAcknowledgementMayMove(t *testing.T) {
 
 	// The same revision again replaces the report in the order garam
 	// receives them, outcome included, and moves the time received.
-	againRejected, err := s.ReportConfiguration(ctx, d.Agent(), epoch, 2, rejected(t, "image pull failed"))
+	againRejected, err := s.ReportConfiguration(ctx, operatorGRN, d.Agent(), epoch, 2, rejected(t, "image pull failed"))
 	require.NoError(t, err)
 	assert.Equal(t, rejected(t, "image pull failed"), againRejected.Configuration.Outcome)
 	assert.False(t, againRejected.Configuration.ReportedAt.Before(kept.Configuration.ReportedAt))
-	againApplied, err := s.ReportConfiguration(ctx, d.Agent(), epoch, 2, applied(t, "workspace"))
+	againApplied, err := s.ReportConfiguration(ctx, operatorGRN, d.Agent(), epoch, 2, applied(t, "workspace"))
 	require.NoError(t, err)
 	assert.Equal(t, applied(t, "workspace"), againApplied.Configuration.Outcome)
 
 	// The saved revision, acknowledged as rejected.
-	three, err := s.ReportConfiguration(ctx, d.Agent(), epoch, 3, rejected(t, "model not offered"))
+	three, err := s.ReportConfiguration(ctx, operatorGRN, d.Agent(), epoch, 3, rejected(t, "model not offered"))
 	require.NoError(t, err)
 	assert.Equal(t, agent.Revision(3), three.Configuration.Revision)
 
-	// Reassigning the agent fences the operator it replaced, and what
-	// that operator acknowledged stays tied to its own epoch, so a
-	// reader comparing epochs sees it is not the current assignment's.
-	reassigned, err := s.Assign(ctx, d.Agent(), scopedGRN("acme", agent.ServiceTypeOperator, "two"))
+	// Reassigning the agent to the operator holding it raises the epoch
+	// alone, so what refuses the earlier epoch is the epoch.
+	selfAssigned, err := s.Assign(ctx, d.Agent(), operatorGRN)
 	require.NoError(t, err)
-	_, err = s.ReportConfiguration(ctx, d.Agent(), epoch, 3, applied(t))
+	_, err = s.ReportConfiguration(ctx, operatorGRN, d.Agent(), epoch, 3, applied(t))
 	assert.ErrorIs(t, err, agent.ErrStaleEpoch)
+	epoch = selfAssigned.Epoch()
+
+	// Reassigning it to another operator fences the one it replaced,
+	// and what that operator acknowledged stays tied to its own epoch,
+	// so a reader comparing epochs sees it is not the current one's.
+	successor := scopedGRN("acme", agent.ServiceTypeOperator, "two")
+	reassigned, err := s.Assign(ctx, d.Agent(), successor)
+	require.NoError(t, err)
 	previous, err := s.Get(ctx, d.Agent())
 	require.NoError(t, err)
-	assert.Equal(t, epoch, previous.Configuration.Epoch)
 	assert.NotEqual(t, reassigned.Epoch(), previous.Configuration.Epoch)
 
 	// The new operator's first acknowledgement is not bounded by the
 	// replaced operator's: an older revision from it is recorded.
-	fromSuccessor, err := s.ReportConfiguration(ctx, d.Agent(), reassigned.Epoch(), 1, applied(t))
+	fromSuccessor, err := s.ReportConfiguration(ctx, successor, d.Agent(), reassigned.Epoch(), 1, applied(t))
 	require.NoError(t, err)
 	assert.Equal(t, reassigned.Epoch(), fromSuccessor.Configuration.Epoch)
 	assert.Equal(t, agent.Revision(1), fromSuccessor.Configuration.Revision)
@@ -258,7 +266,7 @@ func TestAgentConfiguration_AnAgentNoDefinitionDescribesAcknowledgesNothing(t *t
 
 	_, err = s.ReportProvisioningState(ctx, g, assigned.Epoch(), agent.ProvisioningStateReady)
 	require.NoError(t, err)
-	_, err = s.ReportConfiguration(ctx, g, assigned.Epoch(), 1, applied(t))
+	_, err = s.ReportConfiguration(ctx, scopedGRN("acme", agent.ServiceTypeOperator, "one"), g, assigned.Epoch(), 1, applied(t))
 	assert.ErrorIs(t, err, agent.ErrDefinitionNotFound)
 }
 
@@ -285,7 +293,7 @@ func TestAgentConfiguration_AnAcknowledgementRacingAReassignmentIsNeverCurrent(t
 		wg.Add(2)
 		go func() {
 			defer wg.Done()
-			_, reportErr = s.ReportConfiguration(ctx, d.Agent(), epoch, 1, acknowledgement)
+			_, reportErr = s.ReportConfiguration(ctx, operatorGRN, d.Agent(), epoch, 1, acknowledgement)
 		}()
 		go func() {
 			defer wg.Done()
@@ -307,6 +315,36 @@ func TestAgentConfiguration_AnAcknowledgementRacingAReassignmentIsNeverCurrent(t
 		}
 		epoch = reassigned.Epoch()
 	}
+}
+
+// TestAgentConfiguration_AReplacedOperatorCannotReportUnderItsSuccessorsEpoch
+// is the reassignment landing between the service's holding check and
+// the write, made deterministic by calling the write after it: the
+// replaced operator presents the epoch its successor now holds. The
+// write compares the operator and the epoch together, so it is refused
+// and records nothing. The successor's identical report is the control.
+func TestAgentConfiguration_AReplacedOperatorCannotReportUnderItsSuccessorsEpoch(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	s := agent.NewPostgresStore(p)
+	replaced := scopedGRN("acme", agent.ServiceTypeOperator, "one")
+	d := defineAgent(t, p, s, replaced, agent.Values{})
+	claimedDefinition(t, s, d, replaced)
+	successor := scopedGRN("acme", agent.ServiceTypeOperator, "two")
+	reassigned, err := s.Assign(ctx, d.Agent(), successor)
+	require.NoError(t, err)
+
+	_, err = s.ReportConfiguration(ctx, replaced, d.Agent(), reassigned.Epoch(), 1, applied(t))
+	assert.ErrorIs(t, err, agent.ErrNotAssigned)
+	stored, err := s.Get(ctx, d.Agent())
+	require.NoError(t, err)
+	assert.Nil(t, stored.Configuration, "the replaced operator's report was recorded")
+
+	landed, err := s.ReportConfiguration(ctx, successor, d.Agent(), reassigned.Epoch(), 1, applied(t))
+	require.NoError(t, err)
+	require.NotNil(t, landed.Configuration)
+	assert.Equal(t, reassigned.Epoch(), landed.Configuration.Epoch)
 }
 
 // TestAgentConfiguration_TheSchemaKeepsAnAcknowledgementWhole writes
@@ -340,6 +378,18 @@ func TestAgentConfiguration_TheSchemaKeepsAnAcknowledgementWhole(t *testing.T) {
 		"a rejection with a reason past 500 characters": {
 			whole + `configuration_outcome = 'rejected', configuration_ignored_keys = NULL, configuration_reason = repeat('가', 501)`,
 			whole + `configuration_outcome = 'rejected', configuration_ignored_keys = NULL, configuration_reason = repeat('가', 500)`},
+		"an acknowledgement with no epoch": {
+			`configuration_epoch = NULL, configuration_revision = 1, configuration_reported_at = now(), configuration_outcome = 'applied', configuration_ignored_keys = '{}'`,
+			whole + `configuration_outcome = 'applied', configuration_ignored_keys = '{}'`},
+		"an application with no revision": {
+			`configuration_epoch = 1, configuration_revision = NULL, configuration_reported_at = now(), configuration_outcome = 'applied', configuration_ignored_keys = '{}'`,
+			whole + `configuration_outcome = 'applied', configuration_ignored_keys = '{}'`},
+		"an acknowledgement with no outcome": {
+			whole + `configuration_outcome = NULL, configuration_ignored_keys = '{}'`,
+			whole + `configuration_outcome = 'applied', configuration_ignored_keys = '{}'`},
+		"a rejection with no reason": {
+			whole + `configuration_outcome = 'rejected', configuration_ignored_keys = NULL, configuration_reason = NULL`,
+			whole + `configuration_outcome = 'rejected', configuration_ignored_keys = NULL, configuration_reason = 'x'`},
 		"an outcome no one names": {
 			whole + `configuration_outcome = 'partial', configuration_ignored_keys = '{}'`,
 			whole + `configuration_outcome = 'applied', configuration_ignored_keys = '{}'`},

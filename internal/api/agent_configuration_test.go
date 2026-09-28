@@ -141,25 +141,49 @@ func TestAgentReviseValues_OnlyTheValuesMove(t *testing.T) {
 
 // TestAgentReviseValues_RefusesWhatItCannotStore sets every refused
 // body beside the accepted one that differs from it in the refused
-// part alone.
+// part alone, and reads the definition after each refusal: a refused
+// save moves no revision and stores no values. An absent or null
+// `values` would otherwise decode as no settings and clear them, so
+// `{}` — clearing them on purpose — is the accepted control for both.
 func TestAgentReviseValues_RefusesWhatItCannotStore(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
 	f.permit(permission{userGRNOf("owner-sub"), org.ActionAgentConfigure})
 
-	cases := map[string]struct{ refused, accepted string }{
-		"a revision below 1":              {reviseBody(0, `{}`), reviseBody(1, `{}`)},
-		"a key outside the character set": {reviseBody(1, `{"Model_Name":"haiku"}`), reviseBody(1, `{"model-name":"haiku"}`)},
-		"a body that is not an object":    {`[]`, reviseBody(1, `{}`)},
+	cases := map[string]struct {
+		refused, accepted string
+		saved             agent.Values
+	}{
+		"a revision below 1": {
+			reviseBody(0, `{}`), reviseBody(1, `{}`), agent.Values{}},
+		"a key outside the character set": {
+			reviseBody(1, `{"Model_Name":"haiku"}`), reviseBody(1, `{"model-name":"haiku"}`), agent.Values{"model-name": "haiku"}},
+		"a body that is not an object": {
+			`[]`, reviseBody(1, `{}`), agent.Values{}},
+		"no values at all": {
+			`{"expectedRevision":1}`, reviseBody(1, `{}`), agent.Values{}},
+		"values that are null": {
+			reviseBody(1, `null`), reviseBody(1, `{}`), agent.Values{}},
+		"a value that is null": {
+			reviseBody(1, `{"model":null}`), reviseBody(1, `{"model":""}`), agent.Values{"model": ""}},
+		"a value that is not a string": {
+			reviseBody(1, `{"model":1}`), reviseBody(1, `{"model":"1"}`), agent.Values{"model": "1"}},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
-			defined := defineIn(t, f, slug, agent.Values{})
+			defined := defineIn(t, f, slug, agent.Values{"model": "haiku"})
+			stored := f.agents.definitions[defined.String()]
+
 			rec := f.do(t, "PUT", valuesPath(slug, defined), c.refused, owner)
 			assert.Equal(t, http.StatusBadRequest, rec.Code)
+			assert.Equal(t, agent.Revision(1), stored.Revision, "a refused save moved the revision")
+			assert.Equal(t, userGRNOf("owner-sub"), stored.RevisedBy)
+			assert.NotContains(t, f.agents.revised, defined.String(), "a refused save stored values")
+
 			rec = f.do(t, "PUT", valuesPath(slug, defined), c.accepted, owner)
 			assert.Equal(t, http.StatusOK, rec.Code)
+			assert.Equal(t, c.saved, f.agents.revised[defined.String()])
 		})
 	}
 }

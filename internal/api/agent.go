@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 
 	apigen "github.com/garamsh/garam/api"
@@ -227,7 +228,7 @@ func (s *Server) ReviseAgentValues(w http.ResponseWriter, r *http.Request, orgSl
 		writeError(w, err)
 		return
 	}
-	var body apigen.AgentValuesRevision
+	var body valuesRevision
 	if err := decodeJSON(r, &body); err != nil {
 		writeError(w, err)
 		return
@@ -237,7 +238,12 @@ func (s *Server) ReviseAgentValues(w http.ResponseWriter, r *http.Request, orgSl
 		writeError(w, err)
 		return
 	}
-	values, err := agent.ParseValues(body.Values)
+	raw, err := body.values()
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	values, err := agent.ParseValues(raw)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -248,6 +254,37 @@ func (s *Server) ReviseAgentValues(w http.ResponseWriter, r *http.Request, orgSl
 		return
 	}
 	writeJSON(w, http.StatusOK, definitionToAPI(d))
+}
+
+// valuesRevision is `AgentValuesRevision` as it arrives, before it is
+// known to be one. The generated type decodes an absent or null
+// `values`, and a null value inside it, as an empty map and an empty
+// string, which a save would store as clearing the settings; the raw
+// field is what tells those apart from `{}` and `""`.
+type valuesRevision struct {
+	ExpectedRevision int             `json:"expectedRevision"`
+	Values           json.RawMessage `json:"values"`
+}
+
+// values returns the settings the body carries, or refuses a body that
+// carries none, a null in place of the object, or a null in place of a
+// string. `{}` is settings, and saving it clears them.
+func (b valuesRevision) values() (map[string]string, error) {
+	if len(b.Values) == 0 || string(b.Values) == "null" {
+		return nil, errorx.New(errorx.KindInvalidArgument, "values: required")
+	}
+	var entries map[string]*string
+	if err := json.Unmarshal(b.Values, &entries); err != nil {
+		return nil, errorx.Wrap(err, "values", errorx.KindInvalidArgument)
+	}
+	out := make(map[string]string, len(entries))
+	for k, v := range entries {
+		if v == nil {
+			return nil, errorx.New(errorx.KindInvalidArgument, "values: a value is null")
+		}
+		out[k] = *v
+	}
+	return out, nil
 }
 
 // assignmentsOf resolves the org's assignments in one query, keyed by

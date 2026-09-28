@@ -61,8 +61,11 @@ WHERE grn = sqlc.arg('grn')
 RETURNING *;
 
 -- ReportAgentConfiguration records the operator's acknowledgement of a
--- revision, at the epoch the agent is currently assigned at. It matches
--- no row for a revision the definition has not reached, nor for one
+-- revision, where that operator holds the agent at the epoch the report
+-- carries: the two are compared together in this statement, so an
+-- operator a reassignment replaced cannot land a report under its
+-- successor's epoch. It matches no row for a revision the definition
+-- has not reached, nor for one
 -- older than what the same epoch already acknowledged; an
 -- acknowledgement made at an earlier epoch is no bound, because it was
 -- another assignment's (ADR-0076). The same revision again replaces the
@@ -78,7 +81,9 @@ UPDATE agents SET
 WHERE grn = sqlc.arg('grn')
   AND EXISTS (
       SELECT 1 FROM agent_assignments a
-      WHERE a.agent_grn = agents.grn AND a.epoch = sqlc.arg('epoch')::integer
+      WHERE a.agent_grn = agents.grn
+        AND a.epoch = sqlc.arg('epoch')::integer
+        AND a.operator_grn = sqlc.arg('operator_grn')::text
   )
   AND EXISTS (
       SELECT 1 FROM agent_definitions d

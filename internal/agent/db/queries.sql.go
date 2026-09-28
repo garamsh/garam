@@ -537,7 +537,9 @@ UPDATE agents SET
 WHERE grn = $7
   AND EXISTS (
       SELECT 1 FROM agent_assignments a
-      WHERE a.agent_grn = agents.grn AND a.epoch = $1::integer
+      WHERE a.agent_grn = agents.grn
+        AND a.epoch = $1::integer
+        AND a.operator_grn = $8::text
   )
   AND EXISTS (
       SELECT 1 FROM agent_definitions d
@@ -557,11 +559,15 @@ type ReportAgentConfigurationParams struct {
 	IgnoredKeys []string
 	ReportedAt  pgtype.Timestamptz
 	Grn         string
+	OperatorGrn string
 }
 
 // ReportAgentConfiguration records the operator's acknowledgement of a
-// revision, at the epoch the agent is currently assigned at. It matches
-// no row for a revision the definition has not reached, nor for one
+// revision, where that operator holds the agent at the epoch the report
+// carries: the two are compared together in this statement, so an
+// operator a reassignment replaced cannot land a report under its
+// successor's epoch. It matches no row for a revision the definition
+// has not reached, nor for one
 // older than what the same epoch already acknowledged; an
 // acknowledgement made at an earlier epoch is no bound, because it was
 // another assignment's (ADR-0076). The same revision again replaces the
@@ -575,6 +581,7 @@ func (q *Queries) ReportAgentConfiguration(ctx context.Context, arg ReportAgentC
 		arg.IgnoredKeys,
 		arg.ReportedAt,
 		arg.Grn,
+		arg.OperatorGrn,
 	)
 	var i Agent
 	err := row.Scan(

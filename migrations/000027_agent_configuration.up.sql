@@ -44,7 +44,9 @@ ALTER TABLE agents
     -- call path routes around. The acknowledgement is whole or absent,
     -- a rejection carries a reason and no ignored keys, and an
     -- application carries the keys it ignored, possibly none, and no
-    -- reason.
+    -- reason. Every column is tested with IS NULL or IS NOT NULL
+    -- rather than compared, because a comparison with NULL is unknown
+    -- and a CHECK passes an unknown.
     ADD CONSTRAINT agents_configuration_whole CHECK (
         (configuration_epoch IS NULL
             AND configuration_revision IS NULL
@@ -52,14 +54,18 @@ ALTER TABLE agents
             AND configuration_reason IS NULL
             AND configuration_ignored_keys IS NULL
             AND configuration_reported_at IS NULL)
-        OR (configuration_epoch > 0
+        OR (configuration_epoch IS NOT NULL
+            AND configuration_epoch > 0
+            AND configuration_revision IS NOT NULL
             AND configuration_revision > 0
             AND configuration_reported_at IS NOT NULL
+            AND configuration_outcome IS NOT NULL
             AND ((configuration_outcome = 'applied'
                     AND configuration_reason IS NULL
                     AND configuration_ignored_keys IS NOT NULL
                     AND cardinality(configuration_ignored_keys) <= 32)
                 OR (configuration_outcome = 'rejected'
                     AND configuration_ignored_keys IS NULL
+                    AND configuration_reason IS NOT NULL
                     AND btrim(configuration_reason) <> ''
                     AND char_length(configuration_reason) <= 500))));

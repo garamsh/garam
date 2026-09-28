@@ -178,9 +178,13 @@ func (s *service) ReportConfiguration(ctx context.Context, operator, agentGRN gr
 	if err := s.holds(ctx, operator, agentGRN); err != nil {
 		return err
 	}
+	// holds answers a caller that holds nothing without naming the
+	// agent; the write compares the operator and the epoch again, in
+	// one statement, so a reassignment between the two reads cannot
+	// attribute this report to the operator that replaced the caller.
 	// The agent it answers with carries the other party's runtime
 	// state, as it does for the provisioning report.
-	_, err := s.store.ReportConfiguration(ctx, agentGRN, epoch, revision, outcome)
+	_, err := s.store.ReportConfiguration(ctx, operator, agentGRN, epoch, revision, outcome)
 	return err
 }
 

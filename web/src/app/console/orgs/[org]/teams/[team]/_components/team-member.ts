@@ -157,8 +157,25 @@ export function teamCandidates(
   ];
 }
 
-/** How a member is named in a sentence: its name, or what it is. */
+/**
+ * Whether a member is an agent a definition names. Such a name is not
+ * unique (ADR-0075), so wherever it stands the identifier stands too.
+ */
+export function isNamedAgent(member: TeamMember): boolean {
+  return (
+    member.kind === "agent" &&
+    member.name !== null &&
+    member.name !== member.identifier
+  );
+}
+
+/**
+ * How a member is named in a sentence: its name, or what it is. A
+ * named agent carries its identifier, so two agents of one name are
+ * two different sentences.
+ */
 export function memberLabel(member: TeamMember): string {
+  if (isNamedAgent(member)) return `${member.name} (${member.identifier})`;
   if (member.name !== null) return member.name;
   switch (member.kind) {
     case "person":

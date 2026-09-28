@@ -1,4 +1,5 @@
 import { screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
@@ -15,6 +16,8 @@ import {
 } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
+// The removal action revalidates the page it came from.
+vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 vi.mock("next/navigation", () => ({
   notFound: () => {
     throw new Error("NEXT_NOT_FOUND");
@@ -101,6 +104,52 @@ describe("team page", () => {
       "Scout (9f2ac1b40d8e7a35) · awaiting operator · Agent",
       `${slugFromGrn(reportedAgent.grn)} · Agent`,
     ]);
+  });
+
+  it("tells two agents of one name apart and removes the one chosen", async () => {
+    const first = fieldAgent.agentGrn;
+    const second = "grn:acme:default:agent:0a1b2c3d4e5f6071";
+    const removed: string[] = [];
+    server.use(
+      membersAre(first, second),
+      http.get(`${API_URL}/orgs/acme/agent-definitions`, () =>
+        HttpResponse.json([fieldAgent, { ...fieldAgent, agentGrn: second }]),
+      ),
+      http.delete(`${MEMBERS}/:member`, ({ params }) => {
+        removed.push(decodeURIComponent(String(params.member)));
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    const user = userEvent.setup();
+
+    await renderTeam();
+
+    // Both are called Scout; each row carries its own identifier.
+    const rows = screen.getAllByRole("row", { name: /Scout/ });
+    expect(rows).toHaveLength(2);
+    expect(within(rows[0]).getByText("9f2ac1b40d8e7a35")).toBeInTheDocument();
+    expect(within(rows[1]).getByText("0a1b2c3d4e5f6071")).toBeInTheDocument();
+
+    // The removal control and its confirmation name the identity, so
+    // the second agent is the one removed and the first stays.
+    await user.click(
+      screen.getByRole("button", {
+        name: "Remove Scout (0a1b2c3d4e5f6071) from Engineering",
+      }),
+    );
+    expect(
+      screen.getByText(
+        "Remove Scout (0a1b2c3d4e5f6071) from Engineering? Only this team membership goes; nothing else changes in the organization or in other teams.",
+      ),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Confirm removal" }));
+
+    await vi.waitFor(() => expect(removed).toEqual([second]));
+    expect(
+      screen.getByRole("button", {
+        name: "Remove Scout (9f2ac1b40d8e7a35) from Engineering",
+      }),
+    ).toBeInTheDocument();
   });
 
   it("names a defined agent member by the name its definition gives it", async () => {

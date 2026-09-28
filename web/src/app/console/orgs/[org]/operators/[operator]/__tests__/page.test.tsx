@@ -78,6 +78,33 @@ describe("operator page", () => {
     expect(screen.getByText("Unknown — no report")).toBeInTheDocument();
   });
 
+  it("offers a replacement token for an operator without a certificate", async () => {
+    server.use(
+      http.get(OPERATOR, () =>
+        HttpResponse.json({
+          ...fieldOne,
+          enrollmentState: "expired",
+          certificateIssuedAt: undefined,
+        }),
+      ),
+    );
+
+    const expired = await renderOperator();
+
+    expect(
+      screen.getByRole("button", { name: "Issue replacement token" }),
+    ).toBeInTheDocument();
+    expired.unmount();
+
+    // The control: the enrolled operator's page, the same route, offers
+    // none, so the button above is the missing certificate's.
+    server.resetHandlers();
+    await renderOperator();
+    expect(
+      screen.queryByRole("button", { name: "Issue replacement token" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("lists the definitions naming it, says they refuse the delete, and links to them", async () => {
     server.use(
       http.get(DEFINITIONS, () =>

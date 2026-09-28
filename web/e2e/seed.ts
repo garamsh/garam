@@ -214,3 +214,22 @@ export async function seedSignedInUser(): Promise<SeededUser> {
   }
   return user;
 }
+
+/**
+ * Records a certificate for the seeded operator, as enrolling does.
+ * Enrolling takes a signing request on the machine listener, which no
+ * browser reaches (ADR-0064), so the row it leaves is written here.
+ */
+export async function recordOperatorCertificate(seed: Seed): Promise<void> {
+  const client = new Client({ connectionString: DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query(
+      `INSERT INTO operator_certificates (operator_grn, serial, issued_at)
+       VALUES ($1, $2, now())`,
+      [`grn:${seed.orgSlug}:default:operator:${seed.operatorIdentifier}`, "1"],
+    );
+  } finally {
+    await client.end();
+  }
+}

@@ -1,4 +1,5 @@
 import { expect, test } from "./fixtures";
+import { recordOperatorCertificate } from "./seed";
 
 test.describe("operators", () => {
   test("registers a named operator, renames it and defines an agent against it", async ({
@@ -42,13 +43,14 @@ test.describe("operators", () => {
     ).toBeVisible();
 
     // The token the operator enrols with is shown once, beside the
-    // sentence saying so (ADR-0064). Substring, because the sentence is
-    // longer than the claim under test.
+    // sentence saying so (ADR-0064).
     await expect(
       page.getByLabel("Enrollment token", { exact: true }),
     ).toHaveValue(/^[0-9a-f]{48}$/);
     await expect(
-      page.getByText("This is the only time this token is shown"),
+      page.getByText("Save this token now. It is shown only once.", {
+        exact: true,
+      }),
     ).toBeVisible();
 
     await page
@@ -199,5 +201,80 @@ test.describe("operators", () => {
     await expect(
       page.getByRole("link", { name: signedIn.operatorName, exact: true }),
     ).toBeVisible();
+  });
+
+  test("issues a replacement token while the operator has no certificate, and refuses once it enrolled", async ({
+    page,
+    signedIn,
+  }) => {
+    // The seeded operator was registered without a token, so it holds
+    // neither a certificate nor a spendable token.
+    const operator = `/console/orgs/${signedIn.orgSlug}/operators/${signedIn.operatorIdentifier}`;
+    await page.goto(operator);
+    await expect(
+      page.getByText("No certificate or enrollment token", { exact: true }),
+    ).toBeVisible();
+
+    // Disabled until React hydrates, so waiting for it to be enabled
+    // waits on the form being able to submit.
+    const issue = page.getByRole("button", {
+      name: "Issue replacement token",
+      exact: true,
+    });
+    await expect(issue).toBeEnabled();
+    await issue.click();
+
+    const token = page.getByLabel("Enrollment token", { exact: true });
+    await expect(token).toHaveValue(/^[0-9a-f]{48}$/);
+    const first = await token.inputValue();
+    await expect(
+      page.getByText("Save this token now. It is shown only once.", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Update the operator’s enrollment token Secret.", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    // The page re-read after the mint: the operator now holds a token.
+    await expect(
+      page.getByText("Enrollment token available", { exact: true }),
+    ).toBeVisible();
+
+    // Shown once: the page read again carries no token, and an operator
+    // still without a certificate may be issued another.
+    await page.reload();
+    await expect(token).toBeHidden();
+    await expect(issue).toBeEnabled();
+    await issue.click();
+    await expect(token).toHaveValue(/^[0-9a-f]{48}$/);
+    expect(await token.inputValue()).not.toBe(first);
+
+    // The operator enrols after this page was read: the button is still
+    // offered, and garam refuses the mint it sends.
+    await page.reload();
+    await expect(issue).toBeEnabled();
+    await recordOperatorCertificate(signedIn);
+    await issue.click();
+    await expect(
+      page.getByText(
+        "This operator is already enrolled. A new token cannot be issued.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    // The page re-read shows the certificate, and the refusal outlives
+    // that re-read rather than going with the button.
+    await expect(
+      page.getByText("Certificate issued", { exact: true }),
+    ).toBeVisible();
+    await expect(issue).toBeHidden();
+    await expect(
+      page.getByText(
+        "This operator is already enrolled. A new token cannot be issued.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await expect(token).toBeHidden();
   });
 });

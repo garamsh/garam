@@ -20,6 +20,7 @@ import { useHydrated } from "@/hooks/use-hydrated";
 import type { Parsed } from "@/lib/parsed";
 
 import { orgHref } from "../../../../_components/navigation";
+import { EnrollmentToken, ExpiresAt } from "./enrollment-token";
 
 const initialState: RegisterOperatorState = { status: "idle" };
 
@@ -143,116 +144,28 @@ export function RegisterOperatorForm({ org }: { org: string }) {
       </form>
 
       {state.status === "registered" && (
-        <EnrollmentToken
-          href={`${orgHref(org, "operators")}/${state.operator}`}
-          name={state.name}
-          token={state.token}
-          expiresAt={state.expiresAt}
-        />
+        <EnrollmentToken title={`Registered ${state.name}`} token={state.token}>
+          <p className="text-sm text-muted-foreground">
+            Expires at <ExpiresAt at={state.expiresAt} />.
+          </p>
+          <p className="text-sm">
+            Give it to the operator to enrol with. If it is lost, issue a
+            replacement from the operator&apos;s page.
+          </p>
+          <div>
+            <Button asChild variant="outline">
+              <Link href={`${orgHref(org, "operators")}/${state.operator}`}>
+                Open operator
+              </Link>
+            </Button>
+          </div>
+        </EnrollmentToken>
       )}
     </section>
-  );
-}
-
-/**
- * The one-time token, shown where the person can copy it and nowhere
- * else afterwards.
- *
- * The warning sits above the token rather than below it: someone who
- * has already navigated away has no way back, so it has to be read
- * before the panel is dismissed.
- */
-function EnrollmentToken({
-  href,
-  name,
-  token,
-  expiresAt,
-}: {
-  href: string;
-  name: string;
-  token: string;
-  expiresAt: string;
-}) {
-  // Keyed by token, as the invitation panel is: a later registration is
-  // a different token, so neither the claim that it was copied nor the
-  // failure the previous one reported carries over to it.
-  const [attempt, setAttempt] = useState<CopyAttempt | null>(null);
-  const outcome = attempt?.token === token ? attempt.outcome : null;
-
-  return (
-    <div className="flex max-w-2xl flex-col gap-3 rounded-md border border-border p-4">
-      <h3 className="font-heading text-sm font-semibold wrap-anywhere">
-        Registered {name}
-      </h3>
-      <p className="text-sm text-destructive">
-        This is the only time this token is shown; garam keeps no copy. If it is
-        lost, ask an administrator to mint a new enrollment token.
-      </p>
-      <div className="flex gap-2">
-        <Input
-          readOnly
-          value={token}
-          aria-label="Enrollment token"
-          onFocus={(event) => event.target.select()}
-          className="min-w-0 flex-1 bg-muted font-mono text-xs"
-        />
-        <Button
-          type="button"
-          variant="outline"
-          onClick={async () => {
-            // No boundary catches a handler. `navigator.clipboard` is
-            // absent outside a secure context, so the try covers the
-            // property access and not only the rejection.
-            try {
-              await navigator.clipboard.writeText(token);
-              setAttempt({ token, outcome: "copied" });
-            } catch {
-              setAttempt({ token, outcome: "failed" });
-            }
-          }}
-        >
-          {outcome === "copied" ? "Copied" : "Copy"}
-        </Button>
-      </div>
-      {outcome === "failed" && (
-        <p role="alert" className="text-sm text-destructive">
-          Could not copy the token. Select it in the field and copy it yourself.
-        </p>
-      )}
-      <p className="text-sm text-muted-foreground">
-        Give it to the operator to enrol with at{" "}
-        <code className="font-mono">POST /enrollment</code> on garam&apos;s
-        machine listener. It works once and expires at{" "}
-        <ExpiresAt at={expiresAt} />.
-      </p>
-      <div>
-        <Button asChild variant="outline">
-          <Link href={href}>Open operator</Link>
-        </Button>
-      </div>
-    </div>
   );
 }
 
 /** The refusal a parse carried, or null when it carried none. */
 function errorOf<T>(parsed: Parsed<T>): string | null {
   return parsed.status === "error" ? parsed.message : null;
-}
-
-/** What the clipboard answered for one enrollment token. */
-type CopyAttempt = { token: string; outcome: "copied" | "failed" };
-
-/**
- * The expiry, rendered in the reader's own time zone.
- *
- * It is a client component and mounted with `suppressHydrationWarning`
- * because the server renders it in a different zone, and the difference
- * is the point rather than a defect.
- */
-function ExpiresAt({ at }: { at: string }) {
-  return (
-    <time dateTime={at} suppressHydrationWarning>
-      {new Date(at).toLocaleTimeString()}
-    </time>
-  );
 }

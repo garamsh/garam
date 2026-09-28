@@ -149,10 +149,11 @@ Both answer the token once and neither reads one back. The second is
 authorized as the first is, on `operator:register`, and is refused for
 an operator that already enrolled — with a reason, because whether a
 member may issue a second credential path to an identity that has one
-is not decided. No console page reaches it; #1036 is where that is
-decided. The command ADR-0032 ships still mints out of band and is what
-recovers the operator that already holds a certificate; it remains a
-root-level subcommand no serve path references
+is not decided. The console reaches it from the operator's own page,
+offered while the operator holds no certificate. The command ADR-0032
+ships still mints out of band and is what recovers the operator that
+already holds a certificate; it remains a root-level subcommand no serve
+path references
 ([ADR-0032](./adr/0032-garam-ships-the-command-that-mints-an-operators-first-certificate.md)).
 
 **`getOperator` and `updateOperator` read one operator and change

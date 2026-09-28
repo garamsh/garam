@@ -7,6 +7,8 @@ by `internal/agent`.
 |------|----------------|
 | `Agent` | actor owned by an org; carries the state the operator reports about its pod and the state it reports about itself, separately |
 | `Definition` | what an organization says an agent should be: which operator runs it and with what values (ADR-0026), and not what it is built from — it names no image. It names its subject where an `Agent` names itself, and carries none of the state an `Agent` carries, so a reader cannot take one for the other; it writes no `agents` row until the operator it names claims it (ADR-0033) |
+| `Template` | a starting point an organization keeps for defining agents: a name, a description and values a definition copies once (ADR-0075). It names no operator and no agent, and no definition records the template it came from, so editing or deleting one reaches no agent |
+| `Name` | what an organization calls a defined agent or a template, separate from the GRN: trimmed, one to 100 characters, and not unique |
 | `Assignment` | which operator runs an agent, and the epoch that binding holds |
 | `Certificate` | what an agent authenticates with and the garam server root it verifies garam by, as this domain hands them back |
 | `Service` | creates an agent for the calling operator, issues the certificate of one assigned to it or renews an agent's own, answers an operator with the definitions naming it so it can claim one (ADR-0033), and records the state each party reports (ADR-0053) |
@@ -49,6 +51,12 @@ on — the connection is what authorizes it, and it reaches the issuer
 before the comparison is made. An expired certificate has no such
 connection, so the operator route is what recovers one.
 
+A definition's operator and values are written once. Its name is the
+organization's word for the agent and changes alone: renaming touches
+no GRN, operator, value, assignment, membership or attachment, and no
+operator is told (ADR-0075). A definition created without a name, and
+every one written before names existed, is called by its identifier.
+
 `Store` answers `Service` and, org by org, the read the browser-facing
 listener serves people: an organization's agents and the assignments
 holding them, each a batch read rather than one per agent. An agent no
@@ -56,7 +64,9 @@ operator holds contributes no assignment, so the two lists are not one
 length. Both aggregates are rehydrated inside this package — their
 fields are unexported and no exported constructor restores a stored
 row's state or timestamps — which is why the store that reads them back
-lives here rather than below.
+lives here rather than below. A `Template` is a data carrier with
+exported fields (ADR-0069); its store stays beside the others until
+#1083 moves this domain's store out of the package.
 
 Signing happens through the `Issuer` seam the composition root
 satisfies from `internal/ca`, so the two domains still cooperate
@@ -65,10 +75,10 @@ HTTP surfaces are the machine listener — where the operator reports the
 pod and the agent reports itself, each on a route of its own and
 neither reaching the other's fact (ADR-0053) — and the browser-facing
 one for the organization's members, which reads the agents and writes
-only definitions: provisioning is an operator's, from outside garam,
-and a definition writes no `agents` row until the operator it names
-claims it (ADR-0033). The queue a message reaches an
-agent through is the messaging domain.
+only definitions, their names and templates: provisioning is an
+operator's, from outside garam, and a definition writes no `agents`
+row until the operator it names claims it (ADR-0033). The queue a
+message reaches an agent through is the messaging domain.
 
 What an agent is built from is the operator's. A `Definition` names no
 image, and `values` is not a way around that: garam stores the keys and

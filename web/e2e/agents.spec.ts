@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import { expect, test } from "./fixtures";
+import type { Seed } from "./seed";
 
 /** Fills a values editor row, waiting for the form to take input. */
 async function fillRow(page: Page, row: number, key: string, value: string) {
@@ -10,6 +11,29 @@ async function fillRow(page: Page, row: number, key: string, value: string) {
   await expect(keyField).toBeEnabled();
   await keyField.fill(key);
   await page.getByLabel(`Value ${row}`, { exact: true }).fill(value);
+}
+
+/**
+ * Defines an agent from a blank start through the console, as a person
+ * does, and answers with its identifier. No operator claims it.
+ */
+async function defineAgent(
+  page: Page,
+  signedIn: Seed,
+  name: string,
+): Promise<string> {
+  await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/new`);
+  const agentName = page.getByLabel("Name", { exact: true });
+  await expect(agentName).toBeEnabled();
+  await agentName.fill(name);
+  await page.getByLabel("Operator", { exact: true }).selectOption({
+    label: `${signedIn.operatorName} (${signedIn.operatorIdentifier})`,
+  });
+  await page.getByRole("button", { name: "Create agent" }).click();
+  await expect(
+    page.getByRole("heading", { level: 1, name, exact: true }),
+  ).toBeVisible();
+  return page.url().split("/").at(-1) ?? "";
 }
 
 test.describe("agent templates", () => {
@@ -83,20 +107,34 @@ test.describe("agent templates", () => {
     await page.goto(agentUrl);
     await expect(page.getByText("reports", { exact: true })).toBeVisible();
     await expect(page.getByText("archive", { exact: true })).toHaveCount(0);
+  });
+});
 
-    // Renaming moves the name and keeps the identifier.
-    const identifier = agentUrl.split("/").at(-1) ?? "";
+test.describe("named agents", () => {
+  test("renaming moves the name and keeps the identifier", async ({
+    page,
+    signedIn,
+  }) => {
+    const identifier = await defineAgent(page, signedIn, "Scout");
+
     const rename = page.getByLabel("Name", { exact: true });
     await expect(rename).toBeEnabled();
     await rename.fill("Ranger");
     await page.getByRole("button", { name: "Save name" }).click();
     await expect(page.getByRole("status")).toHaveText("Renamed to Ranger.");
-    await page.goto(agents);
+    await page.goto(`/console/orgs/${signedIn.orgSlug}/agents`);
     const card = page.getByRole("listitem").filter({ hasText: identifier });
     await expect(
       card.getByRole("link", { name: "Ranger", exact: true }),
     ).toBeVisible();
     await expect(card.getByText("Awaiting operator")).toBeVisible();
+  });
+
+  test("a team and a policy take a defined agent by name before any claim", async ({
+    page,
+    signedIn,
+  }) => {
+    const identifier = await defineAgent(page, signedIn, "Ranger");
 
     // A team takes the agent by name before any operator claims it: the
     // membership is its GRN, minted with the definition.
@@ -117,12 +155,17 @@ test.describe("agent templates", () => {
       "Agent",
     );
 
-    // A policy can be given to it by the same name.
+    // A policy can be given to it by the same name: its policies are
+    // shown under that name.
     await page.goto(
       `/console/orgs/${signedIn.orgSlug}/permissions/attachments?subject=${encodeURIComponent(`agent:${identifier}`)}`,
     );
     await expect(
-      page.getByText(`Ranger (${identifier}) · awaiting operator`).first(),
+      page.getByRole("heading", {
+        level: 2,
+        name: `Ranger (${identifier}) · awaiting operator · Agent`,
+        exact: true,
+      }),
     ).toBeVisible();
   });
 });

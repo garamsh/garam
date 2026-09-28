@@ -71,8 +71,8 @@ func (s *PostgresStore) ReportConfiguration(ctx context.Context, operator, agent
 		Grn:         agentGRN.String(),
 		OperatorGrn: operator.String(),
 		Epoch:       e,
-		Revision:   r,
-		ReportedAt: stamp(time.Now().UTC()),
+		Revision:    r,
+		ReportedAt:  stamp(time.Now().UTC()),
 	}
 	switch o := outcome.(type) {
 	case ConfigurationApplied:

@@ -60,6 +60,17 @@ var (
 	// than the one it authenticated as. What an agent says about
 	// itself is its own to report (ADR-0012).
 	ErrNotTheAgent = errorx.New(errorx.KindPermissionDenied, "caller is not the agent")
+	// ErrRevisionConflict refuses a save made against a revision the
+	// definition has moved past: another save landed after the editor
+	// read it, and writing over that one would lose it (ADR-0076).
+	ErrRevisionConflict = errorx.New(errorx.KindAborted, "agent definition revision has changed")
+	// ErrRevisionAhead refuses an acknowledgement of a revision the
+	// definition has not reached: garam never served it.
+	ErrRevisionAhead = errorx.New(errorx.KindFailedPrecondition, "configuration revision is ahead of the definition")
+	// ErrRevisionSuperseded refuses an acknowledgement older than the
+	// one the same assignment epoch already gave, which it would
+	// otherwise write over (ADR-0076).
+	ErrRevisionSuperseded = errorx.New(errorx.KindFailedPrecondition, "configuration revision is older than the one acknowledged")
 )
 
 // ProvisioningState is what the operator reports about the agent's pod
@@ -135,6 +146,10 @@ type OrgCounts struct {
 
 // Agent is an autonomous actor owned by an organization. Which operator
 // runs it is an Assignment, not part of the Agent.
+//
+// The fields ADR-0076 added are exported, as `structure.md` asks of
+// what an aggregate persists; the fields before them keep their
+// accessors until #1083 converts this domain.
 type Agent struct {
 	grn          grn.GRN
 	orgGRN       grn.GRN
@@ -142,6 +157,13 @@ type Agent struct {
 	runtime      RuntimeState
 	createdAt    time.Time
 	updatedAt    time.Time
+	// HealthReportedAt is when a provisioning or runtime report last
+	// landed, or nil where none has since garam began recording it.
+	HealthReportedAt *time.Time
+	// Configuration is the operator's last accepted acknowledgement of
+	// a revision, or nil where none was ever given: application is then
+	// unknown, whatever the health reports say.
+	Configuration *ConfigurationReport
 }
 
 // New constructs an Agent owned by orgGRN, before an operator has

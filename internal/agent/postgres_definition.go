@@ -22,6 +22,10 @@ func (s *PostgresStore) Define(ctx context.Context, d *Definition) error {
 	if err != nil {
 		return errorx.Wrap(err, "define: values", errorx.KindInternal)
 	}
+	revision, err := narrowRevision(d.Revision)
+	if err != nil {
+		return errorx.Wrap(err, "define: revision", errorx.KindInvalidArgument)
+	}
 	err = s.q.CreateAgentDefinition(ctx, db.CreateAgentDefinitionParams{
 		AgentGrn:    d.agentGRN.String(),
 		OrgGrn:      d.orgGRN.String(),
@@ -29,8 +33,21 @@ func (s *PostgresStore) Define(ctx context.Context, d *Definition) error {
 		AgentValues: values,
 		DefinedBy:   d.definedBy.String(),
 		CreatedAt:   stamp(d.createdAt),
+		Revision:    revision,
+		RevisedAt:   stamp(d.RevisedAt),
+		RevisedBy:   d.RevisedBy.String(),
 	})
 	return pgxerr.Classify(err, "define", nil, nil)
+}
+
+// GetDefinition returns the definition naming the agent, or
+// ErrDefinitionNotFound.
+func (s *PostgresStore) GetDefinition(ctx context.Context, agentGRN grn.GRN) (*Definition, error) {
+	row, err := s.q.GetAgentDefinition(ctx, agentGRN.String())
+	if err != nil {
+		return nil, pgxerr.Classify(err, "get definition", ErrDefinitionNotFound, nil)
+	}
+	return rowToDefinition(row)
 }
 
 // ListDefinitionsByOrg returns the organization's definitions.
@@ -66,6 +83,9 @@ func (s *PostgresStore) ListDefinitionsByOperator(ctx context.Context, operatorG
 			AgentValues: row.AgentValues,
 			DefinedBy:   row.DefinedBy,
 			CreatedAt:   row.CreatedAt,
+			Revision:    row.Revision,
+			RevisedAt:   row.RevisedAt,
+			RevisedBy:   row.RevisedBy,
 		})
 		if err != nil {
 			return nil, err
@@ -182,6 +202,14 @@ func rowToDefinition(row db.AgentDefinition) (*Definition, error) {
 	if err != nil {
 		return nil, errorx.Wrap(err, "definition values", errorx.KindInternal)
 	}
+	revision, err := ParseRevision(int(row.Revision))
+	if err != nil {
+		return nil, errorx.Wrap(err, "definition revision", errorx.KindInternal)
+	}
+	revisedBy, err := grn.Parse(row.RevisedBy)
+	if err != nil {
+		return nil, errorx.Wrap(err, "definition revised by", errorx.KindInternal)
+	}
 	return &Definition{
 		agentGRN:    agentGRN,
 		orgGRN:      orgGRN,
@@ -189,5 +217,8 @@ func rowToDefinition(row db.AgentDefinition) (*Definition, error) {
 		values:      values,
 		definedBy:   definedBy,
 		createdAt:   row.CreatedAt.Time,
+		Revision:    revision,
+		RevisedAt:   row.RevisedAt.Time,
+		RevisedBy:   revisedBy,
 	}, nil
 }

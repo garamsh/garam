@@ -98,8 +98,8 @@ func (q *Queries) CreateAgent(ctx context.Context, arg CreateAgentParams) error 
 }
 
 const createAgentDefinition = `-- name: CreateAgentDefinition :exec
-INSERT INTO agent_definitions (agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at)
-VALUES ($1, $2, $3, $4, $5, $6)
+INSERT INTO agent_definitions (agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at, revision, revised_at, revised_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 `
 
 type CreateAgentDefinitionParams struct {
@@ -109,10 +109,14 @@ type CreateAgentDefinitionParams struct {
 	AgentValues []byte
 	DefinedBy   string
 	CreatedAt   pgtype.Timestamptz
+	Revision    int32
+	RevisedAt   pgtype.Timestamptz
+	RevisedBy   string
 }
 
-// A definition is written once and never rewritten: garam cannot tell
-// whether an operator has acted on one, so there is no update here.
+// A definition's operator is written once and never rewritten: garam
+// cannot move an agent between operators here. Its values are revised
+// by ReviseAgentDefinitionValues, each save a new revision (ADR-0076).
 func (q *Queries) CreateAgentDefinition(ctx context.Context, arg CreateAgentDefinitionParams) error {
 	_, err := q.db.Exec(ctx, createAgentDefinition,
 		arg.AgentGrn,
@@ -121,12 +125,15 @@ func (q *Queries) CreateAgentDefinition(ctx context.Context, arg CreateAgentDefi
 		arg.AgentValues,
 		arg.DefinedBy,
 		arg.CreatedAt,
+		arg.Revision,
+		arg.RevisedAt,
+		arg.RevisedBy,
 	)
 	return err
 }
 
 const getAgent = `-- name: GetAgent :one
-SELECT grn, org_grn, provisioning_state, runtime_state, created_at, updated_at FROM agents WHERE grn = $1
+SELECT grn, org_grn, provisioning_state, runtime_state, created_at, updated_at, health_reported_at, configuration_epoch, configuration_revision, configuration_outcome, configuration_reason, configuration_ignored_keys, configuration_reported_at FROM agents WHERE grn = $1
 `
 
 func (q *Queries) GetAgent(ctx context.Context, grn string) (Agent, error) {
@@ -139,6 +146,13 @@ func (q *Queries) GetAgent(ctx context.Context, grn string) (Agent, error) {
 		&i.RuntimeState,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.HealthReportedAt,
+		&i.ConfigurationEpoch,
+		&i.ConfigurationRevision,
+		&i.ConfigurationOutcome,
+		&i.ConfigurationReason,
+		&i.ConfigurationIgnoredKeys,
+		&i.ConfigurationReportedAt,
 	)
 	return i, err
 }
@@ -156,6 +170,27 @@ func (q *Queries) GetAgentAssignment(ctx context.Context, agentGrn string) (Agen
 		&i.Epoch,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getAgentDefinition = `-- name: GetAgentDefinition :one
+SELECT agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at, revision, revised_at, revised_by FROM agent_definitions WHERE agent_grn = $1
+`
+
+func (q *Queries) GetAgentDefinition(ctx context.Context, agentGrn string) (AgentDefinition, error) {
+	row := q.db.QueryRow(ctx, getAgentDefinition, agentGrn)
+	var i AgentDefinition
+	err := row.Scan(
+		&i.AgentGrn,
+		&i.OrgGrn,
+		&i.OperatorGrn,
+		&i.AgentValues,
+		&i.DefinedBy,
+		&i.CreatedAt,
+		&i.Revision,
+		&i.RevisedAt,
+		&i.RevisedBy,
 	)
 	return i, err
 }
@@ -194,7 +229,7 @@ func (q *Queries) ListAgentAssignmentsByOrg(ctx context.Context, orgGrn string) 
 }
 
 const listAgentDefinitionsByOperator = `-- name: ListAgentDefinitionsByOperator :many
-SELECT d.agent_grn, d.org_grn, d.operator_grn, d.agent_values, d.defined_by, d.created_at, a.epoch AS claim_epoch, a.created_at AS claim_created_at, a.updated_at AS claim_updated_at
+SELECT d.agent_grn, d.org_grn, d.operator_grn, d.agent_values, d.defined_by, d.created_at, d.revision, d.revised_at, d.revised_by, a.epoch AS claim_epoch, a.created_at AS claim_created_at, a.updated_at AS claim_updated_at
 FROM agent_definitions d
 LEFT JOIN agent_assignments a ON a.agent_grn = d.agent_grn
 WHERE d.operator_grn = $1
@@ -208,6 +243,9 @@ type ListAgentDefinitionsByOperatorRow struct {
 	AgentValues    []byte
 	DefinedBy      string
 	CreatedAt      pgtype.Timestamptz
+	Revision       int32
+	RevisedAt      pgtype.Timestamptz
+	RevisedBy      string
 	ClaimEpoch     pgtype.Int4
 	ClaimCreatedAt pgtype.Timestamptz
 	ClaimUpdatedAt pgtype.Timestamptz
@@ -231,6 +269,9 @@ func (q *Queries) ListAgentDefinitionsByOperator(ctx context.Context, operatorGr
 			&i.AgentValues,
 			&i.DefinedBy,
 			&i.CreatedAt,
+			&i.Revision,
+			&i.RevisedAt,
+			&i.RevisedBy,
 			&i.ClaimEpoch,
 			&i.ClaimCreatedAt,
 			&i.ClaimUpdatedAt,
@@ -246,7 +287,7 @@ func (q *Queries) ListAgentDefinitionsByOperator(ctx context.Context, operatorGr
 }
 
 const listAgentDefinitionsByOrg = `-- name: ListAgentDefinitionsByOrg :many
-SELECT agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at FROM agent_definitions WHERE org_grn = $1 ORDER BY agent_grn
+SELECT agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at, revision, revised_at, revised_by FROM agent_definitions WHERE org_grn = $1 ORDER BY agent_grn
 `
 
 func (q *Queries) ListAgentDefinitionsByOrg(ctx context.Context, orgGrn string) ([]AgentDefinition, error) {
@@ -265,6 +306,9 @@ func (q *Queries) ListAgentDefinitionsByOrg(ctx context.Context, orgGrn string) 
 			&i.AgentValues,
 			&i.DefinedBy,
 			&i.CreatedAt,
+			&i.Revision,
+			&i.RevisedAt,
+			&i.RevisedBy,
 		); err != nil {
 			return nil, err
 		}
@@ -277,7 +321,7 @@ func (q *Queries) ListAgentDefinitionsByOrg(ctx context.Context, orgGrn string) 
 }
 
 const listAgentsByOrg = `-- name: ListAgentsByOrg :many
-SELECT grn, org_grn, provisioning_state, runtime_state, created_at, updated_at FROM agents
+SELECT grn, org_grn, provisioning_state, runtime_state, created_at, updated_at, health_reported_at, configuration_epoch, configuration_revision, configuration_outcome, configuration_reason, configuration_ignored_keys, configuration_reported_at FROM agents
 WHERE org_grn = $1
 ORDER BY grn
 LIMIT $3 OFFSET $2
@@ -305,6 +349,13 @@ func (q *Queries) ListAgentsByOrg(ctx context.Context, arg ListAgentsByOrgParams
 			&i.RuntimeState,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.HealthReportedAt,
+			&i.ConfigurationEpoch,
+			&i.ConfigurationRevision,
+			&i.ConfigurationOutcome,
+			&i.ConfigurationReason,
+			&i.ConfigurationIgnoredKeys,
+			&i.ConfigurationReportedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -317,7 +368,7 @@ func (q *Queries) ListAgentsByOrg(ctx context.Context, arg ListAgentsByOrgParams
 }
 
 const lockAgentDefinition = `-- name: LockAgentDefinition :one
-SELECT agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at FROM agent_definitions WHERE agent_grn = $1 FOR UPDATE
+SELECT agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at, revision, revised_at, revised_by FROM agent_definitions WHERE agent_grn = $1 FOR UPDATE
 `
 
 // LockAgentDefinition is the lock a claim serializes on: two claims of
@@ -333,6 +384,78 @@ func (q *Queries) LockAgentDefinition(ctx context.Context, agentGrn string) (Age
 		&i.AgentValues,
 		&i.DefinedBy,
 		&i.CreatedAt,
+		&i.Revision,
+		&i.RevisedAt,
+		&i.RevisedBy,
+	)
+	return i, err
+}
+
+const reportAgentConfiguration = `-- name: ReportAgentConfiguration :one
+UPDATE agents SET
+    configuration_epoch        = $1::integer,
+    configuration_revision     = $2::integer,
+    configuration_outcome      = $3::text,
+    configuration_reason       = $4::text,
+    configuration_ignored_keys = $5::text[],
+    configuration_reported_at  = $6::timestamptz
+WHERE grn = $7
+  AND EXISTS (
+      SELECT 1 FROM agent_assignments a
+      WHERE a.agent_grn = agents.grn AND a.epoch = $1::integer
+  )
+  AND EXISTS (
+      SELECT 1 FROM agent_definitions d
+      WHERE d.agent_grn = agents.grn
+        AND d.revision >= $2::integer
+  )
+  AND (configuration_epoch IS DISTINCT FROM $1::integer
+       OR configuration_revision <= $2::integer)
+RETURNING grn, org_grn, provisioning_state, runtime_state, created_at, updated_at, health_reported_at, configuration_epoch, configuration_revision, configuration_outcome, configuration_reason, configuration_ignored_keys, configuration_reported_at
+`
+
+type ReportAgentConfigurationParams struct {
+	Epoch       int32
+	Revision    int32
+	Outcome     string
+	Reason      pgtype.Text
+	IgnoredKeys []string
+	ReportedAt  pgtype.Timestamptz
+	Grn         string
+}
+
+// ReportAgentConfiguration records the operator's acknowledgement of a
+// revision, at the epoch the agent is currently assigned at. It matches
+// no row for a revision the definition has not reached, nor for one
+// older than what the same epoch already acknowledged; an
+// acknowledgement made at an earlier epoch is no bound, because it was
+// another assignment's (ADR-0076). The same revision again replaces the
+// last report, in the order garam receives them.
+func (q *Queries) ReportAgentConfiguration(ctx context.Context, arg ReportAgentConfigurationParams) (Agent, error) {
+	row := q.db.QueryRow(ctx, reportAgentConfiguration,
+		arg.Epoch,
+		arg.Revision,
+		arg.Outcome,
+		arg.Reason,
+		arg.IgnoredKeys,
+		arg.ReportedAt,
+		arg.Grn,
+	)
+	var i Agent
+	err := row.Scan(
+		&i.Grn,
+		&i.OrgGrn,
+		&i.ProvisioningState,
+		&i.RuntimeState,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.HealthReportedAt,
+		&i.ConfigurationEpoch,
+		&i.ConfigurationRevision,
+		&i.ConfigurationOutcome,
+		&i.ConfigurationReason,
+		&i.ConfigurationIgnoredKeys,
+		&i.ConfigurationReportedAt,
 	)
 	return i, err
 }
@@ -340,13 +463,14 @@ func (q *Queries) LockAgentDefinition(ctx context.Context, agentGrn string) (Age
 const reportAgentProvisioningState = `-- name: ReportAgentProvisioningState :one
 UPDATE agents SET
     provisioning_state = $1,
-    updated_at         = $2
+    updated_at         = $2,
+    health_reported_at = $2
 WHERE grn = $3
   AND EXISTS (
       SELECT 1 FROM agent_assignments a
       WHERE a.agent_grn = agents.grn AND a.epoch = $4
   )
-RETURNING grn, org_grn, provisioning_state, runtime_state, created_at, updated_at
+RETURNING grn, org_grn, provisioning_state, runtime_state, created_at, updated_at, health_reported_at, configuration_epoch, configuration_revision, configuration_outcome, configuration_reason, configuration_ignored_keys, configuration_reported_at
 `
 
 type ReportAgentProvisioningStateParams struct {
@@ -358,7 +482,8 @@ type ReportAgentProvisioningStateParams struct {
 
 // ReportAgentProvisioningState and ReportAgentRuntimeState write at the
 // epoch the agent is currently assigned at; any other epoch matches no
-// row, and an agent with no assignment matches none either.
+// row, and an agent with no assignment matches none either. Each moves
+// the health report time, which creation does not write (ADR-0076).
 func (q *Queries) ReportAgentProvisioningState(ctx context.Context, arg ReportAgentProvisioningStateParams) (Agent, error) {
 	row := q.db.QueryRow(ctx, reportAgentProvisioningState,
 		arg.ProvisioningState,
@@ -374,20 +499,28 @@ func (q *Queries) ReportAgentProvisioningState(ctx context.Context, arg ReportAg
 		&i.RuntimeState,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.HealthReportedAt,
+		&i.ConfigurationEpoch,
+		&i.ConfigurationRevision,
+		&i.ConfigurationOutcome,
+		&i.ConfigurationReason,
+		&i.ConfigurationIgnoredKeys,
+		&i.ConfigurationReportedAt,
 	)
 	return i, err
 }
 
 const reportAgentRuntimeState = `-- name: ReportAgentRuntimeState :one
 UPDATE agents SET
-    runtime_state = $1,
-    updated_at    = $2
+    runtime_state      = $1,
+    updated_at         = $2,
+    health_reported_at = $2
 WHERE grn = $3
   AND EXISTS (
       SELECT 1 FROM agent_assignments a
       WHERE a.agent_grn = agents.grn AND a.epoch = $4
   )
-RETURNING grn, org_grn, provisioning_state, runtime_state, created_at, updated_at
+RETURNING grn, org_grn, provisioning_state, runtime_state, created_at, updated_at, health_reported_at, configuration_epoch, configuration_revision, configuration_outcome, configuration_reason, configuration_ignored_keys, configuration_reported_at
 `
 
 type ReportAgentRuntimeStateParams struct {
@@ -412,6 +545,58 @@ func (q *Queries) ReportAgentRuntimeState(ctx context.Context, arg ReportAgentRu
 		&i.RuntimeState,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.HealthReportedAt,
+		&i.ConfigurationEpoch,
+		&i.ConfigurationRevision,
+		&i.ConfigurationOutcome,
+		&i.ConfigurationReason,
+		&i.ConfigurationIgnoredKeys,
+		&i.ConfigurationReportedAt,
+	)
+	return i, err
+}
+
+const reviseAgentDefinitionValues = `-- name: ReviseAgentDefinitionValues :one
+UPDATE agent_definitions SET
+    agent_values = $1,
+    revision     = revision + 1,
+    revised_at   = $2,
+    revised_by   = $3
+WHERE agent_grn = $4
+  AND revision = $5
+RETURNING agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at, revision, revised_at, revised_by
+`
+
+type ReviseAgentDefinitionValuesParams struct {
+	AgentValues      []byte
+	RevisedAt        pgtype.Timestamptz
+	RevisedBy        string
+	AgentGrn         string
+	ExpectedRevision int32
+}
+
+// ReviseAgentDefinitionValues replaces the values only where the
+// definition is still at the revision the editor read, so of two
+// editors who read one revision the second matches no row.
+func (q *Queries) ReviseAgentDefinitionValues(ctx context.Context, arg ReviseAgentDefinitionValuesParams) (AgentDefinition, error) {
+	row := q.db.QueryRow(ctx, reviseAgentDefinitionValues,
+		arg.AgentValues,
+		arg.RevisedAt,
+		arg.RevisedBy,
+		arg.AgentGrn,
+		arg.ExpectedRevision,
+	)
+	var i AgentDefinition
+	err := row.Scan(
+		&i.AgentGrn,
+		&i.OrgGrn,
+		&i.OperatorGrn,
+		&i.AgentValues,
+		&i.DefinedBy,
+		&i.CreatedAt,
+		&i.Revision,
+		&i.RevisedAt,
+		&i.RevisedBy,
 	)
 	return i, err
 }

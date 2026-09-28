@@ -81,8 +81,13 @@ func isValueKey(k string) bool {
 // from (ADR-0026).
 //
 // It is a record and not a command: garam learns that an agent exists
-// when an operator reports it and not before (ADR-0012), and a
-// definition is written once.
+// when an operator reports it and not before (ADR-0012). Its operator
+// is written once; its values are revised, each save a new revision
+// that no operator is known to have applied (ADR-0076).
+//
+// The fields ADR-0076 added are exported, as `structure.md` asks of
+// what an aggregate persists; the fields before them keep their
+// accessors until #1083 converts this domain.
 type Definition struct {
 	agentGRN    grn.GRN
 	orgGRN      grn.GRN
@@ -90,6 +95,12 @@ type Definition struct {
 	values      Values
 	definedBy   grn.GRN
 	createdAt   time.Time
+	// Revision numbers the values the definition holds now.
+	Revision Revision
+	// RevisedAt and RevisedBy are when and by whom that revision was
+	// saved: for the first, when and by whom the agent was defined.
+	RevisedAt time.Time
+	RevisedBy grn.GRN
 }
 
 // NewDefinition mints the identity of the agent orgGRN is defining and
@@ -112,13 +123,17 @@ func NewDefinition(orgGRN, operatorGRN grn.GRN, values Values, definedBy grn.GRN
 	if values == nil {
 		values = Values{}
 	}
+	now := time.Now().UTC()
 	return &Definition{
 		agentGRN:    g,
 		orgGRN:      orgGRN,
 		operatorGRN: operatorGRN,
 		values:      values,
 		definedBy:   definedBy,
-		createdAt:   time.Now().UTC(),
+		createdAt:   now,
+		Revision:    1,
+		RevisedAt:   now,
+		RevisedBy:   definedBy,
 	}, nil
 }
 

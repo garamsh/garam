@@ -1564,8 +1564,8 @@ func TestAgentDefinition_StaysInsideItsOrgAndHoldsAnObject(t *testing.T) {
 	}
 	for _, tt := range rejected {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := p.Exec(ctx, `INSERT INTO agent_definitions (agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at)
-				VALUES ($1, $2, $3, $4::jsonb, $5, now())`,
+			_, err := p.Exec(ctx, `INSERT INTO agent_definitions (agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at, revision, revised_at, revised_by)
+				VALUES ($1, $2, $3, $4::jsonb, $5, now(), 1, now(), $5)`,
 				tt.agentGRN.String(), orgGRN.String(), tt.operator.String(), tt.values, grn.New(grn.RootOwner, grn.DefaultProject, "user", "ada").String())
 			var refused *pgconn.PgError
 			require.ErrorAs(t, err, &refused, "the row was not refused by Postgres")
@@ -1575,8 +1575,8 @@ func TestAgentDefinition_StaysInsideItsOrgAndHoldsAnObject(t *testing.T) {
 
 	// The same statement naming this org's agent and operator is
 	// accepted, so the constraints reject a row rather than every row.
-	_, err = p.Exec(ctx, `INSERT INTO agent_definitions (agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at)
-		VALUES ($1, $2, $3, $4::jsonb, $5, now())`,
+	_, err = p.Exec(ctx, `INSERT INTO agent_definitions (agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at, revision, revised_at, revised_by)
+		VALUES ($1, $2, $3, $4::jsonb, $5, now(), 1, now(), $5)`,
 		g.String(), orgGRN.String(), registered.String(), `{"model":"haiku"}`,
 		grn.New(grn.RootOwner, grn.DefaultProject, "user", "ada").String())
 	require.NoError(t, err)

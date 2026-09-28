@@ -53,6 +53,12 @@ type Service interface {
 	// is read: the connection is what bounds it, and the epoch is what
 	// fences it.
 	ReportRuntimeState(ctx context.Context, caller, agentGRN grn.GRN, epoch int, state RuntimeState) error
+	// ReportConfiguration records what the calling operator says it did
+	// with a revision of the agent's definition (ADR-0076). It is
+	// bounded by the assignment as ReportProvisioningState is, and a
+	// revision the definition has not reached, or one older than the
+	// same epoch already acknowledged, is refused and writes nothing.
+	ReportConfiguration(ctx context.Context, operator, agentGRN grn.GRN, epoch int, revision Revision, outcome ConfigurationOutcome) error
 }
 
 type service struct {
@@ -162,6 +168,19 @@ func (s *service) ReportRuntimeState(ctx context.Context, caller, agentGRN grn.G
 		return ErrNotTheAgent
 	}
 	_, err := s.store.ReportRuntimeState(ctx, agentGRN, epoch, state)
+	return err
+}
+
+func (s *service) ReportConfiguration(ctx context.Context, operator, agentGRN grn.GRN, epoch int, revision Revision, outcome ConfigurationOutcome) error {
+	if err := operates(operator); err != nil {
+		return err
+	}
+	if err := s.holds(ctx, operator, agentGRN); err != nil {
+		return err
+	}
+	// The agent it answers with carries the other party's runtime
+	// state, as it does for the provisioning report.
+	_, err := s.store.ReportConfiguration(ctx, agentGRN, epoch, revision, outcome)
 	return err
 }
 

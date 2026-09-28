@@ -554,6 +554,10 @@ type fakeAgentStore struct {
 	agents      map[string]*agent.Agent
 	assignments map[string]*agent.Assignment
 	definitions map[string]*agent.Definition
+	// revised holds the values each revision saved, keyed by agent
+	// GRN. A definition's values are unexported, so this double
+	// records what the handler handed it rather than rewrite them.
+	revised map[string]agent.Values
 }
 
 func newFakeAgentStore() *fakeAgentStore {
@@ -561,7 +565,27 @@ func newFakeAgentStore() *fakeAgentStore {
 		agents:      map[string]*agent.Agent{},
 		assignments: map[string]*agent.Assignment{},
 		definitions: map[string]*agent.Definition{},
+		revised:     map[string]agent.Values{},
 	}
+}
+
+// ReviseDefinition keeps the store's revision comparison: a save at any
+// revision but the stored one is ErrRevisionConflict and moves nothing.
+func (s *fakeAgentStore) ReviseDefinition(_ context.Context, agentGRN grn.GRN, expected agent.Revision, values agent.Values, by grn.GRN) (*agent.Definition, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	d, ok := s.definitions[agentGRN.String()]
+	if !ok {
+		return nil, agent.ErrDefinitionNotFound
+	}
+	if d.Revision != expected {
+		return nil, agent.ErrRevisionConflict
+	}
+	d.Revision++
+	d.RevisedAt = time.Now().UTC()
+	d.RevisedBy = by
+	s.revised[agentGRN.String()] = values
+	return d, nil
 }
 
 func (s *fakeAgentStore) Create(_ context.Context, a *agent.Agent) error {

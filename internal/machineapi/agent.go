@@ -115,3 +115,64 @@ func (s *Server) ReportRuntimeState(w http.ResponseWriter, r *http.Request, agen
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// ReportConfigurationState records what the calling operator says it
+// did with a revision of the agent's definition (ADR-0076). The
+// outcome is parsed whole here, so an application carrying a reason or
+// a rejection carrying ignored keys is refused rather than half read.
+// `internal/agent` decides which agents an operator may report on and
+// which revisions it may acknowledge.
+func (s *Server) ReportConfigurationState(w http.ResponseWriter, r *http.Request, agentGRN machinegen.AgentGrn) {
+	operator, subject, ok := parties(w, r, agentGRN)
+	if !ok {
+		return
+	}
+	var report machinegen.ConfigurationStateReport
+	if err := json.NewDecoder(r.Body).Decode(&report); err != nil {
+		writeError(w, errorx.Wrap(err, "configuration state report", errorx.KindInvalidArgument))
+		return
+	}
+	revision, err := agent.ParseRevision(report.Revision)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	outcome, err := configurationOutcome(report)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.agents.ReportConfiguration(r.Context(), operator, subject, report.Epoch, revision, outcome); err != nil {
+		writeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// configurationOutcome reads a report's outcome together with the one
+// field that outcome carries, and refuses the field the other carries.
+func configurationOutcome(report machinegen.ConfigurationStateReport) (agent.ConfigurationOutcome, error) {
+	switch report.Outcome {
+	case machinegen.Applied:
+		if report.Reason != nil {
+			return nil, errorx.New(errorx.KindInvalidArgument, "configuration state report: an application carries no reason")
+		}
+		if report.IgnoredKeys == nil {
+			return nil, errorx.New(errorx.KindInvalidArgument, "configuration state report: an application names its ignored keys")
+		}
+		return agent.NewConfigurationApplied(*report.IgnoredKeys)
+	case machinegen.Rejected:
+		if report.IgnoredKeys != nil {
+			return nil, errorx.New(errorx.KindInvalidArgument, "configuration state report: a rejection names no ignored keys")
+		}
+		if report.Reason == nil {
+			return nil, errorx.New(errorx.KindInvalidArgument, "configuration state report: a rejection carries a reason")
+		}
+		reason, err := agent.ParseRejectionReason(*report.Reason)
+		if err != nil {
+			return nil, err
+		}
+		return agent.ConfigurationRejected{Reason: reason}, nil
+	}
+	return nil, errorx.New(errorx.KindInvalidArgument, "configuration state report: unknown outcome")
+}

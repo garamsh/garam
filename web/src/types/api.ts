@@ -436,9 +436,31 @@ export interface paths {
         put?: never;
         /**
          * Define an agent. Requires the `member` role.
-         * @description Records what an agent should be — which operator is to run it, and the values that operator constructs it from — and mints the GRN of the agent it describes (ADR-0026). It creates no agent: garam learns an agent exists when an operator reports one, so until then the minted GRN is answered here and nowhere under `/orgs/{org}/agents`. A definition is written once and has no update: nothing tells garam whether an operator has already acted on it.
+         * @description Records what an agent should be — which operator is to run it, and the values that operator constructs it from — and mints the GRN of the agent it describes (ADR-0026). It creates no agent: garam learns an agent exists when an operator reports one, so until then the minted GRN is answered here and nowhere under `/orgs/{org}/agents`. Its operator is written once and has no update. Its values are saved as revision 1, and `reviseAgentValues` saves later ones (ADR-0076).
          */
         post: operations["defineAgent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/agent-definitions/{agent}/values": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save new values for a defined agent. Requires the `member` role.
+         * @description Replaces the definition's values as its next revision, provided the definition still holds `expectedRevision` (ADR-0076). Where another save landed after the editor read it, the request is refused under `aborted` and nothing is written, so neither save silently replaces the other; reading the definition again gives the revision to retry against. Every accepted save raises the revision, identical values included.
+         *     Only the values move. The agent's GRN, its operator, any assignment a claim wrote and every team membership or policy attachment naming the GRN stand as they were.
+         *     A saved revision is what the organization asked for and not what runs: garam tells no operator, and learns whether one applied it only from that operator's acknowledgement, which `Agent`'s `configuration` carries. It is authorized on `agent:configure`.
+         */
+        put: operations["reviseAgentValues"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -995,7 +1017,7 @@ export interface components {
              */
             since: string;
         };
-        /** @description An agent an operator provisioned outside garam. Provisioning state and runtime state are separate facts reported by different parties, and neither substitutes for the other. `assignment` is absent while no operator holds the agent, and `updatedAt` is when a state report last landed — either party's report moves it. */
+        /** @description An agent an operator provisioned outside garam. Provisioning state and runtime state are separate facts reported by different parties, and neither substitutes for the other. `assignment` is absent while no operator holds the agent. `updatedAt` moves when the agent is created and when either party's state report lands; `healthReportedAt` moves only on a report. `configuration` is a separate fact again, with its own time: a ready pod says nothing about which revision it runs. */
         Agent: {
             /** @example grn:acme:default:agent:9f2ac1b40d8e7a35 */
             grn: string;
@@ -1007,6 +1029,36 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            /**
+             * Format: date-time
+             * @description When a provisioning or runtime report last landed. Absent where none has since garam began recording this time (ADR-0076); no earlier time is inferred.
+             */
+            healthReportedAt?: string;
+            configuration?: components["schemas"]["AgentConfigurationReport"];
+        };
+        /**
+         * @description What the operator says it did with a revision: applied it, apart from any `ignoredKeys`, or rejected it.
+         * @enum {string}
+         */
+        AgentConfigurationOutcome: "applied" | "rejected";
+        /**
+         * @description The last acknowledgement garam accepted from the operator holding the agent, of one revision of its definition (ADR-0076). Absent from `Agent` where none was ever given, which is unknown: no current operator reports one.
+         *     It is the operator's claim and garam verifies none of it. It describes the current assignment only while `epoch` equals `assignment.epoch`; after a reassignment it is the previous operator's. `revision` below the definition's revision means the saved values are not yet acknowledged. `applied` with `ignoredKeys` is applied in part.
+         */
+        AgentConfigurationReport: {
+            /** @description The assignment epoch the acknowledging operator held. */
+            epoch: number;
+            revision: number;
+            outcome: components["schemas"]["AgentConfigurationOutcome"];
+            /** @description Present with `applied`: the revision's keys the operator says it did not apply, possibly none. */
+            ignoredKeys?: string[];
+            /** @description Present with `rejected`: the operator's reason, at most 500 characters. */
+            reason?: string;
+            /**
+             * Format: date-time
+             * @description When garam received the acknowledgement, not when the operator acted. A later acknowledgement of the same revision replaces this one in the order garam receives them.
+             */
+            reportedAt: string;
         };
         /**
          * @description Where an operator stands in obtaining a certificate from garam. It is derived from what garam already holds and reported by nobody, so no member says whether the operator is running. `enrolled` is an operator garam has issued a certificate for: it says one was obtained, not that it is still valid — garam records no expiry beside the record and asks the operator nothing. `pending` is an operator with no certificate whose enrollment token is still spendable, which lasts at most the ten minutes the token does. `expired` is an operator with no certificate and no spendable token: the token was lost or ran out, and `mintOperatorEnrollment` answers such an operator a fresh one (ADR-0067), which is the state that operation exists for. An operator that holds a certificate reads `enrolled` however much of its token is left, because the certificate is the outcome the token exists to produce.
@@ -1094,7 +1146,13 @@ export interface components {
             operatorGrn: string;
             values?: components["schemas"]["AgentValues"];
         };
-        /** @description What an organization says an agent should be (ADR-0026). It is a record and not an agent: no state is reported on it, and it carries none of the fields an `Agent` carries. `agentGrn` is the identity garam minted for the agent this definition describes, and no agent answers under it until the claim. */
+        /** @description New values for a defined agent, and the revision the editor read. */
+        AgentValuesRevision: {
+            /** @description The definition's revision when the editor read it. A save is refused under `aborted` once the definition holds another. */
+            expectedRevision: number;
+            values: components["schemas"]["AgentValues"];
+        };
+        /** @description What an organization says an agent should be (ADR-0026). It is a record and not an agent: no state is reported on it, and it carries none of the fields an `Agent` carries. `agentGrn` is the identity garam minted for the agent this definition describes, and no agent answers under it until the claim. `revision` numbers the values it holds now; that revision was saved at `revisedAt` by `revisedBy` (ADR-0076). Saving is not deploying: which revision an operator applied is its report, on `Agent`. */
         AgentDefinition: {
             /** @example grn:acme:default:agent:9f2ac1b40d8e7a35 */
             agentGrn: string;
@@ -1109,6 +1167,14 @@ export interface components {
             definedBy: string;
             /** Format: date-time */
             createdAt: string;
+            revision: number;
+            /** Format: date-time */
+            revisedAt: string;
+            /**
+             * @description The member that saved this revision.
+             * @example grn:root:default:user:117421510527410544321
+             */
+            revisedBy: string;
         };
         Error: {
             /** @description errorx kind, e.g. `not_found`, `permission_denied`. */
@@ -2127,6 +2193,40 @@ export interface operations {
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
+        };
+    };
+    reviseAgentValues: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description Agent identifier (the last GRN segment). */
+                agent: components["parameters"]["agent"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentValuesRevision"];
+            };
+        };
+        responses: {
+            /** @description The definition as saved, at its new revision. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentDefinition"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
         };
     };
     listOperators: {

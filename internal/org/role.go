@@ -99,6 +99,11 @@ const (
 	// It is not provisioning one: what an operator made is reported,
 	// and no action here grants it.
 	ActionAgentDefine = "agent:define"
+	// ActionAgentConfigure is revising the values of an agent the org
+	// defined (ADR-0076). It is granted where defining is, since the
+	// values are what defining writes, and it moves nothing an
+	// operator is known to have applied.
+	ActionAgentConfigure = "agent:configure"
 	// ActionAgentWatch is watching an agent work (ADR-0022). Reading an
 	// agent reports that it exists and what two parties say about its
 	// state; watching exposes the content of its work, which an
@@ -118,6 +123,7 @@ var (
 	adminMachineActions = []string{
 		ActionOperatorRead, ActionOperatorRegister, ActionOperatorUpdate,
 		ActionOperatorDelete, ActionAgentRead, ActionAgentDefine,
+		ActionAgentConfigure,
 	}
 	// memberMachineActions is what a member holds: it reads the
 	// operators an org has registered and registers none, because
@@ -125,6 +131,7 @@ var (
 	// administrative act registering already looks like.
 	memberMachineActions = []string{
 		ActionOperatorRead, ActionAgentRead, ActionAgentDefine,
+		ActionAgentConfigure,
 	}
 )
 

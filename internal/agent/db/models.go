@@ -9,12 +9,19 @@ import (
 )
 
 type Agent struct {
-	Grn               string
-	OrgGrn            string
-	ProvisioningState string
-	RuntimeState      string
-	CreatedAt         pgtype.Timestamptz
-	UpdatedAt         pgtype.Timestamptz
+	Grn                      string
+	OrgGrn                   string
+	ProvisioningState        string
+	RuntimeState             string
+	CreatedAt                pgtype.Timestamptz
+	UpdatedAt                pgtype.Timestamptz
+	HealthReportedAt         pgtype.Timestamptz
+	ConfigurationEpoch       pgtype.Int4
+	ConfigurationRevision    pgtype.Int4
+	ConfigurationOutcome     pgtype.Text
+	ConfigurationReason      pgtype.Text
+	ConfigurationIgnoredKeys []string
+	ConfigurationReportedAt  pgtype.Timestamptz
 }
 
 type AgentAssignment struct {
@@ -32,6 +39,9 @@ type AgentDefinition struct {
 	AgentValues []byte
 	DefinedBy   string
 	CreatedAt   pgtype.Timestamptz
+	Revision    int32
+	RevisedAt   pgtype.Timestamptz
+	RevisedBy   string
 }
 
 type Group struct {

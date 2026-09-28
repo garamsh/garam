@@ -13,6 +13,24 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for ConfigurationOutcome.
+const (
+	Applied  ConfigurationOutcome = "applied"
+	Rejected ConfigurationOutcome = "rejected"
+)
+
+// Valid indicates whether the value is a known member of the ConfigurationOutcome enum.
+func (e ConfigurationOutcome) Valid() bool {
+	switch e {
+	case Applied:
+		return true
+	case Rejected:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MessageState.
 const (
 	MessageStateClaimed   MessageState = "claimed"
@@ -108,13 +126,37 @@ type Claim struct {
 	Watchers int `json:"watchers"`
 }
 
-// Definition What an organization says an agent should be, answered to the operator it names (ADR-0026). `claim` is absent while no operator has claimed the definition and carries the agent's assignment epoch once one has — the only claimant a definition admits is the operator it names, so who claimed it is always the caller.
+// ConfigurationOutcome What an operator did with a revision: applied it, apart from the keys it names as ignored, or refused it.
+type ConfigurationOutcome string
+
+// ConfigurationStateReport One operator's acknowledgement of a revision, at the epoch it holds the agent. `ignoredKeys` accompanies `applied` and is required there, empty where the operator ignored no key; `reason` accompanies `rejected` and is required there. Either field beside the other outcome is refused.
+type ConfigurationStateReport struct {
+	// Epoch The epoch the reporter believes the assignment is on, as `createAgent` or `claimDefinition` answered with.
+	Epoch int `json:"epoch"`
+
+	// IgnoredKeys The revision's keys the operator did not apply. Each follows the key rule `Definition`'s values keep.
+	IgnoredKeys *[]string `json:"ignoredKeys,omitempty"`
+
+	// Outcome What an operator did with a revision: applied it, apart from the keys it names as ignored, or refused it.
+	Outcome ConfigurationOutcome `json:"outcome"`
+
+	// Reason Why the operator refused the revision: printable text of at most 500 characters, carrying no control character.
+	Reason *string `json:"reason,omitempty"`
+
+	// Revision The definition revision acknowledged, as `listDefinitions` answered it.
+	Revision int `json:"revision"`
+}
+
+// Definition What an organization says an agent should be, answered to the operator it names (ADR-0026). `claim` is absent while no operator has claimed the definition and carries the agent's assignment epoch once one has — the only claimant a definition admits is the operator it names, so who claimed it is always the caller. `revision` numbers the values answered, which the organization may replace with a later revision at any time (ADR-0076).
 type Definition struct {
 	// AgentGrn The identity garam minted for the agent this definition describes. No agent answers under it until the claim.
 	AgentGrn string `json:"agentGrn"`
 
 	// Claim The agent's assignment, first written by the claim (ADR-0033).
 	Claim *DefinitionClaim `json:"claim,omitempty"`
+
+	// Revision The revision of `values`. `reportConfigurationState` names it to say what the operator did with these values.
+	Revision int `json:"revision"`
 
 	// Values What the operator constructs the agent from. garam stores the keys and the strings and interprets neither.
 	Values map[string]string `json:"values"`
@@ -266,6 +308,9 @@ type ClaimId = string
 // MessageId defines model for message.
 type MessageId = string
 
+// ReportConfigurationStateJSONRequestBody defines body for ReportConfigurationState for application/json ContentType.
+type ReportConfigurationStateJSONRequestBody = ConfigurationStateReport
+
 // ReportProvisioningStateJSONRequestBody defines body for ReportProvisioningState for application/json ContentType.
 type ReportProvisioningStateJSONRequestBody = ProvisioningStateReport
 
@@ -298,6 +343,9 @@ type ServerInterface interface {
 	// RenewClaim Extend a claim while the message is still being worked on.
 	// (POST /agents/{agent}/claims/{claim}/renewal)
 	RenewClaim(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn, claimId ClaimId)
+	// ReportConfigurationState Report what the operator did with a revision of an agent's definition.
+	// (POST /agents/{agent}/configuration-state)
+	ReportConfigurationState(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn)
 	// ReportProvisioningState Report what the operator sees of an agent's pod.
 	// (POST /agents/{agent}/provisioning-state)
 	ReportProvisioningState(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn)
@@ -466,6 +514,32 @@ func (siw *ServerInterfaceWrapper) RenewClaim(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RenewClaim(w, r, agentGrn, claimId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReportConfigurationState operation middleware
+func (siw *ServerInterfaceWrapper) ReportConfigurationState(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agent" -------------
+	var agentGrn AgentGrn
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentGrn, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReportConfigurationState(w, r, agentGrn)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -802,6 +876,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/certificate", wrapper.IssueAgentCertificate)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/provisioning-state", wrapper.ReportProvisioningState)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/runtime-state", wrapper.ReportRuntimeState)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/configuration-state", wrapper.ReportConfigurationState)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/definitions", wrapper.ListDefinitions)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/definitions/{agent}/claim", wrapper.ClaimDefinition)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/messages", wrapper.PostMessage)

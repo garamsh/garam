@@ -34,11 +34,13 @@ ORDER BY a.agent_grn;
 
 -- ReportAgentProvisioningState and ReportAgentRuntimeState write at the
 -- epoch the agent is currently assigned at; any other epoch matches no
--- row, and an agent with no assignment matches none either.
+-- row, and an agent with no assignment matches none either. Each moves
+-- the health report time, which creation does not write (ADR-0076).
 -- name: ReportAgentProvisioningState :one
 UPDATE agents SET
     provisioning_state = sqlc.arg('provisioning_state'),
-    updated_at         = sqlc.arg('updated_at')
+    updated_at         = sqlc.arg('updated_at'),
+    health_reported_at = sqlc.arg('updated_at')
 WHERE grn = sqlc.arg('grn')
   AND EXISTS (
       SELECT 1 FROM agent_assignments a
@@ -48,8 +50,9 @@ RETURNING *;
 
 -- name: ReportAgentRuntimeState :one
 UPDATE agents SET
-    runtime_state = sqlc.arg('runtime_state'),
-    updated_at    = sqlc.arg('updated_at')
+    runtime_state      = sqlc.arg('runtime_state'),
+    updated_at         = sqlc.arg('updated_at'),
+    health_reported_at = sqlc.arg('updated_at')
 WHERE grn = sqlc.arg('grn')
   AND EXISTS (
       SELECT 1 FROM agent_assignments a
@@ -57,11 +60,57 @@ WHERE grn = sqlc.arg('grn')
   )
 RETURNING *;
 
--- A definition is written once and never rewritten: garam cannot tell
--- whether an operator has acted on one, so there is no update here.
+-- ReportAgentConfiguration records the operator's acknowledgement of a
+-- revision, at the epoch the agent is currently assigned at. It matches
+-- no row for a revision the definition has not reached, nor for one
+-- older than what the same epoch already acknowledged; an
+-- acknowledgement made at an earlier epoch is no bound, because it was
+-- another assignment's (ADR-0076). The same revision again replaces the
+-- last report, in the order garam receives them.
+-- name: ReportAgentConfiguration :one
+UPDATE agents SET
+    configuration_epoch        = sqlc.arg('epoch')::integer,
+    configuration_revision     = sqlc.arg('revision')::integer,
+    configuration_outcome      = sqlc.arg('outcome')::text,
+    configuration_reason       = sqlc.narg('reason')::text,
+    configuration_ignored_keys = sqlc.narg('ignored_keys')::text[],
+    configuration_reported_at  = sqlc.arg('reported_at')::timestamptz
+WHERE grn = sqlc.arg('grn')
+  AND EXISTS (
+      SELECT 1 FROM agent_assignments a
+      WHERE a.agent_grn = agents.grn AND a.epoch = sqlc.arg('epoch')::integer
+  )
+  AND EXISTS (
+      SELECT 1 FROM agent_definitions d
+      WHERE d.agent_grn = agents.grn
+        AND d.revision >= sqlc.arg('revision')::integer
+  )
+  AND (configuration_epoch IS DISTINCT FROM sqlc.arg('epoch')::integer
+       OR configuration_revision <= sqlc.arg('revision')::integer)
+RETURNING *;
+
+-- A definition's operator is written once and never rewritten: garam
+-- cannot move an agent between operators here. Its values are revised
+-- by ReviseAgentDefinitionValues, each save a new revision (ADR-0076).
 -- name: CreateAgentDefinition :exec
-INSERT INTO agent_definitions (agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at)
-VALUES ($1, $2, $3, $4, $5, $6);
+INSERT INTO agent_definitions (agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at, revision, revised_at, revised_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);
+
+-- name: GetAgentDefinition :one
+SELECT * FROM agent_definitions WHERE agent_grn = $1;
+
+-- ReviseAgentDefinitionValues replaces the values only where the
+-- definition is still at the revision the editor read, so of two
+-- editors who read one revision the second matches no row.
+-- name: ReviseAgentDefinitionValues :one
+UPDATE agent_definitions SET
+    agent_values = sqlc.arg('agent_values'),
+    revision     = revision + 1,
+    revised_at   = sqlc.arg('revised_at'),
+    revised_by   = sqlc.arg('revised_by')
+WHERE agent_grn = sqlc.arg('agent_grn')
+  AND revision = sqlc.arg('expected_revision')
+RETURNING *;
 
 -- name: ListAgentDefinitionsByOrg :many
 SELECT * FROM agent_definitions WHERE org_grn = $1 ORDER BY agent_grn;

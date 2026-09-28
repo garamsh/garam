@@ -39,6 +39,21 @@ type Store interface {
 	// creates no agent and assigns none: a definition is a record, and
 	// the agent it describes exists when an operator says so.
 	Define(ctx context.Context, d *Definition) error
+	// GetDefinition returns the definition naming the agent, or
+	// ErrDefinitionNotFound.
+	GetDefinition(ctx context.Context, agentGRN grn.GRN) (*Definition, error)
+	// ReviseDefinition replaces the definition's values as the next
+	// revision, saved by by, provided it still holds expected. It
+	// answers ErrRevisionConflict where another save moved it on and
+	// ErrDefinitionNotFound where none names the agent (ADR-0076).
+	ReviseDefinition(ctx context.Context, agentGRN grn.GRN, expected Revision, values Values, by grn.GRN) (*Definition, error)
+	// ReportConfiguration records the acknowledgement the operator
+	// assigned at epoch gives of revision. It answers ErrStaleEpoch at
+	// any other epoch, ErrDefinitionNotFound for an agent no definition
+	// describes, ErrRevisionAhead for a revision the definition has not
+	// reached, and ErrRevisionSuperseded for one older than what the
+	// same epoch already acknowledged.
+	ReportConfiguration(ctx context.Context, agentGRN grn.GRN, epoch int, revision Revision, outcome ConfigurationOutcome) (*Agent, error)
 	// CountByOrg counts the organization's agents and definitions,
 	// which deleting the organization removes with it. An organization
 	// that does not exist holds neither, so the zero OrgCounts is its

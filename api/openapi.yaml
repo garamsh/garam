@@ -881,9 +881,9 @@ paths:
         GRN of the agent it describes (ADR-0026). It creates no agent:
         garam learns an agent exists when an operator reports one, so
         until then the minted GRN is answered here and nowhere under
-        `/orgs/{org}/agents`. A definition is written once and has no
-        update: nothing tells garam whether an operator has already
-        acted on it.
+        `/orgs/{org}/agents`. Its operator is written once and has no
+        update. Its values are saved as revision 1, and
+        `reviseAgentValues` saves later ones (ADR-0076).
       parameters:
         - $ref: '#/components/parameters/org'
       requestBody:
@@ -935,6 +935,55 @@ paths:
         '403':
           $ref: '#/components/responses/Error'
         '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/agent-definitions/{agent}/values:
+    put:
+      operationId: reviseAgentValues
+      tags: [agent]
+      summary: Save new values for a defined agent. Requires the `member` role.
+      description: >-
+        Replaces the definition's values as its next revision, provided
+        the definition still holds `expectedRevision` (ADR-0076). Where
+        another save landed after the editor read it, the request is
+        refused under `aborted` and nothing is written, so neither save
+        silently replaces the other; reading the definition again gives
+        the revision to retry against. Every accepted save raises the
+        revision, identical values included.
+
+        Only the values move. The agent's GRN, its operator, any
+        assignment a claim wrote and every team membership or policy
+        attachment naming the GRN stand as they were.
+
+        A saved revision is what the organization asked for and not
+        what runs: garam tells no operator, and learns whether one
+        applied it only from that operator's acknowledgement, which
+        `Agent`'s `configuration` carries. It is authorized on
+        `agent:configure`.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/agent'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentValuesRevision'
+      responses:
+        '200':
+          description: The definition as saved, at its new revision.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentDefinition'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
           $ref: '#/components/responses/Error'
   /orgs/{org}/operators:
     post:
@@ -2188,8 +2237,11 @@ components:
         An agent an operator provisioned outside garam. Provisioning
         state and runtime state are separate facts reported by different
         parties, and neither substitutes for the other. `assignment` is
-        absent while no operator holds the agent, and `updatedAt` is
-        when a state report last landed — either party's report moves it.
+        absent while no operator holds the agent. `updatedAt` moves when
+        the agent is created and when either party's state report
+        lands; `healthReportedAt` moves only on a report.
+        `configuration` is a separate fact again, with its own time: a
+        ready pod says nothing about which revision it runs.
       required: [grn, orgGrn, provisioningState, runtimeState, createdAt, updatedAt]
       properties:
         grn:
@@ -2209,6 +2261,65 @@ components:
         updatedAt:
           type: string
           format: date-time
+        healthReportedAt:
+          type: string
+          format: date-time
+          description: >-
+            When a provisioning or runtime report last landed. Absent
+            where none has since garam began recording this time
+            (ADR-0076); no earlier time is inferred.
+        configuration:
+          $ref: '#/components/schemas/AgentConfigurationReport'
+    AgentConfigurationOutcome:
+      type: string
+      description: >-
+        What the operator says it did with a revision: applied it,
+        apart from any `ignoredKeys`, or rejected it.
+      enum: [applied, rejected]
+    AgentConfigurationReport:
+      type: object
+      description: >-
+        The last acknowledgement garam accepted from the operator
+        holding the agent, of one revision of its definition (ADR-0076).
+        Absent from `Agent` where none was ever given, which is
+        unknown: no current operator reports one.
+
+        It is the operator's claim and garam verifies none of it. It
+        describes the current assignment only while `epoch` equals
+        `assignment.epoch`; after a reassignment it is the previous
+        operator's. `revision` below the definition's revision means
+        the saved values are not yet acknowledged. `applied` with
+        `ignoredKeys` is applied in part.
+      required: [epoch, revision, outcome, reportedAt]
+      properties:
+        epoch:
+          type: integer
+          minimum: 1
+          description: The assignment epoch the acknowledging operator held.
+        revision:
+          type: integer
+          minimum: 1
+        outcome:
+          $ref: '#/components/schemas/AgentConfigurationOutcome'
+        ignoredKeys:
+          type: array
+          description: >-
+            Present with `applied`: the revision's keys the operator
+            says it did not apply, possibly none.
+          items:
+            type: string
+        reason:
+          type: string
+          description: >-
+            Present with `rejected`: the operator's reason, at most 500
+            characters.
+        reportedAt:
+          type: string
+          format: date-time
+          description: >-
+            When garam received the acknowledgement, not when the
+            operator acted. A later acknowledgement of the same revision
+            replaces this one in the order garam receives them.
     OperatorEnrollmentState:
       type: string
       description: >-
@@ -2380,6 +2491,19 @@ components:
           example: grn:acme:default:operator:field-one
         values:
           $ref: '#/components/schemas/AgentValues'
+    AgentValuesRevision:
+      type: object
+      description: New values for a defined agent, and the revision the editor read.
+      required: [expectedRevision, values]
+      properties:
+        expectedRevision:
+          type: integer
+          minimum: 1
+          description: >-
+            The definition's revision when the editor read it. A save is
+            refused under `aborted` once the definition holds another.
+        values:
+          $ref: '#/components/schemas/AgentValues'
     AgentDefinition:
       type: object
       description: >-
@@ -2388,7 +2512,11 @@ components:
         carries none of the fields an `Agent` carries. `agentGrn` is
         the identity garam minted for the agent this definition
         describes, and no agent answers under it until the claim.
-      required: [agentGrn, orgGrn, operatorGrn, values, definedBy, createdAt]
+        `revision` numbers the values it holds now; that revision was
+        saved at `revisedAt` by `revisedBy` (ADR-0076). Saving is not
+        deploying: which revision an operator applied is its report,
+        on `Agent`.
+      required: [agentGrn, orgGrn, operatorGrn, values, definedBy, createdAt, revision, revisedAt, revisedBy]
       properties:
         agentGrn:
           type: string
@@ -2407,6 +2535,16 @@ components:
         createdAt:
           type: string
           format: date-time
+        revision:
+          type: integer
+          minimum: 1
+        revisedAt:
+          type: string
+          format: date-time
+        revisedBy:
+          type: string
+          description: The member that saved this revision.
+          example: grn:root:default:user:117421510527410544321
     Error:
       type: object
       required: [kind, message]

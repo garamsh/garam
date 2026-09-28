@@ -9,9 +9,9 @@ import (
 )
 
 // ListDefinitions answers the calling operator with the definitions
-// naming it: the agent GRN each minted, the values, and the claim
-// state (ADR-0033). The definition's operator field is the scoping, so
-// no policy engine is asked.
+// naming it: the agent GRN each minted, the values and their revision
+// (ADR-0076), and the claim state (ADR-0033). The definition's
+// operator field is the scoping, so no policy engine is asked.
 func (s *Server) ListDefinitions(w http.ResponseWriter, r *http.Request) {
 	operator, ok := caller(w, r)
 	if !ok {
@@ -27,6 +27,7 @@ func (s *Server) ListDefinitions(w http.ResponseWriter, r *http.Request) {
 		d := machinegen.Definition{
 			AgentGrn: state.Definition().Agent().String(),
 			Values:   map[string]string(state.Definition().Values()),
+			Revision: int(state.Definition().Revision),
 		}
 		if claim := state.Claim(); claim != nil {
 			d.Claim = &machinegen.DefinitionClaim{Epoch: claim.Epoch()}

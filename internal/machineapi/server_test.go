@@ -68,6 +68,16 @@ type agentService struct {
 	assignment   *agent.Assignment
 	provisioning []stateReport
 	runtime      []stateReport
+	acknowledged []acknowledgement
+}
+
+// acknowledgement is one configuration report the surface passed on,
+// with the outcome it parsed.
+type acknowledgement struct {
+	call
+	epoch    int
+	revision agent.Revision
+	outcome  agent.ConfigurationOutcome
 }
 
 func (s *agentService) Create(_ context.Context, operator grn.GRN) (*agent.Assignment, error) {
@@ -111,6 +121,12 @@ func (s *agentService) ReportProvisioningState(_ context.Context, operator, agen
 func (s *agentService) ReportRuntimeState(_ context.Context, caller, agentGRN grn.GRN, epoch int, state agent.RuntimeState) error {
 	s.runtime = append(s.runtime, stateReport{
 		call: call{operator: caller, subject: agentGRN}, epoch: epoch, state: string(state)})
+	return s.err
+}
+
+func (s *agentService) ReportConfiguration(_ context.Context, operator, agentGRN grn.GRN, epoch int, revision agent.Revision, outcome agent.ConfigurationOutcome) error {
+	s.acknowledged = append(s.acknowledged, acknowledgement{
+		call: call{operator: operator, subject: agentGRN}, epoch: epoch, revision: revision, outcome: outcome})
 	return s.err
 }
 

@@ -23,14 +23,15 @@ func defined(t *testing.T, operator grn.GRN, values agent.Values, id string) *ag
 }
 
 // TestServer_AnswersTheDefinitionsNamingTheCaller covers the read's
-// rendering: the agent GRN each definition minted, the values, and the
-// claim state — absent while unclaimed, carrying the epoch once
-// claimed. The two sit side by side so each shape is read against the
-// other.
+// rendering: the agent GRN each definition minted, the values and their
+// revision, and the claim state — absent while unclaimed, carrying the
+// epoch once claimed. The two sit side by side so each shape is read
+// against the other.
 func TestServer_AnswersTheDefinitionsNamingTheCaller(t *testing.T) {
 	operator := operatorGRN("acme")
 	unclaimed := defined(t, operator, agent.Values{"model": "haiku"}, "0a1b2c3d4e5f6071")
 	claimed := defined(t, operator, agent.Values{}, "9f8e7d6c5b4a3021")
+	claimed.Revision = 4
 	agents := &agentService{states: []*agent.DefinitionState{
 		agent.NewDefinitionState(unclaimed, nil),
 		agent.NewDefinitionState(claimed, agent.NewAssignment(claimed.Agent(), operator, 1)),
@@ -40,8 +41,8 @@ func TestServer_AnswersTheDefinitionsNamingTheCaller(t *testing.T) {
 	status, body := do(t, client, http.MethodGet, url+"/definitions")
 	require.Equal(t, http.StatusOK, status)
 	assert.JSONEq(t, `[
-		{"agentGrn": "`+unclaimed.Agent().String()+`", "values": {"model": "haiku"}},
-		{"agentGrn": "`+claimed.Agent().String()+`", "values": {}, "claim": {"epoch": 1}}
+		{"agentGrn": "`+unclaimed.Agent().String()+`", "values": {"model": "haiku"}, "revision": 1},
+		{"agentGrn": "`+claimed.Agent().String()+`", "values": {}, "revision": 4, "claim": {"epoch": 1}}
 	]`, body)
 	assert.Equal(t, []call{{operator: operator}}, agents.calls,
 		"the caller is what the certificate named")

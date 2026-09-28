@@ -141,13 +141,24 @@ func rowToAgent(row db.Agent) (*Agent, error) {
 	if err != nil {
 		return nil, errorx.Wrap(err, "runtime state", errorx.KindInternal)
 	}
+	configuration, err := rowToConfiguration(row)
+	if err != nil {
+		return nil, errorx.Wrap(err, "configuration report", errorx.KindInternal)
+	}
+	var healthReportedAt *time.Time
+	if row.HealthReportedAt.Valid {
+		t := row.HealthReportedAt.Time
+		healthReportedAt = &t
+	}
 	return &Agent{
-		grn:          g,
-		orgGRN:       orgGRN,
-		provisioning: provisioning,
-		runtime:      runtime,
-		createdAt:    row.CreatedAt.Time,
-		updatedAt:    row.UpdatedAt.Time,
+		grn:              g,
+		orgGRN:           orgGRN,
+		provisioning:     provisioning,
+		runtime:          runtime,
+		createdAt:        row.CreatedAt.Time,
+		updatedAt:        row.UpdatedAt.Time,
+		HealthReportedAt: healthReportedAt,
+		Configuration:    configuration,
 	}, nil
 }
 

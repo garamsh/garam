@@ -153,6 +153,30 @@ func (s *memoryStore) ReportRuntimeState(_ context.Context, agentGRN grn.GRN, ep
 	return a, nil
 }
 
+func (s *memoryStore) GetDefinition(_ context.Context, agentGRN grn.GRN) (*Definition, error) {
+	d, held := s.definitions[agentGRN]
+	if !held {
+		return nil, ErrDefinitionNotFound
+	}
+	return d, nil
+}
+
+func (s *memoryStore) ReviseDefinition(context.Context, grn.GRN, Revision, Values, grn.GRN) (*Definition, error) {
+	return nil, errorx.New(errorx.KindUnimplemented, "the service revises no definition")
+}
+
+// ReportConfiguration keeps the fence the other reports pass and
+// records the acknowledgement; which revisions it accepts is the
+// Postgres store's, which tests/integration exercises.
+func (s *memoryStore) ReportConfiguration(_ context.Context, agentGRN grn.GRN, epoch int, revision Revision, outcome ConfigurationOutcome) (*Agent, error) {
+	a, err := s.reportable(agentGRN, epoch)
+	if err != nil {
+		return nil, err
+	}
+	a.Configuration = &ConfigurationReport{Epoch: epoch, Revision: revision, Outcome: outcome}
+	return a, nil
+}
+
 // reportable is the fence both reports pass: the agent exists, and the
 // epoch carried is the one its assignment is on. An agent no operator
 // holds has no current epoch, so every report about it is stale.
@@ -382,6 +406,51 @@ func TestService_ReportProvisioningStateIsAcceptedFromTheHolderAtTheCurrentEpoch
 	stored, err = store.Get(ctx, held.Agent())
 	require.NoError(t, err)
 	assert.Equal(t, ProvisioningStateFailed, stored.ProvisioningState())
+}
+
+// TestService_ReportConfigurationIsAcceptedFromTheHolderAtTheCurrentEpoch
+// is the acknowledgement's caller fence, the one the provisioning
+// report stands on (ADR-0076). Each refusal sits beside the report that
+// lands from the holder, and the stored agent is what says a refused
+// call moved nothing.
+func TestService_ReportConfigurationIsAcceptedFromTheHolderAtTheCurrentEpoch(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryStore()
+	svc := NewService(store, &signer{})
+
+	holder := operatorGRN("acme", "one")
+	held, err := svc.Create(ctx, holder)
+	require.NoError(t, err)
+	applied, err := NewConfigurationApplied(nil)
+	require.NoError(t, err)
+
+	refused := map[string]struct {
+		caller grn.GRN
+		agent  grn.GRN
+		err    error
+	}{
+		"another operator of the same organization": {operatorGRN("acme", "two"), held.Agent(), ErrNotAssigned},
+		"an operator of another organization":       {operatorGRN("globex", "one"), held.Agent(), ErrNotAssigned},
+		"an agent that does not exist":              {holder, grn.New("acme", grn.DefaultProject, ServiceType, "0f0f0f0f0f0f0f0f"), ErrNotAssigned},
+		"the agent acknowledging for its operator":  {held.Agent(), held.Agent(), ErrNotAnOperator},
+	}
+	for name, tt := range refused {
+		t.Run(name, func(t *testing.T) {
+			assert.ErrorIs(t, svc.ReportConfiguration(ctx, tt.caller, tt.agent, 1, 1, applied), tt.err)
+		})
+	}
+	stored, err := store.Get(ctx, held.Agent())
+	require.NoError(t, err)
+	assert.Nil(t, stored.Configuration, "a refused acknowledgement was recorded")
+
+	require.NoError(t, svc.ReportConfiguration(ctx, holder, held.Agent(), 1, 1, applied),
+		"the same call from the holder")
+	stored, err = store.Get(ctx, held.Agent())
+	require.NoError(t, err)
+	require.NotNil(t, stored.Configuration)
+	assert.Equal(t, Revision(1), stored.Configuration.Revision)
+	assert.Equal(t, ProvisioningStatePending, stored.ProvisioningState(),
+		"the acknowledgement moved the provisioning state")
 }
 
 // TestService_ReportRuntimeStateIsAcceptedOnlyFromTheAgentItself is the

@@ -15,6 +15,24 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for AgentConfigurationOutcome.
+const (
+	Applied  AgentConfigurationOutcome = "applied"
+	Rejected AgentConfigurationOutcome = "rejected"
+)
+
+// Valid indicates whether the value is a known member of the AgentConfigurationOutcome enum.
+func (e AgentConfigurationOutcome) Valid() bool {
+	switch e {
+	case Applied:
+		return true
+	case Rejected:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AgentProvisioningState.
 const (
 	AgentProvisioningStateFailed      AgentProvisioningState = "failed"
@@ -141,13 +159,20 @@ func (e Role) Valid() bool {
 	}
 }
 
-// Agent An agent an operator provisioned outside garam. Provisioning state and runtime state are separate facts reported by different parties, and neither substitutes for the other. `assignment` is absent while no operator holds the agent, and `updatedAt` is when a state report last landed — either party's report moves it.
+// Agent An agent an operator provisioned outside garam. Provisioning state and runtime state are separate facts reported by different parties, and neither substitutes for the other. `assignment` is absent while no operator holds the agent. `updatedAt` moves when the agent is created and when either party's state report lands; `healthReportedAt` moves only on a report. `configuration` is a separate fact again, with its own time: a ready pod says nothing about which revision it runs.
 type Agent struct {
 	// Assignment The operator holding an agent, at the epoch that binding is on. Every assignment raises the epoch and fences the operator it replaced.
 	Assignment *AgentAssignment `json:"assignment,omitempty"`
-	CreatedAt  time.Time        `json:"createdAt"`
-	Grn        string           `json:"grn"`
-	OrgGrn     string           `json:"orgGrn"`
+
+	// Configuration The last acknowledgement garam accepted from the operator holding the agent, of one revision of its definition (ADR-0076). Absent from `Agent` where none was ever given, which is unknown: no current operator reports one.
+	// It is the operator's claim and garam verifies none of it. It describes the current assignment only while `epoch` equals `assignment.epoch`; after a reassignment it is the previous operator's. `revision` below the definition's revision means the saved values are not yet acknowledged. `applied` with `ignoredKeys` is applied in part.
+	Configuration *AgentConfigurationReport `json:"configuration,omitempty"`
+	CreatedAt     time.Time                 `json:"createdAt"`
+	Grn           string                    `json:"grn"`
+
+	// HealthReportedAt When a provisioning or runtime report last landed. Absent where none has since garam began recording this time (ADR-0076); no earlier time is inferred.
+	HealthReportedAt *time.Time `json:"healthReportedAt,omitempty"`
+	OrgGrn           string     `json:"orgGrn"`
 
 	// ProvisioningState What the operator reports about the agent's pod. `pending` is an agent no operator has reported on yet. `provisioned` is an agent whose workload an operator built and which reports no ready replica: it says the pod was built and nothing about its health. `ready` is an agent whose workload reports a ready replica, so its containers are running; it says nothing about whether the agent inside them works. `failed` is an agent an operator observed cannot start, which is a stricter observation than an absent ready replica: an operator with only a replica count reports `provisioned`, so a state other than `failed` is not evidence the pod can start. What an operator may report, and when, is `api/machine.yaml`'s — the specification the reporting party holds, not this one.
 	ProvisioningState AgentProvisioningState `json:"provisioningState"`
@@ -166,15 +191,43 @@ type AgentAssignment struct {
 	Since time.Time `json:"since"`
 }
 
-// AgentDefinition What an organization says an agent should be (ADR-0026). It is a record and not an agent: no state is reported on it, and it carries none of the fields an `Agent` carries. `agentGrn` is the identity garam minted for the agent this definition describes, and no agent answers under it until the claim.
+// AgentConfigurationOutcome What the operator says it did with a revision: applied it, apart from any `ignoredKeys`, or rejected it.
+type AgentConfigurationOutcome string
+
+// AgentConfigurationReport The last acknowledgement garam accepted from the operator holding the agent, of one revision of its definition (ADR-0076). Absent from `Agent` where none was ever given, which is unknown: no current operator reports one.
+// It is the operator's claim and garam verifies none of it. It describes the current assignment only while `epoch` equals `assignment.epoch`; after a reassignment it is the previous operator's. `revision` below the definition's revision means the saved values are not yet acknowledged. `applied` with `ignoredKeys` is applied in part.
+type AgentConfigurationReport struct {
+	// Epoch The assignment epoch the acknowledging operator held.
+	Epoch int `json:"epoch"`
+
+	// IgnoredKeys Present with `applied`: the revision's keys the operator says it did not apply, possibly none.
+	IgnoredKeys *[]string `json:"ignoredKeys,omitempty"`
+
+	// Outcome What the operator says it did with a revision: applied it, apart from any `ignoredKeys`, or rejected it.
+	Outcome AgentConfigurationOutcome `json:"outcome"`
+
+	// Reason Present with `rejected`: the operator's reason, at most 500 characters.
+	Reason *string `json:"reason,omitempty"`
+
+	// ReportedAt When garam received the acknowledgement, not when the operator acted. A later acknowledgement of the same revision replaces this one in the order garam receives them.
+	ReportedAt time.Time `json:"reportedAt"`
+	Revision   int       `json:"revision"`
+}
+
+// AgentDefinition What an organization says an agent should be (ADR-0026). It is a record and not an agent: no state is reported on it, and it carries none of the fields an `Agent` carries. `agentGrn` is the identity garam minted for the agent this definition describes, and no agent answers under it until the claim. `revision` numbers the values it holds now; that revision was saved at `revisedAt` by `revisedBy` (ADR-0076). Saving is not deploying: which revision an operator applied is its report, on `Agent`.
 type AgentDefinition struct {
 	AgentGrn  string    `json:"agentGrn"`
 	CreatedAt time.Time `json:"createdAt"`
 
 	// DefinedBy The member that defined the agent.
-	DefinedBy   string `json:"definedBy"`
-	OperatorGrn string `json:"operatorGrn"`
-	OrgGrn      string `json:"orgGrn"`
+	DefinedBy   string    `json:"definedBy"`
+	OperatorGrn string    `json:"operatorGrn"`
+	OrgGrn      string    `json:"orgGrn"`
+	RevisedAt   time.Time `json:"revisedAt"`
+
+	// RevisedBy The member that saved this revision.
+	RevisedBy string `json:"revisedBy"`
+	Revision  int    `json:"revision"`
 
 	// Values What an operator constructs the agent from. garam stores the keys and the strings and interprets neither: what the payload means belongs to the operator that reads it. A key is one to 64 characters of lowercase letters, digits and `-`; a value is at most 4096 bytes; at most 32 entries.
 	Values AgentValues `json:"values"`
@@ -197,6 +250,15 @@ type AgentRuntimeState string
 
 // AgentValues What an operator constructs the agent from. garam stores the keys and the strings and interprets neither: what the payload means belongs to the operator that reads it. A key is one to 64 characters of lowercase letters, digits and `-`; a value is at most 4096 bytes; at most 32 entries.
 type AgentValues map[string]string
+
+// AgentValuesRevision New values for a defined agent, and the revision the editor read.
+type AgentValuesRevision struct {
+	// ExpectedRevision The definition's revision when the editor read it. A save is refused under `aborted` once the definition holds another.
+	ExpectedRevision int `json:"expectedRevision"`
+
+	// Values What an operator constructs the agent from. garam stores the keys and the strings and interprets neither: what the payload means belongs to the operator that reads it. A key is one to 64 characters of lowercase letters, digits and `-`; a value is at most 4096 bytes; at most 32 entries.
+	Values AgentValues `json:"values"`
+}
 
 // Error defines model for Error.
 type Error struct {
@@ -614,6 +676,9 @@ type UpdateOrgJSONRequestBody = OrganizationPatch
 // DefineAgentJSONRequestBody defines body for DefineAgent for application/json ContentType.
 type DefineAgentJSONRequestBody = AgentDefinitionCreate
 
+// ReviseAgentValuesJSONRequestBody defines body for ReviseAgentValues for application/json ContentType.
+type ReviseAgentValuesJSONRequestBody = AgentValuesRevision
+
 // CreateGroupJSONRequestBody defines body for CreateGroup for application/json ContentType.
 type CreateGroupJSONRequestBody = GroupCreate
 
@@ -700,6 +765,9 @@ type ServerInterface interface {
 	// DefineAgent Define an agent. Requires the `member` role.
 	// (POST /orgs/{org}/agent-definitions)
 	DefineAgent(w http.ResponseWriter, r *http.Request, org Org)
+	// ReviseAgentValues Save new values for a defined agent. Requires the `member` role.
+	// (PUT /orgs/{org}/agent-definitions/{agent}/values)
+	ReviseAgentValues(w http.ResponseWriter, r *http.Request, org Org, agentSlug AgentSlug)
 	// ListAgents List an organization's agents. Requires the `member` role.
 	// (GET /orgs/{org}/agents)
 	ListAgents(w http.ResponseWriter, r *http.Request, org Org, params ListAgentsParams)
@@ -1192,6 +1260,41 @@ func (siw *ServerInterfaceWrapper) DefineAgent(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DefineAgent(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ReviseAgentValues operation middleware
+func (siw *ServerInterfaceWrapper) ReviseAgentValues(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "agent" -------------
+	var agentSlug AgentSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReviseAgentValues(w, r, org, agentSlug)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2788,6 +2891,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agents/{agent}/watch", wrapper.WatchAgent)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agent-definitions", wrapper.ListAgentDefinitions)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/agent-definitions", wrapper.DefineAgent)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/agent-definitions/{agent}/values", wrapper.ReviseAgentValues)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/operators", wrapper.ListOperators)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/operators", wrapper.RegisterOperator)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/operators/{operator}", wrapper.DeleteOperator)

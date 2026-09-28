@@ -148,6 +148,45 @@ func (s *Server) ListAgentDefinitions(w http.ResponseWriter, r *http.Request, or
 	writeJSON(w, http.StatusOK, out)
 }
 
+// ReviseAgentValues saves new values for an agent the org defined, as
+// the definition's next revision (ADR-0076). Requires the member role,
+// on `agent:configure`. A save against a revision the definition has
+// moved past is refused and writes nothing; only the values move, and
+// no operator is told.
+func (s *Server) ReviseAgentValues(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, agentSlug apigen.AgentSlug) {
+	u, err := s.currentUser(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	g := agentGRN(orgSlug, agentSlug)
+	if err := s.authorizeOn(r, orgGRN(orgSlug), g, u, org.ActionAgentConfigure); err != nil {
+		writeError(w, err)
+		return
+	}
+	var body apigen.AgentValuesRevision
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, err)
+		return
+	}
+	expected, err := agent.ParseRevision(body.ExpectedRevision)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	values, err := agent.ParseValues(body.Values)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	d, err := s.agents.ReviseDefinition(r.Context(), g, expected, values, u.GRN)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, definitionToAPI(d))
+}
+
 // assignmentsOf resolves the org's assignments in one query, keyed by
 // agent GRN. An agent assigned between the two reads is absent from the
 // map: the reads are not atomic, and the next request carries it.
@@ -195,6 +234,10 @@ func agentToAPI(a *agent.Agent, assignment *agent.Assignment) apigen.Agent {
 		RuntimeState:      apigen.AgentRuntimeState(a.RuntimeState()),
 		CreatedAt:         a.CreatedAt(),
 		UpdatedAt:         a.UpdatedAt(),
+		HealthReportedAt:  a.HealthReportedAt,
+	}
+	if c := a.Configuration; c != nil {
+		out.Configuration = configurationToAPI(c)
 	}
 	if assignment != nil {
 		out.Assignment = &apigen.AgentAssignment{
@@ -218,5 +261,30 @@ func definitionToAPI(d *agent.Definition) apigen.AgentDefinition {
 		Values:      apigen.AgentValues(d.Values()),
 		DefinedBy:   d.DefinedBy().String(),
 		CreatedAt:   d.CreatedAt(),
+		Revision:    int(d.Revision),
+		RevisedAt:   d.RevisedAt,
+		RevisedBy:   d.RevisedBy.String(),
 	}
+}
+
+// configurationToAPI renders an operator's acknowledgement with the
+// epoch it was made at, which is what tells a reader whether it is the
+// current assignment's (ADR-0076).
+func configurationToAPI(c *agent.ConfigurationReport) *apigen.AgentConfigurationReport {
+	out := &apigen.AgentConfigurationReport{
+		Epoch:      c.Epoch,
+		Revision:   int(c.Revision),
+		ReportedAt: c.ReportedAt,
+	}
+	switch o := c.Outcome.(type) {
+	case agent.ConfigurationApplied:
+		out.Outcome = apigen.Applied
+		keys := o.IgnoredKeys
+		out.IgnoredKeys = &keys
+	case agent.ConfigurationRejected:
+		out.Outcome = apigen.Rejected
+		reason := string(o.Reason)
+		out.Reason = &reason
+	}
+	return out
 }

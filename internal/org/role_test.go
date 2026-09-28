@@ -1,6 +1,7 @@
 package org_test
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -81,6 +82,7 @@ func TestActionConstants_SpellTheirWireStrings(t *testing.T) {
 
 		{org.ActionAgentRead, "agent:read"},
 		{org.ActionAgentDefine, "agent:define"},
+		{org.ActionAgentConfigure, "agent:configure"},
 		{org.ActionAgentWatch, "agent:watch"},
 	}
 	for _, c := range cases {
@@ -96,6 +98,7 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			"org:*", "group:*", "project:*", "policy:*", "consent:*",
 			org.ActionOperatorRead, org.ActionOperatorRegister, org.ActionOperatorUpdate,
 			org.ActionOperatorDelete, org.ActionAgentRead, org.ActionAgentDefine,
+			org.ActionAgentConfigure,
 		},
 		org.RoleOwner.Actions())
 	assert.Equal(t,
@@ -104,6 +107,7 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			"group:*", "project:*", "policy:*", "consent:*",
 			org.ActionOperatorRead, org.ActionOperatorRegister, org.ActionOperatorUpdate,
 			org.ActionOperatorDelete, org.ActionAgentRead, org.ActionAgentDefine,
+			org.ActionAgentConfigure,
 		},
 		org.RoleAdmin.Actions())
 	assert.Equal(t,
@@ -112,6 +116,7 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			org.ActionGroupRead, org.ActionGroupMemberList,
 			org.ActionProjectRead, org.ActionProjectMemberList,
 			org.ActionOperatorRead, org.ActionAgentRead, org.ActionAgentDefine,
+			org.ActionAgentConfigure,
 		},
 		org.RoleMember.Actions())
 	assert.Empty(t, org.Role("").Actions())
@@ -134,6 +139,22 @@ func TestRoleActions_NoRoleReachesAgentWatch(t *testing.T) {
 		assert.Contains(t, r.Actions(), org.ActionAgentRead, string(r))
 		assert.Contains(t, r.Actions(), org.ActionAgentDefine, string(r))
 	}
+}
+
+// TestRoleActions_ConfigureGoesWhereDefineGoes pins that revising an
+// agent's values is granted to exactly the roles that define one
+// (ADR-0076): the values are what defining writes. The role with no
+// name is the control, granting neither, so the pairing is not read
+// off a role that grants nothing.
+func TestRoleActions_ConfigureGoesWhereDefineGoes(t *testing.T) {
+	for _, r := range []org.Role{org.RoleOwner, org.RoleAdmin, org.RoleMember, org.Role("")} {
+		assert.Equal(t,
+			slices.Contains(r.Actions(), org.ActionAgentDefine),
+			slices.Contains(r.Actions(), org.ActionAgentConfigure),
+			string(r))
+	}
+	assert.Contains(t, org.RoleMember.Actions(), org.ActionAgentConfigure)
+	assert.NotContains(t, org.Role("").Actions(), org.ActionAgentConfigure)
 }
 
 // TestRoleActions_OnlyOwnerAndAdminRegisterAnOperator pins the split
@@ -164,6 +185,7 @@ func TestActionsFor_UnionsKnownRoles(t *testing.T) {
 			org.ActionGroupRead, org.ActionGroupMemberList,
 			org.ActionProjectRead, org.ActionProjectMemberList,
 			org.ActionOperatorRead, org.ActionAgentRead, org.ActionAgentDefine,
+			org.ActionAgentConfigure,
 			org.ActionOrgUpdate, org.ActionOrgInvite,
 			"group:*", "project:*", "policy:*", "consent:*",
 			org.ActionOperatorRegister, org.ActionOperatorUpdate, org.ActionOperatorDelete,

@@ -337,7 +337,7 @@ func TestAgentDefine_ADefinitionIsNotAnAgent(t *testing.T) {
 	// The two are answered under different shapes, so a reader holding
 	// one body knows which it holds. A definition carries no state,
 	// because nobody has reported any.
-	assert.Equal(t, []string{"agentGrn", "createdAt", "definedBy", "operatorGrn", "orgGrn", "values"}, definitionFields)
+	assert.Equal(t, []string{"agentGrn", "createdAt", "definedBy", "operatorGrn", "orgGrn", "revisedAt", "revisedBy", "revision", "values"}, definitionFields)
 	assert.Equal(t, []string{"createdAt", "grn", "orgGrn", "provisioningState", "runtimeState", "updatedAt"}, agentFields)
 }
 

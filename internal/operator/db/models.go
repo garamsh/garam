@@ -39,6 +39,8 @@ type Operator struct {
 	OrgGrn       string
 	RegisteredBy string
 	CreatedAt    pgtype.Timestamptz
+	Name         string
+	Description  string
 }
 
 type OperatorCertificate struct {

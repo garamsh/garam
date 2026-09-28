@@ -11,10 +11,12 @@ import {
 const initialState: DeleteOperatorState = { status: "idle" };
 
 /**
- * Deletes one operator's record, which stops that operator
- * authenticating (ADR-0070). What it ends is a live machine identity,
- * so the button asks first and the confirmation says what stops: a
- * single click would put a running operator behind a misclick.
+ * Deletes one operator's registration, which stops that operator
+ * authenticating to garam (ADR-0070). What it ends is a machine
+ * identity, so the button asks first and the confirmation says what
+ * stops and what does not: a single click would put a running operator
+ * behind a misclick, and a reader could take "delete" to reach into the
+ * cluster, which nothing here does.
  *
  * `enrolled` decides which consequence is true. Deleting an operator
  * that holds a certificate refuses that certificate from the next
@@ -24,10 +26,12 @@ const initialState: DeleteOperatorState = { status: "idle" };
 export function DeleteOperatorForm({
   org,
   operator,
+  name,
   enrolled,
 }: {
   org: string;
   operator: string;
+  name: string;
   enrolled: boolean;
 }) {
   const [state, formAction, pending] = useActionState(
@@ -39,13 +43,13 @@ export function DeleteOperatorForm({
   return (
     <div className="flex flex-col gap-2">
       {confirming ? (
-        <form action={formAction} className="flex flex-col gap-3">
+        <form action={formAction} className="flex max-w-2xl flex-col gap-3">
           <input type="hidden" name="org" value={org} />
           <input type="hidden" name="operator" value={operator} />
-          <p className="text-sm">
+          <p className="text-sm wrap-anywhere">
             {enrolled
-              ? `${operator} stops authenticating at once: the certificate it holds is refused from its next connection, and garam does not bring the record back. Agents it provisioned keep their own certificates.`
-              : `${operator} obtained no certificate, so nothing it runs stops. The record and its unspent enrollment token go, and the identifier is free to register again.`}
+              ? `Delete ${name}? Its new connections to garam are refused. Work already running in its cluster does not stop, and agents it provisioned keep their own certificates.`
+              : `Delete ${name}? It never obtained a certificate, so nothing stops. Its identifier becomes free to register again.`}
           </p>
           <div className="flex flex-wrap gap-2">
             <Button type="submit" variant="destructive" disabled={pending}>
@@ -55,6 +59,7 @@ export function DeleteOperatorForm({
               type="button"
               variant="ghost"
               disabled={pending}
+              autoFocus
               onClick={() => setConfirming(false)}
             >
               Cancel
@@ -68,7 +73,7 @@ export function DeleteOperatorForm({
             variant="outline"
             onClick={() => setConfirming(true)}
           >
-            Delete
+            Delete operator
           </Button>
         </div>
       )}

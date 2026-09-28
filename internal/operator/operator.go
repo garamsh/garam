@@ -47,7 +47,9 @@
 package operator
 
 import (
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
@@ -137,20 +139,95 @@ const (
 	EnrollmentStateExpired EnrollmentState = "expired"
 )
 
+// The bounds on what an organization says about its operator, in
+// characters. migrations/000025 holds the same two.
+const (
+	NameMaxLength        = 100
+	DescriptionMaxLength = 1000
+)
+
+// DetailsPatch is what a caller says about an operator's name and
+// description, each absent where it says nothing (ADR-0074). A
+// registration takes it for the details the record starts with, and an
+// update for the ones it changes; the zero value says nothing, which
+// is valid for both.
+//
+// Neither field is part of the operator's identity. The GRN is what a
+// certificate names and what every other table joins on, so a patch
+// reaches no credential, token or definition.
+type DetailsPatch struct {
+	name        *string
+	description *string
+}
+
+// NewDetailsPatch parses what a caller said. A name is trimmed and must
+// keep at least one character; a description is trimmed and may be
+// empty, which clears it. Both are bounded in characters rather than
+// bytes, so the bound a person reads is the one applied, and both
+// must be text PostgreSQL stores: valid UTF-8 without NUL, which it
+// refuses as a storage error rather than as the caller's.
+func NewDetailsPatch(name, description *string) (DetailsPatch, error) {
+	var p DetailsPatch
+	if name != nil {
+		n := strings.TrimSpace(*name)
+		switch {
+		case !storable(n):
+			return DetailsPatch{}, errorx.New(errorx.KindInvalidArgument, "an operator's name must be text without NUL characters")
+		case n == "":
+			return DetailsPatch{}, errorx.New(errorx.KindInvalidArgument, "an operator's name must not be empty")
+		case utf8.RuneCountInString(n) > NameMaxLength:
+			return DetailsPatch{}, errorx.New(errorx.KindInvalidArgument, "an operator's name is at most 100 characters")
+		}
+		p.name = &n
+	}
+	if description != nil {
+		d := strings.TrimSpace(*description)
+		switch {
+		case !storable(d):
+			return DetailsPatch{}, errorx.New(errorx.KindInvalidArgument, "an operator's description must be text without NUL characters")
+		case utf8.RuneCountInString(d) > DescriptionMaxLength:
+			return DetailsPatch{}, errorx.New(errorx.KindInvalidArgument, "an operator's description is at most 1000 characters")
+		}
+		p.description = &d
+	}
+	return p, nil
+}
+
+// storable reports whether s is text a PostgreSQL text column holds.
+func storable(s string) bool {
+	return utf8.ValidString(s) && !strings.ContainsRune(s, 0)
+}
+
+// Name returns the name the patch sets, or nil where it leaves it.
+func (p DetailsPatch) Name() *string { return p.name }
+
+// Description returns the description the patch sets, or nil where it
+// leaves it.
+func (p DetailsPatch) Description() *string { return p.description }
+
 // Operator is an organization's record that it has an operator under
 // this GRN, and where that operator stands in obtaining a certificate.
 //
 // It carries no state the operator reports and no credential. What an
 // operator does is reported against the agents it holds (ADR-0012), and
 // what it authenticates with is the certificate this package's Service
-// issues. The two fields below are what garam already knows about that
+// issues. The last two fields are what garam already knows about that
 // certificate, read beside the record and persisted nowhere on it: the
 // state is a property of the tables together rather than of this row.
+// Name and Description are persisted on the row and exported, as
+// structure.md asks of what an aggregate persists (ADR-0074).
 type Operator struct {
 	grn          grn.GRN
 	orgGRN       grn.GRN
 	registeredBy grn.GRN
 	createdAt    time.Time
+
+	// Name is what the organization calls the operator. Two operators
+	// may share one; the GRN is what tells them apart (ADR-0074).
+	Name string
+	// Description is what the organization says the operator is for,
+	// empty where it says nothing.
+	Description string
 
 	// When garam last issued the operator a certificate, zero where it
 	// has issued none.
@@ -160,21 +237,32 @@ type Operator struct {
 }
 
 // New records that orgGRN has an operator under identifier.
-// registeredBy is the member that registered it.
+// registeredBy is the member that registered it, and details what it
+// says about the operator; a name it leaves out is the identifier.
 //
 // The identifier is supplied rather than minted, because it is already
 // the subject of a certificate wherever an operator holds one
 // (ADR-0032).
-func New(orgGRN grn.GRN, identifier string, registeredBy grn.GRN) (*Operator, error) {
+func New(orgGRN grn.GRN, identifier string, registeredBy grn.GRN, details DetailsPatch) (*Operator, error) {
 	g, err := GRNOf(orgGRN, identifier)
 	if err != nil {
 		return nil, err
+	}
+	name := g.Identifier
+	if details.name != nil {
+		name = *details.name
+	}
+	var description string
+	if details.description != nil {
+		description = *details.description
 	}
 	return &Operator{
 		grn:          g,
 		orgGRN:       orgGRN,
 		registeredBy: registeredBy,
 		createdAt:    time.Now().UTC(),
+		Name:         name,
+		Description:  description,
 		// The record and the token it enrols with are one write
 		// (ADR-0064), so a registration never exists without a live
 		// token beside it. Whether a certificate already exists is

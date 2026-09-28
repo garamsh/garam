@@ -55,6 +55,7 @@ sql:
       - migrations/000017_operators.up.sql
       - migrations/000019_operator_certificates.up.sql
       - migrations/000023_operator_enrollment_tokens.up.sql
+      - migrations/000025_operator_details.up.sql
     queries: internal/operator/queries.sql
     gen:
       go:

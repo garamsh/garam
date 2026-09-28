@@ -50,6 +50,10 @@ export {
 } from "./api/rollback-policy";
 export { updateGroup, type UpdateGroupState } from "./api/update-group";
 export {
+  updateOperator,
+  type UpdateOperatorState,
+} from "./api/update-operator";
+export {
   withdrawOrgConsent,
   type WithdrawOrgConsentState,
 } from "./api/withdraw-org-consent";

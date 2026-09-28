@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import {
@@ -10,10 +11,9 @@ import {
 } from "@/lib/garam";
 
 /**
- * What the delete control has to show: nothing yet, or a refusal.
- * There is no third state to report — the list the page revalidates is
- * what the delete changed, and an operator that is gone from it is the
- * whole of the outcome.
+ * What the delete control has to show: nothing yet, or a refusal. A
+ * deleted operator is the list it is sent back to, and its absence
+ * there is the whole of the outcome.
  */
 export type DeleteOperatorState =
   { status: "idle" } | { status: "error"; message: string };
@@ -30,7 +30,7 @@ const Schema = z.object({
  * returns (ADR-0070).
  *
  * garam refuses it while an agent definition names the operator, and
- * that refusal is rendered beside the record rather than thrown.
+ * that refusal is rendered beside the control rather than thrown.
  */
 export async function deleteOperator(
   _state: DeleteOperatorState,
@@ -52,8 +52,8 @@ export async function deleteOperator(
       { method: "DELETE" },
     );
   } catch (error) {
-    // A refusal is rendered beside the operator rather than thrown: the
-    // boundary would take the whole list down over one record.
+    // A refusal is rendered beside the control rather than thrown: the
+    // boundary would take the whole page down over one answer.
     if (
       error instanceof GaramApiError ||
       error instanceof GaramUnreachableError
@@ -63,6 +63,7 @@ export async function deleteOperator(
     throw error;
   }
 
-  revalidatePath(`/console/orgs/${org}/operators`);
-  return { status: "idle" };
+  revalidatePath(`/console/orgs/${org}/operators`, "layout");
+  revalidatePath(`/console/orgs/${org}/agents`);
+  redirect(`/console/orgs/${org}/operators`);
 }

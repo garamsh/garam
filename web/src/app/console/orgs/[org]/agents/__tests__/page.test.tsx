@@ -121,6 +121,39 @@ describe("agents section", () => {
     expect(container.textContent).not.toContain("grn:");
   });
 
+  it("names a definition's operator and links to it, with its identifier beside", async () => {
+    await renderServerComponent(AgentsPage(params("acme")));
+
+    expect(
+      screen.getByRole("link", { name: "Field cluster one" }),
+    ).toHaveAttribute("href", "/console/orgs/acme/operators/field-one");
+    expect(
+      screen.getByRole("option", { name: "Field cluster one (field-one)" }),
+    ).toBeInTheDocument();
+  });
+
+  it("falls back to identifiers when the operators are not listed to the caller", async () => {
+    server.use(
+      http.get(`${API_URL}/orgs/acme/operators`, () =>
+        HttpResponse.json(
+          { kind: "permission_denied", message: "no" },
+          { status: 403 },
+        ),
+      ),
+    );
+
+    await renderServerComponent(AgentsPage(params("acme")));
+
+    // The page still renders its definitions: the refusal narrows what
+    // is shown rather than hiding the section.
+    expect(screen.getByText("9f2ac1b40d8e7a35")).toBeInTheDocument();
+    expect(screen.getByText("field-one")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Field cluster one" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Operator")).toHaveRole("textbox");
+  });
+
   it("says a definition carries no values rather than showing an empty block", async () => {
     server.use(
       http.get(`${API_URL}/orgs/acme/agent-definitions`, () =>

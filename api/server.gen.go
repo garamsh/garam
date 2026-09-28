@@ -273,14 +273,23 @@ type Operator struct {
 	CertificateIssuedAt *time.Time `json:"certificateIssuedAt,omitempty"`
 	CreatedAt           time.Time  `json:"createdAt"`
 
+	// Description What the organization says the operator is for, empty where it says nothing.
+	Description string `json:"description"`
+
 	// EnrollmentState Where an operator stands in obtaining a certificate from garam. It is derived from what garam already holds and reported by nobody, so no member says whether the operator is running. `enrolled` is an operator garam has issued a certificate for: it says one was obtained, not that it is still valid — garam records no expiry beside the record and asks the operator nothing. `pending` is an operator with no certificate whose enrollment token is still spendable, which lasts at most the ten minutes the token does. `expired` is an operator with no certificate and no spendable token: the token was lost or ran out, and `mintOperatorEnrollment` answers such an operator a fresh one (ADR-0067), which is the state that operation exists for. An operator that holds a certificate reads `enrolled` however much of its token is left, because the certificate is the outcome the token exists to produce.
 	EnrollmentState OperatorEnrollmentState `json:"enrollmentState"`
 	Grn             string                  `json:"grn"`
-	OrgGrn          string                  `json:"orgGrn"`
+
+	// Name What the organization calls the operator. It is not unique and not an identity: two operators may share one, and the GRN is what tells them apart. A registration that named none, including every one made before names existed, is called by its identifier.
+	Name   string `json:"name"`
+	OrgGrn string `json:"orgGrn"`
 
 	// RegisteredBy The member that registered the operator.
 	RegisteredBy string `json:"registeredBy"`
 }
+
+// OperatorDescription At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was.
+type OperatorDescription = string
 
 // OperatorEnrollment The one-time token the operator enrols with, and when it stops being spendable. It is permission to ask for one certificate, once, and it authenticates nothing else.
 type OperatorEnrollment struct {
@@ -294,10 +303,28 @@ type OperatorEnrollment struct {
 // OperatorEnrollmentState Where an operator stands in obtaining a certificate from garam. It is derived from what garam already holds and reported by nobody, so no member says whether the operator is running. `enrolled` is an operator garam has issued a certificate for: it says one was obtained, not that it is still valid — garam records no expiry beside the record and asks the operator nothing. `pending` is an operator with no certificate whose enrollment token is still spendable, which lasts at most the ten minutes the token does. `expired` is an operator with no certificate and no spendable token: the token was lost or ran out, and `mintOperatorEnrollment` answers such an operator a fresh one (ADR-0067), which is the state that operation exists for. An operator that holds a certificate reads `enrolled` however much of its token is left, because the certificate is the outcome the token exists to produce.
 type OperatorEnrollmentState string
 
+// OperatorName At most 100 characters once surrounding space is trimmed, and at least one. Left out of a registration, the name is the identifier.
+type OperatorName = string
+
+// OperatorPatch A change to what the organization says about an operator. A field left out keeps its value; the identifier is not a field.
+type OperatorPatch struct {
+	// Description At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was.
+	Description *OperatorDescription `json:"description,omitempty"`
+
+	// Name At most 100 characters once surrounding space is trimmed, and at least one. Left out of a registration, the name is the identifier.
+	Name *OperatorName `json:"name,omitempty"`
+}
+
 // OperatorRegistration defines model for OperatorRegistration.
 type OperatorRegistration struct {
+	// Description At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was.
+	Description *OperatorDescription `json:"description,omitempty"`
+
 	// Identifier Lowercase letters, digits and `-`, at most 64 characters. It becomes the identifier segment of the operator's GRN, which is what the enrollment token names and what the certificate signed for it holds in its SAN URI — so it is supplied rather than minted, and an operator already holding a certificate is registered under the GRN that certificate names.
 	Identifier string `json:"identifier"`
+
+	// Name At most 100 characters once surrounding space is trimmed, and at least one. Left out of a registration, the name is the identifier.
+	Name *OperatorName `json:"name,omitempty"`
 }
 
 // OrgConsent One organization's view of a cross-organization consent relation (ADR-0035), from the side the path names: `orgGrn` is the other organization, and each half says whether that side's grant stands. `stands` is both halves at once — the only state under which a message crosses.
@@ -602,6 +629,9 @@ type CreateInvitationJSONRequestBody = InvitationCreate
 // RegisterOperatorJSONRequestBody defines body for RegisterOperator for application/json ContentType.
 type RegisterOperatorJSONRequestBody = OperatorRegistration
 
+// UpdateOperatorJSONRequestBody defines body for UpdateOperator for application/json ContentType.
+type UpdateOperatorJSONRequestBody = OperatorPatch
+
 // CreatePolicyJSONRequestBody defines body for CreatePolicy for application/json ContentType.
 type CreatePolicyJSONRequestBody = PolicyCreate
 
@@ -730,6 +760,12 @@ type ServerInterface interface {
 	// DeleteOperator Delete an operator, which stops it authenticating. Requires the `admin` role.
 	// (DELETE /orgs/{org}/operators/{operator})
 	DeleteOperator(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug)
+	// GetOperator Read one of an organization's operators. Requires the `member` role.
+	// (GET /orgs/{org}/operators/{operator})
+	GetOperator(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug)
+	// UpdateOperator Rename or describe an operator. Requires the `admin` role.
+	// (PATCH /orgs/{org}/operators/{operator})
+	UpdateOperator(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug)
 	// MintOperatorEnrollment Mint a fresh enrollment token for a registered operator. Requires the `admin` role.
 	// (POST /orgs/{org}/operators/{operator}/enrollment)
 	MintOperatorEnrollment(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug)
@@ -1851,6 +1887,76 @@ func (siw *ServerInterfaceWrapper) DeleteOperator(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// GetOperator operation middleware
+func (siw *ServerInterfaceWrapper) GetOperator(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "operator" -------------
+	var operatorSlug OperatorSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "operator", r.PathValue("operator"), &operatorSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "operator", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetOperator(w, r, org, operatorSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateOperator operation middleware
+func (siw *ServerInterfaceWrapper) UpdateOperator(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "operator" -------------
+	var operatorSlug OperatorSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "operator", r.PathValue("operator"), &operatorSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "operator", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateOperator(w, r, org, operatorSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // MintOperatorEnrollment operation middleware
 func (siw *ServerInterfaceWrapper) MintOperatorEnrollment(w http.ResponseWriter, r *http.Request) {
 
@@ -2685,6 +2791,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/operators", wrapper.ListOperators)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/operators", wrapper.RegisterOperator)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/operators/{operator}", wrapper.DeleteOperator)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/operators/{operator}", wrapper.GetOperator)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/operators/{operator}", wrapper.UpdateOperator)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/enrollment", wrapper.MintOperatorEnrollment)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/policies", wrapper.ListPolicies)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/policies", wrapper.CreatePolicy)

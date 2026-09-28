@@ -93,12 +93,15 @@ describe("mintOperatorEnrollment", () => {
   });
 
   it("leaves the page as it was when garam refuses the caller", async () => {
+    let refusing = true;
     server.use(
       http.post(ENROLLMENT, () =>
-        HttpResponse.json(
-          { kind: "permission_denied", message: "permission denied" },
-          { status: 403 },
-        ),
+        refusing
+          ? HttpResponse.json(
+              { kind: "permission_denied", message: "permission denied" },
+              { status: 403 },
+            )
+          : HttpResponse.json(MINTED, { status: 201 }),
       ),
     );
 
@@ -106,10 +109,23 @@ describe("mintOperatorEnrollment", () => {
       mintOperatorEnrollment({ status: "idle" }, form()),
     ).resolves.toEqual({ status: "error", message: "permission denied" });
     expect(revalidated).toEqual([]);
+
+    // The control: the same form accepted re-reads the page, so the
+    // page left alone above is the refusal's doing.
+    refusing = false;
+    await mintOperatorEnrollment({ status: "idle" }, form());
+    expect(revalidated).toEqual([SECTION]);
   });
 
   it("returns an unreachable API as a state the control renders", async () => {
-    server.use(http.post(ENROLLMENT, () => HttpResponse.error()));
+    let reachable = false;
+    server.use(
+      http.post(ENROLLMENT, () =>
+        reachable
+          ? HttpResponse.json(MINTED, { status: 201 })
+          : HttpResponse.error(),
+      ),
+    );
 
     await expect(
       mintOperatorEnrollment({ status: "idle" }, form()),
@@ -118,6 +134,12 @@ describe("mintOperatorEnrollment", () => {
       message: "the garam API could not be reached",
     });
     expect(revalidated).toEqual([]);
+
+    // The control: the same form against an API that answers mints.
+    reachable = true;
+    await expect(
+      mintOperatorEnrollment({ status: "idle" }, form()),
+    ).resolves.toEqual({ status: "minted", ...MINTED });
   });
 
   it("mints nothing for a form that names no operator", async () => {
@@ -136,5 +158,9 @@ describe("mintOperatorEnrollment", () => {
       message: "The form did not arrive complete.",
     });
     expect(minted).toEqual([]);
+
+    // The control: the same recorder sees a form that names one.
+    await mintOperatorEnrollment({ status: "idle" }, form());
+    expect(minted).toEqual(["field-two"]);
   });
 });

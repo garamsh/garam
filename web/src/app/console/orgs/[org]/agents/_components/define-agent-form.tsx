@@ -2,265 +2,178 @@
 
 import Link from "next/link";
 import { useActionState, useState } from "react";
-import { Plus, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { defineAgent, type DefineAgentState } from "@/features/orgs/actions";
-import {
-  AGENT_VALUES_MAX_ENTRIES,
-  AGENT_VALUE_MAX_BYTES,
-  parseAgentValues,
-  valueBytes,
-} from "@/lib/agent-definition";
-import { parseOperatorIdentifier } from "@/lib/operator";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { parseAgentName, parseAgentValues } from "@/lib/agent-definition";
+import { parseOperatorIdentifier } from "@/lib/operator";
 import type { Parsed } from "@/lib/parsed";
 
 import { orgHref } from "../../../../_components/navigation";
+import { rowsFrom, ValuesEditor } from "./values-editor";
 
 const initialState: DefineAgentState = { status: "idle" };
 
 /** An operator the form offers: its identifier and what it is called. */
 export type OperatorChoice = { identifier: string; name: string };
 
-/** One row of the values editor; `id` keeps React on the same row. */
-type Row = { id: number; key: string; value: string };
-
-const initialRows: Row[] = [{ id: 0, key: "", value: "" }];
-
 /**
- * Defines an agent: the operator that is to run it, and the values that
- * operator constructs it from.
+ * Defines an agent: what the organization calls it, the operator that
+ * is to run it, and the values that operator constructs it from. A
+ * defined agent opens its own page.
  *
  * The operator is chosen by name from those the organization registered
  * (ADR-0074). A name is not unique, so each is offered with its
  * identifier, which is what the definition stores. Where the list was
- * not answered to the caller, the identifier is typed instead: a
- * definition is `agent:define`'s to write whether or not the caller
- * holds `operator:read`.
+ * not answered to the caller, the identifier is typed instead.
  *
- * The values are a free key/value map. garam interprets no key and the
- * operator that reads one is not garam's to speak for, so this form
- * names none and accepts any — a fixed set of fields here would decide
- * for the operator what its payload means.
+ * `values` is where the form starts: empty, or a template's values
+ * copied once (ADR-0075). They are the form's own rows from then on,
+ * and what is submitted is what the rows hold, so nothing ties the
+ * agent to the template afterwards.
  */
 export function DefineAgentForm({
   org,
   operators,
+  values,
 }: {
   org: string;
   /** The operators to choose from, or null where none were listed. */
   operators: OperatorChoice[] | null;
+  values: Record<string, string>;
 }) {
   const [state, formAction, pending] = useActionState(
     defineAgent,
     initialState,
   );
   const hydrated = useHydrated();
+  const [name, setName] = useState("");
   const [operator, setOperator] = useState("");
-  const [rows, setRows] = useState(initialRows);
+  const [rows, setRows] = useState(() => rowsFrom(values));
 
-  // The refusal the form can make without a round trip. An empty
-  // operator field is left to its own `required`, so an untouched form
+  // The refusals the form can make without a round trip. An empty name
+  // or operator is left to its own `required`, so an untouched form
   // says nothing.
   const problem =
+    (name === "" ? null : errorOf(parseAgentName(name))) ??
     (operator === "" ? null : errorOf(parseOperatorIdentifier(operator))) ??
     errorOf(parseAgentValues(rows));
   const message = problem ?? (state.status === "error" ? state.message : null);
-  const atCap = rows.length >= AGENT_VALUES_MAX_ENTRIES;
-
-  function update(id: number, field: "key" | "value", next: string) {
-    setRows((current) =>
-      current.map((row) => (row.id === id ? { ...row, [field]: next } : row)),
-    );
-  }
 
   return (
-    <section className="flex flex-col gap-3">
-      <h2 className="font-heading text-lg font-semibold">Define an agent</h2>
-      <form action={formAction} className="flex max-w-2xl flex-col gap-6">
-        <input type="hidden" name="org" value={org} />
+    <form action={formAction} className="flex max-w-2xl flex-col gap-6">
+      <input type="hidden" name="org" value={org} />
 
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="operator">Operator</Label>
-          {operators === null ? (
-            <Input
-              id="operator"
-              name="operator"
-              required
-              disabled={!hydrated}
-              value={operator}
-              onChange={(event) => setOperator(event.target.value)}
-              className="max-w-sm font-mono"
-              aria-describedby="operator-hint"
-            />
-          ) : (
-            <select
-              id="operator"
-              name="operator"
-              required
-              disabled={!hydrated}
-              value={operator}
-              onChange={(event) => setOperator(event.target.value)}
-              aria-describedby="operator-hint"
-              className="h-9 w-full max-w-sm min-w-0 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
-            >
-              <option value="" disabled>
-                {operators.length === 0
-                  ? "No operators registered"
-                  : "Choose an operator"}
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="agent-name">Name</Label>
+        <Input
+          id="agent-name"
+          name="name"
+          required
+          disabled={!hydrated}
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+          placeholder="Research assistant"
+          className="max-w-sm"
+          aria-describedby="agent-name-hint"
+        />
+        <p id="agent-name-hint" className="text-sm text-muted-foreground">
+          You can rename it later. garam gives it a fixed identifier.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="operator">Operator</Label>
+        {operators === null ? (
+          <Input
+            id="operator"
+            name="operator"
+            required
+            disabled={!hydrated}
+            value={operator}
+            onChange={(event) => setOperator(event.target.value)}
+            className="max-w-sm font-mono"
+            aria-describedby="operator-hint"
+          />
+        ) : (
+          <select
+            id="operator"
+            name="operator"
+            required
+            disabled={!hydrated}
+            value={operator}
+            onChange={(event) => setOperator(event.target.value)}
+            aria-describedby="operator-hint"
+            className="h-9 w-full max-w-sm min-w-0 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+          >
+            <option value="" disabled>
+              {operators.length === 0
+                ? "No operators registered"
+                : "Choose an operator"}
+            </option>
+            {operators.map(({ identifier, name: operatorName }) => (
+              <option key={identifier} value={identifier}>
+                {operatorName === identifier
+                  ? identifier
+                  : `${operatorName} (${identifier})`}
               </option>
-              {operators.map(({ identifier, name }) => (
-                <option key={identifier} value={identifier}>
-                  {name === identifier ? identifier : `${name} (${identifier})`}
-                </option>
-              ))}
-            </select>
-          )}
-          <p id="operator-hint" className="text-sm text-muted-foreground">
-            {operators === null
-              ? "The identifier of the operator that builds this agent in its own cluster. Operators are not listed to you."
-              : "The operator that builds this agent in its own cluster."}
-          </p>
-          {operators?.length === 0 && (
-            <p className="text-sm">
-              <Link
-                href={orgHref(org, "operators")}
-                className="underline underline-offset-4"
-              >
-                Register an operator
-              </Link>{" "}
-              before defining an agent.
-            </p>
-          )}
-        </div>
-
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1">
-            <h3 className="text-sm font-medium">Values</h3>
-            <p className="text-sm text-muted-foreground">
-              What the operator constructs the agent from. garam stores the keys
-              and the strings and interprets neither, so the keys are the
-              operator&apos;s to choose. Never put a credential in a value —
-              name where the secret lives, not what it is.
-            </p>
-          </div>
-
-          <ul className="flex flex-col gap-4">
-            {rows.map((row, index) => {
-              const bytes = valueBytes(row.value);
-              return (
-                <li key={row.id} className="flex flex-col gap-2 sm:flex-row">
-                  <Input
-                    name="key"
-                    value={row.key}
-                    onChange={(event) =>
-                      update(row.id, "key", event.target.value)
-                    }
-                    aria-label={`Key ${index + 1}`}
-                    className="font-mono sm:w-56"
-                  />
-                  <div className="flex min-w-0 flex-1 flex-col gap-1">
-                    <Textarea
-                      name="value"
-                      rows={2}
-                      value={row.value}
-                      onChange={(event) =>
-                        update(row.id, "value", event.target.value)
-                      }
-                      aria-label={`Value ${index + 1}`}
-                      className="font-mono text-sm"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      {bytes} of {AGENT_VALUE_MAX_BYTES} bytes
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label={`Remove value ${index + 1}`}
-                    disabled={rows.length === 1}
-                    onClick={() =>
-                      setRows((current) =>
-                        current.filter((candidate) => candidate.id !== row.id),
-                      )
-                    }
-                  >
-                    <X />
-                  </Button>
-                </li>
-              );
-            })}
-          </ul>
-
-          <div className="flex items-center gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={atCap}
-              onClick={() =>
-                setRows((current) => [
-                  ...current,
-                  { id: nextId(current), key: "", value: "" },
-                ])
-              }
+            ))}
+          </select>
+        )}
+        <p id="operator-hint" className="text-sm text-muted-foreground">
+          {operators === null
+            ? "Type the operator's identifier. Operators are not listed to you."
+            : "It builds the agent in its own cluster and reports back."}
+        </p>
+        {operators?.length === 0 && (
+          <p className="text-sm">
+            <Link
+              href={orgHref(org, "operators")}
+              className="underline underline-offset-4"
             >
-              <Plus />
-              Add value
-            </Button>
-            <p className="text-sm text-muted-foreground">
-              {rows.length} of {AGENT_VALUES_MAX_ENTRIES} values
-              {atCap && " — a definition carries no more."}
-            </p>
-          </div>
-        </div>
-
-        {message && (
-          <p role="alert" className="text-sm text-destructive">
-            {message}
+              Register an operator
+            </Link>{" "}
+            first.
           </p>
         )}
+      </div>
 
-        <div>
-          <Button
-            type="submit"
-            disabled={!hydrated || pending || problem !== null}
-          >
-            {pending ? "Defining…" : "Define agent"}
-          </Button>
-        </div>
-      </form>
-
-      {state.status === "defined" && (
-        <div className="flex max-w-2xl flex-col gap-2">
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-1">
+          <h2 className="text-sm font-medium">Sherlock settings</h2>
           <p className="text-sm text-muted-foreground">
-            Defined. garam minted this identifier for the agent; the operator
-            builds it and no agent answers under it until one does.
+            Stored as requested. garam does not confirm the operator applies
+            them; its reports show what runs. Never put a credential in a value.
           </p>
-          <Input
-            readOnly
-            value={state.agent}
-            aria-label="Agent identifier"
-            onFocus={(event) => event.target.select()}
-            className="max-w-sm bg-muted font-mono text-xs"
-          />
         </div>
+        <ValuesEditor rows={rows} onChange={setRows} disabled={!hydrated} />
+      </div>
+
+      {message && (
+        <p role="alert" className="text-sm text-destructive">
+          {message}
+        </p>
       )}
-    </section>
+
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="submit"
+          disabled={!hydrated || pending || problem !== null}
+        >
+          {pending ? "Creating…" : "Create agent"}
+        </Button>
+        <Button asChild variant="ghost">
+          <Link href={orgHref(org, "agents")}>Cancel</Link>
+        </Button>
+      </div>
+    </form>
   );
 }
 
 /** The refusal a parse carried, or null when it carried none. */
 function errorOf<T>(parsed: Parsed<T>): string | null {
   return parsed.status === "error" ? parsed.message : null;
-}
-
-/** One past the highest row id, so a removed row's id is never reused. */
-function nextId(rows: readonly Row[]): number {
-  return rows.reduce((highest, row) => Math.max(highest, row.id), -1) + 1;
 }

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import { AGENT_NAME_MAX_LENGTH } from "@/lib/agent-definition";
 import {
   TEMPLATE_DESCRIPTION_MAX_LENGTH,
-  TEMPLATE_NAME_MAX_LENGTH,
   parseTemplateFields,
 } from "@/lib/agent-template";
 
@@ -33,11 +33,11 @@ describe("parseTemplateFields", () => {
   it("counts characters as garam does, not UTF-16 units", () => {
     // Each of these is one character and two UTF-16 units, so a count
     // of units would refuse the longest name garam accepts.
-    const longest = "𝒜".repeat(TEMPLATE_NAME_MAX_LENGTH);
+    const longest = "𝒜".repeat(AGENT_NAME_MAX_LENGTH);
     expect(parseTemplateFields(longest, "", []).status).toBe("ok");
     expect(parseTemplateFields(`${longest}a`, "", [])).toEqual({
       status: "error",
-      message: `A name holds at most ${TEMPLATE_NAME_MAX_LENGTH} characters.`,
+      message: `A name holds at most ${AGENT_NAME_MAX_LENGTH} characters.`,
     });
   });
 

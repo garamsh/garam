@@ -1,10 +1,13 @@
 import type { Metadata } from "next";
-import { Bot, ClipboardList } from "lucide-react";
+import Link from "next/link";
+import { Bot } from "lucide-react";
 
-import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
 import {
-  listAgentDefinitions,
-  listAgents,
+  directoryAgents,
+  getOrg,
+  lookupAgentDefinitions,
+  lookupAgents,
   lookupOperators,
   slugFromGrn,
 } from "@/features/orgs";
@@ -12,9 +15,8 @@ import {
 import { ApiUnreachable } from "../../../_components/api-unreachable";
 import { EmptyState } from "../../../_components/empty-state";
 import { PageHeader } from "../../../_components/page-header";
-import { AgentList } from "./_components/agent-list";
-import { DefineAgentForm } from "./_components/define-agent-form";
-import { DefinitionList } from "./_components/definition-list";
+import { AgentRoster, type RosterEntry } from "./_components/agent-roster";
+import { AgentsTabs } from "./_components/agents-tabs";
 
 /** Head metadata for the agents route; Next.js reads it by name. */
 export const metadata: Metadata = { title: "Agents — garam" };
@@ -22,83 +24,116 @@ export const metadata: Metadata = { title: "Agents — garam" };
 type Params = { params: Promise<{ org: string }> };
 
 /**
- * The agents the organization holds, the definitions it says its agents
- * should be, and the form that says one more. The two lists are
- * separate because the facts are: an agent is what an operator
- * reported, a definition is what the organization decided, and nothing
- * joins them (ADR-0033).
+ * The organization's agents: each one it defined, whether or not an
+ * operator has claimed it yet, beside what operators have reported
+ * (ADR-0075). What the organization asked for and what was reported
+ * are read from different lists and shown apart (ADR-0033); a defined
+ * agent no operator has reported is said to be awaiting one rather
+ * than drawn with a state nobody reported.
  *
- * Every role that may read a definition may also write one
- * (`agent:define`), so the form is not gated the way the invite form
- * is; the API refuses a caller that holds neither.
+ * The organization is read for itself, so one the caller cannot read
+ * answers 404 (ADR-0011); a refused list inside it is said as such.
  */
 export default async function AgentsPage({ params }: Params) {
   const { org } = await params;
-  const [agents, definitions, operators] = await Promise.all([
-    listAgents(org),
-    listAgentDefinitions(org),
+  const [organization, agents, definitions, operators] = await Promise.all([
+    getOrg(org),
+    lookupAgents(org),
+    lookupAgentDefinitions(org),
     lookupOperators(org),
   ]);
-  // A refused operator list leaves the operator typed by identifier
-  // rather than chosen, and definitions shown by identifier alone.
-  const listed = operators.status === "ok" ? operators.data : null;
 
-  return (
+  const header = (
     <>
       <PageHeader
         title="Agents"
-        description="The agents this organization holds and the definitions it says they should be made from. garam learns an agent exists when an operator reports one."
-      />
-      {agents.status === "unreachable" ||
-      definitions.status === "unreachable" ||
-      operators.status === "unreachable" ? (
-        // One outage is one fact, so the page reports it once rather
-        // than once per list.
+        description="Agents this organization defined, and what operators report about them."
+      >
+        <Button asChild>
+          <Link href={`/console/orgs/${org}/agents/new`}>New agent</Link>
+        </Button>
+      </PageHeader>
+      <AgentsTabs org={org} current="agents" />
+    </>
+  );
+  if (
+    organization.status === "unreachable" ||
+    agents.status === "unreachable" ||
+    definitions.status === "unreachable" ||
+    operators.status === "unreachable"
+  ) {
+    return (
+      <>
+        {header}
         <ApiUnreachable subject="this organization's agents" />
-      ) : (
-        <>
-          {agents.data.length === 0 ? (
-            <EmptyState
-              icon={Bot}
-              title="No agents"
-              description="No operator has reported an agent to this organization."
-            />
-          ) : (
-            <AgentList agents={agents.data} />
-          )}
-          <Separator />
-          <section id="definitions" className="flex scroll-mt-4 flex-col gap-3">
-            <h2 className="font-heading text-lg font-semibold">Definitions</h2>
-            <p className="max-w-2xl text-sm text-muted-foreground">
-              What this organization says its agents should be. A definition is
-              a record: an operator reads it and builds the agent elsewhere.
-            </p>
-            {definitions.data.length === 0 ? (
-              <EmptyState
-                icon={ClipboardList}
-                title="No agents defined"
-                description="This organization has defined no agents."
-              />
-            ) : (
-              <DefinitionList
-                org={org}
-                definitions={definitions.data}
-                operators={listed ?? []}
-              />
-            )}
-          </section>
-        </>
+      </>
+    );
+  }
+
+  const directory = { agents, definitions };
+  const reported = new Map(
+    (agents.status === "ok" ? agents.data : []).map((agent) => [
+      agent.grn,
+      agent,
+    ]),
+  );
+  const operatorOf = new Map(
+    (definitions.status === "ok" ? definitions.data : []).map((d) => [
+      d.agentGrn,
+      d.operatorGrn,
+    ]),
+  );
+  const operatorNames = new Map(
+    (operators.status === "ok" ? operators.data : []).map((operator) => [
+      operator.grn,
+      operator.name,
+    ]),
+  );
+  const entries: RosterEntry[] = directoryAgents(directory).map((entry) => {
+    const operatorGrn = operatorOf.get(entry.grn);
+    return {
+      directory: entry,
+      agent: reported.get(entry.grn),
+      operator:
+        operatorGrn === undefined
+          ? undefined
+          : {
+              identifier: slugFromGrn(operatorGrn),
+              name: operatorNames.get(operatorGrn),
+            },
+    };
+  });
+
+  return (
+    <>
+      {header}
+      {definitions.status === "forbidden" && (
+        <p role="status" className="text-sm text-muted-foreground">
+          Agent definitions are not listed to you, so agents awaiting an
+          operator are not shown.
+        </p>
       )}
-      <Separator />
-      <DefineAgentForm
-        org={org}
-        operators={
-          listed?.map((operator) => ({
-            identifier: slugFromGrn(operator.grn),
-            name: operator.name,
-          })) ?? null
-        }
-      />
+      {agents.status === "forbidden" && (
+        <p role="status" className="text-sm text-muted-foreground">
+          Reported agents are not listed to you, so no reported state is shown.
+        </p>
+      )}
+      <section id="definitions" className="scroll-mt-4">
+        {entries.length === 0 ? (
+          <EmptyState
+            icon={Bot}
+            title="No agents"
+            description={
+              definitions.status === "forbidden" ||
+              agents.status === "forbidden"
+                ? "None you can list."
+                : "Create one to ask an operator to run it."
+            }
+          />
+        ) : (
+          <AgentRoster org={org} entries={entries} />
+        )}
+      </section>
     </>
   );
 }

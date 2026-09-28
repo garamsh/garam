@@ -13,6 +13,7 @@ import {
   type CreateAgentTemplateState,
   type UpdateAgentTemplateState,
 } from "@/features/orgs/actions";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { parseAgentValues } from "@/lib/agent-definition";
 import {
   parseTemplateDescription,
@@ -56,6 +57,7 @@ export function TemplateForm({
     start.mode === "create" ? createAgentTemplate : updateAgentTemplate,
     initialState,
   );
+  const hydrated = useHydrated();
   const edit = start.mode === "edit" ? start : null;
   const [name, setName] = useState(edit?.name ?? "");
   const [description, setDescription] = useState(edit?.description ?? "");
@@ -80,6 +82,7 @@ export function TemplateForm({
           id="template-name"
           name="name"
           required
+          disabled={!hydrated}
           value={name}
           onChange={(event) => setName(event.target.value)}
           placeholder="Research assistant"
@@ -93,6 +96,7 @@ export function TemplateForm({
           id="template-description"
           name="description"
           rows={3}
+          disabled={!hydrated}
           value={description}
           onChange={(event) => setDescription(event.target.value)}
           aria-describedby="template-description-hint"
@@ -107,14 +111,13 @@ export function TemplateForm({
 
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-1">
-          <h2 className="text-sm font-medium">Values</h2>
+          <h2 className="text-sm font-medium">Sherlock settings</h2>
           <p className="text-sm text-muted-foreground">
-            Copied into a new agent, where they can still be changed. Later
-            edits here do not reach agents already created. Never put a
-            credential in a value.
+            Copied once into each new agent. Later edits here do not change
+            existing agents. Never put a credential in a value.
           </p>
         </div>
-        <ValuesEditor rows={rows} onChange={setRows} />
+        <ValuesEditor rows={rows} onChange={setRows} disabled={!hydrated} />
       </div>
 
       {message && (
@@ -129,7 +132,10 @@ export function TemplateForm({
       )}
 
       <div className="flex flex-wrap gap-2">
-        <Button type="submit" disabled={pending || problem !== null}>
+        <Button
+          type="submit"
+          disabled={!hydrated || pending || problem !== null}
+        >
           {submitLabel(start.mode, pending)}
         </Button>
         <Button asChild variant="ghost">

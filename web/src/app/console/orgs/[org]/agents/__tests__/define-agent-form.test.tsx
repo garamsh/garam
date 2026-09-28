@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { Component, type ReactNode } from "react";
 import { renderToString } from "react-dom/server";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
@@ -17,6 +18,38 @@ vi.mock("next/navigation", () => ({
 // `revalidatePath` needs a request scope the test does not run in; the
 // action's own answer is what the form renders.
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
+
+/**
+ * Shows the error a render threw. In the app `redirect()` throws to
+ * navigate and Next.js catches it; here this stands where Next.js
+ * would, so the navigation is read rather than left unhandled.
+ */
+class Navigation extends Component<
+  { children: ReactNode },
+  { to: string | null }
+> {
+  state = { to: null };
+  static getDerivedStateFromError(error: Error) {
+    return { to: error.message };
+  }
+  render() {
+    return this.state.to ?? this.props.children;
+  }
+}
+
+type Operators = { identifier: string; name: string }[] | null;
+
+/** Renders the form where Next.js would, starting from `values`. */
+function renderForm(operators: Operators, values: Record<string, string> = {}) {
+  return render(
+    <Navigation>
+      <DefineAgentForm org="acme" operators={operators} values={values} />
+    </Navigation>,
+  );
+}
+
+/** Where a created agent sends the person: its own page. */
+const OPENED = "NEXT_REDIRECT:/console/orgs/acme/agents/9f2ac1b40d8e7a35";
 
 /** Records every definition the form posts, and answers as garam does. */
 function recordDefinitions() {
@@ -39,6 +72,7 @@ describe("define agent form", () => {
       <DefineAgentForm
         org="acme"
         operators={[{ identifier: "field-one", name: "Field one" }]}
+        values={{}}
       />,
     );
     expect(
@@ -46,28 +80,18 @@ describe("define agent form", () => {
     ).toBe(true);
 
     // The control: rendered in the browser, the same button is enabled.
-    render(
-      <DefineAgentForm
-        org="acme"
-        operators={[{ identifier: "field-one", name: "Field one" }]}
-      />,
-    );
-    expect(screen.getByRole("button", { name: "Define agent" })).toBeEnabled();
+    renderForm([{ identifier: "field-one", name: "Field one" }]);
+    expect(screen.getByRole("button", { name: "Create agent" })).toBeEnabled();
   });
 
   it("chooses the operator by name and posts the identifier beside it", async () => {
     const posted = recordDefinitions();
     const user = userEvent.setup();
-    render(
-      <DefineAgentForm
-        org="acme"
-        operators={[
-          { identifier: "field-one", name: "Field cluster" },
-          { identifier: "field-two", name: "Field cluster" },
-          { identifier: "staging", name: "staging" },
-        ]}
-      />,
-    );
+    renderForm([
+      { identifier: "field-one", name: "Field cluster" },
+      { identifier: "field-two", name: "Field cluster" },
+      { identifier: "staging", name: "staging" },
+    ]);
 
     // Two operators share a name, so each option carries the
     // identifier that tells them apart; one named by its identifier is
@@ -82,34 +106,32 @@ describe("define agent form", () => {
       "staging",
     ]);
 
+    await user.type(screen.getByLabelText("Name"), "Scout");
     await user.selectOptions(
       screen.getByLabelText("Operator"),
       "Field cluster (field-two)",
     );
-    await user.click(screen.getByRole("button", { name: "Define agent" }));
+    await user.click(screen.getByRole("button", { name: "Create agent" }));
 
-    expect(
-      await screen.findByLabelText("Agent identifier"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(OPENED)).toBeInTheDocument();
     expect(posted).toEqual([
-      { operatorGrn: "grn:acme:default:operator:field-two", values: {} },
+      {
+        name: "Scout",
+        operatorGrn: "grn:acme:default:operator:field-two",
+        values: {},
+      },
     ]);
   });
 
   it("offers registering when there is no operator to choose", async () => {
-    render(<DefineAgentForm org="acme" operators={[]} />);
+    renderForm([]);
 
     expect(
       screen.getByRole("link", { name: "Register an operator" }),
     ).toHaveAttribute("href", "/console/orgs/acme/operators");
     // The control: with an operator to choose, the offer is gone, so
     // what put it there is the empty list.
-    render(
-      <DefineAgentForm
-        org="acme"
-        operators={[{ identifier: "field-one", name: "Field one" }]}
-      />,
-    );
+    renderForm([{ identifier: "field-one", name: "Field one" }]);
     expect(
       screen.getAllByRole("link", { name: "Register an operator" }),
     ).toHaveLength(1);
@@ -133,12 +155,11 @@ describe("define agent form", () => {
       ),
     );
     const user = userEvent.setup();
-    const { container } = render(
-      <DefineAgentForm org="acme" operators={null} />,
-    );
+    const { container } = renderForm(null);
 
+    await user.type(screen.getByLabelText("Name"), "Scout");
     await user.type(screen.getByLabelText("Operator"), "gagent-dev");
-    await user.click(screen.getByRole("button", { name: "Define agent" }));
+    await user.click(screen.getByRole("button", { name: "Create agent" }));
 
     expect(
       await screen.findByText(
@@ -150,21 +171,21 @@ describe("define agent form", () => {
   it("builds the operator GRN from the organization and posts the values as a map", async () => {
     const posted = recordDefinitions();
     const user = userEvent.setup();
-    render(<DefineAgentForm org="acme" operators={null} />);
+    renderForm(null);
 
+    await user.type(screen.getByLabelText("Name"), "Scout");
     await user.type(screen.getByLabelText("Operator"), "field-one");
     await user.type(screen.getByLabelText("Key 1"), "model");
     await user.type(screen.getByLabelText("Value 1"), "haiku");
     await user.click(screen.getByRole("button", { name: "Add value" }));
     await user.type(screen.getByLabelText("Key 2"), "workspace");
     await user.type(screen.getByLabelText("Value 2"), "frontend");
-    await user.click(screen.getByRole("button", { name: "Define agent" }));
+    await user.click(screen.getByRole("button", { name: "Create agent" }));
 
-    expect(await screen.findByLabelText("Agent identifier")).toHaveValue(
-      "9f2ac1b40d8e7a35",
-    );
+    expect(await screen.findByText(OPENED)).toBeInTheDocument();
     expect(posted).toEqual([
       {
+        name: "Scout",
         operatorGrn: "grn:acme:default:operator:field-one",
         values: { model: "haiku", workspace: "frontend" },
       },
@@ -174,16 +195,16 @@ describe("define agent form", () => {
   it("defines an agent carrying no values at all", async () => {
     const posted = recordDefinitions();
     const user = userEvent.setup();
-    render(<DefineAgentForm org="acme" operators={null} />);
+    renderForm(null);
 
+    await user.type(screen.getByLabelText("Name"), "Scout");
     await user.type(screen.getByLabelText("Operator"), "field-one");
-    await user.click(screen.getByRole("button", { name: "Define agent" }));
+    await user.click(screen.getByRole("button", { name: "Create agent" }));
 
-    expect(
-      await screen.findByLabelText("Agent identifier"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(OPENED)).toBeInTheDocument();
     expect(posted).toEqual([
       {
+        name: "Scout",
         operatorGrn: "grn:acme:default:operator:field-one",
         values: {},
       },
@@ -193,7 +214,7 @@ describe("define agent form", () => {
   it("names no key of its own, and takes whichever key is typed", async () => {
     const posted = recordDefinitions();
     const user = userEvent.setup();
-    render(<DefineAgentForm org="acme" operators={null} />);
+    renderForm(null);
 
     // The form names no key: garam interprets none, and the contract
     // that would give one meaning belongs to an operator garam has
@@ -202,16 +223,16 @@ describe("define agent form", () => {
     expect(document.querySelectorAll("datalist option")).toHaveLength(0);
     expect(screen.getByLabelText("Key 1")).not.toHaveAttribute("placeholder");
 
+    await user.type(screen.getByLabelText("Name"), "Scout");
     await user.type(screen.getByLabelText("Operator"), "field-one");
     await user.type(screen.getByLabelText("Key 1"), "cluster-region");
     await user.type(screen.getByLabelText("Value 1"), "eu-west-1");
-    await user.click(screen.getByRole("button", { name: "Define agent" }));
+    await user.click(screen.getByRole("button", { name: "Create agent" }));
 
-    expect(
-      await screen.findByLabelText("Agent identifier"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(OPENED)).toBeInTheDocument();
     expect(posted).toEqual([
       {
+        name: "Scout",
         operatorGrn: "grn:acme:default:operator:field-one",
         values: { "cluster-region": "eu-west-1" },
       },
@@ -221,9 +242,10 @@ describe("define agent form", () => {
   it("says which key the character rule refuses, without a round trip", async () => {
     const posted = recordDefinitions();
     const user = userEvent.setup();
-    render(<DefineAgentForm org="acme" operators={null} />);
-    const define = screen.getByRole("button", { name: "Define agent" });
+    renderForm(null);
+    const define = screen.getByRole("button", { name: "Create agent" });
 
+    await user.type(screen.getByLabelText("Name"), "Scout");
     await user.type(screen.getByLabelText("Operator"), "field-one");
     await user.type(screen.getByLabelText("Key 1"), "Model");
 
@@ -239,17 +261,16 @@ describe("define agent form", () => {
     await user.type(screen.getByLabelText("Key 1"), "model");
     await user.click(define);
 
-    expect(
-      await screen.findByLabelText("Agent identifier"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText(OPENED)).toBeInTheDocument();
     expect(posted).toHaveLength(1);
   });
 
   it("refuses a repeated key, and takes the same two rows under distinct keys", async () => {
     const posted = recordDefinitions();
     const user = userEvent.setup();
-    render(<DefineAgentForm org="acme" operators={null} />);
+    renderForm(null);
 
+    await user.type(screen.getByLabelText("Name"), "Scout");
     await user.type(screen.getByLabelText("Operator"), "field-one");
     await user.type(screen.getByLabelText("Key 1"), "model");
     await user.click(screen.getByRole("button", { name: "Add value" }));
@@ -258,20 +279,21 @@ describe("define agent form", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       'The key "model" is used twice; a definition holds one value per key.',
     );
-    expect(screen.getByRole("button", { name: "Define agent" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Create agent" })).toBeDisabled();
 
     await user.type(screen.getByLabelText("Key 2"), "-fallback");
 
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Define agent" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Create agent" })).toBeEnabled();
     expect(posted).toEqual([]);
   });
 
   it("counts a value's bytes as it is typed and refuses one past the ceiling", async () => {
     const posted = recordDefinitions();
     const user = userEvent.setup();
-    render(<DefineAgentForm org="acme" operators={null} />);
+    renderForm(null);
 
+    await user.type(screen.getByLabelText("Name"), "Scout");
     await user.type(screen.getByLabelText("Operator"), "field-one");
     await user.type(screen.getByLabelText("Key 1"), "system-prompt");
     await user.type(screen.getByLabelText("Value 1"), "be brief");
@@ -286,13 +308,13 @@ describe("define agent form", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       'The value under "system-prompt" is 4097 bytes; a value holds at most 4096.',
     );
-    expect(screen.getByRole("button", { name: "Define agent" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Create agent" })).toBeDisabled();
     expect(posted).toEqual([]);
   });
 
   it("stops at thirty-two values and says that is all a definition carries", async () => {
     const user = userEvent.setup();
-    render(<DefineAgentForm org="acme" operators={null} />);
+    renderForm(null);
     const add = screen.getByRole("button", { name: "Add value" });
 
     expect(screen.getByText("1 of 32 values")).toBeInTheDocument();
@@ -300,23 +322,22 @@ describe("define agent form", () => {
       await user.click(add);
     }
 
-    expect(
-      screen.getByText("32 of 32 values — a definition carries no more."),
-    ).toBeInTheDocument();
+    expect(screen.getByText("32 of 32 values")).toBeInTheDocument();
     expect(add).toBeDisabled();
   });
 
   it("names the character rule an operator identifier breaks", async () => {
     const posted = recordDefinitions();
     const user = userEvent.setup();
-    render(<DefineAgentForm org="acme" operators={null} />);
+    renderForm(null);
 
+    await user.type(screen.getByLabelText("Name"), "Scout");
     await user.type(screen.getByLabelText("Operator"), "acme:field");
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "An operator identifier holds only lowercase letters, digits and hyphens.",
     );
-    expect(screen.getByRole("button", { name: "Define agent" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Create agent" })).toBeDisabled();
     expect(posted).toEqual([]);
   });
 
@@ -333,10 +354,11 @@ describe("define agent form", () => {
       ),
     );
     const user = userEvent.setup();
-    render(<DefineAgentForm org="acme" operators={null} />);
+    renderForm(null);
 
+    await user.type(screen.getByLabelText("Name"), "Scout");
     await user.type(screen.getByLabelText("Operator"), "field-one");
-    await user.click(screen.getByRole("button", { name: "Define agent" }));
+    await user.click(screen.getByRole("button", { name: "Create agent" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "agent: operator belongs to another organization",
@@ -346,12 +368,13 @@ describe("define agent form", () => {
   it("keeps what was typed when the API does not answer", async () => {
     server.use(http.post(`${API_URL}/*`, () => HttpResponse.error()));
     const user = userEvent.setup();
-    render(<DefineAgentForm org="acme" operators={null} />);
+    renderForm(null);
 
+    await user.type(screen.getByLabelText("Name"), "Scout");
     await user.type(screen.getByLabelText("Operator"), "field-one");
     await user.type(screen.getByLabelText("Key 1"), "system-prompt");
     await user.type(screen.getByLabelText("Value 1"), "be brief");
-    await user.click(screen.getByRole("button", { name: "Define agent" }));
+    await user.click(screen.getByRole("button", { name: "Create agent" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "the garam API could not be reached",
@@ -360,7 +383,7 @@ describe("define agent form", () => {
   });
 
   it("tells a person a credential is never a value", async () => {
-    render(<DefineAgentForm org="acme" operators={null} />);
+    renderForm(null);
 
     // ADR-0036: garam holds the reference and no surface of its serves
     // the value, so the form must not invite one. Presence: the warning
@@ -368,5 +391,58 @@ describe("define agent form", () => {
     expect(
       screen.getByText(/Never put a credential in a value/),
     ).toBeInTheDocument();
+  });
+  it("starts from a template's values and posts them as edited", async () => {
+    const posted = recordDefinitions();
+    const user = userEvent.setup();
+    renderForm(null, { model: "sonnet", ego: "curious" });
+
+    // The copy is the form's own rows: shown as the template held
+    // them, and edited here before anything is posted.
+    expect(screen.getByLabelText("Key 1")).toHaveValue("model");
+    expect(screen.getByLabelText("Value 2")).toHaveValue("curious");
+    await user.clear(screen.getByLabelText("Value 2"));
+    await user.type(screen.getByLabelText("Value 2"), "careful");
+    await user.type(screen.getByLabelText("Name"), "Scout");
+    await user.type(screen.getByLabelText("Operator"), "field-one");
+    await user.click(screen.getByRole("button", { name: "Create agent" }));
+
+    expect(await screen.findByText(OPENED)).toBeInTheDocument();
+    expect(posted).toEqual([
+      {
+        name: "Scout",
+        operatorGrn: "grn:acme:default:operator:field-one",
+        values: { model: "sonnet", ego: "careful" },
+      },
+    ]);
+  });
+
+  it("refuses a name of only spaces, and posts the trimmed name", async () => {
+    const posted = recordDefinitions();
+    const user = userEvent.setup();
+    renderForm(null);
+
+    await user.type(screen.getByLabelText("Name"), "   ");
+    await user.type(screen.getByLabelText("Operator"), "field-one");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Give the agent a name.",
+    );
+    expect(screen.getByRole("button", { name: "Create agent" })).toBeDisabled();
+    expect(posted).toEqual([]);
+
+    // The control: the same name with a word inside it is posted,
+    // trimmed as garam trims it.
+    await user.type(screen.getByLabelText("Name"), "Scout ");
+    await user.click(screen.getByRole("button", { name: "Create agent" }));
+
+    expect(await screen.findByText(OPENED)).toBeInTheDocument();
+    expect(posted).toEqual([
+      {
+        name: "Scout",
+        operatorGrn: "grn:acme:default:operator:field-one",
+        values: {},
+      },
+    ]);
   });
 });

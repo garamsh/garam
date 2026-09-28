@@ -37,8 +37,8 @@ export function DeleteTemplateForm({
           <input type="hidden" name="org" value={org} />
           <input type="hidden" name="template" value={template} />
           <p className="text-sm">
-            Delete {name}? Agents created from it are not changed. garam
-            cannot bring the template back.
+            Delete {name}? Agents created from it are not changed. garam cannot
+            bring the template back.
           </p>
           <div className="flex flex-wrap gap-2">
             <Button type="submit" variant="destructive" disabled={pending}>

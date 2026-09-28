@@ -9,6 +9,7 @@ import {
   API_URL,
   alice,
   aliceMembership,
+  fieldAgent,
   reportedAgent,
   signedOut,
 } from "@/testing/mocks/handlers";
@@ -92,11 +93,43 @@ describe("team page", () => {
     const offered = within(choice)
       .getAllByRole("option")
       .map((option) => option.textContent);
+    // A defined agent is offered by name before any operator claims
+    // it, with its identifier and its state beside the name (ADR-0075).
     expect(offered).toEqual([
       "Choose who to add",
       "Bob · Person",
+      "Scout (9f2ac1b40d8e7a35) · awaiting operator · Agent",
       `${slugFromGrn(reportedAgent.grn)} · Agent`,
     ]);
+  });
+
+  it("names a defined agent member by the name its definition gives it", async () => {
+    server.use(membersAre(fieldAgent.agentGrn));
+
+    await renderTeam();
+
+    // Presence: a row's accessible name is all of its cells.
+    const row = screen.getByRole("row", { name: /Scout/ });
+    expect(within(row).getByText("Agent")).toBeInTheDocument();
+    expect(
+      within(row).queryByText("Not found in this organization"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("says agent definitions are not listed rather than offering none silently", async () => {
+    server.use(
+      http.get(`${API_URL}/orgs/acme/agent-definitions`, () =>
+        HttpResponse.json({ kind: "denied", message: "no" }, { status: 403 }),
+      ),
+    );
+
+    await renderTeam();
+
+    expect(
+      screen.getByText(
+        "This organization's agent definitions are not listed to you, so none of them can be chosen here.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("keeps a member the organization no longer holds visible and removable", async () => {

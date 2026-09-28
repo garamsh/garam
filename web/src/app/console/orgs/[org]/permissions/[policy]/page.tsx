@@ -7,6 +7,7 @@ import {
   listPolicies,
   listPolicyAttachments,
   listPolicyVersions,
+  lookupAgentDefinitions,
   lookupAgents,
   lookupGroups,
   lookupOrgMembers,
@@ -25,6 +26,7 @@ import {
   KIND_PLURAL,
   describeSubject,
   listSubjects,
+  partlyListedAgents,
   reachOf,
   reachSentence,
   refusedKinds,
@@ -66,16 +68,25 @@ function statusSentence(policy: Policy): string {
  */
 export default async function PolicyPage({ params }: Params) {
   const { org, policy: slug } = await params;
-  const [organization, policies, versions, attachments, teams, people, agents] =
-    await Promise.all([
-      getOrg(org),
-      listPolicies(org),
-      listPolicyVersions(org, slug),
-      listPolicyAttachments(org, slug),
-      lookupGroups(org),
-      lookupOrgMembers(org),
-      lookupAgents(org),
-    ]);
+  const [
+    organization,
+    policies,
+    versions,
+    attachments,
+    teams,
+    people,
+    agents,
+    definitions,
+  ] = await Promise.all([
+    getOrg(org),
+    listPolicies(org),
+    listPolicyVersions(org, slug),
+    listPolicyAttachments(org, slug),
+    lookupGroups(org),
+    lookupOrgMembers(org),
+    lookupAgents(org),
+    lookupAgentDefinitions(org),
+  ]);
 
   if (
     organization.status === "unreachable" ||
@@ -84,7 +95,8 @@ export default async function PolicyPage({ params }: Params) {
     attachments.status === "unreachable" ||
     teams.status === "unreachable" ||
     people.status === "unreachable" ||
-    agents.status === "unreachable"
+    agents.status === "unreachable" ||
+    definitions.status === "unreachable"
   ) {
     return (
       <>
@@ -112,7 +124,8 @@ export default async function PolicyPage({ params }: Params) {
   );
   if (policy === undefined) notFound();
 
-  const catalogs: Catalogs = { teams, people, agents };
+  const catalogs: Catalogs = { teams, people, agents, definitions };
+  const partlyListed = partlyListedAgents(catalogs);
   const reach = reachOf(attachments, catalogs);
   const sentence = reachSentence(reach);
   const orgWide = reach.kind !== "attached";
@@ -199,6 +212,12 @@ export default async function PolicyPage({ params }: Params) {
           <p className="text-sm text-muted-foreground">
             Attaching narrows it: it then applies only to what it is attached
             to, not to everyone.
+          </p>
+        )}
+        {partlyListed.length > 0 && (
+          <p className="text-sm text-muted-foreground">
+            This organization&apos;s {partlyListed.join(" and ")} are not listed
+            to you, so some agents may be missing here.
           </p>
         )}
         {refused.length > 0 && (

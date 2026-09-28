@@ -17,6 +17,10 @@ export {
 } from "./api/add-policy-version";
 export { archivePolicy, type ArchivePolicyState } from "./api/archive-policy";
 export { attachPolicy, type AttachPolicyState } from "./api/attach-policy";
+export {
+  createAgentTemplate,
+  type CreateAgentTemplateState,
+} from "./api/create-agent-template";
 export { createGroup, type CreateGroupState } from "./api/create-group";
 export {
   createInvitation,
@@ -26,6 +30,10 @@ export { createOrg, type CreateOrgState } from "./api/create-org";
 export { createPolicy, type CreatePolicyState } from "./api/create-policy";
 export { createProject, type CreateProjectState } from "./api/create-project";
 export { defineAgent, type DefineAgentState } from "./api/define-agent";
+export {
+  deleteAgentTemplate,
+  type DeleteAgentTemplateState,
+} from "./api/delete-agent-template";
 export { deleteGroup, type DeleteGroupState } from "./api/delete-group";
 export { detachPolicy, type DetachPolicyState } from "./api/detach-policy";
 export {
@@ -44,10 +52,15 @@ export {
   removeGroupMember,
   type RemoveGroupMemberState,
 } from "./api/remove-group-member";
+export { renameAgent, type RenameAgentState } from "./api/rename-agent";
 export {
   rollbackPolicy,
   type RollbackPolicyState,
 } from "./api/rollback-policy";
+export {
+  updateAgentTemplate,
+  type UpdateAgentTemplateState,
+} from "./api/update-agent-template";
 export { updateGroup, type UpdateGroupState } from "./api/update-group";
 export {
   updateOperator,

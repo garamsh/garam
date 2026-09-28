@@ -1,7 +1,10 @@
 import {
+  agentChoiceLabel,
+  directoryAgents,
+  lookUpAgent,
   parseGrn,
   slugFromGrn,
-  type Agent,
+  type AgentDirectory,
   type GroupMember,
   type Member,
 } from "@/features/orgs";
@@ -72,14 +75,16 @@ function lookUp<T>(
 
 /**
  * Reads each membership against the organization's people and agents.
- * A GRN neither list holds stays in the result, marked missing, so a
+ * A GRN no list holds stays in the result, marked missing, so a
  * membership that names nobody any more is still visible and
- * removable; one whose list was refused is marked refused instead.
+ * removable; one whose list was refused is marked refused instead. An
+ * agent is known by what operators reported and by what the
+ * organization defined, so one awaiting an operator is found by name.
  */
 export function resolveTeamMembers(
   members: readonly GroupMember[],
   people: Catalog<Member>,
-  agents: Catalog<Agent>,
+  agents: AgentDirectory,
 ): TeamMember[] {
   return members.map(({ memberGrn }) => {
     const identifier = slugFromGrn(memberGrn);
@@ -96,10 +101,15 @@ export function resolveTeamMembers(
         };
       }
       case "agent": {
-        // An agent carries no name of its own (#1125), so its
-        // identifier is the name the console has for it.
-        const { lookup } = lookUp(agents, memberGrn, (a) => a.grn);
-        return { grn: memberGrn, identifier, kind, name: identifier, lookup };
+        // An agent no definition names has only its identifier.
+        const { lookup, agent } = lookUpAgent(agents, memberGrn);
+        return {
+          grn: memberGrn,
+          identifier,
+          kind,
+          name: agent?.name ?? identifier,
+          lookup,
+        };
       }
       case "unknown":
         return {
@@ -116,12 +126,15 @@ export function resolveTeamMembers(
 /**
  * The people and agents of the organization the team does not hold,
  * people first. A person without a name on record is offered under
- * their identifier, said to be one. A refused list offers no one.
+ * their identifier, said to be one. An agent is offered by name with
+ * its identifier, including one still awaiting an operator: its GRN is
+ * minted with its definition, and a team holds GRNs (ADR-0075). A
+ * refused list offers no one.
  */
 export function teamCandidates(
   members: readonly GroupMember[],
   people: Catalog<Member>,
-  agents: Catalog<Agent>,
+  agents: AgentDirectory,
 ): Candidate[] {
   const held = new Set(members.map((member) => member.memberGrn));
   return [
@@ -134,12 +147,12 @@ export function teamCandidates(
           person.nickname ??
           `No name on record (${slugFromGrn(person.userGrn)})`,
       })),
-    ...(agents.status === "ok" ? agents.data : [])
+    ...directoryAgents(agents)
       .filter((agent) => !held.has(agent.grn))
       .map((agent): Candidate => ({
         grn: agent.grn,
         kind: "agent",
-        label: slugFromGrn(agent.grn),
+        label: agentChoiceLabel(agent),
       })),
   ];
 }

@@ -10,14 +10,14 @@ import {
 } from "@/lib/garam";
 import type { components } from "@/types/api";
 
-import { readTemplateForm } from "./agent-template-form";
+import {
+  readTemplateForm,
+  type TemplateFormState,
+} from "./agent-template-form";
 import { AgentTemplateParser } from "./agent-templates";
 
-/** What the edit form has to show: nothing yet, a refusal, or saved. */
-export type UpdateAgentTemplateState =
-  | { status: "idle" }
-  | { status: "error"; message: string }
-  | { status: "saved"; name: string };
+/** What the template form shows while editing (`TemplateFormState`). */
+export type UpdateAgentTemplateState = TemplateFormState;
 
 const TemplateSchema = z.string().min(1);
 

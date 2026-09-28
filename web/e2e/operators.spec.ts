@@ -87,21 +87,29 @@ test.describe("operators", () => {
       }),
     ).toBeVisible();
 
-    await page.goto(`/console/orgs/${signedIn.orgSlug}/agents`);
+    await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/new`);
     const operator = page.getByLabel("Operator", { exact: true });
     await expect(operator).toBeEnabled();
+    await page.getByLabel("Name", { exact: true }).fill("Batch runner");
     await operator.selectOption({ label: "Staging cluster (field-two)" });
     await page
-      .getByRole("button", { name: "Define agent", exact: true })
+      .getByRole("button", { name: "Create agent", exact: true })
       .click();
-    const minted = page.getByLabel("Agent identifier", { exact: true });
-    await expect(minted).toBeVisible();
-    const agent = await minted.inputValue();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Batch runner" }),
+    ).toBeVisible();
+    const agent = page.url().split("/").at(-1) ?? "";
 
     // The definition now refuses the delete, and the operator's page
-    // lists it beside the route to the definitions.
+    // lists it by name beside the route to the definitions.
     await page.goto(`${operators}/field-two`);
     await expect(page.getByText(agent, { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Batch runner", exact: true }),
+    ).toHaveAttribute(
+      "href",
+      `/console/orgs/${signedIn.orgSlug}/agents/${agent}`,
+    );
     await expect(
       page.getByRole("link", { name: "View in Agents", exact: true }),
     ).toHaveAttribute(

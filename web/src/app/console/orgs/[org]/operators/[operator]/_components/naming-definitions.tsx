@@ -50,7 +50,13 @@ export function NamingDefinitions({
           <ul className="flex flex-col gap-1 text-sm">
             {definitions.data.map((definition) => (
               <li key={definition.agentGrn} className="flex flex-wrap gap-x-3">
-                <span className="font-mono">
+                <Link
+                  href={`${agentsHref}/${slugFromGrn(definition.agentGrn)}`}
+                  className="wrap-anywhere underline-offset-4 hover:underline focus-visible:underline"
+                >
+                  {definition.name}
+                </Link>
+                <span className="font-mono text-muted-foreground">
                   {slugFromGrn(definition.agentGrn)}
                 </span>
                 <span className="text-muted-foreground">

@@ -11,15 +11,14 @@ import {
 import type { components } from "@/types/api";
 
 import { slugFromGrn } from "../grn";
-import { readTemplateForm } from "./agent-template-form";
+import {
+  readTemplateForm,
+  type TemplateFormState,
+} from "./agent-template-form";
 import { AgentTemplateParser, type AgentTemplate } from "./agent-templates";
 
-/**
- * What the create form has to show: nothing yet, or a refusal. A
- * created template is the page it is sent to.
- */
-export type CreateAgentTemplateState =
-  { status: "idle" } | { status: "error"; message: string };
+/** What the template form shows while creating (`TemplateFormState`). */
+export type CreateAgentTemplateState = TemplateFormState;
 
 /**
  * Records a template of the organization and opens its page. It
@@ -60,7 +59,5 @@ export async function createAgentTemplate(
   }
 
   revalidatePath(`/console/orgs/${org}/agents/templates`);
-  redirect(
-    `/console/orgs/${org}/agents/templates/${slugFromGrn(created.grn)}`,
-  );
+  redirect(`/console/orgs/${org}/agents/templates/${slugFromGrn(created.grn)}`);
 }

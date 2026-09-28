@@ -3,6 +3,17 @@ import { z } from "zod";
 import { parseTemplateFields, type TemplateFields } from "@/lib/agent-template";
 import type { Parsed } from "@/lib/parsed";
 
+/**
+ * What the template form has to show: nothing yet, a refusal, or the
+ * name an edit saved. Creating and editing share it because one form
+ * does both; a created template is the page it is sent to, so creating
+ * never answers `saved`.
+ */
+export type TemplateFormState =
+  | { status: "idle" }
+  | { status: "error"; message: string }
+  | { status: "saved"; name: string };
+
 const Schema = z.object({
   org: z.string().min(1),
   name: z.string(),
@@ -39,5 +50,8 @@ export function readTemplateForm(
     parsed.data.entries,
   );
   if (fields.status === "error") return fields;
-  return { status: "ok", value: { org: parsed.data.org, fields: fields.value } };
+  return {
+    status: "ok",
+    value: { org: parsed.data.org, fields: fields.value },
+  };
 }

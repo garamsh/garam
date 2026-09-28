@@ -32,9 +32,12 @@ export function rowsFrom(values: Record<string, string>): ValueRow[] {
 export function ValuesEditor({
   rows,
   onChange,
+  disabled,
 }: {
   rows: readonly ValueRow[];
   onChange: (rows: ValueRow[]) => void;
+  /** True until the form hydrates, so no input lands unseen. */
+  disabled: boolean;
 }) {
   const atCap = rows.length >= AGENT_VALUES_MAX_ENTRIES;
 
@@ -52,6 +55,7 @@ export function ValuesEditor({
             <Input
               name="key"
               value={row.key}
+              disabled={disabled}
               onChange={(event) => update(row.id, "key", event.target.value)}
               aria-label={`Key ${index + 1}`}
               className="font-mono sm:w-56"
@@ -61,6 +65,7 @@ export function ValuesEditor({
                 name="value"
                 rows={2}
                 value={row.value}
+                disabled={disabled}
                 onChange={(event) =>
                   update(row.id, "value", event.target.value)
                 }
@@ -76,7 +81,7 @@ export function ValuesEditor({
               variant="ghost"
               size="icon"
               aria-label={`Remove value ${index + 1}`}
-              disabled={rows.length === 1}
+              disabled={disabled || rows.length === 1}
               onClick={() =>
                 onChange(rows.filter((candidate) => candidate.id !== row.id))
               }
@@ -92,7 +97,7 @@ export function ValuesEditor({
           type="button"
           variant="outline"
           size="sm"
-          disabled={atCap}
+          disabled={disabled || atCap}
           onClick={() =>
             onChange([...rows, { id: nextId(rows), key: "", value: "" }])
           }

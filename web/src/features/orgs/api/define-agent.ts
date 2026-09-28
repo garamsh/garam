@@ -1,9 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import { parseAgentValues } from "@/lib/agent-definition";
+import { parseAgentName, parseAgentValues } from "@/lib/agent-definition";
 import { parseOperatorIdentifier } from "@/lib/operator";
 import {
   GaramApiError,
@@ -16,24 +17,25 @@ import { operatorGrn, slugFromGrn } from "../grn";
 import { AgentDefinitionParser, type AgentDefinition } from "./orgs";
 
 /**
- * What the define form has to show: nothing yet, a refusal, or the
- * identifier garam minted for the agent the definition describes.
+ * What the define form has to show: nothing yet, or a refusal. A
+ * defined agent is the page it is sent to.
  */
 export type DefineAgentState =
-  | { status: "idle" }
-  | { status: "error"; message: string }
-  | { status: "defined"; agent: string };
+  { status: "idle" } | { status: "error"; message: string };
 
 const Schema = z.object({
   org: z.string().min(1),
+  name: z.string(),
   operator: z.string(),
   entries: z.array(z.object({ key: z.string(), value: z.string() })),
 });
 
 /**
- * Records what an agent of the organization should be and answers with
- * the agent it minted. It creates no agent: an operator reads the
- * definition and makes one (ADR-0026).
+ * Records what an agent of the organization should be and opens the
+ * page of the agent it minted. It creates no agent: an operator reads
+ * the definition and makes one (ADR-0026). Values a template supplied
+ * arrive here as the form's own rows, so nothing links the definition
+ * to that template (ADR-0075).
  */
 export async function defineAgent(
   _state: DefineAgentState,
@@ -46,6 +48,7 @@ export async function defineAgent(
   const valueFields = formData.getAll("value");
   const parsed = Schema.safeParse({
     org: formData.get("org"),
+    name: formData.get("name"),
     operator: formData.get("operator"),
     entries: Array.from(
       { length: Math.max(keyFields.length, valueFields.length) },
@@ -56,6 +59,8 @@ export async function defineAgent(
     return { status: "error", message: "The form did not arrive complete." };
   }
 
+  const name = parseAgentName(parsed.data.name);
+  if (name.status === "error") return name;
   const operator = parseOperatorIdentifier(parsed.data.operator);
   if (operator.status === "error") return operator;
   const values = parseAgentValues(parsed.data.entries);
@@ -71,6 +76,7 @@ export async function defineAgent(
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          name: name.value,
           operatorGrn: operatorGrn(org, operator.value),
           values: values.value,
         } satisfies components["schemas"]["AgentDefinitionCreate"]),
@@ -89,6 +95,6 @@ export async function defineAgent(
     throw error;
   }
 
-  revalidatePath(`/console/orgs/${org}/agents`);
-  return { status: "defined", agent: slugFromGrn(definition.agentGrn) };
+  revalidatePath(`/console/orgs/${org}/agents`, "layout");
+  redirect(`/console/orgs/${org}/agents/${slugFromGrn(definition.agentGrn)}`);
 }

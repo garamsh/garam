@@ -5,14 +5,17 @@
  * a definition's values and are parsed by `src/lib/agent-definition.ts`.
  *
  * The numbers are the ones `api/openapi.yaml` publishes under
- * `AgentTemplateWrite`, counted in characters as garam counts them.
+ * `AgentTemplateWrite`, counted in characters as garam counts them. A
+ * template's name is bounded as an agent's is.
  */
 
-import { parseAgentValues, type ValueEntry } from "@/lib/agent-definition";
+import {
+  characters,
+  parseAgentName,
+  parseAgentValues,
+  type ValueEntry,
+} from "@/lib/agent-definition";
 import { refuse, type Parsed } from "@/lib/parsed";
-
-/** How long a template's name is, in characters. */
-export const TEMPLATE_NAME_MAX_LENGTH = 100;
 
 /** How long a template's description is, in characters. */
 export const TEMPLATE_DESCRIPTION_MAX_LENGTH = 1000;
@@ -24,23 +27,9 @@ export type TemplateFields = {
   values: Record<string, string>;
 };
 
-/** The character count garam measures a name by: code points. */
-export function characters(text: string): number {
-  return Array.from(text).length;
-}
-
 /** A template's name, trimmed as garam trims it, or the refusal. */
 export function parseTemplateName(name: string): Parsed<string> {
-  const trimmed = name.trim();
-  if (trimmed === "") {
-    return refuse("Give the template a name.");
-  }
-  if (characters(trimmed) > TEMPLATE_NAME_MAX_LENGTH) {
-    return refuse(
-      `A name holds at most ${TEMPLATE_NAME_MAX_LENGTH} characters.`,
-    );
-  }
-  return { status: "ok", value: trimmed };
+  return parseAgentName(name, "Give the template a name.");
 }
 
 /** A template's description, trimmed as garam trims it, or the refusal. */

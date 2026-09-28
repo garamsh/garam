@@ -6,6 +6,7 @@ import {
   listGroupMembers,
   listPolicies,
   listPolicyAttachments,
+  lookupAgentDefinitions,
   lookupAgents,
   lookupGroups,
   lookupOrgMembers,
@@ -22,6 +23,7 @@ import {
   KIND_PLURAL,
   inspectSubject,
   listSubjects,
+  partlyListedAgents,
   resolveSubjectQuery,
   subjectChoices,
   subjectQuery,
@@ -56,13 +58,15 @@ type Props = {
 export default async function AttachmentsPage({ params, searchParams }: Props) {
   const { org } = await params;
   const { subject: query } = await searchParams;
-  const [organization, policies, teams, people, agents] = await Promise.all([
-    getOrg(org),
-    listPolicies(org),
-    lookupGroups(org),
-    lookupOrgMembers(org),
-    lookupAgents(org),
-  ]);
+  const [organization, policies, teams, people, agents, definitions] =
+    await Promise.all([
+      getOrg(org),
+      listPolicies(org),
+      lookupGroups(org),
+      lookupOrgMembers(org),
+      lookupAgents(org),
+      lookupAgentDefinitions(org),
+    ]);
   const header = (
     <>
       <PageHeader
@@ -78,7 +82,8 @@ export default async function AttachmentsPage({ params, searchParams }: Props) {
     policies.status === "unreachable" ||
     teams.status === "unreachable" ||
     people.status === "unreachable" ||
-    agents.status === "unreachable"
+    agents.status === "unreachable" ||
+    definitions.status === "unreachable"
   ) {
     return (
       <>
@@ -96,7 +101,8 @@ export default async function AttachmentsPage({ params, searchParams }: Props) {
     );
   }
 
-  const catalogs: Catalogs = { teams, people, agents };
+  const catalogs: Catalogs = { teams, people, agents, definitions };
+  const partlyListed = partlyListedAgents(catalogs);
   const lookup = resolveSubjectQuery(
     typeof query === "string" ? query : undefined,
     catalogs,
@@ -161,6 +167,12 @@ export default async function AttachmentsPage({ params, searchParams }: Props) {
   return (
     <>
       {header}
+      {partlyListed.length > 0 && (
+        <p className="text-sm text-muted-foreground">
+          This organization&apos;s {partlyListed.join(" and ")} are not listed
+          to you, so some agents may be missing here.
+        </p>
+      )}
       <SubjectPicker
         action={`${base}/attachments`}
         groups={subjectChoices(listSubjects(catalogs), subjectQuery)}

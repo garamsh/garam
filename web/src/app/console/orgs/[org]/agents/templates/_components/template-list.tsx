@@ -23,14 +23,20 @@ export function TemplateList({
         return (
           <li key={template.grn}>
             <Card className="gap-2 p-4">
-              <CardTitle className="text-base">
-                <Link
-                  href={`/console/orgs/${org}/agents/templates/${slugFromGrn(template.grn)}`}
-                  className="underline-offset-4 hover:underline"
-                >
-                  {template.name}
-                </Link>
-              </CardTitle>
+              <div className="flex flex-col gap-0.5">
+                <CardTitle className="text-base">
+                  <Link
+                    href={`/console/orgs/${org}/agents/templates/${slugFromGrn(template.grn)}`}
+                    className="wrap-anywhere underline-offset-4 hover:underline"
+                  >
+                    {template.name}
+                  </Link>
+                </CardTitle>
+                {/* Names repeat, so the identifier tells two apart. */}
+                <p className="font-mono text-xs text-muted-foreground">
+                  {slugFromGrn(template.grn)}
+                </p>
+              </div>
               {template.description !== "" && (
                 <p className="text-sm text-muted-foreground">
                   {template.description}

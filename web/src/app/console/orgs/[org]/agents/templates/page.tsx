@@ -52,7 +52,7 @@ export default async function AgentTemplatesPage({ params }: Params) {
         <EmptyState
           icon={LayoutTemplate}
           title="No templates"
-          description="Create one to reuse the same values across agents."
+          description="This organization keeps no templates."
         />
       ) : (
         <TemplateList org={org} templates={templates.data} />

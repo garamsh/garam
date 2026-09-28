@@ -90,9 +90,14 @@ export default async function TeamPage({ params }: Params) {
   const name = group.data.name;
   const directory = { agents, definitions };
   const resolved = resolveTeamMembers(members.data, people, directory);
+  // Agents are known by two lists. Both refused, no agent can be
+  // chosen; one refused, the other still offers some, and the page says
+  // some may be missing rather than none can be chosen (ADR-0075).
+  const refusedAgents = refusedAgentLists(directory);
+  const agentsUnlisted = refusedAgents.length === 2;
   const unlisted = [
     ...(people.status === "forbidden" ? ["people"] : []),
-    ...refusedAgentLists(directory),
+    ...(agentsUnlisted ? ["agents"] : []),
   ];
 
   return (
@@ -132,6 +137,7 @@ export default async function TeamPage({ params }: Params) {
         team={team}
         candidates={teamCandidates(members.data, people, directory)}
         unlisted={unlisted}
+        partlyListed={agentsUnlisted ? [] : refusedAgents}
       />
       <Separator />
       <section className="flex flex-col gap-4">

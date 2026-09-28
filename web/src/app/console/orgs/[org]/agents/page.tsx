@@ -127,7 +127,7 @@ export default async function AgentsPage({ params }: Params) {
               definitions.status === "forbidden" ||
               agents.status === "forbidden"
                 ? "None you can list."
-                : "Create one to ask an operator to run it."
+                : "This organization has no agents."
             }
           />
         ) : (

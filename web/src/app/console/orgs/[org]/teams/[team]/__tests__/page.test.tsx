@@ -116,7 +116,13 @@ describe("team page", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("says agent definitions are not listed rather than offering none silently", async () => {
+  it("says agents may be missing, not that none can be chosen, when one agent list is refused", async () => {
+    // The control: with both agent lists read, nothing is said missing.
+    server.use(membersAre(alice.grn));
+    const allowed = await renderTeam();
+    expect(screen.queryByText(/may be missing here/)).not.toBeInTheDocument();
+    allowed.unmount();
+
     server.use(
       http.get(`${API_URL}/orgs/acme/agent-definitions`, () =>
         HttpResponse.json({ kind: "denied", message: "no" }, { status: 403 }),
@@ -127,7 +133,43 @@ describe("team page", () => {
 
     expect(
       screen.getByText(
-        "This organization's agent definitions are not listed to you, so none of them can be chosen here.",
+        "This organization's agent definitions are not listed to you, so some agents may be missing here.",
+      ),
+    ).toBeInTheDocument();
+    // The reported list still offers its agent, so "none can be chosen"
+    // would be false.
+    const offered = within(screen.getByLabelText("Person or agent"))
+      .getAllByRole("option")
+      .map((option) => option.textContent);
+    expect(offered).toContain(`${slugFromGrn(reportedAgent.grn)} · Agent`);
+    expect(
+      screen.queryByText(/none of them can be chosen/),
+    ).not.toBeInTheDocument();
+  });
+
+  it("says no agent can be chosen when both agent lists are refused", async () => {
+    // The control: with both agent lists read, no agent list is said
+    // refused.
+    server.use(membersAre(alice.grn));
+    const allowed = await renderTeam();
+    expect(
+      screen.queryByText(/agents are not listed to you/),
+    ).not.toBeInTheDocument();
+    allowed.unmount();
+
+    server.use(
+      ...["agent-definitions", "agents"].map((segment) =>
+        http.get(`${API_URL}/orgs/acme/${segment}`, () =>
+          HttpResponse.json({ kind: "denied", message: "no" }, { status: 403 }),
+        ),
+      ),
+    );
+
+    await renderTeam();
+
+    expect(
+      screen.getByText(
+        "This organization's agents are not listed to you, so none of them can be chosen here.",
       ),
     ).toBeInTheDocument();
   });

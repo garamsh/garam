@@ -555,9 +555,7 @@ type fakeAgentStore struct {
 	assignments map[string]*agent.Assignment
 	definitions map[string]*agent.Definition
 	templates   map[string]*agent.Template
-	// renames records each rename the API asked for. The definition's
-	// fields are the agent package's to set, so the fake answers with
-	// the stored definition and the Postgres suite proves the write.
+	// renames records each rename the API asked for.
 	renames []rename
 }
 
@@ -658,7 +656,10 @@ func (s *fakeAgentStore) RenameDefinition(_ context.Context, g grn.GRN, name age
 		return nil, agent.ErrDefinitionNotFound
 	}
 	s.renames = append(s.renames, rename{agent: g, name: name})
-	return d, nil
+	renamed := *d
+	renamed.Name = name
+	s.definitions[g.String()] = &renamed
+	return &renamed, nil
 }
 
 func (s *fakeAgentStore) CreateTemplate(_ context.Context, t *agent.Template) error {

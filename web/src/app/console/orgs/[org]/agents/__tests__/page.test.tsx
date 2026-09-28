@@ -127,6 +127,14 @@ describe("agents section", () => {
   });
 
   it("falls back to the operator's identifier when operators are not listed", async () => {
+    // The control: with operators listed, the operator is named and
+    // linked.
+    const allowed = await renderServerComponent(AgentsPage(params("acme")));
+    expect(
+      within(cardOf("Scout")).getByRole("link", { name: "Field cluster one" }),
+    ).toBeInTheDocument();
+    allowed.unmount();
+
     server.use(refuse("operators"));
 
     await renderServerComponent(AgentsPage(params("acme")));
@@ -139,6 +147,15 @@ describe("agents section", () => {
   });
 
   it("says reported state is not checked, rather than awaiting, when reports are refused", async () => {
+    // The control: with reports listed, the agent awaits an operator
+    // and nothing is said to be unchecked.
+    const allowed = await renderServerComponent(AgentsPage(params("acme")));
+    expect(
+      within(cardOf("Scout")).getByText("Awaiting operator"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/^Not checked:/)).not.toBeInTheDocument();
+    allowed.unmount();
+
     server.use(refuse("agents"));
 
     await renderServerComponent(AgentsPage(params("acme")));
@@ -155,6 +172,15 @@ describe("agents section", () => {
   });
 
   it("says definitions are not listed rather than showing none", async () => {
+    // The control: with definitions listed, the defined agent is shown
+    // and no refusal is said.
+    const allowed = await renderServerComponent(AgentsPage(params("acme")));
+    expect(screen.getByText("Scout")).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Agent definitions are not listed to you/),
+    ).not.toBeInTheDocument();
+    allowed.unmount();
+
     server.use(refuse("agent-definitions"));
 
     await renderServerComponent(AgentsPage(params("acme")));
@@ -193,7 +219,7 @@ describe("agents section", () => {
 
     expect(screen.getByText("No agents")).toBeInTheDocument();
     expect(
-      screen.getByText("Create one to ask an operator to run it."),
+      screen.getByText("This organization has no agents."),
     ).toBeInTheDocument();
   });
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +29,9 @@ export function RenameAgentForm({
     initialState,
   );
   const hydrated = useHydrated();
+  // Controlled, so a refused rename keeps what was typed: a form action
+  // resets an uncontrolled field when it completes, refusal included.
+  const [value, setValue] = useState(name);
 
   return (
     <form action={formAction} className="flex max-w-2xl flex-col gap-3">
@@ -41,7 +44,8 @@ export function RenameAgentForm({
           name="name"
           required
           disabled={!hydrated}
-          defaultValue={name}
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
           className="max-w-sm"
         />
         <Button type="submit" variant="outline" disabled={!hydrated || pending}>

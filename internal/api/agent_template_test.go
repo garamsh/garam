@@ -240,7 +240,12 @@ func TestAgentDefinition_RenameIsItsOwnActionOnTheAgent(t *testing.T) {
 
 	assert.Equal(t, http.StatusForbidden, f.do(t, "PATCH", path, `{"name":"Scout"}`, definer).Code)
 	assert.Equal(t, http.StatusBadRequest, f.do(t, "PATCH", path, `{"name":"  "}`, renamer).Code)
-	assert.Equal(t, http.StatusOK, f.do(t, "PATCH", path, `{"name":" Scout "}`, renamer).Code)
+	rec = f.do(t, "PATCH", path, `{"name":" Scout "}`, renamer)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "Scout", decodeBody[apigen.AgentDefinition](t, rec).Name, "trimmed")
+	rec = f.do(t, "GET", path, "", renamer)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "Scout", decodeBody[apigen.AgentDefinition](t, rec).Name)
 	assert.Equal(t, http.StatusNotFound,
 		f.do(t, "PATCH", "/orgs/"+slug+"/agent-definitions/0000000000000000", `{"name":"Scout"}`, renamer).Code)
 

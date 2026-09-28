@@ -82,6 +82,12 @@ func TestActionConstants_SpellTheirWireStrings(t *testing.T) {
 		{org.ActionAgentRead, "agent:read"},
 		{org.ActionAgentDefine, "agent:define"},
 		{org.ActionAgentWatch, "agent:watch"},
+		{org.ActionAgentRename, "agent:rename"},
+
+		{org.ActionAgentTemplateRead, "agent-template:read"},
+		{org.ActionAgentTemplateCreate, "agent-template:create"},
+		{org.ActionAgentTemplateUpdate, "agent-template:update"},
+		{org.ActionAgentTemplateDelete, "agent-template:delete"},
 	}
 	for _, c := range cases {
 		t.Run(c.want, func(t *testing.T) {
@@ -96,6 +102,8 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			"org:*", "group:*", "project:*", "policy:*", "consent:*",
 			org.ActionOperatorRead, org.ActionOperatorRegister, org.ActionOperatorUpdate,
 			org.ActionOperatorDelete, org.ActionAgentRead, org.ActionAgentDefine,
+			org.ActionAgentRename, org.ActionAgentTemplateRead, org.ActionAgentTemplateCreate,
+			org.ActionAgentTemplateUpdate, org.ActionAgentTemplateDelete,
 		},
 		org.RoleOwner.Actions())
 	assert.Equal(t,
@@ -104,6 +112,8 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			"group:*", "project:*", "policy:*", "consent:*",
 			org.ActionOperatorRead, org.ActionOperatorRegister, org.ActionOperatorUpdate,
 			org.ActionOperatorDelete, org.ActionAgentRead, org.ActionAgentDefine,
+			org.ActionAgentRename, org.ActionAgentTemplateRead, org.ActionAgentTemplateCreate,
+			org.ActionAgentTemplateUpdate, org.ActionAgentTemplateDelete,
 		},
 		org.RoleAdmin.Actions())
 	assert.Equal(t,
@@ -112,6 +122,7 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			org.ActionGroupRead, org.ActionGroupMemberList,
 			org.ActionProjectRead, org.ActionProjectMemberList,
 			org.ActionOperatorRead, org.ActionAgentRead, org.ActionAgentDefine,
+			org.ActionAgentRename, org.ActionAgentTemplateRead,
 		},
 		org.RoleMember.Actions())
 	assert.Empty(t, org.Role("").Actions())
@@ -164,9 +175,11 @@ func TestActionsFor_UnionsKnownRoles(t *testing.T) {
 			org.ActionGroupRead, org.ActionGroupMemberList,
 			org.ActionProjectRead, org.ActionProjectMemberList,
 			org.ActionOperatorRead, org.ActionAgentRead, org.ActionAgentDefine,
+			org.ActionAgentRename, org.ActionAgentTemplateRead,
 			org.ActionOrgUpdate, org.ActionOrgInvite,
 			"group:*", "project:*", "policy:*", "consent:*",
 			org.ActionOperatorRegister, org.ActionOperatorUpdate, org.ActionOperatorDelete,
+			org.ActionAgentTemplateCreate, org.ActionAgentTemplateUpdate, org.ActionAgentTemplateDelete,
 		},
 		org.ActionsFor([]string{"member", "admin"}))
 	assert.Empty(t, org.ActionsFor([]string{"superuser"}))

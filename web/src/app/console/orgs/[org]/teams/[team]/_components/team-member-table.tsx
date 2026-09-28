@@ -11,6 +11,7 @@ import {
 import { RemoveTeamMemberForm } from "./remove-team-member-form";
 import {
   KIND_LABEL,
+  isNamedAgent,
   memberLabel,
   type Lookup,
   type TeamMember,
@@ -64,7 +65,13 @@ export function TeamMemberTable({
           <TableRow key={member.grn}>
             <TableCell className="align-top font-medium whitespace-normal">
               {member.kind === "agent" ? (
-                <span className="font-mono">{member.name}</span>
+                // An agent no definition names is called by its
+                // identifier; a named one has its identifier below.
+                <span
+                  className={isNamedAgent(member) ? undefined : "font-mono"}
+                >
+                  {member.name}
+                </span>
               ) : (
                 (member.name ?? (
                   <span className="font-normal text-muted-foreground">
@@ -76,7 +83,7 @@ export function TeamMemberTable({
                   </span>
                 ))
               )}
-              {member.kind !== "agent" && (
+              {(member.kind !== "agent" || isNamedAgent(member)) && (
                 <span className="block font-mono text-xs font-normal text-muted-foreground">
                   {member.identifier}
                 </span>

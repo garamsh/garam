@@ -58,6 +58,7 @@ and nowhere else.
 | `project` | unit of work | `grn:acme:default:project:frontend` |
 | `operator` | provisions agents from outside (ADR-0012); registered by its organization, which supplies the identifier (ADR-0045) | `grn:acme:default:operator:field-one` |
 | `policy` | stored policy document | `grn:acme:default:policy:a1b2c3d4` |
+| `agent-template` | starting point an organization keeps for defining agents; a definition copies its values once (ADR-0075) | `grn:acme:default:agent-template:7c1e2a9b3d4f5a60` |
 | `doc` | permissioned document (planned) | `grn:acme:frontend:doc:readme` |
 | `secret` | reference to a value an external store holds, never the value (planned, ADR-0036) | `grn:acme:default:secret:model-api-key` |
 

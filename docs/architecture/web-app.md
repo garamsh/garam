@@ -109,8 +109,10 @@ declared in one place, `web/src/app/console/_components/navigation.ts`,
 which is what the sidebar, the breadcrumb and the active marking all
 read; adding one is an entry there and a route folder. A section whose
 entries each have a page of their own declares it there too, and Teams,
-Operators and Permissions do: `/console/orgs/{org}/teams/{team}` is a
-team's page and `…/teams/new` creates one, `…/operators/{operator}` is
+Agents, Operators and Permissions do: `/console/orgs/{org}/teams/{team}`
+is a team's page and `…/teams/new` creates one, `…/agents/{agent}` is
+a defined agent's and `…/agents/new` creates one,
+`…/operators/{operator}` is
 an operator's, with no create page because `new` is a valid operator
 identifier
 ([ADR-0074](./adr/0074-an-operator-carries-a-name-and-description-and-the-console-gives-it-a-page-of-its-own.md)),
@@ -125,6 +127,11 @@ A section may also declare named views beside its entries, which the
 breadcrumb names by label: Permissions declares Attachments, at
 `…/permissions/attachments`
 ([ADR-0073](./adr/0073-the-console-manages-policies-and-their-attachments-under-permissions.md)).
+A view may have item pages of its own, and the breadcrumb then links
+the section and the view above the entry: Agents declares Templates,
+at `…/agents/templates`, with `…/agents/templates/{template}` and
+`…/agents/templates/new` below it
+([ADR-0075](./adr/0075-an-agent-is-started-from-a-template-copied-once-and-carries-a-name-of-its-own.md)).
 
 What a section can do differs, and the difference is the state of the
 API behind it rather than of the console:
@@ -132,13 +139,13 @@ API behind it rather than of the console:
 | Section | What the console does with it |
 |---|---|
 | Overview | counts what the sections it summarises hold, names the failing states inside them rather than folding them into a count, and says which sections it does not summarise and why |
-| Teams | the organization's groups, presented as teams ([ADR-0072](./adr/0072-the-console-presents-a-group-as-a-team-with-a-page-of-its-own.md)): lists them, creates one, and on a team's page reads its members, adds and removes people and agents, renames it and deletes it. A member is shown by the name and type the organization's people and agents give it, and one neither holds stays listed and removable, marked as not found; where the caller is refused the people or agents list, those members are marked not checked and the team stays readable |
+| Teams | the organization's groups, presented as teams ([ADR-0072](./adr/0072-the-console-presents-a-group-as-a-team-with-a-page-of-its-own.md)): lists them, creates one, and on a team's page reads its members, adds and removes people and agents, renames it and deletes it. A member is shown by the name and type the organization's people and agents give it, and one neither holds stays listed and removable, marked as not found; where the caller is refused the people or agents list, those members are marked not checked and the team stays readable. An agent is offered and shown by its definition's name with its identifier, including one no operator has claimed yet, and a refused definitions list is said rather than offered as none ([ADR-0075](./adr/0075-an-agent-is-started-from-a-template-copied-once-and-carries-a-name-of-its-own.md)) |
 | People | reads the organization's members, and issues the invitation a person joins by ([ADR-0006](./adr/0006-invitation-tokens.md)) |
-| Agents | reads the agents the organization holds with the two states their operator and the agent itself report ([ADR-0053](./adr/0053-an-agent-and-its-operator-report-state-on-the-machine-listener.md)), and reads definitions and defines one ([ADR-0026](./adr/0026-the-console-defines-an-agent.md)). The operator is chosen by name with its identifier beside it, and a definition shows its operator the same way; where the operator list is refused, the identifier is typed and shown alone ([ADR-0074](./adr/0074-an-operator-carries-a-name-and-description-and-the-console-gives-it-a-page-of-its-own.md)) |
+| Agents | lists every agent the organization defined by name, whether or not an operator has claimed it, and every reported agent no definition names, each with the two states its operator and the agent itself report ([ADR-0053](./adr/0053-an-agent-and-its-operator-report-state-on-the-machine-listener.md)) or, before any report, as awaiting an operator. A new agent is defined on its own page, blank or from a template whose values are copied into the form once, with a name and an operator chosen by name with its identifier beside it ([ADR-0026](./adr/0026-the-console-defines-an-agent.md), [ADR-0074](./adr/0074-an-operator-carries-a-name-and-description-and-the-console-gives-it-a-page-of-its-own.md)). An agent's page shows what was requested apart from what was reported and renames it. The Templates view lists, creates, edits and deletes templates; the values are a free key/value editor, said to be saved with their application not reported ([ADR-0075](./adr/0075-an-agent-is-started-from-a-template-copied-once-and-carries-a-name-of-its-own.md)) |
 | Projects | reads the projects the organization owns, and creates one — an agent's GRN names the project it was minted in ([ADR-0001](./adr/0001-grn-segments.md)), so an organization holding none cannot reach that path from the console |
 | Operators | lists the operators the organization registered by name, with the identifier under each and where each stands in obtaining a certificate, which garam derives rather than is told ([ADR-0045](./adr/0045-an-organization-registers-an-operator.md), [ADR-0064](./adr/0064-an-operator-enrols-with-a-one-time-token-and-keeps-its-key-in-its-own-cluster.md)); registers one with the form under the list, which shows the token once; and on an operator's page shows its identity, its enrollment state and runtime as unknown, lists the definitions naming it with a link to them, edits its name and description, issues a replacement enrollment token while it holds no certificate — shown once, saying it replaces any previous one and that it goes in the operator's enrollment token Secret, and keeping garam's refusal on the page once the operator has enrolled ([ADR-0067](./adr/0067-a-member-mints-a-second-enrollment-token-where-the-operator-holds-no-certificate.md)) — and deletes it, saying that work already running in its cluster does not stop ([ADR-0074](./adr/0074-an-operator-carries-a-name-and-description-and-the-console-gives-it-a-page-of-its-own.md)). The delete stays refused while a definition names it, and a refused definitions list is marked not checked |
 | Consents | reads the cross-organization consent relations the organization is a side of, grants its half of one and withdraws it ([ADR-0035](./adr/0035-a-cross-organization-message-needs-both-organizations-consent.md)) |
-| Permissions | the organization's policies and their attachments ([ADR-0073](./adr/0073-the-console-manages-policies-and-their-attachments-under-permissions.md)), through the existing policy operations only. The Policies view lists policies and opens a page per policy, where one is created as a draft, its versions are read and appended, any stored version is made the default, it is activated and archived, and it is attached to and detached from teams, people and agents chosen by name. A write that makes a policy evaluate states the version and whom it reaches first, and one reaching everyone, or reaching a scope garam will not list, needs an explicit confirmation. The Attachments view shows each policy's attachments and, for one chosen subject, the policies attached to it, to its teams and to no one, without calling that its access. A list the caller is refused is shown as unchecked, never as empty; a Condition is shown as not evaluated. Neither view deletes a policy or explains a decision, since no operation does |
+| Permissions | the organization's policies and their attachments ([ADR-0073](./adr/0073-the-console-manages-policies-and-their-attachments-under-permissions.md)), through the existing policy operations only. An agent is chosen by its definition's name with its identifier, including one awaiting an operator ([ADR-0075](./adr/0075-an-agent-is-started-from-a-template-copied-once-and-carries-a-name-of-its-own.md)). The Policies view lists policies and opens a page per policy, where one is created as a draft, its versions are read and appended, any stored version is made the default, it is activated and archived, and it is attached to and detached from teams, people and agents chosen by name. A write that makes a policy evaluate states the version and whom it reaches first, and one reaching everyone, or reaching a scope garam will not list, needs an explicit confirmation. The Attachments view shows each policy's attachments and, for one chosen subject, the policies attached to it, to its teams and to no one, without calling that its access. A list the caller is refused is shown as unchecked, never as empty; a Condition is shown as not evaluated. Neither view deletes a policy or explains a decision, since no operation does |
 
 Every section's empty state names the absence and no next step. Where
 a section creates in place, that next step is the form standing under
@@ -333,6 +340,10 @@ These decide the application itself:
   — operators are listed by name and have a page of their own below the
   Operators section, and the identifier stands beside a name wherever
   the name alone could be ambiguous
+- [ADR-0075](./adr/0075-an-agent-is-started-from-a-template-copied-once-and-carries-a-name-of-its-own.md)
+  — agents are listed by name whether or not an operator has claimed
+  them, a new agent starts blank or from a template copied once, and
+  Templates is a view inside Agents
 
 The rest bear on it without being about it:
 

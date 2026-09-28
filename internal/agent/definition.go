@@ -81,31 +81,47 @@ func isValueKey(k string) bool {
 // from (ADR-0026).
 //
 // It is a record and not a command: garam learns that an agent exists
-// when an operator reports it and not before (ADR-0012), and a
-// definition is written once.
+// when an operator reports it and not before (ADR-0012), and its
+// operator and values are written once. Its name is what the
+// organization calls the agent, which it may change without touching
+// either (ADR-0075).
+//
+// Name is an exported field, as `structure.md` asks of what an
+// aggregate persists; the fields before it keep their accessors until
+// #1083 converts this domain.
 type Definition struct {
 	agentGRN    grn.GRN
 	orgGRN      grn.GRN
 	operatorGRN grn.GRN
-	values      Values
-	definedBy   grn.GRN
-	createdAt   time.Time
+	// Name is what the organization calls the agent. It identifies
+	// nothing: two definitions may share one, and the GRN is the
+	// agent's identity.
+	Name      Name
+	values    Values
+	definedBy grn.GRN
+	createdAt time.Time
 }
 
 // NewDefinition mints the identity of the agent orgGRN is defining and
-// records what it should be. definedBy is the member that defined it.
+// records what it should be and what the organization calls it. An
+// empty name is none given, and the agent is called by its identifier,
+// as a definition written before names existed is (ADR-0075).
+// definedBy is the member that defined it.
 //
 // It fails unless operatorGRN names an operator of that organization
 // (ADR-0015). Whether the organization has registered that operator is
 // the caller's read against internal/operator, not this constructor's
 // (ADR-0045).
-func NewDefinition(orgGRN, operatorGRN grn.GRN, values Values, definedBy grn.GRN) (*Definition, error) {
+func NewDefinition(orgGRN, operatorGRN grn.GRN, name Name, values Values, definedBy grn.GRN) (*Definition, error) {
 	g, err := NewGRN(orgGRN)
 	if err != nil {
 		return nil, err
 	}
 	if err := validateOperator(operatorGRN, orgGRN); err != nil {
 		return nil, err
+	}
+	if name == "" {
+		name = Name(g.Identifier)
 	}
 	// A definition naming no value carries an empty payload rather than
 	// none: what is stored is an object either way.
@@ -116,6 +132,7 @@ func NewDefinition(orgGRN, operatorGRN grn.GRN, values Values, definedBy grn.GRN
 		agentGRN:    g,
 		orgGRN:      orgGRN,
 		operatorGRN: operatorGRN,
+		Name:        name,
 		values:      values,
 		definedBy:   definedBy,
 		createdAt:   time.Now().UTC(),

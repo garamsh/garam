@@ -162,6 +162,15 @@ its name and description**, on `operator:read` and `operator:update`
 The identifier is the path's and not a field, so the update moves no
 certificate, token or definition.
 
+**`getAgentDefinition` and `renameAgentDefinition` read one definition
+and change what the organization calls its agent**, on `agent:read`
+and `agent:rename`; `defineAgent` names an agent by its identifier
+where the caller gives no name. **The agent-template operations**
+list, read, create, replace and delete an organization's templates,
+each on an `agent-template:*` action of its own, authorized against
+the template where the path names one
+([ADR-0075](./adr/0075-an-agent-is-started-from-a-template-copied-once-and-carries-a-name-of-its-own.md)).
+
 **`deleteOperator` is on the same listener and is the one operation
 here that stops a machine identity.** It removes the organization's
 record, which the machine listener reads per connection, so the

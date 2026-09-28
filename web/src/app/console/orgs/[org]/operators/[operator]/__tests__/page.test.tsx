@@ -127,6 +127,12 @@ describe("operator page", () => {
     expect(section).not.toBeNull();
     const definitions = within(section as HTMLElement);
     expect(definitions.getByText("9f2ac1b40d8e7a35")).toBeInTheDocument();
+    // The agent is named as the organization calls it, and opens its
+    // own page (ADR-0075).
+    expect(definitions.getByRole("link", { name: "Scout" })).toHaveAttribute(
+      "href",
+      "/console/orgs/acme/agents/9f2ac1b40d8e7a35",
+    );
     // A definition naming another operator is not this one's.
     expect(definitions.queryByText("0000000000000001")).not.toBeInTheDocument();
     expect(

@@ -26,11 +26,36 @@ func (s *PostgresStore) Define(ctx context.Context, d *Definition) error {
 		AgentGrn:    d.agentGRN.String(),
 		OrgGrn:      d.orgGRN.String(),
 		OperatorGrn: d.operatorGRN.String(),
+		Name:        string(d.Name),
 		AgentValues: values,
 		DefinedBy:   d.definedBy.String(),
 		CreatedAt:   stamp(d.createdAt),
 	})
 	return pgxerr.Classify(err, "define", nil, nil)
+}
+
+// GetDefinition returns the definition naming the agent, or
+// ErrDefinitionNotFound.
+func (s *PostgresStore) GetDefinition(ctx context.Context, agentGRN grn.GRN) (*Definition, error) {
+	row, err := s.q.GetAgentDefinition(ctx, agentGRN.String())
+	if err != nil {
+		return nil, pgxerr.Classify(err, "get definition", ErrDefinitionNotFound, nil)
+	}
+	return rowToDefinition(row)
+}
+
+// RenameDefinition changes what the organization calls the agent and
+// nothing else: the operator, the values and the GRN every other record
+// joins on stay as they were (ADR-0075).
+func (s *PostgresStore) RenameDefinition(ctx context.Context, agentGRN grn.GRN, name Name) (*Definition, error) {
+	row, err := s.q.RenameAgentDefinition(ctx, db.RenameAgentDefinitionParams{
+		AgentGrn: agentGRN.String(),
+		Name:     string(name),
+	})
+	if err != nil {
+		return nil, pgxerr.Classify(err, "rename definition", ErrDefinitionNotFound, nil)
+	}
+	return rowToDefinition(row)
 }
 
 // ListDefinitionsByOrg returns the organization's definitions.
@@ -63,6 +88,7 @@ func (s *PostgresStore) ListDefinitionsByOperator(ctx context.Context, operatorG
 			AgentGrn:    row.AgentGrn,
 			OrgGrn:      row.OrgGrn,
 			OperatorGrn: row.OperatorGrn,
+			Name:        row.Name,
 			AgentValues: row.AgentValues,
 			DefinedBy:   row.DefinedBy,
 			CreatedAt:   row.CreatedAt,
@@ -174,11 +200,11 @@ func rowToDefinition(row db.AgentDefinition) (*Definition, error) {
 	if err != nil {
 		return nil, errorx.Wrap(err, "definition defined by", errorx.KindInternal)
 	}
-	var raw map[string]string
-	if err := json.Unmarshal(row.AgentValues, &raw); err != nil {
-		return nil, errorx.Wrap(err, "definition values", errorx.KindInternal)
+	name, err := ParseName(row.Name)
+	if err != nil {
+		return nil, errorx.Wrap(err, "definition name", errorx.KindInternal)
 	}
-	values, err := ParseValues(raw)
+	values, err := valuesFromRow(row.AgentValues)
 	if err != nil {
 		return nil, errorx.Wrap(err, "definition values", errorx.KindInternal)
 	}
@@ -186,8 +212,19 @@ func rowToDefinition(row db.AgentDefinition) (*Definition, error) {
 		agentGRN:    agentGRN,
 		orgGRN:      orgGRN,
 		operatorGRN: operatorGRN,
+		Name:        name,
 		values:      values,
 		definedBy:   definedBy,
 		createdAt:   row.CreatedAt.Time,
 	}, nil
+}
+
+// valuesFromRow reads a stored values payload back through
+// [ParseValues], which is the only way one reached the row.
+func valuesFromRow(stored []byte) (Values, error) {
+	var raw map[string]string
+	if err := json.Unmarshal(stored, &raw); err != nil {
+		return nil, err
+	}
+	return ParseValues(raw)
 }

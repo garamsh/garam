@@ -61,7 +61,7 @@ func TestOperatorUpdateDetails_MovesNothingTheOperatorAuthenticatesOrEnrolsBy(t 
 
 	enrolled, enrolledToken := register(t, store, "enrolled")
 	certificate := enrol(t, url, enrolledToken)
-	d, err := agent.NewDefinition(orgRootGRN("acme"), enrolled, agent.Values{"image": "ghcr.io/acme/bot:1"},
+	d, err := agent.NewDefinition(orgRootGRN("acme"), enrolled, "Field agent", agent.Values{"image": "ghcr.io/acme/bot:1"},
 		scopedGRN("acme", "user", "ada"))
 	require.NoError(t, err)
 	require.NoError(t, agent.NewPostgresStore(p).Define(ctx, d))

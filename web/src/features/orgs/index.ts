@@ -7,6 +7,21 @@
  * the server-only backend client into the browser bundle.
  */
 export {
+  agentChoiceLabel,
+  directoryAgents,
+  lookUpAgent,
+  refusedAgentLists,
+  type AgentDirectory,
+  type DirectoryAgent,
+  type Reported,
+} from "./agent-directory";
+export {
+  getAgentTemplate,
+  listAgentTemplates,
+  type AgentTemplate,
+} from "./api/agent-templates";
+export {
+  getAgentDefinition,
   getGroup,
   getOperator,
   getOrg,

@@ -105,6 +105,19 @@ const (
 	// organization may withhold from someone it lets read. No role
 	// grants it: a policy carries it or nothing does.
 	ActionAgentWatch = "agent:watch"
+	// ActionAgentRename is changing what the org calls an agent it
+	// defined (ADR-0075). It moves no value an operator reads, so it is
+	// not defining one again.
+	ActionAgentRename = "agent:rename"
+
+	// Reading and maintaining the org's agent templates (ADR-0075). A
+	// template is a starting point a definition copies once, so these
+	// are separate from defining an agent: a policy can let someone
+	// define agents without letting them change what others start from.
+	ActionAgentTemplateRead   = "agent-template:read"
+	ActionAgentTemplateCreate = "agent-template:create"
+	ActionAgentTemplateUpdate = "agent-template:update"
+	ActionAgentTemplateDelete = "agent-template:delete"
 )
 
 // Agent and operator actions are granted one at a time and never as
@@ -118,6 +131,8 @@ var (
 	adminMachineActions = []string{
 		ActionOperatorRead, ActionOperatorRegister, ActionOperatorUpdate,
 		ActionOperatorDelete, ActionAgentRead, ActionAgentDefine,
+		ActionAgentRename, ActionAgentTemplateRead, ActionAgentTemplateCreate,
+		ActionAgentTemplateUpdate, ActionAgentTemplateDelete,
 	}
 	// memberMachineActions is what a member holds: it reads the
 	// operators an org has registered and registers none, because
@@ -125,6 +140,7 @@ var (
 	// administrative act registering already looks like.
 	memberMachineActions = []string{
 		ActionOperatorRead, ActionAgentRead, ActionAgentDefine,
+		ActionAgentRename, ActionAgentTemplateRead,
 	}
 )
 

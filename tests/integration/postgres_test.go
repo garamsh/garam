@@ -1399,7 +1399,7 @@ func TestOperatorStore_RoundTrip(t *testing.T) {
 	// them in one statement. The foreign key between the two is NO
 	// ACTION for exactly this: RESTRICT would refuse the cascade.
 	definitions := agent.NewPostgresStore(p)
-	d, err := agent.NewDefinition(orgRootGRN("acme"), one.GRN(), agent.Values{}, registeredBy)
+	d, err := agent.NewDefinition(orgRootGRN("acme"), one.GRN(), "Field agent", agent.Values{}, registeredBy)
 	require.NoError(t, err)
 	require.NoError(t, definitions.Define(ctx, d))
 	require.NoError(t, orgs.DeleteOrg(ctx, orgRootGRN("acme")))
@@ -1426,13 +1426,13 @@ func TestAgentDefinition_RefusesAnOperatorTheOrgHasNotRegistered(t *testing.T) {
 	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	definedBy := scopedGRN("acme", "user", "ada")
 
-	unregistered, err := agent.NewDefinition(orgRootGRN("acme"), scopedGRN("acme", agent.ServiceTypeOperator, "gagent-dev"), agent.Values{}, definedBy)
+	unregistered, err := agent.NewDefinition(orgRootGRN("acme"), scopedGRN("acme", agent.ServiceTypeOperator, "gagent-dev"), "Field agent", agent.Values{}, definedBy)
 	require.NoError(t, err)
 	assert.Error(t, s.Define(ctx, unregistered))
 
 	// Registering that operator is what makes the same write land, so
 	// the refusal was the missing record and not the row.
-	registered, err := agent.NewDefinition(orgRootGRN("acme"), registerOperator(t, p, scopedGRN("acme", agent.ServiceTypeOperator, "gagent-dev")), agent.Values{}, definedBy)
+	registered, err := agent.NewDefinition(orgRootGRN("acme"), registerOperator(t, p, scopedGRN("acme", agent.ServiceTypeOperator, "gagent-dev")), "Field agent", agent.Values{}, definedBy)
 	require.NoError(t, err)
 	assert.NoError(t, s.Define(ctx, registered))
 }
@@ -1455,7 +1455,7 @@ func TestAgentDefinitionStore_RoundTrip(t *testing.T) {
 	values, err := agent.ParseValues(map[string]string{"model": "haiku", "workspace": "frontend"})
 	require.NoError(t, err)
 	definedBy := grn.New(grn.RootOwner, grn.DefaultProject, "user", "ada")
-	d, err := agent.NewDefinition(orgGRN, registerOperator(t, p, grnOf(agent.ServiceTypeOperator, "one")), values, definedBy)
+	d, err := agent.NewDefinition(orgGRN, registerOperator(t, p, grnOf(agent.ServiceTypeOperator, "one")), "Field agent", values, definedBy)
 	require.NoError(t, err)
 	require.NoError(t, s.Define(ctx, d))
 
@@ -1488,7 +1488,7 @@ func TestAgentDefinitionStore_RoundTrip(t *testing.T) {
 	assert.Equal(t, reported, agents[0].GRN())
 
 	// A definition belongs to the org that wrote it.
-	elsewhere, err := agent.NewDefinition(otherOrgGRN, registerOperator(t, p, scopedGRN("globex", agent.ServiceTypeOperator, "one")), agent.Values{}, definedBy)
+	elsewhere, err := agent.NewDefinition(otherOrgGRN, registerOperator(t, p, scopedGRN("globex", agent.ServiceTypeOperator, "one")), "Field agent", agent.Values{}, definedBy)
 	require.NoError(t, err)
 	require.NoError(t, s.Define(ctx, elsewhere))
 	stored, err = s.ListDefinitionsByOrg(ctx, orgGRN)
@@ -1564,8 +1564,8 @@ func TestAgentDefinition_StaysInsideItsOrgAndHoldsAnObject(t *testing.T) {
 	}
 	for _, tt := range rejected {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := p.Exec(ctx, `INSERT INTO agent_definitions (agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at)
-				VALUES ($1, $2, $3, $4::jsonb, $5, now())`,
+			_, err := p.Exec(ctx, `INSERT INTO agent_definitions (agent_grn, org_grn, operator_grn, name, agent_values, defined_by, created_at)
+				VALUES ($1, $2, $3, 'Field agent', $4::jsonb, $5, now())`,
 				tt.agentGRN.String(), orgGRN.String(), tt.operator.String(), tt.values, grn.New(grn.RootOwner, grn.DefaultProject, "user", "ada").String())
 			var refused *pgconn.PgError
 			require.ErrorAs(t, err, &refused, "the row was not refused by Postgres")
@@ -1575,8 +1575,8 @@ func TestAgentDefinition_StaysInsideItsOrgAndHoldsAnObject(t *testing.T) {
 
 	// The same statement naming this org's agent and operator is
 	// accepted, so the constraints reject a row rather than every row.
-	_, err = p.Exec(ctx, `INSERT INTO agent_definitions (agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at)
-		VALUES ($1, $2, $3, $4::jsonb, $5, now())`,
+	_, err = p.Exec(ctx, `INSERT INTO agent_definitions (agent_grn, org_grn, operator_grn, name, agent_values, defined_by, created_at)
+		VALUES ($1, $2, $3, 'Field agent', $4::jsonb, $5, now())`,
 		g.String(), orgGRN.String(), registered.String(), `{"model":"haiku"}`,
 		grn.New(grn.RootOwner, grn.DefaultProject, "user", "ada").String())
 	require.NoError(t, err)

@@ -23,10 +23,38 @@ export const AGENT_VALUE_MAX_BYTES = 4096;
 /** How long a value key is, in characters. */
 export const AGENT_KEY_MAX_LENGTH = 64;
 
+/**
+ * How long the name of an agent or a template is, in characters, once
+ * surrounding space is trimmed (`api/openapi.yaml` §AgentName).
+ */
+export const AGENT_NAME_MAX_LENGTH = 100;
+
 /** One row of the values editor, before it is known to be a value. */
 export type ValueEntry = { key: string; value: string };
 
 const SEGMENT = /^[a-z0-9-]+$/;
+
+/** The character count garam measures a name by: code points. */
+export function characters(text: string): number {
+  return Array.from(text).length;
+}
+
+/**
+ * A name, trimmed as garam trims it, or the refusal. `missing` is the
+ * sentence an empty one is refused with, which names what is being
+ * named.
+ */
+export function parseAgentName(
+  name: string,
+  missing = "Give the agent a name.",
+): Parsed<string> {
+  const trimmed = name.trim();
+  if (trimmed === "") return refuse(missing);
+  if (characters(trimmed) > AGENT_NAME_MAX_LENGTH) {
+    return refuse(`A name holds at most ${AGENT_NAME_MAX_LENGTH} characters.`);
+  }
+  return { status: "ok", value: trimmed };
+}
 
 /** The UTF-8 byte length a value is measured by. */
 export function valueBytes(value: string): number {

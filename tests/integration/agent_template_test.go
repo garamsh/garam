@@ -43,7 +43,7 @@ func TestAgentTemplate_AnAgentKeepsWhatItCopied(t *testing.T) {
 	ada := scopedGRN("acme", "user", "ada")
 
 	tpl, err := agent.NewTemplate(orgRootGRN("acme"),
-		templateContent(t, "Researcher", "Reads papers", agent.Values{"model": "haiku", "ego": "curious"}), ada)
+		templateContent(t, "Researcher", "Reads papers", agent.Values{"workspace": "papers", "notes": "weekly"}), ada)
 	require.NoError(t, err)
 	require.NoError(t, s.CreateTemplate(ctx, tpl))
 	stored, err := s.GetTemplate(ctx, tpl.GRN)
@@ -57,23 +57,23 @@ func TestAgentTemplate_AnAgentKeepsWhatItCopied(t *testing.T) {
 	for k, v := range stored.Values {
 		copied[k] = v
 	}
-	copied["ego"] = "careful"
+	copied["notes"] = "daily"
 	operatorGRN := registerOperator(t, p, scopedGRN("acme", agent.ServiceTypeOperator, "one"))
 	d, err := agent.NewDefinition(orgRootGRN("acme"), operatorGRN, "Scout", copied, ada)
 	require.NoError(t, err)
 	require.NoError(t, s.Define(ctx, d))
 
 	updated, err := s.UpdateTemplate(ctx, tpl.GRN,
-		templateContent(t, "Analyst", "", agent.Values{"model": "sonnet"}))
+		templateContent(t, "Analyst", "", agent.Values{"workspace": "archive"}))
 	require.NoError(t, err)
 	assert.Equal(t, agent.Name("Analyst"), updated.Name)
-	assert.Equal(t, agent.Values{"model": "sonnet"}, updated.Values)
+	assert.Equal(t, agent.Values{"workspace": "archive"}, updated.Values)
 	assert.True(t, updated.UpdatedAt.After(stored.UpdatedAt) || updated.UpdatedAt.Equal(stored.UpdatedAt))
 
 	after, err := s.GetDefinition(ctx, d.Agent())
 	require.NoError(t, err)
 	assert.Equal(t, agent.Name("Scout"), after.Name())
-	assert.Equal(t, agent.Values{"model": "haiku", "ego": "careful"}, after.Values(),
+	assert.Equal(t, agent.Values{"workspace": "papers", "notes": "daily"}, after.Values(),
 		"the template's edit reached no agent")
 
 	require.NoError(t, s.DeleteTemplate(ctx, tpl.GRN))
@@ -85,7 +85,7 @@ func TestAgentTemplate_AnAgentKeepsWhatItCopied(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, agent.Name("Scout"), after.Name())
 	assert.Equal(t, operatorGRN, after.Operator())
-	assert.Equal(t, agent.Values{"model": "haiku", "ego": "careful"}, after.Values(),
+	assert.Equal(t, agent.Values{"workspace": "papers", "notes": "daily"}, after.Values(),
 		"the template's deletion reached no agent")
 }
 
@@ -142,7 +142,7 @@ func TestAgentDefinition_RenameMovesOnlyTheName(t *testing.T) {
 	p := pool(t)
 	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	s := agent.NewPostgresStore(p)
-	d := defineAgent(t, p, s, scopedGRN("acme", agent.ServiceTypeOperator, "one"), agent.Values{"model": "haiku"})
+	d := defineAgent(t, p, s, scopedGRN("acme", agent.ServiceTypeOperator, "one"), agent.Values{"workspace": "papers"})
 	claim, err := s.Claim(ctx, d.Agent(), d.Operator())
 	require.NoError(t, err)
 

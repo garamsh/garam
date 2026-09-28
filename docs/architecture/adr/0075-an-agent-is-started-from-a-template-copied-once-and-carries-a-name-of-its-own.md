@@ -82,10 +82,12 @@ there (#1078, #1102).
   operator has claimed is shown as awaiting one, not with a state
   nobody reported. Its page shows the requested operator and values
   under their own heading, apart from the reported states.
-- **Settings are named for Sherlock and claimed no further.** The form
-  labels the values Sherlock settings and says garam stores them as
-  requested and does not confirm an operator applies them. No runtime
-  or provider is offered.
+- **Settings are a free key/value editor, claimed no further.** The
+  forms label the values Advanced settings and an agent's page labels
+  them Settings, each saying the values are saved and their application
+  is not reported. No model, ego or other typed field is offered, since
+  no operator has settled those keys (#1078), and no runtime or provider
+  is offered, since agent support is Sherlock alone.
 - **An agent is chosen by name where it is chosen.** Teams and
   Permissions read both agent lists, offer a defined agent before any
   operator claims it, and label each by name with its identifier and,
@@ -105,8 +107,8 @@ there (#1078, #1102).
   with the gap said.
 - Deleting an organization removes its templates, and the deletion
   preview counts them.
-- A value named for Sherlock is stored, not proven applied; #1078 and
-  #1102 decide what an operator consumes.
+- A saved value is stored, not proven applied; #1078 and #1102 decide
+  what an operator consumes.
 
 ## Rejected alternatives
 

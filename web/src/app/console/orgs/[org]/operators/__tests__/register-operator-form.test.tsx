@@ -18,6 +18,9 @@ vi.mock("next/navigation", () => ({
 // action's own answer is what the form renders.
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
+const RECOVERY =
+  "Give it to the operator to enrol with. If it is lost, issue a replacement from the operator's page.";
+
 /** Records every registration the form posts, and answers as garam does. */
 function recordRegistrations() {
   const posted: unknown[] = [];
@@ -63,11 +66,8 @@ describe("register operator form", () => {
     expect(screen.getByLabelText("Enrollment token")).toHaveValue(
       fieldOneRegistered.enrollment.token,
     );
-    // Presence rather than identity: the sentence is longer than the
-    // claim under test, which is that the page says the token is gone
-    // after this.
     expect(
-      screen.getByText(/This is the only time this token is shown/),
+      screen.getByText("Save this token now. It is shown only once."),
     ).toBeInTheDocument();
     // No name is sent, so the API calls the operator by its
     // identifier (ADR-0074).
@@ -136,24 +136,17 @@ describe("register operator form", () => {
     expect(
       screen.queryByText(/Deleting a record stops that operator/),
     ).not.toBeInTheDocument();
-    expect(
-      screen.queryByText(/on garam's machine listener/),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText(RECOVERY)).not.toBeInTheDocument();
     expect(screen.queryByText(/certificate authority/)).not.toBeInTheDocument();
 
     await user.type(screen.getByLabelText("Identifier"), "field-one");
     await user.click(screen.getByRole("button", { name: "Register operator" }));
 
-    // The control: how the operator enrols is beside the token that it
-    // enrols with, so its absence above is a move rather than a
-    // deletion. The recovery named beside it is a new token, which the
-    // API mints (ADR-0067), and not a deletion.
-    expect(
-      await screen.findByText(/on garam's machine listener/),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(/ask an administrator to mint a new enrollment token/),
-    ).toBeInTheDocument();
+    // The control: what the operator does with the token is beside the
+    // token, so its absence above is a move rather than a deletion. The
+    // recovery it names is a replacement token from the operator's page
+    // (ADR-0067), and not a deletion.
+    expect(await screen.findByText(RECOVERY)).toBeInTheDocument();
   });
 
   it("shows no token before a registration answers", async () => {

@@ -37,6 +37,10 @@ export {
   type GrantOrgConsentState,
 } from "./api/grant-org-consent";
 export {
+  mintOperatorEnrollment,
+  type MintOperatorEnrollmentState,
+} from "./api/mint-operator-enrollment";
+export {
   registerOperator,
   type RegisterOperatorState,
 } from "./api/register-operator";

@@ -15,6 +15,7 @@ import { orgHref } from "../../../../_components/navigation";
 import { PageHeader } from "../../../../_components/page-header";
 import { EnrollmentBadge } from "../_components/enrollment-badge";
 import { DeleteOperatorForm } from "./_components/delete-operator-form";
+import { MintEnrollmentForm } from "./_components/mint-enrollment-form";
 import { NamingDefinitions } from "./_components/naming-definitions";
 import { OperatorDetailsForm } from "./_components/operator-details-form";
 
@@ -32,8 +33,8 @@ const ENROLLMENT_MEANING: Record<Operator["enrollmentState"], string> = {
 
 /**
  * One operator: its identity, where it stands in obtaining a
- * certificate, the definitions that name it, and its settings
- * (ADR-0074).
+ * certificate and a replacement token while it holds none (ADR-0067),
+ * the definitions that name it, and its settings (ADR-0074).
  *
  * The organization is read for itself, so one the caller cannot read
  * answers 404 (ADR-0011). Inside one it can read, a refused operator
@@ -144,6 +145,11 @@ export default async function OperatorPage({ params }: Params) {
           <dt className="text-muted-foreground">Runtime</dt>
           <dd>Unknown — no report</dd>
         </dl>
+        <MintEnrollmentForm
+          org={org}
+          operator={operator}
+          enrolled={o.enrollmentState === "enrolled"}
+        />
       </section>
       <NamingDefinitions
         definitions={naming}

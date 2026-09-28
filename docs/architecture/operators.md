@@ -153,6 +153,20 @@ request falls in is the certificate-outranks-token order above, read
 inside the same transaction as the write, by the derivation the
 registration reads it by and not a second one.
 
+A mint succeeds whether or not anything reads the token, and nothing
+here learns that an operator took one: the state moves to `pending` on
+the mint and to `enrolled` only on the enrollment. Whether a running
+operator picks a replacement up is the operator's. At
+`garamsh/garam-agent-operator@9dfeccf567e4d04c92b0bb46b0540b69ed9f4c4d`
+it reads the `enrollment-token` key of its credential Secret at every
+look (`config/manager/manager.yaml`), passes over a token it already
+presented and presents one it has not, so a replacement placed there is
+presented without a restart (`internal/garam/enroller.go`). At
+`7f352e6` it stopped looking after its first refusal, which is what
+ADR-0067 §Consequences records. Those are statements about that
+source, not about any deployed operator, whose version garam cannot
+read; the console says to update the Secret and names no version.
+
 Unknown, spent and expired are one refusal. A caller that spends nothing
 presented no credential either way, and telling the three apart would
 answer questions about tokens the caller does not hold. Only the hash
@@ -224,9 +238,9 @@ browser-facing listener, on the organization's own paths, and that is
 also where a token is minted and where a record is deleted: registering
 writes the record and the token in one transaction, so a registration
 never exists without the token that enrols it; the same surface mints
-another where the operator has not enrolled — a route no console page
-reaches yet — reads and renames one, and deletes one, all three of
-which the console reaches on the operator's own page (ADR-0074).
+another where the operator has not enrolled, reads and renames one, and
+deletes one, all four of which the console reaches on the operator's
+own page (ADR-0067, ADR-0074).
 Deleting
 is authorized on `operator:delete` rather than on the action that
 registers, because registering grants nothing and this withdraws what

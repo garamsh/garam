@@ -29,9 +29,17 @@ export type ConsoleSection = {
   items?: { create?: string; fallback: string };
   /**
    * Named pages below the section beside its entries, each a view of
-   * the section rather than an entry of it.
+   * the section rather than an entry of it. A view may have item pages
+   * of its own, described as a section's are.
    */
-  views?: readonly { segment: string; label: string }[];
+  views?: readonly ConsoleView[];
+};
+
+/** A named view below a section. */
+export type ConsoleView = {
+  segment: string;
+  label: string;
+  items?: { create?: string; fallback: string };
 };
 
 /** The segment below an item section that opens its create page. */
@@ -47,7 +55,20 @@ export const CONSOLE_SECTIONS: readonly ConsoleSection[] = [
     items: { create: "New team", fallback: "Team" },
   },
   { segment: "people", label: "People", icon: UserRound },
-  { segment: "agents", label: "Agents", icon: Bot },
+  {
+    segment: "agents",
+    label: "Agents",
+    icon: Bot,
+    items: { create: "New agent", fallback: "Agent" },
+    // Templates live inside Agents rather than as a section (ADR-0075).
+    views: [
+      {
+        segment: "templates",
+        label: "Templates",
+        items: { create: "New template", fallback: "Template" },
+      },
+    ],
+  },
   { segment: "projects", label: "Projects", icon: FolderGit2 },
   {
     segment: "operators",
@@ -71,11 +92,18 @@ export const CONSOLE_SECTIONS: readonly ConsoleSection[] = [
  * Where a console pathname sits in the console's structure. `item` is
  * the segment below a section that has item pages: `NEW_ITEM` for its
  * create page, a named view's segment, or an entry's identifier.
+ * `viewItem` is the segment below a view that has item pages.
  */
 export type ConsoleLocation =
   | { kind: "orgs" }
   | { kind: "new-org" }
-  | { kind: "org"; org: string; section: ConsoleSection; item?: string }
+  | {
+      kind: "org";
+      org: string;
+      section: ConsoleSection;
+      item?: string;
+      viewItem?: string;
+    }
   | { kind: "invitation" }
   | { kind: "unknown" };
 
@@ -94,7 +122,7 @@ export function orgHref(org: string, segment: string): string {
  */
 export function parseConsolePath(pathname: string): ConsoleLocation {
   const segments = pathname.split("/").filter(Boolean);
-  if (segments[0] !== "console" || segments.length > 5) {
+  if (segments[0] !== "console" || segments.length > 6) {
     return { kind: "unknown" };
   }
   if (segments[1] === "invitations") return { kind: "invitation" };
@@ -105,6 +133,17 @@ export function parseConsolePath(pathname: string): ConsoleLocation {
   const segment = segments.length >= 4 ? segments[3] : "";
   const section = CONSOLE_SECTIONS.find((item) => item.segment === segment);
   if (!section) return { kind: "unknown" };
+  if (segments.length === 6) {
+    const view = section.views?.find((entry) => entry.segment === segments[4]);
+    if (!view?.items) return { kind: "unknown" };
+    return {
+      kind: "org",
+      org: segments[2],
+      section,
+      item: segments[4],
+      viewItem: segments[5],
+    };
+  }
   if (segments.length === 5) {
     if (!section.items) return { kind: "unknown" };
     return { kind: "org", org: segments[2], section, item: segments[4] };
@@ -139,14 +178,34 @@ export function consoleCrumbs(
         organizations,
         { label: org?.name ?? location.org, href: orgHref(location.org, "") },
       ];
-      const { section, item } = location;
+      const { section, item, viewItem } = location;
       if (item === undefined || !section.items) {
         return [...trail, { label: section.label }];
       }
       const view = section.views?.find((entry) => entry.segment === item);
+      const sectionCrumb: Crumb = {
+        label: section.label,
+        href: orgHref(location.org, section.segment),
+      };
+      if (view?.items && viewItem !== undefined) {
+        return [
+          ...trail,
+          sectionCrumb,
+          {
+            label: view.label,
+            href: orgHref(location.org, `${section.segment}/${view.segment}`),
+          },
+          {
+            label:
+              viewItem === NEW_ITEM && view.items.create !== undefined
+                ? view.items.create
+                : (itemName ?? view.items.fallback),
+          },
+        ];
+      }
       return [
         ...trail,
-        { label: section.label, href: orgHref(location.org, section.segment) },
+        sectionCrumb,
         {
           label:
             view?.label ??

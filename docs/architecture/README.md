@@ -497,3 +497,10 @@ ADRs:
   by; the console lists operators by name and opens a page per
   operator, with the identifier wherever a name alone could be
   ambiguous
+- [0075](./adr/0075-an-agent-is-started-from-a-template-copied-once-and-carries-a-name-of-its-own.md)
+  — an agent is started from a template copied once and carries a name
+  of its own: templates are an organization's resource on
+  `agent-template:*` actions with nothing linking them to the agents
+  defined from them, a definition's name changes on `agent:rename`
+  and moves nothing else, and the console lists desired agents by name
+  apart from what operators report

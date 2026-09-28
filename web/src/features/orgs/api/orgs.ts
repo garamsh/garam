@@ -173,6 +173,7 @@ export const AgentDefinitionParser = parserFor<AgentDefinition>()(
   z.object({
     agentGrn: GrnParser,
     orgGrn: GrnParser,
+    name: z.string(),
     operatorGrn: GrnParser,
     values: z.record(z.string(), z.string()),
     definedBy: GrnParser,
@@ -392,6 +393,19 @@ export function lookupAgentDefinitions(
     garamFetchAuthenticated(
       `/orgs/${orgPath(org)}/agent-definitions`,
       z.array(AgentDefinitionParser),
+    ),
+  );
+}
+
+/** One agent definition of an organization, by its agent's identifier. */
+export function getAgentDefinition(
+  org: string,
+  agent: string,
+): Promise<RefusableRead<AgentDefinition>> {
+  return refusableRead(
+    garamFetchAuthenticated(
+      `/orgs/${orgPath(org)}/agent-definitions/${orgPath(agent)}`,
+      AgentDefinitionParser,
     ),
   );
 }

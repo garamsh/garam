@@ -20,20 +20,22 @@ func TestNewDefinition_MintsTheAgentItDescribes(t *testing.T) {
 	values, err := agent.ParseValues(map[string]string{"model": "haiku"})
 	require.NoError(t, err)
 
-	d, err := agent.NewDefinition(orgGRN, operator, values, definedBy)
+	d, err := agent.NewDefinition(orgGRN, operator, "Research assistant", values, definedBy)
 	require.NoError(t, err)
 	assert.Equal(t, "acme", d.Agent().Organization)
 	assert.Equal(t, agent.ServiceType, d.Agent().ServiceType)
 	assert.Len(t, d.Agent().Identifier, 16, "eight random bytes, hex-encoded")
 	assert.Equal(t, orgGRN, d.Organization())
 	assert.Equal(t, operator, d.Operator())
+	assert.Equal(t, agent.Name("Research assistant"), d.Name)
 	assert.Equal(t, agent.Values{"model": "haiku"}, d.Values())
 	assert.Equal(t, definedBy, d.DefinedBy())
 
 	// Two definitions of the same org name two agents. A definition
 	// describes one agent, so a shared identifier would make the second
-	// one a rewrite of the first.
-	other, err := agent.NewDefinition(orgGRN, operator, values, definedBy)
+	// one a rewrite of the first. A shared name identifies nothing, so
+	// it does not either.
+	other, err := agent.NewDefinition(orgGRN, operator, "Research assistant", values, definedBy)
 	require.NoError(t, err)
 	assert.NotEqual(t, d.Agent(), other.Agent())
 }
@@ -57,7 +59,7 @@ func TestNewDefinition_RejectsAnOperatorTheOrganizationDoesNotOwn(t *testing.T) 
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d, err := agent.NewDefinition(orgGRN, tt.operator, agent.Values{}, definedBy)
+			d, err := agent.NewDefinition(orgGRN, tt.operator, "Field agent", agent.Values{}, definedBy)
 			assert.Nil(t, d)
 			assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), "got %v", err)
 		})
@@ -65,7 +67,7 @@ func TestNewDefinition_RejectsAnOperatorTheOrganizationDoesNotOwn(t *testing.T) 
 
 	// The same call with this organization's operator is accepted, so
 	// the refusals above are the operator and not the constructor.
-	d, err := agent.NewDefinition(orgGRN, grn.New("acme", grn.DefaultProject, agent.ServiceTypeOperator, "field-one"), agent.Values{}, definedBy)
+	d, err := agent.NewDefinition(orgGRN, grn.New("acme", grn.DefaultProject, agent.ServiceTypeOperator, "field-one"), "Field agent", agent.Values{}, definedBy)
 	require.NoError(t, err)
 	assert.Equal(t, "acme", d.Agent().Organization)
 }
@@ -139,4 +141,19 @@ func entries(n int) map[string]string {
 		out[fmt.Sprintf("key-%d", i)] = "v"
 	}
 	return out
+}
+
+func TestNewDefinition_CallsAnUnnamedAgentByItsIdentifier(t *testing.T) {
+	orgGRN := grn.New(grn.RootOwner, grn.DefaultProject, "org", "acme")
+	operator := grn.New("acme", grn.DefaultProject, agent.ServiceTypeOperator, "field-one")
+	definedBy := grn.New(grn.RootOwner, grn.DefaultProject, "user", "ada")
+
+	d, err := agent.NewDefinition(orgGRN, operator, "", agent.Values{}, definedBy)
+	require.NoError(t, err)
+	assert.Equal(t, agent.Name(d.Agent().Identifier), d.Name)
+
+	// The control: a name given is the name kept.
+	named, err := agent.NewDefinition(orgGRN, operator, "Scout", agent.Values{}, definedBy)
+	require.NoError(t, err)
+	assert.Equal(t, agent.Name("Scout"), named.Name)
 }

@@ -101,7 +101,16 @@ collaborate on a shared plan.
   one it has not is refused, naming the identifier that named no record
   (ADR-0045). Defining is granted by `agent:define`, named action by
   action because ADR-0012 puts provisioning outside garam and a wildcard
-  would grant in advance what no endpoint may offer.
+  would grant in advance what no endpoint may offer. A definition
+  carries a name the organization calls the agent by, which
+  `agent:rename` changes without touching the identity, operator or
+  values (ADR-0075).
+- An organization's **agent templates**, under
+  `/orgs/{org}/agent-templates` — starting points a definition copies
+  values from once, with nothing linking the two afterwards, so a
+  template's edit or deletion reaches no agent (ADR-0075). Reading,
+  creating, updating and deleting one are `agent-template:read`,
+  `…:create`, `…:update` and `…:delete`.
 - Messages addressed to an agent are held in a queue one reader at a
   time claims from, stored once per sender key and claimable again when
   a reader dies holding one (ADR-0013). A message is bounded by an

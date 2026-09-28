@@ -1,4 +1,5 @@
 import { screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
@@ -9,11 +10,14 @@ import {
   API_URL,
   alice,
   aliceMembership,
+  fieldAgent,
   reportedAgent,
   signedOut,
 } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
+// The removal action revalidates the page it came from.
+vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 vi.mock("next/navigation", () => ({
   notFound: () => {
     throw new Error("NEXT_NOT_FOUND");
@@ -92,11 +96,131 @@ describe("team page", () => {
     const offered = within(choice)
       .getAllByRole("option")
       .map((option) => option.textContent);
+    // A defined agent is offered by name before any operator claims
+    // it, with its identifier and its state beside the name (ADR-0075).
     expect(offered).toEqual([
       "Choose who to add",
       "Bob · Person",
+      "Scout (9f2ac1b40d8e7a35) · awaiting operator · Agent",
       `${slugFromGrn(reportedAgent.grn)} · Agent`,
     ]);
+  });
+
+  it("tells two agents of one name apart and removes the one chosen", async () => {
+    const first = fieldAgent.agentGrn;
+    const second = "grn:acme:default:agent:0a1b2c3d4e5f6071";
+    const removed: string[] = [];
+    server.use(
+      membersAre(first, second),
+      http.get(`${API_URL}/orgs/acme/agent-definitions`, () =>
+        HttpResponse.json([fieldAgent, { ...fieldAgent, agentGrn: second }]),
+      ),
+      http.delete(`${MEMBERS}/:member`, ({ params }) => {
+        removed.push(decodeURIComponent(String(params.member)));
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    const user = userEvent.setup();
+
+    await renderTeam();
+
+    // Both are called Scout; each row carries its own identifier.
+    const rows = screen.getAllByRole("row", { name: /Scout/ });
+    expect(rows).toHaveLength(2);
+    expect(within(rows[0]).getByText("9f2ac1b40d8e7a35")).toBeInTheDocument();
+    expect(within(rows[1]).getByText("0a1b2c3d4e5f6071")).toBeInTheDocument();
+
+    // The removal control and its confirmation name the identity, so
+    // the second agent is the one removed and the first stays.
+    await user.click(
+      screen.getByRole("button", {
+        name: "Remove Scout (0a1b2c3d4e5f6071) from Engineering",
+      }),
+    );
+    expect(
+      screen.getByText(
+        "Remove Scout (0a1b2c3d4e5f6071) from Engineering? Only this team membership goes; nothing else changes in the organization or in other teams.",
+      ),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Confirm removal" }));
+
+    await vi.waitFor(() => expect(removed).toEqual([second]));
+    expect(
+      screen.getByRole("button", {
+        name: "Remove Scout (9f2ac1b40d8e7a35) from Engineering",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it("names a defined agent member by the name its definition gives it", async () => {
+    server.use(membersAre(fieldAgent.agentGrn));
+
+    await renderTeam();
+
+    // Presence: a row's accessible name is all of its cells.
+    const row = screen.getByRole("row", { name: /Scout/ });
+    expect(within(row).getByText("Agent")).toBeInTheDocument();
+    expect(
+      within(row).queryByText("Not found in this organization"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("says agents may be missing, not that none can be chosen, when one agent list is refused", async () => {
+    // The control: with both agent lists read, nothing is said missing.
+    server.use(membersAre(alice.grn));
+    const allowed = await renderTeam();
+    expect(screen.queryByText(/may be missing here/)).not.toBeInTheDocument();
+    allowed.unmount();
+
+    server.use(
+      http.get(`${API_URL}/orgs/acme/agent-definitions`, () =>
+        HttpResponse.json({ kind: "denied", message: "no" }, { status: 403 }),
+      ),
+    );
+
+    await renderTeam();
+
+    expect(
+      screen.getByText(
+        "This organization's agent definitions are not listed to you, so some agents may be missing here.",
+      ),
+    ).toBeInTheDocument();
+    // The reported list still offers its agent, so "none can be chosen"
+    // would be false.
+    const offered = within(screen.getByLabelText("Person or agent"))
+      .getAllByRole("option")
+      .map((option) => option.textContent);
+    expect(offered).toContain(`${slugFromGrn(reportedAgent.grn)} · Agent`);
+    expect(
+      screen.queryByText(/none of them can be chosen/),
+    ).not.toBeInTheDocument();
+  });
+
+  it("says no agent can be chosen when both agent lists are refused", async () => {
+    // The control: with both agent lists read, no agent list is said
+    // refused.
+    server.use(membersAre(alice.grn));
+    const allowed = await renderTeam();
+    expect(
+      screen.queryByText(/agents are not listed to you/),
+    ).not.toBeInTheDocument();
+    allowed.unmount();
+
+    server.use(
+      ...["agent-definitions", "agents"].map((segment) =>
+        http.get(`${API_URL}/orgs/acme/${segment}`, () =>
+          HttpResponse.json({ kind: "denied", message: "no" }, { status: 403 }),
+        ),
+      ),
+    );
+
+    await renderTeam();
+
+    expect(
+      screen.getByText(
+        "This organization's agents are not listed to you, so none of them can be chosen here.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("keeps a member the organization no longer holds visible and removable", async () => {

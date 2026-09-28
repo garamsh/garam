@@ -4,6 +4,7 @@ import type { User } from "@/features/auth";
 import type {
   Agent,
   AgentDefinition,
+  AgentTemplate,
   Group,
   GroupMember,
   Member,
@@ -101,10 +102,26 @@ export const reportedAgent: Agent = {
 export const fieldAgent: AgentDefinition = {
   agentGrn: "grn:acme:default:agent:9f2ac1b40d8e7a35",
   orgGrn: acme.grn,
+  name: "Scout",
   operatorGrn: "grn:acme:default:operator:field-one",
   values: { model: "haiku" },
   definedBy: alice.grn,
   createdAt: "2026-01-02T03:04:05Z",
+};
+
+/**
+ * The single template Acme keeps. Nothing links it to `fieldAgent`: a
+ * definition copies a template's values once (ADR-0075).
+ */
+export const researcher: AgentTemplate = {
+  grn: "grn:acme:default:agent-template:7c1e2a9b3d4f5a60",
+  orgGrn: acme.grn,
+  name: "Researcher",
+  description: "Reads papers",
+  values: { workspace: "papers", notes: "weekly" },
+  createdBy: alice.grn,
+  createdAt: "2026-01-02T03:04:05Z",
+  updatedAt: "2026-01-02T03:04:05Z",
 };
 
 /**
@@ -218,6 +235,17 @@ const routes: { path: string; guarded: boolean; body: JsonBodyType }[] = [
   { path: "/orgs/acme/operators/field-one", guarded: true, body: fieldOne },
   { path: "/orgs/acme/agents", guarded: true, body: [reportedAgent] },
   { path: "/orgs/acme/agent-definitions", guarded: true, body: [fieldAgent] },
+  {
+    path: "/orgs/acme/agent-definitions/9f2ac1b40d8e7a35",
+    guarded: true,
+    body: fieldAgent,
+  },
+  { path: "/orgs/acme/agent-templates", guarded: true, body: [researcher] },
+  {
+    path: "/orgs/acme/agent-templates/7c1e2a9b3d4f5a60",
+    guarded: true,
+    body: researcher,
+  },
   { path: "/orgs/acme/consents", guarded: true, body: [globexConsent] },
   {
     path: "/orgs/acme/policies",

@@ -554,6 +554,15 @@ type fakeAgentStore struct {
 	agents      map[string]*agent.Agent
 	assignments map[string]*agent.Assignment
 	definitions map[string]*agent.Definition
+	templates   map[string]*agent.Template
+	// renames records each rename the API asked for.
+	renames []rename
+}
+
+// rename is one RenameDefinition call.
+type rename struct {
+	agent grn.GRN
+	name  agent.Name
 }
 
 func newFakeAgentStore() *fakeAgentStore {
@@ -561,6 +570,7 @@ func newFakeAgentStore() *fakeAgentStore {
 		agents:      map[string]*agent.Agent{},
 		assignments: map[string]*agent.Assignment{},
 		definitions: map[string]*agent.Definition{},
+		templates:   map[string]*agent.Template{},
 	}
 }
 
@@ -625,6 +635,85 @@ func (s *fakeAgentStore) Define(_ context.Context, d *agent.Definition) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.definitions[d.Agent().String()] = d
+	return nil
+}
+
+func (s *fakeAgentStore) GetDefinition(_ context.Context, g grn.GRN) (*agent.Definition, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	d, ok := s.definitions[g.String()]
+	if !ok {
+		return nil, agent.ErrDefinitionNotFound
+	}
+	return d, nil
+}
+
+func (s *fakeAgentStore) RenameDefinition(_ context.Context, g grn.GRN, name agent.Name) (*agent.Definition, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	d, ok := s.definitions[g.String()]
+	if !ok {
+		return nil, agent.ErrDefinitionNotFound
+	}
+	s.renames = append(s.renames, rename{agent: g, name: name})
+	renamed := *d
+	renamed.Name = name
+	s.definitions[g.String()] = &renamed
+	return &renamed, nil
+}
+
+func (s *fakeAgentStore) CreateTemplate(_ context.Context, t *agent.Template) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.templates[t.GRN.String()] = t
+	return nil
+}
+
+func (s *fakeAgentStore) GetTemplate(_ context.Context, g grn.GRN) (*agent.Template, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.templates[g.String()]
+	if !ok {
+		return nil, agent.ErrTemplateNotFound
+	}
+	return t, nil
+}
+
+func (s *fakeAgentStore) ListTemplatesByOrg(_ context.Context, orgGRN grn.GRN) ([]*agent.Template, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := []*agent.Template{}
+	for _, t := range s.templates {
+		if t.OrgGRN == orgGRN {
+			out = append(out, t)
+		}
+	}
+	slices.SortFunc(out, func(a, b *agent.Template) int {
+		return strings.Compare(string(a.Name), string(b.Name))
+	})
+	return out, nil
+}
+
+func (s *fakeAgentStore) UpdateTemplate(_ context.Context, g grn.GRN, content agent.TemplateContent) (*agent.Template, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	t, ok := s.templates[g.String()]
+	if !ok {
+		return nil, agent.ErrTemplateNotFound
+	}
+	updated := *t
+	updated.TemplateContent = content
+	s.templates[g.String()] = &updated
+	return &updated, nil
+}
+
+func (s *fakeAgentStore) DeleteTemplate(_ context.Context, g grn.GRN) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.templates[g.String()]; !ok {
+		return agent.ErrTemplateNotFound
+	}
+	delete(s.templates, g.String())
 	return nil
 }
 
@@ -1212,6 +1301,11 @@ func (s *fakeAgentStore) CountByOrg(_ context.Context, orgGRN grn.GRN) (agent.Or
 	for _, d := range s.definitions {
 		if d.Organization() == orgGRN {
 			c.Definitions++
+		}
+	}
+	for _, t := range s.templates {
+		if t.OrgGRN == orgGRN {
+			c.Templates++
 		}
 	}
 	return c, nil

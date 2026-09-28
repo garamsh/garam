@@ -23,12 +23,18 @@ export function AddTeamMemberForm({
   team,
   candidates,
   unlisted,
+  partlyListed = [],
 }: {
   org: string;
   team: string;
   candidates: Candidate[];
   /** The kinds whose list garam refused the caller, as plural nouns. */
   unlisted: string[];
+  /**
+   * Refused lists whose kind another list still offers, as plural
+   * nouns: some of that kind are offered and some may be missing.
+   */
+  partlyListed?: string[];
 }) {
   const [state, formAction, pending] = useActionState(
     addGroupMember,
@@ -46,9 +52,15 @@ export function AddTeamMemberForm({
           you, so none of them can be chosen here.
         </p>
       )}
+      {partlyListed.length > 0 && (
+        <p className="text-sm text-muted-foreground">
+          This organization&apos;s {partlyListed.join(" and ")} are not listed
+          to you, so some agents may be missing here.
+        </p>
+      )}
       {candidates.length === 0 ? (
         <p className="text-sm text-muted-foreground">
-          {unlisted.length > 0
+          {unlisted.length > 0 || partlyListed.length > 0
             ? "No one you can list is outside this team."
             : "Every person and agent of this organization is already in this team."}
         </p>

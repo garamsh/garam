@@ -131,7 +131,11 @@ describe("updateAgentTemplate", () => {
     expect(puts).toEqual([
       {
         template: "7c1e2a9b3d4f5a60",
-        body: { name: "Analyst", description: "", values: { workspace: "archive" } },
+        body: {
+          name: "Analyst",
+          description: "",
+          values: { workspace: "archive" },
+        },
       },
     ]);
   });

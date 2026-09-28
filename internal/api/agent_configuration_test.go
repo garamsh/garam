@@ -174,10 +174,12 @@ func TestAgentReviseValues_RefusesWhatItCannotStore(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			defined := defineIn(t, f, slug, agent.Values{"model": "haiku"})
 			stored := f.agents.definitions[defined.String()]
+			revisedAt := stored.RevisedAt
 
 			rec := f.do(t, "PUT", valuesPath(slug, defined), c.refused, owner)
 			assert.Equal(t, http.StatusBadRequest, rec.Code)
 			assert.Equal(t, agent.Revision(1), stored.Revision, "a refused save moved the revision")
+			assert.True(t, revisedAt.Equal(stored.RevisedAt), "a refused save moved the revision time")
 			assert.Equal(t, userGRNOf("owner-sub"), stored.RevisedBy)
 			assert.NotContains(t, f.agents.revised, defined.String(), "a refused save stored values")
 

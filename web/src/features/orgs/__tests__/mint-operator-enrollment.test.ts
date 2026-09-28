@@ -5,7 +5,9 @@ import { mintOperatorEnrollment } from "@/features/orgs/api/mint-operator-enroll
 import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
-const { revalidated } = vi.hoisted(() => ({ revalidated: [] as string[] }));
+const { revalidated } = vi.hoisted((): { revalidated: string[] } => ({
+  revalidated: [],
+}));
 // `revalidatePath` only works inside a Next.js request store; the
 // paths it was handed are what the page re-reads.
 vi.mock("next/cache", () => ({

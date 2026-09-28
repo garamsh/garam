@@ -313,17 +313,29 @@ describe("define agent form", () => {
   });
 
   it("stops at thirty-two values and says that is all a definition carries", async () => {
+    // Thirty-one values arrive the way a template's do, through the
+    // form's own prop, so the test clicks once across the boundary
+    // rather than thirty-one times to reach it.
     const user = userEvent.setup();
-    renderForm(null);
+    renderForm(
+      null,
+      Object.fromEntries(
+        Array.from({ length: 31 }, (_, index) => [`key-${index}`, "v"]),
+      ),
+    );
     const add = screen.getByRole("button", { name: "Add value" });
 
-    expect(screen.getByText("1 of 32 values")).toBeInTheDocument();
-    for (let added = 0; added < 31; added += 1) {
-      await user.click(add);
-    }
+    expect(screen.getByText("31 of 32 values")).toBeInTheDocument();
+    expect(add).toBeEnabled();
+    await user.click(add);
 
     expect(screen.getByText("32 of 32 values")).toBeInTheDocument();
     expect(add).toBeDisabled();
+
+    // A further value is refused: the button takes no click, and the
+    // editor still holds thirty-two rows.
+    await user.click(add);
+    expect(screen.getAllByRole("textbox", { name: /^Key / })).toHaveLength(32);
   });
 
   it("names the character rule an operator identifier breaks", async () => {

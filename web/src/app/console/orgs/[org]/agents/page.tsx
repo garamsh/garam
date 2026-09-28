@@ -131,7 +131,11 @@ export default async function AgentsPage({ params }: Params) {
             }
           />
         ) : (
-          <AgentRoster org={org} entries={entries} />
+          <AgentRoster
+            org={org}
+            entries={entries}
+            definitionsRead={definitions.status === "ok"}
+          />
         )}
       </section>
     </>

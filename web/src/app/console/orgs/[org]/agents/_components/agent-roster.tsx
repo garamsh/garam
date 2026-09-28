@@ -17,15 +17,19 @@ export type RosterEntry = {
 
 /**
  * The organization's agents: every defined agent, claimed or not, and
- * every reported agent no definition names. A defined agent links to
- * its page; one only an operator reported has no definition to show.
+ * every reported agent no definition read names. A defined agent links
+ * to its page. A reported one without a name is said to have no
+ * definition only where the definitions were read: where they were
+ * refused, one may exist unread.
  */
 export function AgentRoster({
   org,
   entries,
+  definitionsRead,
 }: {
   org: string;
   entries: readonly RosterEntry[];
+  definitionsRead: boolean;
 }) {
   return (
     <ul className="flex flex-col gap-3">
@@ -47,7 +51,9 @@ export function AgentRoster({
               </CardTitle>
               {directory.name === null ? (
                 <p className="text-xs text-muted-foreground">
-                  Reported by an operator without a definition here.
+                  {definitionsRead
+                    ? "Reported by an operator without a definition here."
+                    : "Reported by an operator. Its definition is not checked."}
                 </p>
               ) : (
                 <p className="font-mono text-xs text-muted-foreground">

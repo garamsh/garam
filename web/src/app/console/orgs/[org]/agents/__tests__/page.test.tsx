@@ -165,7 +165,19 @@ describe("agents section", () => {
       ),
     ).toBeInTheDocument();
     // The reported agent is still listed: the refusal narrows the page.
-    expect(screen.getByText("1c3d5e7f90a2b4c6")).toBeInTheDocument();
+    // Its definition may be in the list that was refused, so it is not
+    // said to have none.
+    const reported = cardOf("1c3d5e7f90a2b4c6");
+    expect(
+      within(reported).getByText(
+        "Reported by an operator. Its definition is not checked.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(reported).queryByText(
+        "Reported by an operator without a definition here.",
+      ),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("Scout")).not.toBeInTheDocument();
   });
 

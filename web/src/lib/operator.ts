@@ -12,6 +12,11 @@
  * (`docs/architecture/grn-model.md` §identifier). What garam refuses on
  * top of it is not shape but absence: an identifier no operator is
  * registered under is refused by the API, which names it (ADR-0045).
+ *
+ * The name and description beside it are what the organization says
+ * about the operator, and their bounds are `api/openapi.yaml`
+ * §OperatorName and §OperatorDescription (ADR-0074). Registering and
+ * editing both carry them.
  */
 
 import { refuse, type Parsed } from "@/lib/parsed";
@@ -43,4 +48,51 @@ export function parseOperatorIdentifier(input: string): Parsed<string> {
     );
   }
   return { status: "ok", value: identifier };
+}
+
+/** How long an operator's name is, in characters. */
+export const OPERATOR_NAME_MAX_LENGTH = 100;
+/** How long an operator's description is, in characters. */
+export const OPERATOR_DESCRIPTION_MAX_LENGTH = 1000;
+
+/**
+ * Characters as the API counts them: code points, so a character
+ * outside the Basic Multilingual Plane is one and not two.
+ */
+function characters(input: string): number {
+  return [...input].length;
+}
+
+/** Reads what the organization calls the operator, trimmed. */
+export function parseOperatorName(input: string): Parsed<string> {
+  const name = input.trim();
+  if (name.includes("\0")) {
+    return refuse("An operator's name cannot hold a NUL character.");
+  }
+  if (name === "") {
+    return refuse("Give the operator a name.");
+  }
+  if (characters(name) > OPERATOR_NAME_MAX_LENGTH) {
+    return refuse(
+      `An operator's name holds at most ${OPERATOR_NAME_MAX_LENGTH} characters; this one holds ${characters(name)}.`,
+    );
+  }
+  return { status: "ok", value: name };
+}
+
+/**
+ * Reads what the organization says the operator is for, trimmed. Empty
+ * is a description of its own: none.
+ */
+export function parseOperatorDescription(input: string): Parsed<string> {
+  const description = input.trim();
+  if (description.includes("\0")) {
+    return refuse("A description cannot hold a NUL character.");
+  }
+  if (characters(description) > OPERATOR_DESCRIPTION_MAX_LENGTH) {
+    return refuse(
+      `A description holds at most ${OPERATOR_DESCRIPTION_MAX_LENGTH} characters; this one holds ${characters(description)}.`,
+    );
+  }
+  return { status: "ok", value: description };
 }

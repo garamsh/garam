@@ -16,14 +16,15 @@ export const metadata: Metadata = { title: "Operators — garam" };
 type Params = { params: Promise<{ org: string }> };
 
 /**
- * The operators the organization has registered, and the form that
- * registers one more.
+ * The operators the organization has registered, each opening a page
+ * of its own, and the form that registers one more (ADR-0074). The form
+ * is here rather than on a create route because an identifier may be
+ * `new`, and that route would take the operator's page.
  *
- * Registering is granted by `operator:register` and deleting by
- * `operator:delete`, which owners and admins hold and members do not,
- * while every role reads the list. The form and the delete control are
- * rendered for all of them and the API refuses a caller that holds
- * only the read — the same shape the agents section takes.
+ * Registering is granted by `operator:register`, which owners and
+ * admins hold and members do not, while every role reads the list. The
+ * form is offered to all of them and the API refuses a caller that
+ * holds only the read — the same shape the agents section takes.
  */
 export default async function OperatorsPage({ params }: Params) {
   const { org } = await params;
@@ -33,7 +34,7 @@ export default async function OperatorsPage({ params }: Params) {
     <>
       <PageHeader
         title="Operators"
-        description="The operators this organization has registered. A record is what garam holds — an operator authenticates with the certificate it holds, and registering hands it a one-time token to obtain its first one with."
+        description="Operators this organization has registered."
       />
       {operators.status === "unreachable" ? (
         <ApiUnreachable subject="this organization's operators" />

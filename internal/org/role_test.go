@@ -76,6 +76,7 @@ func TestActionConstants_SpellTheirWireStrings(t *testing.T) {
 
 		{org.ActionOperatorRead, "operator:read"},
 		{org.ActionOperatorRegister, "operator:register"},
+		{org.ActionOperatorUpdate, "operator:update"},
 		{org.ActionOperatorDelete, "operator:delete"},
 
 		{org.ActionAgentRead, "agent:read"},
@@ -93,16 +94,16 @@ func TestRoleActions_GrantSets(t *testing.T) {
 	assert.Equal(t,
 		[]string{
 			"org:*", "group:*", "project:*", "policy:*", "consent:*",
-			org.ActionOperatorRead, org.ActionOperatorRegister, org.ActionOperatorDelete,
-			org.ActionAgentRead, org.ActionAgentDefine,
+			org.ActionOperatorRead, org.ActionOperatorRegister, org.ActionOperatorUpdate,
+			org.ActionOperatorDelete, org.ActionAgentRead, org.ActionAgentDefine,
 		},
 		org.RoleOwner.Actions())
 	assert.Equal(t,
 		[]string{
 			org.ActionOrgRead, org.ActionOrgUpdate, org.ActionOrgMemberList, org.ActionOrgInvite,
 			"group:*", "project:*", "policy:*", "consent:*",
-			org.ActionOperatorRead, org.ActionOperatorRegister, org.ActionOperatorDelete,
-			org.ActionAgentRead, org.ActionAgentDefine,
+			org.ActionOperatorRead, org.ActionOperatorRegister, org.ActionOperatorUpdate,
+			org.ActionOperatorDelete, org.ActionAgentRead, org.ActionAgentDefine,
 		},
 		org.RoleAdmin.Actions())
 	assert.Equal(t,
@@ -140,15 +141,16 @@ func TestRoleActions_NoRoleReachesAgentWatch(t *testing.T) {
 // because defining an agent needs the list to name one from, and only
 // the two administrative roles register one. Deleting one goes with
 // registering it and is named separately, because it is the action
-// that stops an operator rather than records one (ADR-0070). The read
-// is the control — without it the member's refusals would also hold
-// for a role that reaches no operator action at all.
+// that stops an operator rather than records one (ADR-0070), and so is
+// changing what the org calls one (ADR-0074). The read is the control
+// — without it the member's refusals would also hold for a role that
+// reaches no operator action at all.
 func TestRoleActions_OnlyOwnerAndAdminRegisterAnOperator(t *testing.T) {
 	for _, r := range []org.Role{org.RoleOwner, org.RoleAdmin, org.RoleMember} {
 		assert.Contains(t, r.Actions(), org.ActionOperatorRead, string(r))
 		assert.NotContains(t, r.Actions(), "operator:*", string(r))
 	}
-	for _, action := range []string{org.ActionOperatorRegister, org.ActionOperatorDelete} {
+	for _, action := range []string{org.ActionOperatorRegister, org.ActionOperatorUpdate, org.ActionOperatorDelete} {
 		assert.Contains(t, org.RoleOwner.Actions(), action)
 		assert.Contains(t, org.RoleAdmin.Actions(), action)
 		assert.NotContains(t, org.RoleMember.Actions(), action)
@@ -164,7 +166,7 @@ func TestActionsFor_UnionsKnownRoles(t *testing.T) {
 			org.ActionOperatorRead, org.ActionAgentRead, org.ActionAgentDefine,
 			org.ActionOrgUpdate, org.ActionOrgInvite,
 			"group:*", "project:*", "policy:*", "consent:*",
-			org.ActionOperatorRegister, org.ActionOperatorDelete,
+			org.ActionOperatorRegister, org.ActionOperatorUpdate, org.ActionOperatorDelete,
 		},
 		org.ActionsFor([]string{"member", "admin"}))
 	assert.Empty(t, org.ActionsFor([]string{"superuser"}))

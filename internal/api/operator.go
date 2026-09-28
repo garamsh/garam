@@ -34,7 +34,12 @@ func (s *Server) RegisterOperator(w http.ResponseWriter, r *http.Request, orgSlu
 		writeError(w, err)
 		return
 	}
-	o, err := operator.New(orgGRN(orgSlug), body.Identifier, u.GRN)
+	details, err := operator.NewDetailsPatch(body.Name, body.Description)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	o, err := operator.New(orgGRN(orgSlug), body.Identifier, u.GRN, details)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -133,6 +138,70 @@ func (s *Server) DeleteOperator(w http.ResponseWriter, r *http.Request, orgSlug 
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// GetOperator answers one operator the org has registered. Requires the
+// member role.
+func (s *Server) GetOperator(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, operatorSlug apigen.OperatorSlug) {
+	u, err := s.currentUser(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.authorize(r, orgGRN(orgSlug), u, org.ActionOperatorRead); err != nil {
+		writeError(w, err)
+		return
+	}
+	g, err := operator.GRNOf(orgGRN(orgSlug), operatorSlug)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	o, err := s.operators.Get(r.Context(), g)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, operatorToAPI(o))
+}
+
+// UpdateOperator changes the operator's name and description
+// (ADR-0074). Requires the admin role.
+//
+// It is authorized on an action of its own: renaming grants nothing a
+// registration does and withdraws nothing a delete does, so neither of
+// those actions is the right one to carry it.
+func (s *Server) UpdateOperator(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, operatorSlug apigen.OperatorSlug) {
+	u, err := s.currentUser(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.authorize(r, orgGRN(orgSlug), u, org.ActionOperatorUpdate); err != nil {
+		writeError(w, err)
+		return
+	}
+	g, err := operator.GRNOf(orgGRN(orgSlug), operatorSlug)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	var body apigen.OperatorPatch
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, err)
+		return
+	}
+	patch, err := operator.NewDetailsPatch(body.Name, body.Description)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	o, err := s.operators.UpdateDetails(r.Context(), g, patch)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, operatorToAPI(o))
+}
+
 // ListOperators lists the operators the org has registered. Requires
 // the member role.
 func (s *Server) ListOperators(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org) {
@@ -182,6 +251,8 @@ func (s *Server) requireRegisteredOperator(r *http.Request, g grn.GRN) error {
 func operatorToAPI(o *operator.Operator) apigen.Operator {
 	out := apigen.Operator{
 		Grn:             o.GRN().String(),
+		Name:            o.Name,
+		Description:     o.Description,
 		OrgGrn:          o.Organization().String(),
 		RegisteredBy:    o.RegisteredBy().String(),
 		CreatedAt:       o.CreatedAt(),

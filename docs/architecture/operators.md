@@ -11,10 +11,11 @@ what it takes to replace that with the next (ADR-0046). Implemented by
 
 | Type | Responsibility |
 |------|----------------|
-| `Operator` | an organization's record that it has an operator under this GRN: who registered it and when, and where that operator stands in obtaining a certificate |
+| `Operator` | an organization's record that it has an operator under this GRN: what it calls the operator and says it is for, who registered it and when, and where that operator stands in obtaining a certificate |
+| `DetailsPatch` | a parsed name and description, each absent where the caller said nothing: what a registration starts with and what an update changes |
 | `EnrollmentState` | where an operator stands: holding a certificate, holding a token nobody has spent, or holding neither |
 | `Enrollment` | the one-time token an operator obtains its first certificate with: which operator it enrols, who minted it, and when it stops being spendable |
-| `Store` | registers one with the token it enrols with and answers what it stored, mints that token again for one that has not enrolled, deletes one and everything the identifier held, answers one by GRN, and lists an organization's own |
+| `Store` | registers one with the token it enrols with and answers what it stored, mints that token again for one that has not enrolled, changes its name and description, deletes one and everything the identifier held, answers one by GRN, and lists an organization's own |
 | `EnrollmentStore` | spends a token, answering the operator it enrols |
 | `Credential` | the certificate a connection authenticated with — the identity it names, which certificate it is, and how long it is good for |
 | `CertificateRequest` | a certificate signing request as it arrived, holding the public key an enrolling operator generated |
@@ -76,9 +77,18 @@ enrolled. Recording the latter would be a history nothing else reads,
 which is what `operator_certificates` declines by keeping the newest row
 alone.
 
-There is no update: a record carries nothing to change. There is a
-delete, and it is the one write here that takes something away
-(ADR-0070). It leaves the identifier holding nothing — the unspent
+The record's one update is to its name and description
+([ADR-0074](./adr/0074-an-operator-carries-a-name-and-description-and-the-console-gives-it-a-page-of-its-own.md)).
+Both are what the organization says about the operator and neither is
+an identity: a name is not unique, one left out of a registration is
+the identifier, and the update writes those two columns and nothing
+keyed on the GRN, so the certificate lineage, an unspent token and the
+definitions naming the operator stand as they were. It is authorized
+on `operator:update`, which grants nothing and withdraws nothing. The
+bounds are `api/openapi.yaml` §OperatorName and §OperatorDescription,
+which is authoritative for them, and 000025 holds the same ones.
+There is a delete, and it is the one write here that takes something
+away (ADR-0070). It leaves the identifier holding nothing — the unspent
 token goes by the foreign key that was declared for this route ahead of
 it, and the record of the certificate garam last issued has no such key
 and is removed by name in the same transaction. That second removal is
@@ -215,7 +225,9 @@ also where a token is minted and where a record is deleted: registering
 writes the record and the token in one transaction, so a registration
 never exists without the token that enrols it; the same surface mints
 another where the operator has not enrolled — a route no console page
-reaches yet — and deletes one, which the console does reach. Deleting
+reaches yet — reads and renames one, and deletes one, all three of
+which the console reaches on the operator's own page (ADR-0074).
+Deleting
 is authorized on `operator:delete` rather than on the action that
 registers, because registering grants nothing and this withdraws what
 an operator runs on (ADR-0070). The record is read on the machine

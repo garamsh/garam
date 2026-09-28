@@ -45,7 +45,9 @@ export type AgentDefinition = components["schemas"]["AgentDefinition"];
  * and where it stands in obtaining a certificate. The record says garam
  * holds one; neither it nor the state says whether the operator is
  * running or reachable (ADR-0045) — `enrolled` is an operator that
- * obtained a certificate and not one that is alive.
+ * obtained a certificate and not one that is alive. Its name is what
+ * the organization calls it and is not unique; the GRN is its identity
+ * (ADR-0074).
  */
 export type Operator = components["schemas"]["Operator"];
 /**
@@ -181,6 +183,8 @@ export const AgentDefinitionParser = parserFor<AgentDefinition>()(
 export const OperatorParser = parserFor<Operator>()(
   z.object({
     grn: GrnParser,
+    name: z.string(),
+    description: z.string(),
     orgGrn: GrnParser,
     registeredBy: GrnParser,
     createdAt: z.string(),
@@ -327,6 +331,34 @@ export function listOperators(org: string): Promise<OrgRead<Operator[]>> {
   );
 }
 
+/** One operator of an organization, by its identifier. */
+export function getOperator(
+  org: string,
+  operator: string,
+): Promise<RefusableRead<Operator>> {
+  return refusableRead(
+    garamFetchAuthenticated(
+      `/orgs/${orgPath(org)}/operators/${orgPath(operator)}`,
+      OperatorParser,
+    ),
+  );
+}
+
+/**
+ * The operators of an organization, for a page that only chooses from
+ * them: a refusal is returned rather than answered with not-found.
+ */
+export function lookupOperators(
+  org: string,
+): Promise<RefusableRead<Operator[]>> {
+  return refusableRead(
+    garamFetchAuthenticated(
+      `/orgs/${orgPath(org)}/operators`,
+      z.array(OperatorParser),
+    ),
+  );
+}
+
 /** The agents an organization holds. */
 export function listAgents(org: string): Promise<OrgRead<Agent[]>> {
   return orgRead(
@@ -342,6 +374,21 @@ export function listAgentDefinitions(
   org: string,
 ): Promise<OrgRead<AgentDefinition[]>> {
   return orgRead(
+    garamFetchAuthenticated(
+      `/orgs/${orgPath(org)}/agent-definitions`,
+      z.array(AgentDefinitionParser),
+    ),
+  );
+}
+
+/**
+ * The agent definitions of an organization, for a page that only looks
+ * in them: a refusal is returned rather than answered with not-found.
+ */
+export function lookupAgentDefinitions(
+  org: string,
+): Promise<RefusableRead<AgentDefinition[]>> {
+  return refusableRead(
     garamFetchAuthenticated(
       `/orgs/${orgPath(org)}/agent-definitions`,
       z.array(AgentDefinitionParser),

@@ -8,6 +8,7 @@
  */
 export {
   getGroup,
+  getOperator,
   getOrg,
   listAgentDefinitions,
   listAgents,
@@ -18,8 +19,10 @@ export {
   listOrgMembers,
   listOrgs,
   listProjects,
+  lookupAgentDefinitions,
   lookupAgents,
   lookupGroups,
+  lookupOperators,
   lookupOrgMembers,
   type Agent,
   type AgentDefinition,

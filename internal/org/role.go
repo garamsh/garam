@@ -82,6 +82,11 @@ const (
 	// member does here that takes a machine identity away: registering
 	// grants nothing and this withdraws what an operator runs on.
 	ActionOperatorDelete = "operator:delete"
+	// ActionOperatorUpdate is changing what the org says about an
+	// operator: its name and description (ADR-0074). It is an action of
+	// its own because it neither grants what registering does nor
+	// withdraws what deleting does.
+	ActionOperatorUpdate = "operator:update"
 
 	// Reading the agents an org holds, defining one, and watching one
 	// work. The org owns the constants for the reason it owns the
@@ -111,8 +116,8 @@ const (
 var (
 	// adminMachineActions is what an owner or an admin holds.
 	adminMachineActions = []string{
-		ActionOperatorRead, ActionOperatorRegister, ActionOperatorDelete,
-		ActionAgentRead, ActionAgentDefine,
+		ActionOperatorRead, ActionOperatorRegister, ActionOperatorUpdate,
+		ActionOperatorDelete, ActionAgentRead, ActionAgentDefine,
 	}
 	// memberMachineActions is what a member holds: it reads the
 	// operators an org has registered and registers none, because

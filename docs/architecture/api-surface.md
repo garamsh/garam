@@ -155,6 +155,12 @@ recovers the operator that already holds a certificate; it remains a
 root-level subcommand no serve path references
 ([ADR-0032](./adr/0032-garam-ships-the-command-that-mints-an-operators-first-certificate.md)).
 
+**`getOperator` and `updateOperator` read one operator and change
+its name and description**, on `operator:read` and `operator:update`
+([ADR-0074](./adr/0074-an-operator-carries-a-name-and-description-and-the-console-gives-it-a-page-of-its-own.md)).
+The identifier is the path's and not a field, so the update moves no
+certificate, token or definition.
+
 **`deleteOperator` is on the same listener and is the one operation
 here that stops a machine identity.** It removes the organization's
 record, which the machine listener reads per connection, so the

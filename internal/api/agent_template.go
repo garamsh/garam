@@ -1,10 +1,13 @@
 package api
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/http"
 
 	apigen "github.com/garamsh/garam/api"
 	"github.com/garamsh/garam/internal/agent"
+	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/org"
 )
@@ -126,10 +129,19 @@ func (s *Server) authorizeTemplate(r *http.Request, orgSlug, templateSlug, actio
 	return g, nil
 }
 
+// templateWrite is the generated AgentTemplateWrite with its values
+// kept raw: decoded straight into a map of strings, an explicit null
+// would arrive as an empty string or as no values at all, and either
+// would overwrite what the template held.
+type templateWrite struct {
+	apigen.AgentTemplateWrite
+	Values json.RawMessage `json:"values"`
+}
+
 // decodeTemplateContent parses the body of a create or an update: the
 // whole of what a template says, each field through its own parse.
 func decodeTemplateContent(r *http.Request) (agent.TemplateContent, error) {
-	var body apigen.AgentTemplateWrite
+	var body templateWrite
 	if err := decodeJSON(r, &body); err != nil {
 		return agent.TemplateContent{}, err
 	}
@@ -145,15 +157,37 @@ func decodeTemplateContent(r *http.Request) (agent.TemplateContent, error) {
 	if err != nil {
 		return agent.TemplateContent{}, err
 	}
-	var raw map[string]string
-	if body.Values != nil {
-		raw = *body.Values
-	}
-	values, err := agent.ParseValues(raw)
+	values, err := parseTemplateValues(body.Values)
 	if err != nil {
 		return agent.TemplateContent{}, err
 	}
 	return agent.TemplateContent{Name: name, Description: parsedDescription, Values: values}, nil
+}
+
+// parseTemplateValues reads a template's values as written. Left out,
+// they are none: an update replaces the whole template, so leaving
+// them out clears them (AgentTemplateWrite). Given, they must be an
+// object of strings; a null object or a null entry is refused rather
+// than read as empty.
+func parseTemplateValues(raw json.RawMessage) (agent.Values, error) {
+	if len(raw) == 0 {
+		return agent.ParseValues(nil)
+	}
+	if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return nil, errorx.New(errorx.KindInvalidArgument, "agent template: values must be an object, not null")
+	}
+	var entries map[string]*string
+	if err := json.Unmarshal(raw, &entries); err != nil {
+		return nil, errorx.Wrap(err, "agent template: values", errorx.KindInvalidArgument)
+	}
+	strings := make(map[string]string, len(entries))
+	for k, v := range entries {
+		if v == nil {
+			return nil, errorx.New(errorx.KindInvalidArgument, "agent template: a value must be a string, not null")
+		}
+		strings[k] = *v
+	}
+	return agent.ParseValues(strings)
 }
 
 // templateGRN builds the GRN of a template owned by the org. The org

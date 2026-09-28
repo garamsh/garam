@@ -258,3 +258,64 @@ func TestAgentDefinition_RenameIsItsOwnActionOnTheAgent(t *testing.T) {
 	assert.Contains(t, renameObjects, agentGRN, "authorized on the agent, not the organization")
 	assert.NotContains(t, renameObjects, orgGRNOf(slug))
 }
+
+// TestAgentTemplate_RefusesNullValuesAndKeepsOmissionClearing holds the
+// write boundary of a template's values. An explicit null, for the
+// object or for one entry, is refused rather than read as empty, and a
+// refused update leaves the stored template as it was, timestamps
+// included. The controls are the writes the specification admits:
+// values left out (which clears them, since an update replaces the
+// whole template), an empty object, and an empty string.
+func TestAgentTemplate_RefusesNullValuesAndKeepsOmissionClearing(t *testing.T) {
+	f := newFixture(t)
+	f.permit(
+		permission{userGRNOf("owner-sub"), org.ActionAgentTemplateRead},
+		permission{userGRNOf("owner-sub"), org.ActionAgentTemplateCreate},
+		permission{userGRNOf("owner-sub"), org.ActionAgentTemplateUpdate},
+	)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	base := "/orgs/" + slug + "/agent-templates"
+
+	for name, body := range map[string]string{
+		"null values object": `{"name":"Researcher","values":null}`,
+		"null value entry":   `{"name":"Researcher","values":{"workspace":null}}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			assert.Equal(t, http.StatusBadRequest, f.do(t, "POST", base, body, owner).Code)
+		})
+	}
+	for name, tc := range map[string]struct {
+		body string
+		want apigen.AgentValues
+	}{
+		"values left out":   {`{"name":"Researcher"}`, apigen.AgentValues{}},
+		"empty object":      {`{"name":"Researcher","values":{}}`, apigen.AgentValues{}},
+		"empty string kept": {`{"name":"Researcher","values":{"workspace":""}}`, apigen.AgentValues{"workspace": ""}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			rec := f.do(t, "POST", base, tc.body, owner)
+			require.Equal(t, http.StatusCreated, rec.Code)
+			assert.Equal(t, tc.want, decodeBody[apigen.AgentTemplate](t, rec).Values)
+		})
+	}
+
+	rec := f.do(t, "POST", base, templateBody("Researcher", "", `{"workspace":"papers"}`), owner)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	created := decodeBody[apigen.AgentTemplate](t, rec)
+	g, err := grn.Parse(created.Grn)
+	require.NoError(t, err)
+	one := base + "/" + g.Identifier
+
+	assert.Equal(t, http.StatusBadRequest,
+		f.do(t, "PUT", one, `{"name":"Researcher","values":{"workspace":null}}`, owner).Code)
+	rec = f.do(t, "GET", one, "", owner)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, created, decodeBody[apigen.AgentTemplate](t, rec), "the refused update changed nothing")
+
+	// The control: the same update with values left out is accepted and
+	// clears them, as the whole-template replacement says it does.
+	rec = f.do(t, "PUT", one, `{"name":"Researcher"}`, owner)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, apigen.AgentValues{}, decodeBody[apigen.AgentTemplate](t, rec).Values)
+}

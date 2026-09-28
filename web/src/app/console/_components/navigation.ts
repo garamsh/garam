@@ -22,9 +22,11 @@ export type ConsoleSection = {
   /**
    * Present on a section whose entries each have a page of their own
    * below it: what the breadcrumb calls the create page, and what it
-   * calls an entry's page before that page has named the entry.
+   * calls an entry's page before that page has named the entry. A
+   * section whose identifiers may be `NEW_ITEM` itself has no create
+   * page, so that segment stays an entry's.
    */
-  items?: { create: string; fallback: string };
+  items?: { create?: string; fallback: string };
   /**
    * Named pages below the section beside its entries, each a view of
    * the section rather than an entry of it.
@@ -47,7 +49,14 @@ export const CONSOLE_SECTIONS: readonly ConsoleSection[] = [
   { segment: "people", label: "People", icon: UserRound },
   { segment: "agents", label: "Agents", icon: Bot },
   { segment: "projects", label: "Projects", icon: FolderGit2 },
-  { segment: "operators", label: "Operators", icon: Server },
+  {
+    segment: "operators",
+    label: "Operators",
+    icon: Server,
+    // An operator's identifier is typed, and `new` is one: registering
+    // stays on the list page rather than taking that segment (ADR-0074).
+    items: { fallback: "Operator" },
+  },
   { segment: "consents", label: "Consents", icon: Handshake },
   {
     segment: "permissions",
@@ -141,7 +150,7 @@ export function consoleCrumbs(
         {
           label:
             view?.label ??
-            (item === NEW_ITEM
+            (item === NEW_ITEM && section.items.create !== undefined
               ? section.items.create
               : (itemName ?? section.items.fallback)),
         },

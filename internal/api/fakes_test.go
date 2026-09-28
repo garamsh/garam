@@ -1114,6 +1114,36 @@ func (s *fakeOperatorStore) markNamedByDefinition(g grn.GRN) {
 	s.namedByDefinition[g.String()] = true
 }
 
+// UpdateDetails replaces the record with one carrying the patched
+// details, keeping what the patch left out. It touches neither the
+// tokens nor the certificate flag, as the statement touches neither
+// table.
+func (s *fakeOperatorStore) UpdateDetails(_ context.Context, g grn.GRN, patch operator.DetailsPatch) (*operator.Operator, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	o, ok := s.operators[g.String()]
+	if !ok {
+		return nil, operator.ErrOperatorNotFound
+	}
+	name, description := o.Name, o.Description
+	if n := patch.Name(); n != nil {
+		name = *n
+	}
+	if d := patch.Description(); d != nil {
+		description = *d
+	}
+	merged, err := operator.NewDetailsPatch(&name, &description)
+	if err != nil {
+		return nil, err
+	}
+	updated, err := operator.New(o.Organization(), g.Identifier, o.RegisteredBy(), merged)
+	if err != nil {
+		return nil, err
+	}
+	s.operators[g.String()] = updated
+	return updated, nil
+}
+
 func (s *fakeOperatorStore) Get(_ context.Context, g grn.GRN) (*operator.Operator, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

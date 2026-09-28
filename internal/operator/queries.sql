@@ -1,6 +1,17 @@
 -- name: CreateOperator :exec
-INSERT INTO operators (grn, org_grn, registered_by, created_at)
-VALUES ($1, $2, $3, $4);
+INSERT INTO operators (grn, org_grn, registered_by, created_at, name, description)
+VALUES ($1, $2, $3, $4, $5, $6);
+
+-- An absent argument keeps the column it would have written, so a
+-- caller changing one of the two leaves the other as it stands. The
+-- statement names no other column: the GRN, and the certificate and
+-- token rows keyed on it, are what an operator authenticates and
+-- enrols by, and this write moves none of them (ADR-0074).
+-- name: UpdateOperatorDetails :execrows
+UPDATE operators
+SET name        = COALESCE(sqlc.narg('name'), name),
+    description = COALESCE(sqlc.narg('description'), description)
+WHERE grn = sqlc.arg('grn');
 
 -- Where an operator stands in obtaining a certificate is derived from
 -- the two tables beside the record and stored in neither: a row in

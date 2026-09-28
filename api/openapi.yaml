@@ -1028,6 +1028,74 @@ paths:
         '404':
           $ref: '#/components/responses/Error'
   /orgs/{org}/operators/{operator}:
+    get:
+      operationId: getOperator
+      tags: [operator]
+      summary: Read one of an organization's operators. Requires the `member` role.
+      description: >-
+        The operator registered under this identifier, answered as
+        `listOperators` answers each entry. What it says about
+        enrollment is what garam holds and never a report from the
+        operator: garam never dials one (ADR-0012), so nothing here
+        says whether the operator is running.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/operator'
+      responses:
+        '200':
+          description: The operator.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operator'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    patch:
+      operationId: updateOperator
+      tags: [operator]
+      summary: Rename or describe an operator. Requires the `admin` role.
+      description: >-
+        Changes what the organization calls the operator and what it
+        says the operator is for, and nothing else (ADR-0074). A field
+        left out keeps its value. The identifier, the GRN it builds and
+        the certificate subject that GRN is are not fields here and do
+        not move: the certificate garam last issued, an unspent
+        enrollment token and every definition naming the operator stand
+        as they were.
+
+        It is authorized on an action of its own, `operator:update`,
+        rather than on the one that registers or the one that deletes,
+        because it grants nothing and withdraws nothing.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/operator'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperatorPatch'
+      responses:
+        '200':
+          description: The operator as stored after the change.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operator'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
     delete:
       operationId: deleteOperator
       tags: [operator]
@@ -2169,11 +2237,23 @@ components:
         nothing and admits nothing (ADR-0045); the enrollment state is
         what garam knows from its own tables and never a report from
         the operator.
-      required: [grn, orgGrn, registeredBy, createdAt, enrollmentState]
+      required: [grn, name, description, orgGrn, registeredBy, createdAt, enrollmentState]
       properties:
         grn:
           type: string
           example: grn:acme:default:operator:field-one
+        name:
+          type: string
+          description: >-
+            What the organization calls the operator. It is not unique
+            and not an identity: two operators may share one, and the
+            GRN is what tells them apart. A registration that named
+            none, including every one made before names existed, is
+            called by its identifier.
+          example: Field cluster one
+        description:
+          type: string
+          description: What the organization says the operator is for, empty where it says nothing.
         orgGrn:
           type: string
         registeredBy:
@@ -2246,6 +2326,32 @@ components:
             certificate is registered under the GRN that certificate
             names.
           example: field-one
+        name:
+          $ref: '#/components/schemas/OperatorName'
+        description:
+          $ref: '#/components/schemas/OperatorDescription'
+    OperatorPatch:
+      type: object
+      description: >-
+        A change to what the organization says about an operator. A
+        field left out keeps its value; the identifier is not a field.
+      properties:
+        name:
+          $ref: '#/components/schemas/OperatorName'
+        description:
+          $ref: '#/components/schemas/OperatorDescription'
+    OperatorName:
+      type: string
+      description: >-
+        At most 100 characters once surrounding space is trimmed, and
+        at least one. Left out of a registration, the name is the
+        identifier.
+      example: Field cluster one
+    OperatorDescription:
+      type: string
+      description: >-
+        At most 1000 characters once surrounding space is trimmed. Empty
+        is no description, and on an update clears the one there was.
     AgentValues:
       type: object
       description: >-

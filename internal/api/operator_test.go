@@ -213,7 +213,7 @@ func TestOperatorList_CarriesTheEnrollmentStateAndNoCertificateDetail(t *testing
 		fields = append(fields, k)
 	}
 	slices.Sort(fields)
-	assert.Equal(t, []string{"createdAt", "enrollmentState", "grn", "orgGrn", "registeredBy"}, fields)
+	assert.Equal(t, []string{"createdAt", "description", "enrollmentState", "grn", "name", "orgGrn", "registeredBy"}, fields)
 }
 
 // TestOperatorMintEnrollment_AdminMintsWhereOthersAreRefused holds the
@@ -455,4 +455,160 @@ func TestOperatorDelete_AnswersTheStateTheOperatorIsIn(t *testing.T) {
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.Contains(t, rec.Body.String(), operatorGRNOf(slug, "named").String(),
 		"a refused delete removes nothing")
+}
+
+// TestOperatorRegister_NamesTheOperatorOrCallsItByItsIdentifier covers
+// the details a registration starts with (ADR-0074). A caller that
+// sends only the identifier registers as before and is answered a name
+// equal to it; one that names the operator is answered what it sent,
+// trimmed. A name the domain refuses refuses the registration, and the
+// identifier it carried is still free afterwards: nothing was written.
+func TestOperatorRegister_NamesTheOperatorOrCallsItByItsIdentifier(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	f.permit(permission{userGRNOf("owner-sub"), org.ActionOperatorRegister})
+
+	rec := f.do(t, "POST", "/orgs/"+slug+"/operators", `{"identifier":"field-one"}`, owner)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	unnamed := decodeBody[apigen.RegisteredOperator](t, rec)
+	assert.Equal(t, "field-one", unnamed.Operator.Name)
+	assert.Empty(t, unnamed.Operator.Description)
+
+	rec = f.do(t, "POST", "/orgs/"+slug+"/operators", `{"identifier":"field-two","name":"   "}`, owner)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+
+	rec = f.do(t, "POST", "/orgs/"+slug+"/operators",
+		`{"identifier":"field-two","name":" Field cluster two ","description":"Batch agents."}`, owner)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	named := decodeBody[apigen.RegisteredOperator](t, rec)
+	assert.Equal(t, "Field cluster two", named.Operator.Name)
+	assert.Equal(t, "Batch agents.", named.Operator.Description)
+}
+
+// TestOperatorGet_AnswersOneOperatorOfThisOrg covers the read a
+// detail page is built on. The admin's read of its own org is the
+// control for the two refusals: the outsider is permitted the read and
+// belongs to another org, and the operator that was never registered
+// is a missing resource rather than a refusal.
+func TestOperatorGet_AnswersOneOperatorOfThisOrg(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	otherOwner := f.sessionCookieFor(t, "other-owner-sub", "Other Owner")
+	otherSlug := createOrg(t, f, otherOwner, "globex")
+	f.permit(
+		permission{userGRNOf("owner-sub"), org.ActionOperatorRegister},
+		permission{userGRNOf("owner-sub"), org.ActionOperatorRead},
+		permission{userGRNOf("outsider-sub"), org.ActionOperatorRead},
+	)
+	outsider := f.sessionCookieFor(t, "outsider-sub", "Outsider")
+	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(otherSlug), userGRNOf("outsider-sub"), org.RoleMember)))
+
+	rec := f.do(t, "POST", "/orgs/"+slug+"/operators", `{"identifier":"field-one","name":"Field one"}`, owner)
+	require.Equal(t, http.StatusCreated, rec.Code)
+
+	rec = f.do(t, "GET", "/orgs/"+slug+"/operators/field-one", "", owner)
+	require.Equal(t, http.StatusOK, rec.Code)
+	got := decodeBody[apigen.Operator](t, rec)
+	assert.Equal(t, operatorGRNOf(slug, "field-one").String(), got.Grn)
+	assert.Equal(t, "Field one", got.Name)
+	assert.Equal(t, apigen.OperatorEnrollmentStatePending, got.EnrollmentState)
+
+	rec = f.do(t, "GET", "/orgs/"+slug+"/operators/field-one", "", outsider)
+	assert.Equal(t, http.StatusForbidden, rec.Code)
+	rec = f.do(t, "GET", "/orgs/"+slug+"/operators/never-registered", "", owner)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+	rec = f.do(t, "GET", "/orgs/"+slug+"/operators/field-one", "")
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+// TestOperatorUpdate_AdminUpdatesWhereOthersAreRefused holds the update
+// to an action of its own (ADR-0074). The registrar is permitted both
+// actions that register and delete and is refused here, so what
+// refuses it is the missing `operator:update` and not the membership;
+// the outsider holds that action in another org, so what refuses it is
+// the org. The admin's update is the control for both, and the
+// signed-out call beside it isolates the session.
+func TestOperatorUpdate_AdminUpdatesWhereOthersAreRefused(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	otherOwner := f.sessionCookieFor(t, "other-owner-sub", "Other Owner")
+	otherSlug := createOrg(t, f, otherOwner, "globex")
+	f.permit(
+		permission{userGRNOf("admin-sub"), org.ActionOperatorRegister},
+		permission{userGRNOf("admin-sub"), org.ActionOperatorUpdate},
+		permission{userGRNOf("registrar-sub"), org.ActionOperatorRegister},
+		permission{userGRNOf("registrar-sub"), org.ActionOperatorDelete},
+		permission{userGRNOf("outsider-sub"), org.ActionOperatorUpdate},
+	)
+	admin := f.sessionCookieFor(t, "admin-sub", "Admin")
+	registrar := f.sessionCookieFor(t, "registrar-sub", "Registrar")
+	outsider := f.sessionCookieFor(t, "outsider-sub", "Outsider")
+	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(slug), userGRNOf("admin-sub"), org.RoleAdmin)))
+	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(slug), userGRNOf("registrar-sub"), org.RoleMember)))
+	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(otherSlug), userGRNOf("outsider-sub"), org.RoleMember)))
+
+	rec := f.do(t, "POST", "/orgs/"+slug+"/operators", `{"identifier":"field-one"}`, admin)
+	require.Equal(t, http.StatusCreated, rec.Code)
+
+	path := "/orgs/" + slug + "/operators/field-one"
+	rec = f.do(t, "PATCH", path, `{"name":"Field one"}`, registrar)
+	assert.Equal(t, http.StatusForbidden, rec.Code,
+		"registering and deleting an operator do not carry renaming one")
+	rec = f.do(t, "PATCH", path, `{"name":"Field one"}`, outsider)
+	assert.Equal(t, http.StatusForbidden, rec.Code)
+	rec = f.do(t, "PATCH", path, `{"name":"Field one"}`)
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+
+	rec = f.do(t, "PATCH", path, `{"name":"Field one"}`, admin)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "Field one", decodeBody[apigen.Operator](t, rec).Name)
+}
+
+// TestOperatorUpdate_ChangesTheFieldsItNamesAndNothingElse covers what
+// a patch moves. A field left out keeps its value, an empty
+// description clears the one there was, and the identifier the path
+// carries is the GRN before and after: a name is not an identity. A
+// refused patch changes nothing, which the read after it shows, and an
+// operator the org never registered is a missing resource.
+func TestOperatorUpdate_ChangesTheFieldsItNamesAndNothingElse(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	f.permit(
+		permission{userGRNOf("owner-sub"), org.ActionOperatorRegister},
+		permission{userGRNOf("owner-sub"), org.ActionOperatorRead},
+		permission{userGRNOf("owner-sub"), org.ActionOperatorUpdate},
+	)
+	rec := f.do(t, "POST", "/orgs/"+slug+"/operators",
+		`{"identifier":"field-one","name":"Field one","description":"Batch agents."}`, owner)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	path := "/orgs/" + slug + "/operators/field-one"
+
+	rec = f.do(t, "PATCH", path, `{"name":"Renamed"}`, owner)
+	require.Equal(t, http.StatusOK, rec.Code)
+	renamed := decodeBody[apigen.Operator](t, rec)
+	assert.Equal(t, "Renamed", renamed.Name)
+	assert.Equal(t, "Batch agents.", renamed.Description, "a field left out keeps its value")
+	assert.Equal(t, operatorGRNOf(slug, "field-one").String(), renamed.Grn)
+
+	rec = f.do(t, "PATCH", path, `{"description":""}`, owner)
+	require.Equal(t, http.StatusOK, rec.Code)
+	cleared := decodeBody[apigen.Operator](t, rec)
+	assert.Equal(t, "Renamed", cleared.Name)
+	assert.Empty(t, cleared.Description)
+
+	rec = f.do(t, "PATCH", path, `{"name":""}`, owner)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	rec = f.do(t, "PATCH", path, `{"description":"a\u0000b"}`, owner)
+	assert.Equal(t, http.StatusBadRequest, rec.Code,
+		"NUL is the caller's error and not a storage one")
+	rec = f.do(t, "GET", path, "", owner)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "Renamed", decodeBody[apigen.Operator](t, rec).Name, "a refused patch changes nothing")
+
+	rec = f.do(t, "PATCH", "/orgs/"+slug+"/operators/never-registered", `{"name":"Ghost"}`, owner)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
 }

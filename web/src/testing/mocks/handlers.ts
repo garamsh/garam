@@ -52,10 +52,13 @@ export const frontend: Project = {
 /**
  * The single operator Acme has registered, which enrolled: it holds a
  * certificate, and `certificateIssuedAt` is when garam last signed for
- * it rather than when it enrolled.
+ * it rather than when it enrolled. Its name differs from its
+ * identifier, so a page showing one where the other belongs is caught.
  */
 export const fieldOne: Operator = {
   grn: "grn:acme:default:operator:field-one",
+  name: "Field cluster one",
+  description: "Runs the batch agents.",
   orgGrn: acme.grn,
   registeredBy: alice.grn,
   createdAt: "2026-01-02T03:04:05Z",
@@ -212,6 +215,7 @@ const routes: { path: string; guarded: boolean; body: JsonBodyType }[] = [
   { path: "/orgs/acme/projects", guarded: true, body: [frontend] },
   { path: "/orgs/acme/members", guarded: true, body: [aliceMembership] },
   { path: "/orgs/acme/operators", guarded: true, body: [fieldOne] },
+  { path: "/orgs/acme/operators/field-one", guarded: true, body: fieldOne },
   { path: "/orgs/acme/agents", guarded: true, body: [reportedAgent] },
   { path: "/orgs/acme/agent-definitions", guarded: true, body: [fieldAgent] },
   { path: "/orgs/acme/consents", guarded: true, body: [globexConsent] },

@@ -47,6 +47,8 @@ func (s *PostgresStore) Register(ctx context.Context, o *Operator, e *Enrollment
 		OrgGrn:       o.orgGRN.String(),
 		RegisteredBy: o.registeredBy.String(),
 		CreatedAt:    stamp(o.createdAt),
+		Name:         o.Name,
+		Description:  o.Description,
 	}); err != nil {
 		return nil, pgxerr.Classify(err, "register operator", nil, ErrOperatorAlreadyRegistered)
 	}
@@ -120,6 +122,42 @@ func (s *PostgresStore) Remint(ctx context.Context, e *Enrollment) error {
 		return errorx.Wrap(err, "commit")
 	}
 	return nil
+}
+
+// UpdateDetails writes the patch and reads the operator back in one
+// transaction, so the answer is the row this write left rather than
+// one a concurrent write replaced in between.
+func (s *PostgresStore) UpdateDetails(ctx context.Context, g grn.GRN, patch DetailsPatch) (*Operator, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, errorx.Wrap(err, "begin", errorx.KindUnavailable)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	q := s.q.WithTx(tx)
+	n, err := q.UpdateOperatorDetails(ctx, db.UpdateOperatorDetailsParams{
+		Grn:         g.String(),
+		Name:        optionalText(patch.name),
+		Description: optionalText(patch.description),
+	})
+	if err != nil {
+		return nil, pgxerr.Classify(err, "update operator details", nil, nil)
+	}
+	if n == 0 {
+		return nil, ErrOperatorNotFound
+	}
+	row, err := q.GetOperator(ctx, g.String())
+	if err != nil {
+		return nil, pgxerr.Classify(err, "read updated operator", ErrOperatorNotFound, nil)
+	}
+	updated, err := rowToOperator(row.Operator, row.CertificateIssuedAt, row.LiveToken)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, errorx.Wrap(err, "commit")
+	}
+	return updated, nil
 }
 
 // Delete removes the record and the record of the certificate garam
@@ -229,11 +267,22 @@ func rowToOperator(row db.Operator, certificateIssuedAt pgtype.Timestamptz, live
 		orgGRN:       orgGRN,
 		registeredBy: registeredBy,
 		createdAt:    row.CreatedAt.Time,
+		Name:         row.Name,
+		Description:  row.Description,
 		// An absent certificate leaves the zero time, which is what
 		// EnrollmentState reads as "garam has issued none".
 		certificateIssuedAt: certificateIssuedAt.Time,
 		liveToken:           liveToken,
 	}, nil
+}
+
+// optionalText converts an absent string to SQL NULL, which the update
+// reads as "leave the column as it stands".
+func optionalText(s *string) pgtype.Text {
+	if s == nil {
+		return pgtype.Text{}
+	}
+	return pgtype.Text{String: *s, Valid: true}
 }
 
 // stamp converts a time.Time to a valid pgtype.Timestamptz.

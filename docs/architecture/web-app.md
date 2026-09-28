@@ -108,12 +108,16 @@ carried by a collapsible sidebar shell over every `/console/*` route
 declared in one place, `web/src/app/console/_components/navigation.ts`,
 which is what the sidebar, the breadcrumb and the active marking all
 read; adding one is an entry there and a route folder. A section whose
-entries each have a page of their own declares it there too, and Teams
-and Permissions do: `/console/orgs/{org}/teams/{team}` is a team's
-page and `…/teams/new` creates one, and `…/permissions/{policy}` and
-`…/permissions/new` are a policy's. On such a page the sidebar marks
-the section as the location, and the breadcrumb links the section and
-names the entry with the name the page read, handed to it through
+entries each have a page of their own declares it there too, and Teams,
+Operators and Permissions do: `/console/orgs/{org}/teams/{team}` is a
+team's page and `…/teams/new` creates one, `…/operators/{operator}` is
+an operator's, with no create page because `new` is a valid operator
+identifier
+([ADR-0074](./adr/0074-an-operator-carries-a-name-and-description-and-the-console-gives-it-a-page-of-its-own.md)),
+and `…/permissions/{policy}` and `…/permissions/new` are a policy's.
+On such a page the sidebar marks the section as the location, and the
+breadcrumb links the section and names the entry with the name the
+page read, handed to it through
 `web/src/app/console/_components/item-crumb.tsx` because the layout
 cannot read the entry
 ([ADR-0072](./adr/0072-the-console-presents-a-group-as-a-team-with-a-page-of-its-own.md)).
@@ -130,9 +134,9 @@ API behind it rather than of the console:
 | Overview | counts what the sections it summarises hold, names the failing states inside them rather than folding them into a count, and says which sections it does not summarise and why |
 | Teams | the organization's groups, presented as teams ([ADR-0072](./adr/0072-the-console-presents-a-group-as-a-team-with-a-page-of-its-own.md)): lists them, creates one, and on a team's page reads its members, adds and removes people and agents, renames it and deletes it. A member is shown by the name and type the organization's people and agents give it, and one neither holds stays listed and removable, marked as not found; where the caller is refused the people or agents list, those members are marked not checked and the team stays readable |
 | People | reads the organization's members, and issues the invitation a person joins by ([ADR-0006](./adr/0006-invitation-tokens.md)) |
-| Agents | reads the agents the organization holds with the two states their operator and the agent itself report ([ADR-0053](./adr/0053-an-agent-and-its-operator-report-state-on-the-machine-listener.md)), and reads definitions and defines one ([ADR-0026](./adr/0026-the-console-defines-an-agent.md)) |
+| Agents | reads the agents the organization holds with the two states their operator and the agent itself report ([ADR-0053](./adr/0053-an-agent-and-its-operator-report-state-on-the-machine-listener.md)), and reads definitions and defines one ([ADR-0026](./adr/0026-the-console-defines-an-agent.md)). The operator is chosen by name with its identifier beside it, and a definition shows its operator the same way; where the operator list is refused, the identifier is typed and shown alone ([ADR-0074](./adr/0074-an-operator-carries-a-name-and-description-and-the-console-gives-it-a-page-of-its-own.md)) |
 | Projects | reads the projects the organization owns, and creates one — an agent's GRN names the project it was minted in ([ADR-0001](./adr/0001-grn-segments.md)), so an organization holding none cannot reach that path from the console |
-| Operators | reads the operators the organization registered with where each stands in obtaining a certificate, which garam derives rather than is told ([ADR-0045](./adr/0045-an-organization-registers-an-operator.md), [ADR-0064](./adr/0064-an-operator-enrols-with-a-one-time-token-and-keeps-its-key-in-its-own-cluster.md)), and registers one |
+| Operators | lists the operators the organization registered by name, with the identifier under each and where each stands in obtaining a certificate, which garam derives rather than is told ([ADR-0045](./adr/0045-an-organization-registers-an-operator.md), [ADR-0064](./adr/0064-an-operator-enrols-with-a-one-time-token-and-keeps-its-key-in-its-own-cluster.md)); registers one with the form under the list, which shows the token once; and on an operator's page shows its identity, its enrollment state and runtime as unknown, lists the definitions naming it with a link to them, edits its name and description, and deletes it, saying that work already running in its cluster does not stop ([ADR-0074](./adr/0074-an-operator-carries-a-name-and-description-and-the-console-gives-it-a-page-of-its-own.md)). The delete stays refused while a definition names it, and a refused definitions list is marked not checked |
 | Consents | reads the cross-organization consent relations the organization is a side of, grants its half of one and withdraws it ([ADR-0035](./adr/0035-a-cross-organization-message-needs-both-organizations-consent.md)) |
 | Permissions | the organization's policies and their attachments ([ADR-0073](./adr/0073-the-console-manages-policies-and-their-attachments-under-permissions.md)), through the existing policy operations only. The Policies view lists policies and opens a page per policy, where one is created as a draft, its versions are read and appended, any stored version is made the default, it is activated and archived, and it is attached to and detached from teams, people and agents chosen by name. A write that makes a policy evaluate states the version and whom it reaches first, and one reaching everyone, or reaching a scope garam will not list, needs an explicit confirmation. The Attachments view shows each policy's attachments and, for one chosen subject, the policies attached to it, to its teams and to no one, without calling that its access. A list the caller is refused is shown as unchecked, never as empty; a Condition is shown as not evaluated. Neither view deletes a policy or explains a decision, since no operation does |
 
@@ -307,7 +311,7 @@ application serves, what it reaches, or what it may not decide belongs
 on this list, which is the quickest test of whether a change is one
 this document owes an update.
 
-Five decide the application itself:
+These decide the application itself:
 
 - [ADR-0009](./adr/0009-web-frontend.md) — a Next.js application in
   `web/` in this repository, reaching the API through a same-origin
@@ -325,6 +329,10 @@ Five decide the application itself:
   — Permissions holds policies and their attachments through the
   existing operations, states a policy's scope before it evaluates, and
   sorts a subject's policies by source without calling them its access
+- [ADR-0074](./adr/0074-an-operator-carries-a-name-and-description-and-the-console-gives-it-a-page-of-its-own.md)
+  — operators are listed by name and have a page of their own below the
+  Operators section, and the identifier stands beside a name wherever
+  the name alone could be ambiguous
 
 The rest bear on it without being about it:
 

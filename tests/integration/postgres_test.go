@@ -152,7 +152,7 @@ func registerOperator(t *testing.T, p *pgxpool.Pool, g grn.GRN) grn.GRN {
 	if _, err := store.Get(context.Background(), g); err == nil {
 		return g
 	}
-	o, err := operator.New(orgRootGRN(g.Organization), g.Identifier, scopedGRN(g.Organization, "user", "ada"))
+	o, err := operator.New(orgRootGRN(g.Organization), g.Identifier, scopedGRN(g.Organization, "user", "ada"), operator.DetailsPatch{})
 	require.NoError(t, err)
 	enrollment, err := operator.NewEnrollment(o.GRN(), scopedGRN(g.Organization, "user", "ada"))
 	require.NoError(t, err)
@@ -1353,7 +1353,7 @@ func TestOperatorStore_RoundTrip(t *testing.T) {
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("globex"), "globex")))
 
 	registeredBy := scopedGRN("acme", "user", "ada")
-	one, err := operator.New(orgRootGRN("acme"), "one", registeredBy)
+	one, err := operator.New(orgRootGRN("acme"), "one", registeredBy, operator.DetailsPatch{})
 	require.NoError(t, err)
 	enrollment, err := operator.NewEnrollment(one.GRN(), registeredBy)
 	require.NoError(t, err)
@@ -1379,7 +1379,7 @@ func TestOperatorStore_RoundTrip(t *testing.T) {
 		"the refused registration rolled back the token beside it")
 
 	// A record belongs to the org that registered it.
-	elsewhere, err := operator.New(orgRootGRN("globex"), "one", scopedGRN("globex", "user", "ada"))
+	elsewhere, err := operator.New(orgRootGRN("globex"), "one", scopedGRN("globex", "user", "ada"), operator.DetailsPatch{})
 	require.NoError(t, err)
 	elsewhereEnrollment, err := operator.NewEnrollment(elsewhere.GRN(), scopedGRN("globex", "user", "ada"))
 	require.NoError(t, err)
@@ -4156,7 +4156,7 @@ func TestMachineSurface_EnrolsAnOperatorWithTheTokenRegisteringItMinted(t *testi
 	url := machineListener(t, p, sealer, evaluator)
 
 	registeredBy := scopedGRN("acme", "user", "ada")
-	o, err := operator.New(orgRootGRN("acme"), "one", registeredBy)
+	o, err := operator.New(orgRootGRN("acme"), "one", registeredBy, operator.DetailsPatch{})
 	require.NoError(t, err)
 	enrollment, err := operator.NewEnrollment(o.GRN(), registeredBy)
 	require.NoError(t, err)

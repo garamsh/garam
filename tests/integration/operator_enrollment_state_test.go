@@ -19,7 +19,7 @@ import (
 func register(t *testing.T, s *operator.PostgresStore, id string) (grn.GRN, *operator.Enrollment) {
 	t.Helper()
 	registeredBy := scopedGRN("acme", "user", "ada")
-	o, err := operator.New(orgRootGRN("acme"), id, registeredBy)
+	o, err := operator.New(orgRootGRN("acme"), id, registeredBy, operator.DetailsPatch{})
 	require.NoError(t, err)
 	e, err := operator.NewEnrollment(o.GRN(), registeredBy)
 	require.NoError(t, err)
@@ -158,7 +158,7 @@ func TestOperatorEnrollmentState_ACertificateOutranksATokenBesideIt(t *testing.T
 	require.NoError(t, s.Adopt(ctx, operator.Current{Operator: g, Serial: "21", IssuedAt: mintedAt}))
 
 	registeredBy := scopedGRN("acme", "user", "ada")
-	o, err := operator.New(orgRootGRN("acme"), "minted-first", registeredBy)
+	o, err := operator.New(orgRootGRN("acme"), "minted-first", registeredBy, operator.DetailsPatch{})
 	require.NoError(t, err)
 	e, err := operator.NewEnrollment(o.GRN(), registeredBy)
 	require.NoError(t, err)

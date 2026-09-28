@@ -77,8 +77,8 @@ func (q *Queries) CountOperatorsByOrg(ctx context.Context, orgGrn string) (int64
 }
 
 const createOperator = `-- name: CreateOperator :exec
-INSERT INTO operators (grn, org_grn, registered_by, created_at)
-VALUES ($1, $2, $3, $4)
+INSERT INTO operators (grn, org_grn, registered_by, created_at, name, description)
+VALUES ($1, $2, $3, $4, $5, $6)
 `
 
 type CreateOperatorParams struct {
@@ -86,6 +86,8 @@ type CreateOperatorParams struct {
 	OrgGrn       string
 	RegisteredBy string
 	CreatedAt    pgtype.Timestamptz
+	Name         string
+	Description  string
 }
 
 func (q *Queries) CreateOperator(ctx context.Context, arg CreateOperatorParams) error {
@@ -94,6 +96,8 @@ func (q *Queries) CreateOperator(ctx context.Context, arg CreateOperatorParams) 
 		arg.OrgGrn,
 		arg.RegisteredBy,
 		arg.CreatedAt,
+		arg.Name,
+		arg.Description,
 	)
 	return err
 }
@@ -131,7 +135,7 @@ func (q *Queries) DeleteOperatorCertificate(ctx context.Context, operatorGrn str
 }
 
 const getOperator = `-- name: GetOperator :one
-SELECT o.grn, o.org_grn, o.registered_by, o.created_at,
+SELECT o.grn, o.org_grn, o.registered_by, o.created_at, o.name, o.description,
        c.issued_at AS certificate_issued_at,
        (t.token_hash IS NOT NULL)::boolean AS live_token
 FROM operators o
@@ -164,6 +168,8 @@ func (q *Queries) GetOperator(ctx context.Context, grn string) (GetOperatorRow, 
 		&i.Operator.OrgGrn,
 		&i.Operator.RegisteredBy,
 		&i.Operator.CreatedAt,
+		&i.Operator.Name,
+		&i.Operator.Description,
 		&i.CertificateIssuedAt,
 		&i.LiveToken,
 	)
@@ -171,7 +177,7 @@ func (q *Queries) GetOperator(ctx context.Context, grn string) (GetOperatorRow, 
 }
 
 const listOperatorsByOrg = `-- name: ListOperatorsByOrg :many
-SELECT o.grn, o.org_grn, o.registered_by, o.created_at,
+SELECT o.grn, o.org_grn, o.registered_by, o.created_at, o.name, o.description,
        c.issued_at AS certificate_issued_at,
        (t.token_hash IS NOT NULL)::boolean AS live_token
 FROM operators o
@@ -202,6 +208,8 @@ func (q *Queries) ListOperatorsByOrg(ctx context.Context, orgGrn string) ([]List
 			&i.Operator.OrgGrn,
 			&i.Operator.RegisteredBy,
 			&i.Operator.CreatedAt,
+			&i.Operator.Name,
+			&i.Operator.Description,
 			&i.CertificateIssuedAt,
 			&i.LiveToken,
 		); err != nil {
@@ -286,4 +294,30 @@ func (q *Queries) SpendOperatorEnrollment(ctx context.Context, tokenHash string)
 	var operator_grn string
 	err := row.Scan(&operator_grn)
 	return operator_grn, err
+}
+
+const updateOperatorDetails = `-- name: UpdateOperatorDetails :execrows
+UPDATE operators
+SET name        = COALESCE($1, name),
+    description = COALESCE($2, description)
+WHERE grn = $3
+`
+
+type UpdateOperatorDetailsParams struct {
+	Name        pgtype.Text
+	Description pgtype.Text
+	Grn         string
+}
+
+// An absent argument keeps the column it would have written, so a
+// caller changing one of the two leaves the other as it stands. The
+// statement names no other column: the GRN, and the certificate and
+// token rows keyed on it, are what an operator authenticates and
+// enrols by, and this write moves none of them (ADR-0074).
+func (q *Queries) UpdateOperatorDetails(ctx context.Context, arg UpdateOperatorDetailsParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateOperatorDetails, arg.Name, arg.Description, arg.Grn)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

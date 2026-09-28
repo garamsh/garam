@@ -479,7 +479,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Read one of an organization's operators. Requires the `member` role.
+         * @description The operator registered under this identifier, answered as `listOperators` answers each entry. What it says about enrollment is what garam holds and never a report from the operator: garam never dials one (ADR-0012), so nothing here says whether the operator is running.
+         */
+        get: operations["getOperator"];
         put?: never;
         post?: never;
         /**
@@ -493,7 +497,12 @@ export interface paths {
         delete: operations["deleteOperator"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Rename or describe an operator. Requires the `admin` role.
+         * @description Changes what the organization calls the operator and what it says the operator is for, and nothing else (ADR-0074). A field left out keeps its value. The identifier, the GRN it builds and the certificate subject that GRN is are not fields here and do not move: the certificate garam last issued, an unspent enrollment token and every definition naming the operator stand as they were.
+         *     It is authorized on an action of its own, `operator:update`, rather than on the one that registers or the one that deletes, because it grants nothing and withdraws nothing.
+         */
+        patch: operations["updateOperator"];
         trace?: never;
     };
     "/orgs/{org}/operators/{operator}/enrollment": {
@@ -1008,6 +1017,13 @@ export interface components {
         Operator: {
             /** @example grn:acme:default:operator:field-one */
             grn: string;
+            /**
+             * @description What the organization calls the operator. It is not unique and not an identity: two operators may share one, and the GRN is what tells them apart. A registration that named none, including every one made before names existed, is called by its identifier.
+             * @example Field cluster one
+             */
+            name: string;
+            /** @description What the organization says the operator is for, empty where it says nothing. */
+            description: string;
             orgGrn: string;
             /** @description The member that registered the operator. */
             registeredBy: string;
@@ -1044,7 +1060,21 @@ export interface components {
              * @example field-one
              */
             identifier: string;
+            name?: components["schemas"]["OperatorName"];
+            description?: components["schemas"]["OperatorDescription"];
         };
+        /** @description A change to what the organization says about an operator. A field left out keeps its value; the identifier is not a field. */
+        OperatorPatch: {
+            name?: components["schemas"]["OperatorName"];
+            description?: components["schemas"]["OperatorDescription"];
+        };
+        /**
+         * @description At most 100 characters once surrounding space is trimmed, and at least one. Left out of a registration, the name is the identifier.
+         * @example Field cluster one
+         */
+        OperatorName: string;
+        /** @description At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was. */
+        OperatorDescription: string;
         /**
          * @description What an operator constructs the agent from. garam stores the keys and the strings and interprets neither: what the payload means belongs to the operator that reads it. A key is one to 64 characters of lowercase letters, digits and `-`; a value is at most 4096 bytes; at most 32 entries.
          * @example {
@@ -2157,6 +2187,35 @@ export interface operations {
             409: components["responses"]["Error"];
         };
     };
+    getOperator: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description Operator identifier (the last GRN segment). */
+                operator: components["parameters"]["operator"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The operator. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Operator"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
     deleteOperator: {
         parameters: {
             query?: never;
@@ -2183,6 +2242,39 @@ export interface operations {
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+        };
+    };
+    updateOperator: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description Operator identifier (the last GRN segment). */
+                operator: components["parameters"]["operator"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperatorPatch"];
+            };
+        };
+        responses: {
+            /** @description The operator as stored after the change. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Operator"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
         };
     };
     mintOperatorEnrollment: {

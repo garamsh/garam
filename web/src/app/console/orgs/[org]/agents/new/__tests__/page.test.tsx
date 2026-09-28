@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import NewAgentPage from "@/app/console/orgs/[org]/agents/new/page";
 import { renderServerComponent } from "@/testing/render";
-import { API_URL } from "@/testing/mocks/handlers";
+import { API_URL, researcher } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
 vi.mock("next/navigation", () => ({
@@ -33,7 +33,7 @@ describe("new agent page", () => {
       "page",
     );
     expect(
-      within(starts).getByRole("link", { name: "Researcher" }),
+      within(starts).getByRole("link", { name: "Researcher 7c1e2a9b3d4f5a60" }),
     ).toHaveAttribute(
       "href",
       "/console/orgs/acme/agents/new?template=7c1e2a9b3d4f5a60",
@@ -44,9 +44,9 @@ describe("new agent page", () => {
   it("copies the chosen template's values into the form and says the copy is one-time", async () => {
     await renderServerComponent(page("7c1e2a9b3d4f5a60"));
 
-    expect(screen.getByLabelText("Key 1")).toHaveValue("model");
-    expect(screen.getByLabelText("Value 1")).toHaveValue("sonnet");
-    expect(screen.getByLabelText("Key 2")).toHaveValue("ego");
+    expect(screen.getByLabelText("Key 1")).toHaveValue("workspace");
+    expect(screen.getByLabelText("Value 1")).toHaveValue("papers");
+    expect(screen.getByLabelText("Key 2")).toHaveValue("notes");
     expect(
       screen.getByText(
         "Copied from Researcher. Changing the template later does not change this agent.",
@@ -60,7 +60,35 @@ describe("new agent page", () => {
     ).toBeInTheDocument();
   });
 
-  it("offers a blank start only, and says why, when templates are refused", async () => {
+  it("tells two templates of one name apart by identifier", async () => {
+    server.use(
+      http.get(`${API_URL}/orgs/acme/agent-templates`, () =>
+        HttpResponse.json([
+          researcher,
+          {
+            ...researcher,
+            grn: "grn:acme:default:agent-template:0a1b2c3d4e5f6071",
+          },
+        ]),
+      ),
+    );
+
+    const { container } = await renderServerComponent(page());
+
+    const starts = screen.getByRole("navigation", { name: "Start from" });
+    expect(
+      within(starts)
+        .getAllByRole("link")
+        .map((link) => link.textContent),
+    ).toEqual([
+      "Blank",
+      "Researcher 7c1e2a9b3d4f5a60",
+      "Researcher 0a1b2c3d4e5f6071",
+    ]);
+    expect(container.textContent).not.toContain("grn:");
+  });
+
+  it("says the template list is refused and still copies a chosen template it can read", async () => {
     server.use(
       http.get(`${API_URL}/orgs/acme/agent-templates`, () =>
         HttpResponse.json(
@@ -70,23 +98,28 @@ describe("new agent page", () => {
       ),
     );
 
-    await renderServerComponent(page());
+    await renderServerComponent(page("7c1e2a9b3d4f5a60"));
 
+    expect(
+      screen.getByText("Templates are not listed to you."),
+    ).toBeInTheDocument();
+    // The chosen template answered on its own read, so its copy stands.
+    expect(screen.getByLabelText("Key 1")).toHaveValue("workspace");
     expect(
       screen.getByText(
-        "Templates are not listed to you, so only a blank start is offered.",
+        "Copied from Researcher. Changing the template later does not change this agent.",
       ),
     ).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Blank" })).toBeInTheDocument();
   });
 
-  it("names Sherlock as what the settings are for without claiming anything runs", async () => {
+  it("labels the settings as saved values without claiming they are applied", async () => {
     const { container } = await renderServerComponent(page());
 
-    expect(screen.getByText("Sherlock settings")).toBeInTheDocument();
+    expect(screen.getByText("Advanced settings")).toBeInTheDocument();
+    // Presence: the sentence goes on to warn about credentials.
     expect(
-      screen.getByText(/garam does not confirm the operator applies them/),
+      screen.getByText(/Saved values; application is not reported\./),
     ).toBeInTheDocument();
-    expect(container.textContent).not.toMatch(/is running|deployed/i);
+    expect(container.textContent).not.toMatch(/is running|deployed|Sherlock/i);
   });
 });

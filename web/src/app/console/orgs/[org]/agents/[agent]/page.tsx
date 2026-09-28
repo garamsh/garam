@@ -123,17 +123,16 @@ export default async function AgentPage({ params }: Params) {
             <time dateTime={createdAt}>{createdAt.slice(0, 10)}</time>
           </dd>
         </dl>
-        <h3 className="text-sm font-medium">Sherlock settings</h3>
+        <h3 className="text-sm font-medium">Settings</h3>
         <DesiredValues values={values} />
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Stored as requested. Whether the operator applied them is not reported
-          to garam.
+          Saved values; application is not reported.
         </p>
       </section>
 
       <Separator />
       <section className="flex flex-col gap-3">
-        <h2 className="font-heading text-lg font-semibold">Settings</h2>
+        <h2 className="font-heading text-lg font-semibold">Rename</h2>
         <RenameAgentForm org={org} agent={agent} name={name} />
       </section>
     </>

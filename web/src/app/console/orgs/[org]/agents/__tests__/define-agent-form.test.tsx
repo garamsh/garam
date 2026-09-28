@@ -395,14 +395,14 @@ describe("define agent form", () => {
   it("starts from a template's values and posts them as edited", async () => {
     const posted = recordDefinitions();
     const user = userEvent.setup();
-    renderForm(null, { model: "sonnet", ego: "curious" });
+    renderForm(null, { workspace: "papers", notes: "weekly" });
 
     // The copy is the form's own rows: shown as the template held
     // them, and edited here before anything is posted.
-    expect(screen.getByLabelText("Key 1")).toHaveValue("model");
-    expect(screen.getByLabelText("Value 2")).toHaveValue("curious");
+    expect(screen.getByLabelText("Key 1")).toHaveValue("workspace");
+    expect(screen.getByLabelText("Value 2")).toHaveValue("weekly");
     await user.clear(screen.getByLabelText("Value 2"));
-    await user.type(screen.getByLabelText("Value 2"), "careful");
+    await user.type(screen.getByLabelText("Value 2"), "daily");
     await user.type(screen.getByLabelText("Name"), "Scout");
     await user.type(screen.getByLabelText("Operator"), "field-one");
     await user.click(screen.getByRole("button", { name: "Create agent" }));
@@ -412,7 +412,7 @@ describe("define agent form", () => {
       {
         name: "Scout",
         operatorGrn: "grn:acme:default:operator:field-one",
-        values: { model: "sonnet", ego: "careful" },
+        values: { workspace: "papers", notes: "daily" },
       },
     ]);
   });

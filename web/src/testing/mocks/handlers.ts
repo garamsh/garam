@@ -118,7 +118,7 @@ export const researcher: AgentTemplate = {
   orgGrn: acme.grn,
   name: "Researcher",
   description: "Reads papers",
-  values: { model: "sonnet", ego: "curious" },
+  values: { workspace: "papers", notes: "weekly" },
   createdBy: alice.grn,
   createdAt: "2026-01-02T03:04:05Z",
   updatedAt: "2026-01-02T03:04:05Z",

@@ -143,10 +143,10 @@ export function DefineAgentForm({
 
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-1">
-          <h2 className="text-sm font-medium">Sherlock settings</h2>
+          <h2 className="text-sm font-medium">Advanced settings</h2>
           <p className="text-sm text-muted-foreground">
-            Stored as requested. garam does not confirm the operator applies
-            them; its reports show what runs. Never put a credential in a value.
+            Saved values; application is not reported. Never put a credential in
+            a value.
           </p>
         </div>
         <ValuesEditor rows={rows} onChange={setRows} disabled={!hydrated} />

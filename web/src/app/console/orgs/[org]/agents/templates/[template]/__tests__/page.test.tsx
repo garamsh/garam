@@ -33,8 +33,8 @@ describe("agent template page", () => {
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Name")).toHaveValue("Researcher");
     expect(screen.getByLabelText("Description")).toHaveValue("Reads papers");
-    expect(screen.getByLabelText("Key 1")).toHaveValue("model");
-    expect(screen.getByLabelText("Value 1")).toHaveValue("sonnet");
+    expect(screen.getByLabelText("Key 1")).toHaveValue("workspace");
+    expect(screen.getByLabelText("Value 1")).toHaveValue("papers");
     expect(
       screen.getByRole("link", { name: "Create agent from template" }),
     ).toHaveAttribute(
@@ -64,7 +64,7 @@ describe("agent template page", () => {
     expect(body).toEqual({
       name: "Analyst",
       description: "Reads papers",
-      values: { model: "sonnet", ego: "curious" },
+      values: { workspace: "papers", notes: "weekly" },
     });
   });
 

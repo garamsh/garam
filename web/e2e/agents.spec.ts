@@ -27,7 +27,7 @@ test.describe("agent templates", () => {
     await expect(name).toBeEnabled();
     await name.fill("Researcher");
     await page.getByLabel("Description", { exact: true }).fill("Reads papers");
-    await fillRow(page, 1, "model", "sonnet");
+    await fillRow(page, 1, "workspace", "papers");
     await page.getByRole("button", { name: "Create template" }).click();
     await expect(
       page.getByRole("heading", { level: 1, name: "Researcher", exact: true }),
@@ -44,7 +44,7 @@ test.describe("agent templates", () => {
       ),
     ).toBeVisible();
     await expect(page.getByLabel("Value 1", { exact: true })).toHaveValue(
-      "sonnet",
+      "papers",
     );
     const agentName = page.getByLabel("Name", { exact: true });
     await expect(agentName).toBeEnabled();
@@ -52,7 +52,7 @@ test.describe("agent templates", () => {
     await page.getByLabel("Operator", { exact: true }).selectOption({
       label: `${signedIn.operatorName} (${signedIn.operatorIdentifier})`,
     });
-    await page.getByLabel("Value 1", { exact: true }).fill("haiku");
+    await page.getByLabel("Value 1", { exact: true }).fill("reports");
     await page.getByRole("button", { name: "Create agent" }).click();
 
     // The agent's page: requested apart from reported, awaiting an
@@ -63,7 +63,7 @@ test.describe("agent templates", () => {
     await expect(
       page.getByText("Awaiting operator", { exact: true }),
     ).toBeVisible();
-    await expect(page.getByText("haiku", { exact: true })).toBeVisible();
+    await expect(page.getByText("reports", { exact: true })).toBeVisible();
     const agentUrl = page.url();
 
     // Editing and then deleting the template reaches no agent.
@@ -71,7 +71,7 @@ test.describe("agent templates", () => {
     await page.getByRole("link", { name: "Researcher", exact: true }).click();
     const templateName = page.getByLabel("Name", { exact: true });
     await expect(templateName).toBeEnabled();
-    await page.getByLabel("Value 1", { exact: true }).fill("opus");
+    await page.getByLabel("Value 1", { exact: true }).fill("archive");
     await page.getByRole("button", { name: "Save template" }).click();
     await expect(page.getByRole("status")).toHaveText("Saved Researcher.");
     await page.getByRole("button", { name: "Delete template" }).click();
@@ -81,8 +81,8 @@ test.describe("agent templates", () => {
     await expect(page.getByText("No templates", { exact: true })).toBeVisible();
 
     await page.goto(agentUrl);
-    await expect(page.getByText("haiku", { exact: true })).toBeVisible();
-    await expect(page.getByText("opus", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("reports", { exact: true })).toBeVisible();
+    await expect(page.getByText("archive", { exact: true })).toHaveCount(0);
 
     // Renaming moves the name and keeps the identifier.
     const identifier = agentUrl.split("/").at(-1) ?? "";

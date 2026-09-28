@@ -111,9 +111,9 @@ export function TemplateForm({
 
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-1">
-          <h2 className="text-sm font-medium">Sherlock settings</h2>
+          <h2 className="text-sm font-medium">Advanced settings</h2>
           <p className="text-sm text-muted-foreground">
-            Copied once into each new agent. Later edits here do not change
+            Copied once into each new agent; later edits here do not change
             existing agents. Never put a credential in a value.
           </p>
         </div>

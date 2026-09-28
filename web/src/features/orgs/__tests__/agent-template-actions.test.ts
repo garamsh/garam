@@ -21,7 +21,7 @@ const researcher = {
   orgGrn: "grn:root:default:org:acme",
   name: "Researcher",
   description: "Reads papers",
-  values: { model: "haiku" },
+  values: { workspace: "papers" },
   createdBy: "grn:root:default:user:alice",
   createdAt: "2026-09-28T00:00:00Z",
   updatedAt: "2026-09-28T00:00:00Z",
@@ -61,7 +61,7 @@ describe("createAgentTemplate", () => {
       createAgentTemplate(
         { status: "idle" },
         form({ name: " Researcher ", description: "Reads papers" }, [
-          ["model", "haiku"],
+          ["workspace", "papers"],
         ]),
       ),
     ).rejects.toThrow(
@@ -70,7 +70,7 @@ describe("createAgentTemplate", () => {
     expect(body).toEqual({
       name: "Researcher",
       description: "Reads papers",
-      values: { model: "haiku" },
+      values: { workspace: "papers" },
     });
   });
 
@@ -123,7 +123,7 @@ describe("updateAgentTemplate", () => {
     const state = await updateAgentTemplate(
       { status: "idle" },
       form({ template: "7c1e2a9b3d4f5a60", name: "Analyst", description: "" }, [
-        ["model", "sonnet"],
+        ["workspace", "archive"],
       ]),
     );
 
@@ -131,7 +131,7 @@ describe("updateAgentTemplate", () => {
     expect(puts).toEqual([
       {
         template: "7c1e2a9b3d4f5a60",
-        body: { name: "Analyst", description: "", values: { model: "sonnet" } },
+        body: { name: "Analyst", description: "", values: { workspace: "archive" } },
       },
     ]);
   });

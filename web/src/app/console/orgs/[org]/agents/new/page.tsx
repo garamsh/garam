@@ -67,7 +67,7 @@ export default async function NewAgentPage({ params, searchParams }: Params) {
         <h2 className="text-sm font-medium">Start from</h2>
         {templates.status === "forbidden" ? (
           <p className="text-sm text-muted-foreground">
-            Templates are not listed to you, so only a blank start is offered.
+            Templates are not listed to you.
           </p>
         ) : null}
         <nav aria-label="Start from" className="flex flex-wrap gap-2">
@@ -76,13 +76,15 @@ export default async function NewAgentPage({ params, searchParams }: Params) {
           </StartLink>
           {(templates.status === "ok" ? templates.data : []).map((t) => {
             const id = slugFromGrn(t.grn);
+            // Names repeat, so the identifier stands beside each one.
             return (
               <StartLink
                 key={t.grn}
                 href={`${base}?template=${encodeURIComponent(id)}`}
                 current={template === id}
               >
-                {t.name}
+                {t.name}{" "}
+                <span className="font-mono text-xs opacity-70">{id}</span>
               </StartLink>
             );
           })}

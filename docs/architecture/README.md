@@ -503,4 +503,14 @@ ADRs:
   `agent-template:*` actions with nothing linking them to the agents
   defined from them, a definition's name changes on `agent:rename`
   and moves nothing else, and the console lists desired agents by name
-  apart from what operators report
+  apart from what operators report; its agent page's "application is
+  not reported" is superseded by ADR-0076
+- [0076](./adr/0076-an-agents-values-are-saved-as-revisions-and-whether-one-applied-is-the-operators-acknowledgement-alone.md)
+  — an agent's values are saved as revisions, and whether one applied is
+  the operator's acknowledgement alone: a save names the revision it
+  was read at and is refused under `aborted` once another landed, on
+  `agent:configure`; the operator holding the agent acknowledges a
+  revision as applied, with the keys it ignored, or rejected, fenced by
+  the assignment's epoch and bound to it; no current operator reports
+  one, so configuration reads unknown, and health keeps a report time
+  of its own

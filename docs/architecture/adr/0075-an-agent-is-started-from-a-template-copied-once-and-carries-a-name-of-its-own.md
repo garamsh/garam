@@ -1,6 +1,9 @@
 # ADR 0075: An agent is started from a template copied once, and carries a name of its own
 
-> Status: accepted
+> Status: accepted — §Decision's "each saying the values are saved and
+> their application is not reported" is superseded for an agent's page
+> by
+> [ADR-0076](./0076-an-agents-values-are-saved-as-revisions-and-whether-one-applied-is-the-operators-acknowledgement-alone.md)
 > Date: 2026-09-28
 
 ## Context

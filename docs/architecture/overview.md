@@ -62,13 +62,18 @@ collaborate on a shared plan.
   the epoch its assignment is on and is accepted only at the current
   one, so the pod a replaced operator left running writes nothing; the
   operator route is bounded by the assignment besides, exactly as the
-  certificate route is.
+  certificate route is. The operator acknowledges a definition revision
+  on a third route, fenced the same way, as applied with the keys it
+  ignored or rejected with a reason; no current operator does, so
+  every agent's configuration reads unknown (ADR-0076).
 - An organization's members reading the agents it holds, over the
   browser API under `/orgs/{org}/agents`. An agent is answered with the
   state its operator reports and the state it reports itself, kept as
   the separate facts ADR-0012 makes them, and with the operator holding
-  it at which epoch. That surface reads only: it assigns no agent and
-  issues no certificate.
+  it at which epoch, when either state was last reported, and the
+  operator's last acknowledgement with the epoch it was made at
+  (ADR-0076). That surface reads only: it assigns no agent and issues
+  no certificate.
 - An organization **registering** an operator, under
   `/orgs/{org}/operators`, and its members reading the list (ADR-0045).
   A record is a GRN, who registered it and when: it carries no
@@ -90,13 +95,18 @@ collaborate on a shared plan.
   `/orgs/{org}/agent-definitions` — which operator is to run it, and
   with what values (ADR-0026). A definition is a record rather than a
   command: garam mints the agent's GRN, writes no `agents` row, and
-  knows nothing about whether an operator acted on it. The operator the
+  knows whether an operator acted on it only from that operator's
+  acknowledgement (ADR-0076). The operator the
   definition names reads its definitions on the machine listener and
   **claims** one: the claim binds the operator to the definition's
   agent GRN — the assignment, at a bumped epoch — and admits it to that
-  agent's certificate route (ADR-0033). A definition is immutable and
-  claimed once — a change of intent is a new definition — and the
-  console path and `POST /agents` can never describe the same agent. The
+  agent's certificate route (ADR-0033). A definition's operator is
+  fixed and it is claimed once — aiming it at another operator is a new
+  definition — and the console path and `POST /agents` can never
+  describe the same agent. Its values are saved as revisions under
+  `agent:configure`, each against the revision the editor read, so a
+  save another one overtook is refused rather than written over it
+  (ADR-0076). The
   operator a definition names must be one the organization registered;
   one it has not is refused, naming the identifier that named no record
   (ADR-0045). Defining is granted by `agent:define`, named action by

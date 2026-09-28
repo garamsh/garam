@@ -216,6 +216,11 @@ and not in the same place on every surface.
   thing besides: the assignment's epoch, which the route refuses a
   stale one of
   ([ADR-0053](./adr/0053-an-agent-and-its-operator-report-state-on-the-machine-listener.md)).
+  An operator's acknowledgement of a definition revision is fenced the
+  same way, and then by the revision: one the definition has not
+  reached, or one older than what the same epoch acknowledged, is
+  refused
+  ([ADR-0076](./adr/0076-an-agents-values-are-saved-as-revisions-and-whether-one-applied-is-the-operators-acknowledgement-alone.md)).
   A sender reading its own message's state is scoped the same way from
   the other side — the caller is the sender the row is matched on, so a
   message it did not send answers as one that is not there
@@ -536,3 +541,8 @@ document owes an update.
   — a member mints an operator another enrollment token where it holds
   no certificate, and the refusal where it holds one is where that
   question stays open
+- [ADR-0076](./adr/0076-an-agents-values-are-saved-as-revisions-and-whether-one-applied-is-the-operators-acknowledgement-alone.md)
+  — the browser-facing listener saves an agent's values against the
+  revision an editor read, and the machine listener takes the
+  operator's acknowledgement of a revision, fenced by the assignment's
+  epoch and by the revision

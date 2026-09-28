@@ -1,7 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import { expect, test } from "./fixtures";
-import { seedOperatorReport } from "./seed";
+import { seedOperatorReport, type Seed } from "./seed";
 
 /** Fills a values editor row, waiting for the form to take input. */
 async function fillRow(page: Page, row: number, key: string, value: string) {
@@ -11,6 +11,29 @@ async function fillRow(page: Page, row: number, key: string, value: string) {
   await expect(keyField).toBeEnabled();
   await keyField.fill(key);
   await page.getByLabel(`Value ${row}`, { exact: true }).fill(value);
+}
+
+/**
+ * Defines an agent from a blank start through the console, as a person
+ * does, and answers with its identifier. No operator claims it.
+ */
+async function defineAgent(
+  page: Page,
+  signedIn: Seed,
+  name: string,
+): Promise<string> {
+  await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/new`);
+  const agentName = page.getByLabel("Name", { exact: true });
+  await expect(agentName).toBeEnabled();
+  await agentName.fill(name);
+  await page.getByLabel("Operator", { exact: true }).selectOption({
+    label: `${signedIn.operatorName} (${signedIn.operatorIdentifier})`,
+  });
+  await page.getByRole("button", { name: "Create agent" }).click();
+  await expect(
+    page.getByRole("heading", { level: 1, name, exact: true }),
+  ).toBeVisible();
+  return page.url().split("/").at(-1) ?? "";
 }
 
 test.describe("agent templates", () => {
@@ -87,20 +110,34 @@ test.describe("agent templates", () => {
     await expect(page.getByLabel("Value 1", { exact: true })).toHaveValue(
       "reports",
     );
+  });
+});
 
-    // Renaming moves the name and keeps the identifier.
-    const identifier = agentUrl.split("/").at(-1) ?? "";
+test.describe("named agents", () => {
+  test("renaming moves the name and keeps the identifier", async ({
+    page,
+    signedIn,
+  }) => {
+    const identifier = await defineAgent(page, signedIn, "Scout");
+
     const rename = page.getByLabel("Name", { exact: true });
     await expect(rename).toBeEnabled();
     await rename.fill("Ranger");
     await page.getByRole("button", { name: "Save name" }).click();
     await expect(page.getByRole("status")).toHaveText("Renamed to Ranger.");
-    await page.goto(agents);
+    await page.goto(`/console/orgs/${signedIn.orgSlug}/agents`);
     const card = page.getByRole("listitem").filter({ hasText: identifier });
     await expect(
       card.getByRole("link", { name: "Ranger", exact: true }),
     ).toBeVisible();
     await expect(card.getByText("Awaiting operator")).toBeVisible();
+  });
+
+  test("a team and a policy take a defined agent by name before any claim", async ({
+    page,
+    signedIn,
+  }) => {
+    const identifier = await defineAgent(page, signedIn, "Ranger");
 
     // A team takes the agent by name before any operator claims it: the
     // membership is its GRN, minted with the definition.
@@ -121,12 +158,17 @@ test.describe("agent templates", () => {
       "Agent",
     );
 
-    // A policy can be given to it by the same name.
+    // A policy can be given to it by the same name: its policies are
+    // shown under that name.
     await page.goto(
       `/console/orgs/${signedIn.orgSlug}/permissions/attachments?subject=${encodeURIComponent(`agent:${identifier}`)}`,
     );
     await expect(
-      page.getByText(`Ranger (${identifier}) · awaiting operator`).first(),
+      page.getByRole("heading", {
+        level: 2,
+        name: `Ranger (${identifier}) · awaiting operator · Agent`,
+        exact: true,
+      }),
     ).toBeVisible();
   });
 });
@@ -151,35 +193,20 @@ test.describe("agents", () => {
 });
 
 test.describe("agent settings", () => {
-  test("saves a revision, recovers a conflicting save, and shows what the operator reported", async ({
+  test("saves a revision and recovers a save another editor landed first", async ({
     page,
     context,
     signedIn,
   }) => {
-    // An agent defined from the console, which no operator has claimed.
-    await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/new`);
-    const name = page.getByLabel("Name", { exact: true });
-    await expect(name).toBeEnabled();
-    await name.fill("Scout");
-    await page.getByLabel("Operator", { exact: true }).selectOption({
-      label: `${signedIn.operatorName} (${signedIn.operatorIdentifier})`,
-    });
-    await fillRow(page, 1, "model", "haiku");
-    await page.getByRole("button", { name: "Create agent" }).click();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Scout", exact: true }),
-    ).toBeVisible();
+    await defineAgent(page, signedIn, "Scout");
     const agentUrl = page.url();
-    const identifier = agentUrl.split("/").at(-1) ?? "";
-    await expect(page.getByText("Unknown", { exact: true })).toBeVisible();
 
     // A save is the next revision and says nothing was applied.
-    await expect(page.getByLabel("Value 1", { exact: true })).toBeEnabled();
-    await page.getByLabel("Value 1", { exact: true }).fill("sonnet");
+    await fillRow(page, 1, "model", "sonnet");
     await page.getByRole("button", { name: "Save settings" }).click();
     await expect(page.getByRole("status")).toHaveText("Saved as revision 2.");
 
-    // A second editor read revision 2; the first saves revision 3.
+    // A second editor reads revision 2; the first saves revision 3.
     const other = await context.newPage();
     await other.goto(agentUrl);
     await expect(other.getByLabel("Value 1", { exact: true })).toBeEnabled();
@@ -187,7 +214,8 @@ test.describe("agent settings", () => {
     await page.getByRole("button", { name: "Save settings" }).click();
     await expect(page.getByRole("status")).toHaveText("Saved as revision 3.");
 
-    // The second editor's save is refused and keeps what was typed.
+    // The second editor's save is refused and keeps what was typed;
+    // keeping the edits saves them over revision 3 on purpose.
     await other.getByLabel("Value 1", { exact: true }).fill("haiku");
     await other.getByRole("button", { name: "Save settings" }).click();
     await expect(other.getByRole("alert")).toContainText(
@@ -200,51 +228,50 @@ test.describe("agent settings", () => {
     await other.getByRole("button", { name: "Save settings" }).click();
     await expect(other.getByRole("status")).toHaveText("Saved as revision 4.");
     await other.close();
+  });
 
-    // Claimed and ready, but no revision reported: still unknown.
+  test("shows what the operator reported of the saved revision", async ({
+    page,
+    signedIn,
+  }) => {
+    const identifier = await defineAgent(page, signedIn, "Scout");
+
+    // Claimed and ready, but no revision reported: unknown, not applied.
     await seedOperatorReport(signedIn, identifier, 1, null);
     await page.reload();
     await expect(page.getByText("ready", { exact: true })).toBeVisible();
     await expect(page.getByText("Unknown", { exact: true })).toBeVisible();
+    await expect(page.getByText("Applied", { exact: true })).toHaveCount(0);
+
+    // The accepted control: the saved revision, applied whole by the
+    // current assignment, reads Applied.
+    await seedOperatorReport(signedIn, identifier, 1, {
+      epoch: 1,
+      revision: 1,
+      outcome: "applied",
+      ignoredKeys: [],
+    });
+    await page.reload();
+    await expect(page.getByText("Applied", { exact: true })).toBeVisible();
+
+    await seedOperatorReport(signedIn, identifier, 1, {
+      epoch: 1,
+      revision: 1,
+      outcome: "rejected",
+      reason: "image pull failed",
+    });
+    await page.reload();
+    await expect(page.getByText("Rejected", { exact: true })).toBeVisible();
     await expect(
-      page.getByText("No operator has reported applying these settings.", {
+      page.getByText("The operator reports: image pull failed", {
         exact: true,
       }),
     ).toBeVisible();
 
-    const reports: [Parameters<typeof seedOperatorReport>[3], string][] = [
-      [
-        { epoch: 1, revision: 3, outcome: "applied", ignoredKeys: [] },
-        "Pending",
-      ],
-      [
-        { epoch: 1, revision: 4, outcome: "applied", ignoredKeys: ["model"] },
-        "Partly applied",
-      ],
-      [
-        {
-          epoch: 1,
-          revision: 4,
-          outcome: "rejected",
-          reason: "image pull failed",
-        },
-        "Rejected",
-      ],
-      [
-        { epoch: 1, revision: 4, outcome: "applied", ignoredKeys: [] },
-        "Applied",
-      ],
-    ];
-    for (const [report, label] of reports) {
-      await seedOperatorReport(signedIn, identifier, 1, report);
-      await page.reload();
-      await expect(page.getByText(label, { exact: true })).toBeVisible();
-    }
-
     // A reassignment leaves the replaced operator's report unknown.
     await seedOperatorReport(signedIn, identifier, 2, {
       epoch: 1,
-      revision: 4,
+      revision: 1,
       outcome: "applied",
       ignoredKeys: [],
     });

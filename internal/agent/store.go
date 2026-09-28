@@ -47,9 +47,9 @@ type Store interface {
 	// and nothing else, or answers ErrDefinitionNotFound (ADR-0075).
 	RenameDefinition(ctx context.Context, agentGRN grn.GRN, name Name) (*Definition, error)
 	// CountByOrg counts the organization's agents, definitions and
-	// templates, which deleting the organization removes with it. An organization
-	// that does not exist holds neither, so the zero OrgCounts is its
-	// answer rather than an error.
+	// templates, which deleting the organization removes with it. An
+	// organization that does not exist holds none, so the zero
+	// OrgCounts is its answer rather than an error.
 	CountByOrg(ctx context.Context, orgGRN grn.GRN) (OrgCounts, error)
 	// ListDefinitionsByOrg returns the organization's definitions,
 	// ordered by the agent GRN each one names.

@@ -96,7 +96,9 @@ type Definition struct {
 }
 
 // NewDefinition mints the identity of the agent orgGRN is defining and
-// records what it should be and what the organization calls it.
+// records what it should be and what the organization calls it. An
+// empty name is none given, and the agent is called by its identifier,
+// as a definition written before names existed is (ADR-0075).
 // definedBy is the member that defined it.
 //
 // It fails unless operatorGRN names an operator of that organization
@@ -110,6 +112,9 @@ func NewDefinition(orgGRN, operatorGRN grn.GRN, name Name, values Values, define
 	}
 	if err := validateOperator(operatorGRN, orgGRN); err != nil {
 		return nil, err
+	}
+	if name == "" {
+		name = Name(g.Identifier)
 	}
 	// A definition naming no value carries an empty payload rather than
 	// none: what is stored is an object either way.

@@ -26,7 +26,7 @@ func defineAgent(t *testing.T, p *pgxpool.Pool, s *agent.PostgresStore, operator
 	t.Helper()
 	d, err := agent.NewDefinition(
 		orgRootGRN(operatorGRN.Organization),
-		registerOperator(t, p, operatorGRN), values, scopedGRN(operatorGRN.Organization, "user", "ada"))
+		registerOperator(t, p, operatorGRN), "Field agent", values, scopedGRN(operatorGRN.Organization, "user", "ada"))
 	require.NoError(t, err)
 	require.NoError(t, s.Define(context.Background(), d))
 	return d

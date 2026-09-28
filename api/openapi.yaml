@@ -881,9 +881,12 @@ paths:
         GRN of the agent it describes (ADR-0026). It creates no agent:
         garam learns an agent exists when an operator reports one, so
         until then the minted GRN is answered here and nowhere under
-        `/orgs/{org}/agents`. A definition is written once and has no
-        update: nothing tells garam whether an operator has already
-        acted on it.
+        `/orgs/{org}/agents`. Its operator and values are written once
+        and have no update: nothing tells garam whether an operator has
+        already acted on them. Its name is the organization's word for
+        the agent and `renameAgentDefinition` changes it (ADR-0075).
+        Values copied from a template are copied here, once: nothing
+        links the definition to that template afterwards.
       parameters:
         - $ref: '#/components/parameters/org'
       requestBody:
@@ -930,6 +933,199 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/AgentDefinition'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/agent-definitions/{agent}:
+    get:
+      operationId: getAgentDefinition
+      tags: [agent]
+      summary: Read one of an organization's agent definitions. Requires the `member` role.
+      description: >-
+        The definition that minted this agent identifier, answered as
+        `listAgentDefinitions` answers each entry. It says what the
+        organization asked for and nothing about whether an operator
+        has claimed or built the agent.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/agent'
+      responses:
+        '200':
+          description: The definition.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentDefinition'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    patch:
+      operationId: renameAgentDefinition
+      tags: [agent]
+      summary: Rename a defined agent. Requires the `member` role.
+      description: >-
+        Changes what the organization calls the agent and nothing else
+        (ADR-0075). The agent's GRN, its operator, its values, the
+        assignment a claim wrote and every team membership or policy
+        attachment naming the GRN stand as they were, and no operator
+        is told: a name is not configuration.
+
+        It is authorized on `agent:rename`, an action of its own,
+        because it moves no value an operator reads.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/agent'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentDefinitionPatch'
+      responses:
+        '200':
+          description: The definition as stored after the change.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentDefinition'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/agent-templates:
+    post:
+      operationId: createAgentTemplate
+      tags: [agent]
+      summary: Create an agent template. Requires the `admin` role.
+      description: >-
+        Records a starting point for defining agents: a name, what it
+        is for, and values a definition may copy (ADR-0075). It defines
+        no agent and names no operator. Authorized on
+        `agent-template:create`.
+      parameters:
+        - $ref: '#/components/parameters/org'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentTemplateWrite'
+      responses:
+        '201':
+          description: Template created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentTemplate'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    get:
+      operationId: listAgentTemplates
+      tags: [agent]
+      summary: List an organization's agent templates. Requires the `member` role.
+      description: >-
+        The organization's templates, ordered by name. Authorized on
+        `agent-template:read`.
+      parameters:
+        - $ref: '#/components/parameters/org'
+      responses:
+        '200':
+          description: The organization's templates.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AgentTemplate'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/agent-templates/{template}:
+    get:
+      operationId: getAgentTemplate
+      tags: [agent]
+      summary: Read one agent template. Requires the `member` role.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/template'
+      responses:
+        '200':
+          description: The template.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentTemplate'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    put:
+      operationId: updateAgentTemplate
+      tags: [agent]
+      summary: Replace what an agent template says. Requires the `admin` role.
+      description: >-
+        Replaces the template's name, description and values. No
+        definition references a template, so agents defined from this
+        one keep the values they copied (ADR-0075). Authorized on
+        `agent-template:update`.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/template'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentTemplateWrite'
+      responses:
+        '200':
+          description: The template as stored after the change.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentTemplate'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+    delete:
+      operationId: deleteAgentTemplate
+      tags: [agent]
+      summary: Delete an agent template. Requires the `admin` role.
+      description: >-
+        Removes the template. Agents defined from it keep the values
+        they copied (ADR-0075). Authorized on `agent-template:delete`.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/template'
+      responses:
+        '204':
+          description: Template deleted.
         '401':
           $ref: '#/components/responses/Error'
         '403':
@@ -1676,6 +1872,14 @@ components:
       x-go-name: AgentSlug
       schema:
         type: string
+    template:
+      name: template
+      in: path
+      required: true
+      description: Agent template identifier (the last GRN segment).
+      x-go-name: TemplateSlug
+      schema:
+        type: string
     operator:
       name: operator
       in: path
@@ -1925,6 +2129,7 @@ components:
         - policies
         - agents
         - agentDefinitions
+        - agentTemplates
         - operators
         - consents
       properties:
@@ -1964,6 +2169,12 @@ components:
           description: >-
             Agent definitions, which are records of what the
             organization said an agent should be (ADR-0026).
+        agentTemplates:
+          type: integer
+          minimum: 0
+          description: >-
+            Agent templates (ADR-0075). No agent references one, so the
+            count says nothing about the agents defined from them.
         operators:
           type: integer
           minimum: 0
@@ -2365,11 +2576,79 @@ components:
       example:
         model: haiku
         workspace: grn-acme-default-project-frontend
+    AgentName:
+      type: string
+      description: >-
+        What the organization calls an agent or a template: at most 100
+        characters once surrounding space is trimmed, and at least one.
+        It identifies nothing — two may share one — so a consumer that
+        must tell them apart reads the GRN beside it (ADR-0075).
+      example: Research assistant
+    AgentDefinitionPatch:
+      type: object
+      description: A change to what the organization calls a defined agent.
+      required: [name]
+      properties:
+        name:
+          $ref: '#/components/schemas/AgentName'
+    AgentTemplateWrite:
+      type: object
+      description: >-
+        What a template says. An update replaces all of it, so a field
+        left out is emptied rather than kept.
+      required: [name]
+      properties:
+        name:
+          $ref: '#/components/schemas/AgentName'
+        description:
+          type: string
+          description: >-
+            What agents made from the template are for: at most 1000
+            characters once surrounding space is trimmed. Empty is none.
+        values:
+          $ref: '#/components/schemas/AgentValues'
+    AgentTemplate:
+      type: object
+      description: >-
+        A starting point an organization keeps for defining agents
+        (ADR-0075). It names no operator and no agent, and no
+        definition records which template it copied, so editing or
+        deleting one reaches no agent.
+      required: [grn, orgGrn, name, description, values, createdBy, createdAt, updatedAt]
+      properties:
+        grn:
+          type: string
+          example: grn:acme:default:agent-template:7c1e2a9b3d4f5a60
+        orgGrn:
+          type: string
+        name:
+          $ref: '#/components/schemas/AgentName'
+        description:
+          type: string
+        values:
+          $ref: '#/components/schemas/AgentValues'
+        createdBy:
+          type: string
+          description: The member that created the template.
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
     AgentDefinitionCreate:
       type: object
       description: What an agent should be, as an organization's member states it.
       required: [operatorGrn]
       properties:
+        name:
+          allOf:
+            - $ref: '#/components/schemas/AgentName'
+          description: >-
+            What the organization calls the agent. Left out, the agent
+            is called by its identifier, as every definition written
+            before names existed is (ADR-0075); given, it must be a name
+            `AgentName` accepts.
         operatorGrn:
           type: string
           description: >-
@@ -2388,11 +2667,13 @@ components:
         carries none of the fields an `Agent` carries. `agentGrn` is
         the identity garam minted for the agent this definition
         describes, and no agent answers under it until the claim.
-      required: [agentGrn, orgGrn, operatorGrn, values, definedBy, createdAt]
+      required: [agentGrn, orgGrn, name, operatorGrn, values, definedBy, createdAt]
       properties:
         agentGrn:
           type: string
           example: grn:acme:default:agent:9f2ac1b40d8e7a35
+        name:
+          $ref: '#/components/schemas/AgentName'
         orgGrn:
           type: string
         operatorGrn:

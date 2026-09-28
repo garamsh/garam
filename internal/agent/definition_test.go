@@ -142,3 +142,18 @@ func entries(n int) map[string]string {
 	}
 	return out
 }
+
+func TestNewDefinition_CallsAnUnnamedAgentByItsIdentifier(t *testing.T) {
+	orgGRN := grn.New(grn.RootOwner, grn.DefaultProject, "org", "acme")
+	operator := grn.New("acme", grn.DefaultProject, agent.ServiceTypeOperator, "field-one")
+	definedBy := grn.New(grn.RootOwner, grn.DefaultProject, "user", "ada")
+
+	d, err := agent.NewDefinition(orgGRN, operator, "", agent.Values{}, definedBy)
+	require.NoError(t, err)
+	assert.Equal(t, agent.Name(d.Agent().Identifier), d.Name())
+
+	// The control: a name given is the name kept.
+	named, err := agent.NewDefinition(orgGRN, operator, "Scout", agent.Values{}, definedBy)
+	require.NoError(t, err)
+	assert.Equal(t, agent.Name("Scout"), named.Name())
+}

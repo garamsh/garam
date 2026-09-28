@@ -104,7 +104,16 @@ func (s *Server) DefineAgent(w http.ResponseWriter, r *http.Request, orgSlug api
 		writeError(w, err)
 		return
 	}
-	d, err := agent.NewDefinition(orgGRN(orgSlug), operatorGRN, values, u.GRN)
+	// A name left out is none given; one given must parse, so an empty
+	// or blank one is refused rather than read as left out.
+	var name agent.Name
+	if body.Name != nil {
+		if name, err = agent.ParseName(*body.Name); err != nil {
+			writeError(w, err)
+			return
+		}
+	}
+	d, err := agent.NewDefinition(orgGRN(orgSlug), operatorGRN, name, values, u.GRN)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -146,6 +155,60 @@ func (s *Server) ListAgentDefinitions(w http.ResponseWriter, r *http.Request, or
 		out = append(out, definitionToAPI(d))
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// GetAgentDefinition returns the definition that minted an agent of the
+// org. Requires the member role. It answers what the org asked for and
+// nothing an operator reported.
+func (s *Server) GetAgentDefinition(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, agentSlug apigen.AgentSlug) {
+	u, err := s.currentUser(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	g := agentGRN(orgSlug, agentSlug)
+	if err := s.authorizeOn(r, orgGRN(orgSlug), g, u, org.ActionAgentRead); err != nil {
+		writeError(w, err)
+		return
+	}
+	d, err := s.agents.GetDefinition(r.Context(), g)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, definitionToAPI(d))
+}
+
+// RenameAgentDefinition changes what the org calls a defined agent and
+// nothing else (ADR-0075). Requires the member role, on an action of
+// its own: the name is not a value any operator reads.
+func (s *Server) RenameAgentDefinition(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, agentSlug apigen.AgentSlug) {
+	u, err := s.currentUser(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	g := agentGRN(orgSlug, agentSlug)
+	if err := s.authorizeOn(r, orgGRN(orgSlug), g, u, org.ActionAgentRename); err != nil {
+		writeError(w, err)
+		return
+	}
+	var body apigen.AgentDefinitionPatch
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, err)
+		return
+	}
+	name, err := agent.ParseName(body.Name)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	d, err := s.agents.RenameDefinition(r.Context(), g, name)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, definitionToAPI(d))
 }
 
 // assignmentsOf resolves the org's assignments in one query, keyed by
@@ -214,6 +277,7 @@ func definitionToAPI(d *agent.Definition) apigen.AgentDefinition {
 	return apigen.AgentDefinition{
 		AgentGrn:    d.Agent().String(),
 		OrgGrn:      d.Organization().String(),
+		Name:        string(d.Name()),
 		OperatorGrn: d.Operator().String(),
 		Values:      apigen.AgentValues(d.Values()),
 		DefinedBy:   d.DefinedBy().String(),

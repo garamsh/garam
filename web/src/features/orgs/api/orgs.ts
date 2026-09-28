@@ -166,6 +166,17 @@ export const AgentParser = parserFor<Agent>()(
       .optional(),
     createdAt: z.string(),
     updatedAt: z.string(),
+    healthReportedAt: z.string().optional(),
+    configuration: z
+      .object({
+        epoch: z.number(),
+        revision: z.number(),
+        outcome: z.enum(["applied", "rejected"]),
+        ignoredKeys: z.array(z.string()).optional(),
+        reason: z.string().optional(),
+        reportedAt: z.string(),
+      })
+      .optional(),
   }),
 );
 
@@ -178,6 +189,9 @@ export const AgentDefinitionParser = parserFor<AgentDefinition>()(
     values: z.record(z.string(), z.string()),
     definedBy: GrnParser,
     createdAt: z.string(),
+    revision: z.number(),
+    revisedAt: z.string(),
+    revisedBy: GrnParser,
   }),
 );
 

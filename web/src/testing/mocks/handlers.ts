@@ -107,6 +107,9 @@ export const fieldAgent: AgentDefinition = {
   values: { model: "haiku" },
   definedBy: alice.grn,
   createdAt: "2026-01-02T03:04:05Z",
+  revision: 1,
+  revisedAt: "2026-01-02T03:04:05Z",
+  revisedBy: alice.grn,
 };
 
 /**

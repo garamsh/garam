@@ -32,8 +32,9 @@ const RUNTIME_BADGE: Record<Agent["runtimeState"], BadgeVariant> = {
  * no reported state at all, which is said rather than drawn as
  * `pending`; a refused list is said as not checked. The two reported
  * states are both named and neither is summarized into the other
- * (ADR-0053). `Updated` is when a report last landed — nothing expires
- * one.
+ * (ADR-0053). `Health reported` is when either report last landed —
+ * nothing expires one — and an agent with none recorded says so rather
+ * than showing when it was created (ADR-0076).
  */
 export function ReportedState({
   reported,
@@ -71,9 +72,15 @@ export function ReportedState({
           {agent.runtimeState}
         </Badge>
       </dd>
-      <dt className="text-muted-foreground">Updated</dt>
+      <dt className="text-muted-foreground">Health reported</dt>
       <dd>
-        <time dateTime={agent.updatedAt}>{agent.updatedAt.slice(0, 10)}</time>
+        {agent.healthReportedAt ? (
+          <time dateTime={agent.healthReportedAt}>
+            {agent.healthReportedAt.slice(0, 10)}
+          </time>
+        ) : (
+          <span className="text-muted-foreground">Not recorded</span>
+        )}
       </dd>
     </dl>
   );

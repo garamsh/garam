@@ -58,6 +58,10 @@ export {
 } from "./api/remove-group-member";
 export { renameAgent, type RenameAgentState } from "./api/rename-agent";
 export {
+  reviseAgentValues,
+  type ReviseAgentValuesState,
+} from "./api/revise-agent-values";
+export {
   rollbackPolicy,
   type RollbackPolicyState,
 } from "./api/rollback-policy";

@@ -233,3 +233,73 @@ export async function recordOperatorCertificate(seed: Seed): Promise<void> {
     await client.end();
   }
 }
+
+/** What an operator reported about an agent's settings (ADR-0076). */
+export type ConfigurationReport =
+  | {
+      epoch: number;
+      revision: number;
+      outcome: "applied";
+      ignoredKeys: string[];
+    }
+  | { epoch: number; revision: number; outcome: "rejected"; reason: string };
+
+/**
+ * Records what the operator holding a defined agent reported: the agent
+ * row a claim writes, held at `epoch`, ready, and the configuration
+ * report, if any. An operator reports on the machine listener, which no
+ * browser reaches (ADR-0053), so the rows are written as that listener
+ * writes them.
+ */
+export async function seedOperatorReport(
+  seed: Seed,
+  agentIdentifier: string,
+  epoch: number,
+  configuration: ConfigurationReport | null,
+): Promise<void> {
+  const orgGrn = `grn:root:default:org:${seed.orgSlug}`;
+  const agentGrn = `grn:${seed.orgSlug}:default:agent:${agentIdentifier}`;
+  const operatorGrn = `grn:${seed.orgSlug}:default:operator:${seed.operatorIdentifier}`;
+  const client = new Client({ connectionString: DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `INSERT INTO agents (grn, org_grn, provisioning_state, runtime_state,
+                           created_at, updated_at, health_reported_at)
+       VALUES ($1, $2, 'ready', 'connected', now(), now(), now())
+       ON CONFLICT (grn) DO NOTHING`,
+      [agentGrn, orgGrn],
+    );
+    await client.query(
+      `INSERT INTO agent_assignments (agent_grn, operator_grn, epoch, created_at, updated_at)
+       VALUES ($1, $2, $3, now(), now())
+       ON CONFLICT (agent_grn) DO UPDATE SET epoch = excluded.epoch`,
+      [agentGrn, operatorGrn, epoch],
+    );
+    await client.query(
+      `UPDATE agents SET
+         configuration_epoch        = $2,
+         configuration_revision     = $3,
+         configuration_outcome      = $4,
+         configuration_reason       = $5,
+         configuration_ignored_keys = $6,
+         configuration_reported_at  = CASE WHEN $2::integer IS NULL THEN NULL ELSE now() END
+       WHERE grn = $1`,
+      [
+        agentGrn,
+        configuration?.epoch ?? null,
+        configuration?.revision ?? null,
+        configuration?.outcome ?? null,
+        configuration?.outcome === "rejected" ? configuration.reason : null,
+        configuration?.outcome === "applied" ? configuration.ignoredKeys : null,
+      ],
+    );
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    await client.end();
+  }
+}

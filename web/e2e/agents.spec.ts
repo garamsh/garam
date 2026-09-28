@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import { expect, test } from "./fixtures";
+import { seedOperatorReport } from "./seed";
 
 /** Fills a values editor row, waiting for the form to take input. */
 async function fillRow(page: Page, row: number, key: string, value: string) {
@@ -63,7 +64,9 @@ test.describe("agent templates", () => {
     await expect(
       page.getByText("Awaiting operator", { exact: true }),
     ).toBeVisible();
-    await expect(page.getByText("reports", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Value 1", { exact: true })).toHaveValue(
+      "reports",
+    );
     const agentUrl = page.url();
 
     // Editing and then deleting the template reaches no agent.
@@ -81,8 +84,9 @@ test.describe("agent templates", () => {
     await expect(page.getByText("No templates", { exact: true })).toBeVisible();
 
     await page.goto(agentUrl);
-    await expect(page.getByText("reports", { exact: true })).toBeVisible();
-    await expect(page.getByText("archive", { exact: true })).toHaveCount(0);
+    await expect(page.getByLabel("Value 1", { exact: true })).toHaveValue(
+      "reports",
+    );
 
     // Renaming moves the name and keeps the identifier.
     const identifier = agentUrl.split("/").at(-1) ?? "";
@@ -143,5 +147,113 @@ test.describe("agents", () => {
     await expect(
       page.getByText(signedIn.agentRuntimeState, { exact: true }),
     ).toBeVisible();
+  });
+});
+
+test.describe("agent settings", () => {
+  test("saves a revision, recovers a conflicting save, and shows what the operator reported", async ({
+    page,
+    context,
+    signedIn,
+  }) => {
+    // An agent defined from the console, which no operator has claimed.
+    await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/new`);
+    const name = page.getByLabel("Name", { exact: true });
+    await expect(name).toBeEnabled();
+    await name.fill("Scout");
+    await page.getByLabel("Operator", { exact: true }).selectOption({
+      label: `${signedIn.operatorName} (${signedIn.operatorIdentifier})`,
+    });
+    await fillRow(page, 1, "model", "haiku");
+    await page.getByRole("button", { name: "Create agent" }).click();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Scout", exact: true }),
+    ).toBeVisible();
+    const agentUrl = page.url();
+    const identifier = agentUrl.split("/").at(-1) ?? "";
+    await expect(page.getByText("Unknown", { exact: true })).toBeVisible();
+
+    // A save is the next revision and says nothing was applied.
+    await expect(page.getByLabel("Value 1", { exact: true })).toBeEnabled();
+    await page.getByLabel("Value 1", { exact: true }).fill("sonnet");
+    await page.getByRole("button", { name: "Save settings" }).click();
+    await expect(page.getByRole("status")).toHaveText("Saved as revision 2.");
+
+    // A second editor read revision 2; the first saves revision 3.
+    const other = await context.newPage();
+    await other.goto(agentUrl);
+    await expect(other.getByLabel("Value 1", { exact: true })).toBeEnabled();
+    await page.getByLabel("Value 1", { exact: true }).fill("opus");
+    await page.getByRole("button", { name: "Save settings" }).click();
+    await expect(page.getByRole("status")).toHaveText("Saved as revision 3.");
+
+    // The second editor's save is refused and keeps what was typed.
+    await other.getByLabel("Value 1", { exact: true }).fill("haiku");
+    await other.getByRole("button", { name: "Save settings" }).click();
+    await expect(other.getByRole("alert")).toContainText(
+      "Someone saved revision 3 first. Your edits are still here.",
+    );
+    await expect(other.getByLabel("Value 1", { exact: true })).toHaveValue(
+      "haiku",
+    );
+    await other.getByRole("button", { name: "Keep my edits" }).click();
+    await other.getByRole("button", { name: "Save settings" }).click();
+    await expect(other.getByRole("status")).toHaveText("Saved as revision 4.");
+    await other.close();
+
+    // Claimed and ready, but no revision reported: still unknown.
+    await seedOperatorReport(signedIn, identifier, 1, null);
+    await page.reload();
+    await expect(page.getByText("ready", { exact: true })).toBeVisible();
+    await expect(page.getByText("Unknown", { exact: true })).toBeVisible();
+    await expect(
+      page.getByText("No operator has reported applying these settings.", {
+        exact: true,
+      }),
+    ).toBeVisible();
+
+    const reports: [Parameters<typeof seedOperatorReport>[3], string][] = [
+      [
+        { epoch: 1, revision: 3, outcome: "applied", ignoredKeys: [] },
+        "Pending",
+      ],
+      [
+        { epoch: 1, revision: 4, outcome: "applied", ignoredKeys: ["model"] },
+        "Partly applied",
+      ],
+      [
+        {
+          epoch: 1,
+          revision: 4,
+          outcome: "rejected",
+          reason: "image pull failed",
+        },
+        "Rejected",
+      ],
+      [
+        { epoch: 1, revision: 4, outcome: "applied", ignoredKeys: [] },
+        "Applied",
+      ],
+    ];
+    for (const [report, label] of reports) {
+      await seedOperatorReport(signedIn, identifier, 1, report);
+      await page.reload();
+      await expect(page.getByText(label, { exact: true })).toBeVisible();
+    }
+
+    // A reassignment leaves the replaced operator's report unknown.
+    await seedOperatorReport(signedIn, identifier, 2, {
+      epoch: 1,
+      revision: 4,
+      outcome: "applied",
+      ignoredKeys: [],
+    });
+    await page.reload();
+    await expect(
+      page.getByText("The last report came from a replaced operator.", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(page.getByText("Applied", { exact: true })).toHaveCount(0);
   });
 });

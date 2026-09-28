@@ -15,8 +15,12 @@ import { ApiUnreachable } from "../../../../_components/api-unreachable";
 import { ItemCrumb } from "../../../../_components/item-crumb";
 import { orgHref } from "../../../../_components/navigation";
 import { PageHeader } from "../../../../_components/page-header";
-import { DesiredValues, OperatorName } from "../_components/agent-facts";
+import { configurationStatus } from "@/lib/agent-configuration";
+
+import { OperatorName } from "../_components/agent-facts";
+import { ConfigurationState } from "../_components/configuration-state";
 import { ReportedState } from "../_components/reported-state";
+import { AgentSettingsForm } from "./_components/agent-settings-form";
 import { RenameAgentForm } from "./_components/rename-agent-form";
 
 /** Head metadata for an agent's route; Next.js reads it by name. */
@@ -70,7 +74,16 @@ export default async function AgentPage({ params }: Params) {
     );
   }
 
-  const { name, agentGrn, operatorGrn, values, createdAt } = definition.data;
+  const {
+    name,
+    agentGrn,
+    operatorGrn,
+    values,
+    createdAt,
+    revision,
+    revisedAt,
+    revisedBy,
+  } = definition.data;
   const reported =
     agents.status === "ok"
       ? agents.data.find((candidate) => candidate.grn === agentGrn)
@@ -123,11 +136,37 @@ export default async function AgentPage({ params }: Params) {
             <time dateTime={createdAt}>{createdAt.slice(0, 10)}</time>
           </dd>
         </dl>
-        <h3 className="text-sm font-medium">Settings</h3>
-        <DesiredValues values={values} />
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="font-heading text-lg font-semibold">Settings</h2>
+        <dl className="grid max-w-2xl grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+          <dt className="text-muted-foreground">Saved</dt>
+          <dd>
+            Revision {revision},{" "}
+            <time dateTime={revisedAt}>{revisedAt.slice(0, 10)}</time>, by{" "}
+            <span className="font-mono">{slugFromGrn(revisedBy)}</span>
+          </dd>
+          <dt className="text-muted-foreground">Status</dt>
+          <dd>
+            <ConfigurationState
+              status={configurationStatus(
+                revision,
+                agents.status === "forbidden" ? "unchecked" : reported,
+              )}
+            />
+          </dd>
+        </dl>
         <p className="max-w-2xl text-sm text-muted-foreground">
-          Saved values; application is not reported.
+          Saving does not apply settings; the operator reports what it applied.
+          Garam does not check which keys an operator reads.
         </p>
+        <AgentSettingsForm
+          org={org}
+          agent={agent}
+          revision={revision}
+          values={values}
+        />
       </section>
 
       <Separator />

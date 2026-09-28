@@ -65,6 +65,27 @@ describe("parseConsolePath", () => {
     });
   });
 
+  it("reads an agent's page and a template's page inside Agents", () => {
+    expect(
+      parseConsolePath("/console/orgs/acme/agents/9f2ac1b40d8e7a35"),
+    ).toMatchObject({
+      section: { segment: "agents" },
+      item: "9f2ac1b40d8e7a35",
+    });
+    expect(
+      parseConsolePath("/console/orgs/acme/agents/templates/7c1e2a9b"),
+    ).toMatchObject({
+      section: { segment: "agents" },
+      item: "templates",
+      viewItem: "7c1e2a9b",
+    });
+    // A section's entry has no pages below it, so the extra segment is
+    // not read as a view's item.
+    expect(parseConsolePath("/console/orgs/acme/teams/eng/members")).toEqual({
+      kind: "unknown",
+    });
+  });
+
   it("reads an invitation", () => {
     expect(parseConsolePath("/console/invitations/token")).toEqual({
       kind: "invitation",
@@ -142,6 +163,41 @@ describe("consoleCrumbs", () => {
       { label: "Permissions", href: "/console/orgs/acme/permissions" },
       { label: "Attachments" },
     ]);
+  });
+
+  it("links Agents and Templates above a template and names it", () => {
+    const template = parseConsolePath(
+      "/console/orgs/acme/agents/templates/7c1e2a9b",
+    );
+
+    expect(consoleCrumbs(template, orgs, "Researcher").slice(2)).toEqual([
+      { label: "Agents", href: "/console/orgs/acme/agents" },
+      { label: "Templates", href: "/console/orgs/acme/agents/templates" },
+      { label: "Researcher" },
+    ]);
+    expect(consoleCrumbs(template, orgs).at(-1)).toEqual({
+      label: "Template",
+    });
+    expect(
+      consoleCrumbs(
+        parseConsolePath("/console/orgs/acme/agents/templates/new"),
+        orgs,
+      ).at(-1),
+    ).toEqual({ label: "New template" });
+    expect(
+      consoleCrumbs(
+        parseConsolePath("/console/orgs/acme/agents/templates"),
+        orgs,
+      ).slice(2),
+    ).toEqual([
+      { label: "Agents", href: "/console/orgs/acme/agents" },
+      { label: "Templates" },
+    ]);
+    expect(
+      consoleCrumbs(parseConsolePath("/console/orgs/acme/agents/new"), orgs).at(
+        -1,
+      ),
+    ).toEqual({ label: "New agent" });
   });
 
   it("names a policy's page and the page that creates one", () => {

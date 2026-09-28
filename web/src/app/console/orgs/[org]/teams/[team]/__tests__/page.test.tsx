@@ -9,6 +9,7 @@ import {
   API_URL,
   alice,
   aliceMembership,
+  fieldAgent,
   reportedAgent,
   signedOut,
 } from "@/testing/mocks/handlers";
@@ -92,11 +93,85 @@ describe("team page", () => {
     const offered = within(choice)
       .getAllByRole("option")
       .map((option) => option.textContent);
+    // A defined agent is offered by name before any operator claims
+    // it, with its identifier and its state beside the name (ADR-0075).
     expect(offered).toEqual([
       "Choose who to add",
       "Bob · Person",
+      "Scout (9f2ac1b40d8e7a35) · awaiting operator · Agent",
       `${slugFromGrn(reportedAgent.grn)} · Agent`,
     ]);
+  });
+
+  it("names a defined agent member by the name its definition gives it", async () => {
+    server.use(membersAre(fieldAgent.agentGrn));
+
+    await renderTeam();
+
+    // Presence: a row's accessible name is all of its cells.
+    const row = screen.getByRole("row", { name: /Scout/ });
+    expect(within(row).getByText("Agent")).toBeInTheDocument();
+    expect(
+      within(row).queryByText("Not found in this organization"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("says agents may be missing, not that none can be chosen, when one agent list is refused", async () => {
+    // The control: with both agent lists read, nothing is said missing.
+    server.use(membersAre(alice.grn));
+    const allowed = await renderTeam();
+    expect(screen.queryByText(/may be missing here/)).not.toBeInTheDocument();
+    allowed.unmount();
+
+    server.use(
+      http.get(`${API_URL}/orgs/acme/agent-definitions`, () =>
+        HttpResponse.json({ kind: "denied", message: "no" }, { status: 403 }),
+      ),
+    );
+
+    await renderTeam();
+
+    expect(
+      screen.getByText(
+        "This organization's agent definitions are not listed to you, so some agents may be missing here.",
+      ),
+    ).toBeInTheDocument();
+    // The reported list still offers its agent, so "none can be chosen"
+    // would be false.
+    const offered = within(screen.getByLabelText("Person or agent"))
+      .getAllByRole("option")
+      .map((option) => option.textContent);
+    expect(offered).toContain(`${slugFromGrn(reportedAgent.grn)} · Agent`);
+    expect(
+      screen.queryByText(/none of them can be chosen/),
+    ).not.toBeInTheDocument();
+  });
+
+  it("says no agent can be chosen when both agent lists are refused", async () => {
+    // The control: with both agent lists read, no agent list is said
+    // refused.
+    server.use(membersAre(alice.grn));
+    const allowed = await renderTeam();
+    expect(
+      screen.queryByText(/agents are not listed to you/),
+    ).not.toBeInTheDocument();
+    allowed.unmount();
+
+    server.use(
+      ...["agent-definitions", "agents"].map((segment) =>
+        http.get(`${API_URL}/orgs/acme/${segment}`, () =>
+          HttpResponse.json({ kind: "denied", message: "no" }, { status: 403 }),
+        ),
+      ),
+    );
+
+    await renderTeam();
+
+    expect(
+      screen.getByText(
+        "This organization's agents are not listed to you, so none of them can be chosen here.",
+      ),
+    ).toBeInTheDocument();
   });
 
   it("keeps a member the organization no longer holds visible and removable", async () => {

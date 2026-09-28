@@ -450,9 +450,9 @@ func TestMigration27_GivesEveryExistingDefinitionItsFirstRevision(t *testing.T) 
 		VALUES ('grn:root:default:org:acme', 'acme', now(), now())`)
 	exec(`INSERT INTO %s.operators (grn, org_grn, registered_by, created_at, name)
 		VALUES ('grn:acme:default:operator:one', 'grn:root:default:org:acme', 'grn:acme:default:user:ada', now(), 'one')`)
-	exec(`INSERT INTO %s.agent_definitions (agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at) VALUES
-		('grn:acme:default:agent:0a0a0a0a0a0a0a0a', 'grn:root:default:org:acme', 'grn:acme:default:operator:one', '{}', 'grn:acme:default:user:ada', '2026-09-01T00:00:00Z'),
-		('grn:acme:default:agent:0b0b0b0b0b0b0b0b', 'grn:root:default:org:acme', 'grn:acme:default:operator:one', '{}', 'grn:acme:default:user:grace', '2026-09-02T00:00:00Z')`)
+	exec(`INSERT INTO %s.agent_definitions (agent_grn, org_grn, operator_grn, name, agent_values, defined_by, created_at) VALUES
+		('grn:acme:default:agent:0a0a0a0a0a0a0a0a', 'grn:root:default:org:acme', 'grn:acme:default:operator:one', 'first', '{}', 'grn:acme:default:user:ada', '2026-09-01T00:00:00Z'),
+		('grn:acme:default:agent:0b0b0b0b0b0b0b0b', 'grn:root:default:org:acme', 'grn:acme:default:operator:one', 'second', '{}', 'grn:acme:default:user:grace', '2026-09-02T00:00:00Z')`)
 	exec(`INSERT INTO %s.agents (grn, org_grn, provisioning_state, runtime_state, created_at, updated_at)
 		VALUES ('grn:acme:default:agent:0a0a0a0a0a0a0a0a', 'grn:root:default:org:acme', 'ready', 'connected',
 		        '2026-09-01T00:00:00Z', '2026-09-03T00:00:00Z')`)

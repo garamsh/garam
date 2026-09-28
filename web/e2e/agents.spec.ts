@@ -1,54 +1,134 @@
+import type { Page } from "@playwright/test";
+
 import { expect, test } from "./fixtures";
 
-test.describe("agent definitions", () => {
-  test("defines an agent and lists it under the organization", async ({
+/** Fills a values editor row, waiting for the form to take input. */
+async function fillRow(page: Page, row: number, key: string, value: string) {
+  // Exact on purpose: the row's remove button is named "Remove value
+  // N", which carries the field's own name as a substring.
+  const keyField = page.getByLabel(`Key ${row}`, { exact: true });
+  await expect(keyField).toBeEnabled();
+  await keyField.fill(key);
+  await page.getByLabel(`Value ${row}`, { exact: true }).fill(value);
+}
+
+test.describe("agent templates", () => {
+  test("an agent copies a template once and keeps the copy", async ({
     page,
     signedIn,
   }) => {
-    await page.goto(`/console/orgs/${signedIn.orgSlug}/agents`);
+    const agents = `/console/orgs/${signedIn.orgSlug}/agents`;
+
+    // A template, created inside Agents.
+    await page.goto(`${agents}/templates`);
+    await expect(page.getByText("No templates", { exact: true })).toBeVisible();
+    await page.getByRole("link", { name: "New template", exact: true }).click();
+    const name = page.getByLabel("Name", { exact: true });
+    await expect(name).toBeEnabled();
+    await name.fill("Researcher");
+    await page.getByLabel("Description", { exact: true }).fill("Reads papers");
+    await fillRow(page, 1, "workspace", "papers");
+    await page.getByRole("button", { name: "Create template" }).click();
     await expect(
-      page.getByText("This organization has defined no agents.", {
-        exact: true,
-      }),
+      page.getByRole("heading", { level: 1, name: "Researcher", exact: true }),
     ).toBeVisible();
 
-    // The operator is chosen by name, with the identifier beside it
-    // (ADR-0074). The field is disabled until React hydrates, so
-    // waiting for it to be enabled waits on the form being able to
-    // hold the choice.
-    const operator = page.getByLabel("Operator", { exact: true });
-    await expect(operator).toBeEnabled();
-    await operator.selectOption({
+    // An agent from it: the copied value is edited before creating.
+    await page
+      .getByRole("link", { name: "Create agent from template", exact: true })
+      .click();
+    await expect(
+      page.getByText(
+        "Copied from Researcher. Changing the template later does not change this agent.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await expect(page.getByLabel("Value 1", { exact: true })).toHaveValue(
+      "papers",
+    );
+    const agentName = page.getByLabel("Name", { exact: true });
+    await expect(agentName).toBeEnabled();
+    await agentName.fill("Scout");
+    await page.getByLabel("Operator", { exact: true }).selectOption({
       label: `${signedIn.operatorName} (${signedIn.operatorIdentifier})`,
     });
-    await page.getByLabel("Key 1", { exact: true }).fill("model");
-    // Exact on purpose: the row's remove button is named "Remove value
-    // 1", which carries the field's own name as a substring.
-    await page.getByLabel("Value 1", { exact: true }).fill("haiku");
-    await page.getByRole("button", { name: "Add value" }).click();
-    await page.getByLabel("Key 2", { exact: true }).fill("system-prompt");
-    await page.getByLabel("Value 2", { exact: true }).fill("be brief");
-    await page.getByRole("button", { name: "Define agent" }).click();
+    await page.getByLabel("Value 1", { exact: true }).fill("reports");
+    await page.getByRole("button", { name: "Create agent" }).click();
 
-    const minted = page.getByLabel("Agent identifier");
-    await expect(minted).toBeVisible();
-    const identifier = await minted.inputValue();
-    // What garam minted is a GRN's last segment and never a GRN
-    // (ADR-0011), so it carries no colon.
-    expect(identifier).toMatch(/^[a-z0-9-]+$/);
-
-    await page.reload();
-
-    await expect(page.getByText(identifier, { exact: true })).toBeVisible();
+    // The agent's page: requested apart from reported, awaiting an
+    // operator because none has claimed it.
     await expect(
-      page.getByRole("link", { name: signedIn.operatorName, exact: true }),
+      page.getByRole("heading", { level: 1, name: "Scout", exact: true }),
     ).toBeVisible();
-    await expect(page.getByText("be brief", { exact: true })).toBeVisible();
+    await expect(
+      page.getByText("Awaiting operator", { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText("reports", { exact: true })).toBeVisible();
+    const agentUrl = page.url();
+
+    // Editing and then deleting the template reaches no agent.
+    await page.goto(`${agents}/templates`);
+    await page.getByRole("link", { name: "Researcher", exact: true }).click();
+    const templateName = page.getByLabel("Name", { exact: true });
+    await expect(templateName).toBeEnabled();
+    await page.getByLabel("Value 1", { exact: true }).fill("archive");
+    await page.getByRole("button", { name: "Save template" }).click();
+    await expect(page.getByRole("status")).toHaveText("Saved Researcher.");
+    await page.getByRole("button", { name: "Delete template" }).click();
+    await page
+      .getByRole("button", { name: "Delete Researcher", exact: true })
+      .click();
+    await expect(page.getByText("No templates", { exact: true })).toBeVisible();
+
+    await page.goto(agentUrl);
+    await expect(page.getByText("reports", { exact: true })).toBeVisible();
+    await expect(page.getByText("archive", { exact: true })).toHaveCount(0);
+
+    // Renaming moves the name and keeps the identifier.
+    const identifier = agentUrl.split("/").at(-1) ?? "";
+    const rename = page.getByLabel("Name", { exact: true });
+    await expect(rename).toBeEnabled();
+    await rename.fill("Ranger");
+    await page.getByRole("button", { name: "Save name" }).click();
+    await expect(page.getByRole("status")).toHaveText("Renamed to Ranger.");
+    await page.goto(agents);
+    const card = page.getByRole("listitem").filter({ hasText: identifier });
+    await expect(
+      card.getByRole("link", { name: "Ranger", exact: true }),
+    ).toBeVisible();
+    await expect(card.getByText("Awaiting operator")).toBeVisible();
+
+    // A team takes the agent by name before any operator claims it: the
+    // membership is its GRN, minted with the definition.
+    const team = `/console/orgs/${signedIn.orgSlug}/teams/engineering`;
+    await page.goto(team);
+    const choice = page.getByLabel("Person or agent", { exact: true });
+    await expect(choice).toBeEnabled();
+    await choice.selectOption({
+      label: `Ranger (${identifier}) · awaiting operator · Agent`,
+    });
+    await page
+      .getByRole("button", { name: "Add to team", exact: true })
+      .click();
+    const row = page.getByRole("row", { name: /Ranger/ });
+    await expect(row).toContainText("Agent");
+    await page.reload();
+    await expect(page.getByRole("row", { name: /Ranger/ })).toContainText(
+      "Agent",
+    );
+
+    // A policy can be given to it by the same name.
+    await page.goto(
+      `/console/orgs/${signedIn.orgSlug}/permissions/attachments?subject=${encodeURIComponent(`agent:${identifier}`)}`,
+    );
+    await expect(
+      page.getByText(`Ranger (${identifier}) · awaiting operator`).first(),
+    ).toBeVisible();
   });
 });
 
 test.describe("agents", () => {
-  test("shows an agent and the states its two parties reported", async ({
+  test("shows a reported agent and the states its two parties reported", async ({
     page,
     signedIn,
   }) => {

@@ -220,7 +220,10 @@ type AgentDefinition struct {
 	CreatedAt time.Time `json:"createdAt"`
 
 	// DefinedBy The member that defined the agent.
-	DefinedBy   string    `json:"definedBy"`
+	DefinedBy string `json:"definedBy"`
+
+	// Name What the organization calls an agent or a template: at most 100 characters once surrounding space is trimmed, and at least one. It identifies nothing — two may share one — so a consumer that must tell them apart reads the GRN beside it (ADR-0075).
+	Name        AgentName `json:"name"`
 	OperatorGrn string    `json:"operatorGrn"`
 	OrgGrn      string    `json:"orgGrn"`
 	RevisedAt   time.Time `json:"revisedAt"`
@@ -235,6 +238,9 @@ type AgentDefinition struct {
 
 // AgentDefinitionCreate What an agent should be, as an organization's member states it.
 type AgentDefinitionCreate struct {
+	// Name What the organization calls the agent. Left out, the agent is called by its identifier, as every definition written before names existed is (ADR-0075); given, it must be a name `AgentName` accepts.
+	Name *AgentName `json:"name,omitempty"`
+
 	// OperatorGrn The operator that is to run the agent. It must be one this organization has registered under `/orgs/{org}/operators`; one it has not registered is refused, naming the identifier that named no record (ADR-0045).
 	OperatorGrn string `json:"operatorGrn"`
 
@@ -242,11 +248,50 @@ type AgentDefinitionCreate struct {
 	Values *AgentValues `json:"values,omitempty"`
 }
 
+// AgentDefinitionPatch A change to what the organization calls a defined agent.
+type AgentDefinitionPatch struct {
+	// Name What the organization calls an agent or a template: at most 100 characters once surrounding space is trimmed, and at least one. It identifies nothing — two may share one — so a consumer that must tell them apart reads the GRN beside it (ADR-0075).
+	Name AgentName `json:"name"`
+}
+
+// AgentName What the organization calls an agent or a template: at most 100 characters once surrounding space is trimmed, and at least one. It identifies nothing — two may share one — so a consumer that must tell them apart reads the GRN beside it (ADR-0075).
+type AgentName = string
+
 // AgentProvisioningState What the operator reports about the agent's pod. `pending` is an agent no operator has reported on yet. `provisioned` is an agent whose workload an operator built and which reports no ready replica: it says the pod was built and nothing about its health. `ready` is an agent whose workload reports a ready replica, so its containers are running; it says nothing about whether the agent inside them works. `failed` is an agent an operator observed cannot start, which is a stricter observation than an absent ready replica: an operator with only a replica count reports `provisioned`, so a state other than `failed` is not evidence the pod can start. What an operator may report, and when, is `api/machine.yaml`'s — the specification the reporting party holds, not this one.
 type AgentProvisioningState string
 
 // AgentRuntimeState What the agent reports about itself. `unknown` is an agent that has not reported since it was created. `connected` and `disconnected` are what the agent last reported about whether it is running: garam records the report and checks nothing behind it, so each names what the agent last said rather than what is true now.
 type AgentRuntimeState string
+
+// AgentTemplate A starting point an organization keeps for defining agents (ADR-0075). It names no operator and no agent, and no definition records which template it copied, so editing or deleting one reaches no agent.
+type AgentTemplate struct {
+	CreatedAt time.Time `json:"createdAt"`
+
+	// CreatedBy The member that created the template.
+	CreatedBy   string `json:"createdBy"`
+	Description string `json:"description"`
+	Grn         string `json:"grn"`
+
+	// Name What the organization calls an agent or a template: at most 100 characters once surrounding space is trimmed, and at least one. It identifies nothing — two may share one — so a consumer that must tell them apart reads the GRN beside it (ADR-0075).
+	Name      AgentName `json:"name"`
+	OrgGrn    string    `json:"orgGrn"`
+	UpdatedAt time.Time `json:"updatedAt"`
+
+	// Values What an operator constructs the agent from. garam stores the keys and the strings and interprets neither: what the payload means belongs to the operator that reads it. A key is one to 64 characters of lowercase letters, digits and `-`; a value is at most 4096 bytes; at most 32 entries.
+	Values AgentValues `json:"values"`
+}
+
+// AgentTemplateWrite What a template says. An update replaces all of it, so a field left out is emptied rather than kept.
+type AgentTemplateWrite struct {
+	// Description What agents made from the template are for: at most 1000 characters once surrounding space is trimmed. Empty is none.
+	Description *string `json:"description,omitempty"`
+
+	// Name What the organization calls an agent or a template: at most 100 characters once surrounding space is trimmed, and at least one. It identifies nothing — two may share one — so a consumer that must tell them apart reads the GRN beside it (ADR-0075).
+	Name AgentName `json:"name"`
+
+	// Values What an operator constructs the agent from. garam stores the keys and the strings and interprets neither: what the payload means belongs to the operator that reads it. A key is one to 64 characters of lowercase letters, digits and `-`; a value is at most 4096 bytes; at most 32 entries.
+	Values *AgentValues `json:"values,omitempty"`
+}
 
 // AgentValues What an operator constructs the agent from. garam stores the keys and the strings and interprets neither: what the payload means belongs to the operator that reads it. A key is one to 64 characters of lowercase letters, digits and `-`; a value is at most 4096 bytes; at most 32 entries.
 type AgentValues map[string]string
@@ -408,6 +453,9 @@ type OrgConsent struct {
 type OrgDeletionCounts struct {
 	// AgentDefinitions Agent definitions, which are records of what the organization said an agent should be (ADR-0026).
 	AgentDefinitions int `json:"agentDefinitions"`
+
+	// AgentTemplates Agent templates (ADR-0075). No agent references one, so the count says nothing about the agents defined from them.
+	AgentTemplates int `json:"agentTemplates"`
 
 	// Agents Agents, each taking its operator assignment with it.
 	Agents int `json:"agents"`
@@ -627,6 +675,9 @@ type Provider = string
 // SubjectGrn defines model for subject.
 type SubjectGrn = string
 
+// TemplateSlug defines model for template.
+type TemplateSlug = string
+
 // OauthCallbackParams defines parameters for OauthCallback.
 type OauthCallbackParams struct {
 	Code  string `form:"code" json:"code"`
@@ -676,8 +727,17 @@ type UpdateOrgJSONRequestBody = OrganizationPatch
 // DefineAgentJSONRequestBody defines body for DefineAgent for application/json ContentType.
 type DefineAgentJSONRequestBody = AgentDefinitionCreate
 
+// RenameAgentDefinitionJSONRequestBody defines body for RenameAgentDefinition for application/json ContentType.
+type RenameAgentDefinitionJSONRequestBody = AgentDefinitionPatch
+
 // ReviseAgentValuesJSONRequestBody defines body for ReviseAgentValues for application/json ContentType.
 type ReviseAgentValuesJSONRequestBody = AgentValuesRevision
+
+// CreateAgentTemplateJSONRequestBody defines body for CreateAgentTemplate for application/json ContentType.
+type CreateAgentTemplateJSONRequestBody = AgentTemplateWrite
+
+// UpdateAgentTemplateJSONRequestBody defines body for UpdateAgentTemplate for application/json ContentType.
+type UpdateAgentTemplateJSONRequestBody = AgentTemplateWrite
 
 // CreateGroupJSONRequestBody defines body for CreateGroup for application/json ContentType.
 type CreateGroupJSONRequestBody = GroupCreate
@@ -765,9 +825,30 @@ type ServerInterface interface {
 	// DefineAgent Define an agent. Requires the `member` role.
 	// (POST /orgs/{org}/agent-definitions)
 	DefineAgent(w http.ResponseWriter, r *http.Request, org Org)
+	// GetAgentDefinition Read one of an organization's agent definitions. Requires the `member` role.
+	// (GET /orgs/{org}/agent-definitions/{agent})
+	GetAgentDefinition(w http.ResponseWriter, r *http.Request, org Org, agentSlug AgentSlug)
+	// RenameAgentDefinition Rename a defined agent. Requires the `member` role.
+	// (PATCH /orgs/{org}/agent-definitions/{agent})
+	RenameAgentDefinition(w http.ResponseWriter, r *http.Request, org Org, agentSlug AgentSlug)
 	// ReviseAgentValues Save new values for a defined agent. Requires the `member` role.
 	// (PUT /orgs/{org}/agent-definitions/{agent}/values)
 	ReviseAgentValues(w http.ResponseWriter, r *http.Request, org Org, agentSlug AgentSlug)
+	// ListAgentTemplates List an organization's agent templates. Requires the `member` role.
+	// (GET /orgs/{org}/agent-templates)
+	ListAgentTemplates(w http.ResponseWriter, r *http.Request, org Org)
+	// CreateAgentTemplate Create an agent template. Requires the `admin` role.
+	// (POST /orgs/{org}/agent-templates)
+	CreateAgentTemplate(w http.ResponseWriter, r *http.Request, org Org)
+	// DeleteAgentTemplate Delete an agent template. Requires the `admin` role.
+	// (DELETE /orgs/{org}/agent-templates/{template})
+	DeleteAgentTemplate(w http.ResponseWriter, r *http.Request, org Org, templateSlug TemplateSlug)
+	// GetAgentTemplate Read one agent template. Requires the `member` role.
+	// (GET /orgs/{org}/agent-templates/{template})
+	GetAgentTemplate(w http.ResponseWriter, r *http.Request, org Org, templateSlug TemplateSlug)
+	// UpdateAgentTemplate Replace what an agent template says. Requires the `admin` role.
+	// (PUT /orgs/{org}/agent-templates/{template})
+	UpdateAgentTemplate(w http.ResponseWriter, r *http.Request, org Org, templateSlug TemplateSlug)
 	// ListAgents List an organization's agents. Requires the `member` role.
 	// (GET /orgs/{org}/agents)
 	ListAgents(w http.ResponseWriter, r *http.Request, org Org, params ListAgentsParams)
@@ -1269,6 +1350,76 @@ func (siw *ServerInterfaceWrapper) DefineAgent(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// GetAgentDefinition operation middleware
+func (siw *ServerInterfaceWrapper) GetAgentDefinition(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "agent" -------------
+	var agentSlug AgentSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAgentDefinition(w, r, org, agentSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RenameAgentDefinition operation middleware
+func (siw *ServerInterfaceWrapper) RenameAgentDefinition(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "agent" -------------
+	var agentSlug AgentSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RenameAgentDefinition(w, r, org, agentSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ReviseAgentValues operation middleware
 func (siw *ServerInterfaceWrapper) ReviseAgentValues(w http.ResponseWriter, r *http.Request) {
 
@@ -1295,6 +1446,163 @@ func (siw *ServerInterfaceWrapper) ReviseAgentValues(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ReviseAgentValues(w, r, org, agentSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListAgentTemplates operation middleware
+func (siw *ServerInterfaceWrapper) ListAgentTemplates(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListAgentTemplates(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateAgentTemplate operation middleware
+func (siw *ServerInterfaceWrapper) CreateAgentTemplate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateAgentTemplate(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteAgentTemplate operation middleware
+func (siw *ServerInterfaceWrapper) DeleteAgentTemplate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "template" -------------
+	var templateSlug TemplateSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "template", r.PathValue("template"), &templateSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "template", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteAgentTemplate(w, r, org, templateSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetAgentTemplate operation middleware
+func (siw *ServerInterfaceWrapper) GetAgentTemplate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "template" -------------
+	var templateSlug TemplateSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "template", r.PathValue("template"), &templateSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "template", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetAgentTemplate(w, r, org, templateSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateAgentTemplate operation middleware
+func (siw *ServerInterfaceWrapper) UpdateAgentTemplate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "template" -------------
+	var templateSlug TemplateSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "template", r.PathValue("template"), &templateSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "template", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateAgentTemplate(w, r, org, templateSlug)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -2891,6 +3199,13 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agents/{agent}/watch", wrapper.WatchAgent)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agent-definitions", wrapper.ListAgentDefinitions)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/agent-definitions", wrapper.DefineAgent)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agent-definitions/{agent}", wrapper.GetAgentDefinition)
+	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/agent-definitions/{agent}", wrapper.RenameAgentDefinition)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agent-templates", wrapper.ListAgentTemplates)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/agent-templates", wrapper.CreateAgentTemplate)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/agent-templates/{template}", wrapper.DeleteAgentTemplate)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agent-templates/{template}", wrapper.GetAgentTemplate)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/agent-templates/{template}", wrapper.UpdateAgentTemplate)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/agent-definitions/{agent}/values", wrapper.ReviseAgentValues)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/operators", wrapper.ListOperators)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/operators", wrapper.RegisterOperator)

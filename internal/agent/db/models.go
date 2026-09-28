@@ -39,9 +39,21 @@ type AgentDefinition struct {
 	AgentValues []byte
 	DefinedBy   string
 	CreatedAt   pgtype.Timestamptz
+	Name        string
 	Revision    int32
 	RevisedAt   pgtype.Timestamptz
 	RevisedBy   string
+}
+
+type AgentTemplate struct {
+	Grn         string
+	OrgGrn      string
+	Name        string
+	Description string
+	AgentValues []byte
+	CreatedBy   string
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
 }
 
 type Group struct {

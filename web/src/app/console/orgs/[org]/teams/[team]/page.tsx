@@ -8,8 +8,10 @@ import {
   getGroup,
   getOrg,
   listGroupMembers,
+  lookupAgentDefinitions,
   lookupAgents,
   lookupOrgMembers,
+  refusedAgentLists,
 } from "@/features/orgs";
 
 import { ApiUnreachable } from "../../../../_components/api-unreachable";
@@ -43,20 +45,23 @@ type Params = { params: Promise<{ org: string; team: string }> };
  */
 export default async function TeamPage({ params }: Params) {
   const { org, team } = await params;
-  const [organization, group, members, people, agents] = await Promise.all([
-    getOrg(org),
-    getGroup(org, team),
-    listGroupMembers(org, team),
-    lookupOrgMembers(org),
-    lookupAgents(org),
-  ]);
+  const [organization, group, members, people, agents, definitions] =
+    await Promise.all([
+      getOrg(org),
+      getGroup(org, team),
+      listGroupMembers(org, team),
+      lookupOrgMembers(org),
+      lookupAgents(org),
+      lookupAgentDefinitions(org),
+    ]);
 
   if (
     organization.status === "unreachable" ||
     group.status === "unreachable" ||
     members.status === "unreachable" ||
     people.status === "unreachable" ||
-    agents.status === "unreachable"
+    agents.status === "unreachable" ||
+    definitions.status === "unreachable"
   ) {
     return (
       <>
@@ -83,10 +88,16 @@ export default async function TeamPage({ params }: Params) {
   }
 
   const name = group.data.name;
-  const resolved = resolveTeamMembers(members.data, people, agents);
+  const directory = { agents, definitions };
+  const resolved = resolveTeamMembers(members.data, people, directory);
+  // Agents are known by two lists. Both refused, no agent can be
+  // chosen; one refused, the other still offers some, and the page says
+  // some may be missing rather than none can be chosen (ADR-0075).
+  const refusedAgents = refusedAgentLists(directory);
+  const agentsUnlisted = refusedAgents.length === 2;
   const unlisted = [
     ...(people.status === "forbidden" ? ["people"] : []),
-    ...(agents.status === "forbidden" ? ["agents"] : []),
+    ...(agentsUnlisted ? ["agents"] : []),
   ];
 
   return (
@@ -124,8 +135,9 @@ export default async function TeamPage({ params }: Params) {
       <AddTeamMemberForm
         org={org}
         team={team}
-        candidates={teamCandidates(members.data, people, agents)}
+        candidates={teamCandidates(members.data, people, directory)}
         unlisted={unlisted}
+        partlyListed={agentsUnlisted ? [] : refusedAgents}
       />
       <Separator />
       <section className="flex flex-col gap-4">

@@ -52,12 +52,14 @@ func (q *Queries) AssignAgent(ctx context.Context, arg AssignAgentParams) (Agent
 const countAgentsByOrg = `-- name: CountAgentsByOrg :one
 SELECT
     (SELECT count(*) FROM agents            a WHERE a.org_grn = $1) AS agent_count,
-    (SELECT count(*) FROM agent_definitions d WHERE d.org_grn = $1) AS definition_count
+    (SELECT count(*) FROM agent_definitions d WHERE d.org_grn = $1) AS definition_count,
+    (SELECT count(*) FROM agent_templates   t WHERE t.org_grn = $1) AS template_count
 `
 
 type CountAgentsByOrgRow struct {
 	AgentCount      int64
 	DefinitionCount int64
+	TemplateCount   int64
 }
 
 // The agents and the definitions the organization holds, which
@@ -67,7 +69,7 @@ type CountAgentsByOrgRow struct {
 func (q *Queries) CountAgentsByOrg(ctx context.Context, orgGrn string) (CountAgentsByOrgRow, error) {
 	row := q.db.QueryRow(ctx, countAgentsByOrg, orgGrn)
 	var i CountAgentsByOrgRow
-	err := row.Scan(&i.AgentCount, &i.DefinitionCount)
+	err := row.Scan(&i.AgentCount, &i.DefinitionCount, &i.TemplateCount)
 	return i, err
 }
 
@@ -98,14 +100,15 @@ func (q *Queries) CreateAgent(ctx context.Context, arg CreateAgentParams) error 
 }
 
 const createAgentDefinition = `-- name: CreateAgentDefinition :exec
-INSERT INTO agent_definitions (agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at, revision, revised_at, revised_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+INSERT INTO agent_definitions (agent_grn, org_grn, operator_grn, name, agent_values, defined_by, created_at, revision, revised_at, revised_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 `
 
 type CreateAgentDefinitionParams struct {
 	AgentGrn    string
 	OrgGrn      string
 	OperatorGrn string
+	Name        string
 	AgentValues []byte
 	DefinedBy   string
 	CreatedAt   pgtype.Timestamptz
@@ -116,12 +119,15 @@ type CreateAgentDefinitionParams struct {
 
 // A definition's operator is written once and never rewritten: garam
 // cannot move an agent between operators here. Its values are revised
-// by ReviseAgentDefinitionValues, each save a new revision (ADR-0076).
+// by ReviseAgentDefinitionValues, each save a new revision (ADR-0076),
+// and its name is the organization's word for the agent, which
+// RenameAgentDefinition changes alone (ADR-0075).
 func (q *Queries) CreateAgentDefinition(ctx context.Context, arg CreateAgentDefinitionParams) error {
 	_, err := q.db.Exec(ctx, createAgentDefinition,
 		arg.AgentGrn,
 		arg.OrgGrn,
 		arg.OperatorGrn,
+		arg.Name,
 		arg.AgentValues,
 		arg.DefinedBy,
 		arg.CreatedAt,
@@ -130,6 +136,48 @@ func (q *Queries) CreateAgentDefinition(ctx context.Context, arg CreateAgentDefi
 		arg.RevisedBy,
 	)
 	return err
+}
+
+const createAgentTemplate = `-- name: CreateAgentTemplate :exec
+INSERT INTO agent_templates (grn, org_grn, name, description, agent_values, created_by, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+`
+
+type CreateAgentTemplateParams struct {
+	Grn         string
+	OrgGrn      string
+	Name        string
+	Description string
+	AgentValues []byte
+	CreatedBy   string
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+}
+
+func (q *Queries) CreateAgentTemplate(ctx context.Context, arg CreateAgentTemplateParams) error {
+	_, err := q.db.Exec(ctx, createAgentTemplate,
+		arg.Grn,
+		arg.OrgGrn,
+		arg.Name,
+		arg.Description,
+		arg.AgentValues,
+		arg.CreatedBy,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+	)
+	return err
+}
+
+const deleteAgentTemplate = `-- name: DeleteAgentTemplate :execrows
+DELETE FROM agent_templates WHERE grn = $1
+`
+
+func (q *Queries) DeleteAgentTemplate(ctx context.Context, grn string) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteAgentTemplate, grn)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getAgent = `-- name: GetAgent :one
@@ -175,7 +223,7 @@ func (q *Queries) GetAgentAssignment(ctx context.Context, agentGrn string) (Agen
 }
 
 const getAgentDefinition = `-- name: GetAgentDefinition :one
-SELECT agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at, revision, revised_at, revised_by FROM agent_definitions WHERE agent_grn = $1
+SELECT agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at, name, revision, revised_at, revised_by FROM agent_definitions WHERE agent_grn = $1
 `
 
 func (q *Queries) GetAgentDefinition(ctx context.Context, agentGrn string) (AgentDefinition, error) {
@@ -188,9 +236,30 @@ func (q *Queries) GetAgentDefinition(ctx context.Context, agentGrn string) (Agen
 		&i.AgentValues,
 		&i.DefinedBy,
 		&i.CreatedAt,
+		&i.Name,
 		&i.Revision,
 		&i.RevisedAt,
 		&i.RevisedBy,
+	)
+	return i, err
+}
+
+const getAgentTemplate = `-- name: GetAgentTemplate :one
+SELECT grn, org_grn, name, description, agent_values, created_by, created_at, updated_at FROM agent_templates WHERE grn = $1
+`
+
+func (q *Queries) GetAgentTemplate(ctx context.Context, grn string) (AgentTemplate, error) {
+	row := q.db.QueryRow(ctx, getAgentTemplate, grn)
+	var i AgentTemplate
+	err := row.Scan(
+		&i.Grn,
+		&i.OrgGrn,
+		&i.Name,
+		&i.Description,
+		&i.AgentValues,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -229,7 +298,7 @@ func (q *Queries) ListAgentAssignmentsByOrg(ctx context.Context, orgGrn string) 
 }
 
 const listAgentDefinitionsByOperator = `-- name: ListAgentDefinitionsByOperator :many
-SELECT d.agent_grn, d.org_grn, d.operator_grn, d.agent_values, d.defined_by, d.created_at, d.revision, d.revised_at, d.revised_by, a.epoch AS claim_epoch, a.created_at AS claim_created_at, a.updated_at AS claim_updated_at
+SELECT d.agent_grn, d.org_grn, d.operator_grn, d.agent_values, d.defined_by, d.created_at, d.name, d.revision, d.revised_at, d.revised_by, a.epoch AS claim_epoch, a.created_at AS claim_created_at, a.updated_at AS claim_updated_at
 FROM agent_definitions d
 LEFT JOIN agent_assignments a ON a.agent_grn = d.agent_grn
 WHERE d.operator_grn = $1
@@ -243,6 +312,7 @@ type ListAgentDefinitionsByOperatorRow struct {
 	AgentValues    []byte
 	DefinedBy      string
 	CreatedAt      pgtype.Timestamptz
+	Name           string
 	Revision       int32
 	RevisedAt      pgtype.Timestamptz
 	RevisedBy      string
@@ -269,6 +339,7 @@ func (q *Queries) ListAgentDefinitionsByOperator(ctx context.Context, operatorGr
 			&i.AgentValues,
 			&i.DefinedBy,
 			&i.CreatedAt,
+			&i.Name,
 			&i.Revision,
 			&i.RevisedAt,
 			&i.RevisedBy,
@@ -287,7 +358,7 @@ func (q *Queries) ListAgentDefinitionsByOperator(ctx context.Context, operatorGr
 }
 
 const listAgentDefinitionsByOrg = `-- name: ListAgentDefinitionsByOrg :many
-SELECT agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at, revision, revised_at, revised_by FROM agent_definitions WHERE org_grn = $1 ORDER BY agent_grn
+SELECT agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at, name, revision, revised_at, revised_by FROM agent_definitions WHERE org_grn = $1 ORDER BY agent_grn
 `
 
 func (q *Queries) ListAgentDefinitionsByOrg(ctx context.Context, orgGrn string) ([]AgentDefinition, error) {
@@ -306,9 +377,43 @@ func (q *Queries) ListAgentDefinitionsByOrg(ctx context.Context, orgGrn string) 
 			&i.AgentValues,
 			&i.DefinedBy,
 			&i.CreatedAt,
+			&i.Name,
 			&i.Revision,
 			&i.RevisedAt,
 			&i.RevisedBy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAgentTemplatesByOrg = `-- name: ListAgentTemplatesByOrg :many
+SELECT grn, org_grn, name, description, agent_values, created_by, created_at, updated_at FROM agent_templates WHERE org_grn = $1 ORDER BY name, grn
+`
+
+func (q *Queries) ListAgentTemplatesByOrg(ctx context.Context, orgGrn string) ([]AgentTemplate, error) {
+	rows, err := q.db.Query(ctx, listAgentTemplatesByOrg, orgGrn)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AgentTemplate
+	for rows.Next() {
+		var i AgentTemplate
+		if err := rows.Scan(
+			&i.Grn,
+			&i.OrgGrn,
+			&i.Name,
+			&i.Description,
+			&i.AgentValues,
+			&i.CreatedBy,
+			&i.CreatedAt,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -368,7 +473,7 @@ func (q *Queries) ListAgentsByOrg(ctx context.Context, arg ListAgentsByOrgParams
 }
 
 const lockAgentDefinition = `-- name: LockAgentDefinition :one
-SELECT agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at, revision, revised_at, revised_by FROM agent_definitions WHERE agent_grn = $1 FOR UPDATE
+SELECT agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at, name, revision, revised_at, revised_by FROM agent_definitions WHERE agent_grn = $1 FOR UPDATE
 `
 
 // LockAgentDefinition is the lock a claim serializes on: two claims of
@@ -384,6 +489,36 @@ func (q *Queries) LockAgentDefinition(ctx context.Context, agentGrn string) (Age
 		&i.AgentValues,
 		&i.DefinedBy,
 		&i.CreatedAt,
+		&i.Name,
+		&i.Revision,
+		&i.RevisedAt,
+		&i.RevisedBy,
+	)
+	return i, err
+}
+
+const renameAgentDefinition = `-- name: RenameAgentDefinition :one
+UPDATE agent_definitions SET name = $1
+WHERE agent_grn = $2
+RETURNING agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at, name, revision, revised_at, revised_by
+`
+
+type RenameAgentDefinitionParams struct {
+	Name     string
+	AgentGrn string
+}
+
+func (q *Queries) RenameAgentDefinition(ctx context.Context, arg RenameAgentDefinitionParams) (AgentDefinition, error) {
+	row := q.db.QueryRow(ctx, renameAgentDefinition, arg.Name, arg.AgentGrn)
+	var i AgentDefinition
+	err := row.Scan(
+		&i.AgentGrn,
+		&i.OrgGrn,
+		&i.OperatorGrn,
+		&i.AgentValues,
+		&i.DefinedBy,
+		&i.CreatedAt,
+		&i.Name,
 		&i.Revision,
 		&i.RevisedAt,
 		&i.RevisedBy,
@@ -564,7 +699,7 @@ UPDATE agent_definitions SET
     revised_by   = $3
 WHERE agent_grn = $4
   AND revision = $5
-RETURNING agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at, revision, revised_at, revised_by
+RETURNING agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at, name, revision, revised_at, revised_by
 `
 
 type ReviseAgentDefinitionValuesParams struct {
@@ -594,9 +729,52 @@ func (q *Queries) ReviseAgentDefinitionValues(ctx context.Context, arg ReviseAge
 		&i.AgentValues,
 		&i.DefinedBy,
 		&i.CreatedAt,
+		&i.Name,
 		&i.Revision,
 		&i.RevisedAt,
 		&i.RevisedBy,
+	)
+	return i, err
+}
+
+const updateAgentTemplate = `-- name: UpdateAgentTemplate :one
+UPDATE agent_templates SET
+    name         = $1,
+    description  = $2,
+    agent_values = $3,
+    updated_at   = $4
+WHERE grn = $5
+RETURNING grn, org_grn, name, description, agent_values, created_by, created_at, updated_at
+`
+
+type UpdateAgentTemplateParams struct {
+	Name        string
+	Description string
+	AgentValues []byte
+	UpdatedAt   pgtype.Timestamptz
+	Grn         string
+}
+
+// An edit replaces what the template says. No definition references
+// the row, so the statement reaches no agent defined from it.
+func (q *Queries) UpdateAgentTemplate(ctx context.Context, arg UpdateAgentTemplateParams) (AgentTemplate, error) {
+	row := q.db.QueryRow(ctx, updateAgentTemplate,
+		arg.Name,
+		arg.Description,
+		arg.AgentValues,
+		arg.UpdatedAt,
+		arg.Grn,
+	)
+	var i AgentTemplate
+	err := row.Scan(
+		&i.Grn,
+		&i.OrgGrn,
+		&i.Name,
+		&i.Description,
+		&i.AgentValues,
+		&i.CreatedBy,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }

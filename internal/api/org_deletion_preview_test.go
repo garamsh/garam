@@ -54,7 +54,7 @@ func TestGetOrgDeletionPreview_CountsEachKind(t *testing.T) {
 	}
 	operatorGRN := registerOperator(t, f, slug, "op-defs")
 	for range 5 {
-		d, err := agent.NewDefinition(orgGRN, operatorGRN, agent.Values{}, ownerGRN)
+		d, err := agent.NewDefinition(orgGRN, operatorGRN, "Field agent", agent.Values{}, ownerGRN)
 		require.NoError(t, err)
 		require.NoError(t, f.agents.Define(ctx, d))
 	}
@@ -69,6 +69,13 @@ func TestGetOrgDeletionPreview_CountsEachKind(t *testing.T) {
 		_, err := f.consents.Grant(ctx, orgGRN,
 			orgGRNOf(other))
 		require.NoError(t, err)
+	}
+
+	// 9 agent templates.
+	for range 9 {
+		tpl, err := agent.NewTemplate(orgGRN, agent.TemplateContent{Name: "Researcher"}, ownerGRN)
+		require.NoError(t, err)
+		require.NoError(t, f.agents.CreateTemplate(ctx, tpl))
 	}
 
 	// 8 policies. The engine owns them and returns the whole list.
@@ -86,6 +93,7 @@ func TestGetOrgDeletionPreview_CountsEachKind(t *testing.T) {
 	assert.Equal(t, 8, body.Counts.Policies)
 	assert.Equal(t, 4, body.Counts.Agents)
 	assert.Equal(t, 5, body.Counts.AgentDefinitions)
+	assert.Equal(t, 9, body.Counts.AgentTemplates)
 	assert.Equal(t, 6, body.Counts.Operators)
 	assert.Equal(t, 7, body.Counts.Consents)
 }
@@ -207,7 +215,7 @@ func TestGetOrgDeletionPreview_ZeroMeansEmptyNotUnauthorized(t *testing.T) {
 	a, err := agent.New(agentGRN, orgGRN)
 	require.NoError(t, err)
 	require.NoError(t, f.agents.Create(ctx, a))
-	d, err := agent.NewDefinition(orgGRN, operatorGRN, agent.Values{}, ownerGRN)
+	d, err := agent.NewDefinition(orgGRN, operatorGRN, "Field agent", agent.Values{}, ownerGRN)
 	require.NoError(t, err)
 	require.NoError(t, f.agents.Define(ctx, d))
 	_, err = f.consents.Grant(ctx, orgGRN, orgGRNOf("elsewhere"))

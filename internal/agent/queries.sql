@@ -91,10 +91,12 @@ RETURNING *;
 
 -- A definition's operator is written once and never rewritten: garam
 -- cannot move an agent between operators here. Its values are revised
--- by ReviseAgentDefinitionValues, each save a new revision (ADR-0076).
+-- by ReviseAgentDefinitionValues, each save a new revision (ADR-0076),
+-- and its name is the organization's word for the agent, which
+-- RenameAgentDefinition changes alone (ADR-0075).
 -- name: CreateAgentDefinition :exec
-INSERT INTO agent_definitions (agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at, revision, revised_at, revised_by)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);
+INSERT INTO agent_definitions (agent_grn, org_grn, operator_grn, name, agent_values, defined_by, created_at, revision, revised_at, revised_by)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);
 
 -- name: GetAgentDefinition :one
 SELECT * FROM agent_definitions WHERE agent_grn = $1;
@@ -110,6 +112,11 @@ UPDATE agent_definitions SET
     revised_by   = sqlc.arg('revised_by')
 WHERE agent_grn = sqlc.arg('agent_grn')
   AND revision = sqlc.arg('expected_revision')
+RETURNING *;
+
+-- name: RenameAgentDefinition :one
+UPDATE agent_definitions SET name = sqlc.arg('name')
+WHERE agent_grn = sqlc.arg('agent_grn')
 RETURNING *;
 
 -- name: ListAgentDefinitionsByOrg :many
@@ -137,4 +144,29 @@ SELECT * FROM agent_definitions WHERE agent_grn = $1 FOR UPDATE;
 -- agent and is not counted apart from it.
 SELECT
     (SELECT count(*) FROM agents            a WHERE a.org_grn = $1) AS agent_count,
-    (SELECT count(*) FROM agent_definitions d WHERE d.org_grn = $1) AS definition_count;
+    (SELECT count(*) FROM agent_definitions d WHERE d.org_grn = $1) AS definition_count,
+    (SELECT count(*) FROM agent_templates   t WHERE t.org_grn = $1) AS template_count;
+
+-- name: CreateAgentTemplate :exec
+INSERT INTO agent_templates (grn, org_grn, name, description, agent_values, created_by, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
+
+-- name: GetAgentTemplate :one
+SELECT * FROM agent_templates WHERE grn = $1;
+
+-- name: ListAgentTemplatesByOrg :many
+SELECT * FROM agent_templates WHERE org_grn = $1 ORDER BY name, grn;
+
+-- An edit replaces what the template says. No definition references
+-- the row, so the statement reaches no agent defined from it.
+-- name: UpdateAgentTemplate :one
+UPDATE agent_templates SET
+    name         = sqlc.arg('name'),
+    description  = sqlc.arg('description'),
+    agent_values = sqlc.arg('agent_values'),
+    updated_at   = sqlc.arg('updated_at')
+WHERE grn = sqlc.arg('grn')
+RETURNING *;
+
+-- name: DeleteAgentTemplate :execrows
+DELETE FROM agent_templates WHERE grn = $1;

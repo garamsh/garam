@@ -20,7 +20,12 @@ import (
 // claimed once, and the claim is where its agent comes to exist
 // (ADR-0033). A state report is fenced as Postgres fences it: at the
 // epoch the agent is assigned at and at no other.
+//
+// The service reads no template and renames no definition, so those
+// methods come from the nil Store embedded here and panic if called.
 type memoryStore struct {
+	Store
+
 	agents      map[grn.GRN]*Agent
 	assignments map[grn.GRN]*Assignment
 	definitions map[grn.GRN]*Definition
@@ -513,7 +518,7 @@ func TestService_ReportRuntimeStateIsAcceptedOnlyFromTheAgentItself(t *testing.T
 // the console writes one.
 func define(t *testing.T, store *memoryStore, operator grn.GRN, values Values) *Definition {
 	t.Helper()
-	d, err := NewDefinition(orgGRNOf(operator), operator, values,
+	d, err := NewDefinition(orgGRNOf(operator), operator, "field agent", values,
 		grn.New(grn.RootOwner, grn.DefaultProject, "user", "ada"))
 	require.NoError(t, err)
 	require.NoError(t, store.Define(context.Background(), d))

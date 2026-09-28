@@ -203,7 +203,7 @@ func operatorGRNOf(orgSlug, id string) grn.GRN {
 
 // defineBody is the request that defines an agent run by operator.
 func defineBody(operator grn.GRN, values string) string {
-	return `{"operatorGrn":"` + operator.String() + `","values":` + values + `}`
+	return `{"name":"Field agent","operatorGrn":"` + operator.String() + `","values":` + values + `}`
 }
 
 // bodyKeys returns the field names a response body carries, sorted. A
@@ -337,7 +337,7 @@ func TestAgentDefine_ADefinitionIsNotAnAgent(t *testing.T) {
 	// The two are answered under different shapes, so a reader holding
 	// one body knows which it holds. A definition carries no state,
 	// because nobody has reported any.
-	assert.Equal(t, []string{"agentGrn", "createdAt", "definedBy", "operatorGrn", "orgGrn", "revisedAt", "revisedBy", "revision", "values"}, definitionFields)
+	assert.Equal(t, []string{"agentGrn", "createdAt", "definedBy", "name", "operatorGrn", "orgGrn", "revisedAt", "revisedBy", "revision", "values"}, definitionFields)
 	assert.Equal(t, []string{"createdAt", "grn", "orgGrn", "provisioningState", "runtimeState", "updatedAt"}, agentFields)
 }
 
@@ -356,7 +356,7 @@ func TestAgentDefine_RefusesWhatItCannotStore(t *testing.T) {
 	}{
 		{
 			name: "operator that is not a grn",
-			body: `{"operatorGrn":"field-one"}`,
+			body: `{"name":"Field agent","operatorGrn":"field-one"}`,
 		},
 		{
 			name: "operator of another organization",
@@ -364,11 +364,19 @@ func TestAgentDefine_RefusesWhatItCannotStore(t *testing.T) {
 		},
 		{
 			name: "grn that names an agent rather than an operator",
-			body: `{"operatorGrn":"` + grn.New(slug, "default", agent.ServiceType, "9f2ac1b40d8e7a35").String() + `"}`,
+			body: `{"name":"Field agent","operatorGrn":"` + grn.New(slug, "default", agent.ServiceType, "9f2ac1b40d8e7a35").String() + `"}`,
 		},
 		{
 			name: "value key outside the segment character set",
 			body: defineBody(registered, `{"Model_Name":"haiku"}`),
+		},
+		{
+			name: "name that is only whitespace",
+			body: `{"name":"   ","operatorGrn":"` + registered.String() + `"}`,
+		},
+		{
+			name: "empty name",
+			body: `{"name":"","operatorGrn":"` + registered.String() + `"}`,
 		},
 		{
 			name: "body that is not an object",
@@ -434,4 +442,32 @@ func TestAgentDefine_RefusesAnOperatorTheOrgHasNotRegistered(t *testing.T) {
 
 	rec = f.do(t, "POST", "/orgs/"+slug+"/agent-definitions", body, member)
 	assert.Equal(t, http.StatusCreated, rec.Code)
+}
+
+// TestAgentDefine_ANameLeftOutIsTheIdentifier keeps a caller that
+// predates names working: a definition that names none is called by the
+// identifier it mints, as 000026 names every earlier one (ADR-0075).
+// A name given empty is refused rather than read as left out, which is
+// the control that the fallback is the omission and not any empty
+// value.
+func TestAgentDefine_ANameLeftOutIsTheIdentifier(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	f.permit(permission{userGRNOf("owner-sub"), org.ActionAgentDefine})
+	operator := registerOperator(t, f, slug, "field-one")
+	path := "/orgs/" + slug + "/agent-definitions"
+
+	rec := f.do(t, "POST", path, `{"operatorGrn":"`+operator.String()+`"}`, owner)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	defined := decodeBody[apigen.AgentDefinition](t, rec)
+	g, err := grn.Parse(defined.AgentGrn)
+	require.NoError(t, err)
+	assert.Equal(t, g.Identifier, defined.Name)
+
+	rec = f.do(t, "POST", path, `{"name":"","operatorGrn":"`+operator.String()+`"}`, owner)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	rec = f.do(t, "POST", path, `{"name":" Scout ","operatorGrn":"`+operator.String()+`"}`, owner)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	assert.Equal(t, "Scout", decodeBody[apigen.AgentDefinition](t, rec).Name)
 }

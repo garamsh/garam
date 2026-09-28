@@ -17,7 +17,7 @@ func defined(t *testing.T, operator grn.GRN, values agent.Values, id string) *ag
 	t.Helper()
 	d, err := agent.NewDefinition(
 		grn.New(grn.RootOwner, grn.DefaultProject, "org", operator.Organization),
-		operator, values, grn.New(grn.RootOwner, grn.DefaultProject, "user", "ada"))
+		operator, "Field agent", values, grn.New(grn.RootOwner, grn.DefaultProject, "user", "ada"))
 	require.NoError(t, err)
 	return d
 }

@@ -30,7 +30,7 @@ func valuesPath(orgSlug string, g grn.GRN) string {
 // its operators, and returns the agent it names.
 func defineIn(t *testing.T, f *fixture, orgSlug string, values agent.Values) grn.GRN {
 	t.Helper()
-	d, err := agent.NewDefinition(orgGRNOf(orgSlug), operatorGRNOf(orgSlug, "field-one"), values, userGRNOf("owner-sub"))
+	d, err := agent.NewDefinition(orgGRNOf(orgSlug), operatorGRNOf(orgSlug, "field-one"), "", values, userGRNOf("owner-sub"))
 	require.NoError(t, err)
 	require.NoError(t, f.agents.Define(testCtx(t), d))
 	return d.Agent()

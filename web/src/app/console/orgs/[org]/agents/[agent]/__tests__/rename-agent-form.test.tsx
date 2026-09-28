@@ -14,16 +14,17 @@ const ONE = `${API_URL}/orgs/acme/agent-definitions/9f2ac1b40d8e7a35`;
 describe("rename agent form", () => {
   it("keeps the attempted name through a refusal and saves it on retry", async () => {
     let refusing = true;
+    const posted: unknown[] = [];
     server.use(
       http.patch(ONE, async ({ request }) => {
+        posted.push(await request.json());
         if (refusing) {
           return HttpResponse.json(
             { kind: "permission_denied", message: "permission denied" },
             { status: 403 },
           );
         }
-        const body = (await request.json()) as { name: string };
-        return HttpResponse.json({ ...fieldAgent, name: body.name });
+        return HttpResponse.json({ ...fieldAgent, name: "Ranger" });
       }),
     );
     const user = userEvent.setup();
@@ -49,5 +50,7 @@ describe("rename agent form", () => {
       "Renamed to Ranger.",
     );
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    // Both attempts carried the name as typed.
+    expect(posted).toEqual([{ name: "Ranger" }, { name: "Ranger" }]);
   });
 });

@@ -2,6 +2,7 @@ import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 import AgentPage from "@/app/console/orgs/[org]/agents/[agent]/page";
 import { renderServerComponent } from "@/testing/render";
@@ -25,6 +26,12 @@ vi.mock("next/navigation", () => ({
 }));
 
 const ONE = `${API_URL}/orgs/acme/agent-definitions/9f2ac1b40d8e7a35`;
+
+/** What the settings form sends, read rather than asserted. */
+const SaveBody = z.object({
+  expectedRevision: z.number(),
+  values: z.record(z.string(), z.string()),
+});
 const params = {
   params: Promise.resolve({ org: "acme", agent: "9f2ac1b40d8e7a35" }),
 };
@@ -124,8 +131,8 @@ describe("agent page", () => {
     const ready = {
       ...reportedAgent,
       grn: fieldAgent.agentGrn,
-      provisioningState: "ready" as const,
-      runtimeState: "connected" as const,
+      provisioningState: "ready",
+      runtimeState: "connected",
       assignment: {
         operatorGrn: fieldAgent.operatorGrn,
         epoch: 1,
@@ -193,6 +200,15 @@ describe("agent page", () => {
       "The last report came from a replaced operator.",
     ],
   ])("says %s", async (_case, report, label, detail) => {
+    // The control is the report that differs from the case's in
+    // nothing but being a whole application of the saved revision by
+    // the current assignment, which reads Applied.
+    let answered: Record<string, unknown> = {
+      epoch: 2,
+      revision: 2,
+      outcome: "applied",
+      ignoredKeys: [],
+    };
     server.use(
       http.get(ONE, () => HttpResponse.json({ ...fieldAgent, revision: 2 })),
       http.get(`${API_URL}/orgs/acme/agents`, () =>
@@ -208,13 +224,19 @@ describe("agent page", () => {
             configuration: {
               epoch: 2,
               reportedAt: "2026-01-04T00:00:00Z",
-              ...report,
+              ...answered,
             },
           },
         ]),
       ),
     );
 
+    const control = await renderServerComponent(AgentPage(params));
+    expect(screen.getByText("Applied")).toBeInTheDocument();
+    expect(screen.queryByText(label)).not.toBeInTheDocument();
+    control.unmount();
+
+    answered = report;
     await renderServerComponent(AgentPage(params));
 
     expect(screen.getByText(label)).toBeInTheDocument();
@@ -223,15 +245,26 @@ describe("agent page", () => {
   });
 
   it("says the settings status is not checked when reports are refused", async () => {
+    let refusing = false;
     server.use(
       http.get(`${API_URL}/orgs/acme/agents`, () =>
-        HttpResponse.json(
-          { kind: "permission_denied", message: "no" },
-          { status: 403 },
-        ),
+        refusing
+          ? HttpResponse.json(
+              { kind: "permission_denied", message: "no" },
+              { status: 403 },
+            )
+          : HttpResponse.json([]),
       ),
     );
 
+    // The control: answered, the same list holds no report of this
+    // agent, which is unknown rather than not checked.
+    const answered = await renderServerComponent(AgentPage(params));
+    expect(screen.getByText("Unknown")).toBeInTheDocument();
+    expect(screen.queryByText("Not checked")).not.toBeInTheDocument();
+    answered.unmount();
+
+    refusing = true;
     await renderServerComponent(AgentPage(params));
 
     expect(screen.getByText("Not checked")).toBeInTheDocument();
@@ -268,7 +301,7 @@ describe("agent page", () => {
     const bodies: unknown[] = [];
     server.use(
       http.put(`${ONE}/values`, async ({ request }) => {
-        const body = (await request.json()) as { expectedRevision: number };
+        const body = SaveBody.parse(await request.json());
         bodies.push(body);
         return HttpResponse.json({
           ...fieldAgent,
@@ -299,10 +332,7 @@ describe("agent page", () => {
     server.use(
       http.get(ONE, () => HttpResponse.json(saved)),
       http.put(`${ONE}/values`, async ({ request }) => {
-        const body = (await request.json()) as {
-          expectedRevision: number;
-          values: Record<string, string>;
-        };
+        const body = SaveBody.parse(await request.json());
         bodies.push(body);
         if (body.expectedRevision !== saved.revision) {
           return HttpResponse.json(
@@ -350,10 +380,7 @@ describe("agent page", () => {
     server.use(
       http.get(ONE, () => HttpResponse.json(saved)),
       http.put(`${ONE}/values`, async ({ request }) => {
-        const body = (await request.json()) as {
-          expectedRevision: number;
-          values: Record<string, string>;
-        };
+        const body = SaveBody.parse(await request.json());
         bodies.push(body);
         if (body.expectedRevision !== saved.revision) {
           return HttpResponse.json(

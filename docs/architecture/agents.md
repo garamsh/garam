@@ -64,19 +64,22 @@ statement that writes, so of two saves against one revision the second
 is refused under `aborted` and writes nothing. A save moves the values
 alone, on `agent:configure`, and tells no operator.
 
-**No current operator acknowledges a revision**, so every agent's
-configuration reads unknown until one does. Garam Agent Operator at
+**Garam Agent Operator at
 [`9dfeccf`](https://github.com/garamsh/garam-agent-operator/blob/9dfeccf/internal/garam/client.go)
-reads only `tools.pins.*`, which garam's key rule cannot carry, and
-reports no revision. What the acknowledgement is: the operator holding
-the agent reports a revision as `applied`, naming the keys it ignored,
-or `rejected`, with a reason, fenced by the assignment's epoch as the
-provisioning report is. A revision the definition has not reached, or
-one older than the same epoch already acknowledged, is refused and
-writes nothing; the same revision again replaces the last report in
-the order garam receives them. The acknowledgement is stored with the
-epoch it was made at and describes the current assignment only while
-that epoch is current. It is the operator's claim: `applied` with
+acknowledges no revision**, so an agent that version runs reads
+unknown: it reads only `tools.pins.*`, which garam's key rule cannot
+carry, and calls no acknowledgement route. What the acknowledgement
+is: the operator holding the agent reports a revision as `applied`,
+naming the keys it ignored, or `rejected`, with a reason. The write
+that records it compares the reporting operator and the epoch with the
+assignment together, so a reassignment landing after the holding
+check cannot put a replaced operator's report under its successor's
+epoch. A revision the definition has not reached, or one older than
+the same epoch already acknowledged, is refused and writes nothing;
+the same revision again replaces the last report in the order garam
+receives them. The acknowledgement is stored with the epoch it was
+made at and describes the current assignment only while that epoch is
+current. It is the operator's claim: `applied` with
 ignored keys is applied in part, and garam verifies none of it. The
 provisioning and runtime reports never move it, and they keep a report
 time of their own, which rows written before ADR-0076 do not have.

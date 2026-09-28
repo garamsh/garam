@@ -1113,29 +1113,45 @@ export interface components {
             configuration?: components["schemas"]["AgentConfigurationReport"];
         };
         /**
-         * @description What the operator says it did with a revision: applied it, apart from any `ignoredKeys`, or rejected it.
-         * @enum {string}
-         */
-        AgentConfigurationOutcome: "applied" | "rejected";
-        /**
-         * @description The last acknowledgement garam accepted from the operator holding the agent, of one revision of its definition (ADR-0076). Absent from `Agent` where none was ever given, which is unknown: no current operator reports one.
+         * @description The last acknowledgement garam accepted from the operator holding the agent, of one revision of its definition (ADR-0076): applied, naming the keys the operator says it ignored, or rejected, with its reason. Absent from `Agent` where none was ever accepted, which is unknown and not applied; a readiness report is never an acknowledgement.
          *     It is the operator's claim and garam verifies none of it. It describes the current assignment only while `epoch` equals `assignment.epoch`; after a reassignment it is the previous operator's. `revision` below the definition's revision means the saved values are not yet acknowledged. `applied` with `ignoredKeys` is applied in part.
          */
-        AgentConfigurationReport: {
-            /** @description The assignment epoch the acknowledging operator held. */
-            epoch: number;
-            revision: number;
-            outcome: components["schemas"]["AgentConfigurationOutcome"];
-            /** @description Present with `applied`: the revision's keys the operator says it did not apply, possibly none. */
-            ignoredKeys?: string[];
-            /** @description Present with `rejected`: the operator's reason, at most 500 characters. */
-            reason?: string;
+        AgentConfigurationReport: components["schemas"]["AgentConfigurationApplied"] | components["schemas"]["AgentConfigurationRejected"];
+        /** @description The operator says it applied the revision, apart from `ignoredKeys`, which is empty where it names none. */
+        AgentConfigurationApplied: {
+            epoch: components["schemas"]["AgentConfigurationEpoch"];
+            revision: components["schemas"]["AgentConfigurationRevision"];
             /**
-             * Format: date-time
-             * @description When garam received the acknowledgement, not when the operator acted. A later acknowledgement of the same revision replaces this one in the order garam receives them.
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
              */
-            reportedAt: string;
+            outcome: "applied";
+            /** @description The revision's keys the operator says it did not apply. */
+            ignoredKeys: string[];
+            reportedAt: components["schemas"]["AgentConfigurationReportedAt"];
         };
+        /** @description The operator says it refused the revision, and why. */
+        AgentConfigurationRejected: {
+            epoch: components["schemas"]["AgentConfigurationEpoch"];
+            revision: components["schemas"]["AgentConfigurationRevision"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            outcome: "rejected";
+            /** @description The operator's reason, at most 500 characters. */
+            reason: string;
+            reportedAt: components["schemas"]["AgentConfigurationReportedAt"];
+        };
+        /** @description The assignment epoch the acknowledging operator held. */
+        AgentConfigurationEpoch: number;
+        /** @description The definition revision acknowledged. */
+        AgentConfigurationRevision: number;
+        /**
+         * Format: date-time
+         * @description When garam received the acknowledgement, not when the operator acted. A later acknowledgement of the same revision replaces this one in the order garam receives them.
+         */
+        AgentConfigurationReportedAt: string;
         /**
          * @description Where an operator stands in obtaining a certificate from garam. It is derived from what garam already holds and reported by nobody, so no member says whether the operator is running. `enrolled` is an operator garam has issued a certificate for: it says one was obtained, not that it is still valid — garam records no expiry beside the record and asks the operator nothing. `pending` is an operator with no certificate whose enrollment token is still spendable, which lasts at most the ten minutes the token does. `expired` is an operator with no certificate and no spendable token: the token was lost or ran out, and `mintOperatorEnrollment` answers such an operator a fresh one (ADR-0067), which is the state that operation exists for. An operator that holds a certificate reads `enrolled` however much of its token is left, because the certificate is the outcome the token exists to produce.
          * @enum {string}

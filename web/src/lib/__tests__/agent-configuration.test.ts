@@ -8,8 +8,24 @@ type Report = NonNullable<Agent["configuration"]>;
 
 const reportedAt = "2026-09-28T01:02:03Z";
 
+/** An application of revision 3 at epoch 2, ignoring `ignoredKeys`. */
+function applied(
+  overrides: Partial<
+    Omit<Extract<Report, { outcome: "applied" }>, "outcome">
+  > = {},
+): Report {
+  return {
+    epoch: 2,
+    revision: 3,
+    outcome: "applied",
+    ignoredKeys: [],
+    reportedAt,
+    ...overrides,
+  };
+}
+
 /** An agent held at epoch 2, carrying the report given, if any. */
-function held(configuration?: Partial<Report>): Agent {
+function held(configuration?: Report): Agent {
   return {
     grn: "grn:acme:default:agent:9f2ac1b40d8e7a35",
     orgGrn: "grn:root:default:org:acme",
@@ -23,14 +39,7 @@ function held(configuration?: Partial<Report>): Agent {
       epoch: 2,
       since: reportedAt,
     },
-    configuration: configuration && {
-      epoch: 2,
-      revision: 3,
-      outcome: "applied",
-      ignoredKeys: [],
-      reportedAt,
-      ...configuration,
-    },
+    configuration,
   };
 }
 
@@ -41,7 +50,7 @@ describe("configurationStatus", () => {
       reason: "unreported",
     });
     // The control: the same agent acknowledging revision 3 is applied.
-    expect(configurationStatus(3, held({}))).toEqual({
+    expect(configurationStatus(3, held(applied()))).toEqual({
       kind: "applied",
       reportedAt,
     });
@@ -61,15 +70,17 @@ describe("configurationStatus", () => {
   });
 
   it("reads a replaced operator's report as unknown beside the current one's", () => {
-    expect(configurationStatus(3, held({ epoch: 1 }))).toEqual({
+    expect(configurationStatus(3, held(applied({ epoch: 1 })))).toEqual({
       kind: "unknown",
       reason: "replaced",
     });
-    expect(configurationStatus(3, held({ epoch: 2 })).kind).toBe("applied");
+    expect(configurationStatus(3, held(applied({ epoch: 2 }))).kind).toBe(
+      "applied",
+    );
   });
 
   it("reads a report with no assignment beside it as unknown", () => {
-    const agent = { ...held({}), assignment: undefined };
+    const agent = { ...held(applied()), assignment: undefined };
     expect(configurationStatus(3, agent)).toEqual({
       kind: "unknown",
       reason: "unassigned",
@@ -77,7 +88,7 @@ describe("configurationStatus", () => {
   });
 
   it("reads an older acknowledged revision as pending", () => {
-    expect(configurationStatus(3, held({ revision: 2 }))).toEqual({
+    expect(configurationStatus(3, held(applied({ revision: 2 })))).toEqual({
       kind: "pending",
       acknowledged: 2,
       reportedAt,
@@ -85,7 +96,7 @@ describe("configurationStatus", () => {
   });
 
   it("reads a revision saved after the settings were read as unknown", () => {
-    expect(configurationStatus(3, held({ revision: 4 }))).toEqual({
+    expect(configurationStatus(3, held(applied({ revision: 4 })))).toEqual({
       kind: "unknown",
       reason: "newer",
     });
@@ -93,15 +104,18 @@ describe("configurationStatus", () => {
 
   it("reads an application that ignored keys as partial, never applied", () => {
     expect(
-      configurationStatus(3, held({ ignoredKeys: ["model", "workspace"] })),
+      configurationStatus(
+        3,
+        held(applied({ ignoredKeys: ["model", "workspace"] })),
+      ),
     ).toEqual({
       kind: "partial",
       ignoredKeys: ["model", "workspace"],
       reportedAt,
     });
-    expect(configurationStatus(3, held({ ignoredKeys: [] })).kind).toBe(
-      "applied",
-    );
+    expect(
+      configurationStatus(3, held(applied({ ignoredKeys: [] }))).kind,
+    ).toBe("applied");
   });
 
   it("reads a rejection with its reason", () => {
@@ -109,9 +123,11 @@ describe("configurationStatus", () => {
       configurationStatus(
         3,
         held({
+          epoch: 2,
+          revision: 3,
           outcome: "rejected",
-          ignoredKeys: undefined,
           reason: "image pull failed",
+          reportedAt,
         }),
       ),
     ).toEqual({ kind: "rejected", reason: "image pull failed", reportedAt });

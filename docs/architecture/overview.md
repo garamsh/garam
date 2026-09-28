@@ -64,8 +64,8 @@ collaborate on a shared plan.
   operator route is bounded by the assignment besides, exactly as the
   certificate route is. The operator acknowledges a definition revision
   on a third route, fenced the same way, as applied with the keys it
-  ignored or rejected with a reason; no current operator does, so
-  every agent's configuration reads unknown (ADR-0076).
+  ignored or rejected with a reason, and an agent no acknowledgement
+  was accepted for reads unknown, whatever its pod reports (ADR-0076).
 - An organization's members reading the agents it holds, over the
   browser API under `/orgs/{org}/agents`. An agent is answered with the
   state its operator reports and the state it reports itself, kept as

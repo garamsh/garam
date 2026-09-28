@@ -41,7 +41,12 @@ func (s *Server) ListAgents(w http.ResponseWriter, r *http.Request, orgSlug apig
 	}
 	out := make([]apigen.Agent, 0, len(agents))
 	for _, a := range agents {
-		out = append(out, agentToAPI(a, assignments[a.GRN().String()]))
+		rendered, err := agentToAPI(a, assignments[a.GRN().String()])
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		out = append(out, rendered)
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -68,7 +73,12 @@ func (s *Server) GetAgent(w http.ResponseWriter, r *http.Request, orgSlug apigen
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, agentToAPI(a, assignment))
+	rendered, err := agentToAPI(a, assignment)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, rendered)
 }
 
 // DefineAgent records what an agent of the org should be: which
@@ -326,7 +336,7 @@ func agentGRN(orgSlug, agentSlug string) grn.GRN {
 // agentToAPI renders an Agent together with the assignment holding it,
 // which is nil when no operator does. The two states stay separate
 // fields: different parties report them (ADR-0012).
-func agentToAPI(a *agent.Agent, assignment *agent.Assignment) apigen.Agent {
+func agentToAPI(a *agent.Agent, assignment *agent.Assignment) (apigen.Agent, error) {
 	out := apigen.Agent{
 		Grn:               a.GRN().String(),
 		OrgGrn:            a.Organization().String(),
@@ -337,7 +347,11 @@ func agentToAPI(a *agent.Agent, assignment *agent.Assignment) apigen.Agent {
 		HealthReportedAt:  a.HealthReportedAt,
 	}
 	if c := a.Configuration; c != nil {
-		out.Configuration = configurationToAPI(c)
+		configuration, err := configurationToAPI(c)
+		if err != nil {
+			return apigen.Agent{}, err
+		}
+		out.Configuration = configuration
 	}
 	if assignment != nil {
 		out.Assignment = &apigen.AgentAssignment{
@@ -346,7 +360,7 @@ func agentToAPI(a *agent.Agent, assignment *agent.Assignment) apigen.Agent {
 			Since:       assignment.UpdatedAt(),
 		}
 	}
-	return out
+	return out, nil
 }
 
 // definitionToAPI renders a Definition. It shares no field with
@@ -370,22 +384,34 @@ func definitionToAPI(d *agent.Definition) apigen.AgentDefinition {
 
 // configurationToAPI renders an operator's acknowledgement with the
 // epoch it was made at, which is what tells a reader whether it is the
-// current assignment's (ADR-0076).
-func configurationToAPI(c *agent.ConfigurationReport) *apigen.AgentConfigurationReport {
-	out := &apigen.AgentConfigurationReport{
-		Epoch:      c.Epoch,
-		Revision:   int(c.Revision),
-		ReportedAt: c.ReportedAt,
-	}
+// current assignment's (ADR-0076). Each outcome carries its own field,
+// so an application without its ignored keys or a rejection without
+// its reason cannot be rendered.
+func configurationToAPI(c *agent.ConfigurationReport) (*apigen.AgentConfigurationReport, error) {
+	out := &apigen.AgentConfigurationReport{}
+	var err error
 	switch o := c.Outcome.(type) {
 	case agent.ConfigurationApplied:
-		out.Outcome = apigen.Applied
-		keys := o.IgnoredKeys
-		out.IgnoredKeys = &keys
+		err = out.FromAgentConfigurationApplied(apigen.AgentConfigurationApplied{
+			Epoch:       c.Epoch,
+			Revision:    int(c.Revision),
+			Outcome:     apigen.Applied,
+			IgnoredKeys: o.IgnoredKeys,
+			ReportedAt:  c.ReportedAt,
+		})
 	case agent.ConfigurationRejected:
-		out.Outcome = apigen.Rejected
-		reason := string(o.Reason)
-		out.Reason = &reason
+		err = out.FromAgentConfigurationRejected(apigen.AgentConfigurationRejected{
+			Epoch:      c.Epoch,
+			Revision:   int(c.Revision),
+			Outcome:    apigen.Rejected,
+			Reason:     string(o.Reason),
+			ReportedAt: c.ReportedAt,
+		})
+	default:
+		return nil, errorx.New(errorx.KindInternal, "agent: unknown configuration outcome")
 	}
-	return out
+	if err != nil {
+		return nil, errorx.Wrap(err, "configuration report", errorx.KindInternal)
+	}
+	return out, nil
 }

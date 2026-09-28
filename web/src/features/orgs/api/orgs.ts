@@ -151,6 +151,34 @@ export const InvitationParser = parserFor<Invitation>()(
   }),
 );
 
+/**
+ * An operator's acknowledgement, read whole: an application carries
+ * the keys it ignored and a rejection its reason, so a report missing
+ * its outcome's field is refused at the seam rather than read as
+ * applied with none ignored (ADR-0076). An absent report is a separate
+ * state, `Agent` leaving `configuration` out.
+ */
+const AgentConfigurationReportParser = parserFor<
+  components["schemas"]["AgentConfigurationReport"]
+>()(
+  z.discriminatedUnion("outcome", [
+    z.object({
+      epoch: z.number(),
+      revision: z.number(),
+      outcome: z.literal("applied"),
+      ignoredKeys: z.array(z.string()),
+      reportedAt: z.string(),
+    }),
+    z.object({
+      epoch: z.number(),
+      revision: z.number(),
+      outcome: z.literal("rejected"),
+      reason: z.string(),
+      reportedAt: z.string(),
+    }),
+  ]),
+);
+
 export const AgentParser = parserFor<Agent>()(
   z.object({
     grn: GrnParser,
@@ -167,16 +195,7 @@ export const AgentParser = parserFor<Agent>()(
     createdAt: z.string(),
     updatedAt: z.string(),
     healthReportedAt: z.string().optional(),
-    configuration: z
-      .object({
-        epoch: z.number(),
-        revision: z.number(),
-        outcome: z.enum(["applied", "rejected"]),
-        ignoredKeys: z.array(z.string()).optional(),
-        reason: z.string().optional(),
-        reportedAt: z.string(),
-      })
-      .optional(),
+    configuration: AgentConfigurationReportParser.optional(),
   }),
 );
 

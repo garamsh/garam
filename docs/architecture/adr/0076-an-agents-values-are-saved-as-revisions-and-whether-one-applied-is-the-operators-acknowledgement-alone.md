@@ -43,10 +43,13 @@ every report, so it cannot say when health was last reported.
   and learns of application only from the operator holding the agent,
   on `POST /agents/{agent}/configuration-state`: `applied`, naming every
   key of that revision it did not apply, or `rejected`, with a reason
-  of at most 500 characters. The route is fenced by the assignment and
-  its epoch as the provisioning report is. The provisioning route never
-  moves the acknowledgement, so an operator that reports no revision
-  leaves application unknown whatever its pod reports.
+  of at most 500 characters. The write that records it compares the
+  reporting operator and the epoch with the assignment together, so a
+  reassignment landing between the route's holding check and the write
+  cannot put a replaced operator's report under its successor's epoch.
+  The provisioning route never moves the acknowledgement, so an
+  operator that reports no revision leaves application unknown
+  whatever its pod reports.
 - **What an acknowledgement may move.** A revision the definition has
   not reached is refused. So is one older than what the same epoch
   already acknowledged, which would write over it. A revision between
@@ -82,10 +85,10 @@ every report, so it cannot say when health was last reported.
 
 - An editor who lost a race keeps what they typed and is offered the
   saved revision to retry against.
-- No current operator acknowledges a revision, so every agent's
-  configuration reads unknown until one does. What would change that is
-  an operator release reporting on this route; this record does not
-  make one.
+- An agent with no accepted acknowledgement reads unknown. Garam Agent
+  Operator at `9dfeccf` calls no acknowledgement route, so an agent it
+  runs stays unknown; what would change that is an operator release
+  reporting on this route, which this record does not make.
 - The definition's values are no longer written once. ADR-0026 and
   [ADR-0033](./0033-an-operator-claims-the-agent-a-definition-mints.md)
   stand: neither decided that the values never change, and the claim,

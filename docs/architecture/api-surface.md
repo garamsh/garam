@@ -217,7 +217,8 @@ and not in the same place on every surface.
   stale one of
   ([ADR-0053](./adr/0053-an-agent-and-its-operator-report-state-on-the-machine-listener.md)).
   An operator's acknowledgement of a definition revision is fenced the
-  same way, and then by the revision: one the definition has not
+  same way, with the operator and the epoch compared together in the
+  write, and then by the revision: one the definition has not
   reached, or one older than what the same epoch acknowledged, is
   refused
   ([ADR-0076](./adr/0076-an-agents-values-are-saved-as-revisions-and-whether-one-applied-is-the-operators-acknowledgement-alone.md)).

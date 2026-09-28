@@ -97,17 +97,26 @@ describe("reviseAgentValues", () => {
   });
 
   it("answers any other refusal with garam's message, not a conflict", async () => {
+    let refusing = true;
     server.use(
       http.put(`${ONE}/values`, () =>
-        HttpResponse.json(
-          { kind: "permission_denied", message: "insufficient role" },
-          { status: 403 },
-        ),
+        refusing
+          ? HttpResponse.json(
+              { kind: "permission_denied", message: "insufficient role" },
+              { status: 403 },
+            )
+          : HttpResponse.json({ ...fieldAgent, revision: 2 }),
       ),
     );
 
     const answer = await reviseAgentValues(idle, form("1", ["model"], ["x"]));
-    expect(answer.status).toBe("error");
+    expect(answer).toEqual({ status: "error", message: "insufficient role" });
+
+    // The control: the same submission garam accepts is saved.
+    refusing = false;
+    await expect(
+      reviseAgentValues(idle, form("1", ["model"], ["x"])),
+    ).resolves.toEqual({ status: "saved", revision: 2 });
   });
 
   it.each<[string, FormData]>([

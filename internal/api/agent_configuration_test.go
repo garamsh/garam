@@ -219,21 +219,26 @@ func TestAgentRead_ConfigurationAndHealthAreSeparateFacts(t *testing.T) {
 	require.NotNil(t, got.HealthReportedAt)
 	assert.True(t, health.Equal(*got.HealthReportedAt))
 	require.NotNil(t, got.Configuration)
-	assert.Equal(t, 2, got.Configuration.Epoch)
-	assert.Equal(t, 3, got.Configuration.Revision)
-	assert.Equal(t, apigen.Applied, got.Configuration.Outcome)
-	assert.Equal(t, &[]string{"workspace"}, got.Configuration.IgnoredKeys)
-	assert.Nil(t, got.Configuration.Reason)
-	assert.True(t, acknowledged.Equal(got.Configuration.ReportedAt))
+	gotApplied, err := got.Configuration.AsAgentConfigurationApplied()
+	require.NoError(t, err)
+	assert.Equal(t, apigen.AgentConfigurationApplied{
+		Epoch: 2, Revision: 3, Outcome: apigen.Applied,
+		IgnoredKeys: []string{"workspace"}, ReportedAt: gotApplied.ReportedAt,
+	}, gotApplied)
+	assert.True(t, acknowledged.Equal(gotApplied.ReportedAt))
+	// Each outcome carries its own field and not the other's.
+	assert.NotContains(t, string(rec.Body.Bytes()), `"reason"`)
 
 	reason, err := agent.ParseRejectionReason("image pull failed")
 	require.NoError(t, err)
 	stored.Configuration = &agent.ConfigurationReport{Epoch: 2, Revision: 3, Outcome: agent.ConfigurationRejected{Reason: reason}, ReportedAt: acknowledged}
 	rec = f.do(t, "GET", "/orgs/"+slug+"/agents/"+reported.Identifier, "", owner)
 	require.Equal(t, http.StatusOK, rec.Code)
+	assert.NotContains(t, rec.Body.String(), `"ignoredKeys"`)
 	got = decodeBody[apigen.Agent](t, rec)
 	require.NotNil(t, got.Configuration)
-	assert.Equal(t, apigen.Rejected, got.Configuration.Outcome)
-	assert.Equal(t, "image pull failed", *got.Configuration.Reason)
-	assert.Nil(t, got.Configuration.IgnoredKeys)
+	gotRejected, err := got.Configuration.AsAgentConfigurationRejected()
+	require.NoError(t, err)
+	assert.Equal(t, apigen.Rejected, gotRejected.Outcome)
+	assert.Equal(t, "image pull failed", gotRejected.Reason)
 }

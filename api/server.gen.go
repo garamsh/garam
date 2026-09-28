@@ -15,17 +15,29 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
-// Defines values for AgentConfigurationOutcome.
+// Defines values for AgentConfigurationAppliedOutcome.
 const (
-	Applied  AgentConfigurationOutcome = "applied"
-	Rejected AgentConfigurationOutcome = "rejected"
+	Applied AgentConfigurationAppliedOutcome = "applied"
 )
 
-// Valid indicates whether the value is a known member of the AgentConfigurationOutcome enum.
-func (e AgentConfigurationOutcome) Valid() bool {
+// Valid indicates whether the value is a known member of the AgentConfigurationAppliedOutcome enum.
+func (e AgentConfigurationAppliedOutcome) Valid() bool {
 	switch e {
 	case Applied:
 		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentConfigurationRejectedOutcome.
+const (
+	Rejected AgentConfigurationRejectedOutcome = "rejected"
+)
+
+// Valid indicates whether the value is a known member of the AgentConfigurationRejectedOutcome enum.
+func (e AgentConfigurationRejectedOutcome) Valid() bool {
+	switch e {
 	case Rejected:
 		return true
 	default:
@@ -164,7 +176,7 @@ type Agent struct {
 	// Assignment The operator holding an agent, at the epoch that binding is on. Every assignment raises the epoch and fences the operator it replaced.
 	Assignment *AgentAssignment `json:"assignment,omitempty"`
 
-	// Configuration The last acknowledgement garam accepted from the operator holding the agent, of one revision of its definition (ADR-0076). Absent from `Agent` where none was ever given, which is unknown: no current operator reports one.
+	// Configuration The last acknowledgement garam accepted from the operator holding the agent, of one revision of its definition (ADR-0076): applied, naming the keys the operator says it ignored, or rejected, with its reason. Absent from `Agent` where none was ever accepted, which is unknown and not applied; a readiness report is never an acknowledgement.
 	// It is the operator's claim and garam verifies none of it. It describes the current assignment only while `epoch` equals `assignment.epoch`; after a reassignment it is the previous operator's. `revision` below the definition's revision means the saved values are not yet acknowledged. `applied` with `ignoredKeys` is applied in part.
 	Configuration *AgentConfigurationReport `json:"configuration,omitempty"`
 	CreatedAt     time.Time                 `json:"createdAt"`
@@ -191,28 +203,58 @@ type AgentAssignment struct {
 	Since time.Time `json:"since"`
 }
 
-// AgentConfigurationOutcome What the operator says it did with a revision: applied it, apart from any `ignoredKeys`, or rejected it.
-type AgentConfigurationOutcome string
-
-// AgentConfigurationReport The last acknowledgement garam accepted from the operator holding the agent, of one revision of its definition (ADR-0076). Absent from `Agent` where none was ever given, which is unknown: no current operator reports one.
-// It is the operator's claim and garam verifies none of it. It describes the current assignment only while `epoch` equals `assignment.epoch`; after a reassignment it is the previous operator's. `revision` below the definition's revision means the saved values are not yet acknowledged. `applied` with `ignoredKeys` is applied in part.
-type AgentConfigurationReport struct {
+// AgentConfigurationApplied The operator says it applied the revision, apart from `ignoredKeys`, which is empty where it names none.
+type AgentConfigurationApplied struct {
 	// Epoch The assignment epoch the acknowledging operator held.
-	Epoch int `json:"epoch"`
+	Epoch AgentConfigurationEpoch `json:"epoch"`
 
-	// IgnoredKeys Present with `applied`: the revision's keys the operator says it did not apply, possibly none.
-	IgnoredKeys *[]string `json:"ignoredKeys,omitempty"`
-
-	// Outcome What the operator says it did with a revision: applied it, apart from any `ignoredKeys`, or rejected it.
-	Outcome AgentConfigurationOutcome `json:"outcome"`
-
-	// Reason Present with `rejected`: the operator's reason, at most 500 characters.
-	Reason *string `json:"reason,omitempty"`
+	// IgnoredKeys The revision's keys the operator says it did not apply.
+	IgnoredKeys []string                         `json:"ignoredKeys"`
+	Outcome     AgentConfigurationAppliedOutcome `json:"outcome"`
 
 	// ReportedAt When garam received the acknowledgement, not when the operator acted. A later acknowledgement of the same revision replaces this one in the order garam receives them.
-	ReportedAt time.Time `json:"reportedAt"`
-	Revision   int       `json:"revision"`
+	ReportedAt AgentConfigurationReportedAt `json:"reportedAt"`
+
+	// Revision The definition revision acknowledged.
+	Revision AgentConfigurationRevision `json:"revision"`
 }
+
+// AgentConfigurationAppliedOutcome defines model for AgentConfigurationApplied.Outcome.
+type AgentConfigurationAppliedOutcome string
+
+// AgentConfigurationEpoch The assignment epoch the acknowledging operator held.
+type AgentConfigurationEpoch = int
+
+// AgentConfigurationRejected The operator says it refused the revision, and why.
+type AgentConfigurationRejected struct {
+	// Epoch The assignment epoch the acknowledging operator held.
+	Epoch   AgentConfigurationEpoch           `json:"epoch"`
+	Outcome AgentConfigurationRejectedOutcome `json:"outcome"`
+
+	// Reason The operator's reason, at most 500 characters.
+	Reason string `json:"reason"`
+
+	// ReportedAt When garam received the acknowledgement, not when the operator acted. A later acknowledgement of the same revision replaces this one in the order garam receives them.
+	ReportedAt AgentConfigurationReportedAt `json:"reportedAt"`
+
+	// Revision The definition revision acknowledged.
+	Revision AgentConfigurationRevision `json:"revision"`
+}
+
+// AgentConfigurationRejectedOutcome defines model for AgentConfigurationRejected.Outcome.
+type AgentConfigurationRejectedOutcome string
+
+// AgentConfigurationReport The last acknowledgement garam accepted from the operator holding the agent, of one revision of its definition (ADR-0076): applied, naming the keys the operator says it ignored, or rejected, with its reason. Absent from `Agent` where none was ever accepted, which is unknown and not applied; a readiness report is never an acknowledgement.
+// It is the operator's claim and garam verifies none of it. It describes the current assignment only while `epoch` equals `assignment.epoch`; after a reassignment it is the previous operator's. `revision` below the definition's revision means the saved values are not yet acknowledged. `applied` with `ignoredKeys` is applied in part.
+type AgentConfigurationReport struct {
+	union json.RawMessage
+}
+
+// AgentConfigurationReportedAt When garam received the acknowledgement, not when the operator acted. A later acknowledgement of the same revision replaces this one in the order garam receives them.
+type AgentConfigurationReportedAt = time.Time
+
+// AgentConfigurationRevision The definition revision acknowledged.
+type AgentConfigurationRevision = int
 
 // AgentDefinition What an organization says an agent should be (ADR-0026). It is a record and not an agent: no state is reported on it, and it carries none of the fields an `Agent` carries. `agentGrn` is the identity garam minted for the agent this definition describes, and no agent answers under it until the claim. `revision` numbers the values it holds now; that revision was saved at `revisedAt` by `revisedBy` (ADR-0076). Saving is not deploying: which revision an operator applied is its report, on `Agent`.
 type AgentDefinition struct {
@@ -777,6 +819,107 @@ type UpdateProjectJSONRequestBody = ProjectPatch
 
 // AddProjectMemberJSONRequestBody defines body for AddProjectMember for application/json ContentType.
 type AddProjectMemberJSONRequestBody = MemberRef
+
+// AsAgentConfigurationApplied returns the union data inside the AgentConfigurationReport as a AgentConfigurationApplied
+func (t AgentConfigurationReport) AsAgentConfigurationApplied() (AgentConfigurationApplied, error) {
+	var body AgentConfigurationApplied
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAgentConfigurationApplied overwrites any union data inside the AgentConfigurationReport as the provided AgentConfigurationApplied
+func (t *AgentConfigurationReport) FromAgentConfigurationApplied(v AgentConfigurationApplied) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"outcome":"applied"}`))
+	t.union = b
+	return err
+}
+
+// MergeAgentConfigurationApplied performs a merge with any union data inside the AgentConfigurationReport, using the provided AgentConfigurationApplied
+func (t *AgentConfigurationReport) MergeAgentConfigurationApplied(v AgentConfigurationApplied) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"outcome":"applied"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+// AsAgentConfigurationRejected returns the union data inside the AgentConfigurationReport as a AgentConfigurationRejected
+func (t AgentConfigurationReport) AsAgentConfigurationRejected() (AgentConfigurationRejected, error) {
+	var body AgentConfigurationRejected
+	err := json.Unmarshal(t.union, &body)
+	return body, err
+}
+
+// FromAgentConfigurationRejected overwrites any union data inside the AgentConfigurationReport as the provided AgentConfigurationRejected
+func (t *AgentConfigurationReport) FromAgentConfigurationRejected(v AgentConfigurationRejected) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"outcome":"rejected"}`))
+	t.union = b
+	return err
+}
+
+// MergeAgentConfigurationRejected performs a merge with any union data inside the AgentConfigurationReport, using the provided AgentConfigurationRejected
+func (t *AgentConfigurationReport) MergeAgentConfigurationRejected(v AgentConfigurationRejected) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+	b, err = runtime.JSONMerge(b, []byte(`{"outcome":"rejected"}`))
+	if err != nil {
+		return err
+	}
+
+	merged, err := runtime.JSONMerge(t.union, b)
+	t.union = merged
+	return err
+}
+
+func (t AgentConfigurationReport) Discriminator() (string, error) {
+	var discriminator struct {
+		Discriminator string `json:"outcome"`
+	}
+	err := json.Unmarshal(t.union, &discriminator)
+	return discriminator.Discriminator, err
+}
+
+func (t AgentConfigurationReport) ValueByDiscriminator() (interface{}, error) {
+	discriminator, err := t.Discriminator()
+	if err != nil {
+		return nil, err
+	}
+	switch discriminator {
+	case "applied":
+		return t.AsAgentConfigurationApplied()
+	case "rejected":
+		return t.AsAgentConfigurationRejected()
+	default:
+		return nil, errors.New("unknown discriminator value: " + discriminator)
+	}
+}
+
+func (t AgentConfigurationReport) MarshalJSON() ([]byte, error) {
+	b, err := t.union.MarshalJSON()
+	return b, err
+}
+
+func (t *AgentConfigurationReport) UnmarshalJSON(b []byte) error {
+	err := t.union.UnmarshalJSON(b)
+	return err
+}
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {

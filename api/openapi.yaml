@@ -2482,19 +2482,14 @@ components:
             (ADR-0076); no earlier time is inferred.
         configuration:
           $ref: '#/components/schemas/AgentConfigurationReport'
-    AgentConfigurationOutcome:
-      type: string
-      description: >-
-        What the operator says it did with a revision: applied it,
-        apart from any `ignoredKeys`, or rejected it.
-      enum: [applied, rejected]
     AgentConfigurationReport:
-      type: object
       description: >-
         The last acknowledgement garam accepted from the operator
-        holding the agent, of one revision of its definition (ADR-0076).
-        Absent from `Agent` where none was ever given, which is
-        unknown: no current operator reports one.
+        holding the agent, of one revision of its definition (ADR-0076):
+        applied, naming the keys the operator says it ignored, or
+        rejected, with its reason. Absent from `Agent` where none was
+        ever accepted, which is unknown and not applied; a readiness
+        report is never an acknowledgement.
 
         It is the operator's claim and garam verifies none of it. It
         describes the current assignment only while `epoch` equals
@@ -2502,36 +2497,67 @@ components:
         operator's. `revision` below the definition's revision means
         the saved values are not yet acknowledged. `applied` with
         `ignoredKeys` is applied in part.
-      required: [epoch, revision, outcome, reportedAt]
+      oneOf:
+        - $ref: '#/components/schemas/AgentConfigurationApplied'
+        - $ref: '#/components/schemas/AgentConfigurationRejected'
+      discriminator:
+        propertyName: outcome
+        mapping:
+          applied: '#/components/schemas/AgentConfigurationApplied'
+          rejected: '#/components/schemas/AgentConfigurationRejected'
+    AgentConfigurationApplied:
+      type: object
+      description: >-
+        The operator says it applied the revision, apart from
+        `ignoredKeys`, which is empty where it names none.
+      required: [epoch, revision, outcome, ignoredKeys, reportedAt]
       properties:
         epoch:
-          type: integer
-          minimum: 1
-          description: The assignment epoch the acknowledging operator held.
+          $ref: '#/components/schemas/AgentConfigurationEpoch'
         revision:
-          type: integer
-          minimum: 1
+          $ref: '#/components/schemas/AgentConfigurationRevision'
         outcome:
-          $ref: '#/components/schemas/AgentConfigurationOutcome'
+          type: string
+          enum: [applied]
         ignoredKeys:
           type: array
-          description: >-
-            Present with `applied`: the revision's keys the operator
-            says it did not apply, possibly none.
+          description: The revision's keys the operator says it did not apply.
           items:
             type: string
+        reportedAt:
+          $ref: '#/components/schemas/AgentConfigurationReportedAt'
+    AgentConfigurationRejected:
+      type: object
+      description: The operator says it refused the revision, and why.
+      required: [epoch, revision, outcome, reason, reportedAt]
+      properties:
+        epoch:
+          $ref: '#/components/schemas/AgentConfigurationEpoch'
+        revision:
+          $ref: '#/components/schemas/AgentConfigurationRevision'
+        outcome:
+          type: string
+          enum: [rejected]
         reason:
           type: string
-          description: >-
-            Present with `rejected`: the operator's reason, at most 500
-            characters.
+          description: The operator's reason, at most 500 characters.
         reportedAt:
-          type: string
-          format: date-time
-          description: >-
-            When garam received the acknowledgement, not when the
-            operator acted. A later acknowledgement of the same revision
-            replaces this one in the order garam receives them.
+          $ref: '#/components/schemas/AgentConfigurationReportedAt'
+    AgentConfigurationEpoch:
+      type: integer
+      minimum: 1
+      description: The assignment epoch the acknowledging operator held.
+    AgentConfigurationRevision:
+      type: integer
+      minimum: 1
+      description: The definition revision acknowledged.
+    AgentConfigurationReportedAt:
+      type: string
+      format: date-time
+      description: >-
+        When garam received the acknowledgement, not when the operator
+        acted. A later acknowledgement of the same revision replaces
+        this one in the order garam receives them.
     OperatorEnrollmentState:
       type: string
       description: >-

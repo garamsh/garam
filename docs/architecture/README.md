@@ -511,6 +511,6 @@ ADRs:
   was read at and is refused under `aborted` once another landed, on
   `agent:configure`; the operator holding the agent acknowledges a
   revision as applied, with the keys it ignored, or rejected, fenced by
-  the assignment's epoch and bound to it; no current operator reports
-  one, so configuration reads unknown, and health keeps a report time
-  of its own
+  the assignment's epoch and bound to it; an agent with no accepted
+  acknowledgement reads unknown, and health keeps a report time of its
+  own

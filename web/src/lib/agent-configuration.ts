@@ -56,12 +56,12 @@ export function configurationStatus(
   if (report.revision < savedRevision) {
     return { kind: "pending", acknowledged: report.revision, reportedAt };
   }
-  if (report.outcome === "rejected") {
-    return { kind: "rejected", reason: report.reason ?? "", reportedAt };
+  switch (report.outcome) {
+    case "rejected":
+      return { kind: "rejected", reason: report.reason, reportedAt };
+    case "applied":
+      return report.ignoredKeys.length > 0
+        ? { kind: "partial", ignoredKeys: report.ignoredKeys, reportedAt }
+        : { kind: "applied", reportedAt };
   }
-  const ignoredKeys = report.ignoredKeys ?? [];
-  if (ignoredKeys.length > 0) {
-    return { kind: "partial", ignoredKeys, reportedAt };
-  }
-  return { kind: "applied", reportedAt };
 }

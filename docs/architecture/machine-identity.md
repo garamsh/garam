@@ -139,9 +139,12 @@ tagged `execution` in `api/machine.yaml`, which is authoritative for
 their wire and their `execution-fence.v1` contract version. Each
 request rereads the caller's certificate and registration, its grant
 and current policy; an agent's own certificate and a controller's are
-refused. Introspection answers a certificate's standing and a
-generation's from one snapshot; a 200 is a status answer, and only
-`credential` and `generation` both `current`, with the expected
+refused. Activation, deactivation and recovery are each bounded by a
+ten-second server deadline over both their authority reads and their
+write, and past it answer unavailable without saying whether the write
+committed (ADR-0080). Introspection answers a certificate's standing
+and a generation's from one snapshot; a 200 is a status answer, and
+only `credential` and `generation` both `current`, with the expected
 binding, is positive. The certificate's GRN still answers who is
 calling; these answer whether that caller is still the one allowed to
 act.

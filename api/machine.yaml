@@ -1000,7 +1000,9 @@ paths:
         activation with 200, a new token and a higher `tokenVersion`;
         only the last token issued is admitted, so keep the highest
         version. The same `requestId` with another request, or for an
-        activation that has ended, is 409.
+        activation that has ended, is 409. Past garam's ten-second
+        deadline the answer is 503, which does not say whether the
+        activation committed: retry it under the same `requestId`.
       parameters:
         - $ref: '#/components/parameters/executionContractVersion'
         - $ref: '#/components/parameters/agent'
@@ -1055,7 +1057,8 @@ paths:
         `replacesActivationId` names: the next activation names the
         agent's most recent activation, which is this one only if
         nothing replaced it. This fences collaboration only: it does not
-        stop the runtime's writer.
+        stop the runtime's writer. Past garam's ten-second deadline the
+        answer is 503; repeating the request is safe.
       parameters:
         - $ref: '#/components/parameters/executionContractVersion'
         - $ref: '#/components/parameters/agent'
@@ -1145,7 +1148,9 @@ paths:
         generation. The same `requestId` with the same body and handoff
         reference answers the certificate it issued; any other request
         under that `requestId`, or a second recovery with the same
-        reference, is 409.
+        reference, is 409. Past garam's ten-second deadline the answer is
+        503, which does not say whether the recovery committed: retry
+        it under the same `requestId`.
       parameters:
         - $ref: '#/components/parameters/executionContractVersion'
         - $ref: '#/components/parameters/agent'

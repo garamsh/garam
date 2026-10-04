@@ -1,11 +1,10 @@
 # ADR 0080: An agent's execution row is the one lock its writes and replacements share, reached through a declared admission function
 
 > Status: accepted
-> Date: 2026-10-05
+> Date: 2026-10-04
 
-Decided by the PM in #1161 (the preflight decision of 2026-10-04 and
-the boundary correction accepted on 2026-10-05), implementing
-ADR-0078's fence.
+Decided by the PM in #1161 (the preflight decision and the boundary
+correction, both of 2026-10-04 UTC), implementing ADR-0078's fence.
 
 ## Context
 
@@ -42,8 +41,9 @@ sends selects it.
 `agent_execution_admit` is owned by `internal/agent` and declared by
 000029. A domain whose write is protected calls it as the first
 statement of its own local transaction. It takes the row `FOR SHARE`
-and holds it until that transaction ends, then answers `admitted` or
-the reason it refused. No transaction is exported, put in a context, or
+and answers `admitted` or the reason it refused while holding it; the
+transaction then makes its write, and the lock is released when it
+commits or rolls back. No transaction is exported, put in a context, or
 shared, and no foreign table is read directly.
 
 **Each consumer declares what it takes, and the transport translates
@@ -68,8 +68,13 @@ request reads its grant, its user's operation authority and persisted
 policy with no transaction open. Then one short agent transaction locks
 the row, rechecks the assignment and every known expiry against
 `clock_timestamp()`, and writes. A withdrawal that commits between the
-two does not undo the act; the next request is refused. No path holds a
-row lock while it waits for a second pool connection or an RPC.
+two does not undo the act; the next request is refused. An activation,
+a recovery and a deactivation run under one server-owned deadline of
+ten seconds across both phases, whatever the caller allows, and run
+out of it as unavailable. Running out is not evidence that nothing
+committed: the caller retries under the same request identifier. No
+path holds a row lock while it waits for a second pool connection or
+an RPC.
 
 **Credential standing is one predicate.** `agent_credential_current`
 answers whether a certificate is inside its validity now and in the

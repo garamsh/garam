@@ -254,11 +254,16 @@ func (s *executionStack) agentPath(suffix string) string {
 
 func activationBody(t *testing.T, requestID string, epoch int, generation agent.Generation, replaces *string, leaf string) string {
 	t.Helper()
-	raw, err := json.Marshal(map[string]any{
+	return activationBodyOf(requestID, epoch, generation, replaces, leaf)
+}
+
+// activationBodyOf is activationBody for a goroutine, which cannot fail
+// the test; a map of strings always marshals.
+func activationBodyOf(requestID string, epoch int, generation agent.Generation, replaces *string, leaf string) string {
+	raw, _ := json.Marshal(map[string]any{
 		"requestId": requestID, "epoch": strconv.Itoa(epoch), "generation": string(generation),
 		"replacesActivationId": replaces, "operationRef": nil, "certificatePem": leaf,
 	})
-	require.NoError(t, err)
 	return string(raw)
 }
 
@@ -825,4 +830,179 @@ func TestExecutionFence_UnknownFreshnessRefusesAsUnavailable(t *testing.T) {
 	p.Close()
 	got = s.activate(t, s.hostedTLS, "r-2", generationOf(2), &a.ActivationId, s.leaf)
 	assert.Equal(t, http.StatusServiceUnavailable, got.status, "a database that stopped answering: %s", got.body)
+}
+
+// TestExecutionFence_ALifecycleWriteIsBoundedByTheServersDeadline holds
+// the agent's execution row past agent.LifecycleDeadline while a
+// client that would wait longer asks for an activation, a deactivation
+// and a recovery. Each is answered unavailable at the server's
+// deadline, writes nothing once the row is released, and the same
+// request then succeeds as the control.
+func TestExecutionFence_ALifecycleWriteIsBoundedByTheServersDeadline(t *testing.T) {
+	acts := []struct {
+		name      string
+		cutOver   bool
+		succeeded int
+		do        func(s *executionStack, current *machinegen.Activation, r recovery) (reply, error)
+		unwritten func(t *testing.T, s *executionStack, current *machinegen.Activation)
+	}{
+		{name: "activation", succeeded: http.StatusCreated,
+			do: func(s *executionStack, _ *machinegen.Activation, _ recovery) (reply, error) {
+				return s.exchange(s.hostedTLS, http.MethodPost, s.agentPath("/activations"), agent.ExecutionContractVersion, "",
+					activationBodyOf("r-1", s.epoch, generationOf(1), nil, s.leaf))
+			},
+			unwritten: func(t *testing.T, s *executionStack, _ *machinegen.Activation) {
+				in := s.standing(t, s.leaf, nil)
+				assert.Equal(t, machinegen.ExecutionIntrospectionModeLegacy, in.Mode)
+				assert.Nil(t, in.ActivationId)
+			}},
+		{name: "deactivation", cutOver: true, succeeded: http.StatusOK,
+			do: func(s *executionStack, current *machinegen.Activation, _ recovery) (reply, error) {
+				return s.exchange(s.hostedTLS, http.MethodPost, s.agentPath("/activations/"+current.ActivationId+"/deactivation"),
+					agent.ExecutionContractVersion, "", "")
+			},
+			unwritten: func(t *testing.T, s *executionStack, current *machinegen.Activation) {
+				assert.Equal(t, machinegen.ExecutionIntrospectionGenerationCurrent, s.standing(t, s.leaf, ptr(generationOf(1))).Generation)
+			}},
+		{name: "recovery", cutOver: true, succeeded: http.StatusCreated,
+			do: func(s *executionStack, _ *machinegen.Activation, r recovery) (reply, error) {
+				return s.exchange(s.hostedTLS, http.MethodPost, s.agentPath("/credential-recovery"), agent.ExecutionContractVersion,
+					"Garam-Operation "+r.authority, r.body)
+			},
+			unwritten: func(t *testing.T, s *executionStack, _ *machinegen.Activation) {
+				assert.Equal(t, machinegen.ExecutionIntrospectionCredentialCurrent, s.standing(t, s.leaf, nil).Credential)
+			}},
+	}
+	for _, a := range acts {
+		t.Run(a.name, func(t *testing.T) {
+			p := pool(t)
+			_, engine := policyEngine(t, p)
+			s := newExecutionStack(t, p, engine)
+			var current *machinegen.Activation
+			if a.cutOver {
+				activated := s.activated(t, "r-0", generationOf(1), nil, s.leaf)
+				current = &activated
+			}
+			r := s.prepareRecovery(t, "rec-1")
+
+			ctx := context.Background()
+			tx, err := p.Begin(ctx)
+			require.NoError(t, err)
+			defer func() { _ = tx.Rollback(ctx) }()
+			_, err = tx.Exec(ctx, `SELECT 1 FROM agent_executions WHERE agent_grn = $1 FOR UPDATE`, s.agent.String())
+			require.NoError(t, err)
+
+			got, elapsed := s.boundedBy(t, func() (reply, error) { return a.do(s, current, r) }, func() { _ = tx.Rollback(ctx) })
+			assert.Equal(t, http.StatusServiceUnavailable, got.status, "the %s waited on the held row: %s", a.name, got.body)
+			assert.GreaterOrEqual(t, elapsed, agent.LifecycleDeadline)
+			assert.Less(t, elapsed, agent.LifecycleDeadline+5*time.Second, "answered at the server's deadline")
+			a.unwritten(t, s, current)
+
+			again, err := a.do(s, current, r)
+			require.NoError(t, err)
+			assert.Equal(t, a.succeeded, again.status, "control: the same request once the row is free: %s", again.body)
+		})
+	}
+}
+
+// TestExecutionFence_AnAuthorityThatDoesNotAnswerIsBoundedByTheServersDeadline
+// holds the policy engine's current check unanswered, before any lock
+// is taken. The activation is answered unavailable at the server's
+// deadline; the engine answering is the control.
+func TestExecutionFence_AnAuthorityThatDoesNotAnswerIsBoundedByTheServersDeadline(t *testing.T) {
+	p := pool(t)
+	srv := grpc.NewServer()
+	engineSrv := &stalledEngine{current: authz.NewGRPCServer(authz.NewPolicyCache(authz.NewPostgresStore(p)))}
+	authzv1.RegisterAuthzServiceServer(srv, engineSrv)
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	go func() { _ = srv.Serve(lis) }()
+	t.Cleanup(srv.Stop)
+	engine, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = engine.Close() })
+	s := newExecutionStack(t, p, engine)
+
+	release := engineSrv.stall()
+	got, elapsed := s.boundedBy(t, func() (reply, error) {
+		return s.exchange(s.hostedTLS, http.MethodPost, s.agentPath("/activations"), agent.ExecutionContractVersion, "",
+			activationBodyOf("r-1", s.epoch, generationOf(1), nil, s.leaf))
+	}, release)
+	assert.Equal(t, http.StatusServiceUnavailable, got.status, got.body)
+	assert.GreaterOrEqual(t, elapsed, agent.LifecycleDeadline)
+	assert.Less(t, elapsed, agent.LifecycleDeadline+5*time.Second, "answered at the server's deadline")
+
+	s.activated(t, "r-1", generationOf(1), nil, s.leaf)
+}
+
+// boundedBy sends one request from a client that waits well past the
+// server's deadline, releases what it is waiting on once it is
+// answered or once that longer wait runs out, and answers the reply and
+// how long it took.
+func (s *executionStack) boundedBy(t *testing.T, send func() (reply, error), release func()) (reply, time.Duration) {
+	t.Helper()
+	type result struct {
+		r   reply
+		err error
+	}
+	done := make(chan result, 1)
+	start := time.Now()
+	go func() {
+		r, err := send()
+		done <- result{r, err}
+	}()
+	var got result
+	select {
+	case got = <-done:
+		release()
+	case <-time.After(agent.LifecycleDeadline + 10*time.Second):
+		release()
+		got = <-done
+	}
+	elapsed := time.Since(start)
+	require.NoError(t, got.err)
+	return got.r, elapsed
+}
+
+// stalledEngine serves the current engine, except that once stalled
+// its current check answers nothing until released or abandoned.
+type stalledEngine struct {
+	authzv1.UnimplementedAuthzServiceServer
+	current authzv1.AuthzServiceServer
+	mu      sync.Mutex
+	held    chan struct{}
+}
+
+func (e *stalledEngine) stall() func() {
+	held := make(chan struct{})
+	e.mu.Lock()
+	e.held = held
+	e.mu.Unlock()
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			e.mu.Lock()
+			e.held = nil
+			e.mu.Unlock()
+			close(held)
+		})
+	}
+}
+
+func (e *stalledEngine) Check(ctx context.Context, r *authzv1.CheckRequest) (*authzv1.CheckResponse, error) {
+	return e.current.Check(ctx, r)
+}
+
+func (e *stalledEngine) CheckCurrent(ctx context.Context, r *authzv1.CheckCurrentRequest) (*authzv1.CheckCurrentResponse, error) {
+	e.mu.Lock()
+	held := e.held
+	e.mu.Unlock()
+	if held != nil {
+		select {
+		case <-held:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	return e.current.CheckCurrent(ctx, r)
 }

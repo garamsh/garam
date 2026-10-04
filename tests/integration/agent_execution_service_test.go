@@ -313,6 +313,19 @@ func TestExecutionService_RecoveryIsBoundToItsExactBodyAndAnsweredOnce(t *testin
 	assert.Equal(t, recovered, again, "a lost response is answered with the recorded certificate")
 	assert.Equal(t, int32(1), l.signer.calls.Load(), "and nothing is signed again")
 
+	changed := `{"request_id":"rec-1","certificate_request_pem":"csr-3"}`
+	l.handoff("h2", changed)
+	replay := in
+	replay.Authority, replay.Body, replay.CertificateRequestPEM = "h2", []byte(changed), []byte("csr-3")
+	_, err = l.service.Recover(ctx, l.audience, replay)
+	assert.ErrorIs(t, err, agent.ErrRecoveryConflict, "a completed request identifier with another binding is refused, not answered")
+	assert.Equal(t, int32(1), l.signer.calls.Load())
+
+	l.authorizer.err = errorx.New(errorx.KindPermissionDenied, "authority withdrawn")
+	_, err = l.service.Recover(ctx, l.audience, in)
+	assert.True(t, errorx.IsKind(err, errorx.KindPermissionDenied), "a retry is authorized afresh before it is answered")
+	l.authorizer.err = nil
+
 	l.handoff("configure", body)
 	l.operations.handoffs["configure"].Kind = agent.OperationKindConfigure
 	in.Authority, in.RequestID = "configure", "rec-2"

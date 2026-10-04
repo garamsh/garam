@@ -112,7 +112,6 @@ func New(recipient, sender grn.GRN, idempotencyKey, body string) (*Message, erro
 		sender:         sender,
 		idempotencyKey: idempotencyKey,
 		body:           body,
-		createdAt:      time.Now().UTC(),
 	}, nil
 }
 
@@ -121,7 +120,11 @@ func (m *Message) Recipient() grn.GRN     { return m.recipient }
 func (m *Message) Sender() grn.GRN        { return m.sender }
 func (m *Message) IdempotencyKey() string { return m.idempotencyKey }
 func (m *Message) Body() string           { return m.body }
-func (m *Message) CreatedAt() time.Time   { return m.createdAt }
+
+// CreatedAt is when the queue stored the message, on the database's
+// clock — the one the retention sweep measures with — and the zero time
+// on a message not stored yet.
+func (m *Message) CreatedAt() time.Time { return m.createdAt }
 
 // Attempts is how many times the message has been handed to a reader,
 // the hold the caller is reading it through included. Delivery is

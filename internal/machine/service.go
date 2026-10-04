@@ -3,6 +3,7 @@ package machine
 import (
 	"context"
 	"crypto/x509"
+	"time"
 
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
@@ -15,17 +16,43 @@ type Service interface {
 	// chain is a presented certificate chain in DER form, leaf first,
 	// as TLS hands it over.
 	Authenticate(ctx context.Context, chain [][]byte) (Identity, error)
+	// Verify refuses a certificate presented on another party's behalf
+	// unless it names subject, chains to the authority of subject's
+	// organization, is valid now, and names an identity the
+	// organization still holds a record of. A certificate that does not
+	// prove subject is invalid-argument, one outside its validity
+	// permission-denied, a withdrawn record not-found, and a trust root
+	// or record that could not be read unavailable.
+	Verify(ctx context.Context, subject grn.GRN, leaf *x509.Certificate) error
+	// Recheck refuses an identity Authenticate returned earlier whose
+	// certificate is no longer valid now, as permission-denied, or whose
+	// record has since been withdrawn, as not-found; a record that could
+	// not be read is unavailable. A connection authenticates once, when
+	// it is made, and this is what a decision on it asks again.
+	Recheck(ctx context.Context, identity Identity) error
+}
+
+// Config holds where verification reads the time from.
+type Config struct {
+	// Now supplies the current time, so a test can hold it still. Zero
+	// takes time.Now.
+	Now func() time.Time
 }
 
 type service struct {
 	roots         TrustRoot
 	registrations Registration
+	now           func() time.Time
 }
 
 // NewService constructs the authentication service over the trust
 // roots it verifies against and the records it admits against.
-func NewService(roots TrustRoot, registrations Registration) Service {
-	return &service{roots: roots, registrations: registrations}
+func NewService(roots TrustRoot, registrations Registration, cfg Config) Service {
+	now := cfg.Now
+	if now == nil {
+		now = time.Now
+	}
+	return &service{roots: roots, registrations: registrations, now: now}
 }
 
 func (s *service) Authenticate(ctx context.Context, chain [][]byte) (Identity, error) {
@@ -51,8 +78,9 @@ func (s *service) Authenticate(ctx context.Context, chain [][]byte) (Identity, e
 	roots := x509.NewCertPool()
 	roots.AddCert(root)
 	if _, err := leaf.Verify(x509.VerifyOptions{
-		Roots:     roots,
-		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		Roots:       roots,
+		CurrentTime: s.now(),
+		KeyUsages:   []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
 	}); err != nil {
 		return Identity{}, errorx.Wrap(err, "machine: certificate does not chain to its organization's authority", errorx.KindUnauthenticated)
 	}
@@ -60,6 +88,59 @@ func (s *service) Authenticate(ctx context.Context, chain [][]byte) (Identity, e
 		return Identity{}, err
 	}
 	return identity, nil
+}
+
+func (s *service) Verify(ctx context.Context, subject grn.GRN, leaf *x509.Certificate) error {
+	// The SAN is compared before anything is read, so a certificate
+	// naming another identity learns nothing about that identity's
+	// organization.
+	identity, err := identityOf(leaf)
+	if err != nil || identity.grn != subject {
+		return ErrNotProven
+	}
+	root, err := s.rootOf(ctx, subject)
+	if errorx.IsKind(err, errorx.KindUnauthenticated) {
+		return errorx.Wrap(err, ErrNotProven.Error(), errorx.KindInvalidArgument)
+	}
+	if err != nil {
+		return errorx.Wrap(err, "machine: trust root", errorx.KindUnavailable)
+	}
+	roots := x509.NewCertPool()
+	roots.AddCert(root)
+	// The chain is verified at a time inside the leaf's validity, so a
+	// refusal here is the signature's and never the clock's; the clock
+	// is Recheck's, at now.
+	if _, err := leaf.Verify(x509.VerifyOptions{
+		Roots:       roots,
+		CurrentTime: within(leaf, s.now()),
+		KeyUsages:   []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+	}); err != nil {
+		return errorx.Wrap(err, ErrNotProven.Error(), errorx.KindInvalidArgument)
+	}
+	return s.Recheck(ctx, identity)
+}
+
+func (s *service) Recheck(ctx context.Context, identity Identity) error {
+	now := s.now()
+	if now.Before(identity.notBefore) || now.After(identity.notAfter) {
+		return ErrOutsideValidity
+	}
+	err := s.registrations.Holds(ctx, identity.grn)
+	if err == nil || errorx.IsKind(err, errorx.KindNotFound) {
+		return err
+	}
+	return errorx.Wrap(err, "machine: registration", errorx.KindUnavailable)
+}
+
+// within returns now held inside the certificate's validity period.
+func within(leaf *x509.Certificate, now time.Time) time.Time {
+	if now.Before(leaf.NotBefore) {
+		return leaf.NotBefore
+	}
+	if now.After(leaf.NotAfter) {
+		return leaf.NotAfter
+	}
+	return now
 }
 
 // held returns nil where the organization still holds its record of

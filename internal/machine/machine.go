@@ -32,7 +32,22 @@ package machine
 import (
 	"time"
 
+	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+)
+
+// Sentinels of a decision that verifies a certificate again rather
+// than once per connection.
+var (
+	// ErrNotProven refuses a presented certificate that does not prove
+	// the identity it is presented for: another SAN, or a chain to no
+	// authority of that identity's organization.
+	ErrNotProven = errorx.New(errorx.KindInvalidArgument,
+		"machine: the certificate does not prove the identity it is presented for")
+	// ErrOutsideValidity refuses a certificate before its validity
+	// period or after it.
+	ErrOutsideValidity = errorx.New(errorx.KindPermissionDenied,
+		"machine: the certificate is outside its validity period")
 )
 
 // Identity is the machine identity a verified client certificate

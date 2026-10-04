@@ -42,6 +42,7 @@ import (
 	"github.com/garamsh/garam/internal/ca"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/machine"
 	"github.com/garamsh/garam/internal/machineapi"
 	"github.com/garamsh/garam/internal/org"
 	"github.com/garamsh/garam/internal/pgxerr"
@@ -261,7 +262,7 @@ func machineListener(t *testing.T, obs *observability, subject grn.GRN) (string,
 	t.Helper()
 	// The identity endpoint answers out of the request alone, so the
 	// listener is assembled with no service behind it.
-	return machineListenerServing(t, obs, subject, machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, nil))
+	return machineListenerServing(t, obs, subject, machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil))
 }
 
 // machineListenerServing is machineListener for a test that needs a
@@ -300,7 +301,8 @@ func machineListenerAround(t *testing.T, obs *observability, subject grn.GRN, ne
 	client, err := tls.X509KeyPair(issued.CertificatePEM(), issued.PrivateKeyPEM())
 	require.NoError(t, err)
 
-	srv := obs.machineServer(certificateAuthorities{store: store}, everyRecordHeld{}, keys.listener, next)
+	srv := obs.machineServer(machine.NewService(certificateAuthorities{store: store}, everyRecordHeld{}, machine.Config{}),
+		keys.listener, next)
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	go func() { _ = srv.ServeTLS(lis, "", "") }()
@@ -487,7 +489,7 @@ func TestLogServed_CarriesTheCauseOfAMachineFailure(t *testing.T) {
 
 	var out lines
 	url, client := machineListenerServing(t, recordingObservability(&out), sender,
-		machineapi.NewServer(nil, nil, nil, nil, nil, noGroups{}, unreachableEngine{err: cause}, nil))
+		machineapi.NewServer(nil, nil, nil, nil, nil, noGroups{}, unreachableEngine{err: cause}, nil, nil, nil))
 
 	resp, err := client.Post(url+"/messages", "application/json", strings.NewReader(submission))
 	require.NoError(t, err)
@@ -506,7 +508,7 @@ func TestLogServed_CarriesTheCauseOfAMachineFailure(t *testing.T) {
 
 	var refusedOut lines
 	url, client = machineListenerServing(t, recordingObservability(&refusedOut), sender,
-		machineapi.NewServer(nil, nil, nil, nil, nil, noGroups{}, deniedEngine{}, nil))
+		machineapi.NewServer(nil, nil, nil, nil, nil, noGroups{}, deniedEngine{}, nil, nil, nil))
 	resp, err = client.Post(url+"/messages", "application/json", strings.NewReader(submission))
 	require.NoError(t, err)
 	require.NoError(t, resp.Body.Close())
@@ -688,7 +690,7 @@ func TestLogServed_CarriesTheCauseAMachineAnswerWithheld(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var out lines
 			url, client := machineListenerServing(t, recordingObservability(&out), sender,
-				machineapi.NewServer(nil, nil, nil, nil, nil, noGroups{}, tt.engine, nil))
+				machineapi.NewServer(nil, nil, nil, nil, nil, noGroups{}, tt.engine, nil, nil, nil))
 
 			resp, err := client.Post(url+"/messages", "application/json", strings.NewReader(submission))
 			require.NoError(t, err)

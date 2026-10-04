@@ -79,8 +79,9 @@ tags:
   - name: authority
     description: >-
       What a hosted operator reads back about the operations members
-      hand it under its delegation (ADR-0078), each decided from
-      current state when it is asked.
+      hand it under its delegation (ADR-0078), and the proof of a
+      controller's current authority it obtains before each lifecycle
+      decision, each decided from current state when it is asked.
   - name: watch
     description: >-
       What an agent is saying now, on its way to the people watching it
@@ -755,6 +756,70 @@ paths:
           $ref: '#/components/responses/ContractError'
         '404':
           $ref: '#/components/responses/ContractError'
+  /operators/{controller}/introspection:
+    post:
+      operationId: introspectController
+      tags: [authority]
+      summary: Prove a controller's current authority, and an agent's placement on it, for one decision.
+      description: >-
+        The calling operator is the hosted control audience and forwards
+        the controller's leaf certificate exactly as that controller
+        presented it in its own TLS handshake; garam verifies the
+        certificate and never a forwarded GRN. The answer is a positive
+        proof, and 200 is returned only when every check passes, each
+        read on this request: the caller's own certificate is still
+        within its validity and its registration is still held; the
+        forwarded certificate names `controller` in its SAN, chains to
+        the organization's authority, is within its validity, and the
+        controller is still registered; the caller's current grant
+        covers `agent:activate` for that controller; and current policy
+        for the caller and its current groups, beside an Allow of
+        `agent:activate` on the organization (or, with `agent`, on that
+        agent) that the grant contributes, does not deny it. With
+        `agent`, the agent must currently be assigned to `controller`,
+        and the answer carries that assignment's epoch, which the caller
+        compares with the epoch it expects. A session admitted without
+        an agent is not permission to release any agent's desired
+        content, status or placement: obtain the agent-bound proof
+        before each such decision, again after a long wait, and never
+        reuse one across decisions. Malformed input is 400; a
+        certificate that does not prove `controller` is 422; a
+        controller or agent that is unknown, of another organization,
+        or no longer registered is 404; any other current-authority
+        refusal — a certificate outside its validity, the caller's
+        withdrawn registration, an ended or out-of-scope grant, a Deny,
+        or an agent assigned elsewhere — is 403; and authority garam
+        cannot read as current is 503. This proves current authority as
+        of its reads and is not a transaction with the caller's store.
+      parameters:
+        - $ref: '#/components/parameters/contractVersion'
+        - $ref: '#/components/parameters/controller'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ControllerIntrospection'
+      responses:
+        '200':
+          description: The proof.
+          headers:
+            Garam-Contract-Version:
+              $ref: '#/components/headers/ContractVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ControllerProof'
+        '400':
+          $ref: '#/components/responses/ContractError'
+        '401':
+          $ref: '#/components/responses/ContractError'
+        '403':
+          $ref: '#/components/responses/ContractError'
+        '404':
+          $ref: '#/components/responses/ContractError'
+        '422':
+          $ref: '#/components/responses/ContractError'
 components:
   parameters:
     contractVersion:
@@ -763,6 +828,14 @@ components:
       required: true
       description: Must be `operation-authority.v1` (ADR-0079); any other value is refused with 400 naming it.
       x-go-name: ContractVersion
+      schema:
+        type: string
+    controller:
+      name: controller
+      in: path
+      required: true
+      description: The controller's operator GRN.
+      x-go-name: ControllerGrn
       schema:
         type: string
     ref:
@@ -1218,6 +1291,44 @@ components:
         epoch:
           type: string
           description: Opaque.
+    ControllerIntrospection:
+      type: object
+      required: [certificatePem]
+      properties:
+        certificatePem:
+          type: string
+          description: >-
+            The controller's leaf certificate in PEM form, exactly as the
+            controller presented it in its TLS handshake with the caller.
+        agent:
+          type: [string, 'null']
+          description: >-
+            An agent GRN, to prove that agent's placement on the
+            controller. Absent or null proves the controller alone.
+    ControllerProof:
+      type: object
+      required: [operator, org, agent]
+      properties:
+        operator:
+          type: string
+          description: The controller's GRN.
+        org:
+          type: string
+          description: The organization's GRN.
+        agent:
+          description: The agent's current placement, null where no agent was supplied.
+          oneOf:
+            - $ref: '#/components/schemas/ProvenAgent'
+            - type: 'null'
+    ProvenAgent:
+      type: object
+      required: [grn, epoch]
+      properties:
+        grn:
+          type: string
+        epoch:
+          type: string
+          description: The current assignment's epoch. Opaque; compare it for equality only.
     Error:
       type: object
       required: [kind, message]

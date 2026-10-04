@@ -139,6 +139,27 @@ type Claim struct {
 	Watchers int `json:"watchers"`
 }
 
+// ControllerIntrospection defines model for ControllerIntrospection.
+type ControllerIntrospection struct {
+	// Agent An agent GRN, to prove that agent's placement on the controller. Absent or null proves the controller alone.
+	Agent *string `json:"agent,omitempty"`
+
+	// CertificatePem The controller's leaf certificate in PEM form, exactly as the controller presented it in its TLS handshake with the caller.
+	CertificatePem string `json:"certificatePem"`
+}
+
+// ControllerProof defines model for ControllerProof.
+type ControllerProof struct {
+	// Agent The agent's current placement, null where no agent was supplied.
+	Agent *ProvenAgent `json:"agent"`
+
+	// Operator The controller's GRN.
+	Operator string `json:"operator"`
+
+	// Org The organization's GRN.
+	Org string `json:"org"`
+}
+
 // Definition What an organization says an agent should be, answered to the operator it names (ADR-0026). `claim` is absent while no operator has claimed the definition and carries the agent's assignment epoch once one has — the only claimant a definition admits is the operator it names, so who claimed it is always the caller.
 type Definition struct {
 	// AgentGrn The identity garam minted for the agent this definition describes. No agent answers under it until the claim.
@@ -280,6 +301,13 @@ type OperationBinding struct {
 // OperationBindingOperation defines model for OperationBinding.Operation.
 type OperationBindingOperation string
 
+// ProvenAgent defines model for ProvenAgent.
+type ProvenAgent struct {
+	// Epoch The current assignment's epoch. Opaque; compare it for equality only.
+	Epoch string `json:"epoch"`
+	Grn   string `json:"grn"`
+}
+
 // ProvisioningState What the operator reports about the agent's pod. `pending` is an agent no operator has reported on yet. `provisioned` is an agent whose workload an operator built and which reports no ready replica: it says the pod was built and nothing about its health. `ready` is an agent whose workload reports a ready replica, so its containers are running; it says nothing about whether the agent inside them works. `failed` is reserved — report it only from an observation that separates a workload that cannot start from one that is still starting, which a ready replica count does not, so a reporter reading that count alone reports `provisioned`.
 type ProvisioningState string
 
@@ -322,6 +350,9 @@ type ClaimId = string
 // ContractVersion defines model for contractVersion.
 type ContractVersion = string
 
+// ControllerGrn defines model for controller.
+type ControllerGrn = string
+
 // MessageId defines model for message.
 type MessageId = string
 
@@ -343,6 +374,12 @@ type CheckOperationReferenceParams struct {
 	ContractVersion ContractVersion `json:"Garam-Contract-Version"`
 }
 
+// IntrospectControllerParams defines parameters for IntrospectController.
+type IntrospectControllerParams struct {
+	// ContractVersion Must be `operation-authority.v1` (ADR-0079); any other value is refused with 400 naming it.
+	ContractVersion ContractVersion `json:"Garam-Contract-Version"`
+}
+
 // ReportProvisioningStateJSONRequestBody defines body for ReportProvisioningState for application/json ContentType.
 type ReportProvisioningStateJSONRequestBody = ProvisioningStateReport
 
@@ -360,6 +397,9 @@ type PostMessageJSONRequestBody = MessageSubmission
 
 // IntrospectOperationAuthorityJSONRequestBody defines body for IntrospectOperationAuthority for application/json ContentType.
 type IntrospectOperationAuthorityJSONRequestBody = AuthorityIntrospection
+
+// IntrospectControllerJSONRequestBody defines body for IntrospectController for application/json ContentType.
+type IntrospectControllerJSONRequestBody = ControllerIntrospection
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -414,6 +454,9 @@ type ServerInterface interface {
 	// CheckOperationReference Recheck a durable operation reference before activating a new desired revision.
 	// (GET /operation-references/{ref})
 	CheckOperationReference(w http.ResponseWriter, r *http.Request, operationRef OperationRef, params CheckOperationReferenceParams)
+	// IntrospectController Prove a controller's current authority, and an agent's placement on it, for one decision.
+	// (POST /operators/{controller}/introspection)
+	IntrospectController(w http.ResponseWriter, r *http.Request, controllerGrn ControllerGrn, params IntrospectControllerParams)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -860,6 +903,60 @@ func (siw *ServerInterfaceWrapper) CheckOperationReference(w http.ResponseWriter
 	handler.ServeHTTP(w, r)
 }
 
+// IntrospectController operation middleware
+func (siw *ServerInterfaceWrapper) IntrospectController(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "controller" -------------
+	var controllerGrn ControllerGrn
+
+	err = runtime.BindStyledParameterWithOptions("simple", "controller", r.PathValue("controller"), &controllerGrn, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "controller", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params IntrospectControllerParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Garam-Contract-Version" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Garam-Contract-Version")]; found {
+		var ContractVersion ContractVersion
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Garam-Contract-Version", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Garam-Contract-Version", valueList[0], &ContractVersion, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Garam-Contract-Version", Err: err})
+			return
+		}
+
+		params.ContractVersion = ContractVersion
+
+	} else {
+		err := fmt.Errorf("Header parameter Garam-Contract-Version is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Garam-Contract-Version", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.IntrospectController(w, r, controllerGrn, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -997,6 +1094,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/claims/{claim}/completion", wrapper.CompleteClaim)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/operation-authorities/introspection", wrapper.IntrospectOperationAuthority)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/operation-references/{ref}", wrapper.CheckOperationReference)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/operators/{controller}/introspection", wrapper.IntrospectController)
 
 	return m
 }

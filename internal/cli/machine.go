@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spf13/cobra"
@@ -158,6 +159,10 @@ type MachineConfig struct {
 	// Logger takes one line per served request and every recovered
 	// panic.
 	Logger *slog.Logger
+	// Now supplies the time a certificate and a grant are measured
+	// against on every decision, so a test can move it across an
+	// expiry on an open connection. Zero takes time.Now.
+	Now func() time.Time
 }
 
 // NewMachineServer assembles the server `garam serve machine` runs:
@@ -209,10 +214,15 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 	// unwind that leaves no line at all. The slice reaches the spec
 	// operations alone; machineServer covers the rest of what this
 	// server serves.
+	// One service authenticates a connection when it is made and
+	// verifies certificates again on a decision, so both read the same
+	// trust roots, records and clock.
+	identities := machine.NewService(certificateAuthorities{store: authorities},
+		operatorRegistrations{store: operatorStore}, machine.Config{Now: cfg.Now})
 	handler := machinegen.HandlerWithOptions(
 		machineapi.NewServer(agents, operators, messages, consents, watches,
 			memberGroups{store: org.NewPostgresStore(pool)}, machineapi.NewGRPCEvaluator(cfg.Engine),
-			NewAuthorityService(pool, cfg.Engine)),
+			NewAuthorityService(pool, cfg.Engine), identities, newProofService(pool, cfg.Engine, cfg.Now)),
 		machinegen.StdHTTPServerOptions{
 			Middlewares: []machinegen.MiddlewareFunc{machineapi.RecoverPanics, obs.logMachineRequests},
 			// A parameter the router cannot bind is refused before any
@@ -220,8 +230,7 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 			// error body reaches that refusal.
 			ErrorHandlerFunc: machineapi.BindingError,
 		})
-	return obs.machineServer(certificateAuthorities{store: authorities},
-		operatorRegistrations{store: operatorStore}, cfg.Certificate, handler), nil
+	return obs.machineServer(identities, cfg.Certificate, handler), nil
 }
 
 // machineServer is the listener `serve machine` serves: TLS a client
@@ -233,8 +242,8 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 // The wrapping is assigned rather than passed in, because NewServer
 // puts that check outside the handler it is given and the check runs
 // per request too.
-func (o *observability) machineServer(roots machine.TrustRoot, registrations machine.Registration, certificate machine.ServerCertificate, next http.Handler) *http.Server {
-	srv := machine.NewServer(machine.NewService(roots, registrations), certificate,
+func (o *observability) machineServer(identities machine.Service, certificate machine.ServerCertificate, next http.Handler) *http.Server {
+	srv := machine.NewServer(identities, certificate,
 		otelhttp.NewHandler(next, serviceMachine))
 	srv.Handler = o.recoverPanics(http.MaxBytesHandler(srv.Handler, maxRequestBody))
 	// A handshake that fails outright — a client that speaks no TLS

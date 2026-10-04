@@ -57,15 +57,18 @@ CREATE INDEX operator_delegation_controllers_controller_idx
 -- identifier within an organization and audience. The short token is
 -- replaced on remint and only its hash is stored; the row outlives it
 -- as the durable reference a later activation rechecks and as replay
--- evidence. The assignment snapshot binds a configuration change to
--- the placement it was authorized for.
+-- evidence. The actor carries no foreign key: deleting a user must not
+-- free its request identifiers for another actor, and current
+-- authorization is what refuses the deleted user's operations. The
+-- assignment snapshot binds a configuration change to the placement it
+-- was authorized for.
 CREATE TABLE operation_authorities (
     ref              text PRIMARY KEY,
     org_grn          text NOT NULL REFERENCES orgs (grn) ON DELETE CASCADE,
     audience_grn     text NOT NULL REFERENCES operators (grn) ON DELETE CASCADE,
     request_id       text NOT NULL,
     delegation_id    text NOT NULL REFERENCES operator_delegations (id) ON DELETE CASCADE,
-    actor_grn        text NOT NULL REFERENCES users (grn) ON DELETE CASCADE,
+    actor_grn        text NOT NULL,
     operation        text NOT NULL,
     target_grn       text NOT NULL,
     assignee_grn     text,

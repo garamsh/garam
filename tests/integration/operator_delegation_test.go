@@ -546,6 +546,38 @@ func TestReference_DeletionLeavesNoTransferableAuthority(t *testing.T) {
 	assert.Equal(t, 0, countRows(t, f.pool, `SELECT count(*) FROM operator_delegations`))
 }
 
+// TestReference_ActorDeletionKeepsTheReplayRecord holds that deleting
+// the user an operation was minted for keeps the operation's record:
+// its request identifier still refuses another actor, while current
+// authorization refuses the deleted user's operation. The same request
+// identifier minted by the original actor before deletion is the
+// control.
+func TestReference_ActorDeletionKeepsTheReplayRecord(t *testing.T) {
+	ctx := context.Background()
+	f := newDelegationFixture(t)
+	f.grant(t)
+	minted, err := f.mint(operator.OperationAgentCreate, f.controller, "req-1")
+	require.NoError(t, err)
+	_, err = f.mint(operator.OperationAgentCreate, f.controller, "req-1")
+	require.NoError(t, err)
+
+	_, err = f.pool.Exec(ctx, `DELETE FROM users WHERE grn = $1`, f.actor.String())
+	require.NoError(t, err)
+	assert.Equal(t, 1, countRows(t, f.pool, `SELECT count(*) FROM operation_authorities WHERE ref = $1`, string(minted.Ref)))
+
+	grace := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "grace")
+	require.NoError(t, userpg.New(f.pool).Create(ctx, user.New(grace, "Grace")))
+	_, err = f.service.Mint(ctx, operator.MintRequest{
+		Actor: grace, Org: f.org, Audience: f.hosted, Operation: operator.OperationAgentCreate,
+		Target: f.controller, RequestID: "req-1", Digest: operator.BodyDigest(strings.Repeat("a", 64)),
+	})
+	require.ErrorIs(t, err, operator.ErrAuthorityRequestConflict)
+
+	f.authority.set(errorx.New(errorx.KindPermissionDenied, "not a member of this org"))
+	_, err = f.service.Reference(ctx, f.hosted, minted.Ref)
+	require.ErrorIs(t, err, operator.ErrAuthorityRevoked)
+}
+
 // TestAuthority_UnavailableStorageRefuses holds that a store that does
 // not answer is unavailable and never an answer.
 func TestAuthority_UnavailableStorageRefuses(t *testing.T) {

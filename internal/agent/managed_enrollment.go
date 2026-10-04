@@ -26,7 +26,8 @@ var (
 	ErrCreationConflict = errorx.New(errorx.KindAlreadyExists, "managed creation conflicts with an earlier one")
 	// ErrInitialCertificateConflict refuses an initial issuance that is
 	// not the one recorded: another request identifier, reference,
-	// epoch or certificate request, once one has been recorded.
+	// epoch or certificate request, once one has been recorded; and
+	// one for an agent no longer where its creation put it.
 	ErrInitialCertificateConflict = errorx.New(errorx.KindAlreadyExists, "initial certificate conflicts with the one issued")
 	// ErrLineageSuperseded refuses an initial issuance, or its retry,
 	// once a recovery has replaced the lineage it was issued into.

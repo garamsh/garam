@@ -46,8 +46,8 @@ func TestAgentCertificate_TheAssignmentIsTheWholePrecondition(t *testing.T) {
 	p := pool(t)
 	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	_, sealer := keyEncryptionKey(t)
-	_, evaluator := policyEngine(t, p)
-	url := machineListener(t, p, sealer, evaluator)
+	_, engine := policyEngine(t, p)
+	url := machineListener(t, p, sealer, engine)
 
 	outOfBand, err := ca.NewService(capg.New(p), sealer, ca.Config{})
 	require.NoError(t, err)

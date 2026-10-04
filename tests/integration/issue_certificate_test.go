@@ -57,8 +57,8 @@ func TestIssueCertificate_MintsAnOperatorsFirstCertificate(t *testing.T) {
 	// key material reach a process: a file its owner alone can read.
 	keyFile, sealer := keyEncryptionKey(t)
 
-	_, evaluator := policyEngine(t, p)
-	url := machineListener(t, p, sealer, evaluator)
+	_, engine := policyEngine(t, p)
+	url := machineListener(t, p, sealer, engine)
 
 	operatorGRN := scopedGRN("acme", agent.ServiceTypeOperator, "one")
 	outDir, err := runIssueCertificate(t, keyFile, operatorGRN.String())

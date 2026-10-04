@@ -261,7 +261,7 @@ func machineListener(t *testing.T, obs *observability, subject grn.GRN) (string,
 	t.Helper()
 	// The identity endpoint answers out of the request alone, so the
 	// listener is assembled with no service behind it.
-	return machineListenerServing(t, obs, subject, machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil))
+	return machineListenerServing(t, obs, subject, machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, nil))
 }
 
 // machineListenerServing is machineListener for a test that needs a
@@ -487,7 +487,7 @@ func TestLogServed_CarriesTheCauseOfAMachineFailure(t *testing.T) {
 
 	var out lines
 	url, client := machineListenerServing(t, recordingObservability(&out), sender,
-		machineapi.NewServer(nil, nil, nil, nil, nil, noGroups{}, unreachableEngine{err: cause}))
+		machineapi.NewServer(nil, nil, nil, nil, nil, noGroups{}, unreachableEngine{err: cause}, nil))
 
 	resp, err := client.Post(url+"/messages", "application/json", strings.NewReader(submission))
 	require.NoError(t, err)
@@ -506,7 +506,7 @@ func TestLogServed_CarriesTheCauseOfAMachineFailure(t *testing.T) {
 
 	var refusedOut lines
 	url, client = machineListenerServing(t, recordingObservability(&refusedOut), sender,
-		machineapi.NewServer(nil, nil, nil, nil, nil, noGroups{}, deniedEngine{}))
+		machineapi.NewServer(nil, nil, nil, nil, nil, noGroups{}, deniedEngine{}, nil))
 	resp, err = client.Post(url+"/messages", "application/json", strings.NewReader(submission))
 	require.NoError(t, err)
 	require.NoError(t, resp.Body.Close())
@@ -530,7 +530,7 @@ func (s brokenSessions) Delete(context.Context, string) error { return s.err }
 // holds leaves no cause on the line.
 func TestLogServed_CarriesTheCauseOfAnAPIFailure(t *testing.T) {
 	cause := errorx.Wrap(errorx.New(errorx.KindInternal, "connection reset by peer"), "session delete")
-	srv := api.NewServer(nil, nil, nil, nil, nil, nil, brokenSessions{err: cause}, nil, nil, nil, nil, nil, nil, nil, api.Config{})
+	srv := api.NewServer(nil, nil, nil, nil, nil, nil, brokenSessions{err: cause}, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{})
 
 	var out lines
 	mux := http.NewServeMux()
@@ -622,7 +622,7 @@ func TestLogServed_CarriesTheCauseAnAPIAnswerWithheld(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			srv := api.NewServer(nil, nil, nil, nil, nil, nil, brokenSessions{err: tt.err},
-				nil, nil, nil, nil, nil, nil, nil, api.Config{})
+				nil, nil, nil, nil, nil, nil, nil, nil, api.Config{})
 
 			var out lines
 			mux := http.NewServeMux()
@@ -688,7 +688,7 @@ func TestLogServed_CarriesTheCauseAMachineAnswerWithheld(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var out lines
 			url, client := machineListenerServing(t, recordingObservability(&out), sender,
-				machineapi.NewServer(nil, nil, nil, nil, nil, noGroups{}, tt.engine))
+				machineapi.NewServer(nil, nil, nil, nil, nil, noGroups{}, tt.engine, nil))
 
 			resp, err := client.Post(url+"/messages", "application/json", strings.NewReader(submission))
 			require.NoError(t, err)
@@ -896,7 +896,7 @@ func (panickingSessions) Delete(context.Context, string) error { panic("session 
 func TestLogRequests_ReportsARecoveredPanicOnce(t *testing.T) {
 	var out lines
 	obs := recordingObservability(&out)
-	srv := api.NewServer(nil, nil, nil, nil, nil, nil, panickingSessions{}, nil, nil, nil, nil, nil, nil, nil, api.Config{})
+	srv := api.NewServer(nil, nil, nil, nil, nil, nil, panickingSessions{}, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{})
 	server := httptest.NewServer(obs.apiHandler(srv))
 	t.Cleanup(server.Close)
 

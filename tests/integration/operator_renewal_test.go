@@ -94,8 +94,8 @@ func TestOperatorRenewal_ReplacesTheCertificateThePresenterHolds(t *testing.T) {
 	p := pool(t)
 	require.NoError(t, org.NewPostgresStore(p).CreateOrg(context.Background(), org.NewOrganization(orgRootGRN("acme"), "acme")))
 	keyFile, sealer := keyEncryptionKey(t)
-	_, evaluator := policyEngine(t, p)
-	url := machineListener(t, p, sealer, evaluator)
+	_, engine := policyEngine(t, p)
+	url := machineListener(t, p, sealer, engine)
 
 	subject := scopedGRN("acme", operator.ServiceType, "one")
 	// Three quarters through an hour-long certificate, so what is left

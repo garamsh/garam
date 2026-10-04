@@ -68,25 +68,29 @@ type Config struct {
 // are the same identity — the whole of the authorization here. Status
 // is bounded the same way from the other side: it reads under the
 // caller as the sender (ADR-0055).
+//
+// An agent's call carries the execution fence its request presents
+// (ADR-0080), and the store runs it with the write. A sender that is
+// not an agent carries none.
 type Service interface {
 	// Post stores a message from sender to recipient and answers with
 	// what is stored. Posting the same idempotency key twice stores one
 	// message.
-	Post(ctx context.Context, sender, recipient grn.GRN, idempotencyKey, body string) (*Message, error)
+	Post(ctx context.Context, sender, recipient grn.GRN, idempotencyKey, body string, fence *Fence) (*Message, error)
 	// Claim hands the caller the oldest message addressed to it, waiting
 	// until one is ready rather than answering an empty queue at once,
 	// and returns ErrNoMessageReady when none arrives in that time.
-	Claim(ctx context.Context, caller, recipient grn.GRN) (*Claim, error)
+	Claim(ctx context.Context, caller, recipient grn.GRN, fence *Fence) (*Claim, error)
 	// Renew extends the caller's hold on a message it is still working
 	// on, no further than the ceiling.
-	Renew(ctx context.Context, caller, recipient grn.GRN, id ClaimID) (*Claim, error)
+	Renew(ctx context.Context, caller, recipient grn.GRN, id ClaimID, fence *Fence) (*Claim, error)
 	// Complete reports the claimed message delivered.
-	Complete(ctx context.Context, caller, recipient grn.GRN, id ClaimID) error
+	Complete(ctx context.Context, caller, recipient grn.GRN, id ClaimID, fence *Fence) error
 	// Status answers how far a message the caller sent has got, or
 	// ErrNoSuchMessage when the caller sent none under the identifier
 	// (ADR-0055). It is the one method a sender rather than a recipient
 	// calls, and the sender it reads under is the caller itself.
-	Status(ctx context.Context, caller grn.GRN, id ID) (*Status, error)
+	Status(ctx context.Context, caller grn.GRN, id ID, fence *Fence) (*Status, error)
 }
 
 type service struct {
@@ -138,16 +142,20 @@ func withDefaults(cfg Config) Config {
 // agents garam knows: garam answers a sender once the message is
 // stored, and reports a routing failure back as a message of its own
 // rather than as a refusal (ADR-0013).
-func (s *service) Post(ctx context.Context, sender, recipient grn.GRN, idempotencyKey, body string) (*Message, error) {
+//
+// fence is the requesting agent's, which is not always sender: a
+// refusal garam stores in reply is sent under the intended recipient's
+// identity, and it is still the requester's write that is fenced.
+func (s *service) Post(ctx context.Context, sender, recipient grn.GRN, idempotencyKey, body string, fence *Fence) (*Message, error) {
 	m, err := New(recipient, sender, idempotencyKey, body)
 	if err != nil {
 		return nil, err
 	}
-	return s.store.Enqueue(ctx, m)
+	return s.store.Enqueue(ctx, m, fence)
 }
 
-func (s *service) Claim(ctx context.Context, caller, recipient grn.GRN) (*Claim, error) {
-	if err := addresses(caller, recipient); err != nil {
+func (s *service) Claim(ctx context.Context, caller, recipient grn.GRN, fence *Fence) (*Claim, error) {
+	if err := addressesFenced(caller, recipient, fence); err != nil {
 		return nil, err
 	}
 	// A message becomes ready either because a sender stored one or
@@ -158,7 +166,7 @@ func (s *service) Claim(ctx context.Context, caller, recipient grn.GRN) (*Claim,
 	// ADR-0013 accepted in place of a push.
 	deadline := time.Now().Add(s.cfg.Wait)
 	for {
-		claim, err := s.store.Claim(ctx, recipient, s.cfg.Lease, s.cfg.Attempts)
+		claim, err := s.store.Claim(ctx, recipient, s.cfg.Lease, s.cfg.Attempts, fence)
 		// The store has one not-found to answer this with, and the kind
 		// is what the chain carries; errors.Is does not read it and is
 		// not mixed with errorx (stack-go.md §4).
@@ -178,18 +186,18 @@ func (s *service) Claim(ctx context.Context, caller, recipient grn.GRN) (*Claim,
 	}
 }
 
-func (s *service) Renew(ctx context.Context, caller, recipient grn.GRN, id ClaimID) (*Claim, error) {
-	if err := addresses(caller, recipient); err != nil {
+func (s *service) Renew(ctx context.Context, caller, recipient grn.GRN, id ClaimID, fence *Fence) (*Claim, error) {
+	if err := addressesFenced(caller, recipient, fence); err != nil {
 		return nil, err
 	}
-	return s.store.Renew(ctx, recipient, id, s.cfg.Lease, s.cfg.LeaseCeiling)
+	return s.store.Renew(ctx, recipient, id, s.cfg.Lease, s.cfg.LeaseCeiling, fence)
 }
 
-func (s *service) Complete(ctx context.Context, caller, recipient grn.GRN, id ClaimID) error {
-	if err := addresses(caller, recipient); err != nil {
+func (s *service) Complete(ctx context.Context, caller, recipient grn.GRN, id ClaimID, fence *Fence) error {
+	if err := addressesFenced(caller, recipient, fence); err != nil {
 		return err
 	}
-	return s.store.Complete(ctx, recipient, id)
+	return s.store.Complete(ctx, recipient, id, fence)
 }
 
 // Status reads under the caller as the sender, so there is no second
@@ -197,8 +205,8 @@ func (s *service) Complete(ctx context.Context, caller, recipient grn.GRN, id Cl
 // not send matches no row. The attempt bound travels with the read, so
 // the state a sender is told is the one the claim predicate would act
 // on rather than a second reading of the same columns.
-func (s *service) Status(ctx context.Context, caller grn.GRN, id ID) (*Status, error) {
-	return s.store.Status(ctx, caller, id, s.cfg.Attempts)
+func (s *service) Status(ctx context.Context, caller grn.GRN, id ID, fence *Fence) (*Status, error) {
+	return s.store.Status(ctx, caller, id, s.cfg.Attempts, fence)
 }
 
 // addresses refuses a caller acting on a queue that is not its own. The
@@ -209,6 +217,20 @@ func (s *service) Status(ctx context.Context, caller grn.GRN, id ID) (*Status, e
 func addresses(caller, recipient grn.GRN) error {
 	if caller != recipient {
 		return ErrNotRecipient
+	}
+	return nil
+}
+
+// addressesFenced is addresses for a call that writes the recipient's
+// queue. The transport decides which callers present a fence; one
+// presented for another identity is its defect, not a refusal of the
+// caller.
+func addressesFenced(caller, recipient grn.GRN, fence *Fence) error {
+	if err := addresses(caller, recipient); err != nil {
+		return err
+	}
+	if fence != nil && fence.Agent != caller {
+		return errorx.New(errorx.KindInternal, "message: the fence does not match the caller")
 	}
 	return nil
 }

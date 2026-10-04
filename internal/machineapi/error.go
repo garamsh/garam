@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"runtime/debug"
+	"strings"
 
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/errorx"
@@ -50,13 +51,27 @@ func RecoverPanics(next http.Handler) http.Handler {
 //
 // The composition root supplies this as ErrorHandlerFunc, and nothing
 // else answers on this path.
-func BindingError(w http.ResponseWriter, _ *http.Request, err error) {
+func BindingError(w http.ResponseWriter, r *http.Request, err error) {
 	var header *machinegen.RequiredHeaderError
 	if errors.As(err, &header) && header.ParamName == operator.ContractVersionHeader {
+		if executionRoute(r) {
+			executionContract(w, "")
+			return
+		}
 		contract(w, "")
 		return
 	}
 	writeError(w, errorx.New(errorx.KindInvalidArgument, "a request parameter could not be read"))
+}
+
+// executionRoute reports whether r is one of the execution routes,
+// whose contract is execution-fence.v1 rather than the operation
+// authority's. Every one of them is a POST under /agents/.
+func executionRoute(r *http.Request) bool {
+	p := r.URL.Path
+	return strings.HasPrefix(p, "/agents/") && (strings.HasSuffix(p, "/activations") ||
+		strings.HasSuffix(p, "/deactivation") || strings.HasSuffix(p, "/execution/introspection") ||
+		strings.HasSuffix(p, "/credential-recovery"))
 }
 
 // causeRecorder is the request-logging middleware's response writer,

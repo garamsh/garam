@@ -285,9 +285,14 @@ minutes or until the grant expires. Creation targets the controller
 and is decided on `agent:create` against the organization, as defining
 an agent is; configuration targets the agent, is decided on
 `agent:configure` against it, and records where the agent runs now.
-Every role holds `agent:create`; only owner and admin hold
-`agent:configure`, because execution settings choose what runs on a
-host. `agent:activate` is a grant operation only, bounding the hosted
+Recovery targets the agent, is decided on `agent:recover` against it,
+and records where the agent runs now; the recovery it authorizes is
+answered once, and a second recovery under it is refused
+([agents.md](./agents.md) §Separated execution). Every role holds
+`agent:create`; only owner and admin hold `agent:configure` and
+`agent:recover`, because execution settings choose what runs on a host
+and a recovery fences every certificate the agent held.
+`agent:activate` is a grant operation only, bounding the hosted
 operator's own lifecycle authority; no member mints it.
 
 The same binding under the same grant mints a fresh token for the same
@@ -348,9 +353,38 @@ is unavailable, never an answer from something older. The proof holds
 as of its reads and is no transaction with the caller's store.
 
 **A session proof releases no agent.** Before releasing an agent's
-desired content, accepting its status or deciding its placement, the
-caller obtains that agent's proof, compares the epoch with the one it
-expects, and asks again after a long wait; it never reuses a proof
-across decisions. The route, its fields and its refusal statuses are
-`api/machine.yaml` `introspectController`, which is authoritative for
-them.
+desired content, deciding its placement or forwarding its certificate
+request — the calls a controller originates — the caller obtains that
+agent's proof, compares the epoch with the one it expects, and asks
+again after a long wait; it never reuses a proof across decisions. The
+route, its fields and its refusal statuses are `api/machine.yaml`
+`introspectController`, which is authoritative for them.
+
+**Each certificate is proven by the route for its kind.** These are
+obligations on the Operator control service; garam's routes for both
+are built.
+
+- **A controller's leaf** is proven here. The control service may keep
+  the exact public leaf a controller presented when it registered the
+  same placement over an authenticated request, and forward it again
+  for each fresh proof; validity, registration, grant, policy and
+  assignment are read again every time, and no earlier positive answer
+  is reused. Only an authenticated request from that controller for
+  the same current placement replaces the kept leaf, and a replacement
+  neither revives a superseded placement nor stands for its writer
+  having stopped.
+- **An agent's leaf** — what the adapter presents with a runtime status
+  report or an activation request — is proven by execution
+  introspection ([machine-identity.md](./machine-identity.md)
+  §Generation and lineage), never relayed through the controller to
+  obtain a controller's leaf. Its 200 is a status answer: a report is
+  accepted only when `credential` and `generation` are both `current`
+  and the identity, assignee, epoch and activation are the ones
+  expected, and an expired or superseded certificate answers
+  `fenced`.
+- **An adapter's activation request** is checked by that
+  introspection for the certificate and binding, the placement's
+  controller is proven again here from its kept leaf, and then the
+  control service activates. The new generation need not be current
+  before it is activated; the both-current condition applies to the
+  status reports that follow.

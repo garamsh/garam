@@ -52,10 +52,12 @@ var (
 
 // Identity is the machine identity a verified client certificate
 // names, and which certificate named it. Only [Service.Authenticate]
-// constructs one, and the listener carries what it returned rather
-// than reading the certificate again, so a handler holding an Identity
-// holds a GRN whose certificate chained to its own organization's
-// certificate authority.
+// and [Service.Prove] construct one, so an Identity holds a GRN whose
+// certificate chained to its own organization's certificate authority.
+// One Authenticate returned was also valid, and its record held, when
+// its connection was made; one Prove returned establishes neither, and
+// [Service.Recheck] is what asks them now. The listener carries what
+// Authenticate returned rather than reading the certificate again.
 //
 // The GRN is the whole of what the certificate asserts — no roles, no
 // claims. The three fields below describe the certificate itself, which

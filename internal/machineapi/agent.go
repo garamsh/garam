@@ -7,7 +7,6 @@ import (
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
 )
 
 // CreateAgent creates an agent in the calling operator's organization
@@ -38,16 +37,26 @@ func (s *Server) CreateAgent(w http.ResponseWriter, r *http.Request) {
 // per certificate and stored nowhere; the garam server root beside it
 // is what the holder verifies garam by.
 func (s *Server) IssueAgentCertificate(w http.ResponseWriter, r *http.Request, agentGRN machinegen.AgentGrn) {
-	identity, ok := caller(w, r)
+	identity, subject, fence, ok := fencedParties(w, r, agentGRN)
 	if !ok {
 		return
 	}
-	subject, err := grn.Parse(agentGRN)
-	if err != nil {
-		writeError(w, errorx.Wrap(err, "agent", errorx.KindInvalidArgument))
-		return
+	var (
+		certificate *agent.Certificate
+		err         error
+	)
+	if fence != nil {
+		// An agent renews its own certificate inside its execution
+		// fence, so a superseded generation or lineage renews nothing
+		// (ADR-0078).
+		if subject != identity {
+			writeError(w, agent.ErrNotTheAgent)
+			return
+		}
+		certificate, err = s.executions.Renew(r.Context(), identity, *fence)
+	} else {
+		certificate, err = s.agents.IssueCertificate(r.Context(), identity, subject)
 	}
-	certificate, err := s.agents.IssueCertificate(r.Context(), identity, subject)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -95,7 +104,7 @@ func (s *Server) ReportProvisioningState(w http.ResponseWriter, r *http.Request,
 // is refused every other one, as it is on its own queue and its own
 // turn events.
 func (s *Server) ReportRuntimeState(w http.ResponseWriter, r *http.Request, agentGRN machinegen.AgentGrn) {
-	caller, subject, ok := parties(w, r, agentGRN)
+	caller, subject, fence, ok := fencedParties(w, r, agentGRN)
 	if !ok {
 		return
 	}
@@ -109,7 +118,12 @@ func (s *Server) ReportRuntimeState(w http.ResponseWriter, r *http.Request, agen
 		writeError(w, err)
 		return
 	}
-	if err := s.agents.ReportRuntimeState(r.Context(), caller, subject, report.Epoch, state); err != nil {
+	if fence == nil {
+		// Not an agent: a runtime report is the agent's own, and the
+		// domain refuses another caller before anything is admitted.
+		fence = &agent.Fencing{Agent: caller}
+	}
+	if err := s.agents.ReportRuntimeState(r.Context(), caller, subject, report.Epoch, state, *fence); err != nil {
 		writeError(w, err)
 		return
 	}

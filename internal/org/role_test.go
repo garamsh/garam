@@ -86,6 +86,7 @@ func TestActionConstants_SpellTheirWireStrings(t *testing.T) {
 		{org.ActionAgentRename, "agent:rename"},
 		{org.ActionAgentCreate, "agent:create"},
 		{org.ActionAgentConfigure, "agent:configure"},
+		{org.ActionAgentRecover, "agent:recover"},
 
 		{org.ActionAgentTemplateRead, "agent-template:read"},
 		{org.ActionAgentTemplateCreate, "agent-template:create"},
@@ -106,7 +107,7 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			org.ActionOperatorRead, org.ActionOperatorRegister, org.ActionOperatorUpdate,
 			org.ActionOperatorDelete, org.ActionOperatorDelegate, org.ActionAgentRead,
 			org.ActionAgentDefine, org.ActionAgentRename, org.ActionAgentCreate,
-			org.ActionAgentConfigure, org.ActionAgentTemplateRead, org.ActionAgentTemplateCreate,
+			org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentTemplateRead, org.ActionAgentTemplateCreate,
 			org.ActionAgentTemplateUpdate, org.ActionAgentTemplateDelete,
 		},
 		org.RoleOwner.Actions())
@@ -117,7 +118,7 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			org.ActionOperatorRead, org.ActionOperatorRegister, org.ActionOperatorUpdate,
 			org.ActionOperatorDelete, org.ActionOperatorDelegate, org.ActionAgentRead,
 			org.ActionAgentDefine, org.ActionAgentRename, org.ActionAgentCreate,
-			org.ActionAgentConfigure, org.ActionAgentTemplateRead, org.ActionAgentTemplateCreate,
+			org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentTemplateRead, org.ActionAgentTemplateCreate,
 			org.ActionAgentTemplateUpdate, org.ActionAgentTemplateDelete,
 		},
 		org.RoleAdmin.Actions())
@@ -201,7 +202,7 @@ func TestActionsFor_UnionsKnownRoles(t *testing.T) {
 			org.ActionOrgUpdate, org.ActionOrgInvite,
 			"group:*", "project:*", "policy:*", "consent:*",
 			org.ActionOperatorRegister, org.ActionOperatorUpdate, org.ActionOperatorDelete,
-			org.ActionOperatorDelegate, org.ActionAgentConfigure,
+			org.ActionOperatorDelegate, org.ActionAgentConfigure, org.ActionAgentRecover,
 			org.ActionAgentTemplateCreate, org.ActionAgentTemplateUpdate, org.ActionAgentTemplateDelete,
 		},
 		org.ActionsFor([]string{"member", "admin"}))

@@ -220,10 +220,12 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 	// unwind that leaves no line at all. The slice reaches the spec
 	// operations alone; machineServer covers the rest of what this
 	// server serves.
+	authority := NewAuthorityService(pool, cfg.Engine)
 	handler := machinegen.HandlerWithOptions(
 		machineapi.NewServer(agents, operators, messages, consents, watches,
 			memberGroups{store: org.NewPostgresStore(pool)}, machineapi.NewGRPCEvaluator(cfg.Engine),
-			NewAuthorityService(pool, cfg.Engine), identities, newProofService(pool, cfg.Engine, cfg.Now)),
+			authority, identities, newProofService(pool, cfg.Engine, cfg.Now),
+			newExecutionService(pool, cfg.Engine, authority, identities, issuer, cfg.ServerRoot, cfg.Now)),
 		machinegen.StdHTTPServerOptions{
 			Middlewares: []machinegen.MiddlewareFunc{machineapi.RecoverPanics, obs.logMachineRequests},
 			// A parameter the router cannot bind is refused before any

@@ -8,8 +8,140 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Agent struct {
+	Grn               string
+	OrgGrn            string
+	ProvisioningState string
+	RuntimeState      string
+	CreatedAt         pgtype.Timestamptz
+	UpdatedAt         pgtype.Timestamptz
+}
+
+type AgentActivation struct {
+	ID                   pgtype.UUID
+	AgentGrn             string
+	RequestID            string
+	Generation           string
+	Epoch                int32
+	Lineage              pgtype.UUID
+	AudienceGrn          string
+	GrantID              string
+	OperationRef         pgtype.Text
+	ReplacesActivationID pgtype.UUID
+	TokenVersion         int64
+	EndedReason          pgtype.Text
+	CreatedAt            pgtype.Timestamptz
+	EndedAt              pgtype.Timestamptz
+}
+
+type AgentAssignment struct {
+	AgentGrn    string
+	OperatorGrn string
+	Epoch       int32
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
+}
+
+type AgentCredential struct {
+	AgentGrn string
+	Serial   string
+	Lineage  pgtype.UUID
+	NotAfter pgtype.Timestamptz
+}
+
+type AgentExecution struct {
+	AgentGrn           string
+	Mode               string
+	Lineage            pgtype.UUID
+	ActivationID       pgtype.UUID
+	TokenHash          []byte
+	LatestActivationID pgtype.UUID
+	UpdatedAt          pgtype.Timestamptz
+}
+
+type AgentRecovery struct {
+	AgentGrn       string
+	RequestID      string
+	OperationRef   string
+	BodySha256     []byte
+	Lineage        pgtype.UUID
+	CertificatePem string
+	CreatedAt      pgtype.Timestamptz
+}
+
 type AgentWatch struct {
 	ID        string
 	AgentGrn  string
 	ExpiresAt pgtype.Timestamptz
+}
+
+type Group struct {
+	Grn       string
+	OrgGrn    string
+	Name      string
+	Roles     []string
+	Policies  []string
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
+
+type GroupMember struct {
+	GroupGrn  string
+	MemberGrn string
+}
+
+type Invitation struct {
+	Token      string
+	OrgGrn     string
+	Role       string
+	CreatedBy  string
+	CreatedAt  pgtype.Timestamptz
+	ExpiresAt  pgtype.Timestamptz
+	AcceptedBy pgtype.Text
+	AcceptedAt pgtype.Timestamptz
+}
+
+type Org struct {
+	Grn       string
+	Name      string
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
+
+type OrgMember struct {
+	OrgGrn    string
+	UserGrn   string
+	Role      string
+	CreatedAt pgtype.Timestamptz
+}
+
+type Project struct {
+	Grn       string
+	OrgGrn    string
+	Name      string
+	Roles     []string
+	Policies  []string
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
+}
+
+type ProjectMember struct {
+	ProjectGrn string
+	MemberGrn  string
+}
+
+type Session struct {
+	TokenHash string
+	UserGrn   string
+	CreatedAt pgtype.Timestamptz
+	ExpiresAt pgtype.Timestamptz
+}
+
+type User struct {
+	Grn       string
+	Nickname  string
+	Roles     []string
+	Policies  []string
+	CreatedAt pgtype.Timestamptz
+	UpdatedAt pgtype.Timestamptz
 }

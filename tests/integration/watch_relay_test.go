@@ -66,7 +66,7 @@ func TestPostgresRelay_ReopensItsConnectionAfterADrop(t *testing.T) {
 		t.Helper()
 		e, err := watch.NewEvent("turn.output", body)
 		require.NoError(t, err)
-		require.NoError(t, announcer.Announce(ctx, watched, e))
+		require.NoError(t, announcer.Announce(ctx, watched, e, nil))
 	}
 
 	announce("before the drop")

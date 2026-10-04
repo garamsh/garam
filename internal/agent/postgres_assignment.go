@@ -12,10 +12,24 @@ import (
 
 // Assign binds the agent to an operator at the next epoch. Every call
 // raises the epoch, so the pods of the assignment it replaces are
-// fenced out whether or not the operator changed.
+// fenced out whether or not the operator changed, and ends the
+// activation the replaced assignment's runtime held (ADR-0078).
+//
+// The execution row is locked before the assignment is written: that
+// is the order every transaction taking both follows (ADR-0080).
 func (s *PostgresStore) Assign(ctx context.Context, agentGRN, operatorGRN grn.GRN) (*Assignment, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, errorx.Wrap(err, "begin", errorx.KindUnavailable)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	q := s.q.WithTx(tx)
+	if _, err := q.LockAgentExecution(ctx, agentGRN.String()); err != nil {
+		return nil, pgxerr.Classify(err, "assign", ErrAgentNotFound, nil)
+	}
 	now := stamp(time.Now().UTC())
-	row, err := s.q.AssignAgent(ctx, db.AssignAgentParams{
+	row, err := q.AssignAgent(ctx, db.AssignAgentParams{
 		AgentGrn:    agentGRN.String(),
 		OperatorGrn: operatorGRN.String(),
 		CreatedAt:   now,
@@ -23,6 +37,15 @@ func (s *PostgresStore) Assign(ctx context.Context, agentGRN, operatorGRN grn.GR
 	})
 	if err != nil {
 		return nil, pgxerr.Classify(err, "assign", ErrAgentNotFound, nil)
+	}
+	if err := q.EndReassignedActivation(ctx, db.EndReassignedActivationParams{
+		AgentGrn:  agentGRN.String(),
+		UpdatedAt: now,
+	}); err != nil {
+		return nil, pgxerr.Classify(err, "assign", nil, nil)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, errorx.Wrap(err, "commit")
 	}
 	return rowToAssignment(row)
 }

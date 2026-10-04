@@ -34,14 +34,14 @@ type queue struct {
 	statusID     message.ID
 }
 
-func (q *queue) Enqueue(_ context.Context, m *message.Message) (*message.Message, error) {
+func (q *queue) Enqueue(_ context.Context, m *message.Message, _ *message.Fence) (*message.Message, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.stored = append(q.stored, m)
 	return m, nil
 }
 
-func (q *queue) Claim(_ context.Context, _ grn.GRN, lease time.Duration, maxAttempts int) (*message.Claim, error) {
+func (q *queue) Claim(_ context.Context, _ grn.GRN, lease time.Duration, maxAttempts int, _ *message.Fence) (*message.Claim, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.claims++
@@ -49,7 +49,7 @@ func (q *queue) Claim(_ context.Context, _ grn.GRN, lease time.Duration, maxAtte
 	return nil, message.ErrNoMessageReady
 }
 
-func (q *queue) Renew(_ context.Context, _ grn.GRN, _ message.ClaimID, lease, ceiling time.Duration) (*message.Claim, error) {
+func (q *queue) Renew(_ context.Context, _ grn.GRN, _ message.ClaimID, lease, ceiling time.Duration, _ *message.Fence) (*message.Claim, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.renewals++
@@ -57,14 +57,14 @@ func (q *queue) Renew(_ context.Context, _ grn.GRN, _ message.ClaimID, lease, ce
 	return nil, message.ErrStaleClaim
 }
 
-func (q *queue) Complete(_ context.Context, _ grn.GRN, _ message.ClaimID) error {
+func (q *queue) Complete(_ context.Context, _ grn.GRN, _ message.ClaimID, _ *message.Fence) error {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.completions++
 	return nil
 }
 
-func (q *queue) Status(_ context.Context, sender grn.GRN, id message.ID, maxAttempts int) (*message.Status, error) {
+func (q *queue) Status(_ context.Context, sender grn.GRN, id message.ID, maxAttempts int, _ *message.Fence) (*message.Status, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.statuses++
@@ -73,6 +73,10 @@ func (q *queue) Status(_ context.Context, sender grn.GRN, id message.ID, maxAtte
 }
 
 // reads is how many times the service went to the queue, by any method.
+// fenceOf is the fence an agent's own request presents. The queue
+// here admits it unread; the fence itself is the store's (ADR-0080).
+func fenceOf(g grn.GRN) *message.Fence { return &message.Fence{Agent: g} }
+
 func (q *queue) reads() int {
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -136,21 +140,21 @@ func TestService_ActsOnlyOnTheQueueTheCallerIsAddressedBy(t *testing.T) {
 		{
 			name: "claim",
 			act: func(s message.Service, caller grn.GRN) error {
-				_, err := s.Claim(ctx, caller, bot)
+				_, err := s.Claim(ctx, caller, bot, fenceOf(bot))
 				return err
 			},
 		},
 		{
 			name: "renew",
 			act: func(s message.Service, caller grn.GRN) error {
-				_, err := s.Renew(ctx, caller, bot, "claim-1")
+				_, err := s.Renew(ctx, caller, bot, "claim-1", fenceOf(bot))
 				return err
 			},
 		},
 		{
 			name: "complete",
 			act: func(s message.Service, caller grn.GRN) error {
-				return s.Complete(ctx, caller, bot, "claim-1")
+				return s.Complete(ctx, caller, bot, "claim-1", fenceOf(bot))
 			},
 		},
 	}
@@ -194,7 +198,7 @@ func TestService_ClaimWaitsForAMessageRatherThanAnsweringAnEmptyQueue(t *testing
 	defer cancel()
 
 	start := time.Now()
-	claim, err := s.Claim(ctx, recipientGRN(), recipientGRN())
+	claim, err := s.Claim(ctx, recipientGRN(), recipientGRN(), fenceOf(recipientGRN()))
 	waited := time.Since(start)
 
 	assert.Nil(t, claim)
@@ -222,7 +226,7 @@ func TestService_ClaimStopsWaitingWhenTheCallerDoes(t *testing.T) {
 	}()
 
 	start := time.Now()
-	_, err = s.Claim(ctx, recipientGRN(), recipientGRN())
+	_, err = s.Claim(ctx, recipientGRN(), recipientGRN(), fenceOf(recipientGRN()))
 	assert.ErrorIs(t, err, message.ErrNoMessageReady)
 	assert.Less(t, time.Since(start), cfg.Wait, "the poll held its wait out after the caller had gone")
 }
@@ -239,7 +243,7 @@ func TestService_PostsToARecipientNothingKnowsAbout(t *testing.T) {
 	require.NoError(t, err)
 
 	unknown := grn.New("acme", grn.DefaultProject, "agent", "nobodyhaseverseenthisone")
-	stored, err := s.Post(ctx, senderGRN(), unknown, "key-1", "hello")
+	stored, err := s.Post(ctx, senderGRN(), unknown, "key-1", "hello", nil)
 	require.NoError(t, err)
 	assert.Equal(t, unknown, stored.Recipient())
 	assert.Equal(t, senderGRN(), stored.Sender(), "the sender is the caller rather than anything the body said")
@@ -247,9 +251,9 @@ func TestService_PostsToARecipientNothingKnowsAbout(t *testing.T) {
 	assert.Zero(t, stored.Attempts(), "a stored message has not been handed out")
 	assert.Len(t, store.stored, 1)
 
-	_, err = s.Post(ctx, senderGRN(), grn.GRN{}, "key-1", "hello")
+	_, err = s.Post(ctx, senderGRN(), grn.GRN{}, "key-1", "hello", nil)
 	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), "a message addressed to nothing")
-	_, err = s.Post(ctx, senderGRN(), unknown, "", "hello")
+	_, err = s.Post(ctx, senderGRN(), unknown, "", "hello", nil)
 	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), "a message with no key to suppress a duplicate by")
 	assert.Len(t, store.stored, 1, "a refused message reached the queue")
 }
@@ -266,12 +270,12 @@ func TestService_RefusesABodyPastTheBoundBeforeStoringIt(t *testing.T) {
 	require.NoError(t, err)
 
 	past := strings.Repeat("b", message.MaxBodyLength+1)
-	_, err = s.Post(ctx, senderGRN(), recipientGRN(), "key-1", past)
+	_, err = s.Post(ctx, senderGRN(), recipientGRN(), "key-1", past, nil)
 	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
 	assert.Empty(t, store.stored, "a refused body reached the queue")
 
 	at := strings.Repeat("b", message.MaxBodyLength)
-	stored, err := s.Post(ctx, senderGRN(), recipientGRN(), "key-2", at)
+	stored, err := s.Post(ctx, senderGRN(), recipientGRN(), "key-2", at, nil)
 	require.NoError(t, err)
 	assert.Equal(t, at, stored.Body())
 	assert.Len(t, store.stored, 1, "a body at the bound is stored")
@@ -289,7 +293,7 @@ func TestService_StatusReadsUnderTheCallerAsTheSender(t *testing.T) {
 	s, err := message.NewService(store, brief())
 	require.NoError(t, err)
 
-	status, err := s.Status(ctx, senderGRN(), "message-1")
+	status, err := s.Status(ctx, senderGRN(), "message-1", nil)
 	require.NoError(t, err)
 	assert.Equal(t, message.ID("message-1"), status.ID())
 	assert.Equal(t, senderGRN(), store.statusSender, "the read named a sender the caller had not proved")
@@ -305,7 +309,7 @@ func TestService_StatusReadsUnderTheCallerAsTheSender(t *testing.T) {
 	configured := &queue{}
 	s, err = message.NewService(configured, cfg)
 	require.NoError(t, err)
-	_, err = s.Status(ctx, senderGRN(), "message-2")
+	_, err = s.Status(ctx, senderGRN(), "message-2", nil)
 	require.NoError(t, err)
 	assert.Equal(t, message.MaxAttempts, configured.maxAttempts)
 }
@@ -318,8 +322,8 @@ type answering struct {
 	err error
 }
 
-func (a *answering) Claim(ctx context.Context, recipient grn.GRN, lease time.Duration, maxAttempts int) (*message.Claim, error) {
-	_, _ = a.queue.Claim(ctx, recipient, lease, maxAttempts)
+func (a *answering) Claim(ctx context.Context, recipient grn.GRN, lease time.Duration, maxAttempts int, fence *message.Fence) (*message.Claim, error) {
+	_, _ = a.queue.Claim(ctx, recipient, lease, maxAttempts, fence)
 	return nil, a.err
 }
 
@@ -339,7 +343,7 @@ func TestService_ClaimWaitsOnTheKindTheStoreAnswersWith(t *testing.T) {
 	s, err := message.NewService(store, cfg)
 	require.NoError(t, err)
 
-	claim, err := s.Claim(context.Background(), recipientGRN(), recipientGRN())
+	claim, err := s.Claim(context.Background(), recipientGRN(), recipientGRN(), fenceOf(recipientGRN()))
 
 	assert.Nil(t, claim)
 	assert.ErrorIs(t, err, message.ErrNoMessageReady, "an empty queue is answered as an empty queue")
@@ -350,7 +354,7 @@ func TestService_ClaimWaitsOnTheKindTheStoreAnswersWith(t *testing.T) {
 	s, err = message.NewService(failing, cfg)
 	require.NoError(t, err)
 
-	_, err = s.Claim(context.Background(), recipientGRN(), recipientGRN())
+	_, err = s.Claim(context.Background(), recipientGRN(), recipientGRN(), fenceOf(recipientGRN()))
 
 	assert.ErrorIs(t, err, unreachable, "the control: another kind reaches the caller")
 	assert.Equal(t, 1, failing.queue.claims, "and is not waited on")

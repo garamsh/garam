@@ -143,17 +143,17 @@ func (s *authorityService) Mint(ctx context.Context, r MintRequest) (*Minted, er
 
 // placement reads what b acts on. A creation targets the controller
 // that will run the new agent, and the actor's authority is decided on
-// the organization, as defining an agent is. A configuration change
-// targets the agent, records where it runs now, and is decided on the
-// agent.
+// the organization, as defining an agent is. A configuration change or
+// a recovery targets the agent, records where it runs now, and is
+// decided on the agent.
 func (s *authorityService) placement(ctx context.Context, b *Binding) (controller, object grn.GRN, err error) {
-	switch b.Operation {
-	case OperationAgentCreate:
+	switch {
+	case b.Operation == OperationAgentCreate:
 		if err := validateOwnership(b.Target, b.Org); err != nil {
 			return grn.GRN{}, grn.GRN{}, err
 		}
 		return b.Target, b.Org, nil
-	case OperationAgentConfigure:
+	case b.Operation.TargetsAgent():
 		if b.Target.ServiceType != agentServiceType || b.Target.Organization != b.Org.Identifier {
 			return grn.GRN{}, grn.GRN{}, errorx.New(errorx.KindInvalidArgument, "target must be an agent of this organization")
 		}
@@ -197,9 +197,9 @@ func (s *authorityService) Reference(ctx context.Context, caller grn.GRN, ref Op
 
 // recheck decides a stored binding against current state: its own grant
 // still current and covering it, the bound controller still registered,
-// a configuration change's placement unchanged, and the actor still
-// authorized. The audience's registration needs no read of its own: its
-// deletion removes the binding by cascade.
+// the placement of an operation on an agent unchanged, and the actor
+// still authorized. The audience's registration needs no read of its
+// own: its deletion removes the binding by cascade.
 func (s *authorityService) recheck(ctx context.Context, b Binding) error {
 	grant, err := s.grants.GetGrant(ctx, b.Grant)
 	if errorx.IsKind(err, errorx.KindNotFound) {
@@ -209,7 +209,7 @@ func (s *authorityService) recheck(ctx context.Context, b Binding) error {
 		return err
 	}
 	controller, object := b.Target, b.Org
-	if b.Operation == OperationAgentConfigure {
+	if b.Operation.TargetsAgent() {
 		current, err := s.assignments.CurrentAssignment(ctx, b.Target)
 		if errorx.IsKind(err, errorx.KindNotFound) {
 			return ErrAuthorityRevoked

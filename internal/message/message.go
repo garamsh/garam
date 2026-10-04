@@ -215,3 +215,15 @@ func randomHex() (string, error) {
 	}
 	return hex.EncodeToString(b[:]), nil
 }
+
+// Fence is what an agent's write presents to the agent execution fence
+// (ADR-0080), as the transport authenticated it: the agent, the
+// certificate its connection verified, and the hash of the execution
+// token its request carries, nil where it carries none.
+type Fence struct {
+	Agent     grn.GRN
+	Serial    string
+	NotBefore time.Time
+	NotAfter  time.Time
+	TokenHash []byte
+}

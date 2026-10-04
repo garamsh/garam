@@ -122,6 +122,10 @@ const (
 	// agent's execution settings or profile: what runs on a host, which
 	// membership alone does not grant (ADR-0078).
 	ActionAgentConfigure = "agent:configure"
+	// ActionAgentRecover is asking a delegated operator to replace an
+	// agent's credential lineage, which fences every certificate it
+	// held before (ADR-0078). Membership alone does not grant it.
+	ActionAgentRecover = "agent:recover"
 
 	// Reading and maintaining the org's agent templates (ADR-0075). A
 	// template is a starting point a definition copies once, so these
@@ -145,7 +149,7 @@ var (
 		ActionOperatorRead, ActionOperatorRegister, ActionOperatorUpdate,
 		ActionOperatorDelete, ActionOperatorDelegate, ActionAgentRead,
 		ActionAgentDefine, ActionAgentRename, ActionAgentCreate,
-		ActionAgentConfigure, ActionAgentTemplateRead, ActionAgentTemplateCreate,
+		ActionAgentConfigure, ActionAgentRecover, ActionAgentTemplateRead, ActionAgentTemplateCreate,
 		ActionAgentTemplateUpdate, ActionAgentTemplateDelete,
 	}
 	// memberMachineActions is what a member holds: it reads the

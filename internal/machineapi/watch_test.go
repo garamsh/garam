@@ -68,7 +68,7 @@ type announced struct {
 	events []watch.Event
 }
 
-func (a *announced) Announce(_ context.Context, _ grn.GRN, e watch.Event) error {
+func (a *announced) Announce(_ context.Context, _ grn.GRN, e watch.Event, _ *watch.Fence) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.events = append(a.events, e)

@@ -24,6 +24,14 @@ type Service interface {
 	// permission-denied, a withdrawn record not-found, and a trust root
 	// or record that could not be read unavailable.
 	Verify(ctx context.Context, subject grn.GRN, leaf *x509.Certificate) error
+	// Prove answers the identity a certificate presented on another
+	// party's behalf names, once it names subject and chains to the
+	// authority of subject's organization, and refuses it otherwise as
+	// Verify does. It establishes nothing about now: not that the
+	// certificate is inside its validity, not that its record is still
+	// held, and not that it may act. Verify is Prove followed by
+	// Recheck.
+	Prove(ctx context.Context, subject grn.GRN, leaf *x509.Certificate) (Identity, error)
 	// Recheck refuses an identity Authenticate returned earlier whose
 	// certificate is no longer valid now, as permission-denied, or whose
 	// record has since been withdrawn, as not-found; a record that could
@@ -91,19 +99,27 @@ func (s *service) Authenticate(ctx context.Context, chain [][]byte) (Identity, e
 }
 
 func (s *service) Verify(ctx context.Context, subject grn.GRN, leaf *x509.Certificate) error {
+	identity, err := s.Prove(ctx, subject, leaf)
+	if err != nil {
+		return err
+	}
+	return s.Recheck(ctx, identity)
+}
+
+func (s *service) Prove(ctx context.Context, subject grn.GRN, leaf *x509.Certificate) (Identity, error) {
 	// The SAN is compared before anything is read, so a certificate
 	// naming another identity learns nothing about that identity's
 	// organization.
 	identity, err := identityOf(leaf)
 	if err != nil || identity.grn != subject {
-		return ErrNotProven
+		return Identity{}, ErrNotProven
 	}
 	root, err := s.rootOf(ctx, subject)
 	if errorx.IsKind(err, errorx.KindUnauthenticated) {
-		return errorx.Wrap(err, ErrNotProven.Error(), errorx.KindInvalidArgument)
+		return Identity{}, errorx.Wrap(err, ErrNotProven.Error(), errorx.KindInvalidArgument)
 	}
 	if err != nil {
-		return errorx.Wrap(err, "machine: trust root", errorx.KindUnavailable)
+		return Identity{}, errorx.Wrap(err, "machine: trust root", errorx.KindUnavailable)
 	}
 	roots := x509.NewCertPool()
 	roots.AddCert(root)
@@ -115,9 +131,9 @@ func (s *service) Verify(ctx context.Context, subject grn.GRN, leaf *x509.Certif
 		CurrentTime: within(leaf, s.now()),
 		KeyUsages:   []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
 	}); err != nil {
-		return errorx.Wrap(err, ErrNotProven.Error(), errorx.KindInvalidArgument)
+		return Identity{}, errorx.Wrap(err, ErrNotProven.Error(), errorx.KindInvalidArgument)
 	}
-	return s.Recheck(ctx, identity)
+	return identity, nil
 }
 
 func (s *service) Recheck(ctx context.Context, identity Identity) error {

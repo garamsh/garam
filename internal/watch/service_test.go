@@ -101,7 +101,7 @@ func newAnnouncements() *announcements {
 	return &announcements{ready: make(chan struct{})}
 }
 
-func (a *announcements) Announce(_ context.Context, agent grn.GRN, e watch.Event) error {
+func (a *announcements) Announce(_ context.Context, agent grn.GRN, e watch.Event, _ *watch.Fence) error {
 	a.mu.Lock()
 	a.made = append(a.made, e)
 	deliver := a.deliver
@@ -195,7 +195,7 @@ func TestService_ForwardedEventsReachTheWatchersOfThatAgentOnly(t *testing.T) {
 
 	// Nobody is watching: the event is announced and reaches no one, and
 	// nothing is held for the agent it was about.
-	require.NoError(t, svc.Publish(ctx, watched, watched, event(t, "turn.start", "before anyone looked")))
+	require.NoError(t, svc.Publish(ctx, watched, watched, event(t, "turn.start", "before anyone looked"), &watch.Fence{Agent: watched}))
 	require.Equal(t, 1, relay.count())
 	require.Zero(t, store.held(), "an agent nobody watches left state behind")
 	watchers, err := svc.Watchers(ctx, watched, watched)
@@ -204,7 +204,7 @@ func TestService_ForwardedEventsReachTheWatchersOfThatAgentOnly(t *testing.T) {
 
 	first, err := svc.Watch(ctx, watched)
 	require.NoError(t, err)
-	require.NoError(t, svc.Publish(ctx, watched, watched, event(t, "turn.output", "hello")))
+	require.NoError(t, svc.Publish(ctx, watched, watched, event(t, "turn.output", "hello"), &watch.Fence{Agent: watched}))
 	assert.Equal(t, "turn.output", awaitEvent(t, first).Kind())
 	assertQuiet(t, first, "an event announced before the watch opened")
 
@@ -212,7 +212,7 @@ func TestService_ForwardedEventsReachTheWatchersOfThatAgentOnly(t *testing.T) {
 	// and receives nothing that was announced before it opened.
 	second, err := svc.Watch(ctx, watched)
 	require.NoError(t, err)
-	require.NoError(t, svc.Publish(ctx, watched, watched, event(t, "turn.output", "both")))
+	require.NoError(t, svc.Publish(ctx, watched, watched, event(t, "turn.output", "both"), &watch.Fence{Agent: watched}))
 	assert.Equal(t, "both", awaitEvent(t, first).Body())
 	assert.Equal(t, "both", awaitEvent(t, second).Body())
 	watchers, err = svc.Watchers(ctx, watched, watched)
@@ -222,7 +222,7 @@ func TestService_ForwardedEventsReachTheWatchersOfThatAgentOnly(t *testing.T) {
 	// A watcher on another agent is not a watcher of this one.
 	elsewhere, err := svc.Watch(ctx, other)
 	require.NoError(t, err)
-	require.NoError(t, svc.Publish(ctx, watched, watched, event(t, "turn.output", "mine only")))
+	require.NoError(t, svc.Publish(ctx, watched, watched, event(t, "turn.output", "mine only"), &watch.Fence{Agent: watched}))
 	assert.Equal(t, "mine only", awaitEvent(t, first).Body())
 	assert.Equal(t, "mine only", awaitEvent(t, second).Body())
 	assertQuiet(t, elsewhere, "an event about another agent")
@@ -230,7 +230,7 @@ func TestService_ForwardedEventsReachTheWatchersOfThatAgentOnly(t *testing.T) {
 	// A closed stream stops being forwarded to, and the one beside it is
 	// undisturbed.
 	require.NoError(t, first.Close(ctx))
-	require.NoError(t, svc.Publish(ctx, watched, watched, event(t, "turn.end", "after the first left")))
+	require.NoError(t, svc.Publish(ctx, watched, watched, event(t, "turn.end", "after the first left"), &watch.Fence{Agent: watched}))
 	assert.Equal(t, "turn.end", awaitEvent(t, second).Kind())
 	_, open := <-first.Events()
 	assert.False(t, open, "a closed subscription still carries a stream")
@@ -245,7 +245,7 @@ func TestService_ForwardedEventsReachTheWatchersOfThatAgentOnly(t *testing.T) {
 	require.NoError(t, err)
 	assert.Zero(t, watchers)
 	assert.Zero(t, store.held(), "a watch outlived the stream it belonged to")
-	require.NoError(t, svc.Publish(ctx, watched, watched, event(t, "turn.output", "nobody left")))
+	require.NoError(t, svc.Publish(ctx, watched, watched, event(t, "turn.output", "nobody left"), &watch.Fence{Agent: watched}))
 	assert.Equal(t, 6, relay.count(), "an event was not announced")
 }
 
@@ -261,7 +261,7 @@ func TestService_ActsOnTheEventsOfTheCallingAgentOnly(t *testing.T) {
 	watched := agentGRN("0a1b2c3d4e5f6071")
 	stranger := agentGRN("9f8e7d6c5b4a3021")
 
-	err := svc.Publish(ctx, stranger, watched, event(t, "turn.output", "not mine to say"))
+	err := svc.Publish(ctx, stranger, watched, event(t, "turn.output", "not mine to say"), &watch.Fence{Agent: watched})
 	require.ErrorIs(t, err, watch.ErrNotAgent)
 	assert.True(t, errorx.IsKind(err, errorx.KindPermissionDenied))
 	assert.Zero(t, relay.count(), "an event nobody was allowed to forward was announced")
@@ -269,7 +269,7 @@ func TestService_ActsOnTheEventsOfTheCallingAgentOnly(t *testing.T) {
 	_, err = svc.Watchers(ctx, stranger, watched)
 	require.ErrorIs(t, err, watch.ErrNotAgent)
 
-	require.NoError(t, svc.Publish(ctx, watched, watched, event(t, "turn.output", "mine")))
+	require.NoError(t, svc.Publish(ctx, watched, watched, event(t, "turn.output", "mine"), &watch.Fence{Agent: watched}))
 	assert.Equal(t, 1, relay.count())
 	watchers, err := svc.Watchers(ctx, watched, watched)
 	require.NoError(t, err)

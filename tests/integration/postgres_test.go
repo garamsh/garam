@@ -1072,7 +1072,7 @@ func TestAgentStore_RoundTrip(t *testing.T) {
 	// about it is stale.
 	_, err = s.ReportProvisioningState(ctx, g, 1, agent.ProvisioningStateReady)
 	assert.ErrorIs(t, err, agent.ErrStaleEpoch)
-	_, err = s.ReportRuntimeState(ctx, g, 1, agent.RuntimeStateConnected)
+	_, err = s.ReportRuntimeState(ctx, g, 1, agent.RuntimeStateConnected, legacyFence(g))
 	assert.ErrorIs(t, err, agent.ErrStaleEpoch)
 
 	first := grnOf(agent.ServiceTypeOperator, "one")
@@ -1093,7 +1093,7 @@ func TestAgentStore_RoundTrip(t *testing.T) {
 	assert.WithinDuration(t, a.CreatedAt(), provisioned.CreatedAt(), time.Microsecond)
 	assert.True(t, provisioned.UpdatedAt().After(a.UpdatedAt()), "a report moves the update stamp")
 
-	running, err := s.ReportRuntimeState(ctx, g, assigned.Epoch(), agent.RuntimeStateConnected)
+	running, err := s.ReportRuntimeState(ctx, g, assigned.Epoch(), agent.RuntimeStateConnected, legacyFence(g))
 	require.NoError(t, err)
 	assert.Equal(t, agent.RuntimeStateConnected, running.RuntimeState())
 	assert.Equal(t, agent.ProvisioningStateReady, running.ProvisioningState())
@@ -1116,12 +1116,12 @@ func TestAgentStore_RoundTrip(t *testing.T) {
 	// A pod left running by the replaced operator still holds epoch 1.
 	_, err = s.ReportProvisioningState(ctx, g, assigned.Epoch(), agent.ProvisioningStateFailed)
 	assert.ErrorIs(t, err, agent.ErrStaleEpoch)
-	_, err = s.ReportRuntimeState(ctx, g, assigned.Epoch(), agent.RuntimeStateDisconnected)
+	_, err = s.ReportRuntimeState(ctx, g, assigned.Epoch(), agent.RuntimeStateDisconnected, legacyFence(g))
 	assert.ErrorIs(t, err, agent.ErrStaleEpoch)
 
 	// An epoch too wide for the column shares its low 32 bits with the
 	// live one and is stale all the same.
-	_, err = s.ReportRuntimeState(ctx, g, stored.Epoch()+1<<32, agent.RuntimeStateDisconnected)
+	_, err = s.ReportRuntimeState(ctx, g, stored.Epoch()+1<<32, agent.RuntimeStateDisconnected, legacyFence(g))
 	assert.ErrorIs(t, err, agent.ErrStaleEpoch)
 
 	after, err := s.Get(ctx, g)
@@ -1130,11 +1130,11 @@ func TestAgentStore_RoundTrip(t *testing.T) {
 	assert.Equal(t, agent.RuntimeStateConnected, after.RuntimeState())
 
 	// The current epoch still writes.
-	current, err := s.ReportRuntimeState(ctx, g, stored.Epoch(), agent.RuntimeStateDisconnected)
+	current, err := s.ReportRuntimeState(ctx, g, stored.Epoch(), agent.RuntimeStateDisconnected, legacyFence(g))
 	require.NoError(t, err)
 	assert.Equal(t, agent.RuntimeStateDisconnected, current.RuntimeState())
 
-	_, err = s.ReportRuntimeState(ctx, grnOf("agent", "missing"), 1, agent.RuntimeStateConnected)
+	_, err = s.ReportRuntimeState(ctx, grnOf("agent", "missing"), 1, agent.RuntimeStateConnected, legacyFence(grnOf("agent", "missing")))
 	assert.ErrorIs(t, err, agent.ErrAgentNotFound)
 
 	// An agent belongs to its org and disappears with it, assignment
@@ -1170,7 +1170,7 @@ func TestAgentStore_ListsTheOrgsOwnAgents(t *testing.T) {
 	require.NoError(t, err)
 	_, err = s.ReportProvisioningState(ctx, held, assigned.Epoch(), agent.ProvisioningStateReady)
 	require.NoError(t, err)
-	_, err = s.ReportRuntimeState(ctx, held, assigned.Epoch(), agent.RuntimeStateConnected)
+	_, err = s.ReportRuntimeState(ctx, held, assigned.Epoch(), agent.RuntimeStateConnected, legacyFence(held))
 	require.NoError(t, err)
 	_, err = s.Assign(ctx, elsewhere, scopedGRN(globex.Identifier, agent.ServiceTypeOperator, "field-two"))
 	require.NoError(t, err)
@@ -1230,6 +1230,12 @@ func TestAgentStore_ListsTheOrgsOwnAgents(t *testing.T) {
 	assignments, err = s.ListAssignmentsByOrg(ctx, orgRootGRN("initech"))
 	require.NoError(t, err)
 	assert.Empty(t, assignments)
+}
+
+// legacyFence is what an agent never activated presents to the
+// execution fence: a valid certificate and no token.
+func legacyFence(g grn.GRN) agent.Fencing {
+	return agent.Fencing{Agent: g, Credential: valid("1")}
 }
 
 // seedAgent mints an agent of the org and stores it.
@@ -2283,7 +2289,7 @@ func TestMessageStore_RoundTrip(t *testing.T) {
 
 	m, err := message.New(bot, ada, "key-1", "hello")
 	require.NoError(t, err)
-	stored, err := s.Enqueue(ctx, m)
+	stored, err := s.Enqueue(ctx, m, nil)
 	require.NoError(t, err)
 	assert.Equal(t, m.ID(), stored.ID())
 	assert.Equal(t, "key-1", stored.IdempotencyKey(), "the key the sender suppressed duplicates with comes back")
@@ -2291,7 +2297,7 @@ func TestMessageStore_RoundTrip(t *testing.T) {
 
 	retried, err := message.New(bot, ada, "key-1", "hello again")
 	require.NoError(t, err)
-	again, err := s.Enqueue(ctx, retried)
+	again, err := s.Enqueue(ctx, retried, nil)
 	require.NoError(t, err)
 	assert.Equal(t, m.ID(), again.ID(), "a repeated sender key returns the stored message")
 	assert.Equal(t, "hello", again.Body(), "and stores nothing new")
@@ -2300,7 +2306,7 @@ func TestMessageStore_RoundTrip(t *testing.T) {
 	// with the one that enqueued claims the message, and dropping every
 	// pooled connection afterwards leaves the claim standing.
 	reader := message.NewPostgresStore(p)
-	claim, err := reader.Claim(ctx, bot, time.Minute, attempts)
+	claim, err := reader.Claim(ctx, bot, time.Minute, attempts, nil)
 	require.NoError(t, err)
 	assert.Equal(t, m.ID(), claim.Message().ID())
 	assert.Equal(t, "hello", claim.Message().Body())
@@ -2308,30 +2314,30 @@ func TestMessageStore_RoundTrip(t *testing.T) {
 	assert.Equal(t, 1, claim.Message().Attempts(), "handing the message out is the first attempt")
 	p.Reset()
 
-	_, err = s.Claim(ctx, bot, time.Minute, attempts)
+	_, err = s.Claim(ctx, bot, time.Minute, attempts, nil)
 	assert.ErrorIs(t, err, message.ErrNoMessageReady, "a held message is nobody else's")
-	_, err = s.Claim(ctx, elsewhere, time.Minute, attempts)
+	_, err = s.Claim(ctx, elsewhere, time.Minute, attempts, nil)
 	assert.ErrorIs(t, err, message.ErrNoMessageReady, "and belongs to the recipient it is addressed to")
 
 	// The claim is a fence rather than a secret: another recipient's
 	// queue does not complete under it even where its token is known.
-	assert.ErrorIs(t, s.Complete(ctx, elsewhere, claim.ID()), message.ErrStaleClaim)
+	assert.ErrorIs(t, s.Complete(ctx, elsewhere, claim.ID(), nil), message.ErrStaleClaim)
 
-	require.NoError(t, reader.Complete(ctx, bot, claim.ID()))
+	require.NoError(t, reader.Complete(ctx, bot, claim.ID(), nil))
 	// A reader retries what it could not confirm, so completing twice
 	// reports the same delivery rather than failing.
-	require.NoError(t, reader.Complete(ctx, bot, claim.ID()))
-	_, err = s.Claim(ctx, bot, time.Minute, attempts)
+	require.NoError(t, reader.Complete(ctx, bot, claim.ID(), nil))
+	_, err = s.Claim(ctx, bot, time.Minute, attempts, nil)
 	assert.ErrorIs(t, err, message.ErrNoMessageReady, "a delivered message is not handed out again")
 
 	// The key outlives delivery, so a retry arriving after it neither
 	// stores a message nor requeues the delivered one.
 	late, err := message.New(bot, ada, "key-1", "hello again")
 	require.NoError(t, err)
-	afterDelivery, err := s.Enqueue(ctx, late)
+	afterDelivery, err := s.Enqueue(ctx, late, nil)
 	require.NoError(t, err)
 	assert.Equal(t, m.ID(), afterDelivery.ID())
-	_, err = s.Claim(ctx, bot, time.Minute, attempts)
+	_, err = s.Claim(ctx, bot, time.Minute, attempts, nil)
 	assert.ErrorIs(t, err, message.ErrNoMessageReady)
 }
 
@@ -2348,7 +2354,7 @@ func TestMessageStore_ClaimIsExclusive(t *testing.T) {
 	for i := range queued {
 		m, err := message.New(bot, ada, fmt.Sprintf("key-%d", i), "hello")
 		require.NoError(t, err)
-		_, err = writer.Enqueue(ctx, m)
+		_, err = writer.Enqueue(ctx, m, nil)
 		require.NoError(t, err)
 	}
 
@@ -2370,7 +2376,7 @@ func TestMessageStore_ClaimIsExclusive(t *testing.T) {
 				// The attempt bound is wide enough to hand every message
 				// to every reader, so what keeps a message to one of them
 				// is the claim and not the count.
-				c, err := s.Claim(ctx, bot, time.Minute, readers)
+				c, err := s.Claim(ctx, bot, time.Minute, readers, nil)
 				if errors.Is(err, message.ErrNoMessageReady) {
 					return
 				}
@@ -2405,10 +2411,10 @@ func TestMessageStore_LapsedClaimIsHandedOn(t *testing.T) {
 
 	m, err := message.New(bot, ada, "key-1", "hello")
 	require.NoError(t, err)
-	_, err = s.Enqueue(ctx, m)
+	_, err = s.Enqueue(ctx, m, nil)
 	require.NoError(t, err)
 
-	lapsing, err := s.Claim(ctx, bot, 100*time.Millisecond, 4)
+	lapsing, err := s.Claim(ctx, bot, 100*time.Millisecond, 4, nil)
 	require.NoError(t, err)
 
 	// What is waited for is what is asserted: the claim that succeeds,
@@ -2416,7 +2422,7 @@ func TestMessageStore_LapsedClaimIsHandedOn(t *testing.T) {
 	// it takes the message for a minute.
 	var handedOn *message.Claim
 	require.Eventually(t, func() bool {
-		c, err := s.Claim(ctx, bot, time.Minute, 4)
+		c, err := s.Claim(ctx, bot, time.Minute, 4, nil)
 		if err != nil {
 			return false
 		}
@@ -2429,12 +2435,12 @@ func TestMessageStore_LapsedClaimIsHandedOn(t *testing.T) {
 	assert.NotEqual(t, lapsing.ID(), handedOn.ID(), "the message is handed on under a claim of its own")
 	assert.Equal(t, 2, handedOn.Message().Attempts(), "the hand-on is the second attempt")
 
-	_, err = s.Renew(ctx, bot, lapsing.ID(), time.Minute, time.Hour)
+	_, err = s.Renew(ctx, bot, lapsing.ID(), time.Minute, time.Hour, nil)
 	assert.ErrorIs(t, err, message.ErrStaleClaim,
 		"the reader the message was taken from renews nothing")
-	assert.ErrorIs(t, s.Complete(ctx, bot, lapsing.ID()), message.ErrStaleClaim,
+	assert.ErrorIs(t, s.Complete(ctx, bot, lapsing.ID(), nil), message.ErrStaleClaim,
 		"the reader the message was taken from completes nothing")
-	require.NoError(t, s.Complete(ctx, bot, handedOn.ID()))
+	require.NoError(t, s.Complete(ctx, bot, handedOn.ID(), nil))
 }
 
 // TestMessageStore_RenewalHoldsAClaimPastItsLeaseButNotPastTheCeiling
@@ -2459,10 +2465,10 @@ func TestMessageStore_RenewalHoldsAClaimPastItsLeaseButNotPastTheCeiling(t *test
 
 	m, err := message.New(bot, ada, "key-1", "hello")
 	require.NoError(t, err)
-	_, err = s.Enqueue(ctx, m)
+	_, err = s.Enqueue(ctx, m, nil)
 	require.NoError(t, err)
 
-	held, err := s.Claim(ctx, bot, lease, 4)
+	held, err := s.Claim(ctx, bot, lease, 4, nil)
 	require.NoError(t, err)
 
 	// Renew until the lease it was claimed under has run out, which is
@@ -2471,7 +2477,7 @@ func TestMessageStore_RenewalHoldsAClaimPastItsLeaseButNotPastTheCeiling(t *test
 	renewedUntil := time.Now().Add(lease + 500*time.Millisecond)
 	var renewed *message.Claim
 	for time.Now().Before(renewedUntil) {
-		renewed, err = s.Renew(ctx, bot, held.ID(), lease, ceiling)
+		renewed, err = s.Renew(ctx, bot, held.ID(), lease, ceiling, nil)
 		require.NoError(t, err, "a claim renewed inside its lease is still the holder's")
 		time.Sleep(200 * time.Millisecond)
 	}
@@ -2479,7 +2485,7 @@ func TestMessageStore_RenewalHoldsAClaimPastItsLeaseButNotPastTheCeiling(t *test
 	assert.True(t, renewed.ExpiresAt().After(held.ExpiresAt()), "renewal carried the claim past where it started")
 	assert.Equal(t, held.ID(), renewed.ID(), "renewal keeps the hold rather than taking a new one")
 
-	_, err = s.Claim(ctx, bot, time.Minute, 4)
+	_, err = s.Claim(ctx, bot, time.Minute, 4, nil)
 	assert.ErrorIs(t, err, message.ErrNoMessageReady,
 		"a renewed claim is nobody else's, past the lease it was claimed under")
 
@@ -2487,8 +2493,8 @@ func TestMessageStore_RenewalHoldsAClaimPastItsLeaseButNotPastTheCeiling(t *test
 	// claim lapses on schedule anyway.
 	var handedOn *message.Claim
 	require.Eventually(t, func() bool {
-		_, _ = s.Renew(ctx, bot, held.ID(), lease, ceiling)
-		c, err := s.Claim(ctx, bot, time.Minute, 4)
+		_, _ = s.Renew(ctx, bot, held.ID(), lease, ceiling, nil)
+		c, err := s.Claim(ctx, bot, time.Minute, 4, nil)
 		if err != nil {
 			return false
 		}
@@ -2498,7 +2504,7 @@ func TestMessageStore_RenewalHoldsAClaimPastItsLeaseButNotPastTheCeiling(t *test
 
 	require.NotNil(t, handedOn)
 	assert.Equal(t, m.ID(), handedOn.Message().ID())
-	_, err = s.Renew(ctx, bot, held.ID(), lease, ceiling)
+	_, err = s.Renew(ctx, bot, held.ID(), lease, ceiling, nil)
 	assert.ErrorIs(t, err, message.ErrStaleClaim, "a claim carried past its ceiling renews nothing")
 }
 
@@ -2517,17 +2523,17 @@ func TestMessageStore_StopsRedeliveringAnExhaustedMessage(t *testing.T) {
 
 	m, err := message.New(bot, ada, "key-1", "hello")
 	require.NoError(t, err)
-	_, err = s.Enqueue(ctx, m)
+	_, err = s.Enqueue(ctx, m, nil)
 	require.NoError(t, err)
 
-	first, err := s.Claim(ctx, bot, lease, attempts)
+	first, err := s.Claim(ctx, bot, lease, attempts, nil)
 	require.NoError(t, err)
 	assert.Equal(t, 1, first.Message().Attempts())
 
 	// Nobody completes it, so the lease is what ends each attempt.
 	var second *message.Claim
 	require.Eventually(t, func() bool {
-		c, err := s.Claim(ctx, bot, lease, attempts)
+		c, err := s.Claim(ctx, bot, lease, attempts, nil)
 		if err != nil {
 			return false
 		}
@@ -2541,13 +2547,13 @@ func TestMessageStore_StopsRedeliveringAnExhaustedMessage(t *testing.T) {
 	// anyone waits — and the second claim's lease runs out inside this
 	// window, so what withholds it is the count rather than a lease.
 	require.Never(t, func() bool {
-		_, err := s.Claim(ctx, bot, time.Minute, attempts)
+		_, err := s.Claim(ctx, bot, time.Minute, attempts, nil)
 		return err == nil
 	}, 2*time.Second, 50*time.Millisecond, "an exhausted message was handed out again")
 
 	// The same message under a wider bound is claimable, so what stopped
 	// it was the count and not anything else about the row.
-	third, err := s.Claim(ctx, bot, time.Minute, attempts+1)
+	third, err := s.Claim(ctx, bot, time.Minute, attempts+1, nil)
 	require.NoError(t, err)
 	assert.Equal(t, m.ID(), third.Message().ID())
 	assert.Equal(t, 3, third.Message().Attempts())
@@ -2566,7 +2572,13 @@ func TestMessageService_ClaimWaitsForTheMessageThatArrives(t *testing.T) {
 	cfg := briefDelivery()
 	s, err := message.NewService(store, cfg)
 	require.NoError(t, err)
-	bot, ada := grnOf("agent", "bot"), grnOf("user", "ada")
+	// The claim is an agent's write, so the agent exists: the execution
+	// fence admits it in its legacy mode (ADR-0080).
+	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	bot, ada := seedAgent(t, agent.NewPostgresStore(p), orgRootGRN("acme")), grnOf("user", "ada")
+	legacy := legacyFence(bot)
+	fence := message.Fence{Agent: bot, Serial: legacy.Credential.Serial,
+		NotBefore: legacy.Credential.NotBefore, NotAfter: legacy.Credential.NotAfter}
 
 	type answer struct {
 		claim *message.Claim
@@ -2575,7 +2587,7 @@ func TestMessageService_ClaimWaitsForTheMessageThatArrives(t *testing.T) {
 	answered := make(chan answer, 1)
 	start := time.Now()
 	go func() {
-		c, err := s.Claim(ctx, bot, bot)
+		c, err := s.Claim(ctx, bot, bot, &fence)
 		answered <- answer{claim: c, err: err}
 	}()
 
@@ -2590,7 +2602,7 @@ func TestMessageService_ClaimWaitsForTheMessageThatArrives(t *testing.T) {
 
 	sent, err := message.New(bot, ada, "key-1", "hello")
 	require.NoError(t, err)
-	_, err = store.Enqueue(ctx, sent)
+	_, err = store.Enqueue(ctx, sent, nil)
 	require.NoError(t, err)
 
 	select {
@@ -2621,13 +2633,13 @@ func TestMessageStore_CompletionDropsTheBodyAndKeepsTheKey(t *testing.T) {
 
 	m, err := message.New(bot, ada, "key-1", "hello")
 	require.NoError(t, err)
-	_, err = s.Enqueue(ctx, m)
+	_, err = s.Enqueue(ctx, m, nil)
 	require.NoError(t, err)
 
-	claim, err := s.Claim(ctx, bot, time.Minute, 4)
+	claim, err := s.Claim(ctx, bot, time.Minute, 4, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "hello", claim.Message().Body(), "the body is there to be dropped")
-	require.NoError(t, s.Complete(ctx, bot, claim.ID()))
+	require.NoError(t, s.Complete(ctx, bot, claim.ID(), nil))
 
 	assert.Equal(t, 1, countRows(t, p,
 		"SELECT count(*) FROM messages WHERE id = $1 AND body IS NULL", string(m.ID())),
@@ -2637,10 +2649,10 @@ func TestMessageStore_CompletionDropsTheBodyAndKeepsTheKey(t *testing.T) {
 	// stores a message nor requeues the delivered one.
 	late, err := message.New(bot, ada, "key-1", "hello again")
 	require.NoError(t, err)
-	afterDelivery, err := s.Enqueue(ctx, late)
+	afterDelivery, err := s.Enqueue(ctx, late, nil)
 	require.NoError(t, err)
 	assert.Equal(t, m.ID(), afterDelivery.ID(), "a retry after completion is still suppressed")
-	_, err = s.Claim(ctx, bot, time.Minute, 4)
+	_, err = s.Claim(ctx, bot, time.Minute, 4, nil)
 	assert.ErrorIs(t, err, message.ErrNoMessageReady)
 }
 
@@ -2660,7 +2672,7 @@ func TestMessageStore_EnqueueSweepsWhatOutlivedTheWindow(t *testing.T) {
 	post := func(key string) message.ID {
 		m, err := message.New(bot, ada, key, "hello")
 		require.NoError(t, err)
-		stored, err := s.Enqueue(ctx, m)
+		stored, err := s.Enqueue(ctx, m, nil)
 		require.NoError(t, err)
 		return stored.ID()
 	}
@@ -2679,10 +2691,10 @@ func TestMessageStore_EnqueueSweepsWhatOutlivedTheWindow(t *testing.T) {
 	// The delivered one is posted first so the claim below takes it: a
 	// claim hands out the oldest message on the queue.
 	delivered := post("key-delivered")
-	claim, err := s.Claim(ctx, bot, time.Minute, 4)
+	claim, err := s.Claim(ctx, bot, time.Minute, 4, nil)
 	require.NoError(t, err)
 	require.Equal(t, delivered, claim.Message().ID(), "the oldest message is the one claimed")
-	require.NoError(t, s.Complete(ctx, bot, claim.ID()))
+	require.NoError(t, s.Complete(ctx, bot, claim.ID(), nil))
 
 	expired := post("key-expired")
 	standing := post("key-standing")
@@ -2740,7 +2752,7 @@ func TestMessage_BodyAndCompletionAreOneState(t *testing.T) {
 	// constraint rejects a half-state rather than every row.
 	m, err := message.New(bot, ada, "key-whole", "hello")
 	require.NoError(t, err)
-	_, err = message.NewPostgresStore(p).Enqueue(ctx, m)
+	_, err = message.NewPostgresStore(p).Enqueue(ctx, m, nil)
 	require.NoError(t, err)
 }
 
@@ -3347,7 +3359,7 @@ func TestMachineSurface_AnAgentActsOnItsOwnQueueAndNoOther(t *testing.T) {
 		`{"recipient":"`+ghost.String()+`","idempotencyKey":"key-2","body":"nobody is home"}`)
 	require.Equal(t, http.StatusCreated, status, string(body))
 
-	stranded, err := message.NewPostgresStore(p).Claim(ctx, ghost, time.Minute, 1)
+	stranded, err := message.NewPostgresStore(p).Claim(ctx, ghost, time.Minute, 1, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "nobody is home", stranded.Message().Body())
 	_, err = agent.NewPostgresStore(p).Get(ctx, ghost)

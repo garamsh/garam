@@ -48,12 +48,16 @@ const (
 	// OperationAgentActivate bounds the hosted operator's own lifecycle
 	// authority (ADR-0078). No member mints it.
 	OperationAgentActivate Operation = "agent:activate"
+	// OperationAgentRecover replaces an agent's credential lineage: a
+	// high-trust action no member role grants, minted for one exact
+	// recovery request (ADR-0078).
+	OperationAgentRecover Operation = "agent:recover"
 )
 
 // ParseOperation parses an operation a grant may carry.
 func ParseOperation(s string) (Operation, error) {
 	switch o := Operation(s); o {
-	case OperationAgentCreate, OperationAgentConfigure, OperationAgentActivate:
+	case OperationAgentCreate, OperationAgentConfigure, OperationAgentActivate, OperationAgentRecover:
 		return o, nil
 	}
 	return "", errorx.New(errorx.KindInvalidArgument, "unknown operation "+s)
@@ -62,7 +66,14 @@ func ParseOperation(s string) (Operation, error) {
 // IsMintable reports whether a member can hand the operation to an
 // operator request by request.
 func (o Operation) IsMintable() bool {
-	return o == OperationAgentCreate || o == OperationAgentConfigure
+	return o == OperationAgentCreate || o.TargetsAgent()
+}
+
+// TargetsAgent reports whether the operation acts on an existing agent:
+// it is authorized on that agent and bound to where the agent runs when
+// it is minted.
+func (o Operation) TargetsAgent() bool {
+	return o == OperationAgentConfigure || o == OperationAgentRecover
 }
 
 // RequestID is a caller's stable identifier for one write, which makes

@@ -523,9 +523,17 @@ ADRs:
   the GRN, epoch and revision; old generations and replaced credential
   lineages are refused per request, applied configuration is the
   runtime's report, and execution authority is a scoped expiring
-  delegation plus a high-trust permission; unbuilt
+  delegation plus a high-trust permission; garam's generation fence and
+  recovery are built, and the shipped adapter does not use them yet
 - [0079](./adr/0079-interservice-contracts-keep-adjacent-releases-compatible-and-replay-by-stable-identifier.md)
   — interservice contracts keep adjacent releases compatible in both
   upgrade orders and refuse what they do not support, a message replays
   by a stable identifier and a reply leaves through a durable outbox,
   and no effect is exactly-once; unbuilt
+- [0080](./adr/0080-an-agents-execution-row-is-the-one-lock-its-writes-and-replacements-share.md)
+  — every agent has one execution row, the lock its protected writes
+  and its replacements share: other domains take it through the
+  declared `agent_execution_admit` function in their own transaction,
+  each reading its answer into its own input and refusal, and a
+  replacement takes it exclusively, so no write of a replaced
+  generation commits after its replacement

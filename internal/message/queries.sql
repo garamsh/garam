@@ -179,3 +179,12 @@ ORDER BY org_a, org_b;
 -- that side's half with it.
 SELECT count(*) FROM message_consents
 WHERE org_a = sqlc.arg('org') OR org_b = sqlc.arg('org');
+
+-- AdmitExecution runs the agent execution fence (ADR-0080) as the
+-- first statement of a protected write's transaction; the row it locks
+-- is held until that transaction ends.
+-- name: AdmitExecution :one
+SELECT agent_execution_admit(
+    sqlc.arg('agent_grn'), sqlc.narg('token_hash')::bytea, sqlc.arg('serial'),
+    sqlc.arg('not_before')::timestamptz, sqlc.arg('not_after')::timestamptz
+)::text;

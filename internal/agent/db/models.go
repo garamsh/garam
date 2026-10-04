@@ -17,12 +17,36 @@ type Agent struct {
 	UpdatedAt         pgtype.Timestamptz
 }
 
+type AgentActivation struct {
+	ID                   pgtype.UUID
+	AgentGrn             string
+	RequestID            string
+	Generation           string
+	Epoch                int32
+	Lineage              pgtype.UUID
+	AudienceGrn          string
+	GrantID              string
+	OperationRef         pgtype.Text
+	ReplacesActivationID pgtype.UUID
+	TokenVersion         int64
+	EndedReason          pgtype.Text
+	CreatedAt            pgtype.Timestamptz
+	EndedAt              pgtype.Timestamptz
+}
+
 type AgentAssignment struct {
 	AgentGrn    string
 	OperatorGrn string
 	Epoch       int32
 	CreatedAt   pgtype.Timestamptz
 	UpdatedAt   pgtype.Timestamptz
+}
+
+type AgentCredential struct {
+	AgentGrn string
+	Serial   string
+	Lineage  pgtype.UUID
+	NotAfter pgtype.Timestamptz
 }
 
 type AgentDefinition struct {
@@ -33,6 +57,26 @@ type AgentDefinition struct {
 	DefinedBy   string
 	CreatedAt   pgtype.Timestamptz
 	Name        string
+}
+
+type AgentExecution struct {
+	AgentGrn           string
+	Mode               string
+	Lineage            pgtype.UUID
+	ActivationID       pgtype.UUID
+	TokenHash          []byte
+	LatestActivationID pgtype.UUID
+	UpdatedAt          pgtype.Timestamptz
+}
+
+type AgentRecovery struct {
+	AgentGrn       string
+	RequestID      string
+	OperationRef   string
+	BodySha256     []byte
+	Lineage        pgtype.UUID
+	CertificatePem string
+	CreatedAt      pgtype.Timestamptz
 }
 
 type AgentTemplate struct {

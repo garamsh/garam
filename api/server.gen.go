@@ -65,6 +65,7 @@ const (
 	DelegatedOperationAgentActivate  DelegatedOperation = "agent:activate"
 	DelegatedOperationAgentConfigure DelegatedOperation = "agent:configure"
 	DelegatedOperationAgentCreate    DelegatedOperation = "agent:create"
+	DelegatedOperationAgentRecover   DelegatedOperation = "agent:recover"
 )
 
 // Valid indicates whether the value is a known member of the DelegatedOperation enum.
@@ -75,6 +76,8 @@ func (e DelegatedOperation) Valid() bool {
 	case DelegatedOperationAgentConfigure:
 		return true
 	case DelegatedOperationAgentCreate:
+		return true
+	case DelegatedOperationAgentRecover:
 		return true
 	default:
 		return false
@@ -103,6 +106,7 @@ func (e InvitationCreateRole) Valid() bool {
 const (
 	OperationAuthorityRequestOperationAgentConfigure OperationAuthorityRequestOperation = "agent:configure"
 	OperationAuthorityRequestOperationAgentCreate    OperationAuthorityRequestOperation = "agent:create"
+	OperationAuthorityRequestOperationAgentRecover   OperationAuthorityRequestOperation = "agent:recover"
 )
 
 // Valid indicates whether the value is a known member of the OperationAuthorityRequestOperation enum.
@@ -111,6 +115,8 @@ func (e OperationAuthorityRequestOperation) Valid() bool {
 	case OperationAuthorityRequestOperationAgentConfigure:
 		return true
 	case OperationAuthorityRequestOperationAgentCreate:
+		return true
+	case OperationAuthorityRequestOperationAgentRecover:
 		return true
 	default:
 		return false
@@ -406,7 +412,7 @@ type OperationAuthorityRequest struct {
 	Operation  OperationAuthorityRequestOperation `json:"operation"`
 	RequestId  RequestId                          `json:"requestId"`
 
-	// Target Controller GRN for `agent:create`, agent GRN for `agent:configure`.
+	// Target Controller GRN for `agent:create`, agent GRN for `agent:configure` and `agent:recover`.
 	Target string `json:"target"`
 }
 

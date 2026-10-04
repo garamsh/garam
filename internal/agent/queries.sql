@@ -2,6 +2,27 @@
 INSERT INTO agents (grn, org_grn, provisioning_state, runtime_state, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5, $6);
 
+-- Every agent has an execution row from the transaction that creates
+-- it, so the row the fence locks always exists (ADR-0080).
+-- name: CreateAgentExecution :exec
+INSERT INTO agent_executions (agent_grn, updated_at) VALUES ($1, $2);
+
+-- LockAgentExecution comes before any read or write of the assignment
+-- in the same transaction: agent_executions, then agent_assignments.
+-- name: LockAgentExecution :one
+SELECT agent_grn FROM agent_executions WHERE agent_grn = $1 FOR UPDATE;
+
+-- EndReassignedActivation ends the activation a reassignment leaves
+-- behind: the new assignee's runtime activates its own.
+-- name: EndReassignedActivation :exec
+WITH ended AS (
+    UPDATE agent_activations a SET ended_reason = 'reassigned', ended_at = $2
+    FROM agent_executions e
+    WHERE e.agent_grn = $1 AND a.id = e.activation_id AND a.ended_reason IS NULL
+)
+UPDATE agent_executions x SET activation_id = NULL, token_hash = NULL, updated_at = $2
+WHERE x.agent_grn = $1 AND x.activation_id IS NOT NULL;
+
 -- name: GetAgent :one
 SELECT * FROM agents WHERE grn = $1;
 
@@ -46,6 +67,9 @@ WHERE grn = sqlc.arg('grn')
   )
 RETURNING *;
 
+-- name: GetAgentExecutionMode :one
+SELECT mode FROM agent_executions WHERE agent_grn = $1;
+
 -- name: ReportAgentRuntimeState :one
 UPDATE agents SET
     runtime_state = sqlc.arg('runtime_state'),
@@ -78,11 +102,15 @@ SELECT * FROM agent_definitions WHERE org_grn = $1 ORDER BY agent_grn;
 
 -- The claim state is the assignment the claim wrote: an unclaimed
 -- definition has none, and a claimed one binds the operator it names.
+-- An agent whose execution is fenced has cut over to the Operator
+-- control service, and its definition is no longer the operator's
+-- source (ADR-0077), so it is not listed.
 -- name: ListAgentDefinitionsByOperator :many
 SELECT d.*, a.epoch AS claim_epoch, a.created_at AS claim_created_at, a.updated_at AS claim_updated_at
 FROM agent_definitions d
 LEFT JOIN agent_assignments a ON a.agent_grn = d.agent_grn
-WHERE d.operator_grn = $1
+LEFT JOIN agent_executions e ON e.agent_grn = d.agent_grn
+WHERE d.operator_grn = $1 AND (e.mode IS NULL OR e.mode = 'legacy')
 ORDER BY d.agent_grn;
 
 -- LockAgentDefinition is the lock a claim serializes on: two claims of
@@ -124,3 +152,12 @@ RETURNING *;
 
 -- name: DeleteAgentTemplate :execrows
 DELETE FROM agent_templates WHERE grn = $1;
+
+-- AdmitExecution runs the agent execution fence (ADR-0080) as the
+-- first statement of a protected write's transaction; the row it locks
+-- is held until that transaction ends.
+-- name: AdmitExecution :one
+SELECT agent_execution_admit(
+    sqlc.arg('agent_grn'), sqlc.narg('token_hash')::bytea, sqlc.arg('serial'),
+    sqlc.arg('not_before')::timestamptz, sqlc.arg('not_after')::timestamptz
+)::text;

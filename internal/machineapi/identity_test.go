@@ -200,6 +200,7 @@ func TestServer_EnrollmentIsTheOnlyRouteAnUncertifiedCallerReaches(t *testing.T)
 		"controller": operatorGRN("acme").String(),
 		"message":    "m-1",
 		"ref":        "ref-1",
+		"activation": "00000000-0000-0000-0000-000000000001",
 	})
 	enrol, ok := routes[enrollmentRoute]
 	require.True(t, ok, "the exemption names no operation the specification declares")

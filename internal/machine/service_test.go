@@ -588,3 +588,38 @@ func TestService_RecheckDecidesAnEarlierIdentityAgain(t *testing.T) {
 	assert.True(t, errorx.IsKind(machine.NewService(trustRoots{store: issuer.store}, unreadable{}, machine.Config{}).
 		Recheck(ctx, identity), errorx.KindUnavailable))
 }
+
+// TestService_ProveEstablishesTheChainAndNothingAboutNow holds one
+// expired certificate whose chain and SAN are sound: Prove answers its
+// identity and dates, and Verify, which is Prove followed by Recheck,
+// refuses the same certificate on the clock. A certificate that does
+// not prove its subject is refused by both, as invalid-argument, and
+// so is a withdrawn record left to Recheck.
+func TestService_ProveEstablishesTheChainAndNothingAboutNow(t *testing.T) {
+	ctx := context.Background()
+	issuer := newIssuer(t)
+	agent := agentGRN("acme", "0a1b2c3d4e5f6071")
+	issuer.authority(t, "acme")
+	expired := parsed(t, issuer.sign(t, "acme", leaf{uris: []string{agent.String()}, notAfter: time.Now().Add(-time.Minute)}))
+	svc := issuer.serviceHolding(held().without(agent))
+
+	identity, err := svc.Prove(ctx, agent, expired)
+	require.NoError(t, err)
+	assert.Equal(t, agent, identity.GRN())
+	assert.Equal(t, expired.SerialNumber.String(), identity.Serial())
+	assert.Equal(t, expired.NotAfter, identity.NotAfter())
+	assert.True(t, errorx.IsKind(svc.Verify(ctx, agent, expired), errorx.KindPermissionDenied),
+		"control: full verification refuses the same certificate on the clock")
+
+	issuer.authority(t, "other")
+	for name, certificate := range map[string]tls.Certificate{
+		"another identity's certificate":             issuer.issue(t, agentGRN("acme", "1111111111111111")),
+		"signed by another organization's authority": issuer.sign(t, "other", leaf{uris: []string{agent.String()}}),
+		"signed by nothing but its own key":          issuer.selfSigned(t, agent),
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := svc.Prove(ctx, agent, parsed(t, certificate))
+			assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), "%v", err)
+		})
+	}
+}

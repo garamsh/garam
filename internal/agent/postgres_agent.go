@@ -14,17 +14,37 @@ import (
 	"github.com/garamsh/garam/internal/pgxerr"
 )
 
-// Create persists a new Agent.
+// Create persists a new Agent and its execution row, in one
+// transaction, so no agent exists without the row the execution fence
+// locks (ADR-0080).
 func (s *PostgresStore) Create(ctx context.Context, a *Agent) error {
-	err := s.q.CreateAgent(ctx, db.CreateAgentParams{
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return errorx.Wrap(err, "begin", errorx.KindUnavailable)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	q := s.q.WithTx(tx)
+	if err := q.CreateAgent(ctx, db.CreateAgentParams{
 		Grn:               a.grn.String(),
 		OrgGrn:            a.orgGRN.String(),
 		ProvisioningState: string(a.provisioning),
 		RuntimeState:      string(a.runtime),
 		CreatedAt:         stamp(a.createdAt),
 		UpdatedAt:         stamp(a.updatedAt),
-	})
-	return pgxerr.Classify(err, "create", nil, ErrAgentAlreadyExists)
+	}); err != nil {
+		return pgxerr.Classify(err, "create", nil, ErrAgentAlreadyExists)
+	}
+	if err := q.CreateAgentExecution(ctx, db.CreateAgentExecutionParams{
+		AgentGrn:  a.grn.String(),
+		UpdatedAt: stamp(a.createdAt),
+	}); err != nil {
+		return pgxerr.Classify(err, "create", nil, nil)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return errorx.Wrap(err, "commit")
+	}
+	return nil
 }
 
 // Get returns the Agent with the given GRN, or ErrAgentNotFound.
@@ -71,28 +91,61 @@ func (s *PostgresStore) ReportProvisioningState(ctx context.Context, agentGRN gr
 		UpdatedAt:         stamp(time.Now().UTC()),
 	})
 	if err != nil {
-		return nil, s.fenced(ctx, err, "report provisioning state", agentGRN)
+		return nil, s.fenced(ctx, s.q, err, "report provisioning state", agentGRN)
 	}
 	return rowToAgent(row)
 }
 
 // ReportRuntimeState records what the agent assigned at epoch reports
 // about itself.
-func (s *PostgresStore) ReportRuntimeState(ctx context.Context, agentGRN grn.GRN, epoch int, state RuntimeState) (*Agent, error) {
+func (s *PostgresStore) ReportRuntimeState(ctx context.Context, agentGRN grn.GRN, epoch int, state RuntimeState, fence Fencing) (*Agent, error) {
 	e, err := narrowEpoch(epoch)
 	if err != nil {
 		return nil, err
 	}
-	row, err := s.q.ReportAgentRuntimeState(ctx, db.ReportAgentRuntimeStateParams{
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, errorx.Wrap(err, "begin", errorx.KindUnavailable)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	q := s.q.WithTx(tx)
+	answer, err := q.AdmitExecution(ctx, db.AdmitExecutionParams{
+		AgentGrn:  fence.Agent.String(),
+		TokenHash: fence.TokenBytes(),
+		Serial:    fence.Credential.Serial,
+		NotBefore: stamp(fence.Credential.NotBefore),
+		NotAfter:  stamp(fence.Credential.NotAfter),
+	})
+	if err != nil {
+		return nil, errorx.Wrap(err, "report runtime state: admit", errorx.KindUnavailable)
+	}
+	if err := Admission(answer).Err(); err != nil {
+		return nil, err
+	}
+	row, err := q.ReportAgentRuntimeState(ctx, db.ReportAgentRuntimeStateParams{
 		Grn:          agentGRN.String(),
 		RuntimeState: string(state),
 		Epoch:        e,
 		UpdatedAt:    stamp(time.Now().UTC()),
 	})
 	if err != nil {
-		return nil, s.fenced(ctx, err, "report runtime state", agentGRN)
+		// The answer is read in the same transaction: no second
+		// connection is asked for while the fence is held.
+		return nil, s.fenced(ctx, q, err, "report runtime state", agentGRN)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, errorx.Wrap(err, "commit", errorx.KindUnavailable)
 	}
 	return rowToAgent(row)
+}
+
+// ExecutionMode answers whether the agent's execution is fenced.
+func (s *PostgresStore) ExecutionMode(ctx context.Context, agentGRN grn.GRN) (Mode, error) {
+	mode, err := s.q.GetAgentExecutionMode(ctx, agentGRN.String())
+	if err != nil {
+		return "", pgxerr.Classify(err, "execution mode", ErrAgentNotFound, nil)
+	}
+	return ParseMode(mode)
 }
 
 // narrowEpoch converts a reported epoch to the width of the `epoch`
@@ -109,11 +162,11 @@ func narrowEpoch(epoch int) (int32, error) {
 
 // fenced says why a state report matched no row: the agent is gone, or
 // the epoch is not the one it is assigned at.
-func (s *PostgresStore) fenced(ctx context.Context, err error, op string, agentGRN grn.GRN) error {
+func (s *PostgresStore) fenced(ctx context.Context, q *db.Queries, err error, op string, agentGRN grn.GRN) error {
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return pgxerr.Classify(err, op, nil, nil)
 	}
-	if _, getErr := s.q.GetAgent(ctx, agentGRN.String()); getErr != nil {
+	if _, getErr := q.GetAgent(ctx, agentGRN.String()); getErr != nil {
 		return pgxerr.Classify(getErr, op, ErrAgentNotFound, nil)
 	}
 	return ErrStaleEpoch

@@ -12,8 +12,10 @@ package watch
 import (
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/internal/grn"
 )
 
 // WatchID identifies one open watch. It is the key its lease is written
@@ -80,3 +82,15 @@ func (e Event) Kind() string { return e.kind }
 // Body is the event as the platform emitted it. It may be empty and it
 // may span lines.
 func (e Event) Body() string { return e.body }
+
+// Fence is what an agent's event presents to the agent execution fence
+// (ADR-0080), as the transport authenticated it: the agent, the
+// certificate its connection verified, and the hash of the execution
+// token its request carries, nil where it carries none.
+type Fence struct {
+	Agent     grn.GRN
+	Serial    string
+	NotBefore time.Time
+	NotAfter  time.Time
+	TokenHash []byte
+}

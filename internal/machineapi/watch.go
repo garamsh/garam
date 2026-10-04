@@ -22,7 +22,7 @@ import (
 // it: nothing is stored, so there is nothing that could report a
 // delivery (ADR-0022).
 func (s *Server) ForwardTurnEvent(w http.ResponseWriter, r *http.Request, agentGRN machinegen.AgentGrn) {
-	caller, agent, ok := parties(w, r, agentGRN)
+	caller, agent, fence, ok := fencedParties(w, r, agentGRN)
 	if !ok {
 		return
 	}
@@ -36,7 +36,7 @@ func (s *Server) ForwardTurnEvent(w http.ResponseWriter, r *http.Request, agentG
 		writeError(w, err)
 		return
 	}
-	if err := s.watches.Publish(r.Context(), caller, agent, event); err != nil {
+	if err := s.watches.Publish(r.Context(), caller, agent, event, watchFence(fence)); err != nil {
 		writeError(w, err)
 		return
 	}

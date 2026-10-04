@@ -13,6 +13,66 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for ExecutionIntrospectionCredential.
+const (
+	ExecutionIntrospectionCredentialCurrent ExecutionIntrospectionCredential = "current"
+	ExecutionIntrospectionCredentialFenced  ExecutionIntrospectionCredential = "fenced"
+)
+
+// Valid indicates whether the value is a known member of the ExecutionIntrospectionCredential enum.
+func (e ExecutionIntrospectionCredential) Valid() bool {
+	switch e {
+	case ExecutionIntrospectionCredentialCurrent:
+		return true
+	case ExecutionIntrospectionCredentialFenced:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ExecutionIntrospectionGeneration.
+const (
+	ExecutionIntrospectionGenerationCurrent     ExecutionIntrospectionGeneration = "current"
+	ExecutionIntrospectionGenerationNone        ExecutionIntrospectionGeneration = "none"
+	ExecutionIntrospectionGenerationNotCurrent  ExecutionIntrospectionGeneration = "not_current"
+	ExecutionIntrospectionGenerationNotSupplied ExecutionIntrospectionGeneration = "not_supplied"
+)
+
+// Valid indicates whether the value is a known member of the ExecutionIntrospectionGeneration enum.
+func (e ExecutionIntrospectionGeneration) Valid() bool {
+	switch e {
+	case ExecutionIntrospectionGenerationCurrent:
+		return true
+	case ExecutionIntrospectionGenerationNone:
+		return true
+	case ExecutionIntrospectionGenerationNotCurrent:
+		return true
+	case ExecutionIntrospectionGenerationNotSupplied:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ExecutionIntrospectionMode.
+const (
+	ExecutionIntrospectionModeFenced ExecutionIntrospectionMode = "fenced"
+	ExecutionIntrospectionModeLegacy ExecutionIntrospectionMode = "legacy"
+)
+
+// Valid indicates whether the value is a known member of the ExecutionIntrospectionMode enum.
+func (e ExecutionIntrospectionMode) Valid() bool {
+	switch e {
+	case ExecutionIntrospectionModeFenced:
+		return true
+	case ExecutionIntrospectionModeLegacy:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MessageState.
 const (
 	MessageStateClaimed   MessageState = "claimed"
@@ -41,6 +101,7 @@ func (e MessageState) Valid() bool {
 const (
 	AgentConfigure OperationBindingOperation = "agent:configure"
 	AgentCreate    OperationBindingOperation = "agent:create"
+	AgentRecover   OperationBindingOperation = "agent:recover"
 )
 
 // Valid indicates whether the value is a known member of the OperationBindingOperation enum.
@@ -49,6 +110,8 @@ func (e OperationBindingOperation) Valid() bool {
 	case AgentConfigure:
 		return true
 	case AgentCreate:
+		return true
+	case AgentRecover:
 		return true
 	default:
 		return false
@@ -100,6 +163,44 @@ func (e RuntimeState) Valid() bool {
 	}
 }
 
+// Activation defines model for Activation.
+type Activation struct {
+	ActivationId string `json:"activationId"`
+
+	// Epoch Opaque.
+	Epoch      string `json:"epoch"`
+	Generation string `json:"generation"`
+	Grn        string `json:"grn"`
+
+	// Lineage The credential lineage checked, null for the certificates issued before any recovery.
+	Lineage *string `json:"lineage"`
+
+	// Token What the runtime's calls carry as `Authorization: Garam-Execution <token>`. Shown once; garam keeps its hash.
+	Token string `json:"token"`
+
+	// TokenVersion Rises with every token issued for this activation; keep the highest.
+	TokenVersion int `json:"tokenVersion"`
+}
+
+// ActivationRequest defines model for ActivationRequest.
+type ActivationRequest struct {
+	// CertificatePem The agent's leaf certificate in PEM form, exactly as the agent presented it to the caller.
+	CertificatePem string `json:"certificatePem"`
+
+	// Epoch The assignment's epoch the caller expects. Opaque.
+	Epoch string `json:"epoch"`
+
+	// Generation The runtime's start nonce for this process.
+	Generation string `json:"generation"`
+
+	// OperationRef A durable `agent:configure` reference for a pending revision, null otherwise.
+	OperationRef *string `json:"operationRef"`
+
+	// ReplacesActivationId The agent's most recent activation, null only before the first.
+	ReplacesActivationId *string `json:"replacesActivationId"`
+	RequestId            string  `json:"requestId"`
+}
+
 // AgentAssignment An agent and the operator that runs it, at the epoch that binding holds.
 type AgentAssignment struct {
 	// Epoch Rises with every assignment and fences the operator it replaced. An agent presents it when it connects.
@@ -114,7 +215,7 @@ type AuthorityIntrospection struct {
 	Authority string `json:"authority"`
 }
 
-// BoundAssignment Where the agent ran when a configuration change was authorized. Present for `agent:configure` only.
+// BoundAssignment Where the agent ran when an operation on it was authorized. Present for `agent:configure` and `agent:recover` only.
 type BoundAssignment struct {
 	// Epoch Opaque.
 	Epoch       string `json:"epoch"`
@@ -158,6 +259,16 @@ type ControllerProof struct {
 
 	// Org The organization's GRN.
 	Org string `json:"org"`
+}
+
+// CredentialRecoveryRequest defines model for CredentialRecoveryRequest.
+type CredentialRecoveryRequest struct {
+	// CertificateRequestPem A PEM-encoded PKCS#10 request over an ECDSA P-256 key the holder generated. Only its key is read.
+	CertificateRequestPem string `json:"certificateRequestPem"`
+
+	// Epoch The assignment's epoch the caller expects. Opaque.
+	Epoch     string `json:"epoch"`
+	RequestId string `json:"requestId"`
 }
 
 // Definition What an organization says an agent should be, answered to the operator it names (ADR-0026). `claim` is absent while no operator has claimed the definition and carries the agent's assignment epoch once one has — the only claimant a definition admits is the operator it names, so who claimed it is always the caller.
@@ -209,6 +320,45 @@ type Error struct {
 	// Kind errorx kind, e.g. `not_found`, `permission_denied`.
 	Kind    string `json:"kind"`
 	Message string `json:"message"`
+}
+
+// ExecutionIntrospection defines model for ExecutionIntrospection.
+type ExecutionIntrospection struct {
+	// ActivationId The current activation, null when none is.
+	ActivationId *string `json:"activationId"`
+
+	// Assignee The operator the agent is assigned to.
+	Assignee   string                           `json:"assignee"`
+	Credential ExecutionIntrospectionCredential `json:"credential"`
+
+	// Epoch Opaque.
+	Epoch string `json:"epoch"`
+
+	// Generation With a generation supplied, whether it is the active one; without one, `none` when no generation is active and `not_supplied` otherwise.
+	Generation ExecutionIntrospectionGeneration `json:"generation"`
+	Grn        string                           `json:"grn"`
+
+	// Mode `fenced` once the agent has been activated.
+	Mode ExecutionIntrospectionMode `json:"mode"`
+	Org  string                     `json:"org"`
+}
+
+// ExecutionIntrospectionCredential defines model for ExecutionIntrospection.Credential.
+type ExecutionIntrospectionCredential string
+
+// ExecutionIntrospectionGeneration With a generation supplied, whether it is the active one; without one, `none` when no generation is active and `not_supplied` otherwise.
+type ExecutionIntrospectionGeneration string
+
+// ExecutionIntrospectionMode `fenced` once the agent has been activated.
+type ExecutionIntrospectionMode string
+
+// ExecutionIntrospectionRequest defines model for ExecutionIntrospectionRequest.
+type ExecutionIntrospectionRequest struct {
+	// CertificatePem The agent's leaf certificate in PEM form, exactly as the agent presented it to the caller.
+	CertificatePem string `json:"certificatePem"`
+
+	// Generation A generation to compare with the active one.
+	Generation *string `json:"generation,omitempty"`
 }
 
 // Identity defines model for Identity.
@@ -281,7 +431,7 @@ type OperationBinding struct {
 	// ActorGrn The user the operation is performed for.
 	ActorGrn string `json:"actorGrn"`
 
-	// Assignment Where the agent ran when a configuration change was authorized. Present for `agent:configure` only.
+	// Assignment Where the agent ran when an operation on it was authorized. Present for `agent:configure` and `agent:recover` only.
 	Assignment  *BoundAssignment `json:"assignment,omitempty"`
 	AudienceGrn string           `json:"audienceGrn"`
 	BodySha256  string           `json:"bodySha256"`
@@ -294,7 +444,7 @@ type OperationBinding struct {
 	OrgGrn       string                    `json:"orgGrn"`
 	RequestId    string                    `json:"requestId"`
 
-	// TargetGrn The controller for `agent:create`, the agent for `agent:configure`.
+	// TargetGrn The controller for `agent:create`, the agent for `agent:configure` and `agent:recover`.
 	TargetGrn string `json:"targetGrn"`
 }
 
@@ -320,6 +470,13 @@ type ProvisioningStateReport struct {
 	State ProvisioningState `json:"state"`
 }
 
+// RecoveredCredential defines model for RecoveredCredential.
+type RecoveredCredential struct {
+	CertificatePem string `json:"certificatePem"`
+	Grn            string `json:"grn"`
+	Lineage        string `json:"lineage"`
+}
+
 // RuntimeState What the agent reports about itself. `unknown` is an agent that has not reported since it was created.
 type RuntimeState string
 
@@ -341,6 +498,9 @@ type TurnEvent struct {
 	Kind string `json:"kind"`
 }
 
+// ActivationId defines model for activation.
+type ActivationId = string
+
 // AgentGrn defines model for agent.
 type AgentGrn = string
 
@@ -353,6 +513,9 @@ type ContractVersion = string
 // ControllerGrn defines model for controller.
 type ControllerGrn = string
 
+// ExecutionContractVersion defines model for executionContractVersion.
+type ExecutionContractVersion = string
+
 // MessageId defines model for message.
 type MessageId = string
 
@@ -361,6 +524,33 @@ type OperationRef = string
 
 // ContractError defines model for ContractError.
 type ContractError = Error
+
+// ExecutionContractError defines model for ExecutionContractError.
+type ExecutionContractError = Error
+
+// ActivateAgentParams defines parameters for ActivateAgent.
+type ActivateAgentParams struct {
+	// ExecutionContractVersion Must be `execution-fence.v1`; any other value is refused with 400 naming it.
+	ExecutionContractVersion ExecutionContractVersion `json:"Garam-Contract-Version"`
+}
+
+// DeactivateAgentParams defines parameters for DeactivateAgent.
+type DeactivateAgentParams struct {
+	// ExecutionContractVersion Must be `execution-fence.v1`; any other value is refused with 400 naming it.
+	ExecutionContractVersion ExecutionContractVersion `json:"Garam-Contract-Version"`
+}
+
+// RecoverAgentCredentialParams defines parameters for RecoverAgentCredential.
+type RecoverAgentCredentialParams struct {
+	// ExecutionContractVersion Must be `execution-fence.v1`; any other value is refused with 400 naming it.
+	ExecutionContractVersion ExecutionContractVersion `json:"Garam-Contract-Version"`
+}
+
+// IntrospectAgentExecutionParams defines parameters for IntrospectAgentExecution.
+type IntrospectAgentExecutionParams struct {
+	// ExecutionContractVersion Must be `execution-fence.v1`; any other value is refused with 400 naming it.
+	ExecutionContractVersion ExecutionContractVersion `json:"Garam-Contract-Version"`
+}
 
 // IntrospectOperationAuthorityParams defines parameters for IntrospectOperationAuthority.
 type IntrospectOperationAuthorityParams struct {
@@ -379,6 +569,15 @@ type IntrospectControllerParams struct {
 	// ContractVersion Must be `operation-authority.v1` (ADR-0079); any other value is refused with 400 naming it.
 	ContractVersion ContractVersion `json:"Garam-Contract-Version"`
 }
+
+// ActivateAgentJSONRequestBody defines body for ActivateAgent for application/json ContentType.
+type ActivateAgentJSONRequestBody = ActivationRequest
+
+// RecoverAgentCredentialJSONRequestBody defines body for RecoverAgentCredential for application/json ContentType.
+type RecoverAgentCredentialJSONRequestBody = CredentialRecoveryRequest
+
+// IntrospectAgentExecutionJSONRequestBody defines body for IntrospectAgentExecution for application/json ContentType.
+type IntrospectAgentExecutionJSONRequestBody = ExecutionIntrospectionRequest
 
 // ReportProvisioningStateJSONRequestBody defines body for ReportProvisioningState for application/json ContentType.
 type ReportProvisioningStateJSONRequestBody = ProvisioningStateReport
@@ -406,6 +605,12 @@ type ServerInterface interface {
 	// CreateAgent Create an agent and assign it to the calling operator.
 	// (POST /agents)
 	CreateAgent(w http.ResponseWriter, r *http.Request)
+	// ActivateAgent Admit a runtime generation of an agent, and issue the token its calls carry.
+	// (POST /agents/{agent}/activations)
+	ActivateAgent(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn, params ActivateAgentParams)
+	// DeactivateAgent End an activation of an agent, if it is still the current one.
+	// (POST /agents/{agent}/activations/{activation}/deactivation)
+	DeactivateAgent(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn, activationId ActivationId, params DeactivateAgentParams)
 	// IssueAgentCertificate Issue the certificate an agent authenticates with.
 	// (POST /agents/{agent}/certificate)
 	IssueAgentCertificate(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn)
@@ -418,6 +623,12 @@ type ServerInterface interface {
 	// RenewClaim Extend a claim while the message is still being worked on.
 	// (POST /agents/{agent}/claims/{claim}/renewal)
 	RenewClaim(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn, claimId ClaimId)
+	// RecoverAgentCredential Replace an agent's credential lineage under an administrator's handoff.
+	// (POST /agents/{agent}/credential-recovery)
+	RecoverAgentCredential(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn, params RecoverAgentCredentialParams)
+	// IntrospectAgentExecution Ask whether an agent certificate and a generation are current, together.
+	// (POST /agents/{agent}/execution/introspection)
+	IntrospectAgentExecution(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn, params IntrospectAgentExecutionParams)
 	// ReportProvisioningState Report what the operator sees of an agent's pod.
 	// (POST /agents/{agent}/provisioning-state)
 	ReportProvisioningState(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn)
@@ -473,6 +684,123 @@ func (siw *ServerInterfaceWrapper) CreateAgent(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.CreateAgent(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ActivateAgent operation middleware
+func (siw *ServerInterfaceWrapper) ActivateAgent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agent" -------------
+	var agentGrn AgentGrn
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentGrn, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ActivateAgentParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Garam-Contract-Version" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Garam-Contract-Version")]; found {
+		var ExecutionContractVersion ExecutionContractVersion
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Garam-Contract-Version", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Garam-Contract-Version", valueList[0], &ExecutionContractVersion, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Garam-Contract-Version", Err: err})
+			return
+		}
+
+		params.ExecutionContractVersion = ExecutionContractVersion
+
+	} else {
+		err := fmt.Errorf("Header parameter Garam-Contract-Version is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Garam-Contract-Version", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ActivateAgent(w, r, agentGrn, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeactivateAgent operation middleware
+func (siw *ServerInterfaceWrapper) DeactivateAgent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agent" -------------
+	var agentGrn AgentGrn
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentGrn, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "activation" -------------
+	var activationId ActivationId
+
+	err = runtime.BindStyledParameterWithOptions("simple", "activation", r.PathValue("activation"), &activationId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "activation", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeactivateAgentParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Garam-Contract-Version" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Garam-Contract-Version")]; found {
+		var ExecutionContractVersion ExecutionContractVersion
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Garam-Contract-Version", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Garam-Contract-Version", valueList[0], &ExecutionContractVersion, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Garam-Contract-Version", Err: err})
+			return
+		}
+
+		params.ExecutionContractVersion = ExecutionContractVersion
+
+	} else {
+		err := fmt.Errorf("Header parameter Garam-Contract-Version is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Garam-Contract-Version", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeactivateAgent(w, r, agentGrn, activationId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -595,6 +923,114 @@ func (siw *ServerInterfaceWrapper) RenewClaim(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RenewClaim(w, r, agentGrn, claimId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RecoverAgentCredential operation middleware
+func (siw *ServerInterfaceWrapper) RecoverAgentCredential(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agent" -------------
+	var agentGrn AgentGrn
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentGrn, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RecoverAgentCredentialParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Garam-Contract-Version" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Garam-Contract-Version")]; found {
+		var ExecutionContractVersion ExecutionContractVersion
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Garam-Contract-Version", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Garam-Contract-Version", valueList[0], &ExecutionContractVersion, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Garam-Contract-Version", Err: err})
+			return
+		}
+
+		params.ExecutionContractVersion = ExecutionContractVersion
+
+	} else {
+		err := fmt.Errorf("Header parameter Garam-Contract-Version is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Garam-Contract-Version", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RecoverAgentCredential(w, r, agentGrn, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// IntrospectAgentExecution operation middleware
+func (siw *ServerInterfaceWrapper) IntrospectAgentExecution(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agent" -------------
+	var agentGrn AgentGrn
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentGrn, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params IntrospectAgentExecutionParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Garam-Contract-Version" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Garam-Contract-Version")]; found {
+		var ExecutionContractVersion ExecutionContractVersion
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Garam-Contract-Version", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Garam-Contract-Version", valueList[0], &ExecutionContractVersion, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Garam-Contract-Version", Err: err})
+			return
+		}
+
+		params.ExecutionContractVersion = ExecutionContractVersion
+
+	} else {
+		err := fmt.Errorf("Header parameter Garam-Contract-Version is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Garam-Contract-Version", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.IntrospectAgentExecution(w, r, agentGrn, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -1095,6 +1531,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/operation-authorities/introspection", wrapper.IntrospectOperationAuthority)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/operation-references/{ref}", wrapper.CheckOperationReference)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/operators/{controller}/introspection", wrapper.IntrospectController)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/activations", wrapper.ActivateAgent)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/activations/{activation}/deactivation", wrapper.DeactivateAgent)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/execution/introspection", wrapper.IntrospectAgentExecution)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/credential-recovery", wrapper.RecoverAgentCredential)
 
 	return m
 }

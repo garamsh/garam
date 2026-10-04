@@ -11,6 +11,37 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const admitExecution = `-- name: AdmitExecution :one
+SELECT agent_execution_admit(
+    $1, $2::bytea, $3,
+    $4::timestamptz, $5::timestamptz
+)::text
+`
+
+type AdmitExecutionParams struct {
+	AgentGrn  string
+	TokenHash []byte
+	Serial    string
+	NotBefore pgtype.Timestamptz
+	NotAfter  pgtype.Timestamptz
+}
+
+// AdmitExecution runs the agent execution fence (ADR-0080) as the
+// first statement of a protected write's transaction; the row it locks
+// is held until that transaction ends.
+func (q *Queries) AdmitExecution(ctx context.Context, arg AdmitExecutionParams) (string, error) {
+	row := q.db.QueryRow(ctx, admitExecution,
+		arg.AgentGrn,
+		arg.TokenHash,
+		arg.Serial,
+		arg.NotBefore,
+		arg.NotAfter,
+	)
+	var column_1 string
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const claimMessage = `-- name: ClaimMessage :one
 UPDATE messages SET
     claim_id         = $1,

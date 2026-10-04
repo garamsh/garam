@@ -23,7 +23,8 @@ type Store interface {
 	// ListByOrg returns the organization's agents, ordered by GRN.
 	ListByOrg(ctx context.Context, orgGRN grn.GRN, f listfilter.Filter) ([]*Agent, error)
 	// Assign binds the agent to an operator at the next epoch,
-	// replacing whichever operator held it before.
+	// replacing whichever operator held it before and ending the
+	// activation its runtime held (ADR-0078).
 	Assign(ctx context.Context, agentGRN, operatorGRN grn.GRN) (*Assignment, error)
 	GetAssignment(ctx context.Context, agentGRN grn.GRN) (*Assignment, error)
 	// ListAssignmentsByOrg returns the assignments of the

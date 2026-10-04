@@ -2,6 +2,27 @@
 INSERT INTO agents (grn, org_grn, provisioning_state, runtime_state, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5, $6);
 
+-- Every agent has an execution row from the transaction that creates
+-- it, so the row the fence locks always exists (ADR-0080).
+-- name: CreateAgentExecution :exec
+INSERT INTO agent_executions (agent_grn, updated_at) VALUES ($1, $2);
+
+-- LockAgentExecution comes before any read or write of the assignment
+-- in the same transaction: agent_executions, then agent_assignments.
+-- name: LockAgentExecution :one
+SELECT agent_grn FROM agent_executions WHERE agent_grn = $1 FOR UPDATE;
+
+-- EndReassignedActivation ends the activation a reassignment leaves
+-- behind: the new assignee's runtime activates its own.
+-- name: EndReassignedActivation :exec
+WITH ended AS (
+    UPDATE agent_activations a SET ended_reason = 'reassigned', ended_at = $2
+    FROM agent_executions e
+    WHERE e.agent_grn = $1 AND a.id = e.activation_id AND a.ended_reason IS NULL
+)
+UPDATE agent_executions x SET activation_id = NULL, token_hash = NULL, updated_at = $2
+WHERE x.agent_grn = $1 AND x.activation_id IS NOT NULL;
+
 -- name: GetAgent :one
 SELECT * FROM agents WHERE grn = $1;
 

@@ -131,6 +131,22 @@ func (q *Queries) CreateAgentDefinition(ctx context.Context, arg CreateAgentDefi
 	return err
 }
 
+const createAgentExecution = `-- name: CreateAgentExecution :exec
+INSERT INTO agent_executions (agent_grn, updated_at) VALUES ($1, $2)
+`
+
+type CreateAgentExecutionParams struct {
+	AgentGrn  string
+	UpdatedAt pgtype.Timestamptz
+}
+
+// Every agent has an execution row from the transaction that creates
+// it, so the row the fence locks always exists (ADR-0080).
+func (q *Queries) CreateAgentExecution(ctx context.Context, arg CreateAgentExecutionParams) error {
+	_, err := q.db.Exec(ctx, createAgentExecution, arg.AgentGrn, arg.UpdatedAt)
+	return err
+}
+
 const createAgentTemplate = `-- name: CreateAgentTemplate :exec
 INSERT INTO agent_templates (grn, org_grn, name, description, agent_values, created_by, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -171,6 +187,28 @@ func (q *Queries) DeleteAgentTemplate(ctx context.Context, grn string) (int64, e
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const endReassignedActivation = `-- name: EndReassignedActivation :exec
+WITH ended AS (
+    UPDATE agent_activations a SET ended_reason = 'reassigned', ended_at = $2
+    FROM agent_executions e
+    WHERE e.agent_grn = $1 AND a.id = e.activation_id AND a.ended_reason IS NULL
+)
+UPDATE agent_executions x SET activation_id = NULL, token_hash = NULL, updated_at = $2
+WHERE x.agent_grn = $1 AND x.activation_id IS NOT NULL
+`
+
+type EndReassignedActivationParams struct {
+	AgentGrn  string
+	UpdatedAt pgtype.Timestamptz
+}
+
+// EndReassignedActivation ends the activation a reassignment leaves
+// behind: the new assignee's runtime activates its own.
+func (q *Queries) EndReassignedActivation(ctx context.Context, arg EndReassignedActivationParams) error {
+	_, err := q.db.Exec(ctx, endReassignedActivation, arg.AgentGrn, arg.UpdatedAt)
+	return err
 }
 
 const getAgent = `-- name: GetAgent :one
@@ -459,6 +497,19 @@ func (q *Queries) LockAgentDefinition(ctx context.Context, agentGrn string) (Age
 		&i.Name,
 	)
 	return i, err
+}
+
+const lockAgentExecution = `-- name: LockAgentExecution :one
+SELECT agent_grn FROM agent_executions WHERE agent_grn = $1 FOR UPDATE
+`
+
+// LockAgentExecution comes before any read or write of the assignment
+// in the same transaction: agent_executions, then agent_assignments.
+func (q *Queries) LockAgentExecution(ctx context.Context, agentGrn string) (string, error) {
+	row := q.db.QueryRow(ctx, lockAgentExecution, agentGrn)
+	var agent_grn string
+	err := row.Scan(&agent_grn)
+	return agent_grn, err
 }
 
 const renameAgentDefinition = `-- name: RenameAgentDefinition :one

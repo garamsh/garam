@@ -158,6 +158,14 @@ func (s *PostgresStore) Claim(ctx context.Context, agentGRN, operatorGRN grn.GRN
 	}); err != nil {
 		return nil, pgxerr.Classify(err, "claim", nil, nil)
 	}
+	// The execution row is written, and so held, before the
+	// assignment: the lock order every transaction follows (ADR-0080).
+	if err := q.CreateAgentExecution(ctx, db.CreateAgentExecutionParams{
+		AgentGrn:  agentGRN.String(),
+		UpdatedAt: now,
+	}); err != nil {
+		return nil, pgxerr.Classify(err, "claim", nil, nil)
+	}
 	assigned, err := q.AssignAgent(ctx, db.AssignAgentParams{
 		AgentGrn:    agentGRN.String(),
 		OperatorGrn: operatorGRN.String(),

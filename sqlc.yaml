@@ -44,6 +44,7 @@ sql:
       - migrations/000004_agents.up.sql
       - migrations/000010_agent_definitions.up.sql
       - migrations/000026_agent_templates.up.sql
+      - migrations/000029_agent_execution_fence.up.sql
     queries: internal/agent/queries.sql
     gen:
       go:
@@ -104,4 +105,15 @@ sql:
       go:
         package: db
         out: internal/watch/db
+        sql_package: pgx/v5
+  - engine: postgresql
+    schema:
+      - migrations/000001_init.up.sql
+      - migrations/000004_agents.up.sql
+      - migrations/000029_agent_execution_fence.up.sql
+    queries: internal/agent/postgres/queries.sql
+    gen:
+      go:
+        package: db
+        out: internal/agent/postgres/db
         sql_package: pgx/v5

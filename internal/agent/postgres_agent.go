@@ -14,17 +14,37 @@ import (
 	"github.com/garamsh/garam/internal/pgxerr"
 )
 
-// Create persists a new Agent.
+// Create persists a new Agent and its execution row, in one
+// transaction, so no agent exists without the row the execution fence
+// locks (ADR-0080).
 func (s *PostgresStore) Create(ctx context.Context, a *Agent) error {
-	err := s.q.CreateAgent(ctx, db.CreateAgentParams{
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return errorx.Wrap(err, "begin", errorx.KindUnavailable)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	q := s.q.WithTx(tx)
+	if err := q.CreateAgent(ctx, db.CreateAgentParams{
 		Grn:               a.grn.String(),
 		OrgGrn:            a.orgGRN.String(),
 		ProvisioningState: string(a.provisioning),
 		RuntimeState:      string(a.runtime),
 		CreatedAt:         stamp(a.createdAt),
 		UpdatedAt:         stamp(a.updatedAt),
-	})
-	return pgxerr.Classify(err, "create", nil, ErrAgentAlreadyExists)
+	}); err != nil {
+		return pgxerr.Classify(err, "create", nil, ErrAgentAlreadyExists)
+	}
+	if err := q.CreateAgentExecution(ctx, db.CreateAgentExecutionParams{
+		AgentGrn:  a.grn.String(),
+		UpdatedAt: stamp(a.createdAt),
+	}); err != nil {
+		return pgxerr.Classify(err, "create", nil, nil)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return errorx.Wrap(err, "commit")
+	}
+	return nil
 }
 
 // Get returns the Agent with the given GRN, or ErrAgentNotFound.

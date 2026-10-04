@@ -724,13 +724,17 @@ func TestLogServed_CarriesTheCauseAMachineAnswerWithheld(t *testing.T) {
 	})
 }
 
-// enginePolicies is an authz.PolicySource answering every Check with
+// enginePolicies is an authz.PolicySource answering every read with
 // err. The engine's own error writer is what the interceptor then
 // reads, so what is under test is the shape grpcError produces rather
 // than one assembled here.
 type enginePolicies struct{ err error }
 
 func (p enginePolicies) Statements(context.Context, grn.GRN, []grn.GRN) ([]authz.Statement, error) {
+	return nil, p.err
+}
+
+func (p enginePolicies) CurrentStatements(context.Context, grn.GRN, []grn.GRN) ([]authz.Statement, error) {
 	return nil, p.err
 }
 

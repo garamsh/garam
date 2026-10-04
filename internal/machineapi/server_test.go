@@ -277,8 +277,9 @@ func listener(t *testing.T, agents agent.Service, operators operator.Service, me
 }
 
 // serveTLS serves srv behind the machine listener, as listener does,
-// for a test that composes the server itself.
-func serveTLS(t *testing.T, srv *machineapi.Server, caller grn.GRN) (string, *http.Client) {
+// for a test that composes the server itself, inside middlewares where
+// a test names them.
+func serveTLS(t *testing.T, srv *machineapi.Server, caller grn.GRN, middlewares ...machinegen.MiddlewareFunc) (string, *http.Client) {
 	t.Helper()
 	store := authorities{}
 	key := make([]byte, ca.KeySize)
@@ -296,7 +297,9 @@ func serveTLS(t *testing.T, srv *machineapi.Server, caller grn.GRN) (string, *ht
 	served := machine.NewServer(
 		machine.NewService(trustRoots{store: store}, everyRecordHeld{}, machine.Config{}),
 		loopback(t),
-		machinegen.HandlerWithOptions(srv, machinegen.StdHTTPServerOptions{ErrorHandlerFunc: machineapi.BindingError}),
+		machinegen.HandlerWithOptions(srv, machinegen.StdHTTPServerOptions{
+			ErrorHandlerFunc: machineapi.BindingError, Middlewares: middlewares,
+		}),
 	)
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)

@@ -218,7 +218,9 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 	// log line can name the route rather than the path. The last
 	// middleware listed is the outermost, so recovery runs inside the
 	// logging: a panic becomes the 500 the line reports rather than an
-	// unwind that leaves no line at all. The slice reaches the spec
+	// unwind that leaves no line at all. Confining a supervisor to its
+	// routes is innermost, beside the handlers it guards. The slice
+	// reaches the spec
 	// operations alone; machineServer covers the rest of what this
 	// server serves.
 	authority := NewAuthorityService(pool, cfg.Engine)
@@ -229,7 +231,7 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 			newExecutionService(pool, cfg.Engine, authority, identities, issuer, cfg.ServerRoot, cfg.Now),
 			newSupervisorService(pool, cfg.Engine, issuer, cfg.ServerRoot, cfg.Now)),
 		machinegen.StdHTTPServerOptions{
-			Middlewares: []machinegen.MiddlewareFunc{machineapi.RecoverPanics, obs.logMachineRequests},
+			Middlewares: []machinegen.MiddlewareFunc{machineapi.ConfineSupervisors, machineapi.RecoverPanics, obs.logMachineRequests},
 			// A parameter the router cannot bind is refused before any
 			// handler runs, so this is the only place the surface's own
 			// error body reaches that refusal.

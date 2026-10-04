@@ -289,6 +289,22 @@ func TestStandalone_TheSupervisorActivatesItsOwnAgentAndNothingElse(t *testing.T
 	assert.Equal(t, e.agent.String(), a.Grn)
 	allAdmitted(t, s.protectedCalls(t, e.agentTLS, a.Token), "the activation's token")
 
+	// The supervisor's certificate reaches no collaboration or operator
+	// route; an agent of the organization posting is the control.
+	posted := s.send(t, s.peerTLS, http.MethodPost, "/messages", "", "", submissionTo(e.agent, s.key()))
+	assert.Equal(t, http.StatusCreated, posted.status, "the control: an ordinary sender posts: %s", posted.body)
+	for _, route := range []struct{ method, path, body string }{
+		{http.MethodPost, "/messages", submissionTo(e.agent, s.key())},
+		{http.MethodGet, "/definitions", ""},
+		{http.MethodPost, "/agents", ""},
+		{http.MethodPost, s.agentPath("/claims"), ""},
+		{http.MethodPost, "/identity/certificate", ""},
+	} {
+		got := s.send(t, e.supervisorTLS, route.method, route.path, "", "", route.body)
+		assert.Equal(t, http.StatusForbidden, got.status, "%s %s: %s", route.method, route.path, got.body)
+		assert.Contains(t, got.body, "lifecycle routes alone", "%s %s", route.method, route.path)
+	}
+
 	in := s.introspect(t, e.supervisorTLS, e.agentLeaf, &[]agent.Generation{generationOf(1)}[0])
 	require.Equal(t, http.StatusOK, in.status, in.body)
 	assert.Contains(t, in.body, `"assignee":"`+e.supervisor.String()+`"`)
@@ -300,7 +316,8 @@ func TestStandalone_TheSupervisorActivatesItsOwnAgentAndNothingElse(t *testing.T
 	csr, _ := enrollmentRequest(t)
 	raw, err := json.Marshal(map[string]string{"requestId": "x", "epoch": strconv.Itoa(e.epoch), "certificateRequestPem": csr})
 	require.NoError(t, err)
-	recovery := s.lifecycle(t, e.supervisorTLS, s.agentPath("/credential-recovery"), "Garam-Operation anything", string(raw))
+	recovery := s.send(t, e.supervisorTLS, http.MethodPost, s.agentPath("/credential-recovery"), agent.ExecutionContractVersion,
+		"Garam-Operation anything", string(raw))
 	assert.Equal(t, http.StatusForbidden, recovery.status, "recovery is an administrator's new approval: %s", recovery.body)
 
 	ended := s.lifecycle(t, e.supervisorTLS, s.agentPath("/activations/"+a.ActivationId+"/deactivation"), "", "")

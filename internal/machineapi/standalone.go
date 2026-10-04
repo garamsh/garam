@@ -13,6 +13,7 @@ import (
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/internal/machine"
 )
 
 // bootstrapScheme is the Authorization scheme a standalone host spends
@@ -123,4 +124,33 @@ func standaloneContract(w http.ResponseWriter, version machinegen.StandaloneCont
 		return false
 	}
 	return true
+}
+
+// supervisorRoutes is everything a supervisor's certificate reaches
+// (ADR-0082): its own identity, its own renewal, and the execution
+// routes it holds lifecycle authority on. They are the router's
+// patterns, so a route added later is outside the set until named here.
+var supervisorRoutes = map[string]bool{
+	http.MethodGet + " /identity":                                              true,
+	http.MethodPost + " /supervisors/self/certificate":                         true,
+	http.MethodPost + " /agents/{agent}/activations":                           true,
+	http.MethodPost + " /agents/{agent}/activations/{activation}/deactivation": true,
+	http.MethodPost + " /agents/{agent}/execution/introspection":               true,
+}
+
+// ConfineSupervisors refuses a supervisor's request to any route
+// outside supervisorRoutes before its handler runs. It is the one place
+// a supervisor's reach is decided: the handlers behind it, the message
+// routes included, answer a machine identity without asking which kind
+// it is, and a supervisor is no organization-wide sender. It reads the
+// route the router matched, so it runs inside the router.
+func ConfineSupervisors(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		identity, ok := machine.IdentityOf(r)
+		if ok && identity.GRN().ServiceType == agent.ServiceTypeSupervisor && !supervisorRoutes[r.Pattern] {
+			writeError(w, errorx.New(errorx.KindPermissionDenied, "a supervisor reaches its lifecycle routes alone"))
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }

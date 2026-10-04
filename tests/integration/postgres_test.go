@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math/big"
 	"net"
 	"net/http"
@@ -47,17 +48,16 @@ import (
 	"github.com/garamsh/garam/internal/authz"
 	"github.com/garamsh/garam/internal/ca"
 	capg "github.com/garamsh/garam/internal/ca/postgres"
+	"github.com/garamsh/garam/internal/cli"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/listfilter"
-	"github.com/garamsh/garam/internal/machine"
 	"github.com/garamsh/garam/internal/machineapi"
 	"github.com/garamsh/garam/internal/message"
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
 	"github.com/garamsh/garam/internal/user"
 	userpg "github.com/garamsh/garam/internal/user/postgres"
-	"github.com/garamsh/garam/internal/watch"
 	"github.com/garamsh/garam/internal/wire"
 	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
 )
@@ -2929,102 +2929,6 @@ func briefDelivery() message.Config {
 	}
 }
 
-// memberGroups reads the groups a machine identity belongs to
-// (machineapi.Groups) — the adapter the composition root builds, in the
-// form this suite can hold.
-type memberGroups struct{ store org.Store }
-
-func (m memberGroups) List(ctx context.Context, subject grn.GRN) ([]grn.GRN, error) {
-	return m.store.ListGroupsByMember(ctx, orgRootGRN(subject.Organization), subject)
-}
-
-// certificates is the certificate authority as the agent domain signs
-// through it (agent.Issuer) — the adapter the composition root builds,
-// in the form this suite can hold.
-type certificates struct {
-	issuer     ca.Service
-	serverRoot []byte
-}
-
-func (c certificates) Issue(ctx context.Context, subject grn.GRN) (*agent.Certificate, error) {
-	issued, err := c.issuer.Issue(ctx, subject)
-	if err != nil {
-		return nil, err
-	}
-	return &agent.Certificate{
-		CertificatePEM: issued.CertificatePEM(),
-		PrivateKeyPEM:  issued.PrivateKeyPEM(),
-		IssuerPEM:      issued.IssuerPEM(),
-		ServerRootPEM:  c.serverRoot,
-		NotAfter:       issued.NotAfter(),
-	}, nil
-}
-
-// operatorCertificates is that same authority in the shape the operator
-// domain signs through (operator.Issuer), carrying the serial a renewal
-// presents to say which certificate it is replacing.
-type operatorCertificates struct {
-	issuer     ca.Service
-	serverRoot []byte
-}
-
-func (c operatorCertificates) Issue(ctx context.Context, subject grn.GRN) (*operator.IssuedCertificate, error) {
-	issued, err := c.issuer.Issue(ctx, subject)
-	if err != nil {
-		return nil, err
-	}
-	return &operator.IssuedCertificate{
-		Certificate:   c.certificate(&issued.Certificate),
-		PrivateKeyPEM: issued.PrivateKeyPEM(),
-	}, nil
-}
-
-func (c operatorCertificates) Sign(ctx context.Context, subject grn.GRN, request operator.CertificateRequest) (*operator.Certificate, error) {
-	signed, err := c.issuer.Sign(ctx, subject, request)
-	if err != nil {
-		return nil, err
-	}
-	certificate := c.certificate(signed)
-	return &certificate, nil
-}
-
-func (c operatorCertificates) certificate(signed *ca.Certificate) operator.Certificate {
-	return operator.Certificate{
-		Subject:        signed.Subject(),
-		Serial:         operator.Serial(signed.Serial()),
-		CertificatePEM: signed.CertificatePEM(),
-		IssuerPEM:      signed.IssuerPEM(),
-		ServerRootPEM:  c.serverRoot,
-		NotAfter:       signed.NotAfter(),
-	}
-}
-
-// operatorRegistrations is the record an identity authenticates on, in
-// the shape the composition root satisfies it: an operator is admitted
-// while its organization still holds the record, and every other
-// identity is admitted without a read (ADR-0070).
-type operatorRegistrations struct{ store operator.Store }
-
-func (r operatorRegistrations) Holds(ctx context.Context, subject grn.GRN) error {
-	if subject.ServiceType != operator.ServiceType {
-		return nil
-	}
-	_, err := r.store.Get(ctx, subject)
-	return err
-}
-
-// machineTrustRoots reads the authority a presented certificate has to
-// chain to out of the ones Postgres holds.
-type machineTrustRoots struct{ store ca.Store }
-
-func (r machineTrustRoots) Get(ctx context.Context, subject grn.GRN) ([]byte, error) {
-	authority, err := r.store.Get(ctx, orgRootGRN(subject.Organization))
-	if err != nil {
-		return nil, err
-	}
-	return authority.Certificate, nil
-}
-
 // listenerCertificate is what garam presents, as the listener asks for
 // it (machine.ServerCertificate).
 type listenerCertificate tls.Certificate
@@ -3095,39 +2999,23 @@ func policyEngine(t *testing.T, p *pgxpool.Pool) (*authz.PolicyGRPCServer, machi
 	return authz.NewPolicyGRPCServer(store, cache), machineapi.NewGRPCEvaluator(conn)
 }
 
-// machineListener serves the machine surface over the stores Postgres
-// holds and returns its URL. The parts are the ones `garam serve
-// machine` assembles: the same generated router, the same listener,
-// authorities sealed under the same key, and the engine reached over
-// gRPC.
+// machineListener serves the server `garam serve machine` builds,
+// over the stores Postgres holds, and returns its URL. What the command
+// reads from its configuration is supplied here instead: the sealer and
+// engine the caller holds, a self-signed listener certificate, and
+// delivery waits shortened to what a test can sit through.
 func machineListener(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer, policies machineapi.Evaluator) string {
 	t.Helper()
-	authorities := capg.New(p)
-	issuer, err := ca.NewService(authorities, sealer, ca.Config{})
-	require.NoError(t, err)
 	presented := loopbackCertificate(t)
-	agents := agent.NewService(agent.NewPostgresStore(p),
-		certificates{issuer: issuer, serverRoot: certificatePEM(presented)})
-	// An operator enrols here with the token registering it minted
-	// (ADR-0064) and renews here afterwards, recording each certificate
-	// it is issued (ADR-0046).
-	operatorStore := operator.NewPostgresStore(p)
-	operators := operator.NewService(operatorStore, operatorStore,
-		operatorCertificates{issuer: issuer, serverRoot: certificatePEM(presented)}, operator.Config{})
-	messages, err := message.NewService(message.NewPostgresStore(p), briefDelivery())
+	srv, err := cli.NewMachineServer(p, cli.MachineConfig{
+		Sealer:      sealer,
+		Certificate: presented,
+		ServerRoot:  certificatePEM(presented),
+		Delivery:    briefDelivery(),
+		Policies:    policies,
+		Logger:      slog.New(slog.NewJSONHandler(io.Discard, nil)),
+	})
 	require.NoError(t, err)
-	// The watches this surface counts are opened by the process serving
-	// browsers, so what it holds is the store they are written to and the
-	// relay it announces forwarded events on (ADR-0017, ADR-0022).
-	watches, err := watch.NewService(watch.NewPostgresStore(p), watch.NewPostgresRelay(p), watch.Config{})
-	require.NoError(t, err)
-
-	srv := machine.NewServer(
-		machine.NewService(machineTrustRoots{store: authorities},
-			operatorRegistrations{store: operatorStore}),
-		presented,
-		machinegen.Handler(machineapi.NewServer(agents, operators, messages, message.NewPostgresStore(p), watches, memberGroups{store: org.NewPostgresStore(p)}, policies)),
-	)
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	go func() { _ = srv.ServeTLS(lis, "", "") }()

@@ -81,42 +81,6 @@ func serveMachine(cmd *cobra.Command) error {
 	if err != nil {
 		return err
 	}
-	authorities := capg.New(pool)
-	issuer, err := ca.NewService(authorities, keys.sealer, ca.Config{CertificateLifetime: lifetime})
-	if err != nil {
-		return err
-	}
-	agents := agent.NewService(agent.NewPostgresStore(pool),
-		certificates{issuer: issuer, serverRoot: keys.serverRoot})
-	// An operator obtains its first certificate on this listener by
-	// enrolling (ADR-0064) and renews it here afterwards (ADR-0046),
-	// through the same authority and the same server root its agents
-	// are given. One store answers both halves: what garam last issued
-	// an operator, and the token an enrollment spends.
-	operatorStore := operator.NewPostgresStore(pool)
-	operators := operator.NewService(operatorStore, operatorStore,
-		operatorCertificates{issuer: issuer, serverRoot: keys.serverRoot}, operator.Config{})
-	// The delivery parameters default narrow (ADR-0018), and the
-	// defaults are what this process runs on until something asks for
-	// another value.
-	messages, err := message.NewService(message.NewPostgresStore(pool), message.Config{})
-	if err != nil {
-		return err
-	}
-	// The consent a cross-organization post needs is the message
-	// domain's relation (ADR-0035); this process reads it and `serve
-	// api` is where an organization grants and withdraws its half.
-	consents := message.NewPostgresStore(pool)
-
-	// Whether anyone is watching is read from the rows `serve api` writes
-	// while it holds a stream, and a forwarded event is announced for
-	// that process to deliver: garam cannot dial an adapter, so the
-	// count travels on the poll this process answers, and no stream is
-	// held here (ADR-0022).
-	watches, err := watch.NewService(watch.NewPostgresStore(pool), watch.NewPostgresRelay(pool), watch.Config{})
-	if err != nil {
-		return err
-	}
 
 	// Whom an agent may send to is decided by the policy engine, which
 	// runs as a process of its own and is reached over gRPC (ADR-0003).
@@ -134,26 +98,21 @@ func serveMachine(cmd *cobra.Command) error {
 	}
 	defer func() { _ = conn.Close() }()
 
-	// The generated router matches before the middleware runs, so the
-	// log line can name the route rather than the path. The last
-	// middleware listed is the outermost, so recovery runs inside the
-	// logging: a panic becomes the 500 the line reports rather than an
-	// unwind that leaves no line at all. The slice reaches the spec
-	// operations alone; machineServer covers the rest of what this
-	// server serves.
-	handler := machinegen.HandlerWithOptions(
-		machineapi.NewServer(agents, operators, messages, consents, watches,
-			memberGroups{store: org.NewPostgresStore(pool)},
-			machineapi.NewGRPCEvaluator(conn)),
-		machinegen.StdHTTPServerOptions{
-			Middlewares: []machinegen.MiddlewareFunc{machineapi.RecoverPanics, obs.logMachineRequests},
-			// A parameter the router cannot bind is refused before any
-			// handler runs, so this is the only place the surface's own
-			// error body reaches that refusal.
-			ErrorHandlerFunc: machineapi.BindingError,
-		})
-	srv := obs.machineServer(certificateAuthorities{store: authorities},
-		operatorRegistrations{store: operator.NewPostgresStore(pool)}, keys.listener, handler)
+	srv, err := NewMachineServer(pool, MachineConfig{
+		Sealer:      keys.sealer,
+		Certificate: keys.listener,
+		ServerRoot:  keys.serverRoot,
+		Authority:   ca.Config{CertificateLifetime: lifetime},
+		// The delivery parameters default narrow (ADR-0018), and the
+		// defaults are what this process runs on until something asks
+		// for another value.
+		Delivery: message.Config{},
+		Policies: machineapi.NewGRPCEvaluator(conn),
+		Logger:   obs.logger,
+	})
+	if err != nil {
+		return err
+	}
 	srv.Addr = envOr(envMachineAddr, ":8443")
 
 	// A probe holds no certificate and reaches no route on the TLS
@@ -174,6 +133,92 @@ func serveMachine(cmd *cobra.Command) error {
 		return errorx.Wrap(err, "machine serve", errorx.KindInternal)
 	}
 	return nil
+}
+
+// MachineConfig is what `garam serve machine` builds its server from
+// beside the database. The command reads each part from the process's
+// configuration; a test supplies its own.
+type MachineConfig struct {
+	// Sealer opens the sealed private keys of the certificate
+	// authorities (ADR-0016).
+	Sealer ca.Sealer
+	// Certificate is what the listener presents (ADR-0040).
+	Certificate machine.ServerCertificate
+	// ServerRoot is the garam root handed out beside every certificate
+	// issued here, for its holder to pin garam by (ADR-0040).
+	ServerRoot []byte
+	// Authority governs the certificates issued here.
+	Authority ca.Config
+	// Delivery governs the message queue (ADR-0018).
+	Delivery message.Config
+	// Policies decides the messages the listener accepts.
+	Policies machineapi.Evaluator
+	// Logger takes one line per served request and every recovered
+	// panic.
+	Logger *slog.Logger
+}
+
+// NewMachineServer assembles the server `garam serve machine` runs:
+// the generated router with its middleware and binding-error body,
+// behind the listener machineServer builds. The caller sets the
+// address and serves it.
+func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, error) {
+	// This listener serves no /metrics, so no registry is collected.
+	obs := &observability{logger: cfg.Logger}
+
+	authorities := capg.New(pool)
+	issuer, err := ca.NewService(authorities, cfg.Sealer, cfg.Authority)
+	if err != nil {
+		return nil, err
+	}
+	agents := agent.NewService(agent.NewPostgresStore(pool),
+		certificates{issuer: issuer, serverRoot: cfg.ServerRoot})
+	// An operator obtains its first certificate on this listener by
+	// enrolling (ADR-0064) and renews it here afterwards (ADR-0046),
+	// through the same authority and the same server root its agents
+	// are given. One store answers both halves: what garam last issued
+	// an operator, and the token an enrollment spends.
+	operatorStore := operator.NewPostgresStore(pool)
+	operators := operator.NewService(operatorStore, operatorStore,
+		operatorCertificates{issuer: issuer, serverRoot: cfg.ServerRoot}, operator.Config{})
+	messages, err := message.NewService(message.NewPostgresStore(pool), cfg.Delivery)
+	if err != nil {
+		return nil, err
+	}
+	// The consent a cross-organization post needs is the message
+	// domain's relation (ADR-0035); this process reads it and `serve
+	// api` is where an organization grants and withdraws its half.
+	consents := message.NewPostgresStore(pool)
+
+	// Whether anyone is watching is read from the rows `serve api` writes
+	// while it holds a stream, and a forwarded event is announced for
+	// that process to deliver: garam cannot dial an adapter, so the
+	// count travels on the poll this process answers, and no stream is
+	// held here (ADR-0022).
+	watches, err := watch.NewService(watch.NewPostgresStore(pool), watch.NewPostgresRelay(pool), watch.Config{})
+	if err != nil {
+		return nil, err
+	}
+
+	// The generated router matches before the middleware runs, so the
+	// log line can name the route rather than the path. The last
+	// middleware listed is the outermost, so recovery runs inside the
+	// logging: a panic becomes the 500 the line reports rather than an
+	// unwind that leaves no line at all. The slice reaches the spec
+	// operations alone; machineServer covers the rest of what this
+	// server serves.
+	handler := machinegen.HandlerWithOptions(
+		machineapi.NewServer(agents, operators, messages, consents, watches,
+			memberGroups{store: org.NewPostgresStore(pool)}, cfg.Policies),
+		machinegen.StdHTTPServerOptions{
+			Middlewares: []machinegen.MiddlewareFunc{machineapi.RecoverPanics, obs.logMachineRequests},
+			// A parameter the router cannot bind is refused before any
+			// handler runs, so this is the only place the surface's own
+			// error body reaches that refusal.
+			ErrorHandlerFunc: machineapi.BindingError,
+		})
+	return obs.machineServer(certificateAuthorities{store: authorities},
+		operatorRegistrations{store: operatorStore}, cfg.Certificate, handler), nil
 }
 
 // machineServer is the listener `serve machine` serves: TLS a client

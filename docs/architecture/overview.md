@@ -91,8 +91,10 @@ collaborate on a shared plan.
   and a member handing it one request-bound operation under
   `/orgs/{org}/operation-authorities`, which the operator reads back on
   the machine listener (ADR-0078), where it also proves a controller's
-  current authority before each lifecycle decision and activates,
-  inspects, deactivates and recovers an agent's execution. A grant is
+  current authority before each lifecycle decision, creates a managed
+  agent and issues its first certificate under a member's
+  `agent:create` reference (ADR-0077), and activates, inspects,
+  deactivates and recovers an agent's execution. A grant is
   immutable and a replacement or withdrawal is final for what was
   minted under it; every mint, read back and proof is decided from
   current state. Delegating is `operator:delegate`, creating
@@ -261,9 +263,11 @@ collaborate on a shared plan.
   certificate route (ADR-0040) and an operator renews its own by
   presenting it (ADR-0046); an operator's first is obtained by enrolling
   with the token registering it minted (ADR-0064), and an agent's first
-  still arrives on the route its operator's claim admits it to. Once an
-  agent's GRN cuts over, its renewal is inside its current lineage and a
-  lost certificate is recovered rather than reissued (ADR-0078).
+  still arrives on the route its operator's claim admits it to, unless
+  the agent was created managed: then it is signed over its
+  controller's key under the creation's reference. Once an agent's GRN
+  cuts over, its renewal is inside its current lineage and a lost
+  certificate is recovered rather than reissued (ADR-0078).
 - Revoking a certificate. There is still no revocation list, no
   responder, and no serial the TLS handshake checks, so an agent's
   certificate authenticates a connection until it expires (ADR-0014).

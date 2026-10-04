@@ -283,8 +283,11 @@ exact body the Operator will receive; garam never sees that body. It
 answers the token once, stores only its hash, and lets it live five
 minutes or until the grant expires. Creation targets the controller
 and is decided on `agent:create` against the organization, as defining
-an agent is; configuration targets the agent, is decided on
-`agent:configure` against it, and records where the agent runs now.
+an agent is, and its reference is what creates a managed agent,
+issues its first certificate and may start its first generation
+([agents.md](./agents.md) §Separated execution); configuration
+targets the agent, is decided on `agent:configure` against it, and
+records where the agent runs now.
 Recovery targets the agent, is decided on `agent:recover` against it,
 and records where the agent runs now; the recovery it authorizes is
 answered once, and a second recovery under it is refused

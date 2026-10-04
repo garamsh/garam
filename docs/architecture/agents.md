@@ -13,8 +13,9 @@ by `internal/agent`.
 | `Certificate` | what an agent authenticates with and the garam server root it verifies garam by, as this domain hands them back |
 | `Service` | creates an agent for the calling operator, issues the certificate of one assigned to it while the agent has not cut over, answers an operator with the definitions naming it so it can claim one (ADR-0033), and records the state each party reports (ADR-0053) |
 | `Issuer` | signs a certificate for a subject GRN and hands back the garam server root beside it |
-| `ExecutionService` | what a lifecycle authority does to an agent's execution — activates a generation, deactivates it, inspects a certificate and a generation, recovers the credential lineage — and how an agent renews its own certificate, legacy or fenced, inside the lineage that certificate is current in (ADR-0040, ADR-0078) |
-| `ExecutionStore` | the execution row every agent has, its activations and its credential lineage, written under the row's lock (ADR-0080) |
+| `ExecutionService` | what a lifecycle authority does to an agent's execution — creates a managed agent and issues its first certificate, activates a generation, deactivates it, inspects a certificate and a generation, recovers the credential lineage — and how an agent renews its own certificate, legacy or fenced, inside the lineage that certificate is current in (ADR-0040, ADR-0077, ADR-0078) |
+| `ExecutionStore` | the execution row every agent has, its activations and its credential lineage, written under the row's lock (ADR-0080), and a managed agent's creation and the initial issuance that starts its lineage |
+| `ManagedCreation` | an agent the hosted control service created: its GRN, the controller and epoch of its first assignment, the `agent:create` reference and request identifier that authorized it, and the lineage it was born into |
 
 garam mints an agent's GRN and never changes it, so which operator runs
 the agent is a relation a reassignment moves rather than part of the
@@ -134,13 +135,16 @@ release of that contract and no compatibility window (ADR-0049).
 
 ## Separated execution
 
-**Built here is garam's half of two parts: the controller proof
+**Built here is garam's half of three parts: managed creation and its
+initial issuance (below), the controller proof
 ([operators.md](./operators.md) §Controller proof) and the generation
 fence ([machine-identity.md](./machine-identity.md) §Generation and
-lineage).** The adapter this repository ships calls neither: nothing
-under `internal/delivery/` activates, carries an execution token or
-introspects. Acceptance with the Operator control service and the
-adapter is unverified and tracked in #1157. The rest is the accepted
+lineage).** The adapter this repository ships calls none of them:
+nothing under `internal/delivery/` activates, carries an execution
+token or introspects. The Operator control service's use of managed
+creation is garamsh/garam-agent-operator#211 and #218's, per #1167.
+Acceptance with the Operator control service and the adapter is
+unverified and tracked in #1157. The rest is the accepted
 target of ADR-0077 and ADR-0078, and everything above describes what
 runs for a GRN that has not cut over. Product implementation is tracked
 in #1157.
@@ -153,10 +157,28 @@ in #1157.
   assignment stay here, and the console still copies a template once
   (ADR-0077).
 - **A managed agent is created by request, not by claim.** The control
-  service asks for one under a delegation and a stable request
-  identifier; registration and the first assignment are one
-  transaction, and a retry answers the same GRN. Today they are two
-  writes, as `Service.Create` in `internal/agent/service.go` says.
+  service presents a member's `agent:create` reference and the request
+  identifier it binds; garam rechecks the reference from current state
+  before it creates or answers an earlier creation, and reads no
+  lifecycle authority to create. The identity, its first assignment to
+  the bound controller, its execution and the creation record are one
+  transaction (migration 000030), so a failure leaves no agent, and the
+  same reference answers the same GRN and epoch while the agent stays
+  where its creation put it. The operator's own route still creates in
+  two writes, as `Service.Create` in `internal/agent/service.go` says,
+  and creates legacy agents alone.
+- **A managed agent is fenced from birth.** Its execution starts
+  fenced, with no activation, in a lineage holding no certificate, so
+  the one credential predicate (ADR-0080) refuses every certificate
+  naming it until its initial issuance records the first; the
+  operator's certificate route and definition claiming never reach
+  it. Initial issuance signs over a key the controller generated,
+  under the creation's own reference and the caller's lifecycle
+  authority for the current controller: it signs before the execution
+  lock and rechecks the assignment and every expiry under it, and an
+  identical retry answers the stored public result. Recovery, not
+  initial issuance, replaces a lost credential, and once it has the
+  initial issuance is refused, retries included.
 - **A generation is what an assignment does not fence.** Beside the GRN
   and the epoch, every agent has one execution row recording its mode,
   its active generation and its credential lineage. A lifecycle
@@ -171,7 +193,11 @@ in #1157.
   already admitted (ADR-0078, ADR-0080). A restart is a new
   activation, not a new certificate; a revision still pending carries
   a durable `agent:configure` reference, rechecked fresh, and one the
-  runtime already applied needs none.
+  runtime already applied needs none. A managed agent's first
+  activation carries its own creation's reference or such a configure
+  reference, and none is refused until an activation has succeeded;
+  the creation reference starts that first generation and no later
+  one.
 - **Applied configuration is the runtime's report**, at its GRN, epoch,
   generation and desired revision, kept apart from what the Operator
   rendered or provisioned. The Operator control service holds it; garam

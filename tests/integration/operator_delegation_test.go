@@ -113,7 +113,7 @@ func newDelegationFixture(t *testing.T) *delegationFixture {
 	f := &delegationFixture{
 		pool: p, store: store, authority: &currentAuthority{},
 		placements: &placements{at: map[grn.GRN]operator.Assignment{}},
-		clock:      &clock{now: time.Now().UTC().Truncate(time.Microsecond)},
+		clock:      &clock{now: time.Now().UTC()},
 		org:        orgRootGRN("acme"), actor: actor, hosted: hosted, controller: controller, other: other,
 		agent: scopedGRN("acme", "agent", "0a1b2c3d4e5f6071"),
 	}
@@ -242,6 +242,39 @@ func TestGrantWrite_ReplayBindsTheWholeWrite(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, created)
 	assert.Equal(t, second.ID, replayed.ID)
+}
+
+// TestGrantWrite_ReplayMatchesAtStoredPrecision holds that an expiry
+// carrying more precision than Postgres stores answers, on the write
+// and on its replay, the value that was stored, and that the replay is
+// recognised. A microsecond later is a different write and conflicts.
+func TestGrantWrite_ReplayMatchesAtStoredPrecision(t *testing.T) {
+	ctx := context.Background()
+	f := newDelegationFixture(t)
+	expiresAt := time.Date(2026, time.October, 5, 1, 2, 3, 123456789, time.UTC)
+	f.clock.now = expiresAt.Add(-time.Hour)
+	termsAt := func(e time.Time) operator.GrantTerms {
+		terms, err := operator.ParseGrantTerms(f.org, f.hosted, []string{f.controller.String()},
+			[]string{string(operator.OperationAgentCreate)}, e, f.clock.Now())
+		require.NoError(t, err)
+		return terms
+	}
+
+	written, created, err := f.write("grant-1", nil, termsAt(expiresAt))
+	require.NoError(t, err)
+	require.True(t, created)
+	stored, err := f.service.CurrentGrant(ctx, f.org, f.hosted)
+	require.NoError(t, err)
+	assert.Equal(t, stored.ExpiresAt, written.ExpiresAt, "the write answers what was stored")
+	assert.Equal(t, stored.GrantedAt, written.GrantedAt)
+
+	replayed, created, err := f.write("grant-1", nil, termsAt(expiresAt))
+	require.NoError(t, err)
+	assert.False(t, created)
+	assert.Equal(t, written.ID, replayed.ID)
+
+	_, _, err = f.write("grant-1", nil, termsAt(expiresAt.Add(time.Microsecond)))
+	require.ErrorIs(t, err, operator.ErrGrantRequestConflict)
 }
 
 // TestGrantWrite_RefusesAStaleViewAndAReusedRequest holds the
@@ -414,7 +447,7 @@ func TestReference_OutlivesTheShortToken(t *testing.T) {
 	f.grant(t)
 	minted, err := f.mint(operator.OperationAgentCreate, f.controller, "req-1")
 	require.NoError(t, err)
-	assert.True(t, minted.ExpiresAt.Equal(f.clock.Now().Add(operator.AuthorityTTL)))
+	assert.True(t, minted.ExpiresAt.Equal(f.clock.Now().Truncate(time.Microsecond).Add(operator.AuthorityTTL)))
 
 	f.clock.advance(operator.AuthorityTTL)
 	_, err = f.service.Introspect(ctx, f.hosted, minted.Authority)

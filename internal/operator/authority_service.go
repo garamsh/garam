@@ -61,10 +61,14 @@ type authorityService struct {
 // authorities it keeps, the operator records it reads registrations
 // from, where agents run, and what decides a user's current authority.
 func NewAuthorityService(grants GrantStore, authorities AuthorityStore, operators Store, assignments AssignmentReader, authorizer Authorizer, cfg Config) AuthorityService {
-	now := cfg.Now
-	if now == nil {
-		now = time.Now
+	clock := cfg.Now
+	if clock == nil {
+		clock = time.Now
 	}
+	// Every time this service writes is kept at the database's
+	// microsecond precision, so what a call answers is what a later read
+	// of the same row answers.
+	now := func() time.Time { return clock().UTC().Truncate(time.Microsecond) }
 	return &authorityService{grants: grants, authorities: authorities, operators: operators,
 		assignments: assignments, authorizer: authorizer, now: now}
 }
@@ -76,7 +80,7 @@ func (s *authorityService) WriteGrant(ctx context.Context, w GrantWrite) (*Grant
 	if err := s.registered(ctx, w.Org, w.Operator); err != nil {
 		return nil, false, err
 	}
-	w.Now = s.now().UTC()
+	w.Now = s.now()
 	return s.grants.WriteGrant(ctx, w, GrantID(uuid.NewString()))
 }
 
@@ -84,7 +88,7 @@ func (s *authorityService) EndGrant(ctx context.Context, actor, org, operator gr
 	if err := s.authorize(ctx, actor, org, org, actionDelegate); err != nil {
 		return err
 	}
-	return s.grants.EndGrant(ctx, org, operator, id, s.now().UTC())
+	return s.grants.EndGrant(ctx, org, operator, id, s.now())
 }
 
 func (s *authorityService) CurrentGrant(ctx context.Context, org, operator grn.GRN) (*Grant, error) {
@@ -114,7 +118,7 @@ func (s *authorityService) Mint(ctx context.Context, r MintRequest) (*Minted, er
 	if err != nil {
 		return nil, err
 	}
-	now := s.now().UTC()
+	now := s.now()
 	if !grant.Covers(b.Operation, controller, now) {
 		return nil, ErrNotDelegated
 	}

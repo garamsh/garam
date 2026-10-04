@@ -123,7 +123,9 @@ func ParseGrantTerms(org, operator grn.GRN, controllers, operations []string, ex
 	if len(controllers) == 0 || len(controllers) > maxControllers {
 		return GrantTerms{}, errorx.New(errorx.KindInvalidArgument, "a grant names 1 to 32 controllers")
 	}
-	terms := GrantTerms{ExpiresAt: expiresAt.UTC()}
+	// Stored at the database's microsecond precision, so the expiry a
+	// write answers is the one a replay of it is compared against.
+	terms := GrantTerms{ExpiresAt: expiresAt.UTC().Truncate(time.Microsecond)}
 	for _, c := range controllers {
 		g, err := grn.Parse(c)
 		if err != nil {

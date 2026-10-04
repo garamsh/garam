@@ -316,7 +316,11 @@ func TestControllerProof_BindsAnAgentToItsCurrentAssignment(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, got.status, "an agent assigned to another controller: %s", got.body)
 	got = s.prove(t, s.hostedTLS, s.controller, s.controllerPEM, scopedGRN("acme", "agent", "nobody").String())
 	assert.Equal(t, http.StatusNotFound, got.status, "an agent the organization does not have: %s", got.body)
-	got = s.prove(t, s.hostedTLS, s.controller, s.controllerPEM, scopedGRN("globex", "agent", "bot").String())
+	// globex's agent is real and placed, on globex's controller: what
+	// refuses it is the organization, decided before its placement is
+	// read.
+	foreign, _ := s.provision(t, machineClient(t, installed(t, p, s.issuer, s.globex)))
+	got = s.prove(t, s.hostedTLS, s.controller, s.controllerPEM, foreign)
 	assert.Equal(t, http.StatusNotFound, got.status, "another organization's agent: %s", got.body)
 
 	// Moving the agent away and back raises the epoch: the proof answers

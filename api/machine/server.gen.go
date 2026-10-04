@@ -37,6 +37,24 @@ func (e MessageState) Valid() bool {
 	}
 }
 
+// Defines values for OperationBindingOperation.
+const (
+	AgentConfigure OperationBindingOperation = "agent:configure"
+	AgentCreate    OperationBindingOperation = "agent:create"
+)
+
+// Valid indicates whether the value is a known member of the OperationBindingOperation enum.
+func (e OperationBindingOperation) Valid() bool {
+	switch e {
+	case AgentConfigure:
+		return true
+	case AgentCreate:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ProvisioningState.
 const (
 	ProvisioningStateFailed      ProvisioningState = "failed"
@@ -88,6 +106,19 @@ type AgentAssignment struct {
 	Epoch    int    `json:"epoch"`
 	Grn      string `json:"grn"`
 	Operator string `json:"operator"`
+}
+
+// AuthorityIntrospection defines model for AuthorityIntrospection.
+type AuthorityIntrospection struct {
+	// Authority The opaque authority, carried in the body so it never reaches a URL.
+	Authority string `json:"authority"`
+}
+
+// BoundAssignment Where the agent ran when a configuration change was authorized. Present for `agent:configure` only.
+type BoundAssignment struct {
+	// Epoch Opaque.
+	Epoch       string `json:"epoch"`
+	OperatorGrn string `json:"operatorGrn"`
 }
 
 // Claim One caller's hold on one message, and the token that fences it. Renewal and completion carry that token, and a hold handed on to the next caller stops matching.
@@ -224,6 +255,31 @@ type MessageSubmission struct {
 	Recipient string `json:"recipient"`
 }
 
+// OperationBinding defines model for OperationBinding.
+type OperationBinding struct {
+	// ActorGrn The user the operation is performed for.
+	ActorGrn string `json:"actorGrn"`
+
+	// Assignment Where the agent ran when a configuration change was authorized. Present for `agent:configure` only.
+	Assignment  *BoundAssignment `json:"assignment,omitempty"`
+	AudienceGrn string           `json:"audienceGrn"`
+	BodySha256  string           `json:"bodySha256"`
+
+	// ExpiresAt When the presented authority stops being usable. Absent on a reference check.
+	ExpiresAt    *time.Time                `json:"expiresAt,omitempty"`
+	GrantId      string                    `json:"grantId"`
+	Operation    OperationBindingOperation `json:"operation"`
+	OperationRef string                    `json:"operationRef"`
+	OrgGrn       string                    `json:"orgGrn"`
+	RequestId    string                    `json:"requestId"`
+
+	// TargetGrn The controller for `agent:create`, the agent for `agent:configure`.
+	TargetGrn string `json:"targetGrn"`
+}
+
+// OperationBindingOperation defines model for OperationBinding.Operation.
+type OperationBindingOperation string
+
 // ProvisioningState What the operator reports about the agent's pod. `pending` is an agent no operator has reported on yet. `provisioned` is an agent whose workload an operator built and which reports no ready replica: it says the pod was built and nothing about its health. `ready` is an agent whose workload reports a ready replica, so its containers are running; it says nothing about whether the agent inside them works. `failed` is reserved — report it only from an observation that separates a workload that cannot start from one that is still starting, which a ready replica count does not, so a reporter reading that count alone reports `provisioned`.
 type ProvisioningState string
 
@@ -263,8 +319,29 @@ type AgentGrn = string
 // ClaimId defines model for claim.
 type ClaimId = string
 
+// ContractVersion defines model for contractVersion.
+type ContractVersion = string
+
 // MessageId defines model for message.
 type MessageId = string
+
+// OperationRef defines model for ref.
+type OperationRef = string
+
+// ContractError defines model for ContractError.
+type ContractError = Error
+
+// IntrospectOperationAuthorityParams defines parameters for IntrospectOperationAuthority.
+type IntrospectOperationAuthorityParams struct {
+	// ContractVersion Must be `operation-authority.v1` (ADR-0079); any other value is refused with 400 naming it.
+	ContractVersion ContractVersion `json:"Garam-Contract-Version"`
+}
+
+// CheckOperationReferenceParams defines parameters for CheckOperationReference.
+type CheckOperationReferenceParams struct {
+	// ContractVersion Must be `operation-authority.v1` (ADR-0079); any other value is refused with 400 naming it.
+	ContractVersion ContractVersion `json:"Garam-Contract-Version"`
+}
 
 // ReportProvisioningStateJSONRequestBody defines body for ReportProvisioningState for application/json ContentType.
 type ReportProvisioningStateJSONRequestBody = ProvisioningStateReport
@@ -280,6 +357,9 @@ type EnrollOperatorJSONRequestBody = Enrollment
 
 // PostMessageJSONRequestBody defines body for PostMessage for application/json ContentType.
 type PostMessageJSONRequestBody = MessageSubmission
+
+// IntrospectOperationAuthorityJSONRequestBody defines body for IntrospectOperationAuthority for application/json ContentType.
+type IntrospectOperationAuthorityJSONRequestBody = AuthorityIntrospection
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -328,6 +408,12 @@ type ServerInterface interface {
 	// GetMessageStatus Read how far a message the caller sent has got.
 	// (GET /messages/{message})
 	GetMessageStatus(w http.ResponseWriter, r *http.Request, messageId MessageId)
+	// IntrospectOperationAuthority Read what an operation authority binds, once current state still authorizes it.
+	// (POST /operation-authorities/introspection)
+	IntrospectOperationAuthority(w http.ResponseWriter, r *http.Request, params IntrospectOperationAuthorityParams)
+	// CheckOperationReference Recheck a durable operation reference before activating a new desired revision.
+	// (GET /operation-references/{ref})
+	CheckOperationReference(w http.ResponseWriter, r *http.Request, operationRef OperationRef, params CheckOperationReferenceParams)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -675,6 +761,105 @@ func (siw *ServerInterfaceWrapper) GetMessageStatus(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// IntrospectOperationAuthority operation middleware
+func (siw *ServerInterfaceWrapper) IntrospectOperationAuthority(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params IntrospectOperationAuthorityParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Garam-Contract-Version" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Garam-Contract-Version")]; found {
+		var ContractVersion ContractVersion
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Garam-Contract-Version", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Garam-Contract-Version", valueList[0], &ContractVersion, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Garam-Contract-Version", Err: err})
+			return
+		}
+
+		params.ContractVersion = ContractVersion
+
+	} else {
+		err := fmt.Errorf("Header parameter Garam-Contract-Version is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Garam-Contract-Version", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.IntrospectOperationAuthority(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CheckOperationReference operation middleware
+func (siw *ServerInterfaceWrapper) CheckOperationReference(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "ref" -------------
+	var operationRef OperationRef
+
+	err = runtime.BindStyledParameterWithOptions("simple", "ref", r.PathValue("ref"), &operationRef, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "ref", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CheckOperationReferenceParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Garam-Contract-Version" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Garam-Contract-Version")]; found {
+		var ContractVersion ContractVersion
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Garam-Contract-Version", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Garam-Contract-Version", valueList[0], &ContractVersion, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Garam-Contract-Version", Err: err})
+			return
+		}
+
+		params.ContractVersion = ContractVersion
+
+	} else {
+		err := fmt.Errorf("Header parameter Garam-Contract-Version is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Garam-Contract-Version", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CheckOperationReference(w, r, operationRef, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -810,6 +995,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/claims/{claim}/renewal", wrapper.RenewClaim)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/turn-events", wrapper.ForwardTurnEvent)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/claims/{claim}/completion", wrapper.CompleteClaim)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/operation-authorities/introspection", wrapper.IntrospectOperationAuthority)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/operation-references/{ref}", wrapper.CheckOperationReference)
 
 	return m
 }

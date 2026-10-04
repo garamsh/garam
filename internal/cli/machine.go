@@ -107,7 +107,7 @@ func serveMachine(cmd *cobra.Command) error {
 		// defaults are what this process runs on until something asks
 		// for another value.
 		Delivery: message.Config{},
-		Policies: machineapi.NewGRPCEvaluator(conn),
+		Engine:   conn,
 		Logger:   obs.logger,
 	})
 	if err != nil {
@@ -151,8 +151,10 @@ type MachineConfig struct {
 	Authority ca.Config
 	// Delivery governs the message queue (ADR-0018).
 	Delivery message.Config
-	// Policies decides the messages the listener accepts.
-	Policies machineapi.Evaluator
+	// Engine is the policy engine, which decides the messages the
+	// listener accepts and, from current state, the operations a hosted
+	// operator reads back (ADR-0078).
+	Engine grpc.ClientConnInterface
 	// Logger takes one line per served request and every recovered
 	// panic.
 	Logger *slog.Logger
@@ -209,7 +211,8 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 	// server serves.
 	handler := machinegen.HandlerWithOptions(
 		machineapi.NewServer(agents, operators, messages, consents, watches,
-			memberGroups{store: org.NewPostgresStore(pool)}, cfg.Policies),
+			memberGroups{store: org.NewPostgresStore(pool)}, machineapi.NewGRPCEvaluator(cfg.Engine),
+			NewAuthorityService(pool, cfg.Engine)),
 		machinegen.StdHTTPServerOptions{
 			Middlewares: []machinegen.MiddlewareFunc{machineapi.RecoverPanics, obs.logMachineRequests},
 			// A parameter the router cannot bind is refused before any

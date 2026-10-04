@@ -20,3 +20,6 @@ packages:
     interfaces:
       Sealer: {}
       Store: {}
+  github.com/garamsh/garam/internal/operator:
+    interfaces:
+      AuthorityService: {}

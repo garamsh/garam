@@ -23,6 +23,7 @@ import (
 	"github.com/garamsh/garam/internal/authn"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	operatormocks "github.com/garamsh/garam/internal/operator/mocks"
 	"github.com/garamsh/garam/internal/org"
 	"github.com/garamsh/garam/internal/user"
 	"github.com/garamsh/garam/internal/watch"
@@ -46,6 +47,7 @@ type fixture struct {
 	evaluator   *mocks.MockEvaluator
 	policies    *mocks.MockPolicyManager
 	authorities *fakeAuthorityReader
+	authority   *operatormocks.MockAuthorityService
 }
 
 func newFixture(t *testing.T, extra ...authn.Provider) *fixture {
@@ -66,6 +68,7 @@ func newFixture(t *testing.T, extra ...authn.Provider) *fixture {
 		evaluator:   mocks.NewMockEvaluator(t),
 		policies:    mocks.NewMockPolicyManager(t),
 		authorities: newFakeAuthorityReader(),
+		authority:   operatormocks.NewMockAuthorityService(t),
 	}
 	// The events a stream carries were forwarded to another process, so
 	// this one delivers what the relay announces to the watches it holds
@@ -76,7 +79,7 @@ func newFixture(t *testing.T, extra ...authn.Provider) *fixture {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	go func() { _ = watches.Receive(ctx) }()
-	srv := api.NewServer(f.users, f.orgs, f.agents, f.operators, f.consents, watches, f.sessions, f.states, f.credentials, f.attempts, append([]authn.Provider{f.provider}, extra...), f.evaluator, f.policies, f.authorities, api.Config{SessionTTL: time.Hour})
+	srv := api.NewServer(f.users, f.orgs, f.agents, f.operators, f.consents, watches, f.sessions, f.states, f.credentials, f.attempts, append([]authn.Provider{f.provider}, extra...), f.evaluator, f.policies, f.authorities, f.authority, api.Config{SessionTTL: time.Hour})
 	// Wired as `serve api` wires it: a binding failure is refused
 	// before any handler runs, so the option is what decides the body.
 	f.handler = apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{

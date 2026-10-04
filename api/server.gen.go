@@ -60,6 +60,27 @@ func (e AgentRuntimeState) Valid() bool {
 	}
 }
 
+// Defines values for DelegatedOperation.
+const (
+	DelegatedOperationAgentActivate  DelegatedOperation = "agent:activate"
+	DelegatedOperationAgentConfigure DelegatedOperation = "agent:configure"
+	DelegatedOperationAgentCreate    DelegatedOperation = "agent:create"
+)
+
+// Valid indicates whether the value is a known member of the DelegatedOperation enum.
+func (e DelegatedOperation) Valid() bool {
+	switch e {
+	case DelegatedOperationAgentActivate:
+		return true
+	case DelegatedOperationAgentConfigure:
+		return true
+	case DelegatedOperationAgentCreate:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for InvitationCreateRole.
 const (
 	InvitationCreateRoleAdmin  InvitationCreateRole = "admin"
@@ -72,6 +93,24 @@ func (e InvitationCreateRole) Valid() bool {
 	case InvitationCreateRoleAdmin:
 		return true
 	case InvitationCreateRoleMember:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for OperationAuthorityRequestOperation.
+const (
+	OperationAuthorityRequestOperationAgentConfigure OperationAuthorityRequestOperation = "agent:configure"
+	OperationAuthorityRequestOperationAgentCreate    OperationAuthorityRequestOperation = "agent:create"
+)
+
+// Valid indicates whether the value is a known member of the OperationAuthorityRequestOperation enum.
+func (e OperationAuthorityRequestOperation) Valid() bool {
+	switch e {
+	case OperationAuthorityRequestOperationAgentConfigure:
+		return true
+	case OperationAuthorityRequestOperationAgentCreate:
 		return true
 	default:
 		return false
@@ -243,6 +282,40 @@ type AgentTemplateWrite struct {
 // AgentValues What an operator constructs the agent from. garam stores the keys and the strings and interprets neither: what the payload means belongs to the operator that reads it. A key is one to 64 characters of lowercase letters, digits and `-`; a value is at most 4096 bytes; at most 32 entries.
 type AgentValues map[string]string
 
+// DelegatedOperation `agent:activate` bounds the hosted operator's own lifecycle authority; no user mints it.
+type DelegatedOperation string
+
+// Delegation defines model for Delegation.
+type Delegation struct {
+	Controllers []string             `json:"controllers"`
+	ExpiresAt   time.Time            `json:"expiresAt"`
+	GrantId     string               `json:"grantId"`
+	GrantedAt   time.Time            `json:"grantedAt"`
+	GrantedBy   string               `json:"grantedBy"`
+	Operations  []DelegatedOperation `json:"operations"`
+	OperatorGrn string               `json:"operatorGrn"`
+}
+
+// DelegationEnd defines model for DelegationEnd.
+type DelegationEnd struct {
+	// GrantId The grant to end, as the caller read it.
+	GrantId string `json:"grantId"`
+}
+
+// DelegationWrite defines model for DelegationWrite.
+type DelegationWrite struct {
+	// Controllers Operator GRNs of this organization the grant may act on. The hosted operator is not one.
+	Controllers []string `json:"controllers"`
+
+	// ExpectedGrantId The grant the caller read as current. Absent where it read none.
+	ExpectedGrantId *string `json:"expectedGrantId,omitempty"`
+
+	// ExpiresAt Within the next 30 days. Kept to the microsecond: finer digits are dropped, and the grant answers and replays the value kept.
+	ExpiresAt  time.Time            `json:"expiresAt"`
+	Operations []DelegatedOperation `json:"operations"`
+	RequestId  RequestId            `json:"requestId"`
+}
+
 // Error defines model for Error.
 type Error struct {
 	// Kind errorx kind, e.g. `not_found`, `permission_denied`.
@@ -311,6 +384,34 @@ type Member struct {
 type MemberRef struct {
 	MemberGrn string `json:"memberGrn"`
 }
+
+// OperationAuthority defines model for OperationAuthority.
+type OperationAuthority struct {
+	// Authority Opaque. garam stores only its hash and cannot answer it again.
+	Authority string    `json:"authority"`
+	ExpiresAt time.Time `json:"expiresAt"`
+	GrantId   string    `json:"grantId"`
+
+	// OperationRef The durable reference of the logical operation.
+	OperationRef string `json:"operationRef"`
+}
+
+// OperationAuthorityRequest defines model for OperationAuthorityRequest.
+type OperationAuthorityRequest struct {
+	// Audience GRN of the hosted operator that will act.
+	Audience string `json:"audience"`
+
+	// BodySha256 Lowercase hexadecimal SHA-256 of the exact request body the Operator receives.
+	BodySha256 string                             `json:"bodySha256"`
+	Operation  OperationAuthorityRequestOperation `json:"operation"`
+	RequestId  RequestId                          `json:"requestId"`
+
+	// Target Controller GRN for `agent:create`, agent GRN for `agent:configure`.
+	Target string `json:"target"`
+}
+
+// OperationAuthorityRequestOperation defines model for OperationAuthorityRequest.Operation.
+type OperationAuthorityRequestOperation string
 
 // Operator An operator this organization has registered, and where that operator stands in obtaining a certificate. The record grants nothing and admits nothing (ADR-0045); the enrollment state is what garam knows from its own tables and never a report from the operator.
 type Operator struct {
@@ -565,6 +666,9 @@ type RegisteredOperator struct {
 	Operator Operator `json:"operator"`
 }
 
+// RequestId defines model for RequestId.
+type RequestId = string
+
 // Role defines model for Role.
 type Role string
 
@@ -579,6 +683,9 @@ type User struct {
 
 // AgentSlug defines model for agent.
 type AgentSlug = string
+
+// ContractVersion defines model for contractVersion.
+type ContractVersion = string
 
 // GroupSlug defines model for group.
 type GroupSlug = string
@@ -616,6 +723,9 @@ type SubjectGrn = string
 // TemplateSlug defines model for template.
 type TemplateSlug = string
 
+// ContractError defines model for ContractError.
+type ContractError = Error
+
 // OauthCallbackParams defines parameters for OauthCallback.
 type OauthCallbackParams struct {
 	Code  string `form:"code" json:"code"`
@@ -641,6 +751,30 @@ type ListGroupsParams struct {
 	// Limit Maximum entries to return; 0 means no limit.
 	Limit  *Limit  `form:"limit,omitempty" json:"limit,omitempty"`
 	Offset *Offset `form:"offset,omitempty" json:"offset,omitempty"`
+}
+
+// MintOperationAuthorityParams defines parameters for MintOperationAuthority.
+type MintOperationAuthorityParams struct {
+	// ContractVersion Must be `operation-authority.v1` (ADR-0079); any other value is refused with 400 naming it.
+	ContractVersion ContractVersion `json:"Garam-Contract-Version"`
+}
+
+// EndOperatorDelegationParams defines parameters for EndOperatorDelegation.
+type EndOperatorDelegationParams struct {
+	// ContractVersion Must be `operation-authority.v1` (ADR-0079); any other value is refused with 400 naming it.
+	ContractVersion ContractVersion `json:"Garam-Contract-Version"`
+}
+
+// GetOperatorDelegationParams defines parameters for GetOperatorDelegation.
+type GetOperatorDelegationParams struct {
+	// ContractVersion Must be `operation-authority.v1` (ADR-0079); any other value is refused with 400 naming it.
+	ContractVersion ContractVersion `json:"Garam-Contract-Version"`
+}
+
+// WriteOperatorDelegationParams defines parameters for WriteOperatorDelegation.
+type WriteOperatorDelegationParams struct {
+	// ContractVersion Must be `operation-authority.v1` (ADR-0079); any other value is refused with 400 naming it.
+	ContractVersion ContractVersion `json:"Garam-Contract-Version"`
 }
 
 // ListProjectsParams defines parameters for ListProjects.
@@ -686,11 +820,20 @@ type AddGroupMemberJSONRequestBody = MemberRef
 // CreateInvitationJSONRequestBody defines body for CreateInvitation for application/json ContentType.
 type CreateInvitationJSONRequestBody = InvitationCreate
 
+// MintOperationAuthorityJSONRequestBody defines body for MintOperationAuthority for application/json ContentType.
+type MintOperationAuthorityJSONRequestBody = OperationAuthorityRequest
+
 // RegisterOperatorJSONRequestBody defines body for RegisterOperator for application/json ContentType.
 type RegisterOperatorJSONRequestBody = OperatorRegistration
 
 // UpdateOperatorJSONRequestBody defines body for UpdateOperator for application/json ContentType.
 type UpdateOperatorJSONRequestBody = OperatorPatch
+
+// EndOperatorDelegationJSONRequestBody defines body for EndOperatorDelegation for application/json ContentType.
+type EndOperatorDelegationJSONRequestBody = DelegationEnd
+
+// WriteOperatorDelegationJSONRequestBody defines body for WriteOperatorDelegation for application/json ContentType.
+type WriteOperatorDelegationJSONRequestBody = DelegationWrite
 
 // CreatePolicyJSONRequestBody defines body for CreatePolicy for application/json ContentType.
 type CreatePolicyJSONRequestBody = PolicyCreate
@@ -832,6 +975,9 @@ type ServerInterface interface {
 	// ListOrgMembers List members of an organization. Requires the `member` role.
 	// (GET /orgs/{org}/members)
 	ListOrgMembers(w http.ResponseWriter, r *http.Request, org Org)
+	// MintOperationAuthority Hand a delegated operator one operation. Requires the operation's action, decided now.
+	// (POST /orgs/{org}/operation-authorities)
+	MintOperationAuthority(w http.ResponseWriter, r *http.Request, org Org, params MintOperationAuthorityParams)
 	// ListOperators List an organization's operators. Requires the `member` role.
 	// (GET /orgs/{org}/operators)
 	ListOperators(w http.ResponseWriter, r *http.Request, org Org)
@@ -847,6 +993,15 @@ type ServerInterface interface {
 	// UpdateOperator Rename or describe an operator. Requires the `admin` role.
 	// (PATCH /orgs/{org}/operators/{operator})
 	UpdateOperator(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug)
+	// EndOperatorDelegation Withdraw a hosted operator's delegation. Requires current `operator:delegate`.
+	// (DELETE /orgs/{org}/operators/{operator}/delegation)
+	EndOperatorDelegation(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug, params EndOperatorDelegationParams)
+	// GetOperatorDelegation Read a hosted operator's current delegation. Requires the `member` role.
+	// (GET /orgs/{org}/operators/{operator}/delegation)
+	GetOperatorDelegation(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug, params GetOperatorDelegationParams)
+	// WriteOperatorDelegation Grant or replace a hosted operator's delegation. Requires current `operator:delegate`.
+	// (PUT /orgs/{org}/operators/{operator}/delegation)
+	WriteOperatorDelegation(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug, params WriteOperatorDelegationParams)
 	// MintOperatorEnrollment Mint a fresh enrollment token for a registered operator. Requires the `admin` role.
 	// (POST /orgs/{org}/operators/{operator}/enrollment)
 	MintOperatorEnrollment(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug)
@@ -2108,6 +2263,60 @@ func (siw *ServerInterfaceWrapper) ListOrgMembers(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// MintOperationAuthority operation middleware
+func (siw *ServerInterfaceWrapper) MintOperationAuthority(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params MintOperationAuthorityParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Garam-Contract-Version" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Garam-Contract-Version")]; found {
+		var ContractVersion ContractVersion
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Garam-Contract-Version", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Garam-Contract-Version", valueList[0], &ContractVersion, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Garam-Contract-Version", Err: err})
+			return
+		}
+
+		params.ContractVersion = ContractVersion
+
+	} else {
+		err := fmt.Errorf("Header parameter Garam-Contract-Version is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Garam-Contract-Version", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MintOperationAuthority(w, r, org, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListOperators operation middleware
 func (siw *ServerInterfaceWrapper) ListOperators(w http.ResponseWriter, r *http.Request) {
 
@@ -2256,6 +2465,195 @@ func (siw *ServerInterfaceWrapper) UpdateOperator(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateOperator(w, r, org, operatorSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// EndOperatorDelegation operation middleware
+func (siw *ServerInterfaceWrapper) EndOperatorDelegation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "operator" -------------
+	var operatorSlug OperatorSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "operator", r.PathValue("operator"), &operatorSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "operator", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params EndOperatorDelegationParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Garam-Contract-Version" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Garam-Contract-Version")]; found {
+		var ContractVersion ContractVersion
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Garam-Contract-Version", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Garam-Contract-Version", valueList[0], &ContractVersion, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Garam-Contract-Version", Err: err})
+			return
+		}
+
+		params.ContractVersion = ContractVersion
+
+	} else {
+		err := fmt.Errorf("Header parameter Garam-Contract-Version is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Garam-Contract-Version", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EndOperatorDelegation(w, r, org, operatorSlug, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetOperatorDelegation operation middleware
+func (siw *ServerInterfaceWrapper) GetOperatorDelegation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "operator" -------------
+	var operatorSlug OperatorSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "operator", r.PathValue("operator"), &operatorSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "operator", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetOperatorDelegationParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Garam-Contract-Version" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Garam-Contract-Version")]; found {
+		var ContractVersion ContractVersion
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Garam-Contract-Version", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Garam-Contract-Version", valueList[0], &ContractVersion, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Garam-Contract-Version", Err: err})
+			return
+		}
+
+		params.ContractVersion = ContractVersion
+
+	} else {
+		err := fmt.Errorf("Header parameter Garam-Contract-Version is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Garam-Contract-Version", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetOperatorDelegation(w, r, org, operatorSlug, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// WriteOperatorDelegation operation middleware
+func (siw *ServerInterfaceWrapper) WriteOperatorDelegation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "operator" -------------
+	var operatorSlug OperatorSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "operator", r.PathValue("operator"), &operatorSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "operator", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params WriteOperatorDelegationParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Garam-Contract-Version" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Garam-Contract-Version")]; found {
+		var ContractVersion ContractVersion
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Garam-Contract-Version", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Garam-Contract-Version", valueList[0], &ContractVersion, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Garam-Contract-Version", Err: err})
+			return
+		}
+
+		params.ContractVersion = ContractVersion
+
+	} else {
+		err := fmt.Errorf("Header parameter Garam-Contract-Version is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Garam-Contract-Version", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.WriteOperatorDelegation(w, r, org, operatorSlug, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3109,6 +3507,10 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/operators/{operator}", wrapper.GetOperator)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/operators/{operator}", wrapper.UpdateOperator)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/enrollment", wrapper.MintOperatorEnrollment)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/delegation", wrapper.EndOperatorDelegation)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/delegation", wrapper.GetOperatorDelegation)
+	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/delegation", wrapper.WriteOperatorDelegation)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/operation-authorities", wrapper.MintOperationAuthority)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/policies", wrapper.ListPolicies)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/policies", wrapper.CreatePolicy)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/policies/{policy}/versions", wrapper.ListPolicyVersions)

@@ -182,6 +182,17 @@ while an agent definition names the operator — nothing is deleted in
 that case. No operation on `api/machine.yaml` deletes an operator: an
 operator does not delete itself, and the one that would meet the
 refusal is the one being deleted.
+
+**Delegation and operation authority are versioned routes on both
+listeners** (ADR-0078). The browser-facing listener grants, reads and
+withdraws a hosted operator's delegation and mints a member's
+request-bound authority; the machine listener answers that authority
+and its durable reference to the operator it names and no other. Each
+requires and answers `Garam-Contract-Version: operation-authority.v1`,
+and a request naming none or another is refused naming the one served
+(ADR-0079). The specifications are authoritative for their forms, and
+[operators.md](./operators.md) §Delegated operation authority for what
+they decide.
 Every certificate after the first is replaced over the connection the
 previous one authenticated: an operator's on the machine listener
 ([ADR-0046](./adr/0046-an-operator-renews-its-certificate-by-presenting-the-one-it-holds.md)),
@@ -243,6 +254,12 @@ and not in the same place on every surface.
   ([ADR-0038](./adr/0038-the-engine-learns-a-subjects-memberships-and-enforces-its-own-scope.md)).
 - **Watching an agent is its own grant**, separate from reading one
   ([ADR-0022](./adr/0022-watching-an-agent.md)).
+- **Delegated operation authority is decided from current state on both
+  listeners**: membership, roles and groups as read for the call, and
+  the organization's persisted policies past the engine's cache, so an
+  allow recorded earlier is never what a later check reads and a
+  decision that cannot be made refuses
+  ([ADR-0078](./adr/0078-a-lifecycle-authority-activates-a-runtime-generation-and-old-generations-and-lineages-are-fenced.md)).
 - **A read describing a write is decided on that write's action.**
   `getOrgDeletionPreview` answers what deleting an organization would
   destroy — a count per resource kind, and whether the organization

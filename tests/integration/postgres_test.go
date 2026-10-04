@@ -2979,7 +2979,7 @@ func certificatePEM(c listenerCertificate) []byte {
 // writes them through beside the seam the machine listener asks
 // through. It is the pair of processes `garam serve authz` and `garam
 // serve machine` are, over one database.
-func policyEngine(t *testing.T, p *pgxpool.Pool) (*authz.PolicyGRPCServer, machineapi.Evaluator) {
+func policyEngine(t *testing.T, p *pgxpool.Pool) (*authz.PolicyGRPCServer, *grpc.ClientConn) {
 	t.Helper()
 	store := authz.NewPostgresStore(p)
 	cache := authz.NewPolicyCache(store)
@@ -2996,7 +2996,7 @@ func policyEngine(t *testing.T, p *pgxpool.Pool) (*authz.PolicyGRPCServer, machi
 	t.Cleanup(func() { _ = conn.Close() })
 	// Writes made through this service drop the org's cache entry
 	// directly, as they do in the engine's own process.
-	return authz.NewPolicyGRPCServer(store, cache), machineapi.NewGRPCEvaluator(conn)
+	return authz.NewPolicyGRPCServer(store, cache), conn
 }
 
 // machineListener serves the server `garam serve machine` builds,
@@ -3004,7 +3004,7 @@ func policyEngine(t *testing.T, p *pgxpool.Pool) (*authz.PolicyGRPCServer, machi
 // reads from its configuration is supplied here instead: the sealer and
 // engine the caller holds, a self-signed listener certificate, and
 // delivery waits shortened to what a test can sit through.
-func machineListener(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer, policies machineapi.Evaluator) string {
+func machineListener(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer, engine grpc.ClientConnInterface) string {
 	t.Helper()
 	presented := loopbackCertificate(t)
 	srv, err := cli.NewMachineServer(p, cli.MachineConfig{
@@ -3012,7 +3012,7 @@ func machineListener(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer, policies m
 		Certificate: presented,
 		ServerRoot:  certificatePEM(presented),
 		Delivery:    briefDelivery(),
-		Policies:    policies,
+		Engine:      engine,
 		Logger:      slog.New(slog.NewJSONHandler(io.Discard, nil)),
 	})
 	require.NoError(t, err)
@@ -3150,8 +3150,8 @@ func TestMachineSurface_OperatorCreatesAnAgentThatThenAuthenticates(t *testing.T
 	outOfBand, err := ca.NewService(capg.New(p), sealer, ca.Config{})
 	require.NoError(t, err)
 
-	_, evaluator := policyEngine(t, p)
-	url := machineListener(t, p, sealer, evaluator)
+	_, engine := policyEngine(t, p)
+	url := machineListener(t, p, sealer, engine)
 	assignments := agent.NewPostgresStore(p)
 
 	operatorGRN := scopedGRN("acme", agent.ServiceTypeOperator, "one")
@@ -3272,8 +3272,8 @@ func TestMachineSurface_AnAgentActsOnItsOwnQueueAndNoOther(t *testing.T) {
 	outOfBand, err := ca.NewService(capg.New(p), sealer, ca.Config{})
 	require.NoError(t, err)
 
-	_, evaluator := policyEngine(t, p)
-	url := machineListener(t, p, sealer, evaluator)
+	_, engine := policyEngine(t, p)
+	url := machineListener(t, p, sealer, engine)
 	operator := machineClient(t, installed(t, p, outOfBand, scopedGRN("acme", agent.ServiceTypeOperator, "one")))
 	senderGRN, sender := provisioned(t, url, operator)
 	recipientGRN, recipient := provisioned(t, url, operator)
@@ -3385,8 +3385,8 @@ func TestMachineSurface_AnotherOrganizationsAgentReachesNothingOnThisQueue(t *te
 	outOfBand, err := ca.NewService(capg.New(p), sealer, ca.Config{})
 	require.NoError(t, err)
 
-	policies, evaluator := policyEngine(t, p)
-	url := machineListener(t, p, sealer, evaluator)
+	policies, engine := policyEngine(t, p)
+	url := machineListener(t, p, sealer, engine)
 	acmeOperator := machineClient(t, installed(t, p, outOfBand, scopedGRN("acme", agent.ServiceTypeOperator, "one")))
 	globexOperator := machineClient(t, installed(t, p, outOfBand, scopedGRN("globex", agent.ServiceTypeOperator, "one")))
 	senderGRN, sender := provisioned(t, url, acmeOperator)
@@ -3514,8 +3514,8 @@ func TestMachineSurface_AnAttachedPolicyDecidesWhatAnAgentSends(t *testing.T) {
 	outOfBand, err := ca.NewService(capg.New(p), sealer, ca.Config{})
 	require.NoError(t, err)
 
-	policies, evaluator := policyEngine(t, p)
-	url := machineListener(t, p, sealer, evaluator)
+	policies, engine := policyEngine(t, p)
+	url := machineListener(t, p, sealer, engine)
 	operator := machineClient(t, installed(t, p, outOfBand, scopedGRN("acme", agent.ServiceTypeOperator, "one")))
 	senderGRN, sender := provisioned(t, url, operator)
 	_, other := provisioned(t, url, operator)
@@ -3612,8 +3612,8 @@ func TestMachineSurface_AGroupAttachedPolicyDecidesWhatItsMembersSend(t *testing
 	outOfBand, err := ca.NewService(capg.New(p), sealer, ca.Config{})
 	require.NoError(t, err)
 
-	policies, evaluator := policyEngine(t, p)
-	url := machineListener(t, p, sealer, evaluator)
+	policies, engine := policyEngine(t, p)
+	url := machineListener(t, p, sealer, engine)
 	operator := machineClient(t, installed(t, p, outOfBand, scopedGRN("acme", agent.ServiceTypeOperator, "one")))
 	senderGRN, sender := provisioned(t, url, operator)
 	_, outsider := provisioned(t, url, operator)
@@ -3731,8 +3731,9 @@ func TestMachineSurface_ARecipientsOwnPolicyAdmitsNoForeignSender(t *testing.T) 
 	outOfBand, err := ca.NewService(capg.New(p), sealer, ca.Config{})
 	require.NoError(t, err)
 
-	policies, evaluator := policyEngine(t, p)
-	url := machineListener(t, p, sealer, evaluator)
+	policies, engine := policyEngine(t, p)
+	evaluator := machineapi.NewGRPCEvaluator(engine)
+	url := machineListener(t, p, sealer, engine)
 	alphaOperator := machineClient(t, installed(t, p, outOfBand, scopedGRN("alpha", agent.ServiceTypeOperator, "one")))
 	betaOperator := machineClient(t, installed(t, p, outOfBand, scopedGRN("beta", agent.ServiceTypeOperator, "one")))
 	foreignGRN, foreign := provisioned(t, url, alphaOperator)
@@ -3910,8 +3911,8 @@ func TestMachineSurface_AConsentRelationCarriesAMessageAcrossTheBoundary(t *test
 	outOfBand, err := ca.NewService(capg.New(p), sealer, ca.Config{})
 	require.NoError(t, err)
 
-	_, evaluator := policyEngine(t, p)
-	url := machineListener(t, p, sealer, evaluator)
+	_, engine := policyEngine(t, p)
+	url := machineListener(t, p, sealer, engine)
 	acmeOperator := machineClient(t, installed(t, p, outOfBand, scopedGRN("acme", agent.ServiceTypeOperator, "one")))
 	globexOperator := machineClient(t, installed(t, p, outOfBand, scopedGRN("globex", agent.ServiceTypeOperator, "one")))
 	initechOperator := machineClient(t, installed(t, p, outOfBand, scopedGRN("initech", agent.ServiceTypeOperator, "one")))
@@ -4040,8 +4041,8 @@ func TestMachineSurface_EnrolsAnOperatorWithTheTokenRegisteringItMinted(t *testi
 	require.NoError(t, err)
 	sealer, err := ca.NewAESGCMSealer(key)
 	require.NoError(t, err)
-	_, evaluator := policyEngine(t, p)
-	url := machineListener(t, p, sealer, evaluator)
+	_, engine := policyEngine(t, p)
+	url := machineListener(t, p, sealer, engine)
 
 	registeredBy := scopedGRN("acme", "user", "ada")
 	o, err := operator.New(orgRootGRN("acme"), "one", registeredBy, operator.DetailsPatch{})

@@ -602,6 +602,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/orgs/{org}/operators/{operator}/delegation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a hosted operator's current delegation. Requires the `member` role.
+         * @description The current grant, which may have passed its expiry. Ended grants are not answered.
+         */
+        get: operations["getOperatorDelegation"];
+        /**
+         * Grant or replace a hosted operator's delegation. Requires current `operator:delegate`.
+         * @description Grants the hosted operator bounded authority over this organization's controllers (ADR-0078). A grant never changes: a new request ends the current grant and creates another, so an operation authorized under the first never becomes valid under the second. `expectedGrantId` must name the current grant, or be absent where there is none; otherwise the write is refused with 409 and changes nothing. Repeating a `requestId` answers the grant it wrote with 200 while that grant is current, and is refused once it has been ended or where any part of the write differs: the terms, `expectedGrantId`, or the caller. Authorization is decided from current membership, roles, groups and persisted policies.
+         */
+        put: operations["writeOperatorDelegation"];
+        post?: never;
+        /**
+         * Withdraw a hosted operator's delegation. Requires current `operator:delegate`.
+         * @description Ends the grant named in the body, and only that one. Every operation authority minted under it is refused from the next introspection or reference check, and no later grant revives it. A grant already ended answers 204 and changes nothing, so a retried withdrawal never ends a replacement written since; a grant this operator never held answers 404.
+         */
+        delete: operations["endOperatorDelegation"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/operation-authorities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hand a delegated operator one operation. Requires the operation's action, decided now.
+         * @description Mints an opaque authority bound to the signed-in user, this organization, the audience operator, the operation, its target, `requestId` and `bodySha256` (ADR-0078). The caller sends it to the Operator as `Authorization: Garam-Operation <authority>`, outside the body whose digest it binds. It is answered once and expires after five minutes or at the grant's expiry, whichever is first.
+         *
+         *     `agent:create` targets the controller that will run the agent and is authorized on the organization; `agent:configure` targets the agent, is authorized on it, and binds where it runs now. The audience's current grant must cover the operation and the controller.
+         *
+         *     The same `requestId` with the same binding under the same grant mints a new authority for the same `operationRef`, replacing the previous one. Any other binding under it, including a replaced grant or a changed placement, is refused with 409: a newly authorized operation takes a new `requestId`.
+         */
+        post: operations["mintOperationAuthority"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orgs/{org}/policies": {
         parameters: {
             query?: never;
@@ -1220,6 +1272,60 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
         };
+        DelegationWrite: {
+            requestId: components["schemas"]["RequestId"];
+            /** @description The grant the caller read as current. Absent where it read none. */
+            expectedGrantId?: string;
+            /** @description Operator GRNs of this organization the grant may act on. The hosted operator is not one. */
+            controllers: string[];
+            operations: components["schemas"]["DelegatedOperation"][];
+            /**
+             * Format: date-time
+             * @description Within the next 30 days. Kept to the microsecond: finer digits are dropped, and the grant answers and replays the value kept.
+             */
+            expiresAt: string;
+        };
+        DelegationEnd: {
+            /** @description The grant to end, as the caller read it. */
+            grantId: string;
+        };
+        Delegation: {
+            grantId: string;
+            operatorGrn: string;
+            controllers: string[];
+            operations: components["schemas"]["DelegatedOperation"][];
+            /** Format: date-time */
+            expiresAt: string;
+            grantedBy: string;
+            /** Format: date-time */
+            grantedAt: string;
+        };
+        /**
+         * @description `agent:activate` bounds the hosted operator's own lifecycle authority; no user mints it.
+         * @enum {string}
+         */
+        DelegatedOperation: "agent:create" | "agent:configure" | "agent:activate";
+        RequestId: string;
+        OperationAuthorityRequest: {
+            /** @description GRN of the hosted operator that will act. */
+            audience: string;
+            /** @enum {string} */
+            operation: "agent:create" | "agent:configure";
+            /** @description Controller GRN for `agent:create`, agent GRN for `agent:configure`. */
+            target: string;
+            requestId: components["schemas"]["RequestId"];
+            /** @description Lowercase hexadecimal SHA-256 of the exact request body the Operator receives. */
+            bodySha256: string;
+        };
+        OperationAuthority: {
+            /** @description Opaque. garam stores only its hash and cannot answer it again. */
+            authority: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /** @description The durable reference of the logical operation. */
+            operationRef: string;
+            grantId: string;
+        };
         Error: {
             /** @description errorx kind, e.g. `not_found`, `permission_denied`. */
             kind: string;
@@ -1236,8 +1342,20 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
+        /** @description Error response of a versioned contract route. */
+        ContractError: {
+            headers: {
+                "Garam-Contract-Version": components["headers"]["ContractVersion"];
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
     };
     parameters: {
+        /** @description Must be `operation-authority.v1` (ADR-0079); any other value is refused with 400 naming it. */
+        contractVersion: string;
         /** @description Authentication provider name (`google`). */
         provider: string;
         /** @description Organization identifier (the last GRN segment). */
@@ -1265,7 +1383,10 @@ export interface components {
         offset: number;
     };
     requestBodies: never;
-    headers: never;
+    headers: {
+        /** @description The contract version this answer follows, `operation-authority.v1`. */
+        ContractVersion: string;
+    };
     pathItems: never;
 }
 export type $defs = Record<string, never>;
@@ -2622,6 +2743,158 @@ export interface operations {
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];
             409: components["responses"]["Error"];
+        };
+    };
+    getOperatorDelegation: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Must be `operation-authority.v1` (ADR-0079); any other value is refused with 400 naming it. */
+                "Garam-Contract-Version": components["parameters"]["contractVersion"];
+            };
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description Operator identifier (the last GRN segment). */
+                operator: components["parameters"]["operator"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The current grant. */
+            200: {
+                headers: {
+                    "Garam-Contract-Version": components["headers"]["ContractVersion"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Delegation"];
+                };
+            };
+            400: components["responses"]["ContractError"];
+            401: components["responses"]["ContractError"];
+            403: components["responses"]["ContractError"];
+            404: components["responses"]["ContractError"];
+        };
+    };
+    writeOperatorDelegation: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Must be `operation-authority.v1` (ADR-0079); any other value is refused with 400 naming it. */
+                "Garam-Contract-Version": components["parameters"]["contractVersion"];
+            };
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description Operator identifier (the last GRN segment). */
+                operator: components["parameters"]["operator"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DelegationWrite"];
+            };
+        };
+        responses: {
+            /** @description The grant this `requestId` already wrote. */
+            200: {
+                headers: {
+                    "Garam-Contract-Version": components["headers"]["ContractVersion"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Delegation"];
+                };
+            };
+            /** @description The new current grant. */
+            201: {
+                headers: {
+                    "Garam-Contract-Version": components["headers"]["ContractVersion"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Delegation"];
+                };
+            };
+            400: components["responses"]["ContractError"];
+            401: components["responses"]["ContractError"];
+            403: components["responses"]["ContractError"];
+            404: components["responses"]["ContractError"];
+            409: components["responses"]["ContractError"];
+        };
+    };
+    endOperatorDelegation: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Must be `operation-authority.v1` (ADR-0079); any other value is refused with 400 naming it. */
+                "Garam-Contract-Version": components["parameters"]["contractVersion"];
+            };
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description Operator identifier (the last GRN segment). */
+                operator: components["parameters"]["operator"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DelegationEnd"];
+            };
+        };
+        responses: {
+            /** @description Grant ended. */
+            204: {
+                headers: {
+                    "Garam-Contract-Version": components["headers"]["ContractVersion"];
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["ContractError"];
+            401: components["responses"]["ContractError"];
+            403: components["responses"]["ContractError"];
+            404: components["responses"]["ContractError"];
+        };
+    };
+    mintOperationAuthority: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Must be `operation-authority.v1` (ADR-0079); any other value is refused with 400 naming it. */
+                "Garam-Contract-Version": components["parameters"]["contractVersion"];
+            };
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperationAuthorityRequest"];
+            };
+        };
+        responses: {
+            /** @description Authority minted, shown once. */
+            201: {
+                headers: {
+                    "Garam-Contract-Version": components["headers"]["ContractVersion"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationAuthority"];
+                };
+            };
+            400: components["responses"]["ContractError"];
+            401: components["responses"]["ContractError"];
+            403: components["responses"]["ContractError"];
+            404: components["responses"]["ContractError"];
+            409: components["responses"]["ContractError"];
         };
     };
     listPolicies: {

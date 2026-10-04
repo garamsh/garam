@@ -86,6 +86,16 @@ collaborate on a shared plan.
   reason the agent actions are — deleting separately from registering,
   because registering grants nothing and deleting withdraws what an
   operator runs on.
+- An organization **delegating** bounded execution authority to a
+  hosted operator, under `/orgs/{org}/operators/{operator}/delegation`,
+  and a member handing it one request-bound operation under
+  `/orgs/{org}/operation-authorities`, which the operator reads back on
+  the machine listener (ADR-0078). A grant is immutable and a
+  replacement or withdrawal is final for what was minted under it;
+  every mint and read back is decided from current state. Delegating is
+  `operator:delegate`, creating `agent:create` and configuring
+  `agent:configure`; [operators.md](./operators.md) §Delegated operation
+  authority holds the rest.
 - An organization's members **defining** an agent, under
   `/orgs/{org}/agent-definitions` — which operator is to run it, and
   with what values (ADR-0026). A definition is a record rather than a

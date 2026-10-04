@@ -198,6 +198,7 @@ func TestServer_EnrollmentIsTheOnlyRouteAnUncertifiedCallerReaches(t *testing.T)
 		"agent":   agentGRN("acme", "0a1b2c3d4e5f6071").String(),
 		"claim":   "c-1",
 		"message": "m-1",
+		"ref":     "ref-1",
 	})
 	enrol, ok := routes[enrollmentRoute]
 	require.True(t, ok, "the exemption names no operation the specification declares")

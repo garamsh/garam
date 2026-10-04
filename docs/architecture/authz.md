@@ -180,9 +180,11 @@ invalidated yet; if that ever has to be refused, the refusal belongs to
 the check, which can name the request in doubt, and not to a probe,
 which cannot.
 
-**Nothing calls `CheckCurrent` yet.** It is that refusal, for the
-privileged actions that must be checked against current authority
+**`CheckCurrent` is that refusal**, for the privileged actions that
+must be checked against current authority
 ([ADR-0078](./adr/0078-a-lifecycle-authority-activates-a-runtime-generation-and-old-generations-and-lineages-are-fenced.md)).
+Its one caller is delegated operation authority on both listeners
+([operators.md](./operators.md) §Delegated operation authority).
 It decides as
 `Check` does, except that the org's active policies and their
 attachments are read from storage on every call: it neither reads nor
@@ -330,10 +332,14 @@ The api server never imports this package; it calls the engine over
 gRPC (`Check` / `Explain` in `proto/garam/authz/v1`) and supplies the
 role-derived statements it collected. The machine listener reaches the
 same engine the same way, over a seam of its own, and supplies the
-identity-derived ones. Neither calls `CheckCurrent` yet
-(§Policy persistence). Each listener's `Evaluator` seam has one
-non-test implementation, the gRPC client, and that is what both
-composition roots wire (`internal/cli/serve.go`,
+identity-derived ones. Delegated operation authority on both reaches
+`CheckCurrent` (§Policy persistence) through one adapter,
+`internal/cli/authority.go`, which reads the membership, the user's
+own roles and its groups for each call and sends the org-scoped
+statement those roles grant; neither operation targets a group or
+project, so no scoped role is collected. Each listener's `Evaluator`
+seam has one non-test implementation, the gRPC client, and that is
+what both composition roots wire (`internal/cli/serve.go`,
 `internal/cli/machine.go`). The in-process evaluator is the engine's
 own rather than a test substitute: `StatementEvaluator` is what `Check`
 runs on every request (`internal/authz/server.go`).

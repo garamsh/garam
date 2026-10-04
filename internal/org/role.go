@@ -87,6 +87,11 @@ const (
 	// its own because it neither grants what registering does nor
 	// withdraws what deleting does.
 	ActionOperatorUpdate = "operator:update"
+	// ActionOperatorDelegate is granting a hosted operator bounded
+	// authority over the org's controllers, and withdrawing it
+	// (ADR-0078). It is the administrative act of handing execution to
+	// a service, which registering an operator alone does not do.
+	ActionOperatorDelegate = "operator:delegate"
 
 	// Reading the agents an org holds, defining one, and watching one
 	// work. The org owns the constants for the reason it owns the
@@ -109,6 +114,14 @@ const (
 	// defined (ADR-0075). It moves no value an operator reads, so it is
 	// not defining one again.
 	ActionAgentRename = "agent:rename"
+	// ActionAgentCreate is asking a delegated operator to create an agent
+	// from an immutable template or profile it already allows
+	// (ADR-0078). It chooses no execution setting.
+	ActionAgentCreate = "agent:create"
+	// ActionAgentConfigure is asking a delegated operator to change an
+	// agent's execution settings or profile: what runs on a host, which
+	// membership alone does not grant (ADR-0078).
+	ActionAgentConfigure = "agent:configure"
 
 	// Reading and maintaining the org's agent templates (ADR-0075). A
 	// template is a starting point a definition copies once, so these
@@ -130,17 +143,19 @@ var (
 	// adminMachineActions is what an owner or an admin holds.
 	adminMachineActions = []string{
 		ActionOperatorRead, ActionOperatorRegister, ActionOperatorUpdate,
-		ActionOperatorDelete, ActionAgentRead, ActionAgentDefine,
-		ActionAgentRename, ActionAgentTemplateRead, ActionAgentTemplateCreate,
+		ActionOperatorDelete, ActionOperatorDelegate, ActionAgentRead,
+		ActionAgentDefine, ActionAgentRename, ActionAgentCreate,
+		ActionAgentConfigure, ActionAgentTemplateRead, ActionAgentTemplateCreate,
 		ActionAgentTemplateUpdate, ActionAgentTemplateDelete,
 	}
 	// memberMachineActions is what a member holds: it reads the
 	// operators an org has registered and registers none, because
 	// standing a machine identity up for the organization is the
-	// administrative act registering already looks like.
+	// administrative act registering already looks like. It may create
+	// an agent from an allowed profile and may not configure one.
 	memberMachineActions = []string{
 		ActionOperatorRead, ActionAgentRead, ActionAgentDefine,
-		ActionAgentRename, ActionAgentTemplateRead,
+		ActionAgentRename, ActionAgentCreate, ActionAgentTemplateRead,
 	}
 )
 

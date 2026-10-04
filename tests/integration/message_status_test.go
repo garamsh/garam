@@ -70,8 +70,8 @@ func TestMessageStatus_ASenderReadsItsOwnMessageThroughEveryStateItReaches(t *te
 	outOfBand, err := ca.NewService(capg.New(p), sealer, ca.Config{})
 	require.NoError(t, err)
 
-	_, evaluator := policyEngine(t, p)
-	url := machineListener(t, p, sealer, evaluator)
+	_, engine := policyEngine(t, p)
+	url := machineListener(t, p, sealer, engine)
 	operator := machineClient(t, installed(t, p, outOfBand, scopedGRN("acme", agent.ServiceTypeOperator, "one")))
 	_, sender := provisioned(t, url, operator)
 	recipientGRN, recipient := provisioned(t, url, operator)

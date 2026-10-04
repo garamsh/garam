@@ -9,6 +9,7 @@ import (
 
 	apigen "github.com/garamsh/garam/api"
 	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/wire"
 )
 
@@ -39,9 +40,17 @@ func RecoverPanics(next http.Handler) http.Handler {
 // an unparseable number is a strconv error, and one quotes the value it
 // could not parse.
 //
+// A missing contract version is answered as an unsupported one, so the
+// refusal names the version the route serves.
+//
 // The composition root supplies this as ErrorHandlerFunc, and nothing
 // else answers on this path.
 func BindingError(w http.ResponseWriter, _ *http.Request, err error) {
+	var header *apigen.RequiredHeaderError
+	if errors.As(err, &header) && header.ParamName == operator.ContractVersionHeader {
+		contract(w, "")
+		return
+	}
 	writeError(w, errorx.New(errorx.KindInvalidArgument, bindingMessage(err)))
 }
 

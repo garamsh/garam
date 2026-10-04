@@ -1,6 +1,7 @@
 package machineapi
 
 import (
+	"context"
 	"crypto/x509"
 	"encoding/json"
 	"errors"
@@ -34,6 +35,8 @@ func (s *Server) ActivateAgent(w http.ResponseWriter, r *http.Request, agentGRN 
 	if !executionContract(w, params.ExecutionContractVersion) {
 		return
 	}
+	r, cancel := lifecycleBudget(r)
+	defer cancel()
 	caller, subject, ok := s.lifecycleParties(w, r, agentGRN)
 	if !ok {
 		return
@@ -50,7 +53,7 @@ func (s *Server) ActivateAgent(w http.ResponseWriter, r *http.Request, agentGRN 
 	}
 	res, err := s.executions.Activate(r.Context(), caller, in)
 	if err != nil {
-		writeExecutionError(w, err)
+		writeExecutionError(w, r, err)
 		return
 	}
 	status := http.StatusOK
@@ -110,6 +113,8 @@ func (s *Server) DeactivateAgent(w http.ResponseWriter, r *http.Request, agentGR
 	if !executionContract(w, params.ExecutionContractVersion) {
 		return
 	}
+	r, cancel := lifecycleBudget(r)
+	defer cancel()
 	caller, subject, ok := s.lifecycleParties(w, r, agentGRN)
 	if !ok {
 		return
@@ -120,7 +125,7 @@ func (s *Server) DeactivateAgent(w http.ResponseWriter, r *http.Request, agentGR
 		return
 	}
 	if err := s.executions.Deactivate(r.Context(), caller, subject, id); err != nil {
-		writeExecutionError(w, err)
+		writeExecutionError(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
@@ -157,7 +162,7 @@ func (s *Server) IntrospectAgentExecution(w http.ResponseWriter, r *http.Request
 	}
 	in, err := s.executions.Introspect(r.Context(), caller, subject, leaf, generation)
 	if err != nil {
-		writeExecutionError(w, err)
+		writeExecutionError(w, r, err)
 		return
 	}
 	out := machinegen.ExecutionIntrospection{
@@ -182,6 +187,8 @@ func (s *Server) RecoverAgentCredential(w http.ResponseWriter, r *http.Request, 
 	if !executionContract(w, params.ExecutionContractVersion) {
 		return
 	}
+	r, cancel := lifecycleBudget(r)
+	defer cancel()
 	caller, subject, ok := s.lifecycleParties(w, r, agentGRN)
 	if !ok {
 		return
@@ -218,7 +225,7 @@ func (s *Server) RecoverAgentCredential(w http.ResponseWriter, r *http.Request, 
 		Body: raw, CertificateRequestPEM: []byte(body.CertificateRequestPem),
 	})
 	if err != nil {
-		writeExecutionError(w, err)
+		writeExecutionError(w, r, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, machinegen.RecoveredCredential{
@@ -241,6 +248,7 @@ func (s *Server) lifecycleParties(w http.ResponseWriter, r *http.Request, agentG
 		return grn.GRN{}, grn.GRN{}, false
 	}
 	if err := s.certificates.Recheck(r.Context(), identity); err != nil {
+		err = withinBudget(r, err)
 		if errorx.IsKind(err, errorx.KindNotFound) {
 			err = errorx.Wrap(err, "the caller's registration is withdrawn", errorx.KindPermissionDenied)
 		}
@@ -344,11 +352,29 @@ func executionContract(w http.ResponseWriter, version machinegen.ExecutionContra
 	return true
 }
 
+// lifecycleBudget bounds an activation, a recovery or a deactivation
+// by agent.LifecycleDeadline from before its first authority read, the
+// caller's own recheck, to its commit.
+func lifecycleBudget(r *http.Request) (*http.Request, context.CancelFunc) {
+	ctx, cancel := context.WithTimeout(r.Context(), agent.LifecycleDeadline)
+	return r.WithContext(ctx), cancel
+}
+
+// withinBudget answers a failure the request's deadline caused as
+// unavailable, whatever the dependency that ran out made of it.
+func withinBudget(r *http.Request, err error) error {
+	if err != nil && r.Context().Err() != nil {
+		return errorx.Wrap(err, "lifecycle deadline", errorx.KindUnavailable)
+	}
+	return err
+}
+
 // writeExecutionError answers 422 for the two refusals of what a
 // request forwarded rather than how it was formed: a certificate that
 // does not prove the agent, and an operation reference this contract
 // does not accept for an activation.
-func writeExecutionError(w http.ResponseWriter, err error) {
+func writeExecutionError(w http.ResponseWriter, r *http.Request, err error) {
+	err = withinBudget(r, err)
 	if errors.Is(err, agent.ErrLeafNotProven) || errors.Is(err, agent.ErrUnsupportedReference) {
 		writeErrorStatus(w, http.StatusUnprocessableEntity, err)
 		return

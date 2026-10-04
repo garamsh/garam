@@ -1006,3 +1006,35 @@ func (e *stalledEngine) CheckCurrent(ctx context.Context, r *authzv1.CheckCurren
 	}
 	return e.current.CheckCurrent(ctx, r)
 }
+
+// TestExecutionFence_AStalledRegistrationReadIsBoundedByTheServersDeadline
+// holds the operators table while the control service, on a connection
+// already open, asks for an activation: the recheck of its own
+// registration is the first read the deadline bounds. It is answered
+// unavailable at the deadline, and the same request then succeeds as
+// the control.
+func TestExecutionFence_AStalledRegistrationReadIsBoundedByTheServersDeadline(t *testing.T) {
+	p := pool(t)
+	_, engine := policyEngine(t, p)
+	s := newExecutionStack(t, p, engine)
+	s.open(t, s.hostedTLS)
+
+	ctx := context.Background()
+	tx, err := p.Begin(ctx)
+	require.NoError(t, err)
+	defer func() { _ = tx.Rollback(ctx) }()
+	_, err = tx.Exec(ctx, `LOCK TABLE operators IN ACCESS EXCLUSIVE MODE`)
+	require.NoError(t, err)
+
+	got, elapsed := s.boundedBy(t, func() (reply, error) {
+		return s.exchange(s.hostedTLS, http.MethodPost, s.agentPath("/activations"), agent.ExecutionContractVersion, "",
+			activationBodyOf("r-1", s.epoch, generationOf(1), nil, s.leaf))
+	}, func() { _ = tx.Rollback(ctx) })
+	assert.Equal(t, http.StatusServiceUnavailable, got.status, got.body)
+	assert.True(t, got.reused, "the request reused the connection the handshake admitted")
+	assert.GreaterOrEqual(t, elapsed, agent.LifecycleDeadline)
+	assert.Less(t, elapsed, agent.LifecycleDeadline+5*time.Second, "answered at the server's deadline")
+	assert.Nil(t, s.standing(t, s.leaf, nil).ActivationId, "nothing was activated")
+
+	s.activated(t, "r-1", generationOf(1), nil, s.leaf)
+}

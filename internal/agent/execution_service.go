@@ -20,22 +20,11 @@ const (
 
 // LifecycleDeadline bounds an activation, a recovery and a
 // deactivation from their first authority read to their commit,
-// whatever the caller allows. Running out of it says nothing about
-// whether the write committed; the caller retries under the same
-// request identifier.
+// whatever the caller allows. The transport starts it before the
+// caller's own recheck. Running out of it says nothing about whether
+// the write committed; the caller retries under the same request
+// identifier.
 const LifecycleDeadline = 10 * time.Second
-
-// withinDeadline runs act under LifecycleDeadline and answers a failure
-// the deadline caused as unavailable.
-func withinDeadline(ctx context.Context, act func(ctx context.Context) error) error {
-	ctx, cancel := context.WithTimeout(ctx, LifecycleDeadline)
-	defer cancel()
-	err := act(ctx)
-	if err != nil && ctx.Err() != nil {
-		return errorx.Wrap(err, "lifecycle deadline", errorx.KindUnavailable)
-	}
-	return err
-}
 
 var (
 	// ErrUnsupportedReference refuses an operation reference this
@@ -181,15 +170,6 @@ func (s *executionService) authorize(ctx context.Context, caller, agentGRN grn.G
 }
 
 func (s *executionService) Activate(ctx context.Context, caller grn.GRN, in ActivationInput) (*ActivationResult, error) {
-	var res *ActivationResult
-	err := withinDeadline(ctx, func(ctx context.Context) (err error) {
-		res, err = s.activate(ctx, caller, in)
-		return err
-	})
-	return res, err
-}
-
-func (s *executionService) activate(ctx context.Context, caller grn.GRN, in ActivationInput) (*ActivationResult, error) {
 	assignment, grant, err := s.authorize(ctx, caller, in.Agent, OperationActivate)
 	if err != nil {
 		return nil, err
@@ -259,12 +239,6 @@ func (b *OperationBinding) covers(caller, agentGRN grn.GRN, assignment *Assignme
 }
 
 func (s *executionService) Deactivate(ctx context.Context, caller, agentGRN grn.GRN, id ActivationID) error {
-	return withinDeadline(ctx, func(ctx context.Context) error {
-		return s.deactivate(ctx, caller, agentGRN, id)
-	})
-}
-
-func (s *executionService) deactivate(ctx context.Context, caller, agentGRN grn.GRN, id ActivationID) error {
 	assignment, grant, err := s.authorize(ctx, caller, agentGRN, OperationActivate)
 	if err != nil {
 		return err
@@ -328,15 +302,6 @@ func standing(active *CurrentActivation, supplied *Generation) GenerationStandin
 }
 
 func (s *executionService) Recover(ctx context.Context, caller grn.GRN, in RecoveryInput) (*Recovery, error) {
-	var res *Recovery
-	err := withinDeadline(ctx, func(ctx context.Context) (err error) {
-		res, err = s.recover(ctx, caller, in)
-		return err
-	})
-	return res, err
-}
-
-func (s *executionService) recover(ctx context.Context, caller grn.GRN, in RecoveryInput) (*Recovery, error) {
 	if len(in.CertificateRequestPEM) > MaxRequestPEM {
 		return nil, errorx.New(errorx.KindInvalidArgument, "certificate request exceeds its bound")
 	}

@@ -1,6 +1,11 @@
 # ADR 0026: The console defines an agent and an operator reads that definition
 
-> Status: accepted — the read surface and the reconciliation it deferred are decided by [ADR-0033](./0033-an-operator-claims-the-agent-a-definition-mints.md)
+> Status: accepted — the read surface and the reconciliation it
+> deferred are decided by
+> [ADR-0033](./0033-an-operator-claims-the-agent-a-definition-mints.md);
+> §Decision's "garam holds what an agent should be" is superseded, for
+> the runtime values, by
+> [ADR-0077](./0077-execution-definitions-move-to-the-operator-control-service-and-each-agent-cuts-over-alone.md)
 > Date: 2026-08-17
 
 ## Contents

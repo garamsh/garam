@@ -1,6 +1,9 @@
 # ADR 0049: Neither published specification promises anything across versions
 
-> Status: accepted
+> Status: accepted — §Decision's first heading is superseded, for the
+> interservice contracts it names and from the first release whose
+> window is tested, by
+> [ADR-0079](./0079-interservice-contracts-keep-adjacent-releases-compatible-and-replay-by-stable-identifier.md)
 > Date: 2026-08-31
 
 Every measurement below was taken at `86c30e8`. The commands are in

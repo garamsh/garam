@@ -1,6 +1,6 @@
 # ADR 0014: Agents authenticate with mTLS on a listener of their own
 
-> Status: accepted — §Decision's rotation term is superseded by [ADR-0040](./0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md); §Consequences' revocation term is superseded, for an operator, by [ADR-0070](./0070-an-organization-deletes-an-operator-and-the-record-it-withdraws-is-what-that-operator-authenticated-on.md)
+> Status: accepted — §Decision's rotation term is superseded by [ADR-0040](./0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md); §Consequences' revocation term is superseded, for an operator, by [ADR-0070](./0070-an-organization-deletes-an-operator-and-the-record-it-withdraws-is-what-that-operator-authenticated-on.md), and for an agent's credential lineage by [ADR-0078](./0078-a-lifecycle-authority-activates-a-runtime-generation-and-old-generations-and-lineages-are-fenced.md)
 > Date: 2026-08-16
 
 ## Contents

@@ -316,7 +316,8 @@ ADRs:
 - [0013](./adr/0013-agent-messaging.md) — agent messaging through a
   garam API an adapter polls
 - [0014](./adr/0014-agent-authentication.md) — agents authenticate with
-  mTLS on a listener of their own
+  mTLS on a listener of their own; an agent's revocation by lifetime is
+  superseded by 0078
 - [0015](./adr/0015-operator-identity.md) — operators authenticate as
   agents do; key material travels as files
 - [0016](./adr/0016-ca-key-custody.md) — a certificate authority's key
@@ -324,7 +325,8 @@ ADRs:
 - [0017](./adr/0017-machine-process.md) — machine identities are served
   by a process of their own
 - [0018](./adr/0018-delivery-acknowledgement.md) — a message is
-  completed by the turn-end event that names it
+  completed by the turn-end event that names it; its in-memory pairing
+  is superseded by 0079
 - [0019](./adr/0019-machine-openapi-spec.md) — the machine listener
   carries an OpenAPI specification of its own
 - [0020](./adr/0020-published-artifacts.md) — garam publishes images and
@@ -340,7 +342,8 @@ ADRs:
 - [0025](./adr/0025-engine-scope-is-a-caller-obligation.md) — an
   unattached policy's org scope is the caller's to hold
 - [0026](./adr/0026-the-console-defines-an-agent.md) — the console
-  defines an agent and an operator reads that definition
+  defines an agent and an operator reads that definition; the runtime
+  values are superseded by 0077
 - [0027](./adr/0027-a-watch-crosses-processes-through-postgres.md) — a
   watch crosses between processes through Postgres
 - [0028](./adr/0028-oauth-state-is-a-server-side-record.md) — a login's
@@ -355,7 +358,8 @@ ADRs:
 - [0032](./adr/0032-garam-ships-the-command-that-mints-an-operators-first-certificate.md)
   — garam ships the command that mints an operator's first certificate
 - [0033](./adr/0033-an-operator-claims-the-agent-a-definition-mints.md)
-  — an operator claims the agent a definition mints
+  — an operator claims the agent a definition mints; superseded by
+  0077 as the controller's source and as how a managed agent is created
 - [0034](./adr/0034-a-delivered-message-keeps-its-key-and-drops-its-body.md)
   — a delivered message keeps its key and drops its body
 - [0035](./adr/0035-a-cross-organization-message-needs-both-organizations-consent.md)
@@ -398,7 +402,9 @@ ADRs:
   garam's domains are named by subject matter, and the Go package list
   is not the domain list
 - [0049](./adr/0049-neither-published-specification-promises-anything-across-versions.md)
-  — neither published specification promises anything across versions
+  — neither published specification promises anything across versions;
+  superseded by 0079 for the interservice contracts once a release's
+  window is tested
 - [0050](./adr/0050-a-specification-states-its-listeners-5xx-once-and-declares-none-per-operation.md)
   — a specification states its listener's 5xx once and declares none per
   operation
@@ -411,7 +417,8 @@ ADRs:
   by the one it was extracted from
 - [0053](./adr/0053-an-agent-and-its-operator-report-state-on-the-machine-listener.md)
   — an operator and an agent each report state on the machine listener,
-  fenced by the assignment's epoch
+  fenced by the assignment's epoch; the agent route is superseded in
+  part by 0078, which fences it by the active generation too
 - [0054](./adr/0054-the-concrete-types-rule-binds-every-boundary-not-only-a-domain.md)
   — the concrete-types rule binds every boundary, not only a domain
 - [0055](./adr/0055-a-sender-reads-the-state-of-a-message-it-sent.md) —
@@ -503,4 +510,22 @@ ADRs:
   `agent-template:*` actions with nothing linking them to the agents
   defined from them, a definition's name changes on `agent:rename`
   and moves nothing else, and the console lists desired agents by name
-  apart from what operators report
+  apart from what operators report. Which service owns a template is
+  superseded by 0077
+- [0077](./adr/0077-execution-definitions-move-to-the-operator-control-service-and-each-agent-cuts-over-alone.md)
+  — execution definitions and templates move to a separately deployed
+  Operator control service with its own store, garam keeps identity,
+  names, assignment and collaboration, and existing agents cut over one
+  GRN at a time with one active source and no new workload or volume;
+  unbuilt
+- [0078](./adr/0078-a-lifecycle-authority-activates-a-runtime-generation-and-old-generations-and-lineages-are-fenced.md)
+  — a lifecycle authority activates a runtime generation distinct from
+  the GRN, epoch and revision; old generations and replaced credential
+  lineages are refused per request, applied configuration is the
+  runtime's report, and execution authority is a scoped expiring
+  delegation plus a high-trust permission; unbuilt
+- [0079](./adr/0079-interservice-contracts-keep-adjacent-releases-compatible-and-replay-by-stable-identifier.md)
+  — interservice contracts keep adjacent releases compatible in both
+  upgrade orders and refuse what they do not support, a message replays
+  by a stable identifier and a reply leaves through a durable outbox,
+  and no effect is exactly-once; unbuilt

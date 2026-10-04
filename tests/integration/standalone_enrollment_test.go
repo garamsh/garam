@@ -608,3 +608,44 @@ func TestStandalone_ARevocationAndAReplacementLeaveOneOutcome(t *testing.T) {
 		assert.Equal(t, 1, countRows(t, s.pool, current, e.agent.String()))
 	}
 }
+
+// TestStandalone_ARevocationLeavesNoActivationInEitherOrder queues a
+// revocation and a first activation of the same agent behind its
+// execution row, each having read its authority before it waits, in
+// both orders. Revoked first, the activation is refused under the lock
+// rather than installing a token; activated first, the revocation ends
+// it. Either way no token admits anything afterwards.
+func TestStandalone_ARevocationLeavesNoActivationInEitherOrder(t *testing.T) {
+	p := pool(t)
+	_, engine := policyEngine(t, p)
+	s := newExecutionStack(t, p, engine)
+	current := `SELECT count(*) FROM agent_executions WHERE agent_grn = $1 AND activation_id IS NOT NULL`
+
+	for _, revokeFirst := range []bool{true, false} {
+		_, e := s.standaloneOf(t)
+		revoke := s.browsing(http.MethodDelete, "/orgs/acme/agent-supervisors/"+e.supervisor.Identifier, s.owner)
+		activate := func() (reply, error) {
+			return s.exchange(e.supervisorTLS, http.MethodPost, s.agentPath("/activations"), agent.ExecutionContractVersion, "",
+				activationBodyOf("q-1", e.epoch, generationOf(1), nil, e.agentLeaf))
+		}
+		var activated reply
+		if revokeFirst {
+			revoked, got := s.queued(t, revoke, activate)
+			assert.Equal(t, http.StatusNoContent, revoked.status, revoked.body)
+			assert.Equal(t, http.StatusForbidden, got.status, "an activation queued behind a revocation: %s", got.body)
+			activated = got
+		} else {
+			got, revoked := s.queued(t, activate, revoke)
+			require.Equal(t, http.StatusCreated, got.status, "the control: an activation ahead of the revocation: %s", got.body)
+			assert.Equal(t, http.StatusNoContent, revoked.status, revoked.body)
+			activated = got
+		}
+		assert.Zero(t, countRows(t, s.pool, current, e.agent.String()), "no activation survives the revocation")
+		if activated.status == http.StatusCreated {
+			var a machinegen.Activation
+			require.NoError(t, json.Unmarshal([]byte(activated.body), &a))
+			s.open(t, e.agentTLS)
+			allRefused(t, s.protectedCalls(t, e.agentTLS, a.Token), http.StatusForbidden, "the revoked supervisor's token")
+		}
+	}
+}

@@ -1211,20 +1211,29 @@ func (q *Queries) ReplaceToken(ctx context.Context, arg ReplaceTokenParams) erro
 }
 
 const shareAssignment = `-- name: ShareAssignment :one
-SELECT assignee_grn, epoch FROM agent_assignments WHERE agent_grn = $1 FOR SHARE
+SELECT a.assignee_grn, a.epoch,
+       (split_part(a.assignee_grn, ':', 4) <> 'supervisor' OR EXISTS (
+           SELECT 1 FROM agent_supervisors s
+           WHERE s.grn = a.assignee_grn AND s.agent_grn = a.agent_grn AND s.ended_at IS NULL
+       ))::boolean AS assignee_registered
+FROM agent_assignments a WHERE a.agent_grn = $1 FOR SHARE OF a
 `
 
 type ShareAssignmentRow struct {
-	AssigneeGrn string
-	Epoch       int32
+	AssigneeGrn        string
+	Epoch              int32
+	AssigneeRegistered bool
 }
 
 // ShareAssignment is taken after LockExecution, never before: the lock
-// order is agent_executions, then agent_assignments.
+// order is agent_executions, then agent_assignments. A supervisor
+// assignee is registered only while its registration is current, which
+// a revocation or a replacement ends under the same execution lock
+// (ADR-0082); an operator's record is read on the listener instead.
 func (q *Queries) ShareAssignment(ctx context.Context, agentGrn string) (ShareAssignmentRow, error) {
 	row := q.db.QueryRow(ctx, shareAssignment, agentGrn)
 	var i ShareAssignmentRow
-	err := row.Scan(&i.AssigneeGrn, &i.Epoch)
+	err := row.Scan(&i.AssigneeGrn, &i.Epoch, &i.AssigneeRegistered)
 	return i, err
 }
 

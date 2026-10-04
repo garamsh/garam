@@ -9,9 +9,17 @@ LEFT JOIN agent_activations a ON a.id = e.activation_id
 WHERE e.agent_grn = $1;
 
 -- ShareAssignment is taken after LockExecution, never before: the lock
--- order is agent_executions, then agent_assignments.
+-- order is agent_executions, then agent_assignments. A supervisor
+-- assignee is registered only while its registration is current, which
+-- a revocation or a replacement ends under the same execution lock
+-- (ADR-0082); an operator's record is read on the listener instead.
 -- name: ShareAssignment :one
-SELECT assignee_grn, epoch FROM agent_assignments WHERE agent_grn = $1 FOR SHARE;
+SELECT a.assignee_grn, a.epoch,
+       (split_part(a.assignee_grn, ':', 4) <> 'supervisor' OR EXISTS (
+           SELECT 1 FROM agent_supervisors s
+           WHERE s.grn = a.assignee_grn AND s.agent_grn = a.agent_grn AND s.ended_at IS NULL
+       ))::boolean AS assignee_registered
+FROM agent_assignments a WHERE a.agent_grn = $1 FOR SHARE OF a;
 
 -- Now is read after the lock it follows was granted, so an expiry is
 -- judged at that instant and not when the transaction began.

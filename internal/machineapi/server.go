@@ -91,10 +91,10 @@ func caller(w http.ResponseWriter, r *http.Request) (grn.GRN, bool) {
 // parties, and a new one that does not is a route an unauthenticated
 // caller reaches.
 //
-// Two routes read the certificate rather than the GRN alone: renewal,
-// because what may replace a certificate is decided by the certificate
-// presented (ADR-0046), and the controller proof, which rechecks it on
-// every request.
+// A route takes the certificate rather than the GRN alone where a
+// decision rests on which certificate authenticated: what may replace
+// it (ADR-0046), a recheck on every request, or the execution fence's
+// judgement of its validity and lineage (ADR-0080).
 func callerCertificate(w http.ResponseWriter, r *http.Request) (machine.Identity, bool) {
 	identity, ok := machine.IdentityOf(r)
 	if !ok {

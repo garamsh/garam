@@ -195,9 +195,9 @@ in #1157.
   a durable `agent:configure` reference, rechecked fresh, and one the
   runtime already applied needs none. A managed agent's first
   activation carries its own creation's reference or such a configure
-  reference, and none is refused until an activation has succeeded;
-  the creation reference starts that first generation and no later
-  one.
+  reference, and an activation carrying no reference is refused until
+  one has succeeded; the creation reference starts that first
+  generation and no later one.
 - **Applied configuration is the runtime's report**, at its GRN, epoch,
   generation and desired revision, kept apart from what the Operator
   rendered or provisioned. The Operator control service holds it; garam

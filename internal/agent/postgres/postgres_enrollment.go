@@ -50,9 +50,11 @@ func (s *Store) CreateManaged(ctx context.Context, a *agent.Agent, c agent.Manag
 			CreatedAt:     at,
 		}), "record creation", nil, agent.ErrCreationConflict)
 	})
-	if errors.Is(err, agent.ErrCreationConflict) {
-		// A concurrent creation committed first and this one wrote
-		// nothing. Under the same reference it is the same creation.
+	if errorx.IsKind(err, errorx.KindAlreadyExists) {
+		// A unique key refused the write, so this one wrote nothing:
+		// a concurrent creation committed first. Under the same
+		// reference, audience, request and controller it is the same
+		// creation; anything else conflicts.
 		prior, err := s.GetManagedCreationByReference(ctx, c.OperationRef)
 		if err != nil {
 			return nil, false, err

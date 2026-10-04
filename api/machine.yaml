@@ -115,7 +115,10 @@ tags:
       host's keys, and renews its own afterwards (ADR-0082). Neither
       route carries a private key: the host generated both keys and the
       bootstrap secret before it asked, and a retry of the same request
-      answers what the first did.
+      answers what the first did. A supervisor's certificate reaches
+      `renewSupervisorCertificate`, `getIdentity`, `activateAgent`,
+      `deactivateAgent` and `introspectAgentExecution` alone; every
+      other operation answers it 403.
   - name: watch
     description: >-
       What an agent is saying now, on its way to the people watching it

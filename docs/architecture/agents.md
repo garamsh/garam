@@ -247,14 +247,24 @@ acceptance with Sherlock is unverified (#1168, #1169).
   from birth, its first assignment to the supervisor and the first
   certificate of its lineage (migration 000031). An identical retry
   answers the recorded public result while that registration still
-  holds the agent, and nothing otherwise. Withdrawing and spending one
+  holds the agent, and nothing otherwise; two identical first
+  spendings queued on one approval create one agent and answer the
+  second with the first's result. Withdrawing and spending one
   approval serialize on its row.
 - **The supervisor activates its own agent and nothing else.** On the
   execution routes it is authorized by its current registration, its
   being the agent's assignee and current policy, read per request; it
-  holds `agent:activate` alone. Its first activation rests on the
-  approval, where a managed creation's needs its reference. Every
-  collaboration route admits through the one fence for both modes.
+  holds `agent:activate` alone. Its registration is read again under
+  the execution lock beside the assignment, so an activation queued
+  behind a revocation or a replacement is refused rather than
+  installing a token. Its first activation rests on the approval,
+  where a managed creation's needs its reference. Its certificate
+  reaches its own identity, its renewal and those three execution
+  routes and nothing else: `ConfineSupervisors` in
+  `internal/machineapi/standalone.go` refuses every other route at the
+  router, so a supervisor posts, claims and reads no message and acts
+  on no operator route. Every collaboration route admits through the
+  one fence for both modes.
 - **Replacement and revocation are an administrator's.** A replacement
   approval names the supervisor and epoch it replaces and, spent,
   reassigns the agent at the next epoch, ends the former registration
@@ -277,3 +287,14 @@ acceptance with Sherlock is unverified (#1168, #1169).
   credential directory holds the agent's key and certificate. Neither
   is the agent's memory, outbox or workspace; which account and mount
   reach each is #1180's.
+- **The host's commands own what they write.** The two directories
+  never overlap; the preparation records the agent directory it owns
+  and refuses one holding credentials it did not write. Each command
+  holds an exclusive lock on each directory it writes, and refuses
+  rather than waits where another holds it. Once the enrollment record
+  exists, `enroll` installs nothing again, so a replay never replaces
+  a credential renewed since; `renew` runs only after it, and the CLI
+  writes the agent's directory only before it, so the agent's own
+  renewal is never overwritten. Every request goes to an `https://`
+  origin verified by the pinned garam server root, and a redirect is
+  refused rather than followed.

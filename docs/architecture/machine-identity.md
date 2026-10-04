@@ -146,10 +146,12 @@ tagged `execution` in `api/machine.yaml`, which is authoritative for
 their wire and their `execution-fence.v1` contract version. A
 standalone host's supervisor is the other: on the same routes it
 activates, deactivates and inspects the one agent it is registered
-for and holds, and recovers nothing ([agents.md](./agents.md)
-§Standalone hosts). The hosted control service alone creates a
-managed agent and obtains its first certificate, on the routes tagged
-`enrollment`, authoritative for theirs and `managed-enrollment.v1`.
+for and holds, and recovers nothing; its certificate reaches no
+route but those, its own renewal and its identity
+([agents.md](./agents.md) §Standalone hosts). The hosted control
+service alone creates a managed agent and obtains its first
+certificate, on the routes tagged `enrollment`, authoritative for
+theirs and `managed-enrollment.v1`.
 Each request rereads the caller's certificate and registration; each
 but creation rereads its grant, or a supervisor's registration and
 assignment, and current policy too, and creation rereads the member's

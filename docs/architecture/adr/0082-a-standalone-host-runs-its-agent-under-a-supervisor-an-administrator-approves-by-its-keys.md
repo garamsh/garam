@@ -54,8 +54,10 @@ approval of the host's own keys.**
   supervisor, and no operator route reaches a supervisor-held agent.
 - **The supervisor activates its own agent on the existing execution
   routes.** Its current registration, its being the agent's assignee
-  and current policy are read per request; it covers activation,
-  deactivation and introspection, and not recovery. Its first
+  and current policy are read per request, the registration again
+  under the execution lock; it covers activation, deactivation and
+  introspection, and not recovery, and its certificate reaches no
+  other route but its own identity and renewal. Its first
   activation rests on the approval; a managed creation's still needs
   its reference. Collaboration routes are unchanged: the generation
   and lineage fence (ADR-0080) is the one admission for both modes.

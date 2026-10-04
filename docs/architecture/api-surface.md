@@ -225,7 +225,10 @@ decided on `agent:enroll` from current state and carry no contract
 version, as an operator's registration does not; on the machine
 listener `enrollStandaloneAgent` and `renewSupervisorCertificate`
 require and answer `Garam-Contract-Version: standalone-enrollment.v1`.
-The specifications are authoritative for their forms, and
+A supervisor's certificate is admitted to those, to `getIdentity` and
+to the three execution routes it holds authority on, and refused on
+every other route at the router before a handler runs. The
+specifications are authoritative for their forms, and
 [agents.md](./agents.md) §Standalone hosts for what they decide.
 
 **Managed enrollment is a third versioned contract on the machine

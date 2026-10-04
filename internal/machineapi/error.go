@@ -73,7 +73,12 @@ type causeRecorder interface {
 // carries no transport; the kind-to-status mapping is the shared one in
 // internal/wire.
 func writeError(w http.ResponseWriter, err error) {
-	status := wire.StatusOf(errorx.KindOf(err))
+	writeErrorStatus(w, wire.StatusOf(errorx.KindOf(err)), err)
+}
+
+// writeErrorStatus renders err as writeError does, at a status the
+// route chose over the shared mapping.
+func writeErrorStatus(w http.ResponseWriter, status int, err error) {
 	// What a client reads is never the chain's own text unless this
 	// project wrote every part of it (wire.MessageOf): a driver error
 	// names a table, a constraint and a SQLSTATE, and a decoder quotes

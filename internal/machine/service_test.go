@@ -95,6 +95,9 @@ func (r registrations) Holds(_ context.Context, subject grn.GRN) error {
 type issuer struct {
 	store  authorities
 	sealer ca.Sealer
+	// now is the clock the services this issuer builds read, nil for
+	// time.Now.
+	now func() time.Time
 }
 
 func newIssuer(t *testing.T) *issuer {
@@ -116,7 +119,7 @@ func (i *issuer) service() machine.Service {
 // serviceHolding is the same service over the records the
 // organizations still hold.
 func (i *issuer) serviceHolding(records registrations) machine.Service {
-	return machine.NewService(trustRoots{store: i.store}, records)
+	return machine.NewService(trustRoots{store: i.store}, records, machine.Config{Now: i.now})
 }
 
 // issue returns the client certificate garam signs for subject,
@@ -471,4 +474,117 @@ func TestService_WithdrawingOneRecordLeavesEveryOtherIdentity(t *testing.T) {
 		require.NoError(t, err, subject.String())
 		assert.Equal(t, subject, identity.GRN())
 	}
+}
+
+// unreadable is a record nobody could read: the database behind it
+// did not answer.
+type unreadable struct{}
+
+func (unreadable) Holds(context.Context, grn.GRN) error {
+	return errorx.New(errorx.KindInternal, "connection refused")
+}
+
+// parsed returns the leaf of pair as Verify takes it.
+func parsed(t *testing.T, pair tls.Certificate) *x509.Certificate {
+	t.Helper()
+	leaf, err := x509.ParseCertificate(pair.Certificate[0])
+	require.NoError(t, err)
+	return leaf
+}
+
+// TestService_VerifyProvesAPresentedCertificateForItsSubject holds the
+// check a decision runs on a certificate presented on another party's
+// behalf. The certificate garam issued the controller is the control,
+// verified through the same service; each refusal differs from it in
+// the one thing its kind names.
+func TestService_VerifyProvesAPresentedCertificateForItsSubject(t *testing.T) {
+	ctx := context.Background()
+	issuer := newIssuer(t)
+	controller := operatorGRNOf("acme", "controller")
+	svc := issuer.service()
+	issuer.authority(t, "other")
+	require.NoError(t, svc.Verify(ctx, controller, parsed(t, issuer.issue(t, controller))))
+
+	tests := map[string]struct {
+		subject     grn.GRN
+		certificate tls.Certificate
+		kind        errorx.Kind
+	}{
+		"another identity's certificate": {
+			controller, issuer.issue(t, operatorGRNOf("acme", "other")), errorx.KindInvalidArgument,
+		},
+		"signed by another organization's authority": {
+			controller, issuer.sign(t, "other", leaf{uris: []string{controller.String()}}), errorx.KindInvalidArgument,
+		},
+		"signed by nothing but its own key": {
+			controller, issuer.selfSigned(t, controller), errorx.KindInvalidArgument,
+		},
+		"expired": {
+			controller, issuer.sign(t, "acme", leaf{uris: []string{controller.String()}, notAfter: time.Now().Add(-time.Minute)}),
+			errorx.KindPermissionDenied,
+		},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			err := svc.Verify(ctx, tt.subject, parsed(t, tt.certificate))
+			require.Error(t, err)
+			assert.Equal(t, tt.kind, errorx.KindOf(err))
+		})
+	}
+
+	t.Run("withdrawn record", func(t *testing.T) {
+		err := issuer.serviceHolding(held().without(controller)).Verify(ctx, controller, parsed(t, issuer.issue(t, controller)))
+		assert.True(t, errorx.IsKind(err, errorx.KindNotFound), "%v", err)
+	})
+	t.Run("record that could not be read", func(t *testing.T) {
+		err := machine.NewService(trustRoots{store: issuer.store}, unreadable{}, machine.Config{}).
+			Verify(ctx, controller, parsed(t, issuer.issue(t, controller)))
+		assert.True(t, errorx.IsKind(err, errorx.KindUnavailable), "%v", err)
+	})
+}
+
+// TestService_VerifyReadsTheTimeAtTheDecision holds one certificate
+// still and moves the clock: valid at its issue time, refused past its
+// expiry. The chain and the record are the same on both calls, so the
+// refusal is the clock's.
+func TestService_VerifyReadsTheTimeAtTheDecision(t *testing.T) {
+	ctx := context.Background()
+	issuer := newIssuer(t)
+	controller := operatorGRNOf("acme", "controller")
+	certificate := parsed(t, issuer.issue(t, controller))
+	at := certificate.NotBefore.Add(time.Minute)
+	issuer.now = func() time.Time { return at }
+	svc := issuer.service()
+
+	require.NoError(t, svc.Verify(ctx, controller, certificate))
+	at = certificate.NotAfter.Add(time.Second)
+	assert.True(t, errorx.IsKind(svc.Verify(ctx, controller, certificate), errorx.KindPermissionDenied))
+}
+
+// TestService_RecheckDecidesAnEarlierIdentityAgain is what a decision
+// on an open connection asks: the identity authenticated once, and the
+// clock and the record are read again. The first recheck, with neither
+// moved, is the control for both refusals.
+func TestService_RecheckDecidesAnEarlierIdentityAgain(t *testing.T) {
+	ctx := context.Background()
+	issuer := newIssuer(t)
+	hosted := operatorGRNOf("acme", "hosted")
+	pair := issuer.issue(t, hosted)
+	at := time.Now()
+	issuer.now = func() time.Time { return at }
+	records := held()
+	svc := issuer.serviceHolding(records)
+
+	identity, err := authenticate(t, svc, pair)
+	require.NoError(t, err)
+	require.NoError(t, svc.Recheck(ctx, identity))
+
+	at = identity.NotAfter().Add(time.Second)
+	assert.True(t, errorx.IsKind(svc.Recheck(ctx, identity), errorx.KindPermissionDenied))
+
+	at = time.Now()
+	records.without(hosted)
+	assert.True(t, errorx.IsKind(svc.Recheck(ctx, identity), errorx.KindNotFound))
+	assert.True(t, errorx.IsKind(machine.NewService(trustRoots{store: issuer.store}, unreadable{}, machine.Config{}).
+		Recheck(ctx, identity), errorx.KindUnavailable))
 }

@@ -132,8 +132,9 @@ func TestRootCommand_CarriesTheAdapter(t *testing.T) {
 
 // anyMachineIdentity authenticates whatever a handshake presents. What
 // this file measures is the protocol the connection ends up on, and a
-// refusal here would end the handshake before there is one.
-type anyMachineIdentity struct{}
+// refusal here would end the handshake before there is one. Nothing
+// here makes a decision that verifies a certificate again.
+type anyMachineIdentity struct{ machine.Service }
 
 func (anyMachineIdentity) Authenticate(context.Context, [][]byte) (machine.Identity, error) {
 	return machine.Identity{}, nil

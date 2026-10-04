@@ -273,7 +273,7 @@ func (c listenerCertificate) Get() (*tls.Certificate, error) {
 // carried.
 func listener(t *testing.T, agents agent.Service, operators operator.Service, messages message.Service, standing message.ConsentStore, watches watch.Service, groups machineapi.Groups, engine machineapi.Evaluator, caller grn.GRN) (string, *http.Client) {
 	t.Helper()
-	return serveTLS(t, machineapi.NewServer(agents, operators, messages, standing, watches, groups, engine, nil), caller)
+	return serveTLS(t, machineapi.NewServer(agents, operators, messages, standing, watches, groups, engine, nil, nil, nil), caller)
 }
 
 // serveTLS serves srv behind the machine listener, as listener does,
@@ -294,7 +294,7 @@ func serveTLS(t *testing.T, srv *machineapi.Server, caller grn.GRN) (string, *ht
 	require.NoError(t, err)
 
 	served := machine.NewServer(
-		machine.NewService(trustRoots{store: store}, everyRecordHeld{}),
+		machine.NewService(trustRoots{store: store}, everyRecordHeld{}, machine.Config{}),
 		loopback(t),
 		machinegen.HandlerWithOptions(srv, machinegen.StdHTTPServerOptions{ErrorHandlerFunc: machineapi.BindingError}),
 	)
@@ -392,7 +392,7 @@ func TestServer_AnswersNothingToAConnectionThatAuthenticatedNobody(t *testing.T)
 	// The same surface served any other way carries no identity, and no
 	// handler invents one.
 	relay := &announced{}
-	plain := httptest.NewServer(machinegen.Handler(machineapi.NewServer(agents, nil, messages, consenting(), watching(t, relay), groups, policies, nil)))
+	plain := httptest.NewServer(machinegen.Handler(machineapi.NewServer(agents, nil, messages, consenting(), watching(t, relay), groups, policies, nil, nil, nil)))
 	t.Cleanup(plain.Close)
 	bot := agentGRN("acme", "0a1b2c3d4e5f6071").String()
 	routes := map[string]struct{ method, path string }{

@@ -84,6 +84,9 @@ names, never against a pool holding every organization's, and both ends
 read their certificate per handshake, so a replaced one is presented on
 the next connection with nothing restarted
 ([ADR-0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)).
+The controller proof is the one route that verifies the caller's
+certificate and record again on every request
+([machine-identity.md](./machine-identity.md)).
 Admission reads that certificate and nothing else: no session and no
 user row exist on this listener, and nothing about the caller is looked
 up to admit it. What an admitted caller may do is decided after that
@@ -187,7 +190,9 @@ refusal is the one being deleted.
 listeners** (ADR-0078). The browser-facing listener grants, reads and
 withdraws a hosted operator's delegation and mints a member's
 request-bound authority; the machine listener answers that authority
-and its durable reference to the operator it names and no other. Each
+and its durable reference to the operator it names and no other, and
+proves a controller's current authority to that operator before each
+lifecycle decision. Each
 requires and answers `Garam-Contract-Version: operation-authority.v1`,
 and a request naming none or another is refused naming the one served
 (ADR-0079). The specifications are authoritative for their forms, and
@@ -258,7 +263,9 @@ and not in the same place on every surface.
   listeners**: membership, roles and groups as read for the call, and
   the organization's persisted policies past the engine's cache, so an
   allow recorded earlier is never what a later check reads and a
-  decision that cannot be made refuses
+  decision that cannot be made refuses. A controller proof is decided
+  the same way for the hosted operator, on its groups and current
+  policy beside the Allow its grant contributes
   ([ADR-0078](./adr/0078-a-lifecycle-authority-activates-a-runtime-generation-and-old-generations-and-lineages-are-fenced.md)).
 - **A read describing a write is decided on that write's action.**
   `getOrgDeletionPreview` answers what deleting an organization would

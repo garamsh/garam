@@ -90,9 +90,11 @@ collaborate on a shared plan.
   hosted operator, under `/orgs/{org}/operators/{operator}/delegation`,
   and a member handing it one request-bound operation under
   `/orgs/{org}/operation-authorities`, which the operator reads back on
-  the machine listener (ADR-0078). A grant is immutable and a
-  replacement or withdrawal is final for what was minted under it;
-  every mint and read back is decided from current state. Delegating is
+  the machine listener (ADR-0078), where it also proves a controller's
+  current authority before each lifecycle decision. A grant is
+  immutable and a replacement or withdrawal is final for what was
+  minted under it; every mint, read back and proof is decided from
+  current state. Delegating is
   `operator:delegate`, creating `agent:create` and configuring
   `agent:configure`; [operators.md](./operators.md) §Delegated operation
   authority holds the rest.

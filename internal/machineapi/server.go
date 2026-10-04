@@ -44,6 +44,10 @@ type Server struct {
 	groups    Groups
 	evaluator Evaluator
 	authority operator.AuthorityService
+	// certificates verifies a certificate again on a decision, the
+	// caller's own and one forwarded for another identity.
+	certificates machine.Service
+	proofs       operator.ProofService
 }
 
 // Compile-time check that Server satisfies the generated interface.
@@ -54,10 +58,13 @@ var _ machinegen.ServerInterface = (*Server)(nil)
 // does to its own certificate, what a machine identity does to its own
 // queue, the consent relation that lets a message cross an organization
 // boundary, who is watching one work and what it is saying, which
-// groups a caller belongs to, what decides whom it may send to, and
-// what a hosted operator reads its delegated operations back through.
-func NewServer(agents agent.Service, operators operator.Service, messages message.Service, consents message.ConsentStore, watches watch.Service, groups Groups, evaluator Evaluator, authority operator.AuthorityService) *Server {
-	return &Server{agents: agents, operators: operators, messages: messages, consents: consents, watches: watches, groups: groups, evaluator: evaluator, authority: authority}
+// groups a caller belongs to, what decides whom it may send to, what a
+// hosted operator reads its delegated operations back through, what
+// verifies a certificate again on a decision, and what proves a
+// controller's current authority to that operator.
+func NewServer(agents agent.Service, operators operator.Service, messages message.Service, consents message.ConsentStore, watches watch.Service, groups Groups, evaluator Evaluator, authority operator.AuthorityService, certificates machine.Service, proofs operator.ProofService) *Server {
+	return &Server{agents: agents, operators: operators, messages: messages, consents: consents, watches: watches, groups: groups, evaluator: evaluator, authority: authority,
+		certificates: certificates, proofs: proofs}
 }
 
 // caller returns the GRN the connection authenticated as, and writes
@@ -80,9 +87,10 @@ func caller(w http.ResponseWriter, r *http.Request) (grn.GRN, bool) {
 // parties, and a new one that does not is a route an unauthenticated
 // caller reaches.
 //
-// One route reads the certificate rather than the GRN alone: what may
-// replace a certificate is decided by the certificate presented
-// (ADR-0046).
+// Two routes read the certificate rather than the GRN alone: renewal,
+// because what may replace a certificate is decided by the certificate
+// presented (ADR-0046), and the controller proof, which rechecks it on
+// every request.
 func callerCertificate(w http.ResponseWriter, r *http.Request) (machine.Identity, bool) {
 	identity, ok := machine.IdentityOf(r)
 	if !ok {

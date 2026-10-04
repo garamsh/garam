@@ -125,9 +125,13 @@ release of that contract and no compatibility window (ADR-0049).
 
 ## Separated execution
 
-**Nothing in this section is built.** It is the accepted target of
-ADR-0077 and ADR-0078, and everything above describes what runs until a
-GRN cuts over. Product implementation is tracked in #1157.
+**Nothing in this section is built but garam's half of one check:**
+the proof a hosted operator obtains of a controller's delegation and
+`agent:activate` permission ([operators.md](./operators.md)
+§Controller proof), which nothing activates on yet. The rest is the
+accepted target of ADR-0077 and ADR-0078, and everything above
+describes what runs until a GRN cuts over. Product implementation is
+tracked in #1157.
 
 - **Desired runtime values and templates leave garam.** The Operator
   control service is their one writable managed source and the cluster

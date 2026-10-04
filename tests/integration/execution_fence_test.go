@@ -797,7 +797,7 @@ func TestExecutionFence_ALeafPastItsValidityIsRefusedOnTheConnectionItOpened(t *
 
 // TestExecutionFence_EachContractFamilyAnswersItsOwnVersion sends each
 // family's routes through the generated router with the version
-// header missing, naming the other family, and malformed. Each is
+// header missing, naming another family, and malformed. Each is
 // refused with 400 naming the family's own version; the version it
 // names is the control.
 func TestExecutionFence_EachContractFamilyAnswersItsOwnVersion(t *testing.T) {
@@ -813,6 +813,8 @@ func TestExecutionFence_EachContractFamilyAnswersItsOwnVersion(t *testing.T) {
 	}{
 		{s.agentPath("/execution/introspection"), string(introspection), agent.ExecutionContractVersion, operator.ContractVersion, http.StatusOK},
 		{"/operation-authorities/introspection", `{"authority":"absent"}`, operator.ContractVersion, agent.ExecutionContractVersion, http.StatusNotFound},
+		{"/operators/" + s.controller.String() + "/managed-agents", `{"requestId":"r-1","operationRef":"absent"}`,
+			agent.EnrollmentContractVersion, agent.ExecutionContractVersion, http.StatusNotFound},
 	}
 	for _, f := range families {
 		for _, sent := range []string{"", f.other, "execution-fence.v2", "not a version"} {
@@ -824,10 +826,15 @@ func TestExecutionFence_EachContractFamilyAnswersItsOwnVersion(t *testing.T) {
 		assert.Equal(t, f.admitted, got.status, "control: %s with its version: %s", f.path, got.body)
 		assert.Equal(t, f.version, got.version)
 	}
-	for _, path := range []string{s.agentPath("/activations"), s.agentPath("/activations/" + absentClaim + "/deactivation"), s.agentPath("/credential-recovery")} {
+	for path, version := range map[string]string{
+		s.agentPath("/activations"):                                  agent.ExecutionContractVersion,
+		s.agentPath("/activations/" + absentClaim + "/deactivation"): agent.ExecutionContractVersion,
+		s.agentPath("/credential-recovery"):                          agent.ExecutionContractVersion,
+		s.agentPath("/initial-certificate"):                          agent.EnrollmentContractVersion,
+	} {
 		got := s.send(t, s.hostedTLS, http.MethodPost, path, "", "", "{}")
 		assert.Equal(t, http.StatusBadRequest, got.status, "%s without a version: %s", path, got.body)
-		assert.Equal(t, agent.ExecutionContractVersion, got.version, path)
+		assert.Equal(t, version, got.version, path)
 	}
 }
 

@@ -78,11 +78,14 @@ func TestActionConstants_SpellTheirWireStrings(t *testing.T) {
 		{org.ActionOperatorRegister, "operator:register"},
 		{org.ActionOperatorUpdate, "operator:update"},
 		{org.ActionOperatorDelete, "operator:delete"},
+		{org.ActionOperatorDelegate, "operator:delegate"},
 
 		{org.ActionAgentRead, "agent:read"},
 		{org.ActionAgentDefine, "agent:define"},
 		{org.ActionAgentWatch, "agent:watch"},
 		{org.ActionAgentRename, "agent:rename"},
+		{org.ActionAgentCreate, "agent:create"},
+		{org.ActionAgentConfigure, "agent:configure"},
 
 		{org.ActionAgentTemplateRead, "agent-template:read"},
 		{org.ActionAgentTemplateCreate, "agent-template:create"},
@@ -101,8 +104,9 @@ func TestRoleActions_GrantSets(t *testing.T) {
 		[]string{
 			"org:*", "group:*", "project:*", "policy:*", "consent:*",
 			org.ActionOperatorRead, org.ActionOperatorRegister, org.ActionOperatorUpdate,
-			org.ActionOperatorDelete, org.ActionAgentRead, org.ActionAgentDefine,
-			org.ActionAgentRename, org.ActionAgentTemplateRead, org.ActionAgentTemplateCreate,
+			org.ActionOperatorDelete, org.ActionOperatorDelegate, org.ActionAgentRead,
+			org.ActionAgentDefine, org.ActionAgentRename, org.ActionAgentCreate,
+			org.ActionAgentConfigure, org.ActionAgentTemplateRead, org.ActionAgentTemplateCreate,
 			org.ActionAgentTemplateUpdate, org.ActionAgentTemplateDelete,
 		},
 		org.RoleOwner.Actions())
@@ -111,8 +115,9 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			org.ActionOrgRead, org.ActionOrgUpdate, org.ActionOrgMemberList, org.ActionOrgInvite,
 			"group:*", "project:*", "policy:*", "consent:*",
 			org.ActionOperatorRead, org.ActionOperatorRegister, org.ActionOperatorUpdate,
-			org.ActionOperatorDelete, org.ActionAgentRead, org.ActionAgentDefine,
-			org.ActionAgentRename, org.ActionAgentTemplateRead, org.ActionAgentTemplateCreate,
+			org.ActionOperatorDelete, org.ActionOperatorDelegate, org.ActionAgentRead,
+			org.ActionAgentDefine, org.ActionAgentRename, org.ActionAgentCreate,
+			org.ActionAgentConfigure, org.ActionAgentTemplateRead, org.ActionAgentTemplateCreate,
 			org.ActionAgentTemplateUpdate, org.ActionAgentTemplateDelete,
 		},
 		org.RoleAdmin.Actions())
@@ -122,7 +127,7 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			org.ActionGroupRead, org.ActionGroupMemberList,
 			org.ActionProjectRead, org.ActionProjectMemberList,
 			org.ActionOperatorRead, org.ActionAgentRead, org.ActionAgentDefine,
-			org.ActionAgentRename, org.ActionAgentTemplateRead,
+			org.ActionAgentRename, org.ActionAgentCreate, org.ActionAgentTemplateRead,
 		},
 		org.RoleMember.Actions())
 	assert.Empty(t, org.Role("").Actions())
@@ -168,6 +173,23 @@ func TestRoleActions_OnlyOwnerAndAdminRegisterAnOperator(t *testing.T) {
 	}
 }
 
+// TestRoleActions_OnlyOwnerAndAdminConfigureOrDelegate pins ADR-0078's
+// split: every role may ask a delegated operator to create an agent
+// from an allowed profile, and only the two administrative roles may
+// change execution settings or delegate to an operator. Creating is the
+// control: without it the member's refusals would also hold for a role
+// that reaches no execution action at all.
+func TestRoleActions_OnlyOwnerAndAdminConfigureOrDelegate(t *testing.T) {
+	for _, r := range []org.Role{org.RoleOwner, org.RoleAdmin, org.RoleMember} {
+		assert.Contains(t, r.Actions(), org.ActionAgentCreate, string(r))
+	}
+	for _, action := range []string{org.ActionAgentConfigure, org.ActionOperatorDelegate} {
+		assert.Contains(t, org.RoleOwner.Actions(), action)
+		assert.Contains(t, org.RoleAdmin.Actions(), action)
+		assert.NotContains(t, org.RoleMember.Actions(), action)
+	}
+}
+
 func TestActionsFor_UnionsKnownRoles(t *testing.T) {
 	assert.Equal(t,
 		[]string{
@@ -175,10 +197,11 @@ func TestActionsFor_UnionsKnownRoles(t *testing.T) {
 			org.ActionGroupRead, org.ActionGroupMemberList,
 			org.ActionProjectRead, org.ActionProjectMemberList,
 			org.ActionOperatorRead, org.ActionAgentRead, org.ActionAgentDefine,
-			org.ActionAgentRename, org.ActionAgentTemplateRead,
+			org.ActionAgentRename, org.ActionAgentCreate, org.ActionAgentTemplateRead,
 			org.ActionOrgUpdate, org.ActionOrgInvite,
 			"group:*", "project:*", "policy:*", "consent:*",
 			org.ActionOperatorRegister, org.ActionOperatorUpdate, org.ActionOperatorDelete,
+			org.ActionOperatorDelegate, org.ActionAgentConfigure,
 			org.ActionAgentTemplateCreate, org.ActionAgentTemplateUpdate, org.ActionAgentTemplateDelete,
 		},
 		org.ActionsFor([]string{"member", "admin"}))

@@ -2,12 +2,14 @@ package machineapi
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"runtime/debug"
 
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/wire"
 )
 
@@ -40,13 +42,20 @@ func RecoverPanics(next http.Handler) http.Handler {
 // this surface's Error response admits.
 //
 // It names no parameter, where the browser surface's counterpart does:
-// every parameter api/machine.yaml declares is a path string, so there
-// is no format for one to fail and nothing to tell a caller beyond that
-// a parameter could not be read.
+// every parameter api/machine.yaml declares but one is a path string,
+// so there is no format for one to fail and nothing to tell a caller
+// beyond that a parameter could not be read. The one is the contract
+// version header, and a missing one is answered as an unsupported one
+// so the refusal names the version the route serves.
 //
 // The composition root supplies this as ErrorHandlerFunc, and nothing
 // else answers on this path.
-func BindingError(w http.ResponseWriter, _ *http.Request, _ error) {
+func BindingError(w http.ResponseWriter, _ *http.Request, err error) {
+	var header *machinegen.RequiredHeaderError
+	if errors.As(err, &header) && header.ParamName == operator.ContractVersionHeader {
+		contract(w, "")
+		return
+	}
 	writeError(w, errorx.New(errorx.KindInvalidArgument, "a request parameter could not be read"))
 }
 

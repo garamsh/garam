@@ -49,7 +49,7 @@ func TestLogin_EndpointShedsPastTheLiveStateBound(t *testing.T) {
 	// doubled.
 	srv := api.NewServer(nil, nil, nil, nil, nil, nil, nil,
 		authn.NewPostgresOAuthStateStore(p), nil, nil, []authn.Provider{stubProvider{}}, nil, nil, nil,
-		api.Config{SessionTTL: time.Hour})
+		nil, api.Config{SessionTTL: time.Hour})
 	handler := apigen.Handler(srv)
 
 	login := func() int {

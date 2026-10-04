@@ -273,6 +273,13 @@ func (c listenerCertificate) Get() (*tls.Certificate, error) {
 // carried.
 func listener(t *testing.T, agents agent.Service, operators operator.Service, messages message.Service, standing message.ConsentStore, watches watch.Service, groups machineapi.Groups, engine machineapi.Evaluator, caller grn.GRN) (string, *http.Client) {
 	t.Helper()
+	return serveTLS(t, machineapi.NewServer(agents, operators, messages, standing, watches, groups, engine, nil), caller)
+}
+
+// serveTLS serves srv behind the machine listener, as listener does,
+// for a test that composes the server itself.
+func serveTLS(t *testing.T, srv *machineapi.Server, caller grn.GRN) (string, *http.Client) {
+	t.Helper()
 	store := authorities{}
 	key := make([]byte, ca.KeySize)
 	_, err := rand.Read(key)
@@ -286,15 +293,15 @@ func listener(t *testing.T, agents agent.Service, operators operator.Service, me
 	pair, err := tls.X509KeyPair(issued.CertificatePEM(), issued.PrivateKeyPEM())
 	require.NoError(t, err)
 
-	srv := machine.NewServer(
+	served := machine.NewServer(
 		machine.NewService(trustRoots{store: store}, everyRecordHeld{}),
 		loopback(t),
-		machinegen.Handler(machineapi.NewServer(agents, operators, messages, standing, watches, groups, engine)),
+		machinegen.HandlerWithOptions(srv, machinegen.StdHTTPServerOptions{ErrorHandlerFunc: machineapi.BindingError}),
 	)
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
-	go func() { _ = srv.ServeTLS(lis, "", "") }()
-	t.Cleanup(func() { _ = srv.Close() })
+	go func() { _ = served.ServeTLS(lis, "", "") }()
+	t.Cleanup(func() { _ = served.Close() })
 
 	client := &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{
 		//nolint:gosec // the listener's own certificate is not under test.
@@ -385,7 +392,7 @@ func TestServer_AnswersNothingToAConnectionThatAuthenticatedNobody(t *testing.T)
 	// The same surface served any other way carries no identity, and no
 	// handler invents one.
 	relay := &announced{}
-	plain := httptest.NewServer(machinegen.Handler(machineapi.NewServer(agents, nil, messages, consenting(), watching(t, relay), groups, policies)))
+	plain := httptest.NewServer(machinegen.Handler(machineapi.NewServer(agents, nil, messages, consenting(), watching(t, relay), groups, policies, nil)))
 	t.Cleanup(plain.Close)
 	bot := agentGRN("acme", "0a1b2c3d4e5f6071").String()
 	routes := map[string]struct{ method, path string }{

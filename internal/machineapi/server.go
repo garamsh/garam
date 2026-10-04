@@ -43,6 +43,7 @@ type Server struct {
 	watches   watch.Service
 	groups    Groups
 	evaluator Evaluator
+	authority operator.AuthorityService
 }
 
 // Compile-time check that Server satisfies the generated interface.
@@ -53,9 +54,10 @@ var _ machinegen.ServerInterface = (*Server)(nil)
 // does to its own certificate, what a machine identity does to its own
 // queue, the consent relation that lets a message cross an organization
 // boundary, who is watching one work and what it is saying, which
-// groups a caller belongs to, and what decides whom it may send to.
-func NewServer(agents agent.Service, operators operator.Service, messages message.Service, consents message.ConsentStore, watches watch.Service, groups Groups, evaluator Evaluator) *Server {
-	return &Server{agents: agents, operators: operators, messages: messages, consents: consents, watches: watches, groups: groups, evaluator: evaluator}
+// groups a caller belongs to, what decides whom it may send to, and
+// what a hosted operator reads its delegated operations back through.
+func NewServer(agents agent.Service, operators operator.Service, messages message.Service, consents message.ConsentStore, watches watch.Service, groups Groups, evaluator Evaluator, authority operator.AuthorityService) *Server {
+	return &Server{agents: agents, operators: operators, messages: messages, consents: consents, watches: watches, groups: groups, evaluator: evaluator, authority: authority}
 }
 
 // caller returns the GRN the connection authenticated as, and writes

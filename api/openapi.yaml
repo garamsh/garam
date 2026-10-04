@@ -1406,6 +1406,183 @@ paths:
           $ref: '#/components/responses/Error'
         '409':
           $ref: '#/components/responses/Error'
+  /orgs/{org}/operators/{operator}/delegation:
+    put:
+      operationId: writeOperatorDelegation
+      tags: [operator]
+      summary: Grant or replace a hosted operator's delegation. Requires current `operator:delegate`.
+      description: >-
+        Grants the hosted operator bounded authority over this
+        organization's controllers (ADR-0078). A grant never changes:
+        a new request ends the current grant and creates another, so an
+        operation authorized under the first never becomes valid under
+        the second. `expectedGrantId` must name the current grant, or
+        be absent where there is none; otherwise the write is refused
+        with 409 and changes nothing. Repeating a `requestId` answers
+        the grant it wrote with 200 while that grant is current, and is
+        refused once it has been ended or where any part of the write
+        differs: the terms, `expectedGrantId`, or the caller.
+        Authorization is decided from current membership, roles,
+        groups and persisted policies.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/operator'
+        - $ref: '#/components/parameters/contractVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DelegationWrite'
+      responses:
+        '200':
+          description: The grant this `requestId` already wrote.
+          headers:
+            Garam-Contract-Version:
+              $ref: '#/components/headers/ContractVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Delegation'
+        '201':
+          description: The new current grant.
+          headers:
+            Garam-Contract-Version:
+              $ref: '#/components/headers/ContractVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Delegation'
+        '400':
+          $ref: '#/components/responses/ContractError'
+        '401':
+          $ref: '#/components/responses/ContractError'
+        '403':
+          $ref: '#/components/responses/ContractError'
+        '404':
+          $ref: '#/components/responses/ContractError'
+        '409':
+          $ref: '#/components/responses/ContractError'
+    get:
+      operationId: getOperatorDelegation
+      tags: [operator]
+      summary: Read a hosted operator's current delegation. Requires the `member` role.
+      description: >-
+        The current grant, which may have passed its expiry. Ended
+        grants are not answered.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/operator'
+        - $ref: '#/components/parameters/contractVersion'
+      responses:
+        '200':
+          description: The current grant.
+          headers:
+            Garam-Contract-Version:
+              $ref: '#/components/headers/ContractVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Delegation'
+        '400':
+          $ref: '#/components/responses/ContractError'
+        '401':
+          $ref: '#/components/responses/ContractError'
+        '403':
+          $ref: '#/components/responses/ContractError'
+        '404':
+          $ref: '#/components/responses/ContractError'
+    delete:
+      operationId: endOperatorDelegation
+      tags: [operator]
+      summary: Withdraw a hosted operator's delegation. Requires current `operator:delegate`.
+      description: >-
+        Ends the grant named in the body, and only that one. Every
+        operation authority minted under it is refused from the next
+        introspection or reference check, and no later grant revives
+        it. A grant already ended answers 204 and changes nothing, so a
+        retried withdrawal never ends a replacement written since; a
+        grant this operator never held answers 404.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/operator'
+        - $ref: '#/components/parameters/contractVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DelegationEnd'
+      responses:
+        '204':
+          description: Grant ended.
+          headers:
+            Garam-Contract-Version:
+              $ref: '#/components/headers/ContractVersion'
+        '400':
+          $ref: '#/components/responses/ContractError'
+        '401':
+          $ref: '#/components/responses/ContractError'
+        '403':
+          $ref: '#/components/responses/ContractError'
+        '404':
+          $ref: '#/components/responses/ContractError'
+  /orgs/{org}/operation-authorities:
+    post:
+      operationId: mintOperationAuthority
+      tags: [operator]
+      summary: Hand a delegated operator one operation. Requires the operation's action, decided now.
+      description: >-
+        Mints an opaque authority bound to the signed-in user, this
+        organization, the audience operator, the operation, its target,
+        `requestId` and `bodySha256` (ADR-0078). The caller sends it to
+        the Operator as `Authorization: Garam-Operation <authority>`,
+        outside the body whose digest it binds. It is answered once and
+        expires after five minutes or at the grant's expiry, whichever
+        is first.
+
+
+        `agent:create` targets the controller that will run the agent
+        and is authorized on the organization; `agent:configure`
+        targets the agent, is authorized on it, and binds where it runs
+        now. The audience's current grant must cover the operation and
+        the controller.
+
+
+        The same `requestId` with the same binding under the same grant
+        mints a new authority for the same `operationRef`, replacing the
+        previous one. Any other binding under it, including a replaced
+        grant or a changed placement, is refused with 409: a newly
+        authorized operation takes a new `requestId`.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - $ref: '#/components/parameters/contractVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationAuthorityRequest'
+      responses:
+        '201':
+          description: Authority minted, shown once.
+          headers:
+            Garam-Contract-Version:
+              $ref: '#/components/headers/ContractVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAuthority'
+        '400':
+          $ref: '#/components/responses/ContractError'
+        '401':
+          $ref: '#/components/responses/ContractError'
+        '403':
+          $ref: '#/components/responses/ContractError'
+        '404':
+          $ref: '#/components/responses/ContractError'
+        '409':
+          $ref: '#/components/responses/ContractError'
   /orgs/{org}/policies:
     post:
       operationId: createPolicy
@@ -1810,6 +1987,14 @@ paths:
           $ref: '#/components/responses/Error'
 components:
   parameters:
+    contractVersion:
+      name: Garam-Contract-Version
+      in: header
+      required: true
+      description: Must be `operation-authority.v1` (ADR-0079); any other value is refused with 400 naming it.
+      x-go-name: ContractVersion
+      schema:
+        type: string
     provider:
       name: provider
       in: path
@@ -2688,6 +2873,108 @@ components:
         createdAt:
           type: string
           format: date-time
+    DelegationWrite:
+      type: object
+      required: [requestId, controllers, operations, expiresAt]
+      properties:
+        requestId:
+          $ref: '#/components/schemas/RequestId'
+        expectedGrantId:
+          type: string
+          description: The grant the caller read as current. Absent where it read none.
+        controllers:
+          type: array
+          minItems: 1
+          maxItems: 32
+          uniqueItems: true
+          description: Operator GRNs of this organization the grant may act on. The hosted operator is not one.
+          items:
+            type: string
+        operations:
+          type: array
+          minItems: 1
+          maxItems: 3
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/DelegatedOperation'
+        expiresAt:
+          type: string
+          format: date-time
+          description: Within the next 30 days.
+    DelegationEnd:
+      type: object
+      required: [grantId]
+      properties:
+        grantId:
+          type: string
+          description: The grant to end, as the caller read it.
+    Delegation:
+      type: object
+      required: [grantId, operatorGrn, controllers, operations, expiresAt, grantedBy, grantedAt]
+      properties:
+        grantId:
+          type: string
+        operatorGrn:
+          type: string
+        controllers:
+          type: array
+          items:
+            type: string
+        operations:
+          type: array
+          items:
+            $ref: '#/components/schemas/DelegatedOperation'
+        expiresAt:
+          type: string
+          format: date-time
+        grantedBy:
+          type: string
+        grantedAt:
+          type: string
+          format: date-time
+    DelegatedOperation:
+      type: string
+      enum: [agent:create, agent:configure, agent:activate]
+      description: >-
+        `agent:activate` bounds the hosted operator's own lifecycle
+        authority; no user mints it.
+    RequestId:
+      type: string
+      pattern: '^[A-Za-z0-9._~-]{1,128}$'
+    OperationAuthorityRequest:
+      type: object
+      required: [audience, operation, target, requestId, bodySha256]
+      properties:
+        audience:
+          type: string
+          description: GRN of the hosted operator that will act.
+        operation:
+          type: string
+          enum: [agent:create, agent:configure]
+        target:
+          type: string
+          description: Controller GRN for `agent:create`, agent GRN for `agent:configure`.
+        requestId:
+          $ref: '#/components/schemas/RequestId'
+        bodySha256:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          description: Lowercase hexadecimal SHA-256 of the exact request body the Operator receives.
+    OperationAuthority:
+      type: object
+      required: [authority, expiresAt, operationRef, grantId]
+      properties:
+        authority:
+          type: string
+          description: Opaque. garam stores only its hash and cannot answer it again.
+        expiresAt:
+          type: string
+          format: date-time
+        operationRef:
+          type: string
+          description: The durable reference of the logical operation.
+        grantId:
+          type: string
     Error:
       type: object
       required: [kind, message]
@@ -2697,9 +2984,23 @@ components:
           description: errorx kind, e.g. `not_found`, `permission_denied`.
         message:
           type: string
+  headers:
+    ContractVersion:
+      description: The contract version this answer follows, `operation-authority.v1`.
+      schema:
+        type: string
   responses:
     Error:
       description: Error response.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ContractError:
+      description: Error response of a versioned contract route.
+      headers:
+        Garam-Contract-Version:
+          $ref: '#/components/headers/ContractVersion'
       content:
         application/json:
           schema:

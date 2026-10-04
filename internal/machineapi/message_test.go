@@ -16,6 +16,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/machineapi"
 	"github.com/garamsh/garam/internal/message"
+	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/wire"
 )
 
@@ -195,6 +196,9 @@ func send(t *testing.T, client *http.Client, method, url, body string) (int, str
 	req, err := http.NewRequest(method, url, strings.NewReader(body))
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
+	// Every route but the contract's ignores it; on those it moves the
+	// request past the router's own refusal to the handler under test.
+	req.Header.Set(operator.ContractVersionHeader, operator.ContractVersion)
 	resp, err := client.Do(req)
 	require.NoError(t, err)
 	defer func() { _ = resp.Body.Close() }()

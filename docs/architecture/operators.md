@@ -5,9 +5,11 @@ stands in obtaining a certificate, and what it authenticates with: the
 record that the organization has it and that its certificate
 authenticates on (ADR-0045, ADR-0070), the one-time token registering
 it mints and a member mints again where it has not enrolled (ADR-0064,
-ADR-0067), and which certificate garam last issued it, together with
-what it takes to replace that with the next (ADR-0046). Implemented by
-`internal/operator`.
+ADR-0067), which certificate garam last issued it, together with
+what it takes to replace that with the next (ADR-0046), and the
+authority an organization delegates to a hosted operator and hands it
+one operation at a time (ADR-0078). Implemented by `internal/operator`,
+whose grants and authorities persist through `internal/operator/postgres`.
 
 | Type | Responsibility |
 |------|----------------|
@@ -25,6 +27,13 @@ what it takes to replace that with the next (ADR-0046). Implemented by
 | `CertificateStore` | records what garam last issued, and moves that record to the successor only where the presented certificate is still it |
 | `Service` | signs an enrolling operator's request, mints a certificate out of band and adopts it, and renews the one an operator presents |
 | `Issuer` | signs a certificate for a subject GRN, over a key it generates or over one a request carries, and hands back the garam server root beside it |
+| `Grant` | an immutable delegation to a hosted operator: its controllers, operations and expiry, and whether a replacement or withdrawal ended it |
+| `Binding` | what one operation authority binds: actor, organization, audience, operation, target, grant, request identifier, body digest and, for a configuration change, the placement |
+| `GrantStore` | writes a grant under a request identifier and an expected current grant, ends one, and answers the current one or one by identifier |
+| `AuthorityStore` | records an operation under its request identifier with a short token, replaces that token for the same binding, and answers a binding by token or by reference |
+| `Authorizer` | decides from current state whether a user may perform an action, refusing whatever it cannot decide |
+| `AssignmentReader` | answers where an agent runs now |
+| `AuthorityService` | grants and withdraws delegations, mints operation authorities, and introspects and rechecks them for their audience |
 
 The identifier is the caller's rather than garam's, which is what makes
 this domain unlike every other org resource. An operator's GRN is
@@ -237,3 +246,61 @@ admitted. The
 agent's certificate is not
 this domain's: an agent is admitted to its own by the claim its operator
 made (ADR-0033) and renews on the route ADR-0040 gave it.
+
+## Delegated operation authority
+
+An organization delegates bounded execution authority to a hosted
+operator, and a member hands that operator one operation at a time
+(ADR-0078). The hosted operator and each controller it may act on are
+distinct records of the same organization, holding distinct
+certificates; a grant naming another organization's operator, or the
+hosted operator as its own controller, is refused.
+
+**A grant never changes.** Writing one ends the current grant and
+creates another, so an operation authorized under the first is never
+authorized under the second, and a withdrawal is final for everything
+minted under it. Each write carries a request identifier and the grant
+the caller read as current: a repeat answers the grant it wrote while
+that grant is current and is refused once it has been ended, and a
+write from a view that has since moved is refused rather than
+overwriting what moved it. Ended grants are kept, because their request
+identifiers are what refuse a replay; deleting the organization or the
+hosted operator removes them and everything minted under them, and
+deleting a controller removes it from every grant. Granting and
+withdrawing are `operator:delegate`, which owner and admin hold.
+
+**An operation authority is a short opaque token over a durable
+reference.** Minting reads the member's authority from current state
+and binds the actor, the audience, the operation, its target, the
+current grant, the caller's request identifier and the digest of the
+exact body the Operator will receive; garam never sees that body. It
+answers the token once, stores only its hash, and lets it live five
+minutes or until the grant expires. Creation targets the controller
+and is decided on `agent:create` against the organization, as defining
+an agent is; configuration targets the agent, is decided on
+`agent:configure` against it, and records where the agent runs now.
+Every role holds `agent:create`; only owner and admin hold
+`agent:configure`, because execution settings choose what runs on a
+host. `agent:activate` is a grant operation only, bounding the hosted
+operator's own lifecycle authority; no member mints it.
+
+The same binding under the same grant mints a fresh token for the same
+reference, which is how a handoff that expired or whose answer was lost
+is retried. Anything else under that request identifier — another
+digest, a replaced grant, a moved agent — is refused, and a newly
+authorized operation takes a new one.
+
+**Every read back is decided again.** Introspection answers the audience
+alone, and an unknown, expired or other audience's token is one
+not-found. It, and the reference check an Operator makes before
+activating a new desired revision, refuse once the grant has ended or
+stopped covering the operation, the bound controller is no longer
+registered, a configuration change's agent has moved, or the member is
+no longer authorized; neither consumes anything. A decision that cannot
+be read from current state is unavailable and never an answer. A
+reference is not a restart capability: restarting an applied revision
+is lifecycle authority (ADR-0078).
+
+The routes and their wire forms are `api/openapi.yaml` §operator and
+`api/machine.yaml` §authority, which are authoritative for them; each
+carries the `operation-authority.v1` contract version (ADR-0079).

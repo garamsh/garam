@@ -76,6 +76,11 @@ tags:
       authenticates as and no other, and it reads back the state of the
       messages it sent and of no others (ADR-0055). garam announces
       none of that: a sender that wants to know asks.
+  - name: authority
+    description: >-
+      What a hosted operator reads back about the operations members
+      hand it under its delegation (ADR-0078), each decided from
+      current state when it is asked.
   - name: watch
     description: >-
       What an agent is saying now, on its way to the people watching it
@@ -677,8 +682,97 @@ paths:
           $ref: '#/components/responses/Error'
         '409':
           $ref: '#/components/responses/Error'
+  /operation-authorities/introspection:
+    post:
+      operationId: introspectOperationAuthority
+      tags: [authority]
+      summary: Read what an operation authority binds, once current state still authorizes it.
+      description: >-
+        The calling operator must be the authority's audience. Unknown,
+        expired, and another audience's authority are one 404. A known
+        operation that current membership, roles, groups, persisted
+        policies, the grant, the bound controller's registration or a
+        configuration change's placement no longer authorizes is 403,
+        and one garam cannot decide from current state is 503. Nothing
+        is consumed: a retry introspects again. Check `bodySha256`
+        against the exact body received, and introspect before
+        revealing any stored result for `requestId`.
+      parameters:
+        - $ref: '#/components/parameters/contractVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthorityIntrospection'
+      responses:
+        '200':
+          description: The authority's binding.
+          headers:
+            Garam-Contract-Version:
+              $ref: '#/components/headers/ContractVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationBinding'
+        '400':
+          $ref: '#/components/responses/ContractError'
+        '401':
+          $ref: '#/components/responses/ContractError'
+        '403':
+          $ref: '#/components/responses/ContractError'
+        '404':
+          $ref: '#/components/responses/ContractError'
+  /operation-references/{ref}:
+    get:
+      operationId: checkOperationReference
+      tags: [authority]
+      summary: Recheck a durable operation reference before activating a new desired revision.
+      description: >-
+        Decides the reference as introspection decides an authority,
+        without the short token's expiry. It is not a restart
+        capability: restarting a revision already applied uses the
+        lifecycle authority (ADR-0078). The answer carries no
+        `expiresAt`.
+      parameters:
+        - $ref: '#/components/parameters/contractVersion'
+        - $ref: '#/components/parameters/ref'
+      responses:
+        '200':
+          description: The reference's binding, currently authorized.
+          headers:
+            Garam-Contract-Version:
+              $ref: '#/components/headers/ContractVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationBinding'
+        '400':
+          $ref: '#/components/responses/ContractError'
+        '401':
+          $ref: '#/components/responses/ContractError'
+        '403':
+          $ref: '#/components/responses/ContractError'
+        '404':
+          $ref: '#/components/responses/ContractError'
 components:
   parameters:
+    contractVersion:
+      name: Garam-Contract-Version
+      in: header
+      required: true
+      description: Must be `operation-authority.v1` (ADR-0079); any other value is refused with 400 naming it.
+      x-go-name: ContractVersion
+      schema:
+        type: string
+    ref:
+      name: ref
+      in: path
+      required: true
+      description: Operation reference, as minting the authority returned it.
+      x-go-name: OperationRef
+      schema:
+        type: string
     claim:
       name: claim
       in: path
@@ -1076,6 +1170,54 @@ components:
           maxLength: 4000
           description: >-
             The event itself. It may be empty and it may span lines.
+    AuthorityIntrospection:
+      type: object
+      required: [authority]
+      properties:
+        authority:
+          type: string
+          description: The opaque authority, carried in the body so it never reaches a URL.
+    OperationBinding:
+      type: object
+      required: [operationRef, grantId, orgGrn, actorGrn, audienceGrn, operation, targetGrn, requestId, bodySha256]
+      properties:
+        operationRef:
+          type: string
+        grantId:
+          type: string
+        orgGrn:
+          type: string
+        actorGrn:
+          type: string
+          description: The user the operation is performed for.
+        audienceGrn:
+          type: string
+        operation:
+          type: string
+          enum: [agent:create, agent:configure]
+        targetGrn:
+          type: string
+          description: The controller for `agent:create`, the agent for `agent:configure`.
+        assignment:
+          $ref: '#/components/schemas/BoundAssignment'
+        requestId:
+          type: string
+        bodySha256:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+          description: When the presented authority stops being usable. Absent on a reference check.
+    BoundAssignment:
+      type: object
+      required: [operatorGrn, epoch]
+      description: Where the agent ran when a configuration change was authorized. Present for `agent:configure` only.
+      properties:
+        operatorGrn:
+          type: string
+        epoch:
+          type: string
+          description: Opaque.
     Error:
       type: object
       required: [kind, message]
@@ -1085,9 +1227,23 @@ components:
           description: errorx kind, e.g. `not_found`, `permission_denied`.
         message:
           type: string
+  headers:
+    ContractVersion:
+      description: The contract version this answer follows, `operation-authority.v1`.
+      schema:
+        type: string
   responses:
     Error:
       description: Error response.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ContractError:
+      description: Error response of a versioned contract route.
+      headers:
+        Garam-Contract-Version:
+          $ref: '#/components/headers/ContractVersion'
       content:
         application/json:
           schema:

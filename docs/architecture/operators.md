@@ -9,7 +9,8 @@ ADR-0067), which certificate garam last issued it, together with
 what it takes to replace that with the next (ADR-0046), and the
 authority an organization delegates to a hosted operator and hands it
 one operation at a time (ADR-0078). Implemented by `internal/operator`,
-whose grants and authorities persist through `internal/operator/postgres`.
+whose grants and authorities persist through
+`internal/operator/postgres`.
 
 | Type | Responsibility |
 |------|----------------|

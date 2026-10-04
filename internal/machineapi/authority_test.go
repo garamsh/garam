@@ -103,9 +103,9 @@ func TestOperationAuthorityRoutes_RefuseAMissingOrUnsupportedVersion(t *testing.
 }
 
 // TestOperationAuthorityRoutes_MapRefusals holds the contract's
-// statuses: one 404 for an authority the caller may not learn about, 403
-// for one current state no longer authorizes, and 503 naming no cause
-// for one garam could not decide.
+// statuses: one 404 for an authority the caller may not learn about,
+// 403 for one current state no longer authorizes, and 503 naming no
+// cause for one garam could not decide.
 func TestOperationAuthorityRoutes_MapRefusals(t *testing.T) {
 	hosted := grn.New("acme", "default", "operator", "hosted")
 	cases := []struct {

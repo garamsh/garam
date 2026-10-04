@@ -19,9 +19,9 @@ var (
 	controller = grn.New("acme", grn.DefaultProject, operator.ServiceType, "controller")
 )
 
-// TestParseGrantTerms_BoundsWhatAGrantCanReach holds every bound a grant
-// write is refused for at the boundary. The accepted terms are the
-// control: each refusal differs from them in one field.
+// TestParseGrantTerms_BoundsWhatAGrantCanReach holds every bound a
+// grant write is refused for at the boundary. The accepted terms are
+// the control: each refusal differs from them in one field.
 func TestParseGrantTerms_BoundsWhatAGrantCanReach(t *testing.T) {
 	now := time.Date(2026, time.October, 4, 12, 0, 0, 0, time.UTC)
 	valid := func() ([]string, []string, time.Time) {

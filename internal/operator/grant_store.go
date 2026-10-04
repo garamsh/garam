@@ -8,9 +8,9 @@ import (
 )
 
 // GrantStore persists the grants an organization makes to its hosted
-// operators. Grants are never updated in place: a write ends the current
-// one and adds another, and ended grants remain so their request
-// identifiers keep refusing replays.
+// operators. Grants are never updated in place: a write ends the
+// current one and adds another, and ended grants remain so their
+// request identifiers keep refusing replays.
 type GrantStore interface {
 	// WriteGrant applies w and answers the grant it leaves current, and
 	// whether this call created it. A repeat of an earlier request

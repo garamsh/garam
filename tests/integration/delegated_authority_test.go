@@ -37,7 +37,8 @@ import (
 // authorityStack is both listeners as the serve commands compose them,
 // over one database and one policy engine: the browser-facing surface
 // over HTTP and the machine surface over mTLS. The delegated authority
-// on each is cli.NewAuthorityService, the composition both commands run.
+// on each is cli.NewAuthorityService, the composition both commands
+// run.
 type authorityStack struct {
 	pool       *pgxpool.Pool
 	engine     *grpc.ClientConn
@@ -232,8 +233,9 @@ func (s *authorityStack) provisionAgent(t *testing.T) string {
 
 // TestDelegatedAuthority_RefusesPastAStaleCachedAllow holds that a Deny
 // the engine's cache has not seen still refuses: another process writes
-// it, the engine's ordinary Check goes on answering the allow it cached,
-// and introspection and minting, which ask CheckCurrent, refuse.
+// it, the engine's ordinary Check goes on answering the allow it
+// cached, and introspection and minting, which ask CheckCurrent,
+// refuse.
 func TestDelegatedAuthority_RefusesPastAStaleCachedAllow(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
@@ -283,8 +285,8 @@ func (e checkOnlyEngine) Check(ctx context.Context, r *authzv1.CheckRequest) (*a
 // TestDelegatedAuthority_AnEngineWithoutCheckCurrentRefuses holds that
 // an older engine, which would answer Check with a cached allow, makes
 // every privileged call unavailable rather than answered from Check.
-// Reading the grant, an ordinary cached read, is the control: the engine
-// answers it.
+// Reading the grant, an ordinary cached read, is the control: the
+// engine answers it.
 func TestDelegatedAuthority_AnEngineWithoutCheckCurrentRefuses(t *testing.T) {
 	p := pool(t)
 	srv := grpc.NewServer()

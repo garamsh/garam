@@ -117,9 +117,9 @@ func TestWriteOperatorDelegation_RefusesOverbroadTermsBeforeTheService(t *testin
 	}
 }
 
-// TestMintOperationAuthority_AnswersTheMintedAuthority holds that a mint
-// reaches the service parsed and answers the authority once; a digest
-// that is not lowercase hexadecimal never reaches it.
+// TestMintOperationAuthority_AnswersTheMintedAuthority holds that a
+// mint reaches the service parsed and answers the authority once; a
+// digest that is not lowercase hexadecimal never reaches it.
 func TestMintOperationAuthority_AnswersTheMintedAuthority(t *testing.T) {
 	f := newFixture(t)
 	cookie := f.sessionCookieFor(t, "member-sub", "Member")

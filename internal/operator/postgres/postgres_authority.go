@@ -17,9 +17,9 @@ import (
 // Compile-time check that Store satisfies operator.AuthorityStore.
 var _ operator.AuthorityStore = (*Store)(nil)
 
-// MintAuthority records the binding or replaces its token, in the one statement
-// MintOperationAuthority is. No row back means the identifier holds a
-// different binding.
+// MintAuthority records the binding or replaces its token, in the one
+// statement MintOperationAuthority is. No row back means the identifier
+// holds a different binding.
 func (s *Store) MintAuthority(ctx context.Context, b operator.Binding, tokenHash string, expiresAt, now time.Time) (operator.OperationRef, error) {
 	var assignee, epoch pgtype.Text
 	if b.Assignment != nil {

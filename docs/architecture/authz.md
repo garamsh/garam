@@ -337,9 +337,9 @@ identity-derived ones. Delegated operation authority on both reaches
 `internal/cli/authority.go`, which reads the membership, the user's
 own roles and its groups for each call and sends the org-scoped
 statement those roles grant; neither operation targets a group or
-project, so no scoped role is collected. Each listener's `Evaluator` seam has one
-non-test implementation, the gRPC client, and that is what both
-composition roots wire (`internal/cli/serve.go`,
+project, so no scoped role is collected. Each listener's `Evaluator`
+seam has one non-test implementation, the gRPC client, and that is
+what both composition roots wire (`internal/cli/serve.go`,
 `internal/cli/machine.go`). The in-process evaluator is the engine's
 own rather than a test substitute: `StatementEvaluator` is what `Check`
 runs on every request (`internal/authz/server.go`).

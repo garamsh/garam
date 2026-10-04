@@ -90,8 +90,9 @@ func (a currentAuthorization) Authorize(ctx context.Context, actor, orgGRN, obje
 	return nil
 }
 
-// agentPlacements answers where an agent runs (operator.AssignmentReader)
-// from its assignment. The epoch is handed on as an opaque string.
+// agentPlacements answers where an agent runs
+// (operator.AssignmentReader) from its assignment. The epoch is handed
+// on as an opaque string.
 type agentPlacements struct{ store agent.Store }
 
 func (p agentPlacements) CurrentAssignment(ctx context.Context, g grn.GRN) (operator.Assignment, error) {

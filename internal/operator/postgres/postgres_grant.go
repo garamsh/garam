@@ -16,9 +16,9 @@ import (
 // Compile-time check that Store satisfies operator.GrantStore.
 var _ operator.GrantStore = (*Store)(nil)
 
-// WriteGrant applies a grant write in one transaction: the replay read, the
-// lock on the current grant, the staleness comparison, ending it, and
-// writing its successor. Two first writes racing past an empty view
+// WriteGrant applies a grant write in one transaction: the replay read,
+// the lock on the current grant, the staleness comparison, ending it,
+// and writing its successor. Two first writes racing past an empty view
 // meet the unique index on the current grant, and the loser is stale.
 func (s *Store) WriteGrant(ctx context.Context, w operator.GrantWrite, id operator.GrantID) (*operator.Grant, bool, error) {
 	tx, err := s.pool.Begin(ctx)
@@ -86,8 +86,9 @@ func (s *Store) WriteGrant(ctx context.Context, w operator.GrantWrite, id operat
 	}, true, nil
 }
 
-// replay answers a repeated request: the grant it wrote while that grant
-// is current, and a refusal once it is ended or where the write differs.
+// replay answers a repeated request: the grant it wrote while that
+// grant is current, and a refusal once it is ended or where the write
+// differs.
 func replay(ctx context.Context, q *db.Queries, row db.OperatorDelegation, w operator.GrantWrite) (*operator.Grant, bool, error) {
 	g, err := grantFromRow(ctx, q, row)
 	switch {

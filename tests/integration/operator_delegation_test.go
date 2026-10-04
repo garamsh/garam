@@ -335,8 +335,8 @@ func TestGrantWrite_ConcurrentReplacementsLeaveOneWinner(t *testing.T) {
 }
 
 // TestMint_RemintKeepsTheReferenceAndReplacesTheToken holds the retry
-// after a lost or expired handoff: the same binding under the same grant
-// answers the same reference with a new token, and the token it
+// after a lost or expired handoff: the same binding under the same
+// grant answers the same reference with a new token, and the token it
 // replaced introspects as unknown.
 func TestMint_RemintKeepsTheReferenceAndReplacesTheToken(t *testing.T) {
 	f := newDelegationFixture(t)
@@ -532,8 +532,8 @@ func TestReference_ConfigurationIsBoundToItsPlacement(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// TestReference_RechecksTheActorEveryTime holds that an allow decided at
-// mint is not what a later check reads: once current authorization
+// TestReference_RechecksTheActorEveryTime holds that an allow decided
+// at mint is not what a later check reads: once current authorization
 // denies, introspection and the reference refuse, and once it cannot be
 // decided, they refuse as unavailable. Nothing falls back.
 func TestReference_RechecksTheActorEveryTime(t *testing.T) {

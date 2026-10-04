@@ -26,7 +26,8 @@ const agentServiceType = "agent"
 // Every privileged call decides from current state: the grant and the
 // registrations it names are read when the call is made, the actor's
 // authority through Authorizer, and a configuration change's placement
-// through AssignmentReader. A call that cannot read any of them refuses.
+// through AssignmentReader. A call that cannot read any of them
+// refuses.
 type AuthorityService interface {
 	// WriteGrant creates or replaces the hosted operator's grant for an
 	// actor currently holding operator:delegate; see GrantStore.WriteGrant

@@ -15,7 +15,8 @@ import (
 // Garam-Contract-Version header and answers with it.
 const ContractVersion = "operation-authority.v1"
 
-// ContractVersionHeader carries ContractVersion on requests and answers.
+// ContractVersionHeader carries ContractVersion on requests and
+// answers.
 const ContractVersionHeader = "Garam-Contract-Version"
 
 // ErrUnsupportedContract refuses a request carrying no version, or one
@@ -64,8 +65,8 @@ func (o Operation) IsMintable() bool {
 	return o == OperationAgentCreate || o == OperationAgentConfigure
 }
 
-// RequestID is a caller's stable identifier for one write, which makes a
-// retry of it recognisable.
+// RequestID is a caller's stable identifier for one write, which makes
+// a retry of it recognisable.
 type RequestID string
 
 var requestIDPattern = regexp.MustCompile(`^[A-Za-z0-9._~-]{1,128}$`)
@@ -116,9 +117,10 @@ type GrantTerms struct {
 	ExpiresAt   time.Time
 }
 
-// ParseGrantTerms parses and bounds what a grant write asks for. operator
-// is the hosted operator the grant is for, which may not also be one of
-// its controllers: the two hold distinct credentials (ADR-0077).
+// ParseGrantTerms parses and bounds what a grant write asks for.
+// operator is the hosted operator the grant is for, which may not also
+// be one of its controllers: the two hold distinct credentials
+// (ADR-0077).
 func ParseGrantTerms(org, operator grn.GRN, controllers, operations []string, expiresAt, now time.Time) (GrantTerms, error) {
 	if len(controllers) == 0 || len(controllers) > maxControllers {
 		return GrantTerms{}, errorx.New(errorx.KindInvalidArgument, "a grant names 1 to 32 controllers")

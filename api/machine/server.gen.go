@@ -193,7 +193,7 @@ type ActivationRequest struct {
 	// Generation The runtime's start nonce for this process.
 	Generation string `json:"generation"`
 
-	// OperationRef A durable `agent:configure` reference for a pending revision, null otherwise.
+	// OperationRef A durable `agent:configure` reference for a pending revision, or a managed agent's own `agent:create` reference for its first activation; null otherwise.
 	OperationRef *string `json:"operationRef"`
 
 	// ReplacesActivationId The agent's most recent activation, null only before the first.
@@ -338,7 +338,7 @@ type ExecutionIntrospection struct {
 	Generation ExecutionIntrospectionGeneration `json:"generation"`
 	Grn        string                           `json:"grn"`
 
-	// Mode `fenced` once the agent has been activated.
+	// Mode `fenced` once the agent has been activated, and from its creation for an agent `createManagedAgent` made.
 	Mode ExecutionIntrospectionMode `json:"mode"`
 	Org  string                     `json:"org"`
 }
@@ -349,7 +349,7 @@ type ExecutionIntrospectionCredential string
 // ExecutionIntrospectionGeneration With a generation supplied, whether it is the active one; without one, `none` when no generation is active and `not_supplied` otherwise.
 type ExecutionIntrospectionGeneration string
 
-// ExecutionIntrospectionMode `fenced` once the agent has been activated.
+// ExecutionIntrospectionMode `fenced` once the agent has been activated, and from its creation for an agent `createManagedAgent` made.
 type ExecutionIntrospectionMode string
 
 // ExecutionIntrospectionRequest defines model for ExecutionIntrospectionRequest.
@@ -364,6 +364,33 @@ type ExecutionIntrospectionRequest struct {
 // Identity defines model for Identity.
 type Identity struct {
 	Grn string `json:"grn"`
+}
+
+// InitialCertificate A managed agent's first certificate, the authority that signed it and the garam server root the holder verifies garam by. It carries no private key: the key stays where it was generated.
+type InitialCertificate struct {
+	CertificatePem string `json:"certificatePem"`
+
+	// IssuerPem The authority that signed this certificate. It is not what garam is verified against (ADR-0040).
+	IssuerPem string `json:"issuerPem"`
+
+	// NotAfter When the certificate stops being valid.
+	NotAfter time.Time `json:"notAfter"`
+
+	// ServerRootPem The garam server root, which the holder verifies garam's listener against (ADR-0040).
+	ServerRootPem string `json:"serverRootPem"`
+}
+
+// InitialCertificateRequest defines model for InitialCertificateRequest.
+type InitialCertificateRequest struct {
+	// CertificateRequestPem One PEM-encoded PKCS#10 request over an ECDSA P-256 key the controller generated. Only its key is read.
+	CertificateRequestPem string `json:"certificateRequestPem"`
+
+	// Epoch The assignment's epoch the caller expects. Opaque.
+	Epoch string `json:"epoch"`
+
+	// OperationRef The `agent:create` reference of this agent's creation.
+	OperationRef string `json:"operationRef"`
+	RequestId    string `json:"requestId"`
 }
 
 // MachineCertificate A client certificate, the private key it was issued with, the authority that signed it, and the garam server root the holder verifies garam by. garam stores no private key, so this one is returned once and a holder that loses it asks for another certificate. One shape for both routes that generate a key pair: what an agent is given and what an operator renews differ in who may ask, not in what comes back. An enrollment answers `EnrolledCertificate` instead, because garam generated no key there and has none to return.
@@ -382,6 +409,22 @@ type MachineCertificate struct {
 
 	// ServerRootPem The garam server root. A holder verifies garam's listener against this and against nothing else — one root for every organization, separate from the authority above and signing only what garam presents (ADR-0040).
 	ServerRootPem string `json:"serverRootPem"`
+}
+
+// ManagedAgent defines model for ManagedAgent.
+type ManagedAgent struct {
+	// Epoch The first assignment's epoch. Opaque.
+	Epoch string `json:"epoch"`
+	Grn   string `json:"grn"`
+}
+
+// ManagedAgentRequest defines model for ManagedAgentRequest.
+type ManagedAgentRequest struct {
+	// OperationRef The member's durable `agent:create` reference.
+	OperationRef string `json:"operationRef"`
+
+	// RequestId The request identifier the member's `agent:create` reference was minted under.
+	RequestId string `json:"requestId"`
 }
 
 // Message One stored message, under an identifier the queue minted.
@@ -513,6 +556,9 @@ type ContractVersion = string
 // ControllerGrn defines model for controller.
 type ControllerGrn = string
 
+// EnrollmentContractVersion defines model for enrollmentContractVersion.
+type EnrollmentContractVersion = string
+
 // ExecutionContractVersion defines model for executionContractVersion.
 type ExecutionContractVersion = string
 
@@ -524,6 +570,9 @@ type OperationRef = string
 
 // ContractError defines model for ContractError.
 type ContractError = Error
+
+// EnrollmentContractError defines model for EnrollmentContractError.
+type EnrollmentContractError = Error
 
 // ExecutionContractError defines model for ExecutionContractError.
 type ExecutionContractError = Error
@@ -552,6 +601,12 @@ type IntrospectAgentExecutionParams struct {
 	ExecutionContractVersion ExecutionContractVersion `json:"Garam-Contract-Version"`
 }
 
+// IssueInitialCertificateParams defines parameters for IssueInitialCertificate.
+type IssueInitialCertificateParams struct {
+	// EnrollmentContractVersion Must be `managed-enrollment.v1`; any other value is refused with 400 naming it.
+	EnrollmentContractVersion EnrollmentContractVersion `json:"Garam-Contract-Version"`
+}
+
 // IntrospectOperationAuthorityParams defines parameters for IntrospectOperationAuthority.
 type IntrospectOperationAuthorityParams struct {
 	// ContractVersion Must be `operation-authority.v1` (ADR-0079); any other value is refused with 400 naming it.
@@ -570,6 +625,12 @@ type IntrospectControllerParams struct {
 	ContractVersion ContractVersion `json:"Garam-Contract-Version"`
 }
 
+// CreateManagedAgentParams defines parameters for CreateManagedAgent.
+type CreateManagedAgentParams struct {
+	// EnrollmentContractVersion Must be `managed-enrollment.v1`; any other value is refused with 400 naming it.
+	EnrollmentContractVersion EnrollmentContractVersion `json:"Garam-Contract-Version"`
+}
+
 // ActivateAgentJSONRequestBody defines body for ActivateAgent for application/json ContentType.
 type ActivateAgentJSONRequestBody = ActivationRequest
 
@@ -578,6 +639,9 @@ type RecoverAgentCredentialJSONRequestBody = CredentialRecoveryRequest
 
 // IntrospectAgentExecutionJSONRequestBody defines body for IntrospectAgentExecution for application/json ContentType.
 type IntrospectAgentExecutionJSONRequestBody = ExecutionIntrospectionRequest
+
+// IssueInitialCertificateJSONRequestBody defines body for IssueInitialCertificate for application/json ContentType.
+type IssueInitialCertificateJSONRequestBody = InitialCertificateRequest
 
 // ReportProvisioningStateJSONRequestBody defines body for ReportProvisioningState for application/json ContentType.
 type ReportProvisioningStateJSONRequestBody = ProvisioningStateReport
@@ -599,6 +663,9 @@ type IntrospectOperationAuthorityJSONRequestBody = AuthorityIntrospection
 
 // IntrospectControllerJSONRequestBody defines body for IntrospectController for application/json ContentType.
 type IntrospectControllerJSONRequestBody = ControllerIntrospection
+
+// CreateManagedAgentJSONRequestBody defines body for CreateManagedAgent for application/json ContentType.
+type CreateManagedAgentJSONRequestBody = ManagedAgentRequest
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -629,6 +696,9 @@ type ServerInterface interface {
 	// IntrospectAgentExecution Ask whether an agent certificate and a generation are current, together.
 	// (POST /agents/{agent}/execution/introspection)
 	IntrospectAgentExecution(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn, params IntrospectAgentExecutionParams)
+	// IssueInitialCertificate Sign a managed agent's first certificate over the key its controller generated.
+	// (POST /agents/{agent}/initial-certificate)
+	IssueInitialCertificate(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn, params IssueInitialCertificateParams)
 	// ReportProvisioningState Report what the operator sees of an agent's pod.
 	// (POST /agents/{agent}/provisioning-state)
 	ReportProvisioningState(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn)
@@ -668,6 +738,9 @@ type ServerInterface interface {
 	// IntrospectController Prove a controller's current authority, and an agent's placement on it, for one decision.
 	// (POST /operators/{controller}/introspection)
 	IntrospectController(w http.ResponseWriter, r *http.Request, controllerGrn ControllerGrn, params IntrospectControllerParams)
+	// CreateManagedAgent Create an agent assigned to a controller, under a member's agent:create reference.
+	// (POST /operators/{controller}/managed-agents)
+	CreateManagedAgent(w http.ResponseWriter, r *http.Request, controllerGrn ControllerGrn, params CreateManagedAgentParams)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -1040,6 +1113,60 @@ func (siw *ServerInterfaceWrapper) IntrospectAgentExecution(w http.ResponseWrite
 	handler.ServeHTTP(w, r)
 }
 
+// IssueInitialCertificate operation middleware
+func (siw *ServerInterfaceWrapper) IssueInitialCertificate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agent" -------------
+	var agentGrn AgentGrn
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentGrn, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params IssueInitialCertificateParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Garam-Contract-Version" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Garam-Contract-Version")]; found {
+		var EnrollmentContractVersion EnrollmentContractVersion
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Garam-Contract-Version", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Garam-Contract-Version", valueList[0], &EnrollmentContractVersion, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Garam-Contract-Version", Err: err})
+			return
+		}
+
+		params.EnrollmentContractVersion = EnrollmentContractVersion
+
+	} else {
+		err := fmt.Errorf("Header parameter Garam-Contract-Version is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Garam-Contract-Version", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.IssueInitialCertificate(w, r, agentGrn, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ReportProvisioningState operation middleware
 func (siw *ServerInterfaceWrapper) ReportProvisioningState(w http.ResponseWriter, r *http.Request) {
 
@@ -1393,6 +1520,60 @@ func (siw *ServerInterfaceWrapper) IntrospectController(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
+// CreateManagedAgent operation middleware
+func (siw *ServerInterfaceWrapper) CreateManagedAgent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "controller" -------------
+	var controllerGrn ControllerGrn
+
+	err = runtime.BindStyledParameterWithOptions("simple", "controller", r.PathValue("controller"), &controllerGrn, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "controller", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params CreateManagedAgentParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Garam-Contract-Version" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Garam-Contract-Version")]; found {
+		var EnrollmentContractVersion EnrollmentContractVersion
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Garam-Contract-Version", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Garam-Contract-Version", valueList[0], &EnrollmentContractVersion, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Garam-Contract-Version", Err: err})
+			return
+		}
+
+		params.EnrollmentContractVersion = EnrollmentContractVersion
+
+	} else {
+		err := fmt.Errorf("Header parameter Garam-Contract-Version is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Garam-Contract-Version", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateManagedAgent(w, r, controllerGrn, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -1535,6 +1716,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/activations/{activation}/deactivation", wrapper.DeactivateAgent)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/execution/introspection", wrapper.IntrospectAgentExecution)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/credential-recovery", wrapper.RecoverAgentCredential)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/operators/{controller}/managed-agents", wrapper.CreateManagedAgent)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/initial-certificate", wrapper.IssueInitialCertificate)
 
 	return m
 }

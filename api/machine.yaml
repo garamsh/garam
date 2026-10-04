@@ -93,6 +93,17 @@ tags:
       activation issued, and every one of them is admitted against the
       current activation and lineage when it writes, on a connection
       already open too (ADR-0080).
+  - name: enrollment
+    description: >-
+      How the hosted Operator control service creates a managed agent
+      and obtains its first certificate (ADR-0077, ADR-0078). Creation
+      is authorized by a member's `agent:create` reference alone and
+      registers the identity, its first assignment and an execution
+      fenced from birth in one transaction; the first certificate is
+      signed over a key the controller generated and is the first of
+      that agent's credential lineage. Neither route carries a private
+      key, and a retry under the same request identifier answers what
+      the first request did rather than creating or issuing again.
   - name: watch
     description: >-
       What an agent is saying now, on its way to the people watching it
@@ -233,6 +244,11 @@ paths:
         otherwise: `issueAgentCertificate` answers for it on the
         assignment alone. An operator that constructs the agents its
         definitions name therefore never constructs this one.
+
+        It creates a legacy agent and nothing else: no delegation
+        authorizes it and none is read. An agent the separated
+        lifecycle runs is created by `createManagedAgent`, and this
+        route never reaches one.
       responses:
         '201':
           description: Agent created and assigned to the calling operator.
@@ -258,9 +274,11 @@ paths:
         current epoch, and for the agent itself renewing over the
         connection its current certificate authenticated (ADR-0040).
 
-        Once an agent's execution has been activated, its operator is
-        refused here with 409: its certificates come from its own
-        renewal or from `recoverAgentCredential` (ADR-0078). The agent's
+        Once an agent's execution has been activated, or from its
+        creation for an agent `createManagedAgent` made, its operator
+        is refused here with 409: its certificates come from
+        `issueInitialCertificate`, its own renewal or
+        `recoverAgentCredential` (ADR-0078). The agent's
         own renewal then presents its execution token and is admitted
         against the current activation and credential lineage, which
         the new certificate joins; the certificate it renews stays
@@ -992,8 +1010,15 @@ paths:
         reference for a pending revision. garam rechecks that reference
         as current and requires it to bind this caller, this agent and
         its current assignment. Whether one is needed is the caller's to
-        decide: garam keeps no revision. An `agent:create` reference is
-        422.
+        decide: garam keeps no revision. The one exception is an agent
+        `createManagedAgent` made: until an activation of it has
+        succeeded, a null `operationRef` is 403, and the reference is
+        either such an `agent:configure` reference or the
+        `agent:create` reference of that agent's own creation, while it
+        is still assigned where that creation put it. An `agent:create`
+        reference is accepted for that first activation alone, with a
+        null `replacesActivationId`, and for its identical retry; any
+        other `agent:create` reference is 403.
 
 
         The same `requestId` with the same request answers the same
@@ -1180,8 +1205,172 @@ paths:
           $ref: '#/components/responses/ExecutionContractError'
         '409':
           $ref: '#/components/responses/ExecutionContractError'
+  /operators/{controller}/managed-agents:
+    post:
+      operationId: createManagedAgent
+      tags: [enrollment]
+      summary: Create an agent assigned to a controller, under a member's agent:create reference.
+      description: >-
+        The caller is the hosted Operator control service, the
+        reference's audience. Before anything is created or an earlier
+        creation answered, garam rechecks `operationRef` from current
+        state: it must be an `agent:create` reference handed to this
+        caller in its own organization, its grant must still cover
+        `agent:create` for `controller`, the controller must still be
+        registered, and the member it was minted for must still hold
+        `agent:create`. The reference must bind this `controller` and
+        this `requestId`. No lifecycle authority is read: creating an
+        inactive identity is not activating one.
+
+
+        garam mints the GRN and writes the agent, its first assignment
+        to `controller` and its execution in one transaction, so a
+        failure leaves no agent behind. The execution is fenced from
+        birth with no active generation and in a credential lineage
+        holding no certificate, so no certificate of the agent
+        authorizes anything until `issueInitialCertificate` records
+        the first one, and `issueAgentCertificate` and claiming a
+        definition never reach it.
+
+
+        The first answer is 201. The same `operationRef` and
+        `requestId` for the same `controller` answer the same `grn` and
+        `epoch` with 200, however many times and from however many
+        concurrent requests, while the agent is still assigned where
+        its creation put it; once it has moved, the retry is 409. A
+        reference bound to another controller or request identifier,
+        or a `requestId` an earlier creation holds under another
+        reference, is 409. A controller of another organization or one
+        that is not an operator is 404, as is an unknown reference or
+        another audience's; a reference of another kind is 403, and so
+        is one current state no longer authorizes. Authority garam
+        cannot read as current is 503.
+      parameters:
+        - $ref: '#/components/parameters/enrollmentContractVersion'
+        - $ref: '#/components/parameters/controller'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ManagedAgentRequest'
+      responses:
+        '200':
+          description: The agent an identical earlier request created.
+          headers:
+            Garam-Contract-Version:
+              $ref: '#/components/headers/EnrollmentContractVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManagedAgent'
+        '201':
+          description: The agent, created and assigned to the controller.
+          headers:
+            Garam-Contract-Version:
+              $ref: '#/components/headers/EnrollmentContractVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManagedAgent'
+        '400':
+          $ref: '#/components/responses/EnrollmentContractError'
+        '401':
+          $ref: '#/components/responses/EnrollmentContractError'
+        '403':
+          $ref: '#/components/responses/EnrollmentContractError'
+        '404':
+          $ref: '#/components/responses/EnrollmentContractError'
+        '409':
+          $ref: '#/components/responses/EnrollmentContractError'
+  /agents/{agent}/initial-certificate:
+    post:
+      operationId: issueInitialCertificate
+      tags: [enrollment]
+      summary: Sign a managed agent's first certificate over the key its controller generated.
+      description: >-
+        For an agent `createManagedAgent` made. Authorized as
+        `activateAgent` is, on every call, and also by `operationRef`,
+        which must be the `agent:create` reference of this agent's own
+        creation, rechecked as current; a reference of another agent's
+        creation, on the same controller too, is 403. The agent must
+        still be assigned where its creation put it, at `epoch`.
+
+
+        The certificate is signed over `certificateRequestPem`'s key,
+        which never leaves the controller. garam reads the key alone:
+        the request's subject, SAN and extension requests are ignored,
+        and the certificate names the agent's GRN as its one SAN URI
+        for client authentication. A request that is not one PEM
+        `CERTIFICATE REQUEST` proving possession of an ECDSA P-256 key
+        is 422. Signing happens before the agent's execution lock;
+        under it garam rechecks the assignment, the epoch and the
+        grant's expiry, and records the certificate as the first of the
+        agent's lineage. From then on that certificate, and the ones it
+        renews into, are the agent's current credential; no other
+        certificate naming the agent is.
+
+
+        The first answer is 201. The same `requestId`, `operationRef`,
+        `epoch` and `certificateRequestPem` answer exactly the stored
+        public result with 200, even after the reference's short token
+        has expired, while current authority still permits it; a lost
+        answer never issues a second effective certificate. Any other
+        request once one is recorded is 409, and so is every request,
+        identical ones included, once `recoverAgentCredential` has
+        replaced the lineage: recovery, not this route, replaces a lost
+        credential. A stale `epoch` is 409. Authority garam cannot read
+        as current is 503.
+      parameters:
+        - $ref: '#/components/parameters/enrollmentContractVersion'
+        - $ref: '#/components/parameters/agent'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InitialCertificateRequest'
+      responses:
+        '200':
+          description: The certificate an identical earlier request issued.
+          headers:
+            Garam-Contract-Version:
+              $ref: '#/components/headers/EnrollmentContractVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InitialCertificate'
+        '201':
+          description: The agent's first certificate.
+          headers:
+            Garam-Contract-Version:
+              $ref: '#/components/headers/EnrollmentContractVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InitialCertificate'
+        '400':
+          $ref: '#/components/responses/EnrollmentContractError'
+        '401':
+          $ref: '#/components/responses/EnrollmentContractError'
+        '403':
+          $ref: '#/components/responses/EnrollmentContractError'
+        '404':
+          $ref: '#/components/responses/EnrollmentContractError'
+        '409':
+          $ref: '#/components/responses/EnrollmentContractError'
+        '422':
+          $ref: '#/components/responses/EnrollmentContractError'
 components:
   parameters:
+    enrollmentContractVersion:
+      name: Garam-Contract-Version
+      in: header
+      required: true
+      description: Must be `managed-enrollment.v1`; any other value is refused with 400 naming it.
+      x-go-name: EnrollmentContractVersion
+      schema:
+        type: string
     executionContractVersion:
       name: Garam-Contract-Version
       in: header
@@ -1724,7 +1913,10 @@ components:
           description: The agent's most recent activation, null only before the first.
         operationRef:
           type: [string, 'null']
-          description: A durable `agent:configure` reference for a pending revision, null otherwise.
+          description: >-
+            A durable `agent:configure` reference for a pending
+            revision, or a managed agent's own `agent:create` reference
+            for its first activation; null otherwise.
         certificatePem:
           type: string
           maxLength: 8192
@@ -1782,7 +1974,9 @@ components:
         mode:
           type: string
           enum: [legacy, fenced]
-          description: '`fenced` once the agent has been activated.'
+          description: >-
+            `fenced` once the agent has been activated, and from its
+            creation for an agent `createManagedAgent` made.
         credential:
           type: string
           enum: [current, fenced]
@@ -1822,6 +2016,68 @@ components:
           type: string
         certificatePem:
           type: string
+    ManagedAgentRequest:
+      type: object
+      required: [requestId, operationRef]
+      properties:
+        requestId:
+          type: string
+          pattern: '^[A-Za-z0-9._~-]{1,128}$'
+          description: The request identifier the member's `agent:create` reference was minted under.
+        operationRef:
+          type: string
+          description: The member's durable `agent:create` reference.
+    ManagedAgent:
+      type: object
+      required: [grn, epoch]
+      properties:
+        grn:
+          type: string
+          example: grn:acme:default:agent:0a1b2c3d4e5f6071
+        epoch:
+          type: string
+          description: The first assignment's epoch. Opaque.
+    InitialCertificateRequest:
+      type: object
+      required: [requestId, epoch, certificateRequestPem, operationRef]
+      properties:
+        requestId:
+          type: string
+          pattern: '^[A-Za-z0-9._~-]{1,128}$'
+        epoch:
+          type: string
+          description: The assignment's epoch the caller expects. Opaque.
+        certificateRequestPem:
+          type: string
+          maxLength: 4096
+          description: >-
+            One PEM-encoded PKCS#10 request over an ECDSA P-256 key the
+            controller generated. Only its key is read.
+        operationRef:
+          type: string
+          description: The `agent:create` reference of this agent's creation.
+    InitialCertificate:
+      type: object
+      description: >-
+        A managed agent's first certificate, the authority that signed
+        it and the garam server root the holder verifies garam by. It
+        carries no private key: the key stays where it was generated.
+      required: [certificatePem, issuerPem, serverRootPem, notAfter]
+      properties:
+        certificatePem:
+          type: string
+        issuerPem:
+          type: string
+          description: >-
+            The authority that signed this certificate. It is not what
+            garam is verified against (ADR-0040).
+        serverRootPem:
+          type: string
+          description: The garam server root, which the holder verifies garam's listener against (ADR-0040).
+        notAfter:
+          type: string
+          format: date-time
+          description: When the certificate stops being valid.
     Error:
       type: object
       required: [kind, message]
@@ -1832,6 +2088,10 @@ components:
         message:
           type: string
   headers:
+    EnrollmentContractVersion:
+      description: The contract version this answer follows, `managed-enrollment.v1`.
+      schema:
+        type: string
     ExecutionContractVersion:
       description: The contract version this answer follows, `execution-fence.v1`.
       schema:
@@ -1843,6 +2103,15 @@ components:
   responses:
     Error:
       description: Error response.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    EnrollmentContractError:
+      description: Error response of a managed enrollment route.
+      headers:
+        Garam-Contract-Version:
+          $ref: '#/components/headers/EnrollmentContractVersion'
       content:
         application/json:
           schema:

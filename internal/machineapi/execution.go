@@ -247,15 +247,24 @@ func (s *Server) lifecycleParties(w http.ResponseWriter, r *http.Request, agentG
 		writeError(w, errorx.Wrap(err, "agent", errorx.KindInvalidArgument))
 		return grn.GRN{}, grn.GRN{}, false
 	}
+	if !s.recheck(w, r, identity) {
+		return grn.GRN{}, grn.GRN{}, false
+	}
+	return identity.GRN(), subject, true
+}
+
+// recheck reads the caller's certificate validity and registration
+// again for this decision, and writes the refusal itself.
+func (s *Server) recheck(w http.ResponseWriter, r *http.Request, identity machine.Identity) bool {
 	if err := s.certificates.Recheck(r.Context(), identity); err != nil {
 		err = withinBudget(r, err)
 		if errorx.IsKind(err, errorx.KindNotFound) {
 			err = errorx.Wrap(err, "the caller's registration is withdrawn", errorx.KindPermissionDenied)
 		}
 		writeError(w, err)
-		return grn.GRN{}, grn.GRN{}, false
+		return false
 	}
-	return identity.GRN(), subject, true
+	return true
 }
 
 // fenceOf answers the execution fence a request of an agent presents
@@ -369,13 +378,12 @@ func withinBudget(r *http.Request, err error) error {
 	return err
 }
 
-// writeExecutionError answers 422 for the two refusals of what a
-// request forwarded rather than how it was formed: a certificate that
-// does not prove the agent, and an operation reference this contract
-// does not accept for an activation.
+// writeExecutionError answers 422 for the refusal of what a request
+// forwarded rather than how it was formed: a certificate that does not
+// prove the agent.
 func writeExecutionError(w http.ResponseWriter, r *http.Request, err error) {
 	err = withinBudget(r, err)
-	if errors.Is(err, agent.ErrLeafNotProven) || errors.Is(err, agent.ErrUnsupportedReference) {
+	if errors.Is(err, agent.ErrLeafNotProven) {
 		writeErrorStatus(w, http.StatusUnprocessableEntity, err)
 		return
 	}

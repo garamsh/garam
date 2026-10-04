@@ -212,13 +212,24 @@ for what they decide. No route adds a 5xx of its own (ADR-0050): an
 answer that cannot be decided from current state is the listener's
 503.
 
+**Managed enrollment is a third versioned contract on the machine
+listener** (ADR-0077, ADR-0078). Creating a managed agent and issuing
+its first certificate each require and answer `Garam-Contract-Version:
+managed-enrollment.v1`, and a request naming none or another is
+refused naming that version. Neither carries a private key. The
+operator's bodyless `createAgent` and its `issueAgentCertificate`
+stay as they were for legacy agents and reach no managed one.
+`api/machine.yaml` is authoritative for the wire, and
+[agents.md](./agents.md) §Separated execution for what they decide.
+
 Every certificate after the first is replaced over the connection the
 previous one authenticated: an operator's on the machine listener
 ([ADR-0046](./adr/0046-an-operator-renews-its-certificate-by-presenting-the-one-it-holds.md)),
-an agent's on the route its claim admits it to (ADR-0040). The one
-exception is an agent's recovery, which the hosted control service
-asks for under an administrator's handoff and which replaces the
-agent's credential lineage instead
+an agent's on the route its claim admits it to (ADR-0040). A managed
+agent's first is signed over its controller's key on the enrollment
+route. The one exception is an agent's recovery, which the hosted
+control service asks for under an administrator's handoff and which
+replaces the agent's credential lineage instead
 ([machine-identity.md](./machine-identity.md) §Generation and
 lineage).
 

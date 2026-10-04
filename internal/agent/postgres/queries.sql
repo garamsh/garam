@@ -114,3 +114,43 @@ INSERT INTO agent_recoveries (
     agent_grn, request_id, operation_ref, body_sha256, lineage,
     certificate_pem, created_at
 ) VALUES ($1, $2, $3, $4, $5, $6, $7);
+
+-- A managed creation writes these four in one transaction, the
+-- execution row before the assignment: the lock order every
+-- transaction follows (ADR-0080).
+-- name: CreateManagedAgent :exec
+INSERT INTO agents (grn, org_grn, provisioning_state, runtime_state, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $5);
+
+-- The execution is fenced from birth in a lineage holding no
+-- credential, so agent_credential_current refuses every certificate
+-- of the agent until its initial issuance records one.
+-- name: CreateFencedExecution :exec
+INSERT INTO agent_executions (agent_grn, mode, lineage, updated_at)
+VALUES ($1, 'fenced', $2, $3);
+
+-- name: AssignFirst :one
+INSERT INTO agent_assignments (agent_grn, operator_grn, epoch, created_at, updated_at)
+VALUES ($1, $2, 1, $3, $3)
+RETURNING epoch;
+
+-- name: InsertManagedCreation :exec
+INSERT INTO agent_managed_creations (
+    agent_grn, audience_grn, controller_grn, request_id, operation_ref,
+    epoch, lineage, created_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
+
+-- name: GetManagedCreation :one
+SELECT * FROM agent_managed_creations WHERE agent_grn = $1;
+
+-- name: GetManagedCreationByReference :one
+SELECT * FROM agent_managed_creations WHERE operation_ref = $1;
+
+-- name: GetInitialCertificate :one
+SELECT * FROM agent_initial_certificates WHERE agent_grn = $1;
+
+-- name: InsertInitialCertificate :exec
+INSERT INTO agent_initial_certificates (
+    agent_grn, request_id, operation_ref, epoch, request_sha256, lineage,
+    certificate_pem, issuer_pem, server_root_pem, not_after, created_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);

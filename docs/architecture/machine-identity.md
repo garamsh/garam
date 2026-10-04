@@ -108,6 +108,8 @@ token (#1169), and acceptance with the Operator control service and a
 standalone lifecycle principal is unverified (#1157, #1168). Until a
 GRN's first activation it is in the legacy cohort: its calls carry no
 token, and the certificate check below still applies to each of them.
+An agent created managed is never in it: it is fenced from birth
+([agents.md](./agents.md) §Separated execution).
 
 ADR-0078 adds two questions an agent's state-changing call answers per
 request rather than per connection, so an open connection loses them
@@ -120,9 +122,9 @@ the moment they change:
   token offered for a legacy GRN is refused rather than read as a
   cutover: the mode is the server's (ADR-0080).
 - **Is this certificate current?** It must be inside its validity by
-  the database's clock and, once a recovery has run, in the lineage
-  that recovery started. The certificate is the one the connection's
-  handshake verified; nothing in a body names it.
+  the database's clock and, once a recovery or a managed creation has
+  started a lineage, in that lineage. The certificate is the one the
+  connection's handshake verified; nothing in a body names it.
 
 Claiming, renewing and completing a message, posting one, reporting
 runtime state, forwarding a turn event and renewing the agent's own
@@ -136,15 +138,19 @@ The routes and their schemes are `api/machine.yaml`'s, under the
 The hosted control service is the lifecycle caller. It activates,
 deactivates, inspects and recovers an agent's execution on the routes
 tagged `execution` in `api/machine.yaml`, which is authoritative for
-their wire and their `execution-fence.v1` contract version. Each
-request rereads the caller's certificate and registration, its grant
-and current policy; an agent's own certificate and a controller's are
-refused. Activation, deactivation and recovery are each bounded by a
-ten-second server deadline over both their authority reads and their
-write, and past it answer unavailable without saying whether the write
-committed (ADR-0080). Introspection answers a certificate's standing
-and a generation's from one snapshot; a 200 is a status answer, and
-only `credential` and `generation` both `current`, with the expected
-binding, is positive. The certificate's GRN still answers who is
-calling; these answer whether that caller is still the one allowed to
-act.
+their wire and their `execution-fence.v1` contract version, and it
+creates a managed agent and obtains its first certificate on the
+routes tagged `enrollment`, authoritative for theirs and
+`managed-enrollment.v1`. Each request rereads the caller's certificate
+and registration; each but creation rereads its grant and current
+policy too, and creation rereads the member's `agent:create` reference
+instead. An agent's own certificate and a controller's are refused.
+Activation, deactivation, recovery, creation and initial issuance are
+each bounded by a ten-second server deadline over both their authority
+reads and their write, and past it answer unavailable without saying
+whether the write committed (ADR-0080). Introspection answers a
+certificate's standing and a generation's from one snapshot; a 200 is
+a status answer, and only `credential` and `generation` both
+`current`, with the expected binding, is positive. The certificate's
+GRN still answers who is calling; these answer whether that caller is
+still the one allowed to act.

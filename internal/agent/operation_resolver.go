@@ -18,14 +18,16 @@ const (
 )
 
 // OperationBinding is what a handoff or an operation reference was
-// minted for. Assignee and Epoch are the assignment snapshot it holds;
-// BodySHA256 is the digest of the exact request it authorizes.
+// minted for. RequestID is the identifier the member minted it under;
+// Assignee and Epoch are the assignment snapshot it holds; BodySHA256
+// is the digest of the exact request it authorizes.
 type OperationBinding struct {
 	Ref        string
 	Kind       OperationKind
 	Org        grn.GRN
 	Audience   grn.GRN
 	Target     grn.GRN
+	RequestID  string
 	Assignee   grn.GRN
 	Epoch      int
 	BodySHA256 [32]byte

@@ -200,8 +200,11 @@ func send(t *testing.T, client *http.Client, method, url, body string) (int, str
 	// Every route but the contracts' ignores it; on those it moves the
 	// request past the router's own refusal to the handler under test.
 	version := operator.ContractVersion
-	if executionPath(req.URL.Path) {
+	switch {
+	case executionPath(req.URL.Path):
 		version = agent.ExecutionContractVersion
+	case enrollmentPath(req.URL.Path):
+		version = agent.EnrollmentContractVersion
 	}
 	req.Header.Set(operator.ContractVersionHeader, version)
 	resp, err := client.Do(req)
@@ -221,6 +224,12 @@ func executionPath(path string) bool {
 		}
 	}
 	return false
+}
+
+// enrollmentPath reports whether path is one of the managed enrollment
+// routes, which serve managed-enrollment.v1.
+func enrollmentPath(path string) bool {
+	return strings.HasSuffix(path, "/managed-agents") || strings.HasSuffix(path, "/initial-certificate")
 }
 
 // TestServer_PostsUnderTheSenderTheCertificateNames covers what reaches

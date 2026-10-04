@@ -517,7 +517,7 @@ ADRs:
   Operator control service with its own store, garam keeps identity,
   names, assignment and collaboration, and existing agents cut over one
   GRN at a time with one active source and no new workload or volume;
-  unbuilt
+  garam's managed creation is built, and the rest is unbuilt
 - [0078](./adr/0078-a-lifecycle-authority-activates-a-runtime-generation-and-old-generations-and-lineages-are-fenced.md)
   — a lifecycle authority activates a runtime generation distinct from
   the GRN, epoch and revision; old generations and replaced credential

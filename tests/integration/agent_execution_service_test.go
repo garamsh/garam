@@ -221,7 +221,7 @@ func TestExecutionService_APendingRevisionNeedsAReferenceForThisAgentAndAssignme
 	attempt("another-audience", func(b *agent.OperationBinding) { b.Audience = scopedGRN("acme", agent.ServiceTypeOperator, "x") }, agent.ErrReferenceMismatch)
 	attempt("stale-assignment", func(b *agent.OperationBinding) { b.Epoch-- }, agent.ErrReferenceMismatch)
 	attempt("another-org", func(b *agent.OperationBinding) { b.Org = orgRootGRN("globex") }, agent.ErrReferenceMismatch)
-	attempt("creation", func(b *agent.OperationBinding) { b.Kind = agent.OperationKindCreate }, agent.ErrUnsupportedReference)
+	attempt("creation", func(b *agent.OperationBinding) { b.Kind = agent.OperationKindCreate }, agent.ErrReferenceMismatch)
 
 	t.Run("a reference whose actor lost authority", func(t *testing.T) {
 		in := l.input("revoked", generation(50), latest, "leaf-1")

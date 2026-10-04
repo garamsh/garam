@@ -59,6 +59,31 @@ type AgentExecution struct {
 	UpdatedAt          pgtype.Timestamptz
 }
 
+type AgentInitialCertificate struct {
+	AgentGrn       string
+	RequestID      string
+	OperationRef   string
+	Epoch          int32
+	RequestSha256  []byte
+	Lineage        pgtype.UUID
+	CertificatePem string
+	IssuerPem      string
+	ServerRootPem  string
+	NotAfter       pgtype.Timestamptz
+	CreatedAt      pgtype.Timestamptz
+}
+
+type AgentManagedCreation struct {
+	AgentGrn      string
+	AudienceGrn   string
+	ControllerGrn string
+	RequestID     string
+	OperationRef  string
+	Epoch         int32
+	Lineage       pgtype.UUID
+	CreatedAt     pgtype.Timestamptz
+}
+
 type AgentRecovery struct {
 	AgentGrn       string
 	RequestID      string

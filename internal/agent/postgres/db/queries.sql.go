@@ -39,6 +39,25 @@ func (q *Queries) Admit(ctx context.Context, arg AdmitParams) (string, error) {
 	return column_1, err
 }
 
+const assignFirst = `-- name: AssignFirst :one
+INSERT INTO agent_assignments (agent_grn, operator_grn, epoch, created_at, updated_at)
+VALUES ($1, $2, 1, $3, $3)
+RETURNING epoch
+`
+
+type AssignFirstParams struct {
+	AgentGrn    string
+	OperatorGrn string
+	CreatedAt   pgtype.Timestamptz
+}
+
+func (q *Queries) AssignFirst(ctx context.Context, arg AssignFirstParams) (int32, error) {
+	row := q.db.QueryRow(ctx, assignFirst, arg.AgentGrn, arg.OperatorGrn, arg.CreatedAt)
+	var epoch int32
+	err := row.Scan(&epoch)
+	return epoch, err
+}
+
 const clearActivation = `-- name: ClearActivation :exec
 UPDATE agent_executions SET activation_id = NULL, token_hash = NULL, updated_at = $2
 WHERE agent_grn = $1
@@ -51,6 +70,52 @@ type ClearActivationParams struct {
 
 func (q *Queries) ClearActivation(ctx context.Context, arg ClearActivationParams) error {
 	_, err := q.db.Exec(ctx, clearActivation, arg.AgentGrn, arg.UpdatedAt)
+	return err
+}
+
+const createFencedExecution = `-- name: CreateFencedExecution :exec
+INSERT INTO agent_executions (agent_grn, mode, lineage, updated_at)
+VALUES ($1, 'fenced', $2, $3)
+`
+
+type CreateFencedExecutionParams struct {
+	AgentGrn  string
+	Lineage   pgtype.UUID
+	UpdatedAt pgtype.Timestamptz
+}
+
+// The execution is fenced from birth in a lineage holding no
+// credential, so agent_credential_current refuses every certificate
+// of the agent until its initial issuance records one.
+func (q *Queries) CreateFencedExecution(ctx context.Context, arg CreateFencedExecutionParams) error {
+	_, err := q.db.Exec(ctx, createFencedExecution, arg.AgentGrn, arg.Lineage, arg.UpdatedAt)
+	return err
+}
+
+const createManagedAgent = `-- name: CreateManagedAgent :exec
+INSERT INTO agents (grn, org_grn, provisioning_state, runtime_state, created_at, updated_at)
+VALUES ($1, $2, $3, $4, $5, $5)
+`
+
+type CreateManagedAgentParams struct {
+	Grn               string
+	OrgGrn            string
+	ProvisioningState string
+	RuntimeState      string
+	CreatedAt         pgtype.Timestamptz
+}
+
+// A managed creation writes these four in one transaction, the
+// execution row before the assignment: the lock order every
+// transaction follows (ADR-0080).
+func (q *Queries) CreateManagedAgent(ctx context.Context, arg CreateManagedAgentParams) error {
+	_, err := q.db.Exec(ctx, createManagedAgent,
+		arg.Grn,
+		arg.OrgGrn,
+		arg.ProvisioningState,
+		arg.RuntimeState,
+		arg.CreatedAt,
+	)
 	return err
 }
 
@@ -189,6 +254,69 @@ func (q *Queries) GetExecution(ctx context.Context, agentGrn string) (GetExecuti
 	return i, err
 }
 
+const getInitialCertificate = `-- name: GetInitialCertificate :one
+SELECT agent_grn, request_id, operation_ref, epoch, request_sha256, lineage, certificate_pem, issuer_pem, server_root_pem, not_after, created_at FROM agent_initial_certificates WHERE agent_grn = $1
+`
+
+func (q *Queries) GetInitialCertificate(ctx context.Context, agentGrn string) (AgentInitialCertificate, error) {
+	row := q.db.QueryRow(ctx, getInitialCertificate, agentGrn)
+	var i AgentInitialCertificate
+	err := row.Scan(
+		&i.AgentGrn,
+		&i.RequestID,
+		&i.OperationRef,
+		&i.Epoch,
+		&i.RequestSha256,
+		&i.Lineage,
+		&i.CertificatePem,
+		&i.IssuerPem,
+		&i.ServerRootPem,
+		&i.NotAfter,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getManagedCreation = `-- name: GetManagedCreation :one
+SELECT agent_grn, audience_grn, controller_grn, request_id, operation_ref, epoch, lineage, created_at FROM agent_managed_creations WHERE agent_grn = $1
+`
+
+func (q *Queries) GetManagedCreation(ctx context.Context, agentGrn string) (AgentManagedCreation, error) {
+	row := q.db.QueryRow(ctx, getManagedCreation, agentGrn)
+	var i AgentManagedCreation
+	err := row.Scan(
+		&i.AgentGrn,
+		&i.AudienceGrn,
+		&i.ControllerGrn,
+		&i.RequestID,
+		&i.OperationRef,
+		&i.Epoch,
+		&i.Lineage,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getManagedCreationByReference = `-- name: GetManagedCreationByReference :one
+SELECT agent_grn, audience_grn, controller_grn, request_id, operation_ref, epoch, lineage, created_at FROM agent_managed_creations WHERE operation_ref = $1
+`
+
+func (q *Queries) GetManagedCreationByReference(ctx context.Context, operationRef string) (AgentManagedCreation, error) {
+	row := q.db.QueryRow(ctx, getManagedCreationByReference, operationRef)
+	var i AgentManagedCreation
+	err := row.Scan(
+		&i.AgentGrn,
+		&i.AudienceGrn,
+		&i.ControllerGrn,
+		&i.RequestID,
+		&i.OperationRef,
+		&i.Epoch,
+		&i.Lineage,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getRecovery = `-- name: GetRecovery :one
 SELECT agent_grn, request_id, operation_ref, body_sha256, lineage, certificate_pem, created_at FROM agent_recoveries WHERE agent_grn = $1 AND request_id = $2
 `
@@ -292,6 +420,76 @@ func (q *Queries) InsertCredential(ctx context.Context, arg InsertCredentialPara
 		arg.Serial,
 		arg.Lineage,
 		arg.NotAfter,
+	)
+	return err
+}
+
+const insertInitialCertificate = `-- name: InsertInitialCertificate :exec
+INSERT INTO agent_initial_certificates (
+    agent_grn, request_id, operation_ref, epoch, request_sha256, lineage,
+    certificate_pem, issuer_pem, server_root_pem, not_after, created_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+`
+
+type InsertInitialCertificateParams struct {
+	AgentGrn       string
+	RequestID      string
+	OperationRef   string
+	Epoch          int32
+	RequestSha256  []byte
+	Lineage        pgtype.UUID
+	CertificatePem string
+	IssuerPem      string
+	ServerRootPem  string
+	NotAfter       pgtype.Timestamptz
+	CreatedAt      pgtype.Timestamptz
+}
+
+func (q *Queries) InsertInitialCertificate(ctx context.Context, arg InsertInitialCertificateParams) error {
+	_, err := q.db.Exec(ctx, insertInitialCertificate,
+		arg.AgentGrn,
+		arg.RequestID,
+		arg.OperationRef,
+		arg.Epoch,
+		arg.RequestSha256,
+		arg.Lineage,
+		arg.CertificatePem,
+		arg.IssuerPem,
+		arg.ServerRootPem,
+		arg.NotAfter,
+		arg.CreatedAt,
+	)
+	return err
+}
+
+const insertManagedCreation = `-- name: InsertManagedCreation :exec
+INSERT INTO agent_managed_creations (
+    agent_grn, audience_grn, controller_grn, request_id, operation_ref,
+    epoch, lineage, created_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+`
+
+type InsertManagedCreationParams struct {
+	AgentGrn      string
+	AudienceGrn   string
+	ControllerGrn string
+	RequestID     string
+	OperationRef  string
+	Epoch         int32
+	Lineage       pgtype.UUID
+	CreatedAt     pgtype.Timestamptz
+}
+
+func (q *Queries) InsertManagedCreation(ctx context.Context, arg InsertManagedCreationParams) error {
+	_, err := q.db.Exec(ctx, insertManagedCreation,
+		arg.AgentGrn,
+		arg.AudienceGrn,
+		arg.ControllerGrn,
+		arg.RequestID,
+		arg.OperationRef,
+		arg.Epoch,
+		arg.Lineage,
+		arg.CreatedAt,
 	)
 	return err
 }

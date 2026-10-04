@@ -542,9 +542,8 @@ func currentRequest(req *authzv1.CheckRequest) *authzv1.CheckCurrentRequest {
 	}
 }
 
-// TestGRPCServer_CheckCurrentDecidesAsCheckDoes asks both RPCs the same
-// question over a source whose cache and storage agree. Each case also
-// names its expected answer, so two RPCs wrong the same way still fail.
+// TestGRPCServer_CheckCurrentDecidesAsCheckDoes asks both RPCs each
+// question over agreeing cache and storage, against a stated answer.
 func TestGRPCServer_CheckCurrentDecidesAsCheckDoes(t *testing.T) {
 	acme := orgGRN("acme")
 	eng := grn.New("acme", grn.DefaultProject, "group", "eng")
@@ -606,10 +605,8 @@ func TestGRPCServer_CheckCurrentDecidesAsCheckDoes(t *testing.T) {
 	}
 }
 
-// TestGRPCServer_CheckCurrentDecidesFromStorage is the stale cache a
-// held-back invalidation leaves: it still holds the Allow storage has
-// since replaced with a Deny. Check allowing is the control that the
-// cache is stale, so CheckCurrent refusing is the storage read.
+// TestGRPCServer_CheckCurrentDecidesFromStorage holds a cache that
+// allows while storage denies: Check allows, CheckCurrent refuses.
 func TestGRPCServer_CheckCurrentDecidesFromStorage(t *testing.T) {
 	acme := orgGRN("acme")
 	update := func(sid string, effect wire.Effect) authz.Statement {
@@ -630,9 +627,8 @@ func TestGRPCServer_CheckCurrentDecidesFromStorage(t *testing.T) {
 }
 
 // TestGRPCServer_CheckCurrentRefusesWhenStorageFails holds a cache
-// that allows: Check answering from it is the control, and the error
-// CheckCurrent returns instead is storage's, with no decision beside
-// it.
+// that allows while storage fails: Check allows, CheckCurrent returns
+// the error and no decision.
 func TestGRPCServer_CheckCurrentRefusesWhenStorageFails(t *testing.T) {
 	acme := orgGRN("acme")
 	allow := authz.Statement{Sid: "allow", Effect: wire.EffectAllow, Action: []string{"org:update"}, Resource: []string{"grn:root:default:org:acme"}}
@@ -660,10 +656,8 @@ func (allowingEngine) Check(context.Context, *authzv1.CheckRequest) (*authzv1.Ch
 }
 
 // TestAuthzService_AnEngineWithoutCheckCurrentRefusesIt serves the
-// service as an engine predating CheckCurrent registered it: the
-// methods it knew, and no CheckCurrent among them. That engine allows
-// every Check, which is the control — a request it read as a Check
-// would come back allowed — and CheckCurrent reaches no handler at all.
+// service without CheckCurrent, as an older engine registers it: its
+// Check allows, and CheckCurrent is refused as unimplemented.
 func TestAuthzService_AnEngineWithoutCheckCurrentRefusesIt(t *testing.T) {
 	older := authzv1.AuthzService_ServiceDesc
 	older.Methods = nil

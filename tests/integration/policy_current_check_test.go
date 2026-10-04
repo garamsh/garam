@@ -52,9 +52,8 @@ func activateStatement(t *testing.T, s *authz.PostgresStore, orgGRN grn.GRN, sid
 	return g
 }
 
-// readProject is ada, a member of acme, asking to read one of its
-// projects. It carries no caller statements, so the persisted policies
-// alone decide.
+// readProject asks whether ada may read an acme project, with no
+// caller statements, so the persisted policies alone decide.
 func readProject() *authzv1.CheckRequest {
 	return &authzv1.CheckRequest{
 		SubjectGrn: grnOf("user", "ada").String(),
@@ -75,16 +74,9 @@ func readProjectCurrent() *authzv1.CheckCurrentRequest {
 	}
 }
 
-// TestCheckCurrent_SeesAWithdrawalNoInvalidationReported caches an
-// allow and withdraws it in Postgres with no invalidation delivered:
-// the engine runs no listener, which is the state a held-back or lost
-// notification leaves. Check still allowing afterwards is the control:
-// it is the documented cached answer. CheckCurrent refusing is then
-// the persisted state and not a cache that happened to reload.
-//
-// No listener runs because one makes the control racy: it drops every
-// org once LISTEN registers, and Postgres reports the session before
-// that drop has happened, so the drop can land after the fill.
+// TestCheckCurrent_SeesAWithdrawalNoInvalidationReported withdraws a
+// cached allow in Postgres with no listener running, so the cache stays
+// stale: Check still allows, and CheckCurrent sees the withdrawal.
 func TestCheckCurrent_SeesAWithdrawalNoInvalidationReported(t *testing.T) {
 	withdrawals := []struct {
 		name     string
@@ -127,11 +119,9 @@ func TestCheckCurrent_SeesAWithdrawalNoInvalidationReported(t *testing.T) {
 }
 
 // TestCheckCurrent_RefusesWhenStorageIsUnreachable cuts the engine's
-// own connection to Postgres while its cache allows. Check answering
-// from the cache is the control; CheckCurrent fails with no decision.
-// The status code is not asserted: the store classifies a dropped
-// connection as no kind at all, and that is every store's, not this
-// RPC's.
+// connection to Postgres while its cache allows: Check still allows,
+// and CheckCurrent fails with no decision. The code is not asserted
+// (#1165).
 func TestCheckCurrent_RefusesWhenStorageIsUnreachable(t *testing.T) {
 	p := pool(t)
 	orgGRN := newPolicyOrg(t, p)

@@ -330,13 +330,9 @@ func TestPolicyCache_ConcurrentMissesConvergeOnOneSnapshot(t *testing.T) {
 	assert.Equal(t, got[0], after, "the entry left behind is not what the callers were served")
 }
 
-// TestPolicyCache_CurrentStatementsReadsTheStoreOnEveryCall holds the
-// cache with a policy the store has since replaced, as an invalidation
-// that never arrived leaves it. Statements answering "before" is the
-// control: the cache really is stale, so "after" from
-// CurrentStatements is the store read and not a cache that reloaded.
-// The second CurrentStatements call is what says the read was not
-// installed and served again from the cache.
+// TestPolicyCache_CurrentStatementsReadsTheStoreOnEveryCall holds a
+// stale cache: CurrentStatements reads the store on each call, and
+// Statements still answers from the cache.
 func TestPolicyCache_CurrentStatementsReadsTheStoreOnEveryCall(t *testing.T) {
 	store := mocks.NewMockStore(t)
 	acme, ada := orgGRN("acme"), subjectGRN("ada")
@@ -363,9 +359,8 @@ func TestPolicyCache_CurrentStatementsReadsTheStoreOnEveryCall(t *testing.T) {
 	assert.Equal(t, cached, stale, "control: Statements still answers from the cache")
 }
 
-// TestPolicyCache_CurrentStatementsFailsWhenTheStoreDoes is the read
-// that has nothing older to fall back on: the cache holds the org, and
-// the store failing is still the answer.
+// TestPolicyCache_CurrentStatementsFailsWhenTheStoreDoes fails with
+// the store even though the cache holds the org.
 func TestPolicyCache_CurrentStatementsFailsWhenTheStoreDoes(t *testing.T) {
 	store := mocks.NewMockStore(t)
 	acme := orgGRN("acme")

@@ -643,7 +643,7 @@ export interface paths {
          * Hand a delegated operator one operation. Requires the operation's action, decided now.
          * @description Mints an opaque authority bound to the signed-in user, this organization, the audience operator, the operation, its target, `requestId` and `bodySha256` (ADR-0078). The caller sends it to the Operator as `Authorization: Garam-Operation <authority>`, outside the body whose digest it binds. It is answered once and expires after five minutes or at the grant's expiry, whichever is first.
          *
-         *     `agent:create` targets the controller that will run the agent and is authorized on the organization; `agent:configure` targets the agent, is authorized on it, and binds where it runs now. The audience's current grant must cover the operation and the controller.
+         *     `agent:create` targets the controller that will run the agent and is authorized on the organization; `agent:configure` and `agent:recover` target the agent, are authorized on it, and bind where it runs now. `agent:recover` authorizes one exact credential recovery, whose request body `bodySha256` digests (ADR-0078). The audience's current grant must cover the operation and the controller.
          *
          *     The same `requestId` with the same binding under the same grant mints a new authority for the same `operationRef`, replacing the previous one. Any other binding under it, including a replaced grant or a changed placement, is refused with 409: a newly authorized operation takes a new `requestId`.
          */
@@ -1304,14 +1304,14 @@ export interface components {
          * @description `agent:activate` bounds the hosted operator's own lifecycle authority; no user mints it.
          * @enum {string}
          */
-        DelegatedOperation: "agent:create" | "agent:configure" | "agent:activate";
+        DelegatedOperation: "agent:create" | "agent:configure" | "agent:activate" | "agent:recover";
         RequestId: string;
         OperationAuthorityRequest: {
             /** @description GRN of the hosted operator that will act. */
             audience: string;
             /** @enum {string} */
-            operation: "agent:create" | "agent:configure";
-            /** @description Controller GRN for `agent:create`, agent GRN for `agent:configure`. */
+            operation: "agent:create" | "agent:configure" | "agent:recover";
+            /** @description Controller GRN for `agent:create`, agent GRN for `agent:configure` and `agent:recover`. */
             target: string;
             requestId: components["schemas"]["RequestId"];
             /** @description Lowercase hexadecimal SHA-256 of the exact request body the Operator receives. */

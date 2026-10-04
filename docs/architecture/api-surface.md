@@ -211,10 +211,16 @@ GRN has cut over, under the `executionToken` scheme each declares.
 for what they decide. No route adds a 5xx of its own (ADR-0050): an
 answer that cannot be decided from current state is the listener's
 503.
+
 Every certificate after the first is replaced over the connection the
 previous one authenticated: an operator's on the machine listener
 ([ADR-0046](./adr/0046-an-operator-renews-its-certificate-by-presenting-the-one-it-holds.md)),
-an agent's on the route its claim admits it to (ADR-0040).
+an agent's on the route its claim admits it to (ADR-0040). The one
+exception is an agent's recovery, which the hosted control service
+asks for under an administrator's handoff and which replaces the
+agent's credential lineage instead
+([machine-identity.md](./machine-identity.md) §Generation and
+lineage).
 
 **Policy engine.** Nothing. Both listeners hold a client of their own,
 and the transport carries no credential because the processes run
@@ -237,8 +243,9 @@ and not in the same place on every surface.
   request ([ADR-0002](./adr/0002-iam-style-policy-model.md)). How it
   decides is [authz.md](./authz.md).
 - **Machine**: by construction more often than by policy. A read is
-  scoped by the caller's own identity, and the renewal route names no
-  subject, so there is nothing to authorize past the handshake
+  scoped by the caller's own identity, and an operator's renewal route
+  names no subject, so there is nothing to authorize past the handshake
+  there
   ([ADR-0033](./adr/0033-an-operator-claims-the-agent-a-definition-mints.md),
   ADR-0046). A state report is decided the same way and by a second
   thing besides: the assignment's epoch, which the route refuses a
@@ -248,6 +255,11 @@ and not in the same place on every surface.
   the other side — the caller is the sender the row is matched on, so a
   message it did not send answers as one that is not there
   ([ADR-0055](./adr/0055-a-sender-reads-the-state-of-a-message-it-sent.md)).
+  An agent's protected calls, its own renewal among them, are also
+  decided per request by its execution fence, and the lifecycle routes
+  by the caller's current authority
+  ([machine-identity.md](./machine-identity.md) §Generation and
+  lineage).
 - **What a machine caller may send** is the exception, and the
   recipient's organization decides which of two things answers it. A
   recipient of the caller's own organization is a policy question: the

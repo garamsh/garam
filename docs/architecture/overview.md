@@ -265,12 +265,17 @@ collaborate on a shared plan.
   agent's GRN cuts over, its renewal is inside its current lineage and a
   lost certificate is recovered rather than reissued (ADR-0078).
 - Revoking a certificate. There is still no revocation list, no
-  responder, and no serial the listener checks, so an agent's
-  certificate authenticates until it expires and nothing shortens that
-  (ADR-0014). An operator is the exception and it is not a certificate
-  mechanism: deleting the operator withdraws the record its certificate
-  authenticates on, so every certificate naming it is refused from the
-  next connection while none of them is revoked (ADR-0070).
+  responder, and no serial the TLS handshake checks, so an agent's
+  certificate authenticates a connection until it expires (ADR-0014).
+  What it may then do is narrower: once the agent has been recovered,
+  a certificate outside the new lineage is refused per request by the
+  execution fence, though its connection still authenticates
+  ([machine-identity.md](./machine-identity.md) §Generation and
+  lineage). An operator is the other exception and it is not a
+  certificate mechanism either: deleting the operator withdraws the
+  record its certificate authenticates on, so every certificate naming
+  it is refused from the next connection while none of them is revoked
+  (ADR-0070).
 - Proving an operator is the operator a record names by any means but
   the certificate. There is no service-account token and no exchange
   route: what registering hands over is a one-time enrollment ticket,

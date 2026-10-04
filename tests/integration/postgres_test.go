@@ -2714,20 +2714,20 @@ func TestMessageStore_EnqueueSweepsWhatOutlivedTheWindow(t *testing.T) {
 	assert.Equal(t, 1, present(fresh))
 }
 
-// TestMessageStore_RetentionRunsOnTheDatabaseClock holds that an
-// undelivered message survives the whole retention window measured on
-// the database's clock, whatever the clock of the process that built it
-// read (#1181). Each message is built a lag before it is stored, which
-// is how a process clock running that far behind the database's would
-// stamp it. Ageing then spends the window short of a margin smaller
-// than the lag, and the control spends it past by the same margin, so
-// one sweep keeps the first and deletes the second.
+// TestMessageStore_RetentionRunsOnTheDatabaseClock holds that the
+// retention window starts on the clock the sweep ends it with (#1181).
+// Each message is built a lag before it is stored, which is how a
+// process clock running that far behind the database's would stamp it,
+// so a stamp taken at building falls before the database's reading
+// ahead of storing. Ageing then moves each stamp, not a fresh one, an
+// hour either side of the window, so one sweep keeps the first message
+// and deletes the second however long the round trips take.
 func TestMessageStore_RetentionRunsOnTheDatabaseClock(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
 	s := message.NewPostgresStore(p)
 	bot, ada := grnOf("agent", "bot"), grnOf("user", "ada")
-	const lag, margin = time.Second, 500 * time.Millisecond
+	const lag, margin = time.Second, time.Hour
 
 	dbNow := func() time.Time {
 		var now time.Time

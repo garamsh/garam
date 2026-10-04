@@ -181,8 +181,9 @@ the check, which can name the request in doubt, and not to a probe,
 which cannot.
 
 **Nothing calls `CheckCurrent` yet.** It is that refusal, for the
-privileged actions the accepted decision #1158 records as ADR-0078
-requires to be checked against current authority. It decides as
+privileged actions that must be checked against current authority
+([ADR-0078](./adr/0078-a-lifecycle-authority-activates-a-runtime-generation-and-old-generations-and-lineages-are-fenced.md)).
+It decides as
 `Check` does, except that the org's active policies and their
 attachments are read from storage on every call: it neither reads nor
 fills the cache, and storage it cannot read fails the call rather than

@@ -161,3 +161,21 @@ BEGIN
     RETURN 'admitted';
 END
 $$;
+
+-- agent:recover is delegated and handed over as agent:configure is: it
+-- acts on an existing agent, so its authority records where the agent
+-- runs when it is minted (ADR-0078).
+ALTER TABLE operator_delegations
+    DROP CONSTRAINT operator_delegations_operations,
+    ADD CONSTRAINT operator_delegations_operations
+        CHECK (cardinality(operations) BETWEEN 1 AND 4
+           AND operations <@ ARRAY['agent:create', 'agent:configure', 'agent:activate', 'agent:recover']);
+
+ALTER TABLE operation_authorities
+    DROP CONSTRAINT operation_authorities_operation,
+    DROP CONSTRAINT operation_authorities_assignment,
+    ADD CONSTRAINT operation_authorities_operation
+        CHECK (operation IN ('agent:create', 'agent:configure', 'agent:recover')),
+    ADD CONSTRAINT operation_authorities_assignment
+        CHECK ((operation IN ('agent:configure', 'agent:recover')) = (assignee_grn IS NOT NULL)
+           AND (assignee_grn IS NULL) = (assignment_epoch IS NULL));

@@ -98,7 +98,7 @@ func newAuthorityToken() (string, error) {
 
 // Operation authority sentinels.
 var (
-	ErrOperationNotMintable = errorx.New(errorx.KindInvalidArgument, "only agent:create and agent:configure can be handed to an operator")
+	ErrOperationNotMintable = errorx.New(errorx.KindInvalidArgument, "only agent:create, agent:configure and agent:recover can be handed to an operator")
 	// ErrAuthorityNotFound is one answer for an unknown, expired, or
 	// another audience's authority, so a caller learns nothing about
 	// authorities it does not hold.

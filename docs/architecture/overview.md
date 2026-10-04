@@ -91,12 +91,13 @@ collaborate on a shared plan.
   and a member handing it one request-bound operation under
   `/orgs/{org}/operation-authorities`, which the operator reads back on
   the machine listener (ADR-0078), where it also proves a controller's
-  current authority before each lifecycle decision. A grant is
+  current authority before each lifecycle decision and activates,
+  inspects, deactivates and recovers an agent's execution. A grant is
   immutable and a replacement or withdrawal is final for what was
   minted under it; every mint, read back and proof is decided from
-  current state. Delegating is
-  `operator:delegate`, creating `agent:create` and configuring
-  `agent:configure`; [operators.md](./operators.md) §Delegated operation
+  current state. Delegating is `operator:delegate`, creating
+  `agent:create`, configuring `agent:configure` and recovering
+  `agent:recover`; [operators.md](./operators.md) §Delegated operation
   authority holds the rest.
 - An organization's members **defining** an agent, under
   `/orgs/{org}/agent-definitions` — which operator is to run it, and
@@ -260,7 +261,9 @@ collaborate on a shared plan.
   certificate route (ADR-0040) and an operator renews its own by
   presenting it (ADR-0046); an operator's first is obtained by enrolling
   with the token registering it minted (ADR-0064), and an agent's first
-  still arrives on the route its operator's claim admits it to.
+  still arrives on the route its operator's claim admits it to. Once an
+  agent's GRN cuts over, its renewal is inside its current lineage and a
+  lost certificate is recovered rather than reissued (ADR-0078).
 - Revoking a certificate. There is still no revocation list, no
   responder, and no serial the listener checks, so an agent's
   certificate authenticates until it expires and nothing shortens that
@@ -305,7 +308,8 @@ collaborate on a shared plan.
   templates to the Operator control service, cutting over one GRN at a
   time; ADR-0078 fences a runtime by its activated generation and
   credential lineage; ADR-0079 bounds interservice compatibility and
-  replay. All three are accepted and unbuilt, and
+  replay. All three are accepted; garam's half of the generation fence
+  is built (ADR-0080) and nothing calls it yet, and the rest is unbuilt.
   [agents.md](./agents.md) §Separated execution carries the target.
 - Chat channels. ADR-0013 makes garam a message API and leaves Slack,
   LINE and the rest to consumers of it; none is built, and whether any

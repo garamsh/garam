@@ -88,21 +88,43 @@ what compose lacks is the step, not something a container cannot do.
 
 ## Generation and lineage
 
-**Nothing in this section is built.** Today a connection is admitted
-once, when it is made, and only the controller proof reads the
-caller's certificate and record again per request; a message call
-compares the caller with the recipient and nothing else
-(`Service.Claim` in `internal/message/service.go`).
+**garam's half is built; no consumer of it is.** No adapter carries an
+execution token yet (#1169), the Operator control service does not yet
+activate (garamsh/garam-agent-operator#218), and the standalone
+lifecycle principal is #1168's. Until a GRN's first activation it is in
+the legacy cohort and every call below is admitted as before.
 
-ADR-0078 adds two questions an agent's state-changing call must answer,
-per request rather than per connection, so an open connection loses
-them the moment they change:
+ADR-0078 adds two questions an agent's state-changing call answers per
+request rather than per connection, so an open connection loses them
+the moment they change:
 
-- **Is this the active generation?** The call carries the activation
-  token binding its GRN, epoch and generation, and one for a generation
-  that is not active is refused.
-- **Is this lineage current?** A credential whose lineage a recovery
-  replaced is refused, though its certificate has not expired.
+- **Is this the active generation?** Once a GRN is fenced, the call
+  carries `Authorization: Garam-Execution <token>` from the activation
+  of its current generation. No token is refused, and so is one an
+  activation, a deactivation, a recovery or a reassignment ended. A
+  token offered for a legacy GRN is refused rather than read as a
+  cutover: the mode is the server's (ADR-0080).
+- **Is this certificate current?** It must be inside its validity by
+  the database's clock and, once a recovery has run, in the lineage
+  that recovery started. The certificate is the one the connection's
+  handshake verified; nothing in a body names it.
 
-The certificate's GRN still answers who is calling; these answer
-whether that caller is still the one allowed to act.
+Claiming, renewing and completing a message, posting one, reading its
+state, reporting runtime state, forwarding a turn event and renewing
+the agent's own certificate each ask both, inside the transaction of
+their own write (ADR-0080). `getIdentity` asks neither. The routes and
+their schemes are `api/machine.yaml`'s, under the `executionToken`
+scheme each declares.
+
+The hosted control service is the lifecycle caller. It activates,
+deactivates, inspects and recovers an agent's execution on the routes
+tagged `execution` in `api/machine.yaml`, which is authoritative for
+their wire and their `execution-fence.v1` contract version. Each
+request rereads the caller's certificate and registration, its grant
+and current policy; an agent's own certificate and a controller's are
+refused. Introspection answers a certificate's standing and a
+generation's from one snapshot; a 200 is a status answer, and only
+`credential` and `generation` both `current`, with the expected
+binding, is positive. The certificate's GRN still answers who is
+calling; these answer whether that caller is still the one allowed to
+act.

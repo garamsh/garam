@@ -22,13 +22,22 @@ state of a message it sent, described below (ADR-0055).
 | `Status` | how far one message has got, as the sender that posted it may observe it (ADR-0055) |
 | `Consent` | one pair of organizations and the two halves of their cross-organization consent (ADR-0035); it stands while both halves do |
 | `Config` | the delivery parameters: lease, ceiling, attempts, and how long a claim waits |
+| `Fence` | what an agent's call presents to the agent execution fence: the agent, the certificate its connection verified and its execution token's hash (ADR-0080) |
 | `Service` | what a machine identity does to its own queue: post, claim, renew, complete, and read the state of what it sent |
 | `ConsentStore` | the consent relation: an organization granting or withdrawing its own half, and the send path asking whether both halves stand |
 | `ActionSend` | the action a policy names to decide what one identity may send to another |
 
 Messages are their own domain rather than part of the agents one: a
 recipient is addressed by GRN, so nothing here depends on the agent
-aggregate, and a message has a lifecycle no agent's contains. A message
+aggregate, and a message has a lifecycle no agent's contains. An
+agent's post, claim, renewal, completion and status read run the
+agent's execution fence first, inside the queue's own transaction, so a
+superseded generation or lineage writes nothing even on a connection
+already open. The fence is the `agent_execution_admit` database
+function the agents domain declares; this domain calls it and reads its
+answer into its own refusal, and imports no package of that domain
+(ADR-0080, [machine-identity.md](./machine-identity.md) §Generation and
+lineage). A message
 may cross an organization boundary only where a relation permits it —
 one row per consenting pair, held by both organizations and withdrawable
 by either (ADR-0035); the refusal reaches the sender as an ordinary

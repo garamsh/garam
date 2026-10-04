@@ -157,6 +157,7 @@ each other at all (ADR-0017).
 | `Service` | opens a watch, carries a forwarded event to the watchers of that agent, and reports how many there are |
 | `Store` | the watches that are open |
 | `Relay` | the announcement that carries an event to the process holding a stream |
+| `Fence` | what the forwarding agent presents to the agent execution fence: the agent, the certificate its connection verified and its execution token's hash (ADR-0080) |
 
 Nothing accumulates for an agent nobody watches, which is what the
 boundary exists to keep true: the service holds an entry per open
@@ -177,7 +178,13 @@ announces and writes nothing down, so an event crossing between processes
 is no more a record than one that never left. An event too large for one
 announcement is refused rather than shortened: a shortened turn would put
 words in the agent's mouth, where a refused one is the gap this stream
-already permits.
+already permits. An agent's announcement runs the agent's execution
+fence in the same transaction as its `NOTIFY`, so a superseded
+generation announces nothing that commits after its replacement; one
+announced before may still arrive after it, since arrival is not commit
+order. The fence is the agents domain's `agent_execution_admit`
+function, and this boundary imports no package of that domain
+(ADR-0080).
 
 `Store` is the count half: a leased row per open watch (ADR-0027).
 Postgres measures the lease, so no instance's clock decides when a watch

@@ -13,6 +13,8 @@ by `internal/agent`.
 | `Certificate` | what an agent authenticates with and the garam server root it verifies garam by, as this domain hands them back |
 | `Service` | creates an agent for the calling operator, issues the certificate of one assigned to it or renews an agent's own, answers an operator with the definitions naming it so it can claim one (ADR-0033), and records the state each party reports (ADR-0053) |
 | `Issuer` | signs a certificate for a subject GRN and hands back the garam server root beside it |
+| `ExecutionService` | what a lifecycle authority does to an agent's execution — activates a generation, deactivates it, inspects a certificate and a generation, recovers the credential lineage — and how an agent renews inside its current lineage (ADR-0078) |
+| `ExecutionStore` | the execution row every agent has, its activations and its credential lineage, written under the row's lock (ADR-0080) |
 
 garam mints an agent's GRN and never changes it, so which operator runs
 the agent is a relation a reassignment moves rather than part of the
@@ -49,7 +51,11 @@ by the identity the connection proved rather than by an assignment, and
 the renewal is the one route the assignment comparison does not stand
 on — the connection is what authorizes it, and it reaches the issuer
 before the comparison is made. An expired certificate has no such
-connection, so the operator route is what recovers one.
+connection, so the operator route is what recovers one. Once a GRN cuts
+over (§Separated execution) that route refuses it, the two routes the
+agent reaches as itself are admitted by the execution fence as well,
+and the control service's recovery is what replaces a lost
+certificate.
 
 A definition's operator and values are written once. Its name is the
 organization's word for the agent and changes alone: renaming touches
@@ -125,13 +131,13 @@ release of that contract and no compatibility window (ADR-0049).
 
 ## Separated execution
 
-**Nothing in this section is built but garam's half of one check:**
-the proof a hosted operator obtains of a controller's delegation and
-`agent:activate` permission ([operators.md](./operators.md)
-§Controller proof), which nothing activates on yet. The rest is the
-accepted target of ADR-0077 and ADR-0078, and everything above
-describes what runs until a GRN cuts over. Product implementation is
-tracked in #1157.
+**Built here is garam's half of two parts: the controller proof
+([operators.md](./operators.md) §Controller proof) and the generation
+fence ([machine-identity.md](./machine-identity.md) §Generation and
+lineage).** No consumer calls either yet. The rest is the accepted
+target of ADR-0077 and ADR-0078, and everything above describes what
+runs for a GRN that has not cut over. Product implementation is tracked
+in #1157.
 
 - **Desired runtime values and templates leave garam.** The Operator
   control service is their one writable managed source and the cluster
@@ -146,11 +152,20 @@ tracked in #1157.
   transaction, and a retry answers the same GRN. Today they are two
   writes, as `Service.Create` in `internal/agent/service.go` says.
 - **A generation is what an assignment does not fence.** Beside the GRN
-  and the epoch, garam records the active process generation, which a
-  lifecycle authority activates after proving it owns the writer; the
-  execution credential cannot activate one. The machine listener checks
-  it per request ([machine-identity.md](./machine-identity.md)
-  §Generation and lineage) (ADR-0078).
+  and the epoch, every agent has one execution row recording its mode,
+  its active generation and its credential lineage. A lifecycle
+  authority activates a generation after proving it owns the writer;
+  the execution credential cannot activate one, and a report activates
+  nothing. The first activation cuts the GRN over, so the operator's
+  certificate route and its definition no longer reach it. The machine
+  listener checks the generation per request
+  ([machine-identity.md](./machine-identity.md) §Generation and
+  lineage), and every write it protects takes the row's lock in its own
+  transaction, which is what orders a replacement against writes
+  already admitted (ADR-0078, ADR-0080). A restart is a new
+  activation, not a new certificate; a revision still pending carries
+  a durable `agent:configure` reference, rechecked fresh, and one the
+  runtime already applied needs none.
 - **Applied configuration is the runtime's report**, at its GRN, epoch,
   generation and desired revision, kept apart from what the Operator
   rendered or provisioned. The Operator control service holds it; garam
@@ -162,4 +177,8 @@ tracked in #1157.
   activates (ADR-0078).
 - **A lost credential is recovered for the same GRN**, replacing its
   lineage and fencing the old one, rather than by recreating the agent
-  (ADR-0078).
+  (ADR-0078). It is built: the control service presents an
+  administrator's `agent:recover` handoff for the exact request body,
+  and the agent's earlier certificates stop authorizing from the next
+  request, on a connection already open too. Ordinary renewal stays in
+  the lineage the renewing certificate is current in.

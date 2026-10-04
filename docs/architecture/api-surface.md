@@ -198,6 +198,19 @@ and a request naming none or another is refused naming the one served
 (ADR-0079). The specifications are authoritative for their forms, and
 [operators.md](./operators.md) §Delegated operation authority for what
 they decide.
+
+**An agent's execution is a versioned contract of its own on the
+machine listener** (ADR-0078). Activation, deactivation, introspection
+and recovery each require and answer `Garam-Contract-Version:
+execution-fence.v1`, and a request naming none or another is refused
+naming that version, not the operation authority's. An agent's own
+protected calls carry `Authorization: Garam-Execution <token>` once its
+GRN has cut over, under the `executionToken` scheme each declares.
+`api/machine.yaml` is authoritative for both, and
+[machine-identity.md](./machine-identity.md) §Generation and lineage
+for what they decide. No route adds a 5xx of its own (ADR-0050): an
+answer that cannot be decided from current state is the listener's
+503.
 Every certificate after the first is replaced over the connection the
 previous one authenticated: an operator's on the machine listener
 ([ADR-0046](./adr/0046-an-operator-renews-its-certificate-by-presenting-the-one-it-holds.md)),
@@ -562,6 +575,10 @@ document owes an update.
   — a member mints an operator another enrollment token where it holds
   no certificate, and the refusal where it holds one is where that
   question stays open
+- [ADR-0078](./adr/0078-a-lifecycle-authority-activates-a-runtime-generation-and-old-generations-and-lineages-are-fenced.md)
+  — a lifecycle authority activates an agent's generation, and its
+  older generations and replaced lineages are refused per request, on
+  the machine listener under a contract version of its own
 - [ADR-0079](./adr/0079-interservice-contracts-keep-adjacent-releases-compatible-and-replay-by-stable-identifier.md)
   — interservice contracts keep adjacent releases compatible in both
   upgrade orders, unbuilt

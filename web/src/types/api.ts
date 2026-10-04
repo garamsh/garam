@@ -1281,7 +1281,7 @@ export interface components {
             operations: components["schemas"]["DelegatedOperation"][];
             /**
              * Format: date-time
-             * @description Within the next 30 days.
+             * @description Within the next 30 days. Kept to the microsecond: finer digits are dropped, and the grant answers and replays the value kept.
              */
             expiresAt: string;
         };

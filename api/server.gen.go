@@ -310,7 +310,7 @@ type DelegationWrite struct {
 	// ExpectedGrantId The grant the caller read as current. Absent where it read none.
 	ExpectedGrantId *string `json:"expectedGrantId,omitempty"`
 
-	// ExpiresAt Within the next 30 days.
+	// ExpiresAt Within the next 30 days. Kept to the microsecond: finer digits are dropped, and the grant answers and replays the value kept.
 	ExpiresAt  time.Time            `json:"expiresAt"`
 	Operations []DelegatedOperation `json:"operations"`
 	RequestId  RequestId            `json:"requestId"`

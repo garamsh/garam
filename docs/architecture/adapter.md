@@ -13,6 +13,7 @@ What the adapter garam ships must do, and what it rests on to do it.
 - Readiness
 - What garam owns
 - Foreign facts this rests on
+- Stable identifiers and the outbox
 - Not decided
 
 ## What it is
@@ -260,13 +261,36 @@ delivery contract may not. Naming the buffer here is what makes it
 contract-bound in a repository that would otherwise have no reason to
 know anyone depends on it.
 
+## Stable identifiers and the outbox
+
+**Nothing in this section is built.** It is ADR-0079's accepted target
+for this contract; everything above describes what runs, including the
+gateway-minted identifier and the in-memory pairing.
+
+- **The adapter names each message to Sherlock by a stable,
+  sender-scoped identifier.** A replay under it with an identical
+  payload answers a completed source's recorded outcome rather than
+  running another turn, and a different payload under it is refused.
+  Completion is reported apart from the accept.
+- **A reply leaves through a durable outbox.** The runtime records it
+  under a stable identifier, the adapter forwards it with that
+  identifier as garam's idempotency key, and the entry goes only once
+  garam has acknowledged it, so a retry mints no second message and a
+  failed forward stays visible as pending or failed. Entries an earlier
+  generation left are forwarded by the current one, under its own
+  credential and token, keeping their identifier and origin generation.
+- **What is still not promised.** A turn interrupted before it
+  committed may repeat its effects. Delivery stays at-least-once and
+  completion stays §Completion's rule.
+- **The adapter and Sherlock keep adjacent releases compatible** in
+  both upgrade orders, and refuse what they do not support by name.
+- **Its calls carry the activation token** of the generation it serves
+  ([machine-identity.md](./machine-identity.md) §Generation and
+  lineage).
+
 ## Not decided
 
 - A durable inbox on the platform's side was unbuilt and unscheduled at
   `sherlock@40ef7ac` — treat it as unavailable rather than refused. If
   it arrives, the completion rule does not change; the redelivery causes
   reduce by one.
-- A caller-supplied message identifier was considered and declined: it
-  would remove the adapter's pairing, which is a simplification rather
-  than a correctness gain, and the pairing is not what makes the design
-  work.

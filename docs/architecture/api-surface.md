@@ -301,7 +301,10 @@ address holds the specification and nothing under `docs/`:
 - **The `version` field promises nothing across versions**
   ([ADR-0049](./adr/0049-neither-published-specification-promises-anything-across-versions.md)),
   and the image tag of ADR-0039 names a build rather than either
-  document.
+  document. That stays true until a release carries a tested window
+  for the contract a file defines: ADR-0079 accepts adjacent-release
+  compatibility for the interservice contracts, unbuilt, and the pull
+  request building that test changes the file's sentence.
 
 What each limit covers is in the two files, named here and not copied.
 
@@ -535,3 +538,6 @@ document owes an update.
   — a member mints an operator another enrollment token where it holds
   no certificate, and the refusal where it holds one is where that
   question stays open
+- [ADR-0079](./adr/0079-interservice-contracts-keep-adjacent-releases-compatible-and-replay-by-stable-identifier.md)
+  — interservice contracts keep adjacent releases compatible in both
+  upgrade orders, unbuilt

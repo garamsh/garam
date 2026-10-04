@@ -289,6 +289,12 @@ collaborate on a shared plan.
   so a stalled peer is no longer silent inside the pod; what is missing
   is anything outside it learning that the loop stopped making
   progress.
+- Separated execution. ADR-0077 moves desired runtime values and
+  templates to the Operator control service, cutting over one GRN at a
+  time; ADR-0078 fences a runtime by its activated generation and
+  credential lineage; ADR-0079 bounds interservice compatibility and
+  replay. All three are accepted and unbuilt, and
+  [agents.md](./agents.md) §Separated execution carries the target.
 - Chat channels. ADR-0013 makes garam a message API and leaves Slack,
   LINE and the rest to consumers of it; none is built, and whether any
   ships first-party is undecided.

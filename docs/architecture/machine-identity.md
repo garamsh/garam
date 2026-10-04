@@ -70,3 +70,23 @@ no step that generates it and hands a container a file that container
 owns. The Kubernetes stacks under `deploy/` have that step — an init
 container copies the key material as the UID the listener runs as — so
 what compose lacks is the step, not something a container cannot do.
+
+## Generation and lineage
+
+**Nothing in this section is built.** Today a connection is admitted
+once, when it is made, and a message call compares the caller with the
+recipient and nothing else (`Service.Claim` in
+`internal/message/service.go`).
+
+ADR-0078 adds two questions an agent's state-changing call must answer,
+per request rather than per connection, so an open connection loses
+them the moment they change:
+
+- **Is this the active generation?** The call carries the activation
+  token binding its GRN, epoch and generation, and one for a generation
+  that is not active is refused.
+- **Is this lineage current?** A credential whose lineage a recovery
+  replaced is refused, though its certificate has not expired.
+
+The certificate's GRN still answers who is calling; these answer
+whether that caller is still the one allowed to act.

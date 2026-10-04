@@ -1,6 +1,8 @@
 # ADR 0075: An agent is started from a template copied once, and carries a name of its own
 
-> Status: accepted
+> Status: accepted — §Decision's "A template is an organization's own
+> resource", as to which service owns it, is superseded by
+> [ADR-0077](./0077-execution-definitions-move-to-the-operator-control-service-and-each-agent-cuts-over-alone.md)
 > Date: 2026-09-28
 
 ## Context

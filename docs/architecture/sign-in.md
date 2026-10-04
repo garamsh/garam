@@ -45,3 +45,10 @@ the write rate the unauthenticated login endpoint can be driven at to
 that many rows per flow lifetime, for every replica at once — the bound
 is decided in the statement that writes, not held by any one process
 (ADR-0030).
+
+Tests outside this repository get their first signed-in user from
+`tests/testprincipal`, which creates a fresh local database and writes
+the user and its session through the stores above (ADR-0081). No
+binary or image Garam ships carries it, so it is no path into a
+deployment; `tests/testprincipal/README.md` is its contract and
+invocation.

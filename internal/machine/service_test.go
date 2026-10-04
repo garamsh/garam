@@ -561,8 +561,8 @@ func TestService_VerifyReadsTheTimeAtTheDecision(t *testing.T) {
 	assert.True(t, errorx.IsKind(svc.Verify(ctx, controller, certificate), errorx.KindPermissionDenied))
 }
 
-// TestService_RecheckDecidesAnEarlierIdentityAgain is what a decision on
-// an open connection asks: the identity authenticated once, and the
+// TestService_RecheckDecidesAnEarlierIdentityAgain is what a decision
+// on an open connection asks: the identity authenticated once, and the
 // clock and the record are read again. The first recheck, with neither
 // moved, is the control for both refusals.
 func TestService_RecheckDecidesAnEarlierIdentityAgain(t *testing.T) {

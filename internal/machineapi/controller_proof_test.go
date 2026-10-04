@@ -65,8 +65,9 @@ func proofListener(t *testing.T, certificates *certificateCheck, p *proofs) (str
 		grn.New("acme", "default", "operator", "hosted"))
 }
 
-// forwarded is a certificate in the PEM form a hosted operator forwards.
-// What it names is not read here: verifying it is certificateCheck's.
+// forwarded is a certificate in the PEM form a hosted operator
+// forwards. What it names is not read here: verifying it is
+// certificateCheck's.
 func forwarded(t *testing.T) string {
 	t.Helper()
 	return string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: loopback(t).Certificate[0]}))

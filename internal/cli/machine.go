@@ -207,6 +207,12 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 		return nil, err
 	}
 
+	// One service authenticates a connection when it is made and
+	// verifies certificates again on a decision, so both read the same
+	// trust roots, records and clock.
+	identities := machine.NewService(certificateAuthorities{store: authorities},
+		operatorRegistrations{store: operatorStore}, machine.Config{Now: cfg.Now})
+
 	// The generated router matches before the middleware runs, so the
 	// log line can name the route rather than the path. The last
 	// middleware listed is the outermost, so recovery runs inside the
@@ -214,11 +220,6 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 	// unwind that leaves no line at all. The slice reaches the spec
 	// operations alone; machineServer covers the rest of what this
 	// server serves.
-	// One service authenticates a connection when it is made and
-	// verifies certificates again on a decision, so both read the same
-	// trust roots, records and clock.
-	identities := machine.NewService(certificateAuthorities{store: authorities},
-		operatorRegistrations{store: operatorStore}, machine.Config{Now: cfg.Now})
 	handler := machinegen.HandlerWithOptions(
 		machineapi.NewServer(agents, operators, messages, consents, watches,
 			memberGroups{store: org.NewPostgresStore(pool)}, machineapi.NewGRPCEvaluator(cfg.Engine),

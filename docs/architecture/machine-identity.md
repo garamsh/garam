@@ -6,7 +6,7 @@ Who is calling on the listener a machine identity authenticates on
 | Type | Responsibility |
 |------|----------------|
 | `Identity` | the GRN a verified client certificate names, and the certificate's own serial and dates — which is what a caller asking to replace it is answered by (ADR-0046) |
-| `Service` | recovers that GRN, verifies the certificate against the organization's authority, and refuses an identity the organization no longer holds a record of |
+| `Service` | recovers that GRN, verifies the certificate against the organization's authority, and refuses an identity the organization no longer holds a record of; for a decision, verifies again — the caller's identity against the clock and its record, and a certificate presented on another identity's behalf against that identity |
 | `TrustRoot` | supplies the authority a presented certificate has to chain to |
 | `Registration` | answers whether the organization still holds its record of the identity a certificate names (ADR-0070) |
 | `ServerCertificate` | supplies the certificate the listener presents, asked per handshake so a replaced one needs no restart (ADR-0040) |
@@ -51,7 +51,22 @@ after the chain verifies. Both reads are per connection and a resumed
 handshake takes them too, because `Authenticate` runs from
 `VerifyConnection` (ADR-0064): a check that ran only on a full
 handshake would let a deleted operator keep connecting for as long as
-its tickets lasted. `ServerCertificate` is the
+its tickets lasted.
+
+One route reads them again on every request: the controller proof
+([operators.md](./operators.md) §Controller proof). It asks `Recheck`
+of the caller's identity — its certificate's dates against the clock,
+then its record — and `Verify` of the controller certificate the
+caller forwards, which proves the identity it is presented for by its
+SAN, by its organization's authority, by its validity at the decision
+and by its record. The chain is verified at a time inside the
+certificate's validity and the validity at the decision is checked
+apart from it, so a certificate nothing signed and one that has run
+out are told apart. Every other route relies on listener admission,
+which reads them once per connection; renewal also reads the
+certificate's dates, to decide its renewal window
+([operators.md](./operators.md)).
+`ServerCertificate` is the
 other seam, satisfied from `internal/keyfile`, and what it answers with
 is a different trust root: garam verifies an identity by its
 organization's authority, and an identity verifies garam by the one
@@ -74,9 +89,10 @@ what compose lacks is the step, not something a container cannot do.
 ## Generation and lineage
 
 **Nothing in this section is built.** Today a connection is admitted
-once, when it is made, and a message call compares the caller with the
-recipient and nothing else (`Service.Claim` in
-`internal/message/service.go`).
+once, when it is made, and only the controller proof reads the
+caller's certificate and record again per request; a message call
+compares the caller with the recipient and nothing else
+(`Service.Claim` in `internal/message/service.go`).
 
 ADR-0078 adds two questions an agent's state-changing call must answer,
 per request rather than per connection, so an open connection loses

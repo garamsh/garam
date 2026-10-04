@@ -6,9 +6,11 @@ record that the organization has it and that its certificate
 authenticates on (ADR-0045, ADR-0070), the one-time token registering
 it mints and a member mints again where it has not enrolled (ADR-0064,
 ADR-0067), which certificate garam last issued it, together with
-what it takes to replace that with the next (ADR-0046), and the
+what it takes to replace that with the next (ADR-0046), the
 authority an organization delegates to a hosted operator and hands it
-one operation at a time (ADR-0078). Implemented by `internal/operator`,
+one operation at a time, and the proof of a controller's current
+authority that hosted operator obtains before each lifecycle decision
+(ADR-0078). Implemented by `internal/operator`,
 whose grants and authorities persist through
 `internal/operator/postgres`.
 
@@ -35,6 +37,9 @@ whose grants and authorities persist through
 | `Authorizer` | decides from current state whether a user may perform an action, refusing whatever it cannot decide |
 | `AssignmentReader` | answers where an agent runs now |
 | `AuthorityService` | grants and withdraws delegations, mints operation authorities, and introspects and rechecks them for their audience |
+| `ControllerProof` | a positive proof for one decision: the controller, its organization and, where an agent was named, a `ProvenAgent` — that agent and its current assignment's opaque epoch |
+| `AudienceAuthorizer` | decides from current state whether a hosted operator may perform an action, beside the one Allow its grant contributes, refusing whatever it cannot decide |
+| `ProofService` | proves a controller's current authority to its hosted operator from the current grant, a named agent's current placement and current policy |
 
 The identifier is the caller's rather than garam's, which is what makes
 this domain unlike every other org resource. An operator's GRN is
@@ -305,3 +310,47 @@ is lifecycle authority (ADR-0078).
 The routes and their wire forms are `api/openapi.yaml` §operator and
 `api/machine.yaml` §authority, which are authoritative for them; each
 carries the `operation-authority.v1` contract version (ADR-0079).
+
+## Controller proof
+
+**garam's half is built; its consumer is not.** Nothing in this
+repository calls the route. The Operator control service adopts it
+under garamsh/garam-agent-operator#211, #212 and #218, each open on
+2026-10-04, so the caller's side below is an obligation on that
+service, not a description of it.
+
+A hosted operator proves a controller's current authority before each
+lifecycle decision it makes for that controller (ADR-0078). It
+forwards the controller's leaf certificate exactly as the controller
+presented it in its own handshake, and garam verifies that certificate
+rather than any GRN the caller asserts. A proof is answered only when
+every check passes, each read on the request, because the caller's
+connection authenticated once when it was made:
+
+- the caller's own certificate is still within its validity and its
+  registration is still held;
+- the forwarded certificate names the controller, chains to the
+  organization's authority, is within its validity, and the controller
+  is still registered;
+- the caller's current grant covers `agent:activate` for that
+  controller;
+- a named agent belongs to the organization and is currently assigned
+  to that controller, and the proof carries the assignment's epoch;
+- current policy for the caller and the groups it belongs to now,
+  beside an Allow of `agent:activate` that the grant contributes — on
+  the organization for a session, on the agent for that agent's
+  lifecycle — does not deny it, and an explicit Deny wins.
+
+Certificates are `internal/machine`'s to verify
+([machine-identity.md](./machine-identity.md)); this domain decides the
+grant, the placement and the policy on GRNs. A read that cannot be made
+is unavailable, never an answer from something older. The proof holds
+as of its reads and is no transaction with the caller's store.
+
+**A session proof releases no agent.** Before releasing an agent's
+desired content, accepting its status or deciding its placement, the
+caller obtains that agent's proof, compares the epoch with the one it
+expects, and asks again after a long wait; it never reuses a proof
+across decisions. The route, its fields and its refusal statuses are
+`api/machine.yaml` `introspectController`, which is authoritative for
+them.

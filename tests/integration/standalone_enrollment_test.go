@@ -649,3 +649,39 @@ func TestStandalone_ARevocationLeavesNoActivationInEitherOrder(t *testing.T) {
 		}
 	}
 }
+
+// TestStandalone_IdenticalFirstSpendingsCreateOneAgent queues two
+// identical first spendings of one approval behind its row, each having
+// found no agent before it waits. One creates the agent and the other
+// answers the same recorded result rather than a supersession; a
+// changed request queued the same way still conflicts.
+func TestStandalone_IdenticalFirstSpendingsCreateOneAgent(t *testing.T) {
+	p := pool(t)
+	_, engine := policyEngine(t, p)
+	s := newExecutionStack(t, p, engine)
+	anonymous := anonymousMachineClient(t)
+	lock := `SELECT 1 FROM agent_enrollments WHERE id = $1 FOR UPDATE`
+
+	h := newStandaloneHost(t)
+	e := s.approved(t, h, nil)
+	first, second := s.queuedBehind(t, lock, e.ID, s.spending(anonymous, h, h.enrollment(t)), s.spending(anonymous, h, h.enrollment(t)))
+	assert.Equal(t, http.StatusCreated, first.status, first.body)
+	assert.Equal(t, http.StatusOK, second.status, "an identical spending answers the recorded result: %s", second.body)
+	assert.JSONEq(t, first.body, second.body)
+	assert.Equal(t, 1, countRows(t, s.pool, `SELECT count(*) FROM agents WHERE grn = $1`, e.AgentGrn))
+	assert.Equal(t, 1, countRows(t, s.pool, `SELECT count(*) FROM agent_supervisors WHERE agent_grn = $1`, e.AgentGrn))
+	assert.Equal(t, 1, countRows(t, s.pool, `SELECT count(DISTINCT lineage) FROM agent_credentials WHERE agent_grn = $1`, e.AgentGrn))
+
+	other := newStandaloneHost(t)
+	o := s.approved(t, other, nil)
+	// The same approved key under a request signed again: it passes
+	// the fingerprint and waits on the row, then differs from the
+	// recorded request.
+	changed := other
+	der, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{}, other.agentKey)
+	require.NoError(t, err)
+	changed.agentCSR = string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: der}))
+	first, second = s.queuedBehind(t, lock, o.ID, s.spending(anonymous, other, other.enrollment(t)), s.spending(anonymous, other, changed.enrollment(t)))
+	assert.Equal(t, http.StatusCreated, first.status, first.body)
+	assert.Equal(t, http.StatusConflict, second.status, "a changed request still conflicts: %s", second.body)
+}

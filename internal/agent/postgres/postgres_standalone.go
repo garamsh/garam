@@ -87,6 +87,22 @@ func (s *Store) Withdraw(ctx context.Context, org grn.GRN, id agent.EnrollmentID
 }
 
 func (s *Store) Enroll(ctx context.Context, req agent.EnrollmentRequest) (*agent.EnrollmentResult, bool, error) {
+	out, created, err := s.enroll(ctx, req)
+	if errors.Is(err, errAgentAppeared) {
+		// The agent this transaction found absent was created while it
+		// waited, so it runs once more holding that agent's execution
+		// row first, in the lock order every other writer takes.
+		return s.enroll(ctx, req)
+	}
+	return out, created, err
+}
+
+// errAgentAppeared reports an approval spent, while this spending
+// waited for it, by a transaction that created the agent this one had
+// not yet locked.
+var errAgentAppeared = errorx.New(errorx.KindAborted, "enroll: the agent was created while waiting")
+
+func (s *Store) enroll(ctx context.Context, req agent.EnrollmentRequest) (*agent.EnrollmentResult, bool, error) {
 	var (
 		out     *agent.EnrollmentResult
 		created bool
@@ -119,7 +135,10 @@ func (s *Store) Enroll(ctx context.Context, req agent.EnrollmentRequest) (*agent
 			if !bytes.Equal(row.RequestSha256, req.RequestSHA256[:]) {
 				return agent.ErrEnrollmentConflict
 			}
-			if err := stillCurrent(ctx, q, row, held); err != nil {
+			if !held {
+				return errAgentAppeared
+			}
+			if err := stillCurrent(ctx, q, row); err != nil {
 				return err
 			}
 			out, err = resultOf(row)
@@ -238,11 +257,9 @@ func place(ctx context.Context, q *db.Queries, row db.AgentEnrollment, exec db.A
 
 // stillCurrent refuses replaying a spent approval once its registration
 // is no longer what holds the agent: ended, or the agent reassigned
-// since. A replay never discloses a superseded result as current.
-func stillCurrent(ctx context.Context, q *db.Queries, row db.AgentEnrollment, held bool) error {
-	if !held {
-		return agent.ErrEnrollmentSuperseded
-	}
+// since. A replay never discloses a superseded result as current. The
+// caller holds the agent's execution row.
+func stillCurrent(ctx context.Context, q *db.Queries, row db.AgentEnrollment) error {
 	registered, err := q.GetSupervisor(ctx, row.SupervisorGrn)
 	if err != nil {
 		return storageError(err, "read supervisor", agent.ErrEnrollmentSuperseded, nil)

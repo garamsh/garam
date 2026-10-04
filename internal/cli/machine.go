@@ -139,8 +139,8 @@ func serveMachine(cmd *cobra.Command) error {
 // beside the database. The command reads each part from the process's
 // configuration; a test supplies its own.
 type MachineConfig struct {
-	// Sealer opens the key-encryption key every certificate authority
-	// is sealed under (ADR-0016).
+	// Sealer opens the sealed private keys of the certificate
+	// authorities (ADR-0016).
 	Sealer ca.Sealer
 	// Certificate is what the listener presents (ADR-0040).
 	Certificate machine.ServerCertificate

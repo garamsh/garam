@@ -2293,7 +2293,6 @@ func TestMessageStore_RoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, m.ID(), stored.ID())
 	assert.Equal(t, "key-1", stored.IdempotencyKey(), "the key the sender suppressed duplicates with comes back")
-	assert.WithinDuration(t, m.CreatedAt(), stored.CreatedAt(), time.Microsecond)
 
 	retried, err := message.New(bot, ada, "key-1", "hello again")
 	require.NoError(t, err)
@@ -2713,6 +2712,63 @@ func TestMessageStore_EnqueueSweepsWhatOutlivedTheWindow(t *testing.T) {
 	assert.Equal(t, 1, present(standing), "a message inside the window outlives the sweep")
 	assert.Equal(t, 1, present(delivered), "a completed message is kept, age or not")
 	assert.Equal(t, 1, present(fresh))
+}
+
+// TestMessageStore_RetentionRunsOnTheDatabaseClock holds that the
+// retention window starts on the clock the sweep ends it with (#1181).
+// Each message is built a lag before it is stored, which is how a
+// process clock running that far behind the database's would stamp it,
+// so a stamp taken at building falls before the database's reading
+// ahead of storing. Ageing then moves each stamp, not a fresh one, an
+// hour either side of the window, so one sweep keeps the first message
+// and deletes the second however long the round trips take.
+func TestMessageStore_RetentionRunsOnTheDatabaseClock(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := message.NewPostgresStore(p)
+	bot, ada := grnOf("agent", "bot"), grnOf("user", "ada")
+	const lag, margin = time.Second, time.Hour
+
+	dbNow := func() time.Time {
+		var now time.Time
+		require.NoError(t, p.QueryRow(ctx, "SELECT now()").Scan(&now))
+		return now
+	}
+	build := func(key string) *message.Message {
+		m, err := message.New(bot, ada, key, "hello")
+		require.NoError(t, err)
+		return m
+	}
+	// age moves the row's stamp back by d, which is the database's clock
+	// moving d forward over it.
+	age := func(id message.ID, d time.Duration) {
+		_, err := p.Exec(ctx,
+			"UPDATE messages SET created_at = created_at - make_interval(secs => $1) WHERE id = $2",
+			d.Seconds(), string(id))
+		require.NoError(t, err)
+	}
+	present := func(id message.ID) int {
+		return countRows(t, p, "SELECT count(*) FROM messages WHERE id = $1", string(id))
+	}
+
+	inside, past := build("key-inside"), build("key-past")
+	// The sleep is the clock disagreement under test, not a wait.
+	time.Sleep(lag)
+	before := dbNow()
+	for _, m := range []*message.Message{inside, past} {
+		stored, err := s.Enqueue(ctx, m, nil)
+		require.NoError(t, err)
+		assert.WithinRange(t, stored.CreatedAt(), before, dbNow(),
+			"the stamp is the database's at storing, not the process's at building")
+	}
+
+	age(inside.ID(), message.RetentionWindow-margin)
+	age(past.ID(), message.RetentionWindow+margin)
+	_, err := s.Enqueue(ctx, build("key-sweep"), nil)
+	require.NoError(t, err)
+
+	assert.Equal(t, 1, present(inside.ID()), "a message inside the window on the database's clock outlives the sweep")
+	assert.Equal(t, 0, present(past.ID()), "a message past it is swept")
 }
 
 // TestMessage_BodyAndCompletionAreOneState covers the schema's copy of

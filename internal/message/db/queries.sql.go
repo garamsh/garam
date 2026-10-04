@@ -214,7 +214,7 @@ func (q *Queries) DropEmptyConsent(ctx context.Context, arg DropEmptyConsentPara
 
 const enqueueMessage = `-- name: EnqueueMessage :one
 INSERT INTO messages (id, recipient_grn, sender_grn, idempotency_key, body, created_at)
-VALUES ($1, $2, $3, $4, $5, $6)
+VALUES ($1, $2, $3, $4, $5, now())
 ON CONFLICT (sender_grn, idempotency_key) DO UPDATE SET
     idempotency_key = messages.idempotency_key
 RETURNING id, recipient_grn, sender_grn, idempotency_key, body, created_at, claim_id, claim_expires_at, completed_at, attempts, claimed_at
@@ -226,13 +226,13 @@ type EnqueueMessageParams struct {
 	SenderGrn      string
 	IdempotencyKey string
 	Body           pgtype.Text
-	CreatedAt      pgtype.Timestamptz
 }
 
 // EnqueueMessage stores the message, unless the sender already used the
 // key: the conflicting row is returned unchanged, because garam owns
 // duplicate suppression (ADR-0013). The update assigns the key to
-// itself, which is what makes RETURNING yield that row.
+// itself, which is what makes RETURNING yield that row. Postgres stamps
+// created_at, so the window the sweep measures starts on its clock too.
 func (q *Queries) EnqueueMessage(ctx context.Context, arg EnqueueMessageParams) (Message, error) {
 	row := q.db.QueryRow(ctx, enqueueMessage,
 		arg.ID,
@@ -240,7 +240,6 @@ func (q *Queries) EnqueueMessage(ctx context.Context, arg EnqueueMessageParams) 
 		arg.SenderGrn,
 		arg.IdempotencyKey,
 		arg.Body,
-		arg.CreatedAt,
 	)
 	var i Message
 	err := row.Scan(

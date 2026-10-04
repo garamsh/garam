@@ -109,7 +109,6 @@ func (s *PostgresStore) Enqueue(ctx context.Context, m *Message, fence *Fence) (
 			SenderGrn:      m.sender.String(),
 			IdempotencyKey: m.idempotencyKey,
 			Body:           pgtype.Text{String: m.body, Valid: true},
-			CreatedAt:      stamp(m.createdAt),
 		})
 		return pgxerr.Classify(err, "enqueue", nil, nil)
 	})

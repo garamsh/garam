@@ -57,7 +57,9 @@ token: two readers never hold one message, and a reader that dies leaves
 it claimable again once the lease runs out rather than stranded. The
 token is what makes that safe — the next claim replaces it, so the
 reader it replaced completes nothing. Postgres measures the lease, so no
-instance's clock decides when a claim lapses.
+instance's clock decides when a claim lapses. It also stamps when a
+message was stored, so the retention window below starts and ends on
+the clock that measures it.
 
 Duplicate suppression is garam's (ADR-0013): a message is stored once
 per sender and idempotency key, and the key outlives delivery so a

@@ -13,10 +13,11 @@ WHERE completed_at IS NULL
 -- EnqueueMessage stores the message, unless the sender already used the
 -- key: the conflicting row is returned unchanged, because garam owns
 -- duplicate suppression (ADR-0013). The update assigns the key to
--- itself, which is what makes RETURNING yield that row.
+-- itself, which is what makes RETURNING yield that row. Postgres stamps
+-- created_at, so the window the sweep measures starts on its clock too.
 -- name: EnqueueMessage :one
 INSERT INTO messages (id, recipient_grn, sender_grn, idempotency_key, body, created_at)
-VALUES ($1, $2, $3, $4, $5, $6)
+VALUES ($1, $2, $3, $4, $5, now())
 ON CONFLICT (sender_grn, idempotency_key) DO UPDATE SET
     idempotency_key = messages.idempotency_key
 RETURNING *;

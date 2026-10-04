@@ -17,9 +17,11 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/google/uuid"
@@ -133,13 +135,101 @@ type hostDirs struct {
 	agent      string
 }
 
+// hostLockFile is what one standalone command holds in each directory
+// it writes, so two never write one directory at once.
+const hostLockFile = ".standalone.lock"
+
+// lockDirs takes the lock of each directory, in the order given,
+// without waiting, and answers what releases them. A directory another
+// command holds refuses this one.
+func lockDirs(dirs ...string) (func(), error) {
+	var held []*os.File
+	release := func() {
+		for _, f := range held {
+			_ = f.Close()
+		}
+	}
+	for _, dir := range dirs {
+		f, err := os.OpenFile(filepath.Join(dir, hostLockFile), os.O_RDWR|os.O_CREATE, 0o600)
+		if err != nil {
+			release()
+			return nil, errorx.Wrap(err, "lock "+dir, errorx.KindInvalidArgument)
+		}
+		if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+			_ = f.Close()
+			release()
+			return nil, errorx.Wrap(err, "another standalone command holds "+dir, errorx.KindFailedPrecondition)
+		}
+		held = append(held, f)
+	}
+	return release, nil
+}
+
+// resolvedDirs answers both directories' resolved paths, refusing one
+// inside the other before creating either: the supervisor's files and
+// the agent's credentials are never reachable through one directory.
+func resolvedDirs(dirs hostDirs) (hostDirs, error) {
+	if dirs.agent == "" {
+		return hostDirs{}, errorx.New(errorx.KindInvalidArgument, "--agent-dir is required")
+	}
+	var out [2]string
+	for i, dir := range []string{dirs.supervisor, dirs.agent} {
+		resolved, err := resolvedPath(dir)
+		if err != nil {
+			return hostDirs{}, errorx.Wrap(err, "standalone directory", errorx.KindInvalidArgument)
+		}
+		out[i] = resolved
+	}
+	if within(out[0], out[1]) || within(out[1], out[0]) {
+		return hostDirs{}, errorx.New(errorx.KindInvalidArgument, "--dir and --agent-dir must not overlap")
+	}
+	for _, dir := range out {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return hostDirs{}, errorx.Wrap(err, "standalone directory", errorx.KindInvalidArgument)
+		}
+	}
+	return hostDirs{supervisor: out[0], agent: out[1]}, nil
+}
+
+// resolvedPath answers dir with every symbolic link in its existing
+// part resolved, whether or not dir itself exists yet.
+func resolvedPath(dir string) (string, error) {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		return "", err
+	}
+	missing := ""
+	for {
+		resolved, err := filepath.EvalSymlinks(abs)
+		if err == nil {
+			return filepath.Join(resolved, missing), nil
+		}
+		if !errors.Is(err, fs.ErrNotExist) || filepath.Dir(abs) == abs {
+			return "", err
+		}
+		missing = filepath.Join(filepath.Base(abs), missing)
+		abs = filepath.Dir(abs)
+	}
+}
+
+// within reports whether path is dir or below it.
+func within(path, dir string) bool {
+	rel, err := filepath.Rel(dir, path)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
 // prepared is what a host generated before asking for its approval.
-// The secret and the key never leave the host.
+// The secret and the keys never leave the host. AgentKeyPEM is held
+// only until the agent's files are written beside AgentDir, the one
+// directory this preparation owns them in.
 type prepared struct {
 	RequestID              string `json:"requestId"`
 	Secret                 string `json:"secret"`
 	SupervisorKeyPEM       string `json:"supervisorKeyPem"`
 	SupervisorRequestPEM   string `json:"supervisorCertificateRequestPem"`
+	AgentDir               string `json:"agentDir"`
+	AgentKeyPEM            string `json:"agentKeyPem,omitempty"`
+	AgentRequestPEM        string `json:"agentCertificateRequestPem"`
 	AgentKeyFingerprintHex string `json:"agentKeySha256"`
 }
 
@@ -156,42 +246,48 @@ type approvalRequest struct {
 // requests and the bootstrap secret, durably, and answers what to
 // approve. Run again it answers the same request from what it wrote:
 // an approval is bound to these keys, so they are never regenerated
-// once the request exists.
+// once the request exists, and it finishes a run interrupted before
+// the agent's files were written. It writes no agent credential it did
+// not generate over one already there.
 func prepareHost(dirs hostDirs) (*approvalRequest, error) {
-	if dirs.agent == "" {
-		return nil, errorx.New(errorx.KindInvalidArgument, "--agent-dir is required")
-	}
-	for _, dir := range []string{dirs.supervisor, dirs.agent} {
-		if err := os.MkdirAll(dir, 0o700); err != nil {
-			return nil, errorx.Wrap(err, "standalone directory", errorx.KindInvalidArgument)
-		}
-	}
-	p, err := readPrepared(dirs.supervisor)
-	if err == nil {
-		requestPEM, err := os.ReadFile(filepath.Join(dirs.agent, agentCSRFile))
-		if err != nil {
-			return nil, errorx.Wrap(err, "prepared agent request", errorx.KindInvalidArgument)
-		}
-		agentKey, err := agent.RequestedKeyFingerprint(requestPEM)
-		if err != nil || agentKey.String() != p.AgentKeyFingerprintHex {
-			return nil, errorx.New(errorx.KindFailedPrecondition, "the agent directory does not hold the prepared agent key")
-		}
-		return p.request()
-	}
-	if !errors.Is(err, fs.ErrNotExist) {
-		return nil, err
-	}
-	// The agent's files are written before the record that commits the
-	// preparation, so an interrupted run leaves nothing a later one
-	// mistakes for prepared.
-	agentKeyPEM, agentRequestPEM, err := newKeyAndRequest()
+	dirs, err := resolvedDirs(dirs)
 	if err != nil {
 		return nil, err
 	}
-	if err := writeDurably(filepath.Join(dirs.agent, agentKeyFile), agentKeyPEM, 0o600); err != nil {
+	release, err := lockDirs(dirs.supervisor, dirs.agent)
+	if err != nil {
 		return nil, err
 	}
-	if err := writeDurably(filepath.Join(dirs.agent, agentCSRFile), agentRequestPEM, 0o644); err != nil {
+	defer release()
+	p, err := readPrepared(dirs.supervisor)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		for _, name := range []string{agentKeyFile, agentCSRFile, agentCertFile} {
+			if _, err := os.Lstat(filepath.Join(dirs.agent, name)); !errors.Is(err, fs.ErrNotExist) {
+				return nil, errorx.New(errorx.KindFailedPrecondition,
+					"the agent directory already holds "+name+", which this preparation did not write")
+			}
+		}
+		if p, err = newPrepared(dirs); err != nil {
+			return nil, err
+		}
+	case err != nil:
+		return nil, err
+	case p.AgentDir != dirs.agent:
+		return nil, errorx.New(errorx.KindFailedPrecondition, "this preparation owns the agent directory "+p.AgentDir)
+	}
+	if err := installAgentFiles(dirs, p); err != nil {
+		return nil, err
+	}
+	return p.request()
+}
+
+// newPrepared generates the keys, requests and secret and writes them
+// in the one record that commits the preparation, before any agent
+// file exists.
+func newPrepared(dirs hostDirs) (*prepared, error) {
+	agentKeyPEM, agentRequestPEM, err := newKeyAndRequest()
+	if err != nil {
 		return nil, err
 	}
 	agentKey, err := agent.RequestedKeyFingerprint(agentRequestPEM)
@@ -206,21 +302,52 @@ func prepareHost(dirs hostDirs) (*approvalRequest, error) {
 	if _, err := rand.Read(secret); err != nil {
 		return nil, errorx.Wrap(err, "bootstrap secret", errorx.KindInternal)
 	}
-	p = &prepared{
+	p := &prepared{
 		RequestID:              uuid.NewString(),
 		Secret:                 base64.RawURLEncoding.EncodeToString(secret),
 		SupervisorKeyPEM:       string(supervisorKeyPEM),
 		SupervisorRequestPEM:   string(supervisorRequestPEM),
+		AgentDir:               dirs.agent,
+		AgentKeyPEM:            string(agentKeyPEM),
+		AgentRequestPEM:        string(agentRequestPEM),
 		AgentKeyFingerprintHex: agentKey.String(),
 	}
+	return p, p.write(dirs.supervisor)
+}
+
+// installAgentFiles writes the agent's key and request where the
+// record still holds the key, and then drops it from the record. Where
+// the record no longer holds it, the files must be the prepared ones.
+func installAgentFiles(dirs hostDirs, p *prepared) error {
+	if p.AgentKeyPEM != "" {
+		if err := writeDurably(filepath.Join(dirs.agent, agentKeyFile), []byte(p.AgentKeyPEM), 0o600); err != nil {
+			return err
+		}
+		if err := writeDurably(filepath.Join(dirs.agent, agentCSRFile), []byte(p.AgentRequestPEM), 0o644); err != nil {
+			return err
+		}
+		p.AgentKeyPEM = ""
+		if err := p.write(dirs.supervisor); err != nil {
+			return err
+		}
+	}
+	requestPEM, err := os.ReadFile(filepath.Join(dirs.agent, agentCSRFile))
+	if err != nil {
+		return errorx.Wrap(err, "prepared agent request", errorx.KindFailedPrecondition)
+	}
+	agentKey, err := agent.RequestedKeyFingerprint(requestPEM)
+	if err != nil || agentKey.String() != p.AgentKeyFingerprintHex {
+		return errorx.New(errorx.KindFailedPrecondition, "the agent directory does not hold the prepared agent key")
+	}
+	return nil
+}
+
+func (p *prepared) write(dir string) error {
 	raw, err := json.Marshal(p)
 	if err != nil {
-		return nil, errorx.Wrap(err, "prepared", errorx.KindInternal)
+		return errorx.Wrap(err, "prepared", errorx.KindInternal)
 	}
-	if err := writeDurably(filepath.Join(dirs.supervisor, preparedFile), raw, 0o600); err != nil {
-		return nil, err
-	}
-	return p.request()
+	return writeDurably(filepath.Join(dir, preparedFile), raw, 0o600)
 }
 
 // readPrepared answers what prepareHost wrote, or an fs.ErrNotExist
@@ -254,16 +381,35 @@ func (p *prepared) request() (*approvalRequest, error) {
 }
 
 // enrollHost spends the approval of what prepareHost wrote and installs
-// both certificates. Run again after a lost answer it sends the same
-// bytes and installs the result garam recorded.
+// both certificates. Run again after an interruption it sends the same
+// bytes and installs the result garam recorded; once the enrollment
+// record exists it installs nothing, so no replay ever replaces a
+// credential renewed since.
 func enrollHost(ctx context.Context, dirs hostDirs, machineURL, rootFile string) (*machinegen.StandaloneEnrollment, error) {
+	base, err := machineEndpoint(machineURL)
+	if err != nil {
+		return nil, err
+	}
+	dirs, err = resolvedDirs(dirs)
+	if err != nil {
+		return nil, err
+	}
+	release, err := lockDirs(dirs.supervisor, dirs.agent)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
 	p, err := readPrepared(dirs.supervisor)
 	if err != nil {
 		return nil, errorx.Wrap(err, "run `garam standalone prepare` first", errorx.KindFailedPrecondition)
 	}
-	agentRequestPEM, err := os.ReadFile(filepath.Join(dirs.agent, agentCSRFile))
-	if err != nil {
-		return nil, errorx.Wrap(err, "prepared agent request", errorx.KindInvalidArgument)
+	if p.AgentDir != dirs.agent || p.AgentKeyPEM != "" {
+		return nil, errorx.New(errorx.KindFailedPrecondition, "the preparation is for another agent directory, or unfinished: run `garam standalone prepare` again")
+	}
+	if done, err := readEnrollment(dirs.supervisor); err == nil {
+		return done, nil
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return nil, err
 	}
 	rootPEM, err := os.ReadFile(rootFile)
 	if err != nil {
@@ -276,13 +422,13 @@ func enrollHost(ctx context.Context, dirs hostDirs, machineURL, rootFile string)
 	body, err := json.Marshal(machinegen.StandaloneEnrollmentRequest{
 		RequestId:                       p.RequestID,
 		SupervisorCertificateRequestPem: p.SupervisorRequestPEM,
-		AgentCertificateRequestPem:      string(agentRequestPEM),
+		AgentCertificateRequestPem:      p.AgentRequestPEM,
 	})
 	if err != nil {
 		return nil, errorx.Wrap(err, "enrollment", errorx.KindInternal)
 	}
 	var result machinegen.StandaloneEnrollment
-	if err := callStandalone(ctx, client, machineURL+"/agent-enrollments", "Garam-Bootstrap "+p.Secret, body, &result); err != nil {
+	if err := callStandalone(ctx, client, base+"/agent-enrollments", "Garam-Bootstrap "+p.Secret, body, &result); err != nil {
 		return nil, err
 	}
 	supervisorPEM := append([]byte(result.SupervisorCertificatePem), p.SupervisorKeyPEM...)
@@ -315,6 +461,37 @@ func enrollHost(ctx context.Context, dirs hostDirs, machineURL, rootFile string)
 	return &result, writeDurably(filepath.Join(dirs.supervisor, enrollmentFile), record, 0o600)
 }
 
+// readEnrollment answers what a completed enrollment recorded, or an
+// fs.ErrNotExist error before one completed.
+func readEnrollment(dir string) (*machinegen.StandaloneEnrollment, error) {
+	path := filepath.Join(dir, enrollmentFile)
+	if _, err := os.Stat(path); err != nil {
+		return nil, err
+	}
+	raw, err := keyfile.Read(path)
+	if err != nil {
+		return nil, err
+	}
+	var e machinegen.StandaloneEnrollment
+	if err := json.Unmarshal(raw, &e); err != nil {
+		return nil, errorx.Wrap(err, "enrollment record", errorx.KindInvalidArgument)
+	}
+	return &e, nil
+}
+
+// machineEndpoint answers garam's machine listener as a base URL, and
+// refuses anything but an https:// origin before a credential is read:
+// every request carries one, and none crosses plaintext or reaches
+// another host.
+func machineEndpoint(raw string) (string, error) {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" ||
+		strings.Trim(u.Path, "/") != "" {
+		return "", errorx.New(errorx.KindInvalidArgument, "--machine-url must be an https:// origin")
+	}
+	return "https://" + u.Host, nil
+}
+
 // pendingRenewal is a renewal's key and request, kept from before the
 // request is sent until its answer is installed, so a retry after a
 // lost answer or a restart sends the same request.
@@ -329,6 +506,18 @@ type pendingRenewal struct {
 // use was installed and is cleared; any other pending renewal is sent
 // again unchanged.
 func renewSupervisor(ctx context.Context, dir, machineURL string) (time.Time, error) {
+	base, err := machineEndpoint(machineURL)
+	if err != nil {
+		return time.Time{}, err
+	}
+	release, err := lockDirs(dir)
+	if err != nil {
+		return time.Time{}, err
+	}
+	defer release()
+	if _, err := readEnrollment(dir); err != nil {
+		return time.Time{}, errorx.Wrap(err, "run `garam standalone enroll` first", errorx.KindFailedPrecondition)
+	}
 	current := filepath.Join(dir, supervisorFile)
 	pending, err := readPending(dir)
 	if err != nil {
@@ -373,7 +562,7 @@ func renewSupervisor(ctx context.Context, dir, machineURL string) (time.Time, er
 		return time.Time{}, errorx.Wrap(err, "renewal", errorx.KindInternal)
 	}
 	var issued machinegen.InitialCertificate
-	if err := callStandalone(ctx, client, machineURL+"/supervisors/self/certificate", "", body, &issued); err != nil {
+	if err := callStandalone(ctx, client, base+"/supervisors/self/certificate", "", body, &issued); err != nil {
 		return time.Time{}, err
 	}
 	next := append([]byte(issued.CertificatePem), pending.KeyPEM...)
@@ -450,7 +639,13 @@ func standaloneClient(rootPEM []byte, pair *keyfile.Pair) (*http.Client, error) 
 	if pair != nil {
 		config.GetClientCertificate = func(*tls.CertificateRequestInfo) (*tls.Certificate, error) { return pair.Get() }
 	}
-	return &http.Client{Transport: &http.Transport{TLSClientConfig: config}, Timeout: standaloneCallTimeout}, nil
+	return &http.Client{
+		Transport: &http.Transport{TLSClientConfig: config},
+		Timeout:   standaloneCallTimeout,
+		// A redirect is answered as the refusal it is, so a credential
+		// is never sent to a location the endpoint names.
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}, nil
 }
 
 // callStandalone posts body under the standalone contract and decodes a

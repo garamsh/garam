@@ -4,9 +4,13 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
+	"encoding/pem"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -96,22 +100,19 @@ func TestStandaloneHost_PrepareEnrollAndRenewRecoverFromInterruption(t *testing.
 	require.Error(t, err, out)
 	assert.NoFileExists(t, filepath.Join(h.supervisor, "supervisor.pem"))
 
-	body := map[string]any{
-		"requestId": request["requestId"], "hostName": "laptop", "expiresAt": time.Now().Add(time.Hour).UTC().Format(time.RFC3339),
-		"secretSha256": request["secretSha256"], "supervisorKeySha256": request["supervisorKeySha256"],
-		"agentKeySha256": request["agentKeySha256"],
-	}
-	raw, err := json.Marshal(body)
-	require.NoError(t, err)
-	status, approved := s.approve(t, s.owner, "acme", string(raw))
-	require.Equal(t, http.StatusCreated, status, approved)
+	approveHost(t, s, request)
 
 	out, err = h.enroll(t, s)
 	require.NoError(t, err, out)
 	first, err := os.ReadFile(filepath.Join(h.supervisor, "supervisor.pem"))
 	require.NoError(t, err)
+
+	// Interrupted before the enrollment was recorded: a retry sends the
+	// same request and installs the result garam recorded.
+	require.NoError(t, os.Remove(filepath.Join(h.supervisor, "enrollment.json")))
+	require.NoError(t, os.Remove(filepath.Join(h.supervisor, "supervisor.pem")))
 	out, err = h.enroll(t, s)
-	require.NoError(t, err, "a repeated enrollment is answered again: %s", out)
+	require.NoError(t, err, "an interrupted enrollment is completed: %s", out)
 	again, err := os.ReadFile(filepath.Join(h.supervisor, "supervisor.pem"))
 	require.NoError(t, err)
 	assert.Equal(t, first, again, "the recorded result is installed again")
@@ -164,6 +165,14 @@ func TestStandaloneHost_PrepareEnrollAndRenewRecoverFromInterruption(t *testing.
 	require.NoError(t, err)
 	assert.Equal(t, installed, unchanged)
 
+	// A completed enrollment is never replayed over what renewed since,
+	// although its approval still stands and garam would answer it.
+	out, err = h.enroll(t, s)
+	require.NoError(t, err, out)
+	afterReplay, err := os.ReadFile(filepath.Join(h.supervisor, "supervisor.pem"))
+	require.NoError(t, err)
+	assert.Equal(t, installed, afterReplay, "the renewed credential is kept")
+
 	// The renewed certificate is the supervisor's credential from here.
 	s.agent = mustParse(t, enrolled["grn"].(string))
 	s.epoch = 1
@@ -197,4 +206,157 @@ func mustParse(t *testing.T, s string) grn.GRN {
 	g, err := grn.Parse(s)
 	require.NoError(t, err)
 	return g
+}
+
+// approveHost approves what prepare printed, as acme's owner.
+func approveHost(t *testing.T, s *executionStack, request map[string]string) {
+	t.Helper()
+	raw, err := json.Marshal(map[string]any{
+		"requestId": request["requestId"], "hostName": "laptop", "expiresAt": time.Now().Add(time.Hour).UTC().Format(time.RFC3339),
+		"secretSha256": request["secretSha256"], "supervisorKeySha256": request["supervisorKeySha256"],
+		"agentKeySha256": request["agentKeySha256"],
+	})
+	require.NoError(t, err)
+	status, approved := s.approve(t, s.owner, "acme", string(raw))
+	require.Equal(t, http.StatusCreated, status, approved)
+}
+
+// snapshot reads every file in dir, by name.
+func snapshot(t *testing.T, dir string) map[string]string {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	out := map[string]string{}
+	for _, e := range entries {
+		raw, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		require.NoError(t, err)
+		out[e.Name()] = string(raw)
+	}
+	return out
+}
+
+// TestStandaloneHost_PrepareWritesNoCredentialItDoesNotOwn covers the
+// directories a preparation may write: never one inside the other, and
+// never an agent directory holding credentials another preparation
+// wrote, whose files are left as they were. Preparing the same pair
+// again is the control.
+func TestStandaloneHost_PrepareWritesNoCredentialItDoesNotOwn(t *testing.T) {
+	p := pool(t)
+	_, engine := policyEngine(t, p)
+	s := newExecutionStack(t, p, engine)
+	h := newHostPaths(t, s)
+	request := h.prepare(t)
+	before := snapshot(t, h.agent)
+
+	other := filepath.Join(filepath.Dir(h.supervisor), "second-supervisor")
+	out, err := standaloneCommand(t, "prepare", "--dir", other, "--agent-dir", h.agent)
+	require.Error(t, err, "a second preparation of an owned agent directory: %s", out)
+	assert.Equal(t, before, snapshot(t, h.agent), "the agent's files are untouched")
+	assert.NoFileExists(t, filepath.Join(other, "prepared.json"))
+
+	for _, dirs := range [][2]string{
+		{h.supervisor, h.supervisor},
+		{h.supervisor, filepath.Join(h.supervisor, "agent")},
+		{filepath.Join(h.agent, "supervisor"), h.agent},
+	} {
+		out, err := standaloneCommand(t, "prepare", "--dir", dirs[0], "--agent-dir", dirs[1])
+		require.Error(t, err, "overlapping %v: %s", dirs, out)
+	}
+	assert.Equal(t, before, snapshot(t, h.agent))
+	assert.Equal(t, request, h.prepare(t), "the control: the owning pair prepares again")
+}
+
+// TestStandaloneHost_CommandsOnOneDirectoryNeverOverlap holds the lock
+// another standalone command would hold on the supervisor's directory,
+// and each command refuses rather than writing beside it; released,
+// the same command runs.
+func TestStandaloneHost_CommandsOnOneDirectoryNeverOverlap(t *testing.T) {
+	p := pool(t)
+	_, engine := policyEngine(t, p)
+	s := newExecutionStack(t, p, engine)
+	h := newHostPaths(t, s)
+	require.NoError(t, os.MkdirAll(h.supervisor, 0o700))
+	held, err := os.OpenFile(filepath.Join(h.supervisor, ".standalone.lock"), os.O_RDWR|os.O_CREATE, 0o600)
+	require.NoError(t, err)
+	require.NoError(t, syscall.Flock(int(held.Fd()), syscall.LOCK_EX))
+
+	for _, args := range [][]string{
+		{"prepare", "--dir", h.supervisor, "--agent-dir", h.agent},
+		{"enroll", "--dir", h.supervisor, "--agent-dir", h.agent, "--machine-url", s.machine, "--server-root-file", h.root},
+		{"renew", "--dir", h.supervisor, "--machine-url", s.machine},
+	} {
+		out, err := standaloneCommand(t, args...)
+		require.Error(t, err, out)
+		assert.Contains(t, err.Error(), "another standalone command holds", args[0])
+	}
+	assert.NoFileExists(t, filepath.Join(h.supervisor, "prepared.json"))
+	require.NoError(t, held.Close())
+	h.prepare(t)
+}
+
+// receiver is an endpoint that records every request it is sent.
+type receiver struct {
+	mu       sync.Mutex
+	requests []*http.Request
+}
+
+func (r *receiver) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	r.mu.Lock()
+	r.requests = append(r.requests, req)
+	r.mu.Unlock()
+	w.WriteHeader(http.StatusNotFound)
+}
+
+func (r *receiver) count() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.requests)
+}
+
+// TestStandaloneHost_CredentialsTravelOnlyToTheHTTPSEndpoint covers
+// where the bootstrap secret and the supervisor's certificate may go:
+// an http:// endpoint is refused before anything is sent or written,
+// and an https:// endpoint answering with a redirect does not forward
+// them to where it points, though both share the pinned root. The
+// pinned-root enrollment in the test above is the control.
+func TestStandaloneHost_CredentialsTravelOnlyToTheHTTPSEndpoint(t *testing.T) {
+	p := pool(t)
+	_, engine := policyEngine(t, p)
+	s := newExecutionStack(t, p, engine)
+	h := newHostPaths(t, s)
+	request := h.prepare(t)
+	approveHost(t, s, request)
+
+	plain := &receiver{}
+	plainServer := httptest.NewServer(plain)
+	t.Cleanup(plainServer.Close)
+	out, err := standaloneCommand(t, "enroll", "--dir", h.supervisor, "--agent-dir", h.agent,
+		"--machine-url", plainServer.URL, "--server-root-file", h.root)
+	require.Error(t, err, out)
+	assert.Zero(t, plain.count(), "nothing reaches a plaintext endpoint")
+
+	elsewhere := &receiver{}
+	target := httptest.NewTLSServer(elsewhere)
+	t.Cleanup(target.Close)
+	redirecting := &receiver{}
+	redirector := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		redirecting.ServeHTTP(httptest.NewRecorder(), r)
+		http.Redirect(w, r, target.URL+r.URL.Path, http.StatusTemporaryRedirect)
+	}))
+	t.Cleanup(redirector.Close)
+	root := filepath.Join(t.TempDir(), "redirector.pem")
+	require.NoError(t, os.WriteFile(root, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: redirector.Certificate().Raw}), 0o644))
+	out, err = standaloneCommand(t, "enroll", "--dir", h.supervisor, "--agent-dir", h.agent,
+		"--machine-url", redirector.URL, "--server-root-file", root)
+	require.Error(t, err, out)
+	require.Equal(t, 1, redirecting.count(), "the pinned endpoint was asked")
+	assert.Zero(t, elsewhere.count(), "no credential follows a redirect")
+	assert.NoFileExists(t, filepath.Join(h.supervisor, "enrollment.json"))
+
+	out, err = h.enroll(t, s)
+	require.NoError(t, err, "the control: the pinned listener enrolls: %s", out)
+	out, err = standaloneCommand(t, "renew", "--dir", h.supervisor, "--machine-url", plainServer.URL)
+	require.Error(t, err, out)
+	assert.Zero(t, plain.count())
+	assert.NoFileExists(t, filepath.Join(h.supervisor, "renewal.json"), "refused before a renewal is prepared")
 }

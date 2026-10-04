@@ -108,6 +108,15 @@ func (s *supervisorService) RenewSupervisor(ctx context.Context, caller grn.GRN,
 		return nil, false, err
 	}
 	if recorded == nil {
+		// Only the certificate garam last issued renews; any other is
+		// refused before anything is signed.
+		registered, err := s.store.GetSupervisor(ctx, caller)
+		if err != nil {
+			return nil, false, err
+		}
+		if registered.Serial != presented.Serial {
+			return nil, false, ErrRenewalConflict
+		}
 		lifetime := presented.NotAfter.Sub(presented.NotBefore)
 		if presented.NotAfter.Sub(s.now()) > lifetime/3 {
 			return nil, false, ErrRenewalTooEarly

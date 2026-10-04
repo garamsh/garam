@@ -56,10 +56,6 @@ func (s *standaloneService) Approve(ctx context.Context, in ApprovalInput) (*Enr
 		return nil, false, errorx.New(errorx.KindInvalidArgument, "expiresAt must be in the next 24 hours")
 	}
 	object := in.Org
-	agentGRN, err := NewGRN(in.Org)
-	if err != nil {
-		return nil, false, err
-	}
 	if r := in.Replaces; r != nil {
 		if err := validateOwnership(r.Agent, in.Org); err != nil {
 			return nil, false, err
@@ -67,10 +63,18 @@ func (s *standaloneService) Approve(ctx context.Context, in ApprovalInput) (*Enr
 		if r.Assignee.ServiceType != ServiceTypeSupervisor || r.Assignee.Organization != in.Org.Identifier || r.Epoch < 1 {
 			return nil, false, errorx.New(errorx.KindInvalidArgument, "a replacement names the supervisor holding the agent and its epoch")
 		}
-		object, agentGRN = r.Agent, r.Agent
+		object = r.Agent
 	}
 	if err := authorizeEnroll(ctx, s.authorizer, in.Actor, in.Org, object); err != nil {
 		return nil, false, err
+	}
+	agentGRN := object
+	if in.Replaces == nil {
+		minted, err := NewGRN(in.Org)
+		if err != nil {
+			return nil, false, err
+		}
+		agentGRN = minted
 	}
 	supervisorGRN, err := newSupervisorGRN(in.Org)
 	if err != nil {

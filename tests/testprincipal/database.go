@@ -55,6 +55,9 @@ func createOwned(ctx context.Context, admin *pgxpool.Config, name string) error 
 	// The marker is a constant with no quote in it; COMMENT takes no
 	// parameter.
 	if _, err := conn.Exec(ctx, "COMMENT ON DATABASE "+ident+" IS '"+ownerMarker+"'"); err != nil {
+		// Unmarked, drop would refuse it later; it was created a
+		// statement ago, so it is this command's to remove now.
+		_, _ = conn.Exec(ctx, "DROP DATABASE "+ident)
 		return errorx.Wrap(err, "mark database "+name)
 	}
 	return nil

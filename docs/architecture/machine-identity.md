@@ -6,7 +6,7 @@ Who is calling on the listener a machine identity authenticates on
 | Type | Responsibility |
 |------|----------------|
 | `Identity` | the GRN a verified client certificate names, and the certificate's own serial and dates — which is what a caller asking to replace it is answered by (ADR-0046) |
-| `Service` | recovers that GRN, verifies the certificate against the organization's authority, and refuses an identity the organization no longer holds a record of; for a decision, verifies again — the caller's identity against the clock and its record, and a certificate presented on another identity's behalf against that identity |
+| `Service` | recovers that GRN, verifies the certificate against the organization's authority, and refuses an identity the organization no longer holds a record of; for a decision, verifies again — the caller's identity against the clock and its record, and a certificate presented on another identity's behalf against that identity. `Prove` is the certificate half alone: the SAN and the chain, establishing neither validity now, nor a record, nor any authority to act |
 | `TrustRoot` | supplies the authority a presented certificate has to chain to |
 | `Registration` | answers whether the organization still holds its record of the identity a certificate names (ADR-0070) |
 | `ServerCertificate` | supplies the certificate the listener presents, asked per handshake so a replaced one needs no restart (ADR-0040) |
@@ -34,10 +34,11 @@ keeping a copy. Which authority the certificate must then chain to is
 read off the organization segment of that GRN, so a certificate one
 organization's CA signed for another organization's identity is
 refused by the trust root rather than by a check. Chaining is not the
-whole of that verification either: it is `crypto/x509`'s, which in the
-same call refuses a certificate outside its validity period and one not
-marked for client authentication, so neither refusal is code this
-repository holds.
+whole of that verification either: at the handshake it is
+`crypto/x509`'s, which in the same call refuses a certificate outside
+its validity period and one not marked for client authentication, so
+neither refusal at authentication is code this repository holds. What
+is read again after the handshake is below.
 
 The package holds no store and reaches no database: `TrustRoot` is the
 seam the composition root satisfies from `internal/ca`, which keeps the
@@ -53,19 +54,32 @@ handshake takes them too, because `Authenticate` runs from
 handshake would let a deleted operator keep connecting for as long as
 its tickets lasted.
 
-One route reads them again on every request: the controller proof
-([operators.md](./operators.md) §Controller proof). It asks `Recheck`
-of the caller's identity — its certificate's dates against the clock,
-then its record — and `Verify` of the controller certificate the
-caller forwards, which proves the identity it is presented for by its
-SAN, by its organization's authority, by its validity at the decision
-and by its record. The chain is verified at a time inside the
-certificate's validity and the validity at the decision is checked
-apart from it, so a certificate nothing signed and one that has run
-out are told apart. Every other route relies on listener admission,
-which reads them once per connection; renewal also reads the
-certificate's dates, to decide its renewal window
-([operators.md](./operators.md)).
+Three kinds of route read them again on every request:
+
+- **The controller proof** ([operators.md](./operators.md) §Controller
+  proof) asks `Recheck` of the caller's identity — its certificate's
+  dates against the clock, then its record — and `Verify` of the
+  controller certificate the caller forwards, which proves the identity
+  it is presented for by its SAN, by its organization's authority, by
+  its validity at the decision and by its record. The chain is verified
+  at a time inside the certificate's validity and the validity at the
+  decision is checked apart from it, so a certificate nothing signed
+  and one that has run out are told apart.
+- **The execution lifecycle routes** ask `Recheck` of the caller the
+  same way, and `Prove` of the agent certificate it forwards. That
+  proof establishes only that the certificate names the agent and
+  chains to its organization's authority; whether it is valid now and
+  in the current lineage is the execution fence's to judge (§Generation
+  and lineage), so an expired agent certificate is answered as fenced
+  rather than as unproven.
+- **An agent's protected calls** are judged by the execution fence on
+  the certificate's serial and dates as the handshake read them, so a
+  certificate that expired on an open connection is refused there
+  (§Generation and lineage).
+
+Every other route relies on listener admission, which reads them once
+per connection; an operator's renewal also reads the certificate's
+dates, to decide its renewal window ([operators.md](./operators.md)).
 `ServerCertificate` is the
 other seam, satisfied from `internal/keyfile`, and what it answers with
 is a different trust root: garam verifies an identity by its
@@ -88,11 +102,12 @@ what compose lacks is the step, not something a container cannot do.
 
 ## Generation and lineage
 
-**garam's half is built; no consumer of it is.** No adapter carries an
-execution token yet (#1169), the Operator control service does not yet
-activate (garamsh/garam-agent-operator#218), and the standalone
-lifecycle principal is #1168's. Until a GRN's first activation it is in
-the legacy cohort and every call below is admitted as before.
+**garam's half is built; the adapter this repository ships does not
+use it.** Nothing under `internal/delivery/` carries an execution
+token (#1169), and acceptance with the Operator control service and a
+standalone lifecycle principal is unverified (#1157, #1168). Until a
+GRN's first activation it is in the legacy cohort: its calls carry no
+token, and the certificate check below still applies to each of them.
 
 ADR-0078 adds two questions an agent's state-changing call answers per
 request rather than per connection, so an open connection loses them
@@ -100,8 +115,8 @@ the moment they change:
 
 - **Is this the active generation?** Once a GRN is fenced, the call
   carries `Authorization: Garam-Execution <token>` from the activation
-  of its current generation. No token is refused, and so is one an
-  activation, a deactivation, a recovery or a reassignment ended. A
+  of its current generation. A missing token is refused, and so is one
+  an activation, a deactivation, a recovery or a reassignment ended. A
   token offered for a legacy GRN is refused rather than read as a
   cutover: the mode is the server's (ADR-0080).
 - **Is this certificate current?** It must be inside its validity by
@@ -109,12 +124,14 @@ the moment they change:
   that recovery started. The certificate is the one the connection's
   handshake verified; nothing in a body names it.
 
-Claiming, renewing and completing a message, posting one, reading its
-state, reporting runtime state, forwarding a turn event and renewing
-the agent's own certificate each ask both, inside the transaction of
-their own write (ADR-0080). `getIdentity` asks neither. The routes and
-their schemes are `api/machine.yaml`'s, under the `executionToken`
-scheme each declares.
+Claiming, renewing and completing a message, posting one, reporting
+runtime state, forwarding a turn event and renewing the agent's own
+certificate each ask both inside the transaction of their own write,
+so the answer holds when that write commits (ADR-0080). Reading a sent
+message's state writes nothing; it asks both in the transaction of its
+read, so a refused caller reads nothing. `getIdentity` asks neither.
+The routes and their schemes are `api/machine.yaml`'s, under the
+`executionToken` scheme each declares.
 
 The hosted control service is the lifecycle caller. It activates,
 deactivates, inspects and recovers an agent's execution on the routes

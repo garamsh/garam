@@ -309,7 +309,9 @@ collaborate on a shared plan.
   time; ADR-0078 fences a runtime by its activated generation and
   credential lineage; ADR-0079 bounds interservice compatibility and
   replay. All three are accepted; garam's half of the generation fence
-  is built (ADR-0080) and nothing calls it yet, and the rest is unbuilt.
+  is built (ADR-0080), the adapter this repository ships does not use
+  it, acceptance with its peers is unverified (#1157), and the rest is
+  unbuilt.
   [agents.md](./agents.md) §Separated execution carries the target.
 - Chat channels. ADR-0013 makes garam a message API and leaves Slack,
   LINE and the rest to consumers of it; none is built, and whether any

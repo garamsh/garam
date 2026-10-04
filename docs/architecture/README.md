@@ -524,7 +524,7 @@ ADRs:
   lineages are refused per request, applied configuration is the
   runtime's report, and execution authority is a scoped expiring
   delegation plus a high-trust permission; garam's generation fence and
-  recovery are built, and nothing calls them yet
+  recovery are built, and the shipped adapter does not use them yet
 - [0079](./adr/0079-interservice-contracts-keep-adjacent-releases-compatible-and-replay-by-stable-identifier.md)
   — interservice contracts keep adjacent releases compatible in both
   upgrade orders and refuse what they do not support, a message replays

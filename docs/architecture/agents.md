@@ -11,9 +11,9 @@ by `internal/agent`.
 | `Name` | what an organization calls a defined agent or a template, separate from the GRN: trimmed, one to 100 characters, and not unique |
 | `Assignment` | which operator runs an agent, and the epoch that binding holds |
 | `Certificate` | what an agent authenticates with and the garam server root it verifies garam by, as this domain hands them back |
-| `Service` | creates an agent for the calling operator, issues the certificate of one assigned to it or renews an agent's own, answers an operator with the definitions naming it so it can claim one (ADR-0033), and records the state each party reports (ADR-0053) |
+| `Service` | creates an agent for the calling operator, issues the certificate of one assigned to it while the agent has not cut over, answers an operator with the definitions naming it so it can claim one (ADR-0033), and records the state each party reports (ADR-0053) |
 | `Issuer` | signs a certificate for a subject GRN and hands back the garam server root beside it |
-| `ExecutionService` | what a lifecycle authority does to an agent's execution — activates a generation, deactivates it, inspects a certificate and a generation, recovers the credential lineage — and how an agent renews inside its current lineage (ADR-0078) |
+| `ExecutionService` | what a lifecycle authority does to an agent's execution — activates a generation, deactivates it, inspects a certificate and a generation, recovers the credential lineage — and how an agent renews its own certificate, legacy or fenced, inside the lineage that certificate is current in (ADR-0040, ADR-0078) |
 | `ExecutionStore` | the execution row every agent has, its activations and its credential lineage, written under the row's lock (ADR-0080) |
 
 garam mints an agent's GRN and never changes it, so which operator runs
@@ -48,14 +48,17 @@ itself: renewing its own certificate over the connection that
 certificate authenticated, which grants it nothing it does not already
 hold (ADR-0040), and reporting its own runtime state. Both are bounded
 by the identity the connection proved rather than by an assignment, and
-the renewal is the one route the assignment comparison does not stand
-on — the connection is what authorizes it, and it reaches the issuer
-before the comparison is made. An expired certificate has no such
-connection, so the operator route is what recovers one. Once a GRN cuts
-over (§Separated execution) that route refuses it, the two routes the
-agent reaches as itself are admitted by the execution fence as well,
-and the control service's recovery is what replaces a lost
-certificate.
+both run the execution fence first, so the certificate must still be
+inside its validity and current in its lineage on that request, and
+once the GRN has cut over the call carries its activation's token
+([machine-identity.md](./machine-identity.md) §Generation and
+lineage). Renewal is `ExecutionService`'s, not `Service`'s: it is the
+one route the assignment comparison does not stand on, and the
+successor joins the renewing certificate's lineage. An expired
+certificate has no such connection, so the operator route is what
+recovers one while the GRN has not cut over; after cutover that route
+refuses it and the control service's recovery is what replaces a lost
+certificate (§Separated execution).
 
 A definition's operator and values are written once. Its name is the
 organization's word for the agent and changes alone: renaming touches
@@ -134,7 +137,10 @@ release of that contract and no compatibility window (ADR-0049).
 **Built here is garam's half of two parts: the controller proof
 ([operators.md](./operators.md) §Controller proof) and the generation
 fence ([machine-identity.md](./machine-identity.md) §Generation and
-lineage).** No consumer calls either yet. The rest is the accepted
+lineage).** The adapter this repository ships calls neither: nothing
+under `internal/delivery/` activates, carries an execution token or
+introspects. Acceptance with the Operator control service and the
+adapter is unverified and tracked in #1157. The rest is the accepted
 target of ADR-0077 and ADR-0078, and everything above describes what
 runs for a GRN that has not cut over. Product implementation is tracked
 in #1157.

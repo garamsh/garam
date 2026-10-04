@@ -14,14 +14,15 @@ const serviceTypeOrg = "org"
 
 // Service is what an operator does to the agents it runs — it creates
 // them, obtains the certificates they authenticate with, and reports
-// what it sees of their pods — and what an agent does for itself,
-// which is renew its own certificate and report its own runtime state.
+// what it sees of their pods — and what an agent reports about its own
+// runtime state. An agent renews its own certificate through
+// ExecutionService instead (ADR-0078).
 //
 // Every method takes the caller, and an operator's answers are bounded
 // by the assignments it holds — the whole of the authorization here,
 // with no path around it (ADR-0015). A caller that is not an operator
 // acts on the identity it authenticated as and reaches nothing else
-// (ADR-0012, ADR-0040).
+// (ADR-0012).
 type Service interface {
 	// Create mints an agent in the operator's own organization and
 	// assigns it to that operator.

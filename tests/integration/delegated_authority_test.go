@@ -213,9 +213,11 @@ func TestDelegatedAuthority_EndToEnd(t *testing.T) {
 			`","requestId":"req-3","bodySha256":"`+strings.Repeat("c", 64)+`"}`)
 	assert.Equal(t, http.StatusBadRequest, status, "another organization's audience: %s", got)
 
+	// The owner's configuration authority answered just above, so a
+	// refusal after the withdrawal is the withdrawal's.
 	status, got = call(t, http.DefaultClient, http.MethodDelete, s.delegationPath(), s.owner, `{"grantId":"`+d.GrantId+`"}`)
 	require.Equal(t, http.StatusNoContent, status, got)
-	status, _ = s.introspect(t, s.hostedTLS, minted.Authority)
+	status, _ = s.introspect(t, s.hostedTLS, configure.Authority)
 	assert.Equal(t, http.StatusForbidden, status, "withdrawn")
 	status, _ = call(t, http.DefaultClient, http.MethodDelete, s.delegationPath(), s.owner, `{"grantId":"`+d.GrantId+`"}`)
 	assert.Equal(t, http.StatusNoContent, status, "a retried withdrawal")
@@ -269,6 +271,74 @@ func TestDelegatedAuthority_RefusesPastAStaleCachedAllow(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, status)
 	status, _ = s.mint(t, s.member, "agent:create", s.controller.String(), "req-1")
 	assert.Equal(t, http.StatusForbidden, status)
+}
+
+// TestDelegatedAuthority_RechecksRolesAndGroups holds that the roles
+// and groups an introspection decides on are read when it asks. A
+// high-trust authority minted by an admin is refused once the
+// membership is demoted, and one minted on a direct user role once that
+// role is removed; a Deny attached to a group refuses its member's
+// authority. The owner's authorities, which none of the changes reach,
+// are the control for each.
+func TestDelegatedAuthority_RechecksRolesAndGroups(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	policies, engine := policyEngine(t, p)
+	s := newAuthorityStack(t, engine, p)
+	orgs := org.NewPostgresStore(p)
+	users := userpg.New(p)
+	s.grant(t, "g-1", nil, "agent:create", "agent:configure")
+	agentGRN := s.provisionAgent(t)
+
+	cookieFor := func(g grn.GRN) *http.Cookie {
+		token, err := authn.NewToken()
+		require.NoError(t, err)
+		require.NoError(t, authn.NewPostgresSessionStore(p).Create(ctx, token, authn.NewSession(g, time.Hour)))
+		return &http.Cookie{Name: "garam_session", Value: token}
+	}
+	admin := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "carol")
+	require.NoError(t, users.Create(ctx, user.New(admin, "carol")))
+	require.NoError(t, orgs.AddMember(ctx, org.NewMembership(s.acme, admin, org.RoleAdmin)))
+	direct := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "dave")
+	require.NoError(t, users.Create(ctx, user.New(direct, "dave", string(org.RoleAdmin))))
+	require.NoError(t, orgs.AddMember(ctx, org.NewMembership(s.acme, direct, org.RoleMember)))
+
+	minted := func(cookie *http.Cookie, operation, target, requestID string) string {
+		status, got := s.mint(t, cookie, operation, target, requestID)
+		require.Equal(t, http.StatusCreated, status, got)
+		return authorityOf(t, got).Authority
+	}
+	byAdmin := minted(cookieFor(admin), "agent:configure", agentGRN, "admin-1")
+	byDirect := minted(cookieFor(direct), "agent:configure", agentGRN, "direct-1")
+	byMember := minted(s.member, "agent:create", s.controller.String(), "member-1")
+	ownerConfigure := minted(s.owner, "agent:configure", agentGRN, "owner-1")
+	ownerCreate := minted(s.owner, "agent:create", s.controller.String(), "owner-2")
+	for _, a := range []string{byAdmin, byDirect, byMember, ownerConfigure, ownerCreate} {
+		status, got := s.introspect(t, s.hostedTLS, a)
+		require.Equal(t, http.StatusOK, status, got)
+	}
+
+	require.NoError(t, orgs.RemoveMember(ctx, s.acme, admin))
+	require.NoError(t, orgs.AddMember(ctx, org.NewMembership(s.acme, admin, org.RoleMember)))
+	_, err := users.Update(ctx, direct, user.Patch{Roles: []string{}})
+	require.NoError(t, err)
+	status, _ := s.introspect(t, s.hostedTLS, byAdmin)
+	assert.Equal(t, http.StatusForbidden, status, "membership demoted to member")
+	status, _ = s.introspect(t, s.hostedTLS, byDirect)
+	assert.Equal(t, http.StatusForbidden, status, "direct admin role removed")
+	status, got := s.introspect(t, s.hostedTLS, ownerConfigure)
+	assert.Equal(t, http.StatusOK, status, "the owner is not demoted: %s", got)
+
+	team := scopedGRN("acme", org.ServiceTypeGroup, "batch")
+	require.NoError(t, orgs.CreateGroup(ctx, org.NewGroup(team, "batch", s.acme)))
+	require.NoError(t, orgs.AddGroupMember(ctx, team, s.memberGRN))
+	denied := activePolicy(t, policies, s.acme, "deny-batch-create",
+		statementDoc("deny-batch-create", wire.EffectDeny, "agent:create", s.acme.String()))
+	attachPolicy(t, policies, denied, team)
+	status, _ = s.introspect(t, s.hostedTLS, byMember)
+	assert.Equal(t, http.StatusForbidden, status, "a Deny attached to the member's group")
+	status, got = s.introspect(t, s.hostedTLS, ownerCreate)
+	assert.Equal(t, http.StatusOK, status, "the owner is in no group the Deny reaches: %s", got)
 }
 
 // checkOnlyEngine is an engine predating CheckCurrent: it answers Check

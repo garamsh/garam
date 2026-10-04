@@ -11,10 +11,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/garamsh/garam/internal/authn"
@@ -105,27 +107,36 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
-// scrub removes the connection string and its password from msg.
+// scrub removes the connection string and its password from msg. The
+// password is removed where it stands as a word of its own, so a
+// password that is part of a longer name — garam in garam_principal_ —
+// leaves that name readable.
 func scrub(msg, dsn string) string {
 	if dsn == "" {
 		return msg
 	}
 	msg = strings.ReplaceAll(msg, dsn, "[connection string]")
 	if pw := passwordOf(dsn); pw != "" {
-		msg = strings.ReplaceAll(msg, pw, "[password]")
+		word := regexp.MustCompile(`(^|[^A-Za-z0-9_])` + regexp.QuoteMeta(pw) + `($|[^A-Za-z0-9_])`)
+		msg = word.ReplaceAllString(msg, "${1}[password]${2}")
 	}
 	return msg
 }
 
-// prepare creates a fresh database, migrates it, and signs one
-// principal in. A database it created and could not finish is dropped
-// again.
+// prepare creates a fresh database, migrates it, signs one principal
+// in, and writes the result. Any failure after the database exists,
+// writing the result included, drops it again, or names it as left
+// behind with the reason.
 func prepare(ctx context.Context, serverURL, migrations string, ttl time.Duration, stdout io.Writer) error {
 	if migrations == "" {
 		return errorx.New(errorx.KindInvalidArgument, "-migrations is required")
 	}
 	if ttl <= 0 || ttl > maxSessionTTL {
 		return errorx.New(errorx.KindInvalidArgument, "-session-ttl must be positive and at most 24h")
+	}
+	dir, err := migrationsDir(migrations)
+	if err != nil {
+		return err
 	}
 	admin, err := parseLocal(serverURL)
 	if err != nil {
@@ -140,25 +151,51 @@ func prepare(ctx context.Context, serverURL, migrations string, ttl time.Duratio
 	if err != nil {
 		return err
 	}
-	if err := createOwned(ctx, admin, name); err != nil {
-		return err
-	}
-	out, err := seed(ctx, target, migrations, ttl)
+	conn, err := connect(ctx, admin)
 	if err != nil {
-		if dropErr := dropOwned(ctx, admin, name); dropErr != nil {
-			return errorx.Wrap(err, "prepare failed and "+name+" was left behind: "+dropErr.Error())
-		}
 		return err
 	}
-	out.Database = name
-	out.DatabaseURL = databaseURL
-	return json.NewEncoder(stdout).Encode(out)
+	defer func() { _ = conn.Close(ctx) }()
+	if err := createDatabase(ctx, conn, name); err != nil {
+		return err
+	}
+	err = complete(ctx, conn, target, name, dir, ttl, func(out *Prepared) error {
+		out.Database = name
+		out.DatabaseURL = databaseURL
+		return json.NewEncoder(stdout).Encode(out)
+	})
+	if err == nil {
+		return nil
+	}
+	// This invocation created name a moment ago, so it is dropped
+	// whether or not the marker was set.
+	if dropErr := dropDatabase(ctx, conn, name); dropErr != nil {
+		return errorx.Wrap(err, "database "+name+" was left behind ("+dropErr.Error()+")")
+	}
+	return err
+}
+
+// complete marks, migrates and seeds the database prepare created,
+// then hands the result to write.
+func complete(ctx context.Context, conn *pgx.Conn, target *pgxpool.Config, name, dir string,
+	ttl time.Duration, write func(*Prepared) error) error {
+	if err := markOwned(ctx, conn, name); err != nil {
+		return err
+	}
+	out, err := seed(ctx, target, dir, ttl)
+	if err != nil {
+		return err
+	}
+	if err := write(out); err != nil {
+		return errorx.Wrap(err, "write the result")
+	}
+	return nil
 }
 
 // seed migrates the new database and writes the principal and its
 // session through Garam's own stores.
-func seed(ctx context.Context, target *pgxpool.Config, migrations string, ttl time.Duration) (*Prepared, error) {
-	if err := migrateUp(target, migrations); err != nil {
+func seed(ctx context.Context, target *pgxpool.Config, dir string, ttl time.Duration) (*Prepared, error) {
+	if err := migrateUp(target, dir); err != nil {
 		return nil, err
 	}
 	pool, err := pgxpool.NewWithConfig(ctx, target)

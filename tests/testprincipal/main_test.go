@@ -117,3 +117,12 @@ func TestScrub_RemovesTheConnectionStringAndItsPassword(t *testing.T) {
 	assert.Contains(t, got, "[connection string]")
 	assert.Contains(t, got, "[password]")
 }
+
+// TestScrub_LeavesANameThePasswordIsPartOf holds the compose default,
+// password garam, apart from the database names prepare reports.
+func TestScrub_LeavesANameThePasswordIsPartOf(t *testing.T) {
+	dsn := "postgres://garam:garam@localhost:25432/postgres"
+	got := scrub(`database garam_principal_0123456789abcdef was left behind; password "garam" refused`, dsn)
+	assert.Contains(t, got, "garam_principal_0123456789abcdef")
+	assert.Contains(t, got, `password "[password]" refused`)
+}

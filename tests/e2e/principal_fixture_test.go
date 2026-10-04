@@ -9,7 +9,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -91,9 +93,11 @@ func prepareDatabase(t *testing.T, bin string) prepared {
 	return p
 }
 
-// serve starts one serve process and stops it with SIGTERM at
-// cleanup, waiting for it to exit so nothing holds the database.
-func serve(t *testing.T, bin, name string, env []string, probe string) *bytes.Buffer {
+// serve starts one serve process once its probe answers ok, and
+// answers stop: SIGTERM, wait for the exit, then the logs. Logs are
+// read only after the exit, when nothing writes them any more. Cleanup
+// stops it too, before the database registered earlier is dropped.
+func serve(t *testing.T, bin, name string, env []string, probe string) (stop func() string) {
 	t.Helper()
 	var logs bytes.Buffer
 	cmd := exec.Command(bin, "serve", name)
@@ -101,12 +105,29 @@ func serve(t *testing.T, bin, name string, env []string, probe string) *bytes.Bu
 	cmd.Stdout = &logs
 	cmd.Stderr = &logs
 	require.NoError(t, cmd.Start())
-	t.Cleanup(func() {
-		_ = cmd.Process.Signal(syscall.SIGTERM)
-		_ = cmd.Wait()
-	})
-	waitForProbe(t, probe, &logs)
-	return &logs
+	var once sync.Once
+	stop = func() string {
+		once.Do(func() {
+			_ = cmd.Process.Signal(syscall.SIGTERM)
+			_ = cmd.Wait()
+		})
+		return logs.String()
+	}
+	t.Cleanup(func() { stop() })
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		resp, err := http.Get(probe)
+		if err == nil {
+			_ = resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				return stop
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("serve %s: %s never answered ok; logs:\n%s", name, probe, stop())
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 }
 
 // consumerClient calls the built api over HTTP as a consumer does.
@@ -207,7 +228,7 @@ func TestPrincipalFixture_DrivesDelegationThroughThePublicAPI(t *testing.T) {
 	serve(t, garam, "authz", []string{
 		"GARAM_DATABASE_URL=" + p.DatabaseURL, "GARAM_GRPC_ADDR=" + grpcAddr, "GARAM_METRICS_ADDR=" + metricsAddr,
 	}, "http://"+metricsAddr+readyPath)
-	apiLogs := serve(t, garam, "api", []string{
+	stopAPI := serve(t, garam, "api", []string{
 		"GARAM_DATABASE_URL=" + p.DatabaseURL, "GARAM_HTTP_ADDR=" + httpAddr, "GARAM_AUTHZ_ADDR=" + grpcAddr,
 	}, "http://"+httpAddr+readyPath)
 	c := consumerClient{t: t, base: "http://" + httpAddr}
@@ -249,7 +270,7 @@ func TestPrincipalFixture_DrivesDelegationThroughThePublicAPI(t *testing.T) {
 	status, body = c.mint(owner, globex, "req-2")
 	assert.Equal(t, http.StatusCreated, status, body)
 
-	assert.NotContains(t, apiLogs.String(), owner, "the api logs no session token")
+	assert.NotContains(t, stopAPI(), owner, "the api logs no session token")
 }
 
 // TestPrincipalFixture_DropRemovesOnlyWhatPrepareCreated asks drop to
@@ -315,4 +336,82 @@ func TestPrincipalFixture_IsAbsentFromTheGaramBinary(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(deps), "github.com/garamsh/garam/internal/authn", "the list is the binary's own packages")
 	assert.NotContains(t, string(deps), "github.com/garamsh/garam/tests/")
+}
+
+// principalDatabases lists the databases named as prepare names them.
+func principalDatabases(t *testing.T, conn *pgx.Conn) []string {
+	t.Helper()
+	rows, err := conn.Query(context.Background(),
+		`SELECT datname FROM pg_database WHERE datname LIKE 'garam\_principal\_%' ORDER BY datname`)
+	require.NoError(t, err)
+	names, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	require.NoError(t, err)
+	return names
+}
+
+// migrationsDirOf writes a migrations directory holding files.
+func migrationsDirOf(t *testing.T, files map[string]string) string {
+	t.Helper()
+	dir := t.TempDir()
+	for name, body := range files {
+		require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte(body), 0o600))
+	}
+	return dir
+}
+
+// TestPrincipalFixture_PrepareRemovesWhatItCreatedWhenItFails fails
+// prepare after its database exists — the result cannot be written,
+// or a migration fails — and finds no database left. A successful
+// prepare beside them leaves one, so the count can move. Where the
+// removal itself fails, prepare names the database it left.
+func TestPrincipalFixture_PrepareRemovesWhatItCreatedWhenItFails(t *testing.T) {
+	ctx := context.Background()
+	server := os.Getenv("GARAM_TEST_DATABASE_URL")
+	bin := buildPrincipalFixture(t)
+	conn, err := pgx.Connect(ctx, server)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close(ctx) })
+	migrations := filepath.Join(moduleRoot(t), "migrations")
+	before := principalDatabases(t, conn)
+
+	// A read-only stdout refuses the write without a signal.
+	readOnly := filepath.Join(t.TempDir(), "stdout")
+	require.NoError(t, os.WriteFile(readOnly, nil, 0o600))
+	stdout, err := os.Open(readOnly)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = stdout.Close() })
+	var stderr bytes.Buffer
+	cmd := exec.Command(bin, "prepare", "-contract", "1", "-server-url", server, "-migrations", migrations)
+	cmd.Stdout = stdout
+	cmd.Stderr = &stderr
+	assert.Error(t, cmd.Run())
+	assert.Contains(t, stderr.String(), "write the result")
+	assert.Equal(t, before, principalDatabases(t, conn), "an unwritten result leaves no database")
+
+	failing := migrationsDirOf(t, map[string]string{"000001_fail.up.sql": "SELECT 1/0;"})
+	code, _, errOut := fixture(t, bin, "prepare", "-contract", "1", "-server-url", server, "-migrations", failing)
+	assert.Equal(t, 1, code, errOut)
+	assert.Equal(t, before, principalDatabases(t, conn), "a failed migration leaves no database")
+
+	p := prepareDatabase(t, bin)
+	assert.Contains(t, principalDatabases(t, conn), p.Database, "the control: a prepare that succeeds leaves its database")
+
+	// A template database cannot be dropped, so the removal fails and
+	// prepare has to say what it left.
+	stuck := migrationsDirOf(t, map[string]string{
+		"000001_template.up.sql": `DO $$ BEGIN EXECUTE format('ALTER DATABASE %I IS_TEMPLATE true', current_database()); END $$;`,
+		"000002_fail.up.sql":     "SELECT 1/0;",
+	})
+	code, _, errOut = fixture(t, bin, "prepare", "-contract", "1", "-server-url", server, "-migrations", stuck)
+	left := regexp.MustCompile(`garam_principal_[0-9a-f]{16}`).FindString(errOut)
+	if left != "" {
+		t.Cleanup(func() {
+			_, _ = conn.Exec(ctx, "ALTER DATABASE "+left+" IS_TEMPLATE false")
+			_, _ = conn.Exec(ctx, "DROP DATABASE IF EXISTS "+left)
+		})
+	}
+	assert.Equal(t, 1, code, errOut)
+	assert.Contains(t, errOut, "database "+left+" was left behind")
+	assert.Contains(t, errOut, "cannot drop a template database")
+	assert.Contains(t, principalDatabases(t, conn), left)
 }

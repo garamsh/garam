@@ -13,8 +13,11 @@ Organizations, operators, further users, delegations and operation
 authorities are made through the public routes the test exercises.
 
 It is not part of Garam: `cmd/garam` does not import it, so no Garam
-binary or image carries it. `tests/e2e/principal_fixture_test.go`
-checks both.
+binary carries it, and the image carries only what
+`deploy/local/Dockerfile` builds from `./cmd/garam`.
+`tests/e2e/principal_fixture_test.go` checks that the built `garam`
+has no such command and that `go list -deps ./cmd/garam` names no
+package under `tests/`.
 
 ## Invocation
 
@@ -71,4 +74,5 @@ nothing verifies that a module cache copy serves.
   name of any other shape, or one without the mark, and does not force
   past open connections.
 - **A partial database.** When `prepare` fails after creating its
-  database, it drops it again, or says that it could not.
+  database, writing its output included, it drops it again. Where
+  that drop fails too, stderr names the database left behind and why.

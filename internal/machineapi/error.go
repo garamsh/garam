@@ -54,11 +54,14 @@ func RecoverPanics(next http.Handler) http.Handler {
 func BindingError(w http.ResponseWriter, r *http.Request, err error) {
 	var header *machinegen.RequiredHeaderError
 	if errors.As(err, &header) && header.ParamName == operator.ContractVersionHeader {
-		if executionRoute(r) {
+		switch {
+		case executionRoute(r):
 			executionContract(w, "")
-			return
+		case enrollmentRoute(r):
+			enrollmentContract(w, "")
+		default:
+			contract(w, "")
 		}
-		contract(w, "")
 		return
 	}
 	writeError(w, errorx.New(errorx.KindInvalidArgument, "a request parameter could not be read"))
@@ -72,6 +75,14 @@ func executionRoute(r *http.Request) bool {
 	return strings.HasPrefix(p, "/agents/") && (strings.HasSuffix(p, "/activations") ||
 		strings.HasSuffix(p, "/deactivation") || strings.HasSuffix(p, "/execution/introspection") ||
 		strings.HasSuffix(p, "/credential-recovery"))
+}
+
+// enrollmentRoute reports whether r is one of the managed enrollment
+// routes, whose contract is managed-enrollment.v1. Both are POSTs.
+func enrollmentRoute(r *http.Request) bool {
+	p := r.URL.Path
+	return (strings.HasPrefix(p, "/operators/") && strings.HasSuffix(p, "/managed-agents")) ||
+		(strings.HasPrefix(p, "/agents/") && strings.HasSuffix(p, "/initial-certificate"))
 }
 
 // causeRecorder is the request-logging middleware's response writer,

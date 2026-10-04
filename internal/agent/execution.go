@@ -55,8 +55,9 @@ var (
 	ErrAuthorityExpired = errorx.New(errorx.KindPermissionDenied, "authority expired")
 	// ErrIssuedByLifecycle refuses an operator's request for the
 	// certificate of an agent whose execution is fenced: from its
-	// cutover on, its certificates come from renewal inside its
-	// lineage or from recovery (ADR-0078).
+	// cutover on, or from its managed creation, its certificates come
+	// from initial issuance, renewal inside its lineage or recovery
+	// (ADR-0078).
 	ErrIssuedByLifecycle = errorx.New(errorx.KindFailedPrecondition, "agent certificates are issued by renewal or recovery once its execution is fenced")
 	// ErrUnsupportedExecutionContract refuses a request carrying no
 	// contract version, or another.
@@ -73,8 +74,9 @@ var (
 )
 
 // Mode is whether an agent's writes are fenced by an activation. An
-// agent is legacy until its first activation and fenced from then on;
-// nothing a caller sends selects it.
+// agent is legacy until its first activation and fenced from then on,
+// and one a managed creation made is fenced from birth; nothing a
+// caller sends selects it.
 type Mode string
 
 const (

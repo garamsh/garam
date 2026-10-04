@@ -27,10 +27,6 @@ const (
 const LifecycleDeadline = 10 * time.Second
 
 var (
-	// ErrUnsupportedReference refuses an operation reference this
-	// release does not accept for an activation: a creation's, until
-	// the agent it created is bound to it.
-	ErrUnsupportedReference = errorx.New(errorx.KindInvalidArgument, "operation reference is not supported for activation")
 	// ErrReferenceMismatch refuses an operation reference or handoff
 	// minted for another operation, organization, caller, agent or
 	// assignment.
@@ -38,6 +34,12 @@ var (
 	// ErrBodyMismatch refuses a request whose bytes are not the ones
 	// its handoff was minted for. The handoff is not spent.
 	ErrBodyMismatch = errorx.New(errorx.KindAlreadyExists, "request body does not match its authority")
+	// ErrActivationIntentRequired refuses a first activation of a
+	// managed agent that carries no reference: until one activation
+	// has succeeded, a generation starts only on its creation's
+	// reference or on a configure reference (ADR-0078).
+	ErrActivationIntentRequired = errorx.New(errorx.KindPermissionDenied,
+		"a managed agent's first activation carries its creation reference or a configure reference")
 )
 
 // ExecutionService is what a lifecycle authority does to an agent's
@@ -64,6 +66,14 @@ type ExecutionService interface {
 	// Renew issues the calling agent's next certificate inside the
 	// lineage the presented one is current in.
 	Renew(ctx context.Context, caller grn.GRN, fence Fencing) (*Certificate, error)
+	// CreateManaged registers an agent and its first assignment under
+	// a member's agent:create reference, and answers an identical
+	// retry with the same agent rather than another.
+	CreateManaged(ctx context.Context, caller grn.GRN, in ManagedCreationInput) (*ManagedCreation, bool, error)
+	// IssueInitialCertificate signs a managed agent's first
+	// certificate over its request's key, and answers an identical
+	// retry with the same certificate rather than another.
+	IssueInitialCertificate(ctx context.Context, caller grn.GRN, in InitialCertificateInput) (*InitialCertificate, bool, error)
 }
 
 // ActivationInput is an activation request as received.
@@ -175,7 +185,7 @@ func (s *executionService) Activate(ctx context.Context, caller grn.GRN, in Acti
 		return nil, err
 	}
 	if in.OperationRef != nil {
-		if err := s.checkReference(ctx, caller, in.Agent, assignment, *in.OperationRef); err != nil {
+		if err := s.checkReference(ctx, caller, in, assignment); err != nil {
 			return nil, err
 		}
 	}
@@ -208,24 +218,34 @@ func (s *executionService) Activate(ctx context.Context, caller grn.GRN, in Acti
 
 // checkReference admits a pending revision's durable reference when it
 // was minted to configure this agent, through this caller, for the
-// assignment the agent is on now. A creation's reference is refused
-// until the agent it created is bound to it.
-func (s *executionService) checkReference(ctx context.Context, caller, agentGRN grn.GRN, assignment *Assignment, ref string) error {
-	b, err := s.operations.ResolveReference(ctx, caller, ref)
+// assignment the agent is on now. A creation's reference is admitted
+// for the first activation of the agent it created alone: it names no
+// activation to replace, and the store refuses it once one exists.
+func (s *executionService) checkReference(ctx context.Context, caller grn.GRN, in ActivationInput, assignment *Assignment) error {
+	b, err := s.operations.ResolveReference(ctx, caller, *in.OperationRef)
 	if err != nil {
 		return err
 	}
 	switch b.Kind {
 	case OperationKindConfigure:
+		if !b.covers(caller, in.Agent, assignment) {
+			return ErrReferenceMismatch
+		}
+		return nil
 	case OperationKindCreate:
-		return ErrUnsupportedReference
-	default:
-		return ErrReferenceMismatch
+		if in.Replaces != nil {
+			return ErrReferenceMismatch
+		}
+		creation, err := s.creationOf(ctx, b, caller, in.Agent)
+		if err != nil {
+			return err
+		}
+		if !creation.placedOn(assignment) {
+			return ErrReferenceMismatch
+		}
+		return nil
 	}
-	if !b.covers(caller, agentGRN, assignment) {
-		return ErrReferenceMismatch
-	}
-	return nil
+	return ErrReferenceMismatch
 }
 
 // covers reports whether the binding was minted for this caller, this

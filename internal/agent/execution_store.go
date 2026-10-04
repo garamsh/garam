@@ -18,7 +18,9 @@ type ExecutionStore interface {
 	// again with the token replaced by req.TokenHash and a higher
 	// TokenVersion. It refuses with ErrStaleEpoch, ErrNotAssigned,
 	// ErrAuthorityExpired, ErrActivationStale, ErrActivationConflict,
-	// ErrActivationEnded, ErrGenerationUsed or ErrCredentialFenced.
+	// ErrActivationEnded, ErrGenerationUsed, ErrCredentialFenced or,
+	// for an agent fenced from birth that no activation has succeeded
+	// for, ErrActivationIntentRequired when req carries no reference.
 	Activate(ctx context.Context, req ActivationRequest) (a *Activation, created bool, err error)
 	// Deactivate ends the agent's activation id when it is the current
 	// one and answers true; an activation already ended is left as it
@@ -46,4 +48,30 @@ type ExecutionStore interface {
 	// CredentialCurrent answers whether c may act for the agent now,
 	// without a token and without taking the execution lock.
 	CredentialCurrent(ctx context.Context, agentGRN grn.GRN, c Credential) (bool, error)
+	// CreateManaged writes a, its execution row fenced in c.Lineage,
+	// its first assignment to c.Controller and c in one transaction,
+	// and answers c as stored with created true. Where an
+	// earlier creation already holds c's reference it writes nothing
+	// and answers that one with created false; where one holds c's
+	// request identifier under another reference it refuses with
+	// ErrCreationConflict.
+	CreateManaged(ctx context.Context, a *Agent, c ManagedCreation) (*ManagedCreation, bool, error)
+	// GetManagedCreation answers the creation of agentGRN, or nil for
+	// an agent no managed creation made.
+	GetManagedCreation(ctx context.Context, agentGRN grn.GRN) (*ManagedCreation, error)
+	// GetManagedCreationByReference answers the creation ref
+	// authorized, or nil.
+	GetManagedCreationByReference(ctx context.Context, ref string) (*ManagedCreation, error)
+	// InstallInitialCertificate records req.Signed as the first
+	// certificate of req.Lineage and answers it with created true. A
+	// retry of the recorded request answers the recorded certificate
+	// with created false. It refuses with ErrStaleEpoch,
+	// ErrNotAssigned, ErrAuthorityExpired, ErrLineageSuperseded once a
+	// recovery replaced req.Lineage, and ErrInitialCertificateConflict
+	// for any other request once one is recorded.
+	InstallInitialCertificate(ctx context.Context, req InitialCertificateRequest) (*InitialCertificate, bool, error)
+	// GetInitialCertificate answers the agent's recorded initial
+	// issuance, or nil, so a retry is answered before anything is
+	// signed again.
+	GetInitialCertificate(ctx context.Context, agentGRN grn.GRN) (*InitialCertificate, error)
 }

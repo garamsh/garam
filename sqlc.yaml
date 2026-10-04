@@ -117,6 +117,7 @@ sql:
       - migrations/000001_init.up.sql
       - migrations/000004_agents.up.sql
       - migrations/000029_agent_execution_fence.up.sql
+      - migrations/000030_agent_managed_enrollment.up.sql
     queries: internal/agent/postgres/queries.sql
     gen:
       go:

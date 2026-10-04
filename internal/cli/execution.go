@@ -42,7 +42,7 @@ func newExecutionService(pool *pgxpool.Pool, engine grpc.ClientConnInterface, au
 		},
 		operationAuthorities{service: authority},
 		provenLeaves{identities: identities},
-		requestSigner{issuer: issuer},
+		requestSigner{issuer: issuer, serverRoot: serverRoot},
 		certificates{issuer: issuer, serverRoot: serverRoot})
 }
 
@@ -111,7 +111,7 @@ func (o operationAuthorities) ResolveHandoff(ctx context.Context, audience grn.G
 func bindingOf(b operator.Binding, expiresAt time.Time) (*agent.OperationBinding, error) {
 	out := &agent.OperationBinding{
 		Ref: string(b.Ref), Kind: agent.OperationKind(b.Operation), Org: b.Org,
-		Audience: b.Audience, Target: b.Target, ExpiresAt: expiresAt,
+		Audience: b.Audience, Target: b.Target, RequestID: string(b.RequestID), ExpiresAt: expiresAt,
 	}
 	digest, err := hex.DecodeString(string(b.Digest))
 	if err != nil || len(digest) != len(out.BodySHA256) {
@@ -145,12 +145,19 @@ func (p provenLeaves) VerifyLeaf(ctx context.Context, agentGRN grn.GRN, leaf *x5
 	return agent.Credential{Serial: identity.Serial(), NotBefore: identity.NotBefore(), NotAfter: identity.NotAfter()}, nil
 }
 
-// requestSigner signs a recovered agent's certificate over the key its
-// request carries (agent.RequestSigner).
-type requestSigner struct{ issuer ca.Service }
+// requestSigner signs an agent's initial or recovered certificate over
+// the key its request carries (agent.RequestSigner), and hands back the
+// garam server root beside it.
+type requestSigner struct {
+	issuer     ca.Service
+	serverRoot []byte
+}
 
 func (s requestSigner) SignRequest(ctx context.Context, subject grn.GRN, requestPEM []byte) (*agent.SignedCertificate, error) {
 	signed, err := s.issuer.Sign(ctx, subject, requestPEM)
+	if errorx.IsKind(err, errorx.KindInvalidArgument) {
+		return nil, agent.ErrInvalidCertificateRequest
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -165,5 +172,7 @@ func (s requestSigner) SignRequest(ctx context.Context, subject grn.GRN, request
 	return &agent.SignedCertificate{
 		Credential:     agent.Credential{Serial: signed.Serial(), NotBefore: leaf.NotBefore, NotAfter: leaf.NotAfter},
 		CertificatePEM: string(signed.CertificatePEM()),
+		IssuerPEM:      string(signed.IssuerPEM()),
+		ServerRootPEM:  string(s.serverRoot),
 	}, nil
 }

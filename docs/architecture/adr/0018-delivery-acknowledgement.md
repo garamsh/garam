@@ -1,6 +1,8 @@
 # ADR 0018: A message is completed by the turn-end event that names it
 
-> Status: accepted
+> Status: accepted — §Decision's in-memory pairing, and the
+> caller-supplied key in §Rejected alternatives, are superseded by
+> [ADR-0079](./0079-interservice-contracts-keep-adjacent-releases-compatible-and-replay-by-stable-identifier.md)
 > Date: 2026-08-17
 
 ## Contents

@@ -1,6 +1,9 @@
 # ADR 0053: An agent and its operator report state on the machine listener
 
-> Status: accepted
+> Status: accepted — §Decision's "The agent route is fenced by the
+> identity the connection proved" is superseded in part by
+> [ADR-0078](./0078-a-lifecycle-authority-activates-a-runtime-generation-and-old-generations-and-lineages-are-fenced.md),
+> which fences it by the active generation as well
 > Date: 2026-09-01
 
 ## Contents

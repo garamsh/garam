@@ -114,13 +114,48 @@ same boundary from the agent's own side, for the tool set it loads, at
 [`eeea6a9`](https://github.com/garamsh/sherlock/blob/eeea6a9/internal/config/config.go#L79-L82),
 read when the repository was named `gagent`.
 
-Nothing in garam requires a version or a capability of an agent, and
-nothing here is being added that would. Such a requirement is the one
-thing on this boundary garam could properly make, because what its own
-machine contract needs is a fact garam holds rather than one about
-somebody's registry. It has had no occasion to: garam publishes no
-release of that contract and no compatibility window (ADR-0049), so no
-version of it has diverged from another, and
-`docs/convention/simplicity.md` §Rules asks for a second real case
-before an abstraction where this has not had a first. That is a bound
-on this record and not a plan.
+Nothing in garam requires a version or a capability of an agent today.
+Such a requirement is the one thing on this boundary garam could
+properly make, because what its own machine contract needs is a fact
+garam holds rather than one about somebody's registry. ADR-0079 accepts
+one: each interservice contract works with the adjacent supported
+release of its peer in both upgrade orders, and unsupported semantics
+are refused by name. None of it is built, so garam still publishes no
+release of that contract and no compatibility window (ADR-0049).
+
+## Separated execution
+
+**Nothing in this section is built.** It is the accepted target of
+ADR-0077 and ADR-0078, and everything above describes what runs until a
+GRN cuts over. Product implementation is tracked in #1157.
+
+- **Desired runtime values and templates leave garam.** The Operator
+  control service is their one writable managed source and the cluster
+  controller pulls from it; a standalone host keeps its own.
+  `Definition` values and `Template` are what move, per GRN, with no
+  dual write and no new workload or volume. The GRN, the `Name` and the
+  assignment stay here, and the console still copies a template once
+  (ADR-0077).
+- **A managed agent is created by request, not by claim.** The control
+  service asks for one under a delegation and a stable request
+  identifier; registration and the first assignment are one
+  transaction, and a retry answers the same GRN. Today they are two
+  writes, as `Service.Create` in `internal/agent/service.go` says.
+- **A generation is what an assignment does not fence.** Beside the GRN
+  and the epoch, garam records the active process generation, which a
+  lifecycle authority activates after proving it owns the writer; the
+  execution credential cannot activate one. The machine listener checks
+  it per request ([machine-identity.md](./machine-identity.md)
+  §Generation and lineage) (ADR-0078).
+- **Applied configuration is the runtime's report**, at its GRN, epoch,
+  generation and desired revision, kept apart from what the Operator
+  rendered or provisioned. The Operator control service holds it; garam
+  only answers whether that epoch and generation are current, and a
+  report activates nothing. A missing or stale report is unknown, never
+  success (ADR-0078).
+- **Execution authority is a scoped, expiring delegation plus a
+  high-trust permission**, both checked fresh before a pending revision
+  activates (ADR-0078).
+- **A lost credential is recovered for the same GRN**, replacing its
+  lineage and fencing the old one, rather than by recreating the agent
+  (ADR-0078).

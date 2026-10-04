@@ -1,6 +1,9 @@
 # ADR 0033: An operator claims the agent a definition mints
 
-> Status: accepted
+> Status: accepted — §Decision's machine read, as the controller's
+> source for a GRN, and its claim, as how a managed agent is created,
+> are superseded by
+> [ADR-0077](./0077-execution-definitions-move-to-the-operator-control-service-and-each-agent-cuts-over-alone.md)
 > Date: 2026-08-19
 
 ## Contents

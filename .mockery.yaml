@@ -22,6 +22,4 @@ packages:
       Store: {}
   github.com/garamsh/garam/internal/operator:
     interfaces:
-      AssignmentReader: {}
       AuthorityService: {}
-      Authorizer: {}

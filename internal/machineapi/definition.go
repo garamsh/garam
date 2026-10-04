@@ -57,7 +57,7 @@ func (s *Server) ClaimDefinition(w http.ResponseWriter, r *http.Request, agentGR
 	}
 	writeJSON(w, http.StatusCreated, machinegen.AgentAssignment{
 		Grn:      assignment.Agent().String(),
-		Operator: assignment.Operator().String(),
+		Operator: assignment.Assignee().String(),
 		Epoch:    assignment.Epoch(),
 	})
 }

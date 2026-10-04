@@ -169,7 +169,7 @@ func TestExecutionService_OnlyALifecycleAuthorityActivates(t *testing.T) {
 	l := newLifecycle(t)
 
 	_, err := l.service.Activate(ctx, l.agent, l.input("r1", generation(1), nil, "leaf-1"))
-	assert.ErrorIs(t, err, agent.ErrNotAnOperator, "an execution certificate cannot activate")
+	assert.ErrorIs(t, err, agent.ErrNotALifecycleAuthority, "an execution certificate cannot activate")
 
 	l.authorizer.err = errorx.New(errorx.KindPermissionDenied, "no grant")
 	_, err = l.service.Activate(ctx, l.audience, l.input("r1", generation(1), nil, "leaf-1"))
@@ -276,7 +276,7 @@ func TestExecutionService_IntrospectionAnswersForThePresentedCertificate(t *test
 	assert.Equal(t, agent.GenerationNone, none.Generation)
 
 	_, err = l.service.Introspect(ctx, l.agent, l.agent, leafNamed("leaf-1"), nil)
-	assert.ErrorIs(t, err, agent.ErrNotAnOperator)
+	assert.ErrorIs(t, err, agent.ErrNotALifecycleAuthority)
 }
 
 func (l lifecycle) handoff(authority, body string) {

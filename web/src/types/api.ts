@@ -519,6 +519,68 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/orgs/{org}/agent-enrollments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve a standalone host's enrollment. Requires current `agent:enroll`.
+         * @description Approves what a standalone host prepared before asking: the SHA-256 of a bootstrap secret it keeps, the fingerprints of the two public keys it generated — its supervisor's and its agent's — and the request identifier it chose (ADR-0082). garam mints the supervisor's GRN and, for a new agent, the agent's, and stores the hash alone, so the host already holds what spending the approval needs and nothing is shown once.
+         *     A replacement names an existing agent, the supervisor holding it and the epoch it holds it at; it stands a new supervisor up for the same GRN and moves the agent to a new credential lineage when spent, and only from exactly that assignment. Authorization is decided from current membership, roles, groups and persisted policies, on the organization for a new agent and on the agent for a replacement; an explicit Deny wins.
+         *     Repeating a `requestId` with the same request answers the same approval with 200, spent or not, while it is neither withdrawn nor expired; any other request under it is refused with 409, and a withdrawn or expired one is never revived.
+         */
+        post: operations["approveAgentEnrollment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/agent-enrollments/{enrollment}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Withdraw an unspent standalone approval. Requires current `agent:enroll`.
+         * @description Withdraws an approval no host has spent. Spending it afterwards is refused as an unknown bootstrap would be, and a withdrawal and a spending of one approval never both take effect. A withdrawn one answers 204 again; a spent one is refused with 409, because what it registered is ended by `revokeAgentSupervisor`.
+         */
+        delete: operations["withdrawAgentEnrollment"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/orgs/{org}/agent-supervisors/{supervisor}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke a standalone host's supervisor. Requires current `agent:enroll`.
+         * @description Ends the supervisor's registration, the agent's current activation and every unspent approval for that agent, in one transaction under the agent's execution lock (ADR-0082). The supervisor's certificate stops authenticating from its next connection and its open ones refuse every lifecycle request; the agent's protected writes are refused from its next request, because no activation admits them. The agent, its GRN and the memory its host keeps are untouched, and only a new approval stands a supervisor up for it again. Authorization is decided on the agent. A supervisor the organization holds no current registration of answers 404.
+         */
+        delete: operations["revokeAgentSupervisor"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/orgs/{org}/operators": {
         parameters: {
             query?: never;
@@ -1112,10 +1174,51 @@ export interface components {
          * @enum {string}
          */
         AgentRuntimeState: "unknown" | "connected" | "disconnected";
-        /** @description The operator holding an agent, at the epoch that binding is on. Every assignment raises the epoch and fences the operator it replaced. */
+        AgentEnrollmentApproval: {
+            /** @description The host's own identifier for this request. */
+            requestId: string;
+            /** @description What the organization calls the host; trimmed, 1 to 100 characters. */
+            hostName: string;
+            /**
+             * Format: date-time
+             * @description When the approval stops being spendable; within the next 24 hours.
+             */
+            expiresAt: string;
+            /** @description SHA-256 of the bootstrap secret the host keeps. */
+            secretSha256: string;
+            /** @description SHA-256 of the supervisor key's SubjectPublicKeyInfo DER. */
+            supervisorKeySha256: string;
+            /** @description SHA-256 of the agent key's SubjectPublicKeyInfo DER. */
+            agentKeySha256: string;
+            replaces?: components["schemas"]["AgentEnrollmentReplacement"];
+        };
+        /** @description The assignment a replacement replaces, exactly as it stands when approved. */
+        AgentEnrollmentReplacement: {
+            agentGrn: string;
+            /** @description The supervisor holding the agent now. */
+            assigneeGrn: string;
+            epoch: number;
+        };
+        AgentEnrollment: {
+            /** Format: uuid */
+            id: string;
+            agentGrn: string;
+            supervisorGrn: string;
+            hostName: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /** @description Whether the host has enrolled with it. */
+            spent: boolean;
+        };
+        /** @description What holds an agent, at the epoch that binding is on: an operator, or the supervisor of a standalone host (ADR-0082). Every assignment raises the epoch and fences the assignee it replaced. */
         AgentAssignment: {
             /** @example grn:acme:default:operator:field-one */
-            operatorGrn: string;
+            assigneeGrn: string;
+            /**
+             * @description The assignee when it is an operator, and absent when it is a supervisor; it never names a supervisor.
+             * @example grn:acme:default:operator:field-one
+             */
+            operatorGrn?: string;
             epoch: number;
             /**
              * Format: date-time
@@ -2562,6 +2665,101 @@ export interface operations {
                 };
                 content?: never;
             };
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    approveAgentEnrollment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentEnrollmentApproval"];
+            };
+        };
+        responses: {
+            /** @description The approval this `requestId` already recorded. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentEnrollment"];
+                };
+            };
+            /** @description Approval recorded. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentEnrollment"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    withdrawAgentEnrollment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description Approval identifier. */
+                enrollment: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Approval withdrawn. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+            409: components["responses"]["Error"];
+        };
+    };
+    revokeAgentSupervisor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description Supervisor identifier (the last GRN segment). */
+                supervisor: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Supervisor revoked. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];

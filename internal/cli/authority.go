@@ -100,5 +100,5 @@ func (p agentPlacements) CurrentAssignment(ctx context.Context, g grn.GRN) (oper
 	if err != nil {
 		return operator.Assignment{}, err
 	}
-	return operator.Assignment{Operator: a.Operator(), Epoch: strconv.Itoa(a.Epoch())}, nil
+	return operator.Assignment{Assignee: a.Assignee(), Epoch: strconv.Itoa(a.Epoch())}, nil
 }

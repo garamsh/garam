@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/oapi-codegen/runtime"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // Defines values for AgentProvisioningState.
@@ -188,7 +189,7 @@ func (e Role) Valid() bool {
 
 // Agent An agent an operator provisioned outside garam. Provisioning state and runtime state are separate facts reported by different parties, and neither substitutes for the other. `assignment` is absent while no operator holds the agent, and `updatedAt` is when a state report last landed — either party's report moves it.
 type Agent struct {
-	// Assignment The operator holding an agent, at the epoch that binding is on. Every assignment raises the epoch and fences the operator it replaced.
+	// Assignment What holds an agent, at the epoch that binding is on: an operator, or the supervisor of a standalone host (ADR-0082). Every assignment raises the epoch and fences the assignee it replaced.
 	Assignment *AgentAssignment `json:"assignment,omitempty"`
 	CreatedAt  time.Time        `json:"createdAt"`
 	Grn        string           `json:"grn"`
@@ -202,10 +203,13 @@ type Agent struct {
 	UpdatedAt    time.Time         `json:"updatedAt"`
 }
 
-// AgentAssignment The operator holding an agent, at the epoch that binding is on. Every assignment raises the epoch and fences the operator it replaced.
+// AgentAssignment What holds an agent, at the epoch that binding is on: an operator, or the supervisor of a standalone host (ADR-0082). Every assignment raises the epoch and fences the assignee it replaced.
 type AgentAssignment struct {
+	AssigneeGrn string `json:"assigneeGrn"`
 	Epoch       int    `json:"epoch"`
-	OperatorGrn string `json:"operatorGrn"`
+
+	// OperatorGrn The assignee when it is an operator, and absent when it is a supervisor; it never names a supervisor.
+	OperatorGrn *string `json:"operatorGrn,omitempty"`
 
 	// Since When the current binding was written.
 	Since time.Time `json:"since"`
@@ -244,6 +248,51 @@ type AgentDefinitionCreate struct {
 type AgentDefinitionPatch struct {
 	// Name What the organization calls an agent or a template: at most 100 characters once surrounding space is trimmed, and at least one. It identifies nothing — two may share one — so a consumer that must tell them apart reads the GRN beside it (ADR-0075).
 	Name AgentName `json:"name"`
+}
+
+// AgentEnrollment defines model for AgentEnrollment.
+type AgentEnrollment struct {
+	AgentGrn  string             `json:"agentGrn"`
+	ExpiresAt time.Time          `json:"expiresAt"`
+	HostName  string             `json:"hostName"`
+	Id        openapi_types.UUID `json:"id"`
+
+	// Spent Whether the host has enrolled with it.
+	Spent         bool   `json:"spent"`
+	SupervisorGrn string `json:"supervisorGrn"`
+}
+
+// AgentEnrollmentApproval defines model for AgentEnrollmentApproval.
+type AgentEnrollmentApproval struct {
+	// AgentKeySha256 SHA-256 of the agent key's SubjectPublicKeyInfo DER.
+	AgentKeySha256 string `json:"agentKeySha256"`
+
+	// ExpiresAt When the approval stops being spendable; within the next 24 hours.
+	ExpiresAt time.Time `json:"expiresAt"`
+
+	// HostName What the organization calls the host; trimmed, 1 to 100 characters.
+	HostName string `json:"hostName"`
+
+	// Replaces The assignment a replacement replaces, exactly as it stands when approved.
+	Replaces *AgentEnrollmentReplacement `json:"replaces,omitempty"`
+
+	// RequestId The host's own identifier for this request.
+	RequestId string `json:"requestId"`
+
+	// SecretSha256 SHA-256 of the bootstrap secret the host keeps.
+	SecretSha256 string `json:"secretSha256"`
+
+	// SupervisorKeySha256 SHA-256 of the supervisor key's SubjectPublicKeyInfo DER.
+	SupervisorKeySha256 string `json:"supervisorKeySha256"`
+}
+
+// AgentEnrollmentReplacement The assignment a replacement replaces, exactly as it stands when approved.
+type AgentEnrollmentReplacement struct {
+	AgentGrn string `json:"agentGrn"`
+
+	// AssigneeGrn The supervisor holding the agent now.
+	AssigneeGrn string `json:"assigneeGrn"`
+	Epoch       int    `json:"epoch"`
 }
 
 // AgentName What the organization calls an agent or a template: at most 100 characters once surrounding space is trimmed, and at least one. It identifies nothing — two may share one — so a consumer that must tell them apart reads the GRN beside it (ADR-0075).
@@ -808,6 +857,9 @@ type DefineAgentJSONRequestBody = AgentDefinitionCreate
 // RenameAgentDefinitionJSONRequestBody defines body for RenameAgentDefinition for application/json ContentType.
 type RenameAgentDefinitionJSONRequestBody = AgentDefinitionPatch
 
+// ApproveAgentEnrollmentJSONRequestBody defines body for ApproveAgentEnrollment for application/json ContentType.
+type ApproveAgentEnrollmentJSONRequestBody = AgentEnrollmentApproval
+
 // CreateAgentTemplateJSONRequestBody defines body for CreateAgentTemplate for application/json ContentType.
 type CreateAgentTemplateJSONRequestBody = AgentTemplateWrite
 
@@ -915,6 +967,15 @@ type ServerInterface interface {
 	// RenameAgentDefinition Rename a defined agent. Requires the `member` role.
 	// (PATCH /orgs/{org}/agent-definitions/{agent})
 	RenameAgentDefinition(w http.ResponseWriter, r *http.Request, org Org, agentSlug AgentSlug)
+	// ApproveAgentEnrollment Approve a standalone host's enrollment. Requires current `agent:enroll`.
+	// (POST /orgs/{org}/agent-enrollments)
+	ApproveAgentEnrollment(w http.ResponseWriter, r *http.Request, org Org)
+	// WithdrawAgentEnrollment Withdraw an unspent standalone approval. Requires current `agent:enroll`.
+	// (DELETE /orgs/{org}/agent-enrollments/{enrollment})
+	WithdrawAgentEnrollment(w http.ResponseWriter, r *http.Request, org Org, enrollmentID openapi_types.UUID)
+	// RevokeAgentSupervisor Revoke a standalone host's supervisor. Requires current `agent:enroll`.
+	// (DELETE /orgs/{org}/agent-supervisors/{supervisor})
+	RevokeAgentSupervisor(w http.ResponseWriter, r *http.Request, org Org, supervisorSlug string)
 	// ListAgentTemplates List an organization's agent templates. Requires the `member` role.
 	// (GET /orgs/{org}/agent-templates)
 	ListAgentTemplates(w http.ResponseWriter, r *http.Request, org Org)
@@ -1504,6 +1565,102 @@ func (siw *ServerInterfaceWrapper) RenameAgentDefinition(w http.ResponseWriter, 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RenameAgentDefinition(w, r, org, agentSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ApproveAgentEnrollment operation middleware
+func (siw *ServerInterfaceWrapper) ApproveAgentEnrollment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ApproveAgentEnrollment(w, r, org)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// WithdrawAgentEnrollment operation middleware
+func (siw *ServerInterfaceWrapper) WithdrawAgentEnrollment(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "enrollment" -------------
+	var enrollmentID openapi_types.UUID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "enrollment", r.PathValue("enrollment"), &enrollmentID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "enrollment", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.WithdrawAgentEnrollment(w, r, org, enrollmentID)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RevokeAgentSupervisor operation middleware
+func (siw *ServerInterfaceWrapper) RevokeAgentSupervisor(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "supervisor" -------------
+	var supervisorSlug string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "supervisor", r.PathValue("supervisor"), &supervisorSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "supervisor", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevokeAgentSupervisor(w, r, org, supervisorSlug)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3507,6 +3664,9 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/agent-templates/{template}", wrapper.DeleteAgentTemplate)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agent-templates/{template}", wrapper.GetAgentTemplate)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/agent-templates/{template}", wrapper.UpdateAgentTemplate)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/agent-enrollments", wrapper.ApproveAgentEnrollment)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/agent-enrollments/{enrollment}", wrapper.WithdrawAgentEnrollment)
+	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/agent-supervisors/{supervisor}", wrapper.RevokeAgentSupervisor)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/operators", wrapper.ListOperators)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/operators", wrapper.RegisterOperator)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/operators/{operator}", wrapper.DeleteOperator)

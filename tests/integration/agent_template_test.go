@@ -159,7 +159,7 @@ func TestAgentDefinition_RenameMovesOnlyTheName(t *testing.T) {
 	assignment, err := s.GetAssignment(ctx, d.Agent())
 	require.NoError(t, err)
 	assert.Equal(t, claim.Epoch(), assignment.Epoch(), "the claim's binding is where it was")
-	assert.Equal(t, d.Operator(), assignment.Operator())
+	assert.Equal(t, d.Operator(), assignment.Assignee())
 
 	_, err = s.RenameDefinition(ctx, scopedGRN("acme", agent.ServiceType, "0000000000000000"), "Ghost")
 	assert.ErrorIs(t, err, agent.ErrDefinitionNotFound)

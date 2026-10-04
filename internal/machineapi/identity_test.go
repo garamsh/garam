@@ -173,11 +173,14 @@ func fillPath(t *testing.T, path string, values map[string]string) string {
 	}
 }
 
-// enrollmentRoute is the one operation reached without a certificate
-// (ADR-0064). It is named here so that what a reader checks is the
-// exemption rather than the routes that are not exempt, which are
-// whatever is left.
-const enrollmentRoute = http.MethodPost + " /enrollment"
+// enrollmentRoute and standaloneEnrollmentRoute are the operations
+// reached without a certificate (ADR-0064, ADR-0082). They are named
+// here so that what a reader checks is the exemption rather than the
+// routes that are not exempt, which are whatever is left.
+const (
+	enrollmentRoute           = http.MethodPost + " /enrollment"
+	standaloneEnrollmentRoute = http.MethodPost + " /agent-enrollments"
+)
 
 // TestServer_EnrollmentIsTheOnlyRouteAnUncertifiedCallerReaches is the
 // control on the one above: the same client that enrols is refused
@@ -209,6 +212,16 @@ func TestServer_EnrollmentIsTheOnlyRouteAnUncertifiedCallerReaches(t *testing.T)
 	status, _ := send(t, client, enrol.method, url+enrol.path,
 		`{"token":"a-token","certificateRequestPem":"a request"}`)
 	require.Equal(t, http.StatusCreated, status)
+
+	// The standalone enrollment is reached too, and refuses on its own
+	// credential, the bootstrap secret, rather than on the missing
+	// certificate.
+	standalone, ok := routes[standaloneEnrollmentRoute]
+	require.True(t, ok, "the exemption names no operation the specification declares")
+	delete(routes, standaloneEnrollmentRoute)
+	status, body := send(t, client, standalone.method, url+standalone.path, "")
+	assert.Equal(t, http.StatusUnauthorized, status)
+	assert.Contains(t, body, "standalone bootstrap")
 
 	// No body is sent, because a handler that reads one before it reads
 	// the identity has already done work for a caller it has not

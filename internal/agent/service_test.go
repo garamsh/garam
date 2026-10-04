@@ -86,7 +86,7 @@ func (s *memoryStore) Assign(_ context.Context, agentGRN, operatorGRN grn.GRN) (
 	if prior, held := s.assignments[agentGRN]; held {
 		epoch = prior.epoch + 1
 	}
-	assignment := &Assignment{agentGRN: agentGRN, operatorGRN: operatorGRN, epoch: epoch}
+	assignment := &Assignment{agentGRN: agentGRN, assigneeGRN: operatorGRN, epoch: epoch}
 	s.assignments[agentGRN] = assignment
 	return assignment, nil
 }
@@ -148,7 +148,7 @@ func (s *memoryStore) Claim(_ context.Context, agentGRN, operatorGRN grn.GRN) (*
 		return nil, err
 	}
 	s.agents[agentGRN] = a
-	assignment := &Assignment{agentGRN: agentGRN, operatorGRN: operatorGRN, epoch: 1}
+	assignment := &Assignment{agentGRN: agentGRN, assigneeGRN: operatorGRN, epoch: 1}
 	s.assignments[agentGRN] = assignment
 	return assignment, nil
 }
@@ -213,7 +213,7 @@ func TestService_CreateAssignsTheAgentToTheCallingOperator(t *testing.T) {
 
 	assignment, err := svc.Create(ctx, operator)
 	require.NoError(t, err)
-	assert.Equal(t, operator, assignment.Operator())
+	assert.Equal(t, operator, assignment.Assignee())
 	assert.Equal(t, 1, assignment.Epoch())
 
 	created := assignment.Agent()
@@ -499,7 +499,7 @@ func TestService_DefinitionsAnswersThoseNamingTheCaller(t *testing.T) {
 	require.Contains(t, byAgent, claimed.Agent())
 	claim := byAgent[claimed.Agent()].Claim()
 	require.NotNil(t, claim, "a claimed definition carries the claim")
-	assert.Equal(t, caller, claim.Operator())
+	assert.Equal(t, caller, claim.Assignee())
 	assert.Equal(t, 1, claim.Epoch())
 
 	_, err = svc.Definitions(ctx, grn.New("acme", grn.DefaultProject, ServiceType, "deadbeefdeadbeef"))
@@ -530,7 +530,7 @@ func TestService_ClaimAdmitsTheOperatorToTheCertificateRoute(t *testing.T) {
 	assignment, err := svc.Claim(ctx, caller, d.Agent())
 	require.NoError(t, err)
 	assert.Equal(t, d.Agent(), assignment.Agent())
-	assert.Equal(t, caller, assignment.Operator())
+	assert.Equal(t, caller, assignment.Assignee())
 	assert.Equal(t, 1, assignment.Epoch())
 
 	// The claim is where the agent comes to exist: nothing reported it,

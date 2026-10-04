@@ -87,7 +87,9 @@ func TestAgentRead_MemberReadsWhereOthersAreRefused(t *testing.T) {
 	assert.Equal(t, apigen.AgentProvisioningStatePending, got.ProvisioningState)
 	assert.Equal(t, apigen.Unknown, got.RuntimeState)
 	require.NotNil(t, got.Assignment)
-	assert.Equal(t, operator.String(), got.Assignment.OperatorGrn)
+	assert.Equal(t, operator.String(), got.Assignment.AssigneeGrn)
+	require.NotNil(t, got.Assignment.OperatorGrn, "an operator assignee is still named on the legacy field")
+	assert.Equal(t, operator.String(), *got.Assignment.OperatorGrn)
 	assert.Equal(t, 2, got.Assignment.Epoch, "the current epoch, not the one it replaced")
 
 	// A member of another org is refused the action it is permitted.

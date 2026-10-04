@@ -52,11 +52,19 @@ func (s *Store) Activate(ctx context.Context, req agent.ActivationRequest) (*age
 		if exec.LatestActivationID != optionalUUID((*uuid.UUID)(req.Replaces)) {
 			return agent.ErrActivationStale
 		}
-		// Fenced with no activation ever recorded is an agent a managed
-		// creation made: its first generation starts on a reference,
-		// and a later one may restart without (ADR-0078).
-		if req.OperationRef == nil && exec.Mode == string(agent.ModeFenced) && !exec.LatestActivationID.Valid {
-			return agent.ErrActivationIntentRequired
+		// A managed creation's first generation starts on a reference,
+		// and a later one may restart without (ADR-0078). A standalone
+		// agent's first rests on the administrator's approval that
+		// registered its supervisor, which the authority checked
+		// (ADR-0082).
+		if req.OperationRef == nil && !exec.LatestActivationID.Valid {
+			managed, err := q.IsManagedCreation(ctx, req.Agent.String())
+			if err != nil {
+				return storageError(err, "read managed creation", nil, nil)
+			}
+			if managed {
+				return agent.ErrActivationIntentRequired
+			}
 		}
 		row, err := q.InsertActivation(ctx, db.InsertActivationParams{
 			ID:                   pgUUID(uuid.New()),

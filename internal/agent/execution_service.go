@@ -160,10 +160,13 @@ func NewExecutionService(store Store, executions ExecutionStore, authorizer Life
 }
 
 // authorize reads the agent's current assignee and the caller's fresh
-// authority over it.
+// authority over it. A hosted operator holds lifecycle authority by
+// its grant and a supervisor by its registration (ADR-0082); every
+// other caller, an agent's own execution credential included, holds
+// none.
 func (s *executionService) authorize(ctx context.Context, caller, agentGRN grn.GRN, op LifecycleOperation) (*Assignment, Grant, error) {
-	if err := operates(caller); err != nil {
-		return nil, Grant{}, err
+	if caller.ServiceType != ServiceTypeOperator && caller.ServiceType != ServiceTypeSupervisor {
+		return nil, Grant{}, ErrNotALifecycleAuthority
 	}
 	assignment, err := s.store.GetAssignment(ctx, agentGRN)
 	if err != nil {
@@ -172,7 +175,7 @@ func (s *executionService) authorize(ctx context.Context, caller, agentGRN grn.G
 		}
 		return nil, Grant{}, err
 	}
-	grant, err := s.authorizer.Authorize(ctx, caller, agentGRN, assignment.Operator(), op)
+	grant, err := s.authorizer.Authorize(ctx, caller, agentGRN, assignment.Assignee(), op)
 	if err != nil {
 		return nil, Grant{}, err
 	}
@@ -206,7 +209,7 @@ func (s *executionService) Activate(ctx context.Context, caller grn.GRN, in Acti
 		Audience:     caller,
 		GrantID:      grant.ID,
 		OperationRef: in.OperationRef,
-		Authority:    Lifecycle{Assignee: assignment.Operator(), GrantExpiresAt: grant.ExpiresAt},
+		Authority:    Lifecycle{Assignee: assignment.Assignee(), GrantExpiresAt: grant.ExpiresAt},
 		Credential:   credential,
 		TokenHash:    token.Hash(),
 	})
@@ -254,7 +257,7 @@ func (b *OperationBinding) covers(caller, agentGRN grn.GRN, assignment *Assignme
 	return b.Org == orgGRNOf(agentGRN) &&
 		b.Audience == caller &&
 		b.Target == agentGRN &&
-		b.Assignee == assignment.Operator() &&
+		b.Assignee == assignment.Assignee() &&
 		b.Epoch == assignment.Epoch()
 }
 
@@ -263,7 +266,7 @@ func (s *executionService) Deactivate(ctx context.Context, caller, agentGRN grn.
 	if err != nil {
 		return err
 	}
-	_, err = s.executions.Deactivate(ctx, agentGRN, id, Lifecycle{Assignee: assignment.Operator(), GrantExpiresAt: grant.ExpiresAt})
+	_, err = s.executions.Deactivate(ctx, agentGRN, id, Lifecycle{Assignee: assignment.Assignee(), GrantExpiresAt: grant.ExpiresAt})
 	return err
 }
 
@@ -284,7 +287,7 @@ func (s *executionService) Introspect(ctx context.Context, caller, agentGRN grn.
 	}
 	// The authority was read for the assignee before; an answer about
 	// another one would not be the one it authorized.
-	if snapshot.Assignee == nil || *snapshot.Assignee != assignment.Operator() {
+	if snapshot.Assignee == nil || *snapshot.Assignee != assignment.Assignee() {
 		return nil, ErrNotAssigned
 	}
 	out := &Introspection{
@@ -343,7 +346,7 @@ func (s *executionService) Recover(ctx context.Context, caller grn.GRN, in Recov
 		Agent:          in.Agent,
 		RequestID:      in.RequestID,
 		Epoch:          in.Epoch,
-		Authority:      Lifecycle{Assignee: assignment.Operator(), GrantExpiresAt: grant.ExpiresAt},
+		Authority:      Lifecycle{Assignee: assignment.Assignee(), GrantExpiresAt: grant.ExpiresAt},
 		TokenExpiresAt: b.ExpiresAt,
 		OperationRef:   b.Ref,
 		BodySHA256:     b.BodySHA256,

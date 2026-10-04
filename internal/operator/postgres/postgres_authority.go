@@ -23,7 +23,7 @@ var _ operator.AuthorityStore = (*Store)(nil)
 func (s *Store) MintAuthority(ctx context.Context, b operator.Binding, tokenHash string, expiresAt, now time.Time) (operator.OperationRef, error) {
 	var assignee, epoch pgtype.Text
 	if b.Assignment != nil {
-		assignee = pgtype.Text{String: b.Assignment.Operator.String(), Valid: true}
+		assignee = pgtype.Text{String: b.Assignment.Assignee.String(), Valid: true}
 		epoch = pgtype.Text{String: b.Assignment.Epoch, Valid: true}
 	}
 	ref, err := s.q.MintOperationAuthority(ctx, db.MintOperationAuthorityParams{
@@ -90,7 +90,7 @@ func bindingFromRow(row db.OperationAuthority) (operator.Binding, error) {
 		if err != nil {
 			return operator.Binding{}, errorx.Wrap(err, "stored authority assignee", errorx.KindInternal)
 		}
-		b.Assignment = &operator.Assignment{Operator: assignee, Epoch: row.AssignmentEpoch.String}
+		b.Assignment = &operator.Assignment{Assignee: assignee, Epoch: row.AssignmentEpoch.String}
 	}
 	return b, nil
 }

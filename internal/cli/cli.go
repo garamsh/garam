@@ -101,7 +101,7 @@ func NewRootCommand() *cobra.Command {
 		SilenceErrors: true,
 	}
 	root.AddCommand(newServeCommand(), newMigrateCommand(), newProbeCommand(),
-		newIssueCertificateCommand(), newAdapterCommand())
+		newIssueCertificateCommand(), newAdapterCommand(), newStandaloneCommand())
 	silenceUsageOnRun(root)
 	return root
 }

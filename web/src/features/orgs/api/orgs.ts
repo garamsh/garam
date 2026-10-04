@@ -159,7 +159,8 @@ export const AgentParser = parserFor<Agent>()(
     runtimeState: z.enum(["unknown", "connected", "disconnected"]),
     assignment: z
       .object({
-        operatorGrn: GrnParser,
+        assigneeGrn: GrnParser,
+        operatorGrn: GrnParser.optional(),
         epoch: z.number(),
         since: z.string(),
       })

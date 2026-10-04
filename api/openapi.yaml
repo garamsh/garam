@@ -1132,6 +1132,133 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
+  /orgs/{org}/agent-enrollments:
+    post:
+      operationId: approveAgentEnrollment
+      tags: [agent]
+      summary: Approve a standalone host's enrollment. Requires current `agent:enroll`.
+      description: >-
+        Approves what a standalone host prepared before asking: the
+        SHA-256 of a bootstrap secret it keeps, the fingerprints of the
+        two public keys it generated — its supervisor's and its
+        agent's — and the request identifier it chose (ADR-0082). garam
+        mints the supervisor's GRN and, for a new agent, the agent's,
+        and stores the hash alone, so the host already holds what
+        spending the approval needs and nothing is shown once.
+
+        A replacement names an existing agent, the supervisor holding
+        it and the epoch it holds it at; it stands a new supervisor up
+        for the same GRN and moves the agent to a new credential
+        lineage when spent, and only from exactly that assignment.
+        Authorization is decided from current membership, roles, groups
+        and persisted policies, on the organization for a new agent and
+        on the agent for a replacement; an explicit Deny wins.
+
+        Repeating a `requestId` with the same request answers the same
+        approval with 200, spent or not, while it is neither withdrawn
+        nor expired; any other request under it is refused with 409,
+        and a withdrawn or expired one is never revived.
+      parameters:
+        - $ref: '#/components/parameters/org'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentEnrollmentApproval'
+      responses:
+        '200':
+          description: The approval this `requestId` already recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentEnrollment'
+        '201':
+          description: Approval recorded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentEnrollment'
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/agent-enrollments/{enrollment}:
+    delete:
+      operationId: withdrawAgentEnrollment
+      tags: [agent]
+      summary: Withdraw an unspent standalone approval. Requires current `agent:enroll`.
+      description: >-
+        Withdraws an approval no host has spent. Spending it afterwards
+        is refused as an unknown bootstrap would be, and a withdrawal
+        and a spending of one approval never both take effect. A
+        withdrawn one answers 204 again; a spent one is refused with
+        409, because what it registered is ended by
+        `revokeAgentSupervisor`.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - name: enrollment
+          in: path
+          required: true
+          description: Approval identifier.
+          x-go-name: EnrollmentID
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Approval withdrawn.
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
+  /orgs/{org}/agent-supervisors/{supervisor}:
+    delete:
+      operationId: revokeAgentSupervisor
+      tags: [agent]
+      summary: Revoke a standalone host's supervisor. Requires current `agent:enroll`.
+      description: >-
+        Ends the supervisor's registration, the agent's current
+        activation and every unspent approval for that agent, in one
+        transaction under the agent's execution lock (ADR-0082). The
+        supervisor's certificate stops authenticating from its next
+        connection and its open ones refuse every lifecycle request;
+        the agent's protected writes are refused from its next request,
+        because no activation admits them. The agent, its GRN and the
+        memory its host keeps are untouched, and only a new approval
+        stands a supervisor up for it again. Authorization is decided
+        on the agent. A supervisor the organization holds no current
+        registration of answers 404.
+      parameters:
+        - $ref: '#/components/parameters/org'
+        - name: supervisor
+          in: path
+          required: true
+          description: Supervisor identifier (the last GRN segment).
+          x-go-name: SupervisorSlug
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Supervisor revoked.
+        '400':
+          $ref: '#/components/responses/Error'
+        '401':
+          $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '404':
+          $ref: '#/components/responses/Error'
   /orgs/{org}/operators:
     post:
       operationId: registerOperator
@@ -2562,16 +2689,84 @@ components:
         it, so each names what the agent last said rather than what is
         true now.
       enum: [unknown, connected, disconnected]
+    AgentEnrollmentApproval:
+      type: object
+      required: [requestId, hostName, expiresAt, secretSha256, supervisorKeySha256, agentKeySha256]
+      properties:
+        requestId:
+          type: string
+          pattern: '^[A-Za-z0-9._~-]{1,128}$'
+          description: The host's own identifier for this request.
+        hostName:
+          type: string
+          description: What the organization calls the host; trimmed, 1 to 100 characters.
+        expiresAt:
+          type: string
+          format: date-time
+          description: When the approval stops being spendable; within the next 24 hours.
+        secretSha256:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          description: SHA-256 of the bootstrap secret the host keeps.
+        supervisorKeySha256:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          description: SHA-256 of the supervisor key's SubjectPublicKeyInfo DER.
+        agentKeySha256:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+          description: SHA-256 of the agent key's SubjectPublicKeyInfo DER.
+        replaces:
+          $ref: '#/components/schemas/AgentEnrollmentReplacement'
+    AgentEnrollmentReplacement:
+      type: object
+      description: The assignment a replacement replaces, exactly as it stands when approved.
+      required: [agentGrn, assigneeGrn, epoch]
+      properties:
+        agentGrn:
+          type: string
+        assigneeGrn:
+          type: string
+          description: The supervisor holding the agent now.
+        epoch:
+          type: integer
+          minimum: 1
+    AgentEnrollment:
+      type: object
+      required: [id, agentGrn, supervisorGrn, hostName, expiresAt, spent]
+      properties:
+        id:
+          type: string
+          format: uuid
+        agentGrn:
+          type: string
+        supervisorGrn:
+          type: string
+        hostName:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+        spent:
+          type: boolean
+          description: Whether the host has enrolled with it.
     AgentAssignment:
       type: object
       description: >-
-        The operator holding an agent, at the epoch that binding is on.
-        Every assignment raises the epoch and fences the operator it
+        What holds an agent, at the epoch that binding is on: an
+        operator, or the supervisor of a standalone host (ADR-0082).
+        Every assignment raises the epoch and fences the assignee it
         replaced.
-      required: [operatorGrn, epoch, since]
+      required: [assigneeGrn, epoch, since]
       properties:
+        assigneeGrn:
+          type: string
+          example: grn:acme:default:operator:field-one
         operatorGrn:
           type: string
+          description: >-
+            The assignee when it is an operator, and absent when it is
+            a supervisor; it never names a supervisor.
           example: grn:acme:default:operator:field-one
         epoch:
           type: integer

@@ -35,9 +35,9 @@ func TestRecoverAuthority_IsHandedOverOnlyUnderAGrantListingIt(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, operator.OperationAgentRecover, in.Operation)
 	require.NotNil(t, in.Assignment)
-	assert.Equal(t, operator.Assignment{Operator: f.controller, Epoch: "1"}, *in.Assignment)
+	assert.Equal(t, operator.Assignment{Assignee: f.controller, Epoch: "1"}, *in.Assignment)
 
-	f.placements.move(f.agent, operator.Assignment{Operator: f.controller, Epoch: "2"})
+	f.placements.move(f.agent, operator.Assignment{Assignee: f.controller, Epoch: "2"})
 	_, err = f.service.Reference(ctx, f.hosted, minted.Ref)
 	assert.ErrorIs(t, err, operator.ErrAuthorityRevoked, "a recovery is bound to where the agent ran")
 }

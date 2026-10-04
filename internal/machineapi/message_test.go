@@ -205,6 +205,8 @@ func send(t *testing.T, client *http.Client, method, url, body string) (int, str
 		version = agent.ExecutionContractVersion
 	case enrollmentPath(req.URL.Path):
 		version = agent.EnrollmentContractVersion
+	case standalonePath(req.URL.Path):
+		version = agent.StandaloneContractVersion
 	}
 	req.Header.Set(operator.ContractVersionHeader, version)
 	resp, err := client.Do(req)
@@ -230,6 +232,12 @@ func executionPath(path string) bool {
 // routes, which serve managed-enrollment.v1.
 func enrollmentPath(path string) bool {
 	return strings.HasSuffix(path, "/managed-agents") || strings.HasSuffix(path, "/initial-certificate")
+}
+
+// standalonePath reports whether path is a standalone enrollment
+// route, whose contract is standalone-enrollment.v1.
+func standalonePath(path string) bool {
+	return path == "/agent-enrollments" || path == "/supervisors/self/certificate"
 }
 
 // TestServer_PostsUnderTheSenderTheCertificateNames covers what reaches

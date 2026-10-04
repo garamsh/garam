@@ -43,36 +43,36 @@ func (q *Queries) AdmitExecution(ctx context.Context, arg AdmitExecutionParams) 
 }
 
 const assignAgent = `-- name: AssignAgent :one
-INSERT INTO agent_assignments (agent_grn, operator_grn, epoch, created_at, updated_at)
+INSERT INTO agent_assignments (agent_grn, assignee_grn, epoch, created_at, updated_at)
 VALUES ($1, $2, 1, $3, $4)
 ON CONFLICT (agent_grn) DO UPDATE SET
-    operator_grn = excluded.operator_grn,
+    assignee_grn = excluded.assignee_grn,
     epoch        = agent_assignments.epoch + 1,
     updated_at   = excluded.updated_at
-RETURNING agent_grn, operator_grn, epoch, created_at, updated_at
+RETURNING agent_grn, assignee_grn, epoch, created_at, updated_at
 `
 
 type AssignAgentParams struct {
 	AgentGrn    string
-	OperatorGrn string
+	AssigneeGrn string
 	CreatedAt   pgtype.Timestamptz
 	UpdatedAt   pgtype.Timestamptz
 }
 
 // AssignAgent writes onto the assignment the agent already has, so a
-// reassignment moves the operator and raises the epoch that fenced the
+// reassignment moves the assignee and raises the epoch that fenced the
 // one it replaces.
 func (q *Queries) AssignAgent(ctx context.Context, arg AssignAgentParams) (AgentAssignment, error) {
 	row := q.db.QueryRow(ctx, assignAgent,
 		arg.AgentGrn,
-		arg.OperatorGrn,
+		arg.AssigneeGrn,
 		arg.CreatedAt,
 		arg.UpdatedAt,
 	)
 	var i AgentAssignment
 	err := row.Scan(
 		&i.AgentGrn,
-		&i.OperatorGrn,
+		&i.AssigneeGrn,
 		&i.Epoch,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -261,7 +261,7 @@ func (q *Queries) GetAgent(ctx context.Context, grn string) (Agent, error) {
 }
 
 const getAgentAssignment = `-- name: GetAgentAssignment :one
-SELECT agent_grn, operator_grn, epoch, created_at, updated_at FROM agent_assignments WHERE agent_grn = $1
+SELECT agent_grn, assignee_grn, epoch, created_at, updated_at FROM agent_assignments WHERE agent_grn = $1
 `
 
 func (q *Queries) GetAgentAssignment(ctx context.Context, agentGrn string) (AgentAssignment, error) {
@@ -269,7 +269,7 @@ func (q *Queries) GetAgentAssignment(ctx context.Context, agentGrn string) (Agen
 	var i AgentAssignment
 	err := row.Scan(
 		&i.AgentGrn,
-		&i.OperatorGrn,
+		&i.AssigneeGrn,
 		&i.Epoch,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -328,7 +328,7 @@ func (q *Queries) GetAgentTemplate(ctx context.Context, grn string) (AgentTempla
 }
 
 const listAgentAssignmentsByOrg = `-- name: ListAgentAssignmentsByOrg :many
-SELECT a.agent_grn, a.operator_grn, a.epoch, a.created_at, a.updated_at FROM agent_assignments a
+SELECT a.agent_grn, a.assignee_grn, a.epoch, a.created_at, a.updated_at FROM agent_assignments a
 JOIN agents g ON g.grn = a.agent_grn
 WHERE g.org_grn = $1
 ORDER BY a.agent_grn
@@ -345,7 +345,7 @@ func (q *Queries) ListAgentAssignmentsByOrg(ctx context.Context, orgGrn string) 
 		var i AgentAssignment
 		if err := rows.Scan(
 			&i.AgentGrn,
-			&i.OperatorGrn,
+			&i.AssigneeGrn,
 			&i.Epoch,
 			&i.CreatedAt,
 			&i.UpdatedAt,

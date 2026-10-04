@@ -136,6 +136,7 @@ func serveAPI(cmd *cobra.Command) error {
 		api.NewGRPCPolicyManager(conn),
 		authorityPresence{store: capg.New(pool)},
 		NewAuthorityService(pool, conn),
+		NewStandaloneService(pool, conn),
 		api.Config{
 			SessionTTL:   ttl,
 			CookieSecure: cookieSecure,

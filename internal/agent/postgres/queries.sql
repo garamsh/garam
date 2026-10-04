@@ -11,7 +11,7 @@ WHERE e.agent_grn = $1;
 -- ShareAssignment is taken after LockExecution, never before: the lock
 -- order is agent_executions, then agent_assignments.
 -- name: ShareAssignment :one
-SELECT operator_grn, epoch FROM agent_assignments WHERE agent_grn = $1 FOR SHARE;
+SELECT assignee_grn, epoch FROM agent_assignments WHERE agent_grn = $1 FOR SHARE;
 
 -- Now is read after the lock it follows was granted, so an expiry is
 -- judged at that instant and not when the transaction began.
@@ -22,7 +22,7 @@ SELECT clock_timestamp()::timestamptz;
 -- assignment, the execution and whether the certificate is current.
 -- name: Introspect :one
 SELECT e.mode, e.activation_id, a.generation AS current_generation,
-       s.operator_grn AS assignee, s.epoch AS epoch,
+       s.assignee_grn AS assignee, s.epoch AS epoch,
        agent_credential_current(
            e.agent_grn, sqlc.arg('serial'),
            sqlc.arg('not_before')::timestamptz, sqlc.arg('not_after')::timestamptz
@@ -130,7 +130,7 @@ INSERT INTO agent_executions (agent_grn, mode, lineage, updated_at)
 VALUES ($1, 'fenced', $2, $3);
 
 -- name: AssignFirst :one
-INSERT INTO agent_assignments (agent_grn, operator_grn, epoch, created_at, updated_at)
+INSERT INTO agent_assignments (agent_grn, assignee_grn, epoch, created_at, updated_at)
 VALUES ($1, $2, 1, $3, $3)
 RETURNING epoch;
 
@@ -139,6 +139,9 @@ INSERT INTO agent_managed_creations (
     agent_grn, audience_grn, controller_grn, request_id, operation_ref,
     epoch, lineage, created_at
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8);
+
+-- name: IsManagedCreation :one
+SELECT EXISTS (SELECT 1 FROM agent_managed_creations WHERE agent_grn = $1);
 
 -- name: GetManagedCreation :one
 SELECT * FROM agent_managed_creations WHERE agent_grn = $1;
@@ -154,3 +157,102 @@ INSERT INTO agent_initial_certificates (
     agent_grn, request_id, operation_ref, epoch, request_sha256, lineage,
     certificate_pem, issuer_pem, server_root_pem, not_after, created_at
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);
+
+-- Standalone approvals and supervisors (ADR-0082).
+
+-- name: InsertEnrollment :execrows
+INSERT INTO agent_enrollments (
+    id, org_grn, agent_grn, supervisor_grn, host_name, supervisor_key_sha256,
+    agent_key_sha256, expected_assignee_grn, expected_epoch, request_id,
+    approved_by, secret_sha256, expires_at, created_at
+) VALUES (
+    sqlc.arg('id'), sqlc.arg('org_grn'), sqlc.arg('agent_grn'), sqlc.arg('supervisor_grn'),
+    sqlc.arg('host_name'), sqlc.arg('supervisor_key_sha256'), sqlc.arg('agent_key_sha256'),
+    sqlc.narg('expected_assignee_grn'), sqlc.narg('expected_epoch'), sqlc.arg('request_id'),
+    sqlc.arg('approved_by'), sqlc.arg('secret_sha256'), sqlc.arg('expires_at'), sqlc.arg('created_at')
+)
+ON CONFLICT (org_grn, request_id) DO NOTHING;
+
+-- name: GetEnrollmentByRequest :one
+SELECT * FROM agent_enrollments WHERE org_grn = $1 AND request_id = $2;
+
+-- name: GetEnrollment :one
+SELECT * FROM agent_enrollments WHERE org_grn = $1 AND id = $2;
+
+-- name: GetEnrollmentBySecret :one
+SELECT * FROM agent_enrollments WHERE secret_sha256 = $1;
+
+-- name: GetEnrollmentByID :one
+SELECT * FROM agent_enrollments WHERE id = $1;
+
+-- LockEnrollment is what withdrawing and spending an approval
+-- serialize on, taken after the execution row where both are taken.
+-- name: LockEnrollment :one
+SELECT * FROM agent_enrollments WHERE id = $1 FOR UPDATE;
+
+-- name: WithdrawEnrollment :exec
+UPDATE agent_enrollments SET withdrawn_at = $2
+WHERE id = $1 AND withdrawn_at IS NULL AND consumed_at IS NULL;
+
+-- name: WithdrawPendingEnrollments :exec
+UPDATE agent_enrollments SET withdrawn_at = $2
+WHERE agent_grn = $1 AND withdrawn_at IS NULL AND consumed_at IS NULL;
+
+-- name: SpendEnrollment :exec
+UPDATE agent_enrollments SET
+    consumed_at                = sqlc.arg('consumed_at'),
+    request_sha256             = sqlc.arg('request_sha256'),
+    epoch                      = sqlc.arg('epoch'),
+    lineage                    = sqlc.arg('lineage'),
+    supervisor_certificate_pem = sqlc.arg('supervisor_certificate_pem'),
+    agent_certificate_pem      = sqlc.arg('agent_certificate_pem'),
+    issuer_pem                 = sqlc.arg('issuer_pem'),
+    server_root_pem            = sqlc.arg('server_root_pem')
+WHERE id = sqlc.arg('id');
+
+-- ReassignSupervisor moves a supervisor-held agent to its replacement
+-- only from the assignment the approval expected; any other matches
+-- no row.
+-- name: ReassignSupervisor :one
+UPDATE agent_assignments SET
+    assignee_grn = sqlc.arg('assignee_grn'),
+    epoch        = epoch + 1,
+    updated_at   = sqlc.arg('updated_at')
+WHERE agent_grn = sqlc.arg('agent_grn')
+  AND assignee_grn = sqlc.arg('expected_assignee_grn')
+  AND epoch = sqlc.arg('expected_epoch')
+RETURNING epoch;
+
+-- name: InsertSupervisor :exec
+INSERT INTO agent_supervisors (grn, agent_grn, enrollment_id, host_name, serial, not_after, registered_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7);
+
+-- name: GetSupervisor :one
+SELECT * FROM agent_supervisors WHERE grn = $1;
+
+-- name: GetSupervisorByEnrollment :one
+SELECT * FROM agent_supervisors WHERE enrollment_id = $1;
+
+-- name: LockSupervisor :one
+SELECT * FROM agent_supervisors WHERE grn = $1 FOR UPDATE;
+
+-- name: EndCurrentSupervisor :exec
+UPDATE agent_supervisors SET ended_at = $2 WHERE agent_grn = $1 AND ended_at IS NULL;
+
+-- name: EndSupervisor :exec
+UPDATE agent_supervisors SET ended_at = $2 WHERE grn = $1 AND ended_at IS NULL;
+
+-- name: MoveSupervisorCertificate :exec
+UPDATE agent_supervisors SET serial = $2, not_after = $3 WHERE grn = $1;
+
+-- name: GetSupervisorRenewal :one
+SELECT r.*, (s.ended_at IS NULL AND s.serial = r.serial)::boolean AS current
+FROM agent_supervisor_renewals r
+JOIN agent_supervisors s ON s.grn = r.supervisor_grn
+WHERE r.supervisor_grn = $1 AND r.predecessor_serial = $2;
+
+-- name: InsertSupervisorRenewal :exec
+INSERT INTO agent_supervisor_renewals (
+    supervisor_grn, predecessor_serial, request_id, request_sha256, serial,
+    certificate_pem, issuer_pem, server_root_pem, not_after, created_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);

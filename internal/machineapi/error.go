@@ -59,6 +59,8 @@ func BindingError(w http.ResponseWriter, r *http.Request, err error) {
 			executionContract(w, "")
 		case enrollmentRoute(r):
 			enrollmentContract(w, "")
+		case standaloneRoute(r):
+			standaloneContract(w, "")
 		default:
 			contract(w, "")
 		}
@@ -83,6 +85,13 @@ func enrollmentRoute(r *http.Request) bool {
 	p := r.URL.Path
 	return (strings.HasPrefix(p, "/operators/") && strings.HasSuffix(p, "/managed-agents")) ||
 		(strings.HasPrefix(p, "/agents/") && strings.HasSuffix(p, "/initial-certificate"))
+}
+
+// standaloneRoute reports whether r is one of the standalone
+// enrollment routes, whose contract is standalone-enrollment.v1.
+func standaloneRoute(r *http.Request) bool {
+	p := r.URL.Path
+	return p == "/agent-enrollments" || p == "/supervisors/self/certificate"
 }
 
 // causeRecorder is the request-logging middleware's response writer,

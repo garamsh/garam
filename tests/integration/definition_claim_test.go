@@ -179,7 +179,7 @@ func TestAgentStore_ConcurrentClaimsSerializeToOneWinner(t *testing.T) {
 
 	assignment, err := s.GetAssignment(ctx, d.Agent())
 	require.NoError(t, err)
-	assert.Equal(t, operator, assignment.Operator())
+	assert.Equal(t, operator, assignment.Assignee())
 	assert.Equal(t, 1, assignment.Epoch(), "the one claim wrote the first epoch")
 }
 
@@ -231,7 +231,7 @@ func TestDefinitionSurface_AClaimReportsTheAgentsCurrentAssignment(t *testing.T)
 
 	reassigned, err := store.Assign(ctx, d.Agent(), twoGRN)
 	require.NoError(t, err)
-	require.Equal(t, twoGRN, reassigned.Operator())
+	require.Equal(t, twoGRN, reassigned.Assignee())
 	require.Equal(t, 2, reassigned.Epoch())
 
 	// The definition names the operator that no longer holds the agent,

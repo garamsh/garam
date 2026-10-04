@@ -182,7 +182,7 @@ func (s *executionService) IssueInitialCertificate(ctx context.Context, caller g
 		Epoch:         in.Epoch,
 		OperationRef:  in.OperationRef,
 		RequestSHA256: sha256.Sum256(in.CertificateRequestPEM),
-		Authority:     Lifecycle{Assignee: assignment.Operator(), GrantExpiresAt: grant.ExpiresAt},
+		Authority:     Lifecycle{Assignee: assignment.Assignee(), GrantExpiresAt: grant.ExpiresAt},
 		Lineage:       creation.Lineage,
 	}
 	// A recorded issuance is answered, or refused, from the record
@@ -221,5 +221,5 @@ func (s *executionService) creationOf(ctx context.Context, b *OperationBinding, 
 // placedOn reports whether the agent is still where its creation put
 // it: the same controller at the same epoch.
 func (c *ManagedCreation) placedOn(assignment *Assignment) bool {
-	return assignment.Operator() == c.Controller && assignment.Epoch() == c.Epoch
+	return assignment.Assignee() == c.Controller && assignment.Epoch() == c.Epoch
 }

@@ -127,7 +127,7 @@ type announcement struct {
 // truncated: a shortened turn would put words in the agent's mouth,
 // where a refused event is a gap, and a gap is what this stream is
 // already permitted (ADR-0022).
-func (r *PostgresRelay) Announce(ctx context.Context, agent grn.GRN, e Event) error {
+func (r *PostgresRelay) Announce(ctx context.Context, agent grn.GRN, e Event, fence *Fence) error {
 	payload, err := json.Marshal(announcement{Agent: agent.String(), Kind: e.Kind(), Body: e.Body()})
 	if err != nil {
 		return errorx.Wrap(err, "watch relay: encode", errorx.KindInvalidArgument)
@@ -135,8 +135,37 @@ func (r *PostgresRelay) Announce(ctx context.Context, agent grn.GRN, e Event) er
 	if len(payload) > maxAnnouncementBytes {
 		return errorx.New(errorx.KindInvalidArgument, "watch relay: event is larger than one announcement carries")
 	}
-	if _, err := r.pool.Exec(ctx, "SELECT pg_notify($1, $2)", TurnEventChannel, string(payload)); err != nil {
+	if fence == nil {
+		if _, err := r.pool.Exec(ctx, "SELECT pg_notify($1, $2)", TurnEventChannel, string(payload)); err != nil {
+			return errorx.Wrap(err, "watch relay: announce", errorx.KindUnavailable)
+		}
+		return nil
+	}
+	// A notification is sent when its transaction commits, so the one
+	// the fence admits commits before a replacement does or not at all.
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return errorx.Wrap(err, "watch relay: begin", errorx.KindUnavailable)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	answer, err := db.New(tx).AdmitExecution(ctx, db.AdmitExecutionParams{
+		AgentGrn:  fence.Agent.String(),
+		TokenHash: fence.TokenHash,
+		Serial:    fence.Serial,
+		NotBefore: pgtype.Timestamptz{Time: fence.NotBefore, Valid: true},
+		NotAfter:  pgtype.Timestamptz{Time: fence.NotAfter, Valid: true},
+	})
+	if err != nil {
+		return errorx.Wrap(err, "watch relay: admit", errorx.KindUnavailable)
+	}
+	if err := refusalOf(answer); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, "SELECT pg_notify($1, $2)", TurnEventChannel, string(payload)); err != nil {
 		return errorx.Wrap(err, "watch relay: announce", errorx.KindUnavailable)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return errorx.Wrap(err, "watch relay: commit", errorx.KindUnavailable)
 	}
 	return nil
 }
@@ -211,4 +240,25 @@ func (r *PostgresRelay) receive(ctx context.Context, deliver func(agent grn.GRN,
 // as.
 func interval(d time.Duration) pgtype.Interval {
 	return pgtype.Interval{Microseconds: d.Microseconds(), Valid: true}
+}
+
+// refusalOf reads the answer of agent_execution_admit, the agent
+// execution fence's declared surface (ADR-0080): nil for an admitted
+// write, and the refusal it names otherwise.
+func refusalOf(answer string) error {
+	switch answer {
+	case "admitted":
+		return nil
+	case "unknown_agent":
+		return errorx.New(errorx.KindNotFound, "agent not found")
+	case "not_cut_over":
+		return errorx.New(errorx.KindFailedPrecondition, "agent has not cut over to activated execution")
+	case "token_required":
+		return errorx.New(errorx.KindUnauthenticated, "execution token required")
+	case "token_stale":
+		return errorx.New(errorx.KindPermissionDenied, "execution token is not current")
+	case "credential_fenced":
+		return errorx.New(errorx.KindFailedPrecondition, "credential is not current")
+	}
+	return errorx.New(errorx.KindInternal, "unknown admission answer")
 }

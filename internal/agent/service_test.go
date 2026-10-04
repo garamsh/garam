@@ -29,6 +29,8 @@ type memoryStore struct {
 	agents      map[grn.GRN]*Agent
 	assignments map[grn.GRN]*Assignment
 	definitions map[grn.GRN]*Definition
+	// fenced holds the agents whose execution has been activated.
+	fenced map[grn.GRN]bool
 }
 
 func newMemoryStore() *memoryStore {
@@ -36,7 +38,18 @@ func newMemoryStore() *memoryStore {
 		agents:      map[grn.GRN]*Agent{},
 		assignments: map[grn.GRN]*Assignment{},
 		definitions: map[grn.GRN]*Definition{},
+		fenced:      map[grn.GRN]bool{},
 	}
+}
+
+func (s *memoryStore) ExecutionMode(_ context.Context, agentGRN grn.GRN) (Mode, error) {
+	if _, held := s.agents[agentGRN]; !held {
+		return "", ErrAgentNotFound
+	}
+	if s.fenced[agentGRN] {
+		return ModeFenced, nil
+	}
+	return ModeLegacy, nil
 }
 
 func (s *memoryStore) Create(_ context.Context, a *Agent) error {
@@ -149,7 +162,7 @@ func (s *memoryStore) ReportProvisioningState(_ context.Context, agentGRN grn.GR
 	return a, nil
 }
 
-func (s *memoryStore) ReportRuntimeState(_ context.Context, agentGRN grn.GRN, epoch int, state RuntimeState) (*Agent, error) {
+func (s *memoryStore) ReportRuntimeState(_ context.Context, agentGRN grn.GRN, epoch int, state RuntimeState, _ Fencing) (*Agent, error) {
 	a, err := s.reportable(agentGRN, epoch)
 	if err != nil {
 		return nil, err
@@ -294,15 +307,13 @@ func TestService_IssueCertificateAnswersOnlyForAnAgentTheOperatorHolds(t *testin
 		"nothing was signed for a caller that was refused")
 }
 
-// TestService_IssueCertificateRenewsTheAgentsOwnCertificate is the
-// renewal ADR-0040 opens: an agent asks for its own certificate over
-// the connection its current one authenticated, and gets one. It is
-// bounded by the identity the caller already holds, which the two
-// refusals beside it are what show — the same call from an agent of
-// the same organization, and from the operator's own GRN, both of
-// which the route would answer if the caller were not compared to the
-// subject at all.
-func TestService_IssueCertificateRenewsTheAgentsOwnCertificate(t *testing.T) {
+// TestService_IssueCertificateIsAnOperatorsRouteForALegacyAgent holds
+// the two callers this route no longer answers: an agent asking for
+// its own certificate, which renews inside its execution fence
+// instead (ADR-0078), and the assigned operator once the agent's
+// execution is fenced. The same operator's request for the same agent
+// before the cutover is the control.
+func TestService_IssueCertificateIsAnOperatorsRouteForALegacyAgent(t *testing.T) {
 	ctx := context.Background()
 	store := newMemoryStore()
 	issuer := &signer{}
@@ -311,18 +322,16 @@ func TestService_IssueCertificateRenewsTheAgentsOwnCertificate(t *testing.T) {
 	operator := operatorGRN("acme", "one")
 	held, err := svc.Create(ctx, operator)
 	require.NoError(t, err)
-	sibling, err := svc.Create(ctx, operator)
-	require.NoError(t, err)
 
-	cert, err := svc.IssueCertificate(ctx, held.Agent(), held.Agent())
-	require.NoError(t, err, "an agent renewing its own certificate")
-	assert.Equal(t, []byte(held.Agent().String()), cert.CertificatePEM)
+	_, err = svc.IssueCertificate(ctx, held.Agent(), held.Agent())
+	assert.ErrorIs(t, err, ErrNotAnOperator, "an agent renewing its own certificate here")
 
-	_, err = svc.IssueCertificate(ctx, sibling.Agent(), held.Agent())
-	assert.ErrorIs(t, err, ErrNotAnOperator, "an agent of the same organization")
+	_, err = svc.IssueCertificate(ctx, operator, held.Agent())
+	require.NoError(t, err, "control: the assigned operator of a legacy agent")
 
-	_, err = svc.IssueCertificate(ctx, operator, operator)
-	assert.ErrorIs(t, err, ErrNotAssigned, "an operator is not an agent renewing itself")
+	store.fenced[held.Agent()] = true
+	_, err = svc.IssueCertificate(ctx, operator, held.Agent())
+	assert.ErrorIs(t, err, ErrIssuedByLifecycle, "the assigned operator once the agent is fenced")
 
 	assert.Equal(t, []grn.GRN{held.Agent()}, issuer.signed,
 		"nothing was signed for a caller that was refused")
@@ -406,7 +415,7 @@ func TestService_ReportRuntimeStateIsAcceptedOnlyFromTheAgentItself(t *testing.T
 	sibling, err := svc.Create(ctx, operator)
 	require.NoError(t, err)
 
-	require.NoError(t, svc.ReportRuntimeState(ctx, held.Agent(), held.Agent(), 1, RuntimeStateConnected))
+	require.NoError(t, svc.ReportRuntimeState(ctx, held.Agent(), held.Agent(), 1, RuntimeStateConnected, Fencing{Agent: held.Agent()}))
 	stored, err := store.Get(ctx, held.Agent())
 	require.NoError(t, err)
 	assert.Equal(t, RuntimeStateConnected, stored.RuntimeState())
@@ -424,7 +433,7 @@ func TestService_ReportRuntimeStateIsAcceptedOnlyFromTheAgentItself(t *testing.T
 	}
 	for name, tt := range refused {
 		t.Run(name, func(t *testing.T) {
-			assert.ErrorIs(t, svc.ReportRuntimeState(ctx, tt.caller, tt.agent, 1, RuntimeStateDisconnected), tt.err)
+			assert.ErrorIs(t, svc.ReportRuntimeState(ctx, tt.caller, tt.agent, 1, RuntimeStateDisconnected, Fencing{Agent: tt.agent}), tt.err)
 		})
 	}
 	stored, err = store.Get(ctx, held.Agent())
@@ -437,8 +446,8 @@ func TestService_ReportRuntimeStateIsAcceptedOnlyFromTheAgentItself(t *testing.T
 	reassigned, err := store.Assign(ctx, held.Agent(), operator)
 	require.NoError(t, err)
 	require.Equal(t, 2, reassigned.Epoch())
-	assert.ErrorIs(t, svc.ReportRuntimeState(ctx, held.Agent(), held.Agent(), 1, RuntimeStateDisconnected), ErrStaleEpoch)
-	require.NoError(t, svc.ReportRuntimeState(ctx, held.Agent(), held.Agent(), 2, RuntimeStateDisconnected),
+	assert.ErrorIs(t, svc.ReportRuntimeState(ctx, held.Agent(), held.Agent(), 1, RuntimeStateDisconnected, Fencing{Agent: held.Agent()}), ErrStaleEpoch)
+	require.NoError(t, svc.ReportRuntimeState(ctx, held.Agent(), held.Agent(), 2, RuntimeStateDisconnected, Fencing{Agent: held.Agent()}),
 		"the same call at the current epoch")
 	stored, err = store.Get(ctx, held.Agent())
 	require.NoError(t, err)

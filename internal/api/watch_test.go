@@ -36,7 +36,7 @@ func (f *fixture) forward(t *testing.T, agent grn.GRN, kind, body string) {
 	t.Helper()
 	e, err := watch.NewEvent(kind, body)
 	require.NoError(t, err)
-	require.NoError(t, f.relay.Announce(context.Background(), agent, e))
+	require.NoError(t, f.relay.Announce(context.Background(), agent, e, nil))
 }
 
 // open holds a request open the way a browser watching an agent does,

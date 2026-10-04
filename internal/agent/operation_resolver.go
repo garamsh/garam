@@ -35,16 +35,17 @@ type OperationBinding struct {
 }
 
 // OperationResolver reads a user's delegated operation authority
-// fresh: the grant it rests on is current and its actor still holds
-// the authority it was minted under. A binding that no longer holds is
+// fresh, for the audience it was handed to: the grant it rests on is
+// current and its actor still holds the authority it was minted under.
+// Another audience's is unknown. A binding that no longer holds is
 // KindPermissionDenied, one unknown is KindNotFound, and authority it
 // could not read is KindUnavailable.
 type OperationResolver interface {
 	// ResolveReference answers the durable reference a pending
 	// revision's activation carries. It checks no handoff expiry: the
 	// reference outlives the handoff that minted it.
-	ResolveReference(ctx context.Context, ref string) (*OperationBinding, error)
+	ResolveReference(ctx context.Context, audience grn.GRN, ref string) (*OperationBinding, error)
 	// ResolveHandoff answers the short-lived handoff a request
 	// presents.
-	ResolveHandoff(ctx context.Context, authority string) (*OperationBinding, error)
+	ResolveHandoff(ctx context.Context, audience grn.GRN, authority string) (*OperationBinding, error)
 }

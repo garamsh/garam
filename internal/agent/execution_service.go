@@ -47,25 +47,27 @@ type ExecutionService interface {
 	Deactivate(ctx context.Context, caller, agentGRN grn.GRN, id ActivationID) error
 	// Introspect answers whether a presented certificate and
 	// generation are current for the agent.
-	Introspect(ctx context.Context, caller, agentGRN grn.GRN, certificatePEM []byte, generation *Generation) (*Introspection, error)
+	Introspect(ctx context.Context, caller, agentGRN grn.GRN, leaf *x509.Certificate, generation *Generation) (*Introspection, error)
 	// Recover moves the agent to a new credential lineage under a
 	// fresh handoff, answering the certificate signed over the
 	// request's key.
 	Recover(ctx context.Context, caller grn.GRN, in RecoveryInput) (*Recovery, error)
 	// Renew issues the calling agent's next certificate inside the
 	// lineage the presented one is current in.
-	Renew(ctx context.Context, caller grn.GRN, token *Token, presented Credential) (*Certificate, error)
+	Renew(ctx context.Context, caller grn.GRN, fence Fencing) (*Certificate, error)
 }
 
 // ActivationInput is an activation request as received.
 type ActivationInput struct {
-	Agent          grn.GRN
-	RequestID      RequestID
-	Epoch          int
-	Generation     Generation
-	Replaces       *ActivationID
-	OperationRef   *string
-	CertificatePEM []byte
+	Agent        grn.GRN
+	RequestID    RequestID
+	Epoch        int
+	Generation   Generation
+	Replaces     *ActivationID
+	OperationRef *string
+	// Certificate is the agent's leaf as the caller received it over
+	// mTLS, parsed and not yet proven.
+	Certificate *x509.Certificate
 }
 
 // ActivationResult is an activation and the token that admits it.
@@ -159,9 +161,6 @@ func (s *executionService) authorize(ctx context.Context, caller, agentGRN grn.G
 }
 
 func (s *executionService) Activate(ctx context.Context, caller grn.GRN, in ActivationInput) (*ActivationResult, error) {
-	if len(in.CertificatePEM) > MaxCertificatePEM {
-		return nil, errorx.New(errorx.KindInvalidArgument, "certificate exceeds its bound")
-	}
 	assignment, grant, err := s.authorize(ctx, caller, in.Agent, OperationActivate)
 	if err != nil {
 		return nil, err
@@ -171,7 +170,7 @@ func (s *executionService) Activate(ctx context.Context, caller grn.GRN, in Acti
 			return nil, err
 		}
 	}
-	credential, err := s.leaves.VerifyLeaf(ctx, in.Agent, in.CertificatePEM)
+	credential, err := s.leaves.VerifyLeaf(ctx, in.Agent, in.Certificate)
 	if err != nil {
 		return nil, err
 	}
@@ -203,7 +202,7 @@ func (s *executionService) Activate(ctx context.Context, caller grn.GRN, in Acti
 // assignment the agent is on now. A creation's reference is refused
 // until the agent it created is bound to it.
 func (s *executionService) checkReference(ctx context.Context, caller, agentGRN grn.GRN, assignment *Assignment, ref string) error {
-	b, err := s.operations.ResolveReference(ctx, ref)
+	b, err := s.operations.ResolveReference(ctx, caller, ref)
 	if err != nil {
 		return err
 	}
@@ -239,15 +238,12 @@ func (s *executionService) Deactivate(ctx context.Context, caller, agentGRN grn.
 	return err
 }
 
-func (s *executionService) Introspect(ctx context.Context, caller, agentGRN grn.GRN, certificatePEM []byte, generation *Generation) (*Introspection, error) {
-	if len(certificatePEM) > MaxCertificatePEM {
-		return nil, errorx.New(errorx.KindInvalidArgument, "certificate exceeds its bound")
-	}
+func (s *executionService) Introspect(ctx context.Context, caller, agentGRN grn.GRN, leaf *x509.Certificate, generation *Generation) (*Introspection, error) {
 	assignment, _, err := s.authorize(ctx, caller, agentGRN, OperationActivate)
 	if err != nil {
 		return nil, err
 	}
-	credential, err := s.leaves.VerifyLeaf(ctx, agentGRN, certificatePEM)
+	credential, err := s.leaves.VerifyLeaf(ctx, agentGRN, leaf)
 	if err != nil {
 		return nil, err
 	}
@@ -304,7 +300,7 @@ func (s *executionService) Recover(ctx context.Context, caller grn.GRN, in Recov
 	if err != nil {
 		return nil, err
 	}
-	b, err := s.operations.ResolveHandoff(ctx, in.Authority)
+	b, err := s.operations.ResolveHandoff(ctx, caller, in.Authority)
 	if err != nil {
 		return nil, err
 	}
@@ -339,13 +335,16 @@ func (s *executionService) Recover(ctx context.Context, caller grn.GRN, in Recov
 	return s.executions.Recover(ctx, req)
 }
 
-func (s *executionService) Renew(ctx context.Context, caller grn.GRN, token *Token, presented Credential) (*Certificate, error) {
+func (s *executionService) Renew(ctx context.Context, caller grn.GRN, fence Fencing) (*Certificate, error) {
 	if caller.ServiceType != ServiceType {
 		return nil, ErrNotTheAgent
 	}
+	if fence.Agent != caller {
+		return nil, errorx.New(errorx.KindInternal, "agent: the fence names another agent")
+	}
 	// Checked before signing so a fenced certificate costs no
 	// signature; RecordRenewal is what decides.
-	current, err := s.executions.CredentialCurrent(ctx, caller, presented)
+	current, err := s.executions.CredentialCurrent(ctx, caller, fence.Credential)
 	if err != nil {
 		return nil, err
 	}
@@ -360,12 +359,7 @@ func (s *executionService) Renew(ctx context.Context, caller grn.GRN, token *Tok
 	if err != nil {
 		return nil, err
 	}
-	var hash *TokenHash
-	if token != nil {
-		h := token.Hash()
-		hash = &h
-	}
-	if err := s.executions.RecordRenewal(ctx, caller, hash, presented, successor); err != nil {
+	if err := s.executions.RecordRenewal(ctx, fence, successor); err != nil {
 		return nil, err
 	}
 	return certificate, nil

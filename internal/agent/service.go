@@ -27,9 +27,10 @@ type Service interface {
 	// assigns it to that operator.
 	Create(ctx context.Context, operator grn.GRN) (*Assignment, error)
 	// IssueCertificate returns the certificate the named agent
-	// authenticates with, for the agent itself or for an agent assigned
-	// to a calling operator at the current epoch, and refuses every
-	// other caller.
+	// authenticates with, for an agent assigned to a calling operator at
+	// the current epoch whose execution is still legacy, and refuses
+	// every other caller. An agent renews its own through
+	// ExecutionService.Renew, inside its execution fence (ADR-0078).
 	IssueCertificate(ctx context.Context, caller, agentGRN grn.GRN) (*Certificate, error)
 	// Definitions returns the definitions naming operator, each with
 	// its claim state. The definition's operator field is the scoping,
@@ -52,7 +53,7 @@ type Service interface {
 	// identity it authenticated as and for no other, so no assignment
 	// is read: the connection is what bounds it, and the epoch is what
 	// fences it.
-	ReportRuntimeState(ctx context.Context, caller, agentGRN grn.GRN, epoch int, state RuntimeState) error
+	ReportRuntimeState(ctx context.Context, caller, agentGRN grn.GRN, epoch int, state RuntimeState, fence Fencing) error
 }
 
 type service struct {
@@ -90,20 +91,21 @@ func (s *service) Create(ctx context.Context, operator grn.GRN) (*Assignment, er
 }
 
 func (s *service) IssueCertificate(ctx context.Context, caller, agentGRN grn.GRN) (*Certificate, error) {
-	// An agent renews its own certificate over the connection that
-	// certificate authenticated, which is what keeps a lifetime short
-	// enough to be the revocation ADR-0014 leaves (ADR-0040). It grants
-	// nothing: the caller holds that identity already, and once the
-	// certificate has expired there is no connection to renew over and
-	// the operator route below is the only way back.
-	if caller.ServiceType == ServiceType && caller == agentGRN {
-		return s.issuer.Issue(ctx, agentGRN)
-	}
 	if err := operates(caller); err != nil {
 		return nil, err
 	}
 	if err := s.holds(ctx, caller, agentGRN); err != nil {
 		return nil, err
+	}
+	// Once an agent's execution is fenced, a certificate outside its
+	// lineage would reach nothing, and one inside it is issued only by
+	// renewal or recovery (ADR-0078).
+	mode, err := s.store.ExecutionMode(ctx, agentGRN)
+	if err != nil {
+		return nil, err
+	}
+	if mode == ModeFenced {
+		return nil, ErrIssuedByLifecycle
 	}
 	return s.issuer.Issue(ctx, agentGRN)
 }
@@ -157,11 +159,14 @@ func (s *service) ReportProvisioningState(ctx context.Context, operator, agentGR
 	return err
 }
 
-func (s *service) ReportRuntimeState(ctx context.Context, caller, agentGRN grn.GRN, epoch int, state RuntimeState) error {
+func (s *service) ReportRuntimeState(ctx context.Context, caller, agentGRN grn.GRN, epoch int, state RuntimeState, fence Fencing) error {
 	if caller != agentGRN {
 		return ErrNotTheAgent
 	}
-	_, err := s.store.ReportRuntimeState(ctx, agentGRN, epoch, state)
+	if fence.Agent != agentGRN {
+		return errorx.New(errorx.KindInternal, "agent: the fence names another agent")
+	}
+	_, err := s.store.ReportRuntimeState(ctx, agentGRN, epoch, state, fence)
 	return err
 }
 

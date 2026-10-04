@@ -237,18 +237,15 @@ func (s *Store) GetRecovery(ctx context.Context, agentGRN grn.GRN, requestID age
 	return &agent.Recovery{Lineage: agent.Lineage(row.Lineage.Bytes), CertificatePEM: row.CertificatePem}, nil
 }
 
-func (s *Store) RecordRenewal(ctx context.Context, agentGRN grn.GRN, token *agent.TokenHash, presented, successor agent.Credential) error {
+func (s *Store) RecordRenewal(ctx context.Context, fence agent.Fencing, successor agent.Credential) error {
+	agentGRN := fence.Agent
 	return s.inTx(ctx, "record renewal", func(q *db.Queries) error {
-		var hash []byte
-		if token != nil {
-			hash = token[:]
-		}
 		answer, err := q.Admit(ctx, db.AdmitParams{
 			AgentGrn:  agentGRN.String(),
-			TokenHash: hash,
-			Serial:    presented.Serial,
-			NotBefore: stamp(presented.NotBefore),
-			NotAfter:  stamp(presented.NotAfter),
+			TokenHash: fence.TokenBytes(),
+			Serial:    fence.Credential.Serial,
+			NotBefore: stamp(fence.Credential.NotBefore),
+			NotAfter:  stamp(fence.Credential.NotAfter),
 		})
 		if err != nil {
 			return storageError(err, "admit", nil, nil)
@@ -257,7 +254,7 @@ func (s *Store) RecordRenewal(ctx context.Context, agentGRN grn.GRN, token *agen
 			return err
 		}
 		// The admit above holds the row FOR SHARE, so the lineage read
-		// here is the one presented was admitted in.
+		// here is the one the fenced certificate was admitted in.
 		exec, err := q.GetExecution(ctx, agentGRN.String())
 		if err != nil {
 			return storageError(err, "get execution", agent.ErrAgentNotFound, nil)

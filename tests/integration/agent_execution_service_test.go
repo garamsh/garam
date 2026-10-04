@@ -43,30 +43,35 @@ type boundOperations struct {
 	refs, handoffs map[string]*agent.OperationBinding
 }
 
-func (o *boundOperations) ResolveReference(_ context.Context, ref string) (*agent.OperationBinding, error) {
+func (o *boundOperations) ResolveReference(_ context.Context, _ grn.GRN, ref string) (*agent.OperationBinding, error) {
 	if b, ok := o.refs[ref]; ok {
 		return b, nil
 	}
 	return nil, errorx.New(errorx.KindPermissionDenied, "reference no longer authorized")
 }
 
-func (o *boundOperations) ResolveHandoff(_ context.Context, authority string) (*agent.OperationBinding, error) {
+func (o *boundOperations) ResolveHandoff(_ context.Context, _ grn.GRN, authority string) (*agent.OperationBinding, error) {
 	if b, ok := o.handoffs[authority]; ok {
 		return b, nil
 	}
 	return nil, errorx.New(errorx.KindNotFound, "handoff unknown")
 }
 
-// namedLeaves verifies a certificate by its PEM text, standing in for
-// the chain check the CA boundary makes.
+// namedLeaves proves a certificate by its subject key ID, standing in
+// for the chain check the machine boundary makes; each name is the
+// credential that proof answers.
 type namedLeaves map[string]agent.Credential
 
-func (l namedLeaves) VerifyLeaf(_ context.Context, _ grn.GRN, certificatePEM []byte) (agent.Credential, error) {
-	if c, ok := l[string(certificatePEM)]; ok {
+func (l namedLeaves) VerifyLeaf(_ context.Context, _ grn.GRN, leaf *x509.Certificate) (agent.Credential, error) {
+	if c, ok := l[string(leaf.SubjectKeyId)]; ok {
 		return c, nil
 	}
 	return agent.Credential{}, errorx.New(errorx.KindInvalidArgument, "certificate does not verify")
 }
+
+// leafNamed is a parsed certificate standing for the one namedLeaves
+// knows by name.
+func leafNamed(name string) *x509.Certificate { return &x509.Certificate{SubjectKeyId: []byte(name)} }
 
 type countingSigner struct{ calls atomic.Int32 }
 
@@ -136,7 +141,7 @@ func expiredCredential(serial string) agent.Credential {
 func (l lifecycle) input(requestID string, gen agent.Generation, replaces *agent.ActivationID, leaf string) agent.ActivationInput {
 	return agent.ActivationInput{
 		Agent: l.agent, RequestID: agent.RequestID(requestID), Epoch: l.epochNow(),
-		Generation: gen, Replaces: replaces, CertificatePEM: []byte(leaf),
+		Generation: gen, Replaces: replaces, Certificate: leafNamed(leaf),
 	}
 }
 
@@ -184,11 +189,6 @@ func TestExecutionService_OnlyALifecycleAuthorityActivates(t *testing.T) {
 
 	_, err = l.service.Activate(ctx, l.audience, l.input("r2", generation(2), &res.Activation.ID, "forged"))
 	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), "a certificate that does not verify")
-	oversized := l.input("r2", generation(2), &res.Activation.ID, strings.Repeat("x", agent.MaxCertificatePEM+1))
-	calls := l.authorizer.calls.Load()
-	_, err = l.service.Activate(ctx, l.audience, oversized)
-	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
-	assert.Equal(t, calls, l.authorizer.calls.Load(), "an oversized certificate is refused before any authority is read")
 }
 
 func TestExecutionService_APendingRevisionNeedsAReferenceForThisAgentAndAssignment(t *testing.T) {
@@ -240,14 +240,14 @@ func TestExecutionService_IntrospectionAnswersForThePresentedCertificate(t *test
 	l := newLifecycle(t)
 	g := func(n int) *agent.Generation { v := generation(n); return &v }
 
-	in, err := l.service.Introspect(ctx, l.audience, l.agent, []byte("leaf-1"), nil)
+	in, err := l.service.Introspect(ctx, l.audience, l.agent, leafNamed("leaf-1"), nil)
 	require.NoError(t, err)
 	assert.Equal(t, agent.CredentialCurrent, in.Credential)
 	assert.Equal(t, agent.GenerationNone, in.Generation, "before any activation")
 	assert.Equal(t, agent.ModeLegacy, in.Mode)
 	assert.Equal(t, l.controller, in.Assignee)
 
-	expired, err := l.service.Introspect(ctx, l.audience, l.agent, []byte("expired"), nil)
+	expired, err := l.service.Introspect(ctx, l.audience, l.agent, leafNamed("expired"), nil)
 	require.NoError(t, err)
 	assert.Equal(t, agent.CredentialFenced, expired.Credential, "an expired leaf is fenced, not malformed")
 
@@ -262,20 +262,20 @@ func TestExecutionService_IntrospectionAnswersForThePresentedCertificate(t *test
 		{"another generation", g(2), agent.GenerationNotCurrent},
 		{"none supplied while one is active", nil, agent.GenerationNotSupplied},
 	} {
-		in, err := l.service.Introspect(ctx, l.audience, l.agent, []byte("leaf-1"), tc.supplied)
+		in, err := l.service.Introspect(ctx, l.audience, l.agent, leafNamed("leaf-1"), tc.supplied)
 		require.NoError(t, err)
 		assert.Equal(t, tc.want, in.Generation, tc.name)
 	}
 
 	require.NoError(t, l.service.Deactivate(ctx, l.audience, l.agent, res.Activation.ID))
-	after, err := l.service.Introspect(ctx, l.audience, l.agent, []byte("leaf-1"), g(1))
+	after, err := l.service.Introspect(ctx, l.audience, l.agent, leafNamed("leaf-1"), g(1))
 	require.NoError(t, err)
 	assert.Equal(t, agent.GenerationNotCurrent, after.Generation, "a deactivated generation")
-	none, err := l.service.Introspect(ctx, l.audience, l.agent, []byte("leaf-1"), nil)
+	none, err := l.service.Introspect(ctx, l.audience, l.agent, leafNamed("leaf-1"), nil)
 	require.NoError(t, err)
 	assert.Equal(t, agent.GenerationNone, none.Generation)
 
-	_, err = l.service.Introspect(ctx, l.agent, l.agent, []byte("leaf-1"), nil)
+	_, err = l.service.Introspect(ctx, l.agent, l.agent, leafNamed("leaf-1"), nil)
 	assert.ErrorIs(t, err, agent.ErrNotAnOperator)
 }
 
@@ -345,17 +345,17 @@ func TestExecutionService_RenewalIssuesOnlyInsideTheCurrentExecution(t *testing.
 	res, err := l.service.Activate(ctx, l.audience, l.input("r1", generation(1), nil, "leaf-1"))
 	require.NoError(t, err)
 
-	cert, err := l.service.Renew(ctx, l.agent, &res.Token, valid("1"))
+	cert, err := l.service.Renew(ctx, l.agent, fencing(l.agent, &res.Token, valid("1")))
 	require.NoError(t, err, "the current generation renews")
 	assert.NotEmpty(t, cert.CertificatePEM)
 
 	stale, err := agent.NewToken()
 	require.NoError(t, err)
-	_, err = l.service.Renew(ctx, l.agent, &stale, valid("1"))
+	_, err = l.service.Renew(ctx, l.agent, fencing(l.agent, &stale, valid("1")))
 	assert.ErrorIs(t, err, agent.ErrExecutionTokenStale)
-	_, err = l.service.Renew(ctx, l.agent, &res.Token, expiredCredential("1"))
+	_, err = l.service.Renew(ctx, l.agent, fencing(l.agent, &res.Token, expiredCredential("1")))
 	assert.ErrorIs(t, err, agent.ErrCredentialFenced)
-	_, err = l.service.Renew(ctx, l.audience, &res.Token, valid("1"))
+	_, err = l.service.Renew(ctx, l.audience, fencing(l.audience, &res.Token, valid("1")))
 	assert.ErrorIs(t, err, agent.ErrNotTheAgent)
 }
 
@@ -419,18 +419,18 @@ func TestExecutionService_IntrospectionNeverMixesTwoExecutions(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	during, err := service.Introspect(ctx, l.audience, l.agent, []byte("leaf-1"), &next)
+	during, err := service.Introspect(ctx, l.audience, l.agent, leafNamed("leaf-1"), &next)
 	require.NoError(t, err)
 	assert.False(t, during.Credential == agent.CredentialCurrent && during.Generation == agent.GenerationCurrent,
 		"the old certificate and the new generation were never current together: %+v", during)
 	assert.Equal(t, agent.CredentialCurrent, during.Credential, "the answer is the execution as it stood when read")
 	assert.Equal(t, agent.GenerationNotCurrent, during.Generation)
 
-	after, err := service.Introspect(ctx, l.audience, l.agent, []byte("leaf-1"), &next)
+	after, err := service.Introspect(ctx, l.audience, l.agent, leafNamed("leaf-1"), &next)
 	require.NoError(t, err)
 	assert.Equal(t, agent.CredentialFenced, after.Credential)
 	assert.Equal(t, agent.GenerationCurrent, after.Generation)
-	control, err := service.Introspect(ctx, l.audience, l.agent, []byte("leaf-2"), &next)
+	control, err := service.Introspect(ctx, l.audience, l.agent, leafNamed("leaf-2"), &next)
 	require.NoError(t, err)
 	assert.Equal(t, agent.CredentialCurrent, control.Credential, "control: the recovered certificate and the new generation are current together")
 	assert.Equal(t, agent.GenerationCurrent, control.Generation)

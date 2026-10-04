@@ -13,6 +13,10 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 )
 
+// ExecutionContractVersion names the contract the execution routes
+// serve, carried in the Garam-Contract-Version header.
+const ExecutionContractVersion = "execution-fence.v1"
+
 // Execution sentinels (ADR-0078). A refusal of a protected write names
 // which part of the fence refused it; none says which process holds
 // the agent now.
@@ -49,6 +53,19 @@ var (
 	// ErrAuthorityExpired refuses an act whose grant or handoff expired
 	// before the fence was taken, however recently it was checked.
 	ErrAuthorityExpired = errorx.New(errorx.KindPermissionDenied, "authority expired")
+	// ErrIssuedByLifecycle refuses an operator's request for the
+	// certificate of an agent whose execution is fenced: from its
+	// cutover on, its certificates come from renewal inside its
+	// lineage or from recovery (ADR-0078).
+	ErrIssuedByLifecycle = errorx.New(errorx.KindFailedPrecondition, "agent certificates are issued by renewal or recovery once its execution is fenced")
+	// ErrUnsupportedExecutionContract refuses a request carrying no
+	// contract version, or another.
+	ErrUnsupportedExecutionContract = errorx.New(errorx.KindInvalidArgument,
+		"unsupported Garam-Contract-Version: this route serves "+ExecutionContractVersion)
+	// ErrLeafNotProven refuses a forwarded certificate that does not
+	// prove the agent it is presented for: another SAN, or a chain to
+	// no authority of the agent's organization.
+	ErrLeafNotProven = errorx.New(errorx.KindInvalidArgument, "the certificate does not prove the agent it is presented for")
 	// ErrRecoveryConflict refuses a recovery request identifier reused
 	// with another body or reference, or a reference that already
 	// recovered.
@@ -168,6 +185,25 @@ type Credential struct {
 	Serial    string
 	NotBefore time.Time
 	NotAfter  time.Time
+}
+
+// Fencing is what a protected write of an agent presents to the
+// execution fence (ADR-0080): the certificate its request
+// authenticated with and the execution token it carries, if any. The
+// domain owning the write runs the fence first in its own transaction.
+type Fencing struct {
+	Agent      grn.GRN
+	Credential Credential
+	Token      *TokenHash
+}
+
+// TokenBytes is the token hash as the fence's SQL surface reads it,
+// nil where the write carries no token.
+func (f Fencing) TokenBytes() []byte {
+	if f.Token == nil {
+		return nil
+	}
+	return f.Token[:]
 }
 
 // Admission is what the fence answered a protected write.

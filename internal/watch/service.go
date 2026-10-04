@@ -52,8 +52,9 @@ type Service interface {
 	Watch(ctx context.Context, agent grn.GRN) (*Subscription, error)
 	// Publish hands one forwarded turn event to whoever is watching the
 	// agent, and to nobody when no one is. It reports that the event was
-	// announced, never that anyone saw it.
-	Publish(ctx context.Context, caller, agent grn.GRN, e Event) error
+	// announced, never that anyone saw it. fence is the caller's
+	// execution fence, which the announcement passes (ADR-0080).
+	Publish(ctx context.Context, caller, agent grn.GRN, e Event, fence *Fence) error
 	// Watchers reports how many streams garam is holding for the agent,
 	// which is what tells an adapter whether to forward anything at all.
 	Watchers(ctx context.Context, caller, agent grn.GRN) (int, error)
@@ -104,11 +105,14 @@ func (s *service) Watch(ctx context.Context, agent grn.GRN) (*Subscription, erro
 	return sub, nil
 }
 
-func (s *service) Publish(ctx context.Context, caller, agent grn.GRN, e Event) error {
+func (s *service) Publish(ctx context.Context, caller, agent grn.GRN, e Event, fence *Fence) error {
 	if caller != agent {
 		return ErrNotAgent
 	}
-	return s.relay.Announce(ctx, agent, e)
+	if fence != nil && fence.Agent != caller {
+		return errorx.New(errorx.KindInternal, "watch: the fence does not match the caller")
+	}
+	return s.relay.Announce(ctx, agent, e, fence)
 }
 
 func (s *service) Watchers(ctx context.Context, caller, agent grn.GRN) (int, error) {

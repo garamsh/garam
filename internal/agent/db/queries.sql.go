@@ -11,6 +11,37 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const admitExecution = `-- name: AdmitExecution :one
+SELECT agent_execution_admit(
+    $1, $2::bytea, $3,
+    $4::timestamptz, $5::timestamptz
+)::text
+`
+
+type AdmitExecutionParams struct {
+	AgentGrn  string
+	TokenHash []byte
+	Serial    string
+	NotBefore pgtype.Timestamptz
+	NotAfter  pgtype.Timestamptz
+}
+
+// AdmitExecution runs the agent execution fence (ADR-0080) as the
+// first statement of a protected write's transaction; the row it locks
+// is held until that transaction ends.
+func (q *Queries) AdmitExecution(ctx context.Context, arg AdmitExecutionParams) (string, error) {
+	row := q.db.QueryRow(ctx, admitExecution,
+		arg.AgentGrn,
+		arg.TokenHash,
+		arg.Serial,
+		arg.NotBefore,
+		arg.NotAfter,
+	)
+	var column_1 string
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const assignAgent = `-- name: AssignAgent :one
 INSERT INTO agent_assignments (agent_grn, operator_grn, epoch, created_at, updated_at)
 VALUES ($1, $2, 1, $3, $4)
@@ -265,6 +296,17 @@ func (q *Queries) GetAgentDefinition(ctx context.Context, agentGrn string) (Agen
 	return i, err
 }
 
+const getAgentExecutionMode = `-- name: GetAgentExecutionMode :one
+SELECT mode FROM agent_executions WHERE agent_grn = $1
+`
+
+func (q *Queries) GetAgentExecutionMode(ctx context.Context, agentGrn string) (string, error) {
+	row := q.db.QueryRow(ctx, getAgentExecutionMode, agentGrn)
+	var mode string
+	err := row.Scan(&mode)
+	return mode, err
+}
+
 const getAgentTemplate = `-- name: GetAgentTemplate :one
 SELECT grn, org_grn, name, description, agent_values, created_by, created_at, updated_at FROM agent_templates WHERE grn = $1
 `
@@ -322,7 +364,8 @@ const listAgentDefinitionsByOperator = `-- name: ListAgentDefinitionsByOperator 
 SELECT d.agent_grn, d.org_grn, d.operator_grn, d.agent_values, d.defined_by, d.created_at, d.name, a.epoch AS claim_epoch, a.created_at AS claim_created_at, a.updated_at AS claim_updated_at
 FROM agent_definitions d
 LEFT JOIN agent_assignments a ON a.agent_grn = d.agent_grn
-WHERE d.operator_grn = $1
+LEFT JOIN agent_executions e ON e.agent_grn = d.agent_grn
+WHERE d.operator_grn = $1 AND (e.mode IS NULL OR e.mode = 'legacy')
 ORDER BY d.agent_grn
 `
 
@@ -341,6 +384,9 @@ type ListAgentDefinitionsByOperatorRow struct {
 
 // The claim state is the assignment the claim wrote: an unclaimed
 // definition has none, and a claimed one binds the operator it names.
+// An agent whose execution is fenced has cut over to the Operator
+// control service, and its definition is no longer the operator's
+// source (ADR-0077), so it is not listed.
 func (q *Queries) ListAgentDefinitionsByOperator(ctx context.Context, operatorGrn string) ([]ListAgentDefinitionsByOperatorRow, error) {
 	rows, err := q.db.Query(ctx, listAgentDefinitionsByOperator, operatorGrn)
 	if err != nil {

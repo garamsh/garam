@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	machinegen "github.com/garamsh/garam/api/machine"
+	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/message"
@@ -27,7 +28,7 @@ const serviceTypeOrg = "org"
 // is stored, because the refusal is deliberate rather than a routing
 // failure.
 func (s *Server) PostMessage(w http.ResponseWriter, r *http.Request) {
-	sender, ok := caller(w, r)
+	sender, fence, ok := fenced(w, r)
 	if !ok {
 		return
 	}
@@ -47,10 +48,10 @@ func (s *Server) PostMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !admitted {
-		s.refuseCrossing(w, r, sender, recipient, submitted.IdempotencyKey)
+		s.refuseCrossing(w, r, sender, recipient, submitted.IdempotencyKey, fence)
 		return
 	}
-	stored, err := s.messages.Post(r.Context(), sender, recipient, submitted.IdempotencyKey, submitted.Body)
+	stored, err := s.messages.Post(r.Context(), sender, recipient, submitted.IdempotencyKey, submitted.Body, messageFence(fence))
 	if err != nil {
 		writeError(w, err)
 		return
@@ -67,11 +68,11 @@ func (s *Server) PostMessage(w http.ResponseWriter, r *http.Request) {
 // says garam refused, and the key derives from the sender's so a
 // retried post is answered with the refusal already stored rather than
 // piling up one per retry.
-func (s *Server) refuseCrossing(w http.ResponseWriter, r *http.Request, sender, recipient grn.GRN, key string) {
+func (s *Server) refuseCrossing(w http.ResponseWriter, r *http.Request, sender, recipient grn.GRN, key string, fence *agent.Fencing) {
 	refusal := "garam could not deliver your message to " + recipient.String() +
 		": the organizations " + sender.Organization + " and " + recipient.Organization +
 		" do not both consent to cross-organization messages"
-	stored, err := s.messages.Post(r.Context(), recipient, sender, "consent-refused:"+sender.String()+":"+key, refusal)
+	stored, err := s.messages.Post(r.Context(), recipient, sender, "consent-refused:"+sender.String()+":"+key, refusal, messageFence(fence))
 	if err != nil {
 		writeError(w, err)
 		return
@@ -171,11 +172,11 @@ func subjectOrg(sender grn.GRN) grn.GRN {
 // sent is answered as one that is not there, which is also the answer
 // for one the sweep deleted (ADR-0055).
 func (s *Server) GetMessageStatus(w http.ResponseWriter, r *http.Request, messageID machinegen.MessageId) {
-	sender, ok := caller(w, r)
+	sender, fence, ok := fenced(w, r)
 	if !ok {
 		return
 	}
-	status, err := s.messages.Status(r.Context(), sender, message.ID(messageID))
+	status, err := s.messages.Status(r.Context(), sender, message.ID(messageID), messageFence(fence))
 	if err != nil {
 		writeError(w, err)
 		return
@@ -189,11 +190,11 @@ func (s *Server) GetMessageStatus(w http.ResponseWriter, r *http.Request, messag
 // carries how many are watching the agent, which is what says whether
 // the turn's events are worth forwarding (ADR-0022).
 func (s *Server) ClaimMessage(w http.ResponseWriter, r *http.Request, agentGRN machinegen.AgentGrn) {
-	claimant, recipient, ok := parties(w, r, agentGRN)
+	claimant, recipient, fence, ok := fencedParties(w, r, agentGRN)
 	if !ok {
 		return
 	}
-	claim, err := s.messages.Claim(r.Context(), claimant, recipient)
+	claim, err := s.messages.Claim(r.Context(), claimant, recipient, messageFence(fence))
 	if errorx.IsKind(err, errorx.KindNotFound) {
 		// A poll that waited its time and found nothing is the ordinary
 		// answer rather than a refusal, so the caller has an empty
@@ -219,11 +220,11 @@ func (s *Server) ClaimMessage(w http.ResponseWriter, r *http.Request, agentGRN m
 // on and answers with the hold as it now stands, and with how many are
 // watching the agent now.
 func (s *Server) RenewClaim(w http.ResponseWriter, r *http.Request, agentGRN machinegen.AgentGrn, claimID machinegen.ClaimId) {
-	holder, recipient, ok := parties(w, r, agentGRN)
+	holder, recipient, fence, ok := fencedParties(w, r, agentGRN)
 	if !ok {
 		return
 	}
-	claim, err := s.messages.Renew(r.Context(), holder, recipient, message.ClaimID(claimID))
+	claim, err := s.messages.Renew(r.Context(), holder, recipient, message.ClaimID(claimID), messageFence(fence))
 	if err != nil {
 		writeError(w, err)
 		return
@@ -236,11 +237,11 @@ func (s *Server) RenewClaim(w http.ResponseWriter, r *http.Request, agentGRN mac
 
 // CompleteClaim reports the claimed message delivered.
 func (s *Server) CompleteClaim(w http.ResponseWriter, r *http.Request, agentGRN machinegen.AgentGrn, claimID machinegen.ClaimId) {
-	holder, recipient, ok := parties(w, r, agentGRN)
+	holder, recipient, fence, ok := fencedParties(w, r, agentGRN)
 	if !ok {
 		return
 	}
-	if err := s.messages.Complete(r.Context(), holder, recipient, message.ClaimID(claimID)); err != nil {
+	if err := s.messages.Complete(r.Context(), holder, recipient, message.ClaimID(claimID), messageFence(fence)); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -262,6 +263,21 @@ func parties(w http.ResponseWriter, r *http.Request, agentGRN machinegen.AgentGr
 		return grn.GRN{}, grn.GRN{}, false
 	}
 	return identity, recipient, true
+}
+
+// fencedParties is parties for a request that writes an agent's
+// state, with the execution fence the request presents (ADR-0080).
+func fencedParties(w http.ResponseWriter, r *http.Request, agentGRN machinegen.AgentGrn) (identity, subject grn.GRN, fence *agent.Fencing, ok bool) {
+	identity, fence, ok = fenced(w, r)
+	if !ok {
+		return grn.GRN{}, grn.GRN{}, nil, false
+	}
+	subject, err := grn.Parse(agentGRN)
+	if err != nil {
+		writeError(w, errorx.Wrap(err, "agent", errorx.KindInvalidArgument))
+		return grn.GRN{}, grn.GRN{}, nil, false
+	}
+	return identity, subject, fence, true
 }
 
 // claimBody renders a claim as the spec's Claim, with the number of

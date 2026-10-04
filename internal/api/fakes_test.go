@@ -930,7 +930,7 @@ func newFakeTurnEvents() *fakeTurnEvents {
 	return &fakeTurnEvents{ready: make(chan struct{})}
 }
 
-func (r *fakeTurnEvents) Announce(_ context.Context, agent grn.GRN, e watch.Event) error {
+func (r *fakeTurnEvents) Announce(_ context.Context, agent grn.GRN, e watch.Event, _ *watch.Fence) error {
 	r.mu.Lock()
 	deliver := r.deliver
 	r.mu.Unlock()

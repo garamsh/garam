@@ -29,3 +29,12 @@ WHERE agent_grn = sqlc.arg('agent_grn') AND expires_at > now();
 -- process that died holding a stream leaves behind.
 -- name: DeleteLapsedWatches :exec
 DELETE FROM agent_watches WHERE expires_at <= now();
+
+-- AdmitExecution runs the agent execution fence (ADR-0080) as the
+-- first statement of a protected write's transaction; the row it locks
+-- is held until that transaction ends.
+-- name: AdmitExecution :one
+SELECT agent_execution_admit(
+    sqlc.arg('agent_grn'), sqlc.narg('token_hash')::bytea, sqlc.arg('serial'),
+    sqlc.arg('not_before')::timestamptz, sqlc.arg('not_after')::timestamptz
+)::text;

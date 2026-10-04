@@ -482,7 +482,7 @@ func TestExecution_RenewalStaysInTheLineageItWasAdmittedIn(t *testing.T) {
 
 	// In the legacy cohort a renewal records nothing and any
 	// certificate of the agent stays admitted.
-	require.NoError(t, f.exec.RecordRenewal(ctx, f.agent, tokenHash(t1), valid("1"), valid("2")))
+	require.NoError(t, f.exec.RecordRenewal(ctx, fencing(f.agent, &t1, valid("1")), valid("2")))
 	assert.Equal(t, agent.AdmissionAdmitted, f.admit(t, &t1, valid("2")))
 
 	rec := f.recovery("rec-1", "ref-1", 1, valid("10"))
@@ -491,19 +491,25 @@ func TestExecution_RenewalStaysInTheLineageItWasAdmittedIn(t *testing.T) {
 	require.NoError(t, err)
 	_, t2 := f.activate(t, "r2", generation(2), &a1.ID, valid("10"))
 
-	require.NoError(t, f.exec.RecordRenewal(ctx, f.agent, tokenHash(t2), valid("10"), valid("11")))
+	require.NoError(t, f.exec.RecordRenewal(ctx, fencing(f.agent, &t2, valid("10")), valid("11")))
 	assert.Equal(t, agent.AdmissionAdmitted, f.admit(t, &t2, valid("11")), "the successor joins the lineage")
 	assert.Equal(t, agent.AdmissionAdmitted, f.admit(t, &t2, valid("10")), "the predecessor stays valid until it expires")
 	assert.Equal(t, agent.AdmissionCredentialFenced, f.admit(t, &t2, valid("12")), "control: an unrecorded serial is not")
 
-	err = f.exec.RecordRenewal(ctx, f.agent, tokenHash(t1), valid("10"), valid("13"))
+	err = f.exec.RecordRenewal(ctx, fencing(f.agent, &t1, valid("10")), valid("13"))
 	assert.ErrorIs(t, err, agent.ErrExecutionTokenStale)
 	assert.Equal(t, agent.AdmissionCredentialFenced, f.admit(t, &t2, valid("13")), "a refused renewal records nothing")
 }
 
-func tokenHash(t agent.Token) *agent.TokenHash {
-	h := t.Hash()
-	return &h
+// fencing is what a request of agentGRN presenting c and token offers
+// the execution fence.
+func fencing(agentGRN grn.GRN, token *agent.Token, c agent.Credential) agent.Fencing {
+	f := agent.Fencing{Agent: agentGRN, Credential: c}
+	if token != nil {
+		h := token.Hash()
+		f.Token = &h
+	}
+	return f
 }
 
 func TestExecution_ReassignmentEndsTheActivationAndIsOrderedAgainstWrites(t *testing.T) {
@@ -656,7 +662,7 @@ func TestExecution_NoPathHoldsALockWhileAwaitingAnotherConnection(t *testing.T) 
 	require.NoError(t, err)
 	_, _, err = exec.Activate(ctx, req)
 	require.NoError(t, err, "a retry reminting the token")
-	require.NoError(t, exec.RecordRenewal(ctx, f.agent, tokenHash(t1), valid("1"), valid("2")))
+	require.NoError(t, exec.RecordRenewal(ctx, fencing(f.agent, &t1, valid("1")), valid("2")))
 	_, err = exec.Deactivate(ctx, f.agent, a1.ID, authority(f.controller))
 	require.NoError(t, err)
 	rec := f.recovery("rec-1", "ref-1", 1, valid("3"))

@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/machineapi"
@@ -152,7 +153,7 @@ type messageService struct {
 	calls []messageCall
 }
 
-func (s *messageService) Post(_ context.Context, sender, recipient grn.GRN, key, body string) (*message.Message, error) {
+func (s *messageService) Post(_ context.Context, sender, recipient grn.GRN, key, body string, _ *message.Fence) (*message.Message, error) {
 	s.calls = append(s.calls, messageCall{method: "post", caller: sender, recipient: recipient, key: key, body: body})
 	if s.err != nil {
 		return nil, s.err
@@ -160,7 +161,7 @@ func (s *messageService) Post(_ context.Context, sender, recipient grn.GRN, key,
 	return message.New(recipient, sender, key, body)
 }
 
-func (s *messageService) Claim(_ context.Context, caller, recipient grn.GRN) (*message.Claim, error) {
+func (s *messageService) Claim(_ context.Context, caller, recipient grn.GRN, _ *message.Fence) (*message.Claim, error) {
 	s.calls = append(s.calls, messageCall{method: "claim", caller: caller, recipient: recipient})
 	if s.err != nil {
 		return nil, s.err
@@ -168,7 +169,7 @@ func (s *messageService) Claim(_ context.Context, caller, recipient grn.GRN) (*m
 	return nil, message.ErrNoMessageReady
 }
 
-func (s *messageService) Renew(_ context.Context, caller, recipient grn.GRN, id message.ClaimID) (*message.Claim, error) {
+func (s *messageService) Renew(_ context.Context, caller, recipient grn.GRN, id message.ClaimID, _ *message.Fence) (*message.Claim, error) {
 	s.calls = append(s.calls, messageCall{method: "renew", caller: caller, recipient: recipient, claim: id})
 	if s.err != nil {
 		return nil, s.err
@@ -176,12 +177,12 @@ func (s *messageService) Renew(_ context.Context, caller, recipient grn.GRN, id 
 	return nil, message.ErrStaleClaim
 }
 
-func (s *messageService) Complete(_ context.Context, caller, recipient grn.GRN, id message.ClaimID) error {
+func (s *messageService) Complete(_ context.Context, caller, recipient grn.GRN, id message.ClaimID, _ *message.Fence) error {
 	s.calls = append(s.calls, messageCall{method: "complete", caller: caller, recipient: recipient, claim: id})
 	return s.err
 }
 
-func (s *messageService) Status(_ context.Context, caller grn.GRN, id message.ID) (*message.Status, error) {
+func (s *messageService) Status(_ context.Context, caller grn.GRN, id message.ID, _ *message.Fence) (*message.Status, error) {
 	s.calls = append(s.calls, messageCall{method: "status", caller: caller, id: id})
 	if s.err != nil {
 		return nil, s.err
@@ -196,15 +197,30 @@ func send(t *testing.T, client *http.Client, method, url, body string) (int, str
 	req, err := http.NewRequest(method, url, strings.NewReader(body))
 	require.NoError(t, err)
 	req.Header.Set("Content-Type", "application/json")
-	// Every route but the contract's ignores it; on those it moves the
+	// Every route but the contracts' ignores it; on those it moves the
 	// request past the router's own refusal to the handler under test.
-	req.Header.Set(operator.ContractVersionHeader, operator.ContractVersion)
+	version := operator.ContractVersion
+	if executionPath(req.URL.Path) {
+		version = agent.ExecutionContractVersion
+	}
+	req.Header.Set(operator.ContractVersionHeader, version)
 	resp, err := client.Do(req)
 	require.NoError(t, err)
 	defer func() { _ = resp.Body.Close() }()
 	got, err := io.ReadAll(resp.Body)
 	require.NoError(t, err)
 	return resp.StatusCode, string(got)
+}
+
+// executionPath reports whether path is one of the execution routes,
+// which serve execution-fence.v1.
+func executionPath(path string) bool {
+	for _, suffix := range []string{"/activations", "/deactivation", "/execution/introspection", "/credential-recovery"} {
+		if strings.HasSuffix(path, suffix) {
+			return true
+		}
+	}
+	return false
 }
 
 // TestServer_PostsUnderTheSenderTheCertificateNames covers what reaches

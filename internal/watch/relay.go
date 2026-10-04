@@ -14,7 +14,12 @@ import (
 // other route.
 type Relay interface {
 	// Announce publishes the event for agent to every process listening.
-	Announce(ctx context.Context, agent grn.GRN, e Event) error
+	// A non-nil fence is the announcing agent's execution fence
+	// (ADR-0080): the event is announced only if it admits, and in the
+	// transaction it holds, so it commits before any replacement of
+	// that execution or not at all. When a listener receives it is not
+	// part of that order.
+	Announce(ctx context.Context, agent grn.GRN, e Event, fence *Fence) error
 	// Receive calls deliver for each announced event until ctx is done.
 	// deliver is called from one goroutine.
 	Receive(ctx context.Context, deliver func(agent grn.GRN, e Event)) error

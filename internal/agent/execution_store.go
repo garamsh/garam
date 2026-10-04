@@ -34,10 +34,10 @@ type ExecutionStore interface {
 	// GetRecovery answers the recovery recorded under requestID, or
 	// nil, so a retry is answered before anything is signed again.
 	GetRecovery(ctx context.Context, agentGRN grn.GRN, requestID RequestID) (*Recovery, error)
-	// RecordRenewal admits presented as the agent's own write, then
-	// records successor in the lineage presented belongs to. The legacy
-	// cohort records nothing.
-	RecordRenewal(ctx context.Context, agentGRN grn.GRN, token *TokenHash, presented, successor Credential) error
+	// RecordRenewal admits fence as the agent's own write, then records
+	// successor in the lineage the fenced certificate belongs to. The
+	// legacy cohort records nothing.
+	RecordRenewal(ctx context.Context, fence Fencing, successor Credential) error
 	// GetExecution answers the agent's execution as it stands.
 	GetExecution(ctx context.Context, agentGRN grn.GRN) (*Execution, error)
 	// Introspect answers the agent's assignment, its execution and

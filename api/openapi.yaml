@@ -1543,10 +1543,12 @@ paths:
 
 
         `agent:create` targets the controller that will run the agent
-        and is authorized on the organization; `agent:configure`
-        targets the agent, is authorized on it, and binds where it runs
-        now. The audience's current grant must cover the operation and
-        the controller.
+        and is authorized on the organization; `agent:configure` and
+        `agent:recover` target the agent, are authorized on it, and bind
+        where it runs now. `agent:recover` authorizes one exact
+        credential recovery, whose request body `bodySha256` digests
+        (ADR-0078). The audience's current grant must cover the
+        operation and the controller.
 
 
         The same `requestId` with the same binding under the same grant
@@ -2893,7 +2895,7 @@ components:
         operations:
           type: array
           minItems: 1
-          maxItems: 3
+          maxItems: 4
           uniqueItems: true
           items:
             $ref: '#/components/schemas/DelegatedOperation'
@@ -2936,7 +2938,7 @@ components:
           format: date-time
     DelegatedOperation:
       type: string
-      enum: [agent:create, agent:configure, agent:activate]
+      enum: [agent:create, agent:configure, agent:activate, agent:recover]
       description: >-
         `agent:activate` bounds the hosted operator's own lifecycle
         authority; no user mints it.
@@ -2952,10 +2954,10 @@ components:
           description: GRN of the hosted operator that will act.
         operation:
           type: string
-          enum: [agent:create, agent:configure]
+          enum: [agent:create, agent:configure, agent:recover]
         target:
           type: string
-          description: Controller GRN for `agent:create`, agent GRN for `agent:configure`.
+          description: Controller GRN for `agent:create`, agent GRN for `agent:configure` and `agent:recover`.
         requestId:
           $ref: '#/components/schemas/RequestId'
         bodySha256:

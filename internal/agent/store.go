@@ -35,8 +35,12 @@ type Store interface {
 	// epoch says about the agent's pod, or ErrStaleEpoch.
 	ReportProvisioningState(ctx context.Context, agentGRN grn.GRN, epoch int, state ProvisioningState) (*Agent, error)
 	// ReportRuntimeState records what the agent assigned at epoch says
-	// about itself, or ErrStaleEpoch.
-	ReportRuntimeState(ctx context.Context, agentGRN grn.GRN, epoch int, state RuntimeState) (*Agent, error)
+	// about itself, or ErrStaleEpoch, in one transaction the execution
+	// fence admits first (ADR-0080).
+	ReportRuntimeState(ctx context.Context, agentGRN grn.GRN, epoch int, state RuntimeState, fence Fencing) (*Agent, error)
+	// ExecutionMode answers whether the agent's execution is fenced, or
+	// ErrAgentNotFound.
+	ExecutionMode(ctx context.Context, agentGRN grn.GRN) (Mode, error)
 	// Define records what an organization says an agent should be. It
 	// creates no agent and assigns none: a definition is a record, and
 	// the agent it describes exists when an operator says so.

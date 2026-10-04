@@ -186,13 +186,13 @@ func TestWatchRelay_RefusesAnEventLargerThanOneAnnouncementCarries(t *testing.T)
 
 	ordinary, err := watch.NewEvent("turn.output", strings.Repeat("a", watch.MaxBodyLength))
 	require.NoError(t, err)
-	require.NoError(t, relay.Announce(ctx, watched, ordinary), "an event of the bounded length was not carried")
+	require.NoError(t, relay.Announce(ctx, watched, ordinary, nil), "an event of the bounded length was not carried")
 
 	// Every character of this body takes two once encoded, so a body the
 	// same length no longer fits.
 	dense, err := watch.NewEvent("turn.output", strings.Repeat("\n", watch.MaxBodyLength))
 	require.NoError(t, err)
-	err = relay.Announce(ctx, watched, dense)
+	err = relay.Announce(ctx, watched, dense, nil)
 	require.Error(t, err)
 	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
 }

@@ -67,6 +67,9 @@ WHERE grn = sqlc.arg('grn')
   )
 RETURNING *;
 
+-- name: GetAgentExecutionMode :one
+SELECT mode FROM agent_executions WHERE agent_grn = $1;
+
 -- name: ReportAgentRuntimeState :one
 UPDATE agents SET
     runtime_state = sqlc.arg('runtime_state'),
@@ -99,11 +102,15 @@ SELECT * FROM agent_definitions WHERE org_grn = $1 ORDER BY agent_grn;
 
 -- The claim state is the assignment the claim wrote: an unclaimed
 -- definition has none, and a claimed one binds the operator it names.
+-- An agent whose execution is fenced has cut over to the Operator
+-- control service, and its definition is no longer the operator's
+-- source (ADR-0077), so it is not listed.
 -- name: ListAgentDefinitionsByOperator :many
 SELECT d.*, a.epoch AS claim_epoch, a.created_at AS claim_created_at, a.updated_at AS claim_updated_at
 FROM agent_definitions d
 LEFT JOIN agent_assignments a ON a.agent_grn = d.agent_grn
-WHERE d.operator_grn = $1
+LEFT JOIN agent_executions e ON e.agent_grn = d.agent_grn
+WHERE d.operator_grn = $1 AND (e.mode IS NULL OR e.mode = 'legacy')
 ORDER BY d.agent_grn;
 
 -- LockAgentDefinition is the lock a claim serializes on: two claims of
@@ -145,3 +152,12 @@ RETURNING *;
 
 -- name: DeleteAgentTemplate :execrows
 DELETE FROM agent_templates WHERE grn = $1;
+
+-- AdmitExecution runs the agent execution fence (ADR-0080) as the
+-- first statement of a protected write's transaction; the row it locks
+-- is held until that transaction ends.
+-- name: AdmitExecution :one
+SELECT agent_execution_admit(
+    sqlc.arg('agent_grn'), sqlc.narg('token_hash')::bytea, sqlc.arg('serial'),
+    sqlc.arg('not_before')::timestamptz, sqlc.arg('not_after')::timestamptz
+)::text;

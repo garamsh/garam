@@ -82,6 +82,17 @@ tags:
       hand it under its delegation (ADR-0078), and the proof of a
       controller's current authority it obtains before each lifecycle
       decision, each decided from current state when it is asked.
+  - name: execution
+    description: >-
+      Which process of an agent may act, and with which credentials
+      (ADR-0078). The hosted Operator control service activates a
+      runtime generation, deactivates it, recovers a lost credential
+      lineage and asks whether a certificate and a generation are
+      current; an agent's own certificate can do none of it. Once an
+      agent is activated, its own protected calls carry the token the
+      activation issued, and every one of them is admitted against the
+      current activation and lineage when it writes, on a connection
+      already open too (ADR-0080).
   - name: watch
     description: >-
       What an agent is saying now, on its way to the people watching it
@@ -237,11 +248,25 @@ paths:
     post:
       operationId: issueAgentCertificate
       tags: [agent]
+      security:
+        - machineCertificate: []
+          executionToken: []
+        - machineCertificate: []
       summary: Issue the certificate an agent authenticates with.
       description: >-
         Answers for an agent assigned to the calling operator at the
         current epoch, and for the agent itself renewing over the
         connection its current certificate authenticated (ADR-0040).
+
+        Once an agent's execution has been activated, its operator is
+        refused here with 409: its certificates come from its own
+        renewal or from `recoverAgentCredential` (ADR-0078). The agent's
+        own renewal then presents its execution token and is admitted
+        against the current activation and credential lineage, which
+        the new certificate joins; the certificate it renews stays
+        valid until it expires, so no restart is needed. A missing
+        token is 401, one that is not current 403, and a certificate
+        that is not current 409.
         Every other caller is refused, which is the whole of the
         authorization here (ADR-0015). A renewal grants nothing: the
         caller already holds that identity, and an expired certificate
@@ -273,6 +298,8 @@ paths:
         '401':
           $ref: '#/components/responses/Error'
         '403':
+          $ref: '#/components/responses/Error'
+        '409':
           $ref: '#/components/responses/Error'
   /agents/{agent}/provisioning-state:
     post:
@@ -328,6 +355,10 @@ paths:
     post:
       operationId: reportRuntimeState
       tags: [agent]
+      security:
+        - machineCertificate: []
+          executionToken: []
+        - machineCertificate: []
       summary: Report what an agent says about itself.
       description: >-
         The agent's own account of whether it is running (ADR-0012).
@@ -350,6 +381,16 @@ paths:
         garam keeps the last report and expires none, so an agent that
         stops reporting stays in the state it last claimed. Silence is
         not `disconnected`, and nothing here turns one into the other.
+
+        An agent whose execution has been activated presents its
+        execution token here, and the call is admitted against the
+        current activation and credential lineage in the transaction
+        of its own write: after a replacement, a reassignment, a
+        recovery or the certificate's expiry it is refused, on a
+        connection already open too (ADR-0080). A missing token is
+        401, one that is not current 403, and a certificate that is
+        not current, or a token presented for an agent never
+        activated, 409.
       parameters:
         - $ref: '#/components/parameters/agent'
       requestBody:
@@ -455,6 +496,10 @@ paths:
     post:
       operationId: postMessage
       tags: [message]
+      security:
+        - machineCertificate: []
+          executionToken: []
+        - machineCertificate: []
       summary: Post a message to a recipient.
       description: >-
         The sender is what the certificate names, so the body carries
@@ -488,6 +533,16 @@ paths:
         is how a caller tells the two apart, and its idempotency key
         derives from the sender's so a retried post is answered with
         the one refusal already stored.
+
+        An agent whose execution has been activated presents its
+        execution token here, and the call is admitted against the
+        current activation and credential lineage in the transaction
+        of its own write: after a replacement, a reassignment, a
+        recovery or the certificate's expiry it is refused, on a
+        connection already open too (ADR-0080). A missing token is
+        401, one that is not current 403, and a certificate that is
+        not current, or a token presented for an agent never
+        activated, 409.
       requestBody:
         required: true
         content:
@@ -507,10 +562,16 @@ paths:
           $ref: '#/components/responses/Error'
         '403':
           $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
   /messages/{message}:
     get:
       operationId: getMessageStatus
       tags: [message]
+      security:
+        - machineCertificate: []
+          executionToken: []
+        - machineCertificate: []
       summary: Read how far a message the caller sent has got.
       description: >-
         What garam knows about the message and the sender does not: the
@@ -544,6 +605,16 @@ paths:
         refusal's sender is not the caller — so its identifier is not
         one this route answers, and there is nothing to track: the
         refusal arrives on the caller's own queue.
+
+        An agent whose execution has been activated presents its
+        execution token here, and the call is admitted against the
+        current activation and credential lineage in the transaction
+        of its own write: after a replacement, a reassignment, a
+        recovery or the certificate's expiry it is refused, on a
+        connection already open too (ADR-0080). A missing token is
+        401, one that is not current 403, and a certificate that is
+        not current, or a token presented for an agent never
+        activated, 409.
       parameters:
         - $ref: '#/components/parameters/message'
       responses:
@@ -557,10 +628,18 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
+        '403':
+          $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
   /agents/{agent}/claims:
     post:
       operationId: claimMessage
       tags: [message]
+      security:
+        - machineCertificate: []
+          executionToken: []
+        - machineCertificate: []
       summary: Claim the next message addressed to an agent.
       description: >-
         A long poll: the call waits for a message rather than answering
@@ -570,6 +649,16 @@ paths:
         given message, under a lease that garam measures; a claim
         nobody completes lapses and the message is handed on, up to a
         bounded number of attempts (ADR-0018).
+
+        An agent whose execution has been activated presents its
+        execution token here, and the call is admitted against the
+        current activation and credential lineage in the transaction
+        of its own write: after a replacement, a reassignment, a
+        recovery or the certificate's expiry it is refused, on a
+        connection already open too (ADR-0080). A missing token is
+        401, one that is not current 403, and a certificate that is
+        not current, or a token presented for an agent never
+        activated, 409.
       parameters:
         - $ref: '#/components/parameters/agent'
       responses:
@@ -587,10 +676,16 @@ paths:
           $ref: '#/components/responses/Error'
         '403':
           $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
   /agents/{agent}/claims/{claim}/renewal:
     post:
       operationId: renewClaim
       tags: [message]
+      security:
+        - machineCertificate: []
+          executionToken: []
+        - machineCertificate: []
       summary: Extend a claim while the message is still being worked on.
       description: >-
         Renewal is what keeps a long turn from losing its claim
@@ -600,6 +695,16 @@ paths:
         for a completion that never arrives, so it is not renewable
         away (ADR-0018). A claim already lapsed, handed on, or
         completed is refused.
+
+        An agent whose execution has been activated presents its
+        execution token here, and the call is admitted against the
+        current activation and credential lineage in the transaction
+        of its own write: after a replacement, a reassignment, a
+        recovery or the certificate's expiry it is refused, on a
+        connection already open too (ADR-0080). A missing token is
+        401, one that is not current 403, and a certificate that is
+        not current, or a token presented for an agent never
+        activated, 409.
       parameters:
         - $ref: '#/components/parameters/agent'
         - $ref: '#/components/parameters/claim'
@@ -622,6 +727,10 @@ paths:
     post:
       operationId: forwardTurnEvent
       tags: [watch]
+      security:
+        - machineCertificate: []
+          executionToken: []
+        - machineCertificate: []
       summary: Forward one turn event to whoever is watching the agent.
       description: >-
         What the agent is saying now, on its way to the browsers
@@ -640,6 +749,20 @@ paths:
         than shortened: a shortened turn would put words in the agent's
         mouth, where a refused event is the gap this stream already
         permits.
+
+        An agent whose execution has been activated presents its
+        execution token here, and the call is admitted against the
+        current activation and credential lineage in the transaction
+        of its own write: after a replacement, a reassignment, a
+        recovery or the certificate's expiry it is refused, on a
+        connection already open too (ADR-0080). A missing token is
+        401, one that is not current 403, and a certificate that is
+        not current, or a token presented for an agent never
+        activated, 409.
+
+        An event admitted before a replacement is announced before that
+        replacement commits; when a watcher receives it is not part of
+        that order.
       parameters:
         - $ref: '#/components/parameters/agent'
       requestBody:
@@ -659,16 +782,32 @@ paths:
           $ref: '#/components/responses/Error'
         '403':
           $ref: '#/components/responses/Error'
+        '409':
+          $ref: '#/components/responses/Error'
   /agents/{agent}/claims/{claim}/completion:
     post:
       operationId: completeClaim
       tags: [message]
+      security:
+        - machineCertificate: []
+          executionToken: []
+        - machineCertificate: []
       summary: Report the claimed message delivered.
       description: >-
         Completion is fenced by the claim rather than by the message,
         so a caller whose lease was handed on completes nothing.
         Completing twice reports the same delivery, because a caller
         that could not read the answer retries.
+
+        An agent whose execution has been activated presents its
+        execution token here, and the call is admitted against the
+        current activation and credential lineage in the transaction
+        of its own write: after a replacement, a reassignment, a
+        recovery or the certificate's expiry it is refused, on a
+        connection already open too (ADR-0080). A missing token is
+        401, one that is not current 403, and a certificate that is
+        not current, or a token presented for an agent never
+        activated, 409.
       parameters:
         - $ref: '#/components/parameters/agent'
         - $ref: '#/components/parameters/claim'
@@ -820,8 +959,240 @@ paths:
           $ref: '#/components/responses/ContractError'
         '422':
           $ref: '#/components/responses/ContractError'
+  /agents/{agent}/activations:
+    post:
+      operationId: activateAgent
+      tags: [execution]
+      summary: Admit a runtime generation of an agent, and issue the token its calls carry.
+      description: >-
+        The caller is the hosted Operator control service, which has
+        proven the placement and that the previous writer stopped
+        before it calls. Per request, garam reads the caller's
+        registration, its current grant, which must cover
+        `agent:activate` for the agent's current assignee, and current
+        policy on the agent, where an explicit Deny wins. It verifies
+        `certificatePem`, the agent's leaf as the caller received it,
+        against the agent's organization authority. Then, under the
+        agent's execution lock, it rechecks the assignment, the
+        epoch, the grant's expiry, and whether that certificate is
+        current: inside its validity and in the agent's credential
+        lineage. An agent's own certificate cannot activate.
+
+
+        `replacesActivationId` names the agent's most recent
+        activation, current or ended, and is null only before the
+        first. Another value is 409, so a stale placement's replay never
+        wins, and a generation already activated in the current lineage
+        is 409 too. The first activation is the agent's cutover, after
+        which every call offering `executionToken` requires the token.
+
+
+        `operationRef` is null for the revision the runtime last
+        reported as effective, and is a durable `agent:configure`
+        reference for a pending revision. garam rechecks that reference
+        as current and requires it to bind this caller, this agent and
+        its current assignment. Whether one is needed is the caller's to
+        decide: garam keeps no revision. An `agent:create` reference is
+        422.
+
+
+        The same `requestId` with the same request answers the same
+        activation with 200, a new token and a higher `tokenVersion`;
+        only the last token issued is admitted, so keep the highest
+        version. The same `requestId` with another request, or for an
+        activation that has ended, is 409.
+      parameters:
+        - $ref: '#/components/parameters/executionContractVersion'
+        - $ref: '#/components/parameters/agent'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ActivationRequest'
+      responses:
+        '200':
+          description: The activation a retry already made, with a new token.
+          headers:
+            Garam-Contract-Version:
+              $ref: '#/components/headers/ExecutionContractVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Activation'
+        '201':
+          description: The activation.
+          headers:
+            Garam-Contract-Version:
+              $ref: '#/components/headers/ExecutionContractVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Activation'
+        '400':
+          $ref: '#/components/responses/ExecutionContractError'
+        '401':
+          $ref: '#/components/responses/ExecutionContractError'
+        '403':
+          $ref: '#/components/responses/ExecutionContractError'
+        '404':
+          $ref: '#/components/responses/ExecutionContractError'
+        '409':
+          $ref: '#/components/responses/ExecutionContractError'
+        '422':
+          $ref: '#/components/responses/ExecutionContractError'
+  /agents/{agent}/activations/{activation}/deactivation:
+    post:
+      operationId: deactivateAgent
+      tags: [execution]
+      summary: End an activation of an agent, if it is still the current one.
+      description: >-
+        Authorized as `activateAgent` is, on every call. Ending the
+        current activation refuses its token from the next call on, on
+        a connection already open too. An activation that already ended
+        is answered the same and nothing changes, so a replayed request
+        never reaches its successor. Deactivation never moves the anchor
+        `replacesActivationId` names: the next activation names the
+        agent's most recent activation, which is this one only if
+        nothing replaced it. This fences collaboration only: it does not
+        stop the runtime's writer.
+      parameters:
+        - $ref: '#/components/parameters/executionContractVersion'
+        - $ref: '#/components/parameters/agent'
+        - $ref: '#/components/parameters/activation'
+      responses:
+        '200':
+          description: The activation is not current.
+          headers:
+            Garam-Contract-Version:
+              $ref: '#/components/headers/ExecutionContractVersion'
+        '400':
+          $ref: '#/components/responses/ExecutionContractError'
+        '401':
+          $ref: '#/components/responses/ExecutionContractError'
+        '403':
+          $ref: '#/components/responses/ExecutionContractError'
+        '404':
+          $ref: '#/components/responses/ExecutionContractError'
+  /agents/{agent}/execution/introspection:
+    post:
+      operationId: introspectAgentExecution
+      tags: [execution]
+      summary: Ask whether an agent certificate and a generation are current, together.
+      description: >-
+        Authorized as `activateAgent` is, on every call. `certificatePem`
+        is the agent's leaf as the caller received it; a leaf that does
+        not chain to the agent's organization authority or names
+        another identity is 422. One that does is answered `current`
+        only if it is inside its validity now and in the agent's
+        credential lineage, and `fenced` otherwise, including when it
+        has expired. The answer is read from one snapshot, so its parts
+        were current together. Ask per decision, never per connection.
+      parameters:
+        - $ref: '#/components/parameters/executionContractVersion'
+        - $ref: '#/components/parameters/agent'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecutionIntrospectionRequest'
+      responses:
+        '200':
+          description: The certificate's and the generation's standing.
+          headers:
+            Garam-Contract-Version:
+              $ref: '#/components/headers/ExecutionContractVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutionIntrospection'
+        '400':
+          $ref: '#/components/responses/ExecutionContractError'
+        '401':
+          $ref: '#/components/responses/ExecutionContractError'
+        '403':
+          $ref: '#/components/responses/ExecutionContractError'
+        '404':
+          $ref: '#/components/responses/ExecutionContractError'
+        '422':
+          $ref: '#/components/responses/ExecutionContractError'
+  /agents/{agent}/credential-recovery:
+    post:
+      operationId: recoverAgentCredential
+      tags: [execution]
+      security:
+        - machineCertificate: []
+          operationAuthority: []
+      summary: Replace an agent's credential lineage under an administrator's handoff.
+      description: >-
+        For an agent whose credential is lost or compromised. The
+        agent keeps its GRN and everything bound to it. Authorized as
+        `activateAgent` is, with `agent:recover` in place of
+        `agent:activate`, and with an `agent:recover` handoff an
+        administrator minted for exactly this request body: the handoff
+        must bind this caller, this agent and its current assignment,
+        and the SHA-256 of the received body must equal its digest, or
+        the request is refused with 409 and the handoff is not spent.
+        The certificate is signed over `certificateRequestPem`'s key,
+        which never leaves the holder.
+
+
+        The recovery ends the current activation and starts a new
+        lineage: every certificate the agent held before stops
+        authorizing protected calls and renewal, on connections already
+        open too. The runtime is then activated again, and may keep its
+        generation. The same `requestId` with the same body and handoff
+        reference answers the certificate it issued; any other request
+        under that `requestId`, or a second recovery with the same
+        reference, is 409.
+      parameters:
+        - $ref: '#/components/parameters/executionContractVersion'
+        - $ref: '#/components/parameters/agent'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CredentialRecoveryRequest'
+      responses:
+        '201':
+          description: The recovered certificate, the first time or again.
+          headers:
+            Garam-Contract-Version:
+              $ref: '#/components/headers/ExecutionContractVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecoveredCredential'
+        '400':
+          $ref: '#/components/responses/ExecutionContractError'
+        '401':
+          $ref: '#/components/responses/ExecutionContractError'
+        '403':
+          $ref: '#/components/responses/ExecutionContractError'
+        '404':
+          $ref: '#/components/responses/ExecutionContractError'
+        '409':
+          $ref: '#/components/responses/ExecutionContractError'
 components:
   parameters:
+    executionContractVersion:
+      name: Garam-Contract-Version
+      in: header
+      required: true
+      description: Must be `execution-fence.v1`; any other value is refused with 400 naming it.
+      x-go-name: ExecutionContractVersion
+      schema:
+        type: string
+    activation:
+      name: activation
+      in: path
+      required: true
+      description: Activation identifier, as `activateAgent` returned it.
+      x-go-name: ActivationId
+      schema:
+        type: string
     contractVersion:
       name: Garam-Contract-Version
       in: header
@@ -1267,10 +1638,10 @@ components:
           type: string
         operation:
           type: string
-          enum: [agent:create, agent:configure]
+          enum: [agent:create, agent:configure, agent:recover]
         targetGrn:
           type: string
-          description: The controller for `agent:create`, the agent for `agent:configure`.
+          description: The controller for `agent:create`, the agent for `agent:configure` and `agent:recover`.
         assignment:
           $ref: '#/components/schemas/BoundAssignment'
         requestId:
@@ -1284,7 +1655,7 @@ components:
     BoundAssignment:
       type: object
       required: [operatorGrn, epoch]
-      description: Where the agent ran when a configuration change was authorized. Present for `agent:configure` only.
+      description: Where the agent ran when an operation on it was authorized. Present for `agent:configure` and `agent:recover` only.
       properties:
         operatorGrn:
           type: string
@@ -1329,6 +1700,123 @@ components:
         epoch:
           type: string
           description: The current assignment's epoch. Opaque; compare it for equality only.
+    ActivationRequest:
+      type: object
+      required: [requestId, epoch, generation, replacesActivationId, operationRef, certificatePem]
+      properties:
+        requestId:
+          type: string
+          pattern: '^[A-Za-z0-9._~-]{1,128}$'
+        epoch:
+          type: string
+          description: The assignment's epoch the caller expects. Opaque.
+        generation:
+          type: string
+          pattern: '^[0-9a-f]{32}$'
+          description: The runtime's start nonce for this process.
+        replacesActivationId:
+          type: [string, 'null']
+          description: The agent's most recent activation, null only before the first.
+        operationRef:
+          type: [string, 'null']
+          description: A durable `agent:configure` reference for a pending revision, null otherwise.
+        certificatePem:
+          type: string
+          maxLength: 8192
+          description: The agent's leaf certificate in PEM form, exactly as the agent presented it to the caller.
+    Activation:
+      type: object
+      required: [activationId, token, tokenVersion, grn, epoch, generation, lineage]
+      properties:
+        activationId:
+          type: string
+        token:
+          type: string
+          description: >-
+            What the runtime's calls carry as `Authorization:
+            Garam-Execution <token>`. Shown once; garam keeps its hash.
+        tokenVersion:
+          type: integer
+          minimum: 1
+          description: Rises with every token issued for this activation; keep the highest.
+        grn:
+          type: string
+        epoch:
+          type: string
+          description: Opaque.
+        generation:
+          type: string
+        lineage:
+          type: [string, 'null']
+          description: The credential lineage checked, null for the certificates issued before any recovery.
+    ExecutionIntrospectionRequest:
+      type: object
+      required: [certificatePem]
+      properties:
+        certificatePem:
+          type: string
+          maxLength: 8192
+          description: The agent's leaf certificate in PEM form, exactly as the agent presented it to the caller.
+        generation:
+          type: [string, 'null']
+          description: A generation to compare with the active one.
+    ExecutionIntrospection:
+      type: object
+      required: [grn, org, assignee, epoch, mode, credential, generation, activationId]
+      properties:
+        grn:
+          type: string
+        org:
+          type: string
+        assignee:
+          type: string
+          description: The operator the agent is assigned to.
+        epoch:
+          type: string
+          description: Opaque.
+        mode:
+          type: string
+          enum: [legacy, fenced]
+          description: '`fenced` once the agent has been activated.'
+        credential:
+          type: string
+          enum: [current, fenced]
+        generation:
+          type: string
+          enum: [current, not_current, none, not_supplied]
+          description: >-
+            With a generation supplied, whether it is the active one;
+            without one, `none` when no generation is active and
+            `not_supplied` otherwise.
+        activationId:
+          type: [string, 'null']
+          description: The current activation, null when none is.
+    CredentialRecoveryRequest:
+      type: object
+      required: [requestId, epoch, certificateRequestPem]
+      properties:
+        requestId:
+          type: string
+          pattern: '^[A-Za-z0-9._~-]{1,128}$'
+        epoch:
+          type: string
+          description: The assignment's epoch the caller expects. Opaque.
+        certificateRequestPem:
+          type: string
+          maxLength: 4096
+          description: >-
+            A PEM-encoded PKCS#10 request over an ECDSA P-256 key the
+            holder generated. Only its key is read.
+    RecoveredCredential:
+      type: object
+      required: [grn, lineage, certificatePem]
+      properties:
+        grn:
+          type: string
+        lineage:
+          type: string
+        certificatePem:
+          type: string
     Error:
       type: object
       required: [kind, message]
@@ -1339,6 +1827,10 @@ components:
         message:
           type: string
   headers:
+    ExecutionContractVersion:
+      description: The contract version this answer follows, `execution-fence.v1`.
+      schema:
+        type: string
     ContractVersion:
       description: The contract version this answer follows, `operation-authority.v1`.
       schema:
@@ -1346,6 +1838,15 @@ components:
   responses:
     Error:
       description: Error response.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ExecutionContractError:
+      description: Error response of an execution route.
+      headers:
+        Garam-Contract-Version:
+          $ref: '#/components/headers/ExecutionContractVersion'
       content:
         application/json:
           schema:
@@ -1360,6 +1861,23 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
   securitySchemes:
+    executionToken:
+      type: http
+      scheme: Garam-Execution
+      description: >-
+        The token an activation issued, as `Authorization:
+        Garam-Execution <token>` beside the client certificate. An agent
+        whose execution has been activated presents it on every call
+        that offers this scheme, and is refused without it; one never
+        activated presents none, and is refused with one. garam stores
+        only its hash.
+    operationAuthority:
+      type: http
+      scheme: Garam-Operation
+      description: >-
+        A user's handoff for one operation, as `Authorization:
+        Garam-Operation <authority>` beside the client certificate. It
+        is minted for the exact request body it accompanies.
     machineCertificate:
       type: mutualTLS
       description: >-

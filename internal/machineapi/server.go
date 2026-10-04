@@ -48,6 +48,9 @@ type Server struct {
 	// caller's own and one forwarded for another identity.
 	certificates machine.Service
 	proofs       operator.ProofService
+	// executions is what a lifecycle authority does to an agent's
+	// execution, and how an agent renews inside it (ADR-0078).
+	executions agent.ExecutionService
 }
 
 // Compile-time check that Server satisfies the generated interface.
@@ -60,11 +63,12 @@ var _ machinegen.ServerInterface = (*Server)(nil)
 // boundary, who is watching one work and what it is saying, which
 // groups a caller belongs to, what decides whom it may send to, what a
 // hosted operator reads its delegated operations back through, what
-// verifies a certificate again on a decision, and what proves a
-// controller's current authority to that operator.
-func NewServer(agents agent.Service, operators operator.Service, messages message.Service, consents message.ConsentStore, watches watch.Service, groups Groups, evaluator Evaluator, authority operator.AuthorityService, certificates machine.Service, proofs operator.ProofService) *Server {
+// verifies a certificate again on a decision, what proves a
+// controller's current authority to that operator, and what activates,
+// inspects, recovers and renews an agent's execution.
+func NewServer(agents agent.Service, operators operator.Service, messages message.Service, consents message.ConsentStore, watches watch.Service, groups Groups, evaluator Evaluator, authority operator.AuthorityService, certificates machine.Service, proofs operator.ProofService, executions agent.ExecutionService) *Server {
 	return &Server{agents: agents, operators: operators, messages: messages, consents: consents, watches: watches, groups: groups, evaluator: evaluator, authority: authority,
-		certificates: certificates, proofs: proofs}
+		certificates: certificates, proofs: proofs, executions: executions}
 }
 
 // caller returns the GRN the connection authenticated as, and writes

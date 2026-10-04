@@ -11,6 +11,7 @@ import (
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
+	"github.com/garamsh/garam/internal/wire"
 )
 
 // IntrospectController answers a positive proof of a controller's
@@ -67,7 +68,7 @@ func (s *Server) IntrospectController(w http.ResponseWriter, r *http.Request, co
 		// refusal this route answers as 422 rather than 400, so a caller
 		// tells a defect of its request from the certificate it
 		// forwarded.
-		status := statusOf(err)
+		status := wire.StatusOf(errorx.KindOf(err))
 		if errorx.IsKind(err, errorx.KindInvalidArgument) {
 			status = http.StatusUnprocessableEntity
 		}

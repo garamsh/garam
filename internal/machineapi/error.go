@@ -73,11 +73,8 @@ type causeRecorder interface {
 // carries no transport; the kind-to-status mapping is the shared one in
 // internal/wire.
 func writeError(w http.ResponseWriter, err error) {
-	writeErrorStatus(w, statusOf(err), err)
+	writeErrorStatus(w, wire.StatusOf(errorx.KindOf(err)), err)
 }
-
-// statusOf is the status the shared kind mapping answers err with.
-func statusOf(err error) int { return wire.StatusOf(errorx.KindOf(err)) }
 
 // writeErrorStatus renders err as writeError does, at a status the
 // route chose over the shared mapping.

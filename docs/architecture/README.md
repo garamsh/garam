@@ -537,3 +537,8 @@ ADRs:
   each reading its answer into its own input and refusal, and a
   replacement takes it exclusively, so no write of a replaced
   generation commits after its replacement
+- [0081](./adr/0081-a-test-only-command-signs-in-the-first-principal-of-a-database-it-creates.md)
+  — a test-only command under `tests/testprincipal` creates a fresh
+  local database and signs in its first principal under a versioned
+  contract; no Garam binary carries it, and everything after that
+  principal goes through public routes

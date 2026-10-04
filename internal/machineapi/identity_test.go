@@ -182,11 +182,11 @@ const (
 	standaloneEnrollmentRoute = http.MethodPost + " /agent-enrollments"
 )
 
-// TestServer_EnrollmentIsTheOnlyRouteAnUncertifiedCallerReaches is the
+// TestServer_EnrollmentsAreTheOnlyRoutesAnUncertifiedCallerReaches is the
 // control on the one above: the same client that enrols is refused
 // everywhere else, so what admitted it was the route and not a listener
 // that stopped checking.
-func TestServer_EnrollmentIsTheOnlyRouteAnUncertifiedCallerReaches(t *testing.T) {
+func TestServer_EnrollmentsAreTheOnlyRoutesAnUncertifiedCallerReaches(t *testing.T) {
 	enrolling := operatorGRN("acme")
 	operators := &operatorService{certificate: &operator.Certificate{Subject: enrolling}}
 	url, _ := listener(t, &agentService{}, operators, &messageService{}, consenting(), unwatched(t), &memberGroups{}, &engine{}, enrolling)

@@ -9,13 +9,19 @@ by `internal/agent`.
 | `Definition` | what an organization says an agent should be: which operator runs it and with what values (ADR-0026), and not what it is built from — it names no image. It names its subject where an `Agent` names itself, and carries none of the state an `Agent` carries, so a reader cannot take one for the other; it writes no `agents` row until the operator it names claims it (ADR-0033) |
 | `Template` | a starting point an organization keeps for defining agents: a name, a description and values a definition copies once (ADR-0075). It names no operator and no agent, and no definition records the template it came from, so editing or deleting one reaches no agent |
 | `Name` | what an organization calls a defined agent or a template, separate from the GRN: trimmed, one to 100 characters, and not unique |
-| `Assignment` | which operator runs an agent, and the epoch that binding holds |
+| `Assignment` | what holds an agent — an operator, or a standalone host's supervisor (ADR-0082) — and the epoch that binding holds |
 | `Certificate` | what an agent authenticates with and the garam server root it verifies garam by, as this domain hands them back |
 | `Service` | creates an agent for the calling operator, issues the certificate of one assigned to it while the agent has not cut over, answers an operator with the definitions naming it so it can claim one (ADR-0033), and records the state each party reports (ADR-0053) |
 | `Issuer` | signs a certificate for a subject GRN and hands back the garam server root beside it |
 | `ExecutionService` | what a lifecycle authority does to an agent's execution — creates a managed agent and issues its first certificate, activates a generation, deactivates it, inspects a certificate and a generation, recovers the credential lineage — and how an agent renews its own certificate, legacy or fenced, inside the lineage that certificate is current in (ADR-0040, ADR-0077, ADR-0078) |
 | `ExecutionStore` | the execution row every agent has, its activations and its credential lineage, written under the row's lock (ADR-0080), and a managed agent's creation and the initial issuance that starts its lineage |
 | `ManagedCreation` | an agent the hosted control service created: its GRN, the controller and epoch of its first assignment, the `agent:create` reference and request identifier that authorized it, and the lineage it was born into |
+| `Enrollment` | an administrator's approval of a standalone host: the hash of the host's bootstrap secret, the fingerprints of its two keys, its request identifier, the agent and supervisor GRNs it binds, the assignment a replacement expects, and the public result once spent (ADR-0082) |
+| `Supervisor` | a standalone host's current supervisor registration: the one agent it holds and the certificate garam last issued it |
+| `StandaloneService` | how an administrator approves a host, withdraws an unspent approval and revokes a supervisor, each decided from current authority; it signs nothing |
+| `SupervisorService` | how a host spends its approval for both first certificates, and how its supervisor renews its own |
+| `StandaloneStore` | approvals, registrations and supervisor renewals, written after the execution row's lock wherever an assignment or an execution changes |
+| `MemberAuthorizer` | decides a user's authority from current state, as approving, withdrawing, revoking and spending need |
 
 garam mints an agent's GRN and never changes it, so which operator runs
 the agent is a relation a reassignment moves rather than part of the
@@ -24,7 +30,9 @@ ADR-0014 rests tenancy on its organization segment, so the domain
 refuses a pairing that disagrees rather than trusting its callers, and
 the schema refuses it again where nothing routes around it. An
 assignment stays inside that organization and names an operator
-(ADR-0015), which the schema alone decides. A definition names one the
+(ADR-0015) or the agent's own supervisor (ADR-0082), which the schema
+alone decides; an operator route compares the operator on the row, so
+none reaches a supervisor-held agent. A definition names one the
 organization has registered as well, which the browser surface decides
 against the operators domain and the schema decides again (ADR-0045);
 this domain reads no record of its own and addresses an operator by GRN. Every assignment raises the
@@ -214,3 +222,58 @@ in #1157.
   and the agent's earlier certificates stop authorizing from the next
   request, on a connection already open too. Ordinary renewal stays in
   the lineage the renewing certificate is current in.
+
+## Standalone hosts
+
+**garam's half is built; the host's runner is not.** A standalone host
+enrolls and renews with `garam standalone prepare`, `enroll` and
+`renew` (`internal/cli/standalone_host.go`); what supervises the
+runtime, proves the old writer exited and hands the adapter its
+activation is #1180's, and the joint message, task and reply
+acceptance with Sherlock is unverified (#1168, #1169).
+
+- **An administrator approves the host's own keys.** The host
+  generates its supervisor key, its agent key and a bootstrap secret
+  before it asks, and keeps them with a request identifier; the
+  approval binds the secret's hash, both fingerprints and that
+  identifier to one organization, host name and agent, expiring within
+  a day, on `agent:enroll` read from current state (ADR-0082). An
+  identical approval retry answers the same binding; a withdrawn or
+  expired one is not revived.
+- **Spending is one transaction and retryable.** The host presents the
+  secret and a request over each approved key; the approver's
+  authority is read again, both certificates are signed over the
+  host's keys, and a new agent is written with an execution fenced
+  from birth, its first assignment to the supervisor and the first
+  certificate of its lineage (migration 000031). An identical retry
+  answers the recorded public result while that registration still
+  holds the agent, and nothing otherwise. Withdrawing and spending one
+  approval serialize on its row.
+- **The supervisor activates its own agent and nothing else.** On the
+  execution routes it is authorized by its current registration, its
+  being the agent's assignee and current policy, read per request; it
+  holds `agent:activate` alone. Its first activation rests on the
+  approval, where a managed creation's needs its reference. Every
+  collaboration route admits through the one fence for both modes.
+- **Replacement and revocation are an administrator's.** A replacement
+  approval names the supervisor and epoch it replaces and, spent,
+  reassigns the agent at the next epoch, ends the former registration
+  and activation and moves the agent to a new lineage under the same
+  GRN; an older approval of the replaced assignment then refuses.
+  Revocation ends the registration, the activation and every unspent
+  approval for the agent under the execution lock. An expired
+  supervisor or agent credential is recovered the same way; nothing
+  recovers it without an administrator.
+- **The supervisor's renewal replays for its predecessor.** It renews
+  over a new key in the last third of its validity; the certificate a
+  renewal replaced may replay that renewal's public answer for the
+  identical request, and two identical renewals racing install one
+  successor. `api/machine.yaml` §standalone is authoritative for the
+  wire and `standalone-enrollment.v1`.
+- **The host's files.** The supervisor's directory holds the prepared
+  secret and key, its current certificate and key in one file a
+  renewal replaces in one rename, and a pending renewal kept from
+  before its request until its answer is installed. The agent's
+  credential directory holds the agent's key and certificate. Neither
+  is the agent's memory, outbox or workspace; which account and mount
+  reach each is #1180's.

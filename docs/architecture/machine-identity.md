@@ -8,14 +8,16 @@ Who is calling on the listener a machine identity authenticates on
 | `Identity` | the GRN a verified client certificate names, and the certificate's own serial and dates — which is what a caller asking to replace it is answered by (ADR-0046) |
 | `Service` | recovers that GRN, verifies the certificate against the organization's authority, and refuses an identity the organization no longer holds a record of; for a decision, verifies again — the caller's identity against the clock and its record, and a certificate presented on another identity's behalf against that identity. `Prove` is the certificate half alone: the SAN and the chain, establishing neither validity now, nor a record, nor any authority to act |
 | `TrustRoot` | supplies the authority a presented certificate has to chain to |
-| `Registration` | answers whether the organization still holds its record of the identity a certificate names (ADR-0070) |
+| `Registration` | answers whether the organization still holds its record of the identity a certificate names: an operator's record (ADR-0070) or a supervisor's current registration (ADR-0082) |
 | `ServerCertificate` | supplies the certificate the listener presents, asked per handshake so a replaced one needs no restart (ADR-0040) |
 
-An agent and an operator are the same kind of caller here and the
-listener does not branch on which. It asks one question of each and
-the branch is in the seam that answers it: an operator is admitted
-while its organization still holds the record, and every other identity
-is held without a read (ADR-0070). What the certificate asserts is the
+An agent, an operator and a supervisor are the same kind of caller
+here and the listener does not branch on which. It asks one question
+of each and the branch is in the seam that answers it: an operator is
+admitted while its organization still holds the record (ADR-0070), a
+supervisor while its registration is current — a revocation or a
+replacement ends it (ADR-0082) — and an agent is held without a
+read. What the certificate asserts is the
 GRN in its SAN URI and nothing beside it: no user row, no session, no
 membership, so no foreign key on `users` is touched and no handler
 taking a `*user.User` changes. The identity carries the certificate's
@@ -44,12 +46,14 @@ The package holds no store and reaches no database: `TrustRoot` is the
 seam the composition root satisfies from `internal/ca`, which keeps the
 two domains cooperating through `grn.GRN` alone. Verification needs the
 authority's certificate and never its key. `Registration` is a seam of
-the same shape, satisfied from `internal/operator`, and it is what
-turns an organization deleting an operator into a certificate that
-stops authenticating — no list, no responder and no stored serial, just
-the record the organization already keeps, read once per connection
-after the chain verifies. Both reads are per connection and a resumed
-handshake takes them too, because `Authenticate` runs from
+the same shape, satisfied from `internal/operator` for an operator and
+from `internal/agent` for a supervisor, and it is what turns an
+organization deleting an operator, or revoking a supervisor, into a
+certificate that stops authenticating — no list, no responder and no
+stored serial, just the record the organization already keeps, read
+once per connection after the chain verifies. Both reads are per
+connection and a resumed handshake takes them too, because
+`Authenticate` runs from
 `VerifyConnection` (ADR-0064): a check that ran only on a full
 handshake would let a deleted operator keep connecting for as long as
 its tickets lasted.
@@ -104,8 +108,9 @@ what compose lacks is the step, not something a container cannot do.
 
 **garam's half is built; the adapter this repository ships does not
 use it.** Nothing under `internal/delivery/` carries an execution
-token (#1169), and acceptance with the Operator control service and a
-standalone lifecycle principal is unverified (#1157, #1168). Until a
+token (#1169), and acceptance with the Operator control service and
+with a standalone host's supervisor is unverified (#1157, #1168): the
+supervisor's runner is unbuilt (#1180). Until a
 GRN's first activation it is in the legacy cohort: its calls carry no
 token, and the certificate check below still applies to each of them.
 An agent created managed is never in it: it is fenced from birth
@@ -135,16 +140,21 @@ read, so a refused caller reads nothing. `getIdentity` asks neither.
 The routes and their schemes are `api/machine.yaml`'s, under the
 `executionToken` scheme each declares.
 
-The hosted control service is the lifecycle caller. It activates,
+The hosted control service is a lifecycle caller. It activates,
 deactivates, inspects and recovers an agent's execution on the routes
 tagged `execution` in `api/machine.yaml`, which is authoritative for
-their wire and their `execution-fence.v1` contract version, and it
-creates a managed agent and obtains its first certificate on the
-routes tagged `enrollment`, authoritative for theirs and
-`managed-enrollment.v1`. Each request rereads the caller's certificate
-and registration; each but creation rereads its grant and current
-policy too, and creation rereads the member's `agent:create` reference
-instead. An agent's own certificate and a controller's are refused.
+their wire and their `execution-fence.v1` contract version. A
+standalone host's supervisor is the other: on the same routes it
+activates, deactivates and inspects the one agent it is registered
+for and holds, and recovers nothing ([agents.md](./agents.md)
+§Standalone hosts). The hosted control service alone creates a
+managed agent and obtains its first certificate, on the routes tagged
+`enrollment`, authoritative for theirs and `managed-enrollment.v1`.
+Each request rereads the caller's certificate and registration; each
+but creation rereads its grant, or a supervisor's registration and
+assignment, and current policy too, and creation rereads the member's
+`agent:create` reference instead. An agent's own certificate and a
+controller's are refused.
 Activation, deactivation, recovery, creation and initial issuance are
 each bounded by a ten-second server deadline over both their authority
 reads and their write, and past it answer unavailable without saying

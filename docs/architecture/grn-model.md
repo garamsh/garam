@@ -57,6 +57,7 @@ and nowhere else.
 | `group` | user/agent bundle | `grn:acme:default:group:eng` |
 | `project` | unit of work | `grn:acme:default:project:frontend` |
 | `operator` | provisions agents from outside (ADR-0012); registered by its organization, which supplies the identifier (ADR-0045) | `grn:acme:default:operator:field-one` |
+| `supervisor` | runs one agent on a standalone host; garam mints the identifier and registers it for that agent on an administrator's approval (ADR-0082) | `grn:acme:default:supervisor:0a1b2c3d4e5f6071` |
 | `policy` | stored policy document | `grn:acme:default:policy:a1b2c3d4` |
 | `agent-template` | starting point an organization keeps for defining agents; a definition copies its values once (ADR-0075) | `grn:acme:default:agent-template:7c1e2a9b3d4f5a60` |
 | `doc` | permissioned document (planned) | `grn:acme:frontend:doc:readme` |

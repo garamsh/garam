@@ -74,9 +74,9 @@ func mode(t *testing.T, path string) os.FileMode {
 // TestStandaloneHost_PrepareEnrollAndRenewRecoverFromInterruption
 // drives the shipped command against the machine listener: a repeated
 // prepare answers the same request, a repeated enrollment installs the
-// result garam recorded, a renewal interrupted before its request, after
-// garam answered it, and after it was installed each completes without
-// a second successor.
+// result garam recorded, and a renewal interrupted before its request,
+// after garam answered it, and after it was installed each completes
+// without a second successor.
 func TestStandaloneHost_PrepareEnrollAndRenewRecoverFromInterruption(t *testing.T) {
 	p := pool(t)
 	_, engine := policyEngine(t, p)

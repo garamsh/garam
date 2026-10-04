@@ -423,7 +423,8 @@ func TestStandalone_RevocationEndsTheSupervisorAndItsActivation(t *testing.T) {
 	p := pool(t)
 	_, engine := policyEngine(t, p)
 	s := newExecutionStack(t, p, engine)
-	_, e := s.standaloneOf(t)
+	h, e := s.standaloneOf(t)
+	supervisorKey := h.supervisorKey
 	got := s.activate(t, e.supervisorTLS, "v-1", generationOf(1), nil, e.agentLeaf)
 	require.Equal(t, http.StatusCreated, got.status, got.body)
 	var a machinegen.Activation
@@ -434,12 +435,17 @@ func TestStandalone_RevocationEndsTheSupervisorAndItsActivation(t *testing.T) {
 	s.open(t, e.supervisorTLS)
 
 	path := "/orgs/acme/agent-supervisors/" + e.supervisor.Identifier
+	fresh := func() *http.Client { return clientOver(t, e.supervisorLeaf, supervisorKey) }
+	identity := s.send(t, fresh(), http.MethodGet, "/identity", "", "", "")
+	assert.Equal(t, http.StatusOK, identity.status, "the control: a current supervisor authenticates: %s", identity.body)
 	status, body := s.browse(t, http.MethodDelete, path, s.member, "")
 	assert.Equal(t, http.StatusForbidden, status, "a member revokes nothing: %s", body)
 	allAdmitted(t, s.protectedCalls(t, e.agentTLS, a.Token), "the control: still admitted before the revocation")
 
 	status, body = s.browse(t, http.MethodDelete, path, s.owner, "")
 	require.Equal(t, http.StatusNoContent, status, body)
+	identity = s.send(t, fresh(), http.MethodGet, "/identity", "", "", "")
+	assert.Equal(t, http.StatusUnauthorized, identity.status, "a revoked supervisor's next connection: %s", identity.body)
 	allRefused(t, s.protectedCalls(t, e.agentTLS, a.Token), http.StatusForbidden, "the revoked supervisor's activation")
 	lifecycle := s.activate(t, e.supervisorTLS, "v-2", generationOf(2), &a.ActivationId, e.agentLeaf)
 	assert.Equal(t, http.StatusForbidden, lifecycle.status, "a revoked supervisor on its open connection: %s", lifecycle.body)

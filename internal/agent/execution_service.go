@@ -251,28 +251,31 @@ func (s *executionService) Introspect(ctx context.Context, caller, agentGRN grn.
 	if err != nil {
 		return nil, err
 	}
-	current, err := s.executions.CredentialCurrent(ctx, agentGRN, credential)
+	// One read, so the certificate's standing, the generation and the
+	// assignment answered were current together.
+	snapshot, err := s.executions.Introspect(ctx, agentGRN, credential)
 	if err != nil {
 		return nil, err
 	}
-	e, err := s.executions.GetExecution(ctx, agentGRN)
-	if err != nil {
-		return nil, err
+	// The authority was read for the assignee before; an answer about
+	// another one would not be the one it authorized.
+	if snapshot.Assignee == nil || *snapshot.Assignee != assignment.Operator() {
+		return nil, ErrNotAssigned
 	}
 	out := &Introspection{
 		Agent:      agentGRN,
 		Org:        orgGRNOf(agentGRN),
-		Assignee:   assignment.Operator(),
-		Epoch:      assignment.Epoch(),
-		Mode:       e.Mode,
+		Assignee:   *snapshot.Assignee,
+		Epoch:      snapshot.Epoch,
+		Mode:       snapshot.Mode,
 		Credential: CredentialFenced,
-		Generation: standing(e.Current, generation),
+		Generation: standing(snapshot.Current, generation),
 	}
-	if current {
+	if snapshot.CredentialCurrent {
 		out.Credential = CredentialCurrent
 	}
-	if e.Current != nil {
-		out.Current = &e.Current.ID
+	if snapshot.Current != nil {
+		out.Current = &snapshot.Current.ID
 	}
 	return out, nil
 }

@@ -18,6 +18,20 @@ SELECT operator_grn, epoch FROM agent_assignments WHERE agent_grn = $1 FOR SHARE
 -- name: Now :one
 SELECT clock_timestamp()::timestamptz;
 
+-- Introspect answers in one statement, so from one snapshot, the
+-- assignment, the execution and whether the certificate is current.
+-- name: Introspect :one
+SELECT e.mode, e.activation_id, a.generation AS current_generation,
+       s.operator_grn AS assignee, s.epoch AS epoch,
+       agent_credential_current(
+           e.agent_grn, sqlc.arg('serial'),
+           sqlc.arg('not_before')::timestamptz, sqlc.arg('not_after')::timestamptz
+       )::boolean AS credential_current
+FROM agent_executions e
+LEFT JOIN agent_assignments s ON s.agent_grn = e.agent_grn
+LEFT JOIN agent_activations a ON a.id = e.activation_id
+WHERE e.agent_grn = sqlc.arg('agent_grn');
+
 -- name: CredentialCurrent :one
 SELECT agent_credential_current(
     sqlc.arg('agent_grn'), sqlc.arg('serial'),

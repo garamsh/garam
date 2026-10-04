@@ -260,6 +260,17 @@ type Execution struct {
 	Latest  *ActivationID
 }
 
+// Snapshot is what one read of an agent's execution answers for a
+// presented certificate: facts that were current together.
+type Snapshot struct {
+	// Assignee is nil for an agent with no assignment.
+	Assignee          *grn.GRN
+	Epoch             int
+	Mode              Mode
+	CredentialCurrent bool
+	Current           *CurrentActivation
+}
+
 // CurrentActivation is the activation whose token admits writes now.
 type CurrentActivation struct {
 	ID         ActivationID

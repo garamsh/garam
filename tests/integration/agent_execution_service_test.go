@@ -18,6 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/garam/internal/agent"
+	agentpg "github.com/garamsh/garam/internal/agent/postgres"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 )
@@ -356,4 +357,81 @@ func TestExecutionService_RenewalIssuesOnlyInsideTheCurrentExecution(t *testing.
 	assert.ErrorIs(t, err, agent.ErrCredentialFenced)
 	_, err = l.service.Renew(ctx, l.audience, &res.Token, valid("1"))
 	assert.ErrorIs(t, err, agent.ErrNotTheAgent)
+}
+
+// interleaving is the real execution store with a recovery and an
+// activation committed once, right after the first read it answers:
+// the moment a proof assembled from more than one read would mix two
+// executions.
+type interleaving struct {
+	*agentpg.Store
+	between func()
+}
+
+// after runs between once the first read has returned.
+func (s *interleaving) after() {
+	if s.between != nil {
+		between := s.between
+		s.between = nil
+		between()
+	}
+}
+
+func (s *interleaving) Introspect(ctx context.Context, agentGRN grn.GRN, c agent.Credential) (*agent.Snapshot, error) {
+	defer s.after()
+	return s.Store.Introspect(ctx, agentGRN, c)
+}
+
+func (s *interleaving) CredentialCurrent(ctx context.Context, agentGRN grn.GRN, c agent.Credential) (bool, error) {
+	defer s.after()
+	return s.Store.CredentialCurrent(ctx, agentGRN, c)
+}
+
+func (s *interleaving) GetExecution(ctx context.Context, agentGRN grn.GRN) (*agent.Execution, error) {
+	defer s.after()
+	return s.Store.GetExecution(ctx, agentGRN)
+}
+
+// TestExecutionService_IntrospectionNeverMixesTwoExecutions commits a
+// recovery and a new activation between the service's store reads, and
+// again after them. The old certificate was current with the old
+// execution and the new generation is current with the new lineage;
+// no answer may say both are current, because they never were together.
+func TestExecutionService_IntrospectionNeverMixesTwoExecutions(t *testing.T) {
+	ctx := context.Background()
+	l := newLifecycle(t)
+	first, err := l.service.Activate(ctx, l.audience, l.input("r1", generation(1), nil, "leaf-1"))
+	require.NoError(t, err)
+
+	store := &interleaving{Store: l.exec}
+	leaves := namedLeaves{"leaf-1": valid("1"), "leaf-2": valid("2")}
+	service := agent.NewExecutionService(l.agents, store, l.authorizer, l.operations, leaves, l.signer, l.issuer)
+	next := generation(2)
+	store.between = func() {
+		body := `{"request_id":"rec-1","certificate_request_pem":"csr-2"}`
+		l.handoff("h1", body)
+		_, err := l.service.Recover(ctx, l.audience, agent.RecoveryInput{
+			Agent: l.agent, RequestID: "rec-1", Epoch: l.epochNow(), Authority: "h1",
+			Body: []byte(body), CertificateRequestPEM: []byte("csr-2"),
+		})
+		require.NoError(t, err)
+		_, err = l.service.Activate(ctx, l.audience, l.input("r2", next, &first.Activation.ID, "leaf-2"))
+		require.NoError(t, err)
+	}
+
+	during, err := service.Introspect(ctx, l.audience, l.agent, []byte("leaf-1"), &next)
+	require.NoError(t, err)
+	assert.False(t, during.Credential == agent.CredentialCurrent && during.Generation == agent.GenerationCurrent,
+		"the old certificate and the new generation were never current together: %+v", during)
+	assert.Equal(t, agent.CredentialCurrent, during.Credential, "the answer is the execution as it stood when read")
+	assert.Equal(t, agent.GenerationNotCurrent, during.Generation)
+
+	after, err := service.Introspect(ctx, l.audience, l.agent, []byte("leaf-1"), &next)
+	require.NoError(t, err)
+	assert.Equal(t, agent.CredentialFenced, after.Credential)
+	assert.Equal(t, agent.GenerationCurrent, after.Generation)
+	control, err := service.Introspect(ctx, l.audience, l.agent, []byte("leaf-2"), &next)
+	require.NoError(t, err)
+	assert.Equal(t, agent.CredentialCurrent, control.Credential, "control: the recovered certificate and the new generation are current together")
+	assert.Equal(t, agent.GenerationCurrent, control.Generation)
 }

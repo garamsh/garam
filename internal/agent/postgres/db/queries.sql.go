@@ -353,6 +353,56 @@ func (q *Queries) InstallActivation(ctx context.Context, arg InstallActivationPa
 	return err
 }
 
+const introspect = `-- name: Introspect :one
+SELECT e.mode, e.activation_id, a.generation AS current_generation,
+       s.operator_grn AS assignee, s.epoch AS epoch,
+       agent_credential_current(
+           e.agent_grn, $1,
+           $2::timestamptz, $3::timestamptz
+       )::boolean AS credential_current
+FROM agent_executions e
+LEFT JOIN agent_assignments s ON s.agent_grn = e.agent_grn
+LEFT JOIN agent_activations a ON a.id = e.activation_id
+WHERE e.agent_grn = $4
+`
+
+type IntrospectParams struct {
+	Serial    string
+	NotBefore pgtype.Timestamptz
+	NotAfter  pgtype.Timestamptz
+	AgentGrn  string
+}
+
+type IntrospectRow struct {
+	Mode              string
+	ActivationID      pgtype.UUID
+	CurrentGeneration pgtype.Text
+	Assignee          pgtype.Text
+	Epoch             pgtype.Int4
+	CredentialCurrent bool
+}
+
+// Introspect answers in one statement, so from one snapshot, the
+// assignment, the execution and whether the certificate is current.
+func (q *Queries) Introspect(ctx context.Context, arg IntrospectParams) (IntrospectRow, error) {
+	row := q.db.QueryRow(ctx, introspect,
+		arg.Serial,
+		arg.NotBefore,
+		arg.NotAfter,
+		arg.AgentGrn,
+	)
+	var i IntrospectRow
+	err := row.Scan(
+		&i.Mode,
+		&i.ActivationID,
+		&i.CurrentGeneration,
+		&i.Assignee,
+		&i.Epoch,
+		&i.CredentialCurrent,
+	)
+	return i, err
+}
+
 const lockExecution = `-- name: LockExecution :one
 SELECT agent_grn, mode, lineage, activation_id, token_hash, latest_activation_id, updated_at FROM agent_executions WHERE agent_grn = $1 FOR UPDATE
 `

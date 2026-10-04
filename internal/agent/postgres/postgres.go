@@ -119,6 +119,38 @@ func (s *Store) GetExecution(ctx context.Context, agentGRN grn.GRN) (*agent.Exec
 	return e, nil
 }
 
+func (s *Store) Introspect(ctx context.Context, agentGRN grn.GRN, c agent.Credential) (*agent.Snapshot, error) {
+	row, err := s.q.Introspect(ctx, db.IntrospectParams{
+		AgentGrn:  agentGRN.String(),
+		Serial:    c.Serial,
+		NotBefore: stamp(c.NotBefore),
+		NotAfter:  stamp(c.NotAfter),
+	})
+	if err != nil {
+		return nil, storageError(err, "introspect", agent.ErrAgentNotFound, nil)
+	}
+	mode, err := agent.ParseMode(row.Mode)
+	if err != nil {
+		return nil, errorx.Wrap(err, "stored execution mode", errorx.KindInternal)
+	}
+	snapshot := &agent.Snapshot{Mode: mode, CredentialCurrent: row.CredentialCurrent}
+	if row.Assignee.Valid {
+		assignee, err := grn.Parse(row.Assignee.String)
+		if err != nil {
+			return nil, errorx.Wrap(err, "stored assignee", errorx.KindInternal)
+		}
+		snapshot.Assignee, snapshot.Epoch = &assignee, int(row.Epoch.Int32)
+	}
+	if id := activationIDOf(row.ActivationID); id != nil {
+		generation, err := agent.ParseGeneration(row.CurrentGeneration.String)
+		if err != nil {
+			return nil, errorx.Wrap(err, "stored generation", errorx.KindInternal)
+		}
+		snapshot.Current = &agent.CurrentActivation{ID: *id, Generation: generation}
+	}
+	return snapshot, nil
+}
+
 func (s *Store) CredentialCurrent(ctx context.Context, agentGRN grn.GRN, c agent.Credential) (bool, error) {
 	current, err := s.q.CredentialCurrent(ctx, credentialParams(agentGRN, c))
 	if err != nil {

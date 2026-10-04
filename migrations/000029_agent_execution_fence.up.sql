@@ -100,10 +100,16 @@ CREATE TABLE agent_recoveries (
 -- may act now: inside its validity at this instant, and in the
 -- agent's current lineage. clock_timestamp() rather than now(), which
 -- is when the transaction began and is stale after a lock wait.
+--
+-- STABLE, so it reads the snapshot of the statement calling it: one
+-- statement that also reads the execution answers facts that were
+-- current together. Each statement agent_execution_admit runs takes
+-- its snapshot after the lock it waited on, so the answer there is
+-- the one current once the lock is held.
 CREATE FUNCTION agent_credential_current(
     p_agent_grn text, p_serial text, p_not_before timestamptz, p_not_after timestamptz
 ) RETURNS boolean
-LANGUAGE sql VOLATILE AS $$
+LANGUAGE sql STABLE AS $$
     SELECT p_not_before <= clock_timestamp()
        AND clock_timestamp() < p_not_after
        AND EXISTS (

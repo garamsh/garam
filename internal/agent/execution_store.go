@@ -40,6 +40,9 @@ type ExecutionStore interface {
 	RecordRenewal(ctx context.Context, agentGRN grn.GRN, token *TokenHash, presented, successor Credential) error
 	// GetExecution answers the agent's execution as it stands.
 	GetExecution(ctx context.Context, agentGRN grn.GRN) (*Execution, error)
+	// Introspect answers the agent's assignment, its execution and
+	// whether c may act now, from one snapshot and without a lock.
+	Introspect(ctx context.Context, agentGRN grn.GRN, c Credential) (*Snapshot, error)
 	// CredentialCurrent answers whether c may act for the agent now,
 	// without a token and without taking the execution lock.
 	CredentialCurrent(ctx context.Context, agentGRN grn.GRN, c Credential) (bool, error)

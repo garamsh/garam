@@ -120,18 +120,26 @@ func TestIntrospectController_ProvesWhatTheForwardedCertificateNames(t *testing.
 	assert.Nil(t, p.agent)
 }
 
+// sessionProof is what the doubles answer a request that passes.
+func sessionProof() *operator.ControllerProof {
+	return &operator.ControllerProof{Controller: grn.New("acme", "default", "operator", "controller"),
+		Org: grn.New("root", "default", "org", "acme")}
+}
+
 // TestIntrospectController_RefusesMalformedInputUnread holds that what
 // does not parse is refused before either the caller's state or the
-// controller's is read. The test above is the control: the same
-// listener reads both for a request that parses.
+// controller's is read. Each case sends the accepted request through
+// the same listener first, which reads both and is proved, and then the
+// request with the one malformed part.
 func TestIntrospectController_RefusesMalformedInputUnread(t *testing.T) {
 	pemText := forwarded(t)
+	accepted := proofBody(t, pemText, agentGRN("acme", "0a1b2c3d4e5f6071").String())
 	key := string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: []byte("not a key")}))
 	tests := []struct {
 		name, path, version, body string
 		status                    int
 	}{
-		{"no contract version", proofRoute, "", proofBody(t, pemText, ""), http.StatusBadRequest},
+		{"no contract version", proofRoute, "", accepted, http.StatusBadRequest},
 		{"a body that is not JSON", proofRoute, operator.ContractVersion, "certificate", http.StatusBadRequest},
 		{"no certificate", proofRoute, operator.ContractVersion, `{}`, http.StatusBadRequest},
 		{"a private key in place of a certificate", proofRoute, operator.ContractVersion, proofBody(t, key, ""), http.StatusBadRequest},
@@ -140,16 +148,23 @@ func TestIntrospectController_RefusesMalformedInputUnread(t *testing.T) {
 			proofBody(t, string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: []byte("x")})), ""), http.StatusBadRequest},
 		{"an agent that is not a GRN", proofRoute, operator.ContractVersion, proofBody(t, pemText, "bot"), http.StatusBadRequest},
 		{"a controller that is not a GRN", "/operators/controller/introspection", operator.ContractVersion,
-			proofBody(t, pemText, ""), http.StatusBadRequest},
+			accepted, http.StatusBadRequest},
 		{"another organization's controller", "/operators/grn:globex:default:operator:controller/introspection",
-			operator.ContractVersion, proofBody(t, pemText, ""), http.StatusNotFound},
+			operator.ContractVersion, accepted, http.StatusNotFound},
 		{"an agent named as the controller", "/operators/grn:acme:default:agent:bot/introspection",
-			operator.ContractVersion, proofBody(t, pemText, ""), http.StatusNotFound},
+			operator.ContractVersion, accepted, http.StatusNotFound},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			certificates, p := &certificateCheck{}, &proofs{}
+			certificates, p := &certificateCheck{}, &proofs{proof: sessionProof()}
 			url, client := proofListener(t, certificates, p)
+			status, _, body := versioned(t, client, http.MethodPost, url+proofRoute, operator.ContractVersion, accepted)
+			require.Equal(t, http.StatusOK, status, "the control: %s", body)
+			require.Len(t, certificates.rechecks, 1)
+			require.NotNil(t, certificates.leaf)
+			require.Equal(t, 1, p.asked)
+
+			*certificates, *p = certificateCheck{}, proofs{proof: sessionProof()}
 			status, version, body := versioned(t, client, http.MethodPost, url+tt.path, tt.version, tt.body)
 			assert.Equal(t, tt.status, status, body)
 			assert.Equal(t, operator.ContractVersion, version)
@@ -164,7 +179,8 @@ func TestIntrospectController_RefusesMalformedInputUnread(t *testing.T) {
 // the caller's own withdrawn registration and expired certificate are
 // 403, a forwarded certificate that does not prove the controller is
 // 422, a withdrawn controller 404, and authority that cannot be read
-// 503 naming no cause.
+// 503 naming no cause. Each case is first answered 200 by the same
+// listener with nothing refusing, and then with the one refusal set.
 func TestIntrospectController_MapsEachRefusal(t *testing.T) {
 	unavailable := errorx.Wrap(errorx.New(errorx.KindInternal, "connection refused"), "registration", errorx.KindUnavailable)
 	tests := []struct {
@@ -187,10 +203,17 @@ func TestIntrospectController_MapsEachRefusal(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			certificates := &certificateCheck{recheck: tt.recheck, verify: tt.verify}
-			url, client := proofListener(t, certificates, &proofs{err: tt.prove})
-			status, version, body := versioned(t, client, http.MethodPost, url+proofRoute, operator.ContractVersion,
-				proofBody(t, forwarded(t), ""))
+			certificates, p := &certificateCheck{}, &proofs{proof: sessionProof()}
+			url, client := proofListener(t, certificates, p)
+			request := proofBody(t, forwarded(t), "")
+			status, _, body := versioned(t, client, http.MethodPost, url+proofRoute, operator.ContractVersion, request)
+			require.Equal(t, http.StatusOK, status, "the control: %s", body)
+
+			certificates.recheck, certificates.verify = tt.recheck, tt.verify
+			if tt.prove != nil {
+				*p = proofs{err: tt.prove}
+			}
+			status, version, body := versioned(t, client, http.MethodPost, url+proofRoute, operator.ContractVersion, request)
 			assert.Equal(t, tt.status, status, body)
 			assert.Equal(t, operator.ContractVersion, version)
 			if tt.status == http.StatusServiceUnavailable {

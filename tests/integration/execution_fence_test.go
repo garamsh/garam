@@ -73,9 +73,13 @@ func (c *shiftedClock) shift(by time.Duration) {
 // created with the certificate the legacy route issued it. A second
 // agent of the controller posts to the first.
 type executionStack struct {
-	pool       *pgxpool.Pool
-	browser    string
-	machine    string
+	pool    *pgxpool.Pool
+	browser string
+	machine string
+	// server is the machine listener serving at machine, composed from
+	// config, which restart composes the next one from.
+	server     *http.Server
+	config     cli.MachineConfig
 	clock      *shiftedClock
 	acme       grn.GRN
 	owner      *http.Cookie
@@ -139,23 +143,18 @@ func newExecutionStack(t *testing.T, p *pgxpool.Pool, engine grpc.ClientConnInte
 
 	clock := &shiftedClock{}
 	presented := loopbackCertificate(t)
-	srv, err := cli.NewMachineServer(p, cli.MachineConfig{
-		Sealer: sealer, Certificate: presented, ServerRoot: certificatePEM(presented),
-		Delivery: briefDelivery(), Engine: engine,
-		Logger: slog.New(slog.NewJSONHandler(io.Discard, nil)), Now: clock.now,
-	})
-	require.NoError(t, err)
-	lis, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	go func() { _ = srv.ServeTLS(lis, "", "") }()
-	t.Cleanup(func() { _ = srv.Close() })
-
 	s := &executionStack{
-		pool: p, browser: browser.URL, machine: "https://" + lis.Addr().String(), clock: clock,
+		pool: p, browser: browser.URL, clock: clock,
+		config: cli.MachineConfig{
+			Sealer: sealer, Certificate: presented, ServerRoot: certificatePEM(presented),
+			Delivery: briefDelivery(), Engine: engine,
+			Logger: slog.New(slog.NewJSONHandler(io.Discard, nil)), Now: clock.now,
+		},
 		acme: acme, owner: session("ada", org.RoleOwner), member: session("bob", org.RoleMember),
 		hosted: hosted, controller: scopedGRN("acme", operator.ServiceType, "controller"),
 		issuer: issuer, past: past,
 	}
+	s.serve(t)
 	s.hostedTLS = machineClient(t, installed(t, p, issuer, s.hosted))
 	s.controlTLS = machineClient(t, installed(t, p, issuer, s.controller))
 	s.delegate(t, "agent:activate", "agent:recover", "agent:configure")
@@ -174,12 +173,43 @@ func newExecutionStack(t *testing.T, p *pgxpool.Pool, engine grpc.ClientConnInte
 	return s
 }
 
+// serve starts a machine listener composed from s.config, as `serve
+// machine` composes it, on a port of its own.
+func (s *executionStack) serve(t *testing.T) {
+	t.Helper()
+	srv, err := cli.NewMachineServer(s.pool, s.config)
+	require.NoError(t, err)
+	lis, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	go func() { _ = srv.ServeTLS(lis, "", "") }()
+	t.Cleanup(func() { _ = srv.Close() })
+	s.server, s.machine = srv, "https://"+lis.Addr().String()
+}
+
+// restart stops the machine listener, closing every connection it
+// held, and serves a new one over the same database.
+func (s *executionStack) restart(t *testing.T) {
+	t.Helper()
+	require.NoError(t, s.server.Close())
+	s.serve(t)
+}
+
 // delegate writes the hosted control service's grant as the owner,
 // replacing the one it wrote before.
 func (s *executionStack) delegate(t *testing.T, operations ...string) {
 	t.Helper()
+	s.delegateTo(t, []grn.GRN{s.controller}, operations...)
+}
+
+// delegateTo is delegate for the controllers named.
+func (s *executionStack) delegateTo(t *testing.T, controllers []grn.GRN, operations ...string) {
+	t.Helper()
+	names := make([]string, 0, len(controllers))
+	for _, c := range controllers {
+		names = append(names, c.String())
+	}
 	raw, err := json.Marshal(map[string]any{
-		"requestId": s.key(), "controllers": []string{s.controller.String()}, "operations": operations,
+		"requestId": s.key(), "controllers": names, "operations": operations,
 		"expiresAt":       time.Now().Add(24 * time.Hour).UTC().Format(time.RFC3339Nano),
 		"expectedGrantId": s.grant,
 	})

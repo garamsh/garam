@@ -20,8 +20,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AuthzService_Check_FullMethodName   = "/garam.authz.v1.AuthzService/Check"
-	AuthzService_Explain_FullMethodName = "/garam.authz.v1.AuthzService/Explain"
+	AuthzService_Check_FullMethodName        = "/garam.authz.v1.AuthzService/Check"
+	AuthzService_Explain_FullMethodName      = "/garam.authz.v1.AuthzService/Explain"
+	AuthzService_CheckCurrent_FullMethodName = "/garam.authz.v1.AuthzService/CheckCurrent"
 )
 
 // AuthzServiceClient is the client API for AuthzService service.
@@ -39,6 +40,16 @@ type AuthzServiceClient interface {
 	// Explain answers the same question and reports which statements
 	// matched and which produced the final decision.
 	Explain(ctx context.Context, in *ExplainRequest, opts ...grpc.CallOption) (*ExplainResponse, error)
+	// CheckCurrent answers Check's question with the org's persisted
+	// policies read from storage when it is asked, never from the
+	// engine's cache, and fails rather than answer when storage cannot
+	// be read. Only that read is current: statements, subject_groups and
+	// subject_org are taken as sent, so a caller needing them current
+	// resolves them afresh. It is a method of its own so that an engine
+	// predating it answers UNIMPLEMENTED: a field on CheckRequest would
+	// be dropped unread by such an engine, which would then answer from
+	// its cache.
+	CheckCurrent(ctx context.Context, in *CheckCurrentRequest, opts ...grpc.CallOption) (*CheckCurrentResponse, error)
 }
 
 type authzServiceClient struct {
@@ -69,6 +80,16 @@ func (c *authzServiceClient) Explain(ctx context.Context, in *ExplainRequest, op
 	return out, nil
 }
 
+func (c *authzServiceClient) CheckCurrent(ctx context.Context, in *CheckCurrentRequest, opts ...grpc.CallOption) (*CheckCurrentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckCurrentResponse)
+	err := c.cc.Invoke(ctx, AuthzService_CheckCurrent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AuthzServiceServer is the server API for AuthzService service.
 // All implementations must embed UnimplementedAuthzServiceServer
 // for forward compatibility.
@@ -84,6 +105,16 @@ type AuthzServiceServer interface {
 	// Explain answers the same question and reports which statements
 	// matched and which produced the final decision.
 	Explain(context.Context, *ExplainRequest) (*ExplainResponse, error)
+	// CheckCurrent answers Check's question with the org's persisted
+	// policies read from storage when it is asked, never from the
+	// engine's cache, and fails rather than answer when storage cannot
+	// be read. Only that read is current: statements, subject_groups and
+	// subject_org are taken as sent, so a caller needing them current
+	// resolves them afresh. It is a method of its own so that an engine
+	// predating it answers UNIMPLEMENTED: a field on CheckRequest would
+	// be dropped unread by such an engine, which would then answer from
+	// its cache.
+	CheckCurrent(context.Context, *CheckCurrentRequest) (*CheckCurrentResponse, error)
 	mustEmbedUnimplementedAuthzServiceServer()
 }
 
@@ -99,6 +130,9 @@ func (UnimplementedAuthzServiceServer) Check(context.Context, *CheckRequest) (*C
 }
 func (UnimplementedAuthzServiceServer) Explain(context.Context, *ExplainRequest) (*ExplainResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Explain not implemented")
+}
+func (UnimplementedAuthzServiceServer) CheckCurrent(context.Context, *CheckCurrentRequest) (*CheckCurrentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckCurrent not implemented")
 }
 func (UnimplementedAuthzServiceServer) mustEmbedUnimplementedAuthzServiceServer() {}
 func (UnimplementedAuthzServiceServer) testEmbeddedByValue()                      {}
@@ -157,6 +191,24 @@ func _AuthzService_Explain_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AuthzService_CheckCurrent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckCurrentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthzServiceServer).CheckCurrent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthzService_CheckCurrent_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthzServiceServer).CheckCurrent(ctx, req.(*CheckCurrentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AuthzService_ServiceDesc is the grpc.ServiceDesc for AuthzService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -171,6 +223,10 @@ var AuthzService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Explain",
 			Handler:    _AuthzService_Explain_Handler,
+		},
+		{
+			MethodName: "CheckCurrent",
+			Handler:    _AuthzService_CheckCurrent_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

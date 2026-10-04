@@ -27,15 +27,15 @@ const (
 	policyReconnectMax = 30 * time.Second
 )
 
-// cachedPolicy is one active policy's parsed statements and the
+// loadedPolicy is one active policy's parsed statements and the
 // subjects it is attached to. An empty subject set applies org-wide.
-type cachedPolicy struct {
+type loadedPolicy struct {
 	statements []Statement
 	subjects   map[grn.GRN]bool
 }
 
 // appliesTo reports whether the policy applies to any of subjects.
-func (p cachedPolicy) appliesTo(subjects []grn.GRN) bool {
+func (p loadedPolicy) appliesTo(subjects []grn.GRN) bool {
 	if len(p.subjects) == 0 {
 		return true
 	}
@@ -53,7 +53,7 @@ func (p cachedPolicy) appliesTo(subjects []grn.GRN) bool {
 type PolicyCache struct {
 	store Store
 	mu    sync.RWMutex
-	byOrg map[grn.GRN][]cachedPolicy
+	byOrg map[grn.GRN][]loadedPolicy
 	// gen counts invalidations. A fill reads the store outside the
 	// lock, so an invalidation can land while that read is in flight
 	// and find no entry to drop; installing the snapshot afterwards
@@ -69,7 +69,7 @@ var _ PolicySource = (*PolicyCache)(nil)
 
 // NewPolicyCache constructs a cache over store.
 func NewPolicyCache(store Store) *PolicyCache {
-	return &PolicyCache{store: store, byOrg: make(map[grn.GRN][]cachedPolicy)}
+	return &PolicyCache{store: store, byOrg: make(map[grn.GRN][]loadedPolicy)}
 }
 
 // Statements returns the statements the org's active policies grant
@@ -79,17 +79,34 @@ func (c *PolicyCache) Statements(ctx context.Context, orgGRN grn.GRN, subjects [
 	if err != nil {
 		return nil, err
 	}
+	return statementsFor(policies, subjects), nil
+}
+
+// CurrentStatements returns what Statements returns, read from the
+// store on every call. It neither reads nor fills the cache, so an
+// invalidation that has not arrived cannot reach its answer.
+func (c *PolicyCache) CurrentStatements(ctx context.Context, orgGRN grn.GRN, subjects []grn.GRN) ([]Statement, error) {
+	policies, err := c.load(ctx, orgGRN)
+	if err != nil {
+		return nil, err
+	}
+	return statementsFor(policies, subjects), nil
+}
+
+// statementsFor returns the statements of the policies that apply to
+// any of subjects.
+func statementsFor(policies []loadedPolicy, subjects []grn.GRN) []Statement {
 	var statements []Statement
 	for _, p := range policies {
 		if p.appliesTo(subjects) {
 			statements = append(statements, p.statements...)
 		}
 	}
-	return statements, nil
+	return statements
 }
 
 // policies returns the org's cached entry, filling it on a miss.
-func (c *PolicyCache) policies(ctx context.Context, orgGRN grn.GRN) ([]cachedPolicy, error) {
+func (c *PolicyCache) policies(ctx context.Context, orgGRN grn.GRN) ([]loadedPolicy, error) {
 	c.mu.RLock()
 	cached, ok := c.byOrg[orgGRN]
 	gen := c.gen
@@ -97,17 +114,9 @@ func (c *PolicyCache) policies(ctx context.Context, orgGRN grn.GRN) ([]cachedPol
 	if ok {
 		return cached, nil
 	}
-	active, err := c.store.ActivePolicies(ctx, orgGRN)
+	policies, err := c.load(ctx, orgGRN)
 	if err != nil {
 		return nil, err
-	}
-	policies := make([]cachedPolicy, 0, len(active))
-	for _, a := range active {
-		subjects := make(map[grn.GRN]bool, len(a.Subjects))
-		for _, s := range a.Subjects {
-			subjects[s] = true
-		}
-		policies = append(policies, cachedPolicy{statements: a.Document.Statement, subjects: subjects})
 	}
 	c.mu.Lock()
 	// A gen that has moved means an invalidation was raised after this
@@ -120,6 +129,23 @@ func (c *PolicyCache) policies(ctx context.Context, orgGRN grn.GRN) ([]cachedPol
 		c.byOrg[orgGRN] = policies
 	}
 	c.mu.Unlock()
+	return policies, nil
+}
+
+// load reads the org's active policies from the store.
+func (c *PolicyCache) load(ctx context.Context, orgGRN grn.GRN) ([]loadedPolicy, error) {
+	active, err := c.store.ActivePolicies(ctx, orgGRN)
+	if err != nil {
+		return nil, err
+	}
+	policies := make([]loadedPolicy, 0, len(active))
+	for _, a := range active {
+		subjects := make(map[grn.GRN]bool, len(a.Subjects))
+		for _, s := range a.Subjects {
+			subjects[s] = true
+		}
+		policies = append(policies, loadedPolicy{statements: a.Document.Statement, subjects: subjects})
+	}
 	return policies, nil
 }
 

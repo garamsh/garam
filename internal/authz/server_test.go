@@ -17,6 +17,7 @@ import (
 
 	"github.com/garamsh/garam/internal/authz"
 	"github.com/garamsh/garam/internal/authz/mocks"
+	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/wire"
 	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
@@ -36,12 +37,45 @@ func (p staticPolicies) Statements(_ context.Context, orgGRN grn.GRN, subjects [
 	return statements, nil
 }
 
+// CurrentStatements answers as Statements does: storage and cache
+// agree, so CheckCurrent and Check are asked the same question.
+func (p staticPolicies) CurrentStatements(ctx context.Context, orgGRN grn.GRN, subjects []grn.GRN) ([]authz.Statement, error) {
+	return p.Statements(ctx, orgGRN, subjects)
+}
+
+// staleCache is a PolicySource whose cache still holds what storage
+// has since replaced, as an invalidation that has not arrived leaves
+// it. currentErr, when set, is storage failing to answer.
+type staleCache struct {
+	cached     staticPolicies
+	current    staticPolicies
+	currentErr error
+}
+
+func (p staleCache) Statements(ctx context.Context, orgGRN grn.GRN, subjects []grn.GRN) ([]authz.Statement, error) {
+	return p.cached.Statements(ctx, orgGRN, subjects)
+}
+
+func (p staleCache) CurrentStatements(ctx context.Context, orgGRN grn.GRN, subjects []grn.GRN) ([]authz.Statement, error) {
+	if p.currentErr != nil {
+		return nil, p.currentErr
+	}
+	return p.current.Statements(ctx, orgGRN, subjects)
+}
+
 // newAuthzClient serves the real engine over an in-memory listener.
-func newAuthzClient(t *testing.T, policies staticPolicies) authzv1.AuthzServiceClient {
+func newAuthzClient(t *testing.T, policies authz.PolicySource) authzv1.AuthzServiceClient {
 	t.Helper()
-	lis := bufconn.Listen(1024 * 1024)
 	srv := grpc.NewServer()
 	authzv1.RegisterAuthzServiceServer(srv, authz.NewGRPCServer(policies))
+	return serveAuthz(t, srv)
+}
+
+// serveAuthz serves srv over an in-memory listener and returns a
+// client of it.
+func serveAuthz(t *testing.T, srv *grpc.Server) authzv1.AuthzServiceClient {
+	t.Helper()
+	lis := bufconn.Listen(1024 * 1024)
 	go func() { _ = srv.Serve(lis) }()
 	t.Cleanup(srv.Stop)
 	conn, err := grpc.NewClient(
@@ -494,4 +528,160 @@ func TestGRPCServer_RefusesFromAPolicyArchivedDuringAFill(t *testing.T) {
 	resp, err := engine.Check(context.Background(), checkRequest())
 	require.NoError(t, err)
 	assert.False(t, resp.GetAllowed(), "the archived policy still allows")
+}
+
+// currentRequest asks CheckCurrent what req asks Check.
+func currentRequest(req *authzv1.CheckRequest) *authzv1.CheckCurrentRequest {
+	return &authzv1.CheckCurrentRequest{
+		SubjectGrn:    req.GetSubjectGrn(),
+		ObjectGrn:     req.GetObjectGrn(),
+		Action:        req.GetAction(),
+		Statements:    req.GetStatements(),
+		SubjectGroups: req.GetSubjectGroups(),
+		SubjectOrg:    req.GetSubjectOrg(),
+	}
+}
+
+// TestGRPCServer_CheckCurrentDecidesAsCheckDoes asks both RPCs the same
+// question over a source whose cache and storage agree. Each case also
+// names its expected answer, so two RPCs wrong the same way still fail.
+func TestGRPCServer_CheckCurrentDecidesAsCheckDoes(t *testing.T) {
+	acme := orgGRN("acme")
+	eng := grn.New("acme", grn.DefaultProject, "group", "eng")
+	allowUpdate := authz.Statement{
+		Sid:      "persisted-allow",
+		Effect:   wire.EffectAllow,
+		Action:   []string{"org:update"},
+		Resource: []string{"grn:root:default:org:acme"},
+	}
+	denyUpdate := authz.Statement{
+		Sid:      "persisted-deny",
+		Effect:   wire.EffectDeny,
+		Action:   []string{"org:update"},
+		Resource: []string{"grn:root:default:org:acme"},
+	}
+	callerAllow := allowStatement("org-role-owner", []string{"org:*"}, []string{"grn:root:default:org:acme"})
+
+	cases := []struct {
+		name     string
+		policies staticPolicies
+		mutate   func(r *authzv1.CheckRequest)
+		code     codes.Code
+		allowed  bool
+	}{
+		{"persisted allow", staticPolicies{acme: {allowUpdate}}, func(*authzv1.CheckRequest) {}, codes.OK, true},
+		{"no statement matches", staticPolicies{}, func(*authzv1.CheckRequest) {}, codes.OK, false},
+		{"persisted deny overrides a caller allow", staticPolicies{acme: {denyUpdate}}, func(r *authzv1.CheckRequest) {
+			r.Statements = []*authzv1.Statement{callerAllow}
+		}, codes.OK, false},
+		{"group-attached deny overrides a caller allow", staticPolicies{eng: {denyUpdate}}, func(r *authzv1.CheckRequest) {
+			r.Statements = []*authzv1.Statement{callerAllow}
+			r.SubjectGroups = []string{eng.String()}
+		}, codes.OK, false},
+		{"another org's policies do not apply", staticPolicies{orgGRN("other"): {allowUpdate}}, func(*authzv1.CheckRequest) {}, codes.OK, false},
+		{"subject of another org is refused", staticPolicies{acme: {allowUpdate}}, func(r *authzv1.CheckRequest) {
+			r.SubjectOrg = "grn:root:default:org:globex"
+		}, codes.PermissionDenied, false},
+		{"unset subject org is refused", staticPolicies{acme: {allowUpdate}}, func(r *authzv1.CheckRequest) {
+			r.SubjectOrg = ""
+		}, codes.PermissionDenied, false},
+		{"empty action is invalid", staticPolicies{acme: {allowUpdate}}, func(r *authzv1.CheckRequest) {
+			r.Action = ""
+		}, codes.InvalidArgument, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			client := newAuthzClient(t, c.policies)
+			req := checkRequest()
+			c.mutate(req)
+
+			checked, err := client.Check(context.Background(), req)
+			assert.Equal(t, c.code, status.Code(err), "Check")
+			assert.Equal(t, c.allowed, checked.GetAllowed(), "Check")
+
+			current, err := client.CheckCurrent(context.Background(), currentRequest(req))
+			assert.Equal(t, c.code, status.Code(err), "CheckCurrent")
+			assert.Equal(t, c.allowed, current.GetAllowed(), "CheckCurrent")
+		})
+	}
+}
+
+// TestGRPCServer_CheckCurrentDecidesFromStorage is the stale cache a
+// held-back invalidation leaves: it still holds the Allow storage has
+// since replaced with a Deny. Check allowing is the control that the
+// cache is stale, so CheckCurrent refusing is the storage read.
+func TestGRPCServer_CheckCurrentDecidesFromStorage(t *testing.T) {
+	acme := orgGRN("acme")
+	update := func(sid string, effect wire.Effect) authz.Statement {
+		return authz.Statement{Sid: sid, Effect: effect, Action: []string{"org:update"}, Resource: []string{"grn:root:default:org:acme"}}
+	}
+	client := newAuthzClient(t, staleCache{
+		cached:  staticPolicies{acme: {update("allow", wire.EffectAllow)}},
+		current: staticPolicies{acme: {update("allow", wire.EffectAllow), update("deny", wire.EffectDeny)}},
+	})
+
+	checked, err := client.Check(context.Background(), checkRequest())
+	require.NoError(t, err)
+	assert.True(t, checked.GetAllowed(), "control: the cache still allows")
+
+	current, err := client.CheckCurrent(context.Background(), currentRequest(checkRequest()))
+	require.NoError(t, err)
+	assert.False(t, current.GetAllowed(), "the persisted Deny decides")
+}
+
+// TestGRPCServer_CheckCurrentRefusesWhenStorageFails holds a cache
+// that allows: Check answering from it is the control, and the error
+// CheckCurrent returns instead is storage's, with no decision beside
+// it.
+func TestGRPCServer_CheckCurrentRefusesWhenStorageFails(t *testing.T) {
+	acme := orgGRN("acme")
+	allow := authz.Statement{Sid: "allow", Effect: wire.EffectAllow, Action: []string{"org:update"}, Resource: []string{"grn:root:default:org:acme"}}
+	client := newAuthzClient(t, staleCache{
+		cached:     staticPolicies{acme: {allow}},
+		currentErr: errorx.New(errorx.KindUnavailable, "database unreachable"),
+	})
+
+	checked, err := client.Check(context.Background(), checkRequest())
+	require.NoError(t, err)
+	assert.True(t, checked.GetAllowed(), "control: the cache allows")
+
+	current, err := client.CheckCurrent(context.Background(), currentRequest(checkRequest()))
+	assert.Equal(t, codes.Unavailable, status.Code(err))
+	assert.Nil(t, current)
+}
+
+// allowingEngine allows every Check it is asked.
+type allowingEngine struct {
+	authzv1.UnimplementedAuthzServiceServer
+}
+
+func (allowingEngine) Check(context.Context, *authzv1.CheckRequest) (*authzv1.CheckResponse, error) {
+	return &authzv1.CheckResponse{Allowed: true}, nil
+}
+
+// TestAuthzService_AnEngineWithoutCheckCurrentRefusesIt serves the
+// service as an engine predating CheckCurrent registered it: the
+// methods it knew, and no CheckCurrent among them. That engine allows
+// every Check, which is the control — a request it read as a Check
+// would come back allowed — and CheckCurrent reaches no handler at all.
+func TestAuthzService_AnEngineWithoutCheckCurrentRefusesIt(t *testing.T) {
+	older := authzv1.AuthzService_ServiceDesc
+	older.Methods = nil
+	for _, m := range authzv1.AuthzService_ServiceDesc.Methods {
+		if m.MethodName != "CheckCurrent" {
+			older.Methods = append(older.Methods, m)
+		}
+	}
+	require.Len(t, older.Methods, 2, "the older engine serves Check and Explain")
+	srv := grpc.NewServer()
+	srv.RegisterService(&older, allowingEngine{})
+	client := serveAuthz(t, srv)
+
+	checked, err := client.Check(context.Background(), checkRequest())
+	require.NoError(t, err)
+	assert.True(t, checked.GetAllowed(), "control: the older engine allows a Check")
+
+	current, err := client.CheckCurrent(context.Background(), currentRequest(checkRequest()))
+	assert.Equal(t, codes.Unimplemented, status.Code(err))
+	assert.Nil(t, current)
 }

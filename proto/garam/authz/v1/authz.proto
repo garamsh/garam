@@ -14,6 +14,17 @@ service AuthzService {
   // Explain answers the same question and reports which statements
   // matched and which produced the final decision.
   rpc Explain(ExplainRequest) returns (ExplainResponse);
+
+  // CheckCurrent answers Check's question with the org's persisted
+  // policies read from storage when it is asked, never from the
+  // engine's cache, and fails rather than answer when storage cannot
+  // be read. Only that read is current: statements, subject_groups and
+  // subject_org are taken as sent, so a caller needing them current
+  // resolves them afresh. It is a method of its own so that an engine
+  // predating it answers UNIMPLEMENTED: a field on CheckRequest would
+  // be dropped unread by such an engine, which would then answer from
+  // its cache.
+  rpc CheckCurrent(CheckCurrentRequest) returns (CheckCurrentResponse);
 }
 
 // Effect is a statement's outcome when it matches (ADR-0002).
@@ -57,6 +68,21 @@ message CheckRequest {
 message CheckResponse {
   // allowed is the final decision: explicit Deny wins, otherwise any
   // matching Allow permits. The zero value is deny.
+  bool allowed = 1;
+}
+
+// CheckCurrentRequest mirrors CheckRequest.
+message CheckCurrentRequest {
+  string subject_grn = 1;
+  string object_grn = 2;
+  string action = 3;
+  repeated Statement statements = 4;
+  repeated string subject_groups = 5;
+  string subject_org = 6;
+}
+
+message CheckCurrentResponse {
+  // allowed is decided as CheckResponse.allowed is.
   bool allowed = 1;
 }
 

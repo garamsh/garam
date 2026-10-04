@@ -76,7 +76,7 @@ from either wins.
 |--------|-------|----------|
 | role-derived statements | api server | per request, from org tables |
 | identity-derived statements | machine listener | per request, from the caller's own GRN |
-| persisted policy statements | authz engine | from the org's cache |
+| persisted policy statements | authz engine | from the org's cache; from storage for `CheckCurrent` |
 
 The engine scopes a request to the org that owns the object: an org's
 identifier is the organization segment of every resource beneath it
@@ -179,6 +179,21 @@ A decision may therefore be made from statements no notification has
 invalidated yet; if that ever has to be refused, the refusal belongs to
 the check, which can name the request in doubt, and not to a probe,
 which cannot.
+
+**Nothing calls `CheckCurrent` yet.** It is that refusal, for the
+privileged actions that must be checked against current authority
+([ADR-0078](./adr/0078-a-lifecycle-authority-activates-a-runtime-generation-and-old-generations-and-lineages-are-fenced.md)).
+It decides as
+`Check` does, except that the org's active policies and their
+attachments are read from storage on every call: it neither reads nor
+fills the cache, and storage it cannot read fails the call rather than
+falling back to the cache. Only that read is current. The statements,
+`subject_groups` and `subject_org` a caller sends are taken as sent,
+so a caller needing current membership, roles or groups resolves them
+afresh. It is a method of its own and not a field on `CheckRequest`:
+an engine predating it answers `UNIMPLEMENTED`, where a field it does
+not know would be dropped unread and the call answered from its cache.
+`Check` and `Explain` keep the cached behaviour above.
 
 Lifecycle is served by `PolicyService` in `proto/garam/authz/v1`:
 create, append a version, list policies and versions, activate,
@@ -304,8 +319,8 @@ other policy write.
 | `Policy` / `PolicyVersion` | stored policy and its revisions | — |
 | `PolicyAttachment` | binds a policy to a subject (ADR-0008) | — |
 | `Store` / `PostgresStore` | policy and attachment persistence | `migrations/` |
-| `PolicyCache` | per-org parsed policies and their attachments | `Store` |
-| `GRPCServer` | `Check` / `Explain` RPCs | `PolicyCache` |
+| `PolicyCache` | per-org parsed policies and their attachments, and the uncached read `CheckCurrent` uses | `Store` |
+| `GRPCServer` | `Check` / `CheckCurrent` / `Explain` RPCs | `PolicyCache` |
 | `PolicyGRPCServer` | policy lifecycle RPCs | `Store`, `PolicyCache` |
 
 Role persistence (subject × role × scope) stays roadmap; roles remain
@@ -315,7 +330,8 @@ The api server never imports this package; it calls the engine over
 gRPC (`Check` / `Explain` in `proto/garam/authz/v1`) and supplies the
 role-derived statements it collected. The machine listener reaches the
 same engine the same way, over a seam of its own, and supplies the
-identity-derived ones. Each listener's `Evaluator` seam has one
+identity-derived ones. Neither calls `CheckCurrent` yet
+(§Policy persistence). Each listener's `Evaluator` seam has one
 non-test implementation, the gRPC client, and that is what both
 composition roots wire (`internal/cli/serve.go`,
 `internal/cli/machine.go`). The in-process evaluator is the engine's
@@ -327,7 +343,7 @@ runs on every request (`internal/authz/server.go`).
 | Concept | Storage | Update cadence | Where it runs |
 |---------|---------|----------------|---------------|
 | Role | Postgres, `org` tables | frequent | api server collects the statements a role grants |
-| Policy | Postgres, engine tables | rare; audited | parsed, cached per org, evaluated per request |
+| Policy | Postgres, engine tables | rare; audited | parsed, cached per org, evaluated per request; read from storage for `CheckCurrent` |
 
 Roles are data. Policies are rules. Keep them on separate update
 channels.

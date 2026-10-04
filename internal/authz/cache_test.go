@@ -12,6 +12,7 @@ import (
 
 	"github.com/garamsh/garam/internal/authz"
 	"github.com/garamsh/garam/internal/authz/mocks"
+	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/wire"
 )
@@ -327,4 +328,55 @@ func TestPolicyCache_ConcurrentMissesConvergeOnOneSnapshot(t *testing.T) {
 	after, err := cache.Statements(context.Background(), acme, []grn.GRN{ada})
 	require.NoError(t, err)
 	assert.Equal(t, got[0], after, "the entry left behind is not what the callers were served")
+}
+
+// TestPolicyCache_CurrentStatementsReadsTheStoreOnEveryCall holds a
+// stale cache: CurrentStatements reads the store on each call, and
+// Statements still answers from the cache.
+func TestPolicyCache_CurrentStatementsReadsTheStoreOnEveryCall(t *testing.T) {
+	store := mocks.NewMockStore(t)
+	acme, ada := orgGRN("acme"), subjectGRN("ada")
+	store.EXPECT().ActivePolicies(mock.Anything, acme).
+		Return([]authz.ActivePolicy{orgWidePolicy("before", wire.EffectAllow)}, nil).Once()
+	cache := authz.NewPolicyCache(store)
+	cached, err := cache.Statements(context.Background(), acme, []grn.GRN{ada})
+	require.NoError(t, err)
+	require.Equal(t, "before", cached[0].Sid)
+
+	store.EXPECT().ActivePolicies(mock.Anything, acme).Return([]authz.ActivePolicy{
+		orgWidePolicy("after", wire.EffectDeny),
+		attachedPolicy("bob-only", wire.EffectAllow, subjectGRN("bob")),
+	}, nil).Twice()
+	for range 2 {
+		current, err := cache.CurrentStatements(context.Background(), acme, []grn.GRN{ada})
+		require.NoError(t, err)
+		require.Len(t, current, 1, "a policy attached to another subject does not apply")
+		assert.Equal(t, "after", current[0].Sid)
+	}
+
+	stale, err := cache.Statements(context.Background(), acme, []grn.GRN{ada})
+	require.NoError(t, err)
+	assert.Equal(t, cached, stale, "control: Statements still answers from the cache")
+}
+
+// TestPolicyCache_CurrentStatementsFailsWhenTheStoreDoes fails with
+// the store even though the cache holds the org.
+func TestPolicyCache_CurrentStatementsFailsWhenTheStoreDoes(t *testing.T) {
+	store := mocks.NewMockStore(t)
+	acme := orgGRN("acme")
+	store.EXPECT().ActivePolicies(mock.Anything, acme).
+		Return([]authz.ActivePolicy{orgWidePolicy("cached", wire.EffectAllow)}, nil).Once()
+	cache := authz.NewPolicyCache(store)
+	_, err := cache.Statements(context.Background(), acme, nil)
+	require.NoError(t, err)
+
+	store.EXPECT().ActivePolicies(mock.Anything, acme).
+		Return(nil, errorx.New(errorx.KindUnavailable, "database unreachable")).Once()
+	current, err := cache.CurrentStatements(context.Background(), acme, nil)
+	require.True(t, errorx.IsKind(err, errorx.KindUnavailable), "got %v", err)
+	assert.Nil(t, current)
+
+	cached, err := cache.Statements(context.Background(), acme, nil)
+	require.NoError(t, err, "control: the cached entry is still there to answer from")
+	assert.Equal(t, "cached", cached[0].Sid)
 }

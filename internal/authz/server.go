@@ -37,18 +37,43 @@ func (s *GRPCServer) Check(ctx context.Context, req *authzv1.CheckRequest) (*aut
 	if err != nil {
 		return nil, grpcError(err)
 	}
-	if err := in.checkScope(); err != nil {
-		return nil, grpcError(err)
-	}
-	statements, err := s.applicable(ctx, in)
+	allowed, err := decide(ctx, in, s.policies.Statements)
 	if err != nil {
 		return nil, grpcError(err)
+	}
+	return &authzv1.CheckResponse{Allowed: allowed}, nil
+}
+
+// CheckCurrent decides as Check does, reading the persisted policies
+// from storage rather than the cache. The caller's statements, groups
+// and org are taken as sent.
+func (s *GRPCServer) CheckCurrent(ctx context.Context, req *authzv1.CheckCurrentRequest) (*authzv1.CheckCurrentResponse, error) {
+	in, err := parseInput(req.GetSubjectGrn(), req.GetObjectGrn(), req.GetAction(), req.GetSubjectGroups(), req.GetSubjectOrg(), req.GetStatements())
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	allowed, err := decide(ctx, in, s.policies.CurrentStatements)
+	if err != nil {
+		return nil, grpcError(err)
+	}
+	return &authzv1.CheckCurrentResponse{Allowed: allowed}, nil
+}
+
+// decide scopes the request, reads the persisted statements through
+// read and evaluates them with the caller's.
+func decide(ctx context.Context, in checkInput, read readStatements) (bool, error) {
+	if err := in.checkScope(); err != nil {
+		return false, err
+	}
+	statements, err := applicable(ctx, in, read)
+	if err != nil {
+		return false, err
 	}
 	d := NewStatementEvaluator(statements).Evaluate(ctx, Context{
 		Object: grnObject{in.object},
 		Action: in.action,
 	})
-	return &authzv1.CheckResponse{Allowed: d == DecisionAllow}, nil
+	return d == DecisionAllow, nil
 }
 
 // Explain evaluates the same input and reports every statement's
@@ -61,7 +86,7 @@ func (s *GRPCServer) Explain(ctx context.Context, req *authzv1.ExplainRequest) (
 	if err := in.checkScope(); err != nil {
 		return nil, grpcError(err)
 	}
-	statements, err := s.applicable(ctx, in)
+	statements, err := applicable(ctx, in, s.policies.Statements)
 	if err != nil {
 		return nil, grpcError(err)
 	}
@@ -91,12 +116,15 @@ func (s *GRPCServer) Explain(ctx context.Context, req *authzv1.ExplainRequest) (
 // it carries no other domain knowledge (ADR-0007).
 const serviceTypeOrg = "org"
 
-// applicable unions the persisted policy statements that reach the
-// subject — org-wide, attached to it, or attached to one of its groups
-// (ADR-0008) — with the role-derived statements the caller supplied
-// (ADR-0007).
-func (s *GRPCServer) applicable(ctx context.Context, in checkInput) ([]Statement, error) {
-	stored, err := s.policies.Statements(ctx, orgGRNOf(in.object), in.subjects)
+// readStatements is one of PolicySource's two reads.
+type readStatements func(ctx context.Context, orgGRN grn.GRN, subjects []grn.GRN) ([]Statement, error)
+
+// applicable unions the persisted policy statements read reports as
+// reaching the subject — org-wide, attached to it, or attached to one
+// of its groups (ADR-0008) — with the role-derived statements the
+// caller supplied (ADR-0007).
+func applicable(ctx context.Context, in checkInput, read readStatements) ([]Statement, error) {
+	stored, err := read(ctx, orgGRNOf(in.object), in.subjects)
 	if err != nil {
 		return nil, err
 	}
@@ -115,12 +143,13 @@ func orgGRNOf(object grn.GRN) grn.GRN {
 	return grn.New(grn.RootOwner, grn.DefaultProject, serviceTypeOrg, object.Organization)
 }
 
-// checkInput is a parsed Check/Explain request. subjects holds the
-// GRNs a policy attachment may name for this request: the subject
-// itself and the groups it belongs to. subjectOrg is the GRN of the
-// organization the subject belongs to when the subject is an org
-// member (ADR-0038); the empty value carries the meaning "no
-// membership was established", which the scope check refuses.
+// checkInput is a parsed Check, CheckCurrent or Explain request.
+// subjects holds the GRNs a policy attachment may name for this
+// request: the subject itself and the groups it belongs to. subjectOrg
+// is the GRN of the organization the subject belongs to when the
+// subject is an org member (ADR-0038); the empty value carries the
+// meaning "no membership was established", which the scope check
+// refuses.
 type checkInput struct {
 	object     grn.GRN
 	action     string

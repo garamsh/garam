@@ -289,25 +289,28 @@ func TestRealEngine_RefusesACopyCorruptedBeforeItIsVerified(t *testing.T) {
 }
 
 // TestRealEngine_KeepsTheMovePendingWhileTheOldGenerationRuns holds the
-// drain before the copy (#1202): a turn waiting on a workspace that
-// does not answer keeps the old runtime draining, and the move pending
-// with no volume created, nothing copied and nothing activated. The
-// control is the same move completing once the workspace answers.
+// drain before the copy (#1202): a workspace stopped from the host,
+// the test's own act, cannot act on the drain's SIGTERM, so the old
+// generation does not exit and the move stays pending, with no volume
+// created, nothing copied and nothing activated. The control is the
+// same move completing once the workspace runs again.
 func TestRealEngine_KeepsTheMovePendingWhileTheOldGenerationRuns(t *testing.T) {
 	h := newHost(t)
 	h.servedWithAStore()
-	runtime, space, adapter := h.container(workload.RoleRuntime), h.container(workload.RoleWorkspace),
-		h.container(workload.RoleAdapter)
+	runtime, space := h.container(workload.RoleRuntime), h.container(workload.RoleWorkspace)
 	resume := h.stopWorkspace(space)
-	h.postStuckTurn(adapter)
 	target := h.prefix + "moved"
 
+	since := time.Now()
 	pending := h.start(moveTo(target))
-	eventually(t, "the runtime draining", func() bool { return h.gatewayState(adapter) == "draining" })
+	eventually(t, "the drain signalling the workspace", func() bool {
+		return len(h.signals(space, since)) > 0
+	})
 	time.Sleep(5 * time.Second)
-	assert.Equal(t, "draining", h.gatewayState(adapter), "the old runtime keeps its turn")
+	assert.Equal(t, "true", h.inspect(space, "{{.State.Running}}"), "the old workspace has not exited")
+	assert.Equal(t, []string{"15"}, h.signals(space, since), "it was sent SIGTERM and nothing else")
 	assert.False(t, pending.returned(), "the move is pending")
-	assert.False(t, h.volumeExists(target), "no volume is created while the old writer runs")
+	assert.False(t, h.volumeExists(target), "no volume is created while the old generation runs")
 	assert.Empty(t, h.mustDocker("ps", "-aq", "--filter", "name=^"+h.prefix+"copier-"), "nothing is copied")
 	assert.Len(t, h.garam.generations(), 1, "nothing is activated")
 

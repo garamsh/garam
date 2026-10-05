@@ -91,7 +91,7 @@ embedding:
 	}
 	status, body := post(oldToken, "garam-sa-old-before")
 	require.Equal(t, http.StatusCreated, status, "the control: the old token is current before the switch: %s", body)
-	assert.Equal(t, "garam-sa-old-before", from.awaitReply(agentGRN).Body)
+	from.awaitBody(agentGRN, "garam-sa-old-before")
 	require.NoError(t, first.stop(), s.scrub(first.out.String()))
 
 	// The move.
@@ -133,7 +133,7 @@ embedding:
 		"the control: the new token's claim is admitted, and finds nothing waiting")
 	status, body = post(newToken, "garam-sa-new-after")
 	require.Equal(t, http.StatusCreated, status, "the control: the new token is current: %s", body)
-	assert.Equal(t, "garam-sa-new-after", from.awaitReply(agentGRN).Body)
+	from.awaitBody(agentGRN, "garam-sa-new-after")
 
 	// A message after the switch reaches the new generation alone, and
 	// the fact told before the move is recalled.
@@ -192,4 +192,17 @@ func keyName(t *testing.T, path string) string {
 	}
 	t.Fatal("the model environment file names no variable")
 	return ""
+}
+
+// awaitBody claims the sender's messages until one from the agent
+// carries body, which the test posted with the agent's own token.
+func (p *sender) awaitBody(from, body string) {
+	p.s.t.Helper()
+	deadline := time.Now().Add(3 * time.Minute)
+	for time.Now().Before(deadline) {
+		if r := p.receive(); r != nil && r.Sender == from && r.Body == body {
+			return
+		}
+	}
+	p.s.t.Fatalf("no message %q from %s", body, from)
 }

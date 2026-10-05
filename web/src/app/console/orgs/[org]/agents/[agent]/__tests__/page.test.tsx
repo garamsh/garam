@@ -127,7 +127,8 @@ describe("agent page", () => {
     expect(
       screen.getByText("Saved values; application is not reported."),
     ).toBeInTheDocument();
-    // Presence, not identity: no sentence on the page mentions an archive.
+    // Presence, not identity: no sentence on the page mentions an
+    // archive.
     expect(screen.queryByText(/archival/)).not.toBeInTheDocument();
   });
 

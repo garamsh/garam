@@ -64,7 +64,9 @@ export function CreateFromTemplate({
     return <ControlNotice>{blocker}</ControlNotice>;
   }
   if (templates === null || templates.status === "loading") {
-    return <ControlNotice>Reading {hosted.name}&apos;s templates…</ControlNotice>;
+    return (
+      <ControlNotice>Reading {hosted.name}&apos;s templates…</ControlNotice>
+    );
   }
   if (templates.status !== "ok") {
     return (
@@ -80,7 +82,10 @@ export function CreateFromTemplate({
     const chosen = published.find((t) => t.name === form.get("template"));
     const controller = String(form.get("controller") ?? "");
     if (!chosen || !delegated.includes(controller) || hosted === null) {
-      setOutcome({ status: "error", message: "Choose a template and a controller." });
+      setOutcome({
+        status: "error",
+        message: "Choose a template and a controller.",
+      });
       return;
     }
     setPending(true);
@@ -111,7 +116,8 @@ export function CreateFromTemplate({
         ? { status: "created", ...result.data }
         : {
             status: "error",
-            message: result.status === "unavailable" ? UNAVAILABLE : result.message,
+            message:
+              result.status === "unavailable" ? UNAVAILABLE : result.message,
           },
     );
   }
@@ -127,8 +133,7 @@ export function CreateFromTemplate({
         >
           {identifier}
         </Link>{" "}
-        at revision {outcome.revision}. It keeps the template version it
-        copied.
+        at revision {outcome.revision}. It keeps the template version it copied.
       </p>
     );
   }

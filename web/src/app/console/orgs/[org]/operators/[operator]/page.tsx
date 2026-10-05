@@ -162,8 +162,7 @@ export default async function OperatorPage({ params }: Params) {
         <p className="max-w-2xl text-sm text-muted-foreground">
           A hosted operator&apos;s control service holds agent templates,
           execution profiles and execution. garam hands it one operation at a
-          time, under the delegation below and only at the registered
-          endpoint.
+          time, under the delegation below and only at the registered endpoint.
         </p>
         <div className="flex max-w-2xl flex-col gap-2">
           <h3 className="text-sm font-medium">Endpoint</h3>

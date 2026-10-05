@@ -33,7 +33,8 @@ export function ControlEndpointForm({
     initialState,
   );
   const hydrated = useHydrated();
-  const current = state.status === "saved" ? state.endpoint : (endpoint ?? null);
+  const current =
+    state.status === "saved" ? state.endpoint : (endpoint ?? null);
 
   return (
     <form action={formAction} className="flex max-w-2xl flex-col gap-3">
@@ -68,9 +69,9 @@ export function ControlEndpointForm({
         </p>
       )}
       <p className="text-sm text-muted-foreground">
-        Changing it requires the delegation permission, not the one that
-        renames the operator. Operations already handed over keep the
-        operator they name.
+        Changing it requires the delegation permission, not the one that renames
+        the operator. Operations already handed over keep the operator they
+        name.
       </p>
       <div className="flex flex-wrap gap-2">
         <Button

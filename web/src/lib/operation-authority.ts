@@ -181,7 +181,9 @@ export type Configuration = z.infer<typeof ConfigurationParser>;
 export const TemplatesParser = z.object({
   templates: z.array(VersionRefParser.extend({ profile: VersionRefParser })),
 });
-export type PublishedTemplate = z.infer<typeof TemplatesParser>["templates"][number];
+export type PublishedTemplate = z.infer<
+  typeof TemplatesParser
+>["templates"][number];
 
 /** One immutable template version, in full. */
 export const TemplateVersionParser = VersionRefParser.extend({

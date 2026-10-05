@@ -8,7 +8,10 @@ import {
   garamFetchAuthenticated,
   parserFor,
 } from "@/lib/garam";
-import { CONTRACT_VERSION, CONTRACT_VERSION_HEADER } from "@/lib/operation-authority";
+import {
+  CONTRACT_VERSION,
+  CONTRACT_VERSION_HEADER,
+} from "@/lib/operation-authority";
 import type { components } from "@/types/api";
 
 import { slugFromGrn } from "../grn";
@@ -72,7 +75,8 @@ export async function getOperatorDelegation(
       ),
     };
   } catch (error) {
-    if (error instanceof GaramUnreachableError) return { status: "unreachable" };
+    if (error instanceof GaramUnreachableError)
+      return { status: "unreachable" };
     if (error instanceof GaramApiError && error.status === 404) {
       return { status: "none" };
     }
@@ -151,7 +155,8 @@ export function hostedFor(
       (h) =>
         h.delegation !== null &&
         h.delegation.operations.includes(operation) &&
-        (controller === undefined || h.delegation.controllers.includes(controller)),
+        (controller === undefined ||
+          h.delegation.controllers.includes(controller)),
     ) ??
     hosted[0] ??
     null

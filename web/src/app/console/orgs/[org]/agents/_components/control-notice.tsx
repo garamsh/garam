@@ -24,11 +24,7 @@ export function controlBlocker(
 
 /** The sentence a disabled control panel shows. */
 export function ControlNotice({ children }: { children: React.ReactNode }) {
-  return (
-    <p className="max-w-2xl text-sm text-muted-foreground">
-      {children}
-    </p>
-  );
+  return <p className="max-w-2xl text-sm text-muted-foreground">{children}</p>;
 }
 
 /** What an unanswered control service looks like on every panel. */

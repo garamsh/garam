@@ -60,10 +60,17 @@ export function PublishTemplateForm({
     const field = (name: string) => String(form.get(name) ?? "").trim();
     const tools = parseTools(field("tools"));
     const version = Number(field("profileVersion"));
-    if (field("name") === "" || field("profileName") === "" || !Number.isInteger(version) || version < 1 || tools === null) {
+    if (
+      field("name") === "" ||
+      field("profileName") === "" ||
+      !Number.isInteger(version) ||
+      version < 1 ||
+      tools === null
+    ) {
       setOutcome({
         status: "error",
-        message: "Name the template and a published profile version; write each tool as tool=pin.",
+        message:
+          "Name the template and a published profile version; write each tool as tool=pin.",
       });
       return;
     }
@@ -114,17 +121,57 @@ export function PublishTemplateForm({
     <form action={publish} className="flex max-w-2xl flex-col gap-3">
       <h3 className="text-sm font-medium">Publish a template version</h3>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field id="publish-name" name="name" label="Template" value={from?.name} />
-        <Field id="publish-profile" name="profileName" label="Profile" value={from?.profile.name} />
-        <Field id="publish-profile-version" name="profileVersion" label="Profile version" value={from ? String(from.profile.version) : undefined} />
-        <Field id="publish-provider" name="provider" label="Model provider" value={model?.provider} />
-        <Field id="publish-base-url" name="baseUrl" label="Model base URL" value={model?.baseUrl} />
-        <Field id="publish-model" name="model" label="Model name" value={model?.name} />
-        <Field id="publish-api-key-ref" name="apiKeyRef" label="API key reference" value={model?.apiKeyRef} />
+        <Field
+          id="publish-name"
+          name="name"
+          label="Template"
+          value={from?.name}
+        />
+        <Field
+          id="publish-profile"
+          name="profileName"
+          label="Profile"
+          value={from?.profile.name}
+        />
+        <Field
+          id="publish-profile-version"
+          name="profileVersion"
+          label="Profile version"
+          value={from ? String(from.profile.version) : undefined}
+        />
+        <Field
+          id="publish-provider"
+          name="provider"
+          label="Model provider"
+          value={model?.provider}
+        />
+        <Field
+          id="publish-base-url"
+          name="baseUrl"
+          label="Model base URL"
+          value={model?.baseUrl}
+        />
+        <Field
+          id="publish-model"
+          name="model"
+          label="Model name"
+          value={model?.name}
+        />
+        <Field
+          id="publish-api-key-ref"
+          name="apiKeyRef"
+          label="API key reference"
+          value={model?.apiKeyRef}
+        />
       </div>
       <div className="flex flex-col gap-2">
         <Label htmlFor="publish-ego">Ego</Label>
-        <Textarea id="publish-ego" name="ego" rows={3} defaultValue={from?.configuration.ego} />
+        <Textarea
+          id="publish-ego"
+          name="ego"
+          rows={3}
+          defaultValue={from?.configuration.ego}
+        />
       </div>
       <div className="flex flex-col gap-2">
         <Label htmlFor="publish-tools">Tools, one tool=pin per line</Label>

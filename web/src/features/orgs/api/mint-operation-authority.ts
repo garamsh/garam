@@ -50,7 +50,10 @@ export async function mintOperationAuthority(
 ): Promise<MintResult> {
   const parsed = Schema.safeParse(input);
   if (!parsed.success) {
-    return { status: "refused", message: "The request did not arrive complete." };
+    return {
+      status: "refused",
+      message: "The request did not arrive complete.",
+    };
   }
   const { org, ...request } = parsed.data;
   try {
@@ -70,7 +73,8 @@ export async function mintOperationAuthority(
     );
     return { status: "ok", authority };
   } catch (error) {
-    if (error instanceof GaramUnreachableError) return { status: "unavailable" };
+    if (error instanceof GaramUnreachableError)
+      return { status: "unavailable" };
     if (error instanceof GaramApiError) {
       return { status: "refused", message: error.message };
     }

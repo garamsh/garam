@@ -133,7 +133,10 @@ function delegationPath(org: string, operator: string): string {
 }
 
 function refusal(error: unknown): DelegationState {
-  if (error instanceof GaramApiError || error instanceof GaramUnreachableError) {
+  if (
+    error instanceof GaramApiError ||
+    error instanceof GaramUnreachableError
+  ) {
     return { status: "error", message: error.message };
   }
   throw error;

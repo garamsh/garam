@@ -37,7 +37,12 @@ export function OperatorTemplates({
   const base = `/v1/orgs/${segment(org)}`;
   const reach = (operation: string, path: string) =>
     hosted !== null && controlBlocker(hosted, operation) === null
-      ? { endpoint: hosted.endpoint, audience: hosted.grn, path, target: orgGrn }
+      ? {
+          endpoint: hosted.endpoint,
+          audience: hosted.grn,
+          path,
+          target: orgGrn,
+        }
       : null;
 
   const blocker = controlBlocker(hosted, "agent-template:read");
@@ -70,7 +75,9 @@ export function OperatorTemplates({
     return <ControlNotice>{blocker}</ControlNotice>;
   }
   if (templates === null || templates.status === "loading") {
-    return <ControlNotice>Reading {hosted.name}&apos;s templates…</ControlNotice>;
+    return (
+      <ControlNotice>Reading {hosted.name}&apos;s templates…</ControlNotice>
+    );
   }
   if (templates.status === "unavailable") {
     return <ControlNotice>{UNAVAILABLE}</ControlNotice>;
@@ -83,8 +90,7 @@ export function OperatorTemplates({
     );
   }
 
-  const canPublish =
-    controlBlocker(hosted, "agent-template:publish") === null;
+  const canPublish = controlBlocker(hosted, "agent-template:publish") === null;
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-muted-foreground">
@@ -107,7 +113,9 @@ export function OperatorTemplates({
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => setSelected({ name: t.name, version: t.version })}
+                onClick={() =>
+                  setSelected({ name: t.name, version: t.version })
+                }
               >
                 View {t.name}
               </Button>
@@ -116,7 +124,10 @@ export function OperatorTemplates({
         </ul>
       )}
       {detail !== null && detail.status === "ok" && (
-        <section aria-label={`${detail.data.name} version ${detail.data.version}`} className="flex flex-col gap-1 text-sm">
+        <section
+          aria-label={`${detail.data.name} version ${detail.data.version}`}
+          className="flex flex-col gap-1 text-sm"
+        >
           <h3 className="font-medium">
             {detail.data.name} version {detail.data.version}
           </h3>
@@ -131,7 +142,10 @@ export function OperatorTemplates({
               reference {detail.data.configuration.model.apiKeyRef}
             </dd>
             <dt className="text-muted-foreground">Tools</dt>
-            <dd>{Object.keys(detail.data.configuration.tools).join(", ") || "none"}</dd>
+            <dd>
+              {Object.keys(detail.data.configuration.tools).join(", ") ||
+                "none"}
+            </dd>
           </dl>
         </section>
       )}
@@ -161,7 +175,11 @@ export function OperatorTemplates({
       </section>
       {canPublish ? (
         <PublishTemplateForm
-          key={detail?.status === "ok" ? `${detail.data.name}/${detail.data.version}` : ""}
+          key={
+            detail?.status === "ok"
+              ? `${detail.data.name}/${detail.data.version}`
+              : ""
+          }
           org={org}
           orgGrn={orgGrn}
           hosted={hosted}

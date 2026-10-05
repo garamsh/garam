@@ -71,13 +71,13 @@ func TestRealEngine_ActivatesItsGenerationAndIsolatesIt(t *testing.T) {
 		"the control: the workspace writes its own volume")
 
 	ad := h.report(adapter, "--open", "/run/garam-control/control.sock", "--open", "/etc/garam/agent.key",
-		"--open", "/var/run/docker.sock", "--open", "/run/docker.sock", "--write", "/data/outbox")
+		"--open", "/var/run/docker.sock", "--open", "/run/docker.sock", "--write", "/outbox")
 	assert.Equal(t, "0000000000000000", ad.Status["CapEff"])
 	assert.Equal(t, "ok", ad.Open["/run/garam-control/control.sock"], "the control: the adapter reaches its socket")
 	assert.Equal(t, "ok", ad.Open["/etc/garam/agent.key"], "and its own key")
 	assert.NotEqual(t, "ok", ad.Open["/var/run/docker.sock"])
 	assert.NotEqual(t, "ok", ad.Open["/run/docker.sock"])
-	assert.Equal(t, "ok", ad.Write["/data/outbox"], "and the outbox")
+	assert.Equal(t, "ok", ad.Write["/outbox"], "and the outbox")
 	assert.NotContains(t, ad.Mounts, "/var/lib/sherlock-workspace")
 
 	require.NoError(t, r.stop(), "stopping the supervisor leaves the workload")

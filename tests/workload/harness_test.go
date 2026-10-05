@@ -24,6 +24,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"math/big"
+	"net"
 	"net/url"
 	"os"
 	"os/exec"
@@ -36,6 +37,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/workload"
 	"github.com/garamsh/garam/internal/workload/docker"
@@ -88,11 +90,30 @@ type stubGaram struct {
 	requests []workload.ActivationRequest
 	versions map[string]int
 	asked    chan struct{}
+	// undecided answers unavailable, as a garam out of reach does.
+	undecided bool
+	// before runs ahead of each answer, outside the lock.
+	before func()
+}
+
+func (g *stubGaram) setUndecided(v bool) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.undecided = v
 }
 
 func (g *stubGaram) Activate(_ context.Context, req workload.ActivationRequest) (*workload.Activation, error) {
 	g.mu.Lock()
+	before := g.before
+	g.mu.Unlock()
+	if before != nil {
+		before()
+	}
+	g.mu.Lock()
 	defer g.mu.Unlock()
+	if g.undecided {
+		return nil, errorx.New(errorx.KindUnavailable, "garam out of reach")
+	}
 	g.requests = append(g.requests, req)
 	g.versions[req.RequestID]++
 	v := g.versions[req.RequestID]
@@ -130,7 +151,18 @@ type host struct {
 	leaf   []byte
 	key    []byte
 	issuer []byte
+	signer *signer
 	daemon string
+	// machineURL is where the adapter reaches garam: nothing, unless
+	// the test stands garam in with garamOn.
+	machineURL string
+}
+
+// signer is the agent's issuer, which here also signs the stand-in
+// garam's serving certificate the adapter verifies garam by.
+type signer struct {
+	cert *x509.Certificate
+	key  *ecdsa.PrivateKey
 }
 
 func newHost(t *testing.T) *host {
@@ -144,15 +176,16 @@ func newHost(t *testing.T) *host {
 	require.NoError(t, err)
 	h := &host{
 		t: t, engine: engine, dir: dir, daemon: daemon,
-		garam:  &stubGaram{versions: map[string]int{}, asked: make(chan struct{}, 1)},
-		prefix: testPrefix + hex.EncodeToString(randomBytes(3)) + "-",
+		garam:      &stubGaram{versions: map[string]int{}, asked: make(chan struct{}, 1)},
+		prefix:     testPrefix + hex.EncodeToString(randomBytes(3)) + "-",
+		machineURL: "https://127.0.0.1:1",
 		images: workload.Images{
 			Runtime:   required(t, "GARAM_TEST_RUNTIME_IMAGE"),
 			Workspace: required(t, "GARAM_TEST_WORKSPACE_IMAGE"),
 			Adapter:   required(t, "GARAM_TEST_ADAPTER_IMAGE"),
 		},
 	}
-	h.issuer, h.leaf, h.key = agentCredential(t)
+	h.issuer, h.leaf, h.key, h.signer = agentCredential(t)
 	t.Cleanup(h.cleanup)
 	return h
 }
@@ -206,10 +239,10 @@ func (h *host) config(edit ...func(*workload.Desired)) workload.Config {
 		Dir: h.dir, Prefix: h.prefix, Desired: d,
 		Adapter: workload.AdapterFiles{
 			CertificatePEM: h.leaf, KeyPEM: h.key, IssuerPEM: h.issuer, ServerRootPEM: h.issuer,
-			// Nothing answers here: garam's half is stood in for, so the
-			// adapter's claims fail and are retried, as they are while
-			// garam is unreachable.
-			MachineURL: "https://127.0.0.1:1",
+			// Nothing answers there unless garamOn stood garam in: the
+			// adapter's claims then fail and are retried, as they are
+			// while garam is unreachable.
+			MachineURL: h.machineURL,
 		},
 	}
 }
@@ -341,7 +374,7 @@ type probeReport struct {
 
 // agentCredential is an issuer and a leaf it signed for the test agent,
 // as garam signs one.
-func agentCredential(t *testing.T) (issuerPEM, leafPEM, keyPEM []byte) {
+func agentCredential(t *testing.T) (issuerPEM, leafPEM, keyPEM []byte, issuing *signer) {
 	t.Helper()
 	issuerKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
@@ -369,5 +402,52 @@ func agentCredential(t *testing.T) (issuerPEM, leafPEM, keyPEM []byte) {
 	keyPEM = pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
 	_, err = tls.X509KeyPair(leafPEM, keyPEM)
 	require.NoError(t, err)
-	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: issuerDER}), leafPEM, keyPEM
+	parsed, err := x509.ParseCertificate(issuerDER)
+	require.NoError(t, err)
+	return pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: issuerDER}), leafPEM, keyPEM,
+		&signer{cert: parsed, key: issuerKey}
+}
+
+// garamOn stands garam's machine listener in, in a container of its
+// own on the network the runtime's namespace is on, and points the
+// adapter at it. It answers what the probe's garam mode answers and
+// prints each outbox key it stored.
+func (h *host) garamOn() string {
+	h.t.Helper()
+	name := h.prefix + "garam"
+	h.mustDocker("create", "--name", name, "--entrypoint", "/probe", h.images.Workspace,
+		"garam", ":8443", "/tmp/garam.crt", "/tmp/garam.key")
+	path, err := probeBinary()
+	require.NoError(h.t, err)
+	h.mustDocker("cp", path, name+":/probe")
+	h.mustDocker("start", name)
+	ip := net.ParseIP(h.inspect(name, "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}"))
+	require.NotNil(h.t, ip, "the stand-in has an address")
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(h.t, err)
+	template := &x509.Certificate{
+		SerialNumber: big.NewInt(3), IPAddresses: []net.IP{ip},
+		NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(24 * time.Hour),
+		KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+	}
+	der, err := x509.CreateCertificate(rand.Reader, template, h.signer.cert, &key.PublicKey, h.signer.key)
+	require.NoError(h.t, err)
+	keyDER, err := x509.MarshalPKCS8PrivateKey(key)
+	require.NoError(h.t, err)
+	for _, f := range []struct {
+		name string
+		data []byte
+	}{
+		// The key first: the stand-in serves once the certificate is
+		// there.
+		{"garam.key", pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})},
+		{"garam.crt", pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})},
+	} {
+		local := filepath.Join(h.dir, f.name)
+		require.NoError(h.t, os.WriteFile(local, f.data, 0o600))
+		h.mustDocker("cp", local, name+":/tmp/"+f.name)
+	}
+	h.machineURL = "https://" + ip.String() + ":8443"
+	return name
 }

@@ -8,6 +8,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -24,7 +25,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fail("usage: probe report|daemon|post|get|size ...")
+		fail("usage: probe report|daemon|post|get|size|put|find|garam ...")
 	}
 	var err error
 	switch os.Args[1] {
@@ -38,6 +39,12 @@ func main() {
 		err = get(os.Args[2])
 	case "size":
 		err = size(os.Args[2])
+	case "put":
+		err = put(os.Args[2], os.Args[3], os.Args[4])
+	case "find":
+		err = find(os.Args[2], os.Args[3])
+	case "garam":
+		err = garam(os.Args[2], os.Args[3], os.Args[4])
 	default:
 		err = fmt.Errorf("unknown mode %q", os.Args[1])
 	}
@@ -214,4 +221,72 @@ func size(path string) error {
 	}
 	fmt.Println(info.Size())
 	return nil
+}
+
+// put writes content to dir/name as the runtime's message tool writes
+// an outbox entry: a dot-named temporary file, owner-only, renamed into
+// place once complete.
+func put(dir, name, content string) error {
+	tmp, err := os.CreateTemp(dir, ".probe-*")
+	if err != nil {
+		return err
+	}
+	if _, err := tmp.WriteString(content); err != nil {
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), filepath.Join(dir, name))
+}
+
+// find prints every path below root whose base name is name.
+func find(root, name string) error {
+	return filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err == nil && d.Name() == name {
+			fmt.Println(path)
+		}
+		return nil
+	})
+}
+
+// garam stands in for garam's machine listener as the adapter meets it
+// when nothing is addressed to the agent: a claim finds nothing, and an
+// outbox reply is stored and answered as durable-delivery.v1 answers
+// it, naming the sender the client certificate names. Each stored key
+// is printed. It serves once certFile exists, which is written after
+// its address is known.
+func garam(addr, certFile, keyFile string) error {
+	for {
+		if _, err := os.Stat(certFile); err == nil {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /agents/{agent}/claims", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+	mux.HandleFunc("POST /outbox-messages", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Recipient      string `json:"recipient"`
+			IdempotencyKey string `json:"idempotencyKey"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&in); err != nil || len(r.TLS.PeerCertificates) == 0 ||
+			len(r.TLS.PeerCertificates[0].URIs) != 1 {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		fmt.Println("stored", in.IdempotencyKey)
+		w.Header().Set("Garam-Contract-Version", r.Header.Get("Garam-Contract-Version"))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"id": "stored-" + in.IdempotencyKey, "sender": r.TLS.PeerCertificates[0].URIs[0].String(),
+			"recipient": in.Recipient, "idempotencyKey": in.IdempotencyKey,
+		})
+	})
+	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 10 * time.Second,
+		TLSConfig: &tls.Config{ClientAuth: tls.RequireAnyClientCert, MinVersion: tls.VersionTLS13}}
+	return srv.ListenAndServeTLS(certFile, keyFile)
 }

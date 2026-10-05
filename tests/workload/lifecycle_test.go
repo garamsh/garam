@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"os"
 	"path/filepath"
@@ -114,10 +115,9 @@ func TestRealEngine_DrainEndsTheWholeWorkload(t *testing.T) {
 
 	successor, nextSpace := h.container(workload.RoleRuntime), h.container(workload.RoleWorkspace)
 	require.NotEqual(t, runtime, successor)
-	adapter := h.container(workload.RoleAdapter)
-	before := [2]int{h.size(adapter, memoryFile), h.size(nextSpace, workspaceFile)}
+	before := [2]int{h.size(successor, memoryFile), h.size(nextSpace, workspaceFile)}
 	time.Sleep(time.Second)
-	after := [2]int{h.size(adapter, memoryFile), h.size(nextSpace, workspaceFile)}
+	after := [2]int{h.size(successor, memoryFile), h.size(nextSpace, workspaceFile)}
 	assert.Equal(t, before, after, "neither file grows after both writers exited")
 	assert.Positive(t, before[0], "the control: the runtime's probe wrote before it was ended")
 	assert.Positive(t, before[1], "the control: the workspace's probe wrote before it was ended")
@@ -336,4 +336,188 @@ func TestRealEngine_DecidesNothingWithoutTheEngine(t *testing.T) {
 	assert.False(t, again.returned(), "the control: the reachable engine supervises the generation")
 	assert.Equal(t, runtime, h.container(workload.RoleRuntime), "the same runtime, adopted")
 	assert.Len(t, h.garam.generations(), 1)
+}
+
+// eventTimes answers when the engine recorded event for a container
+// since, in nanoseconds.
+func (h *host) eventTimes(id, event string, since time.Time) []int64 {
+	h.t.Helper()
+	out := h.mustDocker("events", "--since", since.Format(time.RFC3339Nano), "--until", time.Now().Format(time.RFC3339Nano),
+		"--filter", "container="+id, "--filter", "event="+event, "--format", "{{.TimeNano}}")
+	var times []int64
+	for _, f := range strings.Fields(out) {
+		n, err := strconv.ParseInt(f, 10, 64)
+		require.NoError(h.t, err)
+		times = append(times, n)
+	}
+	return times
+}
+
+// gatewayState answers the runtime's state as its loopback status
+// says, read from inside the adapter, or "" where it does not answer.
+func (h *host) gatewayState(adapter string) string {
+	out, err := h.docker("exec", adapter, h.probe(adapter), "get",
+		"http://127.0.0.1:8080/agents/"+testAgent.String()+"/status")
+	if err != nil {
+		return ""
+	}
+	var s struct {
+		State string `json:"state"`
+	}
+	_ = json.Unmarshal([]byte(out), &s)
+	return s.State
+}
+
+// stopWorkspace stops the workspace's first process from the host, so
+// a tool call the runtime makes waits on it, and answers what resumes
+// it.
+func (h *host) stopWorkspace(space string) func() {
+	h.t.Helper()
+	pid, err := strconv.Atoi(h.inspect(space, "{{.State.Pid}}"))
+	require.NoError(h.t, err)
+	require.NoError(h.t, syscall.Kill(pid, syscall.SIGSTOP))
+	resume := func() { _ = syscall.Kill(pid, syscall.SIGCONT) }
+	h.t.Cleanup(resume)
+	return resume
+}
+
+// postStuckTurn has the runtime take a message whose turn's first tool
+// call waits on the stopped workspace.
+func (h *host) postStuckTurn(adapter string) {
+	h.t.Helper()
+	posted := h.mustDocker("exec", adapter, h.probe(adapter), "post",
+		"http://127.0.0.1:8080/agents/"+testAgent.String()+"/messages",
+		`{"id":"garam-1180-turn","content":"hello"}`)
+	require.Equal(h.t, "202", posted)
+}
+
+// TestRealEngine_DrainFindsARenamedRuntimeByItsID holds the drain to
+// the container IDs it recorded: a runtime renamed under the
+// supervisor is still sent SIGTERM and waited for before the successor
+// starts, which would otherwise meet its store's lock held. The control
+// is the same replacement with nothing renamed.
+func TestRealEngine_DrainFindsARenamedRuntimeByItsID(t *testing.T) {
+	for _, renamed := range []bool{false, true} {
+		t.Run(fmt.Sprintf("renamed %v", renamed), func(t *testing.T) {
+			h := newHost(t)
+			first := h.start()
+			h.activated(1)
+			require.NoError(t, first.stop())
+			runtime := h.container(workload.RoleRuntime)
+			if renamed {
+				h.mustDocker("rename", runtime, h.prefix+"renamed-by-someone")
+			}
+			since := time.Now()
+			h.start(replace)
+			h.activated(2)
+			assert.Equal(t, []string{"15"}, h.signals(runtime, since), "the runtime was sent SIGTERM by its ID")
+			assert.Len(t, h.exitCodes(runtime, since), 1, "and it exited")
+		})
+	}
+}
+
+// TestRealEngine_RequiresTheStoreOnlyAfterAServingReport holds
+// --require-store to a serving report: a generation whose adapter is
+// gone before its activation is answered, so no report follows, starts
+// its successor without the flag. The control is the same generation
+// reporting serving, whose successor starts with it.
+func TestRealEngine_RequiresTheStoreOnlyAfterAServingReport(t *testing.T) {
+	for _, reported := range []bool{false, true} {
+		t.Run(fmt.Sprintf("reported %v", reported), func(t *testing.T) {
+			h := newHost(t)
+			if !reported {
+				h.garam.before = func() {
+					h.garam.mu.Lock()
+					h.garam.before = nil
+					h.garam.mu.Unlock()
+					out, _ := h.docker("ps", "-q", "--filter", "name=^"+h.prefix+"adapter-")
+					_, _ = h.docker("kill", "--signal", "TERM", out)
+					_, _ = h.docker("wait", out)
+				}
+			}
+			r := h.start()
+			h.activated(1)
+			if reported {
+				eventually(t, "the serving report recorded", func() bool {
+					raw, err := os.ReadFile(filepath.Join(h.dir, "workload.json"))
+					var st struct {
+						Memory struct {
+							Served bool `json:"served"`
+						} `json:"memory"`
+					}
+					return err == nil && json.Unmarshal(raw, &st) == nil && st.Memory.Served
+				})
+				h.mustDocker("kill", "--signal", "TERM", h.container(workload.RoleRuntime))
+			}
+			require.ErrorIs(t, r.result(t), workload.ErrGenerationEnded)
+			h.start()
+			h.activated(2)
+			cmd := h.inspect(h.container(workload.RoleRuntime), "{{json .Config.Cmd}}")
+			assert.Equal(t, reported, strings.Contains(cmd, "--require-store"), cmd)
+		})
+	}
+}
+
+// TestRealEngine_ActivatesOnlyAServingRuntime holds activation to a
+// runtime that reports serving: one told to stop while garam was out
+// of reach reports draining, and nothing is activated for it once
+// garam is back. The control is the same runtime still serving, which
+// is activated once garam is back.
+func TestRealEngine_ActivatesOnlyAServingRuntime(t *testing.T) {
+	for _, draining := range []bool{false, true} {
+		t.Run(fmt.Sprintf("draining %v", draining), func(t *testing.T) {
+			h := newHost(t)
+			h.garam.setUndecided(true)
+			h.start()
+			var runtime, space, adapter string
+			eventually(t, "the generation up", func() bool {
+				runtime, space, adapter = h.container(workload.RoleRuntime), h.container(workload.RoleWorkspace),
+					h.container(workload.RoleAdapter)
+				return adapter != "" && h.inspect(adapter, "{{.State.Running}}") == "true" && h.gatewayState(adapter) == "serving"
+			})
+			if draining {
+				h.stopWorkspace(space)
+				h.postStuckTurn(adapter)
+				h.mustDocker("kill", "--signal", "TERM", runtime)
+				eventually(t, "the runtime draining", func() bool { return h.gatewayState(adapter) == "draining" })
+			}
+			h.garam.setUndecided(false)
+			if !draining {
+				h.activated(1)
+				return
+			}
+			seen := func() int { return strings.Count(h.mustDocker("logs", adapter), "runtime not serving; not activated") }
+			after := seen()
+			eventually(t, "the adapter reading the draining runtime twice more", func() bool { return seen() >= after+2 })
+			assert.Empty(t, h.garam.generations(), "nothing is activated for a draining runtime")
+		})
+	}
+}
+
+// TestRealEngine_DrainKeepsTheWorkspaceForTheTurn holds the drain's
+// order: the runtime is told to stop first and waited for, and the
+// workspace only after it exited, so a tool call in flight completes.
+// The control is the turn's tool result, recorded in the workspace.
+func TestRealEngine_DrainKeepsTheWorkspaceForTheTurn(t *testing.T) {
+	h := newHost(t)
+	first := h.start()
+	h.activated(1)
+	runtime, space, adapter := h.container(workload.RoleRuntime), h.container(workload.RoleWorkspace), h.container(workload.RoleAdapter)
+	resume := h.stopWorkspace(space)
+	h.postStuckTurn(adapter)
+	require.NoError(t, first.stop())
+
+	since := time.Now()
+	h.start(replace)
+	eventually(t, "the runtime draining", func() bool { return h.gatewayState(adapter) == "draining" })
+	assert.Empty(t, h.signals(space, since), "the workspace is not told to stop while the runtime drains")
+	resume()
+	h.activated(2)
+	runtimeExit, spaceSignal := h.eventTimes(runtime, "die", since), h.eventTimes(space, "kill", since)
+	require.Len(t, runtimeExit, 1)
+	require.Len(t, spaceSignal, 1)
+	assert.Less(t, runtimeExit[0], spaceSignal[0], "the workspace is signalled after the runtime exited")
+	next := h.container(workload.RoleWorkspace)
+	found := h.mustDocker("exec", next, h.probe(next), "find", "/var/lib/sherlock-workspace", "question.txt")
+	assert.NotEmpty(t, found, "the control: the turn's tool call completed and wrote its result")
 }

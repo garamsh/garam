@@ -22,6 +22,8 @@ const (
 	outboxTarget    = "/outbox"
 	workspaceTarget = "/var/lib/sherlock-workspace"
 	runtimeConfig   = "/etc/sherlock/config.yaml"
+	runtimeEgo      = "/etc/sherlock/ego.md"
+	runtimeInstr    = "/etc/sherlock/instructions.md"
 	adapterFiles    = "/etc/garam"
 	socketTarget    = "/run/garam-control"
 )

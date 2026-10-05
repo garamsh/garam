@@ -235,6 +235,12 @@ func (s *Supervisor) spec(in *intent, r Role, genDir string) ContainerSpec {
 			"--memory-path", memoryTarget + "/memory.db",
 			"--addr", "127.0.0.1:8080", "--workspace-addr", "127.0.0.1:8081",
 		}
+		if d.Ego != nil {
+			spec.Cmd = append(spec.Cmd, "--ego-file", runtimeEgo)
+		}
+		if d.Instructions != nil {
+			spec.Cmd = append(spec.Cmd, "--instructions-file", runtimeInstr)
+		}
 		if in.RequireStore {
 			spec.Cmd = append(spec.Cmd, "--require-store")
 		}
@@ -278,7 +284,14 @@ func (s *Supervisor) files(in *intent, r Role, root []byte) []File {
 	a := s.cfg.Adapter
 	switch r {
 	case RoleRuntime:
-		return []File{dir("sherlock"), own("sherlock/config.yaml", s.cfg.Desired.Config, 0o600)}
+		files := []File{dir("sherlock"), own("sherlock/config.yaml", s.cfg.Desired.Config, 0o600)}
+		if ego := s.cfg.Desired.Ego; ego != nil {
+			files = append(files, own("sherlock/ego.md", ego, 0o600))
+		}
+		if instructions := s.cfg.Desired.Instructions; instructions != nil {
+			files = append(files, own("sherlock/instructions.md", instructions, 0o600))
+		}
+		return files
 	case RoleAdapter:
 		return []File{
 			dir("garam"),

@@ -204,8 +204,10 @@ embedding:
 				t.Logf("%s logs:\n%s", role, s.scrub(tail(strings.Join(turn, "\n"), 80)))
 			}
 		}
-		for _, m := range s.messages("recipient_grn = $1 OR sender_grn = $1", agentGRN) {
-			t.Logf("message %+v", m)
+		if s.conn != nil && !s.conn.IsClosed() {
+			for _, m := range s.messages("recipient_grn = $1 OR sender_grn = $1", agentGRN) {
+				t.Logf("message %+v", m)
+			}
 		}
 	})
 	first := start()
@@ -313,11 +315,12 @@ embedding:
 	// 6. a restart that keeps memory (T15): the same agent on the same
 	// volume, a new generation.
 	before := s.generationOf(h, runtime)
+	activated := len(s.activations(agentGRN))
 	require.NoError(t, second.stop(), s.scrub(second.out.String()))
 	last := start("--replace")
 	s.eventually("the successor activated", func() bool {
 		a := s.activations(agentGRN)
-		return len(a) >= 2 && a[len(a)-1].Ended == ""
+		return len(a) == activated+1 && a[len(a)-1].Ended == ""
 	})
 	successor := h.container("runtime")
 	after := s.generationOf(h, successor)

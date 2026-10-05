@@ -7,7 +7,7 @@ by `internal/agent`.
 |------|----------------|
 | `Agent` | actor owned by an org; carries the state the operator reports about its pod and the state it reports about itself, separately |
 | `Definition` | what an organization says an agent should be: which operator runs it and with what values (ADR-0026), and not what it is built from — it names no image. It names its subject where an `Agent` names itself, and carries none of the state an `Agent` carries, so a reader cannot take one for the other; it writes no `agents` row until the operator it names claims it (ADR-0033) |
-| `Template` | a starting point an organization keeps for defining agents: a name, a description and values a definition copies once (ADR-0075). It names no operator and no agent, and no definition records the template it came from, so editing or deleting one reaches no agent |
+| `Template` | a starting point an organization kept for defining agents: a name, a description and values a definition copied once (ADR-0075). It names no operator and no agent, and no definition records the template it came from. Templates are retired read-only: each is read as the record of what it said, and nothing writes one (ADR-0088) |
 | `Name` | what an organization calls a defined agent or a template, separate from the GRN: trimmed, one to 100 characters, and not unique |
 | `Assignment` | what holds an agent — an operator, or a standalone host's supervisor (ADR-0082) — and the epoch that binding holds |
 | `Certificate` | what an agent authenticates with and the garam server root it verifies garam by, as this domain hands them back |
@@ -94,11 +94,11 @@ through `grn.GRN` alone and this one never holds key material. The
 HTTP surfaces are the machine listener — where the operator reports the
 pod and the agent reports itself, each on a route of its own and
 neither reaching the other's fact (ADR-0053) — and the browser-facing
-one for the organization's members, which reads the agents and writes
-only definitions, their names and templates: provisioning is an
-operator's, from outside garam, and a definition writes no `agents`
-row until the operator it names claims it (ADR-0033). The queue a
-message reaches an agent through is the messaging domain.
+one for the organization's members, which reads the agents and
+templates and writes only definitions and their names: provisioning
+is an operator's, from outside garam, and a definition writes no
+`agents` row until the operator it names claims it (ADR-0033). The
+queue a message reaches an agent through is the messaging domain.
 
 What an agent is built from is the operator's. A `Definition` names no
 image, and `values` is not a way around that: garam stores the keys and
@@ -148,7 +148,8 @@ release of that contract and no compatibility window (ADR-0049).
 initial issuance (below), the controller proof
 ([operators.md](./operators.md) §Controller proof), the generation
 fence ([machine-identity.md](./machine-identity.md) §Generation and
-lineage) and a legacy agent's cutover (below).** The adapter this
+lineage) and a legacy agent's cutover (below); the retirement of
+garam's templates (below) is garam's alone and built.** The adapter this
 repository ships reaches the fence through the lifecycle authority,
 never directly: it asks that authority to activate the generation
 beside it and carries the token it is answered with
@@ -164,10 +165,18 @@ in #1157.
 - **Desired runtime values and templates leave garam.** The Operator
   control service is their one writable managed source and the cluster
   controller pulls from it; a standalone host keeps its own.
-  `Definition` values and `Template` are what move, per GRN, with no
-  dual write and no new workload or volume. The GRN, the `Name` and the
-  assignment stay here, and the console still copies a template once
-  (ADR-0077).
+  `Definition` values are what move, per GRN, with no dual write and no
+  new workload or volume. The GRN, the `Name` and the assignment stay
+  here, and the console copies an Operator template once (ADR-0077).
+- **garam's templates are retired read-only and not imported**
+  (ADR-0088). Migration 000034's trigger refuses every insert, update
+  and delete on `agent_templates`, from whichever release sends it:
+  creating it waits for a write already holding the table, which
+  commits first, and a write reaching the table after it is refused. A
+  delete reached through the organization's own deletion is admitted.
+  No route or action writes a template; `listAgentTemplates` and
+  `getAgentTemplate` read them as records on `agent-template:read`, and
+  no definition or revision changes.
 - **A legacy agent cuts over in stages garam records under its
   execution lock** (ADR-0086). The Operator reads the agent's source —
   its definition, or empty values where none describes it — and the
@@ -190,7 +199,7 @@ in #1157.
   rollback refuses while a cutover is held. `garam cutover-inventory`
   prints every source record of an organization with a digest of each
   value and no value. The Operator's import and release are unbuilt
-  (garamsh/garam-agent-operator#217), and templates are #1188's.
+  (garamsh/garam-agent-operator#217).
 - **A managed agent is created by request, not by claim.** The control
   service presents a member's `agent:create` reference and the request
   identifier it binds; garam rechecks the reference from current state

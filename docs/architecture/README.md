@@ -511,13 +511,14 @@ ADRs:
   defined from them, a definition's name changes on `agent:rename`
   and moves nothing else, and the console lists desired agents by name
   apart from what operators report. Which service owns a template is
-  superseded by 0077
+  superseded by 0077, and its template writes and forms by 0088
 - [0077](./adr/0077-execution-definitions-move-to-the-operator-control-service-and-each-agent-cuts-over-alone.md)
   — execution definitions and templates move to a separately deployed
   Operator control service with its own store, garam keeps identity,
   names, assignment and collaboration, and existing agents cut over one
   GRN at a time with one active source and no new workload or volume;
-  garam's managed creation is built, and the rest is unbuilt
+  garam's managed creation is built, and the rest is unbuilt. Its
+  cutover of templates is superseded by 0088
 - [0078](./adr/0078-a-lifecycle-authority-activates-a-runtime-generation-and-old-generations-and-lineages-are-fenced.md)
   — a lifecycle authority activates a runtime generation distinct from
   the GRN, epoch and revision; old generations and replaced credential
@@ -582,3 +583,9 @@ ADRs:
   files the host names, and its configuration's revision names both,
   so changing either is a new revision; the adapter may reach garam at
   an address of its own, refining ADR-0085
+- [0088](./adr/0088-garams-agent-templates-are-retired-read-only-and-not-imported.md)
+  — garam's agent templates are retired read-only and not imported: a
+  schema guard refuses every write to them from whichever release
+  sends it, a template still goes with its organization, the write
+  routes and actions are removed, and the console defines only from
+  the Operator's templates and shows garam's as archived records

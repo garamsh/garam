@@ -185,10 +185,10 @@ func TestMigration000034_AWriteReachingTheTableAfterTheRetirementIsRefused(t *te
 
 // TestMigration000034_KeepsEveryRowAndRollsBack applies 000034 over a
 // template and a definition copied from it, as 000033 left them. Both
-// rows read back byte for byte: the retirement changes no template and
-// no definition. Rolling 000034 back reopens the write it refused, which
-// is the control that the refusal is 000034's, and applying it again
-// closes it again.
+// rows read back byte for byte: the retirement changes no template
+// and no definition. Rolling 000034 back reopens the write it refused,
+// which is the control that the refusal is 000034's, and applying it
+// again closes it again.
 func TestMigration000034_KeepsEveryRowAndRollsBack(t *testing.T) {
 	ctx := context.Background()
 	sp, m := retiredSchema(t, "retire_000034_rows")

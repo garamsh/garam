@@ -2,7 +2,10 @@
 
 > Status: accepted — §Decision's "A template is an organization's own
 > resource", as to which service owns it, is superseded by
-> [ADR-0077](./0077-execution-definitions-move-to-the-operator-control-service-and-each-agent-cuts-over-alone.md)
+> [ADR-0077](./0077-execution-definitions-move-to-the-operator-control-service-and-each-agent-cuts-over-alone.md);
+> its template actions other than the read, "An update replaces the
+> whole template" and the console's template forms are superseded by
+> [ADR-0088](./0088-garams-agent-templates-are-retired-read-only-and-not-imported.md)
 > Date: 2026-09-28
 
 ## Context

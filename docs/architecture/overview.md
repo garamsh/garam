@@ -141,11 +141,11 @@ collaborate on a shared plan.
   `agent:rename` changes without touching the identity, operator or
   values (ADR-0075).
 - An organization's **agent templates**, under
-  `/orgs/{org}/agent-templates` — starting points a definition copies
-  values from once, with nothing linking the two afterwards, so a
-  template's edit or deletion reaches no agent (ADR-0075). Reading,
-  creating, updating and deleting one are `agent-template:read`,
-  `…:create`, `…:update` and `…:delete`.
+  `/orgs/{org}/agent-templates` — starting points a definition copied
+  values from once, with nothing linking the two afterwards
+  (ADR-0075). They are retired read-only: the schema refuses every
+  write, and listing and reading one on `agent-template:read` is all
+  that remains (ADR-0088).
 - Messages addressed to an agent are held in a queue one reader at a
   time claims from, stored once per sender key and claimable again when
   a reader dies holding one (ADR-0013). A message is bounded by an
@@ -343,13 +343,14 @@ collaborate on a shared plan.
   progress.
 - Separated execution. ADR-0077 moves desired runtime values and
   templates to the Operator control service, cutting over one GRN at a
-  time; ADR-0078 fences a runtime by its activated generation and
-  credential lineage; ADR-0079 bounds interservice compatibility and
-  replay. All three are accepted; garam's half of the generation fence
-  is built (ADR-0080), the adapter this repository ships uses it under
-  ADR-0084's contract, which a standalone host's supervisor serves
-  (ADR-0085) and the Operator control service does not yet,
-  acceptance with its peers is unverified (#1157), and the rest is
+  time, and garam's own templates are retired read-only rather than
+  moved (ADR-0088); ADR-0078 fences a runtime by its activated
+  generation and credential lineage; ADR-0079 bounds interservice
+  compatibility and replay. All three are accepted; garam's half of the
+  generation fence is built (ADR-0080), the adapter this repository
+  ships uses it under ADR-0084's contract, which a standalone host's
+  supervisor serves (ADR-0085) and the Operator control service does not
+  yet, acceptance with its peers is unverified (#1157), and the rest is
   unbuilt.
   [agents.md](./agents.md) §Separated execution carries the target.
 - Chat channels. ADR-0013 makes garam a message API and leaves Slack,

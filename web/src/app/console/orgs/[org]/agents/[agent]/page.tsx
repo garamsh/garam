@@ -16,6 +16,7 @@ import {
 } from "@/features/orgs";
 
 import { ApiUnreachable } from "../../../../_components/api-unreachable";
+import { ArchivalNotice } from "../../../../_components/cutover-marker";
 import { ItemCrumb } from "../../../../_components/item-crumb";
 import { orgHref } from "../../../../_components/navigation";
 import { PageHeader } from "../../../../_components/page-header";
@@ -153,7 +154,11 @@ export default async function AgentPage({ params }: Params) {
   );
 }
 
-/** What the organization asked for, and renaming it. */
+/**
+ * What the organization asked for, and renaming it. A definition whose
+ * agent is cutting over or cut over to the Operator keeps its values as
+ * an archive no one edits, and its name alone still changes (ADR-0086).
+ */
 function Requested({
   org,
   agent,
@@ -165,7 +170,7 @@ function Requested({
   definition: AgentDefinition;
   operatorName: string | undefined;
 }) {
-  const { name, operatorGrn, values, createdAt } = definition;
+  const { name, operatorGrn, values, createdAt, cutover } = definition;
   return (
     <>
       <section className="flex flex-col gap-3">
@@ -186,9 +191,13 @@ function Requested({
         </dl>
         <h3 className="text-sm font-medium">Settings</h3>
         <DesiredValues values={values} />
-        <p className="max-w-2xl text-sm text-muted-foreground">
-          Saved values; application is not reported.
-        </p>
+        {cutover === null ? (
+          <p className="max-w-2xl text-sm text-muted-foreground">
+            Saved values; application is not reported.
+          </p>
+        ) : (
+          <ArchivalNotice cutover={cutover} />
+        )}
       </section>
 
       <Separator />

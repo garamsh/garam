@@ -61,6 +61,44 @@ describe("agents section", () => {
     expect(container.textContent).not.toContain("grn:");
   });
 
+  it("marks a definition cutting over or cut over to the Operator, and no other", async () => {
+    server.use(
+      http.get(`${API_URL}/orgs/acme/agent-definitions`, () =>
+        HttpResponse.json([
+          { ...fieldAgent, cutover: { stage: "switched" } },
+          {
+            ...fieldAgent,
+            agentGrn: "grn:acme:default:agent:0000000000000001",
+            name: "Ranger",
+            cutover: { stage: "frozen" },
+          },
+          {
+            ...fieldAgent,
+            agentGrn: "grn:acme:default:agent:0000000000000002",
+            name: "Legacy",
+            cutover: null,
+          },
+        ]),
+      ),
+    );
+
+    await renderServerComponent(AgentsPage(params("acme")));
+
+    expect(
+      within(cardOf("Scout")).getByText("Managed by the Operator"),
+    ).toBeInTheDocument();
+    expect(
+      within(cardOf("Ranger")).getByText("Cut-over in progress"),
+    ).toBeInTheDocument();
+    // The control: a definition with no open attempt is listed as
+    // before, so the marks above follow the stage and not the list.
+    const legacy = within(cardOf("Legacy"));
+    expect(
+      legacy.queryByText("Managed by the Operator"),
+    ).not.toBeInTheDocument();
+    expect(legacy.queryByText("Cut-over in progress")).not.toBeInTheDocument();
+  });
+
   it("shows a claimed agent's reported states beside its name", async () => {
     server.use(
       http.get(`${API_URL}/orgs/acme/agents`, () =>

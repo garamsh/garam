@@ -77,10 +77,10 @@ export default async function AgentsPage({ params }: Params) {
       agent,
     ]),
   );
-  const operatorOf = new Map(
+  const definitionOf = new Map(
     (definitions.status === "ok" ? definitions.data : []).map((d) => [
       d.agentGrn,
-      d.operatorGrn,
+      d,
     ]),
   );
   const operatorNames = new Map(
@@ -90,7 +90,8 @@ export default async function AgentsPage({ params }: Params) {
     ]),
   );
   const entries: RosterEntry[] = directoryAgents(directory).map((entry) => {
-    const operatorGrn = operatorOf.get(entry.grn);
+    const definition = definitionOf.get(entry.grn);
+    const operatorGrn = definition?.operatorGrn;
     return {
       directory: entry,
       agent: reported.get(entry.grn),
@@ -101,6 +102,7 @@ export default async function AgentsPage({ params }: Params) {
               identifier: slugFromGrn(operatorGrn),
               name: operatorNames.get(operatorGrn),
             },
+      cutover: definition?.cutover ?? null,
     };
   });
 

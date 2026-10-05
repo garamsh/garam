@@ -118,6 +118,49 @@ describe("operator page", () => {
     ).toHaveAttribute("href", "/console/orgs/acme/agents#definitions");
   });
 
+  it("marks a naming definition cutting over or cut over to the Operator, and no other", async () => {
+    server.use(
+      http.get(DEFINITIONS, () =>
+        HttpResponse.json([
+          { ...fieldAgent, cutover: { stage: "switched" } },
+          {
+            ...fieldAgent,
+            agentGrn: "grn:acme:default:agent:0000000000000001",
+            name: "Ranger",
+            cutover: { stage: "frozen" },
+          },
+          {
+            ...fieldAgent,
+            agentGrn: "grn:acme:default:agent:0000000000000002",
+            name: "Legacy",
+            cutover: null,
+          },
+        ]),
+      ),
+    );
+
+    await renderOperator();
+
+    const rowOf = (name: string) => {
+      const row = screen.getByRole("link", { name }).closest("li");
+      if (row === null) throw new Error(`no row holds ${name}`);
+      return within(row);
+    };
+    expect(
+      rowOf("Scout").getByText("Managed by the Operator"),
+    ).toBeInTheDocument();
+    expect(
+      rowOf("Ranger").getByText("Cut-over in progress"),
+    ).toBeInTheDocument();
+    // The control: a definition with no open attempt is listed as
+    // before, so the marks above follow the stage and not the list.
+    const legacy = rowOf("Legacy");
+    expect(
+      legacy.queryByText("Managed by the Operator"),
+    ).not.toBeInTheDocument();
+    expect(legacy.queryByText("Cut-over in progress")).not.toBeInTheDocument();
+  });
+
   it("says no definition names it when none does", async () => {
     server.use(http.get(DEFINITIONS, () => HttpResponse.json([])));
 

@@ -146,8 +146,8 @@ generation, over TLS, under ADR-0084's contract unchanged.**
 for nothing else.** The supervisor requires each of these before it
 forwards:
 
-- the intent's placement token, 32 random bytes, compared in constant
-  time, where none is unauthenticated;
+- the intent's placement token, 32 random bytes compared in constant
+  time; a request without one is unauthenticated;
 - the epoch and the configuration's own `revision`, which `run`
   refuses to be empty;
 - the runtime container being the recorded one, running from the

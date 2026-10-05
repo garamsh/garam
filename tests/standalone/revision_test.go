@@ -71,7 +71,11 @@ embedding:
 	// reported answers what the runtime's own status says it applied,
 	// read on its loopback from inside the adapter.
 	reported := func() string {
-		said, err := s.probeIn(h.container("adapter"), "get", "http://127.0.0.1:8080/agents/"+agentGRN+"/status")
+		adapter := h.container("adapter")
+		if adapter == "" {
+			return ""
+		}
+		said, err := s.probeIn(adapter, "get", "http://127.0.0.1:8080/agents/"+agentGRN+"/status")
 		if err != nil {
 			return ""
 		}

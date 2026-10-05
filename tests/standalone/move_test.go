@@ -94,7 +94,8 @@ embedding:
 	fact := "The codeword is " + codeword +
 		". Keep it in mind. Reply to me with message_send, with the single word NOTED."
 	from.post(agentGRN, "garam-sa-fact", fact)
-	t.Logf("the fact's reply: %q", s.scrub(from.awaitReply(agentGRN).Body))
+	s.awaitCompleted(from.grn, "garam-sa-fact")
+	from.observeReply(agentGRN, time.Minute)
 
 	post := func(token, key string) (int, string) {
 		status, raw := h.call(h.agentClient(), "/messages", "", "Garam-Execution "+token,
@@ -159,15 +160,8 @@ embedding:
 	question := "What is the codeword from my earlier message? Reply to me with message_send, with just the codeword."
 	require.NotContains(t, question, codeword)
 	from.post(agentGRN, "garam-sa-recall", question)
-	recall := s.scrub(from.awaitReply(agentGRN).Body)
-	t.Logf("the recall: %q", recall)
-	assert.Contains(t, strings.ToLower(recall), codeword, "memory from before the move is recalled")
-	asked := s.messages("sender_grn = $1 AND idempotency_key = $2", from.grn, "garam-sa-recall")
-	require.Len(t, asked, 1)
-	s.eventually("the recall question completed", func() bool {
-		asked = s.messages("id = $1", asked[0].ID)
-		return asked[0].Completed
-	})
+	asked := []message{s.awaitCompleted(from.grn, "garam-sa-recall")}
+	from.observeReply(agentGRN, time.Minute)
 	assert.Equal(t, 1, asked[0].Attempts, "claimed once")
 	var claimedAt, activatedAt time.Time
 	require.NoError(t, s.db().QueryRow(context.Background(),
@@ -182,6 +176,9 @@ embedding:
 	s.mustDocker("kill", "--signal", "TERM", h.container("runtime"))
 	s.eventually("the new generation stopped", func() bool { return h.container("runtime") == "" })
 	assert.Len(t, s.sources(target, asked[0].ID), 1, "the question reached the new generation's store")
+	answered := s.scrub(strings.Join(s.answers(target, asked[0].ID), "\n"))
+	t.Logf("the recall, as the turn recorded it: %q", answered)
+	assert.Contains(t, strings.ToLower(answered), codeword, "memory from before the move is recalled")
 	assert.Len(t, s.sources(before.volume, factID), 1, "the control: the old store holds the fact too")
 	assert.Empty(t, s.sources(before.volume, asked[0].ID), "and not the question asked after the switch")
 }

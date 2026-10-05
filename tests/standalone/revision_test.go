@@ -95,7 +95,8 @@ embedding:
 	codeword := "cedar-" + strconv.Itoa(int(randomBytes(1)[0])+100)
 	from.post(agentGRN, "garam-sa-fact", "The codeword is "+codeword+
 		". Keep it in mind. Reply to me with message_send, with the single word NOTED.")
-	t.Logf("the fact's reply: %q", s.scrub(from.awaitReply(agentGRN).Body))
+	s.awaitCompleted(from.grn, "garam-sa-fact")
+	from.observeReply(agentGRN, time.Minute)
 	factID := s.messages("sender_grn = $1 AND idempotency_key = $2", from.grn, "garam-sa-fact")[0].ID
 	require.NoError(t, first.stop(), s.scrub(first.out.String()))
 

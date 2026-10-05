@@ -64,7 +64,7 @@ type stubContainer struct {
 func newStubEngine() *stubEngine {
 	return &stubEngine{
 		volumes: map[string]map[string]string{}, containers: map[string]*stubContainer{},
-		paths:  map[string]map[string]workload.PathState{}, data: map[string]map[string][]byte{},
+		paths: map[string]map[string]workload.PathState{}, data: map[string]map[string][]byte{},
 		byName: map[string]string{}, changed: make(chan struct{}),
 	}
 }

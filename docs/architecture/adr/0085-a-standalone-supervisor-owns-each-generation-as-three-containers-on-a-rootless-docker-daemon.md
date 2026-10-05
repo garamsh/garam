@@ -58,10 +58,12 @@ running.
   host namespace and a stop timeout of -1.
 
 **Storage is two volumes the supervisor created.** The memory volume
-is mounted into the runtime, and into the adapter for the outbox. The
+is mounted into the runtime whole, and into the adapter as its
+`outbox` directory alone, by the engine's volume subpath. The
 workspace volume is mounted into the workspace alone, so no Exec child
 reaches memory: sherlock#966's invariant and garam-agent-operator#249's
-decision hold here too.
+decision hold here too, and the adapter, whose account owns the store,
+cannot open it.
 
 - The supervisor records each volume's name and a random nonce before
   it creates the volume with the nonce as a label. It confirms the
@@ -70,13 +72,29 @@ decision hold here too.
 - A confirmed volume that is gone, or one that carries another nonce,
   is refused. The supervisor creates nothing on it and waits for a
   person; it never creates a volume to replace it.
+- The supervisor makes the outbox, a directory owned by 65532, by
+  copying it into the created runtime before its first start, and
+  checks it again through the runtime before the adapter is created.
+  Anything there but a directory refuses, and the generation waits for
+  a person; the path is never repaired, since replacing it could drop
+  what it holds.
+- That check is sufficient because of when it runs. On the rootless
+  daemon measured, a subpath that is a link inside the volume
+  (`outbox -> .`) is followed, and mounts the whole volume; one that
+  leaves the volume is refused. A tool runs as 65532, which owns the
+  volume, so a tool of an earlier generation could plant such a link.
+  Between the check and the adapter's mount no turn can run, because a
+  turn begins only with a message the adapter delivers, so nothing
+  changes the path in between. A link planted after the adapter starts
+  does not move a mount already made. Entries inside the outbox are
+  still read through the adapter's own file boundary (ADR-0084).
 - The runtime starts with `--require-store` on every start except the
   first ones on a new memory volume. Which those are is a durable fact
-  in the volume's record, written when the first activation for a
-  runtime on it arrives (its adapter read a status the runtime answers
-  only once its store is open) or when a serving status is reported.
-  It is never inferred, so a supervisor restarted after that point
-  always passes the flag.
+  in the volume's record, written when the first runtime-status report
+  saying `serving` arrives for a runtime on it. Nothing infers it, an
+  activation included, so a runtime gone between its activation and
+  its first report leaves the next start creating the store, and a
+  supervisor restarted after a serving report always passes the flag.
 
 **A generation is an intent recorded before anything of it exists.**
 The intent carries:
@@ -92,20 +110,26 @@ when it carries the intent's nonce and identifier, its image and its
 volumes. That recovers a create whose answer was lost without creating
 a second. Anything else under the name is foreign: it is never started,
 signalled or removed, and the run stays pending. A label alone adopts
-nothing.
+nothing. Once the record holds a container's ID, that ID alone finds
+it, so a rename neither hides a container from the drain nor puts a
+stranger in its place.
 
-**A drain is SIGTERM and a wait with no deadline.** The supervisor
-sends SIGTERM to the runtime and the workspace, and waits for the
-engine to report both exited. It then does the same for the adapter,
-and only after that removes the three. A runtime finishing a turn
-keeps the drain pending for as long as that takes. No stop with a
+**A drain is SIGTERM and a wait with no deadline, one container at a
+time.** The supervisor sends SIGTERM to the runtime and waits for the
+engine to report it exited, so a turn it is finishing keeps the tools
+it calls. It then does the same for the workspace, then for the
+adapter, and only after that removes the three. A runtime finishing a
+turn keeps the drain pending for as long as that takes, and so does a
+recorded container the engine cannot account for. No stop with a
 timeout is used, and nothing escalates.
 
 - The positive exit is both writers exited. When a namespace's first
   process exits, the kernel ends every process in that PID namespace,
   so a tool that detached keeps nothing running past it.
 - Any of the three exiting on its own ends the generation, and the
-  other two are drained the same way.
+  other two are drained the same way. So does the generation's control
+  listener stopping on its own, which would leave the adapter no way
+  to activate.
 - A replacement happens when the desired revision, epoch or images
   differ from the running generation's, or when `--replace` asks for
   one. It drains the old generation before the new one is created.
@@ -167,6 +191,13 @@ and never a second one. The supervisor maps garam's answers this way:
 A runtime status is accepted for the activated generation alone and is
 the host's record of what the runtime applied.
 
+**The adapter activates only a runtime that reports `serving`.** This
+refines ADR-0084's "reads the runtime's status ... and activates" for
+the fenced mode: a runtime already told to stop reports `draining`, and
+its generation is not the one to fence the next by. A runtime that
+drains after its activation keeps it, and its status is reported as
+before.
+
 **An engine the supervisor cannot reach decides nothing.** It starts,
 signals, removes and activates nothing, and the generation keeps
 running with the token its adapter holds. Stopping the daemon may stop
@@ -180,14 +211,10 @@ limit and not a promise.
   memory are owed by #1180's next part.
 - **Renewing the agent's certificate inside a running adapter.** A
   renewal recreates the adapter; nothing does that yet.
-- **What the adapter's mount reaches.** The adapter mounts the memory
-  volume whole, so its account could open the store. Mounting the
-  outbox alone needs the outbox to exist before the adapter starts,
-  and the runtime makes it only on its first reply.
 - **A daemon stop or restart.** Measuring one needs a daemon of its
   own, which the shared validation daemon is not.
-- **An explicit storage handover.** A refused volume waits for a
-  person, and no command takes that decision.
+- **An explicit storage handover.** A refused volume or outbox waits
+  for a person, and no command takes that decision.
 
 ## Consequences
 

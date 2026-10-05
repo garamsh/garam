@@ -380,12 +380,13 @@ supervisor when standalone.
   `Authorization: Garam-Execution <token>`
   ([machine-identity.md](./machine-identity.md) §Generation and
   lineage), and the adapter makes none before it holds one.
-- **It activates the generation the runtime reports.** It reads
-  Sherlock's loopback status, then asks the authority with that GRN,
-  epoch, generation and revision and the mounted placement token, under
-  a request identifier derived from those inputs alone, so a restart
-  replays the same intent and receives a newer token. It verifies the
-  binding answered and keeps the highest token version.
+- **It activates the generation the runtime reports, while it reports
+  `serving`.** A runtime already draining is not activated (ADR-0085).
+  It reads Sherlock's loopback status, then asks the authority with that
+  GRN, epoch, generation and revision and the mounted placement token,
+  under a request identifier derived from those inputs alone, so a
+  restart replays the same intent and receives a newer token. It
+  verifies the binding answered and keeps the highest token version.
 - **Undecided answers retry; definite ones pause.** An unavailable
   authority or garam is retried with bounded backoff and stops nothing
   local. A refusal, a wrong binding, or garam refusing the token or the

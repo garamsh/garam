@@ -347,27 +347,35 @@ supervisor that stops leaves the workload running.
   as 65532 with no capability. Each image is named by a digest or an
   image ID.
 - **Two volumes, each mounted where it is needed.** The memory volume
-  goes into the runtime and, for the outbox, the adapter; the
-  workspace volume goes into the workspace alone, so no Exec child
-  reaches memory. The supervisor creates each with a nonce it records
+  goes into the runtime whole and into the adapter as its outbox
+  directory alone; the workspace volume goes into the workspace alone,
+  so no Exec child reaches memory and the adapter cannot open the
+  store. The supervisor creates each volume with a nonce it records
   first, and refuses one that is gone or carries another nonce; it
   creates nothing to replace it, and a person decides what follows.
+- **The outbox is a directory before the adapter mounts it.** The
+  supervisor makes it in the runtime's first start and checks it again
+  before the adapter is created; a link or anything else there
+  refuses, and the path is never repaired.
 - **`--require-store` follows the record.** Every start passes it once
-  the memory volume's record says a runtime served on it. That is
-  written when the first activation of a runtime on the volume arrives
-  or a serving status is reported, and never inferred.
+  the memory volume's record says a runtime served on it, which the
+  first runtime-status report saying `serving` writes; nothing infers
+  it.
 - **The intent is written before anything of it exists.** Container
   names derive from it and carry its nonce. A container under one of
   those names is adopted only when it carries the nonce, the intent,
   the image and the volumes, which recovers a lost create's container
   without making a second. Anything else there is left untouched, and
-  the run stays pending.
+  the run stays pending. Once its ID is recorded, a container is found
+  by that ID alone, whatever it is renamed to.
 - **A drain never forces.** SIGTERM goes to the runtime and the
-  workspace, and the supervisor waits for both to exit, however long
-  that takes, before the adapter is stopped the same way and the
-  successor is created. Any one of the three exiting ends the
-  generation the same way. A replacement is a changed revision, epoch
-  or image, or `--replace`.
+  supervisor waits for it to exit, however long that takes, so a turn
+  keeps its tools; then the workspace and then the adapter are stopped
+  the same way, and only then is the successor created. A recorded
+  container the engine cannot account for keeps the drain pending. Any
+  one of the three exiting ends the generation the same way, and so does
+  its control listener stopping. A replacement is a changed revision,
+  epoch or image, or `--replace`.
 - **The adapter activates through a socket only its generation
   mounts.** The supervisor serves `agent-execution.v1` there over TLS,
   with a serving root minted for the generation and removed with it.
@@ -388,8 +396,7 @@ supervisor that stops leaves the workload running.
 
 What is still not settled is ADR-0085 §What this does not decide: the
 joint acceptance with garam and a model, renewing the agent's
-certificate in a running adapter, the adapter's mount of the whole
-memory volume, a measured daemon stop, and an explicit storage
-handover. ADR-0085 is authoritative for the arrangement and the
-socket's contract, and `make workload-integration` runs it against a
-real daemon.
+certificate in a running adapter, a measured daemon stop, and an
+explicit storage handover. ADR-0085 is authoritative for the arrangement
+and the socket's contract, and `make workload-integration` runs it
+against a real daemon.

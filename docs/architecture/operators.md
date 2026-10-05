@@ -8,7 +8,8 @@ it mints and a member mints again where it has not enrolled (ADR-0064,
 ADR-0067), which certificate garam last issued it, together with
 what it takes to replace that with the next (ADR-0046), the
 authority an organization delegates to a hosted operator and hands it
-one operation at a time, and the proof of a controller's current
+one operation at a time, where that operator's control service answers
+the console, and the proof of a controller's current
 authority that hosted operator obtains before each lifecycle decision
 (ADR-0078). Implemented by `internal/operator`,
 whose grants and authorities persist through
@@ -16,11 +17,12 @@ whose grants and authorities persist through
 
 | Type | Responsibility |
 |------|----------------|
-| `Operator` | an organization's record that it has an operator under this GRN: what it calls the operator and says it is for, who registered it and when, and where that operator stands in obtaining a certificate |
+| `Operator` | an organization's record that it has an operator under this GRN: what it calls the operator and says it is for, who registered it and when, where that operator stands in obtaining a certificate, and the control endpoint the console sends its operations to |
+| `ControlEndpoint` | a parsed `https` base URL a hosted operator's control service answers the console at |
 | `DetailsPatch` | a parsed name and description, each absent where the caller said nothing: what a registration starts with and what an update changes |
 | `EnrollmentState` | where an operator stands: holding a certificate, holding a token nobody has spent, or holding neither |
 | `Enrollment` | the one-time token an operator obtains its first certificate with: which operator it enrols, who minted it, and when it stops being spendable |
-| `Store` | registers one with the token it enrols with and answers what it stored, mints that token again for one that has not enrolled, changes its name and description, deletes one and everything the identifier held, answers one by GRN, and lists an organization's own |
+| `Store` | registers one with the token it enrols with and answers what it stored, mints that token again for one that has not enrolled, changes its name and description, sets or clears its control endpoint, deletes one and everything the identifier held, answers one by GRN, and lists an organization's own |
 | `EnrollmentStore` | spends a token, answering the operator it enrols |
 | `Credential` | the certificate a connection authenticated with — the identity it names, which certificate it is, and how long it is good for |
 | `CertificateRequest` | a certificate signing request as it arrived, holding the public key an enrolling operator generated |
@@ -31,12 +33,13 @@ whose grants and authorities persist through
 | `Service` | signs an enrolling operator's request, mints a certificate out of band and adopts it, and renews the one an operator presents |
 | `Issuer` | signs a certificate for a subject GRN, over a key it generates or over one a request carries, and hands back the garam server root beside it |
 | `Grant` | an immutable delegation to a hosted operator: its controllers, operations and expiry, and whether a replacement or withdrawal ended it |
-| `Binding` | what one operation authority binds: actor, organization, audience, operation, target, grant, request identifier, body digest and, for a configuration change, the placement |
+| `Binding` | what one operation authority binds: actor, organization, audience, operation, target, grant, request identifier, body digest, for an operation on an existing agent the placement, and for a read or publication the request target |
+| `RequestTarget` | a parsed origin-form request target: the escaped path and raw query the Operator receives |
 | `GrantStore` | writes a grant under a request identifier and an expected current grant, ends one, and answers the current one or one by identifier |
 | `AuthorityStore` | records an operation under its request identifier with a short token, replaces that token for the same binding, and answers a binding by token or by reference |
 | `Authorizer` | decides from current state whether a user may perform an action, refusing whatever it cannot decide |
 | `AssignmentReader` | answers where an agent runs now |
-| `AuthorityService` | grants and withdraws delegations, mints operation authorities, and introspects and rechecks them for their audience |
+| `AuthorityService` | grants and withdraws delegations, sets and clears a hosted operator's control endpoint, mints operation authorities, and introspects and rechecks them for their audience |
 | `ControllerProof` | a positive proof for one decision: the controller, its organization and, where an agent was named, a `ProvenAgent` — that agent and its current assignment's opaque epoch |
 | `AudienceAuthorizer` | decides from current state whether a hosted operator may perform an action, beside the one Allow its grant contributes, refusing whatever it cannot decide |
 | `ProofService` | proves a controller's current authority to its hosted operator from the current grant, a named agent's current placement and current policy |
@@ -298,6 +301,47 @@ and a recovery fences every certificate the agent held.
 `agent:activate` is a grant operation only, bounding the hosted
 operator's own lifecycle authority; no member mints it.
 
+**A read or a template publication is its own operation, bound to
+its exact request target** (#1170). Reading published templates is
+`agent-template:read` and reading published execution profiles
+`execution-profile:read`; both target the organization, name no
+controller and are held by every role. Publishing the next immutable
+template version is `agent-template:publish`, also on the
+organization, held by owner and admin. Reading an agent's pending,
+rendered and runtime-reported execution is `agent:execution-read`,
+which targets the agent, records where it runs now as configuration
+does, and is held by owner and admin; `agent:read` stays identity
+access and grants none of it. Each is minted only under a grant that
+lists it, so a create or configure grant authorizes no read, and a
+policy may delegate any of them to someone else while an explicit
+Deny still wins. An empty body's digest is the same for every read,
+so these four also bind the request target the Operator receives —
+the escaped path and raw query with no origin, bounded and checked
+for origin-form — and the Operator compares it byte for byte, with
+the operation's one fixed method, before reading anything. Create,
+configure and recover bind none and refuse one, so their authority is
+what it was. Publishing execution profiles stays with the deployment
+and no operation here grants it. The role defaults are the one
+`machineActions` table in `internal/org/role.go`, which is
+authoritative for which role holds what.
+
+**The registered control endpoint is where the console sends an
+authority, and only the delegating act moves it.** Each operator may
+carry one `https` base URL, with an optional path prefix and no
+credentials, query, fragment or trailing slash. Setting and clearing
+it are `operator:delegate`, decided from current state as a grant is,
+and on routes of their own; changing an operator's name or
+description does not reach it. An authority names its audience by
+GRN, so moving the endpoint moves no audience of one already minted.
+Allowed browser origins, CORS and what the control service answers are
+the Operator's (`garamsh/garam-agent-operator#220`).
+
+**Recovery from the console is unbuilt.** The `agent:recover` handoff
+garam mints is built; the Operator route an administrator would
+finalize a prepared recovery through is not
+(`garamsh/garam-agent-operator#218`), and the console offers no
+recovery control.
+
 The same binding under the same grant mints a fresh token for the same
 reference, which is how a handoff that expired or whose answer was lost
 is retried. Anything else under that request identifier — another
@@ -317,7 +361,9 @@ is lifecycle authority (ADR-0078).
 
 The routes and their wire forms are `api/openapi.yaml` §operator and
 `api/machine.yaml` §authority, which are authoritative for them; each
-carries the `operation-authority.v1` contract version (ADR-0079).
+carries the `operation-authority.v1` contract version (ADR-0079). A
+release that does not know an operation refuses to mint it, so an
+older garam never mints a read without its request target.
 
 ## Controller proof
 

@@ -194,8 +194,10 @@ refusal is the one being deleted.
 
 **Delegation and operation authority are versioned routes on both
 listeners** (ADR-0078). The browser-facing listener grants, reads and
-withdraws a hosted operator's delegation and mints a member's
-request-bound authority; the machine listener answers that authority
+withdraws a hosted operator's delegation, sets and clears its control
+endpoint, and mints a member's request-bound authority — for a read
+or a template publication, bound to the exact request target as well
+as the body (#1170); the machine listener answers that authority
 and its durable reference to the operator it names and no other, and
 proves a controller's current authority to that operator before each
 lifecycle decision. Each

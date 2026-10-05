@@ -40,7 +40,13 @@ CREATE UNIQUE INDEX agent_cutovers_one_open ON agent_cutovers (agent_grn)
 
 -- agent:cutover is delegated and handed over as agent:configure is: it
 -- acts on an existing agent, so its authority records where the agent
--- runs when it is minted, and it binds no request target.
+-- runs when it is minted. It binds the exact request target of the one
+-- cutover route it is presented to, as 000032's operations bind theirs,
+-- so a reference minted for one stage authorizes no other.
+--
+-- Every check this migration (re)adds is NOT VALID, as 000032's are: a
+-- new write is held to it, and a row a rollback of this migration kept
+-- does not stop it applying again.
 ALTER TABLE operator_delegations
     DROP CONSTRAINT operator_delegations_operations,
     ADD CONSTRAINT operator_delegations_operations
@@ -48,17 +54,23 @@ ALTER TABLE operator_delegations
            AND operations <@ ARRAY['agent:create', 'agent:configure', 'agent:activate', 'agent:recover',
                                    'agent-template:read', 'agent-template:publish',
                                    'execution-profile:read', 'agent:execution-read',
-                                   'agent:cutover']);
+                                   'agent:cutover']) NOT VALID;
 
 ALTER TABLE operation_authorities
     DROP CONSTRAINT operation_authorities_operation,
     DROP CONSTRAINT operation_authorities_assignment,
+    DROP CONSTRAINT operation_authorities_request_target,
     ADD CONSTRAINT operation_authorities_operation
         CHECK (operation IN ('agent:create', 'agent:configure', 'agent:recover',
                              'agent-template:read', 'agent-template:publish',
                              'execution-profile:read', 'agent:execution-read',
-                             'agent:cutover')),
+                             'agent:cutover')) NOT VALID,
     ADD CONSTRAINT operation_authorities_assignment
         CHECK ((operation IN ('agent:configure', 'agent:recover', 'agent:execution-read', 'agent:cutover'))
                 = (assignee_grn IS NOT NULL)
-           AND (assignee_grn IS NULL) = (assignment_epoch IS NULL));
+           AND (assignee_grn IS NULL) = (assignment_epoch IS NULL)) NOT VALID,
+    ADD CONSTRAINT operation_authorities_request_target
+        CHECK ((operation IN ('agent-template:read', 'agent-template:publish',
+                              'execution-profile:read', 'agent:execution-read',
+                              'agent:cutover')) = (request_target IS NOT NULL)
+           AND (request_target IS NULL OR char_length(request_target) BETWEEN 1 AND 2048)) NOT VALID;

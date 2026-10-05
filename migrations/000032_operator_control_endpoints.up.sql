@@ -30,6 +30,10 @@ ALTER TABLE operator_delegations
 -- new operations also bind the exact request target the Operator
 -- receives: its escaped path and raw query, with no origin. The three
 -- earlier operations bind none, which keeps their rows as they were.
+--
+-- The request-target check is NOT VALID: every new write is held to
+-- it, and a read authority that outlived a rollback of this migration,
+-- whose target the rollback dropped, is kept rather than refused.
 ALTER TABLE operation_authorities
     ADD COLUMN request_target text,
     DROP CONSTRAINT operation_authorities_operation,
@@ -44,4 +48,4 @@ ALTER TABLE operation_authorities
     ADD CONSTRAINT operation_authorities_request_target
         CHECK ((operation IN ('agent-template:read', 'agent-template:publish',
                               'execution-profile:read', 'agent:execution-read')) = (request_target IS NOT NULL)
-           AND (request_target IS NULL OR char_length(request_target) BETWEEN 1 AND 2048));
+           AND (request_target IS NULL OR char_length(request_target) BETWEEN 1 AND 2048)) NOT VALID;

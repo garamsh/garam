@@ -12,7 +12,7 @@ ALTER TABLE operators
     ADD COLUMN control_endpoint text,
     ADD CONSTRAINT operators_control_endpoint
         CHECK (control_endpoint IS NULL
-            OR (char_length(control_endpoint) <= 2048 AND control_endpoint LIKE 'https://%'));
+            OR (char_length(control_endpoint) <= 2048 AND control_endpoint LIKE 'https://%')) NOT VALID;
 
 -- The reads and the publication are delegated as create is: the three
 -- organization operations name no controller, and agent:execution-read
@@ -24,16 +24,18 @@ ALTER TABLE operator_delegations
         CHECK (cardinality(operations) BETWEEN 1 AND 8
            AND operations <@ ARRAY['agent:create', 'agent:configure', 'agent:activate', 'agent:recover',
                                    'agent-template:read', 'agent-template:publish',
-                                   'execution-profile:read', 'agent:execution-read']);
+                                   'execution-profile:read', 'agent:execution-read']) NOT VALID;
 
 -- An empty body's digest cannot tell one read from another, so the four
 -- new operations also bind the exact request target the Operator
 -- receives: its escaped path and raw query, with no origin. The three
 -- earlier operations bind none, which keeps their rows as they were.
 --
--- The request-target check is NOT VALID: every new write is held to
--- it, and a read authority that outlived a rollback of this migration,
--- whose target the rollback dropped, is kept rather than refused.
+-- Every check this migration adds is NOT VALID: every new write is held
+-- to it, and a row an earlier rollback kept is not refused. A rollback
+-- of this migration keeps a read authority whose target it drops, and
+-- one of a later migration keeps rows naming operations this list does
+-- not; either would otherwise stop this migration applying again.
 ALTER TABLE operation_authorities
     ADD COLUMN request_target text,
     DROP CONSTRAINT operation_authorities_operation,
@@ -41,10 +43,10 @@ ALTER TABLE operation_authorities
     ADD CONSTRAINT operation_authorities_operation
         CHECK (operation IN ('agent:create', 'agent:configure', 'agent:recover',
                              'agent-template:read', 'agent-template:publish',
-                             'execution-profile:read', 'agent:execution-read')),
+                             'execution-profile:read', 'agent:execution-read')) NOT VALID,
     ADD CONSTRAINT operation_authorities_assignment
         CHECK ((operation IN ('agent:configure', 'agent:recover', 'agent:execution-read')) = (assignee_grn IS NOT NULL)
-           AND (assignee_grn IS NULL) = (assignment_epoch IS NULL)),
+           AND (assignee_grn IS NULL) = (assignment_epoch IS NULL)) NOT VALID,
     ADD CONSTRAINT operation_authorities_request_target
         CHECK ((operation IN ('agent-template:read', 'agent-template:publish',
                               'execution-profile:read', 'agent:execution-read')) = (request_target IS NOT NULL)

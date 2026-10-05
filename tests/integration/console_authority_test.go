@@ -3,12 +3,16 @@ package integration_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/golang-migrate/migrate/v4"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -323,22 +327,12 @@ func TestControlEndpoint_IsTheDelegatingActNotARename(t *testing.T) {
 	assert.Nil(t, o.ControlEndpoint, "cleared")
 }
 
-// TestMigration000032_ReappliesOverAStoredReadAuthority applies the
-// migrations, stores a read authority 000032 made possible, rolls
-// 000032 back and applies it again. The rollback keeps the row and
-// drops its request target, so the second apply meets a read without
-// one; it must succeed and keep the row, while every new read without
-// a target is still refused. A read with its target, inserted beside
-// it, is the control for that refusal.
-func TestMigration000032_ReappliesOverAStoredReadAuthority(t *testing.T) {
+// migrationRows writes the organization, hosted operator and grant an
+// operation authority row in schema hangs off, and answers a function
+// that stores one authority for operation, with requestTarget or none.
+func migrationRows(t *testing.T, p *pgxpool.Pool, schema string, operations []string) func(ref, operation, requestTarget string) error {
+	t.Helper()
 	ctx := context.Background()
-	const schema = "migrate_000032_test"
-	p := pool(t)
-	m, err := migrate.New("file://"+migrationsDir(t), isolatedSchema(t, p, schema))
-	require.NoError(t, err)
-	t.Cleanup(func() { _, _ = m.Close() })
-	require.NoError(t, m.Up())
-
 	exec := func(sql string, args ...any) error {
 		_, err := p.Exec(ctx, strings.ReplaceAll(sql, "§", schema+"."), args...)
 		return err
@@ -350,32 +344,144 @@ func TestMigration000032_ReappliesOverAStoredReadAuthority(t *testing.T) {
 		VALUES ($1, $2, 'grn:root:default:user:ada', now(), 'hosted')`, hosted, org))
 	require.NoError(t, exec(`INSERT INTO §operator_delegations
 		(id, org_grn, operator_grn, request_id, operations, expires_at, granted_by, granted_at)
-		VALUES ('g-1', $1, $2, 'r-1', ARRAY['agent-template:read'], now() + interval '1 day', 'grn:root:default:user:ada', now())`,
-		org, hosted))
-	read := func(ref, target string) error {
-		var requestTarget any
-		if target != "" {
-			requestTarget = target
+		VALUES ('g-1', $1, $2, 'r-1', $3, now() + interval '1 day', 'grn:root:default:user:ada', now())`,
+		org, hosted, operations))
+	return func(ref, operation, requestTarget string) error {
+		var target any
+		if requestTarget != "" {
+			target = requestTarget
 		}
 		return exec(`INSERT INTO §operation_authorities
 			(ref, org_grn, audience_grn, request_id, delegation_id, actor_grn, operation, target_grn,
 			 body_sha256, request_target, token_hash, token_expires_at, created_at)
-			VALUES ($1, $2, $3, $1, 'g-1', 'grn:root:default:user:ada', 'agent-template:read', $2,
-			        $4, $5, $1, now() + interval '5 minutes', now())`,
-			ref, org, hosted, emptyBodySHA256, requestTarget)
+			VALUES ($1, $2, $3, $1, 'g-1', 'grn:root:default:user:ada', $4, $2,
+			        $5, $6, $1, now() + interval '5 minutes', now())`,
+			ref, org, hosted, operation, emptyBodySHA256, target)
 	}
-	require.NoError(t, read("stored", "/v1/orgs/mig/templates"))
+}
 
-	require.NoError(t, m.Steps(-1))
-	require.NoError(t, m.Up(), "000032 applies again over the read the rollback kept")
-	version, dirty := schemaVersion(t, p, schema)
-	assert.Equal(t, 32, version)
-	assert.False(t, dirty)
-	var kept int
-	require.NoError(t, p.QueryRow(ctx,
-		"SELECT count(*) FROM "+schema+".operation_authorities WHERE ref = 'stored'").Scan(&kept))
-	assert.Equal(t, 1, kept, "no row is deleted")
+// storedRows counts the authorities still stored in schema.
+func storedRows(t *testing.T, p *pgxpool.Pool, schema string) int {
+	t.Helper()
+	var n int
+	require.NoError(t, p.QueryRow(context.Background(),
+		"SELECT count(*) FROM "+schema+".operation_authorities").Scan(&n))
+	return n
+}
 
-	assert.Error(t, read("new-without", ""), "a new read without its target is refused")
-	assert.NoError(t, read("new-with", "/v1/orgs/mig/templates"), "the control: a new read with its target")
+// TestMigration000032_ReappliesOverRowsARollbackKept rolls 000032 back
+// over rows that no longer satisfy what it adds, and applies it again;
+// it must apply, delete nothing, and still refuse new rows that break
+// its checks. Each case keeps a different row through the rollback:
+//
+//   - a read authority, whose request target 000032's own rollback
+//     drops;
+//   - a grant and an authority naming an operation 000032's lists do
+//     not, kept through a later migration's rollback. That migration is
+//     a stand-in for #1194's 000033, widening the same checks the same
+//     way.
+//
+// A new row satisfying the checks, inserted beside the refused one, is
+// the control for the refusal.
+func TestMigration000032_ReappliesOverRowsARollbackKept(t *testing.T) {
+	const later = `ALTER TABLE operator_delegations
+    DROP CONSTRAINT operator_delegations_operations,
+    ADD CONSTRAINT operator_delegations_operations
+        CHECK (cardinality(operations) BETWEEN 1 AND 9
+           AND operations <@ ARRAY['agent:create', 'agent:configure', 'agent:activate', 'agent:recover',
+                                   'agent-template:read', 'agent-template:publish',
+                                   'execution-profile:read', 'agent:execution-read', 'agent:cutover']) NOT VALID;
+ALTER TABLE operation_authorities
+    DROP CONSTRAINT operation_authorities_operation,
+    ADD CONSTRAINT operation_authorities_operation
+        CHECK (operation IN ('agent:create', 'agent:configure', 'agent:recover',
+                             'agent-template:read', 'agent-template:publish',
+                             'execution-profile:read', 'agent:execution-read', 'agent:cutover')) NOT VALID;`
+	const laterDown = `ALTER TABLE operator_delegations
+    DROP CONSTRAINT operator_delegations_operations,
+    ADD CONSTRAINT operator_delegations_operations
+        CHECK (cardinality(operations) BETWEEN 1 AND 8
+           AND operations <@ ARRAY['agent:create', 'agent:configure', 'agent:activate', 'agent:recover',
+                                   'agent-template:read', 'agent-template:publish',
+                                   'execution-profile:read', 'agent:execution-read']) NOT VALID;
+ALTER TABLE operation_authorities
+    DROP CONSTRAINT operation_authorities_operation,
+    ADD CONSTRAINT operation_authorities_operation
+        CHECK (operation IN ('agent:create', 'agent:configure', 'agent:recover',
+                             'agent-template:read', 'agent-template:publish',
+                             'execution-profile:read', 'agent:execution-read')) NOT VALID;`
+
+	tests := []struct {
+		name string
+		// later, where set, is applied above 000032 and rolled back with
+		// it.
+		later bool
+		// operation is what the kept row stores, and keep stores it.
+		operation, target string
+		// refused breaks a check 000032 adds; accepted is its control.
+		refused, accepted func(store func(ref, operation, requestTarget string) error) error
+	}{
+		{
+			name: "a read whose request target the rollback dropped", operation: "agent-template:read",
+			target: "/v1/orgs/mig/templates",
+			refused: func(store func(string, string, string) error) error {
+				return store("new-without", "agent-template:read", "")
+			},
+			accepted: func(store func(string, string, string) error) error {
+				return store("new-with", "agent-template:read", "/v1/orgs/mig/templates")
+			},
+		},
+		{
+			name: "an operation a later migration added", later: true, operation: "agent:cutover",
+			refused: func(store func(string, string, string) error) error {
+				return store("new-cutover", "agent:cutover", "")
+			},
+			accepted: func(store func(string, string, string) error) error {
+				return store("new-create", "agent:create", "")
+			},
+		},
+	}
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			schema := fmt.Sprintf("migrate_000032_case%d", i)
+			p := pool(t)
+			dir := migrationsDir(t)
+			top := uint(32)
+			if tt.later {
+				dir = t.TempDir()
+				entries, err := os.ReadDir(migrationsDir(t))
+				require.NoError(t, err)
+				for _, e := range entries {
+					if strings.HasSuffix(e.Name(), ".sql") {
+						raw, err := os.ReadFile(filepath.Join(migrationsDir(t), e.Name()))
+						require.NoError(t, err)
+						writeMigration(t, dir, e.Name(), string(raw))
+					}
+				}
+				writeMigration(t, dir, "000033_later.up.sql", later)
+				writeMigration(t, dir, "000033_later.down.sql", laterDown)
+				top = 33
+			}
+			m, err := migrate.New("file://"+dir, isolatedSchema(t, p, schema))
+			require.NoError(t, err)
+			t.Cleanup(func() { _, _ = m.Close() })
+			require.NoError(t, m.Up())
+
+			store := migrationRows(t, p, schema, []string{"agent:create", tt.operation})
+			require.NoError(t, store("kept", tt.operation, tt.target))
+
+			require.NoError(t, m.Migrate(31), "roll back to before 000032")
+			require.NoError(t, m.Migrate(32), "000032 applies again over the rows the rollback kept")
+			version, dirty := schemaVersion(t, p, schema)
+			assert.Equal(t, 32, version)
+			assert.False(t, dirty)
+			assert.Equal(t, 1, storedRows(t, p, schema), "no row is deleted")
+
+			assert.Error(t, tt.refused(store), "a new row breaking 000032's checks is refused")
+			assert.NoError(t, tt.accepted(store), "the control: a new row satisfying them")
+			if top == 33 {
+				require.NoError(t, m.Up(), "the later migration applies again too")
+			}
+		})
+	}
 }

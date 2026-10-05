@@ -130,22 +130,15 @@ func (q *HTTPQueue) Complete(ctx context.Context, id ClaimID) error {
 	}
 }
 
-// outboxSubmission is the body `POST /outbox-messages` takes.
-type outboxSubmission struct {
-	Recipient      string    `json:"recipient"`
-	IdempotencyKey string    `json:"idempotencyKey"`
-	Body           string    `json:"body"`
-	CreatedAt      time.Time `json:"createdAt"`
-}
-
 // Post offers one outbox reply. The answers durable-delivery.v1 pins
 // are told apart by status and kind, never by text: an answer outside
 // the contract is a server that does not serve the route, 400
 // out_of_range a creation instant garam's clock has not reached yet,
 // and every other refusal keeps the entry.
 func (q *HTTPQueue) Post(ctx context.Context, o Outbound) (*Stored, error) {
-	payload, err := json.Marshal(outboxSubmission{
-		Recipient: o.Recipient.String(), IdempotencyKey: o.IdempotencyKey, Body: o.Body, CreatedAt: o.CreatedAt.UTC(),
+	payload, err := json.Marshal(machinegen.OutboxSubmission{
+		Recipient: o.Recipient.String(), IdempotencyKey: o.IdempotencyKey, Body: o.Body,
+		CreatedAt: o.CreatedAt.UTC().Format(time.RFC3339Nano),
 	})
 	if err != nil {
 		return nil, errorx.Wrap(err, "delivery: outbox submission", errorx.KindInternal)

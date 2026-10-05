@@ -162,9 +162,11 @@ export function OperatorTemplates({
           </ControlNotice>
         ) : profiles.status === "ok" ? (
           <p className="text-sm">
-            {profiles.data.profiles
-              .map((p) => `${p.name} version ${p.version}`)
-              .join(", ") || "No profile is published."}{" "}
+            {profiles.data.profiles.length === 0
+              ? "No profile is published."
+              : `Published: ${profiles.data.profiles
+                  .map((p) => `${p.name} version ${p.version}`)
+                  .join(", ")}.`}{" "}
             Profiles are published by the deployment, not from the console.
           </p>
         ) : profiles.status === "loading" ? null : (

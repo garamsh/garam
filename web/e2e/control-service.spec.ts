@@ -409,7 +409,7 @@ test.describe("control service, as contract tests against the agreed Operator wi
 
     reported = true;
     await page.reload();
-    await expect(page.getByText("Revision 1", { exact: true })).toBeVisible();
+    await expect(page.getByText("Revision 1 (pending)")).toBeHidden();
     await expect(
       page.getByText("0123456789abcdef0123456789abcdef", { exact: true }),
     ).toBeVisible();

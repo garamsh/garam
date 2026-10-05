@@ -25,7 +25,9 @@ export type ControlReadTarget = {
  * Reads one control route under a fresh authority whenever the route or
  * `generation` changes, and answers null where `where` is null. Each
  * attempt mints its own request identifier, so a re-read is a new
- * operation rather than a replay.
+ * operation rather than a replay. While a new generation of the same
+ * route is read, the last answer stands, so what is on screen is not
+ * unmounted by a refresh it asked for.
  */
 export function useControlRead<T>(
   org: string,
@@ -38,14 +40,16 @@ export function useControlRead<T>(
   const audience = where?.audience ?? "";
   const path = where?.path ?? "";
   const target = where?.target ?? "";
-  const key = endpoint === null ? null : `${generation} ${endpoint}${path}`;
+  const route = endpoint === null ? null : `${endpoint}${path}`;
+  const key = route === null ? null : `${generation} ${route}`;
   const [answer, setAnswer] = useState<{
     key: string;
+    route: string;
     read: ControlResult<T>;
   } | null>(null);
 
   useEffect(() => {
-    if (endpoint === null || key === null) return;
+    if (endpoint === null || key === null || route === null) return;
     let live = true;
     void callControl(
       {
@@ -61,13 +65,13 @@ export function useControlRead<T>(
       },
       mintOperationAuthority,
     ).then((read) => {
-      if (live) setAnswer({ key, read });
+      if (live) setAnswer({ key, route, read });
     });
     return () => {
       live = false;
     };
-  }, [key, endpoint, path, org, audience, operation, target, parser]);
+  }, [key, route, endpoint, path, org, audience, operation, target, parser]);
 
   if (key === null) return null;
-  return answer?.key === key ? answer.read : { status: "loading" };
+  return answer?.route === route ? answer.read : { status: "loading" };
 }

@@ -90,7 +90,9 @@ func (h *host) client(certFile, keyFile string) *http.Client {
 	require.NoError(h.s.t, err)
 	rootPEM, err := os.ReadFile(h.s.rootFile)
 	require.NoError(h.s.t, err)
-	return &http.Client{Timeout: 30 * time.Second, Transport: &http.Transport{TLSClientConfig: &tls.Config{
+	// A claim waits on garam for a message, so the bound is past its
+	// longest wait.
+	return &http.Client{Timeout: 2 * time.Minute, Transport: &http.Transport{TLSClientConfig: &tls.Config{
 		Certificates: []tls.Certificate{pair}, RootCAs: pool(rootPEM), MinVersion: tls.VersionTLS13,
 	}}}
 }

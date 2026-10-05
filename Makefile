@@ -82,7 +82,7 @@ TEST_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)
 # and overridable on the same terms as the line above.
 WEB_E2E_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)/garam?sslmode=disable)
 
-.PHONY: lint format test build gen check-gen check-toolchain integration e2e workload-integration mutation db-up db-down db-prune backend-up ci template-diff search
+.PHONY: lint format test build gen check-gen check-toolchain integration e2e workload-integration standalone-e2e mutation db-up db-down db-prune backend-up ci template-diff search
 .PHONY: chart chart-lint chart-render chart-identity chart-names chart-rewrite chart-guards chart-security chart-package
 .PHONY: web-install web-lint web-format web-test web-build web-gen web-check-gen web-e2e web-image-e2e web-ci
 .PHONY: image-build
@@ -184,10 +184,10 @@ format:
 # scripts/image-build-test.sh is the one test outside Go: which tags a
 # development image-build accepts (ADR-0071). It needs git and no
 # Docker, and prints its own count.
-TEST_PKGS = $(filter-out %/tests/integration %/tests/e2e %/tests/workload,$(GO_PKGS))
+TEST_PKGS = $(filter-out %/tests/integration %/tests/e2e %/tests/workload %/tests/standalone,$(GO_PKGS))
 
 test:
-	@echo 'test: $(words $(TEST_PKGS)) packages; tests/integration and tests/e2e not covered here — they need Postgres (make db-up integration e2e); tests/workload needs a Docker daemon and the pinned images (make workload-integration)'
+	@echo 'test: $(words $(TEST_PKGS)) packages; tests/integration and tests/e2e not covered here — they need Postgres (make db-up integration e2e); tests/workload and tests/standalone need a Docker daemon and the pinned images (make workload-integration, make standalone-e2e)'
 	@test -n '$(TEST_PKGS)' || { echo 'test: nothing to test — the package list is empty, or the filter above matched all of it'; exit 1; }
 	@go test -count=1 $(TEST_PKGS)
 	@scripts/image-build-test.sh
@@ -387,6 +387,27 @@ workload-integration:
 	@echo 'workload-integration: $(words $(WORKLOAD_PKGS)) packages, $(words $(WORKLOAD_TEST_FILES)) test files, against $(GARAM_TEST_DOCKER_HOST)'
 	@test -n '$(WORKLOAD_PKGS)' || { echo 'workload-integration: nothing to run — no package under ./tests/workload/... holds a test file'; exit 1; }
 	go test -count=1 -timeout 30m $(WORKLOAD_PKGS)
+
+# standalone-e2e runs a standalone host end to end (ADR-0085, #1180):
+# the shipped binary prepares, enrolls and runs the supervisor against
+# garam's own image, over a database tests/testprincipal creates on the
+# Postgres db-up starts, with a real model answering. Like
+# workload-integration it is in no whole-set name and in no workflow,
+# for the same images and a model credential besides. Beside that
+# target's GARAM_TEST_DOCKER_HOST and Sherlock images it reads
+# GARAM_TEST_GARAM_IMAGE (this tree's image-build output, by ID),
+# GARAM_TEST_TEI_IMAGE and GARAM_TEST_MODEL_ENV_FILE, an owner-only
+# KEY=VALUE file; the server and its container come from compose.
+STANDALONE_PKGS = $(shell go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./tests/standalone/...)
+STANDALONE_TEST_FILES = $(shell go list -f '{{range .TestGoFiles}}{{.}} {{end}}{{range .XTestGoFiles}}{{.}} {{end}}' ./tests/standalone/...)
+
+standalone-e2e:
+	@echo 'standalone-e2e: $(words $(STANDALONE_PKGS)) packages, $(words $(STANDALONE_TEST_FILES)) test files, against $(GARAM_TEST_DOCKER_HOST)'
+	@test -n '$(STANDALONE_PKGS)' || { echo 'standalone-e2e: nothing to run — no package under ./tests/standalone/... holds a test file'; exit 1; }
+	@test -n '$(DB_HOST_ADDR)' || { echo "standalone-e2e: no postgres published on this host — run make db-up" >&2; exit 1; }
+	GARAM_TEST_SERVER_URL='postgres://garam:garam@$(DB_HOST_ADDR)/postgres?sslmode=disable' \
+		GARAM_TEST_POSTGRES_CONTAINER="$$($(COMPOSE_LOCAL) ps -q postgres)" \
+		go test -count=1 -timeout 60m $(STANDALONE_PKGS)
 
 # mutation asks of every line what the hunt behind #875 asked of a few
 # by hand: whether the check at that line can fail. gremlins rewrites

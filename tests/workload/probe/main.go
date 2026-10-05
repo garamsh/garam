@@ -25,7 +25,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fail("usage: probe report|daemon|post|get|size|put|find|garam ...")
+		fail("usage: probe report|daemon|post|get|size|cat|put|find|garam ...")
 	}
 	var err error
 	switch os.Args[1] {
@@ -39,6 +39,8 @@ func main() {
 		err = get(os.Args[2])
 	case "size":
 		err = size(os.Args[2])
+	case "cat":
+		err = cat(os.Args[2])
 	case "put":
 		err = put(os.Args[2], os.Args[3], os.Args[4])
 	case "find":
@@ -289,4 +291,13 @@ func garam(addr, certFile, keyFile string) error {
 	srv := &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 10 * time.Second,
 		TLSConfig: &tls.Config{ClientAuth: tls.RequireAnyClientCert, MinVersion: tls.VersionTLS13}}
 	return srv.ListenAndServeTLS(certFile, keyFile)
+}
+
+func cat(path string) error {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	_, err = os.Stdout.Write(raw)
+	return err
 }

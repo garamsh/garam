@@ -81,8 +81,9 @@ func (s *service) superviseFenced(ctx context.Context, sup *supervision) {
 	if err != nil {
 		if !errorx.IsKind(err, errorx.KindUnavailable) {
 			// A runtime of another agent, contract or no generation
-			// cannot be activated for, and what was held is not its.
-			s.ends.Execution.close(gateClosed)
+			// cannot be activated for, and what was held is not its. A
+			// paused gate and the inputs it paused on are left alone.
+			s.ends.Execution.withdraw()
 		}
 		slog.WarnContext(ctx, "runtime status not read", slog.String("error", err.Error()))
 		return

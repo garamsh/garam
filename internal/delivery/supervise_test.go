@@ -277,6 +277,33 @@ func TestRun_PausesADefiniteActivationRefusalUntilAnInputChanges(t *testing.T) {
 	assert.NotContains(t, queue.claimsPresenting(), "", "nothing was claimed without a token")
 }
 
+// TestRun_KeepsADefinitePauseThroughAStatusItCannotRead is a status
+// read that fails between a definite refusal and the next healthy read:
+// the failure leaves the pause as it found it, so the healthy read with
+// every input unchanged asks for nothing. A renewed certificate after
+// it is the control: the pause is still one an input re-arms.
+func TestRun_KeepsADefinitePauseThroughAStatusItCannotRead(t *testing.T) {
+	queue := newGaramQueue(t, time.Second)
+	gateway := newAgentGateway(t)
+	c := newControl(queue)
+	c.answer(errorx.New(errorx.KindFailedPrecondition, "control refused 403 placement_not_current"))
+	m := newMounted()
+	runFenced(t, queue, gateway, c, m, nil)
+
+	eventually(t, func() bool { return len(c.requests()) == 1 }, "the activation is refused")
+	gateway.report("state", "napping")
+	read := gateway.reads()
+	eventually(t, func() bool { return gateway.reads() > read+2 }, "a status the adapter cannot read is read")
+	gateway.report("state", "serving")
+	read = gateway.reads()
+	eventually(t, func() bool { return gateway.reads() > read+2 }, "the healthy status is read again")
+	quietFor()
+	assert.Len(t, c.requests(), 1, "an unreadable status lifts no pause")
+
+	m.replace("placement-1", "1002")
+	eventually(t, func() bool { return len(c.requests()) == 2 }, "the control: a renewed certificate re-arms it")
+}
+
 // TestRun_ReportsRuntimeStatusAfterActivationAndOnChange holds the
 // report to its two moments: after the activation it is reported under,
 // and when what the runtime says changes. An unchanged runtime is the

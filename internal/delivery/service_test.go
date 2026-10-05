@@ -467,8 +467,10 @@ type agentGateway struct {
 	status      map[string]any
 	subscribers []chan string
 	opened      int
-	// closed refuses every new subscription while it is set.
-	closed bool
+	// closed refuses every new subscription while it is set, and
+	// statusReads counts the status reads answered.
+	closed      bool
+	statusReads int
 }
 
 // posted is one post the gateway took.
@@ -563,7 +565,15 @@ func (g *agentGateway) lookup(w http.ResponseWriter, r *http.Request) {
 func (g *agentGateway) statusOf(w http.ResponseWriter, _ *http.Request) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	g.statusReads++
 	writeJSON(w, http.StatusOK, g.status)
+}
+
+// reads is how many status reads the gateway has answered.
+func (g *agentGateway) reads() int {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.statusReads
 }
 
 // report sets one field of what the runtime's status answers.

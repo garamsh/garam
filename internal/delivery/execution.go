@@ -120,6 +120,17 @@ func (e *Execution) close(to gate) {
 	e.set(to)
 }
 
+// withdraw holds protected calls while what is held is not the
+// runtime's, and only then: a refused gate stays refused, so nothing
+// but a changed input re-arms it.
+func (e *Execution) withdraw() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.gate == gateOpen {
+		e.set(gateClosed)
+	}
+}
+
 // open lets protected calls through on what is already held, which for
 // a legacy execution is nothing.
 func (e *Execution) open() {

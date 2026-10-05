@@ -548,3 +548,9 @@ ADRs:
   own keys; it activates that agent on the execution routes, renews
   its own certificate, and is replaced or revoked only by an
   administrator; the host's runner is unbuilt
+- [0083](./adr/0083-a-durable-reply-is-admitted-under-a-fixed-budget-from-its-creation-and-its-key-is-answered-after-it.md)
+  — `POST /outbox-messages` under `durable-delivery.v1` stores a
+  durable reply only while its creation instant is inside a fixed
+  seven-day budget, judged on the database's clock when the insert
+  runs, and answers a key that already stores a message after the
+  budget too

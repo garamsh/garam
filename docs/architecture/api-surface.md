@@ -241,6 +241,29 @@ stay as they were for legacy agents and reach no managed one.
 `api/machine.yaml` is authoritative for the wire, and
 [agents.md](./agents.md) §Separated execution for what they decide.
 
+**Durable submission is a fourth versioned contract on the machine
+listener**
+([ADR-0083](./adr/0083-a-durable-reply-is-admitted-under-a-fixed-budget-from-its-creation-and-its-key-is-answered-after-it.md)).
+`POST /outbox-messages` requires and answers `Garam-Contract-Version:
+durable-delivery.v1` and is the message write `POST /messages` makes,
+which is unchanged, with the entry's `createdAt` added: a new message
+is stored only inside seven days of it on the database's clock, and a
+key that already stores one is answered at any time. An adapter
+branches on these answers, each carrying the header:
+
+| Status | Kind | When |
+|---|---|---|
+| 201 | — | the message the key stores, stored now or earlier, or the cross-organization refusal |
+| 400 | `invalid_argument` | no or another contract version, naming `durable-delivery.v1`; a malformed body, including a missing `createdAt` or one that is not RFC 3339 |
+| 400 | `out_of_range` | `createdAt` later than the decision instant; the entry is kept and a later attempt may be admitted |
+| 410 | `deadline_exceeded` | the key stores nothing and the budget has run out; no later attempt changes it |
+| 409 | `already_exists` | the key stores a different message |
+| 401, 403, 409 `failed_precondition` | as `POST /messages` | the execution fence's refusals (ADR-0080) |
+| 404 | — | a garam without the route |
+
+`api/machine.yaml` is authoritative for the wire, and
+[messaging.md](./messaging.md) for what the budget decides.
+
 Every certificate after the first is replaced over the connection the
 previous one authenticated: an operator's on the machine listener
 ([ADR-0046](./adr/0046-an-operator-renews-its-certificate-by-presenting-the-one-it-holds.md)),
@@ -626,3 +649,7 @@ document owes an update.
 - [ADR-0079](./adr/0079-interservice-contracts-keep-adjacent-releases-compatible-and-replay-by-stable-identifier.md)
   — interservice contracts keep adjacent releases compatible in both
   upgrade orders, unbuilt
+- [ADR-0083](./adr/0083-a-durable-reply-is-admitted-under-a-fixed-budget-from-its-creation-and-its-key-is-answered-after-it.md)
+  — a durable reply is admitted on a versioned route of its own under
+  a fixed seven-day budget from its creation, and its key is answered
+  after it

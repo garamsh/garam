@@ -23,9 +23,10 @@ state of a message it sent, described below (ADR-0055).
 | `Consent` | one pair of organizations and the two halves of their cross-organization consent (ADR-0035); it stands while both halves do |
 | `Config` | the delivery parameters: lease, ceiling, attempts, and how long a claim waits |
 | `Fence` | what an agent's call presents to the agent execution fence: the agent, the certificate its connection verified and its execution token's hash (ADR-0080) |
-| `Service` | what a machine identity does to its own queue: post, claim, renew, complete, and read the state of what it sent |
+| `Service` | what a machine identity does to its own queue: post, post a durable reply within its budget, claim, renew, complete, and read the state of what it sent |
 | `ConsentStore` | the consent relation: an organization granting or withdrawing its own half, and the send path asking whether both halves stand |
 | `ActionSend` | the action a policy names to decide what one identity may send to another |
+| `SubmissionBudget` | how long after its creation a durable reply may still store a message, fixed by `durable-delivery.v1` (ADR-0083) |
 
 Messages are their own domain rather than part of the agents one: a
 recipient is addressed by GRN, so nothing here depends on the agent
@@ -81,6 +82,24 @@ nobody drains, and that argument is about a reply garam could have
 delivered — an address that does not parse is a broken caller rather
 than a routing failure, and a queue keyed by GRN could never hand the
 row to anyone.
+
+A durable reply is posted under a horizon garam enforces rather than
+one the sender keeps
+([ADR-0083](./adr/0083-a-durable-reply-is-admitted-under-a-fixed-budget-from-its-creation-and-its-key-is-answered-after-it.md)).
+It carries the instant its outbox entry was created, and a new message
+is stored only while that instant is no later than the database's
+clock and less than seven days behind it, judged in the inserting
+statement after the execution fence's lock wait, so a request delayed
+on its way is judged when it writes. That instant is the row's
+receipt time; the creation instant decides admission and is not
+stored. A key that already stores a message is answered at any time,
+a completed one with its body dropped included, and one storing a
+message to another recipient, or another body while it holds one,
+conflicts. Every message admitted this way has at most seven days of
+retries left and thirty of retention, so the sweep never reaches a key
+a retry could still need; past the budget, a key that stores nothing
+never stores one. The cross-organization refusal of such a reply is
+written under the same budget.
 
 Handing a message out is an attempt, and attempts are bounded: a turn
 that failed and a turn that never started are indistinguishable from

@@ -232,6 +232,9 @@ func TestRealEngine_MovesTheStoreToAVerifiedCopy(t *testing.T) {
 	nonce := h.inspect(target, `{{index .Labels "sh.garam.workload.nonce"}}`)
 	assert.NotEmpty(t, nonce, "the move created the new volume")
 	assert.Equal(t, nonce, h.record().Memory.Nonce)
+	assert.NotEqual(t, source, target, "the new volume is another volume")
+	assert.NotEqual(t, h.inspect(source, `{{index .Labels "sh.garam.workload.nonce"}}`), nonce,
+		"carrying another nonce")
 	assert.Equal(t, "completed", h.messageState(adapter, "garam-sa-before-move"),
 		"the store came across: the new runtime knows what the old one completed")
 	assert.Equal(t, "unknown", h.messageState(adapter, "garam-sa-never-sent"), "the control: an id it never had")
@@ -253,16 +256,18 @@ func TestRealEngine_MovesTheStoreToAVerifiedCopy(t *testing.T) {
 // TestRealEngine_RefusesACopyCorruptedBeforeItIsVerified holds the
 // digest (#1202): a byte of the copied store flipped between the copy
 // and its verification refuses the move; nothing runs on the copy,
-// nothing is activated, the record stays on the old volume and the
-// copy is kept. The next run starts on the old volume. The control is
-// the same move with the copy left as written.
+// nothing is activated, the move is recorded refused, the record stays
+// on the old volume, which is unchanged, and the copy is kept. The next
+// run starts on the old volume. The control is the same move with the
+// copy left as written.
 func TestRealEngine_RefusesACopyCorruptedBeforeItIsVerified(t *testing.T) {
 	for _, corrupted := range []bool{false, true} {
 		t.Run(fmt.Sprintf("corrupted %v", corrupted), func(t *testing.T) {
 			h := newHost(t)
 			source := h.servedWithAStore()
 			target := h.prefix + "moved"
-			engine := &faultingEngine{Engine: h.engine}
+			var before map[string]string
+			engine := &faultingEngine{Engine: h.engine, beforeCopy: func() { before = h.contents(source) }}
 			if corrupted {
 				engine.afterCopy = func() { h.inVolume(target, "flip", "/data/memory.db") }
 			}
@@ -278,6 +283,9 @@ func TestRealEngine_RefusesACopyCorruptedBeforeItIsVerified(t *testing.T) {
 			assert.Empty(t, h.container(workload.RoleRuntime), "nothing runs on the copy")
 			assert.Len(t, h.garam.generations(), 1, "nothing is activated")
 			assert.Equal(t, source, h.record().Memory.Name, "the agent stays on the old volume")
+			require.NotNil(t, h.record().Move)
+			assert.Equal(t, "refused", h.record().Move.Outcome, "the move is settled refused")
+			assert.Equal(t, before, h.contents(source), "the old volume is unchanged")
 			assert.True(t, h.volumeExists(target), "the refused copy is kept")
 
 			h.start()
@@ -408,4 +416,73 @@ func TestRealEngine_RefusesACopyItsRuntimeDoesNotOpen(t *testing.T) {
 			assert.Equal(t, source, h.mountedAt(h.container(workload.RoleRuntime), "/data"))
 		})
 	}
+}
+
+// TestRealEngine_KeepsTheMovePendingWhileTheRuntimeDoesNotExit holds
+// the drain on the writer itself (#1202): a runtime stopped from the
+// host, the test's own act, cannot act on SIGTERM, so for thirty
+// seconds the move stays pending, no signal but that one SIGTERM
+// reaches any container of the generation, the workspace and the
+// adapter are not yet told to stop, and nothing of the move exists.
+// The control is the same move completing once the runtime runs again,
+// without its having been killed.
+func TestRealEngine_KeepsTheMovePendingWhileTheRuntimeDoesNotExit(t *testing.T) {
+	h := newHost(t)
+	h.servedWithAStore()
+	runtime, space, adapter := h.container(workload.RoleRuntime), h.container(workload.RoleWorkspace),
+		h.container(workload.RoleAdapter)
+	// stopWorkspace stops any container's first process from the host.
+	resume := h.stopWorkspace(runtime)
+	target := h.prefix + "moved"
+
+	since := time.Now()
+	pending := h.start(moveTo(target))
+	eventually(t, "the drain signalling the runtime", func() bool { return len(h.signals(runtime, since)) > 0 })
+	time.Sleep(30 * time.Second)
+	assert.Equal(t, "true", h.inspect(runtime, "{{.State.Running}}"), "the runtime has not exited")
+	assert.Equal(t, []string{"15"}, h.signals(runtime, since), "it was sent SIGTERM and nothing else")
+	assert.Empty(t, h.signals(space, since), "the workspace is not told to stop before the runtime exits")
+	assert.Empty(t, h.signals(adapter, since), "nor is the adapter")
+	assert.False(t, pending.returned(), "the move is pending")
+	assert.False(t, h.volumeExists(target), "no volume is created while the runtime runs")
+	assert.Empty(t, h.mustDocker("ps", "-aq", "--filter", "name=^"+h.prefix+"copier-"), "nothing is copied")
+	assert.Len(t, h.garam.generations(), 1, "nothing is activated")
+
+	resume()
+	h.activated(2)
+	assert.Equal(t, target, h.mountedAt(h.container(workload.RoleRuntime), "/data"),
+		"the control: once it exits, the move completes")
+	assert.Equal(t, []string{"15"}, h.signals(runtime, since), "still SIGTERM alone")
+	assert.Equal(t, []string{"0"}, h.exitCodes(runtime, since), "and it exited after its drain")
+}
+
+// TestRealEngine_HoldsEveryRunToAnUnsettledMove holds a move whose copy
+// verified and whose generation is not yet activated, garam being out
+// of reach: a run with no move asked for, or another volume, refuses
+// rather than start on either volume, and creates nothing. The control
+// is the same move asked for again, which adopts its generation and
+// activates it once garam answers.
+func TestRealEngine_HoldsEveryRunToAnUnsettledMove(t *testing.T) {
+	h := newHost(t)
+	h.servedWithAStore()
+	target := h.prefix + "moved"
+	h.garam.setUndecided(true)
+	r := h.start(moveTo(target))
+	var runtime string
+	eventually(t, "the generation on the copy running", func() bool {
+		runtime = h.container(workload.RoleRuntime)
+		return runtime != "" && h.mountedAt(runtime, "/data") == target
+	})
+	require.NoError(t, r.stop())
+
+	require.ErrorIs(t, h.start().result(t), workload.ErrMovePending)
+	elsewhere := h.prefix + "elsewhere"
+	require.ErrorIs(t, h.start(moveTo(elsewhere)).result(t), workload.ErrMovePending)
+	assert.False(t, h.volumeExists(elsewhere), "nothing is created for another move")
+	assert.Equal(t, runtime, h.container(workload.RoleRuntime), "the generation on the copy runs on")
+
+	h.start(moveTo(target))
+	h.garam.setUndecided(false)
+	h.activated(2)
+	assert.Equal(t, runtime, h.container(workload.RoleRuntime), "the control: the same move adopts its generation")
 }

@@ -320,6 +320,16 @@ contract, `agent-execution.v1`, which garam owns and the lifecycle
 authority serves: the Operator control service when managed, the local
 supervisor when standalone.
 
+- **The deployment chooses the mode.** Without control settings the
+  adapter is legacy, for an agent never cut over: no activation, no
+  token, no status report. With them it is fenced, and what follows
+  applies; some but not all is refused at startup, and neither mode
+  falls back to the other. garam refuses a cut-over agent's claim made
+  without a token, so a misconfigured legacy adapter carries nothing.
+  The legacy mode lasts until #1171 retires its source.
+- **Control authenticates the agent's leaf**, read per handshake, over
+  mTLS; the leaf names the GRN in the path, and garam's token never
+  goes to control.
 - **Every protected call carries the activation's token**, as
   `Authorization: Garam-Execution <token>`
   ([machine-identity.md](./machine-identity.md) §Generation and
@@ -330,12 +340,13 @@ supervisor when standalone.
   a request identifier derived from those inputs alone, so a restart
   replays the same intent and receives a newer token. It verifies the
   binding answered and keeps the highest token version.
-- **Undecided answers retry; definite ones stop.** An unavailable
+- **Undecided answers retry; definite ones pause.** An unavailable
   authority or garam is retried with bounded backoff and stops nothing
   local. A refusal, a wrong binding, or garam refusing the token or the
-  credential stops protected work and keeps the outbox, until the
-  runtime or the placement changes. Credential recovery is the
-  manager's, never the adapter's.
+  credential stops protected work and keeps the outbox, with no
+  time-based retry, until the runtime's generation, epoch or revision,
+  the placement token or the agent's leaf changes. Credential recovery
+  is the manager's, never the adapter's.
 - **It reports the runtime's status outward** after activation and on
   each change: the activation, GRN, epoch, generation, revision, state
   and start time as the runtime reported them, and when it read them. A

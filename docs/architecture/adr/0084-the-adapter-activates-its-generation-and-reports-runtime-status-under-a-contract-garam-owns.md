@@ -1,6 +1,6 @@
 # ADR 0084: The adapter activates its generation and reports runtime status under a contract garam owns
 
-> Status: proposed
+> Status: accepted
 > Date: 2026-10-05
 
 Drafted for #1186. The Operator PM recorded on
@@ -9,7 +9,10 @@ the adapter-facing activation and runtime-status contract, shared by
 managed and standalone, and that the Operator implements it in its
 control service. The inputs are that issue's proposal of 16:30Z, the
 garam PM's review of 17:18Z, and the #1169 decisions of 2026-10-04 at
-16:36 and 16:47. Facts about Sherlock hold at `v0.1.0`
+16:36 and 16:47. The garam PM accepted it on 2026-10-05 with four
+changes, which this text carries: an explicit legacy mode, a cited
+claim fence, re-arming inputs and stated transport authentication.
+Facts about Sherlock hold at `v0.1.0`
 (`44aaa555105f9834244eaac4ad18b0ed75dbf0ff`).
 
 ## Context
@@ -32,6 +35,13 @@ string), `state` (`serving` or `draining`) and `started_at`
 the same `requestId` with the same activation, a new token and a higher
 `tokenVersion`, and admits only the last token issued.
 
+garam still admits an agent that was never cut over: `fenceOf` in
+`internal/machineapi/execution.go` reads a request with no
+`Authorization` as one, and the operator route creates such agents
+([agents.md](../agents.md)). An adapter that required activation would
+stop every one of them the moment its image moved, which ADR-0079's
+adjacent-release rule forbids.
+
 ## Decision
 
 **The contract is `agent-execution.v1`.** Every request and every
@@ -41,6 +51,13 @@ value is refused with 400 naming the supported one; an answer without
 it is an unsupported peer to the adapter. There is no negotiation, and
 a change of meaning is a new value. Bodies are JSON with camelCase
 members and refusals are `{kind, message}` with a snake_case `kind`.
+
+**Both routes authenticate the agent by mTLS.** TLS 1.3, the adapter
+presenting the agent's leaf and verifying control's serving
+certificate against a root of its own. The leaf must name the GRN in
+the path, and a mismatch is 403. It is read per handshake, so a renewed
+leaf is presented without a restart (ADR-0040), and control verifies
+it per request. `Garam-Execution` is never sent to control.
 
 **Activation: `POST /v1/agents/{grn}/activations`.**
 
@@ -95,6 +112,16 @@ members and refusals are `{kind, message}` with a snake_case `kind`.
   and a missing, stale or refused report leaves the revision unknown or
   pending at control.
 
+**Two modes, and the deployment chooses.** With no control settings
+the adapter is legacy: it activates nothing, sends no
+`Garam-Execution` and reports no status, as before this contract.
+With all three it is fenced, and everything below applies. Some but
+not all of them is refused at startup. Neither mode falls back to the
+other, and an agent already cut over that is run as legacy is refused
+by garam itself: its claim answers 401 for want of a token. The legacy
+mode exists until #1171 retires the source that creates such agents,
+and retiring it is a new contract value.
+
 **What the adapter does with each answer.**
 
 - **Nothing protected before activation.** The adapter reads the
@@ -102,19 +129,25 @@ members and refusals are `{kind, message}` with a snake_case `kind`.
   `agent_id` and a 32-hex generation, and activates. It claims, renews,
   completes and forwards only while it holds a token, and every one of
   those calls carries `Authorization: Garam-Execution <token>`.
-- **Undecided is retried; refused is not.** A 503, a timeout or a
+- **Undecided is retried; refused is paused.** A 503, a timeout or a
   failed connection retries the same request with bounded exponential
   backoff. Every 4xx, a wrong binding and an unsupported peer are
-  definite: the same request is not sent again, protected work stops,
-  the outbox is kept and the refusal is logged by kind. The adapter
-  acts again only when an input changes — a new generation, epoch or
-  revision from the runtime, or another placement token — which is a
-  new request.
+  definite: protected work stops, the outbox is kept, the refusal is
+  logged by kind, and nothing is resent on a timer. Three inputs re-arm
+  it: a new generation, epoch or revision from the runtime; a changed
+  placement-token file; and a changed agent leaf, read as its serial,
+  since a 401 or 403 can clear on renewal. The leaf stays out of
+  `requestId`.
 - **A definite fence from garam stops protected work too.** garam's 403
-  on any protected call, and its 409 on a claim, where no hold exists
-  to have lapsed, mean the token or the credential is not current. The
-  adapter neither recovers the credential nor contests the activation:
-  recovery is the manager's.
+  on any protected call, and its 409 on a claim, mean the token or the
+  credential is not current. A claim's 409 has no other source: the
+  claim route answers not-found as 204, the claim's insert classifies
+  no conflict, and the only failed preconditions on its path are the
+  fence's `not_cut_over` and `credential_fenced` answers
+  (`refusalOf` in `internal/message/postgres.go`). A renewal's or a
+  completion's 409 stays a lapsed hold, so a fenced credential found
+  there is met at the next claim. The adapter neither recovers the
+  credential nor contests the activation: recovery is the manager's.
 - **Temporary unavailability stops nothing local.** The adapter never
   stops the runtime; garam or control being unreachable delays claims,
   forwards and reports, which retry.
@@ -122,13 +155,16 @@ members and refusals are `{kind, message}` with a snake_case `kind`.
   the runtime reports. A 503 retries the latest observation rather than
   queueing old ones; a 409 stops reporting for that generation.
 
-**Settings.** The adapter reads `GARAM_ADAPTER_CONTROL_URL`,
+**Settings.** The fenced mode reads `GARAM_ADAPTER_CONTROL_URL`,
 `GARAM_ADAPTER_CONTROL_ROOT_FILE` (the root control's serving
 certificate chains to) and `GARAM_ADAPTER_PLACEMENT_TOKEN_FILE`, as the
-garam PM accepted them, and `GARAM_ADAPTER_OUTBOX_DIR`. One GRN,
-`GARAM_ADAPTER_AGENT`, names the agent on both hops, so
-`GARAM_ADAPTER_GATEWAY_AGENT` is removed: the runtime is started with
-that GRN as its agent identifier.
+garam PM accepted them, and requires `GARAM_ADAPTER_OUTBOX_DIR`, which
+the legacy mode reads where it is set and otherwise forwards nothing.
+One GRN, `GARAM_ADAPTER_AGENT`, names the agent on both hops, so
+`GARAM_ADAPTER_GATEWAY_AGENT` is removed. Every renderer already sets
+the two equal: the Operator's sidecar at its `dev`, `85cf8c9`, writes
+the GRN into both (`internal/controller/agent_statefulset.go`), and
+neither `deploy/local/` nor the chart renders an adapter.
 
 **Delivery under the activation**, as the #1169 decisions of 12:41,
 16:26, 17:04, 17:16, 17:30, 17:46, 18:07 and 18:37 fixed it:
@@ -160,9 +196,9 @@ that GRN as its agent identifier.
 - The Operator implements both routes in its control service citing
   the commit that merges this; Operator's own
   `Control-Contract-Version` proposal is replaced.
-- An adapter deployment must now name a control endpoint, a placement
-  token and an outbox: there is no unfenced mode once the agent is cut
-  over, and an adapter that cannot activate claims nothing.
+- A deployment that names a control endpoint, a placement token and
+  an outbox runs fenced, and an adapter that cannot activate claims
+  nothing; one that names none runs as it did, until #1171.
 - A restarted adapter replays its own activation and receives a newer
   token, which fences the token any earlier process of it held.
 - Every change to a body, a refusal or the identifier's derivation is a

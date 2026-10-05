@@ -2,6 +2,7 @@ package workload_test
 
 import (
 	"archive/tar"
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -436,13 +437,14 @@ func TestRealEngine_KeepsTheMovePendingWhileTheRuntimeDoesNotExit(t *testing.T) 
 	target := h.prefix + "moved"
 
 	since := time.Now()
+	signals := h.watchSignals(since, runtime, space, adapter)
 	pending := h.start(moveTo(target))
-	eventually(t, "the drain signalling the runtime", func() bool { return len(h.signals(runtime, since)) > 0 })
+	eventually(t, "the drain signalling the runtime", func() bool { return len(signals.of(runtime)) > 0 })
 	time.Sleep(30 * time.Second)
 	assert.Equal(t, "true", h.inspect(runtime, "{{.State.Running}}"), "the runtime has not exited")
-	assert.Equal(t, []string{"15"}, h.signals(runtime, since), "it was sent SIGTERM and nothing else")
-	assert.Empty(t, h.signals(space, since), "the workspace is not told to stop before the runtime exits")
-	assert.Empty(t, h.signals(adapter, since), "nor is the adapter")
+	assert.Equal(t, []string{"15"}, signals.of(runtime), "it was sent SIGTERM and nothing else")
+	assert.Empty(t, signals.of(space), "the workspace is not told to stop before the runtime exits")
+	assert.Empty(t, signals.of(adapter), "nor is the adapter")
 	assert.False(t, pending.returned(), "the move is pending")
 	assert.False(t, h.volumeExists(target), "no volume is created while the runtime runs")
 	assert.Empty(t, h.mustDocker("ps", "-aq", "--filter", "name=^"+h.prefix+"copier-"), "nothing is copied")
@@ -452,7 +454,7 @@ func TestRealEngine_KeepsTheMovePendingWhileTheRuntimeDoesNotExit(t *testing.T) 
 	h.activated(2)
 	assert.Equal(t, target, h.mountedAt(h.container(workload.RoleRuntime), "/data"),
 		"the control: once it exits, the move completes")
-	assert.Equal(t, []string{"15"}, h.signals(runtime, since), "still SIGTERM alone")
+	assert.Equal(t, []string{"15"}, signals.of(runtime), "still SIGTERM alone")
 	assert.Equal(t, []string{"0"}, h.exitCodes(runtime, since), "and it exited after its drain")
 }
 
@@ -471,7 +473,10 @@ func TestRealEngine_HoldsEveryRunToAnUnsettledMove(t *testing.T) {
 	var runtime string
 	eventually(t, "the generation on the copy running", func() bool {
 		runtime = h.container(workload.RoleRuntime)
-		return runtime != "" && h.mountedAt(runtime, "/data") == target
+		// The old runtime may be removed between the listing and this
+		// read, so a failed read is a no.
+		mounted, err := h.docker("inspect", "-f", `{{range .Mounts}}{{if eq .Destination "/data"}}{{.Name}}{{end}}{{end}}`, runtime)
+		return runtime != "" && err == nil && mounted == target
 	})
 	require.NoError(t, r.stop())
 
@@ -485,4 +490,53 @@ func TestRealEngine_HoldsEveryRunToAnUnsettledMove(t *testing.T) {
 	h.garam.setUndecided(false)
 	h.activated(2)
 	assert.Equal(t, runtime, h.container(workload.RoleRuntime), "the control: the same move adopts its generation")
+}
+
+// signalWatch is every signal the engine delivered to some containers
+// from a moment on, read from one `docker events` stream the test
+// holds open: a busy daemon trims the history a later query would read.
+type signalWatch struct {
+	mu   sync.Mutex
+	seen map[string][]string
+}
+
+func (h *host) watchSignals(since time.Time, ids ...string) *signalWatch {
+	h.t.Helper()
+	args := []string{"events", "--since", since.Format(time.RFC3339Nano), "--filter", "event=kill",
+		"--format", "{{.Actor.ID}} {{.Actor.Attributes.signal}}"}
+	for _, id := range ids {
+		args = append(args, "--filter", "container="+id)
+	}
+	cmd := exec.Command("docker", args...)
+	cmd.Env = append(os.Environ(), "DOCKER_HOST="+h.daemon)
+	out, err := cmd.StdoutPipe()
+	require.NoError(h.t, err)
+	require.NoError(h.t, cmd.Start())
+	h.t.Cleanup(func() { _ = cmd.Process.Kill(); _ = cmd.Wait() })
+	w := &signalWatch{seen: map[string][]string{}}
+	go func() {
+		lines := bufio.NewScanner(out)
+		for lines.Scan() {
+			if f := strings.Fields(lines.Text()); len(f) == 2 {
+				w.mu.Lock()
+				w.seen[f[0]] = append(w.seen[f[0]], f[1])
+				w.mu.Unlock()
+			}
+		}
+	}()
+	return w
+}
+
+// of answers the signals delivered to a container, named by its ID or
+// a prefix of it.
+func (w *signalWatch) of(id string) []string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	out := []string{}
+	for full, signals := range w.seen {
+		if strings.HasPrefix(full, id) {
+			out = append(out, signals...)
+		}
+	}
+	return out
 }

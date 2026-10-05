@@ -67,6 +67,18 @@ embedding:
 			for i, r := range runs {
 				t.Logf("supervisor run %d:\n%s", i, s.scrub(tail(r.out.String(), 40)))
 			}
+			for _, role := range []string{"runtime", "adapter"} {
+				if id := h.container(role); id != "" {
+					logs, _ := s.docker("logs", id)
+					var turn []string
+					for _, line := range strings.Split(logs, "\n") {
+						if !strings.Contains(line, "/status\"") {
+							turn = append(turn, line)
+						}
+					}
+					t.Logf("%s logs:\n%s", role, s.scrub(tail(strings.Join(turn, "\n"), 60)))
+				}
+			}
 		}
 	})
 

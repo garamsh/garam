@@ -551,6 +551,11 @@ paths:
       operationId: addGroupMember
       tags: [org]
       summary: Add a member to a group. Requires the `admin` role.
+      description: >-
+        A member GRN whose organization segment names another
+        organization is refused with 409 `failed_precondition`, and
+        nothing is stored. A root-owned GRN, such as a user's, belongs
+        to no organization and is admitted.
       parameters:
         - $ref: '#/components/parameters/org'
         - $ref: '#/components/parameters/group'
@@ -578,6 +583,10 @@ paths:
       operationId: removeGroupMember
       tags: [org]
       summary: Remove a member from a group. Requires the `admin` role.
+      description: >-
+        A member another organization owns is not refused. Adding one
+        is, so it is answered 404 as not a member, and a membership
+        stored before that refusal existed is removed.
       parameters:
         - $ref: '#/components/parameters/org'
         - $ref: '#/components/parameters/group'
@@ -738,6 +747,11 @@ paths:
       operationId: addProjectMember
       tags: [org]
       summary: Add a member to a project. Requires the `admin` role.
+      description: >-
+        A member GRN whose organization segment names another
+        organization is refused with 409 `failed_precondition`, and
+        nothing is stored. A root-owned GRN, such as a user's, belongs
+        to no organization and is admitted.
       parameters:
         - $ref: '#/components/parameters/org'
         - $ref: '#/components/parameters/project'
@@ -765,6 +779,10 @@ paths:
       operationId: removeProjectMember
       tags: [org]
       summary: Remove a member from a project. Requires the `admin` role.
+      description: >-
+        A member another organization owns is not refused. Adding one
+        is, so it is answered 404 as not a member, and a membership
+        stored before that refusal existed is removed.
       parameters:
         - $ref: '#/components/parameters/org'
         - $ref: '#/components/parameters/project'

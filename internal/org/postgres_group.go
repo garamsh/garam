@@ -76,8 +76,12 @@ func (s *PostgresStore) DeleteGroup(ctx context.Context, g grn.GRN) error {
 	return classifyRows(n, err, "delete group", ErrGroupNotFound)
 }
 
-// AddGroupMember adds a member to the Group.
+// AddGroupMember adds a member to the Group, or returns
+// ErrMemberOfAnotherOrg and stores nothing.
 func (s *PostgresStore) AddGroupMember(ctx context.Context, groupGRN, memberGRN grn.GRN) error {
+	if err := checkMemberOrg(groupGRN, memberGRN); err != nil {
+		return err
+	}
 	err := s.q.AddGroupMember(ctx, db.AddGroupMemberParams{
 		GroupGrn:  groupGRN.String(),
 		MemberGrn: memberGRN.String(),

@@ -77,8 +77,12 @@ func (s *PostgresStore) DeleteProject(ctx context.Context, g grn.GRN) error {
 	return classifyRows(n, err, "delete project", ErrProjectNotFound)
 }
 
-// AddProjectMember adds a member to the Project.
+// AddProjectMember adds a member to the Project, or returns
+// ErrMemberOfAnotherOrg and stores nothing.
 func (s *PostgresStore) AddProjectMember(ctx context.Context, projectGRN, memberGRN grn.GRN) error {
+	if err := checkMemberOrg(projectGRN, memberGRN); err != nil {
+		return err
+	}
 	err := s.q.AddProjectMember(ctx, db.AddProjectMemberParams{
 		ProjectGrn: projectGRN.String(),
 		MemberGrn:  memberGRN.String(),

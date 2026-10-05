@@ -268,7 +268,10 @@ export interface paths {
         /** List a group's members. Requires the `member` role. */
         get: operations["listGroupMembers"];
         put?: never;
-        /** Add a member to a group. Requires the `admin` role. */
+        /**
+         * Add a member to a group. Requires the `admin` role.
+         * @description A member GRN whose organization segment names another organization is refused with 409 `failed_precondition`, and nothing is stored. A root-owned GRN, such as a user's, belongs to no organization and is admitted.
+         */
         post: operations["addGroupMember"];
         delete?: never;
         options?: never;
@@ -286,7 +289,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Remove a member from a group. Requires the `admin` role. */
+        /**
+         * Remove a member from a group. Requires the `admin` role.
+         * @description A member another organization owns is not refused. Adding one is, so it is answered 404 as not a member, and a membership stored before that refusal existed is removed.
+         */
         delete: operations["removeGroupMember"];
         options?: never;
         head?: never;
@@ -340,7 +346,10 @@ export interface paths {
         /** List a project's members. Requires the `member` role. */
         get: operations["listProjectMembers"];
         put?: never;
-        /** Add a member to a project. Requires the `admin` role. */
+        /**
+         * Add a member to a project. Requires the `admin` role.
+         * @description A member GRN whose organization segment names another organization is refused with 409 `failed_precondition`, and nothing is stored. A root-owned GRN, such as a user's, belongs to no organization and is admitted.
+         */
         post: operations["addProjectMember"];
         delete?: never;
         options?: never;
@@ -358,7 +367,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Remove a member from a project. Requires the `admin` role. */
+        /**
+         * Remove a member from a project. Requires the `admin` role.
+         * @description A member another organization owns is not refused. Adding one is, so it is answered 404 as not a member, and a membership stored before that refusal existed is removed.
+         */
         delete: operations["removeProjectMember"];
         options?: never;
         head?: never;

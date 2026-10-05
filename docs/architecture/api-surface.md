@@ -269,11 +269,11 @@ branches on these answers, each carrying the header:
 **Cutover is a fifth versioned contract on the machine listener**
 ([ADR-0086](./adr/0086-a-legacy-agent-cuts-over-through-stages-garam-records-under-its-execution-lock.md)).
 Reading a legacy agent's cutover and its freeze, switch and rollback
-each require and answer `Garam-Contract-Version: agent-cutover.v1`,
-and carry `Authorization: Garam-Operation` over an `agent:cutover`
-reference. A refusal there keeps `kind` the errorx kind and names
-which one it is in the machine `Error`'s `reason`, from the set the
-contract lists; `activateAgent` sets `reason` only to
+each require and answer `Garam-Contract-Version: agent-cutover.v1`, and
+carry `Authorization: Garam-Operation` over an `agent:cutover` reference
+minted for that route's request target. A refusal there keeps `kind` the
+errorx kind and names which one it is in the machine `Error`'s `reason`,
+from the set the contract lists; `activateAgent` sets `reason` only to
 `cutover_required`, and every other route and refusal leaves it out.
 `api/machine.yaml` §cutover is authoritative for the wire, and
 [agents.md](./agents.md) §Separated execution for what it decides.

@@ -105,8 +105,9 @@ tags:
       it inactive, has garam freeze and verify it, has garam record the
       switch, and only then releases the agent; a frozen attempt may be
       rolled back, a switched one may not. Each call carries an owner's
-      or administrator's durable `agent:cutover` reference, rechecked
-      fresh, beside the caller's own lifecycle authority.
+      or administrator's durable `agent:cutover` reference minted for
+      that one route, rechecked fresh, beside the caller's own
+      lifecycle authority.
   - name: enrollment
     description: >-
       How the hosted Operator control service creates a managed agent
@@ -1343,9 +1344,16 @@ paths:
         Authorized as `activateAgent` is, and additionally by
         `Authorization: Garam-Operation <ref>`, where `ref` is a durable
         `agent:cutover` reference an owner or an administrator minted
-        for this caller, this agent and the assignment it is on now.
-        garam rechecks the reference from current state on this and
-        every cutover call (ADR-0086).
+        for this caller, this agent, the assignment it is on now and
+        this route's exact request target: its escaped path and raw
+        query, as the request carries them. garam rechecks the
+        reference from current state on this and every cutover call,
+        and compares its request target with the one received, so a
+        reference minted for one cutover route authorizes no other
+        (ADR-0086). A GRN no operator holds, an unclaimed definition's
+        included, is 403 on every cutover route, as an agent the caller
+        holds no authority over is: authorization runs before
+        eligibility.
 
 
         `source` is the agent's definition, values included, and null
@@ -1403,7 +1411,9 @@ paths:
         `attempt_open`; an `importId` already rolled back is 409
         `attempt_ended`, which refuses a late replay. An agent whose
         execution is fenced, or whose stored values cannot be read, is
-        422 `not_cut_over_eligible`. The same `importId` and digest
+        422 `not_cut_over_eligible`; an unclaimed definition's GRN has no
+        assignment to authorize against and is 403, as
+        `getAgentCutover` states. The same `importId` and digest
         answer the recorded attempt with 200. Past garam's ten-second
         deadline the answer is 503, which does not say whether the
         freeze committed: read the agent's cutover back before retrying.
@@ -2398,8 +2408,11 @@ components:
           maxLength: 2048
           description: >-
             Present for `agent-template:read`, `agent-template:publish`,
-            `execution-profile:read` and `agent:execution-read`, absent
-            for every other operation. It is the exact origin-form
+            `execution-profile:read`, `agent:execution-read` and
+            `agent:cutover`, absent for every other operation. For
+            `agent:cutover` it is garam's own cutover route the
+            reference is carried to, and garam compares it (ADR-0086).
+            Otherwise it is the exact origin-form
             request target the console sent: the escaped path and the
             raw query, with no scheme or authority, including any path
             prefix of the registered control endpoint. Compare it, before
@@ -2586,6 +2599,22 @@ components:
           type: [string, 'null']
           format: date-time
           description: When the attempt was rolled back.
+    CutoverError:
+      type: object
+      description: >-
+        `Error` as the cutover routes answer it, with the closed set of
+        reasons `agent-cutover.v1` lists (ADR-0086). A refusal outside
+        the set carries no `reason`.
+      required: [kind, message]
+      properties:
+        kind:
+          type: string
+          description: errorx kind, e.g. `not_found`, `permission_denied`.
+        message:
+          type: string
+        reason:
+          type: string
+          enum: [digest_mismatch, attempt_open, attempt_ended, not_cut_over_eligible, reverse_migration_required]
     CutoverFreezeRequest:
       type: object
       required: [importId, sourceDigest, epoch]
@@ -2880,7 +2909,7 @@ components:
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            $ref: '#/components/schemas/CutoverError'
     ExecutionContractError:
       description: Error response of an execution route.
       headers:
@@ -2918,8 +2947,9 @@ components:
         Garam-Operation <authority>` beside the client certificate. It
         is minted for the exact request body it accompanies. On the
         cutover routes it carries instead the durable `agent:cutover`
-        reference such a handoff was minted under, which binds no body
-        and is rechecked from current state on every call (ADR-0086).
+        reference such a handoff was minted under, which binds that
+        route's request target rather than a body and is rechecked from
+        current state on every call (ADR-0086).
     machineCertificate:
       type: mutualTLS
       description: >-

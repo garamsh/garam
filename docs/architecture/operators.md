@@ -296,8 +296,9 @@ and records where the agent runs now; the recovery it authorizes is
 answered once, and a second recovery under it is refused
 ([agents.md](./agents.md) §Separated execution). Cutover targets the
 agent, is decided on `agent:cutover` against it, records where the
-agent runs now and binds no body: its reference is carried on every
-stage of a legacy agent's cutover and rechecked on each (ADR-0086).
+agent runs now and binds the request target of one of garam's cutover
+routes, so each stage of a legacy agent's cutover takes a reference of
+its own, rechecked when it is presented (ADR-0086).
 Every role holds `agent:create`; only owner and admin hold
 `agent:configure`, `agent:recover` and `agent:cutover`, because
 execution settings choose what runs on a host, a recovery fences every

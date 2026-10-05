@@ -172,21 +172,24 @@ in #1157.
   execution lock** (ADR-0086). The Operator reads the agent's source —
   its definition, or empty values where none describes it — and the
   SHA-256 of its RFC 8785 JSON, imports it inactive, and asks garam to
-  freeze it: under the execution row and then the definition row,
-  garam rechecks the assignment and the grant and records the attempt
-  `frozen` only if the source's digest there is the import's. garam
-  then records `switched`, before the Operator releases anything. A
-  frozen attempt may be rolled back and a switched one may not; each
-  attempt is keyed by the import's identifier, so a retry answers what
-  its stage recorded and nothing reaches an ended one. From the freeze
-  the operator's definition poll omits the agent; from the switch its
-  certificate route refuses it, deciding under the row after signing,
-  and the agent's first activation is admitted. Each stage carries an
-  owner's or administrator's `agent:cutover` reference, rechecked. The
-  definition is never written or deleted: a switched one is archival,
-  and the browser read says so. `garam cutover-inventory` prints every
-  source record of an organization with a digest of each value and no
-  value. The Operator's import and release are unbuilt
+  freeze it: under the execution row and then the definition row, garam
+  rechecks the assignment and the grant and records the attempt `frozen`
+  only if the source's digest there is the import's. garam then records
+  `switched`, before the Operator releases anything. A frozen attempt
+  may be rolled back and a switched one may not; each attempt is keyed
+  by the import's identifier, so a retry answers what its stage recorded
+  and nothing reaches an ended one. From the freeze the operator's
+  definition poll omits the agent; from the switch its certificate route
+  refuses it, and the agent's first activation is admitted. That route
+  signs first and decides under the row after: a switch committing
+  between its two reads leaves a certificate signed and discarded, never
+  answered. Each stage carries an owner's or administrator's
+  `agent:cutover` reference minted for that stage's route alone,
+  rechecked. The definition is never written or deleted: a switched one
+  is archival, and the browser read says so, and migration 000033's
+  rollback refuses while a cutover is held. `garam cutover-inventory`
+  prints every source record of an organization with a digest of each
+  value and no value. The Operator's import and release are unbuilt
   (garamsh/garam-agent-operator#217), and templates are #1188's.
 - **A managed agent is created by request, not by claim.** The control
   service presents a member's `agent:create` reference and the request

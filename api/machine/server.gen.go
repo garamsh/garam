@@ -74,6 +74,33 @@ func (e CutoverAttemptStage) Valid() bool {
 	}
 }
 
+// Defines values for CutoverErrorReason.
+const (
+	AttemptEnded             CutoverErrorReason = "attempt_ended"
+	AttemptOpen              CutoverErrorReason = "attempt_open"
+	DigestMismatch           CutoverErrorReason = "digest_mismatch"
+	NotCutOverEligible       CutoverErrorReason = "not_cut_over_eligible"
+	ReverseMigrationRequired CutoverErrorReason = "reverse_migration_required"
+)
+
+// Valid indicates whether the value is a known member of the CutoverErrorReason enum.
+func (e CutoverErrorReason) Valid() bool {
+	switch e {
+	case AttemptEnded:
+		return true
+	case AttemptOpen:
+		return true
+	case DigestMismatch:
+		return true
+	case NotCutOverEligible:
+		return true
+	case ReverseMigrationRequired:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ExecutionIntrospectionCredential.
 const (
 	ExecutionIntrospectionCredentialCurrent ExecutionIntrospectionCredential = "current"
@@ -388,6 +415,17 @@ type CutoverAttempt struct {
 // CutoverAttemptStage defines model for CutoverAttempt.Stage.
 type CutoverAttemptStage string
 
+// CutoverError `Error` as the cutover routes answer it, with the closed set of reasons `agent-cutover.v1` lists (ADR-0086). A refusal outside the set carries no `reason`.
+type CutoverError struct {
+	// Kind errorx kind, e.g. `not_found`, `permission_denied`.
+	Kind    string              `json:"kind"`
+	Message string              `json:"message"`
+	Reason  *CutoverErrorReason `json:"reason,omitempty"`
+}
+
+// CutoverErrorReason defines model for CutoverError.Reason.
+type CutoverErrorReason string
+
 // CutoverFreezeRequest defines model for CutoverFreezeRequest.
 type CutoverFreezeRequest struct {
 	// Epoch The assignment's epoch the import read. Opaque.
@@ -636,7 +674,7 @@ type OperationBinding struct {
 	OrgGrn       string                    `json:"orgGrn"`
 	RequestId    string                    `json:"requestId"`
 
-	// RequestTarget Present for `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `agent:execution-read`, absent for every other operation. It is the exact origin-form request target the console sent: the escaped path and the raw query, with no scheme or authority, including any path prefix of the registered control endpoint. Compare it, before decoding, routing or reading any data, with the target the request arrived with, byte for byte; the empty body's digest does not tell one read from another.
+	// RequestTarget Present for `agent-template:read`, `agent-template:publish`, `execution-profile:read`, `agent:execution-read` and `agent:cutover`, absent for every other operation. For `agent:cutover` it is garam's own cutover route the reference is carried to, and garam compares it (ADR-0086). Otherwise it is the exact origin-form request target the console sent: the escaped path and the raw query, with no scheme or authority, including any path prefix of the registered control endpoint. Compare it, before decoding, routing or reading any data, with the target the request arrived with, byte for byte; the empty body's digest does not tell one read from another.
 	RequestTarget *string `json:"requestTarget,omitempty"`
 
 	// TargetGrn The controller for `agent:create`; the agent for `agent:configure`, `agent:recover`, `agent:execution-read` and `agent:cutover`; the organization for `agent-template:read`, `agent-template:publish` and `execution-profile:read`.
@@ -785,8 +823,8 @@ type StandaloneContractVersion = string
 // ContractError defines model for ContractError.
 type ContractError = Error
 
-// CutoverContractError defines model for CutoverContractError.
-type CutoverContractError = Error
+// CutoverContractError `Error` as the cutover routes answer it, with the closed set of reasons `agent-cutover.v1` lists (ADR-0086). A refusal outside the set carries no `reason`.
+type CutoverContractError = CutoverError
 
 // DeliveryContractError defines model for DeliveryContractError.
 type DeliveryContractError = Error

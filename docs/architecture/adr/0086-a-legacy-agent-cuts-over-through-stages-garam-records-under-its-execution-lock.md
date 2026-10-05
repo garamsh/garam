@@ -7,8 +7,11 @@ Drafted for #1171. The contract was proposed on #1171 (comment
 5987172687) and decided by the PM there (comment 5987261323); the
 Operator PM agreed to it for garamsh/garam-agent-operator#217, and the
 PM confirmed the rollback window (comment 5988124767). The error
-reason field was decided by the PM on this pull request's dispatch.
-Facts about the Operator hold at garamsh/garam-agent-operator@85cf8c9.
+reason field was decided by the PM on #1171 (comment 5988251756). The
+PM's review of #1194 (review 5410304511) bound each reference to its
+stage, accepted the 403 for an agent nothing holds, and required the
+rollback below 000033 to refuse while a cutover is held. Facts about
+the Operator hold at garamsh/garam-agent-operator@85cf8c9.
 
 ## Context
 
@@ -80,9 +83,17 @@ execution lock.** The contract is `agent-cutover.v1`;
 - **Authority.** Each of the four routes is authorized as
   `activateAgent` is, and carries an owner's or administrator's
   durable `agent:cutover` reference for this caller, agent and
-  assignment, rechecked from current state on every stage.
-  `agent:cutover` is a new delegated operation, held by the owner and
-  administrator roles, where an explicit Deny wins.
+  assignment, rechecked from current state on every stage. The
+  reference binds the exact request target of the one route it is
+  carried to, which garam compares with the target it received before
+  acting, so the read, the freeze, the switch and the rollback are
+  four distinct authorities: a reference to roll an attempt back
+  cannot switch it. `agent:cutover` is a new delegated operation, held
+  by the owner and administrator roles, where an explicit Deny wins.
+- **Authorization before eligibility.** A GRN nothing holds, an
+  unclaimed definition's included, is answered 403 as any agent the
+  caller holds no authority over, not 422: it has no assignment to
+  authorize against, and the answer reveals nothing about it.
 - **The inventory.** `garam cutover-inventory --org <slug>` reads one
   snapshot of the database its configuration names, prints one line
   per agent, unclaimed definition and template with a SHA-256 of each
@@ -105,6 +116,10 @@ execution lock.** The contract is `agent-cutover.v1`;
   is active. The agent keeps running on what it was built from.
 - Retained definitions keep blocking `operator:delete` until their
   removal is approved.
+- Migration 000033's rollback refuses while any attempt is frozen or
+  switched, since dropping that record would list the agent to its
+  operator again: two desired sources. Rolling garam below 000033
+  after a switch requires the reverse migration first.
 - Templates are not cut over here; their move is #1188's.
 - The Operator's import, its disposition of keys never applied and its
   release are the Operator's, and are unbuilt.

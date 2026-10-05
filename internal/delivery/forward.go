@@ -93,10 +93,16 @@ func (s *service) pass(ctx context.Context, f *forwarding) bool {
 // execution closed, which ends the pass.
 func (s *service) offer(ctx context.Context, f *forwarding, name string) bool {
 	entry, err := s.ends.Outbox.Read(name)
-	if err != nil {
-		if !errorx.IsKind(err, errorx.KindNotFound) {
-			s.setAside(ctx, f, name, nil, err.Error())
-		}
+	switch {
+	case errorx.IsKind(err, errorx.KindFailedPrecondition):
+		s.setAside(ctx, f, name, nil, err.Error())
+		return true
+	case errorx.IsKind(err, errorx.KindUnavailable):
+		// Not the entry's fault: it is read again after a backoff.
+		s.later(f, name)
+		slog.WarnContext(ctx, "outbox entry not read", slog.String("name", name), slog.String("error", err.Error()))
+		return true
+	case err != nil:
 		return true
 	}
 	outbound, reason := s.outboundOf(entry)
@@ -123,16 +129,22 @@ func (s *service) offer(ctx context.Context, f *forwarding, name string) bool {
 			slog.String("entry", entry.ID), slog.String("error", err.Error()))
 		return false
 	case errorx.IsKind(err, errorx.KindOutOfRange):
-		r := f.later[name]
-		r.wait = s.backoff(r.wait)
-		r.at = time.Now().Add(r.wait)
-		f.later[name] = r
+		s.later(f, name)
 		slog.WarnContext(ctx, "reply not forwarded yet; garam's clock has not reached its creation",
-			slog.String("entry", entry.ID), slog.Duration("retry_in", r.wait))
+			slog.String("entry", entry.ID))
 		return true
 	}
 	s.setAside(ctx, f, name, entry, err.Error())
 	return true
+}
+
+// later offers an entry again after its own backoff, doubling up to
+// the cap each time it is put off.
+func (s *service) later(f *forwarding, name string) {
+	r := f.later[name]
+	r.wait = s.backoff(r.wait)
+	r.at = time.Now().Add(r.wait)
+	f.later[name] = r
 }
 
 // outboundOf is what an entry asks garam to store, or the reason it is

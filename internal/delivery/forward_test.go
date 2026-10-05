@@ -216,6 +216,31 @@ func TestRun_ForwardsAfterARestartAReplyWhoseAcknowledgementWasLost(t *testing.T
 	assert.Equal(t, "stored-first", queue.outbox.stored["entry-1"].Id)
 }
 
+// TestRun_ReadsAgainAnEntryTheSystemCouldNotOpen is a reply the
+// adapter could not open for a reason that is not the entry's — here a
+// mode that refuses the reader, standing in for a descriptor limit or
+// an I/O error. It is not set aside: once it can be read it is
+// forwarded. A planted link beside it is the control: it is set aside
+// and never offered.
+func TestRun_ReadsAgainAnEntryTheSystemCouldNotOpen(t *testing.T) {
+	queue := newGaramQueue(t, time.Second)
+	dir := t.TempDir()
+	writeEntry(t, dir, entryFor("entry-1", "reply"))
+	path := filepath.Join(dir, "entry-1.json")
+	require.NoError(t, os.Chmod(path, 0o000))
+	writeEntry(t, dir, entryFor("entry-target", "reply"))
+	require.NoError(t, os.Rename(filepath.Join(dir, "entry-target.json"), filepath.Join(dir, ".target")))
+	require.NoError(t, os.Symlink(".target", filepath.Join(dir, "entry-link.json")))
+	forwarding(t, queue, dir)
+
+	quietFor()
+	require.Empty(t, queue.submissions(), "an entry that cannot be opened is not offered")
+	require.NoError(t, os.Chmod(path, 0o600))
+	eventually(t, gone(path), "once it can be read it is forwarded")
+	assert.Zero(t, count(queue.submissions(), "entry-link"), "the control: a planted link is never offered")
+	assert.FileExists(t, filepath.Join(dir, "entry-link.json"))
+}
+
 // TestRun_NeverOffersAnEntryItCannotDateOrIsNotItsToSend holds the
 // forwarder to what it can offer: an entry with no creation time, one
 // of another agent, and one for another channel are kept and never

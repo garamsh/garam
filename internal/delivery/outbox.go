@@ -104,7 +104,8 @@ func (o *Outbox) Identity(name string) (os.FileInfo, error) {
 // Read opens one entry at the file boundary and parses it. A link, a
 // file of any other type, one with a second name, one larger than an
 // entry can be, and one the name does not match are all refused with
-// KindFailedPrecondition, and nothing of their contents is answered.
+// KindFailedPrecondition, and nothing of their contents is answered. A
+// file the system could not open or read is KindUnavailable.
 func (o *Outbox) Read(name string) (*Entry, error) {
 	raw, info, err := o.open(name)
 	if err != nil {
@@ -160,7 +161,10 @@ func (o *Outbox) open(name string) ([]byte, os.FileInfo, error) {
 	}
 	f, err := root.OpenFile(name, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
 	if err != nil {
-		return nil, nil, errorx.Wrap(err, "delivery: outbox entry", errorx.KindFailedPrecondition)
+		// The name was a regular file a moment ago, so a failed open is
+		// the system's (no descriptor, no permission, an I/O error) or a
+		// replacement the next read refuses: neither is this entry's.
+		return nil, nil, errorx.Wrap(err, "delivery: outbox entry", errorx.KindUnavailable)
 	}
 	defer func() { _ = f.Close() }()
 	opened, err := f.Stat()

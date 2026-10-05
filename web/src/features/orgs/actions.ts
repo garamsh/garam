@@ -24,7 +24,7 @@ export {
 export {
   saveControlEndpoint,
   type ControlEndpointState,
-} from "./api/control-endpoint";
+} from "./api/save-control-endpoint";
 export { createGroup, type CreateGroupState } from "./api/create-group";
 export {
   createInvitation,
@@ -39,11 +39,8 @@ export {
   type DeleteAgentTemplateState,
 } from "./api/delete-agent-template";
 export { deleteGroup, type DeleteGroupState } from "./api/delete-group";
-export {
-  grantDelegation,
-  withdrawDelegation,
-  type DelegationState,
-} from "./api/delegation-actions";
+export { grantDelegation, type DelegationState } from "./api/grant-delegation";
+export { withdrawDelegation } from "./api/withdraw-delegation";
 export { detachPolicy, type DetachPolicyState } from "./api/detach-policy";
 export {
   deleteOperator,

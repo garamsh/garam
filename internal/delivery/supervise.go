@@ -113,6 +113,14 @@ func (s *service) superviseFenced(ctx context.Context, sup *supervision) {
 		// Paused on a definite refusal: nothing is resent until an
 		// input changes.
 		return
+	case status.State != RuntimeServing:
+		// A runtime that is not serving is never activated: one already
+		// told to stop is not the generation to fence the next one by
+		// (ADR-0085). What was held is not its, and a pause stays.
+		s.ends.Execution.withdraw()
+		slog.InfoContext(ctx, "runtime not serving; not activated",
+			slog.String("generation", now.binding.Generation), slog.String("state", string(status.State)))
+		return
 	}
 	s.ends.Execution.close(gateClosed)
 	s.activate(ctx, sup, now, token, status)

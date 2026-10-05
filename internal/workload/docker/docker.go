@@ -81,7 +81,11 @@ func (e *Engine) InspectVolume(ctx context.Context, name string) (*workload.Volu
 func (e *Engine) CreateContainer(ctx context.Context, spec workload.ContainerSpec) (string, error) {
 	mounts := make([]mount.Mount, 0, len(spec.Volumes)+len(spec.Binds))
 	for _, v := range spec.Volumes {
-		mounts = append(mounts, mount.Mount{Type: mount.TypeVolume, Source: v.Volume, Target: v.Target})
+		m := mount.Mount{Type: mount.TypeVolume, Source: v.Volume, Target: v.Target}
+		if v.Subpath != "" {
+			m.VolumeOptions = &mount.VolumeOptions{Subpath: v.Subpath}
+		}
+		mounts = append(mounts, m)
 	}
 	for _, b := range spec.Binds {
 		mounts = append(mounts, mount.Mount{Type: mount.TypeBind, Source: b.Source, Target: b.Target})
@@ -179,6 +183,16 @@ func (e *Engine) CopyFiles(ctx context.Context, id, dir string, files []workload
 		DestinationPath: dir, Content: &buf, CopyUIDGID: true,
 	})
 	return kindOf(err, "copy into "+id)
+}
+
+// StatPath reads what is at path without following a link, as the
+// engine's archive stat reports it.
+func (e *Engine) StatPath(ctx context.Context, id, path string) (*workload.PathState, error) {
+	res, err := e.api.ContainerStatPath(ctx, id, client.ContainerStatPathOptions{Path: path})
+	if err != nil {
+		return nil, kindOf(err, "stat "+path+" in "+id)
+	}
+	return &workload.PathState{Mode: res.Stat.Mode, LinkTarget: res.Stat.LinkTarget}, nil
 }
 
 func (e *Engine) StartContainer(ctx context.Context, id string) error {

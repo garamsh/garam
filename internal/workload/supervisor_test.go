@@ -205,6 +205,16 @@ func (r *running) stop() error {
 	return r.err
 }
 
+// returned reports whether Run has returned.
+func (r *running) returned() bool {
+	select {
+	case <-r.done:
+		return true
+	default:
+		return false
+	}
+}
+
 // result waits for Run to return on its own.
 func (r *running) result(t *testing.T) error {
 	t.Helper()
@@ -289,8 +299,8 @@ func TestRun_BringsAGenerationUpInTheArrangementsShape(t *testing.T) {
 	assert.NotEqual(t, memory, space)
 	assert.Equal(t, []workload.VolumeMount{{Volume: memory, Target: "/data"}}, runtime.spec.Volumes)
 	assert.Equal(t, []workload.VolumeMount{{Volume: space, Target: "/var/lib/sherlock-workspace"}}, workspace.spec.Volumes)
-	assert.Equal(t, []workload.VolumeMount{{Volume: memory, Target: "/data"}}, adapter.spec.Volumes,
-		"the adapter mounts the memory volume for the outbox, and not the workspace")
+	assert.Equal(t, []workload.VolumeMount{{Volume: memory, Target: "/outbox", Subpath: "outbox"}}, adapter.spec.Volumes,
+		"the adapter mounts the memory volume's outbox alone, and not the workspace")
 	assert.Empty(t, runtime.spec.Binds, "the runtime mounts no host directory")
 	assert.Empty(t, workspace.spec.Binds, "the workspace mounts no host directory")
 	assert.Len(t, adapter.spec.Binds, 1, "the adapter mounts its socket's directory and nothing else of the host")

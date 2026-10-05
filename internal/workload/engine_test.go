@@ -3,6 +3,7 @@ package workload_test
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"strings"
 	"sync"
 	"time"
@@ -16,8 +17,10 @@ import (
 // else ends one. Every signal it is sent is kept, so a test can say
 // none but SIGTERM was.
 type stubEngine struct {
-	mu         sync.Mutex
-	volumes    map[string]map[string]string
+	mu      sync.Mutex
+	volumes map[string]map[string]string
+	// paths is what each volume holds, by path inside it.
+	paths      map[string]map[string]workload.PathState
 	containers map[string]*stubContainer
 	byName     map[string]string
 	seq        int
@@ -51,6 +54,7 @@ type stubContainer struct {
 func newStubEngine() *stubEngine {
 	return &stubEngine{
 		volumes: map[string]map[string]string{}, containers: map[string]*stubContainer{},
+		paths:  map[string]map[string]workload.PathState{},
 		byName: map[string]string{}, changed: make(chan struct{}),
 	}
 }
@@ -198,9 +202,52 @@ func (e *stubEngine) CopyFiles(ctx context.Context, id, dir string, files []work
 		return workload.ErrAbsent
 	}
 	for _, f := range files {
+		if volume, rel, ok := c.volumeAt(dir + "/" + f.Path); ok {
+			if e.paths[volume] == nil {
+				e.paths[volume] = map[string]workload.PathState{}
+			}
+			mode := f.Mode
+			if f.Dir {
+				mode |= fs.ModeDir
+			}
+			e.paths[volume][rel] = workload.PathState{Mode: mode}
+			continue
+		}
 		c.files[dir+"/"+f.Path] = f
 	}
 	return nil
+}
+
+// volumeAt answers the volume a container mounts at path's directory,
+// and path inside it.
+func (c *stubContainer) volumeAt(path string) (string, string, bool) {
+	for _, v := range c.spec.Volumes {
+		if rel, ok := strings.CutPrefix(path, v.Target+"/"); ok && v.Subpath == "" {
+			return v.Volume, rel, true
+		}
+	}
+	return "", "", false
+}
+
+func (e *stubEngine) StatPath(ctx context.Context, id, path string) (*workload.PathState, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if err := e.refuse(ctx); err != nil {
+		return nil, err
+	}
+	c, ok := e.lookup(id)
+	if !ok {
+		return nil, workload.ErrAbsent
+	}
+	volume, rel, ok := c.volumeAt(path)
+	if !ok {
+		return nil, workload.ErrAbsent
+	}
+	st, ok := e.paths[volume][rel]
+	if !ok {
+		return nil, workload.ErrAbsent
+	}
+	return &st, nil
 }
 
 func (e *stubEngine) StartContainer(ctx context.Context, id string) error {

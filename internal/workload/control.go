@@ -40,7 +40,14 @@ var (
 // adapter presents the agent's certificate, which must chain to the
 // agent's issuer, and verifies this listener by the generation's own
 // root.
-func (s *Supervisor) serveControl(genDir string, serving *tls.Certificate, in *intent) (*http.Server, error) {
+// controlServer is a generation's control and what reports its
+// listener stopping on its own.
+type controlServer struct {
+	srv    *http.Server
+	failed chan error
+}
+
+func (s *Supervisor) serveControl(genDir string, serving *tls.Certificate, in *intent) (*controlServer, error) {
 	dir := filepath.Join(genDir, socketDir)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, errorx.Wrap(err, "workload: socket directory", errorx.KindUnavailable)
@@ -81,12 +88,13 @@ func (s *Supervisor) serveControl(genDir string, serving *tls.Certificate, in *i
 		},
 		ReadHeaderTimeout: 10 * time.Second,
 	}
+	ctl := &controlServer{srv: srv, failed: make(chan error, 1)}
 	go func() {
 		if err := srv.ServeTLS(ln, "", ""); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			slog.Error("control stopped serving", slog.String("error", err.Error()))
+			ctl.failed <- err
 		}
 	}()
-	return srv, nil
+	return ctl, nil
 }
 
 // contract refuses a request made under another contract, and names
@@ -291,10 +299,6 @@ func (s *Supervisor) claim(in *intent, body activationBody, leafPEM []byte) (Act
 		}
 		in.Generation, in.RequestID, in.Replaces = body.Generation, body.RequestID, s.st.LastActivation
 		s.st.Generations = append(s.st.Generations, body.Generation)
-		// The adapter read the runtime's status before it asked, and the
-		// runtime answers status only once its store is open: from here
-		// on every start of this volume requires the store.
-		s.st.Memory.Served = true
 		if err := s.save(); err != nil {
 			return ActivationRequest{}, undecided(err)
 		}
@@ -371,6 +375,8 @@ func (s *Supervisor) report(w http.ResponseWriter, r *http.Request, in *intent) 
 		refuse(w, http.StatusConflict, "generation_not_current", "the status is not of the activated generation")
 		return
 	}
+	// The first serving report on this volume is what says its store
+	// exists: from here on every start of it requires the store.
 	if body.State == "serving" && !s.st.Memory.Served {
 		s.st.Memory.Served = true
 		if err := s.save(); err != nil {

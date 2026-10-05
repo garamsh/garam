@@ -53,12 +53,26 @@ func (s *Supervisor) over(ctx context.Context, in *intent) (bool, error) {
 }
 
 // adopt answers the intent's container in role, or nil where the
-// engine holds none under its name. A container the record has no ID
-// for is adopted when its labels confirm the intent, which recovers a
-// create whose answer was lost. Anything else under the name is
-// ErrForeign.
+// engine holds none. A container whose ID the record holds is found by
+// that ID alone, so a rename neither hides it nor puts another in its
+// place. One the record has no ID for is found by its name and adopted
+// when its labels confirm the intent, which recovers a create whose
+// answer was lost; anything else under the name is ErrForeign.
 func (s *Supervisor) adopt(ctx context.Context, in *intent, r Role) (*ContainerState, error) {
 	rec := in.container(r)
+	if rec.ID != "" {
+		c, err := s.engine.InspectContainer(ctx, rec.ID)
+		if errors.Is(err, ErrAbsent) {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		if !s.owns(in, r, c) {
+			return nil, errorx.Wrap(ErrForeign, rec.ID)
+		}
+		return c, nil
+	}
 	c, err := s.engine.InspectContainer(ctx, rec.Name)
 	if errors.Is(err, ErrAbsent) {
 		return nil, nil
@@ -66,13 +80,11 @@ func (s *Supervisor) adopt(ctx context.Context, in *intent, r Role) (*ContainerS
 	if err != nil {
 		return nil, err
 	}
-	if !s.owns(in, r, c) || (rec.ID != "" && rec.ID != c.ID) {
+	if !s.owns(in, r, c) {
 		return nil, errorx.Wrap(ErrForeign, rec.Name)
 	}
-	if rec.ID == "" {
-		if err := s.locked(func() { rec.ID = c.ID }); err != nil {
-			return nil, err
-		}
+	if err := s.locked(func() { rec.ID = c.ID }); err != nil {
+		return nil, err
 	}
 	return c, nil
 }
@@ -142,6 +154,11 @@ func (s *Supervisor) create(ctx context.Context, in *intent, r Role, genDir stri
 			return nil, err
 		}
 	}
+	if r == RoleAdapter {
+		if err := s.outbox(ctx, in.Runtime.ID, false); err != nil {
+			return nil, err
+		}
+	}
 	spec := s.spec(in, r, genDir)
 	id, err := s.engine.CreateContainer(ctx, spec)
 	if errors.Is(err, ErrNameInUse) {
@@ -169,6 +186,11 @@ func (s *Supervisor) create(ctx context.Context, in *intent, r Role, genDir stri
 // leaves it not running, or that the engine refuses because the
 // runtime it joins has exited, is the generation over.
 func (s *Supervisor) start(ctx context.Context, in *intent, r Role, id string, root []byte) error {
+	if r == RoleRuntime {
+		if err := s.outbox(ctx, id, true); err != nil {
+			return err
+		}
+	}
 	if files := s.files(in, r, root); len(files) > 0 {
 		if err := s.engine.CopyFiles(ctx, id, "/etc", files); err != nil {
 			return err
@@ -236,7 +258,7 @@ func (s *Supervisor) spec(in *intent, r Role, genDir string) ContainerSpec {
 			"GARAM_ADAPTER_CONTROL_ROOT_FILE=" + adapterFiles + "/control-root.pem",
 			"GARAM_ADAPTER_PLACEMENT_TOKEN_FILE=" + adapterFiles + "/placement-token",
 			"GARAM_ADAPTER_CONTROL_SOCKET=" + socketTarget + "/" + socketName,
-			"GARAM_ADAPTER_OUTBOX_DIR=" + memoryTarget + "/outbox",
+			"GARAM_ADAPTER_OUTBOX_DIR=" + outboxTarget,
 		}
 	}
 	return spec
@@ -266,6 +288,36 @@ func (s *Supervisor) files(in *intent, r Role, root []byte) []File {
 			own("garam/control-root.pem", root, 0o600),
 			own("garam/placement-token", []byte(in.PlacementToken), 0o600),
 		}
+	}
+	return nil
+}
+
+// outbox makes sure the memory volume's outbox is a directory of its
+// own before the adapter mounts it alone, read through the runtime
+// container that mounts the volume. Where it is absent and create is
+// set, it is made, owned by the runtime's account. Anything but a
+// directory there, a link above all, refuses: a link inside the volume
+// would hand the adapter the whole of it, and the path is never
+// repaired, since replacing it could drop what it holds. No turn runs
+// before the adapter exists, so nothing changes the path between this
+// check and the adapter's mount, and a link made afterwards does not
+// move a mount already made (ADR-0085).
+func (s *Supervisor) outbox(ctx context.Context, runtimeID string, create bool) error {
+	path := memoryTarget + "/" + outboxDir
+	st, err := s.engine.StatPath(ctx, runtimeID, path)
+	if errors.Is(err, ErrAbsent) && create {
+		return s.engine.CopyFiles(ctx, runtimeID, memoryTarget, []File{
+			{Path: outboxDir, Mode: 0o755, Dir: true, UID: runtimeUID, GID: runtimeUID},
+		})
+	}
+	if errors.Is(err, ErrAbsent) {
+		return errorx.Wrap(ErrOutboxReplaced, path+" is gone")
+	}
+	if err != nil {
+		return err
+	}
+	if !st.Mode.IsDir() || st.LinkTarget != "" {
+		return errorx.Wrap(ErrOutboxReplaced, path+" is "+st.Mode.Type().String())
 	}
 	return nil
 }

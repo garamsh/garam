@@ -7,7 +7,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"log/slog"
-	"net/http"
 	"regexp"
 	"sync"
 
@@ -19,6 +18,8 @@ import (
 // sherlock v0.2.0).
 const (
 	memoryTarget    = "/data"
+	outboxDir       = "outbox"
+	outboxTarget    = "/outbox"
 	workspaceTarget = "/var/lib/sherlock-workspace"
 	runtimeConfig   = "/etc/sherlock/config.yaml"
 	adapterFiles    = "/etc/garam"
@@ -181,27 +182,29 @@ func (s *Supervisor) supervise(ctx context.Context, in *intent) error {
 	if err != nil {
 		return err
 	}
-	srv, err := s.serveControl(genDir, serving, in)
+	ctl, err := s.serveControl(genDir, serving, in)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = srv.Close() }()
+	defer func() { _ = ctl.srv.Close() }()
 	for _, r := range roles {
 		err := s.ensure(ctx, in, r, genDir, root)
 		if errors.Is(err, errOver) {
-			return s.end(ctx, srv, in)
+			return s.end(ctx, ctl, in)
 		}
 		if err != nil {
 			return err
 		}
 	}
 	slog.Info("generation running", slog.String("intent", in.ID))
-	return s.watch(ctx, srv, in)
+	return s.watch(ctx, ctl, in)
 }
 
-// watch waits for any container of the generation to exit. ctx ending
-// leaves the workload running; an exit drains the rest of it.
-func (s *Supervisor) watch(ctx context.Context, srv *http.Server, in *intent) error {
+// watch waits for any container of the generation to exit, or for its
+// control to stop serving, which leaves the adapter no way to activate.
+// ctx ending leaves the workload running; either of the others drains
+// it.
+func (s *Supervisor) watch(ctx context.Context, ctl *controlServer, in *intent) error {
 	waitCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	exited := make(chan error, len(roles))
@@ -211,6 +214,9 @@ func (s *Supervisor) watch(ctx context.Context, srv *http.Server, in *intent) er
 	select {
 	case <-ctx.Done():
 		return nil
+	case err := <-ctl.failed:
+		slog.Error("control stopped serving; ending the generation",
+			slog.String("intent", in.ID), slog.String("error", err.Error()))
 	case err := <-exited:
 		if ctx.Err() != nil {
 			return nil
@@ -221,12 +227,15 @@ func (s *Supervisor) watch(ctx context.Context, srv *http.Server, in *intent) er
 			return err
 		}
 	}
-	return s.end(ctx, srv, in)
+	return s.end(ctx, ctl, in)
 }
 
-// end drains a generation one of whose containers exited.
-func (s *Supervisor) end(ctx context.Context, srv *http.Server, in *intent) error {
-	_ = srv.Close()
+// end drains a generation that can no longer run. Its control stops
+// taking requests first, and those already in flight finish.
+func (s *Supervisor) end(ctx context.Context, ctl *controlServer, in *intent) error {
+	if err := ctl.srv.Shutdown(ctx); err != nil {
+		return errorx.Wrap(err, "workload: control", errorx.KindUnavailable)
+	}
 	if err := s.drain(ctx, in); err != nil {
 		return err
 	}

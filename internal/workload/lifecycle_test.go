@@ -3,8 +3,11 @@ package workload_test
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io/fs"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -14,14 +17,25 @@ import (
 )
 
 // activateOnce has the adapter of the generation running now activate
-// it, which is what records that its runtime served.
-func (h *host) activateOnce(adapter *stubContainer) string {
+// it, and answers the activation.
+func (h *host) activateOnce(adapter *stubContainer) (*delivery.Activation, string) {
 	h.t.Helper()
 	auth, token := h.adapterOf(adapter)
 	generation := newGeneration()
-	_, err := auth.Activate(context.Background(), delivery.RequestID(binding(generation), token), binding(generation), token)
+	a, err := auth.Activate(context.Background(), delivery.RequestID(binding(generation), token), binding(generation), token)
 	require.NoError(h.t, err)
-	return generation
+	return a, generation
+}
+
+// serve has the adapter activate the generation running now and report
+// its runtime serving, which is what records that it served.
+func (h *host) serve(adapter *stubContainer) {
+	h.t.Helper()
+	a, generation := h.activateOnce(adapter)
+	auth, _ := h.adapterOf(adapter)
+	status := &delivery.RuntimeStatus{Agent: testAgent, Epoch: "3", Generation: generation, Revision: "r1",
+		State: delivery.RuntimeServing, StartedAt: time.Now()}
+	require.NoError(h.t, auth.Report(context.Background(), a.ID, status, time.Now()))
 }
 
 func replace(d *workload.Desired) { d.Replace = true }
@@ -57,7 +71,7 @@ func TestRun_RequiresTheStoreOnceARuntimeServed(t *testing.T) {
 	assert.NotContains(t, successor.spec.Cmd, "--require-store",
 		"the control: nothing served on the volume yet, so nothing says a store exists")
 	_, _, adapter := h.serving()
-	h.activateOnce(adapter)
+	h.serve(adapter)
 	require.NoError(t, again.stop(), "the supervisor stops after its runtime served")
 
 	again = h.start(replace)
@@ -65,7 +79,7 @@ func TestRun_RequiresTheStoreOnceARuntimeServed(t *testing.T) {
 	third, _, adapter := h.serving()
 	assert.Contains(t, third.spec.Cmd, "--require-store", "a start after a runtime served requires the store")
 
-	h.activateOnce(adapter)
+	h.serve(adapter)
 	h.engine.exit(third)
 	require.ErrorIs(t, again.result(t), workload.ErrGenerationEnded)
 	h.start()
@@ -89,9 +103,10 @@ func TestDrain_WaitsForTheRuntimeWithoutForce(t *testing.T) {
 
 	pending := h.start(replace)
 	require.NoError(t, h.engine.await(func() bool {
-		return workspace.status == workload.ContainerExited && slices.Contains(h.engine.signals, runtime.spec.Name+":SIGTERM")
+		return slices.Contains(h.engine.signals, runtime.spec.Name+":SIGTERM")
 	}))
 	assert.Equal(t, workload.ContainerRunning, runtime.status, "a runtime finishing its turn keeps running")
+	assert.Equal(t, workload.ContainerRunning, workspace.status, "and keeps the tools its turn calls")
 	assert.Equal(t, workload.ContainerRunning, adapter.status, "the adapter outlasts the writers it serves")
 	assert.Equal(t, 1, h.count(workload.RoleRuntime), "no successor while the runtime runs")
 	h.engine.mu.Lock()
@@ -341,4 +356,117 @@ func TestRun_ReturnsNothingWhenStoppedMidStart(t *testing.T) {
 	h.start()
 	adopted, _, _ := h.serving()
 	assert.Same(t, runtime, adopted, "the next run takes it up")
+}
+
+// TestRun_RequiresTheStoreOnlyAfterAServingReport holds --require-store
+// to a serving report, never to an activation: a runtime activated and
+// gone before any report starts again without the flag, and the same
+// sequence with a serving report, the control, starts with it.
+func TestRun_RequiresTheStoreOnlyAfterAServingReport(t *testing.T) {
+	for _, reported := range []bool{false, true} {
+		t.Run(fmt.Sprintf("reported serving: %v", reported), func(t *testing.T) {
+			h := newHost(t)
+			r := h.start()
+			runtime, _, adapter := h.serving()
+			if reported {
+				h.serve(adapter)
+			} else {
+				h.activateOnce(adapter)
+			}
+			h.engine.exit(runtime)
+			require.ErrorIs(t, r.result(t), workload.ErrGenerationEnded)
+			h.start()
+			next, _, _ := h.serving()
+			assert.Equal(t, reported, slices.Contains(next.spec.Cmd, "--require-store"))
+		})
+	}
+}
+
+// TestDrain_FindsARenamedContainerByItsID holds the drain to the IDs it
+// recorded: a runtime renamed under the supervisor is still signalled
+// and waited for, and a stranger given its old name is neither, so no
+// successor starts while the renamed runtime runs. The control is the
+// same drain with nothing renamed.
+func TestDrain_FindsARenamedContainerByItsID(t *testing.T) {
+	for _, renamed := range []bool{false, true} {
+		t.Run(fmt.Sprintf("renamed: %v", renamed), func(t *testing.T) {
+			h := newHost(t)
+			first := h.start()
+			runtime, _, _ := h.serving()
+			require.NoError(t, first.stop())
+			h.engine.mu.Lock()
+			runtime.ignoresTerm = true
+			if renamed {
+				delete(h.engine.byName, runtime.spec.Name)
+				old := runtime.spec.Name
+				runtime.spec.Name = "renamed-by-someone"
+				h.engine.byName[runtime.spec.Name] = runtime.id
+				h.engine.seq++
+				stranger := &stubContainer{spec: workload.ContainerSpec{Name: old}, id: fmt.Sprintf("c%d", h.engine.seq),
+					status: workload.ContainerRunning, exited: make(chan struct{}), files: map[string]workload.File{}}
+				h.engine.containers[stranger.id], h.engine.byName[old] = stranger, stranger.id
+			}
+			h.engine.mu.Unlock()
+
+			pending := h.start(replace)
+			require.NoError(t, h.engine.await(func() bool {
+				return slices.Contains(h.engine.signals, runtime.spec.Name+":SIGTERM")
+			}), "the runtime is signalled by its ID")
+			assert.False(t, pending.returned(), "the drain waits for it")
+			h.engine.mu.Lock()
+			assert.Len(t, h.engine.signals, 1, "nothing else is signalled while it runs")
+			h.engine.mu.Unlock()
+			h.engine.exit(runtime)
+			require.NoError(t, h.engine.await(func() bool {
+				for _, c := range h.engine.named(workload.RoleRuntime) {
+					if c != runtime && c.status == workload.ContainerRunning && c.spec.Labels != nil {
+						return true
+					}
+				}
+				return false
+			}), "the successor starts once it exited")
+		})
+	}
+}
+
+// TestRun_RefusesAnOutboxThatIsNotADirectory holds the adapter's mount
+// of the outbox alone: a link or a file where the outbox is refuses
+// before the adapter is created, and the path is left as it was. The
+// control is the outbox the runtime's first start made, a directory,
+// which the adapter mounts alone.
+func TestRun_RefusesAnOutboxThatIsNotADirectory(t *testing.T) {
+	tests := map[string]*workload.PathState{
+		"a directory": nil,
+		"a link":      {Mode: fs.ModeSymlink | 0o777, LinkTarget: "."},
+		"a file":      {Mode: 0o600},
+	}
+	for name, planted := range tests {
+		t.Run(name, func(t *testing.T) {
+			h := newHost(t)
+			r := h.start()
+			runtime, _, adapter := h.serving()
+			assert.Equal(t, []workload.VolumeMount{{Volume: runtime.spec.Volumes[0].Volume, Target: "/outbox", Subpath: "outbox"}},
+				adapter.spec.Volumes, "the adapter mounts the outbox alone")
+			memory := runtime.spec.Volumes[0].Volume
+			h.engine.mu.Lock()
+			require.True(t, h.engine.paths[memory]["outbox"].Mode.IsDir(), "the first start made the outbox a directory")
+			if planted != nil {
+				h.engine.paths[memory]["outbox"] = *planted
+			}
+			h.engine.mu.Unlock()
+			h.engine.exit(runtime)
+			require.ErrorIs(t, r.result(t), workload.ErrGenerationEnded)
+
+			next := h.start()
+			if planted == nil {
+				h.serving()
+				return
+			}
+			require.ErrorIs(t, next.result(t), workload.ErrOutboxReplaced)
+			assert.Zero(t, h.count(workload.RoleAdapter), "no adapter is created")
+			h.engine.mu.Lock()
+			defer h.engine.mu.Unlock()
+			assert.Equal(t, *planted, h.engine.paths[memory]["outbox"], "the path is not repaired")
+		})
+	}
 }

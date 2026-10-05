@@ -58,12 +58,14 @@ func (s *Supervisor) verifyVolume(ctx context.Context, rec *volumeRecord) error 
 }
 
 // volumesOf is what each role mounts: the memory volume into the
-// runtime and, for the outbox, the adapter; the workspace volume into
-// the workspace alone.
+// runtime, its outbox directory alone into the adapter, and the
+// workspace volume into the workspace alone.
 func (s *Supervisor) volumesOf(r Role) []VolumeMount {
 	switch r {
-	case RoleRuntime, RoleAdapter:
+	case RoleRuntime:
 		return []VolumeMount{{Volume: s.st.Memory.Name, Target: memoryTarget}}
+	case RoleAdapter:
+		return []VolumeMount{{Volume: s.st.Memory.Name, Target: outboxTarget, Subpath: outboxDir}}
 	}
 	return []VolumeMount{{Volume: s.st.Workspace.Name, Target: workspaceTarget}}
 }

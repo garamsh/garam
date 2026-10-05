@@ -33,6 +33,11 @@ var (
 	// cannot prove it created.
 	ErrForeign = errorx.New(errorx.KindFailedPrecondition,
 		"workload: a container under this host's name is not the one it created; it is left untouched")
+	// ErrOutboxReplaced is the memory volume's outbox being something
+	// other than a directory, which the adapter's mount of it alone
+	// would not confine.
+	ErrOutboxReplaced = errorx.New(errorx.KindFailedPrecondition,
+		"workload: the memory volume's outbox is not a directory; continuing needs an explicit handover")
 	// ErrGenerationEnded is the generation the supervisor ran having
 	// exited, after the rest of it was drained.
 	ErrGenerationEnded = errorx.New(errorx.KindAborted, "workload: the generation exited")

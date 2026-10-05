@@ -26,8 +26,12 @@ type Engine interface {
 	CreateContainer(ctx context.Context, spec ContainerSpec) (string, error)
 	// InspectContainer answers the container under a name or an ID.
 	InspectContainer(ctx context.Context, nameOrID string) (*ContainerState, error)
+	// StatPath answers what is at path in a container, created or
+	// running, without following a link there.
+	StatPath(ctx context.Context, id, path string) (*PathState, error)
 	// CopyFiles writes files below dir in a container, created or
-	// running, each with the owner and mode it names.
+	// running, each with the owner and mode it names. It writes into a
+	// volume the container mounts there too.
 	CopyFiles(ctx context.Context, id, dir string, files []File) error
 	// StartContainer starts a created container.
 	StartContainer(ctx context.Context, id string) error
@@ -68,11 +72,20 @@ type ContainerSpec struct {
 	CapAdd    []string
 }
 
-// VolumeMount mounts a named volume. The engine never creates one for
-// a mount: a volume it does not hold refuses the container.
+// VolumeMount mounts a named volume, or the directory Subpath names
+// inside it. An engine creates a volume a mount names where none
+// exists, which is why the supervisor checks a volume again after
+// each create.
 type VolumeMount struct {
-	Volume string
-	Target string
+	Volume  string
+	Target  string
+	Subpath string
+}
+
+// PathState is what is at a path: its mode, and a link's target.
+type PathState struct {
+	Mode       fs.FileMode
+	LinkTarget string
 }
 
 // BindMount mounts a host directory.

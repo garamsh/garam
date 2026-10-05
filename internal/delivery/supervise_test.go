@@ -391,3 +391,22 @@ func TestRun_LegacyResumesAFencedAgentOnlyOnARenewedCertificate(t *testing.T) {
 	m.replace("", "1002")
 	eventually(t, func() bool { return queue.claimsAttempted() > refusedAt }, "a renewed certificate tries again")
 }
+
+// TestRun_ActivatesOnlyAServingRuntime holds activation to a runtime
+// that reports serving (ADR-0085): one already draining is not asked
+// for, and the same runtime reporting serving is, which is the
+// control.
+func TestRun_ActivatesOnlyAServingRuntime(t *testing.T) {
+	queue := newGaramQueue(t, time.Second)
+	gateway := newAgentGateway(t)
+	gateway.report("state", "draining")
+	c := newControl(queue)
+	runFenced(t, queue, gateway, c, newMounted(), nil)
+
+	read := gateway.reads()
+	eventually(t, func() bool { return gateway.reads() > read+2 }, "the draining status is read")
+	assert.Empty(t, c.requests(), "a draining runtime is not activated")
+
+	gateway.report("state", "serving")
+	eventually(t, func() bool { return len(c.requests()) == 1 }, "the control: the serving runtime is activated")
+}

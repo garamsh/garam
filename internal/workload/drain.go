@@ -9,11 +9,13 @@ import (
 	"github.com/garamsh/garam/internal/errorx"
 )
 
-// drain stops the intent's generation with no deadline: SIGTERM to the
-// runtime and the workspace, a wait until both have exited, then the
-// same for the adapter, and only then are the three removed. A
-// runtime still finishing a turn keeps the drain pending for as long
-// as that takes; nothing here escalates.
+// drain stops the intent's generation with no deadline, one container
+// at a time: SIGTERM to the runtime and a wait until it has exited,
+// so a turn it is finishing keeps its tools; then the workspace; then
+// the adapter; and only then are the three removed. A runtime still
+// finishing a turn keeps the drain pending for as long as that takes;
+// nothing here escalates. A container the drain cannot account for
+// keeps it pending too.
 func (s *Supervisor) drain(ctx context.Context, in *intent) error {
 	if in.Phase != phaseDraining {
 		if err := s.locked(func() { in.Phase = phaseDraining }); err != nil {
@@ -23,11 +25,6 @@ func (s *Supervisor) drain(ctx context.Context, in *intent) error {
 	ids := map[Role]string{}
 	for _, r := range roles {
 		c, err := s.adopt(ctx, in, r)
-		if errors.Is(err, ErrForeign) {
-			slog.Warn("a container under this generation's name is not its own; left untouched",
-				slog.String("name", in.container(r).Name))
-			continue
-		}
 		if err != nil {
 			return err
 		}
@@ -36,7 +33,7 @@ func (s *Supervisor) drain(ctx context.Context, in *intent) error {
 		}
 	}
 	slog.Info("draining generation", slog.String("intent", in.ID))
-	for _, stage := range [][]Role{{RoleRuntime, RoleWorkspace}, {RoleAdapter}} {
+	for _, stage := range [][]Role{{RoleRuntime}, {RoleWorkspace}, {RoleAdapter}} {
 		for _, r := range stage {
 			if id := ids[r]; id != "" {
 				if err := s.engine.SignalContainer(ctx, id, "SIGTERM"); err != nil {

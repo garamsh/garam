@@ -321,6 +321,16 @@ pins it for this adapter.
   unreachable garam is retried with bounded backoff under the same
   identity. An entry with no valid `created_at`, or past garam's
   seven-day admission budget, is never deleted, re-keyed or re-stamped.
+  An entry the file boundary refuses is set aside until its file is
+  replaced; one the system could not open or read is tried again after
+  a backoff. A pass offers a bounded batch, the oldest entries not set
+  aside.
+- **Removal compares, then unlinks by name.** Between the two, a
+  writer that can rename in the outbox could put another file under
+  the name. That writer can already delete any entry, so the window
+  grants it nothing; renaming to a private name first would close it
+  at the price of a crash state hiding an unacknowledged reply where
+  the forwarder never reads.
 - **Entries an earlier generation left are forwarded by the current
   one**, under its own credential and token, keeping their identifier
   and origin generation. Nothing in the entry is rewritten before it

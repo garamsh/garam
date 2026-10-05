@@ -1,9 +1,14 @@
 import "server-only";
 
-import { unstable_rethrow } from "next/navigation";
 import { z } from "zod";
 
-import { GaramApiError, garamFetchAuthenticated, parserFor } from "@/lib/garam";
+import {
+  GaramApiError,
+  GaramContractError,
+  GaramUnreachableError,
+  garamFetchAuthenticated,
+  parserFor,
+} from "@/lib/garam";
 import {
   CONTRACT_VERSION,
   CONTRACT_VERSION_HEADER,
@@ -58,6 +63,21 @@ export type DelegationRead =
   | { status: "unreachable" };
 
 /**
+ * Whether error is garam's answer — a refusal, an outage or a body
+ * outside its specification — rather than a login redirect or a bug,
+ * which travel on.
+ */
+function isGaramAnswer(
+  error: unknown,
+): error is GaramApiError | GaramUnreachableError | GaramContractError {
+  return (
+    error instanceof GaramApiError ||
+    error instanceof GaramUnreachableError ||
+    error instanceof GaramContractError
+  );
+}
+
+/**
  * The hosted operator's current grant. It never throws for an answer
  * garam gave: a page that shows a grant is never failed by reading one.
  */
@@ -75,9 +95,7 @@ export async function getOperatorDelegation(
       ),
     };
   } catch (error) {
-    // A rejected session is a redirect to the login page, which Next.js
-    // carries as a throw of its own.
-    unstable_rethrow(error);
+    if (!isGaramAnswer(error)) throw error;
     if (error instanceof GaramApiError && error.status === 404) {
       return { status: "none" };
     }
@@ -128,7 +146,7 @@ export async function listHostedOperators(
       z.array(OperatorParser),
     );
   } catch (error) {
-    unstable_rethrow(error);
+    if (!isGaramAnswer(error)) throw error;
     return {
       status: "unavailable",
       reason:

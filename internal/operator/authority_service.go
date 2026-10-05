@@ -237,10 +237,7 @@ func (s *authorityService) recheck(ctx context.Context, b Binding) error {
 		return err
 	}
 	controller, object := b.Target, b.Org
-	switch {
-	case b.Operation.TargetsOrg():
-		controller = grn.GRN{}
-	case b.Operation.TargetsAgent():
+	if b.Operation.TargetsAgent() {
 		current, err := s.assignments.CurrentAssignment(ctx, b.Target)
 		if errorx.IsKind(err, errorx.KindNotFound) {
 			return ErrAuthorityRevoked

@@ -110,6 +110,13 @@ embedding:
 	assert.Equal(t, activations[0].ID, h.record().Intent.Replaces, "its activation replaces the old one")
 	assert.Equal(t, "superseded", activations[0].Ended)
 	s.mustDocker("volume", "inspect", before.volume)
+	// The store came across, read from the new volume's memory file:
+	// what the old generation stored was checkpointed into it when its
+	// runtime closed the store at its drain.
+	factID := s.messages("sender_grn = $1 AND idempotency_key = $2", from.grn, "garam-sa-fact")[0].ID
+	moved := s.sources(target, factID)
+	require.Len(t, moved, 1, "the new volume's store holds the fact as one source")
+	assert.Contains(t, moved[0], codeword)
 
 	// The old generation's token is refused from the switch on, and
 	// cannot claim; the new one is current.
@@ -159,15 +166,9 @@ embedding:
 		claimedAt, activatedAt)
 
 	// Sherlock's own stores, read once the new generation has stopped:
-	// the fact is in the new volume's store, which it reached only by
-	// the copy, and the question asked after the switch is in that store
-	// alone.
+	// the question asked after the switch is in the new store alone.
 	s.mustDocker("kill", "--signal", "TERM", h.container("runtime"))
 	s.eventually("the new generation stopped", func() bool { return h.container("runtime") == "" })
-	factID := s.messages("sender_grn = $1 AND idempotency_key = $2", from.grn, "garam-sa-fact")[0].ID
-	moved := s.sources(target, factID)
-	require.Len(t, moved, 1, "the new volume's store holds the fact as one source")
-	assert.Contains(t, moved[0], codeword)
 	assert.Len(t, s.sources(target, asked[0].ID), 1, "the question reached the new generation's store")
 	assert.Len(t, s.sources(before.volume, factID), 1, "the control: the old store holds the fact too")
 	assert.Empty(t, s.sources(before.volume, asked[0].ID), "and not the question asked after the switch")

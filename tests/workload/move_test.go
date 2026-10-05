@@ -232,9 +232,9 @@ func TestRealEngine_MovesTheStoreToAVerifiedCopy(t *testing.T) {
 	nonce := h.inspect(target, `{{index .Labels "sh.garam.workload.nonce"}}`)
 	assert.NotEmpty(t, nonce, "the move created the new volume")
 	assert.Equal(t, nonce, h.record().Memory.Nonce)
-	assert.NotEqual(t, source, target, "the new volume is another volume")
-	assert.NotEqual(t, h.inspect(source, `{{index .Labels "sh.garam.workload.nonce"}}`), nonce,
-		"carrying another nonce")
+	assert.NotEqual(t, source, h.mountedAt(runtime, "/data"), "the runtime mounts another volume than the old one")
+	assert.NotEqual(t, h.inspect(source, `{{index .Labels "sh.garam.workload.nonce"}}`), h.record().Memory.Nonce,
+		"and the record names a volume of another nonce")
 	assert.Equal(t, "completed", h.messageState(adapter, "garam-sa-before-move"),
 		"the store came across: the new runtime knows what the old one completed")
 	assert.Equal(t, "unknown", h.messageState(adapter, "garam-sa-never-sent"), "the control: an id it never had")

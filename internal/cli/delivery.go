@@ -29,9 +29,11 @@ const gatewayHeaderTimeout = 30 * time.Second
 // newAdapterCommand constructs `garam adapter`: the delivery loop of
 // docs/architecture/adapter.md, running beside one agent. It claims a
 // message for that agent, posts it into the platform's gateway over
-// loopback, and completes the claim when a turn reports success and
-// names the message. It serves nothing, so it is a subcommand of the
-// one CLI but not one of `serve` (ADR-0003, ADR-0012).
+// loopback, completes the claim when the platform says its turn
+// committed, and forwards the platform's outbox; with control settings
+// it does so under its generation's activation (ADR-0084). It serves
+// nothing, so it is a subcommand of the one CLI but not one of `serve`
+// (ADR-0003, ADR-0012).
 func newAdapterCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "adapter",

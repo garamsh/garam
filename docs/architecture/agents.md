@@ -147,9 +147,12 @@ release of that contract and no compatibility window (ADR-0049).
 initial issuance (below), the controller proof
 ([operators.md](./operators.md) §Controller proof) and the generation
 fence ([machine-identity.md](./machine-identity.md) §Generation and
-lineage).** The adapter this repository ships calls none of them:
-nothing under `internal/delivery/` activates, carries an execution
-token or introspects. The Operator control service's use of managed
+lineage).** The adapter this repository ships reaches the fence
+through the lifecycle authority, never directly: it asks that
+authority to activate the generation beside it and carries the token
+it is answered with ([adapter.md](./adapter.md) §Activation and
+runtime status); it introspects nothing. The Operator control
+service's use of managed
 creation is garamsh/garam-agent-operator#211 and #218's, per #1167.
 Acceptance with the Operator control service and the adapter is
 unverified and tracked in #1157. The rest is the accepted

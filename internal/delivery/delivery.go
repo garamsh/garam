@@ -1,14 +1,15 @@
 // Package delivery carries a message from garam's queue into the agent
-// platform's gateway and reports back the turn that handled it. It is
-// what docs/architecture/adapter.md calls the adapter (ADR-0013,
-// ADR-0018), named here for what it owns.
+// platform's gateway, reports back the turn that handled it, and
+// forwards the replies the platform records in its outbox. It is what
+// docs/architecture/adapter.md calls the adapter (ADR-0013, ADR-0079,
+// ADR-0084), named here for what it owns.
 //
 // It runs beside exactly one agent and holds what it is carrying in
 // memory alone. A restart loses that, the leases it was holding lapse,
-// and garam hands those messages out again: the volatility is the
-// mechanism rather than a gap in it, so nothing here is transactional
-// and nothing is recovered across a restart. Whether a message has
-// already been handled is garam's question, never this package's.
+// and garam hands those messages out again under the same identifiers,
+// which the platform recognises; the replies stay in the platform's
+// outbox until garam acknowledges each. Whether a message is delivered
+// is garam's record, never this package's.
 package delivery
 
 import (

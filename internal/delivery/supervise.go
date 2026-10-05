@@ -33,6 +33,9 @@ type supervision struct {
 	// and the last one it refused; neither is sent again unchanged.
 	reported *RuntimeStatus
 	declined *RuntimeStatus
+	// superseded is a generation control said is not current, which is
+	// reported no more.
+	superseded string
 	// delay is how long until the next look: the status interval, or
 	// backoff while an undecided activation is retried.
 	delay   time.Duration
@@ -153,7 +156,7 @@ func (s *service) activate(ctx context.Context, sup *supervision, now inputs, to
 		return
 	}
 	sup.at, sup.requestID, sup.activationID = now, requestID, activation.ID
-	sup.reported, sup.declined = nil, nil
+	sup.reported, sup.declined, sup.superseded = nil, nil, ""
 	slog.InfoContext(ctx, "activation held",
 		slog.String("activation", activation.ID),
 		slog.Int("token_version", activation.TokenVersion),
@@ -163,9 +166,11 @@ func (s *service) activate(ctx context.Context, sup *supervision, now inputs, to
 
 // report carries the runtime's status to control when it differs from
 // what control last accepted or refused. An undecided answer is retried
-// on the next look with whatever is observed then.
+// on the next look with whatever is observed then; a generation control
+// says is not current is reported no more until another activation.
 func (s *service) report(ctx context.Context, sup *supervision, held *Activation, status *RuntimeStatus) {
-	if sameStatus(sup.reported, status) || sameStatus(sup.declined, status) {
+	if sameStatus(sup.reported, status) || sameStatus(sup.declined, status) ||
+		status.Generation == sup.superseded {
 		return
 	}
 	callCtx, cancel := context.WithTimeout(ctx, s.cfg.CallTimeout)
@@ -176,6 +181,11 @@ func (s *service) report(ctx context.Context, sup *supervision, held *Activation
 		sup.reported = status
 	case errorx.IsKind(err, errorx.KindUnavailable):
 		slog.WarnContext(ctx, "runtime status not reported", slog.String("error", err.Error()))
+	case errorx.IsKind(err, errorx.KindAborted):
+		sup.superseded = status.Generation
+		slog.WarnContext(ctx, "runtime status no longer reported for this generation",
+			slog.String("generation", status.Generation),
+			slog.String("error", err.Error()))
 	default:
 		sup.declined = status
 		slog.WarnContext(ctx, "runtime status refused",

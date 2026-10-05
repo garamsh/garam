@@ -41,6 +41,10 @@ var (
 	// made under: a route the peer does not serve, or an answer that does
 	// not name the contract's version. Nothing falls back from it.
 	ErrUnsupportedPeer = errorx.New(errorx.KindUnimplemented, "delivery: the peer does not serve this contract")
+	// ErrGenerationSuperseded is control refusing a status report because
+	// the generation it is of is not current. Nothing more is reported
+	// for that generation.
+	ErrGenerationSuperseded = errorx.New(errorx.KindAborted, "delivery: the generation is not current at control")
 	// ErrInactive is a protected call asked for while no activation is
 	// held. Nothing reaches garam.
 	ErrInactive = errorx.New(errorx.KindUnavailable, "delivery: no activation is held")

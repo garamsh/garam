@@ -29,6 +29,7 @@ type control struct {
 	placements  []string
 	refuse      error
 	reports     []controlReport
+	reportErr   error
 }
 
 // controlReport is one status report control took.
@@ -65,7 +66,14 @@ func (c *control) Report(_ context.Context, activation string, s *delivery.Runti
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.reports = append(c.reports, controlReport{activation: activation, status: *s})
-	return nil
+	return c.reportErr
+}
+
+// answerReports makes every later report answered with err.
+func (c *control) answerReports(err error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.reportErr = err
 }
 
 // answer makes every later activation answered with err, nil restoring
@@ -275,6 +283,36 @@ func TestRun_PausesADefiniteActivationRefusalUntilAnInputChanges(t *testing.T) {
 	asked = c.requests()
 	assert.Equal(t, asked[1], asked[2], "under the same request: the certificate is not part of it")
 	assert.NotContains(t, queue.claimsPresenting(), "", "nothing was claimed without a token")
+}
+
+// TestRun_StopsReportingAGenerationControlSaysIsNotCurrent is ADR-0084's
+// 409: once control refuses a report as of a generation that is not
+// current, a change in that generation is not reported. Another
+// definite refusal is the control: it holds back only the observation
+// it refused, so the next change is reported.
+func TestRun_StopsReportingAGenerationControlSaysIsNotCurrent(t *testing.T) {
+	for name, tc := range map[string]struct {
+		refusal error
+		reports int
+	}{
+		"generation_not_current":       {errorx.Wrap(delivery.ErrGenerationSuperseded, "control refused 409"), 1},
+		"the control: invalid_request": {errorx.New(errorx.KindFailedPrecondition, "control refused 400 invalid_request"), 2},
+	} {
+		t.Run(name, func(t *testing.T) {
+			queue := newGaramQueue(t, time.Second)
+			gateway := newAgentGateway(t)
+			c := newControl(queue)
+			c.answerReports(tc.refusal)
+			runFenced(t, queue, gateway, c, newMounted(), nil)
+
+			eventually(t, func() bool { return len(c.reported()) == 1 }, "the status is reported once activated")
+			gateway.report("state", "draining")
+			read := gateway.reads()
+			eventually(t, func() bool { return gateway.reads() > read+2 }, "the change is read")
+			quietFor()
+			assert.Len(t, c.reported(), tc.reports)
+		})
+	}
 }
 
 // TestRun_KeepsADefinitePauseThroughAStatusItCannotRead is a status

@@ -129,10 +129,15 @@ func (a *HTTPAuthority) Report(ctx context.Context, activation string, s *Runtim
 		return err
 	}
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusNoContent {
-		return controlRefused(resp)
+	switch resp.StatusCode {
+	case http.StatusNoContent:
+		return nil
+	case http.StatusConflict:
+		// generation_not_current: control holds a newer generation, and
+		// nothing this one reports is accepted again (ADR-0084).
+		return errorx.Wrap(ErrGenerationSuperseded, controlRefused(resp).Error())
 	}
-	return nil
+	return controlRefused(resp)
 }
 
 // post makes one call under the contract, and refuses an answer that

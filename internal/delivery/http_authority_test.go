@@ -146,6 +146,13 @@ func TestHTTPAuthority_ReportCarriesTheRuntimesStatusUnderItsActivation(t *testi
 	}
 	observed := time.Date(2026, 10, 5, 1, 3, 0, 5, time.UTC)
 	require.NoError(t, authority.Report(context.Background(), "activation-1", &status, observed))
+
+	superseded := controlAnswering(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Garam-Contract-Version", delivery.ExecutionContract)
+		writeJSON(w, http.StatusConflict, map[string]string{"kind": "generation_not_current", "message": "newer"})
+	})
+	err := superseded.Report(context.Background(), "activation-1", &status, observed)
+	assert.ErrorIs(t, err, delivery.ErrGenerationSuperseded, "a 409 is the generation not being current")
 	assert.Equal(t, "/v1/agents/"+agentGRN().String()+"/runtime-status", route)
 	assert.Empty(t, authorization, "no token goes to control on a report")
 	assert.Equal(t, map[string]any{

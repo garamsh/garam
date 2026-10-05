@@ -87,6 +87,51 @@ describe("agent page", () => {
     expect(body).toEqual({ name: "Ranger" });
   });
 
+  it.each([
+    ["switched", "Managed by the Operator"],
+    ["frozen", "Cut-over in progress"],
+  ] as const)(
+    "says a %s definition's values are archival and keeps offering the rename",
+    async (stage, state) => {
+      server.use(
+        http.get(ONE, () =>
+          HttpResponse.json({ ...fieldAgent, cutover: { stage } }),
+        ),
+      );
+
+      await renderServerComponent(AgentPage(params));
+
+      expect(
+        screen.getByText(
+          `${state}. These settings are archival and read-only in garam; only the name still changes here.`,
+        ),
+      ).toBeInTheDocument();
+      // The archived values are still shown, as they were frozen, and
+      // the sentence a legacy definition carries is gone.
+      expect(screen.getByText("haiku")).toBeInTheDocument();
+      expect(
+        screen.queryByText("Saved values; application is not reported."),
+      ).not.toBeInTheDocument();
+      // Renaming still reaches garam (ADR-0086).
+      expect(screen.getByLabelText("Name")).toHaveValue("Scout");
+      expect(
+        screen.getByRole("button", { name: "Save name" }),
+      ).toBeInTheDocument();
+    },
+  );
+
+  it("says nothing of a cutover for a definition with none open", async () => {
+    // A rolled-back attempt is read as none, so this is its state too.
+    await renderServerComponent(AgentPage(params));
+
+    expect(
+      screen.getByText("Saved values; application is not reported."),
+    ).toBeInTheDocument();
+    // Presence, not identity: no sentence on the page mentions an
+    // archive.
+    expect(screen.queryByText(/archival/)).not.toBeInTheDocument();
+  });
+
   it("says a refused definition is refused rather than missing", async () => {
     let refusing = false;
     server.use(

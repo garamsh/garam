@@ -1,8 +1,10 @@
 import Link from "next/link";
 
 import { Card, CardTitle } from "@/components/ui/card";
-import type { Agent, DirectoryAgent } from "@/features/orgs";
+import type { Agent, AgentDefinition, DirectoryAgent } from "@/features/orgs";
 import { cn } from "@/lib/utils";
+
+import { CutoverBadge } from "../../../../_components/cutover-marker";
 
 import { OperatorName } from "./agent-facts";
 import { ReportedState } from "./reported-state";
@@ -14,6 +16,8 @@ export type RosterEntry = {
   agent: Agent | undefined;
   /** The operator a definition names, where one does. */
   operator: { identifier: string; name: string | undefined } | undefined;
+  /** Where the definition's cutover stands, null where none is open. */
+  cutover: AgentDefinition["cutover"];
 };
 
 /**
@@ -35,7 +39,7 @@ export function AgentRoster({
 }) {
   return (
     <ul className="flex flex-col gap-3">
-      {entries.map(({ directory, agent, operator }) => (
+      {entries.map(({ directory, agent, operator, cutover }) => (
         <li key={directory.grn}>
           <Card className="gap-3 p-4">
             <div className="flex flex-col gap-0.5">
@@ -62,6 +66,7 @@ export function AgentRoster({
                 </p>
               )}
             </div>
+            <CutoverBadge cutover={cutover} />
             {operator && (
               <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
                 <dt className="text-muted-foreground">Operator</dt>

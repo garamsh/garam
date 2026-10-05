@@ -3,6 +3,8 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { slugFromGrn, type AgentDefinition } from "@/features/orgs";
 
+import { CutoverBadge } from "../../../../../_components/cutover-marker";
+
 /**
  * The agent definitions naming this operator, which is what refuses its
  * deletion (ADR-0045), and the route to the page where they are read in
@@ -65,6 +67,7 @@ export function NamingDefinitions({
                     {definition.createdAt.slice(0, 10)}
                   </time>
                 </span>
+                <CutoverBadge cutover={definition.cutover} />
               </li>
             ))}
           </ul>

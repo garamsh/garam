@@ -82,6 +82,7 @@ export default async function NewAgentPage({ params }: Params) {
               }))
             : null
         }
+        values={{}}
       />
     </>
   );

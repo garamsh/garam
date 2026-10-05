@@ -30,16 +30,20 @@ export type OperatorChoice = { identifier: string; name: string };
  * identifier, which is what the definition stores. Where the list was
  * not answered to the caller, the identifier is typed instead.
  *
- * The form starts blank: garam's templates are retired read-only and
- * no longer a start (ADR-0088).
+ * `values` is where the form starts. The console starts it empty:
+ * garam's templates are retired read-only and offer no start
+ * (ADR-0088). The rows are the form's own, and what is submitted is
+ * what they hold.
  */
 export function DefineAgentForm({
   org,
   operators,
+  values,
 }: {
   org: string;
   /** The operators to choose from, or null where none were listed. */
   operators: OperatorChoice[] | null;
+  values: Record<string, string>;
 }) {
   const [state, formAction, pending] = useActionState(
     defineAgent,
@@ -48,7 +52,7 @@ export function DefineAgentForm({
   const hydrated = useHydrated();
   const [name, setName] = useState("");
   const [operator, setOperator] = useState("");
-  const [rows, setRows] = useState(() => rowsFrom({}));
+  const [rows, setRows] = useState(() => rowsFrom(values));
 
   // The refusals the form can make without a round trip. An empty name
   // or operator is left to its own `required`, so an untouched form

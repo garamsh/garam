@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Component, type ReactNode } from "react";
 import { renderToString } from "react-dom/server";
@@ -39,11 +39,11 @@ class Navigation extends Component<
 
 type Operators = { identifier: string; name: string }[] | null;
 
-/** Renders the form where Next.js would. */
-function renderForm(operators: Operators) {
+/** Renders the form where Next.js would, starting from `values`. */
+function renderForm(operators: Operators, values: Record<string, string> = {}) {
   return render(
     <Navigation>
-      <DefineAgentForm org="acme" operators={operators} />
+      <DefineAgentForm org="acme" operators={operators} values={values} />
     </Navigation>,
   );
 }
@@ -72,6 +72,7 @@ describe("define agent form", () => {
       <DefineAgentForm
         org="acme"
         operators={[{ identifier: "field-one", name: "Field one" }]}
+        values={{}}
       />,
     );
     expect(
@@ -312,12 +313,17 @@ describe("define agent form", () => {
   });
 
   it("stops at thirty-two values and says that is all a definition carries", async () => {
+    // Thirty-one values arrive the way a template's do, through the
+    // form's own prop, so the test clicks once across the boundary
+    // rather than thirty-one times to reach it.
     const user = userEvent.setup();
-    renderForm(null);
+    renderForm(
+      null,
+      Object.fromEntries(
+        Array.from({ length: 31 }, (_, index) => [`key-${index}`, "v"]),
+      ),
+    );
     const add = screen.getByRole("button", { name: "Add value" });
-    // Thirty rows are added synchronously to reach thirty-one; the
-    // clicks across the boundary below are the person's.
-    for (let row = 1; row < 31; row++) fireEvent.click(add);
 
     expect(screen.getByText("31 of 32 values")).toBeInTheDocument();
     expect(add).toBeEnabled();
@@ -398,6 +404,31 @@ describe("define agent form", () => {
       screen.getByText(/Never put a credential in a value/),
     ).toBeInTheDocument();
   });
+  it("starts from a template's values and posts them as edited", async () => {
+    const posted = recordDefinitions();
+    const user = userEvent.setup();
+    renderForm(null, { workspace: "papers", notes: "weekly" });
+
+    // The copy is the form's own rows: shown as the template held
+    // them, and edited here before anything is posted.
+    expect(screen.getByLabelText("Key 1")).toHaveValue("workspace");
+    expect(screen.getByLabelText("Value 2")).toHaveValue("weekly");
+    await user.clear(screen.getByLabelText("Value 2"));
+    await user.type(screen.getByLabelText("Value 2"), "daily");
+    await user.type(screen.getByLabelText("Name"), "Scout");
+    await user.type(screen.getByLabelText("Operator"), "field-one");
+    await user.click(screen.getByRole("button", { name: "Create agent" }));
+
+    expect(await screen.findByText(OPENED)).toBeInTheDocument();
+    expect(posted).toEqual([
+      {
+        name: "Scout",
+        operatorGrn: "grn:acme:default:operator:field-one",
+        values: { workspace: "papers", notes: "daily" },
+      },
+    ]);
+  });
+
   it("refuses a name of only spaces, and posts the trimmed name", async () => {
     const posted = recordDefinitions();
     const user = userEvent.setup();

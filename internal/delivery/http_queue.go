@@ -166,6 +166,17 @@ func (q *HTTPQueue) Post(ctx context.Context, o Outbound) (*Stored, error) {
 	if resp.Header.Get(contractHeader) != DeliveryContract {
 		return nil, errorx.Wrap(ErrUnsupportedPeer, "delivery: garam answered outside "+DeliveryContract)
 	}
+	if resp.StatusCode == http.StatusConflict {
+		// 409 is a conflicting key under already_exists and the fence's
+		// certificate refusal under failed_precondition; the kinds were
+		// kept apart so that no text is read (ADR-0083).
+		text, kind := said(resp)
+		if kind == errorx.KindFailedPrecondition.String() {
+			q.execution.Refused(presented)
+			return nil, errorx.Wrap(ErrFenced, text)
+		}
+		return nil, errorx.New(errorx.KindFailedPrecondition, "delivery: "+text)
+	}
 	if resp.StatusCode != http.StatusCreated {
 		return nil, q.answered(resp, presented)
 	}

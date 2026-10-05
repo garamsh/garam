@@ -128,27 +128,33 @@ func TestHTTPQueue_RenewAndCompleteReportAHoldThatIsGone(t *testing.T) {
 // TestHTTPQueue_ReadsTheFenceFromItsAnswers holds the client to
 // ADR-0084's reading of garam's refusals: a 401 or a 403 on any call is
 // the fence, and so is a 409 on a claim, where no hold exists to have
-// lapsed. Each closes the execution, so nothing more reaches garam. A
+// lapsed, and a submission's 409 of kind failed_precondition, which
+// ADR-0083 keeps apart from a conflicting key's already_exists. Each closes the execution, so nothing more reaches garam. A
 // 503 on the same call is the control: it is undecided and closes
 // nothing.
 func TestHTTPQueue_ReadsTheFenceFromItsAnswers(t *testing.T) {
+	claim := func(q *delivery.HTTPQueue) error { _, err := q.Claim(context.Background()); return err }
+	submit := func(q *delivery.HTTPQueue) error { _, err := q.Post(context.Background(), outbound()); return err }
 	refusals := map[string]struct {
 		status int
+		kind   string
 		call   func(*delivery.HTTPQueue) error
 	}{
-		"a claim's 401":      {http.StatusUnauthorized, func(q *delivery.HTTPQueue) error { _, err := q.Claim(context.Background()); return err }},
-		"a claim's 403":      {http.StatusForbidden, func(q *delivery.HTTPQueue) error { _, err := q.Claim(context.Background()); return err }},
-		"a claim's 409":      {http.StatusConflict, func(q *delivery.HTTPQueue) error { _, err := q.Claim(context.Background()); return err }},
-		"a renewal's 403":    {http.StatusForbidden, func(q *delivery.HTTPQueue) error { _, err := q.Renew(context.Background(), "c"); return err }},
-		"a completion's 403": {http.StatusForbidden, func(q *delivery.HTTPQueue) error { return q.Complete(context.Background(), "c") }},
-		"a submission's 403": {http.StatusForbidden, func(q *delivery.HTTPQueue) error { _, err := q.Post(context.Background(), outbound()); return err }},
+		"a claim's 401":                          {http.StatusUnauthorized, "unauthenticated", claim},
+		"a claim's 403":                          {http.StatusForbidden, "permission_denied", claim},
+		"a claim's 409":                          {http.StatusConflict, "failed_precondition", claim},
+		"a renewal's 403":                        {http.StatusForbidden, "permission_denied", func(q *delivery.HTTPQueue) error { _, err := q.Renew(context.Background(), "c"); return err }},
+		"a completion's 403":                     {http.StatusForbidden, "permission_denied", func(q *delivery.HTTPQueue) error { return q.Complete(context.Background(), "c") }},
+		"a submission's 403":                     {http.StatusForbidden, "permission_denied", submit},
+		"a submission's 409 failed_precondition": {http.StatusConflict, "failed_precondition", submit},
 	}
 	for name, refusal := range refusals {
 		t.Run(name, func(t *testing.T) {
 			calls := 0
 			queue, execution := garamAnswering(t, func(w http.ResponseWriter, _ *http.Request) {
 				calls++
-				writeJSON(w, refusal.status, machinegen.Error{Kind: "permission_denied", Message: "execution token is not current"})
+				w.Header().Set("Garam-Contract-Version", delivery.DeliveryContract)
+				writeJSON(w, refusal.status, machinegen.Error{Kind: refusal.kind, Message: "execution token is not current"})
 			})
 			err := refusal.call(queue)
 			assert.True(t, errorx.IsKind(err, errorx.KindPermissionDenied), "%v", err)

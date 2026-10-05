@@ -136,22 +136,28 @@ func TestConsoleAuthority_RefusesWhatAnOperationDoesNotBind(t *testing.T) {
 	agentGRN := s.provisionAgent(t)
 	const target = "/v1/orgs/acme/agents/x/revisions"
 
+	// A request identifier takes no colon, so each is the operation's
+	// name with its colon replaced.
+	id := func(prefix, operation string) string { return prefix + strings.ReplaceAll(operation, ":", "-") }
 	for _, operation := range []string{"agent:configure", "agent:recover"} {
-		status, got := s.mintTarget(t, s.owner, operation, agentGRN, operation+"-1", target)
+		status, got := s.mintTarget(t, s.owner, operation, agentGRN, id("", operation), target)
 		assert.Equal(t, http.StatusBadRequest, status, "%s binds no request target: %s", operation, got)
-		status, got = s.mintTarget(t, s.owner, operation, agentGRN, operation+"-1", "")
+		assert.Contains(t, got, "binds no request_target", "refused for the target and not another field")
+		status, got = s.mintTarget(t, s.owner, operation, agentGRN, id("", operation), "")
 		assert.Equal(t, http.StatusCreated, status, "the %s control: %s", operation, got)
 	}
 
 	const globex = "grn:globex:default:operator:hosted"
 	for _, operation := range []string{"agent-template:read", "agent-template:publish", "execution-profile:read"} {
-		status, got := s.mintBound(t, s.owner, globex, operation, s.acme.String(), "tenant-"+operation, emptyBodySHA256, "/v1/orgs/acme/templates")
+		status, got := s.mintBound(t, s.owner, globex, operation, s.acme.String(), id("tenant-", operation), emptyBodySHA256, "/v1/orgs/acme/templates")
 		assert.Equal(t, http.StatusBadRequest, status, "%s for another organization's audience: %s", operation, got)
-		status, got = s.mintBound(t, s.owner, s.hosted.String(), operation, s.acme.String(), "tenant-"+operation, emptyBodySHA256, "/v1/orgs/acme/templates")
+		assert.Contains(t, got, "another organization", "refused for the audience and not another field")
+		status, got = s.mintBound(t, s.owner, s.hosted.String(), operation, s.acme.String(), id("tenant-", operation), emptyBodySHA256, "/v1/orgs/acme/templates")
 		assert.Equal(t, http.StatusCreated, status, "the %s control: %s", operation, got)
 	}
 	status, got := s.mintBound(t, s.owner, globex, "agent:execution-read", agentGRN, "tenant-execution", emptyBodySHA256, "/v1/orgs/acme/agents/x/execution")
 	assert.Equal(t, http.StatusBadRequest, status, "execution read for another organization's audience: %s", got)
+	assert.Contains(t, got, "another organization")
 
 	const publish = "/v1/orgs/acme/templates/web/versions"
 	first, other := strings.Repeat("a", 64), strings.Repeat("b", 64)

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/oapi-codegen/runtime"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // Defines values for ExecutionIntrospectionCredential.
@@ -327,7 +328,7 @@ type ExecutionIntrospection struct {
 	// ActivationId The current activation, null when none is.
 	ActivationId *string `json:"activationId"`
 
-	// Assignee The operator the agent is assigned to.
+	// Assignee What the agent is assigned to, an operator or a supervisor.
 	Assignee   string                           `json:"assignee"`
 	Credential ExecutionIntrospectionCredential `json:"credential"`
 
@@ -532,6 +533,44 @@ type RuntimeStateReport struct {
 	State RuntimeState `json:"state"`
 }
 
+// StandaloneEnrollment What an enrollment issued: both certificates, the authority that signed them and the garam server root the host verifies garam by. It carries no private key.
+type StandaloneEnrollment struct {
+	AgentCertificatePem string `json:"agentCertificatePem"`
+
+	// Epoch Opaque. The assignment epoch the supervisor holds the agent at.
+	Epoch string `json:"epoch"`
+
+	// Grn The agent's GRN.
+	Grn string `json:"grn"`
+
+	// IssuerPem The authority that signed both. It is not what garam is verified against (ADR-0040).
+	IssuerPem string             `json:"issuerPem"`
+	Lineage   openapi_types.UUID `json:"lineage"`
+
+	// ServerRootPem The garam server root, which the host verifies garam's listener against (ADR-0040).
+	ServerRootPem            string `json:"serverRootPem"`
+	SupervisorCertificatePem string `json:"supervisorCertificatePem"`
+	SupervisorGrn            string `json:"supervisorGrn"`
+}
+
+// StandaloneEnrollmentRequest defines model for StandaloneEnrollmentRequest.
+type StandaloneEnrollmentRequest struct {
+	// AgentCertificateRequestPem A PKCS#10 request over the agent key whose fingerprint was approved.
+	AgentCertificateRequestPem string `json:"agentCertificateRequestPem"`
+
+	// RequestId The identifier the host chose and the administrator approved.
+	RequestId string `json:"requestId"`
+
+	// SupervisorCertificateRequestPem A PKCS#10 request over the supervisor key whose fingerprint was approved.
+	SupervisorCertificateRequestPem string `json:"supervisorCertificateRequestPem"`
+}
+
+// SupervisorRenewalRequest defines model for SupervisorRenewalRequest.
+type SupervisorRenewalRequest struct {
+	CertificateRequestPem string `json:"certificateRequestPem"`
+	RequestId             string `json:"requestId"`
+}
+
 // TurnEvent One event from the agent's monitoring stream, as the agent platform emitted it. garam carries it and never reads it, so what a kind means and what a body holds are the platform's to say.
 type TurnEvent struct {
 	// Body The event itself. It may be empty and it may span lines.
@@ -568,6 +607,9 @@ type MessageId = string
 // OperationRef defines model for ref.
 type OperationRef = string
 
+// StandaloneContractVersion defines model for standaloneContractVersion.
+type StandaloneContractVersion = string
+
 // ContractError defines model for ContractError.
 type ContractError = Error
 
@@ -576,6 +618,15 @@ type EnrollmentContractError = Error
 
 // ExecutionContractError defines model for ExecutionContractError.
 type ExecutionContractError = Error
+
+// StandaloneContractError defines model for StandaloneContractError.
+type StandaloneContractError = Error
+
+// EnrollStandaloneAgentParams defines parameters for EnrollStandaloneAgent.
+type EnrollStandaloneAgentParams struct {
+	// StandaloneContractVersion Must be `standalone-enrollment.v1`; any other value is refused with 400 naming it.
+	StandaloneContractVersion StandaloneContractVersion `json:"Garam-Contract-Version"`
+}
 
 // ActivateAgentParams defines parameters for ActivateAgent.
 type ActivateAgentParams struct {
@@ -631,6 +682,15 @@ type CreateManagedAgentParams struct {
 	EnrollmentContractVersion EnrollmentContractVersion `json:"Garam-Contract-Version"`
 }
 
+// RenewSupervisorCertificateParams defines parameters for RenewSupervisorCertificate.
+type RenewSupervisorCertificateParams struct {
+	// StandaloneContractVersion Must be `standalone-enrollment.v1`; any other value is refused with 400 naming it.
+	StandaloneContractVersion StandaloneContractVersion `json:"Garam-Contract-Version"`
+}
+
+// EnrollStandaloneAgentJSONRequestBody defines body for EnrollStandaloneAgent for application/json ContentType.
+type EnrollStandaloneAgentJSONRequestBody = StandaloneEnrollmentRequest
+
 // ActivateAgentJSONRequestBody defines body for ActivateAgent for application/json ContentType.
 type ActivateAgentJSONRequestBody = ActivationRequest
 
@@ -667,8 +727,14 @@ type IntrospectControllerJSONRequestBody = ControllerIntrospection
 // CreateManagedAgentJSONRequestBody defines body for CreateManagedAgent for application/json ContentType.
 type CreateManagedAgentJSONRequestBody = ManagedAgentRequest
 
+// RenewSupervisorCertificateJSONRequestBody defines body for RenewSupervisorCertificate for application/json ContentType.
+type RenewSupervisorCertificateJSONRequestBody = SupervisorRenewalRequest
+
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// EnrollStandaloneAgent Spend an administrator's approval and obtain a supervisor's and its agent's first certificates.
+	// (POST /agent-enrollments)
+	EnrollStandaloneAgent(w http.ResponseWriter, r *http.Request, params EnrollStandaloneAgentParams)
 	// CreateAgent Create an agent and assign it to the calling operator.
 	// (POST /agents)
 	CreateAgent(w http.ResponseWriter, r *http.Request)
@@ -741,6 +807,9 @@ type ServerInterface interface {
 	// CreateManagedAgent Create an agent assigned to a controller, under a member's agent:create reference.
 	// (POST /operators/{controller}/managed-agents)
 	CreateManagedAgent(w http.ResponseWriter, r *http.Request, controllerGrn ControllerGrn, params CreateManagedAgentParams)
+	// RenewSupervisorCertificate Renew the calling supervisor's certificate over a key it generated.
+	// (POST /supervisors/self/certificate)
+	RenewSupervisorCertificate(w http.ResponseWriter, r *http.Request, params RenewSupervisorCertificateParams)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -751,6 +820,51 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(http.Handler) http.Handler
+
+// EnrollStandaloneAgent operation middleware
+func (siw *ServerInterfaceWrapper) EnrollStandaloneAgent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params EnrollStandaloneAgentParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Garam-Contract-Version" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Garam-Contract-Version")]; found {
+		var StandaloneContractVersion StandaloneContractVersion
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Garam-Contract-Version", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Garam-Contract-Version", valueList[0], &StandaloneContractVersion, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Garam-Contract-Version", Err: err})
+			return
+		}
+
+		params.StandaloneContractVersion = StandaloneContractVersion
+
+	} else {
+		err := fmt.Errorf("Header parameter Garam-Contract-Version is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Garam-Contract-Version", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EnrollStandaloneAgent(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
 
 // CreateAgent operation middleware
 func (siw *ServerInterfaceWrapper) CreateAgent(w http.ResponseWriter, r *http.Request) {
@@ -1574,6 +1688,51 @@ func (siw *ServerInterfaceWrapper) CreateManagedAgent(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// RenewSupervisorCertificate operation middleware
+func (siw *ServerInterfaceWrapper) RenewSupervisorCertificate(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RenewSupervisorCertificateParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Garam-Contract-Version" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Garam-Contract-Version")]; found {
+		var StandaloneContractVersion StandaloneContractVersion
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Garam-Contract-Version", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Garam-Contract-Version", valueList[0], &StandaloneContractVersion, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Garam-Contract-Version", Err: err})
+			return
+		}
+
+		params.StandaloneContractVersion = StandaloneContractVersion
+
+	} else {
+		err := fmt.Errorf("Header parameter Garam-Contract-Version is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Garam-Contract-Version", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RenewSupervisorCertificate(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -1718,6 +1877,8 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/credential-recovery", wrapper.RecoverAgentCredential)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/operators/{controller}/managed-agents", wrapper.CreateManagedAgent)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/initial-certificate", wrapper.IssueInitialCertificate)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agent-enrollments", wrapper.EnrollStandaloneAgent)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/supervisors/self/certificate", wrapper.RenewSupervisorCertificate)
 
 	return m
 }

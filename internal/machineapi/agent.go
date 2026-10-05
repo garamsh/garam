@@ -25,7 +25,7 @@ func (s *Server) CreateAgent(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusCreated, machinegen.AgentAssignment{
 		Grn:      assignment.Agent().String(),
-		Operator: assignment.Operator().String(),
+		Operator: assignment.Assignee().String(),
 		Epoch:    assignment.Epoch(),
 	})
 }

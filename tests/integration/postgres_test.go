@@ -1078,7 +1078,7 @@ func TestAgentStore_RoundTrip(t *testing.T) {
 	first := grnOf(agent.ServiceTypeOperator, "one")
 	assigned, err := s.Assign(ctx, g, first)
 	require.NoError(t, err)
-	assert.Equal(t, first, assigned.Operator())
+	assert.Equal(t, first, assigned.Assignee())
 	assert.Equal(t, 1, assigned.Epoch())
 	assert.True(t, assigned.CreatedAt().After(a.CreatedAt()), "the assignment is stamped when it is written, after the agent it binds")
 
@@ -1101,7 +1101,7 @@ func TestAgentStore_RoundTrip(t *testing.T) {
 	second := grnOf(agent.ServiceTypeOperator, "two")
 	reassigned, err := s.Assign(ctx, g, second)
 	require.NoError(t, err)
-	assert.Equal(t, second, reassigned.Operator())
+	assert.Equal(t, second, reassigned.Assignee())
 	assert.Equal(t, 2, reassigned.Epoch(), "a reassignment raises the epoch")
 	// A reassignment writes onto the row the first one left, so the
 	// create stamp is still the first one's.
@@ -1110,7 +1110,7 @@ func TestAgentStore_RoundTrip(t *testing.T) {
 
 	stored, err := s.GetAssignment(ctx, g)
 	require.NoError(t, err)
-	assert.Equal(t, second, stored.Operator())
+	assert.Equal(t, second, stored.Assignee())
 	assert.Equal(t, 2, stored.Epoch())
 
 	// A pod left running by the replaced operator still holds epoch 1.
@@ -1208,7 +1208,7 @@ func TestAgentStore_ListsTheOrgsOwnAgents(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, assignments, 1)
 	assert.Equal(t, held, assignments[0].Agent())
-	assert.Equal(t, operator, assignments[0].Operator())
+	assert.Equal(t, operator, assignments[0].Assignee())
 	assert.Equal(t, 1, assignments[0].Epoch())
 
 	// The other org holds its own agent and its own assignment, so the
@@ -1331,7 +1331,7 @@ func TestAgentAssignment_StaysInsideItsOrg(t *testing.T) {
 	operator := grnOf(agent.ServiceTypeOperator, "one")
 	assigned, err := s.Assign(ctx, g, operator)
 	require.NoError(t, err)
-	assert.Equal(t, operator, assigned.Operator())
+	assert.Equal(t, operator, assigned.Assignee())
 
 	// A reassignment writes onto the row the agent already has, and it
 	// leaves the org the same way an assignment does.
@@ -1339,7 +1339,7 @@ func TestAgentAssignment_StaysInsideItsOrg(t *testing.T) {
 	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
 	stored, err := s.GetAssignment(ctx, g)
 	require.NoError(t, err)
-	assert.Equal(t, operator, stored.Operator(), "the rejected reassignment left the row alone")
+	assert.Equal(t, operator, stored.Assignee(), "the rejected reassignment left the row alone")
 	assert.Equal(t, 1, stored.Epoch())
 }
 
@@ -3239,7 +3239,7 @@ func TestMachineSurface_OperatorCreatesAnAgentThatThenAuthenticates(t *testing.T
 
 	stored, err := assignments.GetAssignment(ctx, agentGRN)
 	require.NoError(t, err)
-	assert.Equal(t, operatorGRN, stored.Operator())
+	assert.Equal(t, operatorGRN, stored.Assignee())
 	assert.Equal(t, created.Epoch, stored.Epoch())
 
 	status, body = machineRequest(t, operator, http.MethodPost, url+"/agents/"+created.Grn+"/certificate")

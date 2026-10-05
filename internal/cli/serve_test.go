@@ -197,7 +197,7 @@ func readiness(t *testing.T, handler http.Handler) (int, string) {
 // which is what this middleware is. That is the wiring's behaviour and
 // not this test's subject, so it is left unasserted.
 func TestAPIHandler_AnswersAPanicOnARouteTheGeneratedSliceDoesNotReach(t *testing.T) {
-	srv := api.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{})
+	srv := api.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{})
 
 	var served lines
 	status, _ := readiness(t, recordingObservability(&served).apiHandler(srv, presentProbe{}))
@@ -421,7 +421,7 @@ func postTo(t *testing.T, handler http.Handler, path, body string) (int, string)
 // that too — for the username, which names no account — so a refusal
 // alone would hold as readily for a route refusing everything.
 func TestAPIHandler_RefusesARequestBodyPastTheBound(t *testing.T) {
-	srv := api.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{})
+	srv := api.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{})
 	handler := recordingObservability(&lines{}).apiHandler(srv)
 
 	status, body := postTo(t, handler, "/auth/password/login", passwordLogin(1024))

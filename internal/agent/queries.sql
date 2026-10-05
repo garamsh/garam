@@ -33,13 +33,13 @@ ORDER BY grn
 LIMIT sqlc.narg('row_limit') OFFSET sqlc.arg('row_offset');
 
 -- AssignAgent writes onto the assignment the agent already has, so a
--- reassignment moves the operator and raises the epoch that fenced the
+-- reassignment moves the assignee and raises the epoch that fenced the
 -- one it replaces.
 -- name: AssignAgent :one
-INSERT INTO agent_assignments (agent_grn, operator_grn, epoch, created_at, updated_at)
-VALUES (sqlc.arg('agent_grn'), sqlc.arg('operator_grn'), 1, sqlc.arg('created_at'), sqlc.arg('updated_at'))
+INSERT INTO agent_assignments (agent_grn, assignee_grn, epoch, created_at, updated_at)
+VALUES (sqlc.arg('agent_grn'), sqlc.arg('assignee_grn'), 1, sqlc.arg('created_at'), sqlc.arg('updated_at'))
 ON CONFLICT (agent_grn) DO UPDATE SET
-    operator_grn = excluded.operator_grn,
+    assignee_grn = excluded.assignee_grn,
     epoch        = agent_assignments.epoch + 1,
     updated_at   = excluded.updated_at
 RETURNING *;

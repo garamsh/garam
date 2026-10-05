@@ -35,7 +35,8 @@ func newExecutionService(pool *pgxpool.Pool, engine grpc.ClientConnInterface, au
 	}
 	return agent.NewExecutionService(agent.NewPostgresStore(pool), agentpg.New(pool),
 		lifecycleAuthorization{
-			grants: operatorpg.New(pool),
+			grants:      operatorpg.New(pool),
+			supervisors: agentpg.New(pool),
 			policy: audienceAuthorization{groups: memberGroups{store: org.NewPostgresStore(pool)},
 				engine: authzv1.NewAuthzServiceClient(engine)},
 			now: now,
@@ -46,24 +47,78 @@ func newExecutionService(pool *pgxpool.Pool, engine grpc.ClientConnInterface, au
 		certificates{issuer: issuer, serverRoot: serverRoot})
 }
 
-// lifecycleAuthorization decides a hosted operator's lifecycle
-// authority over one agent from current state
-// (agent.LifecycleAuthorizer): its current grant in the agent's
-// organization, which must cover the operation for the agent's
-// assignee, and current policy on the agent, where an explicit Deny
-// wins. Its registration is rechecked on the
-// listener before this is asked.
+// lifecycleAuthorization decides lifecycle authority over one agent
+// from current state (agent.LifecycleAuthorizer). A hosted operator
+// holds it by its current grant in the agent's organization, which
+// must cover the operation for the agent's assignee; a supervisor by
+// its current registration for this agent, as that agent's assignee,
+// for agent:activate alone (ADR-0082). For either, current policy on
+// the agent is read too and an explicit Deny wins. The caller's
+// registration is rechecked on the listener before this is asked.
 type lifecycleAuthorization struct {
-	grants operator.GrantStore
-	policy audienceAuthorization
-	now    func() time.Time
+	grants      operator.GrantStore
+	supervisors agent.StandaloneStore
+	policy      audienceAuthorization
+	now         func() time.Time
 }
 
 func (a lifecycleAuthorization) Authorize(ctx context.Context, caller, agentGRN, assignee grn.GRN, op agent.LifecycleOperation) (agent.Grant, error) {
-	if caller.ServiceType != operator.ServiceType || caller.Organization != agentGRN.Organization {
+	if caller.Organization != agentGRN.Organization {
 		return agent.Grant{}, errorx.New(errorx.KindPermissionDenied, "the caller holds no lifecycle authority over this agent")
 	}
 	orgGRN := grn.New(grn.RootOwner, grn.DefaultProject, org.ServiceTypeOrg, agentGRN.Organization)
+	var (
+		grant agent.Grant
+		err   error
+	)
+	switch caller.ServiceType {
+	case operator.ServiceType:
+		grant, err = a.delegated(ctx, orgGRN, caller, assignee, op)
+	case agent.ServiceTypeSupervisor:
+		grant, err = a.supervising(ctx, caller, agentGRN, assignee, op)
+	default:
+		err = errorx.New(errorx.KindPermissionDenied, "the caller holds no lifecycle authority over this agent")
+	}
+	if err != nil {
+		return agent.Grant{}, err
+	}
+	err = a.policy.Authorize(ctx, caller, orgGRN, agentGRN, string(op))
+	switch {
+	case err == nil:
+		return grant, nil
+	case errorx.IsKind(err, errorx.KindPermissionDenied):
+		return agent.Grant{}, err
+	}
+	return agent.Grant{}, errorx.Wrap(err, "current policy", errorx.KindUnavailable)
+}
+
+// supervising answers a supervisor's authority: its registration, read
+// now, names this agent and the supervisor holds the agent's
+// assignment. It covers activation alone; recovery is an
+// administrator's new approval. The authority's identifier is the
+// approval that registered it, so a renewal changes nothing an
+// activation retry is matched by, and it expires with the certificate
+// garam last issued the supervisor.
+func (a lifecycleAuthorization) supervising(ctx context.Context, caller, agentGRN, assignee grn.GRN, op agent.LifecycleOperation) (agent.Grant, error) {
+	if op != agent.OperationActivate {
+		return agent.Grant{}, errorx.New(errorx.KindPermissionDenied, "a supervisor's authority does not cover "+string(op))
+	}
+	registered, err := a.supervisors.GetSupervisor(ctx, caller)
+	if errorx.IsKind(err, errorx.KindNotFound) {
+		return agent.Grant{}, errorx.New(errorx.KindPermissionDenied, "the supervisor's registration is not current")
+	}
+	if err != nil {
+		return agent.Grant{}, errorx.Wrap(err, "current registration", errorx.KindUnavailable)
+	}
+	if registered.Agent != agentGRN || assignee != caller {
+		return agent.Grant{}, errorx.New(errorx.KindPermissionDenied, "the supervisor does not hold this agent")
+	}
+	return agent.Grant{ID: "supervisor:" + registered.Enrollment.String(), ExpiresAt: registered.NotAfter}, nil
+}
+
+// delegated answers a hosted operator's authority: its current grant,
+// covering op for the agent's assignee now.
+func (a lifecycleAuthorization) delegated(ctx context.Context, orgGRN, caller, assignee grn.GRN, op agent.LifecycleOperation) (agent.Grant, error) {
 	grant, err := a.grants.CurrentGrant(ctx, orgGRN, caller)
 	if errorx.IsKind(err, errorx.KindNotFound) {
 		return agent.Grant{}, errorx.New(errorx.KindPermissionDenied, "the caller holds no current delegation")
@@ -74,14 +129,7 @@ func (a lifecycleAuthorization) Authorize(ctx context.Context, caller, agentGRN,
 	if !grant.Covers(operator.Operation(op), assignee, a.now()) {
 		return agent.Grant{}, errorx.New(errorx.KindPermissionDenied, "the delegation does not cover "+string(op)+" for the agent's assignee")
 	}
-	err = a.policy.Authorize(ctx, caller, orgGRN, agentGRN, string(op))
-	switch {
-	case err == nil:
-		return agent.Grant{ID: string(grant.ID), ExpiresAt: grant.ExpiresAt}, nil
-	case errorx.IsKind(err, errorx.KindPermissionDenied):
-		return agent.Grant{}, err
-	}
-	return agent.Grant{}, errorx.Wrap(err, "current policy", errorx.KindUnavailable)
+	return agent.Grant{ID: string(grant.ID), ExpiresAt: grant.ExpiresAt}, nil
 }
 
 // operationAuthorities reads a delegated operation authority back for
@@ -123,7 +171,7 @@ func bindingOf(b operator.Binding, expiresAt time.Time) (*agent.OperationBinding
 		if err != nil {
 			return nil, errorx.Wrap(err, "bound assignment epoch", errorx.KindInternal)
 		}
-		out.Assignee, out.Epoch = b.Assignment.Operator, epoch
+		out.Assignee, out.Epoch = b.Assignment.Assignee, epoch
 	}
 	return out, nil
 }

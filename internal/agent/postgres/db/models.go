@@ -36,7 +36,7 @@ type AgentActivation struct {
 
 type AgentAssignment struct {
 	AgentGrn    string
-	OperatorGrn string
+	AssigneeGrn string
 	Epoch       int32
 	CreatedAt   pgtype.Timestamptz
 	UpdatedAt   pgtype.Timestamptz
@@ -47,6 +47,32 @@ type AgentCredential struct {
 	Serial   string
 	Lineage  pgtype.UUID
 	NotAfter pgtype.Timestamptz
+}
+
+type AgentEnrollment struct {
+	ID                       pgtype.UUID
+	OrgGrn                   string
+	AgentGrn                 string
+	SupervisorGrn            string
+	HostName                 string
+	SupervisorKeySha256      []byte
+	AgentKeySha256           []byte
+	ExpectedAssigneeGrn      pgtype.Text
+	ExpectedEpoch            pgtype.Int4
+	RequestID                string
+	ApprovedBy               string
+	SecretSha256             []byte
+	ExpiresAt                pgtype.Timestamptz
+	CreatedAt                pgtype.Timestamptz
+	WithdrawnAt              pgtype.Timestamptz
+	ConsumedAt               pgtype.Timestamptz
+	RequestSha256            []byte
+	Epoch                    pgtype.Int4
+	Lineage                  pgtype.UUID
+	SupervisorCertificatePem pgtype.Text
+	AgentCertificatePem      pgtype.Text
+	IssuerPem                pgtype.Text
+	ServerRootPem            pgtype.Text
 }
 
 type AgentExecution struct {
@@ -92,6 +118,30 @@ type AgentRecovery struct {
 	Lineage        pgtype.UUID
 	CertificatePem string
 	CreatedAt      pgtype.Timestamptz
+}
+
+type AgentSupervisor struct {
+	Grn          string
+	AgentGrn     string
+	EnrollmentID pgtype.UUID
+	HostName     string
+	Serial       string
+	NotAfter     pgtype.Timestamptz
+	RegisteredAt pgtype.Timestamptz
+	EndedAt      pgtype.Timestamptz
+}
+
+type AgentSupervisorRenewal struct {
+	SupervisorGrn     string
+	PredecessorSerial string
+	RequestID         string
+	RequestSha256     []byte
+	Serial            string
+	CertificatePem    string
+	IssuerPem         string
+	ServerRootPem     string
+	NotAfter          pgtype.Timestamptz
+	CreatedAt         pgtype.Timestamptz
 }
 
 type Group struct {

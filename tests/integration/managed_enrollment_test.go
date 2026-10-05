@@ -314,7 +314,7 @@ func TestManagedEnrollment_AReferenceCreatesOneFencedAgent(t *testing.T) {
 	assert.Equal(t, "acme", g.Organization)
 	assignment, err := agent.NewPostgresStore(s.pool).GetAssignment(context.Background(), g)
 	require.NoError(t, err)
-	assert.Equal(t, s.controller, assignment.Operator(), "the assignment is the controller's, not the caller's")
+	assert.Equal(t, s.controller, assignment.Assignee(), "the assignment is the controller's, not the caller's")
 
 	retried := s.createManaged(t, s.hostedTLS, s.controller, "create-1", ref)
 	assert.Equal(t, http.StatusOK, retried.status, retried.body)

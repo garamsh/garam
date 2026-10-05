@@ -40,19 +40,19 @@ func (q *Queries) Admit(ctx context.Context, arg AdmitParams) (string, error) {
 }
 
 const assignFirst = `-- name: AssignFirst :one
-INSERT INTO agent_assignments (agent_grn, operator_grn, epoch, created_at, updated_at)
+INSERT INTO agent_assignments (agent_grn, assignee_grn, epoch, created_at, updated_at)
 VALUES ($1, $2, 1, $3, $3)
 RETURNING epoch
 `
 
 type AssignFirstParams struct {
 	AgentGrn    string
-	OperatorGrn string
+	AssigneeGrn string
 	CreatedAt   pgtype.Timestamptz
 }
 
 func (q *Queries) AssignFirst(ctx context.Context, arg AssignFirstParams) (int32, error) {
-	row := q.db.QueryRow(ctx, assignFirst, arg.AgentGrn, arg.OperatorGrn, arg.CreatedAt)
+	row := q.db.QueryRow(ctx, assignFirst, arg.AgentGrn, arg.AssigneeGrn, arg.CreatedAt)
 	var epoch int32
 	err := row.Scan(&epoch)
 	return epoch, err
@@ -161,6 +161,34 @@ func (q *Queries) EndActivation(ctx context.Context, arg EndActivationParams) er
 	return err
 }
 
+const endCurrentSupervisor = `-- name: EndCurrentSupervisor :exec
+UPDATE agent_supervisors SET ended_at = $2 WHERE agent_grn = $1 AND ended_at IS NULL
+`
+
+type EndCurrentSupervisorParams struct {
+	AgentGrn string
+	EndedAt  pgtype.Timestamptz
+}
+
+func (q *Queries) EndCurrentSupervisor(ctx context.Context, arg EndCurrentSupervisorParams) error {
+	_, err := q.db.Exec(ctx, endCurrentSupervisor, arg.AgentGrn, arg.EndedAt)
+	return err
+}
+
+const endSupervisor = `-- name: EndSupervisor :exec
+UPDATE agent_supervisors SET ended_at = $2 WHERE grn = $1 AND ended_at IS NULL
+`
+
+type EndSupervisorParams struct {
+	Grn     string
+	EndedAt pgtype.Timestamptz
+}
+
+func (q *Queries) EndSupervisor(ctx context.Context, arg EndSupervisorParams) error {
+	_, err := q.db.Exec(ctx, endSupervisor, arg.Grn, arg.EndedAt)
+	return err
+}
+
 const getActivation = `-- name: GetActivation :one
 SELECT id, agent_grn, request_id, generation, epoch, lineage, audience_grn, grant_id, operation_ref, replaces_activation_id, token_version, ended_reason, created_at, ended_at FROM agent_activations WHERE agent_grn = $1 AND id = $2
 `
@@ -219,6 +247,156 @@ func (q *Queries) GetActivationByRequest(ctx context.Context, arg GetActivationB
 		&i.EndedReason,
 		&i.CreatedAt,
 		&i.EndedAt,
+	)
+	return i, err
+}
+
+const getEnrollment = `-- name: GetEnrollment :one
+SELECT id, org_grn, agent_grn, supervisor_grn, host_name, supervisor_key_sha256, agent_key_sha256, expected_assignee_grn, expected_epoch, request_id, approved_by, secret_sha256, expires_at, created_at, withdrawn_at, consumed_at, request_sha256, epoch, lineage, supervisor_certificate_pem, agent_certificate_pem, issuer_pem, server_root_pem FROM agent_enrollments WHERE org_grn = $1 AND id = $2
+`
+
+type GetEnrollmentParams struct {
+	OrgGrn string
+	ID     pgtype.UUID
+}
+
+func (q *Queries) GetEnrollment(ctx context.Context, arg GetEnrollmentParams) (AgentEnrollment, error) {
+	row := q.db.QueryRow(ctx, getEnrollment, arg.OrgGrn, arg.ID)
+	var i AgentEnrollment
+	err := row.Scan(
+		&i.ID,
+		&i.OrgGrn,
+		&i.AgentGrn,
+		&i.SupervisorGrn,
+		&i.HostName,
+		&i.SupervisorKeySha256,
+		&i.AgentKeySha256,
+		&i.ExpectedAssigneeGrn,
+		&i.ExpectedEpoch,
+		&i.RequestID,
+		&i.ApprovedBy,
+		&i.SecretSha256,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+		&i.WithdrawnAt,
+		&i.ConsumedAt,
+		&i.RequestSha256,
+		&i.Epoch,
+		&i.Lineage,
+		&i.SupervisorCertificatePem,
+		&i.AgentCertificatePem,
+		&i.IssuerPem,
+		&i.ServerRootPem,
+	)
+	return i, err
+}
+
+const getEnrollmentByID = `-- name: GetEnrollmentByID :one
+SELECT id, org_grn, agent_grn, supervisor_grn, host_name, supervisor_key_sha256, agent_key_sha256, expected_assignee_grn, expected_epoch, request_id, approved_by, secret_sha256, expires_at, created_at, withdrawn_at, consumed_at, request_sha256, epoch, lineage, supervisor_certificate_pem, agent_certificate_pem, issuer_pem, server_root_pem FROM agent_enrollments WHERE id = $1
+`
+
+func (q *Queries) GetEnrollmentByID(ctx context.Context, id pgtype.UUID) (AgentEnrollment, error) {
+	row := q.db.QueryRow(ctx, getEnrollmentByID, id)
+	var i AgentEnrollment
+	err := row.Scan(
+		&i.ID,
+		&i.OrgGrn,
+		&i.AgentGrn,
+		&i.SupervisorGrn,
+		&i.HostName,
+		&i.SupervisorKeySha256,
+		&i.AgentKeySha256,
+		&i.ExpectedAssigneeGrn,
+		&i.ExpectedEpoch,
+		&i.RequestID,
+		&i.ApprovedBy,
+		&i.SecretSha256,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+		&i.WithdrawnAt,
+		&i.ConsumedAt,
+		&i.RequestSha256,
+		&i.Epoch,
+		&i.Lineage,
+		&i.SupervisorCertificatePem,
+		&i.AgentCertificatePem,
+		&i.IssuerPem,
+		&i.ServerRootPem,
+	)
+	return i, err
+}
+
+const getEnrollmentByRequest = `-- name: GetEnrollmentByRequest :one
+SELECT id, org_grn, agent_grn, supervisor_grn, host_name, supervisor_key_sha256, agent_key_sha256, expected_assignee_grn, expected_epoch, request_id, approved_by, secret_sha256, expires_at, created_at, withdrawn_at, consumed_at, request_sha256, epoch, lineage, supervisor_certificate_pem, agent_certificate_pem, issuer_pem, server_root_pem FROM agent_enrollments WHERE org_grn = $1 AND request_id = $2
+`
+
+type GetEnrollmentByRequestParams struct {
+	OrgGrn    string
+	RequestID string
+}
+
+func (q *Queries) GetEnrollmentByRequest(ctx context.Context, arg GetEnrollmentByRequestParams) (AgentEnrollment, error) {
+	row := q.db.QueryRow(ctx, getEnrollmentByRequest, arg.OrgGrn, arg.RequestID)
+	var i AgentEnrollment
+	err := row.Scan(
+		&i.ID,
+		&i.OrgGrn,
+		&i.AgentGrn,
+		&i.SupervisorGrn,
+		&i.HostName,
+		&i.SupervisorKeySha256,
+		&i.AgentKeySha256,
+		&i.ExpectedAssigneeGrn,
+		&i.ExpectedEpoch,
+		&i.RequestID,
+		&i.ApprovedBy,
+		&i.SecretSha256,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+		&i.WithdrawnAt,
+		&i.ConsumedAt,
+		&i.RequestSha256,
+		&i.Epoch,
+		&i.Lineage,
+		&i.SupervisorCertificatePem,
+		&i.AgentCertificatePem,
+		&i.IssuerPem,
+		&i.ServerRootPem,
+	)
+	return i, err
+}
+
+const getEnrollmentBySecret = `-- name: GetEnrollmentBySecret :one
+SELECT id, org_grn, agent_grn, supervisor_grn, host_name, supervisor_key_sha256, agent_key_sha256, expected_assignee_grn, expected_epoch, request_id, approved_by, secret_sha256, expires_at, created_at, withdrawn_at, consumed_at, request_sha256, epoch, lineage, supervisor_certificate_pem, agent_certificate_pem, issuer_pem, server_root_pem FROM agent_enrollments WHERE secret_sha256 = $1
+`
+
+func (q *Queries) GetEnrollmentBySecret(ctx context.Context, secretSha256 []byte) (AgentEnrollment, error) {
+	row := q.db.QueryRow(ctx, getEnrollmentBySecret, secretSha256)
+	var i AgentEnrollment
+	err := row.Scan(
+		&i.ID,
+		&i.OrgGrn,
+		&i.AgentGrn,
+		&i.SupervisorGrn,
+		&i.HostName,
+		&i.SupervisorKeySha256,
+		&i.AgentKeySha256,
+		&i.ExpectedAssigneeGrn,
+		&i.ExpectedEpoch,
+		&i.RequestID,
+		&i.ApprovedBy,
+		&i.SecretSha256,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+		&i.WithdrawnAt,
+		&i.ConsumedAt,
+		&i.RequestSha256,
+		&i.Epoch,
+		&i.Lineage,
+		&i.SupervisorCertificatePem,
+		&i.AgentCertificatePem,
+		&i.IssuerPem,
+		&i.ServerRootPem,
 	)
 	return i, err
 }
@@ -341,6 +519,91 @@ func (q *Queries) GetRecovery(ctx context.Context, arg GetRecoveryParams) (Agent
 	return i, err
 }
 
+const getSupervisor = `-- name: GetSupervisor :one
+SELECT grn, agent_grn, enrollment_id, host_name, serial, not_after, registered_at, ended_at FROM agent_supervisors WHERE grn = $1
+`
+
+func (q *Queries) GetSupervisor(ctx context.Context, grn string) (AgentSupervisor, error) {
+	row := q.db.QueryRow(ctx, getSupervisor, grn)
+	var i AgentSupervisor
+	err := row.Scan(
+		&i.Grn,
+		&i.AgentGrn,
+		&i.EnrollmentID,
+		&i.HostName,
+		&i.Serial,
+		&i.NotAfter,
+		&i.RegisteredAt,
+		&i.EndedAt,
+	)
+	return i, err
+}
+
+const getSupervisorByEnrollment = `-- name: GetSupervisorByEnrollment :one
+SELECT grn, agent_grn, enrollment_id, host_name, serial, not_after, registered_at, ended_at FROM agent_supervisors WHERE enrollment_id = $1
+`
+
+func (q *Queries) GetSupervisorByEnrollment(ctx context.Context, enrollmentID pgtype.UUID) (AgentSupervisor, error) {
+	row := q.db.QueryRow(ctx, getSupervisorByEnrollment, enrollmentID)
+	var i AgentSupervisor
+	err := row.Scan(
+		&i.Grn,
+		&i.AgentGrn,
+		&i.EnrollmentID,
+		&i.HostName,
+		&i.Serial,
+		&i.NotAfter,
+		&i.RegisteredAt,
+		&i.EndedAt,
+	)
+	return i, err
+}
+
+const getSupervisorRenewal = `-- name: GetSupervisorRenewal :one
+SELECT r.supervisor_grn, r.predecessor_serial, r.request_id, r.request_sha256, r.serial, r.certificate_pem, r.issuer_pem, r.server_root_pem, r.not_after, r.created_at, (s.ended_at IS NULL AND s.serial = r.serial)::boolean AS current
+FROM agent_supervisor_renewals r
+JOIN agent_supervisors s ON s.grn = r.supervisor_grn
+WHERE r.supervisor_grn = $1 AND r.predecessor_serial = $2
+`
+
+type GetSupervisorRenewalParams struct {
+	SupervisorGrn     string
+	PredecessorSerial string
+}
+
+type GetSupervisorRenewalRow struct {
+	SupervisorGrn     string
+	PredecessorSerial string
+	RequestID         string
+	RequestSha256     []byte
+	Serial            string
+	CertificatePem    string
+	IssuerPem         string
+	ServerRootPem     string
+	NotAfter          pgtype.Timestamptz
+	CreatedAt         pgtype.Timestamptz
+	Current           bool
+}
+
+func (q *Queries) GetSupervisorRenewal(ctx context.Context, arg GetSupervisorRenewalParams) (GetSupervisorRenewalRow, error) {
+	row := q.db.QueryRow(ctx, getSupervisorRenewal, arg.SupervisorGrn, arg.PredecessorSerial)
+	var i GetSupervisorRenewalRow
+	err := row.Scan(
+		&i.SupervisorGrn,
+		&i.PredecessorSerial,
+		&i.RequestID,
+		&i.RequestSha256,
+		&i.Serial,
+		&i.CertificatePem,
+		&i.IssuerPem,
+		&i.ServerRootPem,
+		&i.NotAfter,
+		&i.CreatedAt,
+		&i.Current,
+	)
+	return i, err
+}
+
 const insertActivation = `-- name: InsertActivation :one
 INSERT INTO agent_activations (
     id, agent_grn, request_id, generation, epoch, lineage, audience_grn,
@@ -422,6 +685,62 @@ func (q *Queries) InsertCredential(ctx context.Context, arg InsertCredentialPara
 		arg.NotAfter,
 	)
 	return err
+}
+
+const insertEnrollment = `-- name: InsertEnrollment :execrows
+
+INSERT INTO agent_enrollments (
+    id, org_grn, agent_grn, supervisor_grn, host_name, supervisor_key_sha256,
+    agent_key_sha256, expected_assignee_grn, expected_epoch, request_id,
+    approved_by, secret_sha256, expires_at, created_at
+) VALUES (
+    $1, $2, $3, $4,
+    $5, $6, $7,
+    $8, $9, $10,
+    $11, $12, $13, $14
+)
+ON CONFLICT (org_grn, request_id) DO NOTHING
+`
+
+type InsertEnrollmentParams struct {
+	ID                  pgtype.UUID
+	OrgGrn              string
+	AgentGrn            string
+	SupervisorGrn       string
+	HostName            string
+	SupervisorKeySha256 []byte
+	AgentKeySha256      []byte
+	ExpectedAssigneeGrn pgtype.Text
+	ExpectedEpoch       pgtype.Int4
+	RequestID           string
+	ApprovedBy          string
+	SecretSha256        []byte
+	ExpiresAt           pgtype.Timestamptz
+	CreatedAt           pgtype.Timestamptz
+}
+
+// Standalone approvals and supervisors (ADR-0082).
+func (q *Queries) InsertEnrollment(ctx context.Context, arg InsertEnrollmentParams) (int64, error) {
+	result, err := q.db.Exec(ctx, insertEnrollment,
+		arg.ID,
+		arg.OrgGrn,
+		arg.AgentGrn,
+		arg.SupervisorGrn,
+		arg.HostName,
+		arg.SupervisorKeySha256,
+		arg.AgentKeySha256,
+		arg.ExpectedAssigneeGrn,
+		arg.ExpectedEpoch,
+		arg.RequestID,
+		arg.ApprovedBy,
+		arg.SecretSha256,
+		arg.ExpiresAt,
+		arg.CreatedAt,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const insertInitialCertificate = `-- name: InsertInitialCertificate :exec
@@ -524,6 +843,70 @@ func (q *Queries) InsertRecovery(ctx context.Context, arg InsertRecoveryParams) 
 	return err
 }
 
+const insertSupervisor = `-- name: InsertSupervisor :exec
+INSERT INTO agent_supervisors (grn, agent_grn, enrollment_id, host_name, serial, not_after, registered_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7)
+`
+
+type InsertSupervisorParams struct {
+	Grn          string
+	AgentGrn     string
+	EnrollmentID pgtype.UUID
+	HostName     string
+	Serial       string
+	NotAfter     pgtype.Timestamptz
+	RegisteredAt pgtype.Timestamptz
+}
+
+func (q *Queries) InsertSupervisor(ctx context.Context, arg InsertSupervisorParams) error {
+	_, err := q.db.Exec(ctx, insertSupervisor,
+		arg.Grn,
+		arg.AgentGrn,
+		arg.EnrollmentID,
+		arg.HostName,
+		arg.Serial,
+		arg.NotAfter,
+		arg.RegisteredAt,
+	)
+	return err
+}
+
+const insertSupervisorRenewal = `-- name: InsertSupervisorRenewal :exec
+INSERT INTO agent_supervisor_renewals (
+    supervisor_grn, predecessor_serial, request_id, request_sha256, serial,
+    certificate_pem, issuer_pem, server_root_pem, not_after, created_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+`
+
+type InsertSupervisorRenewalParams struct {
+	SupervisorGrn     string
+	PredecessorSerial string
+	RequestID         string
+	RequestSha256     []byte
+	Serial            string
+	CertificatePem    string
+	IssuerPem         string
+	ServerRootPem     string
+	NotAfter          pgtype.Timestamptz
+	CreatedAt         pgtype.Timestamptz
+}
+
+func (q *Queries) InsertSupervisorRenewal(ctx context.Context, arg InsertSupervisorRenewalParams) error {
+	_, err := q.db.Exec(ctx, insertSupervisorRenewal,
+		arg.SupervisorGrn,
+		arg.PredecessorSerial,
+		arg.RequestID,
+		arg.RequestSha256,
+		arg.Serial,
+		arg.CertificatePem,
+		arg.IssuerPem,
+		arg.ServerRootPem,
+		arg.NotAfter,
+		arg.CreatedAt,
+	)
+	return err
+}
+
 const installActivation = `-- name: InstallActivation :exec
 UPDATE agent_executions SET
     mode                 = 'fenced',
@@ -553,7 +936,7 @@ func (q *Queries) InstallActivation(ctx context.Context, arg InstallActivationPa
 
 const introspect = `-- name: Introspect :one
 SELECT e.mode, e.activation_id, a.generation AS current_generation,
-       s.operator_grn AS assignee, s.epoch AS epoch,
+       s.assignee_grn AS assignee, s.epoch AS epoch,
        agent_credential_current(
            e.agent_grn, $1,
            $2::timestamptz, $3::timestamptz
@@ -601,6 +984,54 @@ func (q *Queries) Introspect(ctx context.Context, arg IntrospectParams) (Introsp
 	return i, err
 }
 
+const isManagedCreation = `-- name: IsManagedCreation :one
+SELECT EXISTS (SELECT 1 FROM agent_managed_creations WHERE agent_grn = $1)
+`
+
+func (q *Queries) IsManagedCreation(ctx context.Context, agentGrn string) (bool, error) {
+	row := q.db.QueryRow(ctx, isManagedCreation, agentGrn)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const lockEnrollment = `-- name: LockEnrollment :one
+SELECT id, org_grn, agent_grn, supervisor_grn, host_name, supervisor_key_sha256, agent_key_sha256, expected_assignee_grn, expected_epoch, request_id, approved_by, secret_sha256, expires_at, created_at, withdrawn_at, consumed_at, request_sha256, epoch, lineage, supervisor_certificate_pem, agent_certificate_pem, issuer_pem, server_root_pem FROM agent_enrollments WHERE id = $1 FOR UPDATE
+`
+
+// LockEnrollment is what withdrawing and spending an approval
+// serialize on, taken after the execution row where both are taken.
+func (q *Queries) LockEnrollment(ctx context.Context, id pgtype.UUID) (AgentEnrollment, error) {
+	row := q.db.QueryRow(ctx, lockEnrollment, id)
+	var i AgentEnrollment
+	err := row.Scan(
+		&i.ID,
+		&i.OrgGrn,
+		&i.AgentGrn,
+		&i.SupervisorGrn,
+		&i.HostName,
+		&i.SupervisorKeySha256,
+		&i.AgentKeySha256,
+		&i.ExpectedAssigneeGrn,
+		&i.ExpectedEpoch,
+		&i.RequestID,
+		&i.ApprovedBy,
+		&i.SecretSha256,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+		&i.WithdrawnAt,
+		&i.ConsumedAt,
+		&i.RequestSha256,
+		&i.Epoch,
+		&i.Lineage,
+		&i.SupervisorCertificatePem,
+		&i.AgentCertificatePem,
+		&i.IssuerPem,
+		&i.ServerRootPem,
+	)
+	return i, err
+}
+
 const lockExecution = `-- name: LockExecution :one
 SELECT agent_grn, mode, lineage, activation_id, token_hash, latest_activation_id, updated_at FROM agent_executions WHERE agent_grn = $1 FOR UPDATE
 `
@@ -616,6 +1047,26 @@ func (q *Queries) LockExecution(ctx context.Context, agentGrn string) (AgentExec
 		&i.TokenHash,
 		&i.LatestActivationID,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const lockSupervisor = `-- name: LockSupervisor :one
+SELECT grn, agent_grn, enrollment_id, host_name, serial, not_after, registered_at, ended_at FROM agent_supervisors WHERE grn = $1 FOR UPDATE
+`
+
+func (q *Queries) LockSupervisor(ctx context.Context, grn string) (AgentSupervisor, error) {
+	row := q.db.QueryRow(ctx, lockSupervisor, grn)
+	var i AgentSupervisor
+	err := row.Scan(
+		&i.Grn,
+		&i.AgentGrn,
+		&i.EnrollmentID,
+		&i.HostName,
+		&i.Serial,
+		&i.NotAfter,
+		&i.RegisteredAt,
+		&i.EndedAt,
 	)
 	return i, err
 }
@@ -637,6 +1088,21 @@ type MoveLineageParams struct {
 
 func (q *Queries) MoveLineage(ctx context.Context, arg MoveLineageParams) error {
 	_, err := q.db.Exec(ctx, moveLineage, arg.Lineage, arg.UpdatedAt, arg.AgentGrn)
+	return err
+}
+
+const moveSupervisorCertificate = `-- name: MoveSupervisorCertificate :exec
+UPDATE agent_supervisors SET serial = $2, not_after = $3 WHERE grn = $1
+`
+
+type MoveSupervisorCertificateParams struct {
+	Grn      string
+	Serial   string
+	NotAfter pgtype.Timestamptz
+}
+
+func (q *Queries) MoveSupervisorCertificate(ctx context.Context, arg MoveSupervisorCertificateParams) error {
+	_, err := q.db.Exec(ctx, moveSupervisorCertificate, arg.Grn, arg.Serial, arg.NotAfter)
 	return err
 }
 
@@ -663,6 +1129,41 @@ WHERE agent_grn = $1 AND not_after <= clock_timestamp()
 func (q *Queries) PruneCredentials(ctx context.Context, agentGrn string) error {
 	_, err := q.db.Exec(ctx, pruneCredentials, agentGrn)
 	return err
+}
+
+const reassignSupervisor = `-- name: ReassignSupervisor :one
+UPDATE agent_assignments SET
+    assignee_grn = $1,
+    epoch        = epoch + 1,
+    updated_at   = $2
+WHERE agent_grn = $3
+  AND assignee_grn = $4
+  AND epoch = $5
+RETURNING epoch
+`
+
+type ReassignSupervisorParams struct {
+	AssigneeGrn         string
+	UpdatedAt           pgtype.Timestamptz
+	AgentGrn            string
+	ExpectedAssigneeGrn string
+	ExpectedEpoch       int32
+}
+
+// ReassignSupervisor moves a supervisor-held agent to its replacement
+// only from the assignment the approval expected; any other matches
+// no row.
+func (q *Queries) ReassignSupervisor(ctx context.Context, arg ReassignSupervisorParams) (int32, error) {
+	row := q.db.QueryRow(ctx, reassignSupervisor,
+		arg.AssigneeGrn,
+		arg.UpdatedAt,
+		arg.AgentGrn,
+		arg.ExpectedAssigneeGrn,
+		arg.ExpectedEpoch,
+	)
+	var epoch int32
+	err := row.Scan(&epoch)
+	return epoch, err
 }
 
 const remintActivation = `-- name: RemintActivation :one
@@ -710,19 +1211,98 @@ func (q *Queries) ReplaceToken(ctx context.Context, arg ReplaceTokenParams) erro
 }
 
 const shareAssignment = `-- name: ShareAssignment :one
-SELECT operator_grn, epoch FROM agent_assignments WHERE agent_grn = $1 FOR SHARE
+SELECT a.assignee_grn, a.epoch,
+       (split_part(a.assignee_grn, ':', 4) <> 'supervisor' OR EXISTS (
+           SELECT 1 FROM agent_supervisors s
+           WHERE s.grn = a.assignee_grn AND s.agent_grn = a.agent_grn AND s.ended_at IS NULL
+       ))::boolean AS assignee_registered
+FROM agent_assignments a WHERE a.agent_grn = $1 FOR SHARE OF a
 `
 
 type ShareAssignmentRow struct {
-	OperatorGrn string
-	Epoch       int32
+	AssigneeGrn        string
+	Epoch              int32
+	AssigneeRegistered bool
 }
 
 // ShareAssignment is taken after LockExecution, never before: the lock
-// order is agent_executions, then agent_assignments.
+// order is agent_executions, then agent_assignments. A supervisor
+// assignee is registered only while its registration is current, which
+// a revocation or a replacement ends under the same execution lock
+// (ADR-0082); an operator's record is read on the listener instead.
 func (q *Queries) ShareAssignment(ctx context.Context, agentGrn string) (ShareAssignmentRow, error) {
 	row := q.db.QueryRow(ctx, shareAssignment, agentGrn)
 	var i ShareAssignmentRow
-	err := row.Scan(&i.OperatorGrn, &i.Epoch)
+	err := row.Scan(&i.AssigneeGrn, &i.Epoch, &i.AssigneeRegistered)
 	return i, err
+}
+
+const spendEnrollment = `-- name: SpendEnrollment :exec
+UPDATE agent_enrollments SET
+    consumed_at                = $1,
+    request_sha256             = $2,
+    epoch                      = $3,
+    lineage                    = $4,
+    supervisor_certificate_pem = $5,
+    agent_certificate_pem      = $6,
+    issuer_pem                 = $7,
+    server_root_pem            = $8
+WHERE id = $9
+`
+
+type SpendEnrollmentParams struct {
+	ConsumedAt               pgtype.Timestamptz
+	RequestSha256            []byte
+	Epoch                    pgtype.Int4
+	Lineage                  pgtype.UUID
+	SupervisorCertificatePem pgtype.Text
+	AgentCertificatePem      pgtype.Text
+	IssuerPem                pgtype.Text
+	ServerRootPem            pgtype.Text
+	ID                       pgtype.UUID
+}
+
+func (q *Queries) SpendEnrollment(ctx context.Context, arg SpendEnrollmentParams) error {
+	_, err := q.db.Exec(ctx, spendEnrollment,
+		arg.ConsumedAt,
+		arg.RequestSha256,
+		arg.Epoch,
+		arg.Lineage,
+		arg.SupervisorCertificatePem,
+		arg.AgentCertificatePem,
+		arg.IssuerPem,
+		arg.ServerRootPem,
+		arg.ID,
+	)
+	return err
+}
+
+const withdrawEnrollment = `-- name: WithdrawEnrollment :exec
+UPDATE agent_enrollments SET withdrawn_at = $2
+WHERE id = $1 AND withdrawn_at IS NULL AND consumed_at IS NULL
+`
+
+type WithdrawEnrollmentParams struct {
+	ID          pgtype.UUID
+	WithdrawnAt pgtype.Timestamptz
+}
+
+func (q *Queries) WithdrawEnrollment(ctx context.Context, arg WithdrawEnrollmentParams) error {
+	_, err := q.db.Exec(ctx, withdrawEnrollment, arg.ID, arg.WithdrawnAt)
+	return err
+}
+
+const withdrawPendingEnrollments = `-- name: WithdrawPendingEnrollments :exec
+UPDATE agent_enrollments SET withdrawn_at = $2
+WHERE agent_grn = $1 AND withdrawn_at IS NULL AND consumed_at IS NULL
+`
+
+type WithdrawPendingEnrollmentsParams struct {
+	AgentGrn    string
+	WithdrawnAt pgtype.Timestamptz
+}
+
+func (q *Queries) WithdrawPendingEnrollments(ctx context.Context, arg WithdrawPendingEnrollmentsParams) error {
+	_, err := q.db.Exec(ctx, withdrawPendingEnrollments, arg.AgentGrn, arg.WithdrawnAt)
+	return err
 }

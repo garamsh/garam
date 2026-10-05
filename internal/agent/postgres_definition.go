@@ -100,7 +100,7 @@ func (s *PostgresStore) ListDefinitionsByOperator(ctx context.Context, operatorG
 		if row.ClaimEpoch.Valid {
 			claim = &Assignment{
 				agentGRN:    d.agentGRN,
-				operatorGRN: d.operatorGRN,
+				assigneeGRN: d.operatorGRN,
 				epoch:       int(row.ClaimEpoch.Int32),
 				createdAt:   row.ClaimCreatedAt.Time,
 				updatedAt:   row.ClaimUpdatedAt.Time,
@@ -168,7 +168,7 @@ func (s *PostgresStore) Claim(ctx context.Context, agentGRN, operatorGRN grn.GRN
 	}
 	assigned, err := q.AssignAgent(ctx, db.AssignAgentParams{
 		AgentGrn:    agentGRN.String(),
-		OperatorGrn: operatorGRN.String(),
+		AssigneeGrn: operatorGRN.String(),
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	})

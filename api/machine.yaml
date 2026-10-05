@@ -11,10 +11,12 @@ info:
     carries. This is a different listener from the one
     `api/openapi.yaml` describes and shares nothing with it.
 
-    One operation is reached without a certificate, because it is how a
-    caller obtains its first one: `enrollOperator` carries
-    `security: []` and is authenticated by the one-time token the
-    console minted (ADR-0064). Every other operation requires the
+    Two operations are reached without a certificate, because each is
+    how a caller obtains its first one, and both carry `security: []`:
+    `enrollOperator` is authenticated by the one-time token the console
+    minted (ADR-0064), and `enrollStandaloneAgent` by the bootstrap
+    secret whose hash an administrator approved (ADR-0082). Every other
+    operation requires the
     certificate, and which is which is read from this file rather than
     remembered. An enrolling caller still verifies garam against the
     garam server root, which it holds before it calls: the listener
@@ -88,7 +90,9 @@ tags:
       (ADR-0078). The hosted Operator control service activates a
       runtime generation, deactivates it, recovers a lost credential
       lineage and asks whether a certificate and a generation are
-      current; an agent's own certificate can do none of it. Once an
+      current; a standalone host's supervisor activates, deactivates
+      and inspects the one agent it is registered for, and recovers
+      nothing (ADR-0082); an agent's own certificate can do none of it. Once an
       agent is activated, its own protected calls carry the token the
       activation issued, and every one of them is admitted against the
       current activation and lineage when it writes, on a connection
@@ -104,6 +108,17 @@ tags:
       that agent's credential lineage. Neither route carries a private
       key, and a retry under the same request identifier answers what
       the first request did rather than creating or issuing again.
+  - name: standalone
+    description: >-
+      How a standalone host's supervisor obtains its own certificate
+      and its agent's by spending an administrator's approval of the
+      host's keys, and renews its own afterwards (ADR-0082). Neither
+      route carries a private key: the host generated both keys and the
+      bootstrap secret before it asked, and a retry of the same request
+      answers what the first did. A supervisor's certificate reaches
+      `renewSupervisorCertificate`, `getIdentity`, `activateAgent`,
+      `deactivateAgent` and `introspectAgentExecution` alone; every
+      other operation answers it 403.
   - name: watch
     description: >-
       What an agent is saying now, on its way to the people watching it
@@ -1361,8 +1376,156 @@ paths:
           $ref: '#/components/responses/EnrollmentContractError'
         '422':
           $ref: '#/components/responses/EnrollmentContractError'
+  /agent-enrollments:
+    post:
+      operationId: enrollStandaloneAgent
+      tags: [standalone]
+      summary: Spend an administrator's approval and obtain a supervisor's and its agent's first certificates.
+      description: >-
+        Authenticated by `Authorization: Garam-Bootstrap <secret>`,
+        whose SHA-256 an administrator approved with
+        `approveAgentEnrollment` together with the two key fingerprints
+        and `requestId` this body carries; no client certificate is
+        read. An unknown, withdrawn or expired secret, and one of
+        another organization's approval, are one 401. Each certificate
+        request must prove possession of the key whose fingerprint was
+        approved, or the call is 403 and spends nothing; one that is not
+        a PEM `CERTIFICATE REQUEST` proving an ECDSA P-256 key is 422.
+        The approving administrator's `agent:enroll` is read again from
+        current state on every call: denied is 403, and authority garam
+        cannot read as current is 503.
+
+
+        A new agent is created with an execution fenced from birth,
+        assigned to the supervisor at epoch 1, and its certificate is
+        the first of its credential lineage. A replacement moves the
+        agent from exactly the supervisor and epoch the approval named
+        to the new supervisor at the next epoch, ends the replaced
+        registration and the agent's activation, and starts a new
+        lineage holding the new certificate, so every earlier
+        certificate of the agent is fenced; the agent's GRN is
+        unchanged and garam holds none of its memory. Where the
+        assignment has moved since the approval, the call is 409 and
+        writes nothing.
+
+
+        The first answer is 201. The same secret and the same exact
+        body answer the stored public result with 200 while the
+        approval is unexpired and its registration still holds the
+        agent at the recorded epoch; once a later replacement or a
+        revocation has ended it, the replay is 409 and discloses
+        nothing. Any other body once the approval is spent is 409.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/standaloneContractVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StandaloneEnrollmentRequest'
+      responses:
+        '200':
+          description: The result an identical earlier request recorded.
+          headers:
+            Garam-Contract-Version:
+              $ref: '#/components/headers/StandaloneContractVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandaloneEnrollment'
+        '201':
+          description: The supervisor is registered and both certificates are issued.
+          headers:
+            Garam-Contract-Version:
+              $ref: '#/components/headers/StandaloneContractVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StandaloneEnrollment'
+        '400':
+          $ref: '#/components/responses/StandaloneContractError'
+        '401':
+          $ref: '#/components/responses/StandaloneContractError'
+        '403':
+          $ref: '#/components/responses/StandaloneContractError'
+        '409':
+          $ref: '#/components/responses/StandaloneContractError'
+        '422':
+          $ref: '#/components/responses/StandaloneContractError'
+  /supervisors/self/certificate:
+    post:
+      operationId: renewSupervisorCertificate
+      tags: [standalone]
+      summary: Renew the calling supervisor's certificate over a key it generated.
+      description: >-
+        The caller is a supervisor, presenting the certificate garam
+        last issued it with more than two thirds of its validity spent;
+        an earlier one is 409 as too early, and a caller that is not a
+        supervisor is 403. The new certificate is signed over the key
+        `certificateRequestPem` proves, with the lifetime every
+        certificate garam issues has, and becomes the one renewals are
+        measured against.
+
+
+        The first answer is 201. The certificate that renewal replaced,
+        presented again with the same `requestId` and
+        `certificateRequestPem` while still valid, answers the stored
+        public result with 200, so a lost answer or a restart never
+        strands the supervisor. Any other request from it, and any
+        request from an older certificate, is 409. A supervisor whose
+        registration was revoked or replaced is refused at the
+        connection, and an expired certificate cannot connect: both
+        recover only by an administrator's new approval.
+      parameters:
+        - $ref: '#/components/parameters/standaloneContractVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupervisorRenewalRequest'
+      responses:
+        '200':
+          description: The certificate an identical earlier renewal issued.
+          headers:
+            Garam-Contract-Version:
+              $ref: '#/components/headers/StandaloneContractVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InitialCertificate'
+        '201':
+          description: The supervisor's next certificate.
+          headers:
+            Garam-Contract-Version:
+              $ref: '#/components/headers/StandaloneContractVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InitialCertificate'
+        '400':
+          $ref: '#/components/responses/StandaloneContractError'
+        '401':
+          $ref: '#/components/responses/StandaloneContractError'
+        '403':
+          $ref: '#/components/responses/StandaloneContractError'
+        '404':
+          $ref: '#/components/responses/StandaloneContractError'
+        '409':
+          $ref: '#/components/responses/StandaloneContractError'
+        '422':
+          $ref: '#/components/responses/StandaloneContractError'
 components:
   parameters:
+    standaloneContractVersion:
+      name: Garam-Contract-Version
+      in: header
+      required: true
+      description: Must be `standalone-enrollment.v1`; any other value is refused with 400 naming it.
+      x-go-name: StandaloneContractVersion
+      schema:
+        type: string
     enrollmentContractVersion:
       name: Garam-Contract-Version
       in: header
@@ -1967,7 +2130,7 @@ components:
           type: string
         assignee:
           type: string
-          description: The operator the agent is assigned to.
+          description: What the agent is assigned to, an operator or a supervisor.
         epoch:
           type: string
           description: Opaque.
@@ -2056,6 +2219,59 @@ components:
         operationRef:
           type: string
           description: The `agent:create` reference of this agent's creation.
+    StandaloneEnrollmentRequest:
+      type: object
+      required: [requestId, supervisorCertificateRequestPem, agentCertificateRequestPem]
+      properties:
+        requestId:
+          type: string
+          description: The identifier the host chose and the administrator approved.
+        supervisorCertificateRequestPem:
+          type: string
+          maxLength: 4096
+          description: A PKCS#10 request over the supervisor key whose fingerprint was approved.
+        agentCertificateRequestPem:
+          type: string
+          maxLength: 4096
+          description: A PKCS#10 request over the agent key whose fingerprint was approved.
+    StandaloneEnrollment:
+      type: object
+      description: >-
+        What an enrollment issued: both certificates, the authority
+        that signed them and the garam server root the host verifies
+        garam by. It carries no private key.
+      required: [grn, supervisorGrn, epoch, lineage, supervisorCertificatePem, agentCertificatePem, issuerPem, serverRootPem]
+      properties:
+        grn:
+          type: string
+          description: The agent's GRN.
+        supervisorGrn:
+          type: string
+        epoch:
+          type: string
+          description: Opaque. The assignment epoch the supervisor holds the agent at.
+        lineage:
+          type: string
+          format: uuid
+        supervisorCertificatePem:
+          type: string
+        agentCertificatePem:
+          type: string
+        issuerPem:
+          type: string
+          description: The authority that signed both. It is not what garam is verified against (ADR-0040).
+        serverRootPem:
+          type: string
+          description: The garam server root, which the host verifies garam's listener against (ADR-0040).
+    SupervisorRenewalRequest:
+      type: object
+      required: [requestId, certificateRequestPem]
+      properties:
+        requestId:
+          type: string
+        certificateRequestPem:
+          type: string
+          maxLength: 4096
     InitialCertificate:
       type: object
       description: >-
@@ -2088,6 +2304,10 @@ components:
         message:
           type: string
   headers:
+    StandaloneContractVersion:
+      description: The contract version this answer follows, `standalone-enrollment.v1`.
+      schema:
+        type: string
     EnrollmentContractVersion:
       description: The contract version this answer follows, `managed-enrollment.v1`.
       schema:
@@ -2103,6 +2323,15 @@ components:
   responses:
     Error:
       description: Error response.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    StandaloneContractError:
+      description: Error response of a standalone enrollment route.
+      headers:
+        Garam-Contract-Version:
+          $ref: '#/components/headers/StandaloneContractVersion'
       content:
         application/json:
           schema:

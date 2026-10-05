@@ -542,3 +542,9 @@ ADRs:
   local database and signs in its first principal under a versioned
   contract; no Garam binary carries it, and everything after that
   principal goes through public routes
+- [0082](./adr/0082-a-standalone-host-runs-its-agent-under-a-supervisor-an-administrator-approves-by-its-keys.md)
+  — a standalone host's lifecycle authority is a supervisor garam
+  registers for one agent on an administrator's approval of the host's
+  own keys; it activates that agent on the execution routes, renews
+  its own certificate, and is replaced or revoked only by an
+  administrator; the host's runner is unbuilt

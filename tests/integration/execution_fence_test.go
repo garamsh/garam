@@ -125,7 +125,8 @@ func newExecutionStack(t *testing.T, p *pgxpool.Pool, engine grpc.ClientConnInte
 
 	browserSrv := api.NewServer(users, orgs, nil, operator.NewPostgresStore(p), nil, nil,
 		authn.NewPostgresSessionStore(p), nil, nil, nil, nil,
-		api.NewGRPCEvaluator(engine), nil, nil, cli.NewAuthorityService(p, engine), api.Config{SessionTTL: time.Hour})
+		api.NewGRPCEvaluator(engine), nil, nil, cli.NewAuthorityService(p, engine), cli.NewStandaloneService(p, engine),
+		api.Config{SessionTTL: time.Hour})
 	browser := httptest.NewServer(apigen.HandlerWithOptions(browserSrv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))
 	t.Cleanup(browser.Close)
 
@@ -703,11 +704,17 @@ func TestExecutionFence_AMutationQueuedBehindItsReplacementCannotCommit(t *testi
 // releases it. It answers both replies.
 func (s *executionStack) queued(t *testing.T, first, second func() (reply, error)) (reply, reply) {
 	t.Helper()
+	return s.queuedBehind(t, `SELECT 1 FROM agent_executions WHERE agent_grn = $1 FOR UPDATE`, s.agent.String(), first, second)
+}
+
+// queuedBehind is queued behind the row lock takes for arg.
+func (s *executionStack) queuedBehind(t *testing.T, lock string, arg any, first, second func() (reply, error)) (reply, reply) {
+	t.Helper()
 	ctx := context.Background()
 	tx, err := s.pool.Begin(ctx)
 	require.NoError(t, err)
 	defer func() { _ = tx.Rollback(ctx) }()
-	_, err = tx.Exec(ctx, `SELECT 1 FROM agent_executions WHERE agent_grn = $1 FOR UPDATE`, s.agent.String())
+	_, err = tx.Exec(ctx, lock, arg)
 	require.NoError(t, err)
 
 	type result struct {

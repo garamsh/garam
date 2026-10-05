@@ -126,6 +126,13 @@ const (
 	// agent's credential lineage, which fences every certificate it
 	// held before (ADR-0078). Membership alone does not grant it.
 	ActionAgentRecover = "agent:recover"
+	// ActionAgentEnroll is approving a standalone host's keys for one
+	// agent, withdrawing that approval and revoking the supervisor it
+	// registered (ADR-0082). It stands a machine identity up with
+	// lifecycle authority over an agent, and a replacement fences every
+	// certificate that agent held, so membership alone does not grant
+	// it.
+	ActionAgentEnroll = "agent:enroll"
 
 	// Reading and maintaining the org's agent templates (ADR-0075). A
 	// template is a starting point a definition copies once, so these
@@ -149,7 +156,7 @@ var (
 		ActionOperatorRead, ActionOperatorRegister, ActionOperatorUpdate,
 		ActionOperatorDelete, ActionOperatorDelegate, ActionAgentRead,
 		ActionAgentDefine, ActionAgentRename, ActionAgentCreate,
-		ActionAgentConfigure, ActionAgentRecover, ActionAgentTemplateRead, ActionAgentTemplateCreate,
+		ActionAgentConfigure, ActionAgentRecover, ActionAgentEnroll, ActionAgentTemplateRead, ActionAgentTemplateCreate,
 		ActionAgentTemplateUpdate, ActionAgentTemplateDelete,
 	}
 	// memberMachineActions is what a member holds: it reads the

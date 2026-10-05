@@ -66,9 +66,9 @@ collaborate on a shared plan.
 - An organization's members reading the agents it holds, over the
   browser API under `/orgs/{org}/agents`. An agent is answered with the
   state its operator reports and the state it reports itself, kept as
-  the separate facts ADR-0012 makes them, and with the operator holding
-  it at which epoch. That surface reads only: it assigns no agent and
-  issues no certificate.
+  the separate facts ADR-0012 makes them, and with the operator or
+  standalone supervisor holding it at which epoch. That surface reads
+  only: it assigns no agent and issues no certificate.
 - An organization **registering** an operator, under
   `/orgs/{org}/operators`, and its members reading the list (ADR-0045).
   A record is a GRN, who registered it and when: it carries no
@@ -101,6 +101,18 @@ collaborate on a shared plan.
   `agent:create`, configuring `agent:configure` and recovering
   `agent:recover`; [operators.md](./operators.md) §Delegated operation
   authority holds the rest.
+- An administrator **approving a standalone host** for one agent,
+  under `/orgs/{org}/agent-enrollments`, by the hash of the host's
+  bootstrap secret and the fingerprints of its two keys, and revoking
+  the supervisor that approval registered under
+  `/orgs/{org}/agent-supervisors` (ADR-0082). The host spends the
+  approval on the machine listener for its supervisor's and its
+  agent's first certificates, and the supervisor then activates that
+  one agent on the execution routes and renews its own certificate.
+  No operator, grant or hosted service is involved. Approving,
+  withdrawing and revoking are `agent:enroll`;
+  [agents.md](./agents.md) §Standalone hosts holds the rest, and what
+  supervises the host's runtime is unbuilt (#1180).
 - An organization's members **defining** an agent, under
   `/orgs/{org}/agent-definitions` — which operator is to run it, and
   with what values (ADR-0026). A definition is a record rather than a
@@ -265,9 +277,12 @@ collaborate on a shared plan.
   with the token registering it minted (ADR-0064), and an agent's first
   still arrives on the route its operator's claim admits it to, unless
   the agent was created managed: then it is signed over its
-  controller's key under the creation's reference. Once an agent's GRN
-  cuts over, its renewal is inside its current lineage and a lost
-  certificate is recovered rather than reissued (ADR-0078).
+  controller's key under the creation's reference, or created
+  standalone: then it is signed over the host's approved key with its
+  supervisor's (ADR-0082). Once an agent's GRN cuts over, its renewal
+  is inside its current lineage and a lost certificate is recovered
+  rather than reissued (ADR-0078). What supervises a standalone host's
+  runtime is not served (#1180).
 - Revoking a certificate. There is still no revocation list, no
   responder, and no serial the TLS handshake checks, so an agent's
   certificate authenticates a connection until it expires (ADR-0014).
@@ -279,7 +294,9 @@ collaborate on a shared plan.
   certificate mechanism either: deleting the operator withdraws the
   record its certificate authenticates on, so every certificate naming
   it is refused from the next connection while none of them is revoked
-  (ADR-0070).
+  (ADR-0070). A standalone host's supervisor is the same: revoking or
+  replacing it ends the registration its certificate authenticates on
+  (ADR-0082).
 - Proving an operator is the operator a record names by any means but
   the certificate. There is no service-account token and no exchange
   route: what registering hands over is a one-time enrollment ticket,

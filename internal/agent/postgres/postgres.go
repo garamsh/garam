@@ -74,14 +74,15 @@ func lockExecution(ctx context.Context, q *db.Queries, agentGRN grn.GRN) (db.Age
 
 // recheck confirms under the execution lock what the authority
 // established before it: the assignee it covered still holds the agent,
-// and its grant has not expired at this instant. It answers the epoch
+// still registered where it is a supervisor, and its grant has not
+// expired at this instant. It answers the epoch
 // the agent is assigned at and that instant.
 func recheck(ctx context.Context, q *db.Queries, agentGRN grn.GRN, authority agent.Lifecycle) (int, time.Time, error) {
 	assignment, err := q.ShareAssignment(ctx, agentGRN.String())
 	if err != nil {
 		return 0, time.Time{}, storageError(err, "read assignment", agent.ErrNotAssigned, nil)
 	}
-	if assignment.OperatorGrn != authority.Assignee.String() {
+	if assignment.AssigneeGrn != authority.Assignee.String() || !assignment.AssigneeRegistered {
 		return 0, time.Time{}, agent.ErrNotAssigned
 	}
 	now, err := q.Now(ctx)

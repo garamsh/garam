@@ -248,7 +248,7 @@ func agentGRN(orgSlug, agentSlug string) grn.GRN {
 }
 
 // agentToAPI renders an Agent together with the assignment holding it,
-// which is nil when no operator does. The two states stay separate
+// which is nil when nothing does. The two states stay separate
 // fields: different parties report them (ADR-0012).
 func agentToAPI(a *agent.Agent, assignment *agent.Assignment) apigen.Agent {
 	out := apigen.Agent{
@@ -261,9 +261,14 @@ func agentToAPI(a *agent.Agent, assignment *agent.Assignment) apigen.Agent {
 	}
 	if assignment != nil {
 		out.Assignment = &apigen.AgentAssignment{
-			OperatorGrn: assignment.Operator().String(),
+			AssigneeGrn: assignment.Assignee().String(),
 			Epoch:       assignment.Epoch(),
 			Since:       assignment.UpdatedAt(),
+		}
+		// The legacy field names an operator and never a supervisor.
+		if assignment.Assignee().ServiceType == agent.ServiceTypeOperator {
+			operatorGRN := assignment.Assignee().String()
+			out.Assignment.OperatorGrn = &operatorGRN
 		}
 	}
 	return out

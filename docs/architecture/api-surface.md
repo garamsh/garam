@@ -103,13 +103,14 @@ enrolling exists to issue
 ([ADR-0064](./adr/0064-an-operator-enrols-with-a-one-time-token-and-keeps-its-key-in-its-own-cluster.md)).
 A connection whose certificate does not authenticate is not refused
 there either; it carries no identity instead, and every operation but
-one refuses a request that carries none. The identity a handler holds
+two refuses a request that carries none. The identity a handler holds
 is the one the handshake's own verification returned, so nothing
 derives it a second time and a certificate naming any GRN under a
 chain nothing signed reaches no handler that asks for one. Which
-operation opts out is read from `api/machine.yaml` rather than
-remembered: `enrollOperator` carries `security: []`, as an operation on
-the browser-facing listener does.
+operations opt out is read from `api/machine.yaml` rather than
+remembered: `enrollOperator` and `enrollStandaloneAgent` carry
+`security: []`, as an operation on the browser-facing listener does,
+and each is authenticated by what it is spent with instead.
 
 Why a connection did not authenticate is written to the listener's own
 log and nowhere else: what crosses the wire says only that no identity
@@ -120,11 +121,12 @@ authenticate is recorded as an anomaly.
 
 **Each handler makes that refusal itself, and a test is what makes it
 true of every route.** `internal/machineapi/identity_test.go`, in
-`TestServer_EnrollmentIsTheOnlyRouteAnUncertifiedCallerReaches`, is
+`TestServer_EnrollmentsAreTheOnlyRoutesAnUncertifiedCallerReaches`, is
 authoritative for that: every operation `api/machine.yaml` declares
-except `POST /enrollment` answers `401` to a caller carrying no
-identity, sent from the same client that enrols, so what admitted that
-one was the route rather than a listener that had stopped checking.
+except `POST /enrollment` and `POST /agent-enrollments` answers `401`
+naming the missing identity to a caller carrying none, sent from the
+same client that enrols, so what admitted those two was the route
+rather than a listener that had stopped checking.
 The routes it sends to are derived and not listed — read off the
 registration `make gen` writes from that specification, and held
 against the operation count of the generated interface — so an
@@ -134,13 +136,17 @@ of its value: read as a fixture the test is a handful of paths someone
 chose, and a route added unauthenticated would read as one nobody
 thought to cover rather than as one this already covers.
 
-**One listener mints one kind of first certificate, once per token.**
-An operator's is obtained by enrolling: registering it on the
-browser-facing listener mints a one-time token, the operator generates
-its key pair in its own cluster, and `enrollOperator` signs the request
-that presents the token and spends it (ADR-0064). **What the
-certificate names is the token's to say and never the request's**, and
-no private key is generated or answered.
+**One listener mints two kinds of first certificate without a
+certificate.** An operator's is obtained by enrolling: registering it
+on the browser-facing listener mints a one-time token, the operator
+generates its key pair in its own cluster, and `enrollOperator` signs
+the request that presents the token and spends it (ADR-0064). A
+standalone host's supervisor and agent obtain theirs together with
+`enrollStandaloneAgent`, presenting the bootstrap secret whose hash an
+administrator approved with `approveAgentEnrollment`, over the keys
+whose fingerprints the approval names (ADR-0082). **What either
+certificate names is the approval's or the token's to say and never
+the request's**, and no private key is generated or answered.
 
 **A token is minted on the browser-facing listener and nowhere else,
 by two operations rather than one.** `registerOperator` mints the
@@ -212,6 +218,19 @@ for what they decide. No route adds a 5xx of its own (ADR-0050): an
 answer that cannot be decided from current state is the listener's
 503.
 
+**Standalone enrollment is a versioned contract on both listeners**
+(ADR-0082). `approveAgentEnrollment`, `withdrawAgentEnrollment` and
+`revokeAgentSupervisor` on the browser-facing listener are each
+decided on `agent:enroll` from current state and carry no contract
+version, as an operator's registration does not; on the machine
+listener `enrollStandaloneAgent` and `renewSupervisorCertificate`
+require and answer `Garam-Contract-Version: standalone-enrollment.v1`.
+A supervisor's certificate is admitted to those, to `getIdentity` and
+to the three execution routes it holds authority on, and refused on
+every other route at the router before a handler runs. The
+specifications are authoritative for their forms, and
+[agents.md](./agents.md) §Standalone hosts for what they decide.
+
 **Managed enrollment is a third versioned contract on the machine
 listener** (ADR-0077, ADR-0078). Creating a managed agent and issuing
 its first certificate each require and answer `Garam-Contract-Version:
@@ -227,9 +246,11 @@ previous one authenticated: an operator's on the machine listener
 ([ADR-0046](./adr/0046-an-operator-renews-its-certificate-by-presenting-the-one-it-holds.md)),
 an agent's on the route its claim admits it to (ADR-0040). A managed
 agent's first is signed over its controller's key on the enrollment
-route. The one exception is an agent's recovery, which the hosted
-control service asks for under an administrator's handoff and which
-replaces the agent's credential lineage instead
+route, and a supervisor renews its own on
+`renewSupervisorCertificate`. The one exception is an agent's
+recovery, which the hosted control service asks for under an
+administrator's handoff and which replaces the agent's credential
+lineage instead
 ([machine-identity.md](./machine-identity.md) §Generation and
 lineage).
 

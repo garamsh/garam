@@ -86,7 +86,7 @@ func (s *proofService) placed(ctx context.Context, org, controller, agent grn.GR
 	if err != nil {
 		return nil, errorx.Wrap(err, "current assignment", errorx.KindUnavailable)
 	}
-	if a.Operator != controller {
+	if a.Assignee != controller {
 		return nil, ErrAgentElsewhere
 	}
 	return &ProvenAgent{Agent: agent, Epoch: a.Epoch}, nil

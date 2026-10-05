@@ -33,10 +33,11 @@ func ParseBodyDigest(s string) (BodyDigest, error) {
 	return BodyDigest(s), nil
 }
 
-// Assignment is where an agent runs: the controller it is assigned to
-// and the assignment epoch, which garam treats as opaque here.
+// Assignment is where an agent runs: what it is assigned to — a
+// controller, or a standalone supervisor no grant covers — and the
+// assignment epoch, which garam treats as opaque here.
 type Assignment struct {
-	Operator grn.GRN
+	Assignee grn.GRN
 	Epoch    string
 }
 

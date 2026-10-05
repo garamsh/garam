@@ -88,7 +88,7 @@ func newProofFixture() *proofFixture {
 		agent:      agent,
 		grant: operator.Grant{Controllers: []grn.GRN{controller}, ExpiresAt: now.Add(time.Hour),
 			Operations: []operator.Operation{operator.OperationAgentActivate}},
-		placements: &placements{at: map[grn.GRN]operator.Assignment{agent: {Operator: controller, Epoch: "7"}}},
+		placements: &placements{at: map[grn.GRN]operator.Assignment{agent: {Assignee: controller, Epoch: "7"}}},
 		policy:     &policy{},
 	}
 }
@@ -170,13 +170,13 @@ func TestProofService_BindsAnAgentToItsCurrentPlacement(t *testing.T) {
 		kind  errorx.Kind
 	}{
 		"another organization's agent": {agent: other, place: func(p *placements) {
-			p.at[other] = operator.Assignment{Operator: operatorGRN("acme", "controller"), Epoch: "1"}
+			p.at[other] = operator.Assignment{Assignee: operatorGRN("acme", "controller"), Epoch: "1"}
 		}, kind: errorx.KindNotFound},
 		"an operator named as the agent": {agent: operatorGRN("acme", "controller"), place: func(*placements) {},
 			kind: errorx.KindNotFound},
 		"an agent assigned nowhere": {agent: unplaced, place: func(*placements) {}, kind: errorx.KindNotFound},
 		"an agent assigned elsewhere": {agent: agentGRN("acme", "bot"), place: func(p *placements) {
-			p.at[agentGRN("acme", "bot")] = operator.Assignment{Operator: operatorGRN("acme", "other"), Epoch: "8"}
+			p.at[agentGRN("acme", "bot")] = operator.Assignment{Assignee: operatorGRN("acme", "other"), Epoch: "8"}
 		}, kind: errorx.KindPermissionDenied},
 		"an assignment that could not be read": {agent: agentGRN("acme", "bot"), place: func(p *placements) {
 			p.err = errorx.New(errorx.KindInternal, "connection refused")

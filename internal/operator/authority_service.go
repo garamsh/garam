@@ -162,7 +162,7 @@ func (s *authorityService) placement(ctx context.Context, b *Binding) (controlle
 			return grn.GRN{}, grn.GRN{}, err
 		}
 		b.Assignment = &a
-		return a.Operator, b.Target, nil
+		return a.Assignee, b.Target, nil
 	}
 	return grn.GRN{}, grn.GRN{}, ErrOperationNotMintable
 }
@@ -220,7 +220,7 @@ func (s *authorityService) recheck(ctx context.Context, b Binding) error {
 		if b.Assignment == nil || current != *b.Assignment {
 			return ErrAuthorityRevoked
 		}
-		controller, object = current.Operator, b.Target
+		controller, object = current.Assignee, b.Target
 	}
 	if !grant.Covers(b.Operation, controller, s.now()) {
 		return ErrAuthorityRevoked

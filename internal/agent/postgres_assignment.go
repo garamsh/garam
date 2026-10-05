@@ -10,14 +10,14 @@ import (
 	"github.com/garamsh/garam/internal/pgxerr"
 )
 
-// Assign binds the agent to an operator at the next epoch. Every call
+// Assign binds the agent to an assignee at the next epoch. Every call
 // raises the epoch, so the pods of the assignment it replaces are
-// fenced out whether or not the operator changed, and ends the
+// fenced out whether or not the assignee changed, and ends the
 // activation the replaced assignment's runtime held (ADR-0078).
 //
 // The execution row is locked before the assignment is written: that
 // is the order every transaction taking both follows (ADR-0080).
-func (s *PostgresStore) Assign(ctx context.Context, agentGRN, operatorGRN grn.GRN) (*Assignment, error) {
+func (s *PostgresStore) Assign(ctx context.Context, agentGRN, assigneeGRN grn.GRN) (*Assignment, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return nil, errorx.Wrap(err, "begin", errorx.KindUnavailable)
@@ -31,7 +31,7 @@ func (s *PostgresStore) Assign(ctx context.Context, agentGRN, operatorGRN grn.GR
 	now := stamp(time.Now().UTC())
 	row, err := q.AssignAgent(ctx, db.AssignAgentParams{
 		AgentGrn:    agentGRN.String(),
-		OperatorGrn: operatorGRN.String(),
+		AssigneeGrn: assigneeGRN.String(),
 		CreatedAt:   now,
 		UpdatedAt:   now,
 	})
@@ -50,7 +50,7 @@ func (s *PostgresStore) Assign(ctx context.Context, agentGRN, operatorGRN grn.GR
 	return rowToAssignment(row)
 }
 
-// GetAssignment returns the operator the agent is assigned to and the
+// GetAssignment returns the assignee the agent is assigned to and the
 // epoch it is assigned at, or ErrAssignmentNotFound.
 func (s *PostgresStore) GetAssignment(ctx context.Context, agentGRN grn.GRN) (*Assignment, error) {
 	row, err := s.q.GetAgentAssignment(ctx, agentGRN.String())
@@ -83,13 +83,13 @@ func rowToAssignment(row db.AgentAssignment) (*Assignment, error) {
 	if err != nil {
 		return nil, errorx.Wrap(err, "assignment agent grn", errorx.KindInternal)
 	}
-	operatorGRN, err := grn.Parse(row.OperatorGrn)
+	assigneeGRN, err := grn.Parse(row.AssigneeGrn)
 	if err != nil {
-		return nil, errorx.Wrap(err, "assignment operator grn", errorx.KindInternal)
+		return nil, errorx.Wrap(err, "assignment assignee grn", errorx.KindInternal)
 	}
 	return &Assignment{
 		agentGRN:    agentGRN,
-		operatorGRN: operatorGRN,
+		assigneeGRN: assigneeGRN,
 		epoch:       int(row.Epoch),
 		createdAt:   row.CreatedAt.Time,
 		updatedAt:   row.UpdatedAt.Time,

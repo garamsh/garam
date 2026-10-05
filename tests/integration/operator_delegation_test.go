@@ -117,7 +117,7 @@ func newDelegationFixture(t *testing.T) *delegationFixture {
 		org:        orgRootGRN("acme"), actor: actor, hosted: hosted, controller: controller, other: other,
 		agent: scopedGRN("acme", "agent", "0a1b2c3d4e5f6071"),
 	}
-	f.placements.move(f.agent, operator.Assignment{Operator: controller, Epoch: "1"})
+	f.placements.move(f.agent, operator.Assignment{Assignee: controller, Epoch: "1"})
 	delegations := operatorpg.New(p)
 	f.service = operator.NewAuthorityService(delegations, delegations, store, f.placements, f.authority,
 		operator.Config{Now: f.clock.Now})
@@ -521,9 +521,9 @@ func TestReference_ConfigurationIsBoundToItsPlacement(t *testing.T) {
 	got, err := f.service.Reference(ctx, f.hosted, minted.Ref)
 	require.NoError(t, err)
 	require.NotNil(t, got.Assignment)
-	assert.Equal(t, operator.Assignment{Operator: f.controller, Epoch: "1"}, *got.Assignment)
+	assert.Equal(t, operator.Assignment{Assignee: f.controller, Epoch: "1"}, *got.Assignment)
 
-	f.placements.move(f.agent, operator.Assignment{Operator: f.controller, Epoch: "3"})
+	f.placements.move(f.agent, operator.Assignment{Assignee: f.controller, Epoch: "3"})
 	_, err = f.service.Reference(ctx, f.hosted, minted.Ref)
 	require.ErrorIs(t, err, operator.ErrAuthorityRevoked)
 	_, err = f.mint(operator.OperationAgentConfigure, f.agent, "req-1")

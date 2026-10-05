@@ -79,7 +79,7 @@ func bindingToAPI(b operator.Binding) machinegen.OperationBinding {
 	}
 	if b.Assignment != nil {
 		out.Assignment = &machinegen.BoundAssignment{
-			OperatorGrn: b.Assignment.Operator.String(),
+			OperatorGrn: b.Assignment.Assignee.String(),
 			Epoch:       b.Assignment.Epoch,
 		}
 	}

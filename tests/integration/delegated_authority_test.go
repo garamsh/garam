@@ -75,7 +75,7 @@ func newAuthorityStack(t *testing.T, engine *grpc.ClientConn, p *pgxpool.Pool) *
 
 	srv := api.NewServer(users, orgs, nil, operator.NewPostgresStore(p), nil, nil,
 		authn.NewPostgresSessionStore(p), nil, nil, nil, nil,
-		api.NewGRPCEvaluator(engine), nil, nil, cli.NewAuthorityService(p, engine), api.Config{SessionTTL: time.Hour})
+		api.NewGRPCEvaluator(engine), nil, nil, cli.NewAuthorityService(p, engine), nil, api.Config{SessionTTL: time.Hour})
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))
 	t.Cleanup(browser.Close)
 

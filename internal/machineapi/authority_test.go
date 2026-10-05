@@ -24,7 +24,7 @@ import (
 // listener to a client holding caller's certificate.
 func authorityListener(t *testing.T, authority operator.AuthorityService, caller grn.GRN) (string, *http.Client) {
 	t.Helper()
-	return serveTLS(t, machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, authority, nil, nil, nil), caller)
+	return serveTLS(t, machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, authority, nil, nil, nil, nil), caller)
 }
 
 // versioned sends a request with the contract version header set to
@@ -51,7 +51,7 @@ func configureBinding(audience grn.GRN) operator.Binding {
 		Ref: "ref-1", Grant: "grant-1", Org: grn.New("root", "default", "org", "acme"),
 		Actor: grn.New("root", "default", "user", "member"), Audience: audience,
 		Operation: operator.OperationAgentConfigure, Target: agentGRN("acme", "0a1b2c3d4e5f6071"),
-		Assignment: &operator.Assignment{Operator: grn.New("acme", "default", "operator", "controller"), Epoch: "7"},
+		Assignment: &operator.Assignment{Assignee: grn.New("acme", "default", "operator", "controller"), Epoch: "7"},
 		RequestID:  "req-1", Digest: operator.BodyDigest(strings.Repeat("0", 64)),
 	}
 }

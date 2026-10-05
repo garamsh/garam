@@ -33,7 +33,7 @@ func (s *Store) CreateManaged(ctx context.Context, a *agent.Agent, c agent.Manag
 			return storageError(err, "create execution", nil, nil)
 		}
 		epoch, err := q.AssignFirst(ctx, db.AssignFirstParams{
-			AgentGrn: a.GRN().String(), OperatorGrn: c.Controller.String(), CreatedAt: at,
+			AgentGrn: a.GRN().String(), AssigneeGrn: c.Controller.String(), CreatedAt: at,
 		})
 		if err != nil {
 			return storageError(err, "assign", nil, nil)

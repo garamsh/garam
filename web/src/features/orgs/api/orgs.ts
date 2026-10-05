@@ -179,6 +179,7 @@ export const AgentDefinitionParser = parserFor<AgentDefinition>()(
     values: z.record(z.string(), z.string()),
     definedBy: GrnParser,
     createdAt: z.string(),
+    cutover: z.object({ stage: z.enum(["frozen", "switched"]) }).nullable(),
   }),
 );
 

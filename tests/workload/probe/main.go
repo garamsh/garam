@@ -24,7 +24,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fail("usage: probe report|daemon|post|get ...")
+		fail("usage: probe report|daemon|post|get|size ...")
 	}
 	var err error
 	switch os.Args[1] {
@@ -36,6 +36,8 @@ func main() {
 		err = post(os.Args[2], os.Args[3])
 	case "get":
 		err = get(os.Args[2])
+	case "size":
+		err = size(os.Args[2])
 	default:
 		err = fmt.Errorf("unknown mode %q", os.Args[1])
 	}
@@ -203,4 +205,13 @@ func get(url string) error {
 	defer func() { _ = resp.Body.Close() }()
 	_, err = io.Copy(os.Stdout, resp.Body)
 	return err
+}
+
+func size(path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	fmt.Println(info.Size())
+	return nil
 }

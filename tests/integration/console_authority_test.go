@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/golang-migrate/migrate/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -28,9 +29,15 @@ var consoleOperations = []string{
 // it is empty, and answers the status and body.
 func (s *authorityStack) mintTarget(t *testing.T, cookie *http.Cookie, operation, target, requestID, requestTarget string) (int, string) {
 	t.Helper()
+	return s.mintBound(t, cookie, s.hosted.String(), operation, target, requestID, emptyBodySHA256, requestTarget)
+}
+
+// mintBound is mintTarget with the audience and body digest named.
+func (s *authorityStack) mintBound(t *testing.T, cookie *http.Cookie, audience, operation, target, requestID, digest, requestTarget string) (int, string) {
+	t.Helper()
 	body := map[string]string{
-		"audience": s.hosted.String(), "operation": operation, "target": target,
-		"requestId": requestID, "bodySha256": emptyBodySHA256,
+		"audience": audience, "operation": operation, "target": target,
+		"requestId": requestID, "bodySha256": digest,
 	}
 	if requestTarget != "" {
 		body["requestTarget"] = requestTarget
@@ -114,6 +121,48 @@ func TestConsoleAuthority_ReadsAndPublicationBindTheirRequestTarget(t *testing.T
 	require.NotNil(t, b.Assignment, "an execution read binds where the agent runs")
 	assert.Equal(t, s.controller.String(), b.Assignment.OperatorGrn)
 	assert.Equal(t, execution, *b.RequestTarget)
+}
+
+// TestConsoleAuthority_RefusesWhatAnOperationDoesNotBind holds the
+// refusals beside the ones above, each next to the accepted call it
+// differs from in one field: configure and recover take no request
+// target, the new operations name no other organization's audience,
+// and a publication's request identifier stays bound to its body.
+func TestConsoleAuthority_RefusesWhatAnOperationDoesNotBind(t *testing.T) {
+	p := pool(t)
+	_, engine := policyEngine(t, p)
+	s := newAuthorityStack(t, engine, p)
+	s.grant(t, "g-1", nil, append([]string{"agent:configure", "agent:recover"}, consoleOperations...)...)
+	agentGRN := s.provisionAgent(t)
+	const target = "/v1/orgs/acme/agents/x/revisions"
+
+	for _, operation := range []string{"agent:configure", "agent:recover"} {
+		status, got := s.mintTarget(t, s.owner, operation, agentGRN, operation+"-1", target)
+		assert.Equal(t, http.StatusBadRequest, status, "%s binds no request target: %s", operation, got)
+		status, got = s.mintTarget(t, s.owner, operation, agentGRN, operation+"-1", "")
+		assert.Equal(t, http.StatusCreated, status, "the %s control: %s", operation, got)
+	}
+
+	const globex = "grn:globex:default:operator:hosted"
+	for _, operation := range []string{"agent-template:read", "agent-template:publish", "execution-profile:read"} {
+		status, got := s.mintBound(t, s.owner, globex, operation, s.acme.String(), "tenant-"+operation, emptyBodySHA256, "/v1/orgs/acme/templates")
+		assert.Equal(t, http.StatusBadRequest, status, "%s for another organization's audience: %s", operation, got)
+		status, got = s.mintBound(t, s.owner, s.hosted.String(), operation, s.acme.String(), "tenant-"+operation, emptyBodySHA256, "/v1/orgs/acme/templates")
+		assert.Equal(t, http.StatusCreated, status, "the %s control: %s", operation, got)
+	}
+	status, got := s.mintBound(t, s.owner, globex, "agent:execution-read", agentGRN, "tenant-execution", emptyBodySHA256, "/v1/orgs/acme/agents/x/execution")
+	assert.Equal(t, http.StatusBadRequest, status, "execution read for another organization's audience: %s", got)
+
+	const publish = "/v1/orgs/acme/templates/web/versions"
+	first, other := strings.Repeat("a", 64), strings.Repeat("b", 64)
+	status, got = s.mintBound(t, s.owner, s.hosted.String(), "agent-template:publish", s.acme.String(), "publish-1", first, publish)
+	require.Equal(t, http.StatusCreated, status, got)
+	ref := authorityOf(t, got).OperationRef
+	status, got = s.mintBound(t, s.owner, s.hosted.String(), "agent-template:publish", s.acme.String(), "publish-1", other, publish)
+	assert.Equal(t, http.StatusConflict, status, "the request id is bound to another body: %s", got)
+	status, got = s.mintBound(t, s.owner, s.hosted.String(), "agent-template:publish", s.acme.String(), "publish-1", first, publish)
+	require.Equal(t, http.StatusCreated, status, "the same body remints: %s", got)
+	assert.Equal(t, ref, authorityOf(t, got).OperationRef)
 }
 
 // TestConsoleAuthority_EachReadNeedsItsOwnDelegation holds that a grant
@@ -266,4 +315,61 @@ func TestControlEndpoint_IsTheDelegatingActNotARename(t *testing.T) {
 	o = apigen.Operator{}
 	require.NoError(t, json.Unmarshal([]byte(got), &o))
 	assert.Nil(t, o.ControlEndpoint, "cleared")
+}
+
+// TestMigration000032_ReappliesOverAStoredReadAuthority applies the
+// migrations, stores a read authority 000032 made possible, rolls
+// 000032 back and applies it again. The rollback keeps the row and
+// drops its request target, so the second apply meets a read without
+// one; it must succeed and keep the row, while every new read without
+// a target is still refused. A read with its target, inserted beside
+// it, is the control for that refusal.
+func TestMigration000032_ReappliesOverAStoredReadAuthority(t *testing.T) {
+	ctx := context.Background()
+	const schema = "migrate_000032_test"
+	p := pool(t)
+	m, err := migrate.New("file://"+migrationsDir(t), isolatedSchema(t, p, schema))
+	require.NoError(t, err)
+	t.Cleanup(func() { _, _ = m.Close() })
+	require.NoError(t, m.Up())
+
+	exec := func(sql string, args ...any) error {
+		_, err := p.Exec(ctx, strings.ReplaceAll(sql, "§", schema+"."), args...)
+		return err
+	}
+	org := "grn:root:default:org:mig"
+	hosted := "grn:mig:default:operator:hosted"
+	require.NoError(t, exec(`INSERT INTO §orgs (grn, name, created_at, updated_at) VALUES ($1, 'mig', now(), now())`, org))
+	require.NoError(t, exec(`INSERT INTO §operators (grn, org_grn, registered_by, created_at, name)
+		VALUES ($1, $2, 'grn:root:default:user:ada', now(), 'hosted')`, hosted, org))
+	require.NoError(t, exec(`INSERT INTO §operator_delegations
+		(id, org_grn, operator_grn, request_id, operations, expires_at, granted_by, granted_at)
+		VALUES ('g-1', $1, $2, 'r-1', ARRAY['agent-template:read'], now() + interval '1 day', 'grn:root:default:user:ada', now())`,
+		org, hosted))
+	read := func(ref, target string) error {
+		var requestTarget any
+		if target != "" {
+			requestTarget = target
+		}
+		return exec(`INSERT INTO §operation_authorities
+			(ref, org_grn, audience_grn, request_id, delegation_id, actor_grn, operation, target_grn,
+			 body_sha256, request_target, token_hash, token_expires_at, created_at)
+			VALUES ($1, $2, $3, $1, 'g-1', 'grn:root:default:user:ada', 'agent-template:read', $2,
+			        $4, $5, $1, now() + interval '5 minutes', now())`,
+			ref, org, hosted, emptyBodySHA256, requestTarget)
+	}
+	require.NoError(t, read("stored", "/v1/orgs/mig/templates"))
+
+	require.NoError(t, m.Steps(-1))
+	require.NoError(t, m.Up(), "000032 applies again over the read the rollback kept")
+	version, dirty := schemaVersion(t, p, schema)
+	assert.Equal(t, 32, version)
+	assert.False(t, dirty)
+	var kept int
+	require.NoError(t, p.QueryRow(ctx,
+		"SELECT count(*) FROM "+schema+".operation_authorities WHERE ref = 'stored'").Scan(&kept))
+	assert.Equal(t, 1, kept, "no row is deleted")
+
+	assert.Error(t, read("new-without", ""), "a new read without its target is refused")
+	assert.NoError(t, read("new-with", "/v1/orgs/mig/templates"), "the control: a new read with its target")
 }

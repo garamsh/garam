@@ -263,6 +263,7 @@ that the source no longer reads.
 | `GARAM_ADAPTER_CONTROL_ROOT_FILE` | Same: the adapter's own deployment. |
 | `GARAM_ADAPTER_PLACEMENT_TOKEN_FILE` | Same: the adapter's own deployment. |
 | `GARAM_ADAPTER_OUTBOX_DIR` | Same: the adapter's own deployment. |
+| `GARAM_ADAPTER_CONTROL_SOCKET` | Same: the adapter's own deployment, which on a standalone host is its supervisor (ADR-0085). |
 | `GARAM_MIGRATIONS_DIR` | The migrations ship inside the image and the default resolves to them there. A value here could only point the Job away from them. |
 
 Two things sit outside that comparison:

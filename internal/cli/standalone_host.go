@@ -63,13 +63,13 @@ const standaloneCallTimeout = 30 * time.Second
 // newStandaloneCommand constructs `garam standalone`: what a standalone
 // host runs to stand its agent up without an operator. It prepares the
 // keys and the bootstrap secret an administrator approves, spends the
-// approval, and renews the supervisor's certificate. Supervising the
-// runtime is not here (#1180).
+// approval, renews the supervisor's certificate, and runs the
+// supervisor over the agent's workload (ADR-0085).
 func newStandaloneCommand() *cobra.Command {
 	var dirs hostDirs
 	cmd := &cobra.Command{
 		Use:   "standalone",
-		Short: "Enroll and renew a standalone host's supervisor",
+		Short: "Enroll, renew and run a standalone host's supervisor",
 	}
 	cmd.PersistentFlags().StringVar(&dirs.supervisor, "dir", "",
 		"the supervisor's directory, readable by the supervisor alone (required)")
@@ -124,7 +124,7 @@ func newStandaloneCommand() *cobra.Command {
 	renew.Flags().StringVar(&machineURL, "machine-url", "", "garam's machine listener (required)")
 	_ = renew.MarkFlagRequired("machine-url")
 
-	cmd.AddCommand(prepare, enroll, renew)
+	cmd.AddCommand(prepare, enroll, renew, newStandaloneRunCommand(&dirs))
 	return cmd
 }
 
@@ -491,7 +491,8 @@ func enrollHost(ctx context.Context, dirs hostDirs, machineURL, rootFile string)
 		return nil, errorx.Wrap(err, "enrollment", errorx.KindInternal)
 	}
 	var result machinegen.StandaloneEnrollment
-	if err := callStandalone(ctx, client, base+"/agent-enrollments", "Garam-Bootstrap "+p.Secret, body, &result); err != nil {
+	if _, err := callStandalone(ctx, client, base+"/agent-enrollments", agent.StandaloneContractVersion,
+		"Garam-Bootstrap "+p.Secret, body, &result); err != nil {
 		return nil, err
 	}
 	supervisorPEM := append([]byte(result.SupervisorCertificatePem), p.SupervisorKeyPEM...)
@@ -621,7 +622,8 @@ func renewSupervisor(ctx context.Context, dir, machineURL string) (time.Time, er
 		return time.Time{}, errorx.Wrap(err, "renewal", errorx.KindInternal)
 	}
 	var issued machinegen.InitialCertificate
-	if err := callStandalone(ctx, client, base+"/supervisors/self/certificate", "", body, &issued); err != nil {
+	if _, err := callStandalone(ctx, client, base+"/supervisors/self/certificate", agent.StandaloneContractVersion,
+		"", body, &issued); err != nil {
 		return time.Time{}, err
 	}
 	next := append([]byte(issued.CertificatePem), pending.KeyPEM...)
@@ -707,38 +709,39 @@ func standaloneClient(rootPEM []byte, pair *keyfile.Pair) (*http.Client, error) 
 	}, nil
 }
 
-// callStandalone posts body under the standalone contract and decodes a
-// 200 or 201 answer into out. Any other answer is an error carrying the
-// kind garam named, and never the authorization it was sent with.
-func callStandalone(ctx context.Context, client *http.Client, url, authorization string, body []byte, out any) error {
+// callStandalone posts body under contract and decodes a 200 or 201
+// answer into out, answering which of the two it was. Any other answer
+// is an error carrying the kind garam named, and never the
+// authorization it was sent with.
+func callStandalone(ctx context.Context, client *http.Client, url, contract, authorization string, body []byte, out any) (int, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
-		return errorx.Wrap(err, "request", errorx.KindInvalidArgument)
+		return 0, errorx.Wrap(err, "request", errorx.KindInvalidArgument)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Garam-Contract-Version", agent.StandaloneContractVersion)
+	req.Header.Set("Garam-Contract-Version", contract)
 	if authorization != "" {
 		req.Header.Set("Authorization", authorization)
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return errorx.Wrap(err, "garam", errorx.KindUnavailable)
+		return 0, errorx.Wrap(err, "garam", errorx.KindUnavailable)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
-		return errorx.Wrap(err, "garam answer", errorx.KindUnavailable)
+		return 0, errorx.Wrap(err, "garam answer", errorx.KindUnavailable)
 	}
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		var refusal machinegen.Error
 		_ = json.Unmarshal(raw, &refusal)
-		return errorx.New(kindOfStatus(resp.StatusCode),
+		return resp.StatusCode, errorx.New(kindOfStatus(resp.StatusCode),
 			"garam answered "+resp.Status+": "+strings.TrimSpace(refusal.Message))
 	}
 	if err := json.Unmarshal(raw, out); err != nil {
-		return errorx.Wrap(err, "garam answer", errorx.KindInternal)
+		return resp.StatusCode, errorx.Wrap(err, "garam answer", errorx.KindInternal)
 	}
-	return nil
+	return resp.StatusCode, nil
 }
 
 // kindOfStatus names the kind a refusal's status carries back.

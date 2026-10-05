@@ -350,10 +350,12 @@ pins it for this adapter.
 
 ## Activation and runtime status
 
-**The adapter's half is built; neither lifecycle authority serves the
-two routes yet.** The Operator control service implements them in
-garamsh/garam-agent-operator#218, and the standalone supervisor's
-composition is #1180's. This is
+**The adapter's half is built, and the standalone supervisor serves
+the two routes; the Operator control service does not yet.** The
+Operator implements them in garamsh/garam-agent-operator#218. The
+standalone supervisor serves them on a socket of its generation
+([agents.md](./agents.md) §Standalone hosts, ADR-0085), and its joint
+acceptance with garam and Sherlock is unverified (#1180). This is
 [ADR-0084](./adr/0084-the-adapter-activates-its-generation-and-reports-runtime-status-under-a-contract-garam-owns.md)'s
 contract, `agent-execution.v1`, which garam owns and the lifecycle
 authority serves: the Operator control service when managed, the local
@@ -369,16 +371,22 @@ supervisor when standalone.
 - **Control authenticates the agent's leaf**, read per handshake, over
   mTLS; the leaf names the GRN in the path, and garam's token never
   goes to control.
+- **A standalone adapter dials its supervisor's socket.**
+  `GARAM_ADAPTER_CONTROL_SOCKET` makes every control connection reach
+  that unix socket while TLS still verifies the control URL's host;
+  it is valid only beside the fenced mode's settings, and nothing else
+  in the client changes (ADR-0085).
 - **Every protected call carries the activation's token**, as
   `Authorization: Garam-Execution <token>`
   ([machine-identity.md](./machine-identity.md) §Generation and
   lineage), and the adapter makes none before it holds one.
-- **It activates the generation the runtime reports.** It reads
-  Sherlock's loopback status, then asks the authority with that GRN,
-  epoch, generation and revision and the mounted placement token, under
-  a request identifier derived from those inputs alone, so a restart
-  replays the same intent and receives a newer token. It verifies the
-  binding answered and keeps the highest token version.
+- **It activates the generation the runtime reports, while it reports
+  `serving`.** A runtime already draining is not activated (ADR-0085).
+  It reads Sherlock's loopback status, then asks the authority with that
+  GRN, epoch, generation and revision and the mounted placement token,
+  under a request identifier derived from those inputs alone, so a
+  restart replays the same intent and receives a newer token. It
+  verifies the binding answered and keeps the highest token version.
 - **Undecided answers retry; definite ones pause.** An unavailable
   authority or garam is retried with bounded backoff and stops nothing
   local. A refusal, a wrong binding, or garam refusing the token or the
@@ -392,7 +400,8 @@ supervisor when standalone.
   report never activates anything, and an empty revision is unknown.
 
 ADR-0084 is authoritative for the routes, bodies, refusals, the
-identifier's derivation and the settings the adapter reads.
+identifier's derivation and the settings the adapter reads; ADR-0085
+for the control socket setting.
 
 ## Not decided
 

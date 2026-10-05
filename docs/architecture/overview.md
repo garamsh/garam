@@ -118,7 +118,9 @@ collaborate on a shared plan.
   No operator, grant or hosted service is involved. Approving,
   withdrawing and revoking are `agent:enroll`;
   [agents.md](./agents.md) §Standalone hosts holds the rest, and what
-  supervises the host's runtime is unbuilt (#1180).
+  supervises the host's runtime is `garam standalone run`
+  (ADR-0085), and its joint acceptance with garam and Sherlock is
+  unverified (#1180).
 - An organization's members **defining** an agent, under
   `/orgs/{org}/agent-definitions` — which operator is to run it, and
   with what values (ADR-0026). A definition is a record rather than a
@@ -290,8 +292,8 @@ collaborate on a shared plan.
   standalone: then it is signed over the host's approved key with its
   supervisor's (ADR-0082). Once an agent's GRN cuts over, its renewal
   is inside its current lineage and a lost certificate is recovered
-  rather than reissued (ADR-0078). What supervises a standalone host's
-  runtime is not served (#1180).
+  rather than reissued (ADR-0078). A standalone host's supervisor runs
+  on the host, not in garam (ADR-0085).
 - Revoking a certificate. There is still no revocation list, no
   responder, and no serial the TLS handshake checks, so an agent's
   certificate authenticates a connection until it expires (ADR-0014).
@@ -345,7 +347,8 @@ collaborate on a shared plan.
   credential lineage; ADR-0079 bounds interservice compatibility and
   replay. All three are accepted; garam's half of the generation fence
   is built (ADR-0080), the adapter this repository ships uses it under
-  ADR-0084's contract, which no lifecycle authority serves yet,
+  ADR-0084's contract, which a standalone host's supervisor serves
+  (ADR-0085) and the Operator control service does not yet,
   acceptance with its peers is unverified (#1157), and the rest is
   unbuilt.
   [agents.md](./agents.md) §Separated execution carries the target.
@@ -447,6 +450,12 @@ collaborate on a shared plan.
   carrying in memory alone.
 - `internal/watch/` — who is watching an agent work, and the turn events
   carried to them while they are (ADR-0022). It stores no event.
+- `internal/workload/` — a standalone host's supervisor over its
+  agent's workload: the runtime, workspace and adapter containers of
+  one generation, the volumes they share, and the socket the adapter
+  activates through ([agents.md](./agents.md) §Standalone hosts,
+  ADR-0085). It runs on the host rather than inside garam, and
+  `internal/workload/docker` is its engine.
 - `internal/api/` — handlers implementing the generated ServerInterface.
 - `internal/authn/` — sign-in provider abstraction, implemented by
   Google OIDC alone (ADR-0044), password verification, sessions.
@@ -459,8 +468,9 @@ collaborate on a shared plan.
 `grn`, `errorx` and `listfilter` are the packages domains share with
 each other; `keyfile` holds the one rule key material files are read
 under, reached
-by `ca` and by the `cli` wiring that reads the machine listener's pair
-and the adapter's; `wire` is reached by three packages and no others —
+by `ca`, by the `cli` wiring that reads the machine listener's pair
+and the adapter's, and by `workload` for its record and serving key;
+`wire` is reached by three packages and no others —
 `api`, `machineapi` and `authz`, the first two at their request
 boundaries and `authz` from its model, where the statement `Effect` it
 declares is the type every surface shares ([authz.md](./authz.md)
@@ -516,6 +526,8 @@ it and imports no request surface and no domain.
 | `watch.Subscription` | `internal/watch` | one open watch: the stream its holder reads |
 | `watch.Service` | `internal/watch` | opens a watch, carries a forwarded event to the watchers of that agent, counts them |
 | `delivery.Service` | `internal/delivery` | the loop beside one agent: claims a message, posts it into the agent's gateway, completes the claim a turn named |
+| `workload.Supervisor` | `internal/workload` | a standalone host's supervisor: brings one generation up or adopts it, serves its adapter's activation, and drains it without force |
+| `workload.Engine` | `internal/workload` | the container engine the supervisor alone holds; it has no stop with a timeout |
 | `org.Organization` | `internal/org` | top-level tenant |
 | `org.Group` | `internal/org` | user/agent bundle |
 | `org.Project` | `internal/org` | unit of work |

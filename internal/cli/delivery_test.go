@@ -12,11 +12,13 @@ import (
 	"path/filepath"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/internal/keyfile"
 	"github.com/garamsh/garam/internal/machine"
 )
 
@@ -34,7 +36,7 @@ func clientOf(certFile, keyFile, serverRootFile string) (*http.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return adapterClient(pair, serverRootFile, string(envAdapterServerRootFile))
+	return adapterClient(pair, serverRootFile, string(envAdapterServerRootFile), "")
 }
 
 // adapterKeyMaterial writes what the adapter presents and the garam
@@ -71,6 +73,9 @@ func TestAdapterLoop_RefusesWhatItCannotRunOn(t *testing.T) {
 	fenced.controlRoot = serverRootFile
 	fenced.placementToken = filepath.Join(t.TempDir(), "token")
 	require.NoError(t, fenced.build(), "the fenced control: all three control settings and an outbox")
+	onSocket := fenced
+	onSocket.controlSocket = filepath.Join(t.TempDir(), "control.sock")
+	require.NoError(t, onSocket.build(), "a fenced adapter dials control on a socket where one is named")
 
 	tests := map[string]adapterSettings{}
 	change := func(name string, from adapterSettings, edit func(*adapterSettings)) {
@@ -87,6 +92,9 @@ func TestAdapterLoop_RefusesWhatItCannotRunOn(t *testing.T) {
 	change("no server root", legacy, func(s *adapterSettings) { s.serverRootFile = "" })
 	change("a server root that is not one", legacy, func(s *adapterSettings) { s.serverRootFile = s.keyFile })
 	change("a control address alone", legacy, func(s *adapterSettings) { s.controlURL = fenced.controlURL })
+	change("a control socket without the control settings", withOutbox, func(s *adapterSettings) {
+		s.controlSocket = onSocket.controlSocket
+	})
 	change("no control address", fenced, func(s *adapterSettings) { s.controlURL = "" })
 	change("no control root", fenced, func(s *adapterSettings) { s.controlRoot = "" })
 	change("no placement token", fenced, func(s *adapterSettings) { s.placementToken = "" })
@@ -227,4 +235,47 @@ func TestAdapterClient_MeetsTheMachineListenerOverHTTP11(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = controlResp.Body.Close() })
 	assert.Equal(t, "HTTP/2.0", controlResp.Proto, "the control: the listener does offer h2")
+}
+
+// TestAdapterClient_DialsTheControlSocket holds what a standalone
+// supervisor's control is reached through (ADR-0085): a client given a
+// socket reaches the listener on it under the URL's name, verified as
+// that name. The control is the same client without the socket, which
+// dials the name over TCP and finds nothing there, so what connects is
+// the socket and not the address.
+func TestAdapterClient_DialsTheControlSocket(t *testing.T) {
+	dir := t.TempDir()
+	certFile, keyFile := writeTLSKeyPair(t, dir)
+	pair, err := tls.LoadX509KeyPair(certFile, keyFile)
+	require.NoError(t, err)
+	socket := filepath.Join(dir, "control.sock")
+	ln, err := net.Listen("unix", socket)
+	require.NoError(t, err)
+	srv := &http.Server{
+		Handler:           http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }),
+		TLSConfig:         &tls.Config{Certificates: []tls.Certificate{pair}, MinVersion: tls.VersionTLS13},
+		ReadHeaderTimeout: time.Second,
+	}
+	go func() { _ = srv.ServeTLS(ln, "", "") }()
+	t.Cleanup(func() { _ = srv.Close() })
+	// The listener's certificate is self-signed for localhost, so it is
+	// also the root the caller verifies it by.
+	agentCert, agentKey := writeTLSKeyPair(t, t.TempDir())
+	held, err := keyfile.NewPair(agentCert, agentKey)
+	require.NoError(t, err)
+
+	subject, err := adapterClient(held, certFile, "control root", socket)
+	require.NoError(t, err)
+	resp, err := subject.Get("https://localhost/v1/agents")
+	require.NoError(t, err, "the socket answers under the name the certificate carries")
+	t.Cleanup(func() { _ = resp.Body.Close() })
+	assert.Equal(t, http.StatusNoContent, resp.StatusCode)
+
+	control, err := adapterClient(held, certFile, "control root", "")
+	require.NoError(t, err)
+	controlResp, err := control.Get("https://localhost/v1/agents")
+	if controlResp != nil {
+		_ = controlResp.Body.Close()
+	}
+	require.Error(t, err, "the control: without the socket the name is dialled and nothing answers")
 }

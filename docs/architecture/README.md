@@ -547,7 +547,7 @@ ADRs:
   registers for one agent on an administrator's approval of the host's
   own keys; it activates that agent on the execution routes, renews
   its own certificate, and is replaced or revoked only by an
-  administrator; the host's runner is unbuilt
+  administrator; the host's runner is 0085's
 - [0083](./adr/0083-a-durable-reply-is-admitted-under-a-fixed-budget-from-its-creation-and-its-key-is-answered-after-it.md)
   — `POST /outbox-messages` under `durable-delivery.v1` stores a
   durable reply only while its creation instant is inside a fixed
@@ -560,7 +560,16 @@ ADRs:
   garam owns and the lifecycle authority serves: an adapter-derived
   request identifier, a verified binding, the highest token version,
   and no protected call before activation or after a definite refusal;
-  the adapter's half is built and no lifecycle authority serves it yet
+  the adapter's half is built, a standalone supervisor serves it
+  (0085), and the Operator control service does not yet
+- [0085](./adr/0085-a-standalone-supervisor-owns-each-generation-as-three-containers-on-a-rootless-docker-daemon.md)
+  — a standalone supervisor, a foreground host process holding the
+  Docker socket alone, owns each generation as a runtime, a workspace
+  and an adapter container in one network namespace over two volumes
+  it created and recognises by a nonce; it adopts by a recorded name
+  and nonce, drains with SIGTERM and no deadline until both writers
+  exit, and serves the adapter's activation over TLS on a socket only
+  that generation mounts
 - [0086](./adr/0086-a-legacy-agent-cuts-over-through-stages-garam-records-under-its-execution-lock.md)
   — a legacy agent moves its source to the Operator under its GRN
   through `agent-cutover.v1`: garam freezes the source against the

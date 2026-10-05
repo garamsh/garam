@@ -135,6 +135,12 @@ embedding:
 
 	// The change.
 	second := start(r2, "--replace")
+	s.eventually("a new runtime", func() bool {
+		id := h.container("runtime")
+		return id != "" && id != runtime
+	})
+	s.eventually("the runtime reporting R2", func() bool { return reported() == "r2-config" })
+	assert.Equal(t, "r2-config", h.record().Intent.Revision, "the supervisor's record names R2")
 	s.eventually("the generation running R2 activated", func() bool {
 		a := s.activations(agentGRN)
 		return len(a) == 2 && a[1].Ended == ""
@@ -144,8 +150,6 @@ embedding:
 	assert.Equal(t, before.volume, after.volume, "on the same memory volume")
 	assert.Equal(t, before.nonce, after.nonce)
 	assert.NotEqual(t, before.generation, after.generation, "a new generation")
-	s.eventually("the runtime reporting R2", func() bool { return reported() == "r2-config" })
-	assert.Equal(t, "r2-config", h.record().Intent.Revision, "the supervisor's record names R2")
 	state := func(id string) string {
 		said, _ := s.probeIn(h.container("adapter"), "get", "http://127.0.0.1:8080/agents/"+agentGRN+"/messages/"+id)
 		var m struct {

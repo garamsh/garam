@@ -65,13 +65,19 @@ const (
 	// runtime-reported execution. Reading the agent's identity, which
 	// agent:read is, grants none of it.
 	OperationExecutionRead Operation = "agent:execution-read"
+	// OperationAgentCutover moves a legacy agent's source to the hosted
+	// operator under the agent's existing GRN: a high-trust action no
+	// member role grants, carried as a durable reference on every
+	// cutover stage (ADR-0086).
+	OperationAgentCutover Operation = "agent:cutover"
 )
 
 // ParseOperation parses an operation a grant may carry.
 func ParseOperation(s string) (Operation, error) {
 	switch o := Operation(s); o {
 	case OperationAgentCreate, OperationAgentConfigure, OperationAgentActivate, OperationAgentRecover,
-		OperationTemplateRead, OperationTemplatePublish, OperationProfileRead, OperationExecutionRead:
+		OperationTemplateRead, OperationTemplatePublish, OperationProfileRead, OperationExecutionRead,
+		OperationAgentCutover:
 		return o, nil
 	}
 	return "", errorx.New(errorx.KindInvalidArgument, "unknown operation "+s)
@@ -87,7 +93,8 @@ func (o Operation) IsMintable() bool {
 // it is authorized on that agent and bound to where the agent runs when
 // it is minted.
 func (o Operation) TargetsAgent() bool {
-	return o == OperationAgentConfigure || o == OperationAgentRecover || o == OperationExecutionRead
+	return o == OperationAgentConfigure || o == OperationAgentRecover || o == OperationExecutionRead ||
+		o == OperationAgentCutover
 }
 
 // TargetsOrg reports whether the operation acts on what the Operator

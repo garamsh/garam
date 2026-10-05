@@ -133,6 +133,11 @@ const (
 	// certificate that agent held, so membership alone does not grant
 	// it.
 	ActionAgentEnroll = "agent:enroll"
+	// ActionAgentCutover is asking a delegated operator to take over a
+	// legacy agent's source under its existing GRN (ADR-0086). It
+	// decides which service an agent's settings come from, so
+	// membership alone does not grant it.
+	ActionAgentCutover = "agent:cutover"
 
 	// Reading and maintaining the org's agent templates (ADR-0075). A
 	// template is a starting point a definition copies once, so these
@@ -197,6 +202,7 @@ var machineActions = []struct {
 	{ActionAgentTemplatePublish, false},
 	{ActionExecutionProfileRead, true},
 	{ActionAgentExecutionRead, false},
+	{ActionAgentCutover, false},
 }
 
 // machineActionsHeld returns the machine actions an owner or admin

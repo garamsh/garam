@@ -1,7 +1,11 @@
 // Package cli owns the cobra command tree for the garam binary
 // (ADR-0003, ADR-0017): `serve api`, `serve authz`, `serve machine`,
-// `migrate`, `probe`, `issue-certificate`, and `adapter`. Commands are
-// constructed here; cmd/garam only executes the root.
+// `migrate`, `probe`, `issue-certificate`, `cutover-inventory` and
+// `adapter`. Commands are constructed here; cmd/garam only executes the
+// root.
+//
+// `cutover-inventory` reads, and prints no value: it accounts for an
+// organization's agent sources before their cutover (ADR-0086).
 //
 // `adapter` is the one command that serves nothing and connects
 // outward: the delivery loop docs/architecture/adapter.md specifies,
@@ -111,7 +115,8 @@ func NewRootCommand() *cobra.Command {
 		SilenceErrors: true,
 	}
 	root.AddCommand(newServeCommand(), newMigrateCommand(), newProbeCommand(),
-		newIssueCertificateCommand(), newAdapterCommand(), newStandaloneCommand())
+		newIssueCertificateCommand(), newAdapterCommand(), newStandaloneCommand(),
+		newCutoverInventoryCommand())
 	silenceUsageOnRun(root)
 	return root
 }

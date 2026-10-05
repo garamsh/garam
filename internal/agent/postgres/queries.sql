@@ -264,3 +264,91 @@ INSERT INTO agent_supervisor_renewals (
     supervisor_grn, predecessor_serial, request_id, request_sha256, serial,
     certificate_pem, issuer_pem, server_root_pem, not_after, created_at
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);
+
+-- Cutover (ADR-0086). Every stage takes the execution row FOR UPDATE
+-- first, then the definition row: the lock a claim serializes on.
+
+-- name: LockDefinition :one
+SELECT * FROM agent_definitions WHERE agent_grn = $1 FOR UPDATE;
+
+-- name: GetCutoverSource :one
+SELECT * FROM agent_definitions WHERE agent_grn = $1;
+
+-- name: GetCutoverAttempt :one
+SELECT * FROM agent_cutovers WHERE agent_grn = $1 AND import_id = $2;
+
+-- name: GetOpenCutover :one
+SELECT * FROM agent_cutovers WHERE agent_grn = $1 AND stage <> 'rolled_back';
+
+-- name: GetLatestCutover :one
+SELECT * FROM agent_cutovers WHERE agent_grn = $1
+ORDER BY created_at DESC, import_id DESC LIMIT 1;
+
+-- name: InsertCutover :one
+INSERT INTO agent_cutovers (
+    agent_grn, import_id, stage, frozen_digest, audience_grn, grant_id,
+    operation_ref, created_at
+) VALUES ($1, $2, 'frozen', $3, $4, $5, $6, $7)
+RETURNING *;
+
+-- name: SwitchCutover :one
+UPDATE agent_cutovers SET stage = 'switched', switched_at = $3
+WHERE agent_grn = $1 AND import_id = $2 AND stage = 'frozen'
+RETURNING *;
+
+-- name: RollBackCutover :one
+UPDATE agent_cutovers SET stage = 'rolled_back', ended_at = $3
+WHERE agent_grn = $1 AND import_id = $2 AND stage = 'frozen'
+RETURNING *;
+
+-- IsCutOver reads whether the agent's cutover is switched. It is a
+-- statement of its own after the execution lock, so its snapshot is
+-- taken once that lock is granted.
+-- name: IsCutOver :one
+SELECT EXISTS (
+    SELECT 1 FROM agent_cutovers WHERE agent_grn = $1 AND stage = 'switched'
+);
+
+-- ShareExecution holds the agent's execution row FOR SHARE until the
+-- transaction ends, so a switch either commits first or waits.
+-- name: ShareExecution :one
+SELECT mode FROM agent_executions WHERE agent_grn = $1 FOR SHARE;
+
+-- name: GetCutoverAgent :one
+SELECT e.mode, s.assignee_grn, s.epoch
+FROM agent_executions e
+JOIN agent_assignments s ON s.agent_grn = e.agent_grn
+WHERE e.agent_grn = $1;
+
+-- The inventory reads an organization from one snapshot: every agent
+-- with its execution, assignment and definition, each agent's most
+-- recent attempt, every definition no operator claimed, and every
+-- template.
+-- name: InventoryAgents :many
+SELECT a.grn, e.mode, e.lineage, s.assignee_grn, s.epoch,
+       d.name AS definition_name, d.operator_grn AS definition_operator_grn,
+       d.agent_values AS definition_values,
+       (SELECT count(*) FROM agent_credentials c WHERE c.agent_grn = a.grn) AS tracked_credentials
+FROM agents a
+JOIN agent_executions e ON e.agent_grn = a.grn
+LEFT JOIN agent_assignments s ON s.agent_grn = a.grn
+LEFT JOIN agent_definitions d ON d.agent_grn = a.grn
+WHERE a.org_grn = $1
+ORDER BY a.grn;
+
+-- name: InventoryAttempts :many
+SELECT DISTINCT ON (c.agent_grn) c.agent_grn, c.import_id, c.stage
+FROM agent_cutovers c
+JOIN agents a ON a.grn = c.agent_grn
+WHERE a.org_grn = $1
+ORDER BY c.agent_grn, c.created_at DESC, c.import_id DESC;
+
+-- name: InventoryUnclaimedDefinitions :many
+SELECT d.* FROM agent_definitions d
+WHERE d.org_grn = $1 AND NOT EXISTS (SELECT 1 FROM agents a WHERE a.grn = d.agent_grn)
+ORDER BY d.agent_grn;
+
+-- name: InventoryTemplates :many
+SELECT t.grn, t.name, t.agent_values FROM agent_templates t
+WHERE t.org_grn = $1
+ORDER BY t.grn;

@@ -1761,11 +1761,13 @@ paths:
 
 
         `agent:create` targets the controller that will run the agent
-        and is authorized on the organization; `agent:configure` and
-        `agent:recover` target the agent, are authorized on it, and bind
-        where it runs now. `agent:recover` authorizes one exact
-        credential recovery, whose request body `bodySha256` digests
-        (ADR-0078). `agent-template:read`, `agent-template:publish` and
+        and is authorized on the organization; `agent:configure`,
+        `agent:recover` and `agent:cutover` target the agent, are
+        authorized on it, and bind where it runs now. `agent:recover`
+        authorizes one exact credential recovery, whose request body
+        `bodySha256` digests (ADR-0078). `agent:cutover` authorizes
+        moving a legacy agent's source to the audience (ADR-0086).
+        `agent-template:read`, `agent-template:publish` and
         `execution-profile:read` target this organization and are
         authorized on it; `agent:execution-read` targets the agent, is
         authorized on it and binds where it runs now. The audience's
@@ -3159,7 +3161,7 @@ components:
         carries none of the fields an `Agent` carries. `agentGrn` is
         the identity garam minted for the agent this definition
         describes, and no agent answers under it until the claim.
-      required: [agentGrn, orgGrn, name, operatorGrn, values, definedBy, createdAt]
+      required: [agentGrn, orgGrn, name, operatorGrn, values, definedBy, createdAt, cutover]
       properties:
         agentGrn:
           type: string
@@ -3180,6 +3182,22 @@ components:
         createdAt:
           type: string
           format: date-time
+        cutover:
+          description: >-
+            The agent's open cutover attempt (ADR-0086), null where none
+            is open. A `frozen` or `switched` definition is archival: its
+            values stay preserved here and are no longer what its
+            operator reads, and only its name still changes.
+          oneOf:
+            - $ref: '#/components/schemas/AgentDefinitionCutover'
+            - type: 'null'
+    AgentDefinitionCutover:
+      type: object
+      required: [stage]
+      properties:
+        stage:
+          type: string
+          enum: [frozen, switched]
     DelegationWrite:
       type: object
       required: [requestId, controllers, operations, expiresAt]
@@ -3200,7 +3218,7 @@ components:
         operations:
           type: array
           minItems: 1
-          maxItems: 8
+          maxItems: 9
           uniqueItems: true
           items:
             $ref: '#/components/schemas/DelegatedOperation'
@@ -3251,7 +3269,7 @@ components:
           format: date-time
     DelegatedOperation:
       type: string
-      enum: [agent:create, agent:configure, agent:activate, agent:recover, agent-template:read, agent-template:publish, execution-profile:read, agent:execution-read]
+      enum: [agent:create, agent:configure, agent:activate, agent:recover, agent-template:read, agent-template:publish, execution-profile:read, agent:execution-read, agent:cutover]
       description: >-
         `agent:activate` bounds the hosted operator's own lifecycle
         authority; no user mints it. `agent-template:read`,
@@ -3271,13 +3289,13 @@ components:
           description: GRN of the hosted operator that will act.
         operation:
           type: string
-          enum: [agent:create, agent:configure, agent:recover, agent-template:read, agent-template:publish, execution-profile:read, agent:execution-read]
+          enum: [agent:create, agent:configure, agent:recover, agent-template:read, agent-template:publish, execution-profile:read, agent:execution-read, agent:cutover]
         target:
           type: string
           description: >-
             Controller GRN for `agent:create`; agent GRN for
-            `agent:configure`, `agent:recover` and
-            `agent:execution-read`; this organization's GRN for
+            `agent:configure`, `agent:recover`, `agent:execution-read`
+            and `agent:cutover`; this organization's GRN for
             `agent-template:read`, `agent-template:publish` and
             `execution-profile:read`.
         requestId:

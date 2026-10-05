@@ -29,9 +29,10 @@ type Service interface {
 	Create(ctx context.Context, operator grn.GRN) (*Assignment, error)
 	// IssueCertificate returns the certificate the named agent
 	// authenticates with, for an agent assigned to a calling operator at
-	// the current epoch whose execution is still legacy, and refuses
-	// every other caller. An agent renews its own through
-	// ExecutionService.Renew, inside its execution fence (ADR-0078).
+	// the current epoch whose execution is still legacy and whose
+	// cutover is not switched, and refuses every other caller. An agent
+	// renews its own through ExecutionService.Renew, inside its
+	// execution fence (ADR-0078).
 	IssueCertificate(ctx context.Context, caller, agentGRN grn.GRN) (*Certificate, error)
 	// Definitions returns the definitions naming operator, each with
 	// its claim state. The definition's operator field is the scoping,
@@ -100,15 +101,21 @@ func (s *service) IssueCertificate(ctx context.Context, caller, agentGRN grn.GRN
 	}
 	// Once an agent's execution is fenced, a certificate outside its
 	// lineage would reach nothing, and one inside it is issued only by
-	// renewal or recovery (ADR-0078).
-	mode, err := s.store.ExecutionMode(ctx, agentGRN)
+	// renewal or recovery (ADR-0078); once its cutover is switched, its
+	// operator no longer owns it (ADR-0086). The first read spares a
+	// signature; the second decides, after signing, so no certificate
+	// is answered once a switch has committed.
+	if err := s.store.AdmitLegacyIssuance(ctx, agentGRN); err != nil {
+		return nil, err
+	}
+	certificate, err := s.issuer.Issue(ctx, agentGRN)
 	if err != nil {
 		return nil, err
 	}
-	if mode == ModeFenced {
-		return nil, ErrIssuedByLifecycle
+	if err := s.store.AdmitLegacyIssuance(ctx, agentGRN); err != nil {
+		return nil, err
 	}
-	return s.issuer.Issue(ctx, agentGRN)
+	return certificate, nil
 }
 
 // holds refuses an operator the agent is not assigned to. The row

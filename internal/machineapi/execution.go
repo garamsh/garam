@@ -52,6 +52,10 @@ func (s *Server) ActivateAgent(w http.ResponseWriter, r *http.Request, agentGRN 
 		return
 	}
 	res, err := s.executions.Activate(r.Context(), caller, in)
+	if errors.Is(err, agent.ErrCutoverRequired) {
+		writeErrorReason(w, http.StatusConflict, err, "cutover_required")
+		return
+	}
 	if err != nil {
 		writeExecutionError(w, r, err)
 		return

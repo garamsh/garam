@@ -16,6 +16,24 @@ import (
 	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
+// Defines values for AgentDefinitionCutoverStage.
+const (
+	Frozen   AgentDefinitionCutoverStage = "frozen"
+	Switched AgentDefinitionCutoverStage = "switched"
+)
+
+// Valid indicates whether the value is a known member of the AgentDefinitionCutoverStage enum.
+func (e AgentDefinitionCutoverStage) Valid() bool {
+	switch e {
+	case Frozen:
+		return true
+	case Switched:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AgentProvisioningState.
 const (
 	AgentProvisioningStateFailed      AgentProvisioningState = "failed"
@@ -66,6 +84,7 @@ const (
 	DelegatedOperationAgentActivate        DelegatedOperation = "agent:activate"
 	DelegatedOperationAgentConfigure       DelegatedOperation = "agent:configure"
 	DelegatedOperationAgentCreate          DelegatedOperation = "agent:create"
+	DelegatedOperationAgentCutover         DelegatedOperation = "agent:cutover"
 	DelegatedOperationAgentExecutionRead   DelegatedOperation = "agent:execution-read"
 	DelegatedOperationAgentRecover         DelegatedOperation = "agent:recover"
 	DelegatedOperationAgentTemplatePublish DelegatedOperation = "agent-template:publish"
@@ -81,6 +100,8 @@ func (e DelegatedOperation) Valid() bool {
 	case DelegatedOperationAgentConfigure:
 		return true
 	case DelegatedOperationAgentCreate:
+		return true
+	case DelegatedOperationAgentCutover:
 		return true
 	case DelegatedOperationAgentExecutionRead:
 		return true
@@ -119,6 +140,7 @@ func (e InvitationCreateRole) Valid() bool {
 const (
 	OperationAuthorityRequestOperationAgentConfigure       OperationAuthorityRequestOperation = "agent:configure"
 	OperationAuthorityRequestOperationAgentCreate          OperationAuthorityRequestOperation = "agent:create"
+	OperationAuthorityRequestOperationAgentCutover         OperationAuthorityRequestOperation = "agent:cutover"
 	OperationAuthorityRequestOperationAgentExecutionRead   OperationAuthorityRequestOperation = "agent:execution-read"
 	OperationAuthorityRequestOperationAgentRecover         OperationAuthorityRequestOperation = "agent:recover"
 	OperationAuthorityRequestOperationAgentTemplatePublish OperationAuthorityRequestOperation = "agent-template:publish"
@@ -132,6 +154,8 @@ func (e OperationAuthorityRequestOperation) Valid() bool {
 	case OperationAuthorityRequestOperationAgentConfigure:
 		return true
 	case OperationAuthorityRequestOperationAgentCreate:
+		return true
+	case OperationAuthorityRequestOperationAgentCutover:
 		return true
 	case OperationAuthorityRequestOperationAgentExecutionRead:
 		return true
@@ -244,6 +268,9 @@ type AgentDefinition struct {
 	AgentGrn  string    `json:"agentGrn"`
 	CreatedAt time.Time `json:"createdAt"`
 
+	// Cutover The agent's open cutover attempt (ADR-0086), null where none is open. A `frozen` or `switched` definition is archival: its values stay preserved here and are no longer what its operator reads, and only its name still changes.
+	Cutover *AgentDefinitionCutover `json:"cutover"`
+
 	// DefinedBy The member that defined the agent.
 	DefinedBy string `json:"definedBy"`
 
@@ -267,6 +294,14 @@ type AgentDefinitionCreate struct {
 	// Values What an operator constructs the agent from. garam stores the keys and the strings and interprets neither: what the payload means belongs to the operator that reads it. A key is one to 64 characters of lowercase letters, digits and `-`; a value is at most 4096 bytes; at most 32 entries.
 	Values *AgentValues `json:"values,omitempty"`
 }
+
+// AgentDefinitionCutover defines model for AgentDefinitionCutover.
+type AgentDefinitionCutover struct {
+	Stage AgentDefinitionCutoverStage `json:"stage"`
+}
+
+// AgentDefinitionCutoverStage defines model for AgentDefinitionCutover.Stage.
+type AgentDefinitionCutoverStage string
 
 // AgentDefinitionPatch A change to what the organization calls a defined agent.
 type AgentDefinitionPatch struct {
@@ -493,7 +528,7 @@ type OperationAuthorityRequest struct {
 	// RequestTarget Required for `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `agent:execution-read`, and refused with 400 for every other operation. The exact origin-form request target the Operator will receive: the escaped path and raw query, with no scheme or authority and no empty, `.` or `..` path segment, taken from the same URL the request is sent to. garam binds it as given and decodes nothing.
 	RequestTarget *string `json:"requestTarget,omitempty"`
 
-	// Target Controller GRN for `agent:create`; agent GRN for `agent:configure`, `agent:recover` and `agent:execution-read`; this organization's GRN for `agent-template:read`, `agent-template:publish` and `execution-profile:read`.
+	// Target Controller GRN for `agent:create`; agent GRN for `agent:configure`, `agent:recover`, `agent:execution-read` and `agent:cutover`; this organization's GRN for `agent-template:read`, `agent-template:publish` and `execution-profile:read`.
 	Target string `json:"target"`
 }
 

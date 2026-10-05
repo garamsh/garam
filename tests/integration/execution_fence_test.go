@@ -68,10 +68,10 @@ func (c *shiftedClock) shift(by time.Duration) {
 // executionStack is both listeners as the serve commands compose them,
 // over one database: acme's owner and member on the browser surface;
 // on the machine surface the hosted control service, whose grant
-// covers agent:activate, agent:recover and agent:configure for the
-// controller, the controller itself, and an agent the controller
-// created with the certificate the legacy route issued it. A second
-// agent of the controller posts to the first.
+// covers agent:activate, agent:recover, agent:configure and
+// agent:cutover for the controller, the controller itself, and an
+// agent the controller created with the certificate the legacy route
+// issued it. A second agent of the controller posts to the first.
 type executionStack struct {
 	pool    *pgxpool.Pool
 	browser string
@@ -105,7 +105,18 @@ type executionStack struct {
 	grant *string
 }
 
+// newExecutionStack is the stack once its agent's cutover is switched
+// and before any activation: a legacy agent's first activation waits
+// for its switch (ADR-0086).
 func newExecutionStack(t *testing.T, p *pgxpool.Pool, engine grpc.ClientConnInterface) *executionStack {
+	t.Helper()
+	s := newLegacyStack(t, p, engine)
+	s.cutOver(t, s.agent)
+	return s
+}
+
+// newLegacyStack is the stack before its agent's cutover.
+func newLegacyStack(t *testing.T, p *pgxpool.Pool, engine grpc.ClientConnInterface) *executionStack {
 	t.Helper()
 	ctx := context.Background()
 	orgs := org.NewPostgresStore(p)
@@ -158,7 +169,7 @@ func newExecutionStack(t *testing.T, p *pgxpool.Pool, engine grpc.ClientConnInte
 	s.serve(t)
 	s.hostedTLS = machineClient(t, installed(t, p, issuer, s.hosted))
 	s.controlTLS = machineClient(t, installed(t, p, issuer, s.controller))
-	s.delegate(t, "agent:activate", "agent:recover", "agent:configure")
+	s.delegate(t, "agent:activate", "agent:recover", "agent:configure", "agent:cutover")
 
 	status, body := machineRequest(t, s.controlTLS, http.MethodPost, s.machine+"/agents")
 	require.Equal(t, http.StatusCreated, status, string(body))

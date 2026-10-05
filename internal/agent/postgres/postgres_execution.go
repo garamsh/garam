@@ -39,6 +39,17 @@ func (s *Store) Activate(ctx context.Context, req agent.ActivationRequest) (*age
 		if !current {
 			return agent.ErrCredentialFenced
 		}
+		// A legacy agent's first activation is its cutover's last step,
+		// admitted only once the switch is recorded (ADR-0086).
+		if exec.Mode == string(agent.ModeLegacy) {
+			cutOver, err := q.IsCutOver(ctx, req.Agent.String())
+			if err != nil {
+				return storageError(err, "read cutover", nil, nil)
+			}
+			if !cutOver {
+				return agent.ErrCutoverRequired
+			}
+		}
 		prior, err := q.GetActivationByRequest(ctx, db.GetActivationByRequestParams{
 			AgentGrn: req.Agent.String(), RequestID: string(req.RequestID),
 		})

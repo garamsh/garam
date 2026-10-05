@@ -46,6 +46,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/garam/internal/workload"
@@ -112,6 +113,7 @@ type stack struct {
 	org        string
 	rootKey    *ecdsa.PrivateKey
 	root       *x509.Certificate
+	conn       *pgx.Conn
 }
 
 func newStack(t *testing.T) *stack {

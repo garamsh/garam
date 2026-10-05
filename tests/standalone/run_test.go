@@ -93,13 +93,17 @@ func (r *running) stop() error {
 	return r.err
 }
 
-// db is the stack's database, for reading what garam recorded.
+// db is the stack's database, for reading what garam recorded: one
+// connection for the stack, opened on first use.
 func (s *stack) db() *pgx.Conn {
 	s.t.Helper()
-	conn, err := pgx.Connect(context.Background(), s.databaseURL)
-	require.NoError(s.t, err)
-	s.t.Cleanup(func() { _ = conn.Close(context.Background()) })
-	return conn
+	if s.conn == nil {
+		conn, err := pgx.Connect(context.Background(), s.databaseURL)
+		require.NoError(s.t, err)
+		s.t.Cleanup(func() { _ = conn.Close(context.Background()) })
+		s.conn = conn
+	}
+	return s.conn
 }
 
 // activation is one row garam holds for an agent's activations.

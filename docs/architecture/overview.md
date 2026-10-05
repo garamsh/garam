@@ -98,8 +98,9 @@ collaborate on a shared plan.
   immutable and a replacement or withdrawal is final for what was
   minted under it; every mint, read back and proof is decided from
   current state. Delegating is `operator:delegate`, creating
-  `agent:create`, configuring `agent:configure` and recovering
-  `agent:recover`. Reading the operator's published templates and
+  `agent:create`, configuring `agent:configure`, recovering
+  `agent:recover` and cutting a legacy agent over `agent:cutover`
+  (ADR-0086). Reading the operator's published templates and
   profiles, publishing a template version and reading an agent's
   execution are each an operation of their own, bound to the exact
   request target, and the console sends every one only to the control

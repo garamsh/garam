@@ -561,3 +561,10 @@ ADRs:
   request identifier, a verified binding, the highest token version,
   and no protected call before activation or after a definite refusal;
   the adapter's half is built and no lifecycle authority serves it yet
+- [0086](./adr/0086-a-legacy-agent-cuts-over-through-stages-garam-records-under-its-execution-lock.md)
+  — a legacy agent moves its source to the Operator under its GRN
+  through `agent-cutover.v1`: garam freezes the source against the
+  import's digest and records the switch under the agent's execution
+  lock, holds the agent's first activation and its operator's
+  certificate route on that switch, keeps the values archival, and
+  names each refusal in the machine `Error`'s `reason`

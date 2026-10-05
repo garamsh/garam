@@ -294,10 +294,15 @@ records where the agent runs now.
 Recovery targets the agent, is decided on `agent:recover` against it,
 and records where the agent runs now; the recovery it authorizes is
 answered once, and a second recovery under it is refused
-([agents.md](./agents.md) §Separated execution). Every role holds
-`agent:create`; only owner and admin hold `agent:configure` and
-`agent:recover`, because execution settings choose what runs on a host
-and a recovery fences every certificate the agent held.
+([agents.md](./agents.md) §Separated execution). Cutover targets the
+agent, is decided on `agent:cutover` against it, records where the
+agent runs now and binds no body: its reference is carried on every
+stage of a legacy agent's cutover and rechecked on each (ADR-0086).
+Every role holds `agent:create`; only owner and admin hold
+`agent:configure`, `agent:recover` and `agent:cutover`, because
+execution settings choose what runs on a host, a recovery fences every
+certificate the agent held, and a cutover moves which service owns the
+agent's settings.
 `agent:activate` is a grant operation only, bounding the hosted
 operator's own lifecycle authority; no member mints it.
 

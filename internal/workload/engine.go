@@ -2,6 +2,7 @@ package workload
 
 import (
 	"context"
+	"io"
 	"io/fs"
 	"time"
 )
@@ -43,6 +44,11 @@ type Engine interface {
 	WaitExited(ctx context.Context, id string) error
 	// RemoveContainer removes a container that is not running.
 	RemoveContainer(ctx context.Context, id string) error
+	// ArchiveFrom answers what is at path in a container, created or
+	// exited, as a tar stream, reading a volume it mounts there too.
+	ArchiveFrom(ctx context.Context, id, path string) (io.ReadCloser, error)
+	// Logs answers the last lines a container wrote.
+	Logs(ctx context.Context, id string) (string, error)
 }
 
 // VolumeState is what the engine says of a volume.
@@ -67,6 +73,8 @@ type ContainerSpec struct {
 	// NetworkOf is the container whose network namespace this one
 	// joins, empty for one of its own.
 	NetworkOf string
+	// NoNetwork gives the container no network at all.
+	NoNetwork bool
 	Volumes   []VolumeMount
 	Binds     []BindMount
 	CapAdd    []string
@@ -77,9 +85,10 @@ type ContainerSpec struct {
 // exists, which is why the supervisor checks a volume again after
 // each create.
 type VolumeMount struct {
-	Volume  string
-	Target  string
-	Subpath string
+	Volume   string
+	Target   string
+	Subpath  string
+	ReadOnly bool
 }
 
 // PathState is what is at a path: its mode, and a link's target.
@@ -116,6 +125,8 @@ type ContainerState struct {
 	Status       ContainerStatus
 	StartedAt    time.Time
 	RestartCount int
+	// ExitCode is the status a container that exited ended with.
+	ExitCode int
 	// Volumes is each named volume mounted, by target.
 	Volumes map[string]string
 }

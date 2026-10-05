@@ -6,10 +6,12 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
+	"io"
 	"strings"
 	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
+	"github.com/moby/moby/api/pkg/stdcopy"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/mount"
 	"github.com/moby/moby/client"
@@ -81,7 +83,7 @@ func (e *Engine) InspectVolume(ctx context.Context, name string) (*workload.Volu
 func (e *Engine) CreateContainer(ctx context.Context, spec workload.ContainerSpec) (string, error) {
 	mounts := make([]mount.Mount, 0, len(spec.Volumes)+len(spec.Binds))
 	for _, v := range spec.Volumes {
-		m := mount.Mount{Type: mount.TypeVolume, Source: v.Volume, Target: v.Target}
+		m := mount.Mount{Type: mount.TypeVolume, Source: v.Volume, Target: v.Target, ReadOnly: v.ReadOnly}
 		if v.Subpath != "" {
 			m.VolumeOptions = &mount.VolumeOptions{Subpath: v.Subpath}
 		}
@@ -97,8 +99,11 @@ func (e *Engine) CreateContainer(ctx context.Context, spec workload.ContainerSpe
 		SecurityOpt:   []string{"no-new-privileges"},
 		RestartPolicy: container.RestartPolicy{Name: container.RestartPolicyDisabled},
 	}
-	if spec.NetworkOf != "" {
+	switch {
+	case spec.NetworkOf != "":
 		host.NetworkMode = container.NetworkMode("container:" + spec.NetworkOf)
+	case spec.NoNetwork:
+		host.NetworkMode = container.NetworkMode("none")
 	}
 	res, err := e.api.ContainerCreate(ctx, client.ContainerCreateOptions{
 		Name: spec.Name,
@@ -139,7 +144,7 @@ func (e *Engine) InspectContainer(ctx context.Context, nameOrID string) (*worklo
 		case container.StateCreated:
 			state.Status = workload.ContainerCreated
 		case container.StateExited, container.StateDead:
-			state.Status = workload.ContainerExited
+			state.Status, state.ExitCode = workload.ContainerExited, c.State.ExitCode
 		}
 		if started, err := time.Parse(time.RFC3339Nano, c.State.StartedAt); err == nil && !started.IsZero() &&
 			state.Status != workload.ContainerCreated {
@@ -224,4 +229,31 @@ func (e *Engine) WaitExited(ctx context.Context, id string) error {
 func (e *Engine) RemoveContainer(ctx context.Context, id string) error {
 	_, err := e.api.ContainerRemove(ctx, id, client.ContainerRemoveOptions{})
 	return kindOf(err, "remove "+id)
+}
+
+// ArchiveFrom reads path out of a container as the engine's archive,
+// which a created or exited container answers too.
+func (e *Engine) ArchiveFrom(ctx context.Context, id, path string) (io.ReadCloser, error) {
+	res, err := e.api.CopyFromContainer(ctx, id, client.CopyFromContainerOptions{SourcePath: path})
+	if err != nil {
+		return nil, kindOf(err, "copy "+path+" out of "+id)
+	}
+	return res.Content, nil
+}
+
+// logLines bounds what Logs answers: the reason a one-shot container
+// gave is in its last lines.
+const logLines = "20"
+
+func (e *Engine) Logs(ctx context.Context, id string) (string, error) {
+	res, err := e.api.ContainerLogs(ctx, id, client.ContainerLogsOptions{ShowStdout: true, ShowStderr: true, Tail: logLines})
+	if err != nil {
+		return "", kindOf(err, "logs of "+id)
+	}
+	defer func() { _ = res.Close() }()
+	var out bytes.Buffer
+	if _, err := stdcopy.StdCopy(&out, &out, res); err != nil {
+		return "", errorx.Wrap(err, "docker: logs of "+id, errorx.KindUnavailable)
+	}
+	return strings.TrimSpace(out.String()), nil
 }

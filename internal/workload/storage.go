@@ -21,22 +21,29 @@ func (s *Supervisor) storage(ctx context.Context) error {
 				return err
 			}
 		}
-		rec := *v.rec
-		_, err := s.engine.InspectVolume(ctx, rec.Name)
-		if errors.Is(err, ErrAbsent) && !rec.Confirmed {
-			err = s.engine.CreateVolume(ctx, rec.Name, map[string]string{labelNonce: rec.Nonce})
-		}
-		if err != nil && !errors.Is(err, ErrAbsent) {
+		if err := s.ensureVolume(ctx, *v.rec); err != nil {
 			return err
 		}
-		if err := s.verifyVolume(ctx, rec); err != nil {
-			return err
-		}
-		if !rec.Confirmed {
-			if err := s.locked(func() { rec.Confirmed = true }); err != nil {
-				return err
-			}
-		}
+	}
+	return nil
+}
+
+// ensureVolume makes sure the volume rec names is the one this host
+// created: created where the record has not seen it yet, and refused
+// where it is gone or carries another nonce.
+func (s *Supervisor) ensureVolume(ctx context.Context, rec *volumeRecord) error {
+	_, err := s.engine.InspectVolume(ctx, rec.Name)
+	if errors.Is(err, ErrAbsent) && !rec.Confirmed {
+		err = s.engine.CreateVolume(ctx, rec.Name, map[string]string{labelNonce: rec.Nonce})
+	}
+	if err != nil && !errors.Is(err, ErrAbsent) {
+		return err
+	}
+	if err := s.verifyVolume(ctx, rec); err != nil {
+		return err
+	}
+	if !rec.Confirmed {
+		return s.locked(func() { rec.Confirmed = true })
 	}
 	return nil
 }

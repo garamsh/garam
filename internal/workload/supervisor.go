@@ -46,6 +46,9 @@ var workspaceCaps = []string{"SETUID", "SETGID", "CHOWN", "SYS_ADMIN", "KILL"}
 // the image's configuration.
 var immutableImage = regexp.MustCompile(`^([^@\s]+@)?sha256:[0-9a-f]{64}$`)
 
+// volumeName is a name the engine accepts for a volume.
+var volumeName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]+$`)
+
 // errOver is a generation that can no longer run: a container of it
 // exited, was removed, or restarted. It is drained, never resumed.
 var errOver = errorx.New(errorx.KindAborted, "workload: the generation is over")
@@ -97,6 +100,9 @@ func NewSupervisor(engine Engine, garam Activator, cfg Config) (*Supervisor, err
 			return nil, errorx.New(errorx.KindInvalidArgument, "workload: every image is named by its digest or its ID: "+image)
 		}
 	}
+	if d.MoveMemoryTo != "" && !volumeName.MatchString(d.MoveMemoryTo) {
+		return nil, errorx.New(errorx.KindInvalidArgument, "workload: not a volume name: "+d.MoveMemoryTo)
+	}
 	issuer := x509.NewCertPool()
 	if !issuer.AppendCertsFromPEM(cfg.Adapter.IssuerPEM) {
 		return nil, errorx.New(errorx.KindInvalidArgument, "workload: the agent's issuer holds no certificate")
@@ -129,16 +135,34 @@ func (s *Supervisor) run(ctx context.Context) error {
 	if err := s.storage(ctx); err != nil {
 		return err
 	}
-	in, err := s.recover(ctx)
+	owed, err := s.moveOwed()
+	if err != nil {
+		return err
+	}
+	in, err := s.recover(ctx, owed)
 	if err != nil {
 		return err
 	}
 	if in == nil {
+		if err := s.moveEnded(ctx); err != nil {
+			return err
+		}
+		if owed {
+			if err := s.move(ctx); err != nil {
+				return err
+			}
+		}
 		if in, err = s.newIntent(); err != nil {
 			return err
 		}
 	}
-	return s.supervise(ctx, in)
+	err = s.supervise(ctx, in)
+	if errors.Is(err, ErrGenerationEnded) {
+		if refused := s.moveEnded(ctx); refused != nil {
+			return refused
+		}
+	}
+	return err
 }
 
 // save writes the record. The caller holds mu.
@@ -169,7 +193,12 @@ func (s *Supervisor) newIntent() (*intent, error) {
 	for _, r := range roles {
 		in.container(r).Name = s.cfg.Prefix + string(r) + "-" + id
 	}
-	if err := s.locked(func() { s.st.Intent = in }); err != nil {
+	if err := s.locked(func() {
+		s.st.Intent = in
+		if mv := s.st.Move; mv.awaiting() && mv.Intent == "" {
+			mv.Intent = in.ID
+		}
+	}); err != nil {
 		return nil, err
 	}
 	slog.Info("generation intended", slog.String("intent", in.ID), slog.Bool("require_store", in.RequireStore))

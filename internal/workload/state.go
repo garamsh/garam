@@ -38,6 +38,8 @@ type state struct {
 	// for, which none is accepted for again.
 	Generations []string `json:"generations,omitempty"`
 	Intent      *intent  `json:"intent,omitempty"`
+	// Move is the latest move of the memory to another volume.
+	Move *move `json:"move,omitempty"`
 }
 
 // volumeRecord is a volume the supervisor created, recognised by the
@@ -53,6 +55,10 @@ type volumeRecord struct {
 	// Served is a runtime having reported serving on this memory
 	// volume, so its store exists and every later start requires it.
 	Served bool `json:"served,omitempty"`
+	// WriterExit is the status the last runtime that ran on this memory
+	// volume exited with, as its drain observed it, and absent where no
+	// drain did. A move takes only a store whose writer exited 0.
+	WriterExit *int `json:"writerExit,omitempty"`
 }
 
 // phase is where an intent stands.

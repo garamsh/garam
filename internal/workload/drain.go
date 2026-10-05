@@ -48,6 +48,11 @@ func (s *Supervisor) drain(ctx context.Context, in *intent) error {
 				}
 			}
 		}
+		if stage[0] == RoleRuntime {
+			if err := s.writerExited(ctx, in, ids[RoleRuntime]); err != nil {
+				return err
+			}
+		}
 	}
 	for _, r := range roles {
 		if id := ids[r]; id != "" {
@@ -60,4 +65,30 @@ func (s *Supervisor) drain(ctx context.Context, in *intent) error {
 		return errorx.Wrap(err, "workload: generation directory", errorx.KindUnavailable)
 	}
 	return s.locked(func() { in.Phase = phaseEnded })
+}
+
+// writerExited records on the memory volume how the intent's runtime
+// exited: its status where the engine reports it exited after a start,
+// and unknown where the container the record names is gone. A runtime
+// never created or never started wrote nothing, and leaves the record
+// as it was.
+func (s *Supervisor) writerExited(ctx context.Context, in *intent, id string) error {
+	if id == "" {
+		if in.Runtime.ID == "" {
+			return nil
+		}
+		return s.locked(func() { s.st.Memory.WriterExit = nil })
+	}
+	c, err := s.engine.InspectContainer(ctx, id)
+	if errors.Is(err, ErrAbsent) {
+		return s.locked(func() { s.st.Memory.WriterExit = nil })
+	}
+	if err != nil {
+		return err
+	}
+	if c.Status != ContainerExited || c.StartedAt.IsZero() {
+		return nil
+	}
+	code := c.ExitCode
+	return s.locked(func() { s.st.Memory.WriterExit = &code })
 }

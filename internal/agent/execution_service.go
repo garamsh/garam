@@ -76,7 +76,7 @@ type ExecutionService interface {
 	IssueInitialCertificate(ctx context.Context, caller grn.GRN, in InitialCertificateInput) (*InitialCertificate, bool, error)
 	// GetCutover answers what the Operator imports a legacy agent
 	// from, and the agent's most recent cutover attempt (ADR-0086).
-	GetCutover(ctx context.Context, caller, agentGRN grn.GRN, operationRef string) (*Cutover, error)
+	GetCutover(ctx context.Context, caller grn.GRN, in CutoverInput) (*Cutover, error)
 	// FreezeCutover freezes the agent's source once it matches the
 	// digest the Operator imported, and answers an identical retry
 	// with the same attempt rather than another.

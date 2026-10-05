@@ -67,8 +67,9 @@ const (
 	OperationExecutionRead Operation = "agent:execution-read"
 	// OperationAgentCutover moves a legacy agent's source to the hosted
 	// operator under the agent's existing GRN: a high-trust action no
-	// member role grants, carried as a durable reference on every
-	// cutover stage (ADR-0086).
+	// member role grants. Each reference binds the request target of the
+	// one cutover route it is carried to, so it authorizes one stage
+	// (ADR-0086).
 	OperationAgentCutover Operation = "agent:cutover"
 )
 
@@ -109,7 +110,7 @@ func (o Operation) TargetsOrg() bool {
 // operation that does was added with that binding; the earlier ones
 // bind only their body and take none.
 func (o Operation) BindsRequestTarget() bool {
-	return o.TargetsOrg() || o == OperationExecutionRead
+	return o.TargetsOrg() || o == OperationExecutionRead || o == OperationAgentCutover
 }
 
 // RequestID is a caller's stable identifier for one write, which makes

@@ -38,7 +38,8 @@ func (s *Server) GetAgentCutover(w http.ResponseWriter, r *http.Request, agentGR
 	if !ok {
 		return
 	}
-	c, err := s.executions.GetCutover(r.Context(), caller, subject, ref)
+	c, err := s.executions.GetCutover(r.Context(), caller,
+		agent.CutoverInput{Agent: subject, OperationRef: ref, RequestTarget: requestTarget(r)})
 	if err != nil {
 		writeCutoverError(w, r, err)
 		return
@@ -86,7 +87,7 @@ func (s *Server) FreezeAgentCutover(w http.ResponseWriter, r *http.Request, agen
 		writeError(w, errorx.Wrap(err, "cutover freeze", errorx.KindInvalidArgument))
 		return
 	}
-	in, err := freezeInput(subject, ref, body)
+	in, err := freezeInput(subject, ref, requestTarget(r), body)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -103,7 +104,7 @@ func (s *Server) FreezeAgentCutover(w http.ResponseWriter, r *http.Request, agen
 	writeJSON(w, status, attemptToAPI(attempt))
 }
 
-func freezeInput(subject grn.GRN, ref string, body machinegen.CutoverFreezeRequest) (agent.FreezeInput, error) {
+func freezeInput(subject grn.GRN, ref, target string, body machinegen.CutoverFreezeRequest) (agent.FreezeInput, error) {
 	importID, err := agent.ParseImportID(body.ImportId)
 	if err != nil {
 		return agent.FreezeInput{}, err
@@ -117,7 +118,7 @@ func freezeInput(subject grn.GRN, ref string, body machinegen.CutoverFreezeReque
 		return agent.FreezeInput{}, err
 	}
 	return agent.FreezeInput{
-		CutoverInput: agent.CutoverInput{Agent: subject, ImportID: importID, OperationRef: ref},
+		CutoverInput: agent.CutoverInput{Agent: subject, ImportID: importID, OperationRef: ref, RequestTarget: target},
 		Epoch:        epoch,
 		SourceDigest: digest,
 	}, nil
@@ -171,7 +172,7 @@ func (s *Server) cutoverStage(w http.ResponseWriter, r *http.Request, agentGRN m
 		writeError(w, err)
 		return grn.GRN{}, agent.CutoverInput{}, false
 	}
-	return caller, agent.CutoverInput{Agent: subject, ImportID: importID, OperationRef: ref}, true
+	return caller, agent.CutoverInput{Agent: subject, ImportID: importID, OperationRef: ref, RequestTarget: requestTarget(r)}, true
 }
 
 // writeAttempt answers a switch or a rollback.
@@ -197,6 +198,16 @@ func (s *Server) cutoverParties(w http.ResponseWriter, r *http.Request, agentGRN
 		return grn.GRN{}, grn.GRN{}, "", false
 	}
 	return caller, subject, ref, true
+}
+
+// requestTarget is the request target r arrived at: its escaped path
+// and raw query, as an agent:cutover reference binds it. Each cutover
+// route is served under one method, so the path names the stage.
+func requestTarget(r *http.Request) string {
+	if r.URL.RawQuery == "" {
+		return r.URL.EscapedPath()
+	}
+	return r.URL.EscapedPath() + "?" + r.URL.RawQuery
 }
 
 func attemptToAPI(a *agent.CutoverAttempt) machinegen.CutoverAttempt {

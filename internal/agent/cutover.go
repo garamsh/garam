@@ -264,11 +264,14 @@ type FreezeRequest struct {
 }
 
 // CutoverInput is a cutover stage as received: the agent:cutover
-// reference its Authorization header carries and the import it names.
+// reference its Authorization header carries, the import it names, and
+// the request target it was received at, which the reference must have
+// been minted for.
 type CutoverInput struct {
-	Agent        grn.GRN
-	ImportID     ImportID
-	OperationRef string
+	Agent         grn.GRN
+	ImportID      ImportID
+	OperationRef  string
+	RequestTarget string
 }
 
 // FreezeInput is a freeze as received.

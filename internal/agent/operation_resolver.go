@@ -32,6 +32,9 @@ type OperationBinding struct {
 	Assignee   grn.GRN
 	Epoch      int
 	BodySHA256 [32]byte
+	// RequestTarget is the exact request target the binding was minted
+	// for, empty for an operation that binds none.
+	RequestTarget string
 	// ExpiresAt is the presented handoff's expiry, and zero for a
 	// durable reference, which has none.
 	ExpiresAt time.Time

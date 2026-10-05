@@ -1765,9 +1765,9 @@ paths:
         `agent:recover` and `agent:cutover` target the agent, are
         authorized on it, and bind where it runs now. `agent:recover`
         authorizes one exact credential recovery, whose request body
-        `bodySha256` digests (ADR-0078). `agent:cutover` authorizes
-        moving a legacy agent's source to the audience (ADR-0086).
-        `agent-template:read`, `agent-template:publish` and
+        `bodySha256` digests (ADR-0078). `agent:cutover` authorizes one
+        stage of moving a legacy agent's source to the audience
+        (ADR-0086). `agent-template:read`, `agent-template:publish` and
         `execution-profile:read` target this organization and are
         authorized on it; `agent:execution-read` targets the agent, is
         authorized on it and binds where it runs now. The audience's
@@ -1775,10 +1775,12 @@ paths:
         the controller.
 
 
-        Those four operations also bind `requestTarget`, the exact
-        request target of the one Operator route they are sent to, so
-        an authority for one route or query authorizes no other. No
-        other operation takes one.
+        Those four operations and `agent:cutover` also bind
+        `requestTarget`, the exact request target of the one route they
+        are sent to, so an authority for one route or query authorizes
+        no other. For `agent:cutover` that route is garam's own cutover
+        read or stage of the agent, so a reference minted for one stage
+        authorizes no other. No other operation takes one.
 
 
         The same `requestId` with the same binding under the same grant
@@ -3312,12 +3314,16 @@ components:
           maxLength: 2048
           description: >-
             Required for `agent-template:read`, `agent-template:publish`,
-            `execution-profile:read` and `agent:execution-read`, and
-            refused with 400 for every other operation. The exact
-            origin-form request target the Operator will receive: the
-            escaped path and raw query, with no scheme or authority and
-            no empty, `.` or `..` path segment, taken from the same URL
-            the request is sent to. garam binds it as given and decodes nothing.
+            `execution-profile:read`, `agent:execution-read` and
+            `agent:cutover`, and refused with 400 for every other
+            operation. The exact origin-form request target the route
+            will receive: the escaped path and raw query, with no scheme
+            or authority and no empty, `.` or `..` path segment, taken
+            from the same URL the request is sent to. For `agent:cutover`
+            it is the machine listener's cutover route of the agent, such
+            as `/agents/{agent}/cutover/switch`, and garam compares it
+            with the target that route receives. garam binds it as given
+            and decodes nothing.
     OperationAuthority:
       type: object
       required: [authority, expiresAt, operationRef, grantId]

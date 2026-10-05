@@ -5,13 +5,18 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/agent"
+	"github.com/garamsh/garam/internal/authn"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/org"
+	"github.com/garamsh/garam/internal/user"
+	userpg "github.com/garamsh/garam/internal/user/postgres"
 	"github.com/garamsh/garam/internal/wire"
 )
 
@@ -22,21 +27,43 @@ import (
 // it reads the source, imports nothing, and calls the stages in the
 // order the contract fixes.
 
-// cutoverRef mints, as cookie's user, an agent:cutover authority for
-// the hosted control service over g and answers the status and body.
-func (s *executionStack) mintCutover(t *testing.T, cookie *http.Cookie, g grn.GRN, requestID string) (int, string) {
-	t.Helper()
-	body := `{"audience":"` + s.hosted.String() + `","operation":"agent:cutover","target":"` + g.String() +
-		`","requestId":"` + requestID + `","bodySha256":"` + strings.Repeat("ab", 32) + `"}`
-	return call(t, http.DefaultClient, http.MethodPost, s.browser+"/orgs/acme/operation-authorities", cookie, body)
+// cutoverStages are the cutover routes of an agent, by the suffix each
+// adds to its read's path.
+var cutoverStages = []string{"", "/freeze", "/switch", "/rollback"}
+
+// cutoverTarget is the request target of g's cutover route suffix.
+func cutoverTarget(g grn.GRN, suffix string) string {
+	return "/agents/" + g.String() + "/cutover" + suffix
 }
 
-// cutoverRef is the owner's agent:cutover reference for g.
-func (s *executionStack) cutoverRef(t *testing.T, g grn.GRN) string {
+// mintCutover mints, as cookie's user, an agent:cutover authority for
+// the hosted control service over g, bound to target, and answers the
+// status and body.
+func (s *executionStack) mintCutover(t *testing.T, cookie *http.Cookie, g grn.GRN, requestID, target string) (int, string) {
 	t.Helper()
-	status, got := s.mintCutover(t, s.owner, g, "cutover-"+g.Identifier+"-"+s.key())
-	require.Equal(t, http.StatusCreated, status, got)
-	return authorityOf(t, got).OperationRef
+	body := map[string]string{
+		"audience": s.hosted.String(), "operation": "agent:cutover", "target": g.String(),
+		"requestId": requestID, "bodySha256": strings.Repeat("ab", 32),
+	}
+	if target != "" {
+		body["requestTarget"] = target
+	}
+	raw, err := json.Marshal(body)
+	require.NoError(t, err)
+	return call(t, http.DefaultClient, http.MethodPost, s.browser+"/orgs/acme/operation-authorities", cookie, string(raw))
+}
+
+// cutoverRefs are the owner's agent:cutover references for g, one per
+// route, keyed by the route's suffix.
+func (s *executionStack) cutoverRefs(t *testing.T, g grn.GRN) map[string]string {
+	t.Helper()
+	refs := map[string]string{}
+	for _, suffix := range cutoverStages {
+		status, got := s.mintCutover(t, s.owner, g, "cutover-"+g.Identifier+"-"+s.key(), cutoverTarget(g, suffix))
+		require.Equal(t, http.StatusCreated, status, got)
+		refs[suffix] = authorityOf(t, got).OperationRef
+	}
+	return refs
 }
 
 // cutoverCall sends one agent-cutover.v1 request carrying ref, whose
@@ -76,12 +103,12 @@ func stageBody(importID string) string {
 // freeze over what it read, switch.
 func (s *executionStack) cutOver(t *testing.T, g grn.GRN) {
 	t.Helper()
-	ref := s.cutoverRef(t, g)
-	c := s.readCutover(t, g, ref)
+	refs := s.cutoverRefs(t, g)
+	c := s.readCutover(t, g, refs[""])
 	require.NotNil(t, c.SourceDigest)
-	got := s.cutoverCall(t, http.MethodPost, g, "/freeze", ref, freezeBody("fixture-"+g.Identifier, *c.SourceDigest, c.Epoch))
+	got := s.cutoverCall(t, http.MethodPost, g, "/freeze", refs["/freeze"], freezeBody("fixture-"+g.Identifier, *c.SourceDigest, c.Epoch))
 	require.Equal(t, http.StatusCreated, got.status, got.body)
-	got = s.cutoverCall(t, http.MethodPost, g, "/switch", ref, stageBody("fixture-"+g.Identifier))
+	got = s.cutoverCall(t, http.MethodPost, g, "/switch", refs["/switch"], stageBody("fixture-"+g.Identifier))
 	require.Equal(t, http.StatusOK, got.status, got.body)
 }
 
@@ -99,9 +126,9 @@ func errorOf(t *testing.T, got reply) machinegen.Error {
 // the read survives a restart of the listener.
 func TestCutoverRoutes_AGoClientActingAsTheOperatorCutsALegacyAgentOver(t *testing.T) {
 	s := newLegacyExecutionStack(t)
-	ref := s.cutoverRef(t, s.agent)
+	refs := s.cutoverRefs(t, s.agent)
 
-	c := s.readCutover(t, s.agent, ref)
+	c := s.readCutover(t, s.agent, refs[""])
 	assert.Equal(t, s.agent.String(), c.Agent)
 	assert.Equal(t, s.controller.String(), c.Assignee)
 	assert.Equal(t, machinegen.CutoverMode("legacy"), c.Mode)
@@ -117,13 +144,13 @@ func TestCutoverRoutes_AGoClientActingAsTheOperatorCutsALegacyAgentOver(t *testi
 	assert.Equal(t, "cutover_required", *errorOf(t, got).Reason)
 
 	freeze := freezeBody("import-1", *c.SourceDigest, c.Epoch)
-	got = s.cutoverCall(t, http.MethodPost, s.agent, "/freeze", ref, freeze)
+	got = s.cutoverCall(t, http.MethodPost, s.agent, "/freeze", refs["/freeze"], freeze)
 	require.Equal(t, http.StatusCreated, got.status, got.body)
-	got = s.cutoverCall(t, http.MethodPost, s.agent, "/freeze", ref, freeze)
+	got = s.cutoverCall(t, http.MethodPost, s.agent, "/freeze", refs["/freeze"], freeze)
 	require.Equal(t, http.StatusOK, got.status, "a freeze whose answer was lost: %s", got.body)
 
 	s.restart(t)
-	c = s.readCutover(t, s.agent, ref)
+	c = s.readCutover(t, s.agent, refs[""])
 	require.NotNil(t, c.Attempt)
 	assert.Equal(t, "import-1", c.Attempt.ImportId)
 	assert.Equal(t, machinegen.CutoverAttemptStage("frozen"), c.Attempt.Stage)
@@ -133,9 +160,9 @@ func TestCutoverRoutes_AGoClientActingAsTheOperatorCutsALegacyAgentOver(t *testi
 	status, body := machineRequest(t, s.controlTLS, http.MethodPost, s.machine+"/agents/"+s.agent.String()+"/certificate")
 	assert.Equal(t, http.StatusCreated, status, string(body))
 
-	got = s.cutoverCall(t, http.MethodPost, s.agent, "/switch", ref, stageBody("import-1"))
+	got = s.cutoverCall(t, http.MethodPost, s.agent, "/switch", refs["/switch"], stageBody("import-1"))
 	require.Equal(t, http.StatusOK, got.status, got.body)
-	got = s.cutoverCall(t, http.MethodPost, s.agent, "/switch", ref, stageBody("import-1"))
+	got = s.cutoverCall(t, http.MethodPost, s.agent, "/switch", refs["/switch"], stageBody("import-1"))
 	require.Equal(t, http.StatusOK, got.status, "a switch whose answer was lost: %s", got.body)
 
 	status, body = machineRequest(t, s.controlTLS, http.MethodPost, s.machine+"/agents/"+s.agent.String()+"/certificate")
@@ -148,10 +175,10 @@ func TestCutoverRoutes_AGoClientActingAsTheOperatorCutsALegacyAgentOver(t *testi
 	a := s.activated(t, "first", generation(1), nil, s.leaf)
 	assert.Equal(t, s.agent.String(), a.Grn, "the same GRN activates")
 
-	got = s.cutoverCall(t, http.MethodPost, s.agent, "/rollback", ref, stageBody("import-1"))
+	got = s.cutoverCall(t, http.MethodPost, s.agent, "/rollback", refs["/rollback"], stageBody("import-1"))
 	require.Equal(t, http.StatusConflict, got.status, got.body)
 	assert.Equal(t, "reverse_migration_required", *errorOf(t, got).Reason)
-	got = s.cutoverCall(t, http.MethodPost, s.agent, "/freeze", ref, freezeBody("import-2", *c.SourceDigest, c.Epoch))
+	got = s.cutoverCall(t, http.MethodPost, s.agent, "/freeze", refs["/freeze"], freezeBody("import-2", *c.SourceDigest, c.Epoch))
 	require.Equal(t, http.StatusConflict, got.status, got.body)
 	assert.Equal(t, "attempt_open", *errorOf(t, got).Reason, "the switched attempt stays the open one")
 }
@@ -171,31 +198,31 @@ func newLegacyExecutionStack(t *testing.T) *executionStack {
 // reason field at all, byte for byte as before.
 func TestCutoverRoutes_TheReasonIsSetOnlyWhereItsContractNamesIt(t *testing.T) {
 	s := newLegacyExecutionStack(t)
-	ref := s.cutoverRef(t, s.agent)
-	c := s.readCutover(t, s.agent, ref)
+	refs := s.cutoverRefs(t, s.agent)
+	c := s.readCutover(t, s.agent, refs[""])
 
-	got := s.cutoverCall(t, http.MethodPost, s.agent, "/freeze", ref,
+	got := s.cutoverCall(t, http.MethodPost, s.agent, "/freeze", refs["/freeze"],
 		freezeBody("import-1", strings.Repeat("00", 32), c.Epoch))
 	require.Equal(t, http.StatusConflict, got.status, got.body)
 	assert.Equal(t, "digest_mismatch", *errorOf(t, got).Reason)
 	assert.Equal(t, "aborted", errorOf(t, got).Kind, "the kind stays the errorx kind")
 
-	got = s.cutoverCall(t, http.MethodPost, s.agent, "/freeze", ref, freezeBody("import-1", *c.SourceDigest, c.Epoch))
+	got = s.cutoverCall(t, http.MethodPost, s.agent, "/freeze", refs["/freeze"], freezeBody("import-1", *c.SourceDigest, c.Epoch))
 	require.Equal(t, http.StatusCreated, got.status, got.body)
-	got = s.cutoverCall(t, http.MethodPost, s.agent, "/freeze", ref, freezeBody("import-2", *c.SourceDigest, c.Epoch))
+	got = s.cutoverCall(t, http.MethodPost, s.agent, "/freeze", refs["/freeze"], freezeBody("import-2", *c.SourceDigest, c.Epoch))
 	require.Equal(t, http.StatusConflict, got.status, got.body)
 	assert.Equal(t, "attempt_open", *errorOf(t, got).Reason)
-	got = s.cutoverCall(t, http.MethodPost, s.agent, "/rollback", ref, stageBody("import-1"))
+	got = s.cutoverCall(t, http.MethodPost, s.agent, "/rollback", refs["/rollback"], stageBody("import-1"))
 	require.Equal(t, http.StatusOK, got.status, got.body)
-	got = s.cutoverCall(t, http.MethodPost, s.agent, "/switch", ref, stageBody("import-1"))
+	got = s.cutoverCall(t, http.MethodPost, s.agent, "/switch", refs["/switch"], stageBody("import-1"))
 	require.Equal(t, http.StatusConflict, got.status, got.body)
 	assert.Equal(t, "attempt_ended", *errorOf(t, got).Reason)
 
 	// A stale epoch is a 409 the contract names no reason for.
-	got = s.cutoverCall(t, http.MethodPost, s.agent, "/freeze", ref, freezeBody("import-3", *c.SourceDigest, "99"))
+	got = s.cutoverCall(t, http.MethodPost, s.agent, "/freeze", refs["/freeze"], freezeBody("import-3", *c.SourceDigest, "99"))
 	require.Equal(t, http.StatusConflict, got.status, got.body)
 	assert.NotContains(t, got.body, `"reason"`, "control: an unlisted refusal carries no reason")
-	got = s.cutoverCall(t, http.MethodPost, s.agent, "/switch", ref, stageBody("import-9"))
+	got = s.cutoverCall(t, http.MethodPost, s.agent, "/switch", refs["/switch"], stageBody("import-9"))
 	require.Equal(t, http.StatusNotFound, got.status, got.body)
 	assert.NotContains(t, got.body, `"reason"`)
 
@@ -210,7 +237,7 @@ func TestCutoverRoutes_TheReasonIsSetOnlyWhereItsContractNamesIt(t *testing.T) {
 	assert.NotContains(t, got.body, `"reason"`)
 
 	// An activated agent's class says it is fenced.
-	got = s.cutoverCall(t, http.MethodGet, s.agent, "", ref, "")
+	got = s.cutoverCall(t, http.MethodGet, s.agent, "", refs[""], "")
 	require.Equal(t, http.StatusOK, got.status, got.body)
 	assert.Contains(t, got.body, `"class":"not-applicable"`)
 }
@@ -221,11 +248,11 @@ func TestCutoverRoutes_TheReasonIsSetOnlyWhereItsContractNamesIt(t *testing.T) {
 func TestCutoverRoutes_AnAgentFencedFromBirthIsNotEligible(t *testing.T) {
 	s := newManagedStack(t)
 	m := s.created(t, "create-1")
-	ref := s.cutoverRef(t, m.agent)
-	c := s.readCutover(t, m.agent, ref)
+	refs := s.cutoverRefs(t, m.agent)
+	c := s.readCutover(t, m.agent, refs[""])
 	assert.Equal(t, machinegen.CutoverClass("not-applicable"), c.Class)
 	require.NotNil(t, c.SourceDigest)
-	got := s.cutoverCall(t, http.MethodPost, m.agent, "/freeze", ref, freezeBody("import-1", *c.SourceDigest, c.Epoch))
+	got := s.cutoverCall(t, http.MethodPost, m.agent, "/freeze", refs["/freeze"], freezeBody("import-1", *c.SourceDigest, c.Epoch))
 	require.Equal(t, http.StatusUnprocessableEntity, got.status, got.body)
 	assert.Equal(t, "not_cut_over_eligible", *errorOf(t, got).Reason)
 
@@ -243,10 +270,10 @@ func TestCutoverRoutes_EachStageRechecksTheReferenceAndTheRoles(t *testing.T) {
 	policies, engine := policyEngine(t, p)
 	s := newLegacyStack(t, p, engine)
 
-	status, got := s.mintCutover(t, s.member, s.agent, "member-cutover")
+	status, got := s.mintCutover(t, s.member, s.agent, "member-cutover", cutoverTarget(s.agent, ""))
 	assert.Equal(t, http.StatusForbidden, status, "a member holds no agent:cutover: %s", got)
-	ref := s.cutoverRef(t, s.agent)
-	c := s.readCutover(t, s.agent, ref)
+	refs := s.cutoverRefs(t, s.agent)
+	c := s.readCutover(t, s.agent, refs[""])
 
 	answer := s.cutoverCall(t, http.MethodGet, s.agent, "", "", "")
 	assert.Equal(t, http.StatusUnauthorized, answer.status, "no reference: %s", answer.body)
@@ -254,10 +281,10 @@ func TestCutoverRoutes_EachStageRechecksTheReferenceAndTheRoles(t *testing.T) {
 	require.Equal(t, http.StatusCreated, status, got)
 	answer = s.cutoverCall(t, http.MethodGet, s.agent, "", authorityOf(t, got).OperationRef, "")
 	assert.Equal(t, http.StatusForbidden, answer.status, "a reference minted for another operation: %s", answer.body)
-	answer = s.cutoverCall(t, http.MethodGet, s.peer, "", ref, "")
+	answer = s.cutoverCall(t, http.MethodGet, s.peer, "", refs[""], "")
 	assert.Equal(t, http.StatusForbidden, answer.status, "a reference minted for another agent: %s", answer.body)
 
-	answer = s.cutoverCall(t, http.MethodPost, s.agent, "/freeze", ref, freezeBody("import-1", *c.SourceDigest, c.Epoch))
+	answer = s.cutoverCall(t, http.MethodPost, s.agent, "/freeze", refs["/freeze"], freezeBody("import-1", *c.SourceDigest, c.Epoch))
 	require.Equal(t, http.StatusCreated, answer.status, answer.body)
 
 	// The owner is denied agent:cutover after the freeze: the switch,
@@ -265,9 +292,9 @@ func TestCutoverRoutes_EachStageRechecksTheReferenceAndTheRoles(t *testing.T) {
 	deny := activePolicy(t, policies, s.acme, "deny-cutover",
 		statementDoc("deny-cutover", wire.EffectDeny, "agent:cutover", "grn:acme:*"))
 	attachPolicy(t, policies, deny, grn.New(grn.RootOwner, grn.DefaultProject, "user", "ada"))
-	answer = s.cutoverCall(t, http.MethodPost, s.agent, "/switch", ref, stageBody("import-1"))
+	answer = s.cutoverCall(t, http.MethodPost, s.agent, "/switch", refs["/switch"], stageBody("import-1"))
 	assert.Equal(t, http.StatusForbidden, answer.status, "an explicit Deny wins: %s", answer.body)
-	answer = s.cutoverCall(t, http.MethodGet, s.agent, "", ref, "")
+	answer = s.cutoverCall(t, http.MethodGet, s.agent, "", refs[""], "")
 	assert.Equal(t, http.StatusForbidden, answer.status, answer.body)
 	var frozen string
 	require.NoError(t, s.pool.QueryRow(t.Context(), `SELECT stage FROM agent_cutovers WHERE agent_grn = $1`, s.agent.String()).Scan(&frozen))
@@ -310,18 +337,18 @@ func TestCutoverRoutes_ADefinitionLeavesItsOperatorsPollWhileFrozen(t *testing.T
 	require.True(t, polled(), "control: a claimed definition is polled")
 	require.Nil(t, stageInConsole())
 
-	ref := s.cutoverRef(t, d.Agent())
-	c := s.readCutover(t, d.Agent(), ref)
+	refs := s.cutoverRefs(t, d.Agent())
+	c := s.readCutover(t, d.Agent(), refs[""])
 	require.NotNil(t, c.Source)
 	assert.Equal(t, map[string]string{"model": "large"}, c.Source.Values)
-	got := s.cutoverCall(t, http.MethodPost, d.Agent(), "/freeze", ref, freezeBody("import-1", *c.SourceDigest, c.Epoch))
+	got := s.cutoverCall(t, http.MethodPost, d.Agent(), "/freeze", refs["/freeze"], freezeBody("import-1", *c.SourceDigest, c.Epoch))
 	require.Equal(t, http.StatusCreated, got.status, got.body)
 	assert.False(t, polled())
 	assert.Equal(t, agent.CutoverFrozen, *stageInConsole())
 	status, body = machineRequest(t, s.controlTLS, http.MethodPost, s.machine+"/definitions/"+d.Agent().String()+"/claim")
 	assert.Equal(t, http.StatusConflict, status, "the claim stays refused: %s", body)
 
-	got = s.cutoverCall(t, http.MethodPost, d.Agent(), "/rollback", ref, stageBody("import-1"))
+	got = s.cutoverCall(t, http.MethodPost, d.Agent(), "/rollback", refs["/rollback"], stageBody("import-1"))
 	require.Equal(t, http.StatusOK, got.status, got.body)
 	assert.True(t, polled(), "a rolled-back definition is polled again")
 	assert.Nil(t, stageInConsole())
@@ -332,20 +359,143 @@ func TestCutoverRoutes_ADefinitionLeavesItsOperatorsPollWhileFrozen(t *testing.T
 // does: the Operator reads the attempt back before retrying.
 func TestCutoverRoutes_AFreezeWhoseAnswerIsLostIsReadBack(t *testing.T) {
 	s := newLegacyExecutionStack(t)
-	ref := s.cutoverRef(t, s.agent)
-	c := s.readCutover(t, s.agent, ref)
+	refs := s.cutoverRefs(t, s.agent)
+	c := s.readCutover(t, s.agent, refs[""])
 
 	require.NoError(t, s.server.Close())
 	_, err := s.exchange(s.hostedTLS, http.MethodPost, "/agents/"+s.agent.String()+"/cutover/freeze",
-		agent.CutoverContractVersion, "Garam-Operation "+ref, freezeBody("import-1", *c.SourceDigest, c.Epoch))
+		agent.CutoverContractVersion, "Garam-Operation "+refs["/freeze"], freezeBody("import-1", *c.SourceDigest, c.Epoch))
 	require.Error(t, err, "garam is unavailable")
 	s.serve(t)
 
-	read := s.readCutover(t, s.agent, ref)
+	read := s.readCutover(t, s.agent, refs[""])
 	assert.Nil(t, read.Attempt, "the freeze never reached garam")
-	got := s.cutoverCall(t, http.MethodPost, s.agent, "/freeze", ref, freezeBody("import-1", *c.SourceDigest, c.Epoch))
+	got := s.cutoverCall(t, http.MethodPost, s.agent, "/freeze", refs["/freeze"], freezeBody("import-1", *c.SourceDigest, c.Epoch))
 	require.Equal(t, http.StatusCreated, got.status, got.body)
-	read = s.readCutover(t, s.agent, ref)
+	read = s.readCutover(t, s.agent, refs[""])
 	require.NotNil(t, read.Attempt)
 	assert.Equal(t, machinegen.CutoverAttemptStage("frozen"), read.Attempt.Stage)
+}
+
+// TestCutoverRoutes_AReferenceAuthorizesOnlyTheStageItWasMintedFor:
+// each reference binds the request target of one cutover route, so an
+// owner's reference to roll an attempt back cannot switch it, which no
+// rollback undoes. The switch's own reference is the control.
+func TestCutoverRoutes_AReferenceAuthorizesOnlyTheStageItWasMintedFor(t *testing.T) {
+	s := newLegacyExecutionStack(t)
+	refs := s.cutoverRefs(t, s.agent)
+	c := s.readCutover(t, s.agent, refs[""])
+	got := s.cutoverCall(t, http.MethodPost, s.agent, "/freeze", refs["/freeze"], freezeBody("import-1", *c.SourceDigest, c.Epoch))
+	require.Equal(t, http.StatusCreated, got.status, got.body)
+
+	got = s.cutoverCall(t, http.MethodPost, s.agent, "/switch", refs["/rollback"], stageBody("import-1"))
+	assert.Equal(t, http.StatusForbidden, got.status, "a rollback reference presented to switch: %s", got.body)
+	got = s.cutoverCall(t, http.MethodPost, s.agent, "/freeze", refs["/switch"], freezeBody("import-1", *c.SourceDigest, c.Epoch))
+	assert.Equal(t, http.StatusForbidden, got.status, "a switch reference presented to freeze: %s", got.body)
+	got = s.cutoverCall(t, http.MethodGet, s.agent, "", refs["/freeze"], "")
+	assert.Equal(t, http.StatusForbidden, got.status, "a freeze reference presented to the read: %s", got.body)
+	read := s.readCutover(t, s.agent, refs[""])
+	require.NotNil(t, read.Attempt)
+	assert.Equal(t, machinegen.CutoverAttemptStage("frozen"), read.Attempt.Stage, "nothing moved")
+
+	got = s.cutoverCall(t, http.MethodPost, s.agent, "/switch", refs["/switch"], stageBody("import-1"))
+	assert.Equal(t, http.StatusOK, got.status, "control: the switch's own reference: %s", got.body)
+
+	status, body := s.mintCutover(t, s.owner, s.agent, "no-target", "")
+	assert.Equal(t, http.StatusBadRequest, status, "an agent:cutover authority binds a request target: %s", body)
+}
+
+// TestCutoverRoutes_AReferenceTheAssignmentOrTheGrantOutlivedIsRefused
+// mints the switch's reference, then moves what it was bound to: the
+// agent's assignment, or the grant it was minted under, which a
+// replacement ends. The old reference is refused on the switch; one
+// minted after the move, under the same caller, is the control.
+func TestCutoverRoutes_AReferenceTheAssignmentOrTheGrantOutlivedIsRefused(t *testing.T) {
+	moves := map[string]func(t *testing.T, s *executionStack){
+		"the agent is reassigned": func(t *testing.T, s *executionStack) {
+			other := scopedGRN("acme", "operator", "other-controller")
+			registerOperator(t, s.pool, other)
+			s.delegateTo(t, []grn.GRN{s.controller, other}, "agent:activate", "agent:recover", "agent:configure", "agent:cutover")
+			_, err := agent.NewPostgresStore(s.pool).Assign(t.Context(), s.agent, other)
+			require.NoError(t, err)
+		},
+		"the grant is ended": func(t *testing.T, s *executionStack) {
+			s.delegate(t, "agent:activate", "agent:recover", "agent:configure", "agent:cutover")
+		},
+	}
+	for name, move := range moves {
+		t.Run(name, func(t *testing.T) {
+			s := newLegacyExecutionStack(t)
+			refs := s.cutoverRefs(t, s.agent)
+			c := s.readCutover(t, s.agent, refs[""])
+			got := s.cutoverCall(t, http.MethodPost, s.agent, "/freeze", refs["/freeze"], freezeBody("import-1", *c.SourceDigest, c.Epoch))
+			require.Equal(t, http.StatusCreated, got.status, got.body)
+
+			move(t, s)
+			got = s.cutoverCall(t, http.MethodPost, s.agent, "/switch", refs["/switch"], stageBody("import-1"))
+			assert.Equal(t, http.StatusForbidden, got.status, "the old reference: %s", got.body)
+			var stage string
+			require.NoError(t, s.pool.QueryRow(t.Context(), `SELECT stage FROM agent_cutovers WHERE agent_grn = $1`, s.agent.String()).Scan(&stage))
+			assert.Equal(t, "frozen", stage, "nothing switched")
+
+			fresh := s.cutoverRefs(t, s.agent)
+			got = s.cutoverCall(t, http.MethodPost, s.agent, "/switch", fresh["/switch"], stageBody("import-1"))
+			assert.Equal(t, http.StatusOK, got.status, "control: a reference minted after the move: %s", got.body)
+		})
+	}
+}
+
+// TestCutoverRoutes_AnotherOrganizationsOperatorReachesNoCutover gives
+// globex a hosted control service of its own, delegated by globex's
+// owner, holding a valid agent:cutover reference for a globex agent.
+// Presented on an acme agent's cutover it is refused; on the globex
+// agent it was minted for, it is answered, which is the control.
+func TestCutoverRoutes_AnotherOrganizationsOperatorReachesNoCutover(t *testing.T) {
+	ctx := t.Context()
+	s := newLegacyExecutionStack(t)
+	globex := orgRootGRN("globex")
+	owner := grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, "gabe")
+	require.NoError(t, userpg.New(s.pool).Create(ctx, user.New(owner, "gabe")))
+	require.NoError(t, org.NewPostgresStore(s.pool).AddMember(ctx, org.NewMembership(globex, owner, org.RoleOwner)))
+	token, err := authn.NewToken()
+	require.NoError(t, err)
+	require.NoError(t, authn.NewPostgresSessionStore(s.pool).Create(ctx, token, authn.NewSession(owner, time.Hour)))
+	cookie := &http.Cookie{Name: "garam_session", Value: token}
+
+	hosted := scopedGRN("globex", "operator", "hosted")
+	controller := scopedGRN("globex", "operator", "controller")
+	hostedTLS := machineClient(t, installed(t, s.pool, s.issuer, hosted))
+	registerOperator(t, s.pool, controller)
+	raw, err := json.Marshal(map[string]any{
+		"requestId": "globex-grant", "controllers": []string{controller.String()},
+		"operations": []string{"agent:activate", "agent:cutover"},
+		"expiresAt":  time.Now().Add(24 * time.Hour).UTC().Format(time.RFC3339Nano),
+	})
+	require.NoError(t, err)
+	status, got := call(t, http.DefaultClient, http.MethodPut, s.browser+"/orgs/globex/operators/hosted/delegation", cookie, string(raw))
+	require.Equal(t, http.StatusCreated, status, got)
+
+	agents := agent.NewPostgresStore(s.pool)
+	own := seedAgent(t, agents, globex)
+	_, err = agents.Assign(ctx, own, controller)
+	require.NoError(t, err)
+	mint := func(target string) string {
+		raw, err := json.Marshal(map[string]string{
+			"audience": hosted.String(), "operation": "agent:cutover", "target": own.String(),
+			"requestId": "globex-" + s.key(), "bodySha256": strings.Repeat("ab", 32), "requestTarget": target,
+		})
+		require.NoError(t, err)
+		status, got := call(t, http.DefaultClient, http.MethodPost, s.browser+"/orgs/globex/operation-authorities", cookie, string(raw))
+		require.Equal(t, http.StatusCreated, status, got)
+		return authorityOf(t, got).OperationRef
+	}
+	read := func(g grn.GRN, ref string) reply {
+		return s.send(t, hostedTLS, http.MethodGet, cutoverTarget(g, ""), agent.CutoverContractVersion, "Garam-Operation "+ref, "")
+	}
+
+	answer := read(s.agent, mint(cutoverTarget(s.agent, "")))
+	assert.Equal(t, http.StatusForbidden, answer.status, "globex's operator on acme's agent: %s", answer.body)
+	assert.NotContains(t, answer.body, `"source"`)
+	answer = read(own, mint(cutoverTarget(own, "")))
+	assert.Equal(t, http.StatusOK, answer.status, "control: the agent its reference was minted for: %s", answer.body)
 }

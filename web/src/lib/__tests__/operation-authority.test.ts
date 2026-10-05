@@ -141,6 +141,20 @@ describe("callControl", () => {
     expect(fetch).toHaveBeenCalledOnce();
   });
 
+  it("reads a mint that threw as unavailable and sends nothing", async () => {
+    const fetch = answering(Response.json({ name: "web agent" }));
+    const throwing = vi.fn<(input: MintInput) => Promise<MintResult>>(
+      async () => {
+        throw new Error("the Server Action failed");
+      },
+    );
+
+    expect(await callControl(readCall(), throwing)).toEqual({
+      status: "unavailable",
+    });
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("reads a failed connection and a 503 as unavailable, and a refusal as its message", async () => {
     answering(new TypeError("Failed to fetch"));
     expect(await callControl(readCall(), minting())).toEqual({

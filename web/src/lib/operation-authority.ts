@@ -98,7 +98,8 @@ export type ControlCall<T> = {
 /**
  * Mints an authority for call and sends it. A connection that failed,
  * a CORS refusal, a redirect and a 503 are one answer: the control
- * service is unavailable.
+ * service is unavailable. So is a mint that threw rather than
+ * answered, so no caller is left waiting on a call that never settles.
  */
 export async function callControl<T>(
   call: ControlCall<T>,
@@ -106,7 +107,7 @@ export async function callControl<T>(
 ): Promise<ControlResult<T>> {
   const url = new URL(call.endpoint + call.path);
   const body = call.body === undefined ? undefined : JSON.stringify(call.body);
-  const minted = await mint({
+  const minted: MintResult = await mint({
     org: call.org,
     audience: call.audience,
     operation: call.operation,
@@ -116,7 +117,7 @@ export async function callControl<T>(
     ...(bindsRequestTarget(call.operation)
       ? { requestTarget: url.pathname + url.search }
       : {}),
-  });
+  }).catch(() => ({ status: "unavailable" as const }));
   if (minted.status !== "ok") return minted;
 
   const response = await fetch(url, {

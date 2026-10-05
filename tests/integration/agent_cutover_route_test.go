@@ -281,6 +281,20 @@ func TestCutoverRoutes_EachStageRechecksTheReferenceAndTheRoles(t *testing.T) {
 	require.Equal(t, http.StatusCreated, status, got)
 	answer = s.cutoverCall(t, http.MethodGet, s.agent, "", authorityOf(t, got).OperationRef, "")
 	assert.Equal(t, http.StatusForbidden, answer.status, "a reference minted for another operation: %s", answer.body)
+	// An operation that binds a request target, minted for this very
+	// route, is still another operation.
+	s.delegate(t, "agent:activate", "agent:recover", "agent:configure", "agent:cutover", "agent:execution-read")
+	raw, err := json.Marshal(map[string]string{
+		"audience": s.hosted.String(), "operation": "agent:execution-read", "target": s.agent.String(),
+		"requestId": "read-not-cutover", "bodySha256": strings.Repeat("ab", 32),
+		"requestTarget": cutoverTarget(s.agent, ""),
+	})
+	require.NoError(t, err)
+	status, got = call(t, http.DefaultClient, http.MethodPost, s.browser+"/orgs/acme/operation-authorities", s.owner, string(raw))
+	require.Equal(t, http.StatusCreated, status, got)
+	answer = s.cutoverCall(t, http.MethodGet, s.agent, "", authorityOf(t, got).OperationRef, "")
+	assert.Equal(t, http.StatusForbidden, answer.status, "another operation bound to this route: %s", answer.body)
+	refs = s.cutoverRefs(t, s.agent)
 	answer = s.cutoverCall(t, http.MethodGet, s.peer, "", refs[""], "")
 	assert.Equal(t, http.StatusForbidden, answer.status, "a reference minted for another agent: %s", answer.body)
 

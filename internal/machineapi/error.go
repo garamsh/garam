@@ -61,6 +61,8 @@ func BindingError(w http.ResponseWriter, r *http.Request, err error) {
 			enrollmentContract(w, "")
 		case standaloneRoute(r):
 			standaloneContract(w, "")
+		case cutoverRoute(r):
+			cutoverContract(w, "")
 		case r.URL.Path == "/outbox-messages":
 			deliveryContract(w, "")
 		default:
@@ -87,6 +89,16 @@ func enrollmentRoute(r *http.Request) bool {
 	p := r.URL.Path
 	return (strings.HasPrefix(p, "/operators/") && strings.HasSuffix(p, "/managed-agents")) ||
 		(strings.HasPrefix(p, "/agents/") && strings.HasSuffix(p, "/initial-certificate"))
+}
+
+// cutoverRoute reports whether r is one of the cutover routes, whose
+// contract is agent-cutover.v1: the read of an agent's cutover and the
+// three stages under it.
+func cutoverRoute(r *http.Request) bool {
+	p := r.URL.Path
+	return strings.HasPrefix(p, "/agents/") && (strings.HasSuffix(p, "/cutover") ||
+		strings.HasSuffix(p, "/cutover/freeze") || strings.HasSuffix(p, "/cutover/switch") ||
+		strings.HasSuffix(p, "/cutover/rollback"))
 }
 
 // standaloneRoute reports whether r is one of the standalone
@@ -116,11 +128,22 @@ func writeError(w http.ResponseWriter, err error) {
 // writeErrorStatus renders err as writeError does, at a status the
 // route chose over the shared mapping.
 func writeErrorStatus(w http.ResponseWriter, status int, err error) {
+	writeErrorBody(w, status, err, nil)
+}
+
+// writeErrorReason renders err as writeErrorStatus does, naming the
+// reason the route's contract lists for it (ADR-0086). Only a route
+// whose contract lists reasons calls it.
+func writeErrorReason(w http.ResponseWriter, status int, err error, reason string) {
+	writeErrorBody(w, status, err, &reason)
+}
+
+func writeErrorBody(w http.ResponseWriter, status int, err error, reason *string) {
 	// What a client reads is never the chain's own text unless this
 	// project wrote every part of it (wire.MessageOf): a driver error
 	// names a table, a constraint and a SQLSTATE, and a decoder quotes
 	// the body it could not read.
-	body := machinegen.Error{Kind: errorx.KindOf(err).String(), Message: wire.MessageOf(err)}
+	body := machinegen.Error{Kind: errorx.KindOf(err).String(), Message: wire.MessageOf(err), Reason: reason}
 	disclosed := wire.IsAuthored(err)
 	if status >= http.StatusInternalServerError {
 		// Above 500 nothing of the chain reaches the client, authored

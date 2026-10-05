@@ -139,13 +139,36 @@ func (s *PostgresStore) ReportRuntimeState(ctx context.Context, agentGRN grn.GRN
 	return rowToAgent(row)
 }
 
-// ExecutionMode answers whether the agent's execution is fenced.
-func (s *PostgresStore) ExecutionMode(ctx context.Context, agentGRN grn.GRN) (Mode, error) {
-	mode, err := s.q.GetAgentExecutionMode(ctx, agentGRN.String())
+// AdmitLegacyIssuance answers whether the operator's certificate
+// route may answer for the agent now: its execution is still legacy
+// and its cutover is not switched. Both are read under the execution
+// row FOR SHARE, so a switch committing first is seen.
+func (s *PostgresStore) AdmitLegacyIssuance(ctx context.Context, agentGRN grn.GRN) error {
+	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return "", pgxerr.Classify(err, "execution mode", ErrAgentNotFound, nil)
+		return errorx.Wrap(err, "begin", errorx.KindUnavailable)
 	}
-	return ParseMode(mode)
+	defer func() { _ = tx.Rollback(ctx) }()
+	q := s.q.WithTx(tx)
+	stored, err := q.ShareAgentExecution(ctx, agentGRN.String())
+	if err != nil {
+		return pgxerr.Classify(err, "execution mode", ErrAgentNotFound, nil)
+	}
+	mode, err := ParseMode(stored)
+	if err != nil {
+		return errorx.Wrap(err, "stored execution mode", errorx.KindInternal)
+	}
+	if mode == ModeFenced {
+		return ErrIssuedByLifecycle
+	}
+	cutOver, err := q.IsAgentCutOver(ctx, agentGRN.String())
+	if err != nil {
+		return pgxerr.Classify(err, "cutover", nil, nil)
+	}
+	if cutOver {
+		return ErrCutOver
+	}
+	return nil
 }
 
 // narrowEpoch converts a reported epoch to the width of the `epoch`

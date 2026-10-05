@@ -15,6 +15,7 @@ const (
 	OperationKindCreate    OperationKind = "agent:create"
 	OperationKindConfigure OperationKind = "agent:configure"
 	OperationKindRecover   OperationKind = "agent:recover"
+	OperationKindCutover   OperationKind = "agent:cutover"
 )
 
 // OperationBinding is what a handoff or an operation reference was
@@ -31,6 +32,9 @@ type OperationBinding struct {
 	Assignee   grn.GRN
 	Epoch      int
 	BodySHA256 [32]byte
+	// RequestTarget is the exact request target the binding was minted
+	// for, empty for an operation that binds none.
+	RequestTarget string
 	// ExpiresAt is the presented handoff's expiry, and zero for a
 	// durable reference, which has none.
 	ExpiresAt time.Time

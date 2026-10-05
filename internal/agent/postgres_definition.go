@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 
 	"github.com/garamsh/garam/internal/agent/db"
 	"github.com/garamsh/garam/internal/errorx"
@@ -41,7 +42,10 @@ func (s *PostgresStore) GetDefinition(ctx context.Context, agentGRN grn.GRN) (*D
 	if err != nil {
 		return nil, pgxerr.Classify(err, "get definition", ErrDefinitionNotFound, nil)
 	}
-	return rowToDefinition(row)
+	return definitionAtStage(db.AgentDefinition{
+		AgentGrn: row.AgentGrn, OrgGrn: row.OrgGrn, OperatorGrn: row.OperatorGrn, Name: row.Name,
+		AgentValues: row.AgentValues, DefinedBy: row.DefinedBy, CreatedAt: row.CreatedAt,
+	}, row.CutoverStage)
 }
 
 // RenameDefinition changes what the organization calls the agent and
@@ -55,7 +59,10 @@ func (s *PostgresStore) RenameDefinition(ctx context.Context, agentGRN grn.GRN, 
 	if err != nil {
 		return nil, pgxerr.Classify(err, "rename definition", ErrDefinitionNotFound, nil)
 	}
-	return rowToDefinition(row)
+	return definitionAtStage(db.AgentDefinition{
+		AgentGrn: row.AgentGrn, OrgGrn: row.OrgGrn, OperatorGrn: row.OperatorGrn, Name: row.Name,
+		AgentValues: row.AgentValues, DefinedBy: row.DefinedBy, CreatedAt: row.CreatedAt,
+	}, row.CutoverStage)
 }
 
 // ListDefinitionsByOrg returns the organization's definitions.
@@ -66,7 +73,10 @@ func (s *PostgresStore) ListDefinitionsByOrg(ctx context.Context, orgGRN grn.GRN
 	}
 	definitions := make([]*Definition, 0, len(rows))
 	for _, row := range rows {
-		d, err := rowToDefinition(row)
+		d, err := definitionAtStage(db.AgentDefinition{
+			AgentGrn: row.AgentGrn, OrgGrn: row.OrgGrn, OperatorGrn: row.OperatorGrn, Name: row.Name,
+			AgentValues: row.AgentValues, DefinedBy: row.DefinedBy, CreatedAt: row.CreatedAt,
+		}, row.CutoverStage)
 		if err != nil {
 			return nil, err
 		}
@@ -225,6 +235,21 @@ func rowToDefinition(row db.AgentDefinition) (*Definition, error) {
 		definedBy:   definedBy,
 		createdAt:   row.CreatedAt.Time,
 	}, nil
+}
+
+// definitionAtStage converts a definition read with the stage of its
+// open cutover attempt, which is null where none is open.
+func definitionAtStage(row db.AgentDefinition, stage pgtype.Text) (*Definition, error) {
+	d, err := rowToDefinition(row)
+	if err != nil || !stage.Valid {
+		return d, err
+	}
+	st, err := ParseCutoverStage(stage.String)
+	if err != nil {
+		return nil, errorx.Wrap(err, "definition cutover stage", errorx.KindInternal)
+	}
+	d.Cutover = &st
+	return d, nil
 }
 
 // valuesFromRow reads a stored values payload back through

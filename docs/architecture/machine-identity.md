@@ -115,6 +115,8 @@ is unverified (#1157, #1168): the supervisor's runner is unbuilt
 (#1180). Until a
 GRN's first activation it is in the legacy cohort: its calls carry no
 token, and the certificate check below still applies to each of them.
+A legacy GRN's first activation waits for its cutover's switch
+([agents.md](./agents.md) §Separated execution).
 An agent created managed is never in it: it is fenced from birth
 ([agents.md](./agents.md) §Separated execution).
 
@@ -145,7 +147,9 @@ The routes and their schemes are `api/machine.yaml`'s, under the
 The hosted control service is a lifecycle caller. It activates,
 deactivates, inspects and recovers an agent's execution on the routes
 tagged `execution` in `api/machine.yaml`, which is authoritative for
-their wire and their `execution-fence.v1` contract version. A
+their wire and their `execution-fence.v1` contract version, and cuts a
+legacy agent over on the routes tagged `cutover`, authoritative for
+theirs and `agent-cutover.v1`. A
 standalone host's supervisor is the other: on the same routes it
 activates, deactivates and inspects the one agent it is registered
 for and holds, and recovers nothing; its certificate reaches no

@@ -96,7 +96,13 @@ type Definition struct {
 	// Name is what the organization calls the agent. It identifies
 	// nothing: two definitions may share one, and the GRN is the
 	// agent's identity.
-	Name      Name
+	Name Name
+	// Cutover is the stage of the open cutover attempt of the agent's
+	// GRN, nil where none is open. A frozen or switched definition is
+	// archival: its values stay preserved and are no longer what any
+	// operator reads (ADR-0086). It is read with the definition and
+	// never written through it.
+	Cutover   *CutoverStage
 	values    Values
 	definedBy grn.GRN
 	createdAt time.Time

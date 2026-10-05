@@ -31,6 +31,8 @@ type memoryStore struct {
 	definitions map[grn.GRN]*Definition
 	// fenced holds the agents whose execution has been activated.
 	fenced map[grn.GRN]bool
+	// switched holds the agents whose cutover is switched.
+	switched map[grn.GRN]bool
 }
 
 func newMemoryStore() *memoryStore {
@@ -39,17 +41,21 @@ func newMemoryStore() *memoryStore {
 		assignments: map[grn.GRN]*Assignment{},
 		definitions: map[grn.GRN]*Definition{},
 		fenced:      map[grn.GRN]bool{},
+		switched:    map[grn.GRN]bool{},
 	}
 }
 
-func (s *memoryStore) ExecutionMode(_ context.Context, agentGRN grn.GRN) (Mode, error) {
+func (s *memoryStore) AdmitLegacyIssuance(_ context.Context, agentGRN grn.GRN) error {
 	if _, held := s.agents[agentGRN]; !held {
-		return "", ErrAgentNotFound
+		return ErrAgentNotFound
 	}
 	if s.fenced[agentGRN] {
-		return ModeFenced, nil
+		return ErrIssuedByLifecycle
 	}
-	return ModeLegacy, nil
+	if s.switched[agentGRN] {
+		return ErrCutOver
+	}
+	return nil
 }
 
 func (s *memoryStore) Create(_ context.Context, a *Agent) error {
@@ -189,10 +195,17 @@ func (s *memoryStore) reportable(agentGRN grn.GRN, epoch int) (*Agent, error) {
 // signer is an Issuer recording every subject it signed for, so a
 // refusal is read as a certificate that was not issued rather than as
 // an error beside one that was.
-type signer struct{ signed []grn.GRN }
+type signer struct {
+	signed []grn.GRN
+	// during, when set, runs while a certificate is being signed.
+	during func()
+}
 
 func (s *signer) Issue(_ context.Context, subject grn.GRN) (*Certificate, error) {
 	s.signed = append(s.signed, subject)
+	if s.during != nil {
+		s.during()
+	}
 	return &Certificate{CertificatePEM: []byte(subject.String())}, nil
 }
 
@@ -335,6 +348,35 @@ func TestService_IssueCertificateIsAnOperatorsRouteForALegacyAgent(t *testing.T)
 
 	assert.Equal(t, []grn.GRN{held.Agent()}, issuer.signed,
 		"nothing was signed for a caller that was refused")
+}
+
+// TestService_IssueCertificateAnswersNothingOnceTheCutoverIsSwitched
+// holds the operator's route closed for an agent whose cutover is
+// switched, including a switch that commits while the certificate is
+// being signed: the read after signing is what decides (ADR-0086). The
+// same request with no switch is the control.
+func TestService_IssueCertificateAnswersNothingOnceTheCutoverIsSwitched(t *testing.T) {
+	ctx := context.Background()
+	store := newMemoryStore()
+	issuer := &signer{}
+	svc := NewService(store, issuer)
+	operator := operatorGRN("acme", "one")
+	held, err := svc.Create(ctx, operator)
+	require.NoError(t, err)
+
+	got, err := svc.IssueCertificate(ctx, operator, held.Agent())
+	require.NoError(t, err, "control: the assigned operator of a legacy agent")
+	assert.NotNil(t, got)
+
+	issuer.during = func() { store.switched[held.Agent()] = true }
+	got, err = svc.IssueCertificate(ctx, operator, held.Agent())
+	assert.ErrorIs(t, err, ErrCutOver, "a switch committing while it signs")
+	assert.Nil(t, got)
+
+	issuer.during = nil
+	_, err = svc.IssueCertificate(ctx, operator, held.Agent())
+	assert.ErrorIs(t, err, ErrCutOver, "once switched")
+	assert.Len(t, issuer.signed, 2, "nothing is signed once the switch is read before signing")
 }
 
 // TestService_ReportProvisioningStateIsAcceptedFromTheHolderAtTheCurrentEpoch

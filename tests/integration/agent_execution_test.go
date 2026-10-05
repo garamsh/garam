@@ -20,7 +20,7 @@ import (
 )
 
 // fence is one agent assigned to a controller, with the execution
-// store over it: what every test below starts from.
+// store over it.
 type fence struct {
 	p          *pgxpool.Pool
 	agents     *agent.PostgresStore
@@ -29,7 +29,18 @@ type fence struct {
 	controller grn.GRN
 }
 
+// newFence is a legacy agent whose cutover is switched and that has not
+// been activated: what every test below starts from, since a legacy
+// agent's first activation waits for its switch (ADR-0086).
 func newFence(t *testing.T) fence {
+	t.Helper()
+	f := newLegacyFence(t)
+	f.switched(t, "fixture-cutover")
+	return f
+}
+
+// newLegacyFence is a legacy agent no cutover has reached.
+func newLegacyFence(t *testing.T) fence {
 	t.Helper()
 	p := pool(t)
 	require.NoError(t, org.NewPostgresStore(p).CreateOrg(context.Background(), org.NewOrganization(orgRootGRN("acme"), "acme")))

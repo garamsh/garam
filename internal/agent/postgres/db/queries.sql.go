@@ -251,6 +251,72 @@ func (q *Queries) GetActivationByRequest(ctx context.Context, arg GetActivationB
 	return i, err
 }
 
+const getCutoverAgent = `-- name: GetCutoverAgent :one
+SELECT e.mode, s.assignee_grn, s.epoch
+FROM agent_executions e
+JOIN agent_assignments s ON s.agent_grn = e.agent_grn
+WHERE e.agent_grn = $1
+`
+
+type GetCutoverAgentRow struct {
+	Mode        string
+	AssigneeGrn string
+	Epoch       int32
+}
+
+func (q *Queries) GetCutoverAgent(ctx context.Context, agentGrn string) (GetCutoverAgentRow, error) {
+	row := q.db.QueryRow(ctx, getCutoverAgent, agentGrn)
+	var i GetCutoverAgentRow
+	err := row.Scan(&i.Mode, &i.AssigneeGrn, &i.Epoch)
+	return i, err
+}
+
+const getCutoverAttempt = `-- name: GetCutoverAttempt :one
+SELECT agent_grn, import_id, stage, frozen_digest, audience_grn, grant_id, operation_ref, created_at, switched_at, ended_at FROM agent_cutovers WHERE agent_grn = $1 AND import_id = $2
+`
+
+type GetCutoverAttemptParams struct {
+	AgentGrn string
+	ImportID string
+}
+
+func (q *Queries) GetCutoverAttempt(ctx context.Context, arg GetCutoverAttemptParams) (AgentCutover, error) {
+	row := q.db.QueryRow(ctx, getCutoverAttempt, arg.AgentGrn, arg.ImportID)
+	var i AgentCutover
+	err := row.Scan(
+		&i.AgentGrn,
+		&i.ImportID,
+		&i.Stage,
+		&i.FrozenDigest,
+		&i.AudienceGrn,
+		&i.GrantID,
+		&i.OperationRef,
+		&i.CreatedAt,
+		&i.SwitchedAt,
+		&i.EndedAt,
+	)
+	return i, err
+}
+
+const getCutoverSource = `-- name: GetCutoverSource :one
+SELECT agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at, name FROM agent_definitions WHERE agent_grn = $1
+`
+
+func (q *Queries) GetCutoverSource(ctx context.Context, agentGrn string) (AgentDefinition, error) {
+	row := q.db.QueryRow(ctx, getCutoverSource, agentGrn)
+	var i AgentDefinition
+	err := row.Scan(
+		&i.AgentGrn,
+		&i.OrgGrn,
+		&i.OperatorGrn,
+		&i.AgentValues,
+		&i.DefinedBy,
+		&i.CreatedAt,
+		&i.Name,
+	)
+	return i, err
+}
+
 const getEnrollment = `-- name: GetEnrollment :one
 SELECT id, org_grn, agent_grn, supervisor_grn, host_name, supervisor_key_sha256, agent_key_sha256, expected_assignee_grn, expected_epoch, request_id, approved_by, secret_sha256, expires_at, created_at, withdrawn_at, consumed_at, request_sha256, epoch, lineage, supervisor_certificate_pem, agent_certificate_pem, issuer_pem, server_root_pem FROM agent_enrollments WHERE org_grn = $1 AND id = $2
 `
@@ -455,6 +521,29 @@ func (q *Queries) GetInitialCertificate(ctx context.Context, agentGrn string) (A
 	return i, err
 }
 
+const getLatestCutover = `-- name: GetLatestCutover :one
+SELECT agent_grn, import_id, stage, frozen_digest, audience_grn, grant_id, operation_ref, created_at, switched_at, ended_at FROM agent_cutovers WHERE agent_grn = $1
+ORDER BY created_at DESC, import_id DESC LIMIT 1
+`
+
+func (q *Queries) GetLatestCutover(ctx context.Context, agentGrn string) (AgentCutover, error) {
+	row := q.db.QueryRow(ctx, getLatestCutover, agentGrn)
+	var i AgentCutover
+	err := row.Scan(
+		&i.AgentGrn,
+		&i.ImportID,
+		&i.Stage,
+		&i.FrozenDigest,
+		&i.AudienceGrn,
+		&i.GrantID,
+		&i.OperationRef,
+		&i.CreatedAt,
+		&i.SwitchedAt,
+		&i.EndedAt,
+	)
+	return i, err
+}
+
 const getManagedCreation = `-- name: GetManagedCreation :one
 SELECT agent_grn, audience_grn, controller_grn, request_id, operation_ref, epoch, lineage, created_at FROM agent_managed_creations WHERE agent_grn = $1
 `
@@ -491,6 +580,28 @@ func (q *Queries) GetManagedCreationByReference(ctx context.Context, operationRe
 		&i.Epoch,
 		&i.Lineage,
 		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getOpenCutover = `-- name: GetOpenCutover :one
+SELECT agent_grn, import_id, stage, frozen_digest, audience_grn, grant_id, operation_ref, created_at, switched_at, ended_at FROM agent_cutovers WHERE agent_grn = $1 AND stage <> 'rolled_back'
+`
+
+func (q *Queries) GetOpenCutover(ctx context.Context, agentGrn string) (AgentCutover, error) {
+	row := q.db.QueryRow(ctx, getOpenCutover, agentGrn)
+	var i AgentCutover
+	err := row.Scan(
+		&i.AgentGrn,
+		&i.ImportID,
+		&i.Stage,
+		&i.FrozenDigest,
+		&i.AudienceGrn,
+		&i.GrantID,
+		&i.OperationRef,
+		&i.CreatedAt,
+		&i.SwitchedAt,
+		&i.EndedAt,
 	)
 	return i, err
 }
@@ -685,6 +796,50 @@ func (q *Queries) InsertCredential(ctx context.Context, arg InsertCredentialPara
 		arg.NotAfter,
 	)
 	return err
+}
+
+const insertCutover = `-- name: InsertCutover :one
+INSERT INTO agent_cutovers (
+    agent_grn, import_id, stage, frozen_digest, audience_grn, grant_id,
+    operation_ref, created_at
+) VALUES ($1, $2, 'frozen', $3, $4, $5, $6, $7)
+RETURNING agent_grn, import_id, stage, frozen_digest, audience_grn, grant_id, operation_ref, created_at, switched_at, ended_at
+`
+
+type InsertCutoverParams struct {
+	AgentGrn     string
+	ImportID     string
+	FrozenDigest []byte
+	AudienceGrn  string
+	GrantID      string
+	OperationRef string
+	CreatedAt    pgtype.Timestamptz
+}
+
+func (q *Queries) InsertCutover(ctx context.Context, arg InsertCutoverParams) (AgentCutover, error) {
+	row := q.db.QueryRow(ctx, insertCutover,
+		arg.AgentGrn,
+		arg.ImportID,
+		arg.FrozenDigest,
+		arg.AudienceGrn,
+		arg.GrantID,
+		arg.OperationRef,
+		arg.CreatedAt,
+	)
+	var i AgentCutover
+	err := row.Scan(
+		&i.AgentGrn,
+		&i.ImportID,
+		&i.Stage,
+		&i.FrozenDigest,
+		&i.AudienceGrn,
+		&i.GrantID,
+		&i.OperationRef,
+		&i.CreatedAt,
+		&i.SwitchedAt,
+		&i.EndedAt,
+	)
+	return i, err
 }
 
 const insertEnrollment = `-- name: InsertEnrollment :execrows
@@ -984,6 +1139,181 @@ func (q *Queries) Introspect(ctx context.Context, arg IntrospectParams) (Introsp
 	return i, err
 }
 
+const inventoryAgents = `-- name: InventoryAgents :many
+SELECT a.grn, e.mode, e.lineage, s.assignee_grn, s.epoch,
+       d.name AS definition_name, d.operator_grn AS definition_operator_grn,
+       d.agent_values AS definition_values,
+       (SELECT count(*) FROM agent_credentials c WHERE c.agent_grn = a.grn) AS tracked_credentials
+FROM agents a
+JOIN agent_executions e ON e.agent_grn = a.grn
+LEFT JOIN agent_assignments s ON s.agent_grn = a.grn
+LEFT JOIN agent_definitions d ON d.agent_grn = a.grn
+WHERE a.org_grn = $1
+ORDER BY a.grn
+`
+
+type InventoryAgentsRow struct {
+	Grn                   string
+	Mode                  string
+	Lineage               pgtype.UUID
+	AssigneeGrn           pgtype.Text
+	Epoch                 pgtype.Int4
+	DefinitionName        pgtype.Text
+	DefinitionOperatorGrn pgtype.Text
+	DefinitionValues      []byte
+	TrackedCredentials    int64
+}
+
+// The inventory reads an organization from one snapshot: every agent
+// with its execution, assignment and definition, each agent's most
+// recent attempt, every definition no operator claimed, and every
+// template.
+func (q *Queries) InventoryAgents(ctx context.Context, orgGrn string) ([]InventoryAgentsRow, error) {
+	rows, err := q.db.Query(ctx, inventoryAgents, orgGrn)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []InventoryAgentsRow
+	for rows.Next() {
+		var i InventoryAgentsRow
+		if err := rows.Scan(
+			&i.Grn,
+			&i.Mode,
+			&i.Lineage,
+			&i.AssigneeGrn,
+			&i.Epoch,
+			&i.DefinitionName,
+			&i.DefinitionOperatorGrn,
+			&i.DefinitionValues,
+			&i.TrackedCredentials,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const inventoryAttempts = `-- name: InventoryAttempts :many
+SELECT DISTINCT ON (c.agent_grn) c.agent_grn, c.import_id, c.stage
+FROM agent_cutovers c
+JOIN agents a ON a.grn = c.agent_grn
+WHERE a.org_grn = $1
+ORDER BY c.agent_grn, c.created_at DESC, c.import_id DESC
+`
+
+type InventoryAttemptsRow struct {
+	AgentGrn string
+	ImportID string
+	Stage    string
+}
+
+func (q *Queries) InventoryAttempts(ctx context.Context, orgGrn string) ([]InventoryAttemptsRow, error) {
+	rows, err := q.db.Query(ctx, inventoryAttempts, orgGrn)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []InventoryAttemptsRow
+	for rows.Next() {
+		var i InventoryAttemptsRow
+		if err := rows.Scan(&i.AgentGrn, &i.ImportID, &i.Stage); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const inventoryTemplates = `-- name: InventoryTemplates :many
+SELECT t.grn, t.name, t.agent_values FROM agent_templates t
+WHERE t.org_grn = $1
+ORDER BY t.grn
+`
+
+type InventoryTemplatesRow struct {
+	Grn         string
+	Name        string
+	AgentValues []byte
+}
+
+func (q *Queries) InventoryTemplates(ctx context.Context, orgGrn string) ([]InventoryTemplatesRow, error) {
+	rows, err := q.db.Query(ctx, inventoryTemplates, orgGrn)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []InventoryTemplatesRow
+	for rows.Next() {
+		var i InventoryTemplatesRow
+		if err := rows.Scan(&i.Grn, &i.Name, &i.AgentValues); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const inventoryUnclaimedDefinitions = `-- name: InventoryUnclaimedDefinitions :many
+SELECT d.agent_grn, d.org_grn, d.operator_grn, d.agent_values, d.defined_by, d.created_at, d.name FROM agent_definitions d
+WHERE d.org_grn = $1 AND NOT EXISTS (SELECT 1 FROM agents a WHERE a.grn = d.agent_grn)
+ORDER BY d.agent_grn
+`
+
+func (q *Queries) InventoryUnclaimedDefinitions(ctx context.Context, orgGrn string) ([]AgentDefinition, error) {
+	rows, err := q.db.Query(ctx, inventoryUnclaimedDefinitions, orgGrn)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []AgentDefinition
+	for rows.Next() {
+		var i AgentDefinition
+		if err := rows.Scan(
+			&i.AgentGrn,
+			&i.OrgGrn,
+			&i.OperatorGrn,
+			&i.AgentValues,
+			&i.DefinedBy,
+			&i.CreatedAt,
+			&i.Name,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const isCutOver = `-- name: IsCutOver :one
+SELECT EXISTS (
+    SELECT 1 FROM agent_cutovers WHERE agent_grn = $1 AND stage = 'switched'
+)
+`
+
+// IsCutOver reads whether the agent's cutover is switched. It is a
+// statement of its own after the execution lock, so its snapshot is
+// taken once that lock is granted.
+func (q *Queries) IsCutOver(ctx context.Context, agentGrn string) (bool, error) {
+	row := q.db.QueryRow(ctx, isCutOver, agentGrn)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const isManagedCreation = `-- name: IsManagedCreation :one
 SELECT EXISTS (SELECT 1 FROM agent_managed_creations WHERE agent_grn = $1)
 `
@@ -993,6 +1323,28 @@ func (q *Queries) IsManagedCreation(ctx context.Context, agentGrn string) (bool,
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
+}
+
+const lockDefinition = `-- name: LockDefinition :one
+
+SELECT agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at, name FROM agent_definitions WHERE agent_grn = $1 FOR UPDATE
+`
+
+// Cutover (ADR-0086). Every stage takes the execution row FOR UPDATE
+// first, then the definition row: the lock a claim serializes on.
+func (q *Queries) LockDefinition(ctx context.Context, agentGrn string) (AgentDefinition, error) {
+	row := q.db.QueryRow(ctx, lockDefinition, agentGrn)
+	var i AgentDefinition
+	err := row.Scan(
+		&i.AgentGrn,
+		&i.OrgGrn,
+		&i.OperatorGrn,
+		&i.AgentValues,
+		&i.DefinedBy,
+		&i.CreatedAt,
+		&i.Name,
+	)
+	return i, err
 }
 
 const lockEnrollment = `-- name: LockEnrollment :one
@@ -1210,6 +1562,36 @@ func (q *Queries) ReplaceToken(ctx context.Context, arg ReplaceTokenParams) erro
 	return err
 }
 
+const rollBackCutover = `-- name: RollBackCutover :one
+UPDATE agent_cutovers SET stage = 'rolled_back', ended_at = $3
+WHERE agent_grn = $1 AND import_id = $2 AND stage = 'frozen'
+RETURNING agent_grn, import_id, stage, frozen_digest, audience_grn, grant_id, operation_ref, created_at, switched_at, ended_at
+`
+
+type RollBackCutoverParams struct {
+	AgentGrn string
+	ImportID string
+	EndedAt  pgtype.Timestamptz
+}
+
+func (q *Queries) RollBackCutover(ctx context.Context, arg RollBackCutoverParams) (AgentCutover, error) {
+	row := q.db.QueryRow(ctx, rollBackCutover, arg.AgentGrn, arg.ImportID, arg.EndedAt)
+	var i AgentCutover
+	err := row.Scan(
+		&i.AgentGrn,
+		&i.ImportID,
+		&i.Stage,
+		&i.FrozenDigest,
+		&i.AudienceGrn,
+		&i.GrantID,
+		&i.OperationRef,
+		&i.CreatedAt,
+		&i.SwitchedAt,
+		&i.EndedAt,
+	)
+	return i, err
+}
+
 const shareAssignment = `-- name: ShareAssignment :one
 SELECT a.assignee_grn, a.epoch,
        (split_part(a.assignee_grn, ':', 4) <> 'supervisor' OR EXISTS (
@@ -1275,6 +1657,36 @@ func (q *Queries) SpendEnrollment(ctx context.Context, arg SpendEnrollmentParams
 		arg.ID,
 	)
 	return err
+}
+
+const switchCutover = `-- name: SwitchCutover :one
+UPDATE agent_cutovers SET stage = 'switched', switched_at = $3
+WHERE agent_grn = $1 AND import_id = $2 AND stage = 'frozen'
+RETURNING agent_grn, import_id, stage, frozen_digest, audience_grn, grant_id, operation_ref, created_at, switched_at, ended_at
+`
+
+type SwitchCutoverParams struct {
+	AgentGrn   string
+	ImportID   string
+	SwitchedAt pgtype.Timestamptz
+}
+
+func (q *Queries) SwitchCutover(ctx context.Context, arg SwitchCutoverParams) (AgentCutover, error) {
+	row := q.db.QueryRow(ctx, switchCutover, arg.AgentGrn, arg.ImportID, arg.SwitchedAt)
+	var i AgentCutover
+	err := row.Scan(
+		&i.AgentGrn,
+		&i.ImportID,
+		&i.Stage,
+		&i.FrozenDigest,
+		&i.AudienceGrn,
+		&i.GrantID,
+		&i.OperationRef,
+		&i.CreatedAt,
+		&i.SwitchedAt,
+		&i.EndedAt,
+	)
+	return i, err
 }
 
 const withdrawEnrollment = `-- name: WithdrawEnrollment :exec

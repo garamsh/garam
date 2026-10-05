@@ -11,10 +11,11 @@ by `internal/agent`.
 | `Name` | what an organization calls a defined agent or a template, separate from the GRN: trimmed, one to 100 characters, and not unique |
 | `Assignment` | what holds an agent — an operator, or a standalone host's supervisor (ADR-0082) — and the epoch that binding holds |
 | `Certificate` | what an agent authenticates with and the garam server root it verifies garam by, as this domain hands them back |
-| `Service` | creates an agent for the calling operator, issues the certificate of one assigned to it while the agent has not cut over, answers an operator with the definitions naming it so it can claim one (ADR-0033), and records the state each party reports (ADR-0053) |
+| `Service` | creates an agent for the calling operator, issues the certificate of one assigned to it while its execution is legacy and its cutover is not switched (ADR-0086), answers an operator with the definitions naming it so it can claim one (ADR-0033), and records the state each party reports (ADR-0053) |
 | `Issuer` | signs a certificate for a subject GRN and hands back the garam server root beside it |
-| `ExecutionService` | what a lifecycle authority does to an agent's execution — creates a managed agent and issues its first certificate, activates a generation, deactivates it, inspects a certificate and a generation, recovers the credential lineage — and how an agent renews its own certificate, legacy or fenced, inside the lineage that certificate is current in (ADR-0040, ADR-0077, ADR-0078) |
-| `ExecutionStore` | the execution row every agent has, its activations and its credential lineage, written under the row's lock (ADR-0080), and a managed agent's creation and the initial issuance that starts its lineage |
+| `ExecutionService` | what a lifecycle authority does to an agent's execution — creates a managed agent and issues its first certificate, activates a generation, deactivates it, inspects a certificate and a generation, recovers the credential lineage, cuts a legacy agent over (ADR-0086) — and how an agent renews its own certificate, legacy or fenced, inside the lineage that certificate is current in (ADR-0040, ADR-0077, ADR-0078) |
+| `ExecutionStore` | the execution row every agent has, its activations, its credential lineage and its cutover attempts, written under the row's lock (ADR-0080), and a managed agent's creation and the initial issuance that starts its lineage |
+| `Cutover` | a legacy agent's source as the Operator imports it — its definition, or none — with the digest over it and the agent's most recent attempt (ADR-0086) |
 | `ManagedCreation` | an agent the hosted control service created: its GRN, the controller and epoch of its first assignment, the `agent:create` reference and request identifier that authorized it, and the lineage it was born into |
 | `Enrollment` | an administrator's approval of a standalone host: the hash of the host's bootstrap secret, the fingerprints of its two keys, its request identifier, the agent and supervisor GRNs it binds, the assignment a replacement expects, and the public result once spent (ADR-0082) |
 | `Supervisor` | a standalone host's current supervisor registration: the one agent it holds and the certificate garam last issued it |
@@ -143,16 +144,16 @@ release of that contract and no compatibility window (ADR-0049).
 
 ## Separated execution
 
-**Built here is garam's half of three parts: managed creation and its
+**Built here is garam's half of four parts: managed creation and its
 initial issuance (below), the controller proof
-([operators.md](./operators.md) §Controller proof) and the generation
+([operators.md](./operators.md) §Controller proof), the generation
 fence ([machine-identity.md](./machine-identity.md) §Generation and
-lineage).** The adapter this repository ships reaches the fence
-through the lifecycle authority, never directly: it asks that
-authority to activate the generation beside it and carries the token
-it is answered with ([adapter.md](./adapter.md) §Activation and
-runtime status); it introspects nothing. The Operator control
-service's use of managed
+lineage) and a legacy agent's cutover (below).** The adapter this
+repository ships reaches the fence through the lifecycle authority,
+never directly: it asks that authority to activate the generation
+beside it and carries the token it is answered with
+([adapter.md](./adapter.md) §Activation and runtime status); it
+introspects nothing. The Operator control service's use of managed
 creation is garamsh/garam-agent-operator#211 and #218's, per #1167.
 Acceptance with the Operator control service and the adapter is
 unverified and tracked in #1157. The rest is the accepted
@@ -167,6 +168,29 @@ in #1157.
   dual write and no new workload or volume. The GRN, the `Name` and the
   assignment stay here, and the console still copies a template once
   (ADR-0077).
+- **A legacy agent cuts over in stages garam records under its
+  execution lock** (ADR-0086). The Operator reads the agent's source —
+  its definition, or empty values where none describes it — and the
+  SHA-256 of its RFC 8785 JSON, imports it inactive, and asks garam to
+  freeze it: under the execution row and then the definition row, garam
+  rechecks the assignment and the grant and records the attempt `frozen`
+  only if the source's digest there is the import's. garam then records
+  `switched`, before the Operator releases anything. A frozen attempt
+  may be rolled back and a switched one may not; each attempt is keyed
+  by the import's identifier, so a retry answers what its stage recorded
+  and nothing reaches an ended one. From the freeze the operator's
+  definition poll omits the agent; from the switch its certificate route
+  refuses it, and the agent's first activation is admitted. That route
+  signs first and decides under the row after: a switch committing
+  between its two reads leaves a certificate signed and discarded, never
+  answered. Each stage carries an owner's or administrator's
+  `agent:cutover` reference minted for that stage's route alone,
+  rechecked. The definition is never written or deleted: a switched one
+  is archival, and the browser read says so, and migration 000033's
+  rollback refuses while a cutover is held. `garam cutover-inventory`
+  prints every source record of an organization with a digest of each
+  value and no value. The Operator's import and release are unbuilt
+  (garamsh/garam-agent-operator#217), and templates are #1188's.
 - **A managed agent is created by request, not by claim.** The control
   service presents a member's `agent:create` reference and the request
   identifier it binds; garam rechecks the reference from current state
@@ -195,8 +219,9 @@ in #1157.
   its active generation and its credential lineage. A lifecycle
   authority activates a generation after proving it owns the writer;
   the execution credential cannot activate one, and a report activates
-  nothing. The first activation cuts the GRN over, so the operator's
-  certificate route and its definition no longer reach it. The machine
+  nothing. A legacy agent's first activation waits for its cutover's
+  switch (below), and from the switch the operator's certificate route
+  and its definition no longer reach it. The machine
   listener checks the generation per request
   ([machine-identity.md](./machine-identity.md) §Generation and
   lineage), and every write it protects takes the row's lock in its own

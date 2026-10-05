@@ -74,6 +74,19 @@ type ExecutionService interface {
 	// certificate over its request's key, and answers an identical
 	// retry with the same certificate rather than another.
 	IssueInitialCertificate(ctx context.Context, caller grn.GRN, in InitialCertificateInput) (*InitialCertificate, bool, error)
+	// GetCutover answers what the Operator imports a legacy agent
+	// from, and the agent's most recent cutover attempt (ADR-0086).
+	GetCutover(ctx context.Context, caller grn.GRN, in CutoverInput) (*Cutover, error)
+	// FreezeCutover freezes the agent's source once it matches the
+	// digest the Operator imported, and answers an identical retry
+	// with the same attempt rather than another.
+	FreezeCutover(ctx context.Context, caller grn.GRN, in FreezeInput) (*CutoverAttempt, bool, error)
+	// SwitchCutover records that the Operator now owns the agent's
+	// source, before the Operator releases anything.
+	SwitchCutover(ctx context.Context, caller grn.GRN, in CutoverInput) (*CutoverAttempt, error)
+	// RollBackCutover ends a frozen attempt, which lists the agent's
+	// definition to its operator again.
+	RollBackCutover(ctx context.Context, caller grn.GRN, in CutoverInput) (*CutoverAttempt, error)
 }
 
 // ActivationInput is an activation request as received.

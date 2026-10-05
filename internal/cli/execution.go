@@ -166,6 +166,9 @@ func bindingOf(b operator.Binding, expiresAt time.Time) (*agent.OperationBinding
 		return nil, errorx.New(errorx.KindInternal, "stored body digest is not SHA-256")
 	}
 	copy(out.BodySHA256[:], digest)
+	if b.RequestTarget != nil {
+		out.RequestTarget = string(*b.RequestTarget)
+	}
 	if b.Assignment != nil {
 		epoch, err := strconv.Atoi(b.Assignment.Epoch)
 		if err != nil {

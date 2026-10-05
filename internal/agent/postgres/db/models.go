@@ -49,6 +49,29 @@ type AgentCredential struct {
 	NotAfter pgtype.Timestamptz
 }
 
+type AgentCutover struct {
+	AgentGrn     string
+	ImportID     string
+	Stage        string
+	FrozenDigest []byte
+	AudienceGrn  string
+	GrantID      string
+	OperationRef string
+	CreatedAt    pgtype.Timestamptz
+	SwitchedAt   pgtype.Timestamptz
+	EndedAt      pgtype.Timestamptz
+}
+
+type AgentDefinition struct {
+	AgentGrn    string
+	OrgGrn      string
+	OperatorGrn string
+	AgentValues []byte
+	DefinedBy   string
+	CreatedAt   pgtype.Timestamptz
+	Name        string
+}
+
 type AgentEnrollment struct {
 	ID                       pgtype.UUID
 	OrgGrn                   string
@@ -142,6 +165,17 @@ type AgentSupervisorRenewal struct {
 	ServerRootPem     string
 	NotAfter          pgtype.Timestamptz
 	CreatedAt         pgtype.Timestamptz
+}
+
+type AgentTemplate struct {
+	Grn         string
+	OrgGrn      string
+	Name        string
+	Description string
+	AgentValues []byte
+	CreatedBy   string
+	CreatedAt   pgtype.Timestamptz
+	UpdatedAt   pgtype.Timestamptz
 }
 
 type Group struct {

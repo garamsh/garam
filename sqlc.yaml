@@ -46,6 +46,7 @@ sql:
       - migrations/000026_agent_templates.up.sql
       - migrations/000029_agent_execution_fence.up.sql
       - migrations/000031_agent_standalone_supervisors.up.sql
+      - migrations/000033_agent_cutovers.up.sql
     queries: internal/agent/queries.sql
     gen:
       go:
@@ -123,6 +124,9 @@ sql:
       - migrations/000029_agent_execution_fence.up.sql
       - migrations/000030_agent_managed_enrollment.up.sql
       - migrations/000031_agent_standalone_supervisors.up.sql
+      - migrations/000010_agent_definitions.up.sql
+      - migrations/000026_agent_templates.up.sql
+      - migrations/000033_agent_cutovers.up.sql
     queries: internal/agent/postgres/queries.sql
     gen:
       go:

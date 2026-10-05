@@ -49,6 +49,19 @@ type AgentCredential struct {
 	NotAfter pgtype.Timestamptz
 }
 
+type AgentCutover struct {
+	AgentGrn     string
+	ImportID     string
+	Stage        string
+	FrozenDigest []byte
+	AudienceGrn  string
+	GrantID      string
+	OperationRef string
+	CreatedAt    pgtype.Timestamptz
+	SwitchedAt   pgtype.Timestamptz
+	EndedAt      pgtype.Timestamptz
+}
+
 type AgentDefinition struct {
 	AgentGrn    string
 	OrgGrn      string

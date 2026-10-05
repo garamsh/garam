@@ -22,6 +22,7 @@ import (
 
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/agent"
+	agentpg "github.com/garamsh/garam/internal/agent/postgres"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
@@ -37,7 +38,7 @@ func newManagedStack(t *testing.T) *executionStack {
 	p := pool(t)
 	_, engine := policyEngine(t, p)
 	s := newExecutionStack(t, p, engine)
-	s.delegate(t, "agent:create", "agent:activate", "agent:recover", "agent:configure")
+	s.delegate(t, "agent:create", "agent:activate", "agent:recover", "agent:configure", "agent:cutover")
 	return s
 }
 
@@ -370,9 +371,9 @@ func TestManagedEnrollment_AManagedAgentIsFencedFromBirth(t *testing.T) {
 	assert.Equal(t, map[string]int{
 		"runtime-state": http.StatusUnauthorized, "turn-event": http.StatusUnauthorized, "certificate": http.StatusConflict,
 	}, s.collaborate(t, strayTLS, m.agent, ""), "nor does it collaborate before an activation")
-	mode, err := agent.NewPostgresStore(s.pool).ExecutionMode(ctx, m.agent)
+	execution, err := agentpg.New(s.pool).GetExecution(ctx, m.agent)
 	require.NoError(t, err)
-	assert.Equal(t, agent.ModeFenced, mode)
+	assert.Equal(t, agent.ModeFenced, execution.Mode)
 
 	// The legacy cohort's predicate is the same one: a legacy agent's
 	// signed leaf is current, which is what a managed agent never

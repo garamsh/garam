@@ -87,6 +87,7 @@ func TestActionConstants_SpellTheirWireStrings(t *testing.T) {
 		{org.ActionAgentCreate, "agent:create"},
 		{org.ActionAgentConfigure, "agent:configure"},
 		{org.ActionAgentRecover, "agent:recover"},
+		{org.ActionAgentCutover, "agent:cutover"},
 
 		{org.ActionAgentEnroll, "agent:enroll"},
 		{org.ActionAgentTemplateRead, "agent-template:read"},
@@ -113,7 +114,7 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			org.ActionAgentDefine, org.ActionAgentRename, org.ActionAgentCreate,
 			org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentEnroll, org.ActionAgentTemplateRead, org.ActionAgentTemplateCreate,
 			org.ActionAgentTemplateUpdate, org.ActionAgentTemplateDelete, org.ActionAgentTemplatePublish,
-			org.ActionExecutionProfileRead, org.ActionAgentExecutionRead,
+			org.ActionExecutionProfileRead, org.ActionAgentExecutionRead, org.ActionAgentCutover,
 		},
 		org.RoleOwner.Actions())
 	assert.Equal(t,
@@ -125,7 +126,7 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			org.ActionAgentDefine, org.ActionAgentRename, org.ActionAgentCreate,
 			org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentEnroll, org.ActionAgentTemplateRead, org.ActionAgentTemplateCreate,
 			org.ActionAgentTemplateUpdate, org.ActionAgentTemplateDelete, org.ActionAgentTemplatePublish,
-			org.ActionExecutionProfileRead, org.ActionAgentExecutionRead,
+			org.ActionExecutionProfileRead, org.ActionAgentExecutionRead, org.ActionAgentCutover,
 		},
 		org.RoleAdmin.Actions())
 	assert.Equal(t,
@@ -230,7 +231,7 @@ func TestActionsFor_UnionsKnownRoles(t *testing.T) {
 			org.ActionOperatorRegister, org.ActionOperatorUpdate, org.ActionOperatorDelete,
 			org.ActionOperatorDelegate, org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentEnroll,
 			org.ActionAgentTemplateCreate, org.ActionAgentTemplateUpdate, org.ActionAgentTemplateDelete,
-			org.ActionAgentTemplatePublish, org.ActionAgentExecutionRead,
+			org.ActionAgentTemplatePublish, org.ActionAgentExecutionRead, org.ActionAgentCutover,
 		},
 		org.ActionsFor([]string{"member", "admin"}))
 	assert.Empty(t, org.ActionsFor([]string{"superuser"}))

@@ -279,7 +279,7 @@ func agentToAPI(a *agent.Agent, assignment *agent.Assignment) apigen.Agent {
 // reported any (ADR-0026), and the agent GRN it names is the identity
 // minted for an agent that may not exist.
 func definitionToAPI(d *agent.Definition) apigen.AgentDefinition {
-	return apigen.AgentDefinition{
+	out := apigen.AgentDefinition{
 		AgentGrn:    d.Agent().String(),
 		OrgGrn:      d.Organization().String(),
 		Name:        string(d.Name),
@@ -288,4 +288,8 @@ func definitionToAPI(d *agent.Definition) apigen.AgentDefinition {
 		DefinedBy:   d.DefinedBy().String(),
 		CreatedAt:   d.CreatedAt(),
 	}
+	if d.Cutover != nil {
+		out.Cutover = &apigen.AgentDefinitionCutover{Stage: apigen.AgentDefinitionCutoverStage(*d.Cutover)}
+	}
+	return out
 }

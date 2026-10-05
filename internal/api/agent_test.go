@@ -338,8 +338,9 @@ func TestAgentDefine_ADefinitionIsNotAnAgent(t *testing.T) {
 
 	// The two are answered under different shapes, so a reader holding
 	// one body knows which it holds. A definition carries no state,
-	// because nobody has reported any.
-	assert.Equal(t, []string{"agentGrn", "createdAt", "definedBy", "name", "operatorGrn", "orgGrn", "values"}, definitionFields)
+	// because nobody has reported any; its cutover is where its source
+	// moved, not a report about the agent.
+	assert.Equal(t, []string{"agentGrn", "createdAt", "cutover", "definedBy", "name", "operatorGrn", "orgGrn", "values"}, definitionFields)
 	assert.Equal(t, []string{"createdAt", "grn", "orgGrn", "provisioningState", "runtimeState", "updatedAt"}, agentFields)
 }
 
@@ -472,4 +473,41 @@ func TestAgentDefine_ANameLeftOutIsTheIdentifier(t *testing.T) {
 	rec = f.do(t, "POST", path, `{"name":" Scout ","operatorGrn":"`+operator.String()+`"}`, owner)
 	require.Equal(t, http.StatusCreated, rec.Code)
 	assert.Equal(t, "Scout", decodeBody[apigen.AgentDefinition](t, rec).Name)
+}
+
+// TestListAgentDefinitions_CarriesTheStageOfAnOpenCutover: a definition
+// whose agent is frozen or switched reads as archival, its values
+// still beside the stage (ADR-0086). The same definition with no
+// attempt open reads null, which is the control.
+func TestListAgentDefinitions_CarriesTheStageOfAnOpenCutover(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	f.permit(
+		permission{userGRNOf("member-sub"), org.ActionAgentDefine},
+		permission{userGRNOf("member-sub"), org.ActionAgentRead},
+	)
+	member := f.sessionCookieFor(t, "member-sub", "Member")
+	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(slug), userGRNOf("member-sub"), org.RoleMember)))
+	rec := f.do(t, "POST", "/orgs/"+slug+"/agent-definitions", defineBody(registerOperator(t, f, slug, "field-one"), `{"model":"haiku"}`), member)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	defined := decodeBody[apigen.AgentDefinition](t, rec)
+	assert.Nil(t, defined.Cutover)
+
+	cutover := func() json.RawMessage {
+		rec := f.do(t, "GET", "/orgs/"+slug+"/agent-definitions", "", member)
+		require.Equal(t, http.StatusOK, rec.Code)
+		var listed []map[string]json.RawMessage
+		require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &listed))
+		require.Len(t, listed, 1)
+		assert.JSONEq(t, `{"model":"haiku"}`, string(listed[0]["values"]))
+		return listed[0]["cutover"]
+	}
+	assert.JSONEq(t, `null`, string(cutover()), "control: no attempt is open")
+
+	switched := agent.CutoverSwitched
+	f.agents.mu.Lock()
+	f.agents.definitions[defined.AgentGrn].Cutover = &switched
+	f.agents.mu.Unlock()
+	assert.JSONEq(t, `{"stage":"switched"}`, string(cutover()))
 }

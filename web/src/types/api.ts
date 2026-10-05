@@ -741,9 +741,9 @@ export interface paths {
          * Hand a delegated operator one operation. Requires the operation's action, decided now.
          * @description Mints an opaque authority bound to the signed-in user, this organization, the audience operator, the operation, its target, `requestId` and `bodySha256` (ADR-0078). The caller sends it to the Operator as `Authorization: Garam-Operation <authority>`, outside the body whose digest it binds. It is answered once and expires after five minutes or at the grant's expiry, whichever is first.
          *
-         *     `agent:create` targets the controller that will run the agent and is authorized on the organization; `agent:configure` and `agent:recover` target the agent, are authorized on it, and bind where it runs now. `agent:recover` authorizes one exact credential recovery, whose request body `bodySha256` digests (ADR-0078). `agent-template:read`, `agent-template:publish` and `execution-profile:read` target this organization and are authorized on it; `agent:execution-read` targets the agent, is authorized on it and binds where it runs now. The audience's current grant must cover the operation and, where it names one, the controller.
+         *     `agent:create` targets the controller that will run the agent and is authorized on the organization; `agent:configure`, `agent:recover` and `agent:cutover` target the agent, are authorized on it, and bind where it runs now. `agent:recover` authorizes one exact credential recovery, whose request body `bodySha256` digests (ADR-0078). `agent:cutover` authorizes one stage of moving a legacy agent's source to the audience (ADR-0086). `agent-template:read`, `agent-template:publish` and `execution-profile:read` target this organization and are authorized on it; `agent:execution-read` targets the agent, is authorized on it and binds where it runs now. The audience's current grant must cover the operation and, where it names one, the controller.
          *
-         *     Those four operations also bind `requestTarget`, the exact request target of the one Operator route they are sent to, so an authority for one route or query authorizes no other. No other operation takes one.
+         *     Those four operations and `agent:cutover` also bind `requestTarget`, the exact request target of the one route they are sent to, so an authority for one route or query authorizes no other. For `agent:cutover` that route is garam's own cutover read or stage of the agent, so a reference minted for one stage authorizes no other. No other operation takes one.
          *
          *     The same `requestId` with the same binding under the same grant mints a new authority for the same `operationRef`, replacing the previous one. Any other binding under it, including a replaced grant or a changed placement, is refused with 409: a newly authorized operation takes a new `requestId`.
          */
@@ -1417,6 +1417,12 @@ export interface components {
             definedBy: string;
             /** Format: date-time */
             createdAt: string;
+            /** @description The agent's open cutover attempt (ADR-0086), null where none is open. A `frozen` or `switched` definition is archival: its values stay preserved here and are no longer what its operator reads, and only its name still changes. */
+            cutover: components["schemas"]["AgentDefinitionCutover"] | null;
+        };
+        AgentDefinitionCutover: {
+            /** @enum {string} */
+            stage: "frozen" | "switched";
         };
         DelegationWrite: {
             requestId: components["schemas"]["RequestId"];
@@ -1454,19 +1460,19 @@ export interface components {
          * @description `agent:activate` bounds the hosted operator's own lifecycle authority; no user mints it. `agent-template:read`, `agent-template:publish` and `execution-profile:read` act on what the Operator holds for the organization and name no controller, so a grant covers them whatever controllers it lists.
          * @enum {string}
          */
-        DelegatedOperation: "agent:create" | "agent:configure" | "agent:activate" | "agent:recover" | "agent-template:read" | "agent-template:publish" | "execution-profile:read" | "agent:execution-read";
+        DelegatedOperation: "agent:create" | "agent:configure" | "agent:activate" | "agent:recover" | "agent-template:read" | "agent-template:publish" | "execution-profile:read" | "agent:execution-read" | "agent:cutover";
         RequestId: string;
         OperationAuthorityRequest: {
             /** @description GRN of the hosted operator that will act. */
             audience: string;
             /** @enum {string} */
-            operation: "agent:create" | "agent:configure" | "agent:recover" | "agent-template:read" | "agent-template:publish" | "execution-profile:read" | "agent:execution-read";
-            /** @description Controller GRN for `agent:create`; agent GRN for `agent:configure`, `agent:recover` and `agent:execution-read`; this organization's GRN for `agent-template:read`, `agent-template:publish` and `execution-profile:read`. */
+            operation: "agent:create" | "agent:configure" | "agent:recover" | "agent-template:read" | "agent-template:publish" | "execution-profile:read" | "agent:execution-read" | "agent:cutover";
+            /** @description Controller GRN for `agent:create`; agent GRN for `agent:configure`, `agent:recover`, `agent:execution-read` and `agent:cutover`; this organization's GRN for `agent-template:read`, `agent-template:publish` and `execution-profile:read`. */
             target: string;
             requestId: components["schemas"]["RequestId"];
             /** @description Lowercase hexadecimal SHA-256 of the exact request body the Operator receives; for a GET, that of the empty body. */
             bodySha256: string;
-            /** @description Required for `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `agent:execution-read`, and refused with 400 for every other operation. The exact origin-form request target the Operator will receive: the escaped path and raw query, with no scheme or authority and no empty, `.` or `..` path segment, taken from the same URL the request is sent to. garam binds it as given and decodes nothing. */
+            /** @description Required for `agent-template:read`, `agent-template:publish`, `execution-profile:read`, `agent:execution-read` and `agent:cutover`, and refused with 400 for every other operation. The exact origin-form request target the route will receive: the escaped path and raw query, with no scheme or authority and no empty, `.` or `..` path segment, taken from the same URL the request is sent to. For `agent:cutover` it is the machine listener's cutover route of the agent, such as `/agents/{agent}/cutover/switch`, and garam compares it with the target that route receives. garam binds it as given and decodes nothing. */
             requestTarget?: string;
         };
         OperationAuthority: {

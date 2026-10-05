@@ -67,8 +67,18 @@ WHERE grn = sqlc.arg('grn')
   )
 RETURNING *;
 
--- name: GetAgentExecutionMode :one
-SELECT mode FROM agent_executions WHERE agent_grn = $1;
+-- ShareAgentExecution holds the agent's execution row FOR SHARE until
+-- the transaction ends: a cutover switch, which takes it FOR UPDATE,
+-- either commits before it or waits for the transaction to end.
+-- name: ShareAgentExecution :one
+SELECT mode FROM agent_executions WHERE agent_grn = $1 FOR SHARE;
+
+-- IsAgentCutOver is a statement of its own after ShareAgentExecution,
+-- so its snapshot is taken once that lock is granted.
+-- name: IsAgentCutOver :one
+SELECT EXISTS (
+    SELECT 1 FROM agent_cutovers WHERE agent_grn = $1 AND stage = 'switched'
+);
 
 -- name: ReportAgentRuntimeState :one
 UPDATE agents SET
@@ -89,28 +99,48 @@ RETURNING *;
 INSERT INTO agent_definitions (agent_grn, org_grn, operator_grn, name, agent_values, defined_by, created_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7);
 
+-- A definition is read with the stage of its GRN's open cutover
+-- attempt, if any: a frozen or switched definition is archival, its
+-- values preserved and no longer the source (ADR-0086).
 -- name: GetAgentDefinition :one
-SELECT * FROM agent_definitions WHERE agent_grn = $1;
+SELECT d.*, c.stage AS cutover_stage
+FROM agent_definitions d
+LEFT JOIN agent_cutovers c ON c.agent_grn = d.agent_grn AND c.stage <> 'rolled_back'
+WHERE d.agent_grn = $1;
 
 -- name: RenameAgentDefinition :one
-UPDATE agent_definitions SET name = sqlc.arg('name')
-WHERE agent_grn = sqlc.arg('agent_grn')
-RETURNING *;
+WITH renamed AS (
+    UPDATE agent_definitions SET name = sqlc.arg('name')
+    WHERE agent_definitions.agent_grn = sqlc.arg('agent_grn')
+    RETURNING *
+)
+SELECT d.*, c.stage AS cutover_stage
+FROM renamed d
+LEFT JOIN agent_cutovers c ON c.agent_grn = d.agent_grn AND c.stage <> 'rolled_back';
 
 -- name: ListAgentDefinitionsByOrg :many
-SELECT * FROM agent_definitions WHERE org_grn = $1 ORDER BY agent_grn;
+SELECT d.*, c.stage AS cutover_stage
+FROM agent_definitions d
+LEFT JOIN agent_cutovers c ON c.agent_grn = d.agent_grn AND c.stage <> 'rolled_back'
+WHERE d.org_grn = $1
+ORDER BY d.agent_grn;
 
 -- The claim state is the assignment the claim wrote: an unclaimed
 -- definition has none, and a claimed one binds the operator it names.
--- An agent whose execution is fenced has cut over to the Operator
--- control service, and its definition is no longer the operator's
--- source (ADR-0077), so it is not listed.
+-- An agent whose execution is fenced, or whose cutover is frozen or
+-- switched, is moving or has moved to the Operator control service,
+-- and its definition is no longer the operator's source (ADR-0077,
+-- ADR-0086), so it is not listed.
 -- name: ListAgentDefinitionsByOperator :many
 SELECT d.*, a.epoch AS claim_epoch, a.created_at AS claim_created_at, a.updated_at AS claim_updated_at
 FROM agent_definitions d
 LEFT JOIN agent_assignments a ON a.agent_grn = d.agent_grn
 LEFT JOIN agent_executions e ON e.agent_grn = d.agent_grn
 WHERE d.operator_grn = $1 AND (e.mode IS NULL OR e.mode = 'legacy')
+  AND NOT EXISTS (
+      SELECT 1 FROM agent_cutovers c
+      WHERE c.agent_grn = d.agent_grn AND c.stage <> 'rolled_back'
+  )
 ORDER BY d.agent_grn;
 
 -- LockAgentDefinition is the lock a claim serializes on: two claims of

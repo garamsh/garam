@@ -314,3 +314,31 @@ func TestRun_EndsTheGenerationWhoseRuntimeWasRemoved(t *testing.T) {
 	require.ErrorIs(t, h.start().result(t), workload.ErrGenerationEnded)
 	assert.Zero(t, h.count(workload.RoleWorkspace)+h.count(workload.RoleAdapter), "the rest is drained and removed")
 }
+
+// TestRun_ReturnsNothingWhenStoppedMidStart holds a requested stop as
+// no failure wherever it lands: stopped while the generation is being
+// brought up, the run returns nil and leaves what it started running,
+// and the next run takes it up. The control is the same stop after the
+// generation is up, in TestRun_RequiresTheStoreOnceARuntimeServed.
+func TestRun_ReturnsNothingWhenStoppedMidStart(t *testing.T) {
+	h := newHost(t)
+	var r *running
+	h.engine.afterStart = func(c *stubContainer) {
+		if c.spec.NetworkOf == "" {
+			r.cancel()
+		}
+	}
+	h.engine.mu.Lock()
+	r = h.start()
+	h.engine.mu.Unlock()
+	require.NoError(t, r.result(t), "a stop mid-start is a stop")
+	h.engine.mu.Lock()
+	h.engine.afterStart = nil
+	runtime := h.live(workload.RoleRuntime)
+	h.engine.mu.Unlock()
+	require.NotNil(t, runtime, "the runtime it started runs on")
+
+	h.start()
+	adopted, _, _ := h.serving()
+	assert.Same(t, runtime, adopted, "the next run takes it up")
+}

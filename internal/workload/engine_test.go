@@ -57,6 +57,16 @@ func newStubEngine() *stubEngine {
 
 var errDown = errorx.New(errorx.KindUnavailable, "stub engine: unavailable")
 
+// refuse answers why a call is not served: the engine down, or the
+// caller's context done, which a real engine refuses too. The caller
+// holds mu.
+func (e *stubEngine) refuse(ctx context.Context) error {
+	if e.down {
+		return errDown
+	}
+	return ctx.Err()
+}
+
 func (e *stubEngine) notify() {
 	close(e.changed)
 	e.changed = make(chan struct{})
@@ -94,11 +104,11 @@ func (e *stubEngine) named(role workload.Role) []*stubContainer {
 	return out
 }
 
-func (e *stubEngine) CreateVolume(_ context.Context, name string, labels map[string]string) error {
+func (e *stubEngine) CreateVolume(ctx context.Context, name string, labels map[string]string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if e.down {
-		return errDown
+	if err := e.refuse(ctx); err != nil {
+		return err
 	}
 	if _, ok := e.volumes[name]; !ok {
 		e.volumes[name] = labels
@@ -107,11 +117,11 @@ func (e *stubEngine) CreateVolume(_ context.Context, name string, labels map[str
 	return nil
 }
 
-func (e *stubEngine) InspectVolume(_ context.Context, name string) (*workload.VolumeState, error) {
+func (e *stubEngine) InspectVolume(ctx context.Context, name string) (*workload.VolumeState, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if e.down {
-		return nil, errDown
+	if err := e.refuse(ctx); err != nil {
+		return nil, err
 	}
 	labels, ok := e.volumes[name]
 	if !ok {
@@ -120,11 +130,11 @@ func (e *stubEngine) InspectVolume(_ context.Context, name string) (*workload.Vo
 	return &workload.VolumeState{Name: name, Labels: labels}, nil
 }
 
-func (e *stubEngine) CreateContainer(_ context.Context, spec workload.ContainerSpec) (string, error) {
+func (e *stubEngine) CreateContainer(ctx context.Context, spec workload.ContainerSpec) (string, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if e.down {
-		return "", errDown
+	if err := e.refuse(ctx); err != nil {
+		return "", err
 	}
 	if _, ok := e.byName[spec.Name]; ok {
 		return "", workload.ErrNameInUse
@@ -157,11 +167,11 @@ func (e *stubEngine) lookup(nameOrID string) (*stubContainer, bool) {
 	return c, ok
 }
 
-func (e *stubEngine) InspectContainer(_ context.Context, nameOrID string) (*workload.ContainerState, error) {
+func (e *stubEngine) InspectContainer(ctx context.Context, nameOrID string) (*workload.ContainerState, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if e.down {
-		return nil, errDown
+	if err := e.refuse(ctx); err != nil {
+		return nil, err
 	}
 	c, ok := e.lookup(nameOrID)
 	if !ok {
@@ -177,11 +187,11 @@ func (e *stubEngine) InspectContainer(_ context.Context, nameOrID string) (*work
 	}, nil
 }
 
-func (e *stubEngine) CopyFiles(_ context.Context, id, dir string, files []workload.File) error {
+func (e *stubEngine) CopyFiles(ctx context.Context, id, dir string, files []workload.File) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if e.down {
-		return errDown
+	if err := e.refuse(ctx); err != nil {
+		return err
 	}
 	c, ok := e.lookup(id)
 	if !ok {
@@ -193,11 +203,11 @@ func (e *stubEngine) CopyFiles(_ context.Context, id, dir string, files []worklo
 	return nil
 }
 
-func (e *stubEngine) StartContainer(_ context.Context, id string) error {
+func (e *stubEngine) StartContainer(ctx context.Context, id string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if e.down {
-		return errDown
+	if err := e.refuse(ctx); err != nil {
+		return err
 	}
 	c, ok := e.lookup(id)
 	if !ok {
@@ -216,11 +226,11 @@ func (e *stubEngine) StartContainer(_ context.Context, id string) error {
 	return nil
 }
 
-func (e *stubEngine) SignalContainer(_ context.Context, id, signal string) error {
+func (e *stubEngine) SignalContainer(ctx context.Context, id, signal string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if e.down {
-		return errDown
+	if err := e.refuse(ctx); err != nil {
+		return err
 	}
 	c, ok := e.lookup(id)
 	if !ok {
@@ -252,9 +262,9 @@ func (e *stubEngine) exit(c *stubContainer) {
 
 func (e *stubEngine) WaitExited(ctx context.Context, id string) error {
 	e.mu.Lock()
-	if e.down {
+	if err := e.refuse(ctx); err != nil {
 		e.mu.Unlock()
-		return errDown
+		return err
 	}
 	c, ok := e.lookup(id)
 	if !ok {
@@ -274,11 +284,11 @@ func (e *stubEngine) WaitExited(ctx context.Context, id string) error {
 	}
 }
 
-func (e *stubEngine) RemoveContainer(_ context.Context, id string) error {
+func (e *stubEngine) RemoveContainer(ctx context.Context, id string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	if e.down {
-		return errDown
+	if err := e.refuse(ctx); err != nil {
+		return err
 	}
 	c, ok := e.lookup(id)
 	if !ok {

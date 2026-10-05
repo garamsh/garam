@@ -107,6 +107,17 @@ func NewSupervisor(engine Engine, garam Activator, cfg Config) (*Supervisor, err
 // of it was drained; and any other error with the workload left as it
 // stood. It never forces a container to stop.
 func (s *Supervisor) Run(ctx context.Context) error {
+	err := s.run(ctx)
+	if ctx.Err() != nil {
+		// A requested stop is not a failure, wherever it lands: the
+		// record is written before every step, so the next run takes
+		// up what this one left.
+		return nil
+	}
+	return err
+}
+
+func (s *Supervisor) run(ctx context.Context) error {
 	st, err := loadState(s.cfg.Dir)
 	if err != nil {
 		return err

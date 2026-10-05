@@ -287,8 +287,11 @@ func TestRealEngine_AdoptsOnlyWhatItCreated(t *testing.T) {
 		name := strings.TrimPrefix(h.inspect(made, "{{.Name}}"), "/")
 		intent := h.inspect(made, `{{index .Config.Labels "sh.garam.workload.intent"}}`)
 		h.mustDocker("rm", made)
+		// Everything the supervisor would have made but the nonce: its
+		// name, intent, image and volume.
 		stranger := h.mustDocker("create", "--name", name, "--label", "sh.garam.workload.nonce=someone-else",
-			"--label", "sh.garam.workload.intent="+intent, h.images.Runtime)
+			"--label", "sh.garam.workload.intent="+intent,
+			"--mount", "type=volume,src="+h.volume("memory")+",dst=/data", h.images.Runtime)
 
 		require.ErrorIs(t, h.start().result(t), workload.ErrForeign)
 		assert.Equal(t, "created", h.inspect(stranger, "{{.State.Status}}"), "never started")

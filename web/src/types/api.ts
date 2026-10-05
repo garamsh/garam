@@ -714,7 +714,7 @@ export interface paths {
         get?: never;
         /**
          * Register where a hosted operator's control service answers the console. Requires current `operator:delegate`.
-         * @description Sets the one base URL the console sends this operator's operation authorities to. It is an absolute `https` URL of at most 2048 bytes and may carry a path prefix; credentials, a query, a fragment, a trailing slash and any spelling a URL parser would rewrite are refused with 400. Changing it is the delegating act and is decided from current membership, roles, groups and persisted policies; renaming the operator does not reach it. An authority already minted names its audience by GRN, so a new endpoint moves no audience.
+         * @description Sets the one base URL the console sends this operator's operation authorities to. It is an absolute `https` URL of at most 2048 bytes with a host, and may carry a port from 1 to 65535 and a path prefix; credentials, a query, a fragment, a `.` or `..` path segment, a trailing slash and any spelling a URL parser would rewrite are refused with 400. Changing it is the delegating act and is decided from current membership, roles, groups and persisted policies; renaming the operator does not reach it. An authority already minted names its audience by GRN, so a new endpoint moves no audience.
          */
         put: operations["setOperatorControlEndpoint"];
         post?: never;
@@ -1466,7 +1466,7 @@ export interface components {
             requestId: components["schemas"]["RequestId"];
             /** @description Lowercase hexadecimal SHA-256 of the exact request body the Operator receives; for a GET, that of the empty body. */
             bodySha256: string;
-            /** @description Required for `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `agent:execution-read`, and refused with 400 for every other operation. The exact origin-form request target the Operator will receive: the escaped path and raw query, with no scheme or authority and no empty path segment, taken from the same URL the request is sent to. garam binds it as given and decodes nothing. */
+            /** @description Required for `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `agent:execution-read`, and refused with 400 for every other operation. The exact origin-form request target the Operator will receive: the escaped path and raw query, with no scheme or authority and no empty, `.` or `..` path segment, taken from the same URL the request is sent to. garam binds it as given and decodes nothing. */
             requestTarget?: string;
         };
         OperationAuthority: {

@@ -150,6 +150,8 @@ func TestParseRequestTarget_AcceptsOnlyOriginForm(t *testing.T) {
 		"/prefix/v1/orgs/acme/templates/web%20agent/versions/3",
 		"/v1/orgs/acme/agents/grn:acme:default:agent:9f2a/execution",
 		"/v1/orgs/acme/templates?after=b&after=a",
+		"/v1/orgs/acme/templates?next=../a",
+		"/v1/orgs/acme/templates/v1.2",
 		"/" + strings.Repeat("a", 2047),
 	} {
 		got, err := operator.ParseRequestTarget(ok)
@@ -163,6 +165,10 @@ func TestParseRequestTarget_AcceptsOnlyOriginForm(t *testing.T) {
 		"//control.example.com/v1/orgs/acme/templates",
 		"/v1/orgs//templates",
 		"/v1/orgs/acme/templates/",
+		"/v1/orgs/acme/../globex/templates",
+		"/v1/orgs/acme/./templates",
+		"/v1/orgs/acme/%2E%2e/globex/templates",
+		"/v1/orgs/acme/templates/..",
 		"/v1/orgs/acme/templates#fragment",
 		"/v1/orgs/acme/templ ates",
 		"/v1/orgs/acme/templates%2",

@@ -45,3 +45,37 @@ func TestParseControlEndpoint_AcceptsOnlyABaseURLTheConsoleBuildsUnder(t *testin
 		assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), "%q: %v", bad, err)
 	}
 }
+
+// TestParseControlEndpoint_RefusesWhatAURLParserRewritesOrCannotReach
+// holds the spellings a console could not build a stable request under:
+// no host, a port outside the range, and a dot segment, plain or
+// escaped. Each case differs from the valid prefix, the control, in
+// that one part.
+func TestParseControlEndpoint_RefusesWhatAURLParserRewritesOrCannotReach(t *testing.T) {
+	const control = "https://a.example:8443/garam/control"
+	got, err := operator.ParseControlEndpoint(control)
+	require.NoError(t, err)
+	assert.Equal(t, operator.ControlEndpoint(control), got)
+
+	tests := []struct {
+		name     string
+		endpoint string
+	}{
+		{"empty host", "https://:443"},
+		{"empty host and port", "https://:"},
+		{"port above the range", "https://a.example:99999/garam/control"},
+		{"port zero", "https://a.example:0/garam/control"},
+		{"port with a leading zero", "https://a.example:08443/garam/control"},
+		{"parent segment", "https://a.example/../garam/control"},
+		{"parent segment inside the prefix", "https://a.example:8443/garam/../control"},
+		{"current segment", "https://a.example:8443/garam/./control"},
+		{"escaped parent segment", "https://a.example:8443/garam/%2e%2E/control"},
+		{"half-escaped parent segment", "https://a.example:8443/garam/.%2e/control"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := operator.ParseControlEndpoint(tt.endpoint)
+			assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), "%q: %v", tt.endpoint, err)
+		})
+	}
+}

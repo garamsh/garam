@@ -316,9 +316,10 @@ lists it, so a create or configure grant authorizes no read, and a
 policy may delegate any of them to someone else while an explicit
 Deny still wins. An empty body's digest is the same for every read,
 so these four also bind the request target the Operator receives —
-the escaped path and raw query with no origin, bounded and checked
-for origin-form — and the Operator compares it byte for byte, with
-the operation's one fixed method, before reading anything. Create,
+the escaped path and raw query with no origin, bounded, checked for
+origin-form and holding no dot segment — and the Operator compares it
+byte for byte, with the operation's one fixed method, before reading
+anything. Create,
 configure and recover bind none and refuse one, so their authority is
 what it was. Publishing execution profiles stays with the deployment
 and no operation here grants it. The role defaults are the one
@@ -327,8 +328,9 @@ authoritative for which role holds what.
 
 **The registered control endpoint is where the console sends an
 authority, and only the delegating act moves it.** Each operator may
-carry one `https` base URL, with an optional path prefix and no
-credentials, query, fragment or trailing slash. Setting and clearing
+carry one `https` base URL with a host, an optional port and path
+prefix, and no credentials, query, fragment, dot segment or trailing
+slash. Setting and clearing
 it are `operator:delegate`, decided from current state as a grant is,
 and on routes of their own; changing an operator's name or
 description does not reach it. An authority names its audience by

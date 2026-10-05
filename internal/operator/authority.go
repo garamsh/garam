@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/garamsh/garam/internal/errorx"
@@ -54,11 +55,15 @@ var requestTargetPattern = func() *regexp.Regexp {
 	return regexp.MustCompile(`^(?:/` + pchar + `+)+(?:\?(?:` + pchar + `|[/?])*)?$`)
 }()
 
-// ParseRequestTarget parses an origin-form request target.
+// ParseRequestTarget parses an origin-form request target. It refuses
+// a `.` or `..` path segment, which a server cleaning the path would
+// remove, so the bound target never relies on the Operator not
+// cleaning it.
 func ParseRequestTarget(s string) (RequestTarget, error) {
-	if len(s) > maxRequestTarget || !requestTargetPattern.MatchString(s) {
+	path, _, _ := strings.Cut(s, "?")
+	if len(s) > maxRequestTarget || !requestTargetPattern.MatchString(s) || hasDotSegment(path) {
 		return "", errorx.New(errorx.KindInvalidArgument,
-			"request_target must be an origin-form path and query of at most 2048 bytes")
+			"request_target must be an origin-form path and query of at most 2048 bytes, with no dot segment")
 	}
 	return RequestTarget(s), nil
 }

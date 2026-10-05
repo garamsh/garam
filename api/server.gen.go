@@ -490,7 +490,7 @@ type OperationAuthorityRequest struct {
 	Operation  OperationAuthorityRequestOperation `json:"operation"`
 	RequestId  RequestId                          `json:"requestId"`
 
-	// RequestTarget Required for `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `agent:execution-read`, and refused with 400 for every other operation. The exact origin-form request target the Operator will receive: the escaped path and raw query, with no scheme or authority and no empty path segment, taken from the same URL the request is sent to. garam binds it as given and decodes nothing.
+	// RequestTarget Required for `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `agent:execution-read`, and refused with 400 for every other operation. The exact origin-form request target the Operator will receive: the escaped path and raw query, with no scheme or authority and no empty, `.` or `..` path segment, taken from the same URL the request is sent to. garam binds it as given and decodes nothing.
 	RequestTarget *string `json:"requestTarget,omitempty"`
 
 	// Target Controller GRN for `agent:create`; agent GRN for `agent:configure`, `agent:recover` and `agent:execution-read`; this organization's GRN for `agent-template:read`, `agent-template:publish` and `execution-profile:read`.

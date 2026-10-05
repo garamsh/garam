@@ -293,3 +293,24 @@ func TestRun_RefusesAVolumeACreateNamedIntoExistence(t *testing.T) {
 		assert.Equal(t, workload.ContainerCreated, c.status, "the runtime was never started on it")
 	}
 }
+
+// TestRun_EndsTheGenerationWhoseRuntimeWasRemoved holds a container
+// that is gone as one that exited: a runtime removed before the
+// supervisor watches it ends the generation and the other two are
+// drained, rather than the run stopping with them still running. The
+// control is TestRun_EndsTheGenerationAnyContainerOfItLeaves, where the
+// runtime exits and stays.
+func TestRun_EndsTheGenerationWhoseRuntimeWasRemoved(t *testing.T) {
+	h := newHost(t)
+	h.engine.afterStart = func(c *stubContainer) {
+		if c.spec.User == "65532:65532" && len(c.spec.Binds) > 0 {
+			runtime := h.engine.containers[c.spec.NetworkOf]
+			runtime.status = workload.ContainerExited
+			close(runtime.exited)
+			delete(h.engine.containers, runtime.id)
+			delete(h.engine.byName, runtime.spec.Name)
+		}
+	}
+	require.ErrorIs(t, h.start().result(t), workload.ErrGenerationEnded)
+	assert.Zero(t, h.count(workload.RoleWorkspace)+h.count(workload.RoleAdapter), "the rest is drained and removed")
+}

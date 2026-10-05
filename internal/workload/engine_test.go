@@ -27,8 +27,10 @@ type stubEngine struct {
 	// loseCreate creates the container and then answers unavailable,
 	// as a create whose answer was lost does.
 	loseCreate func(spec workload.ContainerSpec) bool
-	// beforeCreate runs as a create begins, under the engine's lock.
+	// beforeCreate runs as a create begins, and afterStart once a
+	// container started, each under the engine's lock.
 	beforeCreate func(spec workload.ContainerSpec)
+	afterStart   func(c *stubContainer)
 	// changed is closed and replaced on every change, for a test
 	// waiting on a condition.
 	changed chan struct{}
@@ -207,6 +209,9 @@ func (e *stubEngine) StartContainer(_ context.Context, id string) error {
 		}
 	}
 	c.status, c.startedAt = workload.ContainerRunning, time.Now().UTC().Truncate(time.Microsecond)
+	if e.afterStart != nil {
+		e.afterStart(c)
+	}
 	e.notify()
 	return nil
 }

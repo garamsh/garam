@@ -673,8 +673,10 @@ func TestOrgStore_GroupQueriesStayInsideTheirGroupAndOrg(t *testing.T) {
 	require.NoError(t, s.CreateGroup(ctx, org.NewGroup(opsAcme, "ops", acme, string(org.RoleMember))))
 	require.NoError(t, s.CreateGroup(ctx, org.NewGroup(engGlobex, "eng", globex, string(org.RoleMember))))
 
+	// A user is root-owned, which is what lets one join a group or
+	// project in each org.
 	users := userpg.New(p)
-	ada, bob := scopedGRN("acme", "user", "ada"), scopedGRN("acme", "user", "bob")
+	ada, bob := rootUserGRN("ada"), rootUserGRN("bob")
 	require.NoError(t, users.Create(ctx, user.New(ada, "ada")))
 	require.NoError(t, users.Create(ctx, user.New(bob, "bob")))
 
@@ -766,8 +768,10 @@ func TestOrgStore_ProjectQueriesStayInsideTheirProjectAndOrg(t *testing.T) {
 	require.NoError(t, s.CreateProject(ctx, org.NewProject(webAcme, "web", acme, string(org.RoleMember))))
 	require.NoError(t, s.CreateProject(ctx, org.NewProject(webGlobex, "web", globex, string(org.RoleMember))))
 
+	// A user is root-owned, which is what lets one join a group or
+	// project in each org.
 	users := userpg.New(p)
-	ada, bob := scopedGRN("acme", "user", "ada"), scopedGRN("acme", "user", "bob")
+	ada, bob := rootUserGRN("ada"), rootUserGRN("bob")
 	require.NoError(t, users.Create(ctx, user.New(ada, "ada")))
 	require.NoError(t, users.Create(ctx, user.New(bob, "bob")))
 
@@ -1951,6 +1955,74 @@ func TestPolicyAttachments_RoundTrip(t *testing.T) {
 	assert.Equal(t, codes.NotFound, status.Code(err))
 }
 
+// TestOrgStore_MembersStayInsideTheirOrg covers the refusal of a group
+// or project member another org owns. Each refused GRN differs from the
+// admitted control in its organization segment alone, so that segment
+// is what the refusal reads.
+func TestOrgStore_MembersStayInsideTheirOrg(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	s := org.NewPostgresStore(p)
+
+	acme, globex := orgRootGRN("acme"), orgRootGRN("globex")
+	require.NoError(t, s.CreateOrg(ctx, org.NewOrganization(acme, "acme")))
+	require.NoError(t, s.CreateOrg(ctx, org.NewOrganization(globex, "globex")))
+	eng := scopedGRN("acme", org.ServiceTypeGroup, "eng")
+	require.NoError(t, s.CreateGroup(ctx, org.NewGroup(eng, "eng", acme)))
+	web := scopedGRN("acme", org.ServiceTypeProject, "web")
+	require.NoError(t, s.CreateProject(ctx, org.NewProject(web, "web", acme)))
+
+	containers := []struct {
+		name     string
+		grn      grn.GRN
+		table    string
+		add      func(context.Context, grn.GRN, grn.GRN) error
+		remove   func(context.Context, grn.GRN, grn.GRN) error
+		list     func(context.Context, grn.GRN) ([]grn.GRN, error)
+		notFound error
+	}{
+		{"group", eng, "group_members", s.AddGroupMember, s.RemoveGroupMember, s.ListGroupMembers, org.ErrGroupMemberNotFound},
+		{"project", web, "project_members", s.AddProjectMember, s.RemoveProjectMember, s.ListProjectMembers, org.ErrProjectMemberNotFound},
+	}
+	kinds := []string{agent.ServiceType, agent.ServiceTypeOperator, agent.ServiceTypeSupervisor, org.ServiceTypeGroup}
+	for _, c := range containers {
+		t.Run(c.name, func(t *testing.T) {
+			for _, kind := range kinds {
+				own := scopedGRN("acme", kind, "one")
+				other := scopedGRN("globex", kind, "one")
+
+				err := c.add(ctx, c.grn, other)
+				assert.ErrorIs(t, err, org.ErrMemberOfAnotherOrg, "globex's %s is refused", kind)
+				assert.True(t, errorx.IsKind(err, errorx.KindFailedPrecondition))
+				require.NoError(t, c.add(ctx, c.grn, own), "acme's own %s is admitted", kind)
+
+				// No such row can exist, so the remove is answered as
+				// not-a-member rather than refused.
+				assert.ErrorIs(t, c.remove(ctx, c.grn, other), c.notFound)
+			}
+
+			ada := rootUserGRN("ada")
+			require.NoError(t, c.add(ctx, c.grn, ada), "a root-owned user is admitted")
+
+			members, err := c.list(ctx, c.grn)
+			require.NoError(t, err)
+			want := []grn.GRN{ada}
+			for _, kind := range kinds {
+				want = append(want, scopedGRN("acme", kind, "one"))
+			}
+			assert.ElementsMatch(t, want, members, "only the admitted members are stored")
+
+			// A row stored before the refusal existed is still
+			// removable, so an org can clear one out.
+			legacy := scopedGRN("globex", agent.ServiceType, "legacy")
+			_, err = p.Exec(ctx, "INSERT INTO "+c.table+" VALUES ($1, $2)", c.grn.String(), legacy.String())
+			require.NoError(t, err)
+			require.NoError(t, c.remove(ctx, c.grn, legacy))
+			assert.ErrorIs(t, c.remove(ctx, c.grn, legacy), c.notFound)
+		})
+	}
+}
+
 // TestPolicyAttachment_StaysInsideItsOrg covers the schema's
 // org-consistency rule: an org-owned subject from another org cannot
 // carry the policy out of its org.
@@ -2067,6 +2139,12 @@ func TestPolicyAttachment_ADenyDoesNotWidenOnDetach(t *testing.T) {
 	statements, err = cache.Statements(ctx, orgGRN, []grn.GRN{ada})
 	require.NoError(t, err)
 	require.Len(t, statements, 1, "the refused detach leaves the Deny deciding for its subject")
+}
+
+// rootUserGRN returns the root-owned GRN of the named user, the shape
+// sign-in mints.
+func rootUserGRN(id string) grn.GRN {
+	return grn.New(grn.RootOwner, grn.DefaultProject, user.ServiceType, id)
 }
 
 // orgRootGRN returns the root-owned GRN of the named organization.

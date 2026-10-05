@@ -24,7 +24,19 @@ var (
 	ErrInvitationAccepted    = errorx.New(errorx.KindFailedPrecondition, "invitation already accepted")
 	ErrInvitationExpired     = errorx.New(errorx.KindFailedPrecondition, "invitation expired")
 	ErrMemberAlreadyExists   = errorx.New(errorx.KindAlreadyExists, "org member already exists")
+	ErrMemberOfAnotherOrg    = errorx.New(errorx.KindFailedPrecondition, "member is owned by another org")
 )
+
+// checkMemberOrg refuses a Group or Project member that another org
+// owns. An org-owned GRN names its org in the organization segment
+// (ADR-0001), so the two segments must agree; a root-owned GRN, such as
+// a user's, exists above every org and is admitted.
+func checkMemberOrg(container, member grn.GRN) error {
+	if member.Organization != grn.RootOwner && member.Organization != container.Organization {
+		return ErrMemberOfAnotherOrg
+	}
+	return nil
+}
 
 // ServiceType* are the canonical GRN service-type prefixes used by
 // this package.

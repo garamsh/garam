@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Component, type ReactNode } from "react";
 import { renderToString } from "react-dom/server";
@@ -315,7 +315,9 @@ describe("define agent form", () => {
     const user = userEvent.setup();
     renderForm(null);
     const add = screen.getByRole("button", { name: "Add value" });
-    for (let row = 1; row < 31; row++) await user.click(add);
+    // Thirty rows are added synchronously to reach thirty-one; the
+    // clicks across the boundary below are the person's.
+    for (let row = 1; row < 31; row++) fireEvent.click(add);
 
     expect(screen.getByText("31 of 32 values")).toBeInTheDocument();
     expect(add).toBeEnabled();

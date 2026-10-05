@@ -415,10 +415,25 @@ supervisor that stops leaves the workload running.
   signals and activates nothing, and the generation keeps running with
   its adapter's token. A daemon stop may stop the runtime, and recovery
   after it is a new generation.
+- **The memory moves only through a verified copy (ADR-0089).**
+  `--move-memory-to <volume>` drains the generation and takes a store
+  only from a runtime that exited 0 after its drain, which the drain
+  records. A helper running `garam copy-memory` from the run's garam
+  image copies the store files and the outbox into a volume the move
+  creates, holding Sherlock's writer lock, with the old volume mounted
+  read-only. The supervisor compares digests of the old volume before
+  and after and of the copy, and the next generation starts on the
+  copy with `--require-store`. Its first activation request is the
+  copy accepted, and it names the old activation as replaced, so garam
+  fences the old token. Any failure leaves the agent stopped on the
+  old volume with the reason stated, keeps the refused volume and
+  never uses it again; the old volume is never written or removed. A
+  move not yet settled refuses every run that does not ask for it.
 
-What is still not settled is ADR-0085 §What this does not decide: the
-joint acceptance with garam and a model, renewing the agent's
-certificate in a running adapter, a measured daemon stop, and an
-explicit storage handover. ADR-0085 is authoritative for the arrangement
-and the socket's contract, and `make workload-integration` runs it
-against a real daemon.
+What is still not settled is ADR-0085 §What this does not decide, but
+for the storage handover ADR-0089 answers: the joint acceptance with
+garam and a model, renewing the agent's certificate in a running
+adapter, and a measured daemon stop. ADR-0085 is authoritative for the
+arrangement and the socket's contract, and ADR-0089 for the move.
+`make workload-integration` runs both against a real daemon, and `make
+standalone-e2e` runs the move against a real garam and model too.

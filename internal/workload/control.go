@@ -299,6 +299,12 @@ func (s *Supervisor) claim(in *intent, body activationBody, leafPEM []byte) (Act
 		}
 		in.Generation, in.RequestID, in.Replaces = body.Generation, body.RequestID, s.st.LastActivation
 		s.st.Generations = append(s.st.Generations, body.Generation)
+		// The adapter asks only for a runtime that reports serving, so
+		// this is the runtime on a moved store having accepted it
+		// under --require-store.
+		if mv := s.st.Move; mv.awaiting() && mv.Intent == in.ID {
+			mv.Outcome = moveAccepted
+		}
 		if err := s.save(); err != nil {
 			return ActivationRequest{}, undecided(err)
 		}

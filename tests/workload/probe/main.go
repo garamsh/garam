@@ -25,7 +25,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fail("usage: probe report|daemon|post|get|size|cat|collect|ls|put|find|garam ...")
+		fail("usage: probe report|daemon|post|get|size|cat|collect|ls|put|find|garam|flip|remove ...")
 	}
 	var err error
 	switch os.Args[1] {
@@ -51,6 +51,10 @@ func main() {
 		err = find(os.Args[2], os.Args[3])
 	case "garam":
 		err = garam(os.Args[2], os.Args[3], os.Args[4])
+	case "flip":
+		err = flip(os.Args[2])
+	case "remove":
+		err = os.Remove(os.Args[2])
 	default:
 		err = fmt.Errorf("unknown mode %q", os.Args[1])
 	}
@@ -342,4 +346,33 @@ func list(dir string) error {
 		fmt.Println(e.Name())
 	}
 	return nil
+}
+
+// flip inverts one byte of a file in place, 100 bytes before its end,
+// as a fault in storage would change it. In a SQLite file that is
+// inside the last page's cell content, which opening the file does not
+// read.
+func flip(path string) error {
+	f, err := os.OpenFile(path, os.O_RDWR, 0)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = f.Close() }()
+	info, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	if info.Size() < 100 {
+		return fmt.Errorf("%s holds %d bytes, too few to flip one 100 before its end", path, info.Size())
+	}
+	at := info.Size() - 100
+	b := make([]byte, 1)
+	if _, err := f.ReadAt(b, at); err != nil {
+		return err
+	}
+	b[0] ^= 0xff
+	if _, err := f.WriteAt(b, at); err != nil {
+		return err
+	}
+	return f.Sync()
 }

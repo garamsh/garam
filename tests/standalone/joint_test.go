@@ -74,7 +74,7 @@ func (s *stack) probeIn(id string, args ...string) (string, error) {
 func (s *stack) embedding() string {
 	s.t.Helper()
 	name := s.prefix + "tei"
-	s.mustDocker("run", "-d", "--name", name, "--memory", "1g", "-v", "garam-1180-tei-cache:/data",
+	s.mustDocker("run", "-d", "--name", name, "--memory", "1g", "-v", teiCache+":/data",
 		required(s.t, "GARAM_TEST_TEI_IMAGE"), "--model-id", "BAAI/bge-base-en-v1.5", "--port", "80")
 	s.eventually("the embedding service ready", func() bool {
 		logs, _ := s.docker("logs", name)

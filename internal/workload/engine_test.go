@@ -1,9 +1,14 @@
 package workload_test
 
 import (
+	"archive/tar"
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"io/fs"
+	"path"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -19,8 +24,10 @@ import (
 type stubEngine struct {
 	mu      sync.Mutex
 	volumes map[string]map[string]string
-	// paths is what each volume holds, by path inside it.
+	// paths is what each volume holds, by path inside it, and data a
+	// regular file's content.
 	paths      map[string]map[string]workload.PathState
+	data       map[string]map[string][]byte
 	containers map[string]*stubContainer
 	byName     map[string]string
 	seq        int
@@ -49,12 +56,15 @@ type stubContainer struct {
 	// ignoresTerm keeps it running through SIGTERM.
 	ignoresTerm bool
 	exited      chan struct{}
+	// exitCode is what it exits with, and logs what it wrote.
+	exitCode int
+	logs     string
 }
 
 func newStubEngine() *stubEngine {
 	return &stubEngine{
 		volumes: map[string]map[string]string{}, containers: map[string]*stubContainer{},
-		paths:  map[string]map[string]workload.PathState{},
+		paths: map[string]map[string]workload.PathState{}, data: map[string]map[string][]byte{},
 		byName: map[string]string{}, changed: make(chan struct{}),
 	}
 }
@@ -187,7 +197,7 @@ func (e *stubEngine) InspectContainer(ctx context.Context, nameOrID string) (*wo
 	}
 	return &workload.ContainerState{
 		ID: c.id, Name: c.spec.Name, Image: c.spec.Image, Labels: c.spec.Labels, Status: c.status,
-		StartedAt: c.startedAt, RestartCount: c.restarts, Volumes: volumes,
+		StartedAt: c.startedAt, RestartCount: c.restarts, Volumes: volumes, ExitCode: c.exitCode,
 	}, nil
 }
 
@@ -203,14 +213,11 @@ func (e *stubEngine) CopyFiles(ctx context.Context, id, dir string, files []work
 	}
 	for _, f := range files {
 		if volume, rel, ok := c.volumeAt(dir + "/" + f.Path); ok {
-			if e.paths[volume] == nil {
-				e.paths[volume] = map[string]workload.PathState{}
-			}
 			mode := f.Mode
 			if f.Dir {
 				mode |= fs.ModeDir
 			}
-			e.paths[volume][rel] = workload.PathState{Mode: mode}
+			e.put(volume, rel, workload.PathState{Mode: mode}, f.Data)
 			continue
 		}
 		c.files[dir+"/"+f.Path] = f
@@ -266,6 +273,9 @@ func (e *stubEngine) StartContainer(ctx context.Context, id string) error {
 		}
 	}
 	c.status, c.startedAt = workload.ContainerRunning, time.Now().UTC().Truncate(time.Microsecond)
+	if len(c.spec.Cmd) > 0 && c.spec.Cmd[0] == workload.CopyCommand {
+		e.copyLocked(c)
+	}
 	if e.afterStart != nil {
 		e.afterStart(c)
 	}
@@ -348,4 +358,131 @@ func (e *stubEngine) RemoveContainer(ctx context.Context, id string) error {
 	delete(e.byName, c.spec.Name)
 	e.notify()
 	return nil
+}
+
+// put records what a volume holds at rel. The caller holds mu.
+func (e *stubEngine) put(volume, rel string, st workload.PathState, data []byte) {
+	if e.paths[volume] == nil {
+		e.paths[volume] = map[string]workload.PathState{}
+	}
+	if e.data[volume] == nil {
+		e.data[volume] = map[string][]byte{}
+	}
+	e.paths[volume][rel], e.data[volume][rel] = st, data
+}
+
+// write puts a regular file into a volume, as a runtime writes one.
+func (e *stubEngine) write(volume, rel, content string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.put(volume, rel, workload.PathState{Mode: 0o600}, []byte(content))
+}
+
+// snapshot answers what a volume holds, each path with its mode and
+// content, for comparing a volume before and after.
+func (e *stubEngine) snapshot(volume string) map[string]string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	out := map[string]string{}
+	for rel, st := range e.paths[volume] {
+		out[rel] = st.Mode.String() + " " + string(e.data[volume][rel])
+	}
+	return out
+}
+
+// copyLocked runs the copy's helper as garam's copy-memory does: it
+// exits 1 where the source's writer lock is held, and otherwise copies
+// the store files and the outbox to the target and exits 0. The
+// caller holds mu.
+func (e *stubEngine) copyLocked(c *stubContainer) {
+	var from, to string
+	for _, v := range c.spec.Volumes {
+		if v.ReadOnly {
+			from = v.Volume
+		} else {
+			to = v.Volume
+		}
+	}
+	defer e.exitLocked(c)
+	if _, held := e.paths[from]["memory.db.lock.held"]; held {
+		c.exitCode, c.logs = 1, "level=ERROR msg=\"garam exited\" error=\"the store's writer lock is held\""
+		return
+	}
+	for rel, st := range e.paths[from] {
+		if rel == "memory.db" || strings.HasPrefix(rel, "memory.db-") || rel == "outbox" || strings.HasPrefix(rel, "outbox/") {
+			e.put(to, rel, st, e.data[from][rel])
+		}
+	}
+}
+
+// ArchiveFrom answers the volume a container mounts at path as a tar
+// stream, every entry owned by the runtime's account.
+func (e *stubEngine) ArchiveFrom(ctx context.Context, id, at string) (io.ReadCloser, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if err := e.refuse(ctx); err != nil {
+		return nil, err
+	}
+	c, ok := e.lookup(id)
+	if !ok {
+		return nil, workload.ErrAbsent
+	}
+	var volume string
+	for _, v := range c.spec.Volumes {
+		if v.Target == at {
+			volume = v.Volume
+		}
+	}
+	if volume == "" {
+		return nil, workload.ErrAbsent
+	}
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	base := path.Base(at)
+	rels := []string{}
+	for rel := range e.paths[volume] {
+		rels = append(rels, rel)
+	}
+	sort.Strings(rels)
+	entries := append([]string{""}, rels...)
+	for _, rel := range entries {
+		h := &tar.Header{Name: base + "/", Typeflag: tar.TypeDir, Mode: 0o755, Uid: 65532, Gid: 65532}
+		if rel != "" {
+			st, data := e.paths[volume][rel], e.data[volume][rel]
+			h = &tar.Header{Name: base + "/" + rel, Mode: int64(st.Mode.Perm()), Uid: 65532, Gid: 65532}
+			switch {
+			case st.Mode.IsDir():
+				h.Typeflag, h.Name = tar.TypeDir, h.Name+"/"
+			case st.Mode&fs.ModeSymlink != 0:
+				h.Typeflag, h.Linkname = tar.TypeSymlink, st.LinkTarget
+			default:
+				h.Typeflag, h.Size = tar.TypeReg, int64(len(data))
+			}
+		}
+		if err := tw.WriteHeader(h); err != nil {
+			return nil, err
+		}
+		if h.Typeflag == tar.TypeReg {
+			if _, err := tw.Write(e.data[volume][rel]); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if err := tw.Close(); err != nil {
+		return nil, err
+	}
+	return io.NopCloser(&buf), nil
+}
+
+func (e *stubEngine) Logs(ctx context.Context, id string) (string, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if err := e.refuse(ctx); err != nil {
+		return "", err
+	}
+	c, ok := e.lookup(id)
+	if !ok {
+		return "", workload.ErrAbsent
+	}
+	return c.logs, nil
 }

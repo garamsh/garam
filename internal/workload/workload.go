@@ -41,6 +41,14 @@ var (
 	// ErrGenerationEnded is the generation the supervisor ran having
 	// exited, after the rest of it was drained.
 	ErrGenerationEnded = errorx.New(errorx.KindAborted, "workload: the generation exited")
+	// ErrMoveRefused is a move of the memory that did not verify: the
+	// agent is stopped on the volume it was to move from, and the
+	// error carries the reason.
+	ErrMoveRefused = errorx.New(errorx.KindFailedPrecondition,
+		"workload: the memory's move was refused and the agent is stopped on its old volume")
+	// ErrMovePending is a run asked for something other than the move
+	// the record holds unsettled.
+	ErrMovePending = errorx.New(errorx.KindFailedPrecondition, "workload: a move of the memory is not settled")
 )
 
 // Engine sentinels, which an Engine answers in place of its own.
@@ -98,6 +106,9 @@ type Desired struct {
 	// Replace starts a new generation even where the current one runs
 	// what is desired.
 	Replace bool
+	// MoveMemoryTo is a volume the memory moves to, created by the
+	// move, before the next generation starts on it; empty is no move.
+	MoveMemoryTo string
 }
 
 // AdapterFiles is what the adapter presents and verifies by, copied

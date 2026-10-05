@@ -10,8 +10,8 @@ import (
 
 // recover settles the intent the record holds: one still running what
 // is desired is answered to be supervised again; one that ended, was
-// draining, or runs something else is drained.
-func (s *Supervisor) recover(ctx context.Context) (*intent, error) {
+// draining, runs something else, or is to be replaced is drained.
+func (s *Supervisor) recover(ctx context.Context, replace bool) (*intent, error) {
 	in := s.st.Intent
 	if in == nil || in.Phase == phaseEnded {
 		return nil, nil
@@ -22,7 +22,7 @@ func (s *Supervisor) recover(ctx context.Context) (*intent, error) {
 			return nil, err
 		}
 		d := s.cfg.Desired
-		if !over && !d.Replace && in.Revision == d.Revision && in.Epoch == d.Epoch && in.Images == d.Images {
+		if !over && !replace && !d.Replace && in.Revision == d.Revision && in.Epoch == d.Epoch && in.Images == d.Images {
 			return in, nil
 		}
 	}

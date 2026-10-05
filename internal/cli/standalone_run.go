@@ -45,6 +45,7 @@ type runSettings struct {
 	prefix           string
 	images           workload.Images
 	replace          bool
+	moveMemoryTo     string
 }
 
 // newStandaloneRunCommand constructs `garam standalone run`: the host's
@@ -79,6 +80,8 @@ func newStandaloneRunCommand(dirs *hostDirs) *cobra.Command {
 	f.StringVar(&s.images.Adapter, "adapter-image", "", "the garam image the adapter runs, by digest (required)")
 	f.StringVar(&s.prefix, "name-prefix", "garam-", "what every container and volume name begins with")
 	f.BoolVar(&s.replace, "replace", false, "start a new generation even where the running one is what is desired")
+	f.StringVar(&s.moveMemoryTo, "move-memory-to", "",
+		"drain the generation, copy and verify the agent's memory into this new volume, and run the next generation on it")
 	for _, name := range []string{"agent-dir", "engine", "machine-url", "config", "model-env-file",
 		"runtime-image", "workspace-image", "adapter-image"} {
 		_ = cmd.MarkFlagRequired(name)
@@ -168,7 +171,7 @@ func desiredRuntime(s runSettings, agentGRN grn.GRN, epoch string) (workload.Des
 	}
 	desired := workload.Desired{
 		Agent: agentGRN, Epoch: epoch, Config: config, Revision: named.Revision,
-		ModelEnv: env, Images: s.images, Replace: s.replace,
+		ModelEnv: env, Images: s.images, Replace: s.replace, MoveMemoryTo: s.moveMemoryTo,
 	}
 	for _, f := range []struct {
 		path string

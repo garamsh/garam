@@ -1,6 +1,7 @@
 package delivery_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -76,9 +77,29 @@ func TestOutbox_ReadsOnlyARegularEntryInsideIt(t *testing.T) {
 		})
 	}
 
-	names, err := outbox.Names()
+	names, err := outbox.Names(100, func(string) bool { return false })
 	require.NoError(t, err)
 	assert.NotContains(t, names, ".entry-valid.tmp", "a writer's temporary file is never an entry")
+}
+
+// TestOutbox_NamesTheOldestEntriesItIsNotToldToPassOver holds the
+// directory read to its bound: over several chunks of a large outbox,
+// it answers no more than the limit, the first in name order among the
+// entries not passed over. The entries passed over are the control:
+// they would be the first answered otherwise.
+func TestOutbox_NamesTheOldestEntriesItIsNotToldToPassOver(t *testing.T) {
+	dir := t.TempDir()
+	for i := 0; i < 600; i++ {
+		require.NoError(t, os.WriteFile(filepath.Join(dir, fmt.Sprintf("entry-%04d.json", i)), []byte("{}"), 0o600))
+	}
+	outbox, err := delivery.NewOutbox(dir)
+	require.NoError(t, err)
+
+	names, err := outbox.Names(5, func(name string) bool { return name < "entry-0003.json" })
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"entry-0003.json", "entry-0004.json", "entry-0005.json", "entry-0006.json", "entry-0007.json",
+	}, names)
 }
 
 // TestOutbox_RemovesOnlyTheFileThatWasRead is the acknowledgement of

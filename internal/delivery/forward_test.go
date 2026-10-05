@@ -2,6 +2,7 @@ package delivery_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -239,6 +240,27 @@ func TestRun_ReadsAgainAnEntryTheSystemCouldNotOpen(t *testing.T) {
 	eventually(t, gone(path), "once it can be read it is forwarded")
 	assert.Zero(t, count(queue.submissions(), "entry-link"), "the control: a planted link is never offered")
 	assert.FileExists(t, filepath.Join(dir, "entry-link.json"))
+}
+
+// TestRun_ForwardsPastMoreEntriesSetAsideThanOnePassTakes is the bound
+// on a pass meeting an outbox whose oldest entries are all set aside:
+// they are passed over before the bound is applied, so the reply after
+// them still goes. The set-aside entries are the control: each is kept
+// and offered once at most.
+func TestRun_ForwardsPastMoreEntriesSetAsideThanOnePassTakes(t *testing.T) {
+	queue := newGaramQueue(t, time.Second)
+	dir := t.TempDir()
+	for i := 0; i < 300; i++ {
+		undated := entryFor(fmt.Sprintf("entry-a%03d", i), "reply")
+		delete(undated, "created_at")
+		writeEntry(t, dir, undated)
+	}
+	writeEntry(t, dir, entryFor("entry-z", "the reply after them"))
+	forwarding(t, queue, dir)
+
+	eventually(t, gone(filepath.Join(dir, "entry-z.json")), "the reply past the set-aside entries is forwarded")
+	assert.Len(t, queue.submissions(), 1, "the control: no set-aside entry was offered")
+	assert.FileExists(t, filepath.Join(dir, "entry-a299.json"))
 }
 
 // TestRun_NeverOffersAnEntryItCannotDateOrIsNotItsToSend holds the

@@ -3,6 +3,7 @@ package delivery
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"slices"
@@ -61,9 +62,16 @@ type Entry struct {
 	file os.FileInfo
 }
 
-// Names answers the entries the outbox holds, in name order, which is
-// the order the runtime's writer created them in.
-func (o *Outbox) Names() ([]string, error) {
+// namesPerRead is how many names one read of the directory takes, so
+// no read holds the whole of a directory that has grown large.
+const namesPerRead = 256
+
+// Names answers at most limit of the entries the outbox holds that skip
+// does not pass over, the first in name order, which is the order the
+// runtime's writer created them in. The directory is read a chunk at a
+// time and no more than twice limit names are held at once, however
+// many it holds.
+func (o *Outbox) Names(limit int, skip func(name string) bool) ([]string, error) {
 	root, err := o.opened()
 	if err != nil {
 		return nil, err
@@ -73,18 +81,27 @@ func (o *Outbox) Names() ([]string, error) {
 		return nil, errorx.Wrap(err, "delivery: outbox", errorx.KindUnavailable)
 	}
 	defer func() { _ = dir.Close() }()
-	all, err := dir.Readdirnames(-1)
-	if err != nil {
-		return nil, errorx.Wrap(err, "delivery: outbox", errorx.KindUnavailable)
-	}
-	names := all[:0]
-	for _, name := range all {
-		if strings.HasSuffix(name, entrySuffix) && !strings.HasPrefix(name, ".") {
-			names = append(names, name)
+	var names []string
+	for {
+		chunk, err := dir.Readdirnames(namesPerRead)
+		for _, name := range chunk {
+			if strings.HasSuffix(name, entrySuffix) && !strings.HasPrefix(name, ".") && !skip(name) {
+				names = append(names, name)
+			}
+		}
+		if len(names) > 2*limit {
+			slices.Sort(names)
+			names = names[:limit]
+		}
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, errorx.Wrap(err, "delivery: outbox", errorx.KindUnavailable)
 		}
 	}
 	slices.Sort(names)
-	return names, nil
+	return names[:min(len(names), limit)], nil
 }
 
 // Identity answers what the named file is without opening it, so an

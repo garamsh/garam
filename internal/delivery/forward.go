@@ -60,10 +60,17 @@ func (s *service) forward(ctx context.Context) {
 	}
 }
 
-// pass offers each entry once, in the order they were written, and
-// answers false when garam did not answer, which ends the pass.
+// entriesPerPass bounds how many entries one pass offers; the next pass
+// takes the next ones.
+const entriesPerPass = 256
+
+// pass offers the oldest entries not set aside or put off, once each,
+// in the order they were written, and answers false when garam did not
+// answer, which ends the pass. It first forgets what it held for files
+// that are gone, so its memory is bounded by what the outbox holds.
 func (s *service) pass(ctx context.Context, f *forwarding) bool {
-	names, err := s.ends.Outbox.Names()
+	s.forget(f)
+	names, err := s.ends.Outbox.Names(entriesPerPass, func(name string) bool { return s.passedOver(f, name) })
 	if err != nil {
 		slog.DebugContext(ctx, "outbox not read", slog.String("error", err.Error()))
 		return true
@@ -72,20 +79,38 @@ func (s *service) pass(ctx context.Context, f *forwarding) bool {
 		if ctx.Err() != nil {
 			return true
 		}
-		if file, set := f.aside[name]; set {
-			if now, err := s.ends.Outbox.Identity(name); err == nil && os.SameFile(now, file) && now.ModTime().Equal(file.ModTime()) {
-				continue
-			}
-			delete(f.aside, name)
-		}
-		if r, waiting := f.later[name]; waiting && time.Now().Before(r.at) {
-			continue
-		}
 		if !s.offer(ctx, f, name) {
 			return false
 		}
 	}
 	return true
+}
+
+// passedOver reports whether a pass skips an entry: one set aside whose
+// file is unchanged, or one put off until later.
+func (s *service) passedOver(f *forwarding, name string) bool {
+	if file, set := f.aside[name]; set {
+		if now, err := s.ends.Outbox.Identity(name); err == nil && os.SameFile(now, file) && now.ModTime().Equal(file.ModTime()) {
+			return true
+		}
+		delete(f.aside, name)
+	}
+	r, waiting := f.later[name]
+	return waiting && time.Now().Before(r.at)
+}
+
+// forget drops what the forwarder holds about files no longer there.
+func (s *service) forget(f *forwarding) {
+	for name := range f.aside {
+		if _, err := s.ends.Outbox.Identity(name); errorx.IsKind(err, errorx.KindNotFound) {
+			delete(f.aside, name)
+		}
+	}
+	for name := range f.later {
+		if _, err := s.ends.Outbox.Identity(name); errorx.IsKind(err, errorx.KindNotFound) {
+			delete(f.later, name)
+		}
+	}
 }
 
 // offer reads one entry at the file boundary, offers it, and acts on

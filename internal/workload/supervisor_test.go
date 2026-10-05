@@ -544,3 +544,34 @@ func TestNewSupervisor_RefusesAnImageThatCanMove(t *testing.T) {
 	require.Error(t, err)
 	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
 }
+
+// TestRun_GivesTheRuntimeItsEgoAndInstructions holds the runtime's ego
+// and operator instructions to what the host named: each is copied in,
+// readable by the runtime alone, and named by its flag. The control is
+// the same start naming neither, which copies and names nothing, so the
+// runtime keeps its own default ego.
+func TestRun_GivesTheRuntimeItsEgoAndInstructions(t *testing.T) {
+	for _, named := range []bool{false, true} {
+		t.Run(fmt.Sprintf("named %v", named), func(t *testing.T) {
+			h := newHost(t)
+			h.start(func(d *workload.Desired) {
+				if named {
+					d.Ego, d.Instructions = []byte("ego"), []byte("reply with message_send")
+				}
+			})
+			runtime, _, _ := h.serving()
+			for path, flag := range map[string]string{
+				"/etc/sherlock/ego.md": "--ego-file", "/etc/sherlock/instructions.md": "--instructions-file",
+			} {
+				f, copied := runtime.files[path]
+				assert.Equal(t, named, copied, path)
+				assert.Equal(t, named, slices.Contains(runtime.spec.Cmd, flag), flag)
+				if named {
+					assert.Equal(t, 0o600, int(f.Mode))
+					assert.Equal(t, 65532, f.UID)
+					assert.True(t, slices.Contains(runtime.spec.Cmd, path), "%s names %s", flag, path)
+				}
+			}
+		})
+	}
+}

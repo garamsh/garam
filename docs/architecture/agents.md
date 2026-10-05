@@ -388,7 +388,20 @@ supervisor that stops leaves the workload running.
   configuration and the adapter's key, certificate, roots and
   placement token are written into each container before it starts,
   owned by 65532 and readable by it alone; the runtime's environment
-  is the model credential.
+  is the model credential. That credential is a limit rather than an
+  isolation: every tool the runtime runs reads its environment, as
+  Sherlock passes it on (ADR-0085), and the engine shows it to whoever
+  reaches the rootless daemon, which is the host user alone.
+- **The runtime's ego and instructions are the host's.**
+  `--ego-file` and `--instructions-file` are copied in beside the
+  configuration and named to the runtime; with no ego, the runtime
+  runs its own default. The configuration's `revision` names all
+  three, so changing any of them is a new revision (ADR-0087). A host
+  carries the `garam-message.v1` reply instruction this way.
+- **The adapter may reach garam at its own address.**
+  `--adapter-machine-url` is the machine listener as seen from the
+  runtime's namespace, where a rootless host's loopback is not; it
+  defaults to the supervisor's `--machine-url` (ADR-0087).
 - **An engine it cannot reach decides nothing.** The supervisor starts,
   signals and activates nothing, and the generation keeps running with
   its adapter's token. A daemon stop may stop the runtime, and recovery

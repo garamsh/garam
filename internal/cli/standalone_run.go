@@ -34,11 +34,17 @@ type runSettings struct {
 	dirs       hostDirs
 	engine     string
 	machineURL string
-	configFile string
-	modelEnv   string
-	prefix     string
-	images     workload.Images
-	replace    bool
+	// adapterURL is where the adapter reaches garam from inside the
+	// runtime's network namespace, which under a rootless daemon is not
+	// where the host does; empty is machineURL.
+	adapterURL       string
+	configFile       string
+	egoFile          string
+	instructionsFile string
+	modelEnv         string
+	prefix           string
+	images           workload.Images
+	replace          bool
 }
 
 // newStandaloneRunCommand constructs `garam standalone run`: the host's
@@ -63,6 +69,10 @@ func newStandaloneRunCommand(dirs *hostDirs) *cobra.Command {
 	f.StringVar(&s.engine, "engine", "", "the rootless Docker daemon, as unix://<socket> (required)")
 	f.StringVar(&s.machineURL, "machine-url", "", "garam's machine listener (required)")
 	f.StringVar(&s.configFile, "config", "", "the runtime's configuration file, which names its revision (required)")
+	f.StringVar(&s.egoFile, "ego-file", "", "the runtime's ego; empty is the runtime's own default")
+	f.StringVar(&s.instructionsFile, "instructions-file", "", "the runtime's operator instructions; empty is none")
+	f.StringVar(&s.adapterURL, "adapter-machine-url", "",
+		"garam's machine listener as the adapter reaches it from its container (default --machine-url)")
 	f.StringVar(&s.modelEnv, "model-env-file", "", "KEY=VALUE lines the runtime alone receives, readable by its owner alone (required)")
 	f.StringVar(&s.images.Runtime, "runtime-image", "", "the sherlock-agent image, by digest (required)")
 	f.StringVar(&s.images.Workspace, "workspace-image", "", "the sherlock-workspace image, by digest (required)")
@@ -107,7 +117,13 @@ func runStandalone(ctx context.Context, s runSettings) error {
 	if err != nil {
 		return err
 	}
-	files, err := adapterFilesOf(dirs.agent, base)
+	adapterBase := base
+	if s.adapterURL != "" {
+		if adapterBase, err = machineEndpoint(s.adapterURL); err != nil {
+			return err
+		}
+	}
+	files, err := adapterFilesOf(dirs.agent, adapterBase)
 	if err != nil {
 		return err
 	}
@@ -150,10 +166,25 @@ func desiredRuntime(s runSettings, agentGRN grn.GRN, epoch string) (workload.Des
 	if err != nil {
 		return workload.Desired{}, err
 	}
-	return workload.Desired{
+	desired := workload.Desired{
 		Agent: agentGRN, Epoch: epoch, Config: config, Revision: named.Revision,
 		ModelEnv: env, Images: s.images, Replace: s.replace,
-	}, nil
+	}
+	for _, f := range []struct {
+		path string
+		into *[]byte
+		what string
+	}{{s.egoFile, &desired.Ego, "ego"}, {s.instructionsFile, &desired.Instructions, "operator instructions"}} {
+		if f.path == "" {
+			continue
+		}
+		raw, err := os.ReadFile(f.path)
+		if err != nil {
+			return workload.Desired{}, errorx.Wrap(err, f.what, errorx.KindInvalidArgument)
+		}
+		*f.into = raw
+	}
+	return desired, nil
 }
 
 // readModelEnv reads KEY=VALUE lines from a file only its owner can

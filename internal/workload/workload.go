@@ -85,6 +85,12 @@ type Desired struct {
 	// revision it names, which the runtime echoes in its status.
 	Config   []byte
 	Revision string
+	// Ego and Instructions are the runtime's ego and operator
+	// instructions, each absent where nil: no ego is the runtime's
+	// own default. The revision names them as it names the
+	// configuration, so changing either is a new revision.
+	Ego          []byte
+	Instructions []byte
 	// ModelEnv is the runtime's environment: the model credential and
 	// nothing garam holds.
 	ModelEnv []string

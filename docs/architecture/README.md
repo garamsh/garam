@@ -577,3 +577,8 @@ ADRs:
   lock, holds the agent's first activation and its operator's
   certificate route on that switch, keeps the values archival, and
   names each refusal in the machine `Error`'s `reason`
+- [0087](./adr/0087-a-standalone-runtime-revision-names-its-ego-and-instructions-and-the-adapter-has-its-own-way-to-garam.md)
+  — a standalone runtime takes its ego and operator instructions from
+  files the host names, and its configuration's revision names both,
+  so changing either is a new revision; the adapter may reach garam at
+  an address of its own, refining ADR-0085

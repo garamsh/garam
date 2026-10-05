@@ -318,13 +318,31 @@ func newPrepared(dirs hostDirs) (*prepared, error) {
 // installAgentFiles writes the agent's key and request where the
 // record still holds the key, and then drops it from the record. Where
 // the record no longer holds it, the files must be the prepared ones.
+//
+// It never replaces a file: one already there is accepted only when it
+// holds exactly the record's bytes — this preparation's own interrupted
+// write — and anything else refuses before either file is written, so
+// resuming never takes over an agent directory another preparation
+// filled meanwhile.
 func installAgentFiles(dirs hostDirs, p *prepared) error {
 	if p.AgentKeyPEM != "" {
-		if err := writeDurably(filepath.Join(dirs.agent, agentKeyFile), []byte(p.AgentKeyPEM), 0o600); err != nil {
-			return err
+		files := []struct {
+			path string
+			data []byte
+			perm fs.FileMode
+		}{
+			{filepath.Join(dirs.agent, agentKeyFile), []byte(p.AgentKeyPEM), 0o600},
+			{filepath.Join(dirs.agent, agentCSRFile), []byte(p.AgentRequestPEM), 0o644},
 		}
-		if err := writeDurably(filepath.Join(dirs.agent, agentCSRFile), []byte(p.AgentRequestPEM), 0o644); err != nil {
-			return err
+		for _, f := range files {
+			if err := ownedOrAbsent(f.path, f.data); err != nil {
+				return err
+			}
+		}
+		for _, f := range files {
+			if err := createDurably(f.path, f.data, f.perm); err != nil {
+				return err
+			}
 		}
 		p.AgentKeyPEM = ""
 		if err := p.write(dirs.supervisor); err != nil {
@@ -342,6 +360,55 @@ func installAgentFiles(dirs hostDirs, p *prepared) error {
 	return nil
 }
 
+// ownedOrAbsent refuses a file at path holding anything but data.
+func ownedOrAbsent(path string, data []byte) error {
+	existing, err := os.ReadFile(path)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return nil
+	case err != nil:
+		return errorx.Wrap(err, "read "+path, errorx.KindInvalidArgument)
+	case !bytes.Equal(existing, data):
+		return errorx.New(errorx.KindFailedPrecondition, path+" holds a credential this preparation did not write")
+	}
+	return nil
+}
+
+// createDurably writes data at path where nothing is, as writeDurably
+// does, but links the finished file into place rather than renaming it,
+// so a file another writer put there first is never replaced: it is
+// accepted only when it holds exactly data.
+func createDurably(path string, data []byte, perm fs.FileMode) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".*")
+	if err != nil {
+		return errorx.Wrap(err, "write "+path, errorx.KindInvalidArgument)
+	}
+	defer func() { _ = os.Remove(tmp.Name()) }()
+	_, err = tmp.Write(data)
+	if err == nil {
+		err = tmp.Chmod(perm)
+	}
+	if err == nil {
+		err = tmp.Sync()
+	}
+	if closeErr := tmp.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		return errorx.Wrap(err, "write "+path, errorx.KindInvalidArgument)
+	}
+	if err := os.Link(tmp.Name(), path); err != nil {
+		if !errors.Is(err, fs.ErrExist) {
+			return errorx.Wrap(err, "write "+path, errorx.KindInvalidArgument)
+		}
+		if err := ownedOrAbsent(path, data); err != nil {
+			return err
+		}
+	}
+	return syncDir(dir)
+}
+
 func (p *prepared) write(dir string) error {
 	raw, err := json.Marshal(p)
 	if err != nil {
@@ -353,11 +420,7 @@ func (p *prepared) write(dir string) error {
 // readPrepared answers what prepareHost wrote, or an fs.ErrNotExist
 // error where it wrote nothing yet.
 func readPrepared(dir string) (*prepared, error) {
-	path := filepath.Join(dir, preparedFile)
-	if _, err := os.Stat(path); err != nil {
-		return nil, err
-	}
-	raw, err := keyfile.Read(path)
+	raw, err := keyfile.Read(filepath.Join(dir, preparedFile))
 	if err != nil {
 		return nil, err
 	}
@@ -464,11 +527,7 @@ func enrollHost(ctx context.Context, dirs hostDirs, machineURL, rootFile string)
 // readEnrollment answers what a completed enrollment recorded, or an
 // fs.ErrNotExist error before one completed.
 func readEnrollment(dir string) (*machinegen.StandaloneEnrollment, error) {
-	path := filepath.Join(dir, enrollmentFile)
-	if _, err := os.Stat(path); err != nil {
-		return nil, err
-	}
-	raw, err := keyfile.Read(path)
+	raw, err := keyfile.Read(filepath.Join(dir, enrollmentFile))
 	if err != nil {
 		return nil, err
 	}

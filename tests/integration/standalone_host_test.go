@@ -360,3 +360,73 @@ func TestStandaloneHost_CredentialsTravelOnlyToTheHTTPSEndpoint(t *testing.T) {
 	assert.Zero(t, plain.count())
 	assert.NoFileExists(t, filepath.Join(h.supervisor, "renewal.json"), "refused before a renewal is prepared")
 }
+
+// interruptedPrepare runs `prepare` for supervisor against agentDir so
+// that it stops where a crash after committing its record would: the
+// agent directory refuses new files, so the record is written and no
+// agent file is. The directory is writable again afterwards.
+func interruptedPrepare(t *testing.T, supervisor, agentDir string) {
+	t.Helper()
+	require.NoError(t, os.MkdirAll(agentDir, 0o700))
+	require.NoError(t, os.WriteFile(filepath.Join(agentDir, ".standalone.lock"), nil, 0o600))
+	require.NoError(t, os.Chmod(agentDir, 0o500))
+	out, err := standaloneCommand(t, "prepare", "--dir", supervisor, "--agent-dir", agentDir)
+	require.NoError(t, os.Chmod(agentDir, 0o700))
+	require.Error(t, err, "the agent directory refused its files: %s", out)
+	require.FileExists(t, filepath.Join(supervisor, "prepared.json"), "the record was committed")
+	require.NoFileExists(t, filepath.Join(agentDir, "agent.key"))
+}
+
+// TestStandaloneHost_AResumedPreparationNeverReplacesAnotherHostsKey
+// interrupts host A's preparation after its record and before its
+// agent files, lets host B prepare the same agent directory, and
+// resumes A: A is refused and B's files are byte-identical. The control
+// resumes a preparation whose own key is already written and whose
+// request is not, which completes.
+func TestStandaloneHost_AResumedPreparationNeverReplacesAnotherHostsKey(t *testing.T) {
+	base := t.TempDir()
+	shared := filepath.Join(base, "agent")
+	hostA, hostB := filepath.Join(base, "supervisor-a"), filepath.Join(base, "supervisor-b")
+
+	interruptedPrepare(t, hostA, shared)
+	out, err := standaloneCommand(t, "prepare", "--dir", hostB, "--agent-dir", shared)
+	require.NoError(t, err, "B prepares the directory A never wrote: %s", out)
+	before := snapshot(t, shared)
+
+	out, err = standaloneCommand(t, "prepare", "--dir", hostA, "--agent-dir", shared)
+	require.Error(t, err, "A's resumed preparation: %s", out)
+	assert.Contains(t, err.Error(), "did not write")
+	assert.Equal(t, before, snapshot(t, shared), "B's key and request are untouched")
+
+	// Where only a request another preparation wrote is there, A
+	// refuses before writing its own key beside it.
+	partial := filepath.Join(base, "agent-partial")
+	partialSupervisor := filepath.Join(base, "supervisor-partial")
+	interruptedPrepare(t, partialSupervisor, partial)
+	foreign, _ := enrollmentRequest(t)
+	require.NoError(t, os.WriteFile(filepath.Join(partial, "agent.csr"), []byte(foreign), 0o644))
+	out, err = standaloneCommand(t, "prepare", "--dir", partialSupervisor, "--agent-dir", partial)
+	require.Error(t, err, "a foreign request beside a missing key: %s", out)
+	assert.NoFileExists(t, filepath.Join(partial, "agent.key"), "refused before anything was written")
+
+	// The control: A's own key, from its record, is what an
+	// interrupted write left; resuming accepts it and writes the rest.
+	own := filepath.Join(base, "agent-own")
+	ownSupervisor := filepath.Join(base, "supervisor-own")
+	interruptedPrepare(t, ownSupervisor, own)
+	raw, err := os.ReadFile(filepath.Join(ownSupervisor, "prepared.json"))
+	require.NoError(t, err)
+	var record struct {
+		AgentKeyPEM string `json:"agentKeyPem"`
+		Fingerprint string `json:"agentKeySha256"`
+	}
+	require.NoError(t, json.Unmarshal(raw, &record))
+	require.NotEmpty(t, record.AgentKeyPEM)
+	require.NoError(t, os.WriteFile(filepath.Join(own, "agent.key"), []byte(record.AgentKeyPEM), 0o600))
+	out, err = standaloneCommand(t, "prepare", "--dir", ownSupervisor, "--agent-dir", own)
+	require.NoError(t, err, "a preparation resumes over its own partial write: %s", out)
+	var request map[string]string
+	require.NoError(t, json.Unmarshal([]byte(out), &request))
+	assert.Equal(t, record.Fingerprint, request["agentKeySha256"])
+	assert.FileExists(t, filepath.Join(own, "agent.csr"))
+}

@@ -41,8 +41,15 @@ func outboxBeside(t *testing.T) (dir, private string) {
 func TestOutbox_ReadsOnlyARegularEntryInsideIt(t *testing.T) {
 	dir, private := outboxBeside(t)
 	writeEntry(t, dir, entryFor("entry-valid", "reply"))
-	require.NoError(t, os.Symlink(private, filepath.Join(dir, "entry-escape.json")))
-	require.NoError(t, os.Symlink("entry-valid.json", filepath.Join(dir, "entry-inside.json")))
+	require.NoError(t, os.Symlink(private, filepath.Join(dir, "entry-key.json")))
+	// Each link below names a file that would read as a valid entry of
+	// the link's own name, so only the refusal to follow it refuses it.
+	outside := filepath.Join(filepath.Dir(private), "entry-escape.json")
+	writeEntry(t, filepath.Dir(private), entryFor("entry-escape", "planted outside"))
+	require.NoError(t, os.Symlink(outside, filepath.Join(dir, "entry-escape.json")))
+	writeEntry(t, dir, entryFor("entry-inside", "planted inside"))
+	require.NoError(t, os.Rename(filepath.Join(dir, "entry-inside.json"), filepath.Join(dir, ".planted")))
+	require.NoError(t, os.Symlink(".planted", filepath.Join(dir, "entry-inside.json")))
 	writeEntry(t, dir, entryFor("entry-linked", "reply"))
 	require.NoError(t, os.Link(filepath.Join(dir, "entry-linked.json"), filepath.Join(dir, "entry-second.json")))
 	require.NoError(t, syscall.Mkfifo(filepath.Join(dir, "entry-fifo.json"), 0o600))
@@ -58,7 +65,7 @@ func TestOutbox_ReadsOnlyARegularEntryInsideIt(t *testing.T) {
 	assert.Equal(t, "reply", valid.Content)
 
 	for _, name := range []string{
-		"entry-escape.json", "entry-inside.json", "entry-linked.json", "entry-second.json",
+		"entry-key.json", "entry-escape.json", "entry-inside.json", "entry-linked.json", "entry-second.json",
 		"entry-fifo.json", "entry-large.json", "entry-misnamed.json",
 	} {
 		t.Run(name, func(t *testing.T) {

@@ -139,9 +139,10 @@ type outboxSubmission struct {
 }
 
 // Post offers one outbox reply. The answers durable-delivery.v1 pins
-// are told apart by status, never by text: 404 is a server that does
-// not serve the route, 400 out_of_range a creation instant garam's
-// clock has not reached yet, and every other refusal keeps the entry.
+// are told apart by status and kind, never by text: an answer outside
+// the contract is a server that does not serve the route, 400
+// out_of_range a creation instant garam's clock has not reached yet,
+// and every other refusal keeps the entry.
 func (q *HTTPQueue) Post(ctx context.Context, o Outbound) (*Stored, error) {
 	payload, err := json.Marshal(outboxSubmission{
 		Recipient: o.Recipient.String(), IdempotencyKey: o.IdempotencyKey, Body: o.Body, CreatedAt: o.CreatedAt.UTC(),
@@ -154,15 +155,14 @@ func (q *HTTPQueue) Post(ctx context.Context, o Outbound) (*Stored, error) {
 		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
-	switch {
-	case resp.StatusCode == http.StatusNotFound:
-		return nil, errorx.Wrap(ErrUnsupportedPeer, "delivery: garam does not serve POST /outbox-messages")
-	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden ||
-		resp.StatusCode >= http.StatusInternalServerError:
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden ||
+		resp.StatusCode >= http.StatusInternalServerError {
 		// The fence and an undecided answer are the listener's, whatever
 		// contract the route serves.
 		return nil, q.answered(resp, presented)
 	}
+	// A server older than the route answers 404 naming no contract, and
+	// one newer names another: neither is offered the entry again.
 	if resp.Header.Get(contractHeader) != DeliveryContract {
 		return nil, errorx.Wrap(ErrUnsupportedPeer, "delivery: garam answered outside "+DeliveryContract)
 	}

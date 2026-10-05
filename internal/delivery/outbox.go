@@ -173,9 +173,6 @@ func (o *Outbox) open(name string) ([]byte, os.FileInfo, error) {
 	if stat, ok := opened.Sys().(*syscall.Stat_t); !ok || stat.Nlink != 1 {
 		return nil, nil, errorx.New(errorx.KindFailedPrecondition, "delivery: outbox entry has another name")
 	}
-	if opened.Size() > maxEntryBytes {
-		return nil, nil, errorx.New(errorx.KindFailedPrecondition, "delivery: outbox entry is larger than an entry can be")
-	}
 	raw, err := io.ReadAll(io.LimitReader(f, maxEntryBytes+1))
 	if err != nil {
 		return nil, nil, errorx.Wrap(err, "delivery: outbox entry", errorx.KindUnavailable)

@@ -173,13 +173,14 @@ func TestRun_ReplaysItsActivationAfterARestart(t *testing.T) {
 // TestRun_ActivatesTheGenerationTheRuntimeNowReports is a runtime that
 // restarted beside a running adapter: a new generation is new intent,
 // asked under a new request identifier, and the old token is not
-// presented again. Until then an unchanged status asks nothing, which
-// is the control.
+// presented again, and so is a new placement. Until then an unchanged
+// status asks nothing, which is the control.
 func TestRun_ActivatesTheGenerationTheRuntimeNowReports(t *testing.T) {
 	queue := newGaramQueue(t, time.Second)
 	gateway := newAgentGateway(t)
 	c := newControl(queue)
-	runFenced(t, queue, gateway, c, newMounted(), nil)
+	m := newMounted()
+	runFenced(t, queue, gateway, c, m, nil)
 
 	eventually(t, func() bool { return queue.claimsAttempted() > 0 }, "the first generation is activated")
 	quietFor()
@@ -194,6 +195,12 @@ func TestRun_ActivatesTheGenerationTheRuntimeNowReports(t *testing.T) {
 		presented := queue.claimsPresenting()
 		return presented[len(presented)-1] == tokenOf(2, 1)
 	}, "claims carry the new generation's token")
+
+	m.replace("placement-2", "1001")
+	eventually(t, func() bool { return len(c.requests()) == 3 }, "another placement is asked for while the gate is open")
+	asked = c.requests()
+	assert.NotEqual(t, asked[1], asked[2], "under a new request")
+	assert.Equal(t, "placement-2", c.placements[2])
 }
 
 // TestRun_StopsProtectedWorkOnAFenceUntilTheLeafChanges is garam

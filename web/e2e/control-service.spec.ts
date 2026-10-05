@@ -511,7 +511,9 @@ test.describe("control service, as contract tests against the agreed Operator wi
     await expect(page.getByText(refused, { exact: true })).toBeVisible();
 
     await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/templates`);
-    await expect(page.getByText("No templates", { exact: true })).toBeVisible();
+    await expect(
+      page.getByText("No archived templates", { exact: true }),
+    ).toBeVisible();
     await expect(page.getByText(refused, { exact: true })).toBeVisible();
 
     await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/new`);
@@ -551,7 +553,9 @@ test.describe("control service, as contract tests against the agreed Operator wi
     await expect(page.getByText(failed, { exact: true })).toBeVisible();
 
     await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/templates`);
-    await expect(page.getByText("No templates", { exact: true })).toBeVisible();
+    await expect(
+      page.getByText("No archived templates", { exact: true }),
+    ).toBeVisible();
     await expect(page.getByText(failed, { exact: true })).toBeVisible();
 
     await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/new`);

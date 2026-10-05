@@ -19,7 +19,7 @@ vi.mock("next/navigation", () => ({
 const params = { params: Promise.resolve({ org: "acme" }) };
 
 describe("agent templates view", () => {
-  it("lists each template by name, linking to its page, inside Agents", async () => {
+  it("lists each archived template by name as a record, and offers no new one", async () => {
     const { container } = await renderServerComponent(
       AgentTemplatesPage(params),
     );
@@ -31,16 +31,33 @@ describe("agent templates view", () => {
     expect(
       within(views).getByRole("link", { name: "Templates" }),
     ).toHaveAttribute("aria-current", "page");
-    expect(screen.getByRole("link", { name: "Researcher" })).toHaveAttribute(
+    const archived = screen.getByRole("heading", {
+      level: 2,
+      name: "Archived garam templates",
+    }).parentElement!;
+    expect(
+      within(archived).getByRole("link", { name: "Researcher" }),
+    ).toHaveAttribute(
       "href",
       "/console/orgs/acme/agents/templates/7c1e2a9b3d4f5a60",
     );
-    expect(screen.getByText("Reads papers")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "New template" })).toHaveAttribute(
-      "href",
-      "/console/orgs/acme/agents/templates/new",
-    );
+    expect(within(archived).getByText("Reads papers")).toBeInTheDocument();
+    // garam's templates are retired read-only (ADR-0088): the archived
+    // list above is the control that the view still reads them.
+    expect(
+      screen.queryByRole("link", { name: "New template" }),
+    ).not.toBeInTheDocument();
     expect(container.textContent).not.toContain("grn:");
+  });
+
+  it("puts the control service's templates first, as the ones agents are created from", async () => {
+    await renderServerComponent(AgentTemplatesPage(params));
+
+    expect(
+      screen
+        .getAllByRole("heading", { level: 2 })
+        .map((heading) => heading.textContent),
+    ).toEqual(["Control service templates", "Archived garam templates"]);
   });
 
   it("tells two templates of one name apart by identifier", async () => {
@@ -70,7 +87,7 @@ describe("agent templates view", () => {
     expect(container.textContent).not.toContain("grn:");
   });
 
-  it("shows an empty state when the organization keeps none", async () => {
+  it("shows an empty state when the organization kept none", async () => {
     server.use(
       http.get(`${API_URL}/orgs/acme/agent-templates`, () =>
         HttpResponse.json([]),
@@ -79,9 +96,9 @@ describe("agent templates view", () => {
 
     await renderServerComponent(AgentTemplatesPage(params));
 
-    expect(screen.getByText("No templates")).toBeInTheDocument();
+    expect(screen.getByText("No archived templates")).toBeInTheDocument();
     expect(
-      screen.getByText("This organization keeps no templates."),
+      screen.getByText("This organization kept no templates in garam."),
     ).toBeInTheDocument();
   });
 
@@ -112,6 +129,6 @@ describe("agent templates view", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(
       "garam refused to show this organization's templates to you.",
     );
-    expect(screen.queryByText("No templates")).not.toBeInTheDocument();
+    expect(screen.queryByText("No archived templates")).not.toBeInTheDocument();
   });
 });

@@ -61,11 +61,12 @@ export const CONSOLE_SECTIONS: readonly ConsoleSection[] = [
     icon: Bot,
     items: { create: "New agent", fallback: "Agent" },
     // Templates live inside Agents rather than as a section (ADR-0075).
+    // Garam's are retired read-only, so the view creates none (ADR-0088).
     views: [
       {
         segment: "templates",
         label: "Templates",
-        items: { create: "New template", fallback: "Template" },
+        items: { fallback: "Template" },
       },
     ],
   },

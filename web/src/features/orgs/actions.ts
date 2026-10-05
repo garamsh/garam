@@ -18,10 +18,6 @@ export {
 export { archivePolicy, type ArchivePolicyState } from "./api/archive-policy";
 export { attachPolicy, type AttachPolicyState } from "./api/attach-policy";
 export {
-  createAgentTemplate,
-  type CreateAgentTemplateState,
-} from "./api/create-agent-template";
-export {
   saveControlEndpoint,
   type ControlEndpointState,
 } from "./api/save-control-endpoint";
@@ -34,10 +30,6 @@ export { createOrg, type CreateOrgState } from "./api/create-org";
 export { createPolicy, type CreatePolicyState } from "./api/create-policy";
 export { createProject, type CreateProjectState } from "./api/create-project";
 export { defineAgent, type DefineAgentState } from "./api/define-agent";
-export {
-  deleteAgentTemplate,
-  type DeleteAgentTemplateState,
-} from "./api/delete-agent-template";
 export { deleteGroup, type DeleteGroupState } from "./api/delete-group";
 export { grantDelegation, type DelegationState } from "./api/grant-delegation";
 export { withdrawDelegation } from "./api/withdraw-delegation";
@@ -64,10 +56,6 @@ export {
   rollbackPolicy,
   type RollbackPolicyState,
 } from "./api/rollback-policy";
-export {
-  updateAgentTemplate,
-  type UpdateAgentTemplateState,
-} from "./api/update-agent-template";
 export { updateGroup, type UpdateGroupState } from "./api/update-group";
 export {
   updateOperator,

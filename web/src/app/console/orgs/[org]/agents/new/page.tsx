@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 
 import { ApiUnreachable } from "../../../../_components/api-unreachable";
 import { PageHeader } from "../../../../_components/page-header";
+import { ControlNotice } from "../_components/control-notice";
 import { CreateFromTemplate } from "../_components/create-from-template";
 import { DefineAgentForm } from "../_components/define-agent-form";
 
@@ -72,19 +73,23 @@ export default async function NewAgentPage({ params, searchParams }: Params) {
         title="New agent"
         description="Start blank or from a template, then adjust before creating."
       />
-      {organization.status === "ok" && hosted.status === "ok" && (
+      {organization.status === "ok" && (
         <section className="flex flex-col gap-3">
           <h2 className="font-heading text-lg font-semibold">
             From the control service
           </h2>
-          <CreateFromTemplate
-            org={org}
-            orgGrn={organization.data.grn}
-            hosted={hostedFor(hosted.data, "agent:create")}
-            controllers={Object.fromEntries(
-              hosted.operators.map((o) => [o.grn, o.name]),
-            )}
-          />
+          {hosted.status === "ok" ? (
+            <CreateFromTemplate
+              org={org}
+              orgGrn={organization.data.grn}
+              hosted={hostedFor(hosted.data, "agent:create")}
+              controllers={Object.fromEntries(
+                hosted.operators.map((o) => [o.grn, o.name]),
+              )}
+            />
+          ) : (
+            <ControlNotice>{hosted.reason}</ControlNotice>
+          )}
         </section>
       )}
       <h2 className="font-heading text-lg font-semibold">Define in garam</h2>

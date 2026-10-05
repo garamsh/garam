@@ -13,6 +13,7 @@ export function controlBlocker(
   if (hosted === null) {
     return "No control service is registered for this organization. An administrator registers one on an operator's page.";
   }
+  if (hosted.problem !== null) return hosted.problem;
   if (hosted.delegation === null) {
     return `${hosted.name} holds no delegation, so its control service is not reachable from here.`;
   }

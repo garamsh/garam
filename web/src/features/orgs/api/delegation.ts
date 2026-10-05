@@ -1,13 +1,9 @@
 import "server-only";
 
+import { unstable_rethrow } from "next/navigation";
 import { z } from "zod";
 
-import {
-  GaramApiError,
-  GaramUnreachableError,
-  garamFetchAuthenticated,
-  parserFor,
-} from "@/lib/garam";
+import { GaramApiError, garamFetchAuthenticated, parserFor } from "@/lib/garam";
 import {
   CONTRACT_VERSION,
   CONTRACT_VERSION_HEADER,
@@ -15,7 +11,7 @@ import {
 import type { components } from "@/types/api";
 
 import { slugFromGrn } from "../grn";
-import { GrnParser, listOperators, orgPath, type Operator } from "./orgs";
+import { GrnParser, OperatorParser, orgPath, type Operator } from "./orgs";
 
 /**
  * A hosted operator's current grant, as the API returns one: which
@@ -52,7 +48,8 @@ export const DelegationParser = parserFor<Delegation>()(
 
 /**
  * What reading a hosted operator's grant answered: the grant, the fact
- * that it holds none, a refusal, or no answer at all.
+ * that it holds none, a refusal, or no usable answer — the backend
+ * unreachable, failing, or answering outside its specification.
  */
 export type DelegationRead =
   | { status: "ok"; data: Delegation }
@@ -60,7 +57,10 @@ export type DelegationRead =
   | { status: "forbidden" }
   | { status: "unreachable" };
 
-/** The hosted operator's current grant. */
+/**
+ * The hosted operator's current grant. It never throws for an answer
+ * garam gave: a page that shows a grant is never failed by reading one.
+ */
 export async function getOperatorDelegation(
   org: string,
   operator: string,
@@ -75,22 +75,24 @@ export async function getOperatorDelegation(
       ),
     };
   } catch (error) {
-    if (error instanceof GaramUnreachableError)
-      return { status: "unreachable" };
+    // A rejected session is a redirect to the login page, which Next.js
+    // carries as a throw of its own.
+    unstable_rethrow(error);
     if (error instanceof GaramApiError && error.status === 404) {
       return { status: "none" };
     }
     if (error instanceof GaramApiError && error.status === 403) {
       return { status: "forbidden" };
     }
-    throw error;
+    return { status: "unreachable" };
   }
 }
 
 /**
  * An operator with a registered control endpoint: the audience the
  * console hands operations to, where it sends them, and the grant they
- * are minted under, null where it holds none.
+ * are minted under. Where the grant could not be read, `delegation` is
+ * null and `problem` says why.
  */
 export type HostedOperator = {
   grn: string;
@@ -98,25 +100,44 @@ export type HostedOperator = {
   name: string;
   endpoint: string;
   delegation: Delegation | null;
+  problem: string | null;
 };
 
 /**
  * What the console can reach of the organization's control services:
- * every operator with a registered endpoint and its grant, or the fact
- * that garam did not answer. A grant garam refused or did not answer is
- * read as none, so its operations stay disabled.
+ * every operator with a registered endpoint and its grant, or why none
+ * could be read. A control service panel shows the reason and stays
+ * disabled; nothing else on its page waits on this read.
  */
 export type HostedOperatorsRead =
   | { status: "ok"; data: HostedOperator[]; operators: Operator[] }
-  | { status: "unreachable" };
+  | { status: "unavailable"; reason: string };
 
-/** The organization's hosted operators. */
+/**
+ * The organization's hosted operators. It never fails the page it is
+ * read for: a refusal or an error becomes a reason the control service
+ * panels show (#1170).
+ */
 export async function listHostedOperators(
   org: string,
 ): Promise<HostedOperatorsRead> {
-  const operators = await listOperators(org);
-  if (operators.status === "unreachable") return operators;
-  const hosted = operators.data.filter(
+  let operators: Operator[];
+  try {
+    operators = await garamFetchAuthenticated(
+      `/orgs/${orgPath(org)}/operators`,
+      z.array(OperatorParser),
+    );
+  } catch (error) {
+    unstable_rethrow(error);
+    return {
+      status: "unavailable",
+      reason:
+        error instanceof GaramApiError && error.status === 403
+          ? "garam refused to list this organization's operators to you, so no control service is reachable from here."
+          : "garam did not answer for this organization's operators, so no control service is reachable from here.",
+    };
+  }
+  const hosted = operators.filter(
     (o): o is Operator & { controlEndpoint: string } =>
       o.controlEndpoint !== undefined,
   );
@@ -125,15 +146,21 @@ export async function listHostedOperators(
   );
   return {
     status: "ok",
-    operators: operators.data,
+    operators,
     data: hosted.map((o, i) => {
-      const delegation = delegations[i];
+      const delegation = delegations[i] ?? { status: "unreachable" };
       return {
         grn: o.grn,
         identifier: slugFromGrn(o.grn),
         name: o.name,
         endpoint: o.controlEndpoint,
-        delegation: delegation?.status === "ok" ? delegation.data : null,
+        delegation: delegation.status === "ok" ? delegation.data : null,
+        problem:
+          delegation.status === "forbidden"
+            ? `garam refused to show ${o.name}'s delegation to you.`
+            : delegation.status === "unreachable"
+              ? `garam did not answer for ${o.name}'s delegation.`
+              : null,
       };
     }),
   };

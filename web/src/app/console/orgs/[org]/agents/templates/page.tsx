@@ -14,6 +14,7 @@ import { ApiUnreachable } from "../../../../_components/api-unreachable";
 import { EmptyState } from "../../../../_components/empty-state";
 import { PageHeader } from "../../../../_components/page-header";
 import { AgentsTabs } from "../_components/agents-tabs";
+import { ControlNotice } from "../_components/control-notice";
 import { OperatorTemplates } from "../_components/operator-templates";
 import { TemplateList } from "./_components/template-list";
 
@@ -67,16 +68,20 @@ export default async function AgentTemplatesPage({ params }: Params) {
       ) : (
         <TemplateList org={org} templates={templates.data} />
       )}
-      {organization.status === "ok" && hosted.status === "ok" && (
+      {organization.status === "ok" && (
         <section className="flex flex-col gap-3">
           <h2 className="font-heading text-lg font-semibold">
             Control service templates
           </h2>
-          <OperatorTemplates
-            org={org}
-            orgGrn={organization.data.grn}
-            hosted={hostedFor(hosted.data, "agent-template:read")}
-          />
+          {hosted.status === "ok" ? (
+            <OperatorTemplates
+              org={org}
+              orgGrn={organization.data.grn}
+              hosted={hostedFor(hosted.data, "agent-template:read")}
+            />
+          ) : (
+            <ControlNotice>{hosted.reason}</ControlNotice>
+          )}
         </section>
       )}
     </>

@@ -20,6 +20,7 @@ import { ItemCrumb } from "../../../../_components/item-crumb";
 import { orgHref } from "../../../../_components/navigation";
 import { PageHeader } from "../../../../_components/page-header";
 import { DesiredValues, OperatorName } from "../_components/agent-facts";
+import { ControlNotice } from "../_components/control-notice";
 import { ExecutionPanel } from "../_components/execution-panel";
 import { ReportedState } from "../_components/reported-state";
 import { RenameAgentForm } from "./_components/rename-agent-form";
@@ -130,9 +131,7 @@ export default async function AgentPage({ params }: Params) {
             hosted={hostedFor(hosted.data, "agent:execution-read", assignee)}
           />
         ) : (
-          <p role="status" className="text-sm text-muted-foreground">
-            garam did not answer for this organization&apos;s control services.
-          </p>
+          <ControlNotice>{hosted.reason}</ControlNotice>
         )}
       </section>
 

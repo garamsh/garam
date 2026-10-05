@@ -36,24 +36,27 @@ func stalled(t *testing.T) string {
 
 // TestBounds_StalledPeerIsRefusedWithinItsBound is #747's first probe as
 // a regression: with no bound each of these parks forever. Claim, Renew,
-// Complete and Post take the caller's deadline; Subscribe takes the
-// client's header bound instead, because a deadline on the call would
-// also end the stream it opens.
+// Complete, Post and the calls beside them take the caller's deadline;
+// Subscribe takes the client's header bound instead, because a deadline
+// on the call would also end the stream it opens.
 func TestBounds_StalledPeerIsRefusedWithinItsBound(t *testing.T) {
 	const bound = 200 * time.Millisecond
 	base := stalled(t)
 
-	q, err := delivery.NewHTTPQueue(&http.Client{}, base, agentGRN())
+	q, err := delivery.NewHTTPQueue(&http.Client{}, base, agentGRN(), delivery.NewLegacyExecution())
 	require.NoError(t, err)
 	streamBounded := &http.Client{Transport: &http.Transport{ResponseHeaderTimeout: bound}}
-	g, err := delivery.NewHTTPGateway(streamBounded, base, gatewayAgentID)
+	g, err := delivery.NewHTTPGateway(streamBounded, base, agentGRN())
 	require.NoError(t, err)
 
 	deadlined := map[string]func(context.Context) error{
 		"Claim":    func(c context.Context) error { _, e := q.Claim(c); return e },
 		"Renew":    func(c context.Context) error { _, e := q.Renew(c, "id"); return e },
 		"Complete": func(c context.Context) error { return q.Complete(c, "id") },
-		"Post":     func(c context.Context) error { _, e := g.Post(c, "hi"); return e },
+		"Post":     func(c context.Context) error { _, e := g.Post(c, "message-1", "hi"); return e },
+		"Lookup":   func(c context.Context) error { _, e := g.Lookup(c, "message-1"); return e },
+		"Status":   func(c context.Context) error { _, e := g.Status(c); return e },
+		"Submit":   func(c context.Context) error { _, e := q.Post(c, outbound()); return e },
 	}
 	for name, call := range deadlined {
 		t.Run(name, func(t *testing.T) {
@@ -101,7 +104,7 @@ func TestBounds_ClaimIsNotCutShortByTheOrdinaryBound(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	q, err := delivery.NewHTTPQueue(server.Client(), server.URL, agentGRN())
+	q, err := delivery.NewHTTPQueue(server.Client(), server.URL, agentGRN(), delivery.NewLegacyExecution())
 	require.NoError(t, err)
 
 	// The ordinary bound is under the poll; the claim's is over it.
@@ -125,7 +128,7 @@ func TestBounds_SubscribeOutlivesTheHeaderBound(t *testing.T) {
 	const bound = 200 * time.Millisecond
 	gateway := newAgentGateway(t)
 	client := &http.Client{Transport: &http.Transport{ResponseHeaderTimeout: bound}}
-	g, err := delivery.NewHTTPGateway(client, gateway.server.URL, gatewayAgentID)
+	g, err := delivery.NewHTTPGateway(client, gateway.server.URL, agentGRN())
 	require.NoError(t, err)
 
 	stream, err := g.Subscribe(context.Background())
@@ -135,11 +138,11 @@ func TestBounds_SubscribeOutlivesTheHeaderBound(t *testing.T) {
 	// Past the bound before anything is emitted, so nothing below can
 	// have been in flight when it expired.
 	time.Sleep(4 * bound)
-	gateway.endTurn(delivery.TurnFinished, "msg-0")
+	gateway.endTurn(delivery.TurnFinished, "message-0")
 
 	turn, err := stream.Next()
 	require.NoError(t, err, "the stream died at the header bound; it is held open for the agent's life")
-	assert.Equal(t, []delivery.GatewayID{"msg-0"}, turn.Messages)
+	assert.Equal(t, []delivery.MessageID{"message-0"}, turn.Messages)
 }
 
 // TestBounds_AHungCompletionDoesNotStopTheNextOne is #747's second
@@ -150,7 +153,7 @@ func TestBounds_SubscribeOutlivesTheHeaderBound(t *testing.T) {
 // which is what every lost completion here means.
 func TestBounds_AHungCompletionDoesNotStopTheNextOne(t *testing.T) {
 	queue, gateway := twoInFlight(t, true)
-	gateway.endTurn(delivery.TurnFinished, "msg-0", "msg-1")
+	gateway.endTurn(delivery.TurnFinished, "message-0", "message-1")
 	eventually(t, func() bool { return queue.delivered() == 1 },
 		"the completion behind a hung one still reaches garam")
 }
@@ -160,7 +163,7 @@ func TestBounds_AHungCompletionDoesNotStopTheNextOne(t *testing.T) {
 // through only if two arrive when nothing is parked.
 func TestBounds_ControlBothCompleteWhenNothingHangs(t *testing.T) {
 	queue, gateway := twoInFlight(t, false)
-	gateway.endTurn(delivery.TurnFinished, "msg-0", "msg-1")
+	gateway.endTurn(delivery.TurnFinished, "message-0", "message-1")
 	eventually(t, func() bool { return queue.delivered() == 2 },
 		"control: the same turn end completes both when nothing hangs")
 }

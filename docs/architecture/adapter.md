@@ -14,6 +14,7 @@ What the adapter garam ships must do, and what it rests on to do it.
 - What garam owns
 - Foreign facts this rests on
 - Stable identifiers and the outbox
+- Activation and runtime status
 - Not decided
 
 ## What it is
@@ -21,8 +22,11 @@ What the adapter garam ships must do, and what it rests on to do it.
 garam is a message API and an agent platform speaks a different
 protocol. The adapter is the piece between them: it long-polls garam,
 posts into the platform's gateway over loopback, watches the gateway's
-event stream, and reports back. garam writes it as a library with a
-thin binary and an orchestrator deploys it
+event stream, reports back, and forwards the replies the platform
+records in its outbox. Where the agent is fenced it first obtains the
+activation of the platform's running generation from the lifecycle
+authority (§Activation and runtime status). garam writes it as a
+library with a thin binary and an orchestrator deploys it
 ([ADR-0013](./adr/0013-agent-messaging.md)); we own its correctness and
 they own its placement.
 
@@ -46,37 +50,41 @@ and this process keeps running.
 ## The delivery loop
 
 1. Claim a message for its agent from garam's queue. The claim carries
-   a lease.
-2. Post it into the gateway. The response carries an identifier the
-   gateway minted; hold the pairing of that to garam's own, in memory.
+   a lease, garam's identifier for the message and the sender garam
+   verified.
+2. Post it into the gateway under garam's message identifier, never the
+   claim's, as `garam-message.v1` (§Stable identifiers and the outbox).
+   Hold the claim under that identifier, in memory.
 3. Watch the gateway's event stream for a turn ending.
 4. When a turn reports success and names a message, complete that
    message's claim at garam.
 
-Nothing about this loop is transactional and nothing recovers it across
-a restart. That is deliberate: the in-memory pairing is what makes a
-restart lapse the lease rather than lose the message.
+The hold is volatile and the identifier is not. A restart lapses the
+leases it held, and garam hands those messages out again under the
+same identifiers, which the platform recognises: a message whose turn
+already committed is answered as completed and its claim completes at
+once, without a second turn. After the event stream reopens, the
+adapter asks the platform about every message it holds, which recovers
+a turn whose event was lost while no stream was open.
 
 ## Completion
 
-**A claim is completed by a turn that succeeded and named its message,
-and nothing else completes it. A message whose completion never
-arrives — because the turn failed, because the event was dropped,
-because the adapter died — is redelivered.**
+**A claim is completed by the platform's word that a turn which
+consumed its message committed — a turn that succeeded and named it,
+or the platform answering the message as completed — and nothing else
+completes it. A message whose completion never arrives — because the
+turn failed, because the word was lost, because the adapter died — is
+redelivered.**
 
 Both halves belong together wherever this is restated. The first alone
-reads as exactly-once: the pairing between a turn's event and the
-messages it consumed is exact, so it looks like a guarantee. The event
-stream dropping silently is the only reason it is not.
+reads as exactly-once, and the accept is still not a completion
+([ADR-0079](./adr/0079-interservice-contracts-keep-adjacent-releases-compatible-and-replay-by-stable-identifier.md)).
 
-**Delivery is therefore at-least-once, from two independent causes**: a
-restart, and a dropped event for a turn that did complete. Only the
-first has a window anyone can state.
-
-An agent may see the same message twice. The platform cannot recognise
-the repeat — it mints the identifier, so a redelivery arrives as a new
-message — so tolerating one means handling it the way a person saying
-the same thing twice is handled, not deduplicating it.
+**Delivery is at-least-once.** A redelivered message whose turn
+committed is recognised and runs nothing; one whose turn failed, or was
+interrupted before it committed, runs again, and the effects that turn
+had already caused may repeat. Tolerating that means handling it the
+way a person saying the same thing twice is handled.
 
 ## Failure and attempts
 
@@ -217,13 +225,15 @@ is undecided ([deployment-contract.md](./deployment-contract.md)).
 
 ## What garam owns
 
-Idempotency and reconciliation are garam's, not the adapter's and not
-the platform's ([ADR-0013](./adr/0013-agent-messaging.md)). The
-platform cannot be asked whether a message was processed
-(`sherlock@40ef7ac`), and the adapter's knowledge is deliberately
-volatile, so **"has this already been handled" can only live on garam's
-side.** A design that puts it in the pod or in an orchestrator's status
-is inventing a distinction that does not exist there.
+Whether a message is delivered is garam's record, not the adapter's and
+not an orchestrator's ([ADR-0013](./adr/0013-agent-messaging.md)). The
+platform at `v0.1.0` can be asked whether it committed a turn for a
+message it was handed under garam's identifier, and the adapter uses
+that answer only to complete the claim at garam; its own knowledge is
+deliberately volatile, so **"has this already been delivered" lives on
+garam's side.** A design that keeps it in the pod or in an
+orchestrator's status is inventing a distinction that does not exist
+there.
 
 ## Foreign facts this rests on
 
@@ -241,19 +251,33 @@ those restatements.
 
 The last two rows are not that reading's. They arrived on 2026-08-25
 from [ADR-0013](./adr/0013-agent-messaging.md) §Decision, which is
-where they were read.
+where they were read. The 40ef7ac rows that said the gateway mints the
+identifier are gone: the contract no longer rests on them, and the
+table below holds what replaced them.
 
 | Fact | Where | What breaks without it |
 |---|---|---|
 | Terminal events carry the ids the turn drained | `internal/gateway/queue.go` | Completion has nothing to key on |
-| The accept response returns the minted id | `internal/gateway/server.go` | The adapter cannot pair its claims |
-| The gateway mints the id; a caller cannot supply one | `internal/gateway/service.go` | A redelivery would be recognisable, and it is not |
 | A subscriber more than a bounded number of events behind loses events silently | `internal/gateway/events.go` | Delivery would be exactly-once, not at-least-once |
 | One turn takes up to a bounded batch as a single input | `internal/gateway/queue.go` | The batch would not be the completion unit |
 | The inbox is a volatile buffer | `internal/gateway/service.go` | The accept response would be an acknowledgement |
 | A failed turn reaches no sender | `internal/gateway/queue.go` | garam would not owe the notification |
 | Opening a monitoring subscription enqueues nothing | `internal/gateway/events.go` | Readiness would spend the agent's throughput to measure it |
 | No listener exists before the tool registry has loaded — true when [ADR-0013](./adr/0013-agent-messaging.md) §Decision recorded it, and not guaranteed | `cmd/gagent/agent.go` | An answer would stop meaning the agent can accept work |
+
+Read in Sherlock at
+[`v0.1.0`](https://github.com/garamsh/sherlock/tree/44aaa555105f9834244eaac4ad18b0ed75dbf0ff)
+(`44aaa555105f9834244eaac4ad18b0ed75dbf0ff`), the release this
+contract binds:
+
+| Fact | Where | What breaks without it |
+|---|---|---|
+| A post carries the caller's `id` and `content`, refuses any other field, and keys the message by the transport caller and that id | `internal/gateway/handler.go`, `internal/gateway/queue.go` | Two claims of one message would be two sources |
+| A replay of a committed id with the same content answers 200 `completed`; other content under it is 409 | `internal/gateway/queue.go` | A restart's redelivery would run a second turn |
+| `GET /agents/{agent}/messages/{id}` answers `pending`, `completed` or `unknown` | `internal/gateway/handler.go` | A lost event could not be recovered |
+| `GET /agents/{agent}/status` answers `contract_version` 1 with the agent, epoch, generation, revision, state and start | `internal/gateway/handler.go` | Nothing could be activated |
+| The ingress body is bounded at 1 MiB | `internal/gateway/handler.go` | A maximal envelope could be cut |
+| An outbox entry is `<id>.json`, written whole under a dot-prefixed temporary name, carrying `created_at` once | `tools/message_send/message_send.go`, `internal/message/message.go` | The forwarder could read a partial entry or invent an age |
 
 This promotes an observability surface into a delivery contract, and
 the two carry different obligations: observability may lose an event, a
@@ -263,30 +287,112 @@ know anyone depends on it.
 
 ## Stable identifiers and the outbox
 
-**Nothing in this section is built.** It is ADR-0079's accepted target
-for this contract; everything above describes what runs, including the
-gateway-minted identifier and the in-memory pairing.
+What follows is
+[ADR-0079](./adr/0079-interservice-contracts-keep-adjacent-releases-compatible-and-replay-by-stable-identifier.md)
+as [ADR-0084](./adr/0084-the-adapter-activates-its-generation-and-reports-runtime-status-under-a-contract-garam-owns.md)
+pins it for this adapter.
 
-- **The adapter names each message to Sherlock by a stable,
-  sender-scoped identifier.** A replay under it with an identical
-  payload answers a completed source's recorded outcome rather than
-  running another turn, and a different payload under it is refused.
-  Completion is reported apart from the accept.
-- **A reply leaves through a durable outbox.** The runtime records it
-  under a stable identifier, the adapter forwards it with that
-  identifier as garam's idempotency key, and the entry goes only once
-  garam has acknowledged it, so a retry mints no second message and a
-  failed forward stays visible as pending or failed. Entries an earlier
-  generation left are forwarded by the current one, under its own
-  credential and token, keeping their identifier and origin generation.
+- **The adapter names each message to Sherlock by garam's message
+  identifier**, never the claim's, so two claims of one message are one
+  source there. A replay under it with an identical payload answers a
+  completed source's recorded outcome rather than running another turn,
+  and a different payload under it is refused. Completion is reported
+  apart from the accept.
+- **The content is `garam-message.v1`**: a compact JSON object of
+  `contract`, `sender` and `body` in that order, encoded by Go's
+  `encoding/json` default with no trailing newline. `sender` is the GRN
+  garam's claim verified and `body` the original body as one string, so
+  nothing in the body overrides the envelope and a redelivery encodes
+  to the same bytes.
+- **A reply leaves through a durable outbox.** The adapter reads each
+  entry as a bounded regular file inside the outbox directory, never
+  through a link, and requires its agent to be this adapter's GRN. It
+  forwards the entry through `POST /outbox-messages` under
+  `durable-delivery.v1` — content as body, target as recipient, the
+  entry's identifier unchanged as the idempotency key and its
+  `created_at` as `createdAt` — and there is no fallback to
+  `POST /messages`.
+- **The entry goes only on a verified acknowledgement**: a stored
+  message with a non-empty identifier, this agent as sender, the
+  entry's target as recipient and its identifier as key, while the file
+  is still the one that was read. A 201 carrying a cross-organization
+  refusal fails that check. A refusal, an unsupported peer or a wrong
+  binding keeps the entry and logs it without a hot retry loop; an
+  unreachable garam is retried with bounded backoff under the same
+  identity. An entry with no valid `created_at`, or past garam's
+  seven-day admission budget, is never deleted, re-keyed or re-stamped.
+  An entry the file boundary refuses is set aside until its file is
+  replaced; one the system could not open or read is tried again after
+  a backoff. A pass offers a bounded batch, the oldest entries not set
+  aside.
+- **Removal compares, then unlinks by name.** Between the two, a
+  writer that can rename in the outbox could put another file under
+  the name. That writer can already delete any entry, so the window
+  grants it nothing; renaming to a private name first would close it
+  at the price of a crash state hiding an unacknowledged reply where
+  the forwarder never reads.
+- **Entries an earlier generation left are forwarded by the current
+  one**, under its own credential and token, keeping their identifier
+  and origin generation. Nothing in the entry is rewritten before it
+  goes; a delivery or a refusal is logged by its identifier, origin
+  and in-reply-to, never its content.
+- **An outbox is optional where the agent is legacy.** Where none is
+  named nothing is forwarded, as before this contract; the fenced mode
+  requires one.
 - **What is still not promised.** A turn interrupted before it
   committed may repeat its effects. Delivery stays at-least-once and
   completion stays §Completion's rule.
 - **The adapter and Sherlock keep adjacent releases compatible** in
   both upgrade orders, and refuse what they do not support by name.
-- **Its calls carry the activation token** of the generation it serves
+  This contract binds Sherlock `v0.1.0`
+  (`44aaa555105f9834244eaac4ad18b0ed75dbf0ff`) and no tested window
+  yet.
+
+## Activation and runtime status
+
+**The adapter's half is built; neither lifecycle authority serves the
+two routes yet.** The Operator control service implements them in
+garamsh/garam-agent-operator#218, and the standalone supervisor's
+composition is #1180's. This is
+[ADR-0084](./adr/0084-the-adapter-activates-its-generation-and-reports-runtime-status-under-a-contract-garam-owns.md)'s
+contract, `agent-execution.v1`, which garam owns and the lifecycle
+authority serves: the Operator control service when managed, the local
+supervisor when standalone.
+
+- **The deployment chooses the mode.** Without control settings the
+  adapter is legacy, for an agent never cut over: no activation, no
+  token, no status report. With them it is fenced, and what follows
+  applies; some but not all is refused at startup, and neither mode
+  falls back to the other. garam refuses a cut-over agent's claim made
+  without a token, so a misconfigured legacy adapter carries nothing.
+  The legacy mode lasts until #1171 retires its source.
+- **Control authenticates the agent's leaf**, read per handshake, over
+  mTLS; the leaf names the GRN in the path, and garam's token never
+  goes to control.
+- **Every protected call carries the activation's token**, as
+  `Authorization: Garam-Execution <token>`
   ([machine-identity.md](./machine-identity.md) §Generation and
-  lineage).
+  lineage), and the adapter makes none before it holds one.
+- **It activates the generation the runtime reports.** It reads
+  Sherlock's loopback status, then asks the authority with that GRN,
+  epoch, generation and revision and the mounted placement token, under
+  a request identifier derived from those inputs alone, so a restart
+  replays the same intent and receives a newer token. It verifies the
+  binding answered and keeps the highest token version.
+- **Undecided answers retry; definite ones pause.** An unavailable
+  authority or garam is retried with bounded backoff and stops nothing
+  local. A refusal, a wrong binding, or garam refusing the token or the
+  credential stops protected work and keeps the outbox, with no
+  time-based retry, until the runtime's generation, epoch or revision,
+  the placement token or the agent's leaf changes. Credential recovery
+  is the manager's, never the adapter's.
+- **It reports the runtime's status outward** after activation and on
+  each change: the activation, GRN, epoch, generation, revision, state
+  and start time as the runtime reported them, and when it read them. A
+  report never activates anything, and an empty revision is unknown.
+
+ADR-0084 is authoritative for the routes, bodies, refusals, the
+identifier's derivation and the settings the adapter reads.
 
 ## Not decided
 

@@ -8,11 +8,14 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/garamsh/garam/internal/delivery"
+	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/internal/grn"
 )
 
 // gatewayAnswering is the platform's gateway answering one way to
@@ -21,61 +24,140 @@ func gatewayAnswering(t *testing.T, answer http.HandlerFunc) *delivery.HTTPGatew
 	t.Helper()
 	server := httptest.NewServer(answer)
 	t.Cleanup(server.Close)
-	gateway, err := delivery.NewHTTPGateway(server.Client(), server.URL, gatewayAgentID)
+	gateway, err := delivery.NewHTTPGateway(server.Client(), server.URL, agentGRN())
 	require.NoError(t, err)
 	return gateway
 }
 
-// TestHTTPGateway_PostReturnsTheIdentifierTheGatewayMinted covers the
-// ingress call: where it goes, what it carries, and the identifier that
-// comes back — which is the only thing a turn's event can be paired
-// back to, because a caller cannot supply one.
-//
-// The body carries the content and nothing else. The gateway refuses a
-// field it does not know, so a field added here would be rejected
-// there rather than ignored.
-func TestHTTPGateway_PostReturnsTheIdentifierTheGatewayMinted(t *testing.T) {
+// TestHTTPGateway_PostCarriesGaramsIdentifierAndReadsTheRuntimesProgress
+// covers the ingress call: where it goes, what it carries, and what the
+// answer says. The identifier is garam's for the message, so a replay
+// of one the runtime completed answers completed rather than running
+// again. The body carries the identifier and the content and nothing
+// else: the gateway refuses a field it does not know.
+func TestHTTPGateway_PostCarriesGaramsIdentifierAndReadsTheRuntimesProgress(t *testing.T) {
 	var route string
 	var sent map[string]any
+	status, wire := http.StatusAccepted, "queued"
 	gateway := gatewayAnswering(t, func(w http.ResponseWriter, r *http.Request) {
 		route = r.URL.Path
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&sent))
-		writeJSON(w, http.StatusAccepted, map[string]string{
-			"id": "msg-9f2c", "agent_id": gatewayAgentID, "status": "queued",
-		})
+		writeJSON(w, status, map[string]string{"id": "message-1", "agent_id": agentGRN().String(), "status": wire})
 	})
 
-	id, err := gateway.Post(context.Background(), "what the sender said")
+	progress, err := gateway.Post(context.Background(), "message-1", `{"contract":"garam-message.v1"}`)
 	require.NoError(t, err)
-	assert.Equal(t, delivery.GatewayID("msg-9f2c"), id)
-	assert.Equal(t, "/agents/"+gatewayAgentID+"/messages", route)
-	assert.Equal(t, map[string]any{"content": "what the sender said"}, sent)
+	assert.Equal(t, delivery.ProgressPending, progress)
+	assert.Equal(t, "/agents/"+agentGRN().String()+"/messages", route)
+	assert.Equal(t, map[string]any{"id": "message-1", "content": `{"contract":"garam-message.v1"}`}, sent)
+
+	status, wire = http.StatusOK, "completed"
+	progress, err = gateway.Post(context.Background(), "message-1", `{"contract":"garam-message.v1"}`)
+	require.NoError(t, err)
+	assert.Equal(t, delivery.ProgressCompleted, progress, "a replay of a completed message")
 }
 
 // TestHTTPGateway_PostReportsWhatTheGatewayRefusedWith is what happens
-// to a message the gateway will not take: nothing is paired, so the
-// claim is left to lapse, and the line the loop logs carries the
+// to a message the gateway will not take — content it does not accept,
+// or an identifier it holds with other content: nothing is paired, so
+// the claim is left to lapse, and the line the loop logs carries the
 // gateway's own words.
 func TestHTTPGateway_PostReportsWhatTheGatewayRefusedWith(t *testing.T) {
 	gateway := gatewayAnswering(t, func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "content is required"})
+		writeJSON(w, http.StatusConflict, map[string]string{"error": "id reused with different content"})
 	})
 
-	_, err := gateway.Post(context.Background(), "")
+	_, err := gateway.Post(context.Background(), "message-1", "content")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "content is required")
+	assert.Contains(t, err.Error(), "id reused with different content")
 }
 
-// TestHTTPGateway_PostReportsAnAcceptanceThatNamesNothing covers the
-// answer that would leave the loop holding a pairing to an empty
-// identifier: it is an error rather than a pairing under "".
-func TestHTTPGateway_PostReportsAnAcceptanceThatNamesNothing(t *testing.T) {
-	gateway := gatewayAnswering(t, func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, http.StatusAccepted, map[string]string{"agent_id": gatewayAgentID, "status": "queued"})
+// TestHTTPGateway_PostRefusesAnAnswerAboutAnotherMessage covers the
+// answers that would leave the loop holding a message the runtime did
+// not say it took: one naming nothing, one naming another message and
+// one in a status the gateway does not define. The answer naming the
+// message is the control.
+func TestHTTPGateway_PostRefusesAnAnswerAboutAnotherMessage(t *testing.T) {
+	answers := map[string]map[string]string{
+		"naming nothing":         {"status": "queued"},
+		"naming another message": {"id": "message-2", "status": "queued"},
+		"in an unknown status":   {"id": "message-1", "status": "lost"},
+	}
+	for name, answer := range answers {
+		t.Run(name, func(t *testing.T) {
+			gateway := gatewayAnswering(t, func(w http.ResponseWriter, _ *http.Request) {
+				writeJSON(w, http.StatusAccepted, answer)
+			})
+			_, err := gateway.Post(context.Background(), "message-1", "content")
+			require.Error(t, err)
+		})
+	}
+	control := gatewayAnswering(t, func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusAccepted, map[string]string{"id": "message-1", "status": "queued"})
 	})
+	_, err := control.Post(context.Background(), "message-1", "content")
+	require.NoError(t, err, "the control: an answer about the message")
+}
 
-	_, err := gateway.Post(context.Background(), "what the sender said")
-	require.Error(t, err)
+// TestHTTPGateway_LookupReadsWhetherTheRuntimeCompletedAMessage is the
+// durable completion lookup a lost event is recovered by.
+func TestHTTPGateway_LookupReadsWhetherTheRuntimeCompletedAMessage(t *testing.T) {
+	var route string
+	gateway := gatewayAnswering(t, func(w http.ResponseWriter, r *http.Request) {
+		route = r.URL.Path
+		writeJSON(w, http.StatusOK, map[string]string{"id": "message-1", "status": "completed"})
+	})
+	progress, err := gateway.Lookup(context.Background(), "message-1")
+	require.NoError(t, err)
+	assert.Equal(t, delivery.ProgressCompleted, progress)
+	assert.Equal(t, "/agents/"+agentGRN().String()+"/messages/message-1", route)
+}
+
+// runtimeStatus is the status body the runtime serves at v0.1.0.
+func runtimeStatus() map[string]any {
+	return map[string]any{
+		"contract_version": 1, "agent_id": agentGRN().String(), "assignment_epoch": "3",
+		"generation": strings.Repeat("a", 32), "config_revision": "7", "state": "serving",
+		"started_at": "2026-10-05T01:02:03Z",
+	}
+}
+
+// TestHTTPGateway_StatusReadsOnlyARuntimeItCanActivateFor holds the
+// status read to what an activation can be asked for: another status
+// version, another agent, no generation and an undefined state are each
+// refused. The status as the runtime serves it is the control.
+func TestHTTPGateway_StatusReadsOnlyARuntimeItCanActivateFor(t *testing.T) {
+	var route string
+	gateway := gatewayAnswering(t, func(w http.ResponseWriter, r *http.Request) {
+		route = r.URL.Path
+		writeJSON(w, http.StatusOK, runtimeStatus())
+	})
+	status, err := gateway.Status(context.Background())
+	require.NoError(t, err, "the control: the status the runtime serves")
+	assert.Equal(t, "/agents/"+agentGRN().String()+"/status", route)
+	assert.Equal(t, delivery.RuntimeStatus{
+		Agent: agentGRN(), Epoch: "3", Generation: strings.Repeat("a", 32), Revision: "7",
+		State: delivery.RuntimeServing, StartedAt: time.Date(2026, 10, 5, 1, 2, 3, 0, time.UTC),
+	}, *status)
+
+	changes := map[string]func(m map[string]any){
+		"another status version": func(m map[string]any) { m["contract_version"] = 2 },
+		"another agent":          func(m map[string]any) { m["agent_id"] = senderGRN().String() },
+		"no generation":          func(m map[string]any) { m["generation"] = "" },
+		"an undefined state":     func(m map[string]any) { m["state"] = "napping" },
+	}
+	for name, change := range changes {
+		t.Run(name, func(t *testing.T) {
+			body := runtimeStatus()
+			change(body)
+			gateway := gatewayAnswering(t, func(w http.ResponseWriter, _ *http.Request) {
+				writeJSON(w, http.StatusOK, body)
+			})
+			_, err := gateway.Status(context.Background())
+			require.Error(t, err)
+			assert.True(t, errorx.IsKind(err, errorx.KindFailedPrecondition), "a definite refusal, not an outage: %v", err)
+		})
+	}
 }
 
 // sendingEvents is a gateway whose event stream carries what the test
@@ -107,9 +189,9 @@ func TestHTTPGateway_SubscribeReadsTurnEndingsAndSkipsEverythingElse(t *testing.
 	gateway := sendingEvents(t,
 		`{"kind":"turn_started","turn":1}`,
 		`{"kind":"tool_call","turn":1,"tool_name":"files"}`,
-		`{"kind":"turn_finished","turn":1,"message_ids":["msg-0","msg-1"],"response":"done"}`,
+		`{"kind":"turn_finished","turn":1,"message_ids":["message-0","message-1"],"response":"done"}`,
 		`{"kind":"turn_started"`,
-		`{"kind":"turn_failed","turn":2,"message_ids":["msg-2"],"error":"provider unreachable"}`,
+		`{"kind":"turn_failed","turn":2,"message_ids":["message-2"],"error":"provider unreachable"}`,
 	)
 
 	stream, err := gateway.Subscribe(context.Background())
@@ -120,7 +202,7 @@ func TestHTTPGateway_SubscribeReadsTurnEndingsAndSkipsEverythingElse(t *testing.
 	require.NoError(t, err)
 	assert.Equal(t, delivery.TurnEnd{
 		Outcome:  delivery.TurnFinished,
-		Messages: []delivery.GatewayID{"msg-0", "msg-1"},
+		Messages: []delivery.MessageID{"message-0", "message-1"},
 	}, finished)
 	assert.True(t, finished.Completes())
 
@@ -128,7 +210,7 @@ func TestHTTPGateway_SubscribeReadsTurnEndingsAndSkipsEverythingElse(t *testing.
 	require.NoError(t, err)
 	assert.Equal(t, delivery.TurnEnd{
 		Outcome:  delivery.TurnFailed,
-		Messages: []delivery.GatewayID{"msg-2"},
+		Messages: []delivery.MessageID{"message-2"},
 	}, failed)
 	assert.False(t, failed.Completes(), "a turn that failed is an attempt rather than a completion")
 
@@ -144,7 +226,7 @@ func TestHTTPGateway_SubscribeReadsTurnEndingsAndSkipsEverythingElse(t *testing.
 func TestHTTPGateway_SubscribeSkipsAnEventLargerThanItReads(t *testing.T) {
 	gateway := sendingEvents(t,
 		`{"kind":"tool_call","tool_result":"`+strings.Repeat("x", 2<<20)+`"}`,
-		`{"kind":"turn_finished","turn":1,"message_ids":["msg-0"]}`,
+		`{"kind":"turn_finished","turn":1,"message_ids":["message-0"]}`,
 	)
 
 	stream, err := gateway.Subscribe(context.Background())
@@ -153,7 +235,7 @@ func TestHTTPGateway_SubscribeSkipsAnEventLargerThanItReads(t *testing.T) {
 
 	turn, err := stream.Next()
 	require.NoError(t, err)
-	assert.Equal(t, []delivery.GatewayID{"msg-0"}, turn.Messages)
+	assert.Equal(t, []delivery.MessageID{"message-0"}, turn.Messages)
 }
 
 // TestHTTPGateway_SubscribeSkipsAnEventJustPastTheBound is the boundary
@@ -178,7 +260,7 @@ func TestHTTPGateway_SubscribeSkipsAnEventJustPastTheBound(t *testing.T) {
 
 	gateway := sendingEvents(t,
 		oversized,
-		`{"kind":"turn_finished","turn":2,"message_ids":["msg-0"]}`,
+		`{"kind":"turn_finished","turn":2,"message_ids":["message-0"]}`,
 	)
 
 	stream, err := gateway.Subscribe(context.Background())
@@ -187,7 +269,7 @@ func TestHTTPGateway_SubscribeSkipsAnEventJustPastTheBound(t *testing.T) {
 
 	turn, err := stream.Next()
 	require.NoError(t, err)
-	assert.Equal(t, []delivery.GatewayID{"msg-0"}, turn.Messages,
+	assert.Equal(t, []delivery.MessageID{"message-0"}, turn.Messages,
 		"the event past the bound was carried rather than dropped")
 }
 
@@ -242,18 +324,18 @@ func TestNewHTTPGateway_RefusesWhatItCannotCall(t *testing.T) {
 	server := httptest.NewServer(http.NotFoundHandler())
 	t.Cleanup(server.Close)
 
-	_, err := delivery.NewHTTPGateway(server.Client(), server.URL, gatewayAgentID)
+	_, err := delivery.NewHTTPGateway(server.Client(), server.URL, agentGRN())
 	require.NoError(t, err, "an address and an agent that work")
 
 	tests := map[string]struct {
 		client *http.Client
 		base   string
-		agent  string
+		agent  grn.GRN
 	}{
-		"no client":                  {nil, server.URL, gatewayAgentID},
-		"a relative address":         {server.Client(), "/agents", gatewayAgentID},
-		"an address that is not one": {server.Client(), "://", gatewayAgentID},
-		"no agent identifier":        {server.Client(), server.URL, ""},
+		"no client":                  {nil, server.URL, agentGRN()},
+		"a relative address":         {server.Client(), "/agents", agentGRN()},
+		"an address that is not one": {server.Client(), "://", agentGRN()},
+		"an agent that is not a GRN": {server.Client(), server.URL, grn.GRN{}},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {

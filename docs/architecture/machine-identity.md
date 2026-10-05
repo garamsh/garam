@@ -106,11 +106,13 @@ what compose lacks is the step, not something a container cannot do.
 
 ## Generation and lineage
 
-**garam's half is built; the adapter this repository ships does not
-use it.** Nothing under `internal/delivery/` carries an execution
-token (#1169), and acceptance with the Operator control service and
-with a standalone host's supervisor is unverified (#1157, #1168): the
-supervisor's runner is unbuilt (#1180). Until a
+**garam's half is built, and so is the adapter's.** A fenced adapter
+carries the execution token its lifecycle authority obtained
+([adapter.md](./adapter.md) §Activation and runtime status); no
+authority serves that adapter-facing contract yet, and acceptance with
+the Operator control service and with a standalone host's supervisor
+is unverified (#1157, #1168): the supervisor's runner is unbuilt
+(#1180). Until a
 GRN's first activation it is in the legacy cohort: its calls carry no
 token, and the certificate check below still applies to each of them.
 An agent created managed is never in it: it is fenced from birth

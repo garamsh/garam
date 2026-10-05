@@ -9,10 +9,13 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/internal/grn"
 )
 
 // maxEventBytes bounds what one event on the platform's stream may cost
@@ -22,28 +25,29 @@ import (
 const maxEventBytes = 1 << 20
 
 // HTTPGateway is the agent platform's gateway over loopback: the
-// ingress that takes a message and the event stream a turn's end
-// arrives on.
+// ingress that takes a message, the lookup of one it took, the event
+// stream a turn's end arrives on, and the runtime's status.
 //
-// The identifier the ingress answers with is the only pairing there is.
-// A caller cannot supply one, so a redelivered message arrives at the
-// platform as a new message and nothing there collapses the two.
+// Every message is posted under garam's identifier for it, which the
+// runtime keeps as the caller's own, so a redelivery is recognised
+// there rather than run as a new message.
 type HTTPGateway struct {
 	client   *http.Client
+	agent    grn.GRN
 	messages *url.URL
 	events   *url.URL
+	status   *url.URL
 }
 
-// NewHTTPGateway constructs the gateway client. The agent identifier is
-// the one the gateway itself serves, which is not garam's GRN for the
-// same agent: the gateway serves exactly one agent and answers 404 for
-// any other identifier, so this is a value of the platform's own.
-func NewHTTPGateway(client *http.Client, base, agent string) (*HTTPGateway, error) {
+// NewHTTPGateway constructs the gateway client. The runtime serves the
+// agent under the same GRN garam knows it by, and answers 404 for any
+// other.
+func NewHTTPGateway(client *http.Client, base string, agent grn.GRN) (*HTTPGateway, error) {
 	if client == nil {
 		return nil, errorx.New(errorx.KindInvalidArgument, "delivery: gateway client is required")
 	}
-	if agent == "" {
-		return nil, errorx.New(errorx.KindInvalidArgument, "delivery: gateway agent identifier is required")
+	if err := agent.Validate(); err != nil {
+		return nil, errorx.Wrap(err, "delivery: agent", errorx.KindInvalidArgument)
 	}
 	root, err := url.Parse(base)
 	if err != nil {
@@ -52,30 +56,36 @@ func NewHTTPGateway(client *http.Client, base, agent string) (*HTTPGateway, erro
 	if !root.IsAbs() || root.Host == "" {
 		return nil, errorx.New(errorx.KindInvalidArgument, "delivery: gateway address must be an absolute URL")
 	}
+	served := root.JoinPath("agents", agent.String())
 	return &HTTPGateway{
 		client:   client,
-		messages: root.JoinPath("agents", agent, "messages"),
-		events:   root.JoinPath("agents", agent, "events"),
+		agent:    agent,
+		messages: served.JoinPath("messages"),
+		events:   served.JoinPath("events"),
+		status:   served.JoinPath("status"),
 	}, nil
 }
 
-// ingress is what the gateway takes: the message content and nothing
-// about who is sending, which the connection says.
+// ingress is what the gateway takes: the caller's identifier for the
+// message and its content, and nothing about who is sending, which the
+// connection says.
 type ingress struct {
+	ID      string `json:"id"`
 	Content string `json:"content"`
 }
 
-// accepted is what the gateway answers a taken message with. The
-// identifier is minted there.
-type accepted struct {
-	ID string `json:"id"`
+// progress is what the gateway answers a post and a lookup with.
+type progress struct {
+	ID     string `json:"id"`
+	Status string `json:"status"`
 }
 
 // Post hands one message to the agent. A 202 means it entered a
 // volatile buffer rather than that it will be processed, which is why
-// nothing is completed here.
-func (g *HTTPGateway) Post(ctx context.Context, body string) (GatewayID, error) {
-	payload, err := json.Marshal(ingress{Content: body})
+// nothing is completed on it; a 200 is a replay of a message whose turn
+// already committed, and runs nothing.
+func (g *HTTPGateway) Post(ctx context.Context, id MessageID, content string) (Progress, error) {
+	payload, err := json.Marshal(ingress{ID: string(id), Content: content})
 	if err != nil {
 		return "", errorx.Wrap(err, "delivery: gateway request", errorx.KindInvalidArgument)
 	}
@@ -89,26 +99,107 @@ func (g *HTTPGateway) Post(ctx context.Context, body string) (GatewayID, error) 
 		return "", errorx.Wrap(err, "delivery: gateway call", errorx.KindUnavailable)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusAccepted {
+	if resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusOK {
 		return "", refused(resp)
 	}
-	var answer accepted
-	if err := json.NewDecoder(io.LimitReader(resp.Body, maxAnswerBody)).Decode(&answer); err != nil {
-		return "", errorx.Wrap(err, "delivery: gateway answer", errorx.KindInternal)
-	}
-	if answer.ID == "" {
-		return "", errorx.New(errorx.KindInternal, "delivery: gateway accepted a message without naming it")
-	}
-	return GatewayID(answer.ID), nil
+	return readProgress(resp.Body, id)
 }
 
-// Subscribe opens one stream of the agent's events.
-func (g *HTTPGateway) Subscribe(ctx context.Context) (TurnStream, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, g.events.String(), nil)
+// Lookup asks the runtime how far it has got with a message.
+func (g *HTTPGateway) Lookup(ctx context.Context, id MessageID) (Progress, error) {
+	resp, err := g.get(ctx, g.messages.JoinPath(string(id)), "application/json")
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	return readProgress(resp.Body, id)
+}
+
+// readProgress reads an answer about one message, which must name the
+// message asked about: one naming another is not an answer to it.
+func readProgress(body io.Reader, id MessageID) (Progress, error) {
+	var answer progress
+	if err := json.NewDecoder(io.LimitReader(body, maxAnswerBody)).Decode(&answer); err != nil {
+		return "", errorx.Wrap(err, "delivery: gateway answer", errorx.KindInternal)
+	}
+	if answer.ID != string(id) {
+		return "", errorx.New(errorx.KindInternal, "delivery: gateway answered about another message")
+	}
+	switch answer.Status {
+	case "queued", "pending":
+		return ProgressPending, nil
+	case "completed":
+		return ProgressCompleted, nil
+	case "unknown":
+		return ProgressUnknown, nil
+	}
+	return "", errorx.New(errorx.KindInternal, "delivery: gateway answered a status it does not define")
+}
+
+// runtimeStatusVersion is the status shape this adapter reads. Another
+// one is refused rather than read as this one (ADR-0079).
+const runtimeStatusVersion = 1
+
+// runtimeStatus is the runtime's status body as it defines it.
+type runtimeStatus struct {
+	ContractVersion int       `json:"contract_version"`
+	AgentID         string    `json:"agent_id"`
+	AssignmentEpoch string    `json:"assignment_epoch"`
+	Generation      string    `json:"generation"`
+	ConfigRevision  string    `json:"config_revision"`
+	State           string    `json:"state"`
+	StartedAt       time.Time `json:"started_at"`
+}
+
+// Status reads which process of the runtime is serving the agent. A
+// runtime serving another agent, of another status version, or that
+// minted no generation is refused, because nothing can be activated
+// for it.
+func (g *HTTPGateway) Status(ctx context.Context) (*RuntimeStatus, error) {
+	resp, err := g.get(ctx, g.status, "application/json")
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	var answer runtimeStatus
+	if err := json.NewDecoder(io.LimitReader(resp.Body, maxAnswerBody)).Decode(&answer); err != nil {
+		return nil, errorx.Wrap(err, "delivery: runtime status", errorx.KindInternal)
+	}
+	if answer.ContractVersion != runtimeStatusVersion {
+		return nil, errorx.New(errorx.KindFailedPrecondition,
+			"delivery: runtime status version "+strconv.Itoa(answer.ContractVersion)+" is not supported")
+	}
+	if answer.AgentID != g.agent.String() {
+		return nil, errorx.New(errorx.KindFailedPrecondition, "delivery: the runtime serves another agent")
+	}
+	if !generationPattern.MatchString(answer.Generation) {
+		return nil, errorx.New(errorx.KindFailedPrecondition, "delivery: the runtime reports no generation")
+	}
+	state := RuntimeState(answer.State)
+	if state != RuntimeServing && state != RuntimeDraining {
+		return nil, errorx.New(errorx.KindFailedPrecondition, "delivery: the runtime reports a state it does not define")
+	}
+	return &RuntimeStatus{
+		Agent:      g.agent,
+		Epoch:      answer.AssignmentEpoch,
+		Generation: answer.Generation,
+		Revision:   answer.ConfigRevision,
+		State:      state,
+		StartedAt:  answer.StartedAt,
+	}, nil
+}
+
+// generationPattern is a runtime start nonce as garam's activation
+// takes it.
+var generationPattern = regexp.MustCompile(`^[0-9a-f]{32}$`)
+
+// get makes one read of the gateway and refuses any answer but 200.
+func (g *HTTPGateway) get(ctx context.Context, target *url.URL, accept string) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target.String(), nil)
 	if err != nil {
 		return nil, errorx.Wrap(err, "delivery: gateway request", errorx.KindInvalidArgument)
 	}
-	req.Header.Set("Accept", "text/event-stream")
+	req.Header.Set("Accept", accept)
 	resp, err := g.client.Do(req)
 	if err != nil {
 		return nil, errorx.Wrap(err, "delivery: gateway call", errorx.KindUnavailable)
@@ -116,6 +207,15 @@ func (g *HTTPGateway) Subscribe(ctx context.Context) (TurnStream, error) {
 	if resp.StatusCode != http.StatusOK {
 		defer func() { _ = resp.Body.Close() }()
 		return nil, refused(resp)
+	}
+	return resp, nil
+}
+
+// Subscribe opens one stream of the agent's events.
+func (g *HTTPGateway) Subscribe(ctx context.Context) (TurnStream, error) {
+	resp, err := g.get(ctx, g.events, "text/event-stream")
+	if err != nil {
+		return nil, err
 	}
 	return &eventStream{body: resp.Body, lines: bufio.NewReader(resp.Body)}, nil
 }
@@ -164,9 +264,9 @@ func (s *eventStream) Next() (TurnEnd, error) {
 		if outcome != TurnFinished && outcome != TurnFailed {
 			continue
 		}
-		messages := make([]GatewayID, 0, len(payload.MessageIDs))
+		messages := make([]MessageID, 0, len(payload.MessageIDs))
 		for _, id := range payload.MessageIDs {
-			messages = append(messages, GatewayID(id))
+			messages = append(messages, MessageID(id))
 		}
 		return TurnEnd{Outcome: outcome, Messages: messages}, nil
 	}

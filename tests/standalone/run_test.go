@@ -139,6 +139,7 @@ type record struct {
 	Intent struct {
 		ID           string `json:"id"`
 		Epoch        string `json:"epoch"`
+		Revision     string `json:"revision"`
 		Generation   string `json:"generation"`
 		RequestID    string `json:"requestId"`
 		Replaces     string `json:"replaces"`

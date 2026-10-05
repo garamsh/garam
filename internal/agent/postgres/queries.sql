@@ -309,11 +309,6 @@ SELECT EXISTS (
     SELECT 1 FROM agent_cutovers WHERE agent_grn = $1 AND stage = 'switched'
 );
 
--- ShareExecution holds the agent's execution row FOR SHARE until the
--- transaction ends, so a switch either commits first or waits.
--- name: ShareExecution :one
-SELECT mode FROM agent_executions WHERE agent_grn = $1 FOR SHARE;
-
 -- name: GetCutoverAgent :one
 SELECT e.mode, s.assignee_grn, s.epoch
 FROM agent_executions e

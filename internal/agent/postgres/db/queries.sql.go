@@ -1619,19 +1619,6 @@ func (q *Queries) ShareAssignment(ctx context.Context, agentGrn string) (ShareAs
 	return i, err
 }
 
-const shareExecution = `-- name: ShareExecution :one
-SELECT mode FROM agent_executions WHERE agent_grn = $1 FOR SHARE
-`
-
-// ShareExecution holds the agent's execution row FOR SHARE until the
-// transaction ends, so a switch either commits first or waits.
-func (q *Queries) ShareExecution(ctx context.Context, agentGrn string) (string, error) {
-	row := q.db.QueryRow(ctx, shareExecution, agentGrn)
-	var mode string
-	err := row.Scan(&mode)
-	return mode, err
-}
-
 const spendEnrollment = `-- name: SpendEnrollment :exec
 UPDATE agent_enrollments SET
     consumed_at                = $1,

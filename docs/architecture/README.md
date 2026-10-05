@@ -560,4 +560,4 @@ ADRs:
   garam owns and the lifecycle authority serves: an adapter-derived
   request identifier, a verified binding, the highest token version,
   and no protected call before activation or after a definite refusal;
-  unbuilt
+  the adapter's half is built and no lifecycle authority serves it yet

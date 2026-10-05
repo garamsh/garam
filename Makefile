@@ -82,7 +82,7 @@ TEST_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)
 # and overridable on the same terms as the line above.
 WEB_E2E_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_ADDR)/garam?sslmode=disable)
 
-.PHONY: lint format test build gen check-gen check-toolchain integration e2e mutation db-up db-down db-prune backend-up ci template-diff search
+.PHONY: lint format test build gen check-gen check-toolchain integration e2e workload-integration mutation db-up db-down db-prune backend-up ci template-diff search
 .PHONY: chart chart-lint chart-render chart-identity chart-names chart-rewrite chart-guards chart-security chart-package
 .PHONY: web-install web-lint web-format web-test web-build web-gen web-check-gen web-e2e web-image-e2e web-ci
 .PHONY: image-build
@@ -184,10 +184,10 @@ format:
 # scripts/image-build-test.sh is the one test outside Go: which tags a
 # development image-build accepts (ADR-0071). It needs git and no
 # Docker, and prints its own count.
-TEST_PKGS = $(filter-out %/tests/integration %/tests/e2e,$(GO_PKGS))
+TEST_PKGS = $(filter-out %/tests/integration %/tests/e2e %/tests/workload,$(GO_PKGS))
 
 test:
-	@echo 'test: $(words $(TEST_PKGS)) packages; tests/integration and tests/e2e not covered here — they need Postgres (make db-up integration e2e)'
+	@echo 'test: $(words $(TEST_PKGS)) packages; tests/integration and tests/e2e not covered here — they need Postgres (make db-up integration e2e); tests/workload needs a Docker daemon and the pinned images (make workload-integration)'
 	@test -n '$(TEST_PKGS)' || { echo 'test: nothing to test — the package list is empty, or the filter above matched all of it'; exit 1; }
 	@go test -count=1 $(TEST_PKGS)
 	@scripts/image-build-test.sh
@@ -371,6 +371,22 @@ e2e:
 	@test -n '$(E2E_PKGS)' || { echo 'e2e: nothing to run — no package under ./tests/e2e/... holds a test file'; exit 1; }
 	@test -n '$(TEST_DATABASE_URL)' || { echo "e2e: no postgres published on this host — run make db-up" >&2; exit 1; }
 	GARAM_TEST_DATABASE_URL='$(TEST_DATABASE_URL)' go test -count=1 $(E2E_PKGS)
+
+# workload-integration runs a standalone host's supervisor against a
+# real Docker daemon and the images it runs (ADR-0085). It is in no
+# whole-set name and in no workflow: the pinned Sherlock images are
+# pulled from a registry CI holds no credential for.
+# GARAM_TEST_DOCKER_HOST names the daemon, a rootless one's unix://
+# socket; GARAM_TEST_RUNTIME_IMAGE, GARAM_TEST_WORKSPACE_IMAGE and
+# GARAM_TEST_ADAPTER_IMAGE name the images by digest or ID, the adapter
+# being this tree's garam image.
+WORKLOAD_PKGS = $(shell go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./tests/workload/...)
+WORKLOAD_TEST_FILES = $(shell go list -f '{{range .TestGoFiles}}{{.}} {{end}}{{range .XTestGoFiles}}{{.}} {{end}}' ./tests/workload/...)
+
+workload-integration:
+	@echo 'workload-integration: $(words $(WORKLOAD_PKGS)) packages, $(words $(WORKLOAD_TEST_FILES)) test files, against $(GARAM_TEST_DOCKER_HOST)'
+	@test -n '$(WORKLOAD_PKGS)' || { echo 'workload-integration: nothing to run — no package under ./tests/workload/... holds a test file'; exit 1; }
+	go test -count=1 -timeout 30m $(WORKLOAD_PKGS)
 
 # mutation asks of every line what the hunt behind #875 asked of a few
 # by hand: whether the check at that line can fail. gremlins rewrites

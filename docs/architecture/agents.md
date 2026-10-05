@@ -253,12 +253,16 @@ in #1157.
 
 ## Standalone hosts
 
-**garam's half is built; the host's runner is not.** A standalone host
-enrolls and renews with `garam standalone prepare`, `enroll` and
-`renew` (`internal/cli/standalone_host.go`); what supervises the
-runtime, proves the old writer exited and hands the adapter its
-activation is #1180's, and the joint message, task and reply
-acceptance with Sherlock is unverified (#1168, #1169).
+**garam's half is built, and so is the host's runner; the joint
+acceptance is not.** A standalone host enrolls and renews with
+`garam standalone prepare`, `enroll` and `renew`
+(`internal/cli/standalone_host.go`), and `garam standalone run`
+supervises the runtime, proves the old writer exited and hands the
+adapter its activation (`internal/workload`, ADR-0085). The runner is
+tested against a real rootless daemon and the pinned Sherlock images
+with garam's activation stood in for; enrollment, a message and its
+reply, and a restart that keeps memory, joined to garam, are
+unverified (#1180, #1169).
 
 - **An administrator approves the host's own keys.** The host
   generates its supervisor key, its agent key and a bootstrap secret
@@ -313,8 +317,8 @@ acceptance with Sherlock is unverified (#1168, #1169).
   renewal replaces in one rename, and a pending renewal kept from
   before its request until its answer is installed. The agent's
   credential directory holds the agent's key and certificate. Neither
-  is the agent's memory, outbox or workspace; which account and mount
-  reach each is #1180's.
+  is the agent's memory, outbox or workspace, and no container mounts
+  either: the supervisor copies what the adapter needs into it.
 - **The host's commands own what they write.** The two directories
   never overlap; the preparation records the agent directory it owns
   and refuses one holding credentials it did not write. Each command
@@ -326,3 +330,66 @@ acceptance with Sherlock is unverified (#1168, #1169).
   renewal is never overwritten. Every request goes to an `https://`
   origin verified by the pinned garam server root, and a redirect is
   refused rather than followed.
+
+### The host's runner
+
+`garam standalone run` is the supervisor's process: in the
+foreground, over one rootless Docker daemon whose socket it alone
+holds (ADR-0085). It returns once the generation it supervises has
+exited and been drained, and restarting it is the host's init's; a
+supervisor that stops leaves the workload running.
+
+- **A generation is three containers sharing the runtime's network
+  namespace.** The runtime runs the pinned `sherlock-agent` image as
+  65532 with no capability, its gateway on loopback and no port
+  published. The workspace runs the pinned `sherlock-workspace` image
+  with its executor's five capabilities. The adapter runs garam's image
+  as 65532 with no capability. Each image is named by a digest or an
+  image ID.
+- **Two volumes, each mounted where it is needed.** The memory volume
+  goes into the runtime and, for the outbox, the adapter; the
+  workspace volume goes into the workspace alone, so no Exec child
+  reaches memory. The supervisor creates each with a nonce it records
+  first, and refuses one that is gone or carries another nonce; it
+  creates nothing to replace it, and a person decides what follows.
+- **`--require-store` follows the record.** Every start passes it once
+  the memory volume's record says a runtime served on it. That is
+  written when the first activation of a runtime on the volume arrives
+  or a serving status is reported, and never inferred.
+- **The intent is written before anything of it exists.** Container
+  names derive from it and carry its nonce. A container under one of
+  those names is adopted only when it carries the nonce, the intent,
+  the image and the volumes, which recovers a lost create's container
+  without making a second. Anything else there is left untouched, and
+  the run stays pending.
+- **A drain never forces.** SIGTERM goes to the runtime and the
+  workspace, and the supervisor waits for both to exit, however long
+  that takes, before the adapter is stopped the same way and the
+  successor is created. Any one of the three exiting ends the
+  generation the same way. A replacement is a changed revision, epoch
+  or image, or `--replace`.
+- **The adapter activates through a socket only its generation
+  mounts.** The supervisor serves `agent-execution.v1` there over TLS,
+  with a serving root minted for the generation and removed with it.
+  It verifies the agent's leaf against the agent's issuer and forwards
+  that leaf to garam. It forwards an activation only for the intent's
+  placement token, epoch and revision, its runtime unrestarted, and a
+  generation never asked for before. A retry repeats the first
+  request, so garam answers the same activation with a newer token.
+- **Credentials are copied in, never mounted.** The runtime's
+  configuration and the adapter's key, certificate, roots and
+  placement token are written into each container before it starts,
+  owned by 65532 and readable by it alone; the runtime's environment
+  is the model credential.
+- **An engine it cannot reach decides nothing.** The supervisor starts,
+  signals and activates nothing, and the generation keeps running with
+  its adapter's token. A daemon stop may stop the runtime, and recovery
+  after it is a new generation.
+
+What is still not settled is ADR-0085 §What this does not decide: the
+joint acceptance with garam and a model, renewing the agent's
+certificate in a running adapter, the adapter's mount of the whole
+memory volume, a measured daemon stop, and an explicit storage
+handover. ADR-0085 is authoritative for the arrangement and the
+socket's contract, and `make workload-integration` runs it against a
+real daemon.

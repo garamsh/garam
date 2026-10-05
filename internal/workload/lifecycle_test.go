@@ -171,8 +171,9 @@ func TestRun_AdoptsTheContainerALostCreateMade(t *testing.T) {
 // TestRun_LeavesAForeignContainerUntouched holds that a name alone
 // adopts nothing: a container under the derived name without the
 // intent's nonce is neither started, signalled nor removed, and the
-// run stays pending. The control is TestRun_AdoptsTheContainerALostCreateMade,
-// where the same name carries the nonce and is adopted.
+// run stays pending. The control is
+// TestRun_AdoptsTheContainerALostCreateMade, where the same name
+// carries the nonce and is adopted.
 func TestRun_LeavesAForeignContainerUntouched(t *testing.T) {
 	h := newHost(t)
 	h.engine.loseCreate = func(workload.ContainerSpec) bool { return true }
@@ -263,4 +264,32 @@ func TestRun_DecidesNothingWhileTheEngineIsDown(t *testing.T) {
 	h.start()
 	adopted, _, _ := h.serving()
 	assert.Same(t, runtime, adopted, "the control: with the engine back, the same runtime is supervised")
+}
+
+// TestRun_RefusesAVolumeACreateNamedIntoExistence holds the check after
+// a create: a volume removed between the supervisor's check and the
+// runtime's create is made again by the mount, without the nonce, and
+// the runtime is never started on it. The control is the run before,
+// on the same volume as it was.
+func TestRun_RefusesAVolumeACreateNamedIntoExistence(t *testing.T) {
+	h := newHost(t)
+	r := h.start()
+	runtime, _, _ := h.serving()
+	memory := runtime.spec.Volumes[0].Volume
+	h.engine.exit(runtime)
+	require.ErrorIs(t, r.result(t), workload.ErrGenerationEnded, "the control: a generation ran on the volume")
+
+	h.engine.mu.Lock()
+	h.engine.beforeCreate = func(spec workload.ContainerSpec) {
+		if len(spec.Volumes) > 0 && spec.Volumes[0].Volume == memory {
+			delete(h.engine.volumes, memory)
+		}
+	}
+	h.engine.mu.Unlock()
+	require.ErrorIs(t, h.start().result(t), workload.ErrStorageReplaced)
+	h.engine.mu.Lock()
+	defer h.engine.mu.Unlock()
+	for _, c := range h.engine.named(workload.RoleRuntime) {
+		assert.Equal(t, workload.ContainerCreated, c.status, "the runtime was never started on it")
+	}
 }

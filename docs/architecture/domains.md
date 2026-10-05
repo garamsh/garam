@@ -125,8 +125,8 @@ announced by triggers the schema carries in `migrations/`, and
 
 ## Sub-responsibilities in a boundary of their own
 
-Two folders under `internal/` hold a responsibility that belongs to a
-domain's subject rather than to one of its own. Neither is a domain,
+Three folders under `internal/` hold a responsibility that belongs to a
+domain's subject rather than to one of its own. None is a domain,
 and each is a boundary for a reason recorded below — `structure.md`
 §Boundaries and dependency direction makes a boundary a domain, a
 feature or a bounded context, so being a feature of another subject and
@@ -213,6 +213,20 @@ specification through the models generated from it.
 What it must do is [adapter.md](./adapter.md), which is the
 responsibility document for it; nothing about the loop is restated
 here.
+
+### A standalone host's workload
+
+Running a standalone host's agent as the workload its supervisor owns,
+and serving that workload's adapter its activation (ADR-0085).
+Implemented by `internal/workload`, with its Docker engine in
+`internal/workload/docker`. The subject is the agent's execution; the
+boundary is its own because it runs on the host rather than inside
+garam, as a client of the machine listener's execution routes, and
+holds a container engine no garam process may reach. It imports no
+domain and no delivery surface.
+
+What it does is [agents.md](./agents.md) §Standalone hosts, which is
+the responsibility document for it; nothing about it is restated here.
 
 ## Delivery surfaces
 

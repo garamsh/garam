@@ -27,6 +27,8 @@ type stubEngine struct {
 	// loseCreate creates the container and then answers unavailable,
 	// as a create whose answer was lost does.
 	loseCreate func(spec workload.ContainerSpec) bool
+	// beforeCreate runs as a create begins, under the engine's lock.
+	beforeCreate func(spec workload.ContainerSpec)
 	// changed is closed and replaced on every change, for a test
 	// waiting on a condition.
 	changed chan struct{}
@@ -124,6 +126,9 @@ func (e *stubEngine) CreateContainer(_ context.Context, spec workload.ContainerS
 	}
 	if _, ok := e.byName[spec.Name]; ok {
 		return "", workload.ErrNameInUse
+	}
+	if e.beforeCreate != nil {
+		e.beforeCreate(spec)
 	}
 	for _, v := range spec.Volumes {
 		if _, ok := e.volumes[v.Volume]; !ok {

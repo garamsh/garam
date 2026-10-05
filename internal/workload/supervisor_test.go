@@ -90,19 +90,33 @@ type identity struct {
 	leaf      tls.Certificate
 	leafPEM   []byte
 	keyPEM    []byte
+
+	issuer    *x509.Certificate
+	issuerKey *ecdsa.PrivateKey
 }
 
 func newIdentity(t *testing.T, subject string) identity {
 	t.Helper()
 	issuerKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
-	issuer := &x509.Certificate{
+	template := &x509.Certificate{
 		SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "acme authority"},
 		NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour),
 		KeyUsage: x509.KeyUsageCertSign, BasicConstraintsValid: true, IsCA: true,
 	}
-	issuerDER, err := x509.CreateCertificate(rand.Reader, issuer, issuer, &issuerKey.PublicKey, issuerKey)
+	issuerDER, err := x509.CreateCertificate(rand.Reader, template, template, &issuerKey.PublicKey, issuerKey)
 	require.NoError(t, err)
+	issuer, err := x509.ParseCertificate(issuerDER)
+	require.NoError(t, err)
+	id := identity{issuerPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: issuerDER}),
+		issuer: issuer, issuerKey: issuerKey}
+	return id.sign(t, subject)
+}
+
+// sign answers the identity with a new leaf its issuer signed for
+// subject.
+func (id identity) sign(t *testing.T, subject string) identity {
+	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	require.NoError(t, err)
 	uri, err := url.Parse(subject)
@@ -112,15 +126,12 @@ func newIdentity(t *testing.T, subject string) identity {
 		NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour),
 		KeyUsage: x509.KeyUsageDigitalSignature, ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
 	}
-	leafDER, err := x509.CreateCertificate(rand.Reader, leaf, issuer, &key.PublicKey, issuerKey)
+	leafDER, err := x509.CreateCertificate(rand.Reader, leaf, id.issuer, &key.PublicKey, id.issuerKey)
 	require.NoError(t, err)
 	keyDER, err := x509.MarshalPKCS8PrivateKey(key)
 	require.NoError(t, err)
-	id := identity{
-		issuerPEM: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: issuerDER}),
-		leafPEM:   pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leafDER}),
-		keyPEM:    pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER}),
-	}
+	id.leafPEM = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leafDER})
+	id.keyPEM = pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
 	id.leaf, err = tls.X509KeyPair(id.leafPEM, id.keyPEM)
 	require.NoError(t, err)
 	return id
@@ -432,7 +443,10 @@ func TestActivate_RefusesAnUnauthenticatedCaller(t *testing.T) {
 		"no placement token")
 	assert.Equal(t, http.StatusBadRequest, statusOf(post(own, "agent-execution.v0", "Garam-Placement "+token)),
 		"another contract")
-	other := newIdentity(t, "grn:acme:default:agent:ffffffffffffffff")
+	sibling := h.id.sign(t, "grn:acme:default:agent:ffffffffffffffff")
+	assert.Equal(t, http.StatusForbidden, statusOf(post(h.clientOf(adapter, sibling.leaf),
+		workload.ExecutionContract, "Garam-Placement "+token)), "a certificate of the same authority naming another agent")
+	other := newIdentity(t, testAgent.String())
 	_, err := post(h.clientOf(adapter, other.leaf), workload.ExecutionContract, "Garam-Placement "+token)
 	require.Error(t, err, "a certificate another authority signed fails the handshake")
 	assert.Empty(t, h.garam.asked())
@@ -469,4 +483,54 @@ func TestActivate_MapsGaramsAnswer(t *testing.T) {
 			assert.Contains(t, err.Error(), tt.kind)
 		})
 	}
+}
+
+// TestActivate_RefusesAGenerationAnEarlierIntentActivated holds a stale
+// listener off the successor: the generation its predecessor was
+// activated for is refused on the successor's socket, with the
+// successor's own token, beside the successor's own generation
+// accepted.
+func TestActivate_RefusesAGenerationAnEarlierIntentActivated(t *testing.T) {
+	h := newHost(t)
+	first := h.start()
+	_, _, adapter := h.serving()
+	auth, token := h.adapterOf(adapter)
+	stale := newGeneration()
+	_, err := auth.Activate(context.Background(), delivery.RequestID(binding(stale), token), binding(stale), token)
+	require.NoError(t, err)
+	require.NoError(t, first.stop())
+
+	h.start(func(d *workload.Desired) { d.Replace = true })
+	require.NoError(t, h.engine.await(func() bool {
+		a := h.live(workload.RoleAdapter)
+		return a != nil && a != adapter
+	}))
+	h.engine.mu.Lock()
+	successor := h.live(workload.RoleAdapter)
+	h.engine.mu.Unlock()
+	auth, token = h.adapterOf(successor)
+	_, err = auth.Activate(context.Background(), delivery.RequestID(binding(stale), token), binding(stale), token)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "placement_not_current")
+
+	fresh := newGeneration()
+	_, err = auth.Activate(context.Background(), delivery.RequestID(binding(fresh), token), binding(fresh), token)
+	require.NoError(t, err, "the control: the successor's own generation")
+	asked := h.garam.asked()
+	require.Len(t, asked, 2)
+	assert.Equal(t, "activation-"+asked[0].RequestID, asked[1].Replaces, "the successor names its predecessor's activation")
+}
+
+// TestNewSupervisor_RefusesAnImageThatCanMove holds every image to a
+// reference that cannot come to mean other content, beside the same
+// configuration with a digest and with an image ID accepted.
+func TestNewSupervisor_RefusesAnImageThatCanMove(t *testing.T) {
+	h := newHost(t)
+	_, err := workload.NewSupervisor(h.engine, h.garam, h.config())
+	require.NoError(t, err, "the control: digests and an image ID")
+	_, err = workload.NewSupervisor(h.engine, h.garam, h.config(func(d *workload.Desired) {
+		d.Images.Runtime = "sherlock-agent:v0.2.0"
+	}))
+	require.Error(t, err)
+	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
 }

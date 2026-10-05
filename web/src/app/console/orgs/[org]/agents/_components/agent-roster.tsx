@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { Card, CardTitle } from "@/components/ui/card";
 import type { Agent, DirectoryAgent } from "@/features/orgs";
+import { cn } from "@/lib/utils";
 
 import { OperatorName } from "./agent-facts";
 import { ReportedState } from "./reported-state";
@@ -17,8 +18,9 @@ export type RosterEntry = {
 
 /**
  * The organization's agents: every defined agent, claimed or not, and
- * every reported agent no definition read names. A defined agent links
- * to its page. A reported one without a name is said to have no
+ * every reported agent no definition read names. Each links to its
+ * page; one with no definition, as a control service creates, is named
+ * by its identifier. A reported one without a name is said to have no
  * definition only where the definitions were read: where they were
  * refused, one may exist unread.
  */
@@ -38,16 +40,15 @@ export function AgentRoster({
           <Card className="gap-3 p-4">
             <div className="flex flex-col gap-0.5">
               <CardTitle className="text-base">
-                {directory.name === null ? (
-                  <span className="font-mono">{directory.identifier}</span>
-                ) : (
-                  <Link
-                    href={`/console/orgs/${org}/agents/${directory.identifier}`}
-                    className="wrap-anywhere underline-offset-4 hover:underline focus-visible:underline"
-                  >
-                    {directory.name}
-                  </Link>
-                )}
+                <Link
+                  href={`/console/orgs/${org}/agents/${directory.identifier}`}
+                  className={cn(
+                    "wrap-anywhere underline-offset-4 hover:underline focus-visible:underline",
+                    directory.name === null && "font-mono",
+                  )}
+                >
+                  {directory.name ?? directory.identifier}
+                </Link>
               </CardTitle>
               {directory.name === null ? (
                 <p className="text-xs text-muted-foreground">

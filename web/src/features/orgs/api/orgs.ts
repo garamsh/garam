@@ -97,7 +97,7 @@ export type RefusableRead<T> = OrgRead<T> | { status: "forbidden" };
  * otherwise a throw at whichever render or Server Action reaches it
  * first.
  */
-const GrnParser = z.string().refine((value) => parseGrn(value) !== null);
+export const GrnParser = z.string().refine((value) => parseGrn(value) !== null);
 
 const RoleParser = parserFor<components["schemas"]["Role"]>()(
   z.enum(["owner", "admin", "member"]),
@@ -191,6 +191,7 @@ export const OperatorParser = parserFor<Operator>()(
     registeredBy: GrnParser,
     createdAt: z.string(),
     enrollmentState: z.enum(["enrolled", "pending", "expired"]),
+    controlEndpoint: z.string().optional(),
     certificateIssuedAt: z.string().optional(),
   }),
 );
@@ -398,17 +399,29 @@ export function lookupAgentDefinitions(
   );
 }
 
-/** One agent definition of an organization, by its agent's identifier. */
-export function getAgentDefinition(
+/**
+ * One agent definition of an organization, by its agent's identifier,
+ * or null where none names it: an agent a control service created has
+ * no definition in garam (#1170).
+ */
+export async function getAgentDefinition(
   org: string,
   agent: string,
-): Promise<RefusableRead<AgentDefinition>> {
-  return refusableRead(
-    garamFetchAuthenticated(
-      `/orgs/${orgPath(org)}/agent-definitions/${orgPath(agent)}`,
-      AgentDefinitionParser,
-    ),
-  );
+): Promise<RefusableRead<AgentDefinition | null>> {
+  try {
+    return {
+      status: "ok",
+      data: await garamFetchAuthenticated(
+        `/orgs/${orgPath(org)}/agent-definitions/${orgPath(agent)}`,
+        AgentDefinitionParser,
+      ),
+    };
+  } catch (error) {
+    if (error instanceof GaramApiError && error.status === 404) {
+      return { status: "ok", data: null };
+    }
+    return refusableRead(Promise.reject(error));
+  }
 }
 
 /** The cross-organization consent relations an organization is a side of. */

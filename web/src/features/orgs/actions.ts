@@ -21,6 +21,10 @@ export {
   createAgentTemplate,
   type CreateAgentTemplateState,
 } from "./api/create-agent-template";
+export {
+  saveControlEndpoint,
+  type ControlEndpointState,
+} from "./api/control-endpoint";
 export { createGroup, type CreateGroupState } from "./api/create-group";
 export {
   createInvitation,
@@ -35,6 +39,11 @@ export {
   type DeleteAgentTemplateState,
 } from "./api/delete-agent-template";
 export { deleteGroup, type DeleteGroupState } from "./api/delete-group";
+export {
+  grantDelegation,
+  withdrawDelegation,
+  type DelegationState,
+} from "./api/delegation-actions";
 export { detachPolicy, type DetachPolicyState } from "./api/detach-policy";
 export {
   deleteOperator,
@@ -44,6 +53,7 @@ export {
   grantOrgConsent,
   type GrantOrgConsentState,
 } from "./api/grant-org-consent";
+export { mintOperationAuthority } from "./api/mint-operation-authority";
 export {
   registerOperator,
   type RegisterOperatorState,

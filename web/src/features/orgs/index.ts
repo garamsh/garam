@@ -21,6 +21,15 @@ export {
   type AgentTemplate,
 } from "./api/agent-templates";
 export {
+  getOperatorDelegation,
+  hostedFor,
+  listHostedOperators,
+  type DelegatedOperation,
+  type Delegation,
+  type DelegationRead,
+  type HostedOperator,
+} from "./api/delegation";
+export {
   getAgentDefinition,
   getGroup,
   getOperator,

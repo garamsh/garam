@@ -3,8 +3,10 @@ import type { Metadata } from "next";
 import { Separator } from "@/components/ui/separator";
 import {
   getOperator,
+  getOperatorDelegation,
   getOrg,
   lookupAgentDefinitions,
+  lookupOperators,
   slugFromGrn,
   type Operator,
 } from "@/features/orgs";
@@ -14,6 +16,8 @@ import { ItemCrumb } from "../../../../_components/item-crumb";
 import { orgHref } from "../../../../_components/navigation";
 import { PageHeader } from "../../../../_components/page-header";
 import { EnrollmentBadge } from "../_components/enrollment-badge";
+import { ControlEndpointForm } from "./_components/control-endpoint-form";
+import { DelegationForm } from "./_components/delegation-form";
 import { DeleteOperatorForm } from "./_components/delete-operator-form";
 import { NamingDefinitions } from "./_components/naming-definitions";
 import { OperatorDetailsForm } from "./_components/operator-details-form";
@@ -51,11 +55,14 @@ const ENROLLMENT_MEANING: Record<Operator["enrollmentState"], string> = {
  */
 export default async function OperatorPage({ params }: Params) {
   const { org, operator } = await params;
-  const [organization, record, definitions] = await Promise.all([
-    getOrg(org),
-    getOperator(org, operator),
-    lookupAgentDefinitions(org),
-  ]);
+  const [organization, record, definitions, delegation, operators] =
+    await Promise.all([
+      getOrg(org),
+      getOperator(org, operator),
+      lookupAgentDefinitions(org),
+      getOperatorDelegation(org, operator),
+      lookupOperators(org),
+    ]);
 
   if (
     organization.status === "unreachable" ||
@@ -149,6 +156,52 @@ export default async function OperatorPage({ params }: Params) {
         definitions={naming}
         agentsHref={orgHref(org, "agents")}
       />
+      <Separator />
+      <section className="flex flex-col gap-4">
+        <h2 className="font-heading text-lg font-semibold">Control service</h2>
+        <p className="max-w-2xl text-sm text-muted-foreground">
+          A hosted operator&apos;s control service holds agent templates,
+          execution profiles and execution. garam hands it one operation at a
+          time, under the delegation below and only at the registered
+          endpoint.
+        </p>
+        <div className="flex max-w-2xl flex-col gap-2">
+          <h3 className="text-sm font-medium">Endpoint</h3>
+          <ControlEndpointForm
+            org={org}
+            operator={operator}
+            endpoint={o.controlEndpoint}
+          />
+        </div>
+        <div className="flex max-w-2xl flex-col gap-2">
+          <h3 className="text-sm font-medium">Delegation</h3>
+          {delegation.status === "unreachable" ||
+          delegation.status === "forbidden" ? (
+            <p role="alert" className="text-sm text-muted-foreground">
+              {delegation.status === "forbidden"
+                ? "garam refused to show this operator's delegation to you."
+                : "garam did not answer for this operator's delegation."}
+            </p>
+          ) : (
+            <DelegationForm
+              org={org}
+              operator={operator}
+              delegation={delegation.status === "ok" ? delegation.data : null}
+              controllers={
+                operators.status === "ok"
+                  ? operators.data
+                      .filter((c) => c.grn !== o.grn)
+                      .map((c) => ({
+                        grn: c.grn,
+                        name: c.name,
+                        identifier: slugFromGrn(c.grn),
+                      }))
+                  : []
+              }
+            />
+          )}
+        </div>
+      </section>
       <Separator />
       <section className="flex flex-col gap-4">
         <h2 className="font-heading text-lg font-semibold">Settings</h2>

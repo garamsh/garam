@@ -47,6 +47,10 @@ type Store interface {
 	// the certificate lineage, an unspent token and the definitions
 	// naming the operator stand as they were (ADR-0074).
 	UpdateDetails(ctx context.Context, g grn.GRN, patch DetailsPatch) (*Operator, error)
+	// SetControlEndpoint writes the operator's control endpoint, nil
+	// clearing it, and answers the operator as stored, or
+	// ErrOperatorNotFound. It writes nothing else on the record.
+	SetControlEndpoint(ctx context.Context, g grn.GRN, endpoint *ControlEndpoint) (*Operator, error)
 	// Delete removes the record, and with it the record of the
 	// certificate garam last issued the operator and any token still
 	// unspent. It answers ErrOperatorNotFound where the organization

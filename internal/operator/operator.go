@@ -228,6 +228,10 @@ type Operator struct {
 	// Description is what the organization says the operator is for,
 	// empty where it says nothing.
 	Description string
+	// ControlEndpoint is where the operator's control service answers
+	// the console, nil where none is registered. Only an actor holding
+	// operator:delegate moves it (#1170).
+	ControlEndpoint *ControlEndpoint
 
 	// When garam last issued the operator a certificate, zero where it
 	// has issued none.

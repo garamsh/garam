@@ -49,13 +49,15 @@ type OperationAuthority struct {
 	TokenHash       string
 	TokenExpiresAt  pgtype.Timestamptz
 	CreatedAt       pgtype.Timestamptz
+	RequestTarget   pgtype.Text
 }
 
 type Operator struct {
-	Grn          string
-	OrgGrn       string
-	RegisteredBy string
-	CreatedAt    pgtype.Timestamptz
+	Grn             string
+	OrgGrn          string
+	RegisteredBy    string
+	CreatedAt       pgtype.Timestamptz
+	ControlEndpoint pgtype.Text
 }
 
 type OperatorDelegation struct {

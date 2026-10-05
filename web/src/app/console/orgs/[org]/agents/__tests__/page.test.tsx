@@ -82,7 +82,11 @@ describe("agents section", () => {
     await renderServerComponent(AgentsPage(params("acme")));
 
     const reported = cardOf("1c3d5e7f90a2b4c6");
-    expect(within(reported).queryByRole("link")).not.toBeInTheDocument();
+    // A control service creates an agent with no definition in garam,
+    // and its page is where its execution is read (#1170).
+    expect(
+      within(reported).getByRole("link", { name: "1c3d5e7f90a2b4c6" }),
+    ).toHaveAttribute("href", "/console/orgs/acme/agents/1c3d5e7f90a2b4c6");
     expect(
       within(reported).getByText(
         "Reported by an operator without a definition here.",

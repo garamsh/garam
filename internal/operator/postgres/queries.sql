@@ -45,12 +45,13 @@ WHERE id = sqlc.arg('id') AND org_grn = sqlc.arg('org_grn')
 -- name: MintOperationAuthority :one
 INSERT INTO operation_authorities
     (ref, org_grn, audience_grn, request_id, delegation_id, actor_grn, operation,
-     target_grn, assignee_grn, assignment_epoch, body_sha256, token_hash,
-     token_expires_at, created_at)
+     target_grn, assignee_grn, assignment_epoch, body_sha256, request_target,
+     token_hash, token_expires_at, created_at)
 VALUES (sqlc.arg('ref'), sqlc.arg('org_grn'), sqlc.arg('audience_grn'), sqlc.arg('request_id'),
         sqlc.arg('delegation_id'), sqlc.arg('actor_grn'), sqlc.arg('operation'),
         sqlc.arg('target_grn'), sqlc.narg('assignee_grn'), sqlc.narg('assignment_epoch'),
-        sqlc.arg('body_sha256'), sqlc.arg('token_hash'), sqlc.arg('token_expires_at'),
+        sqlc.arg('body_sha256'), sqlc.narg('request_target'), sqlc.arg('token_hash'),
+        sqlc.arg('token_expires_at'),
         sqlc.arg('created_at'))
 ON CONFLICT (org_grn, audience_grn, request_id) DO UPDATE
     SET token_hash = EXCLUDED.token_hash, token_expires_at = EXCLUDED.token_expires_at
@@ -61,6 +62,7 @@ ON CONFLICT (org_grn, audience_grn, request_id) DO UPDATE
       AND operation_authorities.body_sha256 = EXCLUDED.body_sha256
       AND operation_authorities.assignee_grn IS NOT DISTINCT FROM EXCLUDED.assignee_grn
       AND operation_authorities.assignment_epoch IS NOT DISTINCT FROM EXCLUDED.assignment_epoch
+      AND operation_authorities.request_target IS NOT DISTINCT FROM EXCLUDED.request_target
 RETURNING ref;
 
 -- name: GetOperationAuthorityByToken :one

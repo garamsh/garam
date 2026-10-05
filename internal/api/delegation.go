@@ -122,6 +122,56 @@ func (s *Server) EndOperatorDelegation(w http.ResponseWriter, r *http.Request, o
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// SetOperatorControlEndpoint registers where a hosted operator's
+// control service answers the console (#1170). Authorization is the
+// service's, decided from current state on operator:delegate rather
+// than on the operator:update that renames one.
+func (s *Server) SetOperatorControlEndpoint(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, operatorSlug apigen.OperatorSlug, params apigen.SetOperatorControlEndpointParams) {
+	if !contract(w, params.ContractVersion) {
+		return
+	}
+	var body apigen.ControlEndpointWrite
+	if err := decodeJSON(r, &body); err != nil {
+		writeError(w, err)
+		return
+	}
+	endpoint, err := operator.ParseControlEndpoint(body.Url)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	s.setControlEndpoint(w, r, orgSlug, operatorSlug, &endpoint)
+}
+
+// ClearOperatorControlEndpoint clears a hosted operator's control
+// endpoint, under the authority that sets one.
+func (s *Server) ClearOperatorControlEndpoint(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, operatorSlug apigen.OperatorSlug, params apigen.ClearOperatorControlEndpointParams) {
+	if !contract(w, params.ContractVersion) {
+		return
+	}
+	s.setControlEndpoint(w, r, orgSlug, operatorSlug, nil)
+}
+
+func (s *Server) setControlEndpoint(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, operatorSlug apigen.OperatorSlug, endpoint *operator.ControlEndpoint) {
+	u, err := s.currentUser(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	orgG := orgGRN(orgSlug)
+	hosted, err := operator.GRNOf(orgG, operatorSlug)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	o, err := s.authority.SetControlEndpoint(r.Context(), u.GRN, orgG, hosted, endpoint)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, operatorToAPI(o))
+}
+
 // MintOperationAuthority hands a delegated operator one operation on
 // the signed-in user's behalf (ADR-0078).
 func (s *Server) MintOperationAuthority(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, params apigen.MintOperationAuthorityParams) {
@@ -177,9 +227,17 @@ func parseMintRequest(actor, orgG grn.GRN, body apigen.OperationAuthorityRequest
 	if err != nil {
 		return operator.MintRequest{}, err
 	}
+	var requestTarget *operator.RequestTarget
+	if body.RequestTarget != nil {
+		t, err := operator.ParseRequestTarget(*body.RequestTarget)
+		if err != nil {
+			return operator.MintRequest{}, err
+		}
+		requestTarget = &t
+	}
 	return operator.MintRequest{
 		Actor: actor, Org: orgG, Audience: audience, Operation: op,
-		Target: target, RequestID: requestID, Digest: digest,
+		Target: target, RequestID: requestID, Digest: digest, RequestTarget: requestTarget,
 	}, nil
 }
 

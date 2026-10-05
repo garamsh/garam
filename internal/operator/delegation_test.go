@@ -107,3 +107,76 @@ func TestOperationIsMintable_ExcludesActivation(t *testing.T) {
 	assert.True(t, operator.OperationAgentConfigure.IsMintable())
 	assert.False(t, operator.OperationAgentActivate.IsMintable())
 }
+
+// TestGrantCovers_ReadsNoControllerForAnOrganizationOperation holds
+// that an operation on what the Operator holds for the organization
+// is covered whatever controllers the grant lists. An operation on an
+// agent, under the same grant and the same controller argument, is the
+// control: it still needs the controller named.
+func TestGrantCovers_ReadsNoControllerForAnOrganizationOperation(t *testing.T) {
+	now := time.Date(2026, time.October, 5, 12, 0, 0, 0, time.UTC)
+	g := &operator.Grant{Controllers: []grn.GRN{controller}, ExpiresAt: now.Add(time.Hour),
+		Operations: []operator.Operation{operator.OperationTemplateRead, operator.OperationExecutionRead}}
+	assert.True(t, g.Covers(operator.OperationTemplateRead, grn.GRN{}, now))
+	assert.False(t, g.Covers(operator.OperationExecutionRead, grn.GRN{}, now))
+	assert.True(t, g.Covers(operator.OperationExecutionRead, controller, now))
+	assert.False(t, g.Covers(operator.OperationTemplatePublish, grn.GRN{}, now), "an operation the grant does not list")
+}
+
+// TestOperation_BindsRequestTargetExactlyForTheReadsAndPublication
+// holds which operations bind a request target: the four #1170 added,
+// and none of the operations that bind only their body.
+func TestOperation_BindsRequestTargetExactlyForTheReadsAndPublication(t *testing.T) {
+	for _, op := range []operator.Operation{operator.OperationTemplateRead, operator.OperationTemplatePublish,
+		operator.OperationProfileRead, operator.OperationExecutionRead} {
+		assert.True(t, op.BindsRequestTarget(), op)
+		assert.True(t, op.IsMintable(), op)
+		parsed, err := operator.ParseOperation(string(op))
+		require.NoError(t, err)
+		assert.Equal(t, op, parsed)
+	}
+	for _, op := range []operator.Operation{operator.OperationAgentCreate, operator.OperationAgentConfigure,
+		operator.OperationAgentRecover, operator.OperationAgentActivate} {
+		assert.False(t, op.BindsRequestTarget(), op)
+	}
+}
+
+// TestParseRequestTarget_AcceptsOnlyOriginForm holds the bound on what
+// an authority binds as its request target. Each refusal differs from
+// an accepted target in the one property it breaks.
+func TestParseRequestTarget_AcceptsOnlyOriginForm(t *testing.T) {
+	for _, ok := range []string{
+		"/v1/orgs/acme/templates",
+		"/prefix/v1/orgs/acme/templates/web%20agent/versions/3",
+		"/v1/orgs/acme/agents/grn:acme:default:agent:9f2a/execution",
+		"/v1/orgs/acme/templates?after=b&after=a",
+		"/v1/orgs/acme/templates?next=../a",
+		"/v1/orgs/acme/templates/v1.2",
+		"/" + strings.Repeat("a", 2047),
+	} {
+		got, err := operator.ParseRequestTarget(ok)
+		require.NoError(t, err, ok)
+		assert.Equal(t, operator.RequestTarget(ok), got)
+	}
+	for _, bad := range []string{
+		"",
+		"v1/orgs/acme/templates",
+		"https://control.example.com/v1/orgs/acme/templates",
+		"//control.example.com/v1/orgs/acme/templates",
+		"/v1/orgs//templates",
+		"/v1/orgs/acme/templates/",
+		"/v1/orgs/acme/../globex/templates",
+		"/v1/orgs/acme/./templates",
+		"/v1/orgs/acme/%2E%2e/globex/templates",
+		"/v1/orgs/acme/templates/..",
+		"/v1/orgs/acme/templates#fragment",
+		"/v1/orgs/acme/templ ates",
+		"/v1/orgs/acme/templates%2",
+		"/v1/orgs/acme/templates%zz",
+		"/v1/orgs/acme/\ttemplates",
+		"/" + strings.Repeat("a", 2048),
+	} {
+		_, err := operator.ParseRequestTarget(bad)
+		assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), "%q: %v", bad, err)
+	}
+}

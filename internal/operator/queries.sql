@@ -13,6 +13,13 @@ SET name        = COALESCE(sqlc.narg('name'), name),
     description = COALESCE(sqlc.narg('description'), description)
 WHERE grn = sqlc.arg('grn');
 
+-- Writes only the control endpoint, which the details update above
+-- never names: changing where operation authority is sent is the
+-- delegating act, not renaming (#1170).
+-- name: SetOperatorControlEndpoint :execrows
+UPDATE operators SET control_endpoint = sqlc.narg('control_endpoint')
+WHERE grn = sqlc.arg('grn');
+
 -- Where an operator stands in obtaining a certificate is derived from
 -- the two tables beside the record and stored in neither: a row in
 -- `operator_certificates` says garam issued one, and a token still

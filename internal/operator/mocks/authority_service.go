@@ -400,6 +400,92 @@ func (_c *MockAuthorityService_Reference_Call) RunAndReturn(run func(ctx context
 	return _c
 }
 
+// SetControlEndpoint provides a mock function for the type MockAuthorityService
+func (_mock *MockAuthorityService) SetControlEndpoint(ctx context.Context, actor grn.GRN, org grn.GRN, operator1 grn.GRN, endpoint *operator.ControlEndpoint) (*operator.Operator, error) {
+	ret := _mock.Called(ctx, actor, org, operator1, endpoint)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SetControlEndpoint")
+	}
+
+	var r0 *operator.Operator
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, grn.GRN, grn.GRN, *operator.ControlEndpoint) (*operator.Operator, error)); ok {
+		return returnFunc(ctx, actor, org, operator1, endpoint)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, grn.GRN, grn.GRN, *operator.ControlEndpoint) *operator.Operator); ok {
+		r0 = returnFunc(ctx, actor, org, operator1, endpoint)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*operator.Operator)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, grn.GRN, grn.GRN, grn.GRN, *operator.ControlEndpoint) error); ok {
+		r1 = returnFunc(ctx, actor, org, operator1, endpoint)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockAuthorityService_SetControlEndpoint_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetControlEndpoint'
+type MockAuthorityService_SetControlEndpoint_Call struct {
+	*mock.Call
+}
+
+// SetControlEndpoint is a helper method to define mock.On call
+//   - ctx context.Context
+//   - actor grn.GRN
+//   - org grn.GRN
+//   - operator1 grn.GRN
+//   - endpoint *operator.ControlEndpoint
+func (_e *MockAuthorityService_Expecter) SetControlEndpoint(ctx any, actor any, org any, operator1 any, endpoint any) *MockAuthorityService_SetControlEndpoint_Call {
+	return &MockAuthorityService_SetControlEndpoint_Call{Call: _e.mock.On("SetControlEndpoint", ctx, actor, org, operator1, endpoint)}
+}
+
+func (_c *MockAuthorityService_SetControlEndpoint_Call) Run(run func(ctx context.Context, actor grn.GRN, org grn.GRN, operator1 grn.GRN, endpoint *operator.ControlEndpoint)) *MockAuthorityService_SetControlEndpoint_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 grn.GRN
+		if args[1] != nil {
+			arg1 = args[1].(grn.GRN)
+		}
+		var arg2 grn.GRN
+		if args[2] != nil {
+			arg2 = args[2].(grn.GRN)
+		}
+		var arg3 grn.GRN
+		if args[3] != nil {
+			arg3 = args[3].(grn.GRN)
+		}
+		var arg4 *operator.ControlEndpoint
+		if args[4] != nil {
+			arg4 = args[4].(*operator.ControlEndpoint)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+			arg4,
+		)
+	})
+	return _c
+}
+
+func (_c *MockAuthorityService_SetControlEndpoint_Call) Return(operator11 *operator.Operator, err error) *MockAuthorityService_SetControlEndpoint_Call {
+	_c.Call.Return(operator11, err)
+	return _c
+}
+
+func (_c *MockAuthorityService_SetControlEndpoint_Call) RunAndReturn(run func(ctx context.Context, actor grn.GRN, org grn.GRN, operator1 grn.GRN, endpoint *operator.ControlEndpoint) (*operator.Operator, error)) *MockAuthorityService_SetControlEndpoint_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // WriteGrant provides a mock function for the type MockAuthorityService
 func (_mock *MockAuthorityService) WriteGrant(ctx context.Context, w operator.GrantWrite) (*operator.Grant, bool, error) {
 	ret := _mock.Called(ctx, w)

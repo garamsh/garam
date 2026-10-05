@@ -34,19 +34,56 @@ type Invitation struct {
 	AcceptedAt pgtype.Timestamptz
 }
 
+type OperationAuthority struct {
+	Ref             string
+	OrgGrn          string
+	AudienceGrn     string
+	RequestID       string
+	DelegationID    string
+	ActorGrn        string
+	Operation       string
+	TargetGrn       string
+	AssigneeGrn     pgtype.Text
+	AssignmentEpoch pgtype.Text
+	BodySha256      string
+	TokenHash       string
+	TokenExpiresAt  pgtype.Timestamptz
+	CreatedAt       pgtype.Timestamptz
+	RequestTarget   pgtype.Text
+}
+
 type Operator struct {
-	Grn          string
-	OrgGrn       string
-	RegisteredBy string
-	CreatedAt    pgtype.Timestamptz
-	Name         string
-	Description  string
+	Grn             string
+	OrgGrn          string
+	RegisteredBy    string
+	CreatedAt       pgtype.Timestamptz
+	Name            string
+	Description     string
+	ControlEndpoint pgtype.Text
 }
 
 type OperatorCertificate struct {
 	OperatorGrn string
 	Serial      string
 	IssuedAt    pgtype.Timestamptz
+}
+
+type OperatorDelegation struct {
+	ID          string
+	OrgGrn      string
+	OperatorGrn string
+	RequestID   string
+	Replaces    pgtype.Text
+	Operations  []string
+	ExpiresAt   pgtype.Timestamptz
+	GrantedBy   string
+	GrantedAt   pgtype.Timestamptz
+	EndedAt     pgtype.Timestamptz
+}
+
+type OperatorDelegationController struct {
+	DelegationID  string
+	ControllerGrn string
 }
 
 type OperatorEnrollmentToken struct {

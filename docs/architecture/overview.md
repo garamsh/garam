@@ -99,7 +99,12 @@ collaborate on a shared plan.
   minted under it; every mint, read back and proof is decided from
   current state. Delegating is `operator:delegate`, creating
   `agent:create`, configuring `agent:configure` and recovering
-  `agent:recover`; [operators.md](./operators.md) §Delegated operation
+  `agent:recover`. Reading the operator's published templates and
+  profiles, publishing a template version and reading an agent's
+  execution are each an operation of their own, bound to the exact
+  request target, and the console sends every one only to the control
+  endpoint an administrator registered under `operator:delegate`
+  (#1170); [operators.md](./operators.md) §Delegated operation
   authority holds the rest.
 - An administrator **approving a standalone host** for one agent,
   under `/orgs/{org}/agent-enrollments`, by the hash of the host's

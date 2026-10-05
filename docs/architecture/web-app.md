@@ -1,11 +1,15 @@
 # Web App
 
-What the application a person uses garam through is responsible for, the one seam it reaches the backend through, and what it does not decide.
+What the application a person uses garam through is responsible for,
+the one seam it reaches the backend through, the one it reaches a
+hosted operator's control service through, and what it does not
+decide.
 
 ## Contents
 - What it is
 - What it serves
 - How it reaches garam
+- How it reaches a control service
 - What it does not decide
 - Its own toolchain and gate
 - Not established
@@ -141,9 +145,9 @@ API behind it rather than of the console:
 | Overview | counts what the sections it summarises hold, names the failing states inside them rather than folding them into a count, and says which sections it does not summarise and why |
 | Teams | the organization's groups, presented as teams ([ADR-0072](./adr/0072-the-console-presents-a-group-as-a-team-with-a-page-of-its-own.md)): lists them, creates one, and on a team's page reads its members, adds and removes people and agents, renames it and deletes it. A member is shown by the name and type the organization's people and agents give it, and one neither holds stays listed and removable, marked as not found; where the caller is refused the people or agents list, those members are marked not checked and the team stays readable. An agent is offered and shown by its definition's name with its identifier, including one no operator has claimed yet, and a refused definitions list is said rather than offered as none ([ADR-0075](./adr/0075-an-agent-is-started-from-a-template-copied-once-and-carries-a-name-of-its-own.md)) |
 | People | reads the organization's members, and issues the invitation a person joins by ([ADR-0006](./adr/0006-invitation-tokens.md)) |
-| Agents | lists every agent the organization defined by name, whether or not an operator has claimed it, and every reported agent no definition names, each with the two states its operator and the agent itself report ([ADR-0053](./adr/0053-an-agent-and-its-operator-report-state-on-the-machine-listener.md)) or, before any report, as awaiting an operator. A new agent is defined on its own page, blank or from a template whose values are copied into the form once, with a name and an operator chosen by name with its identifier beside it ([ADR-0026](./adr/0026-the-console-defines-an-agent.md), [ADR-0074](./adr/0074-an-operator-carries-a-name-and-description-and-the-console-gives-it-a-page-of-its-own.md)). An agent's page shows what was requested apart from what was reported and renames it. The Templates view lists, creates, edits and deletes templates; the values are a free key/value editor, said to be saved with their application not reported ([ADR-0075](./adr/0075-an-agent-is-started-from-a-template-copied-once-and-carries-a-name-of-its-own.md)) |
+| Agents | lists every agent the organization defined by name, whether or not an operator has claimed it, and every reported agent no definition names, each with the two states its operator and the agent itself report ([ADR-0053](./adr/0053-an-agent-and-its-operator-report-state-on-the-machine-listener.md)) or, before any report, as awaiting an operator. A new agent is defined on its own page, blank or from a template whose values are copied into the form once, with a name and an operator chosen by name with its identifier beside it ([ADR-0026](./adr/0026-the-console-defines-an-agent.md), [ADR-0074](./adr/0074-an-operator-carries-a-name-and-description-and-the-console-gives-it-a-page-of-its-own.md)). An agent's page shows what was requested apart from what was reported and renames it; an agent with no definition, as a control service creates, has a page with the report alone. The Templates view lists, creates, edits and deletes templates; the values are a free key/value editor, said to be saved with their application not reported ([ADR-0075](./adr/0075-an-agent-is-started-from-a-template-copied-once-and-carries-a-name-of-its-own.md)). Beside them, the hosted operator's control service is reached for its published templates and profiles, publishing a template version, creating an agent from one, and an agent's pending, rendered and runtime-reported execution (§How it reaches a control service) |
 | Projects | reads the projects the organization owns, and creates one — an agent's GRN names the project it was minted in ([ADR-0001](./adr/0001-grn-segments.md)), so an organization holding none cannot reach that path from the console |
-| Operators | lists the operators the organization registered by name, with the identifier under each and where each stands in obtaining a certificate, which garam derives rather than is told ([ADR-0045](./adr/0045-an-organization-registers-an-operator.md), [ADR-0064](./adr/0064-an-operator-enrols-with-a-one-time-token-and-keeps-its-key-in-its-own-cluster.md)); registers one with the form under the list, which shows the token once; and on an operator's page shows its identity, its enrollment state and runtime as unknown, lists the definitions naming it with a link to them, edits its name and description, and deletes it, saying that work already running in its cluster does not stop ([ADR-0074](./adr/0074-an-operator-carries-a-name-and-description-and-the-console-gives-it-a-page-of-its-own.md)). The delete stays refused while a definition names it, and a refused definitions list is marked not checked |
+| Operators | lists the operators the organization registered by name, with the identifier under each and where each stands in obtaining a certificate, which garam derives rather than is told ([ADR-0045](./adr/0045-an-organization-registers-an-operator.md), [ADR-0064](./adr/0064-an-operator-enrols-with-a-one-time-token-and-keeps-its-key-in-its-own-cluster.md)); registers one with the form under the list, which shows the token once; and on an operator's page shows its identity, its enrollment state and runtime as unknown, lists the definitions naming it with a link to them, edits its name and description, registers or clears its control endpoint and grants, replaces or withdraws its delegation in a section of their own, and deletes it, saying that work already running in its cluster does not stop ([ADR-0074](./adr/0074-an-operator-carries-a-name-and-description-and-the-console-gives-it-a-page-of-its-own.md)). The delete stays refused while a definition names it, and a refused definitions list is marked not checked |
 | Consents | reads the cross-organization consent relations the organization is a side of, grants its half of one and withdraws it ([ADR-0035](./adr/0035-a-cross-organization-message-needs-both-organizations-consent.md)) |
 | Permissions | the organization's policies and their attachments ([ADR-0073](./adr/0073-the-console-manages-policies-and-their-attachments-under-permissions.md)), through the existing policy operations only. An agent is chosen by its definition's name with its identifier, including one awaiting an operator ([ADR-0075](./adr/0075-an-agent-is-started-from-a-template-copied-once-and-carries-a-name-of-its-own.md)). The Policies view lists policies and opens a page per policy, where one is created as a draft, its versions are read and appended, any stored version is made the default, it is activated and archived, and it is attached to and detached from teams, people and agents chosen by name. A write that makes a policy evaluate states the version and whom it reaches first, and one reaching everyone, or reaching a scope garam will not list, needs an explicit confirmation. The Attachments view shows each policy's attachments and, for one chosen subject, the policies attached to it, to its teams and to no one, without calling that its access. A list the caller is refused is shown as unchecked, never as empty; a Condition is shown as not evaluated. Neither view deletes a policy or explains a decision, since no operation does |
 
@@ -226,6 +230,41 @@ so adding a variable here is a change the chart has to answer for.
 
 Sign-in state is read from the backend's `/me` and never inferred from
 the cookie (ADR-0009).
+
+## How it reaches a control service
+
+**Its peer is unbuilt.** The control service's template, profile and
+execution routes and its CORS answer are not built
+(`garamsh/garam-agent-operator#220`), and its create route is an
+unmerged pull request (#244 at
+`513be2f71af273b23cbf2961a3557093d13b3a2f`). The console's calls to
+them are tested against a stub of the agreed wire in
+`web/e2e/control-service.spec.ts`, with garam real; no run has reached
+a control service. A recovery control is not built either
+([operators.md](./operators.md) §Delegated operation authority).
+
+**One module, in the browser.** `web/src/lib/operation-authority.ts`
+holds the only call to a control service. The browser makes it,
+because the control service's CORS answer is what admits the console's
+origin; the console's own server never calls one.
+
+- **One authority per call.** A Server Action mints it through
+  `web/src/lib/garam.ts` like any other write, and the browser holds it
+  only for that call: never in storage, a URL or a log line. It is
+  sent as `Authorization: Garam-Operation`, with no cookie, and a
+  redirect is an error rather than followed.
+- **The URL is built once.** It is the registered endpoint and the
+  route, and its `pathname + search` is the request target the
+  authority binds; the same object is what is sent, so nothing
+  normalizes one and not the other.
+- **Only the registered endpoint.** The console calls the endpoint an
+  administrator registered on the operator's page and no other
+  address. An operator with none is not reached.
+- **It answers in the section that asked.** A refused mint, a refused
+  call, an unreachable service and an answer outside the agreed wire
+  each disable that section's controls and say so. Teams, People,
+  Agents and every garam read stay as they are, because no other
+  section waits on a control service.
 
 ## What it does not decide
 

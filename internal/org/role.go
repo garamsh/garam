@@ -142,33 +142,74 @@ const (
 	ActionAgentTemplateCreate = "agent-template:create"
 	ActionAgentTemplateUpdate = "agent-template:update"
 	ActionAgentTemplateDelete = "agent-template:delete"
+	// ActionAgentTemplatePublish is publishing the next immutable
+	// version of a template the delegated Operator holds (#1170). It
+	// edits no agent created from an earlier version.
+	ActionAgentTemplatePublish = "agent-template:publish"
+
+	// ActionExecutionProfileRead is reading the execution profiles the
+	// delegated Operator has published. Publishing one stays with the
+	// deployment, and no action here grants it (#1170).
+	ActionExecutionProfileRead = "execution-profile:read"
+	// ActionAgentExecutionRead is reading an agent's pending, rendered
+	// and runtime-reported execution from the delegated Operator
+	// (#1170). Reading an agent is reading its identity, and grants
+	// none of this.
+	ActionAgentExecutionRead = "agent:execution-read"
 )
 
+// machineActions is every agent, operator and execution action a role
+// grants, one row each and in the order Actions answers them. An owner
+// and an admin hold every row. A member holds the rows marked for it:
+// it reads the operators an org has registered and registers none,
+// because standing a machine identity up for the organization is the
+// administrative act registering already looks like. It may create an
+// agent from an allowed profile and read the published templates and
+// profiles it chooses from, and may not configure an agent, publish a
+// template or read an agent's execution.
+//
 // Agent and operator actions are granted one at a time and never as
 // `agent:*` or `operator:*`: ADR-0012 puts provisioning outside garam,
 // so a wildcard would grant in advance the actions no endpoint may
 // offer. Deleting an operator is what that caution was for — it
 // arrived after registering and reading, and a wildcard would have
 // granted it before anyone decided it (ADR-0070).
-var (
-	// adminMachineActions is what an owner or an admin holds.
-	adminMachineActions = []string{
-		ActionOperatorRead, ActionOperatorRegister, ActionOperatorUpdate,
-		ActionOperatorDelete, ActionOperatorDelegate, ActionAgentRead,
-		ActionAgentDefine, ActionAgentRename, ActionAgentCreate,
-		ActionAgentConfigure, ActionAgentRecover, ActionAgentEnroll, ActionAgentTemplateRead, ActionAgentTemplateCreate,
-		ActionAgentTemplateUpdate, ActionAgentTemplateDelete,
+var machineActions = []struct {
+	action string
+	member bool
+}{
+	{ActionOperatorRead, true},
+	{ActionOperatorRegister, false},
+	{ActionOperatorUpdate, false},
+	{ActionOperatorDelete, false},
+	{ActionOperatorDelegate, false},
+	{ActionAgentRead, true},
+	{ActionAgentDefine, true},
+	{ActionAgentRename, true},
+	{ActionAgentCreate, true},
+	{ActionAgentConfigure, false},
+	{ActionAgentRecover, false},
+	{ActionAgentEnroll, false},
+	{ActionAgentTemplateRead, true},
+	{ActionAgentTemplateCreate, false},
+	{ActionAgentTemplateUpdate, false},
+	{ActionAgentTemplateDelete, false},
+	{ActionAgentTemplatePublish, false},
+	{ActionExecutionProfileRead, true},
+	{ActionAgentExecutionRead, false},
+}
+
+// machineActionsHeld returns the machine actions an owner or admin
+// holds, or with member set, the ones a member holds.
+func machineActionsHeld(member bool) []string {
+	var actions []string
+	for _, a := range machineActions {
+		if a.member || !member {
+			actions = append(actions, a.action)
+		}
 	}
-	// memberMachineActions is what a member holds: it reads the
-	// operators an org has registered and registers none, because
-	// standing a machine identity up for the organization is the
-	// administrative act registering already looks like. It may create
-	// an agent from an allowed profile and may not configure one.
-	memberMachineActions = []string{
-		ActionOperatorRead, ActionAgentRead, ActionAgentDefine,
-		ActionAgentRename, ActionAgentCreate, ActionAgentTemplateRead,
-	}
-)
+	return actions
+}
 
 // Actions returns the action patterns the role grants on an org and
 // on the groups, projects, operators and agents it contains. The
@@ -179,18 +220,18 @@ func (r Role) Actions() []string {
 	case RoleOwner:
 		return slices.Concat([]string{
 			"org:*", "group:*", "project:*", "policy:*", "consent:*",
-		}, adminMachineActions)
+		}, machineActionsHeld(false))
 	case RoleAdmin:
 		return slices.Concat([]string{
 			ActionOrgRead, ActionOrgUpdate, ActionOrgMemberList, ActionOrgInvite,
 			"group:*", "project:*", "policy:*", "consent:*",
-		}, adminMachineActions)
+		}, machineActionsHeld(false))
 	case RoleMember:
 		return slices.Concat([]string{
 			ActionOrgRead, ActionOrgMemberList,
 			ActionGroupRead, ActionGroupMemberList,
 			ActionProjectRead, ActionProjectMemberList,
-		}, memberMachineActions)
+		}, machineActionsHeld(true))
 	}
 	return nil
 }

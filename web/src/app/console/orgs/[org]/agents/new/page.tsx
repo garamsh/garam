@@ -3,7 +3,10 @@ import Link from "next/link";
 
 import {
   getAgentTemplate,
+  getOrg,
+  hostedFor,
   listAgentTemplates,
+  listHostedOperators,
   lookupOperators,
   slugFromGrn,
   type AgentTemplate,
@@ -12,6 +15,8 @@ import { cn } from "@/lib/utils";
 
 import { ApiUnreachable } from "../../../../_components/api-unreachable";
 import { PageHeader } from "../../../../_components/page-header";
+import { ControlNotice } from "../_components/control-notice";
+import { CreateFromTemplate } from "../_components/create-from-template";
 import { DefineAgentForm } from "../_components/define-agent-form";
 
 /** Head metadata for the create-agent route; Next.js reads it by name. */
@@ -23,20 +28,25 @@ type Params = {
 };
 
 /**
- * Defines an agent from a blank form or from one of the organization's
- * templates. Choosing a template copies its values into the form once;
- * they can be edited before the agent is created, and later edits to
- * the template do not reach it (ADR-0075).
+ * Creates an agent from a template the hosted operator's control
+ * service published (#1170), or defines one from a blank form or from
+ * one of the organization's templates. Choosing a template copies its
+ * values once; later edits to the template do not reach the agent
+ * (ADR-0075). A control service that is missing or unavailable
+ * disables only its section.
  */
 export default async function NewAgentPage({ params, searchParams }: Params) {
   const { org } = await params;
   const { template: chosen } = await searchParams;
   const template = typeof chosen === "string" && chosen !== "" ? chosen : null;
-  const [operators, templates, source] = await Promise.all([
-    lookupOperators(org),
-    listAgentTemplates(org),
-    template === null ? null : getAgentTemplate(org, template),
-  ]);
+  const [operators, templates, source, organization, hosted] =
+    await Promise.all([
+      lookupOperators(org),
+      listAgentTemplates(org),
+      template === null ? null : getAgentTemplate(org, template),
+      getOrg(org),
+      listHostedOperators(org),
+    ]);
   const base = `/console/orgs/${org}/agents/new`;
 
   if (
@@ -63,6 +73,26 @@ export default async function NewAgentPage({ params, searchParams }: Params) {
         title="New agent"
         description="Start blank or from a template, then adjust before creating."
       />
+      {organization.status === "ok" && (
+        <section className="flex flex-col gap-3">
+          <h2 className="font-heading text-lg font-semibold">
+            From the control service
+          </h2>
+          {hosted.status === "ok" ? (
+            <CreateFromTemplate
+              org={org}
+              orgGrn={organization.data.grn}
+              hosted={hostedFor(hosted.data, "agent:create")}
+              controllers={Object.fromEntries(
+                hosted.operators.map((o) => [o.grn, o.name]),
+              )}
+            />
+          ) : (
+            <ControlNotice>{hosted.reason}</ControlNotice>
+          )}
+        </section>
+      )}
+      <h2 className="font-heading text-lg font-semibold">Define in garam</h2>
       <section className="flex flex-col gap-2">
         <h2 className="text-sm font-medium">Start from</h2>
         {templates.status === "forbidden" ? (

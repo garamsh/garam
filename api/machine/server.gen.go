@@ -100,9 +100,13 @@ func (e MessageState) Valid() bool {
 
 // Defines values for OperationBindingOperation.
 const (
-	AgentConfigure OperationBindingOperation = "agent:configure"
-	AgentCreate    OperationBindingOperation = "agent:create"
-	AgentRecover   OperationBindingOperation = "agent:recover"
+	AgentConfigure       OperationBindingOperation = "agent:configure"
+	AgentCreate          OperationBindingOperation = "agent:create"
+	AgentExecutionRead   OperationBindingOperation = "agent:execution-read"
+	AgentRecover         OperationBindingOperation = "agent:recover"
+	AgentTemplatePublish OperationBindingOperation = "agent-template:publish"
+	AgentTemplateRead    OperationBindingOperation = "agent-template:read"
+	ExecutionProfileRead OperationBindingOperation = "execution-profile:read"
 )
 
 // Valid indicates whether the value is a known member of the OperationBindingOperation enum.
@@ -112,7 +116,15 @@ func (e OperationBindingOperation) Valid() bool {
 		return true
 	case AgentCreate:
 		return true
+	case AgentExecutionRead:
+		return true
 	case AgentRecover:
+		return true
+	case AgentTemplatePublish:
+		return true
+	case AgentTemplateRead:
+		return true
+	case ExecutionProfileRead:
 		return true
 	default:
 		return false
@@ -216,7 +228,7 @@ type AuthorityIntrospection struct {
 	Authority string `json:"authority"`
 }
 
-// BoundAssignment Where the agent ran when an operation on it was authorized. Present for `agent:configure` and `agent:recover` only.
+// BoundAssignment Where the agent ran when an operation on it was authorized. Present for `agent:configure`, `agent:recover` and `agent:execution-read` only.
 type BoundAssignment struct {
 	// Epoch Opaque.
 	Epoch       string `json:"epoch"`
@@ -475,24 +487,29 @@ type OperationBinding struct {
 	// ActorGrn The user the operation is performed for.
 	ActorGrn string `json:"actorGrn"`
 
-	// Assignment Where the agent ran when an operation on it was authorized. Present for `agent:configure` and `agent:recover` only.
+	// Assignment Where the agent ran when an operation on it was authorized. Present for `agent:configure`, `agent:recover` and `agent:execution-read` only.
 	Assignment  *BoundAssignment `json:"assignment,omitempty"`
 	AudienceGrn string           `json:"audienceGrn"`
 	BodySha256  string           `json:"bodySha256"`
 
 	// ExpiresAt When the presented authority stops being usable. Absent on a reference check.
-	ExpiresAt    *time.Time                `json:"expiresAt,omitempty"`
-	GrantId      string                    `json:"grantId"`
+	ExpiresAt *time.Time `json:"expiresAt,omitempty"`
+	GrantId   string     `json:"grantId"`
+
+	// Operation Each operation is served on one route with one fixed HTTP method. A release that does not know an operation refuses to mint it rather than minting it without its binding.
 	Operation    OperationBindingOperation `json:"operation"`
 	OperationRef string                    `json:"operationRef"`
 	OrgGrn       string                    `json:"orgGrn"`
 	RequestId    string                    `json:"requestId"`
 
-	// TargetGrn The controller for `agent:create`, the agent for `agent:configure` and `agent:recover`.
+	// RequestTarget Present for `agent-template:read`, `agent-template:publish`, `execution-profile:read` and `agent:execution-read`, absent for every other operation. It is the exact origin-form request target the console sent: the escaped path and the raw query, with no scheme or authority, including any path prefix of the registered control endpoint. Compare it, before decoding, routing or reading any data, with the target the request arrived with, byte for byte; the empty body's digest does not tell one read from another.
+	RequestTarget *string `json:"requestTarget,omitempty"`
+
+	// TargetGrn The controller for `agent:create`; the agent for `agent:configure`, `agent:recover` and `agent:execution-read`; the organization for `agent-template:read`, `agent-template:publish` and `execution-profile:read`.
 	TargetGrn string `json:"targetGrn"`
 }
 
-// OperationBindingOperation defines model for OperationBinding.Operation.
+// OperationBindingOperation Each operation is served on one route with one fixed HTTP method. A release that does not know an operation refuses to mint it rather than minting it without its binding.
 type OperationBindingOperation string
 
 // OutboxSubmission What a sender supplies for one outbox entry. Who is sending is the certificate's to say.

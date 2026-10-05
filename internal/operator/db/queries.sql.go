@@ -135,7 +135,7 @@ func (q *Queries) DeleteOperatorCertificate(ctx context.Context, operatorGrn str
 }
 
 const getOperator = `-- name: GetOperator :one
-SELECT o.grn, o.org_grn, o.registered_by, o.created_at, o.name, o.description,
+SELECT o.grn, o.org_grn, o.registered_by, o.created_at, o.name, o.description, o.control_endpoint,
        c.issued_at AS certificate_issued_at,
        (t.token_hash IS NOT NULL)::boolean AS live_token
 FROM operators o
@@ -170,6 +170,7 @@ func (q *Queries) GetOperator(ctx context.Context, grn string) (GetOperatorRow, 
 		&i.Operator.CreatedAt,
 		&i.Operator.Name,
 		&i.Operator.Description,
+		&i.Operator.ControlEndpoint,
 		&i.CertificateIssuedAt,
 		&i.LiveToken,
 	)
@@ -177,7 +178,7 @@ func (q *Queries) GetOperator(ctx context.Context, grn string) (GetOperatorRow, 
 }
 
 const listOperatorsByOrg = `-- name: ListOperatorsByOrg :many
-SELECT o.grn, o.org_grn, o.registered_by, o.created_at, o.name, o.description,
+SELECT o.grn, o.org_grn, o.registered_by, o.created_at, o.name, o.description, o.control_endpoint,
        c.issued_at AS certificate_issued_at,
        (t.token_hash IS NOT NULL)::boolean AS live_token
 FROM operators o
@@ -210,6 +211,7 @@ func (q *Queries) ListOperatorsByOrg(ctx context.Context, orgGrn string) ([]List
 			&i.Operator.CreatedAt,
 			&i.Operator.Name,
 			&i.Operator.Description,
+			&i.Operator.ControlEndpoint,
 			&i.CertificateIssuedAt,
 			&i.LiveToken,
 		); err != nil {
@@ -276,6 +278,27 @@ func (q *Queries) MintOperatorEnrollment(ctx context.Context, arg MintOperatorEn
 		arg.ExpiresAt,
 	)
 	return err
+}
+
+const setOperatorControlEndpoint = `-- name: SetOperatorControlEndpoint :execrows
+UPDATE operators SET control_endpoint = $1
+WHERE grn = $2
+`
+
+type SetOperatorControlEndpointParams struct {
+	ControlEndpoint pgtype.Text
+	Grn             string
+}
+
+// Writes only the control endpoint, which the details update above
+// never names: changing where operation authority is sent is the
+// delegating act, not renaming (#1170).
+func (q *Queries) SetOperatorControlEndpoint(ctx context.Context, arg SetOperatorControlEndpointParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setOperatorControlEndpoint, arg.ControlEndpoint, arg.Grn)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const spendOperatorEnrollment = `-- name: SpendOperatorEnrollment :one

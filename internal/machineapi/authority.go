@@ -83,5 +83,9 @@ func bindingToAPI(b operator.Binding) machinegen.OperationBinding {
 			Epoch:       b.Assignment.Epoch,
 		}
 	}
+	if b.RequestTarget != nil {
+		target := string(*b.RequestTarget)
+		out.RequestTarget = &target
+	}
 	return out
 }

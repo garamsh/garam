@@ -38,6 +38,11 @@ type AuthorityService interface {
 	EndGrant(ctx context.Context, actor, org, operator grn.GRN, id GrantID) error
 	// CurrentGrant answers the hosted operator's current grant.
 	CurrentGrant(ctx context.Context, org, operator grn.GRN) (*Grant, error)
+	// SetControlEndpoint registers where the hosted operator's control
+	// service answers the console, nil clearing it, for an actor
+	// currently holding operator:delegate. It answers the operator as
+	// stored.
+	SetControlEndpoint(ctx context.Context, actor, org, operator grn.GRN, endpoint *ControlEndpoint) (*Operator, error)
 	// Mint hands the audience one operation on the actor's behalf.
 	Mint(ctx context.Context, r MintRequest) (*Minted, error)
 	// Introspect answers what an authority binds, to its audience only,
@@ -96,9 +101,25 @@ func (s *authorityService) CurrentGrant(ctx context.Context, org, operator grn.G
 	return s.grants.CurrentGrant(ctx, org, operator)
 }
 
+func (s *authorityService) SetControlEndpoint(ctx context.Context, actor, org, operator grn.GRN, endpoint *ControlEndpoint) (*Operator, error) {
+	if err := s.authorize(ctx, actor, org, org, actionDelegate); err != nil {
+		return nil, err
+	}
+	if err := validateOwnership(operator, org); err != nil {
+		return nil, err
+	}
+	return s.operators.SetControlEndpoint(ctx, operator, endpoint)
+}
+
 func (s *authorityService) Mint(ctx context.Context, r MintRequest) (*Minted, error) {
 	if !r.Operation.IsMintable() {
 		return nil, ErrOperationNotMintable
+	}
+	switch {
+	case r.Operation.BindsRequestTarget() && r.RequestTarget == nil:
+		return nil, ErrRequestTargetRequired
+	case !r.Operation.BindsRequestTarget() && r.RequestTarget != nil:
+		return nil, ErrRequestTargetRefused
 	}
 	if err := validateOwnership(r.Audience, r.Org); err != nil {
 		return nil, err
@@ -113,7 +134,7 @@ func (s *authorityService) Mint(ctx context.Context, r MintRequest) (*Minted, er
 	b := Binding{
 		Ref: OperationRef(uuid.NewString()), Grant: grant.ID, Org: r.Org, Actor: r.Actor,
 		Audience: r.Audience, Operation: r.Operation, Target: r.Target,
-		RequestID: r.RequestID, Digest: r.Digest,
+		RequestID: r.RequestID, Digest: r.Digest, RequestTarget: r.RequestTarget,
 	}
 	controller, object, err := s.placement(ctx, &b)
 	if err != nil {
@@ -143,11 +164,18 @@ func (s *authorityService) Mint(ctx context.Context, r MintRequest) (*Minted, er
 
 // placement reads what b acts on. A creation targets the controller
 // that will run the new agent, and the actor's authority is decided on
-// the organization, as defining an agent is. A configuration change or
-// a recovery targets the agent, records where it runs now, and is
-// decided on the agent.
+// the organization, as defining an agent is. An operation on an
+// existing agent targets the agent, records where it runs now, and is
+// decided on the agent. A read or publication of what the Operator
+// holds for the organization targets the organization, names no
+// controller, and is decided on the organization.
 func (s *authorityService) placement(ctx context.Context, b *Binding) (controller, object grn.GRN, err error) {
 	switch {
+	case b.Operation.TargetsOrg():
+		if b.Target != b.Org {
+			return grn.GRN{}, grn.GRN{}, errorx.New(errorx.KindInvalidArgument, "target must be this organization")
+		}
+		return grn.GRN{}, b.Org, nil
 	case b.Operation == OperationAgentCreate:
 		if err := validateOwnership(b.Target, b.Org); err != nil {
 			return grn.GRN{}, grn.GRN{}, err
@@ -209,7 +237,10 @@ func (s *authorityService) recheck(ctx context.Context, b Binding) error {
 		return err
 	}
 	controller, object := b.Target, b.Org
-	if b.Operation.TargetsAgent() {
+	switch {
+	case b.Operation.TargetsOrg():
+		controller = grn.GRN{}
+	case b.Operation.TargetsAgent():
 		current, err := s.assignments.CurrentAssignment(ctx, b.Target)
 		if errorx.IsKind(err, errorx.KindNotFound) {
 			return ErrAuthorityRevoked

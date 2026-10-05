@@ -93,6 +93,9 @@ func TestActionConstants_SpellTheirWireStrings(t *testing.T) {
 		{org.ActionAgentTemplateCreate, "agent-template:create"},
 		{org.ActionAgentTemplateUpdate, "agent-template:update"},
 		{org.ActionAgentTemplateDelete, "agent-template:delete"},
+		{org.ActionAgentTemplatePublish, "agent-template:publish"},
+		{org.ActionExecutionProfileRead, "execution-profile:read"},
+		{org.ActionAgentExecutionRead, "agent:execution-read"},
 	}
 	for _, c := range cases {
 		t.Run(c.want, func(t *testing.T) {
@@ -109,7 +112,8 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			org.ActionOperatorDelete, org.ActionOperatorDelegate, org.ActionAgentRead,
 			org.ActionAgentDefine, org.ActionAgentRename, org.ActionAgentCreate,
 			org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentEnroll, org.ActionAgentTemplateRead, org.ActionAgentTemplateCreate,
-			org.ActionAgentTemplateUpdate, org.ActionAgentTemplateDelete,
+			org.ActionAgentTemplateUpdate, org.ActionAgentTemplateDelete, org.ActionAgentTemplatePublish,
+			org.ActionExecutionProfileRead, org.ActionAgentExecutionRead,
 		},
 		org.RoleOwner.Actions())
 	assert.Equal(t,
@@ -120,7 +124,8 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			org.ActionOperatorDelete, org.ActionOperatorDelegate, org.ActionAgentRead,
 			org.ActionAgentDefine, org.ActionAgentRename, org.ActionAgentCreate,
 			org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentEnroll, org.ActionAgentTemplateRead, org.ActionAgentTemplateCreate,
-			org.ActionAgentTemplateUpdate, org.ActionAgentTemplateDelete,
+			org.ActionAgentTemplateUpdate, org.ActionAgentTemplateDelete, org.ActionAgentTemplatePublish,
+			org.ActionExecutionProfileRead, org.ActionAgentExecutionRead,
 		},
 		org.RoleAdmin.Actions())
 	assert.Equal(t,
@@ -130,6 +135,7 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			org.ActionProjectRead, org.ActionProjectMemberList,
 			org.ActionOperatorRead, org.ActionAgentRead, org.ActionAgentDefine,
 			org.ActionAgentRename, org.ActionAgentCreate, org.ActionAgentTemplateRead,
+			org.ActionExecutionProfileRead,
 		},
 		org.RoleMember.Actions())
 	assert.Empty(t, org.Role("").Actions())
@@ -192,6 +198,24 @@ func TestRoleActions_OnlyOwnerAndAdminConfigureOrDelegate(t *testing.T) {
 	}
 }
 
+// TestRoleActions_OnlyOwnerAndAdminPublishOrReadExecution pins the
+// #1170 matrix: every role reads the Operator's published templates and
+// profiles it creates an agent from, and only the two administrative
+// roles publish a template or read an agent's execution. The two reads
+// are the control: without them the member's refusals would also hold
+// for a role that reaches no Operator action at all.
+func TestRoleActions_OnlyOwnerAndAdminPublishOrReadExecution(t *testing.T) {
+	for _, r := range []org.Role{org.RoleOwner, org.RoleAdmin, org.RoleMember} {
+		assert.Contains(t, r.Actions(), org.ActionAgentTemplateRead, string(r))
+		assert.Contains(t, r.Actions(), org.ActionExecutionProfileRead, string(r))
+	}
+	for _, action := range []string{org.ActionAgentTemplatePublish, org.ActionAgentExecutionRead} {
+		assert.Contains(t, org.RoleOwner.Actions(), action)
+		assert.Contains(t, org.RoleAdmin.Actions(), action)
+		assert.NotContains(t, org.RoleMember.Actions(), action)
+	}
+}
+
 func TestActionsFor_UnionsKnownRoles(t *testing.T) {
 	assert.Equal(t,
 		[]string{
@@ -200,11 +224,13 @@ func TestActionsFor_UnionsKnownRoles(t *testing.T) {
 			org.ActionProjectRead, org.ActionProjectMemberList,
 			org.ActionOperatorRead, org.ActionAgentRead, org.ActionAgentDefine,
 			org.ActionAgentRename, org.ActionAgentCreate, org.ActionAgentTemplateRead,
+			org.ActionExecutionProfileRead,
 			org.ActionOrgUpdate, org.ActionOrgInvite,
 			"group:*", "project:*", "policy:*", "consent:*",
 			org.ActionOperatorRegister, org.ActionOperatorUpdate, org.ActionOperatorDelete,
 			org.ActionOperatorDelegate, org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentEnroll,
 			org.ActionAgentTemplateCreate, org.ActionAgentTemplateUpdate, org.ActionAgentTemplateDelete,
+			org.ActionAgentTemplatePublish, org.ActionAgentExecutionRead,
 		},
 		org.ActionsFor([]string{"member", "admin"}))
 	assert.Empty(t, org.ActionsFor([]string{"superuser"}))

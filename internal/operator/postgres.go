@@ -160,6 +160,40 @@ func (s *PostgresStore) UpdateDetails(ctx context.Context, g grn.GRN, patch Deta
 	return updated, nil
 }
 
+// SetControlEndpoint writes the endpoint and reads the operator back in
+// one transaction, as UpdateDetails does.
+func (s *PostgresStore) SetControlEndpoint(ctx context.Context, g grn.GRN, endpoint *ControlEndpoint) (*Operator, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, errorx.Wrap(err, "begin", errorx.KindUnavailable)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	q := s.q.WithTx(tx)
+	n, err := q.SetOperatorControlEndpoint(ctx, db.SetOperatorControlEndpointParams{
+		Grn:             g.String(),
+		ControlEndpoint: optionalText((*string)(endpoint)),
+	})
+	if err != nil {
+		return nil, pgxerr.Classify(err, "set operator control endpoint", nil, nil)
+	}
+	if n == 0 {
+		return nil, ErrOperatorNotFound
+	}
+	row, err := q.GetOperator(ctx, g.String())
+	if err != nil {
+		return nil, pgxerr.Classify(err, "read operator", ErrOperatorNotFound, nil)
+	}
+	updated, err := rowToOperator(row.Operator, row.CertificateIssuedAt, row.LiveToken)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, errorx.Wrap(err, "commit")
+	}
+	return updated, nil
+}
+
 // Delete removes the record and the record of the certificate garam
 // last issued the operator, in one transaction. An unspent token needs
 // no statement: it references the registration and goes with it
@@ -262,13 +296,22 @@ func rowToOperator(row db.Operator, certificateIssuedAt pgtype.Timestamptz, live
 	if err != nil {
 		return nil, errorx.Wrap(err, "registered by", errorx.KindInternal)
 	}
+	var endpoint *ControlEndpoint
+	if row.ControlEndpoint.Valid {
+		e, err := ParseControlEndpoint(row.ControlEndpoint.String)
+		if err != nil {
+			return nil, errorx.Wrap(err, "control endpoint", errorx.KindInternal)
+		}
+		endpoint = &e
+	}
 	return &Operator{
-		grn:          g,
-		orgGRN:       orgGRN,
-		registeredBy: registeredBy,
-		createdAt:    row.CreatedAt.Time,
-		Name:         row.Name,
-		Description:  row.Description,
+		grn:             g,
+		orgGRN:          orgGRN,
+		registeredBy:    registeredBy,
+		createdAt:       row.CreatedAt.Time,
+		Name:            row.Name,
+		Description:     row.Description,
+		ControlEndpoint: endpoint,
 		// An absent certificate leaves the zero time, which is what
 		// EnrollmentState reads as "garam has issued none".
 		certificateIssuedAt: certificateIssuedAt.Time,

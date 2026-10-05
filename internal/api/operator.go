@@ -261,5 +261,9 @@ func operatorToAPI(o *operator.Operator) apigen.Operator {
 	if issuedAt := o.CertificateIssuedAt(); !issuedAt.IsZero() {
 		out.CertificateIssuedAt = &issuedAt
 	}
+	if o.ControlEndpoint != nil {
+		endpoint := string(*o.ControlEndpoint)
+		out.ControlEndpoint = &endpoint
+	}
 	return out
 }

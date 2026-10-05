@@ -52,12 +52,26 @@ const (
 	// high-trust action no member role grants, minted for one exact
 	// recovery request (ADR-0078).
 	OperationAgentRecover Operation = "agent:recover"
+	// OperationTemplateRead reads the Operator's published agent
+	// templates (#1170).
+	OperationTemplateRead Operation = "agent-template:read"
+	// OperationTemplatePublish publishes the next immutable version of an
+	// Operator template. It edits no agent created from an earlier one.
+	OperationTemplatePublish Operation = "agent-template:publish"
+	// OperationProfileRead reads the Operator's published execution
+	// profiles. Publishing one stays with the deployment.
+	OperationProfileRead Operation = "execution-profile:read"
+	// OperationExecutionRead reads an agent's pending, rendered and
+	// runtime-reported execution. Reading the agent's identity, which
+	// agent:read is, grants none of it.
+	OperationExecutionRead Operation = "agent:execution-read"
 )
 
 // ParseOperation parses an operation a grant may carry.
 func ParseOperation(s string) (Operation, error) {
 	switch o := Operation(s); o {
-	case OperationAgentCreate, OperationAgentConfigure, OperationAgentActivate, OperationAgentRecover:
+	case OperationAgentCreate, OperationAgentConfigure, OperationAgentActivate, OperationAgentRecover,
+		OperationTemplateRead, OperationTemplatePublish, OperationProfileRead, OperationExecutionRead:
 		return o, nil
 	}
 	return "", errorx.New(errorx.KindInvalidArgument, "unknown operation "+s)
@@ -66,14 +80,29 @@ func ParseOperation(s string) (Operation, error) {
 // IsMintable reports whether a member can hand the operation to an
 // operator request by request.
 func (o Operation) IsMintable() bool {
-	return o == OperationAgentCreate || o.TargetsAgent()
+	return o == OperationAgentCreate || o.TargetsAgent() || o.TargetsOrg()
 }
 
 // TargetsAgent reports whether the operation acts on an existing agent:
 // it is authorized on that agent and bound to where the agent runs when
 // it is minted.
 func (o Operation) TargetsAgent() bool {
-	return o == OperationAgentConfigure || o == OperationAgentRecover
+	return o == OperationAgentConfigure || o == OperationAgentRecover || o == OperationExecutionRead
+}
+
+// TargetsOrg reports whether the operation acts on what the Operator
+// holds for the whole organization: it is authorized on the
+// organization and names no controller.
+func (o Operation) TargetsOrg() bool {
+	return o == OperationTemplateRead || o == OperationTemplatePublish || o == OperationProfileRead
+}
+
+// BindsRequestTarget reports whether an authority for the operation
+// binds the exact request target the Operator receives. Every
+// operation that does was added with that binding; the earlier ones
+// bind only their body and take none.
+func (o Operation) BindsRequestTarget() bool {
+	return o.TargetsOrg() || o == OperationExecutionRead
 }
 
 // RequestID is a caller's stable identifier for one write, which makes
@@ -115,10 +144,11 @@ type Grant struct {
 }
 
 // Covers reports whether the grant, at now, lets its operator perform
-// op for controller.
+// op for controller. An operation on the organization names no
+// controller, so controller is not read for one.
 func (g *Grant) Covers(op Operation, controller grn.GRN, now time.Time) bool {
-	return g.EndedAt == nil && now.Before(g.ExpiresAt) &&
-		slices.Contains(g.Operations, op) && slices.Contains(g.Controllers, controller)
+	return g.EndedAt == nil && now.Before(g.ExpiresAt) && slices.Contains(g.Operations, op) &&
+		(op.TargetsOrg() || slices.Contains(g.Controllers, controller))
 }
 
 // GrantTerms is what a grant write asks for, parsed.

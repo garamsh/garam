@@ -1229,8 +1229,24 @@ func (s *fakeOperatorStore) UpdateDetails(_ context.Context, g grn.GRN, patch op
 	if err != nil {
 		return nil, err
 	}
+	updated.ControlEndpoint = o.ControlEndpoint
 	s.operators[g.String()] = updated
 	return updated, nil
+}
+
+// SetControlEndpoint replaces the endpoint on a copy of the record,
+// leaving everything else as it stands.
+func (s *fakeOperatorStore) SetControlEndpoint(_ context.Context, g grn.GRN, endpoint *operator.ControlEndpoint) (*operator.Operator, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	o, ok := s.operators[g.String()]
+	if !ok {
+		return nil, operator.ErrOperatorNotFound
+	}
+	updated := *o
+	updated.ControlEndpoint = endpoint
+	s.operators[g.String()] = &updated
+	return &updated, nil
 }
 
 func (s *fakeOperatorStore) Get(_ context.Context, g grn.GRN) (*operator.Operator, error) {

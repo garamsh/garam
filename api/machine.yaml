@@ -2119,16 +2119,38 @@ components:
           type: string
         operation:
           type: string
-          enum: [agent:create, agent:configure, agent:recover]
+          enum: [agent:create, agent:configure, agent:recover, agent-template:read, agent-template:publish, execution-profile:read, agent:execution-read]
+          description: >-
+            Each operation is served on one route with one fixed HTTP
+            method. A release that does not know an operation refuses
+            to mint it rather than minting it without its binding.
         targetGrn:
           type: string
-          description: The controller for `agent:create`, the agent for `agent:configure` and `agent:recover`.
+          description: >-
+            The controller for `agent:create`; the agent for
+            `agent:configure`, `agent:recover` and
+            `agent:execution-read`; the organization for
+            `agent-template:read`, `agent-template:publish` and
+            `execution-profile:read`.
         assignment:
           $ref: '#/components/schemas/BoundAssignment'
         requestId:
           type: string
         bodySha256:
           type: string
+        requestTarget:
+          type: string
+          maxLength: 2048
+          description: >-
+            Present for `agent-template:read`, `agent-template:publish`,
+            `execution-profile:read` and `agent:execution-read`, absent
+            for every other operation. It is the exact origin-form
+            request target the console sent: the escaped path and the
+            raw query, with no scheme or authority, including any path
+            prefix of the registered control endpoint. Compare it, before
+            decoding, routing or reading any data, with the target the
+            request arrived with, byte for byte; the empty body's digest
+            does not tell one read from another.
         expiresAt:
           type: string
           format: date-time
@@ -2136,7 +2158,10 @@ components:
     BoundAssignment:
       type: object
       required: [operatorGrn, epoch]
-      description: Where the agent ran when an operation on it was authorized. Present for `agent:configure` and `agent:recover` only.
+      description: >-
+        Where the agent ran when an operation on it was authorized.
+        Present for `agent:configure`, `agent:recover` and
+        `agent:execution-read` only.
       properties:
         operatorGrn:
           type: string

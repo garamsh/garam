@@ -139,14 +139,11 @@ const (
 	// membership alone does not grant it.
 	ActionAgentCutover = "agent:cutover"
 
-	// Reading and maintaining the org's agent templates (ADR-0075). A
-	// template is a starting point a definition copies once, so these
-	// are separate from defining an agent: a policy can let someone
-	// define agents without letting them change what others start from.
-	ActionAgentTemplateRead   = "agent-template:read"
-	ActionAgentTemplateCreate = "agent-template:create"
-	ActionAgentTemplateUpdate = "agent-template:update"
-	ActionAgentTemplateDelete = "agent-template:delete"
+	// ActionAgentTemplateRead is reading the org's retired agent
+	// templates (ADR-0075, ADR-0088) and the templates the delegated
+	// Operator has published (#1170). No action writes a garam template:
+	// they are retired read-only.
+	ActionAgentTemplateRead = "agent-template:read"
 	// ActionAgentTemplatePublish is publishing the next immutable
 	// version of a template the delegated Operator holds (#1170). It
 	// edits no agent created from an earlier version.
@@ -196,9 +193,6 @@ var machineActions = []struct {
 	{ActionAgentRecover, false},
 	{ActionAgentEnroll, false},
 	{ActionAgentTemplateRead, true},
-	{ActionAgentTemplateCreate, false},
-	{ActionAgentTemplateUpdate, false},
-	{ActionAgentTemplateDelete, false},
 	{ActionAgentTemplatePublish, false},
 	{ActionExecutionProfileRead, true},
 	{ActionAgentExecutionRead, false},

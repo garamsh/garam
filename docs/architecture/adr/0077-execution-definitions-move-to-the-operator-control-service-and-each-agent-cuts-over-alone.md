@@ -1,6 +1,9 @@
 # ADR 0077: Execution definitions move to the Operator control service, and each agent cuts over alone
 
-> Status: accepted
+> Status: accepted — §Decision's cutover, as to templates, is
+> superseded by
+> [ADR-0088](./0088-garams-agent-templates-are-retired-read-only-and-not-imported.md):
+> garam's templates are retired read-only and not imported
 > Date: 2026-10-04
 
 Decided by the PM under the owner's explicit delegation of 2026-10-04,

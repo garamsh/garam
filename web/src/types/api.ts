@@ -491,15 +491,11 @@ export interface paths {
         };
         /**
          * List an organization's agent templates. Requires the `member` role.
-         * @description The organization's templates, ordered by name. Authorized on `agent-template:read`.
+         * @description The organization's templates, ordered by name. Authorized on `agent-template:read`. Templates are retired read-only (ADR-0088): no operation creates, changes or deletes one, and each is listed as the record of what it said.
          */
         get: operations["listAgentTemplates"];
         put?: never;
-        /**
-         * Create an agent template. Requires the `admin` role.
-         * @description Records a starting point for defining agents: a name, what it is for, and values a definition may copy (ADR-0075). It defines no agent and names no operator. Authorized on `agent-template:create`.
-         */
-        post: operations["createAgentTemplate"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -515,17 +511,9 @@ export interface paths {
         };
         /** Read one agent template. Requires the `member` role. */
         get: operations["getAgentTemplate"];
-        /**
-         * Replace what an agent template says. Requires the `admin` role.
-         * @description Replaces the template's name, description and values. No definition references a template, so agents defined from this one keep the values they copied (ADR-0075). Authorized on `agent-template:update`.
-         */
-        put: operations["updateAgentTemplate"];
+        put?: never;
         post?: never;
-        /**
-         * Delete an agent template. Requires the `admin` role.
-         * @description Removes the template. Agents defined from it keep the values they copied (ADR-0075). Authorized on `agent-template:delete`.
-         */
-        delete: operations["deleteAgentTemplate"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1368,14 +1356,7 @@ export interface components {
         AgentDefinitionPatch: {
             name: components["schemas"]["AgentName"];
         };
-        /** @description What a template says. An update replaces all of it, so a field left out is emptied rather than kept. */
-        AgentTemplateWrite: {
-            name: components["schemas"]["AgentName"];
-            /** @description What agents made from the template are for: at most 1000 characters once surrounding space is trimmed. Empty is none. */
-            description?: string;
-            values?: components["schemas"]["AgentValues"];
-        };
-        /** @description A starting point an organization keeps for defining agents (ADR-0075). It names no operator and no agent, and no definition records which template it copied, so editing or deleting one reaches no agent. */
+        /** @description A starting point an organization kept for defining agents (ADR-0075), retired read-only (ADR-0088). It names no operator and no agent, and no definition records which template it copied. Agents are created from the Operator control service's templates; this is the record of what one said. */
         AgentTemplate: {
             /** @example grn:acme:default:agent-template:7c1e2a9b3d4f5a60 */
             grn: string;
@@ -2607,37 +2588,6 @@ export interface operations {
             404: components["responses"]["Error"];
         };
     };
-    createAgentTemplate: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Organization identifier (the last GRN segment). */
-                org: components["parameters"]["org"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AgentTemplateWrite"];
-            };
-        };
-        responses: {
-            /** @description Template created. */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentTemplate"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-        };
-    };
     getAgentTemplate: {
         parameters: {
             query?: never;
@@ -2660,65 +2610,6 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AgentTemplate"];
                 };
-            };
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-        };
-    };
-    updateAgentTemplate: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Organization identifier (the last GRN segment). */
-                org: components["parameters"]["org"];
-                /** @description Agent template identifier (the last GRN segment). */
-                template: components["parameters"]["template"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AgentTemplateWrite"];
-            };
-        };
-        responses: {
-            /** @description The template as stored after the change. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentTemplate"];
-                };
-            };
-            400: components["responses"]["Error"];
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-        };
-    };
-    deleteAgentTemplate: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Organization identifier (the last GRN segment). */
-                org: components["parameters"]["org"];
-                /** @description Agent template identifier (the last GRN segment). */
-                template: components["parameters"]["template"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Template deleted. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
             };
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];

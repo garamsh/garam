@@ -70,11 +70,7 @@ func TestCutoverInventory_AccountsForEverySourceRecordWithoutAValue(t *testing.T
 	_, _, err = f.exec.Activate(ctx, first(t, activated))
 	require.NoError(t, err)
 
-	template, err := agent.NewTemplate(acme, agent.TemplateContent{
-		Name: "Starter", Values: agent.Values{"model": "inventory-secret-four"},
-	}, scopedGRN("acme", "user", "ada"))
-	require.NoError(t, err)
-	require.NoError(t, f.agents.CreateTemplate(ctx, template))
+	template := keepTemplate(t, f.p, "acme", "Starter", agent.Values{"model": "inventory-secret-four"})
 
 	lines, printed, err := runInventory(t, "acme")
 	require.NoError(t, err)
@@ -95,8 +91,8 @@ func TestCutoverInventory_AccountsForEverySourceRecordWithoutAValue(t *testing.T
 		assert.Equal(t, want[0], got["record"], "%s", g)
 		assert.Equal(t, want[1], got["class"], "%s", g)
 	}
-	require.Contains(t, byGRN, template.GRN.String())
-	assert.Equal(t, "template", byGRN[template.GRN.String()]["record"])
+	require.Contains(t, byGRN, template.String())
+	assert.Equal(t, "template", byGRN[template.String()]["record"])
 
 	eligible := byGRN[f.agent.String()]
 	assert.Equal(t, "import", eligible["disposition"])

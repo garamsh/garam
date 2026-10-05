@@ -662,11 +662,12 @@ func (s *fakeAgentStore) RenameDefinition(_ context.Context, g grn.GRN, name age
 	return &renamed, nil
 }
 
-func (s *fakeAgentStore) CreateTemplate(_ context.Context, t *agent.Template) error {
+// keepTemplate stores a template as one kept before templates were
+// retired: no route writes one any more (ADR-0088).
+func (s *fakeAgentStore) keepTemplate(t *agent.Template) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.templates[t.GRN.String()] = t
-	return nil
 }
 
 func (s *fakeAgentStore) GetTemplate(_ context.Context, g grn.GRN) (*agent.Template, error) {
@@ -692,29 +693,6 @@ func (s *fakeAgentStore) ListTemplatesByOrg(_ context.Context, orgGRN grn.GRN) (
 		return strings.Compare(string(a.Name), string(b.Name))
 	})
 	return out, nil
-}
-
-func (s *fakeAgentStore) UpdateTemplate(_ context.Context, g grn.GRN, content agent.TemplateContent) (*agent.Template, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	t, ok := s.templates[g.String()]
-	if !ok {
-		return nil, agent.ErrTemplateNotFound
-	}
-	updated := *t
-	updated.TemplateContent = content
-	s.templates[g.String()] = &updated
-	return &updated, nil
-}
-
-func (s *fakeAgentStore) DeleteTemplate(_ context.Context, g grn.GRN) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if _, ok := s.templates[g.String()]; !ok {
-		return agent.ErrTemplateNotFound
-	}
-	delete(s.templates, g.String())
-	return nil
 }
 
 func (s *fakeAgentStore) ListDefinitionsByOrg(_ context.Context, orgGRN grn.GRN) ([]*agent.Definition, error) {

@@ -111,8 +111,9 @@ export const fieldAgent: AgentDefinition = {
 };
 
 /**
- * The single template Acme keeps. Nothing links it to `fieldAgent`: a
- * definition copies a template's values once (ADR-0075).
+ * The single template Acme kept before garam's templates were retired
+ * read-only (ADR-0088). Nothing links it to `fieldAgent`: a definition
+ * copied a template's values once (ADR-0075).
  */
 export const researcher: AgentTemplate = {
   grn: "grn:acme:default:agent-template:7c1e2a9b3d4f5a60",

@@ -1021,45 +1021,15 @@ paths:
         '404':
           $ref: '#/components/responses/Error'
   /orgs/{org}/agent-templates:
-    post:
-      operationId: createAgentTemplate
-      tags: [agent]
-      summary: Create an agent template. Requires the `admin` role.
-      description: >-
-        Records a starting point for defining agents: a name, what it
-        is for, and values a definition may copy (ADR-0075). It defines
-        no agent and names no operator. Authorized on
-        `agent-template:create`.
-      parameters:
-        - $ref: '#/components/parameters/org'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AgentTemplateWrite'
-      responses:
-        '201':
-          description: Template created.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AgentTemplate'
-        '400':
-          $ref: '#/components/responses/Error'
-        '401':
-          $ref: '#/components/responses/Error'
-        '403':
-          $ref: '#/components/responses/Error'
-        '404':
-          $ref: '#/components/responses/Error'
     get:
       operationId: listAgentTemplates
       tags: [agent]
       summary: List an organization's agent templates. Requires the `member` role.
       description: >-
         The organization's templates, ordered by name. Authorized on
-        `agent-template:read`.
+        `agent-template:read`. Templates are retired read-only
+        (ADR-0088): no operation creates, changes or deletes one, and
+        each is listed as the record of what it said.
       parameters:
         - $ref: '#/components/parameters/org'
       responses:
@@ -1092,58 +1062,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AgentTemplate'
-        '401':
-          $ref: '#/components/responses/Error'
-        '403':
-          $ref: '#/components/responses/Error'
-        '404':
-          $ref: '#/components/responses/Error'
-    put:
-      operationId: updateAgentTemplate
-      tags: [agent]
-      summary: Replace what an agent template says. Requires the `admin` role.
-      description: >-
-        Replaces the template's name, description and values. No
-        definition references a template, so agents defined from this
-        one keep the values they copied (ADR-0075). Authorized on
-        `agent-template:update`.
-      parameters:
-        - $ref: '#/components/parameters/org'
-        - $ref: '#/components/parameters/template'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AgentTemplateWrite'
-      responses:
-        '200':
-          description: The template as stored after the change.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/AgentTemplate'
-        '400':
-          $ref: '#/components/responses/Error'
-        '401':
-          $ref: '#/components/responses/Error'
-        '403':
-          $ref: '#/components/responses/Error'
-        '404':
-          $ref: '#/components/responses/Error'
-    delete:
-      operationId: deleteAgentTemplate
-      tags: [agent]
-      summary: Delete an agent template. Requires the `admin` role.
-      description: >-
-        Removes the template. Agents defined from it keep the values
-        they copied (ADR-0075). Authorized on `agent-template:delete`.
-      parameters:
-        - $ref: '#/components/parameters/org'
-        - $ref: '#/components/parameters/template'
-      responses:
-        '204':
-          description: Template deleted.
         '401':
           $ref: '#/components/responses/Error'
         '403':
@@ -3087,29 +3005,14 @@ components:
       properties:
         name:
           $ref: '#/components/schemas/AgentName'
-    AgentTemplateWrite:
-      type: object
-      description: >-
-        What a template says. An update replaces all of it, so a field
-        left out is emptied rather than kept.
-      required: [name]
-      properties:
-        name:
-          $ref: '#/components/schemas/AgentName'
-        description:
-          type: string
-          description: >-
-            What agents made from the template are for: at most 1000
-            characters once surrounding space is trimmed. Empty is none.
-        values:
-          $ref: '#/components/schemas/AgentValues'
     AgentTemplate:
       type: object
       description: >-
-        A starting point an organization keeps for defining agents
-        (ADR-0075). It names no operator and no agent, and no
-        definition records which template it copied, so editing or
-        deleting one reaches no agent.
+        A starting point an organization kept for defining agents
+        (ADR-0075), retired read-only (ADR-0088). It names no operator
+        and no agent, and no definition records which template it
+        copied. Agents are created from the Operator control service's
+        templates; this is the record of what one said.
       required: [grn, orgGrn, name, description, values, createdBy, createdAt, updatedAt]
       properties:
         grn:

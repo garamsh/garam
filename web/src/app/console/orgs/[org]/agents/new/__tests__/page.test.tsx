@@ -1,10 +1,9 @@
-import { screen, within } from "@testing-library/react";
-import { HttpResponse, http } from "msw";
+import { screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import NewAgentPage from "@/app/console/orgs/[org]/agents/new/page";
 import { renderServerComponent } from "@/testing/render";
-import { API_URL, researcher } from "@/testing/mocks/handlers";
+import { researcher } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
 vi.mock("next/navigation", () => ({
@@ -16,106 +15,47 @@ vi.mock("next/navigation", () => ({
   },
 }));
 
-function page(template?: string) {
-  return NewAgentPage({
-    params: Promise.resolve({ org: "acme" }),
-    searchParams: Promise.resolve(template === undefined ? {} : { template }),
-  });
+function page() {
+  return NewAgentPage({ params: Promise.resolve({ org: "acme" }) });
 }
 
 describe("new agent page", () => {
-  it("starts blank and offers each template as a starting point", async () => {
-    await renderServerComponent(page());
+  it("offers no garam template and defines from a blank form", async () => {
+    // garam's templates are retired read-only (ADR-0088): the page does
+    // not read them, so a template garam still answers is not offered.
+    const read: string[] = [];
+    server.events.on("request:start", ({ request }) => {
+      read.push(new URL(request.url).pathname);
+    });
+    const { container } = await renderServerComponent(page());
+    server.events.removeAllListeners();
 
-    const starts = screen.getByRole("navigation", { name: "Start from" });
-    expect(within(starts).getByRole("link", { name: "Blank" })).toHaveAttribute(
-      "aria-current",
-      "page",
-    );
+    expect(read).not.toContain("/orgs/acme/agent-templates");
     expect(
-      within(starts).getByRole("link", { name: "Researcher 7c1e2a9b3d4f5a60" }),
-    ).toHaveAttribute(
-      "href",
-      "/console/orgs/acme/agents/new?template=7c1e2a9b3d4f5a60",
-    );
+      screen.queryByRole("navigation", { name: "Start from" }),
+    ).not.toBeInTheDocument();
+    expect(container.textContent).not.toContain(researcher.name);
     expect(screen.getByLabelText("Key 1")).toHaveValue("");
-  });
-
-  it("copies the chosen template's values into the form and says the copy is one-time", async () => {
-    await renderServerComponent(page("7c1e2a9b3d4f5a60"));
-
-    expect(screen.getByLabelText("Key 1")).toHaveValue("workspace");
-    expect(screen.getByLabelText("Value 1")).toHaveValue("papers");
-    expect(screen.getByLabelText("Key 2")).toHaveValue("notes");
-    expect(
-      screen.getByText(
-        "Copied from Researcher. Changing the template later does not change this agent.",
-      ),
-    ).toBeInTheDocument();
-    // The name is the agent's own: nothing is copied into it.
-    expect(screen.getByLabelText("Name")).toHaveValue("");
-    // The operator is chosen by name with its identifier beside it.
+    // The control: the page did read garam, for the operators the form
+    // offers by name, so the template's absence is not a page that read
+    // nothing.
+    expect(read).toContain("/orgs/acme/operators");
     expect(
       screen.getByRole("option", { name: "Field cluster one (field-one)" }),
     ).toBeInTheDocument();
   });
 
-  it("tells two templates of one name apart by identifier", async () => {
-    server.use(
-      http.get(`${API_URL}/orgs/acme/agent-templates`, () =>
-        HttpResponse.json([
-          researcher,
-          {
-            ...researcher,
-            grn: "grn:acme:default:agent-template:0a1b2c3d4e5f6071",
-          },
-        ]),
-      ),
-    );
-
-    const { container } = await renderServerComponent(page());
-
-    const starts = screen.getByRole("navigation", { name: "Start from" });
-    expect(
-      within(starts)
-        .getAllByRole("link")
-        .map((link) => link.textContent),
-    ).toEqual([
-      "Blank",
-      "Researcher 7c1e2a9b3d4f5a60",
-      "Researcher 0a1b2c3d4e5f6071",
-    ]);
-    expect(container.textContent).not.toContain("grn:");
-  });
-
-  it("says the template list is refused and still copies a chosen template it can read", async () => {
-    // The control: with the list answered, no refusal is said.
-    const allowed = await renderServerComponent(page("7c1e2a9b3d4f5a60"));
-    expect(
-      screen.queryByText("Templates are not listed to you."),
-    ).not.toBeInTheDocument();
-    allowed.unmount();
-
-    server.use(
-      http.get(`${API_URL}/orgs/acme/agent-templates`, () =>
-        HttpResponse.json(
-          { kind: "permission_denied", message: "no" },
-          { status: 403 },
-        ),
-      ),
-    );
-
-    await renderServerComponent(page("7c1e2a9b3d4f5a60"));
+  it("names the control service as where templates are created from", async () => {
+    await renderServerComponent(page());
 
     expect(
-      screen.getByText("Templates are not listed to you."),
+      screen.getByRole("heading", {
+        level: 2,
+        name: "From the control service",
+      }),
     ).toBeInTheDocument();
-    // The chosen template answered on its own read, so its copy stands.
-    expect(screen.getByLabelText("Key 1")).toHaveValue("workspace");
     expect(
-      screen.getByText(
-        "Copied from Researcher. Changing the template later does not change this agent.",
-      ),
+      screen.getByRole("heading", { level: 2, name: "Define in garam" }),
     ).toBeInTheDocument();
   });
 

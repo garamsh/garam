@@ -178,48 +178,6 @@ func (q *Queries) CreateAgentExecution(ctx context.Context, arg CreateAgentExecu
 	return err
 }
 
-const createAgentTemplate = `-- name: CreateAgentTemplate :exec
-INSERT INTO agent_templates (grn, org_grn, name, description, agent_values, created_by, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-`
-
-type CreateAgentTemplateParams struct {
-	Grn         string
-	OrgGrn      string
-	Name        string
-	Description string
-	AgentValues []byte
-	CreatedBy   string
-	CreatedAt   pgtype.Timestamptz
-	UpdatedAt   pgtype.Timestamptz
-}
-
-func (q *Queries) CreateAgentTemplate(ctx context.Context, arg CreateAgentTemplateParams) error {
-	_, err := q.db.Exec(ctx, createAgentTemplate,
-		arg.Grn,
-		arg.OrgGrn,
-		arg.Name,
-		arg.Description,
-		arg.AgentValues,
-		arg.CreatedBy,
-		arg.CreatedAt,
-		arg.UpdatedAt,
-	)
-	return err
-}
-
-const deleteAgentTemplate = `-- name: DeleteAgentTemplate :execrows
-DELETE FROM agent_templates WHERE grn = $1
-`
-
-func (q *Queries) DeleteAgentTemplate(ctx context.Context, grn string) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteAgentTemplate, grn)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const endReassignedActivation = `-- name: EndReassignedActivation :exec
 WITH ended AS (
     UPDATE agent_activations a SET ended_reason = 'reassigned', ended_at = $2
@@ -735,46 +693,4 @@ func (q *Queries) ShareAgentExecution(ctx context.Context, agentGrn string) (str
 	var mode string
 	err := row.Scan(&mode)
 	return mode, err
-}
-
-const updateAgentTemplate = `-- name: UpdateAgentTemplate :one
-UPDATE agent_templates SET
-    name         = $1,
-    description  = $2,
-    agent_values = $3,
-    updated_at   = $4
-WHERE grn = $5
-RETURNING grn, org_grn, name, description, agent_values, created_by, created_at, updated_at
-`
-
-type UpdateAgentTemplateParams struct {
-	Name        string
-	Description string
-	AgentValues []byte
-	UpdatedAt   pgtype.Timestamptz
-	Grn         string
-}
-
-// An edit replaces what the template says. No definition references
-// the row, so the statement reaches no agent defined from it.
-func (q *Queries) UpdateAgentTemplate(ctx context.Context, arg UpdateAgentTemplateParams) (AgentTemplate, error) {
-	row := q.db.QueryRow(ctx, updateAgentTemplate,
-		arg.Name,
-		arg.Description,
-		arg.AgentValues,
-		arg.UpdatedAt,
-		arg.Grn,
-	)
-	var i AgentTemplate
-	err := row.Scan(
-		&i.Grn,
-		&i.OrgGrn,
-		&i.Name,
-		&i.Description,
-		&i.AgentValues,
-		&i.CreatedBy,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
 }

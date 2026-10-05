@@ -30,10 +30,10 @@ export type OperatorChoice = { identifier: string; name: string };
  * identifier, which is what the definition stores. Where the list was
  * not answered to the caller, the identifier is typed instead.
  *
- * `values` is where the form starts: empty, or a template's values
- * copied once (ADR-0075). They are the form's own rows from then on,
- * and what is submitted is what the rows hold, so nothing ties the
- * agent to the template afterwards.
+ * `values` is where the form starts. The console starts it empty:
+ * garam's templates are retired read-only and offer no start
+ * (ADR-0088). The rows are the form's own, and what is submitted is
+ * what they hold.
  */
 export function DefineAgentForm({
   org,

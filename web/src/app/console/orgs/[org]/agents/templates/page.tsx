@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { LayoutTemplate } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import {
   getOrg,
   hostedFor,
@@ -24,12 +22,13 @@ export const metadata: Metadata = { title: "Agent templates — garam" };
 type Params = { params: Promise<{ org: string }> };
 
 /**
- * The organization's agent templates, inside Agents (ADR-0075), and
- * beside them the ones its hosted operator's control service has
- * published (#1170), which #1188 will leave as the only ones. The
- * organization is read for itself, so one the caller cannot read
- * answers 404 (ADR-0011); inside it, a refused list says so. A control
- * service that is missing or unavailable disables only its section.
+ * The templates the hosted operator's control service has published
+ * (#1170), which agents are created from, and below them the
+ * organization's garam templates, retired read-only and shown as
+ * records (ADR-0088). The organization is read for itself, so one the
+ * caller cannot read answers 404 (ADR-0011); inside it, a refused list
+ * says so. A control service that is missing or unavailable disables
+ * only its section.
  */
 export default async function AgentTemplatesPage({ params }: Params) {
   const { org } = await params;
@@ -44,30 +43,8 @@ export default async function AgentTemplatesPage({ params }: Params) {
       <PageHeader
         title="Agents"
         description="Templates are starting points for new agents. An agent copies a template once, when it is created."
-      >
-        <Button asChild>
-          <Link href={`/console/orgs/${org}/agents/templates/new`}>
-            New template
-          </Link>
-        </Button>
-      </PageHeader>
+      />
       <AgentsTabs org={org} current="templates" />
-      {organization.status === "unreachable" ||
-      templates.status === "unreachable" ? (
-        <ApiUnreachable subject="this organization's agent templates" />
-      ) : templates.status === "forbidden" ? (
-        <p role="alert" className="text-sm text-muted-foreground">
-          garam refused to show this organization&apos;s templates to you.
-        </p>
-      ) : templates.data.length === 0 ? (
-        <EmptyState
-          icon={LayoutTemplate}
-          title="No templates"
-          description="This organization keeps no templates."
-        />
-      ) : (
-        <TemplateList org={org} templates={templates.data} />
-      )}
       {organization.status === "ok" && (
         <section className="flex flex-col gap-3">
           <h2 className="font-heading text-lg font-semibold">
@@ -84,6 +61,31 @@ export default async function AgentTemplatesPage({ params }: Params) {
           )}
         </section>
       )}
+      <section className="flex flex-col gap-3">
+        <h2 className="font-heading text-lg font-semibold">
+          Archived garam templates
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          garam&apos;s own templates are retired. Each is kept as a record of
+          what it said and cannot be changed or used to define an agent.
+        </p>
+        {organization.status === "unreachable" ||
+        templates.status === "unreachable" ? (
+          <ApiUnreachable subject="this organization's archived templates" />
+        ) : templates.status === "forbidden" ? (
+          <p role="alert" className="text-sm text-muted-foreground">
+            garam refused to show this organization&apos;s templates to you.
+          </p>
+        ) : templates.data.length === 0 ? (
+          <EmptyState
+            icon={LayoutTemplate}
+            title="No archived templates"
+            description="This organization kept no templates in garam."
+          />
+        ) : (
+          <TemplateList org={org} templates={templates.data} />
+        )}
+      </section>
     </>
   );
 }

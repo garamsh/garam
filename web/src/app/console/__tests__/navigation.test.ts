@@ -178,12 +178,14 @@ describe("consoleCrumbs", () => {
     expect(consoleCrumbs(template, orgs).at(-1)).toEqual({
       label: "Template",
     });
+    // Garam's templates are retired read-only, so `new` names no create
+    // page and reads as an identifier (ADR-0088).
     expect(
       consoleCrumbs(
         parseConsolePath("/console/orgs/acme/agents/templates/new"),
         orgs,
       ).at(-1),
-    ).toEqual({ label: "New template" });
+    ).toEqual({ label: "Template" });
     expect(
       consoleCrumbs(
         parseConsolePath("/console/orgs/acme/agents/templates"),

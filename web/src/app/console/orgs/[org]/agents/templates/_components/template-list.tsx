@@ -5,9 +5,9 @@ import { slugFromGrn } from "@/features/orgs";
 import type { AgentTemplate } from "@/features/orgs";
 
 /**
- * The organization's templates, each linking to its own page. A
- * template's values are shown there rather than here: the list is for
- * choosing one.
+ * The organization's archived templates, each linking to the page that
+ * shows its record. A template's values are shown there rather than
+ * here.
  */
 export function TemplateList({
   org,

@@ -1,17 +1,7 @@
 import type { Page } from "@playwright/test";
 
 import { expect, test } from "./fixtures";
-import { seedCutoverDefinition, type Seed } from "./seed";
-
-/** Fills a values editor row, waiting for the form to take input. */
-async function fillRow(page: Page, row: number, key: string, value: string) {
-  // Exact on purpose: the row's remove button is named "Remove value
-  // N", which carries the field's own name as a substring.
-  const keyField = page.getByLabel(`Key ${row}`, { exact: true });
-  await expect(keyField).toBeEnabled();
-  await keyField.fill(key);
-  await page.getByLabel(`Value ${row}`, { exact: true }).fill(value);
-}
+import { seedArchivedTemplate, seedCutoverDefinition, type Seed } from "./seed";
 
 /**
  * Defines an agent from a blank start through the console, as a person
@@ -36,77 +26,58 @@ async function defineAgent(
   return page.url().split("/").at(-1) ?? "";
 }
 
-test.describe("agent templates", () => {
-  test("an agent copies a template once and keeps the copy", async ({
+test.describe("archived agent templates", () => {
+  test("a kept template is a record only, and the define form offers none", async ({
     page,
     signedIn,
   }) => {
     const agents = `/console/orgs/${signedIn.orgSlug}/agents`;
+    const kept = await seedArchivedTemplate(signedIn, "Researcher", {
+      workspace: "papers",
+    });
 
-    // A template, created inside Agents.
+    // Listed under its own heading, with no way to make another.
     await page.goto(`${agents}/templates`);
-    await expect(page.getByText("No templates", { exact: true })).toBeVisible();
-    await page.getByRole("link", { name: "New template", exact: true }).click();
-    const name = page.getByLabel("Name", { exact: true });
-    await expect(name).toBeEnabled();
-    await name.fill("Researcher");
-    await page.getByLabel("Description", { exact: true }).fill("Reads papers");
-    await fillRow(page, 1, "workspace", "papers");
-    await page.getByRole("button", { name: "Create template" }).click();
+    await expect(
+      page.getByRole("heading", { level: 2, name: "Archived garam templates" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "New template", exact: true }),
+    ).toHaveCount(0);
+
+    // Its page shows what it said and offers nothing to do with it.
+    await page.getByRole("link", { name: "Researcher", exact: true }).click();
     await expect(
       page.getByRole("heading", { level: 1, name: "Researcher", exact: true }),
     ).toBeVisible();
-
-    // An agent from it: the copied value is edited before creating.
-    await page
-      .getByRole("link", { name: "Create agent from template", exact: true })
-      .click();
+    await expect(page.getByText("papers", { exact: true })).toBeVisible();
     await expect(
-      page.getByText(
-        "Copied from Researcher. Changing the template later does not change this agent.",
-        { exact: true },
-      ),
+      page.getByText(kept.identifier, { exact: true }),
     ).toBeVisible();
-    await expect(page.getByLabel("Value 1", { exact: true })).toHaveValue(
-      "papers",
+    await expect(page.getByRole("textbox")).toHaveCount(0);
+    await expect(
+      page.getByRole("link", { name: "Create agent from template" }),
+    ).toHaveCount(0);
+
+    // The define form starts blank, and the template is not offered.
+    // The operator it offers is the control that the form read garam.
+    await page.goto(`${agents}/new?template=${kept.identifier}`);
+    const operator = page.getByLabel("Operator", { exact: true });
+    await expect(operator).toBeEnabled();
+    await expect(
+      operator.getByRole("option", {
+        name: `${signedIn.operatorName} (${signedIn.operatorIdentifier})`,
+      }),
+    ).toHaveCount(1);
+    await expect(page.getByText("Researcher")).toHaveCount(0);
+    await expect(page.getByLabel("Key 1", { exact: true })).toHaveValue("");
+
+    // The template's write routes are closed at garam itself.
+    const replaced = await page.request.put(
+      `/api/orgs/${signedIn.orgSlug}/agent-templates/${kept.identifier}`,
+      { data: { name: "Analyst", values: {} } },
     );
-    const agentName = page.getByLabel("Name", { exact: true });
-    await expect(agentName).toBeEnabled();
-    await agentName.fill("Scout");
-    await page.getByLabel("Operator", { exact: true }).selectOption({
-      label: `${signedIn.operatorName} (${signedIn.operatorIdentifier})`,
-    });
-    await page.getByLabel("Value 1", { exact: true }).fill("reports");
-    await page.getByRole("button", { name: "Create agent" }).click();
-
-    // The agent's page: requested apart from reported, awaiting an
-    // operator because none has claimed it.
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Scout", exact: true }),
-    ).toBeVisible();
-    await expect(
-      page.getByText("Awaiting operator", { exact: true }),
-    ).toBeVisible();
-    await expect(page.getByText("reports", { exact: true })).toBeVisible();
-    const agentUrl = page.url();
-
-    // Editing and then deleting the template reaches no agent.
-    await page.goto(`${agents}/templates`);
-    await page.getByRole("link", { name: "Researcher", exact: true }).click();
-    const templateName = page.getByLabel("Name", { exact: true });
-    await expect(templateName).toBeEnabled();
-    await page.getByLabel("Value 1", { exact: true }).fill("archive");
-    await page.getByRole("button", { name: "Save template" }).click();
-    await expect(page.getByRole("status")).toHaveText("Saved Researcher.");
-    await page.getByRole("button", { name: "Delete template" }).click();
-    await page
-      .getByRole("button", { name: "Delete Researcher", exact: true })
-      .click();
-    await expect(page.getByText("No templates", { exact: true })).toBeVisible();
-
-    await page.goto(agentUrl);
-    await expect(page.getByText("reports", { exact: true })).toBeVisible();
-    await expect(page.getByText("archive", { exact: true })).toHaveCount(0);
+    expect(replaced.status()).toBe(405);
   });
 });
 

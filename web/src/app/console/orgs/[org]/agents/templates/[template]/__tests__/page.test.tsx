@@ -1,5 +1,4 @@
 import { screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
@@ -8,7 +7,6 @@ import { renderServerComponent } from "@/testing/render";
 import { API_URL, researcher } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
-vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 vi.mock("next/navigation", () => ({
   notFound: () => {
     throw new Error("NEXT_NOT_FOUND");
@@ -42,60 +40,23 @@ function answer(status: 200 | 403 | 404) {
 }
 
 describe("agent template page", () => {
-  it("opens the template's fields for editing and offers creating an agent from it", async () => {
+  it("shows the archived template as a record, with nothing to edit, delete or create from", async () => {
     await renderServerComponent(AgentTemplatePage(params));
 
     expect(
       screen.getByRole("heading", { level: 1, name: "Researcher" }),
     ).toBeInTheDocument();
-    expect(screen.getByLabelText("Name")).toHaveValue("Researcher");
-    expect(screen.getByLabelText("Description")).toHaveValue("Reads papers");
-    expect(screen.getByLabelText("Key 1")).toHaveValue("workspace");
-    expect(screen.getByLabelText("Value 1")).toHaveValue("papers");
+    // The control: what the template said is on the page.
+    expect(screen.getByText("Reads papers")).toBeInTheDocument();
+    expect(screen.getByText("workspace")).toBeInTheDocument();
+    expect(screen.getByText("papers")).toBeInTheDocument();
+    expect(screen.getByText("notes")).toBeInTheDocument();
+    // garam's templates are retired read-only (ADR-0088).
+    expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Create agent from template" }),
-    ).toHaveAttribute(
-      "href",
-      "/console/orgs/acme/agents/new?template=7c1e2a9b3d4f5a60",
-    );
-  });
-
-  it("saves an edit as the whole template and says it did", async () => {
-    let body: unknown;
-    server.use(
-      http.put(ONE, async ({ request }) => {
-        body = await request.json();
-        return HttpResponse.json({ ...researcher, name: "Analyst" });
-      }),
-    );
-    const user = userEvent.setup();
-    await renderServerComponent(AgentTemplatePage(params));
-
-    await user.clear(screen.getByLabelText("Name"));
-    await user.type(screen.getByLabelText("Name"), "Analyst");
-    await user.click(screen.getByRole("button", { name: "Save template" }));
-
-    expect(await screen.findByRole("status")).toHaveTextContent(
-      "Saved Analyst.",
-    );
-    expect(body).toEqual({
-      name: "Analyst",
-      description: "Reads papers",
-      values: { workspace: "papers", notes: "weekly" },
-    });
-  });
-
-  it("says deleting leaves agents created from it unchanged", async () => {
-    const user = userEvent.setup();
-    await renderServerComponent(AgentTemplatePage(params));
-
-    await user.click(screen.getByRole("button", { name: "Delete template" }));
-
-    expect(
-      screen.getByText(
-        "Delete Researcher? Agents created from it are not changed. garam cannot bring the template back.",
-      ),
-    ).toBeInTheDocument();
+      screen.queryByRole("link", { name: "Create agent from template" }),
+    ).not.toBeInTheDocument();
   });
 
   it("says a refused template is refused rather than missing", async () => {

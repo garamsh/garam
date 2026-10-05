@@ -267,7 +267,8 @@ func (c *controlStandIn) requests() []string {
 }
 
 // adapterProcess is one fenced adapter process beside rt, presenting
-// what held holds, under the placement token in tokenFile.
+// what held holds, under the placement token in tokenFile, forwarding
+// the outbox it was given.
 type adapterProcess struct {
 	execution *delivery.Execution
 	queue     *delivery.HTTPQueue
@@ -275,6 +276,12 @@ type adapterProcess struct {
 }
 
 func startAdapter(t *testing.T, s *executionStack, c *controlStandIn, rt *runtimeDouble, held *heldPair, tokenFile string) *adapterProcess {
+	t.Helper()
+	return startAdapterWith(t, s, c, rt, held, tokenFile, t.TempDir())
+}
+
+// startAdapterWith is startAdapter forwarding the outbox in dir.
+func startAdapterWith(t *testing.T, s *executionStack, c *controlStandIn, rt *runtimeDouble, held *heldPair, tokenFile, dir string) *adapterProcess {
 	t.Helper()
 	execution := delivery.NewFencedExecution()
 	client := presenting(t, held)
@@ -284,7 +291,7 @@ func startAdapter(t *testing.T, s *executionStack, c *controlStandIn, rt *runtim
 	require.NoError(t, err)
 	authority, err := delivery.NewHTTPAuthority(presenting(t, held), c.server.URL, s.agent)
 	require.NoError(t, err)
-	outbox, err := delivery.NewOutbox(t.TempDir())
+	outbox, err := delivery.NewOutbox(dir)
 	require.NoError(t, err)
 	loop, err := delivery.NewService(delivery.Ends{
 		Agent: s.agent, Queue: queue, Gateway: gateway, Execution: execution, Authority: authority,

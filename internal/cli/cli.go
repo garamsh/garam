@@ -172,10 +172,13 @@ const (
 	envAdapterAgent          envName = "GARAM_ADAPTER_AGENT"
 	envAdapterMachineURL     envName = "GARAM_ADAPTER_MACHINE_URL"
 	envAdapterGatewayURL     envName = "GARAM_ADAPTER_GATEWAY_URL"
-	envAdapterGatewayAgent   envName = "GARAM_ADAPTER_GATEWAY_AGENT"
 	envAdapterTLSCertFile    envName = "GARAM_ADAPTER_TLS_CERT_FILE"
 	envAdapterTLSKeyFile     envName = "GARAM_ADAPTER_TLS_KEY_FILE"
 	envAdapterServerRootFile envName = "GARAM_ADAPTER_SERVER_ROOT_FILE"
+	envAdapterControlURL     envName = "GARAM_ADAPTER_CONTROL_URL"
+	envAdapterControlRoot    envName = "GARAM_ADAPTER_CONTROL_ROOT_FILE"
+	envAdapterPlacementToken envName = "GARAM_ADAPTER_PLACEMENT_TOKEN_FILE"
+	envAdapterOutboxDir      envName = "GARAM_ADAPTER_OUTBOX_DIR"
 )
 
 // envOr reads a declared name, or the fallback when it is unset or

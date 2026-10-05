@@ -256,10 +256,13 @@ that the source no longer reads.
 | `GARAM_ADAPTER_AGENT` | The adapter is not one of garam's workloads: it runs beside one agent, in that agent's pod, deployed by whoever runs the agent (`docs/architecture/adapter.md`). |
 | `GARAM_ADAPTER_MACHINE_URL` | Same: the adapter's own deployment. |
 | `GARAM_ADAPTER_GATEWAY_URL` | Same: the adapter's own deployment. |
-| `GARAM_ADAPTER_GATEWAY_AGENT` | Same: the adapter's own deployment. |
 | `GARAM_ADAPTER_TLS_CERT_FILE` | Same: the adapter's own deployment. |
 | `GARAM_ADAPTER_TLS_KEY_FILE` | Same: the adapter's own deployment. |
 | `GARAM_ADAPTER_SERVER_ROOT_FILE` | Same: the adapter's own deployment. |
+| `GARAM_ADAPTER_CONTROL_URL` | Same: the adapter's own deployment. |
+| `GARAM_ADAPTER_CONTROL_ROOT_FILE` | Same: the adapter's own deployment. |
+| `GARAM_ADAPTER_PLACEMENT_TOKEN_FILE` | Same: the adapter's own deployment. |
+| `GARAM_ADAPTER_OUTBOX_DIR` | Same: the adapter's own deployment. |
 | `GARAM_MIGRATIONS_DIR` | The migrations ship inside the image and the default resolves to them there. A value here could only point the Job away from them. |
 
 Two things sit outside that comparison:

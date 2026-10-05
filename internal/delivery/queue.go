@@ -3,9 +3,10 @@ package delivery
 import "context"
 
 // Queue is garam's side of the loop: the claim this adapter holds for
-// its agent, the renewal that keeps it, and the completion that ends
-// it. Every call is for the one agent the adapter runs beside, which is
-// why none of them names it.
+// its agent, the renewal that keeps it, the completion that ends it,
+// and the reply it posts on the agent's behalf. Every call is for the
+// one agent the adapter runs beside, which is why none of them names
+// it.
 type Queue interface {
 	// Claim waits for a message addressed to the agent and returns the
 	// hold garam gave it, or ErrNoMessageReady when the wait ran out.
@@ -16,4 +17,8 @@ type Queue interface {
 	// Complete reports the claimed message delivered, or answers
 	// ErrClaimLapsed when the hold was handed on.
 	Complete(ctx context.Context, id ClaimID) error
+	// Post offers one outbox reply under durable-delivery.v1 and
+	// answers the message garam stored for it, which the caller still
+	// verifies before treating it as an acknowledgement.
+	Post(ctx context.Context, o Outbound) (*Stored, error)
 }

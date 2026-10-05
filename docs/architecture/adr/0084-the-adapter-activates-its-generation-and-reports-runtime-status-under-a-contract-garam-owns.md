@@ -73,7 +73,10 @@ it per request. `Garam-Execution` is never sent to control.
   revision, and the lowercase hex SHA-256 of the placement token. The
   same intent therefore has one identifier across adapter restarts and
   certificate renewal, and a new generation, revision, epoch or
-  placement is new intent. The token never appears in it.
+  placement is new intent. The token never appears in it. For
+  `grn:acme:default:agent:0a1b2c3d4e5f6071`, epoch `3`, generation
+  `a` repeated 32 times, revision `7` and token `placement-1` it is
+  `737a3319-e377-8fab-ba8c-fe01762adb62`.
 - The answer, 201 the first time and 200 for a replay, is
   `{activationId, tokenVersion, token, grn, epoch, generation,
   configRevision}`. **The adapter verifies the binding**: `grn`,

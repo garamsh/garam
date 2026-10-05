@@ -51,15 +51,18 @@ func adapt(cmd *cobra.Command) error {
 		return err
 	}
 
-	loop, err := adapterLoop(
-		envOr(envAdapterAgent, ""),
-		envOr(envAdapterMachineURL, ""),
-		envOr(envAdapterGatewayURL, defaultGatewayURL),
-		envOr(envAdapterGatewayAgent, ""),
-		envOr(envAdapterTLSCertFile, ""),
-		envOr(envAdapterTLSKeyFile, ""),
-		envOr(envAdapterServerRootFile, ""),
-	)
+	loop, err := adapterLoop(adapterSettings{
+		agent:          envOr(envAdapterAgent, ""),
+		machineURL:     envOr(envAdapterMachineURL, ""),
+		gatewayURL:     envOr(envAdapterGatewayURL, defaultGatewayURL),
+		certFile:       envOr(envAdapterTLSCertFile, ""),
+		keyFile:        envOr(envAdapterTLSKeyFile, ""),
+		serverRootFile: envOr(envAdapterServerRootFile, ""),
+		controlURL:     envOr(envAdapterControlURL, ""),
+		controlRoot:    envOr(envAdapterControlRoot, ""),
+		placementToken: envOr(envAdapterPlacementToken, ""),
+		outboxDir:      envOr(envAdapterOutboxDir, ""),
+	})
 	if err != nil {
 		return err
 	}
@@ -67,46 +70,101 @@ func adapt(cmd *cobra.Command) error {
 	obs.logger.Info("carrying messages")
 	// A requested stop returns nil, as it does for every serve command:
 	// the pairings this process was holding go with it, their leases
-	// lapse, and garam hands those messages to whoever claims next.
+	// lapse, and garam hands those messages to whoever claims next. The
+	// outbox stays where the runtime wrote it.
 	return loop.Run(ctx)
 }
 
+// adapterSettings is what the environment names the adapter.
+type adapterSettings struct {
+	agent, machineURL, gatewayURL     string
+	certFile, keyFile, serverRootFile string
+	controlURL, controlRoot           string
+	placementToken, outboxDir         string
+}
+
+// fenced reports which mode the settings choose (ADR-0084): all three
+// control settings select the fenced one, none the legacy one, and
+// anything between is refused rather than read as either.
+func (s adapterSettings) fenced() (bool, error) {
+	set := 0
+	for _, v := range []string{s.controlURL, s.controlRoot, s.placementToken} {
+		if v != "" {
+			set++
+		}
+	}
+	switch set {
+	case 0:
+		return false, nil
+	case 3:
+		if s.outboxDir == "" {
+			return false, errorx.New(errorx.KindInvalidArgument, "GARAM_ADAPTER_OUTBOX_DIR is required beside the control settings")
+		}
+		return true, nil
+	}
+	return false, errorx.New(errorx.KindInvalidArgument,
+		"GARAM_ADAPTER_CONTROL_URL, GARAM_ADAPTER_CONTROL_ROOT_FILE and GARAM_ADAPTER_PLACEMENT_TOKEN_FILE are set together or not at all")
+}
+
 // adapterLoop builds the loop from what the environment named, or
-// refuses what it cannot run on. Everything is required but the
-// gateway's address, which has a default: the two identifiers are
-// different names for one agent — garam's GRN and what the gateway
-// itself serves — and neither can be guessed from the other.
-func adapterLoop(agentRaw, machineURL, gatewayURL, gatewayAgent, certFile, keyFile, serverRootFile string) (delivery.Service, error) {
-	if agentRaw == "" {
+// refuses what it cannot run on. One GRN names the agent to garam and to
+// the runtime beside it, which serves the agent under that GRN. The
+// control settings choose the mode, and the outbox is forwarded from
+// wherever it is named.
+func adapterLoop(s adapterSettings) (delivery.Service, error) {
+	if s.agent == "" {
 		return nil, errorx.New(errorx.KindInvalidArgument, "GARAM_ADAPTER_AGENT is required")
 	}
-	agent, err := grn.Parse(agentRaw)
+	agent, err := grn.Parse(s.agent)
 	if err != nil {
 		return nil, errorx.Wrap(err, string(envAdapterAgent), errorx.KindInvalidArgument)
 	}
-	if machineURL == "" {
+	if s.machineURL == "" {
 		return nil, errorx.New(errorx.KindInvalidArgument, "GARAM_ADAPTER_MACHINE_URL is required")
 	}
-	if gatewayAgent == "" {
-		return nil, errorx.New(errorx.KindInvalidArgument, "GARAM_ADAPTER_GATEWAY_AGENT is required")
-	}
-	client, err := adapterClient(certFile, keyFile, serverRootFile)
+	fenced, err := s.fenced()
 	if err != nil {
 		return nil, err
 	}
-	queue, err := delivery.NewHTTPQueue(client, machineURL, agent)
+	pair, err := adapterPair(s.certFile, s.keyFile)
 	if err != nil {
+		return nil, err
+	}
+	client, err := adapterClient(pair, s.serverRootFile, string(envAdapterServerRootFile))
+	if err != nil {
+		return nil, err
+	}
+	ends := delivery.Ends{
+		Agent:       agent,
+		Execution:   delivery.NewLegacyExecution(),
+		Credentials: delivery.NewFileCredentials(s.placementToken, pair.Get),
+	}
+	if fenced {
+		ends.Execution = delivery.NewFencedExecution()
+		control, err := adapterClient(pair, s.controlRoot, string(envAdapterControlRoot))
+		if err != nil {
+			return nil, err
+		}
+		if ends.Authority, err = delivery.NewHTTPAuthority(control, s.controlURL, agent); err != nil {
+			return nil, err
+		}
+	}
+	if s.outboxDir != "" {
+		if ends.Outbox, err = delivery.NewOutbox(s.outboxDir); err != nil {
+			return nil, err
+		}
+	}
+	if ends.Queue, err = delivery.NewHTTPQueue(client, s.machineURL, agent, ends.Execution); err != nil {
 		return nil, err
 	}
 	// The hop to the gateway is loopback inside one pod and carries no
 	// certificate. What it buys is that the platform stays a separable
 	// product rather than a library, which is the boundary ADR-0013
 	// pays for.
-	gateway, err := delivery.NewHTTPGateway(gatewayClient(), gatewayURL, gatewayAgent)
-	if err != nil {
+	if ends.Gateway, err = delivery.NewHTTPGateway(gatewayClient(), s.gatewayURL, agent); err != nil {
 		return nil, err
 	}
-	return delivery.NewService(queue, gateway, delivery.Config{})
+	return delivery.NewService(ends, delivery.Config{})
 }
 
 // gatewayClient reaches the platform beside this adapter. It carries no
@@ -124,32 +182,41 @@ func gatewayClient() *http.Client {
 	return &http.Client{Transport: bounded}
 }
 
-// adapterClient is the connection garam sees: the agent's own
-// certificate, presented per handshake so a renewed one needs no
-// restart, and the garam server root as a separate input, because the
-// authority that signed the agent signs no server certificate
-// (ADR-0040).
-//
-// The client carries no timeout, and one added here breaks the adapter:
-// a claim is a long poll and the event stream is held open for as long
-// as the agent runs. Each call carries its own deadline instead
-// (delivery.Config's ClaimTimeout and CallTimeout).
-func adapterClient(certFile, keyFile, serverRootFile string) (*http.Client, error) {
-	if certFile == "" || keyFile == "" || serverRootFile == "" {
+// adapterPair is the agent's certificate and key, read per handshake
+// so a renewed one needs no restart.
+func adapterPair(certFile, keyFile string) (*keyfile.Pair, error) {
+	if certFile == "" || keyFile == "" {
 		return nil, errorx.New(errorx.KindInvalidArgument,
-			"GARAM_ADAPTER_TLS_CERT_FILE, GARAM_ADAPTER_TLS_KEY_FILE and GARAM_ADAPTER_SERVER_ROOT_FILE are required")
+			"GARAM_ADAPTER_TLS_CERT_FILE and GARAM_ADAPTER_TLS_KEY_FILE are required")
 	}
 	pair, err := keyfile.NewPair(certFile, keyFile)
 	if err != nil {
 		return nil, errorx.Wrap(err, "adapter certificate")
 	}
-	serverRootPEM, err := os.ReadFile(serverRootFile)
+	return pair, nil
+}
+
+// adapterClient is a connection the agent's certificate authenticates:
+// presented per handshake so a renewed one needs no restart, and the
+// peer verified against a root of its own — garam's server root, which
+// the authority that signed the agent never signs (ADR-0040), or the
+// root control's serving certificate chains to (ADR-0084).
+//
+// The client carries no timeout, and one added here breaks the adapter:
+// a claim is a long poll and the event stream is held open for as long
+// as the agent runs. Each call carries its own deadline instead
+// (delivery.Config's ClaimTimeout and CallTimeout).
+func adapterClient(pair *keyfile.Pair, rootFile, what string) (*http.Client, error) {
+	if rootFile == "" {
+		return nil, errorx.New(errorx.KindInvalidArgument, what+" is required")
+	}
+	rootPEM, err := os.ReadFile(rootFile)
 	if err != nil {
-		return nil, errorx.Wrap(err, "adapter server root", errorx.KindInvalidArgument)
+		return nil, errorx.Wrap(err, what, errorx.KindInvalidArgument)
 	}
 	roots := x509.NewCertPool()
-	if !roots.AppendCertsFromPEM(serverRootPEM) {
-		return nil, errorx.New(errorx.KindInvalidArgument, "adapter server root: no certificate in "+serverRootFile)
+	if !roots.AppendCertsFromPEM(rootPEM) {
+		return nil, errorx.New(errorx.KindInvalidArgument, what+": no certificate in "+rootFile)
 	}
 	return &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{
 		GetClientCertificate: func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {

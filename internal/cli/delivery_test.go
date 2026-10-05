@@ -20,15 +20,21 @@ import (
 	"github.com/garamsh/garam/internal/machine"
 )
 
-// adapterArgs is one set of what the environment names the adapter.
-type adapterArgs struct {
-	agent, machineURL, gatewayURL, gatewayAgent string
-	certFile, keyFile, serverRootFile           string
+// build builds the loop from one set of what the environment names the
+// adapter.
+func (s adapterSettings) build() error {
+	_, err := adapterLoop(s)
+	return err
 }
 
-func (a adapterArgs) build() error {
-	_, err := adapterLoop(a.agent, a.machineURL, a.gatewayURL, a.gatewayAgent, a.certFile, a.keyFile, a.serverRootFile)
-	return err
+// clientOf is the client garam is reached through, from the three files
+// the deployment mounts for it.
+func clientOf(certFile, keyFile, serverRootFile string) (*http.Client, error) {
+	pair, err := adapterPair(certFile, keyFile)
+	if err != nil {
+		return nil, err
+	}
+	return adapterClient(pair, serverRootFile, string(envAdapterServerRootFile))
 }
 
 // adapterKeyMaterial writes what the adapter presents and the garam
@@ -42,37 +48,54 @@ func adapterKeyMaterial(t *testing.T) (certFile, keyFile, serverRootFile string)
 }
 
 // TestAdapterLoop_RefusesWhatItCannotRunOn covers what the process will
-// not start without. The working set is the control: each case below
-// changes one value of it, so what refuses is that value rather than
-// anything beside it.
+// not start without, in either mode ADR-0084 lets the deployment
+// choose. The two working sets are the controls: each case below
+// changes one value of one of them, so what refuses is that value
+// rather than anything beside it.
 func TestAdapterLoop_RefusesWhatItCannotRunOn(t *testing.T) {
 	certFile, keyFile, serverRootFile := adapterKeyMaterial(t)
-	working := adapterArgs{
+	legacy := adapterSettings{
 		agent:          machineGRN("acme", "bot-1").String(),
 		machineURL:     "https://garam.example:8443",
 		gatewayURL:     defaultGatewayURL,
-		gatewayAgent:   "default",
 		certFile:       certFile,
 		keyFile:        keyFile,
 		serverRootFile: serverRootFile,
 	}
-	require.NoError(t, working.build(), "everything the loop needs")
+	require.NoError(t, legacy.build(), "the legacy control: no control settings")
+	withOutbox := legacy
+	withOutbox.outboxDir = t.TempDir()
+	require.NoError(t, withOutbox.build(), "a legacy adapter forwards an outbox where one is named")
+	fenced := withOutbox
+	fenced.controlURL = "https://control.example:8443"
+	fenced.controlRoot = serverRootFile
+	fenced.placementToken = filepath.Join(t.TempDir(), "token")
+	require.NoError(t, fenced.build(), "the fenced control: all three control settings and an outbox")
 
-	tests := map[string]func(adapterArgs) adapterArgs{
-		"no agent":                             func(a adapterArgs) adapterArgs { a.agent = ""; return a },
-		"an agent that is not a GRN":           func(a adapterArgs) adapterArgs { a.agent = "bot-1"; return a },
-		"no machine listener":                  func(a adapterArgs) adapterArgs { a.machineURL = ""; return a },
-		"a machine listener that is not a URL": func(a adapterArgs) adapterArgs { a.machineURL = "garam.example"; return a },
-		"no gateway address":                   func(a adapterArgs) adapterArgs { a.gatewayURL = ""; return a },
-		"no gateway agent":                     func(a adapterArgs) adapterArgs { a.gatewayAgent = ""; return a },
-		"no certificate":                       func(a adapterArgs) adapterArgs { a.certFile = ""; return a },
-		"no private key":                       func(a adapterArgs) adapterArgs { a.keyFile = ""; return a },
-		"no server root":                       func(a adapterArgs) adapterArgs { a.serverRootFile = ""; return a },
-		"a server root that is not one":        func(a adapterArgs) adapterArgs { a.serverRootFile = a.keyFile; return a },
+	tests := map[string]adapterSettings{}
+	change := func(name string, from adapterSettings, edit func(*adapterSettings)) {
+		edit(&from)
+		tests[name] = from
 	}
-	for name, change := range tests {
+	change("no agent", legacy, func(s *adapterSettings) { s.agent = "" })
+	change("an agent that is not a GRN", legacy, func(s *adapterSettings) { s.agent = "bot-1" })
+	change("no machine listener", legacy, func(s *adapterSettings) { s.machineURL = "" })
+	change("a machine listener that is not a URL", legacy, func(s *adapterSettings) { s.machineURL = "garam.example" })
+	change("no gateway address", legacy, func(s *adapterSettings) { s.gatewayURL = "" })
+	change("no certificate", legacy, func(s *adapterSettings) { s.certFile = "" })
+	change("no private key", legacy, func(s *adapterSettings) { s.keyFile = "" })
+	change("no server root", legacy, func(s *adapterSettings) { s.serverRootFile = "" })
+	change("a server root that is not one", legacy, func(s *adapterSettings) { s.serverRootFile = s.keyFile })
+	change("a control address alone", legacy, func(s *adapterSettings) { s.controlURL = fenced.controlURL })
+	change("no control address", fenced, func(s *adapterSettings) { s.controlURL = "" })
+	change("no control root", fenced, func(s *adapterSettings) { s.controlRoot = "" })
+	change("no placement token", fenced, func(s *adapterSettings) { s.placementToken = "" })
+	change("no outbox beside the control settings", fenced, func(s *adapterSettings) { s.outboxDir = "" })
+	change("a control address that is not https", fenced, func(s *adapterSettings) { s.controlURL = "http://control.example" })
+	change("a control root that is not one", fenced, func(s *adapterSettings) { s.controlRoot = s.keyFile })
+	for name, settings := range tests {
 		t.Run(name, func(t *testing.T) {
-			err := change(working).build()
+			err := settings.build()
 			require.Error(t, err)
 			assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), "want an invalid-argument kind, got %v", err)
 		})
@@ -86,11 +109,11 @@ func TestAdapterLoop_RefusesWhatItCannotRunOn(t *testing.T) {
 func TestAdapterClient_RefusesAGroupReadableKey(t *testing.T) {
 	certFile, keyFile, serverRootFile := adapterKeyMaterial(t)
 
-	_, err := adapterClient(certFile, keyFile, serverRootFile)
+	_, err := clientOf(certFile, keyFile, serverRootFile)
 	require.NoError(t, err, "owner-only key")
 
 	require.NoError(t, os.Chmod(keyFile, 0o640))
-	_, err = adapterClient(certFile, keyFile, serverRootFile)
+	_, err = clientOf(certFile, keyFile, serverRootFile)
 	require.Error(t, err)
 	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
 }
@@ -105,7 +128,7 @@ func TestAdapterClient_RefusesKeyMaterialThatIsNotThere(t *testing.T) {
 	certFile, keyFile, serverRootFile := adapterKeyMaterial(t)
 	absent := filepath.Join(t.TempDir(), "absent.pem")
 
-	_, err := adapterClient(certFile, keyFile, serverRootFile)
+	_, err := clientOf(certFile, keyFile, serverRootFile)
 	require.NoError(t, err, "every file where it was configured")
 
 	for name, args := range map[string][3]string{
@@ -114,7 +137,7 @@ func TestAdapterClient_RefusesKeyMaterialThatIsNotThere(t *testing.T) {
 		"a server root that is not there": {certFile, keyFile, absent},
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := adapterClient(args[0], args[1], args[2])
+			_, err := clientOf(args[0], args[1], args[2])
 			require.Error(t, err)
 			assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
 		})
@@ -183,7 +206,7 @@ func TestAdapterClient_MeetsTheMachineListenerOverHTTP11(t *testing.T) {
 	require.True(t, ok, `net.Listen("tcp", ...) returns a *net.TCPAddr`)
 	url := "https://localhost:" + strconv.Itoa(addr.Port)
 
-	subject, err := adapterClient(certFile, keyFile, rootFile)
+	subject, err := clientOf(certFile, keyFile, rootFile)
 	require.NoError(t, err)
 	resp, err := subject.Get(url)
 	require.NoError(t, err)

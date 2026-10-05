@@ -194,6 +194,7 @@ const (
 	envAdapterControlRoot    envName = "GARAM_ADAPTER_CONTROL_ROOT_FILE"
 	envAdapterPlacementToken envName = "GARAM_ADAPTER_PLACEMENT_TOKEN_FILE"
 	envAdapterOutboxDir      envName = "GARAM_ADAPTER_OUTBOX_DIR"
+	envAdapterControlSocket  envName = "GARAM_ADAPTER_CONTROL_SOCKET"
 )
 
 // envOr reads a declared name, or the fallback when it is unset or

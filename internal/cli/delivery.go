@@ -1,8 +1,10 @@
 package cli
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"net"
 	"net/http"
 	"os"
 	"time"
@@ -64,6 +66,7 @@ func adapt(cmd *cobra.Command) error {
 		controlRoot:    envOr(envAdapterControlRoot, ""),
 		placementToken: envOr(envAdapterPlacementToken, ""),
 		outboxDir:      envOr(envAdapterOutboxDir, ""),
+		controlSocket:  envOr(envAdapterControlSocket, ""),
 	})
 	if err != nil {
 		return err
@@ -83,6 +86,10 @@ type adapterSettings struct {
 	certFile, keyFile, serverRootFile string
 	controlURL, controlRoot           string
 	placementToken, outboxDir         string
+	// controlSocket is a unix socket every control connection dials
+	// in place of controlURL's host, which TLS still verifies: a
+	// standalone supervisor serves control on one (ADR-0085).
+	controlSocket string
 }
 
 // fenced reports which mode the settings choose (ADR-0084): all three
@@ -97,6 +104,9 @@ func (s adapterSettings) fenced() (bool, error) {
 	}
 	switch set {
 	case 0:
+		if s.controlSocket != "" {
+			return false, errorx.New(errorx.KindInvalidArgument, "GARAM_ADAPTER_CONTROL_SOCKET is set only beside the control settings")
+		}
 		return false, nil
 	case 3:
 		if s.outboxDir == "" {
@@ -132,7 +142,7 @@ func adapterLoop(s adapterSettings) (delivery.Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	client, err := adapterClient(pair, s.serverRootFile, string(envAdapterServerRootFile))
+	client, err := adapterClient(pair, s.serverRootFile, string(envAdapterServerRootFile), "")
 	if err != nil {
 		return nil, err
 	}
@@ -143,7 +153,7 @@ func adapterLoop(s adapterSettings) (delivery.Service, error) {
 	}
 	if fenced {
 		ends.Execution = delivery.NewFencedExecution()
-		control, err := adapterClient(pair, s.controlRoot, string(envAdapterControlRoot))
+		control, err := adapterClient(pair, s.controlRoot, string(envAdapterControlRoot), s.controlSocket)
 		if err != nil {
 			return nil, err
 		}
@@ -208,7 +218,12 @@ func adapterPair(certFile, keyFile string) (*keyfile.Pair, error) {
 // a claim is a long poll and the event stream is held open for as long
 // as the agent runs. Each call carries its own deadline instead
 // (delivery.Config's ClaimTimeout and CallTimeout).
-func adapterClient(pair *keyfile.Pair, rootFile, what string) (*http.Client, error) {
+//
+// A socket, where one is given, is what every connection dials,
+// whatever address a request names; TLS still verifies the URL's
+// host, so a standalone supervisor's control is reached on the unix
+// socket it serves (ADR-0085).
+func adapterClient(pair *keyfile.Pair, rootFile, what, socket string) (*http.Client, error) {
 	if rootFile == "" {
 		return nil, errorx.New(errorx.KindInvalidArgument, what+" is required")
 	}
@@ -220,11 +235,18 @@ func adapterClient(pair *keyfile.Pair, rootFile, what string) (*http.Client, err
 	if !roots.AppendCertsFromPEM(rootPEM) {
 		return nil, errorx.New(errorx.KindInvalidArgument, what+": no certificate in "+rootFile)
 	}
-	return &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{
+	transport := &http.Transport{TLSClientConfig: &tls.Config{
 		GetClientCertificate: func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
 			return pair.Get()
 		},
 		RootCAs:    roots,
 		MinVersion: tls.VersionTLS13,
-	}}}, nil
+	}}
+	if socket != "" {
+		var dialer net.Dialer
+		transport.DialContext = func(ctx context.Context, _, _ string) (net.Conn, error) {
+			return dialer.DialContext(ctx, "unix", socket)
+		}
+	}
+	return &http.Client{Transport: transport}, nil
 }

@@ -24,6 +24,15 @@ type Store interface {
 	// key already used returns the message stored under it, so a sender
 	// that retries stores one message and not two.
 	Enqueue(ctx context.Context, m *Message, fence *Fence) (*Message, error)
+	// EnqueueWithinBudget stores the message of a durable submission
+	// created at created, or returns what the sender's key already
+	// stores, after the budget too (ADR-0083). A key storing a message
+	// to another recipient, or with another body while it holds one,
+	// returns ErrKeyHoldsAnotherMessage. Where the key stores nothing,
+	// the database's clock decides when the insert runs: created after
+	// it returns ErrCreatedLater, and created SubmissionBudget or more
+	// before it ErrSubmissionExpired.
+	EnqueueWithinBudget(ctx context.Context, m *Message, created time.Time, fence *Fence) (*Message, error)
 	// Claim hands the recipient's oldest ready message to exactly one
 	// caller and holds it for lease, or returns ErrNoMessageReady. A
 	// claim that is never completed lapses when the lease runs out and

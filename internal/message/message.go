@@ -37,6 +37,26 @@ var (
 	// teaches a caller nothing about the queue outside its own messages
 	// (ADR-0055).
 	ErrNoSuchMessage = errorx.New(errorx.KindNotFound, "no such message")
+	// ErrUnsupportedDeliveryContract refuses a durable submission
+	// carrying no contract version, or one this release does not serve,
+	// and names the one it does (ADR-0083).
+	ErrUnsupportedDeliveryContract = errorx.New(errorx.KindInvalidArgument,
+		"unsupported Garam-Contract-Version: this route serves "+DeliveryContractVersion)
+	// ErrCreatedLater refuses a durable submission created after the
+	// database's decision instant. Its sender's clock runs ahead of the
+	// database's, which time resolves, so the refusal is not final
+	// (ADR-0083).
+	ErrCreatedLater = errorx.New(errorx.KindOutOfRange, "createdAt is later than garam's clock")
+	// ErrSubmissionExpired refuses a durable submission whose budget had
+	// run out at the decision instant and whose key stores nothing. No
+	// later attempt under that key stores one (ADR-0083).
+	ErrSubmissionExpired = errorx.New(errorx.KindDeadlineExceeded,
+		"createdAt is past the submission budget and nothing is stored under the key")
+	// ErrKeyHoldsAnotherMessage refuses a durable submission whose key
+	// already stores a message to another recipient or with another
+	// body (ADR-0083).
+	ErrKeyHoldsAnotherMessage = errorx.New(errorx.KindAlreadyExists,
+		"the idempotency key already stores a different message")
 )
 
 // ActionSend is the action a policy names to decide what one identity
@@ -57,7 +77,18 @@ const (
 	// suppress a retry — the budget is the senders', and the window
 	// names it.
 	RetentionWindow = 30 * 24 * time.Hour
+	// SubmissionBudget is how long after its creation a durable
+	// submission may still store a message (ADR-0083). It is part of
+	// DeliveryContractVersion rather than a setting, and sits well inside
+	// RetentionWindow, so every message it admits outlives the last
+	// retry that could duplicate it.
+	SubmissionBudget = 7 * 24 * time.Hour
 )
+
+// DeliveryContractVersion names the durable submission contract
+// (ADR-0083). Its route requires the version in the
+// Garam-Contract-Version header and answers with it.
+const DeliveryContractVersion = "durable-delivery.v1"
 
 // ID identifies a stored message. ClaimID identifies one reader's hold
 // on it; the two are never interchangeable.

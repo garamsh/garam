@@ -61,6 +61,8 @@ func BindingError(w http.ResponseWriter, r *http.Request, err error) {
 			enrollmentContract(w, "")
 		case standaloneRoute(r):
 			standaloneContract(w, "")
+		case r.URL.Path == "/outbox-messages":
+			deliveryContract(w, "")
 		default:
 			contract(w, "")
 		}

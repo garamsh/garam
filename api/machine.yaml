@@ -597,6 +597,89 @@ paths:
           $ref: '#/components/responses/Error'
         '409':
           $ref: '#/components/responses/Error'
+  /outbox-messages:
+    post:
+      operationId: postOutboxMessage
+      tags: [message]
+      security:
+        - machineCertificate: []
+          executionToken: []
+        - machineCertificate: []
+      summary: Post a durable reply under the creation instant its outbox entry holds.
+      description: >-
+        The same message write as `postMessage`, reached under contract
+        `durable-delivery.v1` (ADR-0083) by a sender that retries one
+        outbox entry under one idempotency key until garam answers. The
+        body adds `createdAt`, the instant the entry was created, and
+        garam stores a new message only while that instant is inside a
+        fixed seven-day budget: no later than the database's clock when
+        the insert runs, and less than seven days before it. The budget
+        is part of the contract and no deployment changes it. A
+        request delayed on its way to the insert is judged when it
+        writes, and the receipt time garam stamps is that same instant;
+        `createdAt` decides admission only and is not stored.
+
+        A key that already stores a message is answered with that
+        message whatever the budget now says, a completed one whose
+        body was dropped included (ADR-0034). So a sender that lost an
+        answer retries the same entry and is answered with what the
+        first attempt stored, and once the budget has run out on a key
+        that stores nothing, no attempt under it ever stores one —
+        which keeps every stored message inside the thirty-day
+        retention a retry could still reach.
+
+        Recipients, policy, the cross-organization refusal and the
+        execution token are `postMessage`'s, unchanged. The refusal is
+        stored under the same budget, and a 201 carrying it has the
+        intended recipient as sender and the caller as recipient, which
+        is how a caller tells it from its own message: verify the
+        answer's `id`, `sender`, `recipient` and `idempotencyKey`
+        before treating the entry as delivered.
+
+        The answers, each with the `Garam-Contract-Version` header:
+        201 is the message the key stores, stored now or earlier, or
+        the refusal. 400 `invalid_argument` is a missing or unknown
+        contract version, which names `durable-delivery.v1`, or a
+        malformed body, including a missing `createdAt` or one that is
+        not an RFC 3339 instant. 400 `out_of_range` is a `createdAt`
+        later than garam's clock: the entry is not lost, and a later
+        attempt may be admitted. 410 `deadline_exceeded` is a key that
+        stores nothing and a budget that has run out, which no later
+        attempt changes. 409 `already_exists` is a key that stores a
+        message to another recipient, or with another body while it
+        still holds one. A missing token is 401, one that is not current
+        403, and a certificate that is not current, or a token
+        presented for an agent never activated, 409 `failed_precondition`
+        (ADR-0080). A garam that predates this route answers 404, as it
+        does any path it does not serve, and has stored nothing.
+      parameters:
+        - $ref: '#/components/parameters/deliveryContractVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OutboxSubmission'
+      responses:
+        '201':
+          description: The message the key stores, or the cross-organization refusal.
+          headers:
+            Garam-Contract-Version:
+              $ref: '#/components/headers/DeliveryContractVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          $ref: '#/components/responses/DeliveryContractError'
+        '401':
+          $ref: '#/components/responses/DeliveryContractError'
+        '403':
+          $ref: '#/components/responses/DeliveryContractError'
+        '409':
+          $ref: '#/components/responses/DeliveryContractError'
+        '410':
+          $ref: '#/components/responses/DeliveryContractError'
   /messages/{message}:
     get:
       operationId: getMessageStatus
@@ -1534,6 +1617,14 @@ components:
       x-go-name: EnrollmentContractVersion
       schema:
         type: string
+    deliveryContractVersion:
+      name: Garam-Contract-Version
+      in: header
+      required: true
+      description: Must be `durable-delivery.v1` (ADR-0083); any other value is refused with 400 naming it.
+      x-go-name: DeliveryContractVersion
+      schema:
+        type: string
     executionContractVersion:
       name: Garam-Contract-Version
       in: header
@@ -1849,6 +1940,39 @@ components:
             arithmetic, and 256 KiB is the figure that arithmetic runs
             on: size a buffer or a row estimate against it, not against
             the character count.
+    OutboxSubmission:
+      type: object
+      description: >-
+        What a sender supplies for one outbox entry. Who is sending is
+        the certificate's to say.
+      required: [recipient, idempotencyKey, body, createdAt]
+      properties:
+        recipient:
+          type: string
+          description: >-
+            GRN of the identity the message is addressed to. It does
+            not have to name an agent garam knows.
+          example: grn:acme:default:agent:0a1b2c3d4e5f6071
+        idempotencyKey:
+          type: string
+          description: >-
+            The entry's own identifier, unchanged on every attempt. The
+            first message stored under it is the one every later
+            attempt is answered with.
+        body:
+          type: string
+          maxLength: 65536
+          description: >-
+            The message itself, bounded as `MessageSubmission`'s body is
+            (ADR-0034).
+        createdAt:
+          type: string
+          description: >-
+            When the entry was created, as an RFC 3339 instant with any
+            number of fractional digits, the same on every attempt. It
+            is read as text so that garam, not the decoder, refuses one
+            that does not parse.
+          example: '2026-10-04T18:07:52.123456789Z'
     Message:
       type: object
       description: One stored message, under an identifier the queue minted.
@@ -2312,6 +2436,10 @@ components:
       description: The contract version this answer follows, `managed-enrollment.v1`.
       schema:
         type: string
+    DeliveryContractVersion:
+      description: The contract version this answer follows, `durable-delivery.v1`.
+      schema:
+        type: string
     ExecutionContractVersion:
       description: The contract version this answer follows, `execution-fence.v1`.
       schema:
@@ -2341,6 +2469,15 @@ components:
       headers:
         Garam-Contract-Version:
           $ref: '#/components/headers/EnrollmentContractVersion'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    DeliveryContractError:
+      description: Error response of the durable submission route.
+      headers:
+        Garam-Contract-Version:
+          $ref: '#/components/headers/DeliveryContractVersion'
       content:
         application/json:
           schema:

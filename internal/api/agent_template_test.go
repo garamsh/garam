@@ -6,6 +6,7 @@ import (
 	"slices"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -18,80 +19,90 @@ import (
 	"github.com/garamsh/garam/internal/org"
 )
 
-// templateBody is a create or update request.
-func templateBody(name, description, values string) string {
-	return `{"name":"` + name + `","description":"` + description + `","values":` + values + `}`
+// retiredTemplate is a template of the organization slug names, as one
+// kept before templates were retired read-only (ADR-0088).
+func retiredTemplate(slug, id, name string) *agent.Template {
+	at := time.Date(2026, 9, 28, 0, 0, 0, 0, time.UTC)
+	return &agent.Template{
+		GRN:    grn.New(slug, grn.DefaultProject, agent.ServiceTypeTemplate, id),
+		OrgGRN: orgGRNOf(slug),
+		TemplateContent: agent.TemplateContent{
+			Name: agent.Name(name), Description: "Reads papers", Values: agent.Values{"model": "haiku"},
+		},
+		CreatedBy: userGRNOf("owner-sub"),
+		CreatedAt: at,
+		UpdatedAt: at,
+	}
 }
 
-// TestAgentTemplate_EachOperationIsItsOwnAction covers the four
-// template actions (ADR-0075). The maintainer holds all four and the
-// reader holds only the read: the reader's refused writes and the
-// maintainer's answered ones are the same requests, so what refuses
-// the reader is the action and not the request. Defining agents grants
-// none of them, which is what lets a policy tell the two apart.
-func TestAgentTemplate_EachOperationIsItsOwnAction(t *testing.T) {
+// TestAgentTemplate_WritesAreClosedAndReadsStay holds the retirement at
+// the routes (ADR-0088). An owner whom the evaluator allows every
+// action sends the create, the replacement and the delete the
+// specification served before, and each is answered 405 without
+// reaching the store: the template reads back unchanged. The control
+// is the same owner reading the same paths, which are answered.
+func TestAgentTemplate_WritesAreClosedAndReadsStay(t *testing.T) {
+	f := newFixture(t)
+	f.evaluator.EXPECT().Evaluate(mock.Anything, mock.Anything).Return(true, nil)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	kept := retiredTemplate(slug, "7c1e2a9b3d4f5a60", "Researcher")
+	f.agents.keepTemplate(kept)
+	base := "/orgs/" + slug + "/agent-templates"
+	one := base + "/" + kept.GRN.Identifier
+	body := `{"name":"Analyst","description":"","values":{}}`
+
+	for _, write := range []struct{ method, path string }{
+		{"POST", base}, {"PUT", one}, {"DELETE", one},
+	} {
+		rec := f.do(t, write.method, write.path, body, owner)
+		assert.Equal(t, http.StatusMethodNotAllowed, rec.Code, write.method+" "+write.path)
+	}
+
+	rec := f.do(t, "GET", one, "", owner)
+	require.Equal(t, http.StatusOK, rec.Code)
+	read := decodeBody[apigen.AgentTemplate](t, rec)
+	assert.Equal(t, kept.GRN.String(), read.Grn)
+	assert.Equal(t, "Researcher", read.Name, "no write reached the template")
+	assert.Equal(t, apigen.AgentValues{"model": "haiku"}, read.Values)
+	rec = f.do(t, "GET", base, "", owner)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Len(t, decodeBody[[]apigen.AgentTemplate](t, rec), 1)
+}
+
+// TestAgentTemplate_ReadingIsItsOwnAction covers the one template
+// action left (ADR-0075, ADR-0088). The reader holds it and reads both
+// paths; defining agents does not grant it, so the definer's refusals
+// of the same requests are what the action decides.
+func TestAgentTemplate_ReadingIsItsOwnAction(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
 	f.permit(
-		permission{userGRNOf("maintainer-sub"), org.ActionAgentTemplateRead},
-		permission{userGRNOf("maintainer-sub"), org.ActionAgentTemplateCreate},
-		permission{userGRNOf("maintainer-sub"), org.ActionAgentTemplateUpdate},
-		permission{userGRNOf("maintainer-sub"), org.ActionAgentTemplateDelete},
 		permission{userGRNOf("reader-sub"), org.ActionAgentTemplateRead},
 		permission{userGRNOf("definer-sub"), org.ActionAgentDefine},
 		permission{userGRNOf("definer-sub"), org.ActionAgentRead},
 	)
-	maintainer := f.sessionCookieFor(t, "maintainer-sub", "Maintainer")
 	reader := f.sessionCookieFor(t, "reader-sub", "Reader")
 	definer := f.sessionCookieFor(t, "definer-sub", "Definer")
-	for _, sub := range []string{"maintainer-sub", "reader-sub", "definer-sub"} {
+	for _, sub := range []string{"reader-sub", "definer-sub"} {
 		require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(slug), userGRNOf(sub), org.RoleMember)))
 	}
+	kept := retiredTemplate(slug, "7c1e2a9b3d4f5a60", "Researcher")
+	f.agents.keepTemplate(kept)
 	base := "/orgs/" + slug + "/agent-templates"
 
-	create := templateBody(" Researcher ", "Reads papers", `{"model":"haiku"}`)
-	for _, who := range []*http.Cookie{reader, definer} {
-		assert.Equal(t, http.StatusForbidden, f.do(t, "POST", base, create, who).Code)
-	}
-	rec := f.do(t, "POST", base, create, maintainer)
-	require.Equal(t, http.StatusCreated, rec.Code)
-	created := decodeBody[apigen.AgentTemplate](t, rec)
-	assert.Equal(t, "Researcher", created.Name, "trimmed")
-	assert.Equal(t, "Reads papers", created.Description)
-	assert.Equal(t, apigen.AgentValues{"model": "haiku"}, created.Values)
-	assert.Equal(t, userGRNOf("maintainer-sub").String(), created.CreatedBy)
-	g, err := grn.Parse(created.Grn)
-	require.NoError(t, err)
-	assert.Equal(t, slug, g.Organization)
-	assert.Equal(t, agent.ServiceTypeTemplate, g.ServiceType)
-	one := base + "/" + g.Identifier
-
-	for _, path := range []string{base, one} {
+	for _, path := range []string{base, base + "/" + kept.GRN.Identifier} {
 		assert.Equal(t, http.StatusForbidden, f.do(t, "GET", path, "", definer).Code, path)
 		assert.Equal(t, http.StatusOK, f.do(t, "GET", path, "", reader).Code, path)
 	}
-
-	update := templateBody("Analyst", "", `{}`)
-	assert.Equal(t, http.StatusForbidden, f.do(t, "PUT", one, update, reader).Code)
-	rec = f.do(t, "PUT", one, update, maintainer)
-	require.Equal(t, http.StatusOK, rec.Code)
-	updated := decodeBody[apigen.AgentTemplate](t, rec)
-	assert.Equal(t, "Analyst", updated.Name)
-	assert.Empty(t, updated.Description, "an update replaces the whole template")
-	assert.Empty(t, updated.Values)
-
-	assert.Equal(t, http.StatusForbidden, f.do(t, "DELETE", one, "", reader).Code)
-	assert.Equal(t, http.StatusNoContent, f.do(t, "DELETE", one, "", maintainer).Code)
-	assert.Equal(t, http.StatusNotFound, f.do(t, "GET", one, "", reader).Code)
-	assert.Equal(t, http.StatusNotFound, f.do(t, "DELETE", one, "", maintainer).Code)
 }
 
 // TestAgentTemplate_IsAuthorizedOnTheTemplateItNames records what each
-// template route asks the evaluator about. A route that asked about the
+// template read asks the evaluator about. A read that asked about the
 // organization instead would let a policy scoped to one template reach
-// every other one; the collection routes, which name no template, ask
-// about the organization and are the control.
+// every other one; the list, which names no template, asks about the
+// organization and is the control.
 func TestAgentTemplate_IsAuthorizedOnTheTemplateItNames(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
@@ -111,16 +122,11 @@ func TestAgentTemplate_IsAuthorizedOnTheTemplateItNames(t *testing.T) {
 		})
 	maintainer := f.sessionCookieFor(t, "maintainer-sub", "Maintainer")
 	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(slug), userGRNOf("maintainer-sub"), org.RoleMember)))
+	kept := retiredTemplate(slug, "7c1e2a9b3d4f5a60", "Researcher")
+	f.agents.keepTemplate(kept)
 	base := "/orgs/" + slug + "/agent-templates"
 
-	rec := f.do(t, "POST", base, templateBody("Researcher", "", `{}`), maintainer)
-	require.Equal(t, http.StatusCreated, rec.Code)
-	g, err := grn.Parse(decodeBody[apigen.AgentTemplate](t, rec).Grn)
-	require.NoError(t, err)
-	one := base + "/" + g.Identifier
-	require.Equal(t, http.StatusOK, f.do(t, "GET", one, "", maintainer).Code)
-	require.Equal(t, http.StatusOK, f.do(t, "PUT", one, templateBody("Analyst", "", `{}`), maintainer).Code)
-	require.Equal(t, http.StatusNoContent, f.do(t, "DELETE", one, "", maintainer).Code)
+	require.Equal(t, http.StatusOK, f.do(t, "GET", base+"/"+kept.GRN.Identifier, "", maintainer).Code)
 	require.Equal(t, http.StatusOK, f.do(t, "GET", base, "", maintainer).Code)
 
 	mu.Lock()
@@ -128,70 +134,34 @@ func TestAgentTemplate_IsAuthorizedOnTheTemplateItNames(t *testing.T) {
 	// Which object each action was asked about is the property; the
 	// order the evaluator was asked in is not.
 	assert.ElementsMatch(t, []question{
-		{org.ActionAgentTemplateCreate, orgGRNOf(slug)},
-		{org.ActionAgentTemplateRead, g},
-		{org.ActionAgentTemplateUpdate, g},
-		{org.ActionAgentTemplateDelete, g},
+		{org.ActionAgentTemplateRead, kept.GRN},
 		{org.ActionAgentTemplateRead, orgGRNOf(slug)},
 	}, asked)
 }
 
-// TestAgentTemplate_StaysInsideItsOrganization reads, updates and
-// deletes one organization's template through another's paths. The
-// identifier is the same; only the organization segment differs, so a
-// store keyed on the identifier alone would answer. The owner's own
-// organization answering the same requests is the control.
+// TestAgentTemplate_StaysInsideItsOrganization reads one
+// organization's template through another's paths. The identifier is
+// the same; only the organization segment differs, so a store keyed on
+// the identifier alone would answer. The owning organization answering
+// the same read is the control.
 func TestAgentTemplate_StaysInsideItsOrganization(t *testing.T) {
 	f := newFixture(t)
-	f.permit(
-		permission{userGRNOf("owner-sub"), org.ActionAgentTemplateRead},
-		permission{userGRNOf("owner-sub"), org.ActionAgentTemplateCreate},
-		permission{userGRNOf("owner-sub"), org.ActionAgentTemplateUpdate},
-		permission{userGRNOf("owner-sub"), org.ActionAgentTemplateDelete},
-	)
+	f.permit(permission{userGRNOf("owner-sub"), org.ActionAgentTemplateRead})
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	acme := createOrg(t, f, owner, "acme")
 	globex := createOrg(t, f, owner, "globex")
+	theirs := retiredTemplate(globex, "7c1e2a9b3d4f5a60", "Theirs")
+	f.agents.keepTemplate(theirs)
 
-	rec := f.do(t, "POST", "/orgs/"+globex+"/agent-templates", templateBody("Theirs", "", `{}`), owner)
-	require.Equal(t, http.StatusCreated, rec.Code)
-	g, err := grn.Parse(decodeBody[apigen.AgentTemplate](t, rec).Grn)
-	require.NoError(t, err)
-
-	elsewhere := "/orgs/" + acme + "/agent-templates/" + g.Identifier
+	elsewhere := "/orgs/" + acme + "/agent-templates/" + theirs.GRN.Identifier
 	assert.Equal(t, http.StatusNotFound, f.do(t, "GET", elsewhere, "", owner).Code)
-	assert.Equal(t, http.StatusNotFound, f.do(t, "PUT", elsewhere, templateBody("Mine", "", `{}`), owner).Code)
-	assert.Equal(t, http.StatusNotFound, f.do(t, "DELETE", elsewhere, "", owner).Code)
-	rec = f.do(t, "GET", "/orgs/"+acme+"/agent-templates", "", owner)
+	rec := f.do(t, "GET", "/orgs/"+acme+"/agent-templates", "", owner)
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.Empty(t, decodeBody[[]apigen.AgentTemplate](t, rec))
 
-	home := "/orgs/" + globex + "/agent-templates/" + g.Identifier
-	rec = f.do(t, "GET", home, "", owner)
+	rec = f.do(t, "GET", "/orgs/"+globex+"/agent-templates/"+theirs.GRN.Identifier, "", owner)
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "Theirs", decodeBody[apigen.AgentTemplate](t, rec).Name)
-}
-
-func TestAgentTemplate_RefusesWhatItCannotStore(t *testing.T) {
-	f := newFixture(t)
-	f.permit(permission{userGRNOf("owner-sub"), org.ActionAgentTemplateCreate})
-	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
-	slug := createOrg(t, f, owner, "acme")
-	base := "/orgs/" + slug + "/agent-templates"
-
-	for name, body := range map[string]string{
-		"no name":             `{"values":{}}`,
-		"name of whitespace":  templateBody("   ", "", `{}`),
-		"value key refused":   templateBody("Researcher", "", `{"Model":"haiku"}`),
-		"body not an object":  `[]`,
-		"values not a string": templateBody("Researcher", "", `{"model":1}`),
-	} {
-		t.Run(name, func(t *testing.T) {
-			assert.Equal(t, http.StatusBadRequest, f.do(t, "POST", base, body, owner).Code)
-		})
-	}
-	// The same request with a name and a key garam accepts is stored.
-	assert.Equal(t, http.StatusCreated, f.do(t, "POST", base, templateBody("Researcher", "", `{"model":"haiku"}`), owner).Code)
 }
 
 // TestAgentDefinition_RenameIsItsOwnActionOnTheAgent covers renaming a
@@ -257,65 +227,4 @@ func TestAgentDefinition_RenameIsItsOwnActionOnTheAgent(t *testing.T) {
 	defer mu.Unlock()
 	assert.Contains(t, renameObjects, agentGRN, "authorized on the agent, not the organization")
 	assert.NotContains(t, renameObjects, orgGRNOf(slug))
-}
-
-// TestAgentTemplate_RefusesNullValuesAndKeepsOmissionClearing holds the
-// write boundary of a template's values. An explicit null, for the
-// object or for one entry, is refused rather than read as empty, and a
-// refused update leaves the stored template as it was, timestamps
-// included. The controls are the writes the specification admits:
-// values left out (which clears them, since an update replaces the
-// whole template), an empty object, and an empty string.
-func TestAgentTemplate_RefusesNullValuesAndKeepsOmissionClearing(t *testing.T) {
-	f := newFixture(t)
-	f.permit(
-		permission{userGRNOf("owner-sub"), org.ActionAgentTemplateRead},
-		permission{userGRNOf("owner-sub"), org.ActionAgentTemplateCreate},
-		permission{userGRNOf("owner-sub"), org.ActionAgentTemplateUpdate},
-	)
-	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
-	slug := createOrg(t, f, owner, "acme")
-	base := "/orgs/" + slug + "/agent-templates"
-
-	for name, body := range map[string]string{
-		"null values object": `{"name":"Researcher","values":null}`,
-		"null value entry":   `{"name":"Researcher","values":{"workspace":null}}`,
-	} {
-		t.Run(name, func(t *testing.T) {
-			assert.Equal(t, http.StatusBadRequest, f.do(t, "POST", base, body, owner).Code)
-		})
-	}
-	for name, tc := range map[string]struct {
-		body string
-		want apigen.AgentValues
-	}{
-		"values left out":   {`{"name":"Researcher"}`, apigen.AgentValues{}},
-		"empty object":      {`{"name":"Researcher","values":{}}`, apigen.AgentValues{}},
-		"empty string kept": {`{"name":"Researcher","values":{"workspace":""}}`, apigen.AgentValues{"workspace": ""}},
-	} {
-		t.Run(name, func(t *testing.T) {
-			rec := f.do(t, "POST", base, tc.body, owner)
-			require.Equal(t, http.StatusCreated, rec.Code)
-			assert.Equal(t, tc.want, decodeBody[apigen.AgentTemplate](t, rec).Values)
-		})
-	}
-
-	rec := f.do(t, "POST", base, templateBody("Researcher", "", `{"workspace":"papers"}`), owner)
-	require.Equal(t, http.StatusCreated, rec.Code)
-	created := decodeBody[apigen.AgentTemplate](t, rec)
-	g, err := grn.Parse(created.Grn)
-	require.NoError(t, err)
-	one := base + "/" + g.Identifier
-
-	assert.Equal(t, http.StatusBadRequest,
-		f.do(t, "PUT", one, `{"name":"Researcher","values":{"workspace":null}}`, owner).Code)
-	rec = f.do(t, "GET", one, "", owner)
-	require.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, created, decodeBody[apigen.AgentTemplate](t, rec), "the refused update changed nothing")
-
-	// The control: the same update with values left out is accepted and
-	// clears them, as the whole-template replacement says it does.
-	rec = f.do(t, "PUT", one, `{"name":"Researcher"}`, owner)
-	require.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, apigen.AgentValues{}, decodeBody[apigen.AgentTemplate](t, rec).Values)
 }

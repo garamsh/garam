@@ -1,8 +1,6 @@
 package agent
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"time"
 
 	"github.com/garamsh/garam/internal/errorx"
@@ -13,12 +11,12 @@ import (
 // templates (ADR-0075).
 const ServiceTypeTemplate = "agent-template"
 
-// ErrTemplateNotFound is what a read, an edit or a delete of a template
-// the organization does not hold answers.
+// ErrTemplateNotFound is what a read of a template the organization
+// does not hold answers.
 var ErrTemplateNotFound = errorx.New(errorx.KindNotFound, "agent template not found")
 
 // TemplateContent is what a template says: its name, what it is for,
-// and the values a definition may copy from it. Each field is the
+// and the values a definition could copy from it. Each field is the
 // parsed form, so a TemplateContent is within every bound a template
 // row keeps.
 type TemplateContent struct {
@@ -27,10 +25,11 @@ type TemplateContent struct {
 	Values      Values
 }
 
-// Template is a starting point an organization keeps for defining
+// Template is a starting point an organization kept for defining
 // agents (ADR-0075). It names no operator and no agent, and nothing
-// records which definitions were started from it: a definition copies
-// the values once, so editing or deleting a template reaches no agent.
+// records which definitions were started from it: a definition copied
+// the values once. Templates are retired read-only, so a stored one is
+// the record of what it said and nothing writes it again (ADR-0088).
 //
 // Its fields are exported: it is a data carrier with no invariant a
 // method holds, so the field is the exposure (ADR-0069).
@@ -42,29 +41,6 @@ type Template struct {
 	CreatedBy grn.GRN
 	CreatedAt time.Time
 	UpdatedAt time.Time
-}
-
-// NewTemplate mints the identity of a template orgGRN keeps and records
-// what it says. createdBy is the member that created it.
-func NewTemplate(orgGRN grn.GRN, content TemplateContent, createdBy grn.GRN) (*Template, error) {
-	b := make([]byte, 8)
-	if _, err := rand.Read(b); err != nil {
-		return nil, errorx.Wrap(err, "agent template id")
-	}
-	// A template carrying no value holds an empty payload rather than
-	// none, as a definition does.
-	if content.Values == nil {
-		content.Values = Values{}
-	}
-	now := time.Now().UTC()
-	return &Template{
-		GRN:             grn.New(orgGRN.Identifier, grn.DefaultProject, ServiceTypeTemplate, hex.EncodeToString(b)),
-		OrgGRN:          orgGRN,
-		TemplateContent: content,
-		CreatedBy:       createdBy,
-		CreatedAt:       now,
-		UpdatedAt:       now,
-	}, nil
 }
 
 // validateTemplateOwnership returns nil if g names a template of the

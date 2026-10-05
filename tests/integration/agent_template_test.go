@@ -6,9 +6,11 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -17,82 +19,55 @@ import (
 	"github.com/garamsh/garam/internal/org"
 )
 
-// templateContent builds content the domain accepts, for a test that is
-// not about what it refuses.
-func templateContent(t *testing.T, name, description string, values agent.Values) agent.TemplateContent {
+// retiredMessage is what 000034's guard raises for any write to a
+// template (ADR-0088).
+const retiredMessage = "agent_templates is retired read-only"
+
+// templateSeq numbers the templates keepTemplate writes, so each has
+// an identifier of its own.
+var templateSeq atomic.Uint64
+
+// keepTemplate writes a template of orgName as one kept before
+// templates were retired, and answers its GRN. 000034 refuses every
+// write, so the row is written with the session's ordinary triggers
+// off, which the suite's superuser may do; nothing in garam writes
+// one.
+func keepTemplate(t *testing.T, p *pgxpool.Pool, orgName, name string, values agent.Values) grn.GRN {
 	t.Helper()
-	n, err := agent.ParseName(name)
-	require.NoError(t, err)
-	d, err := agent.ParseDescription(description)
-	require.NoError(t, err)
-	return agent.TemplateContent{Name: n, Description: d, Values: values}
-}
-
-// TestAgentTemplate_AnAgentKeepsWhatItCopied is ADR-0075's
-// independence against real Postgres. A definition is written from a
-// template's values the way the console writes one: the values are
-// copied into the request, once. Editing the template and then deleting
-// it leaves the definition's name, operator, values and GRN exactly as
-// they were, and the template's own row is the control that the edit
-// and the delete happened.
-func TestAgentTemplate_AnAgentKeepsWhatItCopied(t *testing.T) {
 	ctx := context.Background()
-	p := pool(t)
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
-	s := agent.NewPostgresStore(p)
-	ada := scopedGRN("acme", "user", "ada")
-
-	tpl, err := agent.NewTemplate(orgRootGRN("acme"),
-		templateContent(t, "Researcher", "Reads papers", agent.Values{"workspace": "papers", "notes": "weekly"}), ada)
-	require.NoError(t, err)
-	require.NoError(t, s.CreateTemplate(ctx, tpl))
-	stored, err := s.GetTemplate(ctx, tpl.GRN)
-	require.NoError(t, err)
-	assert.Equal(t, tpl.TemplateContent, stored.TemplateContent)
-	assert.Equal(t, ada, stored.CreatedBy)
-
-	// The copy the console makes: the template's values, edited before
-	// the definition is written.
-	copied := agent.Values{}
-	for k, v := range stored.Values {
-		copied[k] = v
+	g := scopedGRN(orgName, agent.ServiceTypeTemplate, fmt.Sprintf("%016x", templateSeq.Add(1)))
+	if values == nil {
+		values = agent.Values{}
 	}
-	copied["notes"] = "daily"
-	operatorGRN := registerOperator(t, p, scopedGRN("acme", agent.ServiceTypeOperator, "one"))
-	d, err := agent.NewDefinition(orgRootGRN("acme"), operatorGRN, "Scout", copied, ada)
+	tx, err := p.Begin(ctx)
 	require.NoError(t, err)
-	require.NoError(t, s.Define(ctx, d))
-
-	updated, err := s.UpdateTemplate(ctx, tpl.GRN,
-		templateContent(t, "Analyst", "", agent.Values{"workspace": "archive"}))
+	defer func() { _ = tx.Rollback(ctx) }()
+	_, err = tx.Exec(ctx, "SET LOCAL session_replication_role = replica")
 	require.NoError(t, err)
-	assert.Equal(t, agent.Name("Analyst"), updated.Name)
-	assert.Equal(t, agent.Values{"workspace": "archive"}, updated.Values)
-	assert.True(t, updated.UpdatedAt.After(stored.UpdatedAt) || updated.UpdatedAt.Equal(stored.UpdatedAt))
-
-	after, err := s.GetDefinition(ctx, d.Agent())
+	_, err = tx.Exec(ctx, `INSERT INTO agent_templates
+		(grn, org_grn, name, description, agent_values, created_by, created_at, updated_at)
+		VALUES ($1, $2, $3, '', $4, $5, now(), now())`,
+		g.String(), orgRootGRN(orgName).String(), name, values, scopedGRN(orgName, "user", "ada").String())
 	require.NoError(t, err)
-	assert.Equal(t, agent.Name("Scout"), after.Name)
-	assert.Equal(t, agent.Values{"workspace": "papers", "notes": "daily"}, after.Values(),
-		"the template's edit reached no agent")
-
-	require.NoError(t, s.DeleteTemplate(ctx, tpl.GRN))
-	_, err = s.GetTemplate(ctx, tpl.GRN)
-	assert.ErrorIs(t, err, agent.ErrTemplateNotFound)
-	assert.ErrorIs(t, s.DeleteTemplate(ctx, tpl.GRN), agent.ErrTemplateNotFound)
-
-	after, err = s.GetDefinition(ctx, d.Agent())
-	require.NoError(t, err)
-	assert.Equal(t, agent.Name("Scout"), after.Name)
-	assert.Equal(t, operatorGRN, after.Operator())
-	assert.Equal(t, agent.Values{"workspace": "papers", "notes": "daily"}, after.Values(),
-		"the template's deletion reached no agent")
+	require.NoError(t, tx.Commit(ctx))
+	return g
 }
 
-// TestAgentTemplate_BelongsToOneOrganization lists, reads and counts
-// templates of two organizations. Each lists its own, ordered by name;
-// deleting one organization takes its templates and leaves the other's.
-func TestAgentTemplate_BelongsToOneOrganization(t *testing.T) {
+// requireRetired asserts err is 000034's refusal of a template write.
+func requireRetired(t *testing.T, err error) {
+	t.Helper()
+	var pgErr *pgconn.PgError
+	require.ErrorAs(t, err, &pgErr)
+	assert.Equal(t, "P0001", pgErr.Code, "raised by the retirement guard")
+	assert.Equal(t, retiredMessage, pgErr.Message)
+}
+
+// TestAgentTemplate_ARetiredTemplateIsReadAsKept reads kept templates
+// of two organizations. Each lists its own, ordered by name, and reads
+// one back as it was written; deleting one organization takes its
+// templates through the cascade the guard admits, and leaves the
+// other's.
+func TestAgentTemplate_ARetiredTemplateIsReadAsKept(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
 	orgs := org.NewPostgresStore(p)
@@ -100,15 +75,9 @@ func TestAgentTemplate_BelongsToOneOrganization(t *testing.T) {
 	require.NoError(t, orgs.CreateOrg(ctx, org.NewOrganization(orgRootGRN("globex"), "globex")))
 	s := agent.NewPostgresStore(p)
 
-	create := func(orgName, name string) *agent.Template {
-		tpl, err := agent.NewTemplate(orgRootGRN(orgName), templateContent(t, name, "", nil), scopedGRN(orgName, "user", "ada"))
-		require.NoError(t, err)
-		require.NoError(t, s.CreateTemplate(ctx, tpl))
-		return tpl
-	}
-	create("acme", "Writer")
-	create("acme", "Analyst")
-	theirs := create("globex", "Spy")
+	writer := keepTemplate(t, p, "acme", "Writer", agent.Values{"workspace": "papers"})
+	keepTemplate(t, p, "acme", "Analyst", nil)
+	theirs := keepTemplate(t, p, "globex", "Spy", nil)
 
 	mine, err := s.ListTemplatesByOrg(ctx, orgRootGRN("acme"))
 	require.NoError(t, err)
@@ -116,9 +85,12 @@ func TestAgentTemplate_BelongsToOneOrganization(t *testing.T) {
 	for _, tpl := range mine {
 		names = append(names, tpl.Name)
 		assert.Equal(t, orgRootGRN("acme"), tpl.OrgGRN)
-		assert.Equal(t, agent.Values{}, tpl.Values, "an empty payload rather than none")
 	}
 	assert.Equal(t, []agent.Name{"Analyst", "Writer"}, names)
+	read, err := s.GetTemplate(ctx, writer)
+	require.NoError(t, err)
+	assert.Equal(t, agent.Values{"workspace": "papers"}, read.Values)
+	assert.Equal(t, scopedGRN("acme", "user", "ada"), read.CreatedBy)
 
 	counts, err := s.CountByOrg(ctx, orgRootGRN("acme"))
 	require.NoError(t, err)
@@ -128,9 +100,85 @@ func TestAgentTemplate_BelongsToOneOrganization(t *testing.T) {
 	counts, err = s.CountByOrg(ctx, orgRootGRN("acme"))
 	require.NoError(t, err)
 	assert.Zero(t, counts.Templates, "the organization's deletion took its templates")
-	kept, err := s.GetTemplate(ctx, theirs.GRN)
+	kept, err := s.GetTemplate(ctx, theirs)
 	require.NoError(t, err)
 	assert.Equal(t, agent.Name("Spy"), kept.Name, "and left the other organization's")
+}
+
+// TestAgentTemplate_TheSchemaRefusesEveryWrite holds 000034's guard
+// against writes sent straight to the table, as a release still serving
+// the old routes would send them. Each is refused and changes nothing.
+// The control is the same write with the session's ordinary triggers
+// off, which is accepted: what refuses it is the guard, and not a check
+// or a key the write breaks.
+func TestAgentTemplate_TheSchemaRefusesEveryWrite(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	kept := keepTemplate(t, p, "acme", "Researcher", agent.Values{"workspace": "papers"})
+
+	for name, write := range map[string]struct {
+		query string
+		args  []any
+	}{
+		"an insert": {`INSERT INTO agent_templates
+			(grn, org_grn, name, description, agent_values, created_by, created_at, updated_at)
+			VALUES ('grn:acme:default:agent-template:00000000000000ff', 'grn:root:default:org:acme', 'New', '', '{}',
+			        'grn:acme:default:user:ada', now(), now())`, nil},
+		"an update": {`UPDATE agent_templates SET name = 'Analyst' WHERE grn = $1`, []any{kept.String()}},
+		"a delete":  {`DELETE FROM agent_templates WHERE grn = $1`, []any{kept.String()}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := p.Exec(ctx, write.query, write.args...)
+			requireRetired(t, err)
+			read, err := agent.NewPostgresStore(p).GetTemplate(ctx, kept)
+			require.NoError(t, err)
+			assert.Equal(t, agent.Name("Researcher"), read.Name, "the refused write changed nothing")
+			assert.Equal(t, 1, countRows(t, p, `SELECT count(*) FROM agent_templates`))
+
+			tx, err := p.Begin(ctx)
+			require.NoError(t, err)
+			defer func() { _ = tx.Rollback(ctx) }()
+			_, err = tx.Exec(ctx, "SET LOCAL session_replication_role = replica")
+			require.NoError(t, err)
+			_, err = tx.Exec(ctx, write.query, write.args...)
+			assert.NoError(t, err, "control: the same write without the guard is accepted")
+		})
+	}
+}
+
+// TestAgentTemplate_ADefinitionKeepsWhatItCopied is ADR-0075's
+// copy-once held across the retirement. A definition is written from a
+// kept template's values, edited first, the way the console wrote one.
+// The template's retirement leaves the definition's name, operator and
+// values exactly as they were, and the template's own refused edit is
+// the control that the retirement is in force.
+func TestAgentTemplate_ADefinitionKeepsWhatItCopied(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	s := agent.NewPostgresStore(p)
+	kept := keepTemplate(t, p, "acme", "Researcher", agent.Values{"workspace": "papers", "notes": "weekly"})
+	stored, err := s.GetTemplate(ctx, kept)
+	require.NoError(t, err)
+
+	copied := agent.Values{}
+	for k, v := range stored.Values {
+		copied[k] = v
+	}
+	copied["notes"] = "daily"
+	operatorGRN := registerOperator(t, p, scopedGRN("acme", agent.ServiceTypeOperator, "one"))
+	d, err := agent.NewDefinition(orgRootGRN("acme"), operatorGRN, "Scout", copied, scopedGRN("acme", "user", "ada"))
+	require.NoError(t, err)
+	require.NoError(t, s.Define(ctx, d))
+
+	_, err = p.Exec(ctx, `UPDATE agent_templates SET agent_values = '{}' WHERE grn = $1`, kept.String())
+	requireRetired(t, err)
+	after, err := s.GetDefinition(ctx, d.Agent())
+	require.NoError(t, err)
+	assert.Equal(t, agent.Name("Scout"), after.Name)
+	assert.Equal(t, operatorGRN, after.Operator())
+	assert.Equal(t, agent.Values{"workspace": "papers", "notes": "daily"}, after.Values())
 }
 
 // TestAgentDefinition_RenameMovesOnlyTheName renames a claimed
@@ -165,30 +213,22 @@ func TestAgentDefinition_RenameMovesOnlyTheName(t *testing.T) {
 	assert.ErrorIs(t, err, agent.ErrDefinitionNotFound)
 }
 
-// TestAgentTemplate_TheSchemaRefusesWhatTheDomainRefuses holds
-// 000026's checks as the copy no call path routes around. The writes go
-// straight to the tables, and the write within every bound is the
-// control.
-func TestAgentTemplate_TheSchemaRefusesWhatTheDomainRefuses(t *testing.T) {
+// TestAgentDefinition_TheSchemaRefusesWhatTheDomainRefuses holds
+// 000026's checks on a definition's name as the copy no call path
+// routes around. The writes go straight to the table, and the write
+// within every bound is the control. A template's own checks are
+// behind its retirement, which refuses every write first.
+func TestAgentDefinition_TheSchemaRefusesWhatTheDomainRefuses(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
 	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	s := agent.NewPostgresStore(p)
-	tpl, err := agent.NewTemplate(orgRootGRN("acme"), templateContent(t, "Researcher", "", nil), scopedGRN("acme", "user", "ada"))
-	require.NoError(t, err)
-	require.NoError(t, s.CreateTemplate(ctx, tpl))
 	d := defineAgent(t, p, s, scopedGRN("acme", agent.ServiceTypeOperator, "one"), nil)
 
 	for name, write := range map[string]struct {
 		query string
 		arg   string
 	}{
-		"a blank template name":    {`UPDATE agent_templates SET name = '  ' WHERE grn = $1`, tpl.GRN.String()},
-		"a template name past 100": {`UPDATE agent_templates SET name = repeat('가', 101) WHERE grn = $1`, tpl.GRN.String()},
-		"a description past 1000":  {`UPDATE agent_templates SET description = repeat('가', 1001) WHERE grn = $1`, tpl.GRN.String()},
-		"values that are an array": {`UPDATE agent_templates SET agent_values = '[]' WHERE grn = $1`, tpl.GRN.String()},
-		"a template of another org": {`UPDATE agent_templates SET grn = 'grn:globex:default:agent-template:x' WHERE grn = $1`,
-			tpl.GRN.String()},
 		"a blank agent name":    {`UPDATE agent_definitions SET name = '' WHERE agent_grn = $1`, d.Agent().String()},
 		"an agent name of null": {`UPDATE agent_definitions SET name = NULL WHERE agent_grn = $1`, d.Agent().String()},
 	} {
@@ -200,11 +240,7 @@ func TestAgentTemplate_TheSchemaRefusesWhatTheDomainRefuses(t *testing.T) {
 		})
 	}
 
-	_, err = p.Exec(ctx,
-		`UPDATE agent_templates SET name = repeat('가', 100), description = repeat('가', 1000) WHERE grn = $1`,
-		tpl.GRN.String())
-	assert.NoError(t, err)
-	_, err = p.Exec(ctx, `UPDATE agent_definitions SET name = repeat('가', 100) WHERE agent_grn = $1`, d.Agent().String())
+	_, err := p.Exec(ctx, `UPDATE agent_definitions SET name = repeat('가', 100) WHERE agent_grn = $1`, d.Agent().String())
 	assert.NoError(t, err)
 }
 

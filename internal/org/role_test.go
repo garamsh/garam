@@ -91,9 +91,6 @@ func TestActionConstants_SpellTheirWireStrings(t *testing.T) {
 
 		{org.ActionAgentEnroll, "agent:enroll"},
 		{org.ActionAgentTemplateRead, "agent-template:read"},
-		{org.ActionAgentTemplateCreate, "agent-template:create"},
-		{org.ActionAgentTemplateUpdate, "agent-template:update"},
-		{org.ActionAgentTemplateDelete, "agent-template:delete"},
 		{org.ActionAgentTemplatePublish, "agent-template:publish"},
 		{org.ActionExecutionProfileRead, "execution-profile:read"},
 		{org.ActionAgentExecutionRead, "agent:execution-read"},
@@ -112,8 +109,8 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			org.ActionOperatorRead, org.ActionOperatorRegister, org.ActionOperatorUpdate,
 			org.ActionOperatorDelete, org.ActionOperatorDelegate, org.ActionAgentRead,
 			org.ActionAgentDefine, org.ActionAgentRename, org.ActionAgentCreate,
-			org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentEnroll, org.ActionAgentTemplateRead, org.ActionAgentTemplateCreate,
-			org.ActionAgentTemplateUpdate, org.ActionAgentTemplateDelete, org.ActionAgentTemplatePublish,
+			org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentEnroll, org.ActionAgentTemplateRead,
+			org.ActionAgentTemplatePublish,
 			org.ActionExecutionProfileRead, org.ActionAgentExecutionRead, org.ActionAgentCutover,
 		},
 		org.RoleOwner.Actions())
@@ -124,8 +121,8 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			org.ActionOperatorRead, org.ActionOperatorRegister, org.ActionOperatorUpdate,
 			org.ActionOperatorDelete, org.ActionOperatorDelegate, org.ActionAgentRead,
 			org.ActionAgentDefine, org.ActionAgentRename, org.ActionAgentCreate,
-			org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentEnroll, org.ActionAgentTemplateRead, org.ActionAgentTemplateCreate,
-			org.ActionAgentTemplateUpdate, org.ActionAgentTemplateDelete, org.ActionAgentTemplatePublish,
+			org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentEnroll, org.ActionAgentTemplateRead,
+			org.ActionAgentTemplatePublish,
 			org.ActionExecutionProfileRead, org.ActionAgentExecutionRead, org.ActionAgentCutover,
 		},
 		org.RoleAdmin.Actions())
@@ -230,7 +227,6 @@ func TestActionsFor_UnionsKnownRoles(t *testing.T) {
 			"group:*", "project:*", "policy:*", "consent:*",
 			org.ActionOperatorRegister, org.ActionOperatorUpdate, org.ActionOperatorDelete,
 			org.ActionOperatorDelegate, org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentEnroll,
-			org.ActionAgentTemplateCreate, org.ActionAgentTemplateUpdate, org.ActionAgentTemplateDelete,
 			org.ActionAgentTemplatePublish, org.ActionAgentExecutionRead, org.ActionAgentCutover,
 		},
 		org.ActionsFor([]string{"member", "admin"}))

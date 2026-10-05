@@ -2,33 +2,12 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
-	"time"
 
 	"github.com/garamsh/garam/internal/agent/db"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/pgxerr"
 )
-
-// CreateTemplate persists a template.
-func (s *PostgresStore) CreateTemplate(ctx context.Context, t *Template) error {
-	values, err := json.Marshal(t.Values)
-	if err != nil {
-		return errorx.Wrap(err, "create template: values", errorx.KindInternal)
-	}
-	err = s.q.CreateAgentTemplate(ctx, db.CreateAgentTemplateParams{
-		Grn:         t.GRN.String(),
-		OrgGrn:      t.OrgGRN.String(),
-		Name:        string(t.Name),
-		Description: string(t.Description),
-		AgentValues: values,
-		CreatedBy:   t.CreatedBy.String(),
-		CreatedAt:   stamp(t.CreatedAt),
-		UpdatedAt:   stamp(t.UpdatedAt),
-	})
-	return pgxerr.Classify(err, "create template", nil, nil)
-}
 
 // GetTemplate returns the template, or ErrTemplateNotFound.
 func (s *PostgresStore) GetTemplate(ctx context.Context, g grn.GRN) (*Template, error) {
@@ -54,42 +33,6 @@ func (s *PostgresStore) ListTemplatesByOrg(ctx context.Context, orgGRN grn.GRN) 
 		templates = append(templates, t)
 	}
 	return templates, nil
-}
-
-// UpdateTemplate replaces what the template says, or answers
-// ErrTemplateNotFound. No definition references the template, so the
-// write reaches no agent defined from it (ADR-0075).
-func (s *PostgresStore) UpdateTemplate(ctx context.Context, g grn.GRN, content TemplateContent) (*Template, error) {
-	if content.Values == nil {
-		content.Values = Values{}
-	}
-	values, err := json.Marshal(content.Values)
-	if err != nil {
-		return nil, errorx.Wrap(err, "update template: values", errorx.KindInternal)
-	}
-	row, err := s.q.UpdateAgentTemplate(ctx, db.UpdateAgentTemplateParams{
-		Grn:         g.String(),
-		Name:        string(content.Name),
-		Description: string(content.Description),
-		AgentValues: values,
-		UpdatedAt:   stamp(time.Now().UTC()),
-	})
-	if err != nil {
-		return nil, pgxerr.Classify(err, "update template", ErrTemplateNotFound, nil)
-	}
-	return rowToTemplate(row)
-}
-
-// DeleteTemplate removes the template, or answers ErrTemplateNotFound.
-func (s *PostgresStore) DeleteTemplate(ctx context.Context, g grn.GRN) error {
-	n, err := s.q.DeleteAgentTemplate(ctx, g.String())
-	if err != nil {
-		return pgxerr.Classify(err, "delete template", nil, nil)
-	}
-	if n == 0 {
-		return ErrTemplateNotFound
-	}
-	return nil
 }
 
 // rowToTemplate converts a sqlc row into the domain aggregate. Every

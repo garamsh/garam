@@ -142,7 +142,12 @@ test.describe("control service, as contract tests against the agreed Operator wi
     await page
       .getByRole("button", { name: "Save endpoint", exact: true })
       .click();
-    await expect(page.getByRole("alert")).toContainText("trailing slash");
+    await expect(
+      page.getByText(
+        "control endpoint must be an https URL of at most 2048 bytes, with no credentials, query, fragment or trailing slash",
+        { exact: true },
+      ),
+    ).toBeVisible();
     await endpoint.fill(ENDPOINT);
     await page
       .getByRole("button", { name: "Save endpoint", exact: true })

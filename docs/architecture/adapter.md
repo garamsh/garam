@@ -14,6 +14,7 @@ What the adapter garam ships must do, and what it rests on to do it.
 - What garam owns
 - Foreign facts this rests on
 - Stable identifiers and the outbox
+- Activation and runtime status
 - Not decided
 
 ## What it is
@@ -263,30 +264,85 @@ know anyone depends on it.
 
 ## Stable identifiers and the outbox
 
-**Nothing in this section is built.** It is ADR-0079's accepted target
-for this contract; everything above describes what runs, including the
-gateway-minted identifier and the in-memory pairing.
+**Nothing in this section is built.** It is the accepted target for
+this contract
+([ADR-0079](./adr/0079-interservice-contracts-keep-adjacent-releases-compatible-and-replay-by-stable-identifier.md),
+[ADR-0084](./adr/0084-the-adapter-activates-its-generation-and-reports-runtime-status-under-a-contract-garam-owns.md));
+everything above describes what runs, including the gateway-minted
+identifier and the in-memory pairing.
 
-- **The adapter names each message to Sherlock by a stable,
-  sender-scoped identifier.** A replay under it with an identical
-  payload answers a completed source's recorded outcome rather than
-  running another turn, and a different payload under it is refused.
-  Completion is reported apart from the accept.
-- **A reply leaves through a durable outbox.** The runtime records it
-  under a stable identifier, the adapter forwards it with that
-  identifier as garam's idempotency key, and the entry goes only once
-  garam has acknowledged it, so a retry mints no second message and a
-  failed forward stays visible as pending or failed. Entries an earlier
-  generation left are forwarded by the current one, under its own
-  credential and token, keeping their identifier and origin generation.
+- **The adapter names each message to Sherlock by garam's message
+  identifier**, never the claim's, so two claims of one message are one
+  source there. A replay under it with an identical payload answers a
+  completed source's recorded outcome rather than running another turn,
+  and a different payload under it is refused. Completion is reported
+  apart from the accept.
+- **The content is `garam-message.v1`**: a compact JSON object of
+  `contract`, `sender` and `body` in that order, encoded by Go's
+  `encoding/json` default with no trailing newline. `sender` is the GRN
+  garam's claim verified and `body` the original body as one string, so
+  nothing in the body overrides the envelope and a redelivery encodes
+  to the same bytes.
+- **A reply leaves through a durable outbox.** The adapter reads each
+  entry as a bounded regular file inside the outbox directory, never
+  through a link, and requires its agent to be this adapter's GRN. It
+  forwards the entry through `POST /outbox-messages` under
+  `durable-delivery.v1` — content as body, target as recipient, the
+  entry's identifier unchanged as the idempotency key and its
+  `created_at` as `createdAt` — and there is no fallback to
+  `POST /messages`.
+- **The entry goes only on a verified acknowledgement**: a stored
+  message with a non-empty identifier, this agent as sender, the
+  entry's target as recipient and its identifier as key, while the file
+  is still the one that was read. A 201 carrying a cross-organization
+  refusal fails that check. A refusal, an unsupported peer or a wrong
+  binding keeps the entry and logs it without a hot retry loop; an
+  unreachable garam is retried with bounded backoff under the same
+  identity. An entry with no valid `created_at`, or past garam's
+  seven-day admission budget, is never deleted, re-keyed or re-stamped.
+- **Entries an earlier generation left are forwarded by the current
+  one**, under its own credential and token, keeping their identifier
+  and origin generation.
 - **What is still not promised.** A turn interrupted before it
   committed may repeat its effects. Delivery stays at-least-once and
   completion stays §Completion's rule.
 - **The adapter and Sherlock keep adjacent releases compatible** in
   both upgrade orders, and refuse what they do not support by name.
-- **Its calls carry the activation token** of the generation it serves
+  This contract binds Sherlock `v0.1.0`
+  (`44aaa555105f9834244eaac4ad18b0ed75dbf0ff`) and no tested window
+  yet.
+
+## Activation and runtime status
+
+**Nothing in this section is built.** It is
+[ADR-0084](./adr/0084-the-adapter-activates-its-generation-and-reports-runtime-status-under-a-contract-garam-owns.md)'s
+contract, `agent-execution.v1`, which garam owns and the lifecycle
+authority serves: the Operator control service when managed, the local
+supervisor when standalone.
+
+- **Every protected call carries the activation's token**, as
+  `Authorization: Garam-Execution <token>`
   ([machine-identity.md](./machine-identity.md) §Generation and
-  lineage).
+  lineage), and the adapter makes none before it holds one.
+- **It activates the generation the runtime reports.** It reads
+  Sherlock's loopback status, then asks the authority with that GRN,
+  epoch, generation and revision and the mounted placement token, under
+  a request identifier derived from those inputs alone, so a restart
+  replays the same intent and receives a newer token. It verifies the
+  binding answered and keeps the highest token version.
+- **Undecided answers retry; definite ones stop.** An unavailable
+  authority or garam is retried with bounded backoff and stops nothing
+  local. A refusal, a wrong binding, or garam refusing the token or the
+  credential stops protected work and keeps the outbox, until the
+  runtime or the placement changes. Credential recovery is the
+  manager's, never the adapter's.
+- **It reports the runtime's status outward** after activation and on
+  each change: the activation, GRN, epoch, generation, revision, state
+  and start time as the runtime reported them, and when it read them. A
+  report never activates anything, and an empty revision is unknown.
+
+ADR-0084 is authoritative for the routes, bodies, refusals, the
+identifier's derivation and the settings the adapter reads.
 
 ## Not decided
 

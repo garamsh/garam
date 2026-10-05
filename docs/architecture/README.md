@@ -554,3 +554,10 @@ ADRs:
   seven-day budget, judged on the database's clock when the insert
   runs, and answers a key that already stores a message after the
   budget too
+- [0084](./adr/0084-the-adapter-activates-its-generation-and-reports-runtime-status-under-a-contract-garam-owns.md)
+  — the adapter activates the generation its runtime reports and
+  reports that runtime's status under `agent-execution.v1`, a contract
+  garam owns and the lifecycle authority serves: an adapter-derived
+  request identifier, a verified binding, the highest token version,
+  and no protected call before activation or after a definite refusal;
+  unbuilt

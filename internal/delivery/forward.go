@@ -136,8 +136,8 @@ func (s *service) offer(ctx context.Context, f *forwarding, name string) bool {
 }
 
 // outboundOf is what an entry asks garam to store, or the reason it is
-// not this adapter's to offer. An entry of unknown age is never offered:
-// nothing here can supply the instant it was created.
+// not this adapter's to offer. An entry of unknown age is never
+// offered: nothing here can supply the instant it was created.
 func (s *service) outboundOf(e *Entry) (Outbound, string) {
 	switch {
 	case e.Agent != s.ends.Agent.String():

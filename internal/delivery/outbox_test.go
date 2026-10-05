@@ -81,8 +81,8 @@ func TestOutbox_ReadsOnlyARegularEntryInsideIt(t *testing.T) {
 	assert.NotContains(t, names, ".entry-valid.tmp", "a writer's temporary file is never an entry")
 }
 
-// TestOutbox_RemovesOnlyTheFileThatWasRead is the acknowledgement of one
-// reply that must not erase another: a file replaced under the same
+// TestOutbox_RemovesOnlyTheFileThatWasRead is the acknowledgement of
+// one reply that must not erase another: a file replaced under the same
 // name after it was read is kept. Removing the same entry unreplaced is
 // the control.
 func TestOutbox_RemovesOnlyTheFileThatWasRead(t *testing.T) {

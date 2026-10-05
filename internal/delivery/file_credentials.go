@@ -16,9 +16,9 @@ type FileCredentials struct {
 	leaf      func() (*tls.Certificate, error)
 }
 
-// NewFileCredentials reads the placement token from tokenFile, empty for
-// a legacy adapter that holds none, and the certificate through leaf,
-// which is what the handshake presents.
+// NewFileCredentials reads the placement token from tokenFile, empty
+// for a legacy adapter that holds none, and the certificate through
+// leaf, which is what the handshake presents.
 func NewFileCredentials(tokenFile string, leaf func() (*tls.Certificate, error)) *FileCredentials {
 	return &FileCredentials{tokenFile: tokenFile, leaf: leaf}
 }

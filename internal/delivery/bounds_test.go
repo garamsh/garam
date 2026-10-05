@@ -36,9 +36,9 @@ func stalled(t *testing.T) string {
 
 // TestBounds_StalledPeerIsRefusedWithinItsBound is #747's first probe as
 // a regression: with no bound each of these parks forever. Claim, Renew,
-// Complete, Post and the calls beside them take the caller's deadline; Subscribe takes the
-// client's header bound instead, because a deadline on the call would
-// also end the stream it opens.
+// Complete, Post and the calls beside them take the caller's deadline;
+// Subscribe takes the client's header bound instead, because a deadline
+// on the call would also end the stream it opens.
 func TestBounds_StalledPeerIsRefusedWithinItsBound(t *testing.T) {
 	const bound = 200 * time.Millisecond
 	base := stalled(t)

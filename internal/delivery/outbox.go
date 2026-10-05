@@ -14,8 +14,8 @@ import (
 )
 
 // maxEntryBytes bounds one outbox entry. garam admits a body of 65536
-// characters, four bytes each at most, and JSON may escape one into six;
-// the runtime's own ingress stops at the same mebibyte.
+// characters, four bytes each at most, and JSON may escape one into
+// six; the runtime's own ingress stops at the same mebibyte.
 const maxEntryBytes = 1 << 20
 
 // entrySuffix is the name the runtime's writer gives a finished entry.

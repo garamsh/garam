@@ -129,8 +129,9 @@ func TestHTTPQueue_RenewAndCompleteReportAHoldThatIsGone(t *testing.T) {
 // ADR-0084's reading of garam's refusals: a 401 or a 403 on any call is
 // the fence, and so is a 409 on a claim, where no hold exists to have
 // lapsed, and a submission's 409 of kind failed_precondition, which
-// ADR-0083 keeps apart from a conflicting key's already_exists. Each closes the execution, so nothing more reaches garam. A
-// 503 on the same call is the control: it is undecided and closes
+// ADR-0083 keeps apart from a conflicting key's already_exists. Each
+// closes the execution, so nothing more reaches garam. A 503 on the
+// same call is the control: it is undecided and closes
 // nothing.
 func TestHTTPQueue_ReadsTheFenceFromItsAnswers(t *testing.T) {
 	claim := func(q *delivery.HTTPQueue) error { _, err := q.Claim(context.Background()); return err }

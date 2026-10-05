@@ -162,8 +162,8 @@ func (a *HTTPAuthority) post(ctx context.Context, target *url.URL, payload []byt
 	return resp, nil
 }
 
-// controlRefused renders a definite refusal with the kind control named,
-// which is what the adapter logs it by.
+// controlRefused renders a definite refusal with the kind control
+// named, which is what the adapter logs it by.
 func controlRefused(resp *http.Response) error {
 	said := "control refused " + strconv.Itoa(resp.StatusCode)
 	var refusal struct {

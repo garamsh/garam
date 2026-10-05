@@ -77,9 +77,9 @@ type Config struct {
 }
 
 // Ends is the agent the loop runs beside, what it carries between and
-// what it presents. Authority
-// is nil for a legacy execution, which activates nothing; Outbox is nil
-// where no outbox is mounted, which forwards nothing.
+// what it presents. Authority is nil for a legacy execution, which
+// activates nothing; Outbox is nil where no outbox is mounted, which
+// forwards nothing.
 type Ends struct {
 	Agent       grn.GRN
 	Queue       Queue
@@ -94,8 +94,8 @@ type Ends struct {
 // an activation of the runtime's generation where the agent is fenced,
 // claim a message with its lease, post it into the gateway under its
 // own identifier, watch for a turn ending, complete that message's
-// claim when a turn reports success and names it, and forward the
-// replies the runtime records in its outbox.
+// claim when the runtime says a turn that consumed it committed, and
+// forward the replies the runtime records in its outbox.
 type Service interface {
 	// Run carries messages until ctx is done, and answers nil then,
 	// because a requested stop is not a failure. Nothing else ends it:
@@ -418,8 +418,8 @@ func (s *service) reconcile(ctx context.Context, held map[MessageID]pairing) {
 	}
 }
 
-// completeClaim reports one claim's message delivered. A completion that
-// does not arrive is a redelivery, which the runtime answers as
+// completeClaim reports one claim's message delivered. A completion
+// that does not arrive is a redelivery, which the runtime answers as
 // completed, so a failure here is logged and nothing more.
 func (s *service) completeClaim(ctx context.Context, claim *Claim) {
 	callCtx, cancel := context.WithTimeout(ctx, s.cfg.CallTimeout)

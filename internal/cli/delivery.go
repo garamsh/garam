@@ -109,8 +109,8 @@ func (s adapterSettings) fenced() (bool, error) {
 }
 
 // adapterLoop builds the loop from what the environment named, or
-// refuses what it cannot run on. One GRN names the agent to garam and to
-// the runtime beside it, which serves the agent under that GRN. The
+// refuses what it cannot run on. One GRN names the agent to garam and
+// to the runtime beside it, which serves the agent under that GRN. The
 // control settings choose the mode, and the outbox is forwarded from
 // wherever it is named.
 func adapterLoop(s adapterSettings) (delivery.Service, error) {

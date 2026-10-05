@@ -1115,7 +1115,8 @@ func TestRun_CompletesAMessageTheRuntimeCompletedBeforeARestart(t *testing.T) {
 	assert.Zero(t, queue.messagesCompleted(1), "the control: the uncompleted message waits for its turn")
 }
 
-// messagesCompleted reports whether one message is completed, as 0 or 1.
+// messagesCompleted reports whether one message is completed, as 0 or
+// 1.
 func (q *garamQueue) messagesCompleted(message int) int {
 	q.mu.Lock()
 	defer q.mu.Unlock()

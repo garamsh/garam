@@ -1,0 +1,195 @@
+package standalone_test
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net"
+	"net/http"
+	"os"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// TestStandalone_MovesMemoryThroughAVerifiedHandover is #1202's move on
+// a real garam with a real model, through the shipped `garam standalone
+// run --move-memory-to`: a fact told before the move is recalled after
+// it, by the same agent, in a new generation on a new volume. Garam
+// refuses the old generation's token from the switch on, and a message
+// sent after the switch is claimed once, by the new generation. The
+// controls are the old token admitted before the switch and the new
+// token admitted after it.
+//
+// The test's own acts: the interposer, which keeps the tokens garam
+// answers so the test can present the old one as its generation would;
+// and the sender, as in the joint scenario.
+func TestStandalone_MovesMemoryThroughAVerifiedHandover(t *testing.T) {
+	s := newStack(t)
+	modelEnv := required(t, "GARAM_TEST_MODEL_ENV_FILE")
+	s.secretsFrom(modelEnv)
+	tei := s.embedding()
+
+	h := s.newHost("agent")
+	h.prepare()
+	h.approve(time.Now().Add(time.Hour))
+	out, err := h.enroll()
+	require.NoError(t, err, out)
+	agentGRN, _, _ := h.enrolled()
+	from := s.newSender()
+	certPEM, keyPEM := s.serving(net.IPv4(127, 0, 0, 1))
+	p := s.interpose(h, certPEM, keyPEM)
+
+	config := s.file("config.yaml", fmt.Sprintf(`revision: r1-move
+model:
+  provider: openai-compatible
+  base-url: https://api.minimax.io/v1
+  model: MiniMax-M2
+  api-key-env: %s
+embedding:
+  base-url: http://%s:80/v1
+  model: BAAI/bge-base-en-v1.5
+`, keyName(t, modelEnv), tei))
+	extra := []string{"--instructions-file", s.file("instructions.md", replyInstruction)}
+	var runs []*running
+	start := func(more ...string) *running {
+		r := h.run(runOptions{machineURL: p.url, config: config, modelEnv: modelEnv,
+			extra: append(append([]string{}, extra...), more...)})
+		runs = append(runs, r)
+		return r
+	}
+	t.Cleanup(func() {
+		if t.Failed() {
+			for i, r := range runs {
+				t.Logf("supervisor run %d:\n%s", i, s.scrub(tail(r.out.String(), 40)))
+			}
+		}
+	})
+
+	first := start()
+	s.eventually("the first generation activated and serving", func() bool {
+		return len(s.activations(agentGRN)) == 1 && h.record().Memory.Served
+	})
+	oldToken := p.lastToken()
+	require.NotEmpty(t, oldToken)
+	before := s.generationOf(h, h.container("runtime"))
+
+	codeword := "amber-" + strconv.Itoa(int(randomBytes(1)[0])+100)
+	fact := "The codeword is " + codeword +
+		". Keep it in mind. Reply to me with message_send, with the single word NOTED."
+	from.post(agentGRN, "garam-sa-fact", fact)
+	t.Logf("the fact's reply: %q", s.scrub(from.awaitReply(agentGRN).Body))
+
+	post := func(token, key string) (int, string) {
+		status, raw := h.call(h.agentClient(), "/messages", "", "Garam-Execution "+token,
+			map[string]string{"recipient": from.grn, "idempotencyKey": key, "body": key})
+		return status, string(raw)
+	}
+	status, body := post(oldToken, "garam-sa-old-before")
+	require.Equal(t, http.StatusCreated, status, "the control: the old token is current before the switch: %s", body)
+	assert.Equal(t, "garam-sa-old-before", from.awaitReply(agentGRN).Body)
+	require.NoError(t, first.stop(), s.scrub(first.out.String()))
+
+	// The move.
+	target := s.prefix + "agent-moved"
+	start("--move-memory-to", target)
+	s.eventually("the generation on the new volume activated", func() bool {
+		a := s.activations(agentGRN)
+		return len(a) == 2 && a[1].Ended == ""
+	})
+	activations := s.activations(agentGRN)
+	after := s.generationOf(h, h.container("runtime"))
+	assert.Equal(t, agentGRN, after.agent, "the same agent")
+	assert.Equal(t, target, after.volume, "on the new volume")
+	assert.NotEqual(t, before.nonce, after.nonce, "which the move created")
+	assert.NotEqual(t, before.generation, after.generation, "a new generation")
+	assert.Equal(t, activations[0].ID, h.record().Intent.Replaces, "its activation replaces the old one")
+	assert.Equal(t, "superseded", activations[0].Ended)
+	s.mustDocker("volume", "inspect", before.volume)
+
+	// The old generation's token is refused from the switch on, and
+	// cannot claim; the new one is current.
+	status, body = post(oldToken, "garam-sa-old-after")
+	assert.Equal(t, http.StatusForbidden, status, "garam refuses the old token: %s", body)
+	assert.JSONEq(t, `{"kind":"permission_denied","message":"execution token is not current"}`, body)
+	claim := func(token string) (int, refusal) {
+		status, raw := h.call(h.agentClient(), "/agents/"+agentGRN+"/claims", "", "Garam-Execution "+token, nil)
+		var r refusal
+		_ = json.Unmarshal(raw, &r)
+		return status, r
+	}
+	status, refused := claim(oldToken)
+	assert.Equal(t, http.StatusForbidden, status, "the old token claims nothing")
+	assert.Equal(t, refusal{Kind: "permission_denied", Message: "execution token is not current"}, refused,
+		"garam refuses it as a token that is not current")
+	newToken := p.lastToken()
+	require.NotEqual(t, oldToken, newToken)
+	status, _ = claim(newToken)
+	assert.Equal(t, http.StatusNoContent, status,
+		"the control: the new token's claim is admitted, and finds nothing waiting")
+	status, body = post(newToken, "garam-sa-new-after")
+	require.Equal(t, http.StatusCreated, status, "the control: the new token is current: %s", body)
+	assert.Equal(t, "garam-sa-new-after", from.awaitReply(agentGRN).Body)
+
+	// A message after the switch reaches the new generation alone, and
+	// the fact told before the move is recalled.
+	question := "What is the codeword from my earlier message? Reply to me with message_send, with just the codeword."
+	require.NotContains(t, question, codeword)
+	from.post(agentGRN, "garam-sa-recall", question)
+	recall := s.scrub(from.awaitReply(agentGRN).Body)
+	t.Logf("the recall: %q", recall)
+	assert.Contains(t, strings.ToLower(recall), codeword, "memory from before the move is recalled")
+	asked := s.messages("sender_grn = $1 AND idempotency_key = $2", from.grn, "garam-sa-recall")
+	require.Len(t, asked, 1)
+	s.eventually("the recall question completed", func() bool {
+		asked = s.messages("id = $1", asked[0].ID)
+		return asked[0].Completed
+	})
+	assert.Equal(t, 1, asked[0].Attempts, "claimed once")
+	var claimedAt, activatedAt time.Time
+	require.NoError(t, s.db().QueryRow(context.Background(),
+		`SELECT m.claimed_at, a.created_at FROM messages m, agent_activations a WHERE m.id = $1 AND a.id::text = $2`,
+		asked[0].ID, activations[1].ID).Scan(&claimedAt, &activatedAt))
+	assert.True(t, claimedAt.After(activatedAt),
+		"and after the new activation, from which garam admits no other token: claimed %s, activated %s",
+		claimedAt, activatedAt)
+
+	// Sherlock's own stores, read once the new generation has stopped:
+	// the fact is in the new volume's store, which it reached only by
+	// the copy, and the question asked after the switch is in that store
+	// alone.
+	s.mustDocker("kill", "--signal", "TERM", h.container("runtime"))
+	s.eventually("the new generation stopped", func() bool { return h.container("runtime") == "" })
+	factID := s.messages("sender_grn = $1 AND idempotency_key = $2", from.grn, "garam-sa-fact")[0].ID
+	moved := s.sources(target, factID)
+	require.Len(t, moved, 1, "the new volume's store holds the fact as one source")
+	assert.Contains(t, moved[0], codeword)
+	assert.Len(t, s.sources(target, asked[0].ID), 1, "the question reached the new generation's store")
+	assert.Len(t, s.sources(before.volume, factID), 1, "the control: the old store holds the fact too")
+	assert.Empty(t, s.sources(before.volume, asked[0].ID), "and not the question asked after the switch")
+}
+
+// refusal is garam's machine Error.
+type refusal struct {
+	Kind    string `json:"kind"`
+	Message string `json:"message"`
+}
+
+// keyName answers the variable the owner-only model environment file
+// names, which the runtime's configuration reads its key from.
+func keyName(t *testing.T, path string) string {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	for _, line := range strings.Split(string(raw), "\n") {
+		if name, _, ok := strings.Cut(strings.TrimSpace(line), "="); ok && name != "" && !strings.HasPrefix(name, "#") {
+			return name
+		}
+	}
+	t.Fatal("the model environment file names no variable")
+	return ""
+}

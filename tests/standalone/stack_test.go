@@ -17,7 +17,8 @@
 //     the model's credential, for the scenarios a model answers
 //
 // It fails rather than skips without them. Every container, volume and
-// network it makes is named garam-1180-…, and it removes only those.
+// network it makes is named under testPrefix, and it removes only
+// those; the embedding service's cache, teiCache, is kept between runs.
 package standalone_test
 
 import (
@@ -53,7 +54,14 @@ import (
 	"github.com/garamsh/garam/internal/workload/docker"
 )
 
-const testPrefix = "garam-1180-"
+// testPrefix begins every name this suite makes, so cleanup removes
+// what it made and nothing another user of the daemon did.
+const testPrefix = "garam-sa-test-"
+
+// teiCache is the volume the embedding service's weights are cached
+// in. It is under testPrefix but outside every stack's own prefix, so
+// no cleanup removes it.
+const teiCache = testPrefix + "tei-cache"
 
 func required(t *testing.T, name string) string {
 	t.Helper()

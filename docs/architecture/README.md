@@ -589,3 +589,11 @@ ADRs:
   sends it, a template still goes with its organization, the write
   routes and actions are removed, and the console defines only from
   the Operator's templates and shows garam's as archived records
+- [0089](./adr/0089-a-standalone-agents-memory-moves-only-through-a-verified-copy-its-new-generation-accepts-before-it-activates.md)
+  — a standalone agent's memory moves to a new volume only through
+  `garam standalone run --move-memory-to`: the old runtime drained and
+  exited 0, a copy made under Sherlock's writer lock from the old
+  volume mounted read-only, verified by digest and accepted by the new
+  runtime's `--require-store` before its activation replaces the old
+  one; any failure leaves the agent stopped on the old volume, which is
+  never written or removed

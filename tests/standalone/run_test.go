@@ -161,7 +161,9 @@ func (h *host) record() record {
 // certificate, so garam sees the supervisor's request unchanged. While
 // lose is set it forwards an activation and then drops garam's answer,
 // as a connection lost after garam committed; while hold is set it
-// keeps every activation waiting. Nothing here is the supervisor's
+// keeps every activation waiting. It keeps every token garam's
+// activation answers carried, so a test can present one as the
+// generation holding it would. Nothing here is the supervisor's
 // behaviour.
 type interposer struct {
 	s        *stack
@@ -170,6 +172,7 @@ type interposer struct {
 	lose     bool
 	held     chan struct{}
 	requests []map[string]any
+	tokens   []string
 }
 
 func (s *stack) interpose(h *host, certPEM, keyPEM []byte) *interposer {
@@ -205,6 +208,12 @@ func (s *stack) interpose(h *host, certPEM, keyPEM []byte) *interposer {
 		defer func() { _ = resp.Body.Close() }()
 		answer, _ := io.ReadAll(resp.Body)
 		p.mu.Lock()
+		var activation struct {
+			Token string `json:"token"`
+		}
+		if activating && resp.StatusCode/100 == 2 && json.Unmarshal(answer, &activation) == nil {
+			p.tokens = append(p.tokens, activation.Token)
+		}
 		lose := activating && p.lose
 		if lose {
 			// Garam committed and its answer is lost; what follows waits
@@ -248,4 +257,14 @@ func (p *interposer) asked() []map[string]any {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return append([]map[string]any(nil), p.requests...)
+}
+
+// lastToken answers the token garam's latest activation answer carried.
+func (p *interposer) lastToken() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if len(p.tokens) == 0 {
+		return ""
+	}
+	return p.tokens[len(p.tokens)-1]
 }

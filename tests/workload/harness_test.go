@@ -7,8 +7,8 @@
 // and the three images by digest or ID: GARAM_TEST_RUNTIME_IMAGE,
 // GARAM_TEST_WORKSPACE_IMAGE and GARAM_TEST_ADAPTER_IMAGE. `make
 // workload-integration` runs it; it fails rather than skips without
-// them. Every container and volume it makes is named garam-1180-…, and
-// it removes only those.
+// them. Every container and volume it makes is named under testPrefix,
+// and it removes only those.
 package workload_test
 
 import (
@@ -45,7 +45,7 @@ import (
 
 // testPrefix begins every name this suite makes, so cleanup removes
 // what it made and nothing another user of the daemon did.
-const testPrefix = "garam-1180-"
+const testPrefix = "garam-sa-test-"
 
 var testAgent = func() grn.GRN {
 	g, err := grn.Parse("grn:acme:default:agent:0a1b2c3d4e5f6071")

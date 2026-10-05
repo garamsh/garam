@@ -258,6 +258,62 @@ func (q *Queries) EnqueueMessage(ctx context.Context, arg EnqueueMessageParams) 
 	return i, err
 }
 
+const enqueueWithinBudget = `-- name: EnqueueWithinBudget :one
+WITH decision AS MATERIALIZED (
+    SELECT clock_timestamp() AS decided_at
+), stored AS (
+    INSERT INTO messages (id, recipient_grn, sender_grn, idempotency_key, body, created_at)
+    SELECT $2::text, $3::text, $4::text,
+           $5::text, $6::text, decision.decided_at
+    FROM decision
+    WHERE $1::timestamptz <= decision.decided_at
+      AND $1::timestamptz + $7::interval > decision.decided_at
+    ON CONFLICT (sender_grn, idempotency_key) DO UPDATE SET
+        idempotency_key = messages.idempotency_key
+    RETURNING 1
+)
+SELECT CASE
+    WHEN EXISTS (SELECT 1 FROM stored) THEN 'admitted'
+    WHEN $1::timestamptz > decision.decided_at THEN 'later'
+    ELSE 'expired'
+END::text AS verdict
+FROM decision
+`
+
+type EnqueueWithinBudgetParams struct {
+	Created        pgtype.Timestamptz
+	ID             string
+	RecipientGrn   string
+	SenderGrn      string
+	IdempotencyKey string
+	Body           string
+	Budget         pgtype.Interval
+}
+
+// EnqueueWithinBudget stores a durable submission's message only while
+// its creation instant is inside the budget at the decision instant
+// (ADR-0083), and answers 'admitted' where a row was stored or a
+// concurrent one under the key returned, otherwise why not. The
+// decision instant is clock_timestamp() read once as this statement
+// runs, not now(), which is when the transaction began: the fence's
+// lock wait falls between the two, and a request delayed there is
+// judged when it writes. It also stamps created_at, so retention runs
+// from the decision on the clock that judged it.
+func (q *Queries) EnqueueWithinBudget(ctx context.Context, arg EnqueueWithinBudgetParams) (string, error) {
+	row := q.db.QueryRow(ctx, enqueueWithinBudget,
+		arg.Created,
+		arg.ID,
+		arg.RecipientGrn,
+		arg.SenderGrn,
+		arg.IdempotencyKey,
+		arg.Body,
+		arg.Budget,
+	)
+	var verdict string
+	err := row.Scan(&verdict)
+	return verdict, err
+}
+
 const grantConsent = `-- name: GrantConsent :one
 INSERT INTO message_consents (org_a, org_b, a_consented_at, b_consented_at)
 VALUES (least($1, $2), greatest($1, $2),
@@ -324,6 +380,38 @@ func (q *Queries) ListConsents(ctx context.Context, org string) ([]MessageConsen
 		return nil, err
 	}
 	return items, nil
+}
+
+const messageByKey = `-- name: MessageByKey :one
+SELECT id, recipient_grn, sender_grn, idempotency_key, body, created_at, claim_id, claim_expires_at, completed_at, attempts, claimed_at FROM messages
+WHERE sender_grn = $1 AND idempotency_key = $2
+`
+
+type MessageByKeyParams struct {
+	SenderGrn      string
+	IdempotencyKey string
+}
+
+// MessageByKey reads what one sender's key stores: what a durable
+// submission under that key is answered with, whatever its budget now
+// says (ADR-0083).
+func (q *Queries) MessageByKey(ctx context.Context, arg MessageByKeyParams) (Message, error) {
+	row := q.db.QueryRow(ctx, messageByKey, arg.SenderGrn, arg.IdempotencyKey)
+	var i Message
+	err := row.Scan(
+		&i.ID,
+		&i.RecipientGrn,
+		&i.SenderGrn,
+		&i.IdempotencyKey,
+		&i.Body,
+		&i.CreatedAt,
+		&i.ClaimID,
+		&i.ClaimExpiresAt,
+		&i.CompletedAt,
+		&i.Attempts,
+		&i.ClaimedAt,
+	)
+	return i, err
 }
 
 const messageStatus = `-- name: MessageStatus :one

@@ -22,6 +22,43 @@ ON CONFLICT (sender_grn, idempotency_key) DO UPDATE SET
     idempotency_key = messages.idempotency_key
 RETURNING *;
 
+-- MessageByKey reads what one sender's key stores: what a durable
+-- submission under that key is answered with, whatever its budget now
+-- says (ADR-0083).
+-- name: MessageByKey :one
+SELECT * FROM messages
+WHERE sender_grn = sqlc.arg('sender_grn') AND idempotency_key = sqlc.arg('idempotency_key');
+
+-- EnqueueWithinBudget stores a durable submission's message only while
+-- its creation instant is inside the budget at the decision instant
+-- (ADR-0083), and answers 'admitted' where a row was stored or a
+-- concurrent one under the key returned, otherwise why not. The
+-- decision instant is clock_timestamp() read once as this statement
+-- runs, not now(), which is when the transaction began: the fence's
+-- lock wait falls between the two, and a request delayed there is
+-- judged when it writes. It also stamps created_at, so retention runs
+-- from the decision on the clock that judged it.
+-- name: EnqueueWithinBudget :one
+WITH decision AS MATERIALIZED (
+    SELECT clock_timestamp() AS decided_at
+), stored AS (
+    INSERT INTO messages (id, recipient_grn, sender_grn, idempotency_key, body, created_at)
+    SELECT sqlc.arg('id')::text, sqlc.arg('recipient_grn')::text, sqlc.arg('sender_grn')::text,
+           sqlc.arg('idempotency_key')::text, sqlc.arg('body')::text, decision.decided_at
+    FROM decision
+    WHERE sqlc.arg('created')::timestamptz <= decision.decided_at
+      AND sqlc.arg('created')::timestamptz + sqlc.arg('budget')::interval > decision.decided_at
+    ON CONFLICT (sender_grn, idempotency_key) DO UPDATE SET
+        idempotency_key = messages.idempotency_key
+    RETURNING 1
+)
+SELECT CASE
+    WHEN EXISTS (SELECT 1 FROM stored) THEN 'admitted'
+    WHEN sqlc.arg('created')::timestamptz > decision.decided_at THEN 'later'
+    ELSE 'expired'
+END::text AS verdict
+FROM decision;
+
 -- ClaimMessage hands one message to one reader: the row it picks is
 -- locked for the statement, and a reader that meets a locked row skips
 -- to the next rather than waiting behind it. The lease is measured by

@@ -32,12 +32,21 @@ type queue struct {
 	maxAttempts  int
 	statusSender grn.GRN
 	statusID     message.ID
+	created      []time.Time
 }
 
 func (q *queue) Enqueue(_ context.Context, m *message.Message, _ *message.Fence) (*message.Message, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	q.stored = append(q.stored, m)
+	return m, nil
+}
+
+func (q *queue) EnqueueWithinBudget(_ context.Context, m *message.Message, created time.Time, _ *message.Fence) (*message.Message, error) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.stored = append(q.stored, m)
+	q.created = append(q.created, created)
 	return m, nil
 }
 
@@ -254,6 +263,29 @@ func TestService_PostsToARecipientNothingKnowsAbout(t *testing.T) {
 	_, err = s.Post(ctx, senderGRN(), grn.GRN{}, "key-1", "hello", nil)
 	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), "a message addressed to nothing")
 	_, err = s.Post(ctx, senderGRN(), unknown, "", "hello", nil)
+	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), "a message with no key to suppress a duplicate by")
+	assert.Len(t, store.stored, 1, "a refused message reached the queue")
+}
+
+// TestService_PostWithinBudgetLeavesTheBudgetToTheStore holds that a
+// durable submission reaches the store with the creation instant it
+// carries, however old, because the store judges the budget when it
+// inserts (ADR-0083). A message nothing could be done with is refused
+// first, beside a valid one that is stored.
+func TestService_PostWithinBudgetLeavesTheBudgetToTheStore(t *testing.T) {
+	ctx := context.Background()
+	store := &queue{}
+	s, err := message.NewService(store, brief())
+	require.NoError(t, err)
+
+	long := time.Now().Add(-2 * message.SubmissionBudget)
+	stored, err := s.PostWithinBudget(ctx, senderGRN(), recipientGRN(), "entry-1", "hello", long, nil)
+	require.NoError(t, err)
+	assert.Equal(t, senderGRN(), stored.Sender())
+	assert.Equal(t, "entry-1", stored.IdempotencyKey())
+	assert.Equal(t, []time.Time{long}, store.created, "the creation instant reached the store unjudged")
+
+	_, err = s.PostWithinBudget(ctx, senderGRN(), recipientGRN(), "", "hello", long, nil)
 	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), "a message with no key to suppress a duplicate by")
 	assert.Len(t, store.stored, 1, "a refused message reached the queue")
 }

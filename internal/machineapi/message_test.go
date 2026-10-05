@@ -137,6 +137,7 @@ type messageCall struct {
 	id        message.ID
 	key       string
 	body      string
+	created   time.Time
 }
 
 // storedAt is when the queue stored the message this double answers a
@@ -155,6 +156,14 @@ type messageService struct {
 
 func (s *messageService) Post(_ context.Context, sender, recipient grn.GRN, key, body string, _ *message.Fence) (*message.Message, error) {
 	s.calls = append(s.calls, messageCall{method: "post", caller: sender, recipient: recipient, key: key, body: body})
+	if s.err != nil {
+		return nil, s.err
+	}
+	return message.New(recipient, sender, key, body)
+}
+
+func (s *messageService) PostWithinBudget(_ context.Context, sender, recipient grn.GRN, key, body string, created time.Time, _ *message.Fence) (*message.Message, error) {
+	s.calls = append(s.calls, messageCall{method: "post within budget", caller: sender, recipient: recipient, key: key, body: body, created: created})
 	if s.err != nil {
 		return nil, s.err
 	}
@@ -207,6 +216,8 @@ func send(t *testing.T, client *http.Client, method, url, body string) (int, str
 		version = agent.EnrollmentContractVersion
 	case standalonePath(req.URL.Path):
 		version = agent.StandaloneContractVersion
+	case strings.HasSuffix(req.URL.Path, "/outbox-messages"):
+		version = message.DeliveryContractVersion
 	}
 	req.Header.Set(operator.ContractVersionHeader, version)
 	resp, err := client.Do(req)
@@ -683,4 +694,144 @@ func TestServer_ReadsAnEmptyPollFromTheKindNotTheSentinel(t *testing.T) {
 	status, body = send(t, client, http.MethodPost, url+claims, "")
 	assert.Equal(t, http.StatusServiceUnavailable, status, "the control: another kind is not an empty poll")
 	assert.Contains(t, body, `"kind":"unavailable"`)
+}
+
+// outboxSend posts body to the durable submission route under version,
+// sending no version header at all where version is empty, and returns
+// the status, the version the answer carries and the body.
+func outboxSend(t *testing.T, client *http.Client, url, version, body string) (int, string, string) {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPost, url+"/outbox-messages", strings.NewReader(body))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	if version != "" {
+		req.Header.Set(operator.ContractVersionHeader, version)
+	}
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+	got, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	return resp.StatusCode, resp.Header.Get(operator.ContractVersionHeader), string(got)
+}
+
+// outboxEntry is the body a sender posts for one outbox entry.
+func outboxEntry(recipient grn.GRN, key, createdAt string) string {
+	return `{"recipient":"` + recipient.String() + `","idempotencyKey":"` + key +
+		`","body":"hello","createdAt":"` + createdAt + `"}`
+}
+
+// TestServer_RefusesAnOutboxMessageBeforeTheQueueWithoutItsContractOrCreationInstant
+// holds the refusals the surface makes itself (ADR-0083): a request
+// carrying no contract version, or another one, and an entry whose
+// creation instant is missing or does not parse never reach the queue.
+// The entry the queue is asked for is the control, sent first under
+// the same version and recipient: it reaches the queue with the
+// instant it named, so each refusal is its own field rather than a
+// route that refuses everything. Every answer names the contract it
+// follows.
+func TestServer_RefusesAnOutboxMessageBeforeTheQueueWithoutItsContractOrCreationInstant(t *testing.T) {
+	sender := agentGRN("acme", "9f8e7d6c5b4a3021")
+	recipient := agentGRN("acme", "0a1b2c3d4e5f6071")
+	messages := &messageService{}
+	url, client := listener(t, &agentService{}, nil, messages, consenting(), unwatched(t), &memberGroups{}, &engine{}, sender)
+	const v1 = message.DeliveryContractVersion
+
+	status, version, body := outboxSend(t, client, url, v1, outboxEntry(recipient, "entry-1", "2026-10-04T18:07:52.1Z"))
+	require.Equal(t, http.StatusCreated, status, body)
+	assert.Equal(t, v1, version)
+	assert.Contains(t, body, `"sender":"`+sender.String()+`"`)
+	assert.Equal(t, []messageCall{{
+		method: "post within budget", caller: sender, recipient: recipient, key: "entry-1", body: "hello",
+		created: time.Date(2026, time.October, 4, 18, 7, 52, 100000000, time.UTC),
+	}}, messages.calls)
+
+	tests := []struct {
+		name, version, body, names string
+	}{
+		{name: "no contract version", body: outboxEntry(recipient, "entry-2", "2026-10-04T18:07:52Z"), names: v1},
+		{name: "another contract version", version: operator.ContractVersion, body: outboxEntry(recipient, "entry-2", "2026-10-04T18:07:52Z"), names: v1},
+		{name: "no creation instant", version: v1, body: `{"recipient":"` + recipient.String() + `","idempotencyKey":"entry-2","body":"hello"}`, names: "createdAt"},
+		{name: "a creation instant that is not RFC 3339", version: v1, body: outboxEntry(recipient, "entry-2", "2026-10-04 18:07:52"), names: "createdAt"},
+		{name: "a creation instant with no zone", version: v1, body: outboxEntry(recipient, "entry-2", "2026-10-04T18:07:52"), names: "createdAt"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			before := len(messages.calls)
+			status, version, body := outboxSend(t, client, url, tt.version, tt.body)
+			assert.Equal(t, http.StatusBadRequest, status, body)
+			assert.Equal(t, v1, version, "the refusal names the contract the route serves")
+			assert.Contains(t, body, `"kind":"invalid_argument"`)
+			assert.Contains(t, body, tt.names)
+			assert.Len(t, messages.calls, before, "a refused entry reached the queue")
+		})
+	}
+}
+
+// TestServer_AnswersEachBudgetRefusalWithItsOwnStatus pins the table
+// the adapter branches on (ADR-0083). An expired entry is 410 because
+// the sentinel is what picks it: the control is a failure of the same
+// kind that is not the sentinel, which keeps the shared 504, so a
+// timeout never reads as expiry.
+func TestServer_AnswersEachBudgetRefusalWithItsOwnStatus(t *testing.T) {
+	sender := agentGRN("acme", "9f8e7d6c5b4a3021")
+	recipient := agentGRN("acme", "0a1b2c3d4e5f6071")
+
+	tests := []struct {
+		name   string
+		err    error
+		status int
+		kind   errorx.Kind
+	}{
+		{name: "expired", err: message.ErrSubmissionExpired, status: http.StatusGone, kind: errorx.KindDeadlineExceeded},
+		{name: "created later than garam's clock", err: message.ErrCreatedLater, status: http.StatusBadRequest, kind: errorx.KindOutOfRange},
+		{name: "a key holding another message", err: message.ErrKeyHoldsAnotherMessage, status: http.StatusConflict, kind: errorx.KindAlreadyExists},
+		{
+			name: "control: a timeout of the expiry's kind", err: errorx.New(errorx.KindDeadlineExceeded, "query timed out"),
+			status: http.StatusGatewayTimeout, kind: errorx.KindDeadlineExceeded,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			messages := &messageService{err: tt.err}
+			url, client := listener(t, &agentService{}, nil, messages, consenting(), unwatched(t), &memberGroups{}, &engine{}, sender)
+			status, version, body := outboxSend(t, client, url, message.DeliveryContractVersion, outboxEntry(recipient, "entry-1", "2026-10-04T18:07:52Z"))
+			assert.Equal(t, tt.status, status, body)
+			assert.Equal(t, message.DeliveryContractVersion, version)
+			if tt.status < http.StatusInternalServerError {
+				assert.Contains(t, body, `"kind":"`+tt.kind.String()+`"`)
+			}
+		})
+	}
+}
+
+// TestServer_RefusesAnOutboxMessageAcrossTheBoundaryUnderItsBudget
+// holds that the cross-organization refusal of an outbox entry is
+// written through the same budgeted write, carrying the entry's
+// creation instant, so an expired entry stores no refusal either. The
+// consenting pair is the control: its entry is stored as submitted.
+func TestServer_RefusesAnOutboxMessageAcrossTheBoundaryUnderItsBudget(t *testing.T) {
+	sender := agentGRN("acme", "9f8e7d6c5b4a3021")
+	foreign := agentGRN("globex", "0a1b2c3d4e5f6071")
+	stranger := agentGRN("initech", "0a1b2c3d4e5f6071")
+	messages := &messageService{}
+	url, client := listener(t, &agentService{}, nil, messages, consenting([2]string{"acme", "globex"}), unwatched(t), &memberGroups{}, &engine{}, sender)
+	created := time.Date(2026, time.October, 4, 18, 7, 52, 0, time.UTC)
+
+	status, _, body := outboxSend(t, client, url, message.DeliveryContractVersion, outboxEntry(foreign, "entry-1", created.Format(time.RFC3339)))
+	require.Equal(t, http.StatusCreated, status, body)
+	status, _, body = outboxSend(t, client, url, message.DeliveryContractVersion, outboxEntry(stranger, "entry-2", created.Format(time.RFC3339)))
+	require.Equal(t, http.StatusCreated, status, body)
+	assert.Contains(t, body, `"recipient":"`+sender.String()+`"`)
+	assert.Contains(t, body, `"sender":"`+stranger.String()+`"`)
+
+	assert.Equal(t, []messageCall{
+		{method: "post within budget", caller: sender, recipient: foreign, key: "entry-1", body: "hello", created: created},
+		{
+			method: "post within budget", caller: stranger, recipient: sender,
+			key:     "consent-refused:" + sender.String() + ":entry-2",
+			body:    "garam could not deliver your message to " + stranger.String() + ": the organizations acme and initech do not both consent to cross-organization messages",
+			created: created,
+		},
+	}, messages.calls)
 }

@@ -3,7 +3,9 @@ package machineapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"time"
 
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/agent"
@@ -47,11 +49,11 @@ func (s *Server) PostMessage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+	from, to, key, body := sender, recipient, submitted.IdempotencyKey, submitted.Body
 	if !admitted {
-		s.refuseCrossing(w, r, sender, recipient, submitted.IdempotencyKey, fence)
-		return
+		from, to, key, body = crossingRefusal(sender, recipient, key)
 	}
-	stored, err := s.messages.Post(r.Context(), sender, recipient, submitted.IdempotencyKey, submitted.Body, messageFence(fence))
+	stored, err := s.messages.Post(r.Context(), from, to, key, body, messageFence(fence))
 	if err != nil {
 		writeError(w, err)
 		return
@@ -59,25 +61,96 @@ func (s *Server) PostMessage(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, messageBody(stored))
 }
 
-// refuseCrossing answers a post no consent relation carries across its
-// boundary. garam cannot route the message, so the answer is not a
-// status: the refusal returns to the sender as an ordinary inbound
-// message (ADR-0013, ADR-0035), and the post is answered once that is
-// stored, as for any other. It is stored under the intended recipient's
-// identity because garam holds none of its own (ADR-0024); the body
-// says garam refused, and the key derives from the sender's so a
-// retried post is answered with the refusal already stored rather than
-// piling up one per retry.
-func (s *Server) refuseCrossing(w http.ResponseWriter, r *http.Request, sender, recipient grn.GRN, key string, fence *agent.Fencing) {
-	refusal := "garam could not deliver your message to " + recipient.String() +
-		": the organizations " + sender.Organization + " and " + recipient.Organization +
-		" do not both consent to cross-organization messages"
-	stored, err := s.messages.Post(r.Context(), recipient, sender, "consent-refused:"+sender.String()+":"+key, refusal, messageFence(fence))
+// PostOutboxMessage stores a durable reply under the creation instant
+// its outbox entry holds (ADR-0083). It is PostMessage's write behind a
+// contract version, checked before anything else is read, and a
+// budget, which the store judges at its insert.
+func (s *Server) PostOutboxMessage(w http.ResponseWriter, r *http.Request, params machinegen.PostOutboxMessageParams) {
+	if !deliveryContract(w, params.DeliveryContractVersion) {
+		return
+	}
+	sender, fence, ok := fenced(w, r)
+	if !ok {
+		return
+	}
+	var submitted machinegen.OutboxSubmission
+	if err := json.NewDecoder(r.Body).Decode(&submitted); err != nil {
+		writeError(w, errorx.Wrap(err, "message", errorx.KindInvalidArgument))
+		return
+	}
+	created, err := parseCreatedAt(submitted.CreatedAt)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	recipient, err := grn.Parse(submitted.Recipient)
+	if err != nil {
+		writeError(w, errorx.Wrap(err, "recipient", errorx.KindInvalidArgument))
+		return
+	}
+	admitted, err := s.authorizeSend(r.Context(), sender, recipient)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	from, to, key, body := sender, recipient, submitted.IdempotencyKey, submitted.Body
+	if !admitted {
+		from, to, key, body = crossingRefusal(sender, recipient, key)
+	}
+	stored, err := s.messages.PostWithinBudget(r.Context(), from, to, key, body, created, messageFence(fence))
+	if errors.Is(err, message.ErrSubmissionExpired) {
+		// The shared mapping answers the kind 504, which reads as a
+		// timeout a retry outlasts; the sentinel, not the kind, picks
+		// 410, so a timeout never reads as expiry.
+		writeErrorStatus(w, http.StatusGone, err)
+		return
+	}
 	if err != nil {
 		writeError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, messageBody(stored))
+}
+
+// parseCreatedAt reads an outbox entry's creation instant. A missing
+// one is refused rather than taken as now, so no receipt time ever
+// stands in for it.
+func parseCreatedAt(s string) (time.Time, error) {
+	if s == "" {
+		return time.Time{}, errorx.New(errorx.KindInvalidArgument, "createdAt is required")
+	}
+	created, err := time.Parse(time.RFC3339Nano, s)
+	if err != nil {
+		return time.Time{}, errorx.New(errorx.KindInvalidArgument, "createdAt is not an RFC 3339 instant")
+	}
+	return created, nil
+}
+
+// deliveryContract stamps the durable submission contract version on
+// the answer and refuses a request that asked for another.
+func deliveryContract(w http.ResponseWriter, version machinegen.DeliveryContractVersion) bool {
+	w.Header().Set("Garam-Contract-Version", message.DeliveryContractVersion)
+	if version != message.DeliveryContractVersion {
+		writeError(w, message.ErrUnsupportedDeliveryContract)
+		return false
+	}
+	return true
+}
+
+// crossingRefusal is what a post no consent relation carries across its
+// boundary stores instead. garam cannot route the message, so the
+// answer is not a status: the refusal returns to the sender as an
+// ordinary inbound message (ADR-0013, ADR-0035), and the post is
+// answered once that is stored, as for any other. It is sent under the
+// intended recipient's identity because garam holds none of its own
+// (ADR-0024); the body says garam refused, and the key derives from the
+// sender's so a retried post is answered with the refusal already
+// stored rather than piling up one per retry.
+func crossingRefusal(sender, recipient grn.GRN, key string) (from, to grn.GRN, refusalKey, body string) {
+	body = "garam could not deliver your message to " + recipient.String() +
+		": the organizations " + sender.Organization + " and " + recipient.Organization +
+		" do not both consent to cross-organization messages"
+	return recipient, sender, "consent-refused:" + sender.String() + ":" + key, body
 }
 
 // authorizeSend reports whether sender may post to recipient. A

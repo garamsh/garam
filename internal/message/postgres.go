@@ -2,9 +2,11 @@ package message
 
 import (
 	"context"
+	"errors"
 	"math"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -116,6 +118,72 @@ func (s *PostgresStore) Enqueue(ctx context.Context, m *Message, fence *Fence) (
 		return nil, err
 	}
 	return rowToMessage(row)
+}
+
+// EnqueueWithinBudget answers what the sender's key stores, and tries
+// the insert the budget gates only where it stores nothing, so a
+// stored result is answered after the budget too (ADR-0083). The
+// sweep rides it as it rides Enqueue. The key is read again after an
+// admitted insert, because the row admitted may be one a concurrent
+// submission stored first.
+func (s *PostgresStore) EnqueueWithinBudget(ctx context.Context, m *Message, created time.Time, fence *Fence) (*Message, error) {
+	key := db.MessageByKeyParams{SenderGrn: m.sender.String(), IdempotencyKey: m.idempotencyKey}
+	var row db.Message
+	err := s.fenced(ctx, "enqueue within budget", fence, func(q *db.Queries) error {
+		if err := q.DeleteExpiredMessages(ctx, interval(RetentionWindow)); err != nil {
+			return pgxerr.Classify(err, "sweep", nil, nil)
+		}
+		var err error
+		row, err = q.MessageByKey(ctx, key)
+		if !errors.Is(err, pgx.ErrNoRows) {
+			return pgxerr.Classify(err, "stored under key", nil, nil)
+		}
+		verdict, err := q.EnqueueWithinBudget(ctx, db.EnqueueWithinBudgetParams{
+			Created:        stamp(created),
+			ID:             string(m.id),
+			RecipientGrn:   m.recipient.String(),
+			SenderGrn:      m.sender.String(),
+			IdempotencyKey: m.idempotencyKey,
+			Body:           m.body,
+			Budget:         interval(SubmissionBudget),
+		})
+		if err != nil {
+			return pgxerr.Classify(err, "enqueue within budget", nil, nil)
+		}
+		if err := budgetRefusal(verdict); err != nil {
+			return err
+		}
+		row, err = q.MessageByKey(ctx, key)
+		return pgxerr.Classify(err, "stored under key", nil, nil)
+	})
+	if err != nil {
+		return nil, err
+	}
+	if !sameSubmission(row, m) {
+		return nil, ErrKeyHoldsAnotherMessage
+	}
+	return rowToMessage(row)
+}
+
+// budgetRefusal reads the verdict EnqueueWithinBudget decided: nil for
+// a stored row, and the refusal it names otherwise.
+func budgetRefusal(verdict string) error {
+	switch verdict {
+	case "admitted":
+		return nil
+	case "later":
+		return ErrCreatedLater
+	case "expired":
+		return ErrSubmissionExpired
+	}
+	return errorx.New(errorx.KindInternal, "unknown budget verdict")
+}
+
+// sameSubmission reports whether the row stored under m's key is m's
+// own submission. A completed row has dropped its body (ADR-0034), so
+// the key and recipient are what bind a retry to it then.
+func sameSubmission(row db.Message, m *Message) bool {
+	return row.RecipientGrn == m.recipient.String() && (!row.Body.Valid || row.Body.String == m.body)
 }
 
 // Claim hands the recipient's oldest ready message to one reader and

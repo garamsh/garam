@@ -77,6 +77,11 @@ type Service interface {
 	// what is stored. Posting the same idempotency key twice stores one
 	// message.
 	Post(ctx context.Context, sender, recipient grn.GRN, idempotencyKey, body string, fence *Fence) (*Message, error)
+	// PostWithinBudget is Post for a durable submission created at
+	// created: it stores a message only inside SubmissionBudget of that
+	// instant, and answers what the key already stores at any time
+	// (ADR-0083).
+	PostWithinBudget(ctx context.Context, sender, recipient grn.GRN, idempotencyKey, body string, created time.Time, fence *Fence) (*Message, error)
 	// Claim hands the caller the oldest message addressed to it, waiting
 	// until one is ready rather than answering an empty queue at once,
 	// and returns ErrNoMessageReady when none arrives in that time.
@@ -152,6 +157,17 @@ func (s *service) Post(ctx context.Context, sender, recipient grn.GRN, idempoten
 		return nil, err
 	}
 	return s.store.Enqueue(ctx, m, fence)
+}
+
+// PostWithinBudget is Post, with the budget judged by the store at its
+// insert rather than here: a request delayed on its way there is judged
+// when it writes.
+func (s *service) PostWithinBudget(ctx context.Context, sender, recipient grn.GRN, idempotencyKey, body string, created time.Time, fence *Fence) (*Message, error) {
+	m, err := New(recipient, sender, idempotencyKey, body)
+	if err != nil {
+		return nil, err
+	}
+	return s.store.EnqueueWithinBudget(ctx, m, created, fence)
 }
 
 func (s *service) Claim(ctx context.Context, caller, recipient grn.GRN, fence *Fence) (*Claim, error) {

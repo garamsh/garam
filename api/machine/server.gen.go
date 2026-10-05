@@ -495,6 +495,21 @@ type OperationBinding struct {
 // OperationBindingOperation defines model for OperationBinding.Operation.
 type OperationBindingOperation string
 
+// OutboxSubmission What a sender supplies for one outbox entry. Who is sending is the certificate's to say.
+type OutboxSubmission struct {
+	// Body The message itself, bounded as `MessageSubmission`'s body is (ADR-0034).
+	Body string `json:"body"`
+
+	// CreatedAt When the entry was created, as an RFC 3339 instant with any number of fractional digits, the same on every attempt. It is read as text so that garam, not the decoder, refuses one that does not parse.
+	CreatedAt string `json:"createdAt"`
+
+	// IdempotencyKey The entry's own identifier, unchanged on every attempt. The first message stored under it is the one every later attempt is answered with.
+	IdempotencyKey string `json:"idempotencyKey"`
+
+	// Recipient GRN of the identity the message is addressed to. It does not have to name an agent garam knows.
+	Recipient string `json:"recipient"`
+}
+
 // ProvenAgent defines model for ProvenAgent.
 type ProvenAgent struct {
 	// Epoch The current assignment's epoch. Opaque; compare it for equality only.
@@ -595,6 +610,9 @@ type ContractVersion = string
 // ControllerGrn defines model for controller.
 type ControllerGrn = string
 
+// DeliveryContractVersion defines model for deliveryContractVersion.
+type DeliveryContractVersion = string
+
 // EnrollmentContractVersion defines model for enrollmentContractVersion.
 type EnrollmentContractVersion = string
 
@@ -612,6 +630,9 @@ type StandaloneContractVersion = string
 
 // ContractError defines model for ContractError.
 type ContractError = Error
+
+// DeliveryContractError defines model for DeliveryContractError.
+type DeliveryContractError = Error
 
 // EnrollmentContractError defines model for EnrollmentContractError.
 type EnrollmentContractError = Error
@@ -682,6 +703,12 @@ type CreateManagedAgentParams struct {
 	EnrollmentContractVersion EnrollmentContractVersion `json:"Garam-Contract-Version"`
 }
 
+// PostOutboxMessageParams defines parameters for PostOutboxMessage.
+type PostOutboxMessageParams struct {
+	// DeliveryContractVersion Must be `durable-delivery.v1` (ADR-0083); any other value is refused with 400 naming it.
+	DeliveryContractVersion DeliveryContractVersion `json:"Garam-Contract-Version"`
+}
+
 // RenewSupervisorCertificateParams defines parameters for RenewSupervisorCertificate.
 type RenewSupervisorCertificateParams struct {
 	// StandaloneContractVersion Must be `standalone-enrollment.v1`; any other value is refused with 400 naming it.
@@ -726,6 +753,9 @@ type IntrospectControllerJSONRequestBody = ControllerIntrospection
 
 // CreateManagedAgentJSONRequestBody defines body for CreateManagedAgent for application/json ContentType.
 type CreateManagedAgentJSONRequestBody = ManagedAgentRequest
+
+// PostOutboxMessageJSONRequestBody defines body for PostOutboxMessage for application/json ContentType.
+type PostOutboxMessageJSONRequestBody = OutboxSubmission
 
 // RenewSupervisorCertificateJSONRequestBody defines body for RenewSupervisorCertificate for application/json ContentType.
 type RenewSupervisorCertificateJSONRequestBody = SupervisorRenewalRequest
@@ -807,6 +837,9 @@ type ServerInterface interface {
 	// CreateManagedAgent Create an agent assigned to a controller, under a member's agent:create reference.
 	// (POST /operators/{controller}/managed-agents)
 	CreateManagedAgent(w http.ResponseWriter, r *http.Request, controllerGrn ControllerGrn, params CreateManagedAgentParams)
+	// PostOutboxMessage Post a durable reply under the creation instant its outbox entry holds.
+	// (POST /outbox-messages)
+	PostOutboxMessage(w http.ResponseWriter, r *http.Request, params PostOutboxMessageParams)
 	// RenewSupervisorCertificate Renew the calling supervisor's certificate over a key it generated.
 	// (POST /supervisors/self/certificate)
 	RenewSupervisorCertificate(w http.ResponseWriter, r *http.Request, params RenewSupervisorCertificateParams)
@@ -1688,6 +1721,51 @@ func (siw *ServerInterfaceWrapper) CreateManagedAgent(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// PostOutboxMessage operation middleware
+func (siw *ServerInterfaceWrapper) PostOutboxMessage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PostOutboxMessageParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Garam-Contract-Version" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Garam-Contract-Version")]; found {
+		var DeliveryContractVersion DeliveryContractVersion
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Garam-Contract-Version", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Garam-Contract-Version", valueList[0], &DeliveryContractVersion, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Garam-Contract-Version", Err: err})
+			return
+		}
+
+		params.DeliveryContractVersion = DeliveryContractVersion
+
+	} else {
+		err := fmt.Errorf("Header parameter Garam-Contract-Version is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Garam-Contract-Version", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PostOutboxMessage(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RenewSupervisorCertificate operation middleware
 func (siw *ServerInterfaceWrapper) RenewSupervisorCertificate(w http.ResponseWriter, r *http.Request) {
 
@@ -1863,6 +1941,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/definitions", wrapper.ListDefinitions)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/definitions/{agent}/claim", wrapper.ClaimDefinition)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/messages", wrapper.PostMessage)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/outbox-messages", wrapper.PostOutboxMessage)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/messages/{message}", wrapper.GetMessageStatus)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/claims", wrapper.ClaimMessage)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/claims/{claim}/renewal", wrapper.RenewClaim)

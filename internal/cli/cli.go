@@ -62,14 +62,12 @@
 //	GARAM_CERTIFICATE_LIFETIME  how long a certificate garam signs stays
 //	                       valid (default "24h"; internal/ca bounds it)
 //	GARAM_ADAPTER_AGENT    GRN of the agent the adapter carries messages
-//	                       for (required for adapter)
+//	                       for, which the gateway serves it under too
+//	                       (required for adapter)
 //	GARAM_ADAPTER_MACHINE_URL  base URL of the machine listener it claims
 //	                       from (required for adapter)
 //	GARAM_ADAPTER_GATEWAY_URL  base URL of the agent platform's gateway
 //	                       (default "http://127.0.0.1:8080")
-//	GARAM_ADAPTER_GATEWAY_AGENT  the identifier that gateway serves its
-//	                       agent under, which is not garam's GRN for it
-//	                       (required for adapter)
 //	GARAM_ADAPTER_TLS_CERT_FILE  the agent's own client certificate, PEM
 //	                       (required for adapter)
 //	GARAM_ADAPTER_TLS_KEY_FILE   its private key, PEM, readable by its
@@ -78,6 +76,18 @@
 //	                       verified against, PEM, which is not the
 //	                       authority that issued the certificate above
 //	                       (required for adapter)
+//	GARAM_ADAPTER_CONTROL_URL  https base URL of the lifecycle authority
+//	                       the adapter activates through (ADR-0084; set
+//	                       with the next two, or none of the three for an
+//	                       agent never cut over)
+//	GARAM_ADAPTER_CONTROL_ROOT_FILE  the root that authority's serving
+//	                       certificate chains to, PEM (with the URL)
+//	GARAM_ADAPTER_PLACEMENT_TOKEN_FILE  the mounted placement token,
+//	                       read afresh on each activation (with the URL)
+//	GARAM_ADAPTER_OUTBOX_DIR  the runtime's outbox directory, whose
+//	                       replies the adapter forwards (required beside
+//	                       the control settings; otherwise optional, and
+//	                       nothing is forwarded without it)
 package cli
 
 import (

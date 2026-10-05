@@ -19,13 +19,16 @@ import (
 //
 // T9: garam commits the first activation and its answer is lost, by
 // the test's interposer; the supervisor is then stopped and started
-// again. The adapter's retry reaches the new supervisor, which sends
-// garam the same request identifier, and garam answers the same
-// activation with a higher token version: one activation exists.
+// again. The adapter asks again, and the restarted supervisor sends
+// garam the request its record holds, with the same request
+// identifier; garam answers the same activation with a higher token
+// version: one activation exists.
 //
-// T10: after a replacement, the ended intent's own request sent to
-// garam again is refused with 409, and neither the supervisor's anchor
-// nor garam's current activation moves. The control is the live
+// T10: after a replacement, the ended intent's own request, sent to
+// garam again by the test with the supervisor's certificate, is refused
+// with 409 and garam's current activation does not move. That is
+// garam's refusal; the supervisor sends nothing for an ended intent,
+// whose socket is gone with its adapter. The control is the live
 // intent's request sent again, which garam answers with the same
 // activation and a higher token version.
 func TestStandalone_ReplaysALostActivationAndRefusesAnEndedOne(t *testing.T) {
@@ -96,7 +99,6 @@ func TestStandalone_ReplaysALostActivationAndRefusesAnEndedOne(t *testing.T) {
 	status, answer := replay(before)
 	assert.Equal(t, http.StatusConflict, status, "the ended intent's request is refused: %v", answer)
 	t.Logf("the ended intent's replay answered %d %v", status, answer)
-	assert.Equal(t, after.LastActivation, h.record().LastActivation, "the supervisor's anchor does not move")
 	now := s.activations(agentGRN)
 	require.Len(t, now, 2, "no activation is created")
 	assert.Equal(t, current, now[1], "garam's current activation does not move")

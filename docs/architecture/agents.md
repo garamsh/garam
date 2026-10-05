@@ -388,7 +388,10 @@ supervisor that stops leaves the workload running.
   configuration and the adapter's key, certificate, roots and
   placement token are written into each container before it starts,
   owned by 65532 and readable by it alone; the runtime's environment
-  is the model credential.
+  is the model credential. That credential is a limit rather than an
+  isolation: every tool the runtime runs reads its environment, as
+  Sherlock passes it on (ADR-0085), and the engine shows it to whoever
+  reaches the rootless daemon, which is the host user alone.
 - **The runtime's ego and instructions are the host's.**
   `--ego-file` and `--instructions-file` are copied in beside the
   configuration and named to the runtime; with no ego, the runtime

@@ -132,7 +132,9 @@ func (s *stack) activations(agentGRN string) []activation {
 type record struct {
 	LastActivation string `json:"lastActivation"`
 	Memory         struct {
-		Served bool `json:"served"`
+		Name   string `json:"name"`
+		Nonce  string `json:"nonce"`
+		Served bool   `json:"served"`
 	} `json:"memory"`
 	Intent struct {
 		ID           string `json:"id"`

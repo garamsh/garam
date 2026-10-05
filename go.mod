@@ -10,6 +10,7 @@ require (
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/moby/moby/api v1.55.0
 	github.com/moby/moby/client v0.5.0
+	github.com/ncruces/go-sqlite3 v0.32.0
 	github.com/oapi-codegen/runtime v1.7.0
 	github.com/prometheus/client_golang v1.24.1
 	github.com/spf13/cobra v1.10.2
@@ -118,7 +119,6 @@ require (
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/ncruces/go-sqlite3 v0.32.0 // indirect
 	github.com/ncruces/julianday v1.0.0 // indirect
 	github.com/oapi-codegen/oapi-codegen/v2 v2.8.0 // indirect
 	github.com/oasdiff/yaml v0.1.1 // indirect

@@ -2,6 +2,7 @@ package standalone_test
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -14,6 +15,8 @@ import (
 	"testing"
 	"time"
 
+	_ "github.com/ncruces/go-sqlite3/driver"
+	_ "github.com/ncruces/go-sqlite3/embed"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -49,12 +52,19 @@ var probe = sync.OnceValues(func() (string, error) {
 	return path, nil
 })
 
-// exec runs the probe inside a container and answers what it printed.
-func (s *stack) probeIn(id string, args ...string) (string, error) {
+// placeProbe copies the probe into a container at /probe.
+func (s *stack) placeProbe(id string) {
 	s.t.Helper()
 	path, err := probe()
 	require.NoError(s.t, err)
 	s.mustDocker("cp", path, id+":/probe")
+}
+
+// probeIn runs the probe inside a container and answers what it
+// printed.
+func (s *stack) probeIn(id string, args ...string) (string, error) {
+	s.t.Helper()
+	s.placeProbe(id)
 	return s.docker(append([]string{"exec", id, "/probe"}, args...)...)
 }
 
@@ -139,6 +149,7 @@ func TestStandalone_JointScenario(t *testing.T) {
 func joint(t *testing.T, ego string) {
 	s := newStack(t)
 	modelEnv := required(t, "GARAM_TEST_MODEL_ENV_FILE")
+	s.secretsFrom(modelEnv)
 	tei := s.embedding()
 
 	// 1. prepare, approval, enroll.
@@ -179,7 +190,7 @@ embedding:
 			return
 		}
 		for i, r := range runs {
-			t.Logf("supervisor run %d:\n%s", i, tail(r.out.String(), 40))
+			t.Logf("supervisor run %d:\n%s", i, s.scrub(tail(r.out.String(), 40)))
 		}
 		for _, role := range []string{"runtime", "adapter"} {
 			if id := h.container(role); id != "" {
@@ -190,7 +201,7 @@ embedding:
 						turn = append(turn, line)
 					}
 				}
-				t.Logf("%s logs:\n%s", role, tail(redacted(strings.Join(turn, "\n")), 80))
+				t.Logf("%s logs:\n%s", role, s.scrub(tail(strings.Join(turn, "\n"), 80)))
 			}
 		}
 		for _, m := range s.messages("recipient_grn = $1 OR sender_grn = $1", agentGRN) {
@@ -202,6 +213,11 @@ embedding:
 		a := s.activations(agentGRN)
 		return len(a) == 1 && h.record().Memory.Served
 	})
+	// The runtime runs with the ego it was given, and with Sherlock's
+	// own where it was given none; both carry the reply instruction.
+	launched := s.mustDocker("inspect", "-f", "{{json .Config.Cmd}}", h.container("runtime"))
+	assert.Equal(t, ego != "", strings.Contains(launched, "--ego-file"), "the ego reaches the runtime: %s", launched)
+	assert.Contains(t, launched, "--instructions-file")
 
 	// 3. a message with an escaped, JSON-looking body, and 4. a
 	// harmless task effect. The workspace is stopped, the test's own
@@ -237,51 +253,175 @@ embedding:
 	<-first.done
 
 	second := start()
+	var runtime string
+	s.eventually("the second generation's runtime", func() bool {
+		runtime = h.container("runtime")
+		return runtime != ""
+	})
+	// The test keeps a copy of every outbox entry the runtime writes,
+	// since the adapter removes each once garam stored it.
+	s.placeProbe(runtime)
+	s.mustDocker("exec", "-d", runtime, "/probe", "collect", "/data/outbox", "/data/garam-1180-collected")
 	reply := from.awaitReply(agentGRN)
-	t.Logf("the reply: %q", reply.Body)
-	assert.Equal(t, agentGRN, reply.Sender, "the reply comes from the agent garam verified")
+	t.Logf("the reply: %q", s.scrub(reply.Body))
 	s.eventually("the message completed", func() bool {
 		m1 = s.messages("id = $1", m1.ID)[0]
 		return m1.Completed
 	})
 	assert.Equal(t, 2, m1.Attempts, "the message was claimed twice")
-	replies := s.messages("sender_grn = $1 AND recipient_grn = $2", agentGRN, from.grn)
-	require.NotEmpty(t, replies, "the reply is garam's durable record")
-	assert.NotEmpty(t, replies[0].Key, "under the outbox entry's own key")
 
+	// 5. the durable reply: exactly one, written to the outbox in reply
+	// to garam's message, and stored by garam under that entry's own
+	// key, sender and target.
+	entries := s.collected(runtime)
+	require.Len(t, entries, 1, "the runtime wrote exactly one reply")
+	entry := entries[0]
+	assert.Equal(t, []string{m1.ID}, entry.InReplyTo, "the reply answers garam's message, by its stable id")
+	assert.Equal(t, "garam", entry.Channel)
+	replies := s.messages("sender_grn = $1 AND recipient_grn = $2", agentGRN, from.grn)
+	require.Len(t, replies, 1, "garam stored exactly one reply")
+	assert.Equal(t, entry.ID, replies[0].Key, "under the outbox entry's own key")
+	assert.Equal(t, entry.Target, replies[0].Recipient, "to the entry's target")
+	assert.Equal(t, agentGRN, replies[0].Sender, "from the agent whose certificate posted it")
+	assert.Equal(t, from.grn, entry.Target, "the original sender")
+	assert.Equal(t, entry.Content, reply.Body, "the sender received what the runtime wrote")
+
+	// 4. the effect, byte for byte: the body's escapes decoded.
+	space = h.container("workspace")
+	found, err := s.probeIn(space, "find", "/var/lib/sherlock-workspace", "garam-1180-effect.txt")
+	require.NoError(t, err, s.scrub(found))
+	require.NotEmpty(t, found, "the task's effect")
+	effect, err := s.probeIn(space, "cat", strings.Fields(found)[0])
+	require.NoError(t, err, s.scrub(effect))
+	assert.Equal(t, `done "quoted" \ end`, strings.TrimSuffix(effect, "\n"), "the effect's bytes")
+
+	// One source, read live: the runtime answers the exact envelope as
+	// completed and the same id with other content as reused. That is
+	// an inference from the runtime's answers; the count in its store
+	// follows once the generation stops.
 	adapter = h.container("adapter")
 	content := envelope(t, from.grn, body)
 	said, err := s.probeIn(adapter, "post", "http://127.0.0.1:8080/agents/"+agentGRN+"/messages",
 		mustJSON(t, map[string]string{"id": m1.ID, "content": content}))
-	require.NoError(t, err, said)
-	assert.Equal(t, "200", said, "the same id and content is the one completed source")
+	require.NoError(t, err, s.scrub(said))
+	assert.Equal(t, "200", said, "the same id and content answers as the one completed source")
 	said, err = s.probeIn(adapter, "post", "http://127.0.0.1:8080/agents/"+agentGRN+"/messages",
 		mustJSON(t, map[string]string{"id": m1.ID, "content": content + " "}))
-	require.NoError(t, err, said)
+	require.NoError(t, err, s.scrub(said))
 	assert.Equal(t, "409", said, "the control: the id is held, so other content is refused")
 
-	space = h.container("workspace")
-	found, err := s.probeIn(space, "find", "/var/lib/sherlock-workspace", "garam-1180-effect.txt")
-	require.NoError(t, err, found)
-	require.NotEmpty(t, found, "the task's effect")
-	effect, err := s.probeIn(space, "cat", strings.Fields(found)[0])
-	t.Logf("the effect at %s: %q (%v)", found, effect, err)
-
-	// 6. a restart that keeps memory (T15).
-	require.NoError(t, second.stop(), second.out.String())
-	start("--replace")
+	// 6. a restart that keeps memory (T15): the same agent on the same
+	// volume, a new generation.
+	before := s.generationOf(h, runtime)
+	require.NoError(t, second.stop(), s.scrub(second.out.String()))
+	last := start("--replace")
 	s.eventually("the successor activated", func() bool {
 		a := s.activations(agentGRN)
 		return len(a) >= 2 && a[len(a)-1].Ended == ""
 	})
-	runtime := h.container("runtime")
-	cmd := s.mustDocker("inspect", "-f", "{{json .Config.Cmd}}", runtime)
-	assert.Contains(t, cmd, "--require-store", "the successor requires the store it inherits")
-	from.post(agentGRN, "garam-1180-second",
-		"What is the codeword from my earlier message? Reply to me with message_send, with just the codeword.")
-	recall := from.awaitReply(agentGRN)
-	t.Logf("the recall: %q", recall.Body)
-	assert.Contains(t, strings.ToLower(recall.Body), codeword, "memory from the previous generation is recalled")
+	successor := h.container("runtime")
+	after := s.generationOf(h, successor)
+	assert.Equal(t, before.agent, after.agent, "the same agent")
+	assert.Equal(t, agentGRN, after.agent)
+	assert.Equal(t, before.volume, after.volume, "the same memory volume")
+	assert.Equal(t, before.nonce, after.nonce, "carrying the nonce the host created it with")
+	assert.NotEqual(t, before.generation, after.generation, "a new generation")
+	assert.Contains(t, s.mustDocker("inspect", "-f", "{{json .Config.Cmd}}", successor), "--require-store",
+		"the successor requires the store it inherits")
+	question := "What is the codeword from my earlier message? Reply to me with message_send, with just the codeword."
+	require.NotContains(t, question, codeword, "the second turn's input does not carry the codeword")
+	from.post(agentGRN, "garam-1180-second", question)
+	recall := s.scrub(from.awaitReply(agentGRN).Body)
+	t.Logf("the recall: %q", recall)
+	assert.Contains(t, strings.ToLower(recall), codeword, "memory from the previous generation is recalled")
+
+	// One source, counted in the runtime's own store once its
+	// generation has stopped.
+	s.mustDocker("kill", "--signal", "TERM", successor)
+	<-last.done
+	sources := s.sources(after.volume, m1.ID)
+	require.Len(t, sources, 1, "the store holds the message as one source")
+	assert.Equal(t, content, sources[0], "under the content the adapter posted both times")
+}
+
+// outboxEntry is a reply the runtime wrote, as its writer wrote it.
+type outboxEntry struct {
+	ID        string   `json:"id"`
+	InReplyTo []string `json:"in_reply_to"`
+	Channel   string   `json:"channel"`
+	Target    string   `json:"target"`
+	Content   string   `json:"content"`
+}
+
+// collected answers the outbox entries the test's collector kept.
+func (s *stack) collected(runtime string) []outboxEntry {
+	s.t.Helper()
+	names, err := s.probeIn(runtime, "ls", "/data/garam-1180-collected")
+	require.NoError(s.t, err, s.scrub(names))
+	var out []outboxEntry
+	for _, name := range strings.Fields(names) {
+		raw, err := s.docker("exec", runtime, "/probe", "cat", "/data/garam-1180-collected/"+name)
+		require.NoError(s.t, err, s.scrub(raw))
+		var e outboxEntry
+		require.NoError(s.t, json.Unmarshal([]byte(raw), &e), s.scrub(raw))
+		out = append(out, e)
+	}
+	return out
+}
+
+// generation is what identifies one generation of the agent: the
+// agent it serves, its memory volume and that volume's nonce, and the
+// generation garam activated.
+type generation struct {
+	agent, volume, nonce, generation string
+}
+
+func (s *stack) generationOf(h *host, runtime string) generation {
+	s.t.Helper()
+	var cmd []string
+	require.NoError(s.t, json.Unmarshal([]byte(s.mustDocker("inspect", "-f", "{{json .Config.Cmd}}", runtime)), &cmd))
+	g := generation{generation: h.record().Intent.Generation}
+	for i, arg := range cmd {
+		if arg == "--agent-id" && i+1 < len(cmd) {
+			g.agent = cmd[i+1]
+		}
+	}
+	g.volume = s.mustDocker("inspect", "-f", `{{range .Mounts}}{{if eq .Destination "/data"}}{{.Name}}{{end}}{{end}}`, runtime)
+	g.nonce = s.mustDocker("volume", "inspect", "-f", `{{index .Labels "sh.garam.workload.nonce"}}`, g.volume)
+	require.NotEmpty(s.t, g.nonce)
+	require.Equal(s.t, g.nonce, h.record().Memory.Nonce, "the volume carries the nonce the record holds")
+	return g
+}
+
+// sources reads the runtime's store on volume, its generation stopped,
+// and answers the content of every source recorded under id.
+func (s *stack) sources(volume, id string) []string {
+	s.t.Helper()
+	dir := s.t.TempDir()
+	for _, name := range []string{"memory.db", "memory.db-wal"} {
+		cmd := exec.Command("docker", "run", "--rm", "--network", "none", "-v", volume+":/v:ro",
+			"--entrypoint", "sh", required(s.t, "GARAM_TEST_WORKSPACE_IMAGE"), "-c", "test ! -e /v/"+name+" || cat /v/"+name)
+		cmd.Env = append(os.Environ(), "DOCKER_HOST="+s.daemon)
+		raw, err := cmd.Output()
+		require.NoError(s.t, err)
+		if len(raw) > 0 {
+			require.NoError(s.t, os.WriteFile(filepath.Join(dir, name), raw, 0o600))
+		}
+	}
+	db, err := sql.Open("sqlite3", "file:"+filepath.Join(dir, "memory.db"))
+	require.NoError(s.t, err)
+	defer func() { _ = db.Close() }()
+	rows, err := db.Query(`SELECT content FROM conversation_sources WHERE external_id = ?`, id)
+	require.NoError(s.t, err)
+	defer func() { _ = rows.Close() }()
+	var out []string
+	for rows.Next() {
+		var c string
+		require.NoError(s.t, rows.Scan(&c))
+		out = append(out, c)
+	}
+	require.NoError(s.t, rows.Err())
+	return out
 }
 
 func mustJSON(t *testing.T, v any) string {
@@ -309,16 +449,24 @@ func tail(s string, n int) string {
 	return strings.Join(lines, "\n")
 }
 
-// redacted drops every line that names a key or a token, so nothing a
-// log might hold of a credential reaches the test's output.
-func redacted(s string) string {
-	var kept []string
-	for _, line := range strings.Split(s, "\n") {
-		lower := strings.ToLower(line)
-		if strings.Contains(lower, "key") || strings.Contains(lower, "token") || strings.Contains(lower, "authorization") {
-			continue
+// secretsFrom reads the values of an owner-only KEY=VALUE file, which
+// scrub removes from everything the test prints.
+func (s *stack) secretsFrom(path string) {
+	s.t.Helper()
+	raw, err := os.ReadFile(path)
+	require.NoError(s.t, err)
+	for _, line := range strings.Split(string(raw), "\n") {
+		if _, value, ok := strings.Cut(strings.TrimSpace(line), "="); ok && value != "" {
+			s.secrets = append(s.secrets, value)
 		}
-		kept = append(kept, line)
 	}
-	return strings.Join(kept, "\n")
+}
+
+// scrub answers text with every secret value the stack holds replaced,
+// so no output the test prints carries one, whichever line it is on.
+func (s *stack) scrub(text string) string {
+	for _, secret := range s.secrets {
+		text = strings.ReplaceAll(text, secret, "[redacted]")
+	}
+	return text
 }

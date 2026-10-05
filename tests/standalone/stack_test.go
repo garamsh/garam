@@ -114,6 +114,8 @@ type stack struct {
 	rootKey    *ecdsa.PrivateKey
 	root       *x509.Certificate
 	conn       *pgx.Conn
+	// secrets are values no output of the test may carry.
+	secrets []string
 }
 
 func newStack(t *testing.T) *stack {
@@ -169,7 +171,7 @@ func (s *stack) docker(args ...string) (string, error) {
 func (s *stack) mustDocker(args ...string) string {
 	s.t.Helper()
 	out, err := s.docker(args...)
-	require.NoError(s.t, err, "docker %v: %s", args, out)
+	require.NoError(s.t, err, "docker %v: %s", args, s.scrub(out))
 	return out
 }
 

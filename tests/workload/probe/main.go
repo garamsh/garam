@@ -25,7 +25,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fail("usage: probe report|daemon|post|get|size|cat|put|find|garam ...")
+		fail("usage: probe report|daemon|post|get|size|cat|collect|ls|put|find|garam ...")
 	}
 	var err error
 	switch os.Args[1] {
@@ -41,6 +41,10 @@ func main() {
 		err = size(os.Args[2])
 	case "cat":
 		err = cat(os.Args[2])
+	case "collect":
+		err = collect(os.Args[2], os.Args[3])
+	case "ls":
+		err = list(os.Args[2])
 	case "put":
 		err = put(os.Args[2], os.Args[3], os.Args[4])
 	case "find":
@@ -300,4 +304,42 @@ func cat(path string) error {
 	}
 	_, err = os.Stdout.Write(raw)
 	return err
+}
+
+// collect copies every finished entry that appears in dir into dest,
+// every fiftieth of a second, for as long as it lives, so an entry is
+// kept after its reader removes it. It copies rather than links: a
+// second link would make the entry one its reader refuses.
+func collect(dir, dest string) error {
+	if err := os.MkdirAll(dest, 0o700); err != nil {
+		return err
+	}
+	for {
+		entries, _ := os.ReadDir(dir)
+		for _, e := range entries {
+			if !strings.HasSuffix(e.Name(), ".json") || strings.HasPrefix(e.Name(), ".") {
+				continue
+			}
+			target := filepath.Join(dest, e.Name())
+			if _, err := os.Stat(target); err == nil {
+				continue
+			}
+			if raw, err := os.ReadFile(filepath.Join(dir, e.Name())); err == nil {
+				_ = os.WriteFile(target, raw, 0o600)
+			}
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// list prints the name of every entry in dir.
+func list(dir string) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		fmt.Println(e.Name())
+	}
+	return nil
 }

@@ -3,7 +3,12 @@ import { createHash } from "node:crypto";
 import type { Page } from "@playwright/test";
 
 import { expect, test } from "./fixtures";
-import { recordedAuthority, seedHostedOperator, type Seed } from "./seed";
+import {
+  recordedAuthority,
+  seedHostedOperator,
+  seedMemberDeniedOperatorRead,
+  type Seed,
+} from "./seed";
 
 /*
  * The console against a hosted operator's control service (#1170).
@@ -144,7 +149,7 @@ test.describe("control service, as contract tests against the agreed Operator wi
       .click();
     await expect(
       page.getByText(
-        "control endpoint must be an https URL of at most 2048 bytes, with no credentials, query, fragment or trailing slash",
+        "control endpoint must be an https URL of at most 2048 bytes with a host and a valid port, and no credentials, query, fragment, dot segment or trailing slash",
         { exact: true },
       ),
     ).toBeVisible();
@@ -462,6 +467,98 @@ test.describe("control service, as contract tests against the agreed Operator wi
       page.getByRole("heading", { level: 1, name: "People", exact: true }),
     ).toBeVisible();
     await expect(page.getByText(signedIn.nickname).first()).toBeVisible();
+  });
+
+  test("a member denied operator:read keeps the agent and template views, with the control service panels saying why", async ({
+    page,
+    context,
+    signedIn,
+    baseURL,
+  }) => {
+    await seedHostedOperator(signedIn, ENDPOINT, READS);
+    await stubControl(page, new URL(baseURL!).origin, () => "unreachable");
+    const refused =
+      "garam refused to list this organization's operators to you, so no control service is reachable from here.";
+    const agentPage = `/console/orgs/${signedIn.orgSlug}/agents/${signedIn.agentIdentifier}`;
+
+    // The control: the owner, whom nothing denies, meets no refusal on
+    // the same page.
+    await page.goto(agentPage);
+    await expect(
+      page.getByRole("heading", { level: 1, name: signedIn.agentIdentifier }),
+    ).toBeVisible();
+    await expect(page.getByText(refused, { exact: true })).toBeHidden();
+
+    const member = await seedMemberDeniedOperatorRead(signedIn);
+    await context.clearCookies();
+    await context.addCookies([
+      {
+        name: "garam_session",
+        value: member.sessionToken,
+        url: baseURL!,
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ]);
+
+    await page.goto(agentPage);
+    await expect(
+      page.getByRole("heading", { level: 1, name: signedIn.agentIdentifier }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(signedIn.agentProvisioningState, { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText(refused, { exact: true })).toBeVisible();
+
+    await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/templates`);
+    await expect(page.getByText("No templates", { exact: true })).toBeVisible();
+    await expect(page.getByText(refused, { exact: true })).toBeVisible();
+
+    await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/new`);
+    await expect(
+      page.getByRole("button", { name: "Create agent", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText(refused, { exact: true })).toBeVisible();
+  });
+
+  test("a delegation read garam answers with 500 leaves the agent and template views, with the panels saying why", async ({
+    page,
+    signedIn,
+    baseURL,
+  }) => {
+    await seedHostedOperator(signedIn, ENDPOINT, READS, "not-a-grn");
+    await stubControl(page, new URL(baseURL!).origin, () => "unreachable");
+    const failed = "garam did not answer for Hosted control's delegation.";
+
+    // The control: the operator's own page reads the same delegation,
+    // says so in its section, and renders around it.
+    await page.goto(`/console/orgs/${signedIn.orgSlug}/operators/hosted`);
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Hosted control" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("garam did not answer for this operator's delegation.", {
+        exact: true,
+      }),
+    ).toBeVisible();
+
+    await page.goto(
+      `/console/orgs/${signedIn.orgSlug}/agents/${signedIn.agentIdentifier}`,
+    );
+    await expect(
+      page.getByRole("heading", { level: 1, name: signedIn.agentIdentifier }),
+    ).toBeVisible();
+    await expect(page.getByText(failed, { exact: true })).toBeVisible();
+
+    await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/templates`);
+    await expect(page.getByText("No templates", { exact: true })).toBeVisible();
+    await expect(page.getByText(failed, { exact: true })).toBeVisible();
+
+    await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/new`);
+    await expect(
+      page.getByRole("button", { name: "Create agent", exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText(failed, { exact: true })).toBeVisible();
   });
 
   test("with no registered endpoint the console reaches no control service and says so", async ({

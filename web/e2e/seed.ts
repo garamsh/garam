@@ -234,6 +234,10 @@ export async function seedHostedOperator(
   seed: Seed,
   endpoint: string | null,
   operations: readonly string[],
+  // Who the grant names as having granted it. Anything but a GRN is a
+  // row garam cannot read back, which is how a test makes the
+  // delegation read fail.
+  grantedBy: string = seed.userGrn,
 ): Promise<HostedSeed> {
   const hosted: HostedSeed = {
     identifier: "hosted",
@@ -258,14 +262,7 @@ export async function seedHostedOperator(
         `INSERT INTO operator_delegations
            (id, org_grn, operator_grn, request_id, operations, expires_at, granted_by, granted_at)
          VALUES ($1, $2, $3, $4, $5, now() + interval '1 day', $6, now())`,
-        [
-          grantId,
-          orgGrn,
-          hosted.grn,
-          `seed-${grantId}`,
-          operations,
-          seed.userGrn,
-        ],
+        [grantId, orgGrn, hosted.grn, `seed-${grantId}`, operations, grantedBy],
       );
       await client.query(
         `INSERT INTO operator_delegation_controllers (delegation_id, controller_grn)
@@ -321,4 +318,69 @@ export async function recordedAuthority(
   } finally {
     await client.end();
   }
+}
+
+/**
+ * Adds a member of the seeded organization whom an active policy denies
+ * `operator:read`, and answers that member's session token. Policies
+ * are seeded rather than written through the console because the
+ * subject is a second identity; the change notification the policy
+ * table raises reaches the engine as a console write would.
+ */
+export async function seedMemberDeniedOperatorRead(
+  seed: Seed,
+): Promise<SeededUser> {
+  const suffix = randomBytes(6).toString("hex");
+  const member: SeededUser = {
+    sessionToken: randomBytes(32).toString("base64url"),
+    userGrn: `grn:root:default:user:e2e-${suffix}`,
+    userSlug: `e2e-${suffix}`,
+    nickname: `e2e-member-${suffix}`,
+  };
+  const orgGrn = `grn:root:default:org:${seed.orgSlug}`;
+  const policyGrn = `grn:${seed.orgSlug}:default:policy:deny-operator-read`;
+  const document = {
+    Version: "2026-07-25",
+    Statement: [
+      {
+        Sid: "DenyOperatorRead",
+        Effect: "Deny",
+        Action: ["operator:read"],
+        Resource: [orgGrn, `grn:${seed.orgSlug}:*`],
+      },
+    ],
+  };
+  const client = new Client({ connectionString: DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query("BEGIN");
+    await insertUserAndSession(client, member);
+    await client.query(
+      `INSERT INTO org_members (org_grn, user_grn, role, created_at)
+       VALUES ($1, $2, 'member', now())`,
+      [orgGrn, member.userGrn],
+    );
+    await client.query(
+      `INSERT INTO policies (grn, org_grn, name, status, default_version, created_at, updated_at)
+       VALUES ($1, $2, 'deny-operator-read', 'active', 1, now(), now())`,
+      [policyGrn, orgGrn],
+    );
+    await client.query(
+      `INSERT INTO policy_versions (policy_grn, version, document, created_by, created_at)
+       VALUES ($1, 1, $2, $3, now())`,
+      [policyGrn, JSON.stringify(document), seed.userGrn],
+    );
+    await client.query(
+      `INSERT INTO policy_attachments (policy_grn, subject_grn, created_at)
+       VALUES ($1, $2, now())`,
+      [policyGrn, member.userGrn],
+    );
+    await client.query("COMMIT");
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  } finally {
+    await client.end();
+  }
+  return member;
 }

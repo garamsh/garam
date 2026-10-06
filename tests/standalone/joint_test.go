@@ -404,7 +404,7 @@ func (s *stack) generationOf(h *host, runtime string) generation {
 // and answers the content of every source recorded under id.
 func (s *stack) sources(volume, id string) []string {
 	s.t.Helper()
-	return s.strings(s.store(volume), `SELECT content FROM conversation_sources WHERE external_id = ?`, id)
+	return s.storeStrings(s.store(volume), `SELECT content FROM conversation_sources WHERE external_id = ?`, id)
 }
 
 func mustJSON(t *testing.T, v any) string {

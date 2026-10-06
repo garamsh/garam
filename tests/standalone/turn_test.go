@@ -68,8 +68,8 @@ func (s *stack) store(volume string) *sql.DB {
 	return db
 }
 
-// strings answers one text column of every row a query returns.
-func (s *stack) strings(db *sql.DB, query string, args ...any) []string {
+// storeStrings answers one text column of every row a query returns.
+func (s *stack) storeStrings(db *sql.DB, query string, args ...any) []string {
 	s.t.Helper()
 	rows, err := db.Query(query, args...)
 	require.NoError(s.t, err)
@@ -90,7 +90,7 @@ func (s *stack) strings(db *sql.DB, query string, args ...any) []string {
 // and before the next message's.
 func (s *stack) answers(volume, id string) []string {
 	s.t.Helper()
-	return s.strings(s.store(volume), `
+	return s.storeStrings(s.store(volume), `
 		SELECT content FROM conversation_sources
 		 WHERE role = 'assistant'
 		   AND id > (SELECT id FROM conversation_sources WHERE external_id = ?1)

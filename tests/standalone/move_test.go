@@ -22,9 +22,10 @@ import (
 // run --move-memory-to`: a fact told before the move is recalled after
 // it, by the same agent, in a new generation on a new volume. Garam
 // refuses the old generation's token from the switch on, and a message
-// sent after the switch is claimed once, by the new generation. The
-// controls are the old token admitted before the switch and the new
-// token admitted after it.
+// sent after the switch can be held only under the new activation,
+// however often garam delivers it; each answer its turn sends reaches
+// garam once. The controls are the old token admitted before the
+// switch and the new token admitted after it.
 //
 // The test's own acts: the interposer, which keeps the tokens garam
 // answers so the test can present the old one as its generation would;
@@ -187,8 +188,12 @@ embedding:
 	assert.True(t, claimedAt.After(activatedAt),
 		"and the claim garam holds was made under the new activation: claimed %s, activated %s",
 		claimedAt, activatedAt)
-	// Each answer the turn sent reaches garam once, under its outbox
-	// entry's key, however many times the question was delivered.
+	// Each answer the turn sent reaches garam once, however many times
+	// the question was delivered: garam holds as many messages from the
+	// agent to its sender since the question as the turns wrote outbox
+	// entries in reply to it, under those entries' keys. One row per key
+	// is the schema's; a second post under a fresh key is what this
+	// would catch.
 	var sent []outboxEntry
 	for _, e := range s.collected(runtime) {
 		if slices.Contains(e.InReplyTo, asked[0].ID) {
@@ -200,9 +205,18 @@ embedding:
 		s.eventually("garam storing the answer "+e.ID, func() bool {
 			return len(s.messages("sender_grn = $1 AND idempotency_key = $2", agentGRN, e.ID)) > 0
 		})
-		assert.Len(t, s.messages("sender_grn = $1 AND idempotency_key = $2", agentGRN, e.ID), 1,
-			"one durable reply per answer sent")
 	}
+	var keys []string
+	for _, m := range s.messages("sender_grn = $1 AND recipient_grn = $2 AND created_at > $3",
+		agentGRN, from.grn, createdAt) {
+		keys = append(keys, m.Key)
+	}
+	var written []string
+	for _, e := range sent {
+		written = append(written, e.ID)
+	}
+	assert.ElementsMatch(t, written, keys,
+		"one durable reply per answer sent, and none other, since the question")
 
 	// Sherlock's own stores, read once the new generation has stopped:
 	// the question asked after the switch is in the new store alone.

@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import {
   EMPTY_BODY_SHA256,
+  TemplateVersionParser,
   callControl,
   sha256Hex,
   type ControlCall,
@@ -179,5 +180,40 @@ describe("callControl", () => {
       status: "refused",
       message: "The control service answered outside the agreed contract.",
     });
+  });
+});
+
+describe("TemplateVersionParser", () => {
+  const version = (model: Record<string, unknown>) => ({
+    name: "web agent",
+    version: 1,
+    profile: { name: "small", version: 1 },
+    configuration: { model, ego: "Answers.", tools: {} },
+  });
+  const model = {
+    provider: "openai-compatible",
+    baseUrl: "https://api.example.test/v1",
+    name: "MiniMax-M2",
+    apiKeyRef: "model-keys/web",
+  };
+
+  it("keeps the model's embedding, so a version published from it carries it", () => {
+    const embedding = {
+      baseUrl: "http://tei.embeddings.svc/v1",
+      name: "BAAI/bge-base-en-v1.5",
+      apiKeyRef: "",
+    };
+
+    const parsed = TemplateVersionParser.parse(
+      version({ ...model, embedding }),
+    );
+
+    expect(parsed.configuration.model.embedding).toEqual(embedding);
+  });
+
+  it("leaves a model that names no embedding without one", () => {
+    const parsed = TemplateVersionParser.parse(version(model));
+
+    expect(parsed.configuration.model).not.toHaveProperty("embedding");
   });
 });

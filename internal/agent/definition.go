@@ -110,11 +110,12 @@ type Definition struct {
 }
 
 // NewDefinition builds a definition under a newly minted agent
-// identity, as garam wrote one before it stopped accepting them
-// (ADR-0090); no store persists what it returns. An empty name is none
-// given, and the agent is called by its identifier, as a definition
-// written before names existed is (ADR-0075). definedBy is the member
-// that defined it.
+// identity, as garam wrote one before it stopped accepting them. No
+// production path calls it since ADR-0090, and no store persists what
+// it returns: it is the only way a test outside this package builds a
+// Definition until #1083 makes the aggregate a data carrier, which
+// deletes it. An empty name is none given, and the agent is called by
+// its identifier (ADR-0075). definedBy is the member that defined it.
 //
 // It fails unless operatorGRN names an operator of that organization
 // (ADR-0015). Whether the organization has registered that operator is

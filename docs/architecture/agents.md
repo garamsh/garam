@@ -76,10 +76,10 @@ definition, and migration 000035's trigger refuses an insert into
 `agent_definitions`, an update changing anything but the name, and a
 delete other than its organization's cascade, from whichever release
 sends it. A definition's operator and values therefore stay as they
-were written, and none is deleted except with its organization. Its name is the organization's word for the agent
-and changes alone: renaming touches no GRN, operator, value,
-assignment, membership or attachment, and no operator is told
-(ADR-0075). A definition written without a name, and every one
+were written, and none is deleted except with its organization. Its
+name is the organization's word for the agent and changes alone:
+renaming touches no GRN, operator, value, assignment, membership or
+attachment, and no operator is told (ADR-0075). A definition written without a name, and every one
 written before names existed, is called by its identifier.
 
 `Store` answers `Service` and, org by org, the read the browser-facing
@@ -182,10 +182,10 @@ in #1157.
   the name and a direct delete, from whichever release sends it; it
   orders itself against a write in flight as 000034 does. A rename is
   admitted, and a delete reached through the organization's own
-  deletion is too, so a definition still goes with its organization. Every definition held
-  stays readable, claimable by the operator it names and cut over
-  below, so the legacy agents a cutover has to move are those garam
-  held when 000035 ran.
+  deletion is too, so a definition still goes with its organization.
+  Every definition held stays readable, claimable by the operator it
+  names and cut over below, so the legacy agents a cutover has to
+  move are those garam held when 000035 ran.
 - **garam's templates are retired read-only and not imported**
   (ADR-0088). Migration 000034's trigger refuses every insert, update
   and delete on `agent_templates`, from whichever release sends it:

@@ -431,9 +431,10 @@ export async function seedMemberDeniedOperatorRead(
 /**
  * Writes a definition of the seeded organization naming the operator
  * `operatorIdentifier`, as one written before garam stopped accepting
- * them (ADR-0090). Migration 000035 refuses a new one, so this one
- * statement runs with the session's ordinary triggers off, which the
- * suite's superuser may do; nothing in garam writes one any more.
+ * them (ADR-0090). Migration 000035 refuses a new one, so its trigger
+ * alone is off for this statement, inside the caller's transaction;
+ * the foreign keys stay on, so the operator must be registered.
+ * Nothing in garam writes one any more.
  */
 async function insertDefinition(
   client: Client,
@@ -442,7 +443,9 @@ async function insertDefinition(
   operatorIdentifier: string,
   name: string,
 ): Promise<void> {
-  await client.query("SET LOCAL session_replication_role = replica");
+  await client.query(
+    "ALTER TABLE agent_definitions DISABLE TRIGGER agent_definitions_closed",
+  );
   await client.query(
     `INSERT INTO agent_definitions (agent_grn, org_grn, operator_grn, agent_values, defined_by, created_at, name)
      VALUES ($1, $2, $3, $4, $5, now(), $6)`,
@@ -455,7 +458,9 @@ async function insertDefinition(
       name,
     ],
   );
-  await client.query("SET LOCAL session_replication_role = origin");
+  await client.query(
+    "ALTER TABLE agent_definitions ENABLE TRIGGER agent_definitions_closed",
+  );
 }
 
 /**

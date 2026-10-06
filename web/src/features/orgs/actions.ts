@@ -29,7 +29,6 @@ export {
 export { createOrg, type CreateOrgState } from "./api/create-org";
 export { createPolicy, type CreatePolicyState } from "./api/create-policy";
 export { createProject, type CreateProjectState } from "./api/create-project";
-export { defineAgent, type DefineAgentState } from "./api/define-agent";
 export { deleteGroup, type DeleteGroupState } from "./api/delete-group";
 export { grantDelegation, type DelegationState } from "./api/grant-delegation";
 export { withdrawDelegation } from "./api/withdraw-delegation";

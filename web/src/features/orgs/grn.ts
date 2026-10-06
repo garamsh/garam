@@ -46,13 +46,3 @@ export function parseGrn(value: string): Grn | null {
   }
   return { organization, project, serviceType, identifier };
 }
-
-/**
- * The GRN of an operator of `org`, built from the identifier the
- * console addresses it by. An operator is org-level, so its project
- * segment is `default` (grn-model.md §Ownership). `identifier` is what
- * `parseOperatorIdentifier` returned, so it carries no colon of its own.
- */
-export function operatorGrn(org: string, identifier: string): string {
-  return `grn:${org}:default:operator:${identifier}`;
-}

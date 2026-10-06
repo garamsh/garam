@@ -5,7 +5,9 @@
 > [ADR-0033](./0033-an-operator-claims-the-agent-a-definition-mints.md);
 > §Decision's "garam holds what an agent should be" is superseded, for
 > the runtime values, by
-> [ADR-0077](./0077-execution-definitions-move-to-the-operator-control-service-and-each-agent-cuts-over-alone.md)
+> [ADR-0077](./0077-execution-definitions-move-to-the-operator-control-service-and-each-agent-cuts-over-alone.md);
+> the console's define route is superseded, for new definitions, by
+> [ADR-0090](./0090-garam-accepts-no-new-agent-definition-and-keeps-the-ones-it-holds.md)
 > Date: 2026-08-17
 
 ## Contents

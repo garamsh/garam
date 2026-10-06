@@ -6,7 +6,7 @@ by `internal/agent`.
 | Type | Responsibility |
 |------|----------------|
 | `Agent` | actor owned by an org; carries the state the operator reports about its pod and the state it reports about itself, separately |
-| `Definition` | what an organization says an agent should be: which operator runs it and with what values (ADR-0026), and not what it is built from — it names no image. It names its subject where an `Agent` names itself, and carries none of the state an `Agent` carries, so a reader cannot take one for the other; it writes no `agents` row until the operator it names claims it (ADR-0033) |
+| `Definition` | what an organization said an agent should be: which operator runs it and with what values (ADR-0026), and not what it is built from — it names no image. It names its subject where an `Agent` names itself, and carries none of the state an `Agent` carries, so a reader cannot take one for the other; it writes no `agents` row until the operator it names claims it (ADR-0033). garam accepts no new one: each is read, claimed and cut over as written, and nothing writes one (ADR-0090) |
 | `Template` | a starting point an organization kept for defining agents: a name, a description and values a definition copied once (ADR-0075). It names no operator and no agent, and no definition records the template it came from. Templates are retired read-only: each is read as the record of what it said, and nothing writes one (ADR-0088) |
 | `Name` | what an organization calls a defined agent or a template, separate from the GRN: trimmed, one to 100 characters, and not unique |
 | `Assignment` | what holds an agent — an operator, or a standalone host's supervisor (ADR-0082) — and the epoch that binding holds |
@@ -34,9 +34,10 @@ assignment stays inside that organization and names an operator
 (ADR-0015) or the agent's own supervisor (ADR-0082), which the schema
 alone decides; an operator route compares the operator on the row, so
 none reaches a supervisor-held agent. A definition names one the
-organization has registered as well, which the browser surface decides
-against the operators domain and the schema decides again (ADR-0045);
-this domain reads no record of its own and addresses an operator by GRN. Every assignment raises the
+organization has registered as well, which the schema's foreign key
+decides (ADR-0045), as the browser surface also did while it wrote
+definitions (ADR-0090); this domain reads no record of its own and
+addresses an operator by GRN. Every assignment raises the
 epoch, and a state report is accepted only at the current one — the
 operator a reassignment replaced reports nothing about the agent it
 lost. An agent is never an organization member (ADR-0014), so nothing
@@ -70,11 +71,17 @@ recovers one while the GRN has not cut over; after cutover that route
 refuses it and the control service's recovery is what replaces a lost
 certificate (§Separated execution).
 
-A definition's operator and values are written once. Its name is the
-organization's word for the agent and changes alone: renaming touches
-no GRN, operator, value, assignment, membership or attachment, and no
-operator is told (ADR-0075). A definition created without a name, and
-every one written before names existed, is called by its identifier.
+garam accepts no desired value (ADR-0090): no route writes a
+definition, and migration 000035's trigger refuses an insert into
+`agent_definitions`, an update changing anything but the name, and a
+delete other than its organization's cascade, from whichever release
+sends it. A definition's operator and values therefore stay as they
+were written, and none is deleted except with its organization. Its
+name is the organization's word for the agent and changes alone:
+renaming touches no GRN, operator, value, assignment, membership or
+attachment, and no operator is told (ADR-0075). A definition written
+without a name, and every one written before names existed, is called
+by its identifier.
 
 `Store` answers `Service` and, org by org, the read the browser-facing
 listener serves people: an organization's agents and the assignments
@@ -95,9 +102,10 @@ HTTP surfaces are the machine listener — where the operator reports the
 pod and the agent reports itself, each on a route of its own and
 neither reaching the other's fact (ADR-0053) — and the browser-facing
 one for the organization's members, which reads the agents and
-templates and writes only definitions and their names: provisioning
-is an operator's, from outside garam, and a definition writes no
-`agents` row until the operator it names claims it (ADR-0033). The
+templates and writes only a definition's name: provisioning is an
+operator's, from outside garam or through its control service, and a
+definition writes no `agents` row until the operator it names claims
+it (ADR-0033). The
 queue a message reaches an agent through is the messaging domain.
 
 What an agent is built from is the operator's. A `Definition` names no
@@ -148,8 +156,9 @@ release of that contract and no compatibility window (ADR-0049).
 initial issuance (below), the controller proof
 ([operators.md](./operators.md) §Controller proof), the generation
 fence ([machine-identity.md](./machine-identity.md) §Generation and
-lineage) and a legacy agent's cutover (below); the retirement of
-garam's templates (below) is garam's alone and built.** The adapter this
+lineage) and a legacy agent's cutover (below); closing new
+definitions and retiring garam's templates (below) are garam's alone
+and built.** The adapter this
 repository ships reaches the fence through the lifecycle authority,
 never directly: it asks that authority to activate the generation
 beside it and carries the token it is answered with
@@ -168,6 +177,16 @@ in #1157.
   `Definition` values are what move, per GRN, with no dual write and no
   new workload or volume. The GRN, the `Name` and the assignment stay
   here, and the console copies an Operator template once (ADR-0077).
+- **garam accepts no new definition** (ADR-0090). `defineAgent` and
+  `agent:define` are gone, and migration 000035's trigger refuses an
+  insert into `agent_definitions`, an update changing anything but
+  the name and a direct delete, from whichever release sends it; it
+  orders itself against a write in flight as 000034 does. A rename is
+  admitted, and a delete reached through the organization's own
+  deletion is too, so a definition still goes with its organization.
+  Every definition held stays readable, claimable by the operator it
+  names and cut over below, so the legacy agents a cutover has to
+  move are those garam held when 000035 ran.
 - **garam's templates are retired read-only and not imported**
   (ADR-0088). Migration 000034's trigger refuses every insert, update
   and delete on `agent_templates`, from whichever release sends it:

@@ -76,13 +76,14 @@ func isValueKey(k string) bool {
 	return true
 }
 
-// Definition is what an organization says an agent should be: which
+// Definition is what an organization said an agent should be: which
 // operator is to run it, and the values that operator constructs it
-// from (ADR-0026).
+// from (ADR-0026). garam accepts no new one: each is read back as
+// written, claimed and cut over, and none is written (ADR-0090).
 //
 // It is a record and not a command: garam learns that an agent exists
 // when an operator reports it and not before (ADR-0012), and its
-// operator and values are written once. Its name is what the
+// operator and values are never rewritten. Its name is what the
 // organization calls the agent, which it may change without touching
 // either (ADR-0075).
 //
@@ -108,11 +109,13 @@ type Definition struct {
 	createdAt time.Time
 }
 
-// NewDefinition mints the identity of the agent orgGRN is defining and
-// records what it should be and what the organization calls it. An
-// empty name is none given, and the agent is called by its identifier,
-// as a definition written before names existed is (ADR-0075).
-// definedBy is the member that defined it.
+// NewDefinition builds a definition under a newly minted agent
+// identity, as garam wrote one before it stopped accepting them. No
+// production path calls it since ADR-0090, and no store persists what
+// it returns: it is the only way a test outside this package builds a
+// Definition until #1083 makes the aggregate a data carrier, which
+// deletes it. An empty name is none given, and the agent is called by
+// its identifier (ADR-0075). definedBy is the member that defined it.
 //
 // It fails unless operatorGRN names an operator of that organization
 // (ADR-0015). Whether the organization has registered that operator is

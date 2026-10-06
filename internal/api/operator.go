@@ -4,8 +4,6 @@ import (
 	"net/http"
 
 	apigen "github.com/garamsh/garam/api"
-	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
 )
@@ -224,20 +222,6 @@ func (s *Server) ListOperators(w http.ResponseWriter, r *http.Request, orgSlug a
 		out = append(out, operatorToAPI(o))
 	}
 	writeJSON(w, http.StatusOK, out)
-}
-
-// requireRegisteredOperator refuses a GRN the org holds no record of
-// (ADR-0045). The refusal is a bad request and not a missing resource:
-// the caller named the operator in a body. It names the identifier
-// alone, which is the whole of what was wrong, because the console
-// renders the sentence it gets without printing a GRN (ADR-0011).
-func (s *Server) requireRegisteredOperator(r *http.Request, g grn.GRN) error {
-	_, err := s.operators.Get(r.Context(), g)
-	if errorx.IsKind(err, errorx.KindNotFound) {
-		return errorx.New(errorx.KindInvalidArgument,
-			"this organization has registered no operator named "+g.Identifier)
-	}
-	return err
 }
 
 // operatorToAPI renders an Operator. The enrollment state is what garam

@@ -57,7 +57,7 @@ func TestGetOrgDeletionPreview_CountsEachKind(t *testing.T) {
 	for range 5 {
 		d, err := agent.NewDefinition(orgGRN, operatorGRN, "Field agent", agent.Values{}, ownerGRN)
 		require.NoError(t, err)
-		require.NoError(t, f.agents.Define(ctx, d))
+		f.agents.keepDefinition(d)
 	}
 	// One operator is already registered above for the definitions to
 	// name, so five more make six.
@@ -216,7 +216,7 @@ func TestGetOrgDeletionPreview_ZeroMeansEmptyNotUnauthorized(t *testing.T) {
 	require.NoError(t, f.agents.Create(ctx, a))
 	d, err := agent.NewDefinition(orgGRN, operatorGRN, "Field agent", agent.Values{}, ownerGRN)
 	require.NoError(t, err)
-	require.NoError(t, f.agents.Define(ctx, d))
+	f.agents.keepDefinition(d)
 	_, err = f.consents.Grant(ctx, orgGRN, orgGRNOf("elsewhere"))
 	require.NoError(t, err)
 

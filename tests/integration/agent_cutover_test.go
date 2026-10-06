@@ -330,8 +330,10 @@ func TestCutover_StoredValuesThatDoNotParseArePreservedAndBlock(t *testing.T) {
 	ctx := context.Background()
 	f := newCutover(t, agent.Values{"model": "large"})
 	const stored = `{"tools.pins.git": "v2", "replicas": 2}`
-	_, err := f.p.Exec(ctx, `UPDATE agent_definitions SET agent_values = $2 WHERE agent_grn = $1`, f.agent.String(), stored)
-	require.NoError(t, err)
+	withDefinitionsOpen(t, f.p, func(tx pgx.Tx) {
+		_, err := tx.Exec(ctx, `UPDATE agent_definitions SET agent_values = $2 WHERE agent_grn = $1`, f.agent.String(), stored)
+		require.NoError(t, err)
+	})
 
 	c, err := f.exec.GetCutover(ctx, f.agent)
 	require.NoError(t, err)
@@ -351,8 +353,10 @@ func TestCutover_StoredValuesThatDoNotParseArePreservedAndBlock(t *testing.T) {
 	assert.JSONEq(t, stored, kept, "the payload is preserved as stored")
 
 	// The control: the same agent with a payload that parses freezes.
-	_, err = f.p.Exec(ctx, `UPDATE agent_definitions SET agent_values = '{"model": "large"}' WHERE agent_grn = $1`, f.agent.String())
-	require.NoError(t, err)
+	withDefinitionsOpen(t, f.p, func(tx pgx.Tx) {
+		_, err := tx.Exec(ctx, `UPDATE agent_definitions SET agent_values = '{"model": "large"}' WHERE agent_grn = $1`, f.agent.String())
+		require.NoError(t, err)
+	})
 	f.frozen(t, "import-1")
 }
 

@@ -64,8 +64,10 @@ tags:
       epoch (ADR-0012).
   - name: definition
     description: >-
-      What an organization says its agents should be, read by the
-      operator each definition names (ADR-0026). An operator polls its
+      What an organization said its agents should be, read by the
+      operator each definition names (ADR-0026). garam accepts no new
+      definition (ADR-0090): those it holds are what is answered here,
+      each as it was written. An operator polls its
       definitions and claims one, which binds it to the agent GRN the
       definition minted and admits it to that agent's certificate route
       (ADR-0033).

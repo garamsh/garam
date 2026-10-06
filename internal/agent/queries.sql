@@ -91,17 +91,12 @@ WHERE grn = sqlc.arg('grn')
   )
 RETURNING *;
 
--- A definition's operator and values are written once and never
--- rewritten: garam cannot tell whether an operator has acted on them,
--- so there is no update of either here. Its name is the organization's
--- word for the agent, which RenameAgentDefinition changes alone.
--- name: CreateAgentDefinition :exec
-INSERT INTO agent_definitions (agent_grn, org_grn, operator_grn, name, agent_values, defined_by, created_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7);
-
 -- A definition is read with the stage of its GRN's open cutover
 -- attempt, if any: a frozen or switched definition is archival, its
--- values preserved and no longer the source (ADR-0086).
+-- values preserved and no longer the source (ADR-0086). Nothing here
+-- writes one: garam accepts no new definition, and an existing one
+-- keeps its operator and values (ADR-0090, migration 000035); its
+-- name is what RenameAgentDefinition changes alone.
 -- name: GetAgentDefinition :one
 SELECT d.*, c.stage AS cutover_stage
 FROM agent_definitions d

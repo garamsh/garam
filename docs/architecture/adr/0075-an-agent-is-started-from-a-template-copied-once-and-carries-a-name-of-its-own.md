@@ -5,7 +5,9 @@
 > [ADR-0077](./0077-execution-definitions-move-to-the-operator-control-service-and-each-agent-cuts-over-alone.md);
 > its template actions other than the read, "An update replaces the
 > whole template" and the console's template forms are superseded by
-> [ADR-0088](./0088-garams-agent-templates-are-retired-read-only-and-not-imported.md)
+> [ADR-0088](./0088-garams-agent-templates-are-retired-read-only-and-not-imported.md);
+> copying values into a new definition is superseded by
+> [ADR-0090](./0090-garam-accepts-no-new-agent-definition-and-keeps-the-ones-it-holds.md)
 > Date: 2026-09-28
 
 ## Context

@@ -81,7 +81,6 @@ func TestActionConstants_SpellTheirWireStrings(t *testing.T) {
 		{org.ActionOperatorDelegate, "operator:delegate"},
 
 		{org.ActionAgentRead, "agent:read"},
-		{org.ActionAgentDefine, "agent:define"},
 		{org.ActionAgentWatch, "agent:watch"},
 		{org.ActionAgentRename, "agent:rename"},
 		{org.ActionAgentCreate, "agent:create"},
@@ -108,7 +107,7 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			"org:*", "group:*", "project:*", "policy:*", "consent:*",
 			org.ActionOperatorRead, org.ActionOperatorRegister, org.ActionOperatorUpdate,
 			org.ActionOperatorDelete, org.ActionOperatorDelegate, org.ActionAgentRead,
-			org.ActionAgentDefine, org.ActionAgentRename, org.ActionAgentCreate,
+			org.ActionAgentRename, org.ActionAgentCreate,
 			org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentEnroll, org.ActionAgentTemplateRead,
 			org.ActionAgentTemplatePublish,
 			org.ActionExecutionProfileRead, org.ActionAgentExecutionRead, org.ActionAgentCutover,
@@ -120,7 +119,7 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			"group:*", "project:*", "policy:*", "consent:*",
 			org.ActionOperatorRead, org.ActionOperatorRegister, org.ActionOperatorUpdate,
 			org.ActionOperatorDelete, org.ActionOperatorDelegate, org.ActionAgentRead,
-			org.ActionAgentDefine, org.ActionAgentRename, org.ActionAgentCreate,
+			org.ActionAgentRename, org.ActionAgentCreate,
 			org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentEnroll, org.ActionAgentTemplateRead,
 			org.ActionAgentTemplatePublish,
 			org.ActionExecutionProfileRead, org.ActionAgentExecutionRead, org.ActionAgentCutover,
@@ -131,7 +130,7 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			org.ActionOrgRead, org.ActionOrgMemberList,
 			org.ActionGroupRead, org.ActionGroupMemberList,
 			org.ActionProjectRead, org.ActionProjectMemberList,
-			org.ActionOperatorRead, org.ActionAgentRead, org.ActionAgentDefine,
+			org.ActionOperatorRead, org.ActionAgentRead,
 			org.ActionAgentRename, org.ActionAgentCreate, org.ActionAgentTemplateRead,
 			org.ActionExecutionProfileRead,
 		},
@@ -146,7 +145,7 @@ func TestRoleActions_GrantSets(t *testing.T) {
 // withhold the other, and ADR-0012 keeps provisioning out of a
 // wildcard; both make an agent action a role grants a deliberate one.
 //
-// The read and the define are the control. Without them the two
+// The read and the rename are the control. Without them the two
 // refusals hold for a role that grants nothing at all, which is a
 // different state and the one most likely to arrive by accident.
 func TestRoleActions_NoRoleReachesAgentWatch(t *testing.T) {
@@ -154,13 +153,24 @@ func TestRoleActions_NoRoleReachesAgentWatch(t *testing.T) {
 		assert.NotContains(t, r.Actions(), org.ActionAgentWatch, string(r))
 		assert.NotContains(t, r.Actions(), "agent:*", string(r))
 		assert.Contains(t, r.Actions(), org.ActionAgentRead, string(r))
-		assert.Contains(t, r.Actions(), org.ActionAgentDefine, string(r))
+		assert.Contains(t, r.Actions(), org.ActionAgentRename, string(r))
+	}
+}
+
+// TestRoleActions_NoRoleDefinesAnAgent pins ADR-0090: garam accepts no
+// desired value, so no role grants the `agent:define` a definition was
+// written under. Creating through the control service is the control:
+// every role still reaches an agent's creation.
+func TestRoleActions_NoRoleDefinesAnAgent(t *testing.T) {
+	for _, r := range []org.Role{org.RoleOwner, org.RoleAdmin, org.RoleMember} {
+		assert.NotContains(t, r.Actions(), "agent:define", string(r))
+		assert.Contains(t, r.Actions(), org.ActionAgentCreate, string(r))
 	}
 }
 
 // TestRoleActions_OnlyOwnerAndAdminRegisterAnOperator pins the split
 // ADR-0045 rests on: every role reads the operators an org registered,
-// because defining an agent needs the list to name one from, and only
+// because defining an agent needed the list to name one from, and only
 // the two administrative roles register one. Deleting one goes with
 // registering it and is named separately, because it is the action
 // that stops an operator rather than records one (ADR-0070), and so is
@@ -220,7 +230,7 @@ func TestActionsFor_UnionsKnownRoles(t *testing.T) {
 			org.ActionOrgRead, org.ActionOrgMemberList,
 			org.ActionGroupRead, org.ActionGroupMemberList,
 			org.ActionProjectRead, org.ActionProjectMemberList,
-			org.ActionOperatorRead, org.ActionAgentRead, org.ActionAgentDefine,
+			org.ActionOperatorRead, org.ActionAgentRead,
 			org.ActionAgentRename, org.ActionAgentCreate, org.ActionAgentTemplateRead,
 			org.ActionExecutionProfileRead,
 			org.ActionOrgUpdate, org.ActionOrgInvite,

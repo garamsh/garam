@@ -7,9 +7,10 @@ import (
 	"github.com/garamsh/garam/internal/listfilter"
 )
 
-// Store persists Agents, the operator each one is assigned to, the
-// definitions an organization writes of the agents it should have, and
-// the templates it kept before they were retired read-only. A
+// Store persists Agents and the operator each one is assigned to, and
+// reads the definitions an organization wrote of the agents it should
+// have, which garam no longer accepts (ADR-0090), and the templates it
+// kept before they were retired read-only. A
 // state report carries the epoch it was produced at and is accepted
 // only at the assignment's current epoch (ADR-0012).
 //
@@ -44,10 +45,6 @@ type Store interface {
 	// ErrAgentNotFound. It reads both under the execution row FOR
 	// SHARE (ADR-0086).
 	AdmitLegacyIssuance(ctx context.Context, agentGRN grn.GRN) error
-	// Define records what an organization says an agent should be. It
-	// creates no agent and assigns none: a definition is a record, and
-	// the agent it describes exists when an operator says so.
-	Define(ctx context.Context, d *Definition) error
 	// GetDefinition returns the definition naming the agent, or
 	// ErrDefinitionNotFound.
 	GetDefinition(ctx context.Context, agentGRN grn.GRN) (*Definition, error)

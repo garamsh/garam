@@ -1411,7 +1411,7 @@ func TestOperatorStore_RoundTrip(t *testing.T) {
 	definitions := agent.NewPostgresStore(p)
 	d, err := agent.NewDefinition(orgRootGRN("acme"), one.GRN(), "Field agent", agent.Values{}, registeredBy)
 	require.NoError(t, err)
-	require.NoError(t, definitions.Define(ctx, d))
+	keepDefinition(t, p, d)
 	require.NoError(t, orgs.DeleteOrg(ctx, orgRootGRN("acme")))
 	_, err = s.Get(ctx, one.GRN())
 	assert.ErrorIs(t, err, operator.ErrOperatorNotFound)
@@ -1424,34 +1424,11 @@ func TestOperatorStore_RoundTrip(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-// TestAgentDefinition_RefusesAnOperatorTheOrgHasNotRegistered covers
-// the schema's copy of the check internal/api makes (ADR-0045). The
-// domain refuses it on the way in, so only a store call that skipped
-// the handler reaches the foreign key — and this is the copy no call
-// path routes around.
-func TestAgentDefinition_RefusesAnOperatorTheOrgHasNotRegistered(t *testing.T) {
-	ctx := context.Background()
-	p := pool(t)
-	s := agent.NewPostgresStore(p)
-	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
-	definedBy := scopedGRN("acme", "user", "ada")
-
-	unregistered, err := agent.NewDefinition(orgRootGRN("acme"), scopedGRN("acme", agent.ServiceTypeOperator, "gagent-dev"), "Field agent", agent.Values{}, definedBy)
-	require.NoError(t, err)
-	assert.Error(t, s.Define(ctx, unregistered))
-
-	// Registering that operator is what makes the same write land, so
-	// the refusal was the missing record and not the row.
-	registered, err := agent.NewDefinition(orgRootGRN("acme"), registerOperator(t, p, scopedGRN("acme", agent.ServiceTypeOperator, "gagent-dev")), "Field agent", agent.Values{}, definedBy)
-	require.NoError(t, err)
-	assert.NoError(t, s.Define(ctx, registered))
-}
-
 // TestAgentDefinitionStore_RoundTrip covers what a definition is
 // (ADR-0026): an organization's record of what an agent should be,
-// written once, holding no agent. The agent GRN it names answers
-// nothing among the agents, because garam learns an agent exists from
-// the operator that reports it.
+// kept from before garam stopped accepting them, holding no agent.
+// The agent GRN it names answers nothing among the agents, because
+// garam learns an agent exists from the operator that reports it.
 func TestAgentDefinitionStore_RoundTrip(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
@@ -1467,7 +1444,7 @@ func TestAgentDefinitionStore_RoundTrip(t *testing.T) {
 	definedBy := grn.New(grn.RootOwner, grn.DefaultProject, "user", "ada")
 	d, err := agent.NewDefinition(orgGRN, registerOperator(t, p, grnOf(agent.ServiceTypeOperator, "one")), "Field agent", values, definedBy)
 	require.NoError(t, err)
-	require.NoError(t, s.Define(ctx, d))
+	keepDefinition(t, p, d)
 
 	stored, err := s.ListDefinitionsByOrg(ctx, orgGRN)
 	require.NoError(t, err)
@@ -1500,7 +1477,7 @@ func TestAgentDefinitionStore_RoundTrip(t *testing.T) {
 	// A definition belongs to the org that wrote it.
 	elsewhere, err := agent.NewDefinition(otherOrgGRN, registerOperator(t, p, scopedGRN("globex", agent.ServiceTypeOperator, "one")), "Field agent", agent.Values{}, definedBy)
 	require.NoError(t, err)
-	require.NoError(t, s.Define(ctx, elsewhere))
+	keepDefinition(t, p, elsewhere)
 	stored, err = s.ListDefinitionsByOrg(ctx, orgGRN)
 	require.NoError(t, err)
 	require.Len(t, stored, 1, "this org's definitions and no other org's")
@@ -1572,11 +1549,23 @@ func TestAgentDefinition_StaysInsideItsOrgAndHoldsAnObject(t *testing.T) {
 		{"values that are not an object", acmeAgent(), registered, `[]`,
 			"agent_definitions_values_object"},
 	}
+	// 000035 refuses every insert before a constraint is read
+	// (ADR-0090), so each one is made with that guard off, as a release
+	// before it made one, and rolled back.
+	insert := func(agentGRN, operatorGRN grn.GRN, values string) error {
+		tx, err := p.Begin(ctx)
+		require.NoError(t, err)
+		defer func() { _ = tx.Rollback(ctx) }()
+		_, err = tx.Exec(ctx, "ALTER TABLE agent_definitions DISABLE TRIGGER agent_definitions_closed")
+		require.NoError(t, err)
+		_, err = tx.Exec(ctx, `INSERT INTO agent_definitions (agent_grn, org_grn, operator_grn, name, agent_values, defined_by, created_at)
+			VALUES ($1, $2, $3, 'Field agent', $4::jsonb, $5, now())`,
+			agentGRN.String(), orgGRN.String(), operatorGRN.String(), values, grn.New(grn.RootOwner, grn.DefaultProject, "user", "ada").String())
+		return err
+	}
 	for _, tt := range rejected {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := p.Exec(ctx, `INSERT INTO agent_definitions (agent_grn, org_grn, operator_grn, name, agent_values, defined_by, created_at)
-				VALUES ($1, $2, $3, 'Field agent', $4::jsonb, $5, now())`,
-				tt.agentGRN.String(), orgGRN.String(), tt.operator.String(), tt.values, grn.New(grn.RootOwner, grn.DefaultProject, "user", "ada").String())
+			err := insert(tt.agentGRN, tt.operator, tt.values)
 			var refused *pgconn.PgError
 			require.ErrorAs(t, err, &refused, "the row was not refused by Postgres")
 			assert.Equal(t, tt.constraint, refused.ConstraintName)
@@ -1585,11 +1574,7 @@ func TestAgentDefinition_StaysInsideItsOrgAndHoldsAnObject(t *testing.T) {
 
 	// The same statement naming this org's agent and operator is
 	// accepted, so the constraints reject a row rather than every row.
-	_, err = p.Exec(ctx, `INSERT INTO agent_definitions (agent_grn, org_grn, operator_grn, name, agent_values, defined_by, created_at)
-		VALUES ($1, $2, $3, 'Field agent', $4::jsonb, $5, now())`,
-		g.String(), orgGRN.String(), registered.String(), `{"model":"haiku"}`,
-		grn.New(grn.RootOwner, grn.DefaultProject, "user", "ada").String())
-	require.NoError(t, err)
+	require.NoError(t, insert(g, registered, `{"model":"haiku"}`))
 }
 
 func ptr[T any](v T) *T { return &v }

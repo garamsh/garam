@@ -109,7 +109,7 @@ func TestOrgDeletionPreview_CountsMatchWhatTheCascadeTakes(t *testing.T) {
 	require.NoError(t, agents.Create(ctx, a))
 	d, err := agent.NewDefinition(orgGRN, op.GRN(), "Field agent", agent.Values{}, ownerGRN)
 	require.NoError(t, err)
-	require.NoError(t, agents.Define(ctx, d))
+	keepDefinition(t, p, d)
 
 	_, err = consents.Grant(ctx, orgGRN, otherGRN)
 	require.NoError(t, err)

@@ -631,11 +631,19 @@ func (s *fakeAgentStore) GetAssignment(_ context.Context, agentGRN grn.GRN) (*ag
 	return a, nil
 }
 
-func (s *fakeAgentStore) Define(_ context.Context, d *agent.Definition) error {
+// keepDefinition stores a definition as one written before garam
+// stopped accepting them: no route writes one any more (ADR-0090).
+func (s *fakeAgentStore) keepDefinition(d *agent.Definition) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.definitions[d.Agent().String()] = d
-	return nil
+}
+
+// definitionCount answers how many definitions the store holds.
+func (s *fakeAgentStore) definitionCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.definitions)
 }
 
 func (s *fakeAgentStore) GetDefinition(_ context.Context, g grn.GRN) (*agent.Definition, error) {

@@ -13,8 +13,9 @@ Organizations, operators, further users, delegations and operation
 authorities are made through the public routes the test exercises.
 
 It is not part of Garam: `cmd/garam` does not import it, so no Garam
-binary carries it, and the image carries only what
-`deploy/local/Dockerfile` builds from `./cmd/garam`.
+binary carries it, and no release image does: those carry only what
+`deploy/local/Dockerfile` builds from `./cmd/garam`. The test image
+below carries it as a file (ADR-0092).
 `tests/e2e/principal_fixture_test.go` checks that the built `garam`
 has no such command and that `go list -deps ./cmd/garam` names no
 package under `tests/`.
@@ -22,7 +23,8 @@ package under `tests/`.
 ## Invocation
 
 Build it from the Garam checkout at the revision the consumer pins,
-and run it against a Postgres server on the same machine:
+or copy it out of the test image (§The test image), and run it
+against a Postgres server on the same machine:
 
 ```sh
 go build -o testprincipal ./tests/testprincipal
@@ -76,3 +78,52 @@ nothing verifies that a module cache copy serves.
 - **A partial database.** When `prepare` fails after creating its
   database, writing its output included, it drops it again. Where
   that drop fails too, stderr names the database left behind and why.
+
+## The test image
+
+`ghcr.io/garamsh/garam-test` holds this command, `garam` and the
+migrations of one Garam commit, for a CI that cannot read this
+repository (ADR-0092). It is a file source: copy the paths out and
+never run the image.
+
+| Path | What it is |
+|---|---|
+| `/garam` | `go build ./cmd/garam`, static, linux/amd64 |
+| `/testprincipal` | `go build ./tests/testprincipal`, static, linux/amd64 |
+| `/migrations/` | the repository's `migrations/`, verbatim |
+
+Its label `org.opencontainers.image.revision` names the full commit.
+`make test-image` builds it from `tests/testprincipal/Dockerfile`, and
+`make test-image-e2e` checks those paths, the linking and the label.
+
+**Pin the digest, not the tag.** Every push to `dev` publishes one
+version tagged with the commit's full hash, and a tag can be pushed
+again; the digest cannot name other bytes:
+
+```sh
+docker buildx imagetools inspect --format '{{.Manifest.Digest}}' \
+  ghcr.io/garamsh/garam-test:<commit>
+id=$(docker create ghcr.io/garamsh/garam-test@<digest>)
+docker cp "$id:/garam" . && docker cp "$id:/testprincipal" . \
+  && docker cp "$id:/migrations" .
+docker rm "$id"
+```
+
+Then run them as §Invocation says, with `-migrations ./migrations`.
+
+- **Access.** The package is private. A repository reads it from its
+  own workflows once the package grants that repository Actions
+  access, a setting an organization admin applies; ADR-0092 grants it
+  to `garamsh/garam-agent-operator`.
+- **Retention.** The 8 newest unpinned versions are kept, and every
+  version tagged `pinned-<consumer>`. A digest older than 8 `dev`
+  commits is gone unless pinned. To hold one, ask the Garam PM, who
+  runs `.github/workflows/test-image.yml` by dispatch with the commit
+  and your name: that moves `pinned-<consumer>` to it, and your
+  previous pin becomes prunable.
+- **What it refuses outside a test database.** `/testprincipal` is
+  this command at that commit, and refuses everything §What it
+  refuses lists: a server off the machine, a database it did not
+  create, and a partial database. `/garam` is the ordinary server and
+  refuses nothing of its own here; it serves whatever database it is
+  given, so give it the `databaseUrl` `prepare` printed.

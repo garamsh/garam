@@ -22,7 +22,8 @@ trap 'rm -rf "$scratch"' EXIT INT TERM
 # `if:` holds spaces.
 #
 #   job <name> needs=<needs> if=<if>
-#   step <job> last|- <uses> push|run|- if=<if> keep=<n> exclude=<tags> dry=<b>
+#   step <job> last|- <uses> push|run|- if=<if> keep=<n>
+#     exclude=<tags> dry=<b>
 #
 # <last> is `last` on a job's final step, which is how the push is
 # known to be what the publish job ends in.

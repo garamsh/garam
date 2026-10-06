@@ -203,15 +203,35 @@ What this repository runs against itself. `docs/convention/ci.md` decides how a 
 - `.github/workflows/ci.yml` triggers on `pull_request` into `main` and
   on nothing else; `.github/workflows/images.yml` on the same event and
   base except where a pull request changes only `docs/`;
-  `.github/workflows/release.yml` triggers on a `v*` tag (ADR-0039).
+  `.github/workflows/release.yml` triggers on a `v*` tag (ADR-0039);
+  `.github/workflows/test-image.yml` on a push to `dev` and on a
+  dispatch (ADR-0092).
   The base filter selects every pull request while `main` is the only
   branch on `origin`; it is in place before `dev` is, so that no pull
   request into `dev` starts a runner (#1059).
-- **A superseded run is cancelled; a release run is not.** `ci.yml` and `images.yml` each declare a concurrency group keyed on `github.workflow` and `github.ref` — under their one trigger that ref is the pull request's merge ref, one value per pull request — with `cancel-in-progress`, so a push that replaces a head stops the run reading the old one, up to the four job-runs a full merge costs. `release.yml` declares none, and the absence is what enforces it: a group cancels a pending run of that group when a newer one queues behind it, whichever way `cancel-in-progress` is set, so a group there could leave a `vX.Y.Z` tag publishing nothing at all, and a run cancelled mid-publish leaves the version half-published with the next version as the only repair (ADR-0039 §Consequences). What reads the guard is that `grep -n '^concurrency:' .github/workflows/*.yml` names two files and not three (#899).
+- **A superseded run is cancelled; a release run is not.** `ci.yml` and
+  `images.yml` each declare a concurrency group keyed on
+  `github.workflow` and `github.ref` — under their one trigger that ref
+  is the pull request's merge ref, one value per pull request — with
+  `cancel-in-progress`, so a push that replaces a head stops the run
+  reading the old one, up to the four job-runs a full merge costs.
+  `release.yml` declares none, and the absence is what enforces it: a
+  group cancels a pending run of that group when a newer one queues
+  behind it, whichever way `cancel-in-progress` is set, so a group there
+  could leave a `vX.Y.Z` tag publishing nothing at all, and a run
+  cancelled mid-publish leaves the version half-published with the next
+  version as the only repair (ADR-0039 §Consequences). `test-image.yml`
+  declares none at its top, on the same reasoning: every commit on `dev`
+  is owed its image. Its prune and dispatch jobs share a job-level
+  group, which sits indented and is not what the guard reads. What reads
+  the guard is that `grep -n '^concurrency:' .github/workflows/*.yml`
+  names two files and not four (#899).
 - **Both images a release publishes are built on a pull request.** `images.yml` builds each from what `release.yml` says it is built from and then checks the web one, which is the image a release used to be able to fail on irreversibly: the server image was pushed before the web image was built, and immutability makes the repair the next version (ADR-0039 §Consequences). `release.yml` builds both and pushes neither until both are built (#945), so what a build failure there now costs is the run. Until #850 neither image was built by any check.
 - **No run here reaches a deployment, so `main` is not what a caller
   meets.** `release.yml` publishes two images on a `vX.Y.Z` tag and no
   other workflow pushes one, so a merge to `main` publishes nothing;
+  `test-image.yml` publishes the test image on a push to `dev`, which
+  no deployment pulls (ADR-0092);
   the only cluster a recipe here reaches is the local minikube, and
   what it runs there it built from the working tree (`Makefile`,
   `minikube-images`). What a running garam serves is fixed by the image
@@ -374,7 +394,7 @@ ADRs:
 - [0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)
   — a version tag publishes both images to the account's registry;
   superseded in part by 0071, which lets the same repositories hold a
-  development build
+  development build, and by 0092 for non-release artifacts
 - [0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)
   — the machine listener presents a pinned garam server certificate, and
   certificates rotate without a restart
@@ -543,7 +563,8 @@ ADRs:
   — a test-only command under `tests/testprincipal` creates a fresh
   local database and signs in its first principal under a versioned
   contract; no Garam binary carries it, and everything after that
-  principal goes through public routes
+  principal goes through public routes. Superseded in part by 0092,
+  whose test image carries it
 - [0082](./adr/0082-a-standalone-host-runs-its-agent-under-a-supervisor-an-administrator-approves-by-its-keys.md)
   — a standalone host's lifecycle authority is a supervisor garam
   registers for one agent on an administrator's approval of the host's
@@ -612,3 +633,10 @@ ADRs:
   answers it again, and a recovery recorded before 000036 is answered
   with the chain the signer signs under now, which holds while neither
   the organization's authority nor the server root has been replaced
+- [0092](./adr/0092-a-test-image-is-published-to-ghcr-from-dev-and-no-release-carries-it.md)
+  — a test image holding `garam`, `testprincipal` and the migrations
+  is published on every push to `dev` to a private GHCR package of its
+  own, tagged by commit and pinned by digest, keeping the 8 newest
+  unpinned versions and every `pinned-*` one; supersedes ADR-0039 for
+  non-release artifacts and ADR-0081's "no image Garam ships carries
+  it" in part

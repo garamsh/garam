@@ -52,7 +52,11 @@ made and pushed
 ([ADR-0071](./adr/0071-a-development-image-shares-the-release-repository-and-its-tag-says-it-is-not-a-release.md)).
 `scripts/image-build.sh` is authoritative for which development tags
 this repository produces, and refuses every other one before it
-builds; `README.md` §Development images is the procedure.
+builds; `README.md` §Development images is the procedure. The test
+image, `ghcr.io/garamsh/garam-test`, is none of these: it is published
+from `dev` for another repository's CI, no deployment runs it, and the
+chart names it nowhere
+([ADR-0092](./adr/0092-a-test-image-is-published-to-ghcr-from-dev-and-no-release-carries-it.md)).
 
 It records what is. Changing any behaviour named below is a decision,
 not an edit here. Every claim names the path it can be checked against,
@@ -520,6 +524,9 @@ that would assert one:
   — a development build shares each image's repository and is told
   apart by its tag, which this repository refuses to make a bare
   release version
+- [ADR-0092](./adr/0092-a-test-image-is-published-to-ghcr-from-dev-and-no-release-carries-it.md)
+  — the test image is published from `dev` to GHCR, outside the
+  release repositories, and no deployment runs it
 - [ADR-0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)
   — the listener presents one certificate signed by a garam server
   authority the deployment holds, every identity pins that root, and a

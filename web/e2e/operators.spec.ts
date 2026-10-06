@@ -1,7 +1,8 @@
 import { expect, test } from "./fixtures";
+import { seedDefinition } from "./seed";
 
 test.describe("operators", () => {
-  test("registers a named operator, renames it and defines an agent against it", async ({
+  test("registers a named operator, renames it and lists the definition naming it", async ({
     page,
     signedIn,
   }) => {
@@ -87,21 +88,12 @@ test.describe("operators", () => {
       }),
     ).toBeVisible();
 
-    await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/new`);
-    const operator = page.getByLabel("Operator", { exact: true });
-    await expect(operator).toBeEnabled();
-    await page.getByLabel("Name", { exact: true }).fill("Batch runner");
-    await operator.selectOption({ label: "Staging cluster (field-two)" });
-    await page
-      .getByRole("button", { name: "Create agent", exact: true })
-      .click();
-    await expect(
-      page.getByRole("heading", { level: 1, name: "Batch runner" }),
-    ).toBeVisible();
-    const agent = page.url().split("/").at(-1) ?? "";
+    // A definition kept from before garam stopped accepting them
+    // (ADR-0090) names the operator.
+    const agent = await seedDefinition(signedIn, "Batch runner", "field-two");
 
-    // The definition now refuses the delete, and the operator's page
-    // lists it by name beside the route to the definitions.
+    // The definition refuses the delete, and the operator's page lists
+    // it by name beside the route to the definitions.
     await page.goto(`${operators}/field-two`);
     await expect(page.getByText(agent, { exact: true })).toBeVisible();
     await expect(

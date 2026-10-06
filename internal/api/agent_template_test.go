@@ -72,7 +72,7 @@ func TestAgentTemplate_WritesAreClosedAndReadsStay(t *testing.T) {
 
 // TestAgentTemplate_ReadingIsItsOwnAction covers the one template
 // action left (ADR-0075, ADR-0088). The reader holds it and reads both
-// paths; defining agents does not grant it, so the definer's refusals
+// paths; renaming agents does not grant it, so the renamer's refusals
 // of the same requests are what the action decides.
 func TestAgentTemplate_ReadingIsItsOwnAction(t *testing.T) {
 	f := newFixture(t)
@@ -80,12 +80,12 @@ func TestAgentTemplate_ReadingIsItsOwnAction(t *testing.T) {
 	slug := createOrg(t, f, owner, "acme")
 	f.permit(
 		permission{userGRNOf("reader-sub"), org.ActionAgentTemplateRead},
-		permission{userGRNOf("definer-sub"), org.ActionAgentDefine},
-		permission{userGRNOf("definer-sub"), org.ActionAgentRead},
+		permission{userGRNOf("renamer-sub"), org.ActionAgentRename},
+		permission{userGRNOf("renamer-sub"), org.ActionAgentRead},
 	)
 	reader := f.sessionCookieFor(t, "reader-sub", "Reader")
-	definer := f.sessionCookieFor(t, "definer-sub", "Definer")
-	for _, sub := range []string{"reader-sub", "definer-sub"} {
+	renamer := f.sessionCookieFor(t, "renamer-sub", "Renamer")
+	for _, sub := range []string{"reader-sub", "renamer-sub"} {
 		require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(slug), userGRNOf(sub), org.RoleMember)))
 	}
 	kept := retiredTemplate(slug, "7c1e2a9b3d4f5a60", "Researcher")
@@ -93,7 +93,7 @@ func TestAgentTemplate_ReadingIsItsOwnAction(t *testing.T) {
 	base := "/orgs/" + slug + "/agent-templates"
 
 	for _, path := range []string{base, base + "/" + kept.GRN.Identifier} {
-		assert.Equal(t, http.StatusForbidden, f.do(t, "GET", path, "", definer).Code, path)
+		assert.Equal(t, http.StatusForbidden, f.do(t, "GET", path, "", renamer).Code, path)
 		assert.Equal(t, http.StatusOK, f.do(t, "GET", path, "", reader).Code, path)
 	}
 }
@@ -166,9 +166,8 @@ func TestAgentTemplate_StaysInsideItsOrganization(t *testing.T) {
 
 // TestAgentDefinition_RenameIsItsOwnActionOnTheAgent covers renaming a
 // defined agent (ADR-0075): it is authorized on `agent:rename` against
-// the agent's GRN, and defining agents does not grant it. A member of
-// another organization is refused on this organization's path, and a
-// definition this organization never wrote is not found.
+// the agent's GRN, and reading agents does not grant it. A definition
+// this organization never wrote is not found.
 func TestAgentDefinition_RenameIsItsOwnActionOnTheAgent(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
@@ -178,8 +177,7 @@ func TestAgentDefinition_RenameIsItsOwnActionOnTheAgent(t *testing.T) {
 	allowed := []permission{
 		{userGRNOf("renamer-sub"), org.ActionAgentRename},
 		{userGRNOf("renamer-sub"), org.ActionAgentRead},
-		{userGRNOf("definer-sub"), org.ActionAgentDefine},
-		{userGRNOf("definer-sub"), org.ActionAgentRead},
+		{userGRNOf("reader-sub"), org.ActionAgentRead},
 	}
 	f.evaluator.EXPECT().Evaluate(mock.Anything, mock.Anything).
 		RunAndReturn(func(_ context.Context, in api.EvalInput) (bool, error) {
@@ -191,24 +189,19 @@ func TestAgentDefinition_RenameIsItsOwnActionOnTheAgent(t *testing.T) {
 			return slices.Contains(allowed, permission{in.Subject, in.Action}), nil
 		})
 	renamer := f.sessionCookieFor(t, "renamer-sub", "Renamer")
-	definer := f.sessionCookieFor(t, "definer-sub", "Definer")
-	for _, sub := range []string{"renamer-sub", "definer-sub"} {
+	reader := f.sessionCookieFor(t, "reader-sub", "Reader")
+	for _, sub := range []string{"renamer-sub", "reader-sub"} {
 		require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(slug), userGRNOf(sub), org.RoleMember)))
 	}
 
-	rec := f.do(t, "POST", "/orgs/"+slug+"/agent-definitions", defineBody(registerOperator(t, f, slug, "field-one"), `{"model":"haiku"}`), definer)
-	require.Equal(t, http.StatusCreated, rec.Code)
-	defined := decodeBody[apigen.AgentDefinition](t, rec)
-	assert.Equal(t, "Field agent", defined.Name)
-	agentGRN, err := grn.Parse(defined.AgentGrn)
-	require.NoError(t, err)
+	agentGRN := keptDefinition(t, f, slug, agent.Values{"model": "haiku"}).Agent()
 	path := "/orgs/" + slug + "/agent-definitions/" + agentGRN.Identifier
 
-	rec = f.do(t, "GET", path, "", definer)
+	rec := f.do(t, "GET", path, "", reader)
 	require.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, defined, decodeBody[apigen.AgentDefinition](t, rec))
+	assert.Equal(t, "Field agent", decodeBody[apigen.AgentDefinition](t, rec).Name)
 
-	assert.Equal(t, http.StatusForbidden, f.do(t, "PATCH", path, `{"name":"Scout"}`, definer).Code)
+	assert.Equal(t, http.StatusForbidden, f.do(t, "PATCH", path, `{"name":"Scout"}`, reader).Code)
 	assert.Equal(t, http.StatusBadRequest, f.do(t, "PATCH", path, `{"name":"  "}`, renamer).Code)
 	rec = f.do(t, "PATCH", path, `{"name":" Scout "}`, renamer)
 	require.Equal(t, http.StatusOK, rec.Code)

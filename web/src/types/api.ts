@@ -442,15 +442,11 @@ export interface paths {
         };
         /**
          * List an organization's agent definitions. Requires the `member` role.
-         * @description The agents the organization says it should have. An entry here is not an agent, and an agent under `/orgs/{org}/agents` is not a definition. No response joins them; a consumer can. A claim writes the agent under the GRN its definition minted (ADR-0033), so `agentGrn` here and that agent's `grn` are one identity, and a definition no operator has claimed has no agent to match.
+         * @description The agents the organization said it should have. No route writes a new one: garam accepts no desired runtime value, and an agent is created through its operator's control service (ADR-0090). An entry here is not an agent, and an agent under `/orgs/{org}/agents` is not a definition. No response joins them; a consumer can. A claim writes the agent under the GRN its definition minted (ADR-0033), so `agentGrn` here and that agent's `grn` are one identity, and a definition no operator has claimed has no agent to match.
          */
         get: operations["listAgentDefinitions"];
         put?: never;
-        /**
-         * Define an agent. Requires the `member` role.
-         * @description Records what an agent should be — which operator is to run it, and the values that operator constructs it from — and mints the GRN of the agent it describes (ADR-0026). It creates no agent: garam learns an agent exists when an operator reports one, so until then the minted GRN is answered here and nowhere under `/orgs/{org}/agents`. Its operator and values are written once and have no update: nothing tells garam whether an operator has already acted on them. Its name is the organization's word for the agent and `renameAgentDefinition` changes it (ADR-0075). Values copied from a template are copied here, once: nothing links the definition to that template afterwards.
-         */
-        post: operations["defineAgent"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1338,7 +1334,7 @@ export interface components {
         /** @description At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was. */
         OperatorDescription: string;
         /**
-         * @description What an operator constructs the agent from. garam stores the keys and the strings and interprets neither: what the payload means belongs to the operator that reads it. A key is one to 64 characters of lowercase letters, digits and `-`; a value is at most 4096 bytes; at most 32 entries.
+         * @description What an operator constructs the agent from. garam stores the keys and the strings and interprets neither: what the payload means belongs to the operator that reads it. garam accepts no new one (ADR-0090); what it answers was stored before then. A key is one to 64 characters of lowercase letters, digits and `-`; a value is at most 4096 bytes; at most 32 entries.
          * @example {
          *       "model": "haiku",
          *       "workspace": "grn-acme-default-project-frontend"
@@ -1371,18 +1367,7 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
-        /** @description What an agent should be, as an organization's member states it. */
-        AgentDefinitionCreate: {
-            /** @description What the organization calls the agent. Left out, the agent is called by its identifier, as every definition written before names existed is (ADR-0075); given, it must be a name `AgentName` accepts. */
-            name?: components["schemas"]["AgentName"];
-            /**
-             * @description The operator that is to run the agent. It must be one this organization has registered under `/orgs/{org}/operators`; one it has not registered is refused, naming the identifier that named no record (ADR-0045).
-             * @example grn:acme:default:operator:field-one
-             */
-            operatorGrn: string;
-            values?: components["schemas"]["AgentValues"];
-        };
-        /** @description What an organization says an agent should be (ADR-0026). It is a record and not an agent: no state is reported on it, and it carries none of the fields an `Agent` carries. `agentGrn` is the identity garam minted for the agent this definition describes, and no agent answers under it until the claim. */
+        /** @description What an organization said an agent should be (ADR-0026), written before garam stopped accepting definitions (ADR-0090). It is a record and not an agent: no state is reported on it, and it carries none of the fields an `Agent` carries. `agentGrn` is the identity garam minted for the agent this definition describes, and no agent answers under it until the claim. */
         AgentDefinition: {
             /** @example grn:acme:default:agent:9f2ac1b40d8e7a35 */
             agentGrn: string;
@@ -2465,37 +2450,6 @@ export interface operations {
                     "application/json": components["schemas"]["AgentDefinition"][];
                 };
             };
-            401: components["responses"]["Error"];
-            403: components["responses"]["Error"];
-            404: components["responses"]["Error"];
-        };
-    };
-    defineAgent: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                /** @description Organization identifier (the last GRN segment). */
-                org: components["parameters"]["org"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AgentDefinitionCreate"];
-            };
-        };
-        responses: {
-            /** @description Agent defined. */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AgentDefinition"];
-                };
-            };
-            400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
             404: components["responses"]["Error"];

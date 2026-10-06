@@ -4,9 +4,9 @@
  * again at the boundary, so a person is refused without a round trip
  * and a caller that skips the form is still refused.
  *
- * Two forms carry an operator identifier — registering one, and naming
- * one in an agent definition — which is why the rule lives here rather
- * than beside either.
+ * Registering an operator carries the identifier, in its form and its
+ * Server Action, which is why the rule lives here rather than beside
+ * either.
  *
  * The character rule is the GRN segment rule
  * (`docs/architecture/grn-model.md` §identifier). What garam refuses on

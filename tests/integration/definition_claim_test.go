@@ -20,16 +20,19 @@ import (
 	"github.com/garamsh/garam/internal/org"
 )
 
-// defineAgent records a definition of an agent operator is to run, as
-// the console writes one through internal/api.
+// defineAgent keeps a definition of an agent operator is to run, as
+// the console wrote one before garam stopped accepting them
+// (ADR-0090), and answers it as s reads it back.
 func defineAgent(t *testing.T, p *pgxpool.Pool, s *agent.PostgresStore, operatorGRN grn.GRN, values agent.Values) *agent.Definition {
 	t.Helper()
 	d, err := agent.NewDefinition(
 		orgRootGRN(operatorGRN.Organization),
 		registerOperator(t, p, operatorGRN), "Field agent", values, scopedGRN(operatorGRN.Organization, "user", "ada"))
 	require.NoError(t, err)
-	require.NoError(t, s.Define(context.Background(), d))
-	return d
+	keepDefinition(t, p, d)
+	stored, err := s.GetDefinition(context.Background(), d.Agent())
+	require.NoError(t, err)
+	return stored
 }
 
 // definitionsOf polls the operator's definitions, as the adapter

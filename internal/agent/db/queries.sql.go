@@ -130,38 +130,6 @@ func (q *Queries) CreateAgent(ctx context.Context, arg CreateAgentParams) error 
 	return err
 }
 
-const createAgentDefinition = `-- name: CreateAgentDefinition :exec
-INSERT INTO agent_definitions (agent_grn, org_grn, operator_grn, name, agent_values, defined_by, created_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7)
-`
-
-type CreateAgentDefinitionParams struct {
-	AgentGrn    string
-	OrgGrn      string
-	OperatorGrn string
-	Name        string
-	AgentValues []byte
-	DefinedBy   string
-	CreatedAt   pgtype.Timestamptz
-}
-
-// A definition's operator and values are written once and never
-// rewritten: garam cannot tell whether an operator has acted on them,
-// so there is no update of either here. Its name is the organization's
-// word for the agent, which RenameAgentDefinition changes alone.
-func (q *Queries) CreateAgentDefinition(ctx context.Context, arg CreateAgentDefinitionParams) error {
-	_, err := q.db.Exec(ctx, createAgentDefinition,
-		arg.AgentGrn,
-		arg.OrgGrn,
-		arg.OperatorGrn,
-		arg.Name,
-		arg.AgentValues,
-		arg.DefinedBy,
-		arg.CreatedAt,
-	)
-	return err
-}
-
 const createAgentExecution = `-- name: CreateAgentExecution :exec
 INSERT INTO agent_executions (agent_grn, updated_at) VALUES ($1, $2)
 `
@@ -236,6 +204,7 @@ func (q *Queries) GetAgentAssignment(ctx context.Context, agentGrn string) (Agen
 }
 
 const getAgentDefinition = `-- name: GetAgentDefinition :one
+
 SELECT d.agent_grn, d.org_grn, d.operator_grn, d.agent_values, d.defined_by, d.created_at, d.name, c.stage AS cutover_stage
 FROM agent_definitions d
 LEFT JOIN agent_cutovers c ON c.agent_grn = d.agent_grn AND c.stage <> 'rolled_back'
@@ -253,6 +222,10 @@ type GetAgentDefinitionRow struct {
 	CutoverStage pgtype.Text
 }
 
+// Nothing here writes a definition: garam accepts no new one, and an
+// existing one keeps its operator and values (ADR-0090, migration
+// 000035). Its name is the organization's word for the agent, which
+// RenameAgentDefinition changes alone.
 // A definition is read with the stage of its GRN's open cutover
 // attempt, if any: a frozen or switched definition is archival, its
 // values preserved and no longer the source (ADR-0086).

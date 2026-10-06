@@ -70,68 +70,6 @@ func (s *Server) GetAgent(w http.ResponseWriter, r *http.Request, orgSlug apigen
 	writeJSON(w, http.StatusOK, agentToAPI(a, assignment))
 }
 
-// DefineAgent records what an agent of the org should be: which
-// operator is to run it, and the values it is constructed from
-// (ADR-0026). Requires the member role, and the operator must be one
-// the org has registered (ADR-0045). It creates no agent: the response
-// carries the definition's own shape and not an agent's.
-func (s *Server) DefineAgent(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org) {
-	u, err := s.currentUser(r)
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	if err := s.authorize(r, orgGRN(orgSlug), u, org.ActionAgentDefine); err != nil {
-		writeError(w, err)
-		return
-	}
-	var body apigen.AgentDefinitionCreate
-	if err := decodeJSON(r, &body); err != nil {
-		writeError(w, err)
-		return
-	}
-	operatorGRN, err := grn.Parse(body.OperatorGrn)
-	if err != nil {
-		writeError(w, errorx.Wrap(err, "operator", errorx.KindInvalidArgument))
-		return
-	}
-	var raw map[string]string
-	if body.Values != nil {
-		raw = *body.Values
-	}
-	values, err := agent.ParseValues(raw)
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	// A name left out is none given; one given must parse, so an empty
-	// or blank one is refused rather than read as left out.
-	var name agent.Name
-	if body.Name != nil {
-		if name, err = agent.ParseName(*body.Name); err != nil {
-			writeError(w, err)
-			return
-		}
-	}
-	d, err := agent.NewDefinition(orgGRN(orgSlug), operatorGRN, name, values, u.GRN)
-	if err != nil {
-		writeError(w, err)
-		return
-	}
-	// NewDefinition proves the GRN names an operator of this org; this
-	// proves the org registered it. The two refusals name different
-	// things wrong, so they stay apart.
-	if err := s.requireRegisteredOperator(r, operatorGRN); err != nil {
-		writeError(w, err)
-		return
-	}
-	if err := s.agents.Define(r.Context(), d); err != nil {
-		writeError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, definitionToAPI(d))
-}
-
 // ListAgentDefinitions lists the agents the org says it should have.
 // Requires the member role. An entry is a definition and not an agent:
 // nothing here reads the agent rows an operator reports.

@@ -170,7 +170,7 @@ func TestAgentTemplate_ADefinitionKeepsWhatItCopied(t *testing.T) {
 	operatorGRN := registerOperator(t, p, scopedGRN("acme", agent.ServiceTypeOperator, "one"))
 	d, err := agent.NewDefinition(orgRootGRN("acme"), operatorGRN, "Scout", copied, scopedGRN("acme", "user", "ada"))
 	require.NoError(t, err)
-	require.NoError(t, s.Define(ctx, d))
+	keepDefinition(t, p, d)
 
 	_, err = p.Exec(ctx, `UPDATE agent_templates SET agent_values = '{}' WHERE grn = $1`, kept.String())
 	requireRetired(t, err)

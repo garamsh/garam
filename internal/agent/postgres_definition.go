@@ -15,26 +15,6 @@ import (
 	"github.com/garamsh/garam/internal/pgxerr"
 )
 
-// Define persists a definition. It writes no agent row: what an
-// organization says an agent should be and what an operator says
-// exists are separate records (ADR-0026).
-func (s *PostgresStore) Define(ctx context.Context, d *Definition) error {
-	values, err := json.Marshal(d.values)
-	if err != nil {
-		return errorx.Wrap(err, "define: values", errorx.KindInternal)
-	}
-	err = s.q.CreateAgentDefinition(ctx, db.CreateAgentDefinitionParams{
-		AgentGrn:    d.agentGRN.String(),
-		OrgGrn:      d.orgGRN.String(),
-		OperatorGrn: d.operatorGRN.String(),
-		Name:        string(d.Name),
-		AgentValues: values,
-		DefinedBy:   d.definedBy.String(),
-		CreatedAt:   stamp(d.createdAt),
-	})
-	return pgxerr.Classify(err, "define", nil, nil)
-}
-
 // GetDefinition returns the definition naming the agent, or
 // ErrDefinitionNotFound.
 func (s *PostgresStore) GetDefinition(ctx context.Context, agentGRN grn.GRN) (*Definition, error) {

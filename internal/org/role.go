@@ -93,17 +93,12 @@ const (
 	// a service, which registering an operator alone does not do.
 	ActionOperatorDelegate = "operator:delegate"
 
-	// Reading the agents an org holds, defining one, and watching one
-	// work. The org owns the constants for the reason it owns the
-	// policy ones: the api
-	// server enforces them, and internal/agent does not import this
-	// package — it keeps its own copy of the org service type rather
-	// than depend on it.
+	// Reading the agents an org holds and watching one work. The org
+	// owns the constants for the reason it owns the policy ones: the
+	// api server enforces them, and internal/agent does not import
+	// this package — it keeps its own copy of the org service type
+	// rather than depend on it.
 	ActionAgentRead = "agent:read"
-	// ActionAgentDefine is saying what an agent should be (ADR-0026).
-	// It is not provisioning one: what an operator made is reported,
-	// and no action here grants it.
-	ActionAgentDefine = "agent:define"
 	// ActionAgentWatch is watching an agent work (ADR-0022). Reading an
 	// agent reports that it exists and what two parties say about its
 	// state; watching exposes the content of its work, which an
@@ -111,8 +106,9 @@ const (
 	// grants it: a policy carries it or nothing does.
 	ActionAgentWatch = "agent:watch"
 	// ActionAgentRename is changing what the org calls an agent it
-	// defined (ADR-0075). It moves no value an operator reads, so it is
-	// not defining one again.
+	// defined (ADR-0075). It moves no value an operator reads. No
+	// action defines an agent: garam accepts no desired value
+	// (ADR-0090).
 	ActionAgentRename = "agent:rename"
 	// ActionAgentCreate is asking a delegated operator to create an agent
 	// from an immutable template or profile it already allows
@@ -186,7 +182,6 @@ var machineActions = []struct {
 	{ActionOperatorDelete, false},
 	{ActionOperatorDelegate, false},
 	{ActionAgentRead, true},
-	{ActionAgentDefine, true},
 	{ActionAgentRename, true},
 	{ActionAgentCreate, true},
 	{ActionAgentConfigure, false},

@@ -121,10 +121,10 @@ collaborate on a shared plan.
   supervises the host's runtime is `garam standalone run`
   (ADR-0085), and its joint acceptance with garam and Sherlock is
   unverified (#1180).
-- An organization's members **defining** an agent, under
-  `/orgs/{org}/agent-definitions` — which operator is to run it, and
+- The agents an organization's members **defined**, under
+  `/orgs/{org}/agent-definitions` — which operator is to run each, and
   with what values (ADR-0026). A definition is a record rather than a
-  command: garam mints the agent's GRN, writes no `agents` row, and
+  command: garam minted the agent's GRN, writes no `agents` row, and
   knows nothing about whether an operator acted on it. The operator the
   definition names reads its definitions on the machine listener and
   **claims** one: the claim binds the operator to the definition's
@@ -134,9 +134,11 @@ collaborate on a shared plan.
   console path and `POST /agents` can never describe the same agent. The
   operator a definition names must be one the organization registered;
   one it has not is refused, naming the identifier that named no record
-  (ADR-0045). Defining is granted by `agent:define`, named action by
-  action because ADR-0012 puts provisioning outside garam and a wildcard
-  would grant in advance what no endpoint may offer. A definition
+  (ADR-0045). garam accepts no new definition: no route and no role
+  writes one, and the schema refuses one and any changed value from
+  whichever release sends it; every definition it holds stays
+  readable, claimable and cut over as written, and an agent is created
+  through its operator's control service (ADR-0090). A definition
   carries a name the organization calls the agent by, which
   `agent:rename` changes without touching the identity, operator or
   values (ADR-0075).

@@ -263,7 +263,7 @@ type AgentAssignment struct {
 	Since time.Time `json:"since"`
 }
 
-// AgentDefinition What an organization says an agent should be (ADR-0026). It is a record and not an agent: no state is reported on it, and it carries none of the fields an `Agent` carries. `agentGrn` is the identity garam minted for the agent this definition describes, and no agent answers under it until the claim.
+// AgentDefinition What an organization said an agent should be (ADR-0026), written before garam stopped accepting definitions (ADR-0090). It is a record and not an agent: no state is reported on it, and it carries none of the fields an `Agent` carries. `agentGrn` is the identity garam minted for the agent this definition describes, and no agent answers under it until the claim.
 type AgentDefinition struct {
 	AgentGrn  string    `json:"agentGrn"`
 	CreatedAt time.Time `json:"createdAt"`
@@ -279,20 +279,8 @@ type AgentDefinition struct {
 	OperatorGrn string    `json:"operatorGrn"`
 	OrgGrn      string    `json:"orgGrn"`
 
-	// Values What an operator constructs the agent from. garam stores the keys and the strings and interprets neither: what the payload means belongs to the operator that reads it. A key is one to 64 characters of lowercase letters, digits and `-`; a value is at most 4096 bytes; at most 32 entries.
+	// Values What an operator constructs the agent from. garam stores the keys and the strings and interprets neither: what the payload means belongs to the operator that reads it. garam accepts no new one (ADR-0090); what it answers was stored before then. A key is one to 64 characters of lowercase letters, digits and `-`; a value is at most 4096 bytes; at most 32 entries.
 	Values AgentValues `json:"values"`
-}
-
-// AgentDefinitionCreate What an agent should be, as an organization's member states it.
-type AgentDefinitionCreate struct {
-	// Name What the organization calls the agent. Left out, the agent is called by its identifier, as every definition written before names existed is (ADR-0075); given, it must be a name `AgentName` accepts.
-	Name *AgentName `json:"name,omitempty"`
-
-	// OperatorGrn The operator that is to run the agent. It must be one this organization has registered under `/orgs/{org}/operators`; one it has not registered is refused, naming the identifier that named no record (ADR-0045).
-	OperatorGrn string `json:"operatorGrn"`
-
-	// Values What an operator constructs the agent from. garam stores the keys and the strings and interprets neither: what the payload means belongs to the operator that reads it. A key is one to 64 characters of lowercase letters, digits and `-`; a value is at most 4096 bytes; at most 32 entries.
-	Values *AgentValues `json:"values,omitempty"`
 }
 
 // AgentDefinitionCutover defines model for AgentDefinitionCutover.
@@ -377,11 +365,11 @@ type AgentTemplate struct {
 	OrgGrn    string    `json:"orgGrn"`
 	UpdatedAt time.Time `json:"updatedAt"`
 
-	// Values What an operator constructs the agent from. garam stores the keys and the strings and interprets neither: what the payload means belongs to the operator that reads it. A key is one to 64 characters of lowercase letters, digits and `-`; a value is at most 4096 bytes; at most 32 entries.
+	// Values What an operator constructs the agent from. garam stores the keys and the strings and interprets neither: what the payload means belongs to the operator that reads it. garam accepts no new one (ADR-0090); what it answers was stored before then. A key is one to 64 characters of lowercase letters, digits and `-`; a value is at most 4096 bytes; at most 32 entries.
 	Values AgentValues `json:"values"`
 }
 
-// AgentValues What an operator constructs the agent from. garam stores the keys and the strings and interprets neither: what the payload means belongs to the operator that reads it. A key is one to 64 characters of lowercase letters, digits and `-`; a value is at most 4096 bytes; at most 32 entries.
+// AgentValues What an operator constructs the agent from. garam stores the keys and the strings and interprets neither: what the payload means belongs to the operator that reads it. garam accepts no new one (ADR-0090); what it answers was stored before then. A key is one to 64 characters of lowercase letters, digits and `-`; a value is at most 4096 bytes; at most 32 entries.
 type AgentValues map[string]string
 
 // ControlEndpointWrite defines model for ControlEndpointWrite.
@@ -921,9 +909,6 @@ type CreateOrgJSONRequestBody = OrganizationCreate
 // UpdateOrgJSONRequestBody defines body for UpdateOrg for application/json ContentType.
 type UpdateOrgJSONRequestBody = OrganizationPatch
 
-// DefineAgentJSONRequestBody defines body for DefineAgent for application/json ContentType.
-type DefineAgentJSONRequestBody = AgentDefinitionCreate
-
 // RenameAgentDefinitionJSONRequestBody defines body for RenameAgentDefinition for application/json ContentType.
 type RenameAgentDefinitionJSONRequestBody = AgentDefinitionPatch
 
@@ -1025,9 +1010,6 @@ type ServerInterface interface {
 	// ListAgentDefinitions List an organization's agent definitions. Requires the `member` role.
 	// (GET /orgs/{org}/agent-definitions)
 	ListAgentDefinitions(w http.ResponseWriter, r *http.Request, org Org)
-	// DefineAgent Define an agent. Requires the `member` role.
-	// (POST /orgs/{org}/agent-definitions)
-	DefineAgent(w http.ResponseWriter, r *http.Request, org Org)
 	// GetAgentDefinition Read one of an organization's agent definitions. Requires the `member` role.
 	// (GET /orgs/{org}/agent-definitions/{agent})
 	GetAgentDefinition(w http.ResponseWriter, r *http.Request, org Org, agentSlug AgentSlug)
@@ -1533,32 +1515,6 @@ func (siw *ServerInterfaceWrapper) ListAgentDefinitions(w http.ResponseWriter, r
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListAgentDefinitions(w, r, org)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// DefineAgent operation middleware
-func (siw *ServerInterfaceWrapper) DefineAgent(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-	_ = err
-
-	// ------------- Path parameter "org" -------------
-	var org Org
-
-	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.DefineAgent(w, r, org)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -3750,7 +3706,6 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agents/{agent}", wrapper.GetAgent)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agents/{agent}/watch", wrapper.WatchAgent)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agent-definitions", wrapper.ListAgentDefinitions)
-	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/agent-definitions", wrapper.DefineAgent)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agent-definitions/{agent}", wrapper.GetAgentDefinition)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/agent-definitions/{agent}", wrapper.RenameAgentDefinition)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/agent-templates", wrapper.ListAgentTemplates)

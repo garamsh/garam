@@ -1,33 +1,12 @@
-import type { Page } from "@playwright/test";
-
 import { expect, test } from "./fixtures";
-import { seedArchivedTemplate, seedCutoverDefinition, type Seed } from "./seed";
-
-/**
- * Defines an agent from a blank start through the console, as a person
- * does, and answers with its identifier. No operator claims it.
- */
-async function defineAgent(
-  page: Page,
-  signedIn: Seed,
-  name: string,
-): Promise<string> {
-  await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/new`);
-  const agentName = page.getByLabel("Name", { exact: true });
-  await expect(agentName).toBeEnabled();
-  await agentName.fill(name);
-  await page.getByLabel("Operator", { exact: true }).selectOption({
-    label: `${signedIn.operatorName} (${signedIn.operatorIdentifier})`,
-  });
-  await page.getByRole("button", { name: "Create agent" }).click();
-  await expect(
-    page.getByRole("heading", { level: 1, name, exact: true }),
-  ).toBeVisible();
-  return page.url().split("/").at(-1) ?? "";
-}
+import {
+  seedArchivedTemplate,
+  seedCutoverDefinition,
+  seedDefinition,
+} from "./seed";
 
 test.describe("archived agent templates", () => {
-  test("a kept template is a record only, and the define form offers none", async ({
+  test("a kept template is a record only, and the new agent page offers no garam form", async ({
     page,
     signedIn,
   }) => {
@@ -59,25 +38,38 @@ test.describe("archived agent templates", () => {
       page.getByRole("link", { name: "Create agent from template" }),
     ).toHaveCount(0);
 
-    // The define form starts blank, and the template is not offered.
-    // The operator it offers is the control that the form read garam.
+    // The new agent page offers the control service alone: no garam
+    // template and no form to define an agent in garam (ADR-0090). Its
+    // control service section is the control that the page rendered.
     await page.goto(`${agents}/new?template=${kept.identifier}`);
-    const operator = page.getByLabel("Operator", { exact: true });
-    await expect(operator).toBeEnabled();
     await expect(
-      operator.getByRole("option", {
-        name: `${signedIn.operatorName} (${signedIn.operatorIdentifier})`,
+      page.getByRole("heading", {
+        level: 2,
+        name: "From the control service",
       }),
-    ).toHaveCount(1);
+    ).toBeVisible();
     await expect(page.getByText("Researcher")).toHaveCount(0);
-    await expect(page.getByLabel("Key 1", { exact: true })).toHaveValue("");
+    await expect(page.getByLabel("Operator", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("textbox")).toHaveCount(0);
 
-    // The template's write routes are closed at garam itself.
+    // The template's write routes and the define route are closed at
+    // garam itself.
     const replaced = await page.request.put(
       `/api/orgs/${signedIn.orgSlug}/agent-templates/${kept.identifier}`,
       { data: { name: "Analyst", values: {} } },
     );
     expect(replaced.status()).toBe(405);
+    const defined = await page.request.post(
+      `/api/orgs/${signedIn.orgSlug}/agent-definitions`,
+      {
+        data: {
+          name: "Scout",
+          operatorGrn: `grn:${signedIn.orgSlug}:default:operator:${signedIn.operatorIdentifier}`,
+          values: { model: "haiku" },
+        },
+      },
+    );
+    expect(defined.status()).toBe(405);
   });
 });
 
@@ -86,7 +78,8 @@ test.describe("named agents", () => {
     page,
     signedIn,
   }) => {
-    const identifier = await defineAgent(page, signedIn, "Scout");
+    const identifier = await seedDefinition(signedIn, "Scout");
+    await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/${identifier}`);
 
     const rename = page.getByLabel("Name", { exact: true });
     await expect(rename).toBeEnabled();
@@ -105,7 +98,7 @@ test.describe("named agents", () => {
     page,
     signedIn,
   }) => {
-    const identifier = await defineAgent(page, signedIn, "Ranger");
+    const identifier = await seedDefinition(signedIn, "Ranger");
 
     // A team takes the agent by name before any operator claims it: the
     // membership is its GRN, minted with the definition.

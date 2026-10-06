@@ -115,9 +115,10 @@ func (s *memoryStore) ListAssignmentsByOrg(_ context.Context, orgGRN grn.GRN) ([
 	return assignments, nil
 }
 
-func (s *memoryStore) Define(_ context.Context, d *Definition) error {
+// keepDefinition stores a definition as one written before garam
+// stopped accepting them (ADR-0090).
+func (s *memoryStore) keepDefinition(d *Definition) {
 	s.definitions[d.agentGRN] = d
-	return nil
 }
 
 func (s *memoryStore) ListDefinitionsByOrg(context.Context, grn.GRN) ([]*Definition, error) {
@@ -496,14 +497,14 @@ func TestService_ReportRuntimeStateIsAcceptedOnlyFromTheAgentItself(t *testing.T
 	assert.Equal(t, RuntimeStateDisconnected, stored.RuntimeState())
 }
 
-// define records a definition of an agent operator is to run, the way
-// the console writes one.
+// define keeps a definition of an agent operator is to run, as the
+// console wrote one before garam stopped accepting them (ADR-0090).
 func define(t *testing.T, store *memoryStore, operator grn.GRN, values Values) *Definition {
 	t.Helper()
 	d, err := NewDefinition(orgGRNOf(operator), operator, "field agent", values,
 		grn.New(grn.RootOwner, grn.DefaultProject, "user", "ada"))
 	require.NoError(t, err)
-	require.NoError(t, store.Define(context.Background(), d))
+	store.keepDefinition(d)
 	return d
 }
 

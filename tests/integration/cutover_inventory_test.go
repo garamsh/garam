@@ -8,6 +8,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -54,9 +55,11 @@ func TestCutoverInventory_AccountsForEverySourceRecordWithoutAValue(t *testing.T
 	broken := defineAgent(t, f.p, f.agents, f.controller, agent.Values{"model": "x"})
 	_, err := f.agents.Claim(ctx, broken.Agent(), f.controller)
 	require.NoError(t, err)
-	_, err = f.p.Exec(ctx, `UPDATE agent_definitions SET agent_values = '{"tools.pins.git":"inventory-secret-two"}' WHERE agent_grn = $1`,
-		broken.Agent().String())
-	require.NoError(t, err)
+	withDefinitionsOpen(t, f.p, func(tx pgx.Tx) {
+		_, err := tx.Exec(ctx, `UPDATE agent_definitions SET agent_values = '{"tools.pins.git":"inventory-secret-two"}' WHERE agent_grn = $1`,
+			broken.Agent().String())
+		require.NoError(t, err)
+	})
 	unclaimed := defineAgent(t, f.p, f.agents, f.controller, agent.Values{"model": "inventory-secret-three"})
 
 	bare := seedAgent(t, f.agents, acme)

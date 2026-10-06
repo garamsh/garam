@@ -343,7 +343,7 @@ ADRs:
   unattached policy's org scope is the caller's to hold
 - [0026](./adr/0026-the-console-defines-an-agent.md) — the console
   defines an agent and an operator reads that definition; the runtime
-  values are superseded by 0077
+  values are superseded by 0077, and the define route by 0090
 - [0027](./adr/0027-a-watch-crosses-processes-through-postgres.md) — a
   watch crosses between processes through Postgres
 - [0028](./adr/0028-oauth-state-is-a-server-side-record.md) — a login's
@@ -511,7 +511,8 @@ ADRs:
   defined from them, a definition's name changes on `agent:rename`
   and moves nothing else, and the console lists desired agents by name
   apart from what operators report. Which service owns a template is
-  superseded by 0077, and its template writes and forms by 0088
+  superseded by 0077, its template writes and forms by 0088, and
+  copying values into a new definition by 0090
 - [0077](./adr/0077-execution-definitions-move-to-the-operator-control-service-and-each-agent-cuts-over-alone.md)
   — execution definitions and templates move to a separately deployed
   Operator control service with its own store, garam keeps identity,
@@ -597,3 +598,9 @@ ADRs:
   runtime's `--require-store` before its activation replaces the old
   one; any failure leaves the agent stopped on the old volume, which is
   never written or removed
+- [0090](./adr/0090-garam-accepts-no-new-agent-definition-and-keeps-the-ones-it-holds.md)
+  — garam accepts no new agent definition: `defineAgent` and
+  `agent:define` are removed, a schema guard refuses a new definition
+  or a changed value from whichever release sends it while a rename
+  stays admitted, every definition held stays readable, claimable and
+  cut-over-able, and an agent is created through the control service

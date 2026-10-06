@@ -64,7 +64,7 @@ func TestOperatorUpdateDetails_MovesNothingTheOperatorAuthenticatesOrEnrolsBy(t 
 	d, err := agent.NewDefinition(orgRootGRN("acme"), enrolled, "Field agent", agent.Values{"image": "ghcr.io/acme/bot:1"},
 		scopedGRN("acme", "user", "ada"))
 	require.NoError(t, err)
-	require.NoError(t, agent.NewPostgresStore(p).Define(ctx, d))
+	keepDefinition(t, p, d)
 	pending, pendingToken := register(t, store, "pending")
 
 	serial := rowOf(t, p, `SELECT serial FROM operator_certificates WHERE operator_grn = $1`, enrolled)

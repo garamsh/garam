@@ -172,8 +172,11 @@ certificate, token or definition.
 
 **`getAgentDefinition` and `renameAgentDefinition` read one definition
 and change what the organization calls its agent**, on `agent:read`
-and `agent:rename`; `defineAgent` names an agent by its identifier
-where the caller gives no name. **The agent-template operations**
+and `agent:rename`. No operation writes a definition: `defineAgent`
+is removed, and the schema refuses a new definition or a changed value
+from any release
+([ADR-0090](./adr/0090-garam-accepts-no-new-agent-definition-and-keeps-the-ones-it-holds.md)).
+**The agent-template operations**
 list and read an organization's templates on `agent-template:read`,
 authorized against the template where the path names one
 ([ADR-0075](./adr/0075-an-agent-is-started-from-a-template-copied-once-and-carries-a-name-of-its-own.md)).

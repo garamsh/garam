@@ -207,11 +207,11 @@ func (p *sender) receive() *received {
 	return &received{ID: c.Message.ID, Sender: c.Message.Sender, Body: c.Message.Body}
 }
 
-// awaitReply claims until a message from from arrives, for as long as a
-// model's turn takes.
-func (p *sender) awaitReply(from string) *received {
+// awaitReplyWithin claims until a message from from arrives, for up to
+// within, and fails with why where none does.
+func (p *sender) awaitReplyWithin(from string, within time.Duration, why string) *received {
 	p.s.t.Helper()
-	deadline := time.Now().Add(8 * time.Minute)
+	deadline := time.Now().Add(within)
 	for time.Now().Before(deadline) {
 		if r := p.receive(); r != nil && r.Sender == from {
 			return r
@@ -219,7 +219,7 @@ func (p *sender) awaitReply(from string) *received {
 			p.s.t.Logf("the sender received a message from %s, not the agent", r.Sender)
 		}
 	}
-	p.s.t.Fatalf("no reply from %s", from)
+	p.s.t.Fatalf("no reply from %s within %s: %s", from, within, why)
 	return nil
 }
 

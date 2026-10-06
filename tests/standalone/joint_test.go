@@ -2,7 +2,6 @@ package standalone_test
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -264,13 +263,15 @@ embedding:
 	// since the adapter removes each once garam stored it.
 	s.placeProbe(runtime)
 	s.mustDocker("exec", "-d", runtime, "/probe", "collect", "/data/outbox", "/data/garam-1180-collected")
-	reply := from.awaitReply(agentGRN)
-	t.Logf("the reply: %q", s.scrub(reply.Body))
-	s.eventually("the message completed", func() bool {
-		m1 = s.messages("id = $1", m1.ID)[0]
-		return m1.Completed
-	})
+	// The turn completes first. Its durable reply is this scenario's
+	// claim, so it is asserted, within a bound counted from the turn's
+	// completion: a turn that ends without message_send fails here, by
+	// name, rather than in a wait that cannot tell why.
+	m1 = s.awaitCompleted(from.grn, "garam-1180-first")
 	assert.Equal(t, 2, m1.Attempts, "the message was claimed twice")
+	reply := from.awaitReplyWithin(agentGRN, 2*time.Minute,
+		"the turn completed without a reply: the model did not call message_send")
+	t.Logf("the reply: %q", s.scrub(reply.Body))
 
 	// 5. the durable reply: exactly one, written to the outbox in reply
 	// to garam's message, and stored by garam under that entry's own
@@ -334,14 +335,17 @@ embedding:
 	question := "What is the codeword from my earlier message? Reply to me with message_send, with just the codeword."
 	require.NotContains(t, question, codeword, "the second turn's input does not carry the codeword")
 	from.post(agentGRN, "garam-1180-second", question)
-	recall := s.scrub(from.awaitReply(agentGRN).Body)
-	t.Logf("the recall: %q", recall)
-	assert.Contains(t, strings.ToLower(recall), codeword, "memory from the previous generation is recalled")
+	asked := s.awaitCompleted(from.grn, "garam-1180-second")
+	from.observeReply(agentGRN, time.Minute)
 
 	// One source, counted in the runtime's own store once its
-	// generation has stopped.
+	// generation has stopped, and the recall, read from what the
+	// question's turn recorded as its own answer there.
 	s.mustDocker("kill", "--signal", "TERM", successor)
 	<-last.done
+	answered := s.scrub(strings.Join(s.answers(after.volume, asked.ID), "\n"))
+	t.Logf("the recall, as the turn recorded it: %q", answered)
+	assert.Contains(t, strings.ToLower(answered), codeword, "memory from the previous generation is recalled")
 	sources := s.sources(after.volume, m1.ID)
 	require.Len(t, sources, 1, "the store holds the message as one source")
 	assert.Equal(t, content, sources[0], "under the content the adapter posted both times")
@@ -400,31 +404,7 @@ func (s *stack) generationOf(h *host, runtime string) generation {
 // and answers the content of every source recorded under id.
 func (s *stack) sources(volume, id string) []string {
 	s.t.Helper()
-	dir := s.t.TempDir()
-	for _, name := range []string{"memory.db", "memory.db-wal"} {
-		cmd := exec.Command("docker", "run", "--rm", "--network", "none", "-v", volume+":/v:ro",
-			"--entrypoint", "sh", required(s.t, "GARAM_TEST_WORKSPACE_IMAGE"), "-c", "test ! -e /v/"+name+" || cat /v/"+name)
-		cmd.Env = append(os.Environ(), "DOCKER_HOST="+s.daemon)
-		raw, err := cmd.Output()
-		require.NoError(s.t, err)
-		if len(raw) > 0 {
-			require.NoError(s.t, os.WriteFile(filepath.Join(dir, name), raw, 0o600))
-		}
-	}
-	db, err := sql.Open("sqlite3", "file:"+filepath.Join(dir, "memory.db"))
-	require.NoError(s.t, err)
-	defer func() { _ = db.Close() }()
-	rows, err := db.Query(`SELECT content FROM conversation_sources WHERE external_id = ?`, id)
-	require.NoError(s.t, err)
-	defer func() { _ = rows.Close() }()
-	var out []string
-	for rows.Next() {
-		var c string
-		require.NoError(s.t, rows.Scan(&c))
-		out = append(out, c)
-	}
-	require.NoError(s.t, rows.Err())
-	return out
+	return s.storeStrings(s.store(volume), `SELECT content FROM conversation_sources WHERE external_id = ?`, id)
 }
 
 func mustJSON(t *testing.T, v any) string {

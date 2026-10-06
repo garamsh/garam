@@ -54,31 +54,17 @@ const EMBEDDING = {
 };
 
 /**
- * The control service's refusal of a publish whose model it could not
- * start an agent with: a model other than the mock naming no
- * embedding, or one missing its base URL or name (garam-agent-operator
- * ADR 0053 §Decision 1). Null where it accepts the model.
+ * The control service's refusal of a publish whose model names no
+ * embedding (garam-agent-operator ADR 0053 §Decision 1), the one case
+ * of that rule these tests send. Null where a model names one.
  */
 function refusedModel(body: string): Answer | null {
   const { model } = (
     JSON.parse(body) as {
-      configuration: {
-        model: {
-          provider: string;
-          embedding?: { baseUrl: string; name: string };
-        };
-      };
+      configuration: { model: { embedding?: unknown } };
     }
   ).configuration;
-  const embedding = model.embedding;
-  if (model.provider === "mock" && embedding === undefined) return null;
-  if (
-    embedding !== undefined &&
-    embedding.baseUrl !== "" &&
-    embedding.name !== ""
-  ) {
-    return null;
-  }
+  if (model.embedding !== undefined) return null;
   return {
     status: 400,
     body: {

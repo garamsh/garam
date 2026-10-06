@@ -234,15 +234,20 @@ the cookie (ADR-0009).
 
 ## How it reaches a control service
 
-**Its peer is unbuilt.** The control service's template, profile and
-execution routes and its CORS answer are not built
-(`garamsh/garam-agent-operator#220`), and its create route is an
-unmerged pull request (#244 at
-`513be2f71af273b23cbf2961a3557093d13b3a2f`). The console's calls to
-them are tested against a stub of the agreed wire in
-`web/e2e/control-service.spec.ts`, with garam real; no run has reached
-a control service. A recovery control is not built either
-([operators.md](./operators.md) §Delegated operation authority).
+**Its peer is merged and has been reached.** The control service's
+create route (`garamsh/garam-agent-operator#244`, `5e46800`) and its
+template, profile and execution reads, template publication and CORS
+answer (#277, `5ef745a`) are on that repository's `dev`. garam#1196
+run 2 reached one at `dev` `8e1116933408` with the console's create,
+read and publish shapes: create `201`, the template list and version,
+the profile list and the execution read `200`, and a publication
+naming the model's embedding `201`
+(`/home/sauce/.cache/garam-validation-1157/kind-1196b/report.md`, S1
+and S7). That run sent the bodies the components build and drove no
+browser. The console's calls are tested against a stub of the merged
+wire in `web/e2e/control-service.spec.ts`, with garam real. A recovery
+control is not built ([operators.md](./operators.md) §Delegated
+operation authority).
 
 **One module, in the browser.** `web/src/lib/operation-authority.ts`
 holds the only call to a control service. The browser makes it,
@@ -261,6 +266,12 @@ origin; the console's own server never calls one.
 - **Only the registered endpoint.** The console calls the endpoint an
   administrator registered on the operator's page and no other
   address. An operator with none is not reached.
+- **The model carries its embedding.** A template version names the
+  model's embeddings endpoint beside the model, absent where it names
+  none, and publishing from a version on screen sends it unchanged.
+  Which models need one is the control service's to decide and refuse
+  (garam-agent-operator ADR 0052 and ADR 0053 at `8e1116933408`); the
+  console shows the refusal.
 - **It answers in the section that asked.** A refused mint, a refused
   call, an unreachable service and an answer outside the agreed wire
   each disable that section's controls and say so. Teams, People,

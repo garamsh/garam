@@ -74,6 +74,13 @@ export function PublishTemplateForm({
       });
       return;
     }
+    // An embedding no field names is absent from the wire, not empty.
+    const embedding = {
+      baseUrl: field("embeddingBaseUrl"),
+      name: field("embeddingModel"),
+      apiKeyRef: field("embeddingApiKeyRef"),
+    };
+    const namesEmbedding = Object.values(embedding).some((v) => v !== "");
     setPending(true);
     const requestId = crypto.randomUUID();
     const result = await callControl(
@@ -90,6 +97,7 @@ export function PublishTemplateForm({
               baseUrl: field("baseUrl"),
               name: field("model"),
               apiKeyRef: field("apiKeyRef"),
+              ...(namesEmbedding ? { embedding } : {}),
             },
             ego: field("ego"),
             tools,
@@ -162,6 +170,24 @@ export function PublishTemplateForm({
           name="apiKeyRef"
           label="API key reference"
           value={model?.apiKeyRef}
+        />
+        <Field
+          id="publish-embedding-base-url"
+          name="embeddingBaseUrl"
+          label="Embedding base URL"
+          value={model?.embedding?.baseUrl}
+        />
+        <Field
+          id="publish-embedding-model"
+          name="embeddingModel"
+          label="Embedding model name"
+          value={model?.embedding?.name}
+        />
+        <Field
+          id="publish-embedding-api-key-ref"
+          name="embeddingApiKeyRef"
+          label="Embedding API key reference"
+          value={model?.embedding?.apiKeyRef}
         />
       </div>
       <div className="flex flex-col gap-2">

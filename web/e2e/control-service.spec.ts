@@ -16,13 +16,10 @@ import {
  * garam is real in every test here: the session, the operator record,
  * the delegation and every operation authority are minted by the
  * running API and read back from its database. The control service is
- * not. These are contract tests against the agreed wire, answered by a
- * stub at the registered endpoint: create is garam-agent-operator pull
- * request #244 at 513be2f71af273b23cbf2961a3557093d13b3a2f, not merged;
- * the reads and publication are the route matrix of
- * garam-agent-operator#220, not built. They show what the console sends
- * and that garam bound exactly that, and nothing about a running
- * control service.
+ * not. These are contract tests against the merged Operator wire
+ * (garam-agent-operator `dev` 8e1116933408), answered by a stub at the
+ * registered endpoint. They show what the console sends and that garam
+ * bound exactly that, and nothing about a running control service.
  */
 
 const ENDPOINT = "https://control.example.test/garam";
@@ -47,6 +44,49 @@ type Answer = { status: number; body: unknown } | "unreachable";
 
 function sha256(text: string): string {
   return createHash("sha256").update(text).digest("hex");
+}
+
+/** A published model's embeddings endpoint, as the wire carries it. */
+const EMBEDDING = {
+  baseUrl: "http://tei.embeddings.svc/v1",
+  name: "BAAI/bge-base-en-v1.5",
+  apiKeyRef: "",
+};
+
+/**
+ * The control service's refusal of a publish whose model it could not
+ * start an agent with: a model other than the mock naming no
+ * embedding, or one missing its base URL or name (garam-agent-operator
+ * ADR 0053 §Decision 1). Null where it accepts the model.
+ */
+function refusedModel(body: string): Answer | null {
+  const { model } = (
+    JSON.parse(body) as {
+      configuration: {
+        model: {
+          provider: string;
+          embedding?: { baseUrl: string; name: string };
+        };
+      };
+    }
+  ).configuration;
+  const embedding = model.embedding;
+  if (model.provider === "mock" && embedding === undefined) return null;
+  if (
+    embedding !== undefined &&
+    embedding.baseUrl !== "" &&
+    embedding.name !== ""
+  ) {
+    return null;
+  }
+  return {
+    status: 400,
+    body: {
+      kind: "embedding_required",
+      message:
+        "the model needs an embeddings endpoint with a base URL and a name",
+    },
+  };
 }
 
 /**
@@ -226,10 +266,11 @@ test.describe("control service, as contract tests against the agreed Operator wi
               profile: { name: "small", version: 1 },
               configuration: {
                 model: {
-                  provider: "anthropic",
-                  baseUrl: "https://api.example.test",
-                  name: "haiku",
+                  provider: "openai-compatible",
+                  baseUrl: "https://api.example.test/v1",
+                  name: "MiniMax-M2",
                   apiKeyRef: "model-keys/web",
+                  embedding: EMBEDDING,
                 },
                 ego: "Answers web questions.",
                 tools: { search: "v2" },
@@ -247,6 +288,8 @@ test.describe("control service, as contract tests against the agreed Operator wi
           got.method === "POST" &&
           path === `${base}/templates/web%20agent/versions`
         ) {
+          const refused = refusedModel(got.body);
+          if (refused !== null) return refused;
           latest = 2;
           return { status: 201, body: { name: "web agent", version: 2 } };
         }
@@ -303,13 +346,114 @@ test.describe("control service, as contract tests against the agreed Operator wi
     );
     const sent = JSON.parse(publish.body) as {
       requestId: string;
-      configuration: { ego: string };
+      configuration: { ego: string; model: unknown };
     };
     expect(sent.requestId).toBe(recorded.requestId);
     expect(sent.configuration.ego).toBe("Answers web questions briefly.");
+    // The version on screen named an embedding, and publishing from it
+    // sent the embedding unchanged.
+    expect(sent.configuration.model).toEqual({
+      provider: "openai-compatible",
+      baseUrl: "https://api.example.test/v1",
+      name: "MiniMax-M2",
+      apiKeyRef: "model-keys/web",
+      embedding: EMBEDDING,
+    });
     // Each call minted its own authority: none was reused for another.
     const tokens = new Set(received.map((r) => r.authorization));
     expect(tokens.size).toBe(received.length);
+  });
+
+  test("publishes a model with the embedding the form names, which the control service refuses it without", async ({
+    page,
+    signedIn,
+    baseURL,
+  }) => {
+    await seedHostedOperator(signedIn, ENDPOINT, READS);
+    const base = `/garam/v1/orgs/${signedIn.orgSlug}`;
+    const received = await stubControl(
+      page,
+      new URL(baseURL!).origin,
+      (got) => {
+        const path = got.url.pathname;
+        if (got.method === "GET" && path === `${base}/templates`) {
+          return { status: 200, body: { templates: [] } };
+        }
+        if (got.method === "GET" && path === `${base}/profiles`) {
+          return {
+            status: 200,
+            body: { profiles: [{ name: "small", version: 1 }] },
+          };
+        }
+        if (
+          got.method === "POST" &&
+          path === `${base}/templates/minimax/versions`
+        ) {
+          return (
+            refusedModel(got.body) ?? {
+              status: 201,
+              body: { name: "minimax", version: 1 },
+            }
+          );
+        }
+        return { status: 404, body: { message: "no such route" } };
+      },
+    );
+
+    await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/templates`);
+    await expect(
+      page.getByText("No template is published.", { exact: true }),
+    ).toBeVisible();
+    const fields: [string, string][] = [
+      ["Template", "minimax"],
+      ["Profile", "small"],
+      ["Profile version", "1"],
+      ["Model provider", "openai-compatible"],
+      ["Model base URL", "https://api.minimax.io/v1"],
+      ["Model name", "MiniMax-M2"],
+      ["API key reference", "minimax/key"],
+    ];
+    for (const [label, value] of fields) {
+      await page.getByLabel(label, { exact: true }).fill(value);
+    }
+    const publish = page.getByRole("button", {
+      name: "Publish version",
+      exact: true,
+    });
+
+    // Named without an embedding, the model is refused.
+    await publish.click();
+    await expect(
+      page.getByText(
+        "the model needs an embeddings endpoint with a base URL and a name",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    const refused = received.filter((r) => r.method === "POST");
+    expect(refused).toHaveLength(1);
+    expect(JSON.parse(refused[0]!.body).configuration.model).not.toHaveProperty(
+      "embedding",
+    );
+
+    // The control: the same model, naming the embedding, is published.
+    // The form is refilled because React resets it after each action.
+    for (const [label, value] of fields) {
+      await page.getByLabel(label, { exact: true }).fill(value);
+    }
+    await page
+      .getByLabel("Embedding base URL", { exact: true })
+      .fill(EMBEDDING.baseUrl);
+    await page
+      .getByLabel("Embedding model name", { exact: true })
+      .fill(EMBEDDING.name);
+    await publish.click();
+    await expect(
+      page.getByText(/^Published minimax version 1\./),
+    ).toBeVisible();
+    const accepted = received.filter((r) => r.method === "POST")[1]!;
+    expect(JSON.parse(accepted.body).configuration.model.embedding).toEqual(
+      EMBEDDING,
+    );
   });
 
   test("creates an agent from a template and shows pending against runtime-reported execution", async ({

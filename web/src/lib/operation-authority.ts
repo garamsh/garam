@@ -13,11 +13,11 @@
  * error, so no intermediary can resend the authority elsewhere.
  *
  * The control routes and their answers are the Operator's
- * (`garamsh/garam-agent-operator`). Create is the wire of its pull
- * request #244 at `513be2f71af273b23cbf2961a3557093d13b3a2f`, not yet
- * merged; the reads and publication are the #220 route matrix, not yet
- * built, with the field names those routes' configure sibling uses.
- * Nothing here is verified against a running control service.
+ * (`garamsh/garam-agent-operator`), merged there as create (#244,
+ * `5e46800`) and the reads and publication (#277, `5ef745a`); the
+ * model's embedding is its ADR 0052 and 0053. garam#1196 run 2 reached
+ * a control service at its `dev` `8e1116933408` with these shapes
+ * (`/home/sauce/.cache/garam-validation-1157/kind-1196b/report.md`).
  */
 
 import { z } from "zod";
@@ -164,7 +164,9 @@ export type VersionRef = z.infer<typeof VersionRefParser>;
 
 /**
  * What an agent runs with. A secret appears only as a reference to
- * where it is held, never as its value.
+ * where it is held, never as its value. The embedding is absent where
+ * the model names none; which models need one the control service
+ * decides.
  */
 export const ConfigurationParser = z.object({
   model: z.object({
@@ -172,6 +174,9 @@ export const ConfigurationParser = z.object({
     baseUrl: z.string(),
     name: z.string(),
     apiKeyRef: z.string(),
+    embedding: z
+      .object({ baseUrl: z.string(), name: z.string(), apiKeyRef: z.string() })
+      .optional(),
   }),
   ego: z.string(),
   tools: z.record(z.string(), z.string()),

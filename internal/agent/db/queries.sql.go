@@ -204,7 +204,6 @@ func (q *Queries) GetAgentAssignment(ctx context.Context, agentGrn string) (Agen
 }
 
 const getAgentDefinition = `-- name: GetAgentDefinition :one
-
 SELECT d.agent_grn, d.org_grn, d.operator_grn, d.agent_values, d.defined_by, d.created_at, d.name, c.stage AS cutover_stage
 FROM agent_definitions d
 LEFT JOIN agent_cutovers c ON c.agent_grn = d.agent_grn AND c.stage <> 'rolled_back'
@@ -222,13 +221,12 @@ type GetAgentDefinitionRow struct {
 	CutoverStage pgtype.Text
 }
 
-// Nothing here writes a definition: garam accepts no new one, and an
-// existing one keeps its operator and values (ADR-0090, migration
-// 000035). Its name is the organization's word for the agent, which
-// RenameAgentDefinition changes alone.
 // A definition is read with the stage of its GRN's open cutover
 // attempt, if any: a frozen or switched definition is archival, its
-// values preserved and no longer the source (ADR-0086).
+// values preserved and no longer the source (ADR-0086). Nothing here
+// writes one: garam accepts no new definition, and an existing one
+// keeps its operator and values (ADR-0090, migration 000035); its
+// name is what RenameAgentDefinition changes alone.
 func (q *Queries) GetAgentDefinition(ctx context.Context, agentGrn string) (GetAgentDefinitionRow, error) {
 	row := q.db.QueryRow(ctx, getAgentDefinition, agentGrn)
 	var i GetAgentDefinitionRow

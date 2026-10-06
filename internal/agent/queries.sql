@@ -91,14 +91,12 @@ WHERE grn = sqlc.arg('grn')
   )
 RETURNING *;
 
--- Nothing here writes a definition: garam accepts no new one, and an
--- existing one keeps its operator and values (ADR-0090, migration
--- 000035). Its name is the organization's word for the agent, which
--- RenameAgentDefinition changes alone.
-
 -- A definition is read with the stage of its GRN's open cutover
 -- attempt, if any: a frozen or switched definition is archival, its
--- values preserved and no longer the source (ADR-0086).
+-- values preserved and no longer the source (ADR-0086). Nothing here
+-- writes one: garam accepts no new definition, and an existing one
+-- keeps its operator and values (ADR-0090, migration 000035); its
+-- name is what RenameAgentDefinition changes alone.
 -- name: GetAgentDefinition :one
 SELECT d.*, c.stage AS cutover_stage
 FROM agent_definitions d

@@ -10,7 +10,7 @@ is `internal/ca/postgres`.
 | `Certificate` | a signed client certificate, the CA that signed it, and the serial that tells it from another certificate naming the same subject; it holds no key, because the key may be one garam never saw |
 | `IssuedCertificate` | a `Certificate` garam generated the key pair for, carrying the private key it returns once |
 | `Sealer` | seals key material so what reaches storage is useless without the key-encryption key the process holds |
-| `Service` | issues a certificate for a subject GRN over a key it generates, or signs one a certificate request carries, creating the organization's CA on demand; answers the CA that signs for a subject now, creating none |
+| `Service` | issues a certificate for a subject GRN over a key it generates, or signs one a certificate request carries, creating the organization's CA on demand; answers the CA that signs for a subject now, creating none, which is what a retry of a recovery recorded without its chain names (ADR-0091) |
 
 `Authority`'s fields are exported and it has no accessors: every one
 of them is a value the store writes and reads back, and the aggregate

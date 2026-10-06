@@ -605,3 +605,10 @@ ADRs:
   while a rename and the organization's cascade stay admitted, every
   definition held stays readable, claimable and cut-over-able, and an
   agent is created through the control service
+- [0091](./adr/0091-a-recovered-credential-names-its-chain-and-garam-stores-it-with-the-recovery.md)
+  — a recovered credential's answer names its issuer and garam server
+  root, added to `execution-fence.v1` without a version change; garam
+  stores the chain the signer produced with the recovery so a retry
+  answers it again, and a recovery recorded before 000036 is answered
+  with the chain the signer signs under now, which holds while neither
+  the organization's authority nor the server root has been replaced

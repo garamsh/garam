@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
@@ -114,7 +114,11 @@ describe("remove team member form", () => {
     // member and clears the refusal.
     refusing = false;
     await user.click(screen.getByRole("button", { name: "Confirm removal" }));
-    await vi.waitFor(() => expect(removed).toHaveLength(1));
-    expect(screen.queryByText("permission denied")).not.toBeInTheDocument();
+    // The refusal stays until the action answers, so its going is the
+    // answer rendered; the request is recorded before that.
+    await waitFor(() =>
+      expect(screen.queryByText("permission denied")).not.toBeInTheDocument(),
+    );
+    expect(removed).toHaveLength(1);
   });
 });

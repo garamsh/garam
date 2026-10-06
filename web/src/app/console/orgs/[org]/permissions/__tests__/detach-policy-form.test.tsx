@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
@@ -72,7 +72,11 @@ describe("detach policy form", () => {
     // through and the refusal clears.
     last = false;
     await user.click(screen.getByRole("button", { name: "Confirm detach" }));
-    await vi.waitFor(() => expect(deleted).toEqual(["eng"]));
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    // The refusal stays until the action answers, so its going is the
+    // answer rendered; the request is recorded before that.
+    await waitFor(() =>
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument(),
+    );
+    expect(deleted).toEqual(["eng"]);
   });
 });

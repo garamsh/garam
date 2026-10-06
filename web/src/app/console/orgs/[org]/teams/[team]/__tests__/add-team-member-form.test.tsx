@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
@@ -95,8 +95,12 @@ describe("add team member form", () => {
       "Alice · Person",
     );
     await user.click(screen.getByRole("button", { name: "Add to team" }));
-    await vi.waitFor(() => expect(posted).toEqual([{ memberGrn: alice.grn }]));
-    expect(screen.queryByText("permission denied")).not.toBeInTheDocument();
+    // The refusal stays until the action answers, so its going is the
+    // answer rendered; the request is recorded before that.
+    await waitFor(() =>
+      expect(screen.queryByText("permission denied")).not.toBeInTheDocument(),
+    );
+    expect(posted).toEqual([{ memberGrn: alice.grn }]);
   });
 
   it("says there is no one left to add instead of an empty choice", () => {

@@ -1,11 +1,11 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { AcceptInvitationForm } from "@/app/console/invitations/[token]/_components/accept-invitation-form";
 import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
-import { setupUser } from "@/testing/user";
 
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
@@ -29,7 +29,7 @@ describe("accept invitation form", () => {
         ),
       ),
     );
-    const user = setupUser();
+    const user = userEvent.setup();
     render(<AcceptInvitationForm token="secret-token" />);
 
     await user.click(screen.getByRole("button", { name: "Accept invitation" }));
@@ -41,7 +41,7 @@ describe("accept invitation form", () => {
 
   it("keeps the page when the API never answers", async () => {
     server.use(http.post(ACCEPT, () => HttpResponse.error()));
-    const user = setupUser();
+    const user = userEvent.setup();
     render(<AcceptInvitationForm token="secret-token" />);
 
     await user.click(screen.getByRole("button", { name: "Accept invitation" }));

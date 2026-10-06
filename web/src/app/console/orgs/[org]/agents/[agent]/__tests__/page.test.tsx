@@ -1,4 +1,5 @@
 import { screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
@@ -6,7 +7,6 @@ import AgentPage from "@/app/console/orgs/[org]/agents/[agent]/page";
 import { renderServerComponent } from "@/testing/render";
 import { API_URL, fieldAgent, reportedAgent } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
-import { setupUser } from "@/testing/user";
 
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 vi.mock("next/navigation", () => ({
@@ -74,7 +74,7 @@ describe("agent page", () => {
         return HttpResponse.json({ ...fieldAgent, name: "Ranger" });
       }),
     );
-    const user = setupUser();
+    const user = userEvent.setup();
     await renderServerComponent(AgentPage(params));
 
     await user.clear(screen.getByLabelText("Name"));

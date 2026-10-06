@@ -1,12 +1,12 @@
 import { render, screen } from "@testing-library/react";
 import { Component, type ReactNode } from "react";
+import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { DeleteTeamForm } from "@/app/console/orgs/[org]/teams/[team]/_components/delete-team-form";
 import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
-import { setupUser } from "@/testing/user";
 
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
@@ -54,7 +54,7 @@ describe("delete team form", () => {
         return new HttpResponse(null, { status: 204 });
       }),
     );
-    const user = setupUser();
+    const user = userEvent.setup();
     renderForm();
 
     await user.click(screen.getByRole("button", { name: "Delete team" }));
@@ -83,7 +83,7 @@ describe("delete team form", () => {
           : new HttpResponse(null, { status: 204 }),
       ),
     );
-    const user = setupUser();
+    const user = userEvent.setup();
     render(
       <Navigation>
         <DeleteTeamForm

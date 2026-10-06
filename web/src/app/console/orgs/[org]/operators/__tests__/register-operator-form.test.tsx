@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { renderToString } from "react-dom/server";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
@@ -6,7 +7,6 @@ import { describe, expect, it, vi } from "vitest";
 import { RegisterOperatorForm } from "@/app/console/orgs/[org]/operators/_components/register-operator-form";
 import { API_URL, fieldOneRegistered } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
-import { setupUser } from "@/testing/user";
 
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
@@ -49,7 +49,7 @@ describe("register operator form", () => {
 
   it("posts the identifier alone when no name is given, and shows the enrollment token once", async () => {
     const posted = recordRegistrations();
-    const user = setupUser();
+    const user = userEvent.setup();
     render(<RegisterOperatorForm org="acme" />);
 
     await user.type(screen.getByLabelText("Identifier"), "field-one");
@@ -76,7 +76,7 @@ describe("register operator form", () => {
 
   it("posts the name and description typed, and links to the operator's page", async () => {
     const posted = recordRegistrations();
-    const user = setupUser();
+    const user = userEvent.setup();
     render(<RegisterOperatorForm org="acme" />);
 
     await user.type(screen.getByLabelText("Identifier"), "field-one");
@@ -98,7 +98,7 @@ describe("register operator form", () => {
 
   it("refuses a name past 100 characters without a round trip", async () => {
     const posted = recordRegistrations();
-    const user = setupUser();
+    const user = userEvent.setup();
     render(<RegisterOperatorForm org="acme" />);
 
     await user.type(screen.getByLabelText("Identifier"), "field-one");
@@ -123,7 +123,7 @@ describe("register operator form", () => {
 
   it("keeps only what has to be read before typing over the input", async () => {
     recordRegistrations();
-    const user = setupUser();
+    const user = userEvent.setup();
     render(<RegisterOperatorForm org="acme" />);
 
     // Presence: each is one clause of a longer sentence. What a person
@@ -168,7 +168,7 @@ describe("register operator form", () => {
 
   it("refuses an identifier outside the character rule without a round trip", async () => {
     const posted = recordRegistrations();
-    const user = setupUser();
+    const user = userEvent.setup();
     render(<RegisterOperatorForm org="acme" />);
 
     await user.type(screen.getByLabelText("Identifier"), "Field-One");
@@ -201,7 +201,7 @@ describe("register operator form", () => {
         ),
       ),
     );
-    const user = setupUser();
+    const user = userEvent.setup();
     render(<RegisterOperatorForm org="acme" />);
 
     await user.type(screen.getByLabelText("Identifier"), "field-one");
@@ -217,7 +217,7 @@ describe("register operator form", () => {
     server.use(
       http.post(`${API_URL}/orgs/acme/operators`, () => HttpResponse.error()),
     );
-    const user = setupUser();
+    const user = userEvent.setup();
     render(<RegisterOperatorForm org="acme" />);
 
     await user.type(screen.getByLabelText("Identifier"), "field-one");

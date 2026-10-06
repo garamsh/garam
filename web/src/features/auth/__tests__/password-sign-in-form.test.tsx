@@ -1,4 +1,5 @@
 import { cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
@@ -6,7 +7,6 @@ import { PasswordSignInForm } from "@/features/auth/components/password-sign-in-
 import { PASSWORD_REFUSED } from "@/lib/password-credentials";
 import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
-import { setupUser } from "@/testing/user";
 
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
@@ -31,7 +31,7 @@ function refuses(status: number, kind: string, message: string) {
  * the refusal on its own, and the whole rendered text around it.
  */
 async function signIn(username: string, password: string) {
-  const user = setupUser();
+  const user = userEvent.setup();
   const { container } = render(<PasswordSignInForm />);
 
   await user.type(screen.getByLabelText("Username"), username);

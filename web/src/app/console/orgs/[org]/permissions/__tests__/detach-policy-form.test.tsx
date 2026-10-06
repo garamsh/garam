@@ -1,11 +1,11 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { DetachPolicyForm } from "@/app/console/orgs/[org]/permissions/_components/detach-policy-form";
 import { API_URL, engineering } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
-import { setupUser } from "@/testing/user";
 
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
@@ -24,7 +24,7 @@ function renderDetach() {
   );
 }
 
-async function detach(user: ReturnType<typeof setupUser>) {
+async function detach(user: ReturnType<typeof userEvent.setup>) {
   await user.click(
     screen.getByRole("button", {
       name: "Detach Deny project deletion from Engineering",
@@ -49,7 +49,7 @@ describe("detach policy form", () => {
         return new HttpResponse(null, { status: 204 });
       }),
     );
-    const user = setupUser();
+    const user = userEvent.setup();
     renderDetach();
 
     await detach(user);

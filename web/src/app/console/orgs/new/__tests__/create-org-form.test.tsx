@@ -1,11 +1,11 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { CreateOrgForm } from "@/app/console/orgs/new/_components/create-org-form";
 import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
-import { setupUser } from "@/testing/user";
 
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
@@ -18,7 +18,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
 async function submitName(name: string) {
-  const user = setupUser();
+  const user = userEvent.setup();
   render(<CreateOrgForm />);
   await user.type(screen.getByLabelText("Name"), name);
   await user.click(screen.getByRole("button", { name: "Create organization" }));

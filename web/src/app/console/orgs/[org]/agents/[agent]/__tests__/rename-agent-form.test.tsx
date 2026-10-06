@@ -1,11 +1,11 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { RenameAgentForm } from "@/app/console/orgs/[org]/agents/[agent]/_components/rename-agent-form";
 import { API_URL, fieldAgent } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
-import { setupUser } from "@/testing/user";
 
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
@@ -27,7 +27,7 @@ describe("rename agent form", () => {
         return HttpResponse.json({ ...fieldAgent, name: "Ranger" });
       }),
     );
-    const user = setupUser();
+    const user = userEvent.setup();
     render(
       <RenameAgentForm org="acme" agent="9f2ac1b40d8e7a35" name="Scout" />,
     );

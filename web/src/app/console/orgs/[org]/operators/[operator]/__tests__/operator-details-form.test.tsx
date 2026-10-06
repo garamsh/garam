@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { renderToString } from "react-dom/server";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
@@ -6,7 +7,6 @@ import { describe, expect, it, vi } from "vitest";
 import { OperatorDetailsForm } from "@/app/console/orgs/[org]/operators/[operator]/_components/operator-details-form";
 import { API_URL, fieldOne } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
-import { setupUser } from "@/testing/user";
 
 // `revalidatePath` needs a request scope the test does not run in; the
 // action's own answer is what the form renders.
@@ -72,7 +72,7 @@ describe("operator details form", () => {
 
   it("sends the name and description to the operator's own path", async () => {
     const patched = recordPatches();
-    const user = setupUser();
+    const user = userEvent.setup();
     renderForm();
 
     await user.clear(screen.getByLabelText("Name"));
@@ -89,7 +89,7 @@ describe("operator details form", () => {
 
   it("refuses an empty name without a round trip", async () => {
     const patched = recordPatches();
-    const user = setupUser();
+    const user = userEvent.setup();
     renderForm();
 
     await user.clear(screen.getByLabelText("Name"));
@@ -114,7 +114,7 @@ describe("operator details form", () => {
         ),
       ),
     );
-    const user = setupUser();
+    const user = userEvent.setup();
     renderForm();
 
     await user.clear(screen.getByLabelText("Name"));

@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -7,7 +8,6 @@ import { ActivatePolicyForm } from "@/app/console/orgs/[org]/permissions/[policy
 import { MakeDefaultForm } from "@/app/console/orgs/[org]/permissions/[policy]/_components/make-default-form";
 import { API_URL, baselineRead, denyDeletes } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
-import { setupUser } from "@/testing/user";
 
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
@@ -24,7 +24,7 @@ describe("activate policy form", () => {
         return HttpResponse.json(baselineRead);
       }),
     );
-    const user = setupUser();
+    const user = userEvent.setup();
     render(
       <ActivatePolicyForm
         org="acme"
@@ -54,7 +54,7 @@ describe("activate policy form", () => {
   });
 
   it("asks nothing more of an attached policy", async () => {
-    const user = setupUser();
+    const user = userEvent.setup();
     render(
       <ActivatePolicyForm
         org="acme"
@@ -78,7 +78,7 @@ describe("activate policy form", () => {
 
 describe("confirmations and Conditions", () => {
   it("says the version to evaluate carries a Condition that restricts nothing", async () => {
-    const user = setupUser();
+    const user = userEvent.setup();
     const props = {
       org: "acme",
       policy: "d1e2f3a4b5c6d7e8",
@@ -114,7 +114,7 @@ describe("make default form", () => {
         return HttpResponse.json(denyDeletes);
       }),
     );
-    const user = setupUser();
+    const user = userEvent.setup();
     render(
       <MakeDefaultForm
         org="acme"
@@ -142,7 +142,7 @@ describe("make default form", () => {
   });
 
   it("carries the everyone confirmation for an active policy with no attachment", async () => {
-    const user = setupUser();
+    const user = userEvent.setup();
     const { unmount } = render(
       <MakeDefaultForm
         org="acme"

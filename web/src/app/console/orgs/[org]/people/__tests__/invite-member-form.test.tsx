@@ -1,11 +1,11 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { InviteMemberForm } from "@/app/console/orgs/[org]/people/_components/invite-member-form";
 import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
-import { setupUser } from "@/testing/user";
 
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
@@ -28,7 +28,7 @@ describe("invite member form", () => {
         ),
       ),
     );
-    const user = setupUser();
+    const user = userEvent.setup();
     render(<InviteMemberForm org="acme" />);
 
     await user.click(screen.getByRole("button", { name: "Create invitation" }));
@@ -54,7 +54,7 @@ describe("invite member form", () => {
         );
       }),
     );
-    const user = setupUser();
+    const user = userEvent.setup();
     render(<InviteMemberForm org="acme" />);
 
     await user.click(screen.getByRole("button", { name: "Create invitation" }));
@@ -95,7 +95,7 @@ describe("invite member form", () => {
         ),
       ),
     );
-    const user = setupUser();
+    const user = userEvent.setup();
     render(<InviteMemberForm org="acme" />);
 
     await user.click(screen.getByRole("button", { name: "Create invitation" }));
@@ -141,7 +141,7 @@ describe("invite member form", () => {
         );
       }),
     );
-    const user = setupUser();
+    const user = userEvent.setup();
     render(<InviteMemberForm org="acme" />);
 
     await user.click(screen.getByRole("combobox", { name: "Role" }));
@@ -156,7 +156,7 @@ describe("invite member form", () => {
     server.use(
       http.post(`${API_URL}/orgs/acme/invitations`, () => HttpResponse.error()),
     );
-    const user = setupUser();
+    const user = userEvent.setup();
     render(<InviteMemberForm org="acme" />);
 
     await user.click(screen.getByRole("button", { name: "Create invitation" }));
@@ -176,7 +176,7 @@ describe("invite member form", () => {
         ),
       ),
     );
-    const user = setupUser();
+    const user = userEvent.setup();
     render(<InviteMemberForm org="acme" />);
 
     await user.click(screen.getByRole("button", { name: "Create invitation" }));

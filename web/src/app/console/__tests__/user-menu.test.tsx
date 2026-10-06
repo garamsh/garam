@@ -1,10 +1,10 @@
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { UserMenu } from "@/app/console/_components/user-menu";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { setupUser } from "@/testing/user";
 
 // The Server Action revokes the session and redirects; the menu's own
 // contract is that submitting the control reaches it.
@@ -32,7 +32,7 @@ describe("user menu", () => {
   });
 
   it("signs the user out", async () => {
-    const user = setupUser();
+    const user = userEvent.setup();
     renderMenu("Alice");
 
     // Presence, as above: the nickname is one part of the trigger's.

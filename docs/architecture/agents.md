@@ -79,8 +79,9 @@ sends it. A definition's operator and values therefore stay as they
 were written, and none is deleted except with its organization. Its
 name is the organization's word for the agent and changes alone:
 renaming touches no GRN, operator, value, assignment, membership or
-attachment, and no operator is told (ADR-0075). A definition written without a name, and every one
-written before names existed, is called by its identifier.
+attachment, and no operator is told (ADR-0075). A definition written
+without a name, and every one written before names existed, is called
+by its identifier.
 
 `Store` answers `Service` and, org by org, the read the browser-facing
 listener serves people: an organization's agents and the assignments

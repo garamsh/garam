@@ -577,7 +577,10 @@ test.describe("control service, as contract tests against the agreed Operator wi
       page.getByRole("button", { name: "Create from template" }),
     ).toBeHidden();
     await expect(
-      page.getByRole("button", { name: "Create agent", exact: true }),
+      page.getByRole("heading", {
+        level: 2,
+        name: "From the control service",
+      }),
     ).toBeVisible();
 
     await page.goto(
@@ -648,7 +651,10 @@ test.describe("control service, as contract tests against the agreed Operator wi
 
     await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/new`);
     await expect(
-      page.getByRole("button", { name: "Create agent", exact: true }),
+      page.getByRole("heading", {
+        level: 2,
+        name: "From the control service",
+      }),
     ).toBeVisible();
     await expect(page.getByText(refused, { exact: true })).toBeVisible();
   });
@@ -690,7 +696,10 @@ test.describe("control service, as contract tests against the agreed Operator wi
 
     await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/new`);
     await expect(
-      page.getByRole("button", { name: "Create agent", exact: true }),
+      page.getByRole("heading", {
+        level: 2,
+        name: "From the control service",
+      }),
     ).toBeVisible();
     await expect(page.getByText(failed, { exact: true })).toBeVisible();
   });

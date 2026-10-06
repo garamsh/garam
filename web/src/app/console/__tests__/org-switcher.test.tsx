@@ -1,10 +1,10 @@
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { OrgSwitcher } from "@/app/console/_components/org-switcher";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { setupUser } from "@/testing/user";
 
 const route = vi.hoisted(() => ({ pathname: "/console/orgs" }));
 
@@ -46,7 +46,7 @@ describe("organization switcher", () => {
   });
 
   it("offers every organization and marks the active one", async () => {
-    const user = userEvent.setup();
+    const user = setupUser();
     renderSwitcher("/console/orgs/acme");
 
     // Presence, as above: the org's name is one part of the trigger's.
@@ -61,7 +61,7 @@ describe("organization switcher", () => {
   });
 
   it("offers the create form", async () => {
-    const user = userEvent.setup();
+    const user = setupUser();
     renderSwitcher("/console/orgs");
 
     // Presence, as above: "None selected" follows in the trigger's name.
@@ -75,7 +75,7 @@ describe("organization switcher", () => {
   });
 
   it("still offers the create form to a caller with no organizations", async () => {
-    const user = userEvent.setup();
+    const user = setupUser();
     renderSwitcher("/console/orgs", []);
 
     // Presence, as above: "None selected" follows in the trigger's name.

@@ -1,11 +1,11 @@
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { CreateProjectForm } from "@/app/console/orgs/[org]/projects/_components/create-project-form";
 import { API_URL, frontend } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
+import { setupUser } from "@/testing/user";
 
 // `revalidatePath` needs a request scope the test does not run in; the
 // action's own answer is what the form renders.
@@ -52,7 +52,7 @@ describe.each(RESOURCES)(
 
     it("posts the name typed into it and reports the identifier back", async () => {
       const posted = recordCreates();
-      const user = userEvent.setup();
+      const user = setupUser();
       const { container } = render(<CreateProjectForm org="acme" />);
 
       await user.type(screen.getByLabelText(label), typed);
@@ -77,7 +77,7 @@ describe.each(RESOURCES)(
           ),
         ),
       );
-      const user = userEvent.setup();
+      const user = setupUser();
       render(<CreateProjectForm org="acme" />);
 
       await user.type(screen.getByLabelText(label), typed);

@@ -1,5 +1,4 @@
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
@@ -10,6 +9,7 @@ import {
 } from "@/lib/password-credentials";
 import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
+import { setupUser } from "@/testing/user";
 
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
@@ -24,7 +24,7 @@ const TOKEN = "invitation-token-nobody-guesses";
 
 /** Registers through the form and answers with what it then shows. */
 async function register(token: string, username: string, password: string) {
-  const user = userEvent.setup();
+  const user = setupUser();
   render(<PasswordRegisterForm />);
 
   await user.type(screen.getByLabelText("Invitation token"), token);

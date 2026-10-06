@@ -1,11 +1,11 @@
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { WithdrawConsentForm } from "@/app/console/orgs/[org]/consents/_components/withdraw-consent-form";
 import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
+import { setupUser } from "@/testing/user";
 
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
@@ -36,7 +36,7 @@ describe("withdraw consent form", () => {
     // sending — so what held the request back is the confirmation
     // rather than a form that never posts.
     const withdrawn = recordWithdrawals();
-    const user = userEvent.setup();
+    const user = setupUser();
     render(<WithdrawConsentForm org="acme" other="globex" stands />);
 
     await user.click(screen.getByRole("button", { name: "Withdraw" }));
@@ -52,7 +52,7 @@ describe("withdraw consent form", () => {
 
   it("sends nothing when the confirmation is cancelled", async () => {
     const withdrawn = recordWithdrawals();
-    const user = userEvent.setup();
+    const user = setupUser();
     render(<WithdrawConsentForm org="acme" other="globex" stands />);
 
     await user.click(screen.getByRole("button", { name: "Withdraw" }));
@@ -72,7 +72,7 @@ describe("withdraw consent form", () => {
   });
 
   it("says messages stop when the pair stands", async () => {
-    const user = userEvent.setup();
+    const user = setupUser();
     render(<WithdrawConsentForm org="acme" other="globex" stands />);
 
     await user.click(screen.getByRole("button", { name: "Withdraw" }));
@@ -85,7 +85,7 @@ describe("withdraw consent form", () => {
   });
 
   it("says nothing crosses when the other half is down", async () => {
-    const user = userEvent.setup();
+    const user = setupUser();
     render(<WithdrawConsentForm org="acme" other="globex" stands={false} />);
 
     await user.click(screen.getByRole("button", { name: "Withdraw" }));
@@ -106,7 +106,7 @@ describe("withdraw consent form", () => {
         ),
       ),
     );
-    const user = userEvent.setup();
+    const user = setupUser();
     render(<WithdrawConsentForm org="acme" other="globex" stands />);
 
     await user.click(screen.getByRole("button", { name: "Withdraw" }));

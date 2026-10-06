@@ -1,5 +1,4 @@
-import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { render, screen, waitFor } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
@@ -7,6 +6,7 @@ import { AddTeamMemberForm } from "@/app/console/orgs/[org]/teams/[team]/_compon
 import type { Candidate } from "@/app/console/orgs/[org]/teams/[team]/_components/team-member";
 import { API_URL, alice, reportedAgent } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
+import { setupUser } from "@/testing/user";
 
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
@@ -31,7 +31,7 @@ describe("add team member form", () => {
         return new HttpResponse(null, { status: 204 });
       }),
     );
-    const user = userEvent.setup();
+    const user = setupUser();
     render(
       <AddTeamMemberForm
         org="acme"
@@ -67,7 +67,7 @@ describe("add team member form", () => {
         return new HttpResponse(null, { status: 204 });
       }),
     );
-    const user = userEvent.setup();
+    const user = setupUser();
     render(
       <AddTeamMemberForm
         org="acme"
@@ -95,8 +95,12 @@ describe("add team member form", () => {
       "Alice · Person",
     );
     await user.click(screen.getByRole("button", { name: "Add to team" }));
-    await vi.waitFor(() => expect(posted).toEqual([{ memberGrn: alice.grn }]));
-    expect(screen.queryByText("permission denied")).not.toBeInTheDocument();
+    // The refusal stays until the action answers, so its going is the
+    // answer rendered; the request is recorded before that.
+    await waitFor(() =>
+      expect(screen.queryByText("permission denied")).not.toBeInTheDocument(),
+    );
+    expect(posted).toEqual([{ memberGrn: alice.grn }]);
   });
 
   it("says there is no one left to add instead of an empty choice", () => {

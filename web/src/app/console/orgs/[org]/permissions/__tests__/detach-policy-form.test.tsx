@@ -1,11 +1,11 @@
-import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { render, screen, waitFor } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { DetachPolicyForm } from "@/app/console/orgs/[org]/permissions/_components/detach-policy-form";
 import { API_URL, engineering } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
+import { setupUser } from "@/testing/user";
 
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
@@ -24,7 +24,7 @@ function renderDetach() {
   );
 }
 
-async function detach(user: ReturnType<typeof userEvent.setup>) {
+async function detach(user: ReturnType<typeof setupUser>) {
   await user.click(
     screen.getByRole("button", {
       name: "Detach Deny project deletion from Engineering",
@@ -49,7 +49,7 @@ describe("detach policy form", () => {
         return new HttpResponse(null, { status: 204 });
       }),
     );
-    const user = userEvent.setup();
+    const user = setupUser();
     renderDetach();
 
     await detach(user);
@@ -72,7 +72,11 @@ describe("detach policy form", () => {
     // through and the refusal clears.
     last = false;
     await user.click(screen.getByRole("button", { name: "Confirm detach" }));
-    await vi.waitFor(() => expect(deleted).toEqual(["eng"]));
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    // The refusal stays until the action answers, so its going is the
+    // answer rendered; the request is recorded before that.
+    await waitFor(() =>
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument(),
+    );
+    expect(deleted).toEqual(["eng"]);
   });
 });

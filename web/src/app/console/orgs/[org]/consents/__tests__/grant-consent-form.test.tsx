@@ -1,11 +1,11 @@
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { GrantConsentForm } from "@/app/console/orgs/[org]/consents/_components/grant-consent-form";
 import { API_URL, globexConsent } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
+import { setupUser } from "@/testing/user";
 
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
@@ -36,7 +36,7 @@ function recordGrants(stands: boolean) {
 describe("grant consent form", () => {
   it("grants the half under the pair's own path and reports the pair standing", async () => {
     const granted = recordGrants(true);
-    const user = userEvent.setup();
+    const user = setupUser();
     const { container } = render(<GrantConsentForm org="acme" />);
 
     await user.type(screen.getByLabelText("Other organization"), "globex");
@@ -55,7 +55,7 @@ describe("grant consent form", () => {
 
   it("reports the half waiting when the other organization has not granted", async () => {
     recordGrants(false);
-    const user = userEvent.setup();
+    const user = setupUser();
     render(<GrantConsentForm org="acme" />);
 
     await user.type(screen.getByLabelText("Other organization"), "globex");
@@ -82,7 +82,7 @@ describe("grant consent form", () => {
         ),
       ),
     );
-    const user = userEvent.setup();
+    const user = setupUser();
     render(<GrantConsentForm org="acme" />);
 
     await user.type(screen.getByLabelText("Other organization"), "acme");

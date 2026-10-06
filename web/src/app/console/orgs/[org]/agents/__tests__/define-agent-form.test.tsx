@@ -1,5 +1,4 @@
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { Component, type ReactNode } from "react";
 import { renderToString } from "react-dom/server";
 import { HttpResponse, http } from "msw";
@@ -8,6 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import { DefineAgentForm } from "@/app/console/orgs/[org]/agents/_components/define-agent-form";
 import { API_URL, fieldAgent } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
+import { setupUser } from "@/testing/user";
 
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
@@ -86,7 +86,7 @@ describe("define agent form", () => {
 
   it("chooses the operator by name and posts the identifier beside it", async () => {
     const posted = recordDefinitions();
-    const user = userEvent.setup();
+    const user = setupUser();
     renderForm([
       { identifier: "field-one", name: "Field cluster" },
       { identifier: "field-two", name: "Field cluster" },
@@ -154,7 +154,7 @@ describe("define agent form", () => {
         ),
       ),
     );
-    const user = userEvent.setup();
+    const user = setupUser();
     const { container } = renderForm(null);
 
     await user.type(screen.getByLabelText("Name"), "Scout");
@@ -170,7 +170,7 @@ describe("define agent form", () => {
   });
   it("builds the operator GRN from the organization and posts the values as a map", async () => {
     const posted = recordDefinitions();
-    const user = userEvent.setup();
+    const user = setupUser();
     renderForm(null);
 
     await user.type(screen.getByLabelText("Name"), "Scout");
@@ -194,7 +194,7 @@ describe("define agent form", () => {
 
   it("defines an agent carrying no values at all", async () => {
     const posted = recordDefinitions();
-    const user = userEvent.setup();
+    const user = setupUser();
     renderForm(null);
 
     await user.type(screen.getByLabelText("Name"), "Scout");
@@ -213,7 +213,7 @@ describe("define agent form", () => {
 
   it("names no key of its own, and takes whichever key is typed", async () => {
     const posted = recordDefinitions();
-    const user = userEvent.setup();
+    const user = setupUser();
     renderForm(null);
 
     // The form names no key: garam interprets none, and the contract
@@ -241,7 +241,7 @@ describe("define agent form", () => {
 
   it("says which key the character rule refuses, without a round trip", async () => {
     const posted = recordDefinitions();
-    const user = userEvent.setup();
+    const user = setupUser();
     renderForm(null);
     const define = screen.getByRole("button", { name: "Create agent" });
 
@@ -267,7 +267,7 @@ describe("define agent form", () => {
 
   it("refuses a repeated key, and takes the same two rows under distinct keys", async () => {
     const posted = recordDefinitions();
-    const user = userEvent.setup();
+    const user = setupUser();
     renderForm(null);
 
     await user.type(screen.getByLabelText("Name"), "Scout");
@@ -290,7 +290,7 @@ describe("define agent form", () => {
 
   it("counts a value's bytes as it is typed and refuses one past the ceiling", async () => {
     const posted = recordDefinitions();
-    const user = userEvent.setup();
+    const user = setupUser();
     renderForm(null);
 
     await user.type(screen.getByLabelText("Name"), "Scout");
@@ -316,7 +316,7 @@ describe("define agent form", () => {
     // Thirty-one values arrive the way a template's do, through the
     // form's own prop, so the test clicks once across the boundary
     // rather than thirty-one times to reach it.
-    const user = userEvent.setup();
+    const user = setupUser();
     renderForm(
       null,
       Object.fromEntries(
@@ -340,7 +340,7 @@ describe("define agent form", () => {
 
   it("names the character rule an operator identifier breaks", async () => {
     const posted = recordDefinitions();
-    const user = userEvent.setup();
+    const user = setupUser();
     renderForm(null);
 
     await user.type(screen.getByLabelText("Name"), "Scout");
@@ -365,7 +365,7 @@ describe("define agent form", () => {
         ),
       ),
     );
-    const user = userEvent.setup();
+    const user = setupUser();
     renderForm(null);
 
     await user.type(screen.getByLabelText("Name"), "Scout");
@@ -379,7 +379,7 @@ describe("define agent form", () => {
 
   it("keeps what was typed when the API does not answer", async () => {
     server.use(http.post(`${API_URL}/*`, () => HttpResponse.error()));
-    const user = userEvent.setup();
+    const user = setupUser();
     renderForm(null);
 
     await user.type(screen.getByLabelText("Name"), "Scout");
@@ -406,7 +406,7 @@ describe("define agent form", () => {
   });
   it("starts from a template's values and posts them as edited", async () => {
     const posted = recordDefinitions();
-    const user = userEvent.setup();
+    const user = setupUser();
     renderForm(null, { workspace: "papers", notes: "weekly" });
 
     // The copy is the form's own rows: shown as the template held
@@ -431,7 +431,7 @@ describe("define agent form", () => {
 
   it("refuses a name of only spaces, and posts the trimmed name", async () => {
     const posted = recordDefinitions();
-    const user = userEvent.setup();
+    const user = setupUser();
     renderForm(null);
 
     await user.type(screen.getByLabelText("Name"), "   ");

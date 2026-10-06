@@ -1,12 +1,12 @@
 import { render, screen } from "@testing-library/react";
 import { Component, type ReactNode } from "react";
-import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { DeleteOperatorForm } from "@/app/console/orgs/[org]/operators/[operator]/_components/delete-operator-form";
 import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
+import { setupUser } from "@/testing/user";
 
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
@@ -67,7 +67,7 @@ describe("delete operator form", () => {
     // sending — so what held the request back is the confirmation
     // rather than a form that never posts.
     const deleted = recordDeletions();
-    const user = userEvent.setup();
+    const user = setupUser();
     renderForm(true);
 
     await user.click(screen.getByRole("button", { name: "Delete operator" }));
@@ -84,7 +84,7 @@ describe("delete operator form", () => {
 
   it("sends nothing when the confirmation is cancelled", async () => {
     const deleted = recordDeletions();
-    const user = userEvent.setup();
+    const user = setupUser();
     renderForm(true);
 
     await user.click(screen.getByRole("button", { name: "Delete operator" }));
@@ -97,7 +97,7 @@ describe("delete operator form", () => {
   });
 
   it("says what stops and that work in its cluster does not, when it enrolled", async () => {
-    const user = userEvent.setup();
+    const user = setupUser();
     renderForm(true);
 
     await user.click(screen.getByRole("button", { name: "Delete operator" }));
@@ -110,7 +110,7 @@ describe("delete operator form", () => {
   });
 
   it("says nothing stops when the operator never enrolled", async () => {
-    const user = userEvent.setup();
+    const user = setupUser();
     renderForm(false);
 
     await user.click(screen.getByRole("button", { name: "Delete operator" }));
@@ -138,7 +138,7 @@ describe("delete operator form", () => {
           : new HttpResponse(null, { status: 204 }),
       ),
     );
-    const user = userEvent.setup();
+    const user = setupUser();
     renderForm(true);
 
     await user.click(screen.getByRole("button", { name: "Delete operator" }));

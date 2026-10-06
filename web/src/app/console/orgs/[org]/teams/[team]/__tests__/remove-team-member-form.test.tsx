@@ -1,11 +1,11 @@
-import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { render, screen, waitFor } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { RemoveTeamMemberForm } from "@/app/console/orgs/[org]/teams/[team]/_components/remove-team-member-form";
 import { API_URL, alice } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
+import { setupUser } from "@/testing/user";
 
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
@@ -38,7 +38,7 @@ describe("remove team member form", () => {
         return new HttpResponse(null, { status: 204 });
       }),
     );
-    const user = userEvent.setup();
+    const user = setupUser();
     renderForm();
 
     await user.click(
@@ -67,7 +67,7 @@ describe("remove team member form", () => {
         return new HttpResponse(null, { status: 204 });
       }),
     );
-    const user = userEvent.setup();
+    const user = setupUser();
     renderForm();
 
     await user.click(
@@ -98,7 +98,7 @@ describe("remove team member form", () => {
         return new HttpResponse(null, { status: 204 });
       }),
     );
-    const user = userEvent.setup();
+    const user = setupUser();
     renderForm();
 
     await user.click(
@@ -114,7 +114,11 @@ describe("remove team member form", () => {
     // member and clears the refusal.
     refusing = false;
     await user.click(screen.getByRole("button", { name: "Confirm removal" }));
-    await vi.waitFor(() => expect(removed).toHaveLength(1));
-    expect(screen.queryByText("permission denied")).not.toBeInTheDocument();
+    // The refusal stays until the action answers, so its going is the
+    // answer rendered; the request is recorded before that.
+    await waitFor(() =>
+      expect(screen.queryByText("permission denied")).not.toBeInTheDocument(),
+    );
+    expect(removed).toHaveLength(1);
   });
 });

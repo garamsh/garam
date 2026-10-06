@@ -1,6 +1,5 @@
 import { render, screen } from "@testing-library/react";
 import { Component, type ReactNode } from "react";
-import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
@@ -8,6 +7,7 @@ import { z } from "zod";
 import { CreatePolicyForm } from "@/app/console/orgs/[org]/permissions/new/_components/create-policy-form";
 import { API_URL, denyDeletes } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
+import { setupUser } from "@/testing/user";
 
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 const redirected: string[] = [];
@@ -57,7 +57,7 @@ describe("create policy form", () => {
           : HttpResponse.json(denyDeletes, { status: 201 });
       }),
     );
-    const user = userEvent.setup();
+    const user = setupUser();
     render(
       <Navigation>
         <CreatePolicyForm org="acme" />
@@ -92,7 +92,7 @@ describe("create policy form", () => {
   });
 
   it("holds back text that is not JSON and names why", async () => {
-    const user = userEvent.setup();
+    const user = setupUser();
     render(<CreatePolicyForm org="acme" />);
     const submit = screen.getByRole("button", { name: "Create draft" });
     // The control: the starting document parses, so the form can be

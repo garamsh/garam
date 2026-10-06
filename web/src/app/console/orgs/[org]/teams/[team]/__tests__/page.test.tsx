@@ -1,5 +1,4 @@
 import { screen, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
@@ -15,6 +14,7 @@ import {
   signedOut,
 } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
+import { setupUser } from "@/testing/user";
 
 // The removal action revalidates the page it came from.
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
@@ -120,7 +120,7 @@ describe("team page", () => {
         return new HttpResponse(null, { status: 204 });
       }),
     );
-    const user = userEvent.setup();
+    const user = setupUser();
 
     await renderTeam();
 

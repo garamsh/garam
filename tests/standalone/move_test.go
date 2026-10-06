@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -159,17 +160,49 @@ embedding:
 	// the fact told before the move is recalled.
 	question := "What is the codeword from my earlier message? Reply to me with message_send, with just the codeword."
 	require.NotContains(t, question, codeword)
+	// The test keeps a copy of every outbox entry the new runtime
+	// writes, since the adapter removes each once garam stored it.
+	runtime := h.container("runtime")
+	s.placeProbe(runtime)
+	s.mustDocker("exec", "-d", runtime, "/probe", "collect", "/data/outbox", "/data/garam-1180-collected")
 	from.post(agentGRN, "garam-sa-recall", question)
 	asked := []message{s.awaitCompleted(from.grn, "garam-sa-recall")}
 	from.observeReply(agentGRN, time.Minute)
-	assert.Equal(t, 1, asked[0].Attempts, "claimed once")
-	var claimedAt, activatedAt time.Time
+
+	// Only the new generation can have received it. Garam delivers at
+	// least once (ADR-0018), so a lease that lapses during a slow turn
+	// hands the question out again; what is asserted is which
+	// generation can hold it, not how often it was held.
+	var createdAt, claimedAt, activatedAt time.Time
 	require.NoError(t, s.db().QueryRow(context.Background(),
-		`SELECT m.claimed_at, a.created_at FROM messages m, agent_activations a WHERE m.id = $1 AND a.id::text = $2`,
-		asked[0].ID, activations[1].ID).Scan(&claimedAt, &activatedAt))
+		`SELECT m.created_at, m.claimed_at, a.created_at FROM messages m, agent_activations a WHERE m.id = $1 AND a.id::text = $2`,
+		asked[0].ID, activations[1].ID).Scan(&createdAt, &claimedAt, &activatedAt))
+	t.Logf("the question was claimed %d time(s)", asked[0].Attempts)
+	assert.True(t, createdAt.After(activatedAt),
+		"the question was sent after the new activation, so every claim of it came after the switch: sent %s, activated %s",
+		createdAt, activatedAt)
+	// Garam keeps the latest claim alone, so that is the one read; with
+	// the claim above and the old token's refusal, no claim is left to
+	// the old generation.
 	assert.True(t, claimedAt.After(activatedAt),
-		"and after the new activation, from which garam admits no other token: claimed %s, activated %s",
+		"and the claim garam holds was made under the new activation: claimed %s, activated %s",
 		claimedAt, activatedAt)
+	// Each answer the turn sent reaches garam once, under its outbox
+	// entry's key, however many times the question was delivered.
+	var sent []outboxEntry
+	for _, e := range s.collected(runtime) {
+		if slices.Contains(e.InReplyTo, asked[0].ID) {
+			sent = append(sent, e)
+		}
+	}
+	t.Logf("the recall turn sent %d answer(s)", len(sent))
+	for _, e := range sent {
+		s.eventually("garam storing the answer "+e.ID, func() bool {
+			return len(s.messages("sender_grn = $1 AND idempotency_key = $2", agentGRN, e.ID)) > 0
+		})
+		assert.Len(t, s.messages("sender_grn = $1 AND idempotency_key = $2", agentGRN, e.ID), 1,
+			"one durable reply per answer sent")
+	}
 
 	// Sherlock's own stores, read once the new generation has stopped:
 	// the question asked after the switch is in the new store alone.

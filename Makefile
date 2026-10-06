@@ -85,7 +85,7 @@ WEB_E2E_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_AD
 .PHONY: lint format test build gen check-gen check-toolchain integration e2e workload-integration standalone-e2e mutation db-up db-down db-prune backend-up ci template-diff search
 .PHONY: chart chart-lint chart-render chart-identity chart-names chart-rewrite chart-guards chart-security chart-package
 .PHONY: web-install web-lint web-format web-test web-build web-gen web-check-gen web-e2e web-image-e2e web-ci
-.PHONY: image-build
+.PHONY: image-build test-image test-image-e2e
 .PHONY: minikube-up minikube-down minikube-start minikube-images minikube-db
 .PHONY: minikube-secret minikube-migrate minikube-apps minikube-rebuild minikube-forward minikube-context
 
@@ -181,9 +181,11 @@ format:
 # swept back in and fails for want of a database rather than skipping
 # quietly.
 #
-# scripts/image-build-test.sh is the one test outside Go: which tags a
-# development image-build accepts (ADR-0071). It needs git and no
-# Docker, and prints its own count.
+# Two tests are outside Go, each needing git or nothing and no Docker,
+# and each printing its own count: scripts/image-build-test.sh, which
+# tags a development image-build accepts (ADR-0071), and
+# scripts/image-test-workflow-test.sh, what the test image's prune
+# keeps (ADR-0092).
 TEST_PKGS = $(filter-out %/tests/integration %/tests/e2e %/tests/workload %/tests/standalone,$(GO_PKGS))
 
 test:
@@ -191,6 +193,7 @@ test:
 	@test -n '$(TEST_PKGS)' || { echo 'test: nothing to test — the package list is empty, or the filter above matched all of it'; exit 1; }
 	@go test -count=1 $(TEST_PKGS)
 	@scripts/image-build-test.sh
+	@scripts/image-test-workflow-test.sh
 
 # `go build ./...` exits 0 having done nothing should that pattern ever
 # resolve to no package, so build names what it compiles too. It skips a
@@ -274,7 +277,8 @@ check-gen:
 # which ci.md §Security baseline keeps out of a command line.
 export TOOLCHAIN_PAIRS = \
 	web/.nvmrc,$(NODE_VERSION),deploy/local/Dockerfile.web,node \
-	go.mod,$(GO_DIRECTIVE),deploy/local/Dockerfile,golang
+	go.mod,$(GO_DIRECTIVE),deploy/local/Dockerfile,golang \
+	go.mod,$(GO_DIRECTIVE),tests/testprincipal/Dockerfile,golang
 
 check-toolchain:
 	@scripts/check-toolchain.sh
@@ -609,6 +613,20 @@ web-image-e2e: $(if $(GARAM_WEB_IMAGE),,image-build)
 	@image='$(or $(GARAM_WEB_IMAGE),$(WEB_IMAGE))'; \
 		test -n "$$image" || { echo 'web-image-e2e: nothing names the image to check — .github/workflows/release.yml builds none from the web context'; exit 1; }; \
 		GARAM_WEB_IMAGE="$$image" tests/image/web.sh
+
+# test-image builds the test image another repository's CI copies
+# garam, testprincipal and the migrations out of (ADR-0092), tagged
+# with HEAD's full hash under TEST_IMAGE_REPOSITORY; the script refuses
+# a working tree that differs from HEAD. test-image-e2e checks it as
+# that consumer reads it. Both need Docker, so neither is in `ci`;
+# .github/workflows/test-image.yml runs the second before it pushes.
+TEST_IMAGE_REPOSITORY ?= garam-test
+
+test-image:
+	scripts/image-test.sh '$(TEST_IMAGE_REPOSITORY)'
+
+test-image-e2e: test-image
+	tests/image/test-image.sh '$(TEST_IMAGE_REPOSITORY):$(shell git rev-parse HEAD)'
 
 web-ci: web-format web-lint web-test web-build web-check-gen
 

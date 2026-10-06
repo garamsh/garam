@@ -234,20 +234,15 @@ the cookie (ADR-0009).
 
 ## How it reaches a control service
 
-**Its peer is merged and has been reached.** The control service's
-create route (`garamsh/garam-agent-operator#244`, `5e46800`) and its
-template, profile and execution reads, template publication and CORS
-answer (#277, `5ef745a`) are on that repository's `dev`. garam#1196
-run 2 reached one at `dev` `8e1116933408` with the console's create,
-read and publish shapes: create `201`, the template list and version,
-the profile list and the execution read `200`, and a publication
-naming the model's embedding `201`
-(`/home/sauce/.cache/garam-validation-1157/kind-1196b/report.md`, S1
-and S7). That run sent the bodies the components build and drove no
-browser. The console's calls are tested against a stub of the merged
-wire in `web/e2e/control-service.spec.ts`, with garam real. A recovery
-control is not built ([operators.md](./operators.md) §Delegated
-operation authority).
+**Its peer is the merged Operator wire.** The console's create, read
+and publish calls are the control routes at garam-agent-operator `dev`
+`8e1116933408`: create (#244, `5e46800`) and the template, profile and
+execution reads, template publication and CORS answer (#277,
+`5ef745a`). garam#1217 records a run against them. The console's calls
+are tested against a stub of that wire in
+`web/e2e/control-service.spec.ts`, with garam real. A recovery control
+is not built ([operators.md](./operators.md) §Delegated operation
+authority).
 
 **One module, in the browser.** `web/src/lib/operation-authority.ts`
 holds the only call to a control service. The browser makes it,

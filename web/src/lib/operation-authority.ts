@@ -12,12 +12,9 @@
  * normalization can differ between mint and call. A redirect is an
  * error, so no intermediary can resend the authority elsewhere.
  *
- * The control routes and their answers are the Operator's
- * (`garamsh/garam-agent-operator`), merged there as create (#244,
- * `5e46800`) and the reads and publication (#277, `5ef745a`); the
- * model's embedding is its ADR 0052 and 0053. garam#1196 run 2 reached
- * a control service at its `dev` `8e1116933408` with these shapes
- * (`/home/sauce/.cache/garam-validation-1157/kind-1196b/report.md`).
+ * The control routes and their answers are the merged wire of
+ * `garamsh/garam-agent-operator` at `dev` `8e1116933408`: create
+ * (#244, `5e46800`), the reads and publication (#277, `5ef745a`).
  */
 
 import { z } from "zod";

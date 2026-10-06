@@ -23,4 +23,15 @@ type SignedCertificate struct {
 // prove an ECDSA P-256 key is ErrInvalidCertificateRequest.
 type RequestSigner interface {
 	SignRequest(ctx context.Context, subject grn.GRN, requestPEM []byte) (*SignedCertificate, error)
+	// Chain answers the IssuerPEM and ServerRootPEM a certificate
+	// signed for subject now would carry, signing nothing.
+	Chain(ctx context.Context, subject grn.GRN) (*Chain, error)
+}
+
+// Chain is what a certificate an agent holds chains to: the authority
+// that signed it and the garam server root the holder verifies garam
+// by (ADR-0040).
+type Chain struct {
+	IssuerPEM     string
+	ServerRootPEM string
 }

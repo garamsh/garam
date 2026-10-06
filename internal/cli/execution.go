@@ -198,7 +198,8 @@ func (p provenLeaves) VerifyLeaf(ctx context.Context, agentGRN grn.GRN, leaf *x5
 
 // requestSigner signs an agent's initial or recovered certificate over
 // the key its request carries (agent.RequestSigner), and hands back the
-// garam server root beside it.
+// garam server root beside it. Its Chain reads the same two values
+// without signing.
 type requestSigner struct {
 	issuer     ca.Service
 	serverRoot []byte
@@ -226,4 +227,12 @@ func (s requestSigner) SignRequest(ctx context.Context, subject grn.GRN, request
 		IssuerPEM:      string(signed.IssuerPEM()),
 		ServerRootPEM:  string(s.serverRoot),
 	}, nil
+}
+
+func (s requestSigner) Chain(ctx context.Context, subject grn.GRN) (*agent.Chain, error) {
+	issuer, err := s.issuer.IssuerPEM(ctx, subject)
+	if err != nil {
+		return nil, err
+	}
+	return &agent.Chain{IssuerPEM: string(issuer), ServerRootPEM: string(s.serverRoot)}, nil
 }

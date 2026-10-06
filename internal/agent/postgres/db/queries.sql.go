@@ -607,7 +607,7 @@ func (q *Queries) GetOpenCutover(ctx context.Context, agentGrn string) (AgentCut
 }
 
 const getRecovery = `-- name: GetRecovery :one
-SELECT agent_grn, request_id, operation_ref, body_sha256, lineage, certificate_pem, created_at FROM agent_recoveries WHERE agent_grn = $1 AND request_id = $2
+SELECT agent_grn, request_id, operation_ref, body_sha256, lineage, certificate_pem, created_at, issuer_pem, server_root_pem FROM agent_recoveries WHERE agent_grn = $1 AND request_id = $2
 `
 
 type GetRecoveryParams struct {
@@ -626,6 +626,8 @@ func (q *Queries) GetRecovery(ctx context.Context, arg GetRecoveryParams) (Agent
 		&i.Lineage,
 		&i.CertificatePem,
 		&i.CreatedAt,
+		&i.IssuerPem,
+		&i.ServerRootPem,
 	)
 	return i, err
 }
@@ -971,8 +973,8 @@ func (q *Queries) InsertManagedCreation(ctx context.Context, arg InsertManagedCr
 const insertRecovery = `-- name: InsertRecovery :exec
 INSERT INTO agent_recoveries (
     agent_grn, request_id, operation_ref, body_sha256, lineage,
-    certificate_pem, created_at
-) VALUES ($1, $2, $3, $4, $5, $6, $7)
+    certificate_pem, issuer_pem, server_root_pem, created_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 `
 
 type InsertRecoveryParams struct {
@@ -982,6 +984,8 @@ type InsertRecoveryParams struct {
 	BodySha256     []byte
 	Lineage        pgtype.UUID
 	CertificatePem string
+	IssuerPem      pgtype.Text
+	ServerRootPem  pgtype.Text
 	CreatedAt      pgtype.Timestamptz
 }
 
@@ -993,6 +997,8 @@ func (q *Queries) InsertRecovery(ctx context.Context, arg InsertRecoveryParams) 
 		arg.BodySha256,
 		arg.Lineage,
 		arg.CertificatePem,
+		arg.IssuerPem,
+		arg.ServerRootPem,
 		arg.CreatedAt,
 	)
 	return err

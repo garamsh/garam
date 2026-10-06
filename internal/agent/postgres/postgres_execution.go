@@ -212,7 +212,7 @@ func (s *Store) Recover(ctx context.Context, req agent.RecoveryRequest) (*agent.
 			if prior.OperationRef != req.OperationRef || !bytes.Equal(prior.BodySha256, req.BodySHA256[:]) {
 				return agent.ErrRecoveryConflict
 			}
-			out = &agent.Recovery{Lineage: agent.Lineage(prior.Lineage.Bytes), CertificatePEM: prior.CertificatePem}
+			out = recoveryOf(prior)
 			return nil
 		case !errors.Is(err, pgx.ErrNoRows):
 			return storageError(err, "read recovery", nil, nil)
@@ -225,6 +225,8 @@ func (s *Store) Recover(ctx context.Context, req agent.RecoveryRequest) (*agent.
 			BodySha256:     req.BodySHA256[:],
 			Lineage:        lineage,
 			CertificatePem: req.CertificatePEM,
+			IssuerPem:      pgtype.Text{String: req.Chain.IssuerPEM, Valid: true},
+			ServerRootPem:  pgtype.Text{String: req.Chain.ServerRootPEM, Valid: true},
 			CreatedAt:      stamp(now),
 		}); err != nil {
 			return storageError(err, "insert recovery", nil, agent.ErrRecoveryConflict)
@@ -242,7 +244,8 @@ func (s *Store) Recover(ctx context.Context, req agent.RecoveryRequest) (*agent.
 		}); err != nil {
 			return storageError(err, "record credential", nil, nil)
 		}
-		out = &agent.Recovery{Lineage: req.Lineage, CertificatePEM: req.CertificatePEM}
+		chain := req.Chain
+		out = &agent.Recovery{Lineage: req.Lineage, CertificatePEM: req.CertificatePEM, Chain: &chain}
 		return nil
 	})
 	if err != nil {
@@ -259,7 +262,17 @@ func (s *Store) GetRecovery(ctx context.Context, agentGRN grn.GRN, requestID age
 	if err != nil {
 		return nil, storageError(err, "read recovery", nil, nil)
 	}
-	return &agent.Recovery{Lineage: agent.Lineage(row.Lineage.Bytes), CertificatePEM: row.CertificatePem}, nil
+	return recoveryOf(row), nil
+}
+
+// recoveryOf reads a recorded recovery. A row recorded before 000036
+// holds no chain.
+func recoveryOf(row db.AgentRecovery) *agent.Recovery {
+	out := &agent.Recovery{Lineage: agent.Lineage(row.Lineage.Bytes), CertificatePEM: row.CertificatePem}
+	if row.IssuerPem.Valid && row.ServerRootPem.Valid {
+		out.Chain = &agent.Chain{IssuerPEM: row.IssuerPem.String, ServerRootPEM: row.ServerRootPem.String}
+	}
+	return out
 }
 
 func (s *Store) RecordRenewal(ctx context.Context, fence agent.Fencing, successor agent.Credential) error {

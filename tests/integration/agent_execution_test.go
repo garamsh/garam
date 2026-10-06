@@ -430,6 +430,7 @@ func (f fence) recovery(requestID, ref string, digest byte, c agent.Credential) 
 		Lineage:        agent.NewLineage(),
 		Credential:     c,
 		CertificatePEM: "certificate " + c.Serial,
+		Chain:          agent.Chain{IssuerPEM: "issuer of " + c.Serial, ServerRootPEM: "server root"},
 	}
 }
 
@@ -444,6 +445,7 @@ func TestExecution_RecoveryFencesTheLegacyCohortAndEveryOlderLineage(t *testing.
 	recovered, err := f.exec.Recover(ctx, first)
 	require.NoError(t, err)
 	assert.Equal(t, first.Lineage, recovered.Lineage)
+	assert.Equal(t, &first.Chain, recovered.Chain, "the chain the signer produced")
 	assert.Equal(t, agent.AdmissionTokenStale, f.admit(t, &t1, valid("1")), "recovery ends the current activation")
 
 	// The same generation activates again in the new lineage.
@@ -459,10 +461,15 @@ func TestExecution_RecoveryFencesTheLegacyCohortAndEveryOlderLineage(t *testing.
 		retry := first
 		retry.Lineage = agent.NewLineage()
 		retry.CertificatePEM = "another"
+		retry.Chain = agent.Chain{IssuerPEM: "another issuer", ServerRootPEM: "another root"}
 		got, err := f.exec.Recover(ctx, retry)
 		require.NoError(t, err)
 		assert.Equal(t, first.Lineage, got.Lineage)
 		assert.Equal(t, first.CertificatePEM, got.CertificatePEM)
+		assert.Equal(t, &first.Chain, got.Chain, "the recorded chain, not the retry's")
+		stored, err := f.exec.GetRecovery(ctx, f.agent, first.RequestID)
+		require.NoError(t, err)
+		assert.Equal(t, &first.Chain, stored.Chain)
 	})
 	t.Run("a changed body is refused", func(t *testing.T) {
 		changed := first

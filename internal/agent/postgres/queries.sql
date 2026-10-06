@@ -120,8 +120,8 @@ SELECT * FROM agent_recoveries WHERE agent_grn = $1 AND request_id = $2;
 -- name: InsertRecovery :exec
 INSERT INTO agent_recoveries (
     agent_grn, request_id, operation_ref, body_sha256, lineage,
-    certificate_pem, created_at
-) VALUES ($1, $2, $3, $4, $5, $6, $7);
+    certificate_pem, issuer_pem, server_root_pem, created_at
+) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9);
 
 -- A managed creation writes these four in one transaction, the
 -- execution row before the assignment: the lock order every

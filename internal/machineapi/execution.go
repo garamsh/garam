@@ -234,6 +234,7 @@ func (s *Server) RecoverAgentCredential(w http.ResponseWriter, r *http.Request, 
 	}
 	writeJSON(w, http.StatusCreated, machinegen.RecoveredCredential{
 		Grn: subject.String(), Lineage: recovered.Lineage.String(), CertificatePem: recovered.CertificatePEM,
+		IssuerPem: recovered.Chain.IssuerPEM, ServerRootPem: recovered.Chain.ServerRootPEM,
 	})
 }
 

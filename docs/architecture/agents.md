@@ -278,6 +278,16 @@ in #1157.
   and the agent's earlier certificates stop authorizing from the next
   request, on a connection already open too. Ordinary renewal stays in
   the lineage the renewing certificate is current in.
+- **A recovery's answer names its chain**: the authority that signed
+  the recovered certificate and the garam server root the holder
+  verifies garam by, as initial issuance's does, so a holder verifies
+  the recovered credential from the answer alone (#1222). Both are
+  what the signer produced and are stored with the recovery, so a
+  retry answers them again. A recovery recorded before
+  `migrations/000036` stored neither, and its retry answers the chain
+  the signer signs under now: the same one while neither the
+  organization's authority nor the listener's server root has been
+  replaced since.
 
 ## Standalone hosts
 

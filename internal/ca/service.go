@@ -69,6 +69,11 @@ type Service interface {
 	// identity is signed for the one named here and for no other
 	// (ADR-0064).
 	Sign(ctx context.Context, subject grn.GRN, request []byte) (*Certificate, error)
+	// IssuerPEM returns the authority that signs for subject now, in
+	// PEM form: the issuer a certificate Issue or Sign returns for
+	// subject carries. It creates no authority, so an organization
+	// that has none is ErrAuthorityNotFound.
+	IssuerPEM(ctx context.Context, subject grn.GRN) ([]byte, error)
 }
 
 type service struct {
@@ -123,6 +128,18 @@ func (s *service) Sign(ctx context.Context, subject grn.GRN, request []byte) (*C
 		return nil, err
 	}
 	return s.sign(ctx, subject, public)
+}
+
+func (s *service) IssuerPEM(ctx context.Context, subject grn.GRN) ([]byte, error) {
+	authority, err := s.store.Get(ctx, orgGRNOf(subject))
+	if err != nil {
+		return nil, err
+	}
+	authority, err = ownedBy(authority, orgGRNOf(subject))
+	if err != nil {
+		return nil, err
+	}
+	return encodePEM("CERTIFICATE", authority.Certificate), nil
 }
 
 // sign issues the certificate that names subject over public, whoever

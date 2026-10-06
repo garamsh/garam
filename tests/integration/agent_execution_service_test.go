@@ -73,12 +73,24 @@ func (l namedLeaves) VerifyLeaf(_ context.Context, _ grn.GRN, leaf *x509.Certifi
 // knows by name.
 func leafNamed(name string) *x509.Certificate { return &x509.Certificate{SubjectKeyId: []byte(name)} }
 
-type countingSigner struct{ calls atomic.Int32 }
+// countingSigner signs under chain, the one it holds now.
+type countingSigner struct {
+	calls atomic.Int32
+	chain agent.Chain
+}
 
 func (s *countingSigner) SignRequest(_ context.Context, _ grn.GRN, requestPEM []byte) (*agent.SignedCertificate, error) {
 	s.calls.Add(1)
 	serial := strings.TrimPrefix(string(requestPEM), "csr-")
-	return &agent.SignedCertificate{Credential: valid(serial), CertificatePEM: "signed " + serial}, nil
+	return &agent.SignedCertificate{
+		Credential: valid(serial), CertificatePEM: "signed " + serial,
+		IssuerPEM: s.chain.IssuerPEM, ServerRootPEM: s.chain.ServerRootPEM,
+	}, nil
+}
+
+func (s *countingSigner) Chain(context.Context, grn.GRN) (*agent.Chain, error) {
+	chain := s.chain
+	return &chain, nil
 }
 
 // selfIssuer issues a parseable certificate with the next serial.
@@ -122,7 +134,7 @@ func newLifecycle(t *testing.T) lifecycle {
 		fence:      f,
 		authorizer: &grantingAuthorizer{},
 		operations: &boundOperations{refs: map[string]*agent.OperationBinding{}, handoffs: map[string]*agent.OperationBinding{}},
-		signer:     &countingSigner{},
+		signer:     &countingSigner{chain: agent.Chain{IssuerPEM: "issuer 1", ServerRootPEM: "server root 1"}},
 		issuer:     &selfIssuer{},
 		audience:   scopedGRN("acme", agent.ServiceTypeOperator, "control"),
 	}
@@ -307,12 +319,25 @@ func TestExecutionService_RecoveryIsBoundToItsExactBodyAndAnsweredOnce(t *testin
 	recovered, err := l.service.Recover(ctx, l.audience, in)
 	require.NoError(t, err, "control: the exact body recovers, the handoff was not spent")
 	assert.Equal(t, "signed 2", recovered.CertificatePEM)
+	assert.Equal(t, agent.Chain{IssuerPEM: "issuer 1", ServerRootPEM: "server root 1"}, recovered.Chain,
+		"the chain the signer produced")
 	assert.Equal(t, agent.AdmissionTokenStale, l.admit(t, &res.Token, valid("1")))
 
+	// The signer's chain moves; a retry still answers the one the
+	// certificate was signed under.
+	l.signer.chain = agent.Chain{IssuerPEM: "issuer 2", ServerRootPEM: "server root 2"}
 	again, err := l.service.Recover(ctx, l.audience, in)
 	require.NoError(t, err)
-	assert.Equal(t, recovered, again, "a lost response is answered with the recorded certificate")
+	assert.Equal(t, recovered, again, "a lost response is answered with the recorded certificate and chain")
 	assert.Equal(t, int32(1), l.signer.calls.Load(), "and nothing is signed again")
+
+	forgetChain(t, l.p, l.agent.String(), "rec-1")
+	legacy, err := l.service.Recover(ctx, l.audience, in)
+	require.NoError(t, err)
+	assert.Equal(t, recovered.CertificatePEM, legacy.CertificatePEM)
+	assert.Equal(t, l.signer.chain, legacy.Chain,
+		"a recovery recorded before 000036 is answered with the chain the signer holds now")
+	assert.Equal(t, int32(1), l.signer.calls.Load(), "which signs nothing")
 
 	changed := `{"request_id":"rec-1","certificate_request_pem":"csr-3"}`
 	l.handoff("h2", changed)

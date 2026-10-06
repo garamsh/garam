@@ -268,6 +268,33 @@ func TestService_CertificateDoesNotChainToAnotherOrganization(t *testing.T) {
 	assert.Error(t, verifyAgainst(t, &otherCert.Certificate, acme))
 }
 
+// TestService_IssuerPEMIsTheAuthorityThatSignsAndCreatesNone reads the
+// authority that signs for a subject without signing: it is the issuer
+// a certificate signed for that organization carries. An organization
+// with no authority is not found, and the mock fails the test if the
+// read reaches Create; another organization's authority is refused as
+// Issue refuses it.
+func TestService_IssuerPEMIsTheAuthorityThatSignsAndCreatesNone(t *testing.T) {
+	ctx := context.Background()
+	sealer := newSealer(t)
+	cert, acme := issueForNewOrg(t, agentGRN("acme", "bot-1"), sealer, ca.Config{})
+
+	issuer, err := serviceHolding(t, acme, sealer, ca.Config{}).IssuerPEM(ctx, agentGRN("acme", "bot-2"))
+	require.NoError(t, err)
+	assert.Equal(t, cert.IssuerPEM(), issuer)
+
+	absent := agentGRN("other", "bot-1")
+	store := mocks.NewMockStore(t)
+	store.EXPECT().Get(mock.Anything, orgOf(absent)).Return(nil, ca.ErrAuthorityNotFound).Once()
+	_, err = newService(t, store, sealer, ca.Config{}).IssuerPEM(ctx, absent)
+	assert.ErrorIs(t, err, ca.ErrAuthorityNotFound)
+
+	wrong := mocks.NewMockStore(t)
+	wrong.EXPECT().Get(mock.Anything, orgOf(absent)).Return(acme, nil).Once()
+	_, err = newService(t, wrong, sealer, ca.Config{}).IssuerPEM(ctx, absent)
+	assert.True(t, errorx.IsKind(err, errorx.KindInternal), "another organization's authority")
+}
+
 // TestService_IssueRefusesAnAuthorityFromAnotherOrganization covers the
 // store seam rather than the store that ships: a lookup by primary key
 // cannot return the wrong row, but Store is exported and mocked, and a

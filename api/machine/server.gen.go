@@ -718,11 +718,17 @@ type ProvisioningStateReport struct {
 	State ProvisioningState `json:"state"`
 }
 
-// RecoveredCredential defines model for RecoveredCredential.
+// RecoveredCredential The recovered certificate, the authority that signed it and the garam server root the holder verifies garam by. It carries no private key.
 type RecoveredCredential struct {
 	CertificatePem string `json:"certificatePem"`
 	Grn            string `json:"grn"`
-	Lineage        string `json:"lineage"`
+
+	// IssuerPem The authority that signed `certificatePem`. It is not what garam is verified against (ADR-0040).
+	IssuerPem string `json:"issuerPem"`
+	Lineage   string `json:"lineage"`
+
+	// ServerRootPem The garam server root the recovered credential trusts, which the holder verifies garam's listener against (ADR-0040).
+	ServerRootPem string `json:"serverRootPem"`
 }
 
 // RuntimeState What the agent reports about itself. `unknown` is an agent that has not reported since it was created.

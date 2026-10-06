@@ -1292,7 +1292,9 @@ paths:
         and the SHA-256 of the received body must equal its digest, or
         the request is refused with 409 and the handoff is not spent.
         The certificate is signed over `certificateRequestPem`'s key,
-        which never leaves the holder.
+        which never leaves the holder, and the answer names the
+        authority that signed it and the garam server root, so the
+        holder verifies the recovered credential from the answer alone.
 
 
         The recovery ends the current activation and starts a new
@@ -1300,11 +1302,11 @@ paths:
         authorizing protected calls and renewal, on connections already
         open too. The runtime is then activated again, and may keep its
         generation. The same `requestId` with the same body and handoff
-        reference answers the certificate it issued; any other request
-        under that `requestId`, or a second recovery with the same
-        reference, is 409. Past garam's ten-second deadline the answer is
-        503, which does not say whether the recovery committed: retry
-        it under the same `requestId`.
+        reference answers the certificate it issued and its chain; any
+        other request under that `requestId`, or a second recovery with
+        the same reference, is 409. Past garam's ten-second deadline the
+        answer is 503, which does not say whether the recovery
+        committed: retry it under the same `requestId`.
       parameters:
         - $ref: '#/components/parameters/executionContractVersion'
         - $ref: '#/components/parameters/agent'
@@ -2701,7 +2703,11 @@ components:
             holder generated. Only its key is read.
     RecoveredCredential:
       type: object
-      required: [grn, lineage, certificatePem]
+      description: >-
+        The recovered certificate, the authority that signed it and the
+        garam server root the holder verifies garam by. It carries no
+        private key.
+      required: [grn, lineage, certificatePem, issuerPem, serverRootPem]
       properties:
         grn:
           type: string
@@ -2709,6 +2715,16 @@ components:
           type: string
         certificatePem:
           type: string
+        issuerPem:
+          type: string
+          description: >-
+            The authority that signed `certificatePem`. It is not what
+            garam is verified against (ADR-0040).
+        serverRootPem:
+          type: string
+          description: >-
+            The garam server root the recovered credential trusts, which
+            the holder verifies garam's listener against (ADR-0040).
     ManagedAgentRequest:
       type: object
       required: [requestId, operationRef]

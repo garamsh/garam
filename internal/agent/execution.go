@@ -328,10 +328,22 @@ type RecoveryRequest struct {
 	Lineage        Lineage
 	Credential     Credential
 	CertificatePEM string
+	Chain          Chain
 }
 
-// Recovery is what a recovery answers, the first time and on a retry.
+// Recovery is what a recovery recorded, the first time and on a retry.
+// Chain is nil for a recovery recorded before migration 000036, which
+// stored none.
 type Recovery struct {
 	Lineage        Lineage
 	CertificatePEM string
+	Chain          *Chain
+}
+
+// RecoveredCredential is what a recovery answers: the certificate, and
+// the chain it was signed under.
+type RecoveredCredential struct {
+	Lineage        Lineage
+	CertificatePEM string
+	Chain          Chain
 }

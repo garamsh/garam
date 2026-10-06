@@ -141,6 +141,8 @@ type AgentRecovery struct {
 	Lineage        pgtype.UUID
 	CertificatePem string
 	CreatedAt      pgtype.Timestamptz
+	IssuerPem      pgtype.Text
+	ServerRootPem  pgtype.Text
 }
 
 type AgentSupervisor struct {

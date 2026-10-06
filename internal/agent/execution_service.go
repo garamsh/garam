@@ -61,8 +61,8 @@ type ExecutionService interface {
 	Introspect(ctx context.Context, caller, agentGRN grn.GRN, leaf *x509.Certificate, generation *Generation) (*Introspection, error)
 	// Recover moves the agent to a new credential lineage under a
 	// fresh handoff, answering the certificate signed over the
-	// request's key.
-	Recover(ctx context.Context, caller grn.GRN, in RecoveryInput) (*Recovery, error)
+	// request's key and the chain it was signed under.
+	Recover(ctx context.Context, caller grn.GRN, in RecoveryInput) (*RecoveredCredential, error)
 	// Renew issues the calling agent's next certificate inside the
 	// lineage the presented one is current in.
 	Renew(ctx context.Context, caller grn.GRN, fence Fencing) (*Certificate, error)
@@ -337,7 +337,7 @@ func standing(active *CurrentActivation, supplied *Generation) GenerationStandin
 	}
 }
 
-func (s *executionService) Recover(ctx context.Context, caller grn.GRN, in RecoveryInput) (*Recovery, error) {
+func (s *executionService) Recover(ctx context.Context, caller grn.GRN, in RecoveryInput) (*RecoveredCredential, error) {
 	if len(in.CertificateRequestPEM) > MaxRequestPEM {
 		return nil, errorx.New(errorx.KindInvalidArgument, "certificate request exceeds its bound")
 	}
@@ -376,8 +376,24 @@ func (s *executionService) Recover(ctx context.Context, caller grn.GRN, in Recov
 			return nil, err
 		}
 		req.Lineage, req.Credential, req.CertificatePEM = NewLineage(), signed.Credential, signed.CertificatePEM
+		req.Chain = Chain{IssuerPEM: signed.IssuerPEM, ServerRootPEM: signed.ServerRootPEM}
 	}
-	return s.executions.Recover(ctx, req)
+	recovered, err := s.executions.Recover(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	chain := recovered.Chain
+	if chain == nil {
+		// A recovery recorded before 000036 kept no chain, so its
+		// retry answers the one the signer signs under now. That is
+		// the chain the certificate was signed under while the
+		// organization's authority and the server root have not been
+		// replaced since; replacing either ends it.
+		if chain, err = s.signer.Chain(ctx, in.Agent); err != nil {
+			return nil, err
+		}
+	}
+	return &RecoveredCredential{Lineage: recovered.Lineage, CertificatePEM: recovered.CertificatePEM, Chain: *chain}, nil
 }
 
 func (s *executionService) Renew(ctx context.Context, caller grn.GRN, fence Fencing) (*Certificate, error) {

@@ -383,17 +383,37 @@ func (s *executionStack) recover(t *testing.T, r recovery, body string) reply {
 }
 
 // recovered answers the client and leaf of the certificate a recovery
-// issued, over the key it was prepared with.
+// issued, over the key it was prepared with, once the answer's
+// certificate has verified against the issuer the same answer names.
 func recovered(t *testing.T, got reply, key *ecdsa.PrivateKey) (*http.Client, string) {
 	t.Helper()
 	require.Equal(t, http.StatusCreated, got.status, got.body)
 	var issued machinegen.RecoveredCredential
 	require.NoError(t, json.Unmarshal([]byte(got.body), &issued))
+	require.NoError(t, chainsToIssuer(t, issued), "the recovered certificate chains to the issuer its answer names")
 	der, err := x509.MarshalECPrivateKey(key)
 	require.NoError(t, err)
 	pair, err := tls.X509KeyPair([]byte(issued.CertificatePem), pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: der}))
 	require.NoError(t, err)
 	return machineClient(t, pair), issued.CertificatePem
+}
+
+// chainsToIssuer verifies a recovered certificate against the issuer
+// its answer names, as a holder with nothing but the answer would.
+func chainsToIssuer(t *testing.T, issued machinegen.RecoveredCredential) error {
+	t.Helper()
+	issuerBlock, _ := pem.Decode([]byte(issued.IssuerPem))
+	require.NotNil(t, issuerBlock, "the answer names its issuer")
+	issuer, err := x509.ParseCertificate(issuerBlock.Bytes)
+	require.NoError(t, err)
+	leafBlock, _ := pem.Decode([]byte(issued.CertificatePem))
+	require.NotNil(t, leafBlock)
+	leaf, err := x509.ParseCertificate(leafBlock.Bytes)
+	require.NoError(t, err)
+	roots := x509.NewCertPool()
+	roots.AddCert(issuer)
+	_, err = leaf.Verify(x509.VerifyOptions{Roots: roots, KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}})
+	return err
 }
 
 func bearer(token string) string {
@@ -599,9 +619,22 @@ func TestExecutionFence_RecoveryFencesTheOldLineageOnAnOpenConnection(t *testing
 	assert.Equal(t, http.StatusConflict, changed.status, "a byte the handoff does not cover: %s", changed.body)
 	answer := s.recover(t, r, r.body)
 	recoveredTLS, recoveredLeaf := recovered(t, answer, r.key)
+	var named machinegen.RecoveredCredential
+	require.NoError(t, json.Unmarshal([]byte(answer.body), &named))
+	assert.Equal(t, string(s.config.ServerRoot), named.ServerRootPem, "the answer names the server root")
+	other, err := s.issuer.Issue(context.Background(), scopedGRN("globex", operator.ServiceType, "other"))
+	require.NoError(t, err)
+	substituted := named
+	substituted.IssuerPem = string(other.IssuerPEM())
+	assert.Error(t, chainsToIssuer(t, substituted), "control: another organization's issuer verifies nothing")
 	retry := s.recover(t, r, r.body)
 	assert.Equal(t, http.StatusCreated, retry.status, retry.body)
-	assert.JSONEq(t, answer.body, retry.body, "a retry answers the stored certificate")
+	assert.JSONEq(t, answer.body, retry.body, "a retry answers the stored certificate and chain")
+	forgetChain(t, s.pool, s.agent.String(), "rec-1")
+	legacy := s.recover(t, r, r.body)
+	recovered(t, legacy, r.key)
+	assert.JSONEq(t, answer.body, legacy.body,
+		"a recovery recorded before 000036 answers the chain the authority signs under now")
 	second := s.prepareRecovery(t, "rec-2")
 	got2 := s.recover(t, r, second.body)
 	assert.Equal(t, http.StatusConflict, got2.status, "a second recovery under a spent handoff: %s", got2.body)

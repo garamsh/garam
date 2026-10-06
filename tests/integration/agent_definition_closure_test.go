@@ -66,12 +66,13 @@ func requireClosed(t *testing.T, err error) {
 
 // TestAgentDefinition_TheSchemaRefusesEveryNewValue holds 000035's
 // guard against writes sent straight to the table, as a release still
-// serving the define route would send them. A new definition and a
-// rewrite of a kept one's values or operator are each refused and
-// change nothing. The controls are a rename, which is admitted, the
-// organization's deletion, which takes the definition, and the same
-// insert with the guard off, which is accepted: what refuses each
-// write is the guard, and not a check or a key it breaks.
+// serving the define route would send them. A new definition, a
+// rewrite of a kept one's values or operator, and a direct delete are
+// each refused and change nothing. The controls are a rename, which is
+// admitted, the organization's deletion, whose cascade takes the
+// definition, and the same insert with the guard off, which is
+// accepted: what refuses each write is the guard, and not a check or a
+// key it breaks.
 func TestAgentDefinition_TheSchemaRefusesEveryNewValue(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
@@ -93,6 +94,7 @@ func TestAgentDefinition_TheSchemaRefusesEveryNewValue(t *testing.T) {
 			[]any{kept.Agent().String()}},
 		"the operator moved": {`UPDATE agent_definitions SET operator_grn = $2 WHERE agent_grn = $1`,
 			[]any{kept.Agent().String(), other.String()}},
+		"a direct delete": {`DELETE FROM agent_definitions WHERE agent_grn = $1`, []any{kept.Agent().String()}},
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := p.Exec(ctx, write.query, write.args...)

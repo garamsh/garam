@@ -73,10 +73,10 @@ certificate (§Separated execution).
 
 garam accepts no desired value (ADR-0090): no route writes a
 definition, and migration 000035's trigger refuses an insert into
-`agent_definitions`, and an update changing anything but the name,
-from whichever release sends it. A definition's operator and values
-therefore stay as they were written, and none is deleted except with
-its organization. Its name is the organization's word for the agent
+`agent_definitions`, an update changing anything but the name, and a
+delete other than its organization's cascade, from whichever release
+sends it. A definition's operator and values therefore stay as they
+were written, and none is deleted except with its organization. Its name is the organization's word for the agent
 and changes alone: renaming touches no GRN, operator, value,
 assignment, membership or attachment, and no operator is told
 (ADR-0075). A definition written without a name, and every one
@@ -178,10 +178,11 @@ in #1157.
   here, and the console copies an Operator template once (ADR-0077).
 - **garam accepts no new definition** (ADR-0090). `defineAgent` and
   `agent:define` are gone, and migration 000035's trigger refuses an
-  insert into `agent_definitions` and an update changing anything but
-  the name, from whichever release sends it; it orders itself against
-  a write in flight as 000034 does. A rename is admitted and a
-  definition still goes with its organization. Every definition held
+  insert into `agent_definitions`, an update changing anything but
+  the name and a direct delete, from whichever release sends it; it
+  orders itself against a write in flight as 000034 does. A rename is
+  admitted, and a delete reached through the organization's own
+  deletion is too, so a definition still goes with its organization. Every definition held
   stays readable, claimable by the operator it names and cut over
   below, so the legacy agents a cutover has to move are those garam
   held when 000035 ran.

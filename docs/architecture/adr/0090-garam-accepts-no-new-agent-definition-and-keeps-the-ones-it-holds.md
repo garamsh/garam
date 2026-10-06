@@ -47,12 +47,14 @@ definitions it holds stay as written.**
   Reading, renaming, claiming and cutting over a definition are
   unchanged.
 - **The schema refuses every new value.** Migration 000035 puts a
-  trigger on `agent_definitions` that refuses an insert, and an update
-  that changes anything but the name. Creating it waits for every
-  write already holding the table, which commits first; a write that
-  reaches the table afterwards is refused, from whichever release
-  sent it. A rename is admitted (ADR-0075), and a delete is not
-  refused, so a definition still goes with its organization.
+  trigger on `agent_definitions` that refuses an insert, an update
+  that changes anything but the name, and a delete, as 000034 refuses
+  a template's. Creating it waits for every write already holding the
+  table, which commits first; a write that reaches the table
+  afterwards is refused, from whichever release sent it. A rename is
+  admitted (ADR-0075), and so is a delete reached through the
+  organization's own deletion, told apart by the organization's row
+  being gone, so a definition still goes with its organization.
 - **No row is deleted or rewritten.** Every definition stays readable
   on `listAgentDefinitions` and `getAgentDefinition`, claimable by the
   operator it names (ADR-0033) and cut over as ADR-0086 decides; a

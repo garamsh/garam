@@ -8,10 +8,14 @@
 -- Creating the trigger waits for every write already holding the
 -- table, which commits first; a write that reaches the table after it
 -- is refused. Renaming changes the name alone and is admitted
--- (ADR-0075), and a delete is not refused here: a definition still
--- goes with its organization.
+-- (ADR-0075). A definition still goes with its organization: a cascade
+-- runs after the organization's row is gone, which is what tells it
+-- from a direct delete, as 000034 tells a template's.
 CREATE FUNCTION agent_definitions_closed() RETURNS trigger AS $$
 BEGIN
+    IF TG_OP = 'DELETE' AND NOT EXISTS (SELECT 1 FROM orgs WHERE grn = OLD.org_grn) THEN
+        RETURN OLD;
+    END IF;
     IF TG_OP = 'UPDATE'
        AND (NEW.agent_grn, NEW.org_grn, NEW.operator_grn, NEW.agent_values, NEW.defined_by, NEW.created_at)
            IS NOT DISTINCT FROM
@@ -23,5 +27,5 @@ END;
 $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER agent_definitions_closed
-    BEFORE INSERT OR UPDATE ON agent_definitions
+    BEFORE INSERT OR UPDATE OR DELETE ON agent_definitions
     FOR EACH ROW EXECUTE FUNCTION agent_definitions_closed();

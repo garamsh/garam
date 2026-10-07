@@ -6,6 +6,11 @@
 # that tag loses it in the same push. What the repository's lifecycle
 # policy keeps under the tag is ADR-0093's.
 #
+# Moving the tag depends on the repository exempting `pinned-*` from
+# its tag immutability, an exclusion filter garamsh/infra declares
+# (ADR-0093). Without it a consumer's first pin succeeds and every
+# later one is refused by the registry.
+#
 #   scripts/image-test-pin.sh <repository> <commit> <consumer>
 set -eu
 
@@ -33,8 +38,9 @@ digest() {
 	docker buildx imagetools inspect --format '{{.Manifest.Digest}}' "$1"
 }
 
-want=$(digest "$source") || refuse "$source is not in the registry"
-docker buildx imagetools create --prefer-index=false --tag "$pinned" "$source"
+want=$(digest "$source") || refuse "$source could not be read from the registry"
+docker buildx imagetools create --prefer-index=false --tag "$pinned" "$source" \
+	|| refuse "the registry refused moving $pinned to $source; if $pinned already exists, the likely cause is tag immutability without the pinned-* exclusion filter"
 got=$(digest "$pinned")
 [ "$got" = "$want" ] || {
 	echo "image-test-pin: $pinned resolves to $got, not $source's $want" >&2

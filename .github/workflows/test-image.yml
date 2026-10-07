@@ -35,11 +35,13 @@ permissions: read-all
 env:
   IMAGE_REPOSITORY: ghcr.io/garamsh/garam-test
 
+# Every job names this repository in its `if:`, so a fork's push to
+# `dev` or its dispatch builds and deletes nothing.
 jobs:
   # No concurrency group: a group cancels a pending run when a newer
   # one queues, and every commit on `dev` is owed its image.
   publish:
-    if: github.event_name == 'push'
+    if: github.repository == 'garamsh/garam' && github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -64,6 +66,7 @@ jobs:
   # replaced by a newer one loses nothing; the newer one does the same.
   prune:
     needs: publish
+    if: github.repository == 'garamsh/garam'
     runs-on: ubuntu-latest
     permissions:
       packages: write
@@ -83,7 +86,7 @@ jobs:
   # A dispatch runs the workflow file of the ref it names, so one from
   # any other branch would run that branch's copy with packages: write.
   dispatch:
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/dev'
+    if: github.repository == 'garamsh/garam' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
     permissions:
       contents: read

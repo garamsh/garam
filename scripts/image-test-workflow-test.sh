@@ -10,7 +10,8 @@
 #   run past a failure; every other one is a dry run;
 # - the publish job ends in the push, which no `if:` or
 #   `continue-on-error` can skip past;
-# - every job names this repository in its `if:`.
+# - every job names this repository in its `if:`, and the dispatch job
+#   runs only from `dev`.
 #
 # The check runs on the workflow and then on copies of it, each with
 # one of those properties removed, every one of which it must refuse:
@@ -123,6 +124,8 @@ check() {
 		*) echo "$job: its if: does not open with $guard" ;;
 		esac
 	done
+	grep "^job${tab}dispatch$tab" "$scratch/parsed" | grep -Fq "&& github.ref == 'refs/heads/dev'" \
+		|| echo "dispatch: its if: does not hold it to refs/heads/dev"
 }
 
 cases=0
@@ -175,6 +178,8 @@ refused 'package is garam, want garam-test' 's/package: garam-test/package: gara
 refused "publish: its if: does not open with $guard" "s|^    if: $guard \&\& github.event_name == 'push'|    if: github.event_name == 'push'|"
 refused "prune: its if: does not open with $guard" "\\|^    if: $guard\$|d"
 refused "dispatch: its if: does not open with $guard" "s|^    if: $guard \&\& github.event_name == 'workflow_dispatch'|    if: github.event_name == 'workflow_dispatch'|"
+
+refused 'dispatch: its if: does not hold it to refs/heads/dev' "s| \&\& github.ref == 'refs/heads/dev'||"
 
 [ "$failed" -eq 0 ] || {
 	echo "image-test-workflow-test: $failed of $cases cases failed" >&2

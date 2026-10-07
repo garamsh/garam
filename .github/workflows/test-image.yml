@@ -80,8 +80,10 @@ jobs:
           keep-n-tagged: 8
           exclude-tags: pinned-*
 
+  # A dispatch runs the workflow file of the ref it names, so one from
+  # any other branch would run that branch's copy with packages: write.
   dispatch:
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
     permissions:
       contents: read

@@ -83,7 +83,13 @@ release image carries what it holds.**
   version, so each consumer holds one pinned version at a time and the
   one it held before becomes prunable. The PM runs it when a consumer
   asks and records the pin on #1213 or its successor. A `dry-run`
-  input prints what a prune would delete and deletes nothing.
+  input prints what a prune would delete and deletes nothing. The
+  dispatch runs only from `dev`, so it is always that branch's copy of
+  the workflow.
+- **The bound on pinned versions is a procedure, not a mechanism.**
+  Anyone who can dispatch a workflow here can pin under any consumer
+  name, and each new name keeps one more version; what holds the count
+  to one per consumer is that the PM is the one who runs it.
 - **This supersedes ADR-0039 for non-release artifacts only.** A
   version tag stays the only trigger that publishes a release image,
   to the repositories ADR-0039 named; the test image is published from

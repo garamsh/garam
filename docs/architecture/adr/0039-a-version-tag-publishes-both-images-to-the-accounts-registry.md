@@ -2,7 +2,9 @@
 
 > Status: accepted — §Decision's "Pushing that tag to GitHub is the
 > only trigger that publishes" is superseded in part by
-> [ADR-0071](./0071-a-development-image-shares-the-release-repository-and-its-tag-says-it-is-not-a-release.md)
+> [ADR-0071](./0071-a-development-image-shares-the-release-repository-and-its-tag-says-it-is-not-a-release.md),
+> and superseded for non-release artifacts by
+> [ADR-0092](./0092-a-test-image-is-published-to-ghcr-from-dev-and-no-release-carries-it.md)
 > Date: 2026-08-22
 
 ## Contents

@@ -1,6 +1,9 @@
 # ADR 0081: A test-only command signs in the first principal of a database it creates
 
-> Status: accepted
+> Status: accepted — §Decision's "no binary or image Garam ships
+> carries it" is superseded in part by
+> [ADR-0092](./0092-a-test-image-is-published-to-ghcr-from-dev-and-no-release-carries-it.md),
+> whose test image carries it
 > Date: 2026-10-05
 
 Drafted for #1176; the PM required the record on 2026-10-05, since a

@@ -18,6 +18,7 @@ Documentation lives in [`docs/`](./docs/).
 - Local stack
 - Web frontend
 - Development images
+- Test image
 - Development model
 
 ## Module path
@@ -165,6 +166,22 @@ checks the web image you built before you push it.
 Without `IMAGE_REGISTRY`, `make image-build` builds both images as
 `garam-server:ci` and `garam-web:ci`, which is what
 `.github/workflows/images.yml` runs through `make web-image-e2e`.
+
+## Test image
+
+Another repository's CI copies `garam`, `testprincipal` and the
+migrations of one commit out of `ghcr.io/garamsh/garam-test`, which
+`.github/workflows/test-image.yml` publishes on every push to `dev`
+([ADR-0092](./docs/architecture/adr/0092-a-test-image-is-published-to-ghcr-from-dev-and-no-release-carries-it.md)).
+From a clean checkout:
+
+```sh
+make test-image      # builds garam-test:<HEAD>
+make test-image-e2e  # builds it, then checks the paths, linking and label
+```
+
+`tests/testprincipal/README.md` §The test image is the consumer's
+contract: what it holds, how to pin it, and how long a version stays.
 
 ## Development model
 

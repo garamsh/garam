@@ -28,12 +28,11 @@ on:
 permissions: read-all
 
 env:
-  # TODO(PM): both values are placeholders until garamsh/infra supplies
-  # the repository and the publisher role (#1227).
-  # scripts/image-test-target.sh refuses them, so every job stops
-  # before it assumes a role or pushes anything.
-  TEST_IMAGE_ECR_REPOSITORY: PLACEHOLDER-ecr-repository-from-garamsh-infra
-  TEST_IMAGE_PUBLISHER_ROLE: PLACEHOLDER-publisher-role-arn-from-garamsh-infra
+  # Both are declared in garamsh/infra (#1227). The role trusts this
+  # repository's workflow on refs/heads/dev alone, and is not the
+  # release role.
+  TEST_IMAGE_ECR_REPOSITORY: garam/garam-test
+  TEST_IMAGE_PUBLISHER_ROLE: arn:aws:iam::486152169996:role/garamsh-garam-github-actions-dev
 
 # Every job names this repository in its `if:`, so a fork's push to
 # `dev` or its dispatch assumes no role.

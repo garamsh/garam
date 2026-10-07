@@ -83,13 +83,14 @@ nothing verifies that a module cache copy serves.
 
 The test image holds this command, `garam` and the migrations of one
 Garam commit, for a CI that cannot read this repository (ADR-0092). It
-is published to an ECR repository of its own in account
-`486152169996`, region `ap-northeast-2` (ADR-0093), written below as
-`$REPOSITORY`: `486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/`
-followed by the repository name `garamsh/infra` declares. That name is
-pending, and until it arrives `.github/workflows/test-image.yml`
-pushes nothing (#1227). It is a file source: copy the paths out and
-never run the image.
+is published to an ECR repository of its own, which `garamsh/infra`
+declares (ADR-0093):
+
+```sh
+REPOSITORY=486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam/garam-test
+```
+
+It is a file source: copy the paths out and never run the image.
 
 | Path | What it is |
 |---|---|

@@ -15,10 +15,9 @@
 #   no step uses an action outside actions/checkout and the two
 #   aws-actions, each pinned to a full commit SHA, so nothing prunes
 #   and nothing logs in to GHCR;
-# - the role and repository the workflow names are refused by
-#   scripts/image-test-target.sh while they are placeholders and
-#   admitted once they are not, and that script refuses the release
-#   role.
+# - the workflow names the repository and the publisher role
+#   garamsh/infra declared, and scripts/image-test-target.sh admits
+#   them while it refuses the release role and every other account.
 #
 # The check runs on the workflow and then on copies of it, each with
 # one of those properties removed, every one of which it must refuse:
@@ -30,6 +29,8 @@ workflow=.github/workflows/test-image.yml
 target=scripts/image-test-target.sh
 guard="github.repository == 'garamsh/garam'"
 role_expr='${{ env.TEST_IMAGE_PUBLISHER_ROLE }}'
+want_role=arn:aws:iam::486152169996:role/garamsh-garam-github-actions-dev
+want_repository=garam/garam-test
 scratch=$(mktemp -d)
 trap 'rm -rf "$scratch"' EXIT INT TERM
 tab=$(printf '\t')
@@ -191,16 +192,12 @@ check() {
 
 	role=$(env_value "$parsed" TEST_IMAGE_PUBLISHER_ROLE)
 	repository=$(env_value "$parsed" TEST_IMAGE_ECR_REPOSITORY)
-	case $role$repository in
-	*PLACEHOLDER*)
-		"$target" "$role" "$repository" >/dev/null 2>&1 \
-			&& echo "env: $target admits the placeholders $role and $repository"
-		;;
-	*)
-		"$target" "$role" "$repository" >/dev/null 2>&1 \
-			|| echo "env: $target refuses $role and $repository"
-		;;
-	esac
+	[ "$role" = "$want_role" ] \
+		|| echo "env: TEST_IMAGE_PUBLISHER_ROLE is $role, want $want_role"
+	[ "$repository" = "$want_repository" ] \
+		|| echo "env: TEST_IMAGE_ECR_REPOSITORY is $repository, want $want_repository"
+	"$target" "$role" "$repository" >/dev/null 2>&1 \
+		|| echo "env: $target refuses $role and $repository"
 	return 0
 }
 
@@ -233,7 +230,7 @@ refused() {
 	}
 }
 
-publisher=arn:aws:iam::486152169996:role/garam-test-publisher
+publisher=$want_role
 
 refused "on: push is not filtered to branches: [dev] alone" 's/branches: \[dev\]/branches: [dev, main]/'
 refused "on: push is not filtered to branches: [dev] alone" '/branches: \[dev\]/d'
@@ -258,12 +255,14 @@ refused 'has an if:' 's/^      - env:/      - if: always()\n        env:/'
 refused 'publish does not end in scripts/image-push.sh' '/scripts\/image-push.sh/d'
 refused 'dispatch does not end in scripts/image-test-pin.sh' '/scripts\/image-test-pin.sh/d'
 refused 'or it sets continue-on-error' 's/^  publish:/  publish:\n    continue-on-error: true/'
-refused "env: $target refuses" "s|^  TEST_IMAGE_PUBLISHER_ROLE: .*|  TEST_IMAGE_PUBLISHER_ROLE: arn:aws:iam::486152169996:role/garamsh-garam-github-actions|; s|^  TEST_IMAGE_ECR_REPOSITORY: .*|  TEST_IMAGE_ECR_REPOSITORY: garam/garam-test|"
-refused "env: $target refuses" "s|^  TEST_IMAGE_PUBLISHER_ROLE: .*|  TEST_IMAGE_PUBLISHER_ROLE: $publisher|; s|^  TEST_IMAGE_ECR_REPOSITORY: .*|  TEST_IMAGE_ECR_REPOSITORY: Garam Test|"
+refused "env: $target refuses" "s|^  TEST_IMAGE_PUBLISHER_ROLE: .*|  TEST_IMAGE_PUBLISHER_ROLE: arn:aws:iam::486152169996:role/garamsh-garam-github-actions|"
+refused "env: TEST_IMAGE_PUBLISHER_ROLE is arn:aws:iam::123456789012:role/garamsh-garam-github-actions-dev" "s|486152169996:role/garamsh-garam-github-actions-dev|123456789012:role/garamsh-garam-github-actions-dev|"
+refused "env: TEST_IMAGE_ECR_REPOSITORY is garam/garam-test-2, want $want_repository" "s|^  TEST_IMAGE_ECR_REPOSITORY: .*|  TEST_IMAGE_ECR_REPOSITORY: garam/garam-test-2|"
+refused "env: $target refuses" "s|^  TEST_IMAGE_ECR_REPOSITORY: .*|  TEST_IMAGE_ECR_REPOSITORY: Garam Test|"
 
 # The script on its own, beyond what the workflow names today: the
-# release role and a foreign account are refused, a well-formed pair
-# is admitted.
+# release role, a foreign account and an empty repository are
+# refused, the declared pair is admitted.
 admits() {
 	cases=$((cases + 1))
 	if "$target" "$2" "$3" >/dev/null 2>&1; then got=0; else got=1; fi
@@ -275,7 +274,7 @@ admits() {
 admits 0 "$publisher" garam/garam-test
 admits 1 arn:aws:iam::486152169996:role/garamsh-garam-github-actions garam/garam-test
 admits 1 arn:aws:iam::123456789012:role/garam-test-publisher garam/garam-test
-admits 1 "$publisher" PLACEHOLDER-ecr-repository-from-garamsh-infra
+admits 1 "$publisher" ''
 admits 1 "$publisher" garam/Garam-Test
 
 [ "$failed" -eq 0 ] || {

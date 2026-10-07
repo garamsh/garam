@@ -41,16 +41,20 @@ Three facts reverse that choice:
 
 ## Decision
 
-**The test image is published to an ECR repository of its own in
-account `486152169996`, region `ap-northeast-2`, through a publisher
-role of its own, and its retention is that repository's lifecycle
-policy rather than a workflow step.**
+**The test image is published to an ECR repository of its own,
+`486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam/garam-test`,
+through a publisher role of its own,
+`arn:aws:iam::486152169996:role/garamsh-garam-github-actions-dev`,
+and its retention is that repository's lifecycle policy rather than a
+workflow step.**
 
 - **The repository and the role are `garamsh/infra`'s.** It declares,
   as one change, the repository, a publisher role assumable only by
   this repository's workflow on `refs/heads/dev`, the lifecycle policy,
   the tag mutability and the consumer's pull grant. This repository
-  names the repository and the role and declares neither.
+  names the repository and the role and declares neither, and
+  `scripts/image-test-workflow-test.sh` holds the names
+  `.github/workflows/test-image.yml` carries to those two.
 - **The credential is federated.** `.github/workflows/test-image.yml`
   assumes the publisher role through
   `aws-actions/configure-aws-credentials` and logs in through
@@ -60,13 +64,8 @@ policy rather than a workflow step.**
 - **The publisher role is not the release role.**
   `garamsh-garam-github-actions` publishes release images alone, on a
   `v*` tag (ADR-0039). `scripts/image-test-target.sh` refuses it, and
-  refuses any role outside account `486152169996`, before either job
-  assumes one.
-- **Until `garamsh/infra` supplies both values, the workflow pushes
-  nothing.** It carries two placeholders, which
-  `scripts/image-test-target.sh` refuses by name as the step before
-  the role is assumed. A guessed name would fail later, at the assume
-  or the push, with a message naming neither.
+  refuses any role outside account `486152169996`, as the step before
+  either job assumes one.
 - **Tags: the commit's full hash, immutable; `pinned-<consumer>`,
   movable.** The repository holds that mutability. A consumer still
   pins the digest.
@@ -105,8 +104,9 @@ policy rather than a workflow step.**
 
 ## What this does not decide
 
-- **The repository's name and the publisher role's ARN.** Both are
-  `garamsh/infra`'s, pending the owner's approval of its proposal.
+- **The repository's and the publisher role's declarations.** Both
+  are `garamsh/infra`'s: its trust conditions, its lifecycle rules and
+  its pull grant are read there and not restated here.
 - **Whether moving `pinned-<consumer>` onto an image restarts rule 2's
   count.** Nothing here measured it. The procedure above assumes it
   does not: the count runs from the commit's push, which is why a pin
@@ -116,9 +116,6 @@ policy rather than a workflow step.**
 
 ## Consequences
 
-- **Until both values arrive, every push to `dev` fails its publish
-  run** at `scripts/image-test-target.sh`, and a pin dispatch fails at
-  the same step. Neither assumes a role or pushes.
 - **A digest lasts 90 days from its push, pinned or not.** Under
   ADR-0092 an unpinned digest lasted 8 `dev` commits and a pinned one
   indefinitely.
@@ -147,6 +144,7 @@ policy rather than a workflow step.**
 - **Publishing with the release role.** Its trust admits `v*` tags
   alone, and a role that also trusted a branch would carry the
   release images' push right to every `dev` commit.
-- **Writing a guessed repository name or role ARN.** A wrong value
-  fails at the assume or the push with a message naming neither, or
-  succeeds against something nobody approved.
+- **Writing a repository name or role ARN before `garamsh/infra`
+  named them.** A guessed value fails at the assume or the push with
+  a message naming neither, or succeeds against something nobody
+  approved.

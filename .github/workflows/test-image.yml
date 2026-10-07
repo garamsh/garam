@@ -76,12 +76,15 @@ jobs:
     steps:
       # `exclude-tags` is applied before `keep-n-tagged`, so this keeps
       # the 8 newest unpinned versions and every pinned one (ADR-0092).
-      # scripts/image-test-workflow-test.sh holds both values.
+      # `delete-untagged` removes a version a re-run's push left without
+      # a tag; a pinned version always carries one. Both values are held
+      # by scripts/image-test-workflow-test.sh.
       - uses: dataaxiom/ghcr-cleanup-action@d52806a0dc70b430571a37da1fde39733ffd640f # v1.2.2
         with:
           package: garam-test
           keep-n-tagged: 8
           exclude-tags: pinned-*
+          delete-untagged: true
 
   # A dispatch runs the workflow file of the ref it names, so one from
   # any other branch would run that branch's copy with packages: write.
@@ -118,4 +121,5 @@ jobs:
           package: garam-test
           keep-n-tagged: 8
           exclude-tags: pinned-*
+          delete-untagged: true
           dry-run: true

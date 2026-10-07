@@ -116,11 +116,12 @@ Then run them as §Invocation says, with `-migrations ./migrations`.
   access, a setting an organization admin applies; ADR-0092 grants it
   to `garamsh/garam-agent-operator`.
 - **Retention.** The 8 newest unpinned versions are kept, and every
-  version tagged `pinned-<consumer>`. A digest older than 8 `dev`
-  commits is gone unless pinned. To hold one, ask the Garam PM, who
-  runs `.github/workflows/test-image.yml` by dispatch with the commit
-  and your name: that moves `pinned-<consumer>` to it, and your
-  previous pin becomes prunable.
+  version tagged `pinned-<consumer>`; a version left without a tag is
+  deleted. A digest older than 8 `dev` commits is gone unless pinned.
+  To hold one, ask the Garam PM, who runs
+  `.github/workflows/test-image.yml` by dispatch with the commit and
+  your name: that moves `pinned-<consumer>` to it, and your previous
+  pin becomes prunable.
 - **What it refuses outside a test database.** `/testprincipal` is
   this command at that commit, and refuses everything §What it
   refuses lists: a server off the machine, a database it did not

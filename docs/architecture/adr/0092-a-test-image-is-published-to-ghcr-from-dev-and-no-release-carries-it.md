@@ -77,7 +77,10 @@ release image carries what it holds.**
   one.** After each publish, `dataaxiom/ghcr-cleanup-action` runs with
   `keep-n-tagged: 8` and `exclude-tags: pinned-*`; an excluded version
   is outside the count, so a pinned version among the newest does not
-  push an unpinned one out.
+  push an unpinned one out. `delete-untagged: true` removes every
+  version left without a tag. A pinned version is never one: it
+  carries its `pinned-` tag and is excluded before either rule runs,
+  and it is a single manifest that names no other version.
 - **A pin is a dispatch of the same workflow.** Given a commit and a
   consumer name, it moves the tag `pinned-<consumer>` to that commit's
   version, so each consumer holds one pinned version at a time and the
@@ -121,8 +124,9 @@ release image carries what it holds.**
   that a later queued prune replaces shows as cancelled and is
   dispatched again.
 - **Re-running a publish moves the commit's tag.** The rebuilt image
-  can differ in digest, and the version it replaces becomes untagged,
-  which `keep-n-tagged` does not count and does not delete.
+  can differ in digest, and the version it replaces becomes untagged;
+  the next prune deletes it. A consumer that pinned that version's
+  digest without a `pinned-` tag loses it then.
 - **The prune deletes with `GITHUB_TOKEN`**, which needs this
   repository to hold the admin role on the package.
 

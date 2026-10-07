@@ -3,8 +3,8 @@
 #
 # - every cleanup step is dataaxiom/ghcr-cleanup-action at a full
 #   commit SHA, on the package garam-test, keeping the 8 newest tagged
-#   versions and excluding `pinned-*`, and takes no input beyond those
-#   and `dry-run`;
+#   versions, excluding `pinned-*` and deleting untagged versions, and
+#   takes no input beyond those and `dry-run`;
 # - exactly one of them deletes, in a job needing the publish job,
 #   whose `if:` is the repository guard alone and which nothing lets
 #   run past a failure; every other one is a dry run;
@@ -91,7 +91,7 @@ check() {
 			|| echo "$job: $uses is not pinned to a full commit SHA"
 		for pair in $(printf '%s' "${with#with=}" | tr ',' ' '); do
 			case ${pair%%=*} in
-			package | keep-n-tagged | exclude-tags | dry-run) ;;
+			package | keep-n-tagged | exclude-tags | delete-untagged | dry-run) ;;
 			*) echo "$job: the cleanup takes ${pair%%=*}, which this check does not allow" ;;
 			esac
 		done
@@ -101,6 +101,8 @@ check() {
 			|| echo "$job: keep-n-tagged is $(with_value "$with" keep-n-tagged), want 8"
 		printf ',%s,' "$(with_value "$with" exclude-tags)" | grep -Fq ',pinned-*,' \
 			|| echo "$job: exclude-tags is $(with_value "$with" exclude-tags), which does not exclude pinned-*"
+		[ "$(with_value "$with" delete-untagged)" = true ] \
+			|| echo "$job: delete-untagged is $(with_value "$with" delete-untagged), want true"
 		if [ "$(with_value "$with" dry-run)" != true ]; then
 			[ "$sif" = if=- ] || echo "$job: the deleting cleanup step has an if: (${sif#if=})"
 			[ "$scoe" = coe=- ] || echo "$job: the deleting cleanup step sets continue-on-error"
@@ -167,6 +169,8 @@ refused 'publish sets continue-on-error' 's/^  publish:/  publish:\n    continue
 refused 'more than one cleanup step deletes' '/dry-run: true/d'
 refused 'which this check does not allow' 's/^          keep-n-tagged: 8/          keep-n-tagged: 8\n          delete-tags: "*"/'
 refused 'which this check does not allow' 's/^          keep-n-tagged: 8/          keep-n-tagged: 8\n          older-than: 1 day/'
+refused 'delete-untagged is -, want true' '/delete-untagged:/d'
+refused 'delete-untagged is false, want true' 's/delete-untagged: true/delete-untagged: false/'
 refused 'package is garam, want garam-test' 's/package: garam-test/package: garam/'
 refused "publish: its if: does not open with $guard" "s|^    if: $guard \&\& github.event_name == 'push'|    if: github.event_name == 'push'|"
 refused "prune: its if: does not open with $guard" "\\|^    if: $guard\$|d"

@@ -11,6 +11,11 @@
 #   assumes the publisher role through
 #   aws-actions/configure-aws-credentials, and ends in what it exists
 #   for: publish in the push, dispatch in the pin;
+# - the steps that build, push and pin take IMAGE_REPOSITORY from their
+#   `env:`, built from the ECR login's registry and
+#   TEST_IMAGE_ECR_REPOSITORY, and name it in their `run:`;
+# - no `run:` holds a `${{` expression, which would put its value into
+#   the command text rather than the environment;
 # - no step on that path carries an `if:` or `continue-on-error`, and
 #   no step uses an action outside actions/checkout and the two
 #   aws-actions, each pinned to a full commit SHA, so nothing prunes
@@ -29,6 +34,7 @@ workflow=.github/workflows/test-image.yml
 target=scripts/image-test-target.sh
 guard="github.repository == 'garamsh/garam'"
 role_expr='${{ env.TEST_IMAGE_PUBLISHER_ROLE }}'
+repository_expr='${{ steps.ecr.outputs.registry }}/${{ env.TEST_IMAGE_ECR_REPOSITORY }}'
 want_role=arn:aws:iam::486152169996:role/garamsh-garam-github-actions-dev
 want_repository=garam/garam-test
 scratch=$(mktemp -d)
@@ -38,19 +44,32 @@ tab=$(printf '\t')
 # One tab-separated line per trigger, workflow variable, job,
 # permission and step, read off the indentation the file is written
 # in: top-level keys at 0, their keys at 2, a trigger's keys at 4, job
-# keys at 4, permissions at 6, steps at 6, step keys at 8 and `with:`
-# keys at 10.
+# keys at 4, permissions at 6, steps at 6, step keys at 8, and `with:`
+# and `env:` keys at 10. A `run:` block is every line under its key
+# indented past 8.
 #
 #   on <event>
 #   on-key <event> <key>=<value>
 #   env <name>=<value>
 #   job <name> if=<if> coe=<continue-on-error>
 #   perm <job> <key>=<value>
-#   step <job> <n> last|- uses=<uses> run=<run> if=<if> coe=<coe> with=<k=v,...>
+#   step <job> <n> last|- uses=<uses> run=<run> if=<if> coe=<coe> with=<k=v,...> env=<k=v,...>
+#   runexpr <job> <line>
 #
+# <run> is the key's own line; runexpr names each line of a `run:`,
+# comments included, that holds `${{`.
 # A key the file does not set reads `-`.
 parse() {
 	awk '
+		inrun {
+			if ($0 ~ /^[[:space:]]*$/) next
+			match($0, /^ */)
+			if (RLENGTH > 8) {
+				if (index($0, "${{")) printf "runexpr\t%s\t%d\n", job, NR
+				next
+			}
+			inrun = 0
+		}
 		function val(line) {
 			sub(/^[^:]*:[[:space:]]*/, "", line)
 			sub(/[[:space:]]+#.*/, "", line)
@@ -64,10 +83,10 @@ parse() {
 		function step_end() {
 			if (instep) {
 				nsteps++
-				steps[nsteps] = sprintf("uses=%s\trun=%s\tif=%s\tcoe=%s\twith=%s", \
-					uses, run, sif, scoe, (with == "" ? "-" : with))
+				steps[nsteps] = sprintf("uses=%s\trun=%s\tif=%s\tcoe=%s\twith=%s\tenv=%s", \
+					uses, run, sif, scoe, (with == "" ? "-" : with), (senv == "" ? "-" : senv))
 			}
-			instep = 0; inwith = 0; uses = "-"; run = "-"; sif = "-"; scoe = "-"; with = ""
+			instep = 0; inwith = 0; inenv = 0; uses = "-"; run = "-"; sif = "-"; scoe = "-"; with = ""; senv = ""
 		}
 		function job_end() {
 			step_end()
@@ -90,25 +109,33 @@ parse() {
 		inperm && /^      [A-Za-z0-9_-]+:/ { printf "perm\t%s\t%s=%s\n", job, key($0), val($0); next }
 		/^      - / { step_end(); instep = 1; sub(/^      - /, "        ") }
 		instep && /^        [A-Za-z0-9_-]+:/ {
-			inwith = 0
+			inwith = 0; inenv = 0
 			k = key($0)
 			if (k == "uses") uses = val($0)
-			else if (k == "run") run = val($0)
+			else if (k == "run") {
+				run = val($0); inrun = 1
+				if (index($0, "${{")) printf "runexpr\t%s\t%d\n", job, NR
+			}
 			else if (k == "if") sif = val($0)
 			else if (k == "continue-on-error") scoe = val($0)
 			else if (k == "with") inwith = 1
+			else if (k == "env") inenv = 1
 			next
 		}
 		instep && inwith && /^          [A-Za-z0-9_-]+:/ {
 			with = with (with == "" ? "" : ",") key($0) "=" val($0)
 		}
+		instep && inenv && /^          [A-Za-z0-9_-]+:/ {
+			senv = senv (senv == "" ? "" : ",") key($0) "=" val($0)
+		}
 		END { job_end() }
 	' "$1"
 }
 
-# with_value <with=...> <key>: the value the step gives the key, or -.
+# with_value <with=...|env=...> <key>: the value the step gives the
+# key, or -.
 with_value() {
-	printf ',%s,' "${1#with=}" | sed -n "s/.*,$2=\\([^,]*\\),.*/\\1/p" | grep . || echo -
+	printf ',%s,' "${1#*=}" | sed -n "s/.*,$2=\\([^,]*\\),.*/\\1/p" | grep . || echo -
 }
 
 # env_value <parsed> <name>: the workflow variable's value, or -.
@@ -185,6 +212,21 @@ check() {
 			[ "$scoe" = coe=- ] || echo "$job: step $n sets continue-on-error"
 		done
 	done
+	# Each step that reads the repository, by the command it opens with.
+	for want in 'publish make test-image-e2e' 'publish scripts/image-push.sh' 'dispatch scripts/image-test-pin.sh'; do
+		job=${want%% *} command=${want#* }
+		line=$(grep "^step$tab$job$tab[0-9]*$tab[^$tab]*${tab}uses=-${tab}run=$command " "$parsed" | head -n 1)
+		[ -n "$line" ] || continue
+		env=$(printf '%s' "$line" | cut -f 10)
+		[ "$(with_value "$env" IMAGE_REPOSITORY)" = "$repository_expr" ] \
+			|| echo "$job: $command takes IMAGE_REPOSITORY $(with_value "$env" IMAGE_REPOSITORY), want $repository_expr"
+		printf '%s' "$line" | cut -f 6 | grep -Eq '\$IMAGE_REPOSITORY([^A-Za-z0-9_]|$)' \
+			|| echo "$job: $command does not name \$IMAGE_REPOSITORY in its run:"
+	done
+	sed -n "s/^runexpr$tab//p" "$parsed" | while IFS=$tab read -r job n; do
+		echo "$job: the run: at line $n holds a \${{ expression"
+	done
+
 	grep -q "^step${tab}publish$tab[0-9]*${tab}last${tab}uses=-${tab}run=scripts/image-push.sh " "$parsed" \
 		|| echo "publish does not end in scripts/image-push.sh"
 	grep -q "^step${tab}dispatch$tab[0-9]*${tab}last${tab}uses=-${tab}run=scripts/image-test-pin.sh " "$parsed" \
@@ -259,6 +301,13 @@ refused "env: $target refuses" "s|^  TEST_IMAGE_PUBLISHER_ROLE: .*|  TEST_IMAGE_
 refused "env: TEST_IMAGE_PUBLISHER_ROLE is arn:aws:iam::123456789012:role/garamsh-garam-github-actions-dev" "s|486152169996:role/garamsh-garam-github-actions-dev|123456789012:role/garamsh-garam-github-actions-dev|"
 refused "env: TEST_IMAGE_ECR_REPOSITORY is garam/garam-test-2, want $want_repository" "s|^  TEST_IMAGE_ECR_REPOSITORY: .*|  TEST_IMAGE_ECR_REPOSITORY: garam/garam-test-2|"
 refused "env: $target refuses" "s|^  TEST_IMAGE_ECR_REPOSITORY: .*|  TEST_IMAGE_ECR_REPOSITORY: Garam Test|"
+refused 'publish: scripts/image-push.sh takes IMAGE_REPOSITORY 486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam/other' '/^      - env:$/{n;/IMAGE_REPOSITORY/{N;/image-push/s|IMAGE_REPOSITORY: .*\n|IMAGE_REPOSITORY: 486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam/other\n|;};}'
+refused 'publish: make test-image-e2e takes IMAGE_REPOSITORY' '/^      - env:$/{n;/IMAGE_REPOSITORY/{N;/make test-image-e2e/s|IMAGE_REPOSITORY: .*\n|IMAGE_REPOSITORY: garam-test\n|;};}'
+refused 'dispatch: scripts/image-test-pin.sh takes IMAGE_REPOSITORY -' '/^      - env:$/{n;/IMAGE_REPOSITORY/{N;/COMMIT:/d;};}'
+refused 'publish: scripts/image-push.sh does not name $IMAGE_REPOSITORY in its run:' 's|scripts/image-push.sh "test-image=$IMAGE_REPOSITORY:|scripts/image-push.sh "test-image=garam/other:|'
+refused 'dispatch: the run: at line' 's|scripts/image-test-pin.sh "$IMAGE_REPOSITORY" "$COMMIT"|scripts/image-test-pin.sh "$IMAGE_REPOSITORY" "${{ inputs.commit }}"|'
+refused 'publish: the run: at line' 's|^      - run: scripts/oidc-subject.sh|      - run: \|\n          echo ok\n          echo "${{ github.ref_name }}"|'
+refused 'publish: the run: at line' 's|^      - run: scripts/oidc-subject.sh|      - run: \|\n          # ${{ github.ref_name }}\n          scripts/oidc-subject.sh|'
 
 # The script on its own, beyond what the workflow names today: the
 # release role, a foreign account and an empty repository are

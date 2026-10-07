@@ -12,8 +12,8 @@
 # one is pushed, so a run that built one image of a pair pushes neither.
 # The release repositories are IMMUTABLE and half a version cannot be
 # re-pushed, so the repair for a partial release is the next version
-# rather than this one (ADR-0039 §Consequences). The test image's GHCR
-# package has mutable tags.
+# rather than this one (ADR-0039 §Consequences). The test image's
+# repository holds its commit tags immutable too (ADR-0093).
 #
 # The digest comes from the registry and not from the build. What a
 # consumer resolves is the manifest the registry stores, and a build

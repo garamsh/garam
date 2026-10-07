@@ -184,8 +184,8 @@ format:
 # Two tests are outside Go, each needing git or nothing and no Docker,
 # and each printing its own count: scripts/image-build-test.sh, which
 # tags a development image-build accepts (ADR-0071), and
-# scripts/image-test-workflow-test.sh, what the test image's prune
-# keeps (ADR-0092).
+# scripts/image-test-workflow-test.sh, how the test image's workflow
+# reaches its registry (ADR-0093).
 TEST_PKGS = $(filter-out %/tests/integration %/tests/e2e %/tests/workload %/tests/standalone,$(GO_PKGS))
 
 test:

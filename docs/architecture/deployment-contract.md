@@ -53,10 +53,11 @@ made and pushed
 `scripts/image-build.sh` is authoritative for which development tags
 this repository produces, and refuses every other one before it
 builds; `README.md` §Development images is the procedure. The test
-image, `ghcr.io/garamsh/garam-test`, is none of these: it is published
-from `dev` for another repository's CI, no deployment runs it, and the
-chart names it nowhere
-([ADR-0092](./adr/0092-a-test-image-is-published-to-ghcr-from-dev-and-no-release-carries-it.md)).
+image is none of these: it is published from `dev` for another
+repository's CI, to an ECR repository of its own that no release
+writes to, no deployment runs it, and the chart names it nowhere
+([ADR-0092](./adr/0092-a-test-image-is-published-to-ghcr-from-dev-and-no-release-carries-it.md),
+[ADR-0093](./adr/0093-the-test-image-is-published-to-the-accounts-ecr-and-its-retention-is-infrastructure-code.md)).
 
 It records what is. Changing any behaviour named below is a decision,
 not an edit here. Every claim names the path it can be checked against,
@@ -525,8 +526,12 @@ that would assert one:
   apart by its tag, which this repository refuses to make a bare
   release version
 - [ADR-0092](./adr/0092-a-test-image-is-published-to-ghcr-from-dev-and-no-release-carries-it.md)
-  — the test image is published from `dev` to GHCR, outside the
-  release repositories, and no deployment runs it
+  — the test image is published from `dev`, outside the release
+  repositories, and no deployment runs it; its registry is superseded
+  by ADR-0093
+- [ADR-0093](./adr/0093-the-test-image-is-published-to-the-accounts-ecr-and-its-retention-is-infrastructure-code.md)
+  — the test image's repository is the account's ECR, and its
+  retention is that repository's lifecycle policy in `garamsh/infra`
 - [ADR-0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)
   — the listener presents one certificate signed by a garam server
   authority the deployment holds, every identity pins that root, and a

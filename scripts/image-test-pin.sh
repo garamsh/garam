@@ -1,9 +1,10 @@
 #!/bin/sh
 # Moves the tag `pinned-<consumer>` to the test image of one commit
-# (ADR-0092), which the prune in .github/workflows/test-image.yml, its
-# only caller, never deletes. The manifest is copied as it is, so the
-# pinned tag and the commit's tag resolve to one digest, and the
-# consumer's previous version under that tag loses it in the same push.
+# (ADR-0092), for .github/workflows/test-image.yml, its only caller.
+# The manifest is copied as it is, so the pinned tag and the commit's
+# tag resolve to one digest, and the consumer's previous version under
+# that tag loses it in the same push. What the repository's lifecycle
+# policy keeps under the tag is ADR-0093's.
 #
 #   scripts/image-test-pin.sh <repository> <commit> <consumer>
 set -eu

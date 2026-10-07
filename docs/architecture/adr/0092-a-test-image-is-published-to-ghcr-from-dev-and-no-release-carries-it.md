@@ -1,6 +1,8 @@
 # ADR 0092: A test image is published to GHCR from `dev`, and no release carries it
 
-> Status: accepted
+> Status: accepted — its registry and retention mechanism are
+> superseded by [ADR-0093](./0093-the-test-image-is-published-to-the-accounts-ecr-and-its-retention-is-infrastructure-code.md),
+> which publishes the test image to the account's ECR
 > Date: 2026-10-07
 
 Drafted for #1213, which reserved this number. The image, the

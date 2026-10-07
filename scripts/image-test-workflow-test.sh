@@ -1,17 +1,24 @@
 #!/bin/sh
-# Checks what .github/workflows/test-image.yml prunes (ADR-0092):
+# Checks how .github/workflows/test-image.yml reaches the registry
+# (ADR-0093):
 #
-# - every cleanup step is dataaxiom/ghcr-cleanup-action at a full
-#   commit SHA, on the package garam-test, keeping the 8 newest tagged
-#   versions, excluding `pinned-*` and deleting untagged versions, and
-#   takes no input beyond those and `dry-run`;
-# - exactly one of them deletes, in a job needing the publish job,
-#   whose `if:` is the repository guard alone and which nothing lets
-#   run past a failure; every other one is a dry run;
-# - the publish job ends in the push, which no `if:` or
-#   `continue-on-error` can skip past;
-# - every job names this repository in its `if:`, and the dispatch job
-#   runs only from `dev`.
+# - it triggers on a push to `dev` and on a dispatch, and on nothing
+#   else;
+# - every job names this repository in its `if:`, publish runs on the
+#   push alone and dispatch only from `dev`;
+# - each of those two jobs grants `contents: read` and `id-token: write`
+#   and nothing else, runs scripts/image-test-target.sh before it
+#   assumes the publisher role through
+#   aws-actions/configure-aws-credentials, and ends in what it exists
+#   for: publish in the push, dispatch in the pin;
+# - no step on that path carries an `if:` or `continue-on-error`, and
+#   no step uses an action outside actions/checkout and the two
+#   aws-actions, each pinned to a full commit SHA, so nothing prunes
+#   and nothing logs in to GHCR;
+# - the role and repository the workflow names are refused by
+#   scripts/image-test-target.sh while they are placeholders and
+#   admitted once they are not, and that script refuses the release
+#   role.
 #
 # The check runs on the workflow and then on copies of it, each with
 # one of those properties removed, every one of which it must refuse:
@@ -20,21 +27,27 @@
 set -eu
 
 workflow=.github/workflows/test-image.yml
+target=scripts/image-test-target.sh
 guard="github.repository == 'garamsh/garam'"
+role_expr='${{ env.TEST_IMAGE_PUBLISHER_ROLE }}'
 scratch=$(mktemp -d)
 trap 'rm -rf "$scratch"' EXIT INT TERM
 tab=$(printf '\t')
 
-# One tab-separated line per job and per step, read off the
-# indentation the file is written in: jobs at 2, their keys at 4, steps
-# at 6, step keys at 8 and `with:` keys at 10.
+# One tab-separated line per trigger, workflow variable, job,
+# permission and step, read off the indentation the file is written
+# in: top-level keys at 0, their keys at 2, a trigger's keys at 4, job
+# keys at 4, permissions at 6, steps at 6, step keys at 8 and `with:`
+# keys at 10.
 #
-#   job <name> needs=<needs> if=<if> coe=<continue-on-error>
-#   step <job> last|- <uses> push|run|- if=<if> coe=<coe> with=<k=v,...>
+#   on <event>
+#   on-key <event> <key>=<value>
+#   env <name>=<value>
+#   job <name> if=<if> coe=<continue-on-error>
+#   perm <job> <key>=<value>
+#   step <job> <n> last|- uses=<uses> run=<run> if=<if> coe=<coe> with=<k=v,...>
 #
-# <last> marks a job's final step, which is how the push is known to
-# be what the publish job ends in. A key the file does not set reads
-# `-`.
+# A key the file does not set reads `-`.
 parse() {
 	awk '
 		function val(line) {
@@ -42,35 +55,51 @@ parse() {
 			sub(/[[:space:]]+#.*/, "", line)
 			return line == "" ? "-" : line
 		}
+		function key(line) {
+			sub(/^[[:space:]]+/, "", line)
+			sub(/:.*/, "", line)
+			return line
+		}
 		function step_end() {
 			if (instep) {
 				nsteps++
-				steps[nsteps] = sprintf("%s\t%s\tif=%s\tcoe=%s\twith=%s", \
+				steps[nsteps] = sprintf("uses=%s\trun=%s\tif=%s\tcoe=%s\twith=%s", \
 					uses, run, sif, scoe, (with == "" ? "-" : with))
 			}
-			instep = 0; uses = "-"; run = "-"; sif = "-"; scoe = "-"; with = ""
+			instep = 0; inwith = 0; uses = "-"; run = "-"; sif = "-"; scoe = "-"; with = ""
 		}
 		function job_end() {
 			step_end()
 			for (i = 1; i <= nsteps; i++)
-				printf "step\t%s\t%s\t%s\n", job, (i == nsteps ? "last" : "-"), steps[i]
-			if (job != "") printf "job\t%s\tneeds=%s\tif=%s\tcoe=%s\n", job, needs, jif, jcoe
-			nsteps = 0; needs = "-"; jif = "-"; jcoe = "-"
+				printf "step\t%s\t%d\t%s\t%s\n", job, i, (i == nsteps ? "last" : "-"), steps[i]
+			if (job != "") printf "job\t%s\tif=%s\tcoe=%s\n", job, jif, jcoe
+			nsteps = 0; jif = "-"; jcoe = "-"; inperm = 0
 		}
-		/^jobs:/ { injobs = 1; next }
-		!injobs { next }
-		/^  [A-Za-z0-9_-]+:[[:space:]]*$/ { job_end(); job = $1; sub(/:$/, "", job); next }
-		/^    needs:/ { needs = val($0); next }
-		/^    if:/ { jif = val($0); next }
-		/^    continue-on-error:/ { jcoe = val($0); next }
+		/^[[:space:]]*(#.*)?$/ { next }
+		/^[^[:space:]]/ { job_end(); job = ""; top = key($0); next }
+		top == "on" && /^  [A-Za-z0-9_-]+:/ { event = key($0); print "on\t" event; next }
+		top == "on" && /^    [A-Za-z0-9_-]+:/ { printf "on-key\t%s\t%s=%s\n", event, key($0), val($0); next }
+		top == "env" && /^  [A-Za-z0-9_-]+:/ { printf "env\t%s=%s\n", key($0), val($0); next }
+		top != "jobs" { next }
+		/^  [A-Za-z0-9_-]+:[[:space:]]*$/ { job_end(); job = key($0); next }
+		/^    if:/ { jif = val($0); inperm = 0; next }
+		/^    continue-on-error:/ { jcoe = val($0); inperm = 0; next }
+		/^    permissions:/ { inperm = 1; next }
+		/^    [A-Za-z0-9_-]+:/ { inperm = 0; next }
+		inperm && /^      [A-Za-z0-9_-]+:/ { printf "perm\t%s\t%s=%s\n", job, key($0), val($0); next }
 		/^      - / { step_end(); instep = 1; sub(/^      - /, "        ") }
-		instep && /^        uses:/ { uses = val($0) }
-		instep && /^        run:/ { run = ($0 ~ /image-push\.sh/) ? "push" : "run" }
-		instep && /^        if:/ { sif = val($0) }
-		instep && /^        continue-on-error:/ { scoe = val($0) }
-		instep && /^          [A-Za-z0-9_-]+:/ {
-			key = $1; sub(/:$/, "", key)
-			with = with (with == "" ? "" : ",") key "=" val($0)
+		instep && /^        [A-Za-z0-9_-]+:/ {
+			inwith = 0
+			k = key($0)
+			if (k == "uses") uses = val($0)
+			else if (k == "run") run = val($0)
+			else if (k == "if") sif = val($0)
+			else if (k == "continue-on-error") scoe = val($0)
+			else if (k == "with") inwith = 1
+			next
+		}
+		instep && inwith && /^          [A-Za-z0-9_-]+:/ {
+			with = with (with == "" ? "" : ",") key($0) "=" val($0)
 		}
 		END { job_end() }
 	' "$1"
@@ -81,51 +110,98 @@ with_value() {
 	printf ',%s,' "${1#with=}" | sed -n "s/.*,$2=\\([^,]*\\),.*/\\1/p" | grep . || echo -
 }
 
+# env_value <parsed> <name>: the workflow variable's value, or -.
+env_value() {
+	sed -n "s/^env$tab$2=//p" "$1" | grep . || echo -
+}
+
+# first_step <parsed> <job> <field pattern>: the number of the job's
+# first step whose line matches, or nothing.
+first_step() {
+	grep "^step$tab$2$tab" "$1" | grep -E "$3" | head -n 1 | cut -f 3
+}
+
 # check <file>: prints one line per property the file breaks.
 check() {
-	parse "$1" >"$scratch/parsed"
-	: >"$scratch/deleters"
-	cleanup='dataaxiom/ghcr-cleanup-action@'
-	grep -q "^step$tab.*$tab$cleanup" "$scratch/parsed" || echo "no step uses $cleanup"
-	grep "^step$tab.*$tab$cleanup" "$scratch/parsed" | while IFS=$tab read -r _ job _ uses _ sif scoe with; do
-		printf '%s' "${uses#"$cleanup"}" | grep -Eq '^[0-9a-f]{40}$' \
-			|| echo "$job: $uses is not pinned to a full commit SHA"
-		for pair in $(printf '%s' "${with#with=}" | tr ',' ' '); do
-			case ${pair%%=*} in
-			package | keep-n-tagged | exclude-tags | delete-untagged | dry-run) ;;
-			*) echo "$job: the cleanup takes ${pair%%=*}, which this check does not allow" ;;
-			esac
-		done
-		[ "$(with_value "$with" package)" = garam-test ] \
-			|| echo "$job: package is $(with_value "$with" package), want garam-test"
-		[ "$(with_value "$with" keep-n-tagged)" = 8 ] \
-			|| echo "$job: keep-n-tagged is $(with_value "$with" keep-n-tagged), want 8"
-		printf ',%s,' "$(with_value "$with" exclude-tags)" | grep -Fq ',pinned-*,' \
-			|| echo "$job: exclude-tags is $(with_value "$with" exclude-tags), which does not exclude pinned-*"
-		[ "$(with_value "$with" delete-untagged)" = true ] \
-			|| echo "$job: delete-untagged is $(with_value "$with" delete-untagged), want true"
-		if [ "$(with_value "$with" dry-run)" != true ]; then
-			[ "$sif" = if=- ] || echo "$job: the deleting cleanup step has an if: (${sif#if=})"
-			[ "$scoe" = coe=- ] || echo "$job: the deleting cleanup step sets continue-on-error"
-			grep -Fxq "job$tab$job${tab}needs=publish${tab}if=$guard${tab}coe=-" "$scratch/parsed" \
-				|| echo "$job: the deleting cleanup runs in a job that does not need publish alone, or whose if: is more than the repository guard"
-			echo "$job" >>"$scratch/deleters"
-		fi
-	done
-	[ -s "$scratch/deleters" ] || echo "no cleanup step deletes"
-	[ "$(wc -l <"$scratch/deleters")" -le 1 ] || echo "more than one cleanup step deletes"
-	grep -q "^step${tab}publish${tab}last$tab-${tab}push${tab}if=-${tab}coe=-$tab" "$scratch/parsed" \
-		|| echo "publish does not end in scripts/image-push.sh, or an if: or continue-on-error lets it be skipped"
-	grep -q "^job${tab}publish$tab.*${tab}coe=-\$" "$scratch/parsed" \
-		|| echo "publish sets continue-on-error, so the prune runs after a failed push"
-	grep "^job$tab" "$scratch/parsed" | while IFS=$tab read -r _ job _ jif _; do
+	parsed=$scratch/parsed
+	parse "$1" >"$parsed"
+
+	events=$(sed -n "s/^on$tab//p" "$parsed" | sort | tr '\n' ' ')
+	[ "$events" = 'push workflow_dispatch ' ] \
+		|| echo "on: triggers on '$events', want push and workflow_dispatch alone"
+	[ "$(grep -c "^on-key${tab}push$tab" "$parsed")" -eq 1 ] \
+		&& grep -Fxq "on-key${tab}push${tab}branches=[dev]" "$parsed" \
+		|| echo "on: push is not filtered to branches: [dev] alone"
+
+	grep "^job$tab" "$parsed" | while IFS=$tab read -r _ job jif _; do
 		case ${jif#if=} in
 		"$guard" | "$guard && "*) ;;
 		*) echo "$job: its if: does not open with $guard" ;;
 		esac
 	done
-	grep "^job${tab}dispatch$tab" "$scratch/parsed" | grep -Fq "&& github.ref == 'refs/heads/dev'" \
-		|| echo "dispatch: its if: does not hold it to refs/heads/dev"
+	grep -Fxq "job${tab}publish${tab}if=$guard && github.event_name == 'push'${tab}coe=-" "$parsed" \
+		|| echo "publish: its if: is not the repository guard and the push, or it sets continue-on-error"
+	grep -Fxq "job${tab}dispatch${tab}if=$guard && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/dev'${tab}coe=-" "$parsed" \
+		|| echo "dispatch: its if: does not hold it to a dispatch from refs/heads/dev, or it sets continue-on-error"
+
+	grep "^step$tab" "$parsed" | while IFS=$tab read -r _ job _ _ uses _; do
+		action=${uses#uses=}
+		[ "$action" = - ] && continue
+		case ${action%@*} in
+		actions/checkout | aws-actions/configure-aws-credentials | aws-actions/amazon-ecr-login) ;;
+		*) echo "$job: uses ${action%@*}, which this workflow does not allow" ;;
+		esac
+		printf '%s' "${action#*@}" | grep -Eq '^[0-9a-f]{40}$' \
+			|| echo "$job: $action is not pinned to a full commit SHA"
+	done
+
+	for job in publish dispatch; do
+		perms=$(sed -n "s/^perm$tab$job$tab//p" "$parsed" | sort | tr '\n' ' ')
+		[ "$perms" = 'contents=read id-token=write ' ] \
+			|| echo "$job: grants '$perms', want contents: read and id-token: write alone"
+
+		auth=$(first_step "$parsed" "$job" "${tab}uses=aws-actions/configure-aws-credentials@")
+		if [ -z "$auth" ]; then
+			echo "$job: no step assumes a role with aws-actions/configure-aws-credentials"
+			continue
+		fi
+		line=$(grep "^step$tab$job$tab$auth$tab" "$parsed")
+		with=$(printf '%s' "$line" | cut -f 9)
+		[ "$(with_value "$with" role-to-assume)" = "$role_expr" ] \
+			|| echo "$job: role-to-assume is $(with_value "$with" role-to-assume), want $role_expr"
+		[ "$(with_value "$with" aws-region)" = ap-northeast-2 ] \
+			|| echo "$job: aws-region is $(with_value "$with" aws-region), want ap-northeast-2"
+
+		refusal=$(first_step "$parsed" "$job" "${tab}run=$target \"\\\$TEST_IMAGE_PUBLISHER_ROLE\" \"\\\$TEST_IMAGE_ECR_REPOSITORY\"$tab")
+		[ -n "$refusal" ] && [ "$refusal" -lt "$auth" ] \
+			|| echo "$job: $target does not run on the workflow's role and repository before the role is assumed"
+
+		# Every step from the refusal to the last is on the path to the
+		# push or the pin, so none of them may be skipped past.
+		grep "^step$tab$job$tab" "$parsed" | while IFS=$tab read -r _ _ n _ _ _ sif scoe _; do
+			[ "$n" -ge "${refusal:-1}" ] || continue
+			[ "$sif" = if=- ] || echo "$job: step $n has an if: (${sif#if=})"
+			[ "$scoe" = coe=- ] || echo "$job: step $n sets continue-on-error"
+		done
+	done
+	grep -q "^step${tab}publish$tab[0-9]*${tab}last${tab}uses=-${tab}run=scripts/image-push.sh " "$parsed" \
+		|| echo "publish does not end in scripts/image-push.sh"
+	grep -q "^step${tab}dispatch$tab[0-9]*${tab}last${tab}uses=-${tab}run=scripts/image-test-pin.sh " "$parsed" \
+		|| echo "dispatch does not end in scripts/image-test-pin.sh"
+
+	role=$(env_value "$parsed" TEST_IMAGE_PUBLISHER_ROLE)
+	repository=$(env_value "$parsed" TEST_IMAGE_ECR_REPOSITORY)
+	case $role$repository in
+	*PLACEHOLDER*)
+		"$target" "$role" "$repository" >/dev/null 2>&1 \
+			&& echo "env: $target admits the placeholders $role and $repository"
+		;;
+	*)
+		"$target" "$role" "$repository" >/dev/null 2>&1 \
+			|| echo "env: $target refuses $role and $repository"
+		;;
+	esac
+	return 0
 }
 
 cases=0
@@ -157,32 +233,53 @@ refused() {
 	}
 }
 
-refused 'does not exclude pinned-*' '/exclude-tags:/d'
-refused 'does not exclude pinned-*' 's/exclude-tags: pinned-\*/exclude-tags: pinned/'
-refused 'keep-n-tagged is 9, want 8' 's/keep-n-tagged: 8/keep-n-tagged: 9/'
-refused 'is not pinned to a full commit SHA' 's/ghcr-cleanup-action@[0-9a-f]*/ghcr-cleanup-action@v1.2.2/'
-refused 'does not need publish alone' '/^    needs: publish/d'
-refused 'whose if: is more than the repository guard' "s|^    if: $guard\$|    if: always()|"
-refused 'has an if:' 's/^      - uses: dataaxiom/      - if: always()\n        uses: dataaxiom/'
-refused 'sets continue-on-error' 's/^      - uses: dataaxiom/      - continue-on-error: true\n        uses: dataaxiom/'
-refused 'publish does not end in scripts/image-push.sh' '/scripts\/image-push.sh/d'
-refused 'an if: or continue-on-error lets it be skipped' 's/^      - run: scripts\/image-push.sh/      - if: always()\n        run: scripts\/image-push.sh/'
-refused 'an if: or continue-on-error lets it be skipped' 's/^      - run: scripts\/image-push.sh/      - continue-on-error: true\n        run: scripts\/image-push.sh/'
-refused 'publish sets continue-on-error' 's/^  publish:/  publish:\n    continue-on-error: true/'
-refused 'more than one cleanup step deletes' '/dry-run: true/d'
-refused 'which this check does not allow' 's/^          keep-n-tagged: 8/          keep-n-tagged: 8\n          delete-tags: "*"/'
-refused 'which this check does not allow' 's/^          keep-n-tagged: 8/          keep-n-tagged: 8\n          older-than: 1 day/'
-refused 'delete-untagged is -, want true' '/delete-untagged:/d'
-refused 'delete-untagged is false, want true' 's/delete-untagged: true/delete-untagged: false/'
-refused 'package is garam, want garam-test' 's/package: garam-test/package: garam/'
-refused "publish: its if: does not open with $guard" "s|^    if: $guard \&\& github.event_name == 'push'|    if: github.event_name == 'push'|"
-refused "prune: its if: does not open with $guard" "\\|^    if: $guard\$|d"
-refused "dispatch: its if: does not open with $guard" "s|^    if: $guard \&\& github.event_name == 'workflow_dispatch'|    if: github.event_name == 'workflow_dispatch'|"
+publisher=arn:aws:iam::486152169996:role/garam-test-publisher
 
-refused 'dispatch: its if: does not hold it to refs/heads/dev' "s| \&\& github.ref == 'refs/heads/dev'||"
+refused "on: push is not filtered to branches: [dev] alone" 's/branches: \[dev\]/branches: [dev, main]/'
+refused "on: push is not filtered to branches: [dev] alone" '/branches: \[dev\]/d'
+refused "on: triggers on 'pull_request push workflow_dispatch '" 's/^on:$/on:\n  pull_request:/'
+refused "publish: its if: does not open with $guard" "s|^    if: $guard \&\& github.event_name == 'push'|    if: github.event_name == 'push'|"
+refused "dispatch: its if: does not open with $guard" "s|^    if: $guard \&\& github.event_name == 'workflow_dispatch'|    if: github.event_name == 'workflow_dispatch'|"
+refused 'dispatch: its if: does not hold it to a dispatch from refs/heads/dev' "s| \&\& github.ref == 'refs/heads/dev'||"
+refused 'publish: its if: is not the repository guard and the push' "s| \&\& github.event_name == 'push'||"
+refused 'publish: grants' 's/^      id-token: write/      id-token: write\n      packages: write/'
+refused 'dispatch: grants' '/^      id-token: write/{x;s/^/x/;/^xx$/{x;d};x}'
+refused 'publish: no step assumes a role' '0,/configure-aws-credentials@/{/configure-aws-credentials@/d}'
+refused 'is not pinned to a full commit SHA' 's/configure-aws-credentials@[0-9a-f]*/configure-aws-credentials@v6.2.3/'
+refused 'uses docker/login-action, which this workflow does not allow' 's|^      - id: ecr$|      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f\n\n      - id: ecr|'
+refused 'role-to-assume is arn:aws:iam::486152169996:role/garamsh-garam-github-actions' 's|role-to-assume: .*|role-to-assume: arn:aws:iam::486152169996:role/garamsh-garam-github-actions|'
+refused 'aws-region is us-east-1, want ap-northeast-2' 's/aws-region: ap-northeast-2/aws-region: us-east-1/'
+refused "publish: $target does not run" "0,\\|run: $target|{\\|run: $target|d}"
+refused "dispatch: $target does not run" "\\|run: $target|{x;s/^/x/;/^xx\$/{x;d};x}"
+refused "publish: $target does not run" "s|^      - run: $target \"\\\$TEST_IMAGE_PUBLISHER_ROLE\" \"\\\$TEST_IMAGE_ECR_REPOSITORY\"|      - run: $target \"$publisher\" \"\\\$TEST_IMAGE_ECR_REPOSITORY\"|"
+refused 'has an if:' "s|^      - run: $target|      - if: always()\n        run: $target|"
+refused 'sets continue-on-error' 's/^      - uses: aws-actions\/configure-aws-credentials/      - continue-on-error: true\n        uses: aws-actions\/configure-aws-credentials/'
+refused 'has an if:' 's/^      - env:/      - if: always()\n        env:/'
+refused 'publish does not end in scripts/image-push.sh' '/scripts\/image-push.sh/d'
+refused 'dispatch does not end in scripts/image-test-pin.sh' '/scripts\/image-test-pin.sh/d'
+refused 'or it sets continue-on-error' 's/^  publish:/  publish:\n    continue-on-error: true/'
+refused "env: $target refuses" "s|^  TEST_IMAGE_PUBLISHER_ROLE: .*|  TEST_IMAGE_PUBLISHER_ROLE: arn:aws:iam::486152169996:role/garamsh-garam-github-actions|; s|^  TEST_IMAGE_ECR_REPOSITORY: .*|  TEST_IMAGE_ECR_REPOSITORY: garam/garam-test|"
+refused "env: $target refuses" "s|^  TEST_IMAGE_PUBLISHER_ROLE: .*|  TEST_IMAGE_PUBLISHER_ROLE: $publisher|; s|^  TEST_IMAGE_ECR_REPOSITORY: .*|  TEST_IMAGE_ECR_REPOSITORY: Garam Test|"
+
+# The script on its own, beyond what the workflow names today: the
+# release role and a foreign account are refused, a well-formed pair
+# is admitted.
+admits() {
+	cases=$((cases + 1))
+	if "$target" "$2" "$3" >/dev/null 2>&1; then got=0; else got=1; fi
+	[ "$got" = "$1" ] || {
+		echo "image-test-target: '$2' '$3' exited $got, want $1" >&2
+		failed=$((failed + 1))
+	}
+}
+admits 0 "$publisher" garam/garam-test
+admits 1 arn:aws:iam::486152169996:role/garamsh-garam-github-actions garam/garam-test
+admits 1 arn:aws:iam::123456789012:role/garam-test-publisher garam/garam-test
+admits 1 "$publisher" PLACEHOLDER-ecr-repository-from-garamsh-infra
+admits 1 "$publisher" garam/Garam-Test
 
 [ "$failed" -eq 0 ] || {
 	echo "image-test-workflow-test: $failed of $cases cases failed" >&2
 	exit 1
 }
-echo "image-test-workflow-test: $cases cases passed, read against $workflow"
+echo "image-test-workflow-test: $cases cases passed, read against $workflow and $target"

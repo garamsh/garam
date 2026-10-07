@@ -205,7 +205,7 @@ What this repository runs against itself. `docs/convention/ci.md` decides how a 
   base except where a pull request changes only `docs/`;
   `.github/workflows/release.yml` triggers on a `v*` tag (ADR-0039);
   `.github/workflows/test-image.yml` on a push to `dev` and on a
-  dispatch (ADR-0092).
+  dispatch (ADR-0092, ADR-0093).
   `dev` is the default branch, and every pull request but the
   promotion pull request targets it (`docs/convention/git.md`
   §Promotion), so the base filter selects the promotion pull request
@@ -222,17 +222,16 @@ What this repository runs against itself. `docs/convention/ci.md` decides how a 
   could leave a `vX.Y.Z` tag publishing nothing at all, and a run
   cancelled mid-publish leaves the version half-published with the next
   version as the only repair (ADR-0039 §Consequences). `test-image.yml`
-  declares none at its top, on the same reasoning: every commit on `dev`
-  is owed its image. Its prune and dispatch jobs share a job-level
-  group, which sits indented and is not what the guard reads. What reads
-  the guard is that `grep -n '^concurrency:' .github/workflows/*.yml`
-  names two files and not four (#899).
+  declares none, on the same reasoning: every commit on `dev` is owed
+  its image. What reads the guard is that
+  `grep -n '^concurrency:' .github/workflows/*.yml` names two files and
+  not four (#899).
 - **Both images a release publishes are built on a pull request.** `images.yml` builds each from what `release.yml` says it is built from and then checks the web one, which is the image a release used to be able to fail on irreversibly: the server image was pushed before the web image was built, and immutability makes the repair the next version (ADR-0039 §Consequences). `release.yml` builds both and pushes neither until both are built (#945), so what a build failure there now costs is the run. Until #850 neither image was built by any check.
 - **No run here reaches a deployment, so `main` is not what a caller
   meets.** `release.yml` publishes two images on a `vX.Y.Z` tag and no
   other workflow pushes one, so a merge to `main` publishes nothing;
-  `test-image.yml` publishes the test image on a push to `dev`, which
-  no deployment pulls (ADR-0092);
+  `test-image.yml` publishes the test image on a push to `dev`, to an
+  ECR repository no deployment pulls (ADR-0092, ADR-0093);
   the only cluster a recipe here reaches is the local minikube, and
   what it runs there it built from the working tree (`Makefile`,
   `minikube-images`). What a running garam serves is fixed by the image
@@ -640,7 +639,13 @@ ADRs:
   own, tagged by commit and pinned by digest, keeping the 8 newest
   unpinned versions and every `pinned-*` one; supersedes ADR-0039 for
   non-release artifacts and ADR-0081's "no image Garam ships carries
-  it" in part
+  it" in part; its registry and retention are superseded by 0093
+- [0093](./adr/0093-the-test-image-is-published-to-the-accounts-ecr-and-its-retention-is-infrastructure-code.md)
+  — the test image is published to an ECR repository of its own in the
+  account, through a publisher role trusting `dev` alone, and expires
+  by that repository's lifecycle policy in `garamsh/infra`, which
+  expires a pinned image too 90 days after its push; supersedes
+  ADR-0092's registry and retention only
 - [0094](./adr/0094-structural-rules-yield-only-to-what-a-framework-imposes.md)
   — a structural rule yields to a stack file only where the stack's
   framework imposes the case, taken from the conventions template at

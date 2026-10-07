@@ -170,9 +170,11 @@ Without `IMAGE_REGISTRY`, `make image-build` builds both images as
 ## Test image
 
 Another repository's CI copies `garam`, `testprincipal` and the
-migrations of one commit out of `ghcr.io/garamsh/garam-test`, which
+migrations of one commit out of the test image, which
 `.github/workflows/test-image.yml` publishes on every push to `dev`
-([ADR-0092](./docs/architecture/adr/0092-a-test-image-is-published-to-ghcr-from-dev-and-no-release-carries-it.md)).
+([ADR-0092](./docs/architecture/adr/0092-a-test-image-is-published-to-ghcr-from-dev-and-no-release-carries-it.md))
+to an ECR repository of its own
+([ADR-0093](./docs/architecture/adr/0093-the-test-image-is-published-to-the-accounts-ecr-and-its-retention-is-infrastructure-code.md)).
 From a clean checkout:
 
 ```sh

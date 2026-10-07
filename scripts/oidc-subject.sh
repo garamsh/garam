@@ -3,8 +3,9 @@
 # Actions runner it runs on would present, and nothing else about that
 # token: not the token, not the rest of the payload, and not jq's parse
 # error, which quotes its input (docs/convention/ci.md §Security
-# baseline). Why a release run prints it, and where the step sits, is in
-# .github/workflows/release.yml — its only caller.
+# baseline). Why a run prints it, and where the step sits, is in
+# .github/workflows/release.yml and .github/workflows/test-image.yml,
+# its callers.
 #
 # curl's status is read on its own line rather than out of a pipeline's,
 # so a fetch that failed is reported as that rather than reaching jq and

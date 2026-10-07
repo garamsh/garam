@@ -81,9 +81,14 @@ nothing verifies that a module cache copy serves.
 
 ## The test image
 
-`ghcr.io/garamsh/garam-test` holds this command, `garam` and the
-migrations of one Garam commit, for a CI that cannot read this
-repository (ADR-0092). It is a file source: copy the paths out and
+The test image holds this command, `garam` and the migrations of one
+Garam commit, for a CI that cannot read this repository (ADR-0092). It
+is published to an ECR repository of its own in account
+`486152169996`, region `ap-northeast-2` (ADR-0093), written below as
+`$REPOSITORY`: `486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/`
+followed by the repository name `garamsh/infra` declares. That name is
+pending, and until it arrives `.github/workflows/test-image.yml`
+pushes nothing (#1227). It is a file source: copy the paths out and
 never run the image.
 
 | Path | What it is |
@@ -97,13 +102,14 @@ Its label `org.opencontainers.image.revision` names the full commit.
 `make test-image-e2e` checks those paths, the linking and the label.
 
 **Pin the digest, not the tag.** Every push to `dev` publishes one
-version tagged with the commit's full hash, and a tag can be pushed
-again; the digest cannot name other bytes:
+image tagged with the commit's full hash. The repository holds that
+tag immutable, but immutability is a setting of the repository and
+not of the reference; the digest cannot name other bytes:
 
 ```sh
 docker buildx imagetools inspect --format '{{.Manifest.Digest}}' \
-  ghcr.io/garamsh/garam-test:<commit>
-id=$(docker create ghcr.io/garamsh/garam-test@<digest>)
+  "$REPOSITORY:<commit>"
+id=$(docker create "$REPOSITORY@<digest>")
 docker cp "$id:/garam" . && docker cp "$id:/testprincipal" . \
   && docker cp "$id:/migrations" .
 docker rm "$id"
@@ -111,17 +117,25 @@ docker rm "$id"
 
 Then run them as §Invocation says, with `-migrations ./migrations`.
 
-- **Access.** The package is private. A repository reads it from its
-  own workflows once the package grants that repository Actions
-  access, a setting an organization admin applies; ADR-0092 grants it
-  to `garamsh/garam-agent-operator`.
-- **Retention.** The 8 newest unpinned versions are kept, and every
-  version tagged `pinned-<consumer>`; a version left without a tag is
-  deleted. A digest older than 8 `dev` commits is gone unless pinned.
-  To hold one, ask the Garam PM, who runs
+- **Access.** The repository is private to the account. A consumer
+  pulls with an AWS role the repository's policy grants, held in
+  `garamsh/infra`; ADR-0093 grants it to
+  `arn:aws:iam::486152169996:role/garam-agent-operator-github-actions`,
+  the role `garamsh/garam-agent-operator`'s workflows assume.
+- **Retention.** The repository's lifecycle policy, held in
+  `garamsh/infra`, expires an image tagged by commit 90 days after it
+  was pushed, and an untagged one after a day. **A pin does not hold
+  an image past those 90 days**: an image tagged `pinned-<consumer>`
+  also carries its commit's tag, and the commit rule expires it
+  (ADR-0093). So pin again whenever the commit you test against
+  moves, and move to a newer commit before the one you hold is 90
+  days old: ask the Garam PM, who runs
   `.github/workflows/test-image.yml` by dispatch with the commit and
-  your name: that moves `pinned-<consumer>` to it, and your previous
-  pin becomes prunable.
+  your name, which moves `pinned-<consumer>` to it.
+- **The GHCR package.** Images published before ADR-0093 are in
+  `ghcr.io/garamsh/garam-test`, which nothing publishes to or prunes
+  any longer. Retiring it is a separate step, announced once the ECR
+  repository publishes.
 - **What it refuses outside a test database.** `/testprincipal` is
   this command at that commit, and refuses everything §What it
   refuses lists: a server off the machine, a database it did not

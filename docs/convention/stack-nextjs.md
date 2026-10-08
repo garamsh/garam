@@ -21,7 +21,7 @@ for it.
 - 10. Parallel routes and intercepts (modal pattern)
 - 11. `proxy.ts` (v16+) / `middleware.ts`
 - 12. Testing — three layers, two locations
-- 13. Import direction and file naming
+- 13. Feature entry points and file naming
 
 ## 0. Folder & file naming
 
@@ -45,9 +45,7 @@ or folder after what it owns.
 
 ## 1. Project layout (App Router, `src/`)
 
-Use the `src/` layout. `src/app/` holds routes and nothing else;
-every other folder under `src/` holds code by its responsibility,
-named for what it does.
+Use the `src/` layout. `src/app/` holds routes and nothing else.
 
 At the project root:
 
@@ -82,7 +80,7 @@ Under `src/`:
 - `src/env.ts` — the typed env loader (§8).
 - `src/testing/` — test infrastructure: render helper, MSW
   handlers, MSW server (§12).
-- `src/types/` — types used by two or more features.
+- `src/types/` — types extracted below the features.
 - `src/styles/globals.css` — global styles.
 - `src/instrumentation.ts` — optional OpenTelemetry hook.
 
@@ -293,6 +291,7 @@ back/forward. The pieces, for a photo modal:
   `render()`, and wrapping whatever providers the root layout mounts.
   A provider mounted over one segment is wrapped by the tests of that
   segment, not here.
+- Nothing outside a test imports `src/testing/`.
 - The test setup stubs `server-only` to an empty module. That package
   throws wherever it is imported outside a Server Component, so
   without the stub every test reaching a server-only module fails
@@ -314,17 +313,7 @@ back/forward. The pieces, for a photo modal:
   `exact` option, so a string is identity there and a regex is presence.
 
 
-## 13. Import direction and file naming
-
-Three tiers, and what each may import:
-
-- `components/`, `hooks/`, `lib/`, `types/`: cross-feature.
-  Each may import from itself or each other.
-- `features/*`: may import the cross-feature modules; **may not**
-  import from `app/` or from another feature.
-- `app/`: may import from both.
-- `src/testing/`: outside the tiers. Test scaffolding may import from
-  anywhere, and nothing outside a test imports it.
+## 13. Feature entry points and file naming
 
 A feature declares two entry points, not one:
 
@@ -338,10 +327,6 @@ client-reachable is treated as client-reachable whole, so a client
 module importing a single action drags the server-only modules beside
 it into the client graph. The error then names the client module,
 which is innocent — the shape of the barrel is the cause.
-
-The tiers are not self-enforcing: configure `import/no-restricted-paths`
-to fail the build on a crossing, in the same pull request that creates
-the first feature.
 
 ### File naming
 

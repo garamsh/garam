@@ -13,13 +13,13 @@ const features = readdirSync(join(import.meta.dirname, "src/features"), {
   .filter((entry) => entry.isDirectory())
   .map((entry) => entry.name);
 
-// The tiers of stack-nextjs.md §Import direction and file naming: the
-// cross-feature tiers import neither features nor routes, a feature
-// imports neither routes nor a sibling, and routes import both. `app`
-// reaches a feature only through the two files the feature declares
-// public: `index.ts`, the server-only read surface, and `actions.ts`,
-// the Server Actions — kept apart so a client module cannot pull the
-// backend client into the browser bundle.
+// What may import what under src/ is structure.md §Boundaries and
+// dependency direction: shared code imports neither a feature nor a
+// route, a feature imports no route, and a route or a sibling feature
+// reaches a feature only through the two files stack-nextjs.md §13
+// Feature entry points has it declare: `index.ts`, the server-only read
+// surface, and `actions.ts`, the Server Actions — kept apart so a
+// client module cannot pull the backend client into the browser bundle.
 const importDirection = {
   basePath: import.meta.dirname,
   zones: [
@@ -33,20 +33,17 @@ const importDirection = {
       from: "./src/app",
       message: "A feature may not import a route.",
     },
-    ...features.flatMap((name) => [
-      {
-        target: `./src/features/${name}`,
-        from: "./src/features",
-        except: [`./${name}`],
-        message: "A feature may not import another feature.",
-      },
-      {
-        target: "./src/app",
-        from: `./src/features/${name}`,
-        except: ["./index.ts", "./actions.ts"],
-        message: `Import ${name} through its index.ts or actions.ts.`,
-      },
-    ]),
+    ...features.map((name) => ({
+      target: [
+        "./src/app",
+        ...features
+          .filter((sibling) => sibling !== name)
+          .map((sibling) => `./src/features/${sibling}`),
+      ],
+      from: `./src/features/${name}`,
+      except: ["./index.ts", "./actions.ts"],
+      message: `Import ${name} through its index.ts or actions.ts.`,
+    })),
   ],
 };
 

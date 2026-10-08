@@ -68,9 +68,14 @@ own things a reader might come here for, and none of them is restated:
   is absent at runtime
   ([ADR-0042](./adr/0042-a-chart-is-the-description-of-a-garam-deployment.md)).
 - `docs/convention/stack-nextjs.md` governs how the application is laid
-  out inside `web/src/`: which folder holds what, and which tier may
-  import which. Nothing here restates a layout rule, and a question
-  about where a file belongs is that file's, not this one's.
+  out inside `web/src/`: which folder holds what, and the two entry
+  points a feature declares (§13). What may import what there is
+  [structure.md](./structure.md) §Boundaries and dependency direction's
+  ([ADR-0094](./adr/0094-structural-rules-yield-only-to-what-a-framework-imposes.md)),
+  and `web/eslint.config.mjs`'s `garam/import-direction` rule is what
+  fails `make web-lint` on a crossing. Nothing here restates a layout
+  rule, and a question about where a file belongs is that file's, not
+  this one's.
 - `deploy/local/Dockerfile.web` is authoritative for what the image
   carries. `output: "standalone"` in `web/next.config.ts` decides what
   the build emits; that Dockerfile decides what has to be copied in
@@ -465,3 +470,7 @@ The rest bear on it without being about it:
   — a definition whose agent cuts over keeps its values as an archive
   only its name still changes, which the Agents and Operators sections
   mark
+- [ADR-0094](./adr/0094-structural-rules-yield-only-to-what-a-framework-imposes.md)
+  — `structure.md` governs what a module under `web/src/` may import,
+  so a feature reaches a sibling through its declared entry points and
+  the stack file no longer refuses that edge

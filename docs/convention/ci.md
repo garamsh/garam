@@ -28,6 +28,14 @@ second way to run it.
 - **One name for the whole set.** A single name runs lint, format, test,
   and build in order, so "run the checks" is one command locally and one
   step in CI.
+- **A change shows that the whole set ran before it landed.** Once the
+  project has a pipeline, every change that can land on the default
+  branch carries, on the change itself, the record of a run of the
+  whole set against it made before it lands, and what made that run: a
+  pipeline run whose result is attached to the change, or a run outside
+  the pipeline recorded there by whoever made it. A pipeline run that
+  starts only after the change has landed, or only for changes bound
+  for another branch, is no such record for it.
 - **CI calls the names, not the commands behind them.** A pipeline that
   spells out the underlying tool invocations has created a second set of
   commands, and the two drift.

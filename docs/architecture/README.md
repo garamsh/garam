@@ -161,16 +161,16 @@ Current architecture of the system and the decisions behind it. This file is the
    waits under `structure.md`'s open questions, where it binds nothing,
    and moves into that document's current decisions when the project
    takes a side.
-8. **Structural rules rank between the convention tiers.** Where
+8. **Structural rules yield only to what a framework imposes.** Where
    `structure.md` and a convention file decide the same case
-   differently, the stack-specific file that applies governs;
-   `structure.md` governs against the tiers below it in
-   `docs/convention/README.md` §Precedence — the stack-neutral files,
-   then that index itself. A stack file carries the shape its framework
-   imposes and the project cannot restate; the shape chosen at bootstrap
-   is this project's own refinement of what a stack-neutral file states
-   for every project. A project with no `structure.md` meets no such
-   conflict, and this rule asks nothing of it.
+   differently, `structure.md` governs, unless the stack-specific file
+   that applies decides it as its framework imposes it — the alternative
+   fails to build or run, so the project cannot restate it. A stack
+   file's spelling of a structural rule is not that: the rule it spells
+   is `structure.md`'s. The shape chosen at bootstrap is this project's
+   own refinement of what a stack-neutral file states for every project.
+   A project with no `structure.md` meets no such conflict, and this
+   rule asks nothing of it.
 9. **A responsibility document says a mechanism is unbuilt before it
    describes it.** A section describing a mechanism nothing implements,
    or one built in part, opens with that fact; underneath the
@@ -640,3 +640,8 @@ ADRs:
   unpinned versions and every `pinned-*` one; supersedes ADR-0039 for
   non-release artifacts and ADR-0081's "no image Garam ships carries
   it" in part
+- [0094](./adr/0094-structural-rules-yield-only-to-what-a-framework-imposes.md)
+  — a structural rule yields to a stack file only where the stack's
+  framework imposes the case, taken from the conventions template at
+  `b02fe37` with five more template commits; `web/` and the
+  composition root are governed by `structure.md` again

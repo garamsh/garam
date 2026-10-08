@@ -630,10 +630,11 @@ test-image-e2e: test-image
 # An operator pushes the test image to its ECR repository and moves a
 # consumer's pin there, under their own AWS credentials (ADR-0093): no
 # workflow holds one for it. test-image-push builds and checks HEAD as
-# test-image-e2e does and pushes it under HEAD's full hash;
-# test-image-pin moves `pinned-$(CONSUMER)` to the image of $(COMMIT).
+# test-image-e2e does and pushes it under HEAD's first twelve hex
+# digits (ADR-0071's commit-derived tag); test-image-pin moves
+# `pinned-$(CONSUMER)` to the image of $(COMMIT).
 # Neither is in `ci`, which holds no AWS credential.
-TEST_IMAGE_ECR_REPOSITORY = 486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam/garam-test
+TEST_IMAGE_ECR_REPOSITORY = 486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam-dev/garam-test
 
 test-image-push:
 	scripts/image-test-push.sh '$(TEST_IMAGE_ECR_REPOSITORY)'

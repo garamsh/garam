@@ -640,9 +640,10 @@ ADRs:
   it" in part; its registry, its publishing from `dev` and its
   retention are superseded by 0093
 - [0093](./adr/0093-an-operator-pushes-the-test-image-to-the-accounts-ecr.md)
-  — an operator pushes the test image to an ECR repository of its own
-  in the account and moves its pins, under their own AWS identity with
-  `make test-image-push` and `make test-image-pin`; no workflow holds a
+  — an operator pushes the test image to `garam-dev/garam-test` in the
+  account's ECR, under ADR-0071's commit-prefix tag, and moves its
+  pins, under their own AWS identity with `make test-image-push` and
+  `make test-image-pin`; no workflow holds a
   credential for it, so no image appears per `dev` commit, and the
   repository's lifecycle policy in `garamsh/infra` expires a pinned
   image too 90 days after its push; supersedes ADR-0092's registry,

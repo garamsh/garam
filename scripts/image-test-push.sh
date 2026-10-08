@@ -1,14 +1,19 @@
 #!/bin/sh
 # Builds the test image of HEAD, checks it as `make test-image-e2e`
-# does, and pushes it to its ECR repository under HEAD's full hash
-# (ADR-0093), for `make test-image-push`, under the caller's AWS
-# credentials. No workflow holds a credential for that repository, so
-# this is the only way an image reaches it.
+# does, and pushes it to its ECR repository (ADR-0093), for
+# `make test-image-push`, under the caller's AWS credentials. No
+# workflow holds a credential for that repository, so this is the only
+# way an image reaches it.
 #
-# The commit tag is immutable in that repository, so a commit already
-# there is reported and not built again: a second build would differ
-# in its bytes and be refused at the push. The digest is read back
-# from the registry, and must be the one the push reported.
+# The pushed tag is HEAD's first twelve hex digits, the commit-derived
+# form ADR-0071 gives a development build at its default length. The
+# build and the check name the full hash, as `make test-image-e2e`
+# does, and the checked image is tagged again for the push.
+#
+# The tag is immutable in that repository, so a commit already there
+# is reported and not built again: a second build would differ in its
+# bytes and be refused at the push. The digest is read back from the
+# registry, and must be the one the push reported.
 #
 #   scripts/image-test-push.sh <repository-uri>
 set -eu
@@ -41,11 +46,12 @@ name=${repository#*/}
 account=${host%%.*}
 region=${host#*.dkr.ecr.}
 region=${region%.amazonaws.com}
-image=$repository:$revision
+tag=$(printf '%s' "$revision" | cut -c1-12)
+image=$repository:$tag
 
 digest() {
 	aws ecr batch-get-image --region "$region" --registry-id "$account" \
-		--repository-name "$name" --image-ids "imageTag=$revision" \
+		--repository-name "$name" --image-ids "imageTag=$tag" \
 		--accepted-media-types application/vnd.oci.image.manifest.v1+json application/vnd.docker.distribution.manifest.v2+json \
 		--query 'images[0].imageId.imageDigest' --output text
 }
@@ -61,7 +67,8 @@ aws ecr get-login-password --region "$region" \
 	|| refuse "docker could not log in to $host with the caller's AWS credentials"
 
 scripts/image-test.sh "$repository"
-tests/image/test-image.sh "$image"
+tests/image/test-image.sh "$repository:$revision"
+docker tag "$repository:$revision" "$image"
 
 docker push "$image" || refuse "the registry refused $image"
 pushed=$(docker image inspect -f '{{range .RepoDigests}}{{println .}}{{end}}' "$image" \
@@ -74,4 +81,4 @@ got=$(digest) || {
 	echo "image-test-push: $image reads back as $got, but the push reported ${pushed:-no digest}" >&2
 	exit 1
 }
-echo "image-test-push: pushed $image, $got"
+echo "image-test-push: pushed $image ($revision), $got"

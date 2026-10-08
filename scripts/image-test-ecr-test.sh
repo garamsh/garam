@@ -38,6 +38,7 @@ git -C "$repo" init -q
 git -C "$repo" -c user.name=test -c user.email=test@invalid add -A
 git -C "$repo" -c user.name=test -c user.email=test@invalid commit -qm scratch
 head=$(git -C "$repo" rev-parse HEAD)
+short=$(printf '%s' "$head" | cut -c1-12)
 
 # A tag in the registry is three files: <tag>.digest, <tag>.media and
 # <tag>.manifest. AWS_FAILS makes every call fail as a missing
@@ -91,21 +92,21 @@ esac
 EOF
 chmod +x "$bin/aws" "$bin/docker"
 
-ecr=486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam/garam-test
+ecr=486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam-dev/garam-test
 want=sha256:want
 cases=0
 failed=0
 out=$scratch/out
 calls=$scratch/calls
 
-# reset clears the registry and holds an image of $head in it unless
-# told `empty`.
+# reset clears the registry and holds an image of $head in it, under
+# its first twelve hex digits, unless told `empty`.
 reset() {
 	rm -f "$registry"/*
 	[ "${1:-}" = empty ] && return
-	echo "$want" >"$registry/$head.digest"
-	echo application/vnd.oci.image.manifest.v1+json >"$registry/$head.media"
-	echo '{"schemaVersion":2}' >"$registry/$head.manifest"
+	echo "$want" >"$registry/$short.digest"
+	echo application/vnd.oci.image.manifest.v1+json >"$registry/$short.media"
+	echo '{"schemaVersion":2}' >"$registry/$short.manifest"
 }
 
 run() {
@@ -170,13 +171,13 @@ called() {
 push=scripts/image-test-push.sh
 pin=scripts/image-test-pin.sh
 
-# test-image-push: the control pushes HEAD, after the check, and reads
-# the digest back.
+# test-image-push: the control checks HEAD under its full hash, pushes
+# it under the first twelve digits, and reads the digest back.
 reset empty
-accepted "image-test-push: pushed $ecr:$head, sha256:pushed" $push "$ecr"
+accepted "image-test-push: pushed $ecr:$short ($head), sha256:pushed" $push "$ecr"
 cases=$((cases + 1))
-called "^check $ecr:$head\$" && called "^docker push $ecr:$head\$" \
-	|| fail "the push control did not check and push $ecr:$head: $(cat "$calls")"
+called "^check $ecr:$head\$" && called "^docker push $ecr:$short\$" \
+	|| fail "the push control did not check $ecr:$head and push $ecr:$short: $(cat "$calls")"
 
 untouched 'usage: scripts/image-test-push.sh' $push
 untouched 'is not an ECR repository URI' $push garam/garam-test
@@ -208,7 +209,7 @@ cases=$((cases + 1))
 ! called '^docker ' || fail "a push without credentials called docker: $(cat "$calls")"
 
 reset
-accepted "image-test-push: $ecr:$head is already in the repository, $want; nothing built" $push "$ecr"
+accepted "image-test-push: $ecr:$short is already in the repository, $want; nothing built" $push "$ecr"
 cases=$((cases + 1))
 ! called '^(docker|build) ' || fail "a commit already pushed was built or pushed again: $(cat "$calls")"
 
@@ -221,23 +222,26 @@ reset empty
 with PUSH_REPORTS=sha256:other refused 'but the push reported sha256:other' $push "$ecr"
 
 # test-image-pin: the control moves the tag with the commit's manifest
-# under the digest it was read with.
+# under the digest it was read with, the commit named in full or by
+# the twelve digits it is pushed under.
 reset
-accepted "image-test-pin: $ecr:pinned-consumer is $head, $want" $pin "$ecr" "$head" consumer
+accepted "image-test-pin: $ecr:pinned-consumer is $short, $want" $pin "$ecr" "$head" consumer
 cases=$((cases + 1))
 grep -Fq -- "--image-tag pinned-consumer --image-manifest {\"schemaVersion\":2} --image-manifest-media-type application/vnd.oci.image.manifest.v1+json --image-digest $want" "$calls" \
 	|| fail "the pin control put another image: $(cat "$calls")"
 
 untouched 'usage: scripts/image-test-pin.sh' $pin "$ecr" "$head"
 untouched 'is not an ECR repository URI' $pin garam/garam-test "$head" consumer
-for commit in "$(printf '%s' "$head" | cut -c1-12)" "$(printf '%s' "$head" | tr a-f A-F)" "${head}0" ''; do
-	untouched 'is not a full lowercase commit hash' $pin "$ecr" "$commit" consumer
+reset
+accepted "image-test-pin: $ecr:pinned-consumer is $short, $want" $pin "$ecr" "$short" consumer
+for commit in "$(printf '%s' "$head" | cut -c1-11)" "$(printf '%s' "$head" | tr a-f A-F)" "${head}0" ''; do
+	untouched 'is not 12 to 40 lowercase hex digits' $pin "$ecr" "$commit" consumer
 done
 long=$(printf 'a%.0s' $(seq 122))
 for consumer in Consumer -consumer consumer- 'consumer/x' '' "$long"; do
 	untouched 'is not lowercase letters, digits and inner hyphens' $pin "$ecr" "$head" "$consumer"
 done
-accepted "image-test-pin: $ecr:pinned-$(printf 'a%.0s' $(seq 121)) is $head, $want" \
+accepted "image-test-pin: $ecr:pinned-$(printf 'a%.0s' $(seq 121)) is $short, $want" \
 	$pin "$ecr" "$head" "$(printf 'a%.0s' $(seq 121))"
 
 reset empty
@@ -246,7 +250,7 @@ with AWS_FAILS=1 refused "could not be read with the caller's AWS credentials" $
 
 reset
 echo "$want" >"$registry/pinned-consumer.digest"
-accepted "image-test-pin: $ecr:pinned-consumer is already $head, $want" $pin "$ecr" "$head" consumer
+accepted "image-test-pin: $ecr:pinned-consumer is already $short, $want" $pin "$ecr" "$head" consumer
 cases=$((cases + 1))
 ! called put-image || fail "a pin already in place was put again: $(cat "$calls")"
 
@@ -257,12 +261,12 @@ cases=$((cases + 1))
 grep -Fq 'tag immutability without the pinned-* exclusion filter' "$out" \
 	|| fail 'a refused move does not name tag immutability'
 reset
-with PUT_FAILS=1 refused "the registry refused tagging $head as pinned-consumer" $pin "$ecr" "$head" consumer
+with PUT_FAILS=1 refused "the registry refused tagging $short as pinned-consumer" $pin "$ecr" "$head" consumer
 cases=$((cases + 1))
 ! grep -Fq 'immutability' "$out" || fail 'a refused first pin names tag immutability'
 
 reset
-with PUT_STORES=sha256:other refused "pinned-consumer resolves to sha256:other, not $head's $want" $pin "$ecr" "$head" consumer
+with PUT_STORES=sha256:other refused "pinned-consumer resolves to sha256:other, not $short's $want" $pin "$ecr" "$head" consumer
 
 [ "$failed" -eq 0 ] || {
 	echo "image-test-ecr-test: $failed of $cases cases failed" >&2

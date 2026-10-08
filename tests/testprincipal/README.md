@@ -87,7 +87,7 @@ operator pushes it to an ECR repository of its own, which
 `garamsh/infra` declares; no workflow publishes it (ADR-0093):
 
 ```sh
-REPOSITORY=486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam/garam-test
+REPOSITORY=486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam-dev/garam-test
 ```
 
 It is a file source: copy the paths out and never run the image.
@@ -103,13 +103,13 @@ Its label `org.opencontainers.image.revision` names the full commit.
 `make test-image-e2e` checks those paths, the linking and the label.
 
 **Pin the digest, not the tag.** An image is tagged with its commit's
-full hash. The repository holds that tag immutable, but immutability
-is a setting of the repository and not of the reference; the digest
-cannot name other bytes:
+first twelve hex digits, `<tag>` below. The repository holds that tag
+immutable, but immutability is a setting of the repository and not of
+the reference; the digest cannot name other bytes:
 
 ```sh
 docker buildx imagetools inspect --format '{{.Manifest.Digest}}' \
-  "$REPOSITORY:<commit>"
+  "$REPOSITORY:<tag>"
 id=$(docker create "$REPOSITORY@<digest>")
 docker cp "$id:/garam" . && docker cp "$id:/testprincipal" . \
   && docker cp "$id:/migrations" .
@@ -160,7 +160,7 @@ make test-image-push
 `scripts/image-test-push.sh` refuses a working tree that differs from
 HEAD, logs Docker in with `aws ecr get-login-password`, builds the
 image and runs `make test-image-e2e`'s checks on it, pushes
-`$REPOSITORY:<commit>`, and prints the digest it reads back from the
+`$REPOSITORY:<tag>`, and prints the digest it reads back from the
 registry. A commit already in the repository is reported with its
 digest, and nothing is built.
 
@@ -170,8 +170,8 @@ Then the pin, from a checkout that has this target:
 make test-image-pin COMMIT=<commit> CONSUMER=<consumer>
 ```
 
-`scripts/image-test-pin.sh` refuses a commit that is not a full
-lowercase hash and a consumer name of anything but lowercase letters,
+`scripts/image-test-pin.sh` refuses a commit that is not 12 to 40
+lowercase hex digits and a consumer name of anything but lowercase letters,
 digits and inner hyphens, puts the commit's manifest under
 `pinned-<consumer>` with the digest it was read with, and prints the
 digest the tag reads back as. Where the registry refuses moving an

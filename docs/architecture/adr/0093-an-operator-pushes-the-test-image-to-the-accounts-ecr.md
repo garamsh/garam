@@ -7,7 +7,10 @@ Drafted for #1227, which reserved this number. On 2026-10-08 the owner
 directed that Garam uses AWS ECR, and then, on `garamsh/infra`'s
 question why `dev` needs Actions at all when a development push to ECR
 can be a direct one, that the test image is pushed by an operator. The
-PM recorded both on #1227.
+PM recorded both on #1227. On 2026-10-09 the owner decided that
+development images live under the `garam-dev/` namespace (#1234,
+which reserves ADR-0095 for that decision), and the test image is
+one.
 
 ## Contents
 - Context
@@ -46,11 +49,14 @@ Three facts reverse that choice:
 ## Decision
 
 **The test image is pushed to an ECR repository of its own,
-`486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam/garam-test`,
+`486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam-dev/garam-test`,
 by an operator under their own AWS identity, and its retention is that
 repository's lifecycle policy. No workflow publishes it, and no
 workflow holds a credential for it.**
 
+- **The namespace is `garam-dev/`.** The test image is a development
+  image, and #1234 puts development images there, out of the release
+  namespace `garam/`; ADR-0095 records that decision, not this one.
 - **The repository is `garamsh/infra`'s.** It declares the repository,
   its tag mutability, its lifecycle policy and the consumer's pull
   grant, and who may push to it. This repository names the repository
@@ -61,8 +67,8 @@ workflow holds a credential for it.**
   on a `v*` tag (ADR-0039).
 - **An operator runs two `make` targets.** `make test-image-push`,
   from a clean checkout of the commit, builds the image and checks it
-  as `make test-image-e2e` does, pushes it under the commit's full
-  hash, and reads its digest back from the registry
+  as `make test-image-e2e` does, pushes it under the commit's tag, and
+  reads its digest back from the registry
   (`scripts/image-test-push.sh`). `make test-image-pin COMMIT=<hash>
   CONSUMER=<name>` moves `pinned-<consumer>` to that commit's image by
   putting its manifest again under the digest it was read with, and
@@ -71,10 +77,15 @@ workflow holds a credential for it.**
 - **What each refuses before it reaches AWS** is held by
   `scripts/image-test-ecr-test.sh` in `make test`: a repository that is
   not an ECR repository URI, a working tree that differs from HEAD, a
-  commit that is not a full lowercase hash, and a consumer name that
-  cannot follow `pinned-` in a tag.
-- **Tags: the commit's full hash, immutable; `pinned-<consumer>`,
-  movable.** The repository holds that mutability. A commit already in
+  commit that is not 12 to 40 lowercase hex digits, and a consumer name
+  that cannot follow `pinned-` in a tag.
+- **Tags: the commit's first twelve hex digits, immutable;
+  `pinned-<consumer>`, movable.** The commit tag is the commit-derived
+  form
+  [ADR-0071](./0071-a-development-image-shares-the-release-repository-and-its-tag-says-it-is-not-a-release.md)
+  gives a development build, at its default length; a pin names the
+  commit in full or by those twelve. The repository holds that
+  mutability. A commit already in
   the repository is reported and not built again, since a rebuild would
   differ in its bytes and be refused at the push. A consumer still pins
   the digest.
@@ -96,8 +107,9 @@ workflow holds a credential for it.**
   (`garamsh/infra#292`).
 - **This supersedes ADR-0092's registry, its publishing from `dev`,
   and its retention mechanism.** ADR-0092's other decisions stand: the
-  image contents, commit-hash tags and digest pins, and the
-  `pinned-<consumer>` protocol, run on the PM's request. Its retention
+  image contents, digest pins, and the `pinned-<consumer>` protocol,
+  run on the PM's request. Its commit tag, the full hash, gives way to
+  ADR-0071's form above. Its retention
   count of 8 and its rejection of retention by age are superseded with
   the mechanism.
 - **Nothing deletes the GHCR package.** It keeps what ADR-0092
@@ -108,7 +120,11 @@ workflow holds a credential for it.**
 
 - **The repository's declarations.** Its mutability, its lifecycle
   rules, its pull grant and which identities may push are
-  `garamsh/infra`'s, read there and not restated here.
+  `garamsh/infra`'s, read there and not restated here. The rules and
+  the measurement above were declared for `garam/garam-test`;
+  `garam-dev/garam-test` is requested of `garamsh/infra` under #1234,
+  with the same ones.
+- **The `garam-dev/` namespace itself**, which is ADR-0095's (#1234).
 - **Whether moving `pinned-<consumer>` onto an image restarts rule 2's
   count.** Nothing here measured it. The procedure above assumes it
   does not: the count runs from the commit's push, which is why a pin
@@ -139,6 +155,11 @@ workflow holds a credential for it.**
 - **Keeping GHCR.** The consumer's access stays a web setting no
   repository records, and the image stays the one outside the
   account's registry.
+- **Tagging with the full hash, as ADR-0092 did.** A development
+  build takes ADR-0071's commit-derived form, twelve digits by default,
+  and the test image is one.
+- **`garam/garam-test`, this ADR's first repository.** The release
+  namespace holds releases only under #1234.
 - **Publishing from a workflow on `dev` through a role of its own.**
   This ADR's first draft did, through
   `garam-github-actions-dev` trusting this repository's workflow on

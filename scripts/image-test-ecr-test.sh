@@ -92,7 +92,7 @@ esac
 EOF
 chmod +x "$bin/aws" "$bin/docker"
 
-ecr=486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam-dev/garam-test
+ecr=486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/dev/garam-test
 want=sha256:want
 cases=0
 failed=0

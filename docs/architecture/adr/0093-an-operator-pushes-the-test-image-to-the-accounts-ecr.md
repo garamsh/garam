@@ -7,10 +7,10 @@ Drafted for #1227, which reserved this number. On 2026-10-08 the owner
 directed that Garam uses AWS ECR, and then, on `garamsh/infra`'s
 question why `dev` needs Actions at all when a development push to ECR
 can be a direct one, that the test image is pushed by an operator. The
-PM recorded both on #1227. On 2026-10-09 the owner decided that
-development images live under the `garam-dev/` namespace (#1234,
-which reserves ADR-0095 for that decision), and the test image is
-one.
+PM recorded both on #1227. The owner then decided that development
+images live under the `dev/` namespace, answering `garamsh/infra` on
+2026-10-08 (#1234, which reserves ADR-0095 for that decision), and the
+test image is one.
 
 ## Contents
 - Context
@@ -49,12 +49,12 @@ Three facts reverse that choice:
 ## Decision
 
 **The test image is pushed to an ECR repository of its own,
-`486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam-dev/garam-test`,
+`486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/dev/garam-test`,
 by an operator under their own AWS identity, and its retention is that
 repository's lifecycle policy. No workflow publishes it, and no
 workflow holds a credential for it.**
 
-- **The namespace is `garam-dev/`.** The test image is a development
+- **The namespace is `dev/`.** The test image is a development
   image, and #1234 puts development images there, out of the release
   namespace `garam/`; ADR-0095 records that decision, not this one.
 - **The repository is `garamsh/infra`'s.** It declares the repository,
@@ -122,9 +122,9 @@ workflow holds a credential for it.**
   rules, its pull grant and which identities may push are
   `garamsh/infra`'s, read there and not restated here. The rules and
   the measurement above were declared for `garam/garam-test`;
-  `garam-dev/garam-test` is requested of `garamsh/infra` under #1234,
-  with the same ones.
-- **The `garam-dev/` namespace itself**, which is ADR-0095's (#1234).
+  `dev/garam-test` is one of the development repositories #1234 lists
+  for `garamsh/infra` to declare, with the same ones.
+- **The `dev/` namespace itself**, which is ADR-0095's (#1234).
 - **Whether moving `pinned-<consumer>` onto an image restarts rule 2's
   count.** Nothing here measured it. The procedure above assumes it
   does not: the count runs from the commit's push, which is why a pin

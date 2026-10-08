@@ -634,7 +634,7 @@ test-image-e2e: test-image
 # digits (ADR-0071's commit-derived tag); test-image-pin moves
 # `pinned-$(CONSUMER)` to the image of $(COMMIT).
 # Neither is in `ci`, which holds no AWS credential.
-TEST_IMAGE_ECR_REPOSITORY = 486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam-dev/garam-test
+TEST_IMAGE_ECR_REPOSITORY = 486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/dev/garam-test
 
 test-image-push:
 	scripts/image-test-push.sh '$(TEST_IMAGE_ECR_REPOSITORY)'

@@ -640,7 +640,7 @@ ADRs:
   it" in part; its registry, its publishing from `dev` and its
   retention are superseded by 0093
 - [0093](./adr/0093-an-operator-pushes-the-test-image-to-the-accounts-ecr.md)
-  — an operator pushes the test image to `garam-dev/garam-test` in the
+  — an operator pushes the test image to `dev/garam-test` in the
   account's ECR, under ADR-0071's commit-prefix tag, and moves its
   pins, under their own AWS identity with `make test-image-push` and
   `make test-image-pin`; no workflow holds a

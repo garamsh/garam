@@ -17,9 +17,10 @@ const features = readdirSync(join(import.meta.dirname, "src/features"), {
 // dependency direction: shared code imports neither a feature nor a
 // route, a feature imports no route, and a route or a sibling feature
 // reaches a feature only through the two files stack-nextjs.md §13
-// Feature entry points has it declare: `index.ts`, the server-only read
-// surface, and `actions.ts`, the Server Actions — kept apart so a
-// client module cannot pull the backend client into the browser bundle.
+// Feature entry points and file naming has it declare: `index.ts`, the
+// server-only read surface, and `actions.ts`, the Server Actions — kept
+// apart so a client module cannot pull the backend client into the
+// browser bundle.
 const importDirection = {
   basePath: import.meta.dirname,
   zones: [

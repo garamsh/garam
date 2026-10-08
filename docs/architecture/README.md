@@ -643,5 +643,6 @@ ADRs:
 - [0094](./adr/0094-structural-rules-yield-only-to-what-a-framework-imposes.md)
   — a structural rule yields to a stack file only where the stack's
   framework imposes the case, taken from the conventions template at
-  `b02fe37` with five more template commits; `web/` and the
-  composition root are governed by `structure.md` again
+  `b02fe37` with six more template commits; `web/` is governed by
+  `structure.md` again, and `db32912` makes `internal/cli` the
+  composition site `stack-go.md` provides

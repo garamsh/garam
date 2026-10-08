@@ -1,4 +1,4 @@
-# ADR 0094: Structural rules yield only to what a framework imposes, and garam takes five more template changes with that one
+# ADR 0094: Structural rules yield only to what a framework imposes, and garam takes six more template changes with that one
 
 > Status: accepted
 > Date: 2026-10-08
@@ -34,7 +34,9 @@ the stack-specific file that applies governs". Two cases turned on it.
   `docs/convention/stack-go.md` §Project envelope puts construction in
   `cmd/<binary>/main.go` and nowhere else. That section cited rule 8 to
   say the stack file governs, and recorded `internal/cli` as a
-  divergence (#756).
+  divergence. #756 put the question to the template and closed on
+  2026-08-31. The template answered it at `db32912` (#337, merged
+  2026-09-05), which this repository had not taken.
 
 `garamsh/convention-driven-project`'s PM reported the first case on that
 repository's #409. That report is where #1230 comes from. The template
@@ -53,7 +55,7 @@ stated.** Each one is named by its merge commit in
   stack file states of a structural rule. This is the change this ADR
   is owed for under rule 4 and
   [ADR-0061](./0061-adopting-a-rule-the-template-decided-is-a-decision-taken-here.md):
-  it decides two cases differently from the record before it.
+  it decides the `web/` case differently from the record before it.
 - **`8e32768` (#409), taken for `stack-nextjs.md` verbatim.** The tiers
   in §13 go, the one rule in them that was not structural moves to §12,
   and §13 is renamed. The commit's `stack-fastapi.md` half has nothing
@@ -65,28 +67,31 @@ stated.** Each one is named by its merge commit in
   an obligation.
 - **`2f625b6` (#380), taken verbatim.** `git.md` names the default
   branch instead of `main`. On `garamsh/garam` that branch is `dev`.
+- **`db32912` (#337), taken verbatim.** `stack-go.md` §Project envelope
+  names one composition site. That site is `cmd/<binary>/main.go`
+  unless a test has to reach it, in which case it is a package
+  `main.go` calls.
 - **`db30fcb` (#368) and `dc78d64` (#389), taken verbatim.** These are
   `documentation.md` §GitHub artifacts' rule that a claim names a basis
   that could have contradicted it, and `ci.md`'s rule that a change
   shows the whole check set ran before it landed.
 
-**The two cases in §Context now follow from the new rule 8.**
+**The two cases in §Context are settled, by different commits.**
 
-- **`web/`.** It is governed by `structure.md`, and a feature reaches a
-  sibling through that sibling's `index.ts` or `actions.ts`.
+- **`web/`, by the new rule 8.** It is governed by `structure.md`, and
+  a feature reaches a sibling through that sibling's `index.ts` or
+  `actions.ts`.
   `web/eslint.config.mjs` refuses an import into a sibling's internals
   and admits one through those two files. That is the same zone it
   already drew around `app/`.
-- **The composition root.** Go imposes no site for construction:
-  `internal/cli` builds and runs. So `structure.md` governs that case,
-  `internal/cli` is the composition root by its rule, and the
-  divergence record ends.
+- **The composition root, by `db32912`.** `tests/integration` reaches
+  the shipped wiring through `cli.NewRootCommand()`. So `internal/cli`
+  is the composition site that `stack-go.md` §Project envelope itself
+  provides. The two files now decide the case the same way, rule 8 has
+  no conflict to settle, and the divergence record ends.
 
 ## What this does not decide
 
-- **Whether `stack-go.md` should name a property rather than a path.**
-  That question is still open with the template's convention owner, as
-  #756 put it.
 - **The template commits between `TEMPLATE_SYNCED` (`6fbfd5d`) and
   `8e32768` that are not named above.** One of them is `3152373`
   (#388), which rewords the sentence `b02fe37` added to the conventions
@@ -104,12 +109,17 @@ stated.** Each one is named by its merge commit in
 - **`web/` can draw a feature-to-feature edge without an ADR.** The
   edge must go through the declared surface, and the lint rule enforces
   that.
+- **No lint rule keeps a cycle between two features out.** Direction
+  does that, held when the split is drawn, so a cycle is a review
+  matter under ADR-0047. The zone that refused every feature-to-feature
+  import also refused every cycle; the zone that replaces it admits an
+  import through the declared surface in both directions.
 - **This ADR pairs with the index, with [web-app.md](../web-app.md) and
   with [structure.md](../structure.md).** Rule 8 is the index's
   ([ADR-0062](./0062-an-adr-deciding-a-rule-of-the-index-pairs-with-the-index.md)).
   The other two each held a statement this ADR made false: the first
   that `stack-nextjs.md` governs which tier may import which, the
-  second that rule 8 puts `stack-go.md` above it.
+  second that `internal/cli` diverges from `stack-go.md`.
 
 ## Rejected alternatives
 

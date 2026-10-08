@@ -135,8 +135,21 @@ Multiple root-level files are fine: `errors.go` + `logger.go` +
 
 ### Project envelope
 
-- `cmd/<binary>/main.go` is the **only place** that constructs concrete
-  types and passes them to interfaces. Keep it thin.
+- **The module has one composition site**: the place that constructs
+  concrete types and passes them to interfaces, deciding which
+  implementation each interface gets. Everything else takes what it
+  depends on as an argument. Keep it thin.
+- **That site is `cmd/<binary>/main.go`, unless a test has to reach
+  it.** `package main` cannot be imported, so a module whose tests
+  exercise the wired binary holds the site in a package `main.go`
+  calls, and `main.go` holds that call. A site a test cannot call is one
+  the test copies instead, and the copy goes on passing after the
+  shipped wiring breaks.
+- **A test constructs what it puts under test** — the unit and whatever
+  stands in for its dependencies, or the server the test points its
+  client at. That is the test's subject, not a second composition site.
+  What a test does not do is assemble the shipped graph a second time:
+  where that graph is the subject, the test calls the composition site.
 - `internal/` is enforced by the Go toolchain. Use it for everything not
   explicitly public.
 - `pkg/` is for code other modules import. Most services don't need it.

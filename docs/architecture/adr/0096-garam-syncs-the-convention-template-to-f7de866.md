@@ -29,8 +29,9 @@ make the adoption the unit an ADR records. Most of the range lands in
 not:
 
 - **`adr/0000-template.md` gains §Signs the decision was wrong**
-  (`b55aebc`, template #341). That changes the form every ADR here is
-  written from, which is a change to `docs/architecture/` itself.
+  (`b55aebc`, template #341). That changes the blank form kept under
+  `docs/architecture/adr/`, which is a change to `docs/architecture/`
+  itself.
 - **`stack-go.md` §Project envelope and §7 moved** (`e0ffe77`, #381,
   and `f7de866`, #414). [structure.md](../structure.md) §Where the
   composition root lives cited §7's sentence that `package main` cannot
@@ -41,13 +42,36 @@ not:
 ## Decision
 
 **garam takes every commit in `6fbfd5d..f7de866` that lands on a file
-it keeps.** The exceptions are the declines and adaptations below. The
-pull request that adds this ADR carries the per-commit table. Each row
-names the template commit and what happened to it. The rules stand in
-the files they landed in, and this ADR does not restate them.
+it keeps.** The exceptions are the six below. The pull request that
+adds this ADR carries the per-commit table. Each row names the template
+commit and what happened to it. The rules stand in the files they
+landed in, and this ADR does not restate them.
+
+**Four exceptions follow from what Garam already holds.**
+
+- **`a6a2355` (#323) is declined.** It adds the template's skeleton
+  `Makefile`, `ci.yml`, `dependabot.yml` and README text. Garam's own
+  files already carry `make lint` and `make ci`, a `ci.yml` that runs
+  `make ci`, and a Dependabot entry for `github-actions`. Its pull
+  request template and `check-contents-list.sh` halves were already
+  held here.
+- **`70b7359` (#336) is declined.** `stack-nextjs.md` §12 already
+  states the identity and presence form of a text assertion for each
+  tool in prose. The template's table would be a second site for the
+  same rule.
+- **The "Concrete naming forms" half of `f159947` (#397) is
+  declined.** It rewords a `style.md` bullet that sends the reader to
+  the stack file. Garam removed that bullet in #979, because a
+  convention file does not send the reader to another. The commit's
+  new "Shared concept, named file" bullet is taken.
+- **`f7de866` (#414) is placed differently.** Its paragraph goes at the
+  end of `testing.md` §Three layers, after Garam's own paragraph on the
+  Postgres integration layer (#900). The template places it after the
+  testcontainers exception. Garam's paragraph applies that rule and its
+  exception, so it stays next to them.
 
 **Two local positions are kept and stated, on the PM's decision on
-#1235.**
+#1235.** These are the remaining two exceptions.
 
 - **`stack-go.md` §1 names an implementation package for its
   technology.** The template moved to `internal/<domain>/<pkg>/`
@@ -79,17 +103,18 @@ taken, declined with a reason, or lands on a file Garam does not keep.
 - **Template #415.** It is still open with the template owner. When it
   is decided, it gets its own sync and its own ADR.
 - **The re-check of the three stack files at Garam's own releases.**
-  That is a follow-up issue. Until it lands, those headers record a
-  check made at an earlier release.
-- **Whether earlier ADRs owe §Signs the decision was wrong.** Rule 2
-  freezes their bodies. The new section binds an ADR written from the
-  form after this one.
+  That is #1239. Until it lands, the current headers ("Go 1.21 and
+  mockery 3", "Next.js 16", "Tailwind CSS 4") name no checkable
+  release, which `documentation.md` §Keep it current asks for.
+- **Whether an ADR is bound to carry §Signs the decision was wrong.**
+  That is a rule about how the record is written. It belongs in the
+  index's §Rules, and the PM will raise it separately.
 
 ## Consequences
 
-- **An ADR written after this one carries §Signs the decision was
-  wrong.** It is written while the rejected alternatives are still in
-  view. This ADR is the first.
+- **The blank ADR form now carries §Signs the decision was wrong, and
+  this ADR uses it.** The section is written while the rejected
+  alternatives are still in view. No ADR before this one has it.
 - **`stack-go.md` §1 no longer reaches a domain whose unexported fields
   close its aggregate.** It does not change which of Garam's domains
   are defective. [structure.md](../structure.md) §Boundaries and

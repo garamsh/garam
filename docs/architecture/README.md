@@ -644,9 +644,10 @@ ADRs:
   account's ECR, under ADR-0071's commit-prefix tag, and moves its
   pins, under their own AWS identity with `make test-image-push` and
   `make test-image-pin`; no workflow holds a
-  credential for it, so no image appears per `dev` commit, and the
-  repository's lifecycle policy in `garamsh/infra` expires a pinned
-  image too 90 days after its push; supersedes ADR-0092's registry,
+  credential for it, so no image appears per `dev` commit; the
+  repository's lifecycle policy in `garamsh/infra` expires an unpinned
+  image 90 days after its push and bounds pins by a count of 50, not
+  by age; supersedes ADR-0092's registry,
   its publishing from `dev` and its retention
 - [0094](./adr/0094-structural-rules-yield-only-to-what-a-framework-imposes.md)
   — a structural rule yields to a stack file only where the stack's

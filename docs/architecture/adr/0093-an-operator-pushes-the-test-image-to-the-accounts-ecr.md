@@ -89,18 +89,25 @@ workflow holds a credential for it.**
   the repository is reported and not built again, since a rebuild would
   differ in its bytes and be refused at the push. A consumer still pins
   the digest.
-- **Retention is three lifecycle rules.** Rule 1 keeps `pinned-*`
-  images, one per consumer; rule 2 expires an image tagged by commit
-  90 days after it was pushed; rule 3 expires an untagged image after
-  a day. Nothing here lists or deletes an image.
-- **A pinned image is expired 90 days after it was pushed.**
-  `garamsh/infra` measured with ECR's own lifecycle preview that rule
-  priority does not protect a pinned image that also carries its
-  commit tag: rule 2 selects it by that tag, and every pinned image
-  carries one, because a pin puts the commit's manifest under a second
-  tag. So a pin holds an image for no longer than an image is held
-  unpinned, and a consumer moves its pin to a newer commit before the
-  one it holds is 90 days old.
+- **Retention is three lifecycle rules,** in priority order: rule 1
+  selects tags with the prefix `pinned-` and expires images past a
+  count of 50; rule 2 selects every tag (`tagPatternList ["*"]`) and
+  expires an image 90 days after its push; rule 3 expires an untagged
+  image after a day. Nothing here lists or deletes an image.
+- **A pinned image is not expired by age.** Rule 1 claims it, and an
+  image a higher-priority rule claims is not evaluated by a lower one,
+  so rule 2 never reaches it although it also carries its commit tag.
+  What bounds pins is rule 1's count of 50, not time, and moving a pin
+  when the commit a consumer tests against moves is a convenience
+  rather than a necessity. The Garam PM measured this on 2026-10-09
+  with read-only `start-lifecycle-policy-preview` on
+  `garam/garam-agent-operator`, whose images carry two tags as a
+  pinned one does: a prefix rule with count > 50 ahead of a `*` rule
+  with count > 1 expired 0 images, and the `*` rule alone expired 3;
+  `get-lifecycle-policy` answering `LifecyclePolicyNotFoundException`
+  afterwards showed the previews applied nothing (#1227). An earlier
+  measurement that found the opposite gave both rules the same
+  selection, which the service refuses as invalid.
 - **The consumer pulls with its own role.** The repository's policy
   grants pull to
   `arn:aws:iam::486152169996:role/garam-agent-operator-github-actions`
@@ -120,15 +127,11 @@ workflow holds a credential for it.**
 
 - **The repository's declarations.** Its mutability, its lifecycle
   rules, its pull grant and which identities may push are
-  `garamsh/infra`'s, read there and not restated here. The rules and
-  the measurement above were declared for `garam/garam-test`;
-  `dev/garam-test` is one of the development repositories #1234 lists
-  for `garamsh/infra` to declare, with the same ones.
+  `garamsh/infra`'s, read there and not restated here. The rules above
+  are the policy #1227 records going in; `dev/garam-test` is one of
+  the development repositories #1234 lists for `garamsh/infra` to
+  declare.
 - **The `dev/` namespace itself**, which is ADR-0095's (#1234).
-- **Whether moving `pinned-<consumer>` onto an image restarts rule 2's
-  count.** Nothing here measured it. The procedure above assumes it
-  does not: the count runs from the commit's push, which is why a pin
-  moves to a newer commit rather than being refreshed on the same one.
 - **When the GHCR package is retired**, and what announces it.
 - **What the repository costs.** No storage is measured here.
 
@@ -141,8 +144,9 @@ workflow holds a credential for it.**
   `scripts/image-test-push.sh` refuses unless it is clean, and is
   checked there by `tests/image/test-image.sh` before the push. No
   runner records the build.
-- **A digest lasts 90 days from its push, pinned or not.** Under
-  ADR-0092 an unpinned digest lasted 8 `dev` commits and a pinned one
+- **An unpinned digest lasts 90 days from its push, and a pinned one
+  until its pin moves or 50 newer pins push it out.** Under ADR-0092
+  an unpinned digest lasted 8 `dev` commits and a pinned one
   indefinitely.
 - **A commit's tag cannot be moved.** It is immutable, so the first
   image pushed for a commit stands. ADR-0092's consequence that a
@@ -172,8 +176,8 @@ workflow holds a credential for it.**
 - **Pruning from a workflow step or a script against ECR.** It needs a
   delete right and puts retention outside the Terraform that holds
   every other repository's.
-- **Protecting a pin by rule priority alone.** Measured not to hold:
-  the pinned image's commit tag still matches rule 2.
+- **Selecting commit tags in rule 2 by a hex pattern.** A
+  `tagPatternList` is ANDed, so such a pattern selects nothing (#1227).
 - **Copying the pin with `docker buildx imagetools create`.** It
   needs a Docker login, and nothing in it ties the bytes it pushes to
   the digest it read. ECR's `PutImage` takes the manifest with that

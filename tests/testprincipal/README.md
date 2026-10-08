@@ -124,14 +124,13 @@ Then run them as §Invocation says, with `-migrations ./migrations`.
   `arn:aws:iam::486152169996:role/garam-agent-operator-github-actions`,
   the role `garamsh/garam-agent-operator`'s workflows assume.
 - **Retention.** The repository's lifecycle policy, held in
-  `garamsh/infra`, expires an image tagged by commit 90 days after it
-  was pushed, and an untagged one after a day. **A pin does not hold
-  an image past those 90 days**: an image tagged `pinned-<consumer>`
-  also carries its commit's tag, and the commit rule expires it
-  (ADR-0093). So pin again whenever the commit you test against
-  moves, and move to a newer commit before the one you hold is 90
-  days old: ask the Garam PM, and an operator pushes that commit's
-  image and moves `pinned-<consumer>` to it (§Pushing and pinning).
+  `garamsh/infra`, keeps an image tagged `pinned-<consumer>` whatever
+  its age, up to 50 pins; expires any other tagged image 90 days after
+  it was pushed; and expires an untagged one after a day (ADR-0093).
+  A pin therefore holds its image until it moves. To move it to
+  another commit, ask the Garam PM, and an operator pushes that
+  commit's image and moves `pinned-<consumer>` to it (§Pushing and
+  pinning).
 - **The GHCR package.** Images published before ADR-0093 are in
   `ghcr.io/garamsh/garam-test`, which nothing publishes to or prunes
   any longer. It stays until the ECR repository holds a pinned image,

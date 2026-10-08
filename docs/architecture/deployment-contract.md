@@ -527,8 +527,8 @@ that would assert one:
   release version
 - [ADR-0092](./adr/0092-a-test-image-is-published-to-ghcr-from-dev-and-no-release-carries-it.md)
   — the test image is published outside the release repositories,
-  and no deployment runs it; its registry and its publishing from
-  `dev` are superseded by ADR-0093
+  and no deployment runs it; its registry, its commit tag and its
+  publishing from `dev` are superseded by ADR-0093
 - [ADR-0093](./adr/0093-an-operator-pushes-the-test-image-to-the-accounts-ecr.md)
   — an operator pushes the test image to its ECR repository in the
   account, no workflow holds a credential for it, and its retention is

@@ -637,8 +637,8 @@ ADRs:
   own, tagged by commit and pinned by digest, keeping the 8 newest
   unpinned versions and every `pinned-*` one; supersedes ADR-0039 for
   non-release artifacts and ADR-0081's "no image Garam ships carries
-  it" in part; its registry, its publishing from `dev` and its
-  retention are superseded by 0093
+  it" in part; its registry, its commit tag, its publishing from `dev`
+  and its retention are superseded by 0093
 - [0093](./adr/0093-an-operator-pushes-the-test-image-to-the-accounts-ecr.md)
   — an operator pushes the test image to `dev/garam-test` in the
   account's ECR, under ADR-0071's commit-prefix tag, and moves its
@@ -647,8 +647,8 @@ ADRs:
   credential for it, so no image appears per `dev` commit; the
   repository's lifecycle policy in `garamsh/infra` expires an unpinned
   image 90 days after its push and bounds pins by a count of 50, not
-  by age; supersedes ADR-0092's registry,
-  its publishing from `dev` and its retention
+  by age; supersedes ADR-0092's registry, its commit tag, its
+  publishing from `dev` and its retention
 - [0094](./adr/0094-structural-rules-yield-only-to-what-a-framework-imposes.md)
   — a structural rule yields to a stack file only where the stack's
   framework imposes the case, taken from the conventions template at

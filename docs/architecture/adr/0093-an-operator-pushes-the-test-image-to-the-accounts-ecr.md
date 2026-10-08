@@ -60,7 +60,9 @@ workflow holds a credential for it.**
 - **The repository is `garamsh/infra`'s.** It declares the repository,
   its tag mutability, its lifecycle policy and the consumer's pull
   grant, and who may push to it. This repository names the repository
-  in `Makefile` and declares none of it.
+  as a constant in `scripts/image-test-push.sh` and
+  `scripts/image-test-pin.sh`, which take no argument naming one, and
+  declares none of it.
 - **No CI credential.** There is no role trusting `refs/heads/dev` and
   no publishing workflow. `.github/workflows/test-image.yml` is
   removed; no workflow here assumes an AWS identity but `release.yml`'s
@@ -112,11 +114,11 @@ workflow holds a credential for it.**
   grants pull to
   `arn:aws:iam::486152169996:role/garam-agent-operator-github-actions`
   (`garamsh/infra#292`).
-- **This supersedes ADR-0092's registry, its publishing from `dev`,
-  and its retention mechanism.** ADR-0092's other decisions stand: the
-  image contents, digest pins, and the `pinned-<consumer>` protocol,
-  run on the PM's request. Its commit tag, the full hash, gives way to
-  ADR-0071's form above. Its retention
+- **This supersedes ADR-0092's registry, its commit tag, its
+  publishing from `dev`, and its retention mechanism.** ADR-0092's
+  other decisions stand: the image contents, digest pins, and the
+  `pinned-<consumer>` protocol, run on the PM's request. Its commit
+  tag, the full hash, gives way to ADR-0071's form above. Its retention
   count of 8 and its rejection of retention by age are superseded with
   the mechanism.
 - **Nothing deletes the GHCR package.** It keeps what ADR-0092

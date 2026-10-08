@@ -41,7 +41,7 @@ nothing added since.
 | `runtime-safety.md` | Types, trust boundaries, error handling |
 | `testing.md` | Test layers, mocking, placement |
 | `ci.md` | Local/CI parity, pipeline authoring, security |
-| `git.md` | Branches, commits, PR titles, merging |
+| `git.md` | Branches, commits, PR titles, merging, promoting `dev` to `main` |
 | `style.md` | Naming and pattern consistency in code |
 | `simplicity.md` | Whether to add or to change the shape; when an abstraction earns its place |
 | `review.md` | What a review must carry to be valid, and how an author responds |

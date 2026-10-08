@@ -1,7 +1,7 @@
 # Git Conventions
 
-How branches, commits, and PR titles are written, and what survives a
-merge.
+How branches, commits, and PR titles are written, what survives a
+merge, and how `dev` reaches `main`.
 
 ## Branches
 
@@ -78,5 +78,52 @@ Format: `<type>: <imperative summary>`
   becomes the commit on the default branch, so it is the permanent
   record of the change.
 - Body follows `.github/PULL_REQUEST_TEMPLATE.md`.
-- PRs are squash-merged. Branch commits do not appear on the default
-  branch; do not rewrite them to be pretty.
+- PRs into `dev` are squash-merged. Branch commits do not appear on the
+  default branch; do not rewrite them to be pretty. The promotion PR is
+  never merged: §Promotion moves `main` to its head instead.
+
+## Promotion
+
+Every PR but the promotion PR targets `dev`. `main` moves only by this
+procedure.
+
+- **The PM promotes.** No other role moves `main`.
+- **Due** before any release, and at least after each verified
+  milestone.
+- **The gate:** a PR from `dev` into `main`, which is what starts
+  `ci.yml` and `images.yml` on the forge. Every job of both passes on
+  the head being promoted. A run that was never dispatched is handled
+  as `AGENTS.md` §Roles states.
+- **A fast-forward, never a squash, a rebase or a merge commit.** A
+  squash or a rebase puts commits on `main` that `dev` does not have,
+  so `main` stops being an ancestor of `dev` and every later promotion
+  diverges. A merge commit leaves `main` holding a commit no run
+  tested.
+- **The steps**, with `<n>` the promotion PR and `<head>` the commit
+  its runs tested:
+  1. Open the PR with base `main` and head `dev`.
+  2. Read `<head>` and the checks on it:
+     `gh pr view <n> --json headRefOid,statusCheckRollup`. Every
+     `ci.yml` and `images.yml` job on `<head>` has passed.
+  3. Confirm `main` is still an ancestor of `<head>`:
+     `gh api repos/garamsh/garam/compare/main...<head> --jq .behind_by`
+     answers `0`.
+  4. Move `main` with a non-forced ref update:
+     `gh api -X PATCH repos/garamsh/garam/git/refs/heads/main -f sha=<head> -F force=false`.
+     The forge refuses one that is not a fast-forward, and marks the PR
+     merged because `main` now holds its head.
+  5. Read back that `main` is `<head>`:
+     `gh api repos/garamsh/garam/git/refs/heads/main --jq .object.sha`.
+- **Nothing else moves `main`:** no push, no merge of any PR into
+  `main`, no other ref update. Branch protection and rulesets are
+  unavailable on this repository's plan (the API answered 403 on
+  2026-10-08, #1215), so this rule is the whole of `main`'s defence. A
+  fix `main` needs reaches it through `dev` and the next promotion.
+- **A release tag is cut only on a commit `main` holds.** `release.yml`
+  publishes whatever commit a `v*` tag names, so a tag on a commit only
+  `dev` holds releases what the gate never passed.
+- **A failed run is fixed on `dev`, not on the promotion PR.** No commit
+  is pushed to the promotion PR and `main` does not move around it. An
+  ordinary PR into `dev` carries the fix; its merge moves the promotion
+  PR's head, and the gate is read again on the run that follows. The
+  promotion PR stays open across that.

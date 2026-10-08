@@ -28,7 +28,7 @@ COPY migrations /migrations
 
 # The commit built, which the image's tag repeats. It is what the build
 # claimed and not a property of the bytes, as on the release images.
-# The source label is what links a GHCR package to this repository.
+# The source label names the repository the image is built from.
 ARG IMAGE_REVISION
 LABEL org.opencontainers.image.revision=$IMAGE_REVISION \
   org.opencontainers.image.source=https://github.com/garamsh/garam \

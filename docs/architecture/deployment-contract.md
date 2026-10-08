@@ -56,11 +56,12 @@ so a deployment running one sets the repository as well as the tag.
 `scripts/image-build.sh` is authoritative for which development
 references this repository produces, and refuses every other tag
 before it builds; `README.md` §Development images is the procedure.
-The test
-image, `ghcr.io/garamsh/garam-test`, is none of these: it is published
-from `dev` for another repository's CI, no deployment runs it, and the
-chart names it nowhere
-([ADR-0092](./adr/0092-a-test-image-is-published-to-ghcr-from-dev-and-no-release-carries-it.md)).
+The test image is none of these: an operator pushes it for another
+repository's CI to `dev/garam-test`, an ECR repository of its own that
+no release writes to; no deployment runs it, and the chart names it
+nowhere
+([ADR-0092](./adr/0092-a-test-image-is-published-to-ghcr-from-dev-and-no-release-carries-it.md),
+[ADR-0093](./adr/0093-an-operator-pushes-the-test-image-to-the-accounts-ecr.md)).
 
 It records what is. Changing any behaviour named below is a decision,
 not an edit here. Every claim names the path it can be checked against,
@@ -531,8 +532,13 @@ that would assert one:
   — a development build lives under `dev/`, and the release
   repositories hold releases only
 - [ADR-0092](./adr/0092-a-test-image-is-published-to-ghcr-from-dev-and-no-release-carries-it.md)
-  — the test image is published from `dev` to GHCR, outside the
-  release repositories, and no deployment runs it
+  — the test image is published outside the release repositories,
+  and no deployment runs it; its registry, its commit tag and its
+  publishing from `dev` are superseded by ADR-0093
+- [ADR-0093](./adr/0093-an-operator-pushes-the-test-image-to-the-accounts-ecr.md)
+  — an operator pushes the test image to its ECR repository in the
+  account, no workflow holds a credential for it, and its retention is
+  that repository's lifecycle policy in `garamsh/infra`
 - [ADR-0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)
   — the listener presents one certificate signed by a garam server
   authority the deployment holds, every identity pins that root, and a

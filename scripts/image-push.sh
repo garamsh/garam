@@ -3,17 +3,14 @@
 # `<output>=<reference>` on the command line, and records what the
 # registry answers with as `<output>-digest` on $GITHUB_OUTPUT
 # (ADR-0039: the release records each image's digest beside its tag).
-# It has two callers: .github/workflows/release.yml, which says why the
-# push is separated from the build, and
-# .github/workflows/test-image.yml, which pushes the test image after
-# checking it (ADR-0092).
+# Its one caller is .github/workflows/release.yml, which says why the
+# push is separated from the build.
 #
 # Every reference is read out of the local image store before the first
 # one is pushed, so a run that built one image of a pair pushes neither.
 # The release repositories are IMMUTABLE and half a version cannot be
 # re-pushed, so the repair for a partial release is the next version
-# rather than this one (ADR-0039 §Consequences). The test image's GHCR
-# package has mutable tags.
+# rather than this one (ADR-0039 §Consequences).
 #
 # The digest comes from the registry and not from the build. What a
 # consumer resolves is the manifest the registry stores, and a build

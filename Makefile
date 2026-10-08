@@ -85,7 +85,7 @@ WEB_E2E_DATABASE_URL ?= $(if $(DB_HOST_ADDR),postgres://garam:garam@$(DB_HOST_AD
 .PHONY: lint format test build gen check-gen check-toolchain integration e2e workload-integration standalone-e2e mutation db-up db-down db-prune backend-up ci template-diff search
 .PHONY: chart chart-lint chart-render chart-identity chart-names chart-rewrite chart-guards chart-security chart-package
 .PHONY: web-install web-lint web-format web-test web-build web-gen web-check-gen web-e2e web-image-e2e web-ci
-.PHONY: image-build test-image test-image-e2e
+.PHONY: image-build test-image test-image-e2e test-image-push test-image-pin
 .PHONY: minikube-up minikube-down minikube-start minikube-images minikube-db
 .PHONY: minikube-secret minikube-migrate minikube-apps minikube-rebuild minikube-forward minikube-context
 
@@ -185,8 +185,8 @@ format:
 # and each printing its own count: scripts/image-build-test.sh, which
 # tags a development image-build accepts (ADR-0071) and under which
 # namespace it names them (ADR-0095), and
-# scripts/image-test-workflow-test.sh, what the test image's prune
-# keeps (ADR-0092).
+# scripts/image-test-ecr-test.sh, what test-image-push and
+# test-image-pin refuse before they reach AWS (ADR-0093).
 TEST_PKGS = $(filter-out %/tests/integration %/tests/e2e %/tests/workload %/tests/standalone,$(GO_PKGS))
 
 test:
@@ -194,7 +194,7 @@ test:
 	@test -n '$(TEST_PKGS)' || { echo 'test: nothing to test — the package list is empty, or the filter above matched all of it'; exit 1; }
 	@go test -count=1 $(TEST_PKGS)
 	@scripts/image-build-test.sh
-	@scripts/image-test-workflow-test.sh
+	@scripts/image-test-ecr-test.sh
 
 # `go build ./...` exits 0 having done nothing should that pattern ever
 # resolve to no package, so build names what it compiles too. It skips a
@@ -620,8 +620,7 @@ web-image-e2e: $(if $(GARAM_WEB_IMAGE),,image-build)
 # garam, testprincipal and the migrations out of (ADR-0092), tagged
 # with HEAD's full hash under TEST_IMAGE_REPOSITORY; the script refuses
 # a working tree that differs from HEAD. test-image-e2e checks it as
-# that consumer reads it. Both need Docker, so neither is in `ci`;
-# .github/workflows/test-image.yml runs the second before it pushes.
+# that consumer reads it. Both need Docker, so neither is in `ci`.
 TEST_IMAGE_REPOSITORY ?= garam-test
 
 test-image:
@@ -629,6 +628,20 @@ test-image:
 
 test-image-e2e: test-image
 	tests/image/test-image.sh '$(TEST_IMAGE_REPOSITORY):$(shell git rev-parse HEAD)'
+
+# An operator pushes the test image to its ECR repository and moves a
+# consumer's pin there, under their own AWS credentials (ADR-0093): no
+# workflow holds one for it. test-image-push builds and checks HEAD as
+# test-image-e2e does and pushes it under HEAD's first twelve hex
+# digits (ADR-0071's commit-derived tag); test-image-pin moves
+# `pinned-$(CONSUMER)` to the image of $(COMMIT).
+# Neither is in `ci`, which holds no AWS credential. Both scripts hold
+# the repository themselves, so no make variable can redirect them.
+test-image-push:
+	scripts/image-test-push.sh
+
+test-image-pin:
+	scripts/image-test-pin.sh '$(COMMIT)' '$(CONSUMER)'
 
 web-ci: web-format web-lint web-test web-build web-check-gen
 

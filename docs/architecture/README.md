@@ -203,9 +203,9 @@ What this repository runs against itself. `docs/convention/ci.md` decides how a 
 - `.github/workflows/ci.yml` triggers on `pull_request` into `main` and
   on nothing else; `.github/workflows/images.yml` on the same event and
   base except where a pull request changes only `docs/`;
-  `.github/workflows/release.yml` triggers on a `v*` tag (ADR-0039);
-  `.github/workflows/test-image.yml` on a push to `dev` and on a
-  dispatch (ADR-0092).
+  `.github/workflows/release.yml` triggers on a `v*` tag (ADR-0039).
+  No workflow publishes the test image; an operator pushes it with
+  `make test-image-push` and `make test-image-pin` (ADR-0093).
   `dev` is the default branch, and every pull request but the
   promotion pull request targets it (`docs/convention/git.md`
   §Promotion), so the base filter selects the promotion pull request
@@ -221,18 +221,15 @@ What this repository runs against itself. `docs/convention/ci.md` decides how a 
   behind it, whichever way `cancel-in-progress` is set, so a group there
   could leave a `vX.Y.Z` tag publishing nothing at all, and a run
   cancelled mid-publish leaves the version half-published with the next
-  version as the only repair (ADR-0039 §Consequences). `test-image.yml`
-  declares none at its top, on the same reasoning: every commit on `dev`
-  is owed its image. Its prune and dispatch jobs share a job-level
-  group, which sits indented and is not what the guard reads. What reads
-  the guard is that `grep -n '^concurrency:' .github/workflows/*.yml`
-  names two files and not four (#899).
+  version as the only repair (ADR-0039 §Consequences). What reads the
+  guard is that `grep -n '^concurrency:' .github/workflows/*.yml` names
+  two files and not three (#899).
 - **Both images a release publishes are built on a pull request.** `images.yml` builds each from what `release.yml` says it is built from and then checks the web one, which is the image a release used to be able to fail on irreversibly: the server image was pushed before the web image was built, and immutability makes the repair the next version (ADR-0039 §Consequences). `release.yml` builds both and pushes neither until both are built (#945), so what a build failure there now costs is the run. Until #850 neither image was built by any check.
 - **No run here reaches a deployment, so `main` is not what a caller
   meets.** `release.yml` publishes two images on a `vX.Y.Z` tag and no
   other workflow pushes one, so a merge to `main` publishes nothing;
-  `test-image.yml` publishes the test image on a push to `dev`, which
-  no deployment pulls (ADR-0092);
+  an operator pushes the test image, from a checkout, to an ECR
+  repository no deployment pulls (ADR-0092, ADR-0093);
   the only cluster a recipe here reaches is the local minikube, and
   what it runs there it built from the working tree (`Makefile`,
   `minikube-images`). What a running garam serves is fixed by the image
@@ -642,7 +639,18 @@ ADRs:
   own, tagged by commit and pinned by digest, keeping the 8 newest
   unpinned versions and every `pinned-*` one; supersedes ADR-0039 for
   non-release artifacts and ADR-0081's "no image Garam ships carries
-  it" in part
+  it" in part; its registry, its commit tag, its publishing from `dev`
+  and its retention are superseded by 0093
+- [0093](./adr/0093-an-operator-pushes-the-test-image-to-the-accounts-ecr.md)
+  — an operator pushes the test image to `dev/garam-test` in the
+  account's ECR, under ADR-0071's commit-prefix tag, and moves its
+  pins, under their own AWS identity with `make test-image-push` and
+  `make test-image-pin`; no workflow holds a
+  credential for it, so no image appears per `dev` commit; the
+  repository's lifecycle policy in `garamsh/infra` expires an unpinned
+  image 90 days after its push and bounds pins by a count of 50, not
+  by age; supersedes ADR-0092's registry, its commit tag, its
+  publishing from `dev` and its retention
 - [0094](./adr/0094-structural-rules-yield-only-to-what-a-framework-imposes.md)
   — a structural rule yields to a stack file only where the stack's
   framework imposes the case, taken from the conventions template at

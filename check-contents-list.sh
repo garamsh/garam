@@ -2,10 +2,11 @@
 # Checks each Markdown file's "## Contents" list against its own "##" headings, per
 # docs/convention/documentation.md §Format. That rule governs every Markdown document in
 # this repository, so the set is selected by $scope rather than by a chosen directory, and
-# the count is printed with $scope so the reported coverage stays the coverage read.
+# the count is printed with $scope so the reported coverage stays the coverage read. $scope
+# runs through eval, as a shell runs it when pasted, so the text printed is the text run.
 set -euf
 
-scope="git ls-files --cached --others --exclude-standard -- *.md"
+scope="git ls-files --cached --others --exclude-standard -- '*.md'"
 
 cd "$(dirname "$0")"
 
@@ -53,7 +54,7 @@ while IFS= read -r file; do
 		status=1
 	fi
 done <<EOF
-$($scope)
+$(eval "$scope")
 EOF
 
 echo "checked $count Markdown files, selected by: $scope"

@@ -11,6 +11,9 @@ own what formatters cannot judge.
 - **Same kind, same shape.** Functions doing similar work follow the
   same verb pattern (`getUser`, `getOrder` — not `getUser`,
   `fetchOrder`).
+- **Shared concept, named file.** When two helpers share a concept,
+  give the concept a name and name their file for it. The path then
+  says what the file does, not that it holds helpers.
 
 ## Pattern consistency
 

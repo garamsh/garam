@@ -93,15 +93,27 @@ garam's composition root is `internal/cli`, the package `cmd/garam/main.go` call
 
 This is the composition site `docs/convention/stack-go.md` §Project
 envelope provides for a module whose tests have to reach it. That
-section puts the site in `cmd/<binary>/main.go` unless a test has to
-reach it, and puts it in a package `main.go` calls when one does. The
+section puts the site in `cmd/<binary>/main.go` unless a test outside
+`cmd/<binary>/` has to reach it, and puts it in a package `main.go`
+calls when one does. The
 paragraph below names the tests that reach it, so the two documents
 decide this case the same way
 ([ADR-0094](./adr/0094-structural-rules-yield-only-to-what-a-framework-imposes.md)).
 
 **The environment is read in the composition root and nowhere else.** Every name the module reads is declared in one block in `internal/cli/cli.go`, and the `envOr` beside it holds the only environment read under `internal/` and `cmd/`, so what the source reads is enumerable from those declarations rather than from the spelling of the calls that read them. A second read there is the defect this states, and `make chart-render` fails on one rather than leaving it to a reviewer: it counts the reads under those two trees and expects the one, because a name read outside the block is one it cannot enumerate against the chart. The suites under `tests/` read `GARAM_TEST_DATABASE_URL` for themselves and are outside both the rule and the count.
 
-**The placement is what the in-process integration tests rest on.** `package main` cannot be imported, which `docs/convention/stack-go.md` §7 states where it makes a test of one internal by necessity, and the same section designates `tests/` for the integration and E2E tests that wire multiple domains. `tests/integration/issue_certificate_test.go` and `tests/integration/migrate_test.go` reach the shipped command tree through `cli.NewRootCommand()`. Construction moved into `cmd/garam/main.go` is construction those two cannot reach: what they exercise goes uncovered, or is rebuilt beside them as a second copy of the wiring — and a copy does not fail when the shipped wiring breaks.
+**The placement is what the in-process integration tests rest on.** Only
+a test in its own directory can import a main package, which
+`docs/convention/stack-go.md` §Project envelope states where it moves
+the site out of `main.go`, and §7 of that file designates `tests/` for
+the integration and E2E tests that wire multiple domains
+([ADR-0096](./adr/0096-garam-syncs-the-convention-template-to-f7de866.md)).
+`tests/integration/issue_certificate_test.go` and
+`tests/integration/migrate_test.go` reach the shipped command tree
+through `cli.NewRootCommand()`. Construction moved into
+`cmd/garam/main.go` is construction those two cannot reach: what they
+exercise goes uncovered, or is rebuilt beside them as a second copy of
+the wiring — and a copy does not fail when the shipped wiring breaks.
 
 **This section once recorded a divergence, and that record has ended.**
 `stack-go.md` used to put construction in `cmd/<binary>/main.go` and

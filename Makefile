@@ -633,14 +633,13 @@ test-image-e2e: test-image
 # test-image-e2e does and pushes it under HEAD's first twelve hex
 # digits (ADR-0071's commit-derived tag); test-image-pin moves
 # `pinned-$(CONSUMER)` to the image of $(COMMIT).
-# Neither is in `ci`, which holds no AWS credential.
-TEST_IMAGE_ECR_REPOSITORY = 486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/dev/garam-test
-
+# Neither is in `ci`, which holds no AWS credential. Both scripts hold
+# the repository themselves, so no make variable can redirect them.
 test-image-push:
-	scripts/image-test-push.sh '$(TEST_IMAGE_ECR_REPOSITORY)'
+	scripts/image-test-push.sh
 
 test-image-pin:
-	scripts/image-test-pin.sh '$(TEST_IMAGE_ECR_REPOSITORY)' '$(COMMIT)' '$(CONSUMER)'
+	scripts/image-test-pin.sh '$(COMMIT)' '$(CONSUMER)'
 
 web-ci: web-format web-lint web-test web-build web-check-gen
 

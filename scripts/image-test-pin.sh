@@ -14,33 +14,35 @@
 # (ADR-0093). Without it a consumer's first pin succeeds and every
 # later one is refused by the registry.
 #
-#   scripts/image-test-pin.sh <repository-uri> <commit> <consumer>
+#   scripts/image-test-pin.sh <commit> <consumer>
 set -eu
 
-[ $# -eq 3 ] || {
-	echo 'usage: scripts/image-test-pin.sh <repository-uri> <commit> <consumer>' >&2
+[ $# -eq 2 ] || {
+	echo 'usage: scripts/image-test-pin.sh <commit> <consumer>' >&2
 	exit 2
 }
-repository=$1 commit=$2 consumer=$3
+commit=$1 consumer=$2
+
+# The one repository the test image goes to (ADR-0093). It is held
+# here rather than taken as an argument, so no invocation can point the
+# image or a pin at another account, region or repository.
+account=486152169996
+region=ap-northeast-2
+name=dev/garam-test
+host=$account.dkr.ecr.$region.amazonaws.com
+repository=$host/$name
 
 refuse() {
 	echo "image-test-pin: $1; nothing tagged" >&2
 	exit 1
 }
 
-printf '%s' "$repository" | grep -Eq '^[0-9]{12}\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com/[a-z0-9]+([._-][a-z0-9]+)*(/[a-z0-9]+([._-][a-z0-9]+)*)*$' \
-	|| refuse "repository '$repository' is not an ECR repository URI, <account>.dkr.ecr.<region>.amazonaws.com/<name>"
 printf '%s' "$commit" | grep -Eq '^[0-9a-f]{12,40}$' \
 	|| refuse "commit '$commit' is not 12 to 40 lowercase hex digits; the image is pushed under the commit's first twelve"
 # A tag is at most 128 characters, and `pinned-` takes 7 of them.
 printf '%s' "$consumer" | grep -Eq '^[a-z0-9]([a-z0-9-]{0,119}[a-z0-9])?$' \
 	|| refuse "consumer '$consumer' is not lowercase letters, digits and inner hyphens of at most 121 characters"
 
-host=${repository%%/*}
-name=${repository#*/}
-account=${host%%.*}
-region=${host#*.dkr.ecr.}
-region=${region%.amazonaws.com}
 source=$(printf '%s' "$commit" | cut -c1-12)
 pinned=pinned-$consumer
 

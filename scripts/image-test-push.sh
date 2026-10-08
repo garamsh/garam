@@ -15,22 +15,27 @@
 # bytes and be refused at the push. The digest is read back from the
 # registry, and must be the one the push reported.
 #
-#   scripts/image-test-push.sh <repository-uri>
+#   scripts/image-test-push.sh
 set -eu
 
-[ $# -eq 1 ] || {
-	echo 'usage: scripts/image-test-push.sh <repository-uri>' >&2
+[ $# -eq 0 ] || {
+	echo 'usage: scripts/image-test-push.sh, which takes no argument' >&2
 	exit 2
 }
-repository=$1
+
+# The one repository the test image goes to (ADR-0093). It is held
+# here rather than taken as an argument, so no invocation can point the
+# image or a pin at another account, region or repository.
+account=486152169996
+region=ap-northeast-2
+name=dev/garam-test
+host=$account.dkr.ecr.$region.amazonaws.com
+repository=$host/$name
 
 refuse() {
 	echo "image-test-push: $1; nothing pushed" >&2
 	exit 1
 }
-
-printf '%s' "$repository" | grep -Eq '^[0-9]{12}\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com/[a-z0-9]+([._-][a-z0-9]+)*(/[a-z0-9]+([._-][a-z0-9]+)*)*$' \
-	|| refuse "repository '$repository' is not an ECR repository URI, <account>.dkr.ecr.<region>.amazonaws.com/<name>"
 
 # scripts/image-test.sh refuses this too; it is read here as well so a
 # dirty tree reaches neither AWS nor the build.
@@ -41,11 +46,6 @@ status=$(git status --porcelain) \
 [ -z "$status" ] \
 	|| refuse "the working tree differs from HEAD ($revision), which the tag and the revision label would both name"
 
-host=${repository%%/*}
-name=${repository#*/}
-account=${host%%.*}
-region=${host#*.dkr.ecr.}
-region=${region%.amazonaws.com}
 tag=$(printf '%s' "$revision" | cut -c1-12)
 image=$repository:$tag
 

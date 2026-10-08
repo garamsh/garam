@@ -44,6 +44,8 @@ short=$(printf '%s' "$head" | cut -c1-12)
 # <tag>.manifest. AWS_FAILS makes every call fail as a missing
 # credential does; PUT_FAILS makes put-image fail as an immutable tag
 # does, and PUT_STORES stores another digest than the one asked for.
+# MANIFEST_FAILS fails reading a manifest, and READBACK_FAILS fails
+# every read once a push or a put has written the .written marker.
 cat >"$bin/aws" <<'EOF'
 #!/bin/sh
 echo "aws $*" >>"$CALLS"
@@ -62,6 +64,10 @@ done
 case $op in
 get-login-password) echo password ;;
 batch-get-image)
+	[ -z "${READBACK_FAILS:-}" ] || [ ! -f "$REGISTRY/.written" ] || exit 254
+	case $query in
+	*.imageManifest) [ -z "${MANIFEST_FAILS:-}" ] || exit 254 ;;
+	esac
 	case $query in
 	*.imageDigest) file=$REGISTRY/$tag.digest ;;
 	*.imageManifestMediaType) file=$REGISTRY/$tag.media ;;
@@ -72,18 +78,26 @@ batch-get-image)
 put-image)
 	[ -z "${PUT_FAILS:-}" ] || { echo 'ImageTagAlreadyExistsException' >&2; exit 254; }
 	echo "${PUT_STORES:-$digest}" >"$REGISTRY/$tag.digest"
+	: >"$REGISTRY/.written"
 	;;
 *) exit 252 ;;
 esac
 EOF
 # A push stores sha256:pushed under the tag it names, and the local
-# image reports PUSH_REPORTS as its repository digest.
+# image reports PUSH_REPORTS as its repository digest. LOGIN_FAILS
+# fails the login.
 cat >"$bin/docker" <<'EOF'
 #!/bin/sh
 echo "docker $*" >>"$CALLS"
 case $1 in
-login) cat >/dev/null ;;
-push) echo sha256:pushed >"$REGISTRY/${2##*:}.digest" ;;
+login)
+	cat >/dev/null
+	[ -z "${LOGIN_FAILS:-}" ]
+	;;
+push)
+	echo sha256:pushed >"$REGISTRY/${2##*:}.digest"
+	: >"$REGISTRY/.written"
+	;;
 image)
 	eval "ref=\${$#}"
 	echo "${ref%:*}@${PUSH_REPORTS:-sha256:pushed}"
@@ -102,7 +116,7 @@ calls=$scratch/calls
 # reset clears the registry and holds an image of $head in it, under
 # its first twelve hex digits, unless told `empty`.
 reset() {
-	rm -f "$registry"/*
+	rm -f "$registry"/* "$registry/.written"
 	[ "${1:-}" = empty ] && return
 	echo "$want" >"$registry/$short.digest"
 	echo application/vnd.oci.image.manifest.v1+json >"$registry/$short.media"
@@ -174,21 +188,35 @@ pin=scripts/image-test-pin.sh
 # test-image-push: the control checks HEAD under its full hash, pushes
 # it under the first twelve digits, and reads the digest back.
 reset empty
-accepted "image-test-push: pushed $ecr:$short ($head), sha256:pushed" $push "$ecr"
+accepted "image-test-push: pushed $ecr:$short ($head), sha256:pushed" $push
 cases=$((cases + 1))
 called "^check $ecr:$head\$" && called "^docker push $ecr:$short\$" \
 	|| fail "the push control did not check $ecr:$head and push $ecr:$short: $(cat "$calls")"
 
-untouched 'usage: scripts/image-test-push.sh' $push
-untouched 'is not an ECR repository URI' $push garam/garam-test
-untouched 'is not an ECR repository URI' $push "ghcr.io/garamsh/garam-test"
+# Every call names the one repository: its account, its region and
+# its name, and Docker logs in to and pushes to its host alone.
+cases=$((cases + 1))
+aws_calls=$(grep '^aws ecr batch-get-image ' "$calls" | wc -l)
+aws_ours=$(grep -c -- '--region ap-northeast-2 --registry-id 486152169996 --repository-name dev/garam-test ' "$calls" || true)
+[ "$aws_calls" -gt 0 ] && [ "$aws_ours" -eq "$aws_calls" ] \
+	&& called '^aws ecr get-login-password --region ap-northeast-2$' \
+	&& called '^docker login --username AWS --password-stdin 486152169996\.dkr\.ecr\.ap-northeast-2\.amazonaws\.com$' \
+	&& [ "$(grep -c '^docker push ' "$calls")" -eq 1 ] \
+	|| fail "the push control reached another repository: $(cat "$calls")"
+
+# A repository named on the command line is refused, whatever it is:
+# another account, another region, the release namespace, or this one.
+untouched 'usage: scripts/image-test-push.sh' $push 123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/dev/garam-test
+untouched 'usage: scripts/image-test-push.sh' $push 486152169996.dkr.ecr.us-east-1.amazonaws.com/dev/garam-test
+untouched 'usage: scripts/image-test-push.sh' $push 486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam/garam-test
+untouched 'usage: scripts/image-test-push.sh' $push "$ecr"
 
 touch "$repo/untracked"
 reset empty
-untouched 'differs from HEAD' $push "$ecr"
+untouched 'differs from HEAD' $push
 rm "$repo/untracked"
 echo changed >>"$repo/scripts/image-test.sh"
-untouched 'differs from HEAD' $push "$ecr"
+untouched 'differs from HEAD' $push
 git -C "$repo" checkout -q scripts/image-test.sh
 
 # A `git` whose status fails and prints nothing, every other command
@@ -200,73 +228,99 @@ cat >"$bin/git" <<EOF
 exec "$realgit" "\$@"
 EOF
 chmod +x "$bin/git"
-untouched 'git status failed' $push "$ecr"
+untouched 'git status failed' $push
 rm "$bin/git"
 
 reset empty
-with AWS_FAILS=1 refused "could not be read with the caller's AWS credentials" $push "$ecr"
+with AWS_FAILS=1 refused "could not be read with the caller's AWS credentials" $push
 cases=$((cases + 1))
 ! called '^docker ' || fail "a push without credentials called docker: $(cat "$calls")"
 
 reset
-accepted "image-test-push: $ecr:$short is already in the repository, $want; nothing built" $push "$ecr"
+accepted "image-test-push: $ecr:$short is already in the repository, $want; nothing built" $push
 cases=$((cases + 1))
 ! called '^(docker|build) ' || fail "a commit already pushed was built or pushed again: $(cat "$calls")"
 
 reset empty
-with CHECK_FAILS=1 refused 'test-image-e2e: stand-in check failed' $push "$ecr"
+with CHECK_FAILS=1 refused 'test-image-e2e: stand-in check failed' $push
 cases=$((cases + 1))
 ! called '^docker push' || fail "an image whose check failed was pushed: $(cat "$calls")"
 
 reset empty
-with PUSH_REPORTS=sha256:other refused 'but the push reported sha256:other' $push "$ecr"
+with PUSH_REPORTS=sha256:other refused 'but the push reported sha256:other' $push
+
+reset empty
+with LOGIN_FAILS=1 refused 'docker could not log in to' $push
+cases=$((cases + 1))
+! called '^(build|docker push) ' || fail "a push whose login failed built or pushed: $(cat "$calls")"
+
+reset empty
+with READBACK_FAILS=1 refused 'was pushed as sha256:pushed and could not be read back' $push
 
 # test-image-pin: the control moves the tag with the commit's manifest
 # under the digest it was read with, the commit named in full or by
 # the twelve digits it is pushed under.
 reset
-accepted "image-test-pin: $ecr:pinned-consumer is $short, $want" $pin "$ecr" "$head" consumer
+accepted "image-test-pin: $ecr:pinned-consumer is $short, $want" $pin "$head" consumer
 cases=$((cases + 1))
 grep -Fq -- "--image-tag pinned-consumer --image-manifest {\"schemaVersion\":2} --image-manifest-media-type application/vnd.oci.image.manifest.v1+json --image-digest $want" "$calls" \
 	|| fail "the pin control put another image: $(cat "$calls")"
 
-untouched 'usage: scripts/image-test-pin.sh' $pin "$ecr" "$head"
-untouched 'is not an ECR repository URI' $pin garam/garam-test "$head" consumer
+cases=$((cases + 1))
+aws_calls=$(grep -c '^aws ecr ' "$calls" || true)
+aws_ours=$(grep -c -- '--region ap-northeast-2 --registry-id 486152169996 --repository-name dev/garam-test ' "$calls" || true)
+[ "$aws_calls" -gt 0 ] && [ "$aws_ours" -eq "$aws_calls" ] && ! called '^docker ' \
+	|| fail "the pin control reached another repository: $(cat "$calls")"
+
+untouched 'usage: scripts/image-test-pin.sh' $pin "$head"
+for other in 123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/dev/garam-test \
+	486152169996.dkr.ecr.us-east-1.amazonaws.com/dev/garam-test \
+	486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam/garam-test "$ecr"; do
+	untouched 'usage: scripts/image-test-pin.sh' $pin "$other" "$head" consumer
+done
 reset
-accepted "image-test-pin: $ecr:pinned-consumer is $short, $want" $pin "$ecr" "$short" consumer
+accepted "image-test-pin: $ecr:pinned-consumer is $short, $want" $pin "$short" consumer
 for commit in "$(printf '%s' "$head" | cut -c1-11)" "$(printf '%s' "$head" | tr a-f A-F)" "${head}0" ''; do
-	untouched 'is not 12 to 40 lowercase hex digits' $pin "$ecr" "$commit" consumer
+	untouched 'is not 12 to 40 lowercase hex digits' $pin "$commit" consumer
 done
 long=$(printf 'a%.0s' $(seq 122))
 for consumer in Consumer -consumer consumer- 'consumer/x' '' "$long"; do
-	untouched 'is not lowercase letters, digits and inner hyphens' $pin "$ecr" "$head" "$consumer"
+	untouched 'is not lowercase letters, digits and inner hyphens' $pin "$head" "$consumer"
 done
 accepted "image-test-pin: $ecr:pinned-$(printf 'a%.0s' $(seq 121)) is $short, $want" \
-	$pin "$ecr" "$head" "$(printf 'a%.0s' $(seq 121))"
+	$pin "$head" "$(printf 'a%.0s' $(seq 121))"
 
 reset empty
-refused 'push it first with make test-image-push' $pin "$ecr" "$head" consumer
-with AWS_FAILS=1 refused "could not be read with the caller's AWS credentials" $pin "$ecr" "$head" consumer
+refused 'push it first with make test-image-push' $pin "$head" consumer
+with AWS_FAILS=1 refused "could not be read with the caller's AWS credentials" $pin "$head" consumer
 
 reset
 echo "$want" >"$registry/pinned-consumer.digest"
-accepted "image-test-pin: $ecr:pinned-consumer is already $short, $want" $pin "$ecr" "$head" consumer
+accepted "image-test-pin: $ecr:pinned-consumer is already $short, $want" $pin "$head" consumer
 cases=$((cases + 1))
 ! called put-image || fail "a pin already in place was put again: $(cat "$calls")"
 
 reset
 echo sha256:older >"$registry/pinned-consumer.digest"
-with PUT_FAILS=1 refused 'moving pinned-consumer from sha256:older to' $pin "$ecr" "$head" consumer
+with PUT_FAILS=1 refused 'moving pinned-consumer from sha256:older to' $pin "$head" consumer
 cases=$((cases + 1))
 grep -Fq 'tag immutability without the pinned-* exclusion filter' "$out" \
 	|| fail 'a refused move does not name tag immutability'
 reset
-with PUT_FAILS=1 refused "the registry refused tagging $short as pinned-consumer" $pin "$ecr" "$head" consumer
+with PUT_FAILS=1 refused "the registry refused tagging $short as pinned-consumer" $pin "$head" consumer
 cases=$((cases + 1))
 ! grep -Fq 'immutability' "$out" || fail 'a refused first pin names tag immutability'
 
 reset
-with PUT_STORES=sha256:other refused "pinned-consumer resolves to sha256:other, not $short's $want" $pin "$ecr" "$head" consumer
+with MANIFEST_FAILS=1 refused "$ecr:$short's manifest could not be read" $pin "$head" consumer
+cases=$((cases + 1))
+! called put-image || fail "a pin whose manifest read failed was put: $(cat "$calls")"
+
+reset
+with READBACK_FAILS=1 refused "$ecr:pinned-consumer could not be read back" $pin "$head" consumer
+
+reset
+with PUT_STORES=sha256:other refused "pinned-consumer resolves to sha256:other, not $short's $want" $pin "$head" consumer
 
 [ "$failed" -eq 0 ] || {
 	echo "image-test-ecr-test: $failed of $cases cases failed" >&2

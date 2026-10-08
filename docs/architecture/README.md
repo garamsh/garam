@@ -206,9 +206,10 @@ What this repository runs against itself. `docs/convention/ci.md` decides how a 
   `.github/workflows/release.yml` triggers on a `v*` tag (ADR-0039);
   `.github/workflows/test-image.yml` on a push to `dev` and on a
   dispatch (ADR-0092).
-  The base filter selects every pull request while `main` is the only
-  branch on `origin`; it is in place before `dev` is, so that no pull
-  request into `dev` starts a runner (#1059).
+  `dev` is the default branch, and every pull request but the
+  promotion pull request targets it (`docs/convention/git.md`
+  §Promotion), so the base filter selects the promotion pull request
+  and no pull request into `dev` starts a runner (#1059).
 - **A superseded run is cancelled; a release run is not.** `ci.yml` and
   `images.yml` each declare a concurrency group keyed on
   `github.workflow` and `github.ref` — under their one trigger that ref

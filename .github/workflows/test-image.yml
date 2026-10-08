@@ -32,7 +32,7 @@ env:
   # repository's workflow on refs/heads/dev alone, and is not the
   # release role.
   TEST_IMAGE_ECR_REPOSITORY: garam/garam-test
-  TEST_IMAGE_PUBLISHER_ROLE: arn:aws:iam::486152169996:role/garamsh-garam-github-actions-dev
+  TEST_IMAGE_PUBLISHER_ROLE: arn:aws:iam::486152169996:role/garam-github-actions-dev
 
 # Every job names this repository in its `if:`, so a fork's push to
 # `dev` or its dispatch assumes no role.

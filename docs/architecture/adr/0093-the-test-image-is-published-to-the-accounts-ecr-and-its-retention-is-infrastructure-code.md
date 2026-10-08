@@ -44,7 +44,7 @@ Three facts reverse that choice:
 **The test image is published to an ECR repository of its own,
 `486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam/garam-test`,
 through a publisher role of its own,
-`arn:aws:iam::486152169996:role/garamsh-garam-github-actions-dev`,
+`arn:aws:iam::486152169996:role/garam-github-actions-dev`,
 and its retention is that repository's lifecycle policy rather than a
 workflow step.**
 
@@ -62,10 +62,12 @@ workflow step.**
   `id-token: write` on the two jobs that do. No job holds
   `packages: write`.
 - **The publisher role is not the release role.**
-  `garamsh-garam-github-actions` publishes release images alone, on a
-  `v*` tag (ADR-0039). `scripts/image-test-target.sh` refuses it, and
-  refuses any role outside account `486152169996`, as the step before
-  either job assumes one.
+  `garam-github-actions`, named `garamsh-garam-github-actions` before
+  `garamsh/infra#303` corrected it, publishes release images alone, on
+  a `v*` tag (ADR-0039). `scripts/image-test-target.sh` refuses it
+  under either name and admits no role but
+  `garam-github-actions-dev`, as the step before either job assumes
+  one.
 - **Tags: the commit's full hash, immutable; `pinned-<consumer>`,
   movable.** The repository holds that mutability. A consumer still
   pins the digest.

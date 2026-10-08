@@ -35,7 +35,7 @@ target=scripts/image-test-target.sh
 guard="github.repository == 'garamsh/garam'"
 role_expr='${{ env.TEST_IMAGE_PUBLISHER_ROLE }}'
 repository_expr='${{ steps.ecr.outputs.registry }}/${{ env.TEST_IMAGE_ECR_REPOSITORY }}'
-want_role=arn:aws:iam::486152169996:role/garamsh-garam-github-actions-dev
+want_role=arn:aws:iam::486152169996:role/garam-github-actions-dev
 want_repository=garam/garam-test
 scratch=$(mktemp -d)
 trap 'rm -rf "$scratch"' EXIT INT TERM
@@ -286,7 +286,7 @@ refused 'dispatch: grants' '/^      id-token: write/{x;s/^/x/;/^xx$/{x;d};x}'
 refused 'publish: no step assumes a role' '0,/configure-aws-credentials@/{/configure-aws-credentials@/d}'
 refused 'is not pinned to a full commit SHA' 's/configure-aws-credentials@[0-9a-f]*/configure-aws-credentials@v6.2.3/'
 refused 'uses docker/login-action, which this workflow does not allow' 's|^      - id: ecr$|      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f\n\n      - id: ecr|'
-refused 'role-to-assume is arn:aws:iam::486152169996:role/garamsh-garam-github-actions' 's|role-to-assume: .*|role-to-assume: arn:aws:iam::486152169996:role/garamsh-garam-github-actions|'
+refused 'role-to-assume is arn:aws:iam::486152169996:role/garam-github-actions' 's|role-to-assume: .*|role-to-assume: arn:aws:iam::486152169996:role/garam-github-actions|'
 refused 'aws-region is us-east-1, want ap-northeast-2' 's/aws-region: ap-northeast-2/aws-region: us-east-1/'
 refused "publish: $target does not run" "0,\\|run: $target|{\\|run: $target|d}"
 refused "dispatch: $target does not run" "\\|run: $target|{x;s/^/x/;/^xx\$/{x;d};x}"
@@ -297,8 +297,12 @@ refused 'has an if:' 's/^      - env:/      - if: always()\n        env:/'
 refused 'publish does not end in scripts/image-push.sh' '/scripts\/image-push.sh/d'
 refused 'dispatch does not end in scripts/image-test-pin.sh' '/scripts\/image-test-pin.sh/d'
 refused 'or it sets continue-on-error' 's/^  publish:/  publish:\n    continue-on-error: true/'
-refused "env: $target refuses" "s|^  TEST_IMAGE_PUBLISHER_ROLE: .*|  TEST_IMAGE_PUBLISHER_ROLE: arn:aws:iam::486152169996:role/garamsh-garam-github-actions|"
-refused "env: TEST_IMAGE_PUBLISHER_ROLE is arn:aws:iam::123456789012:role/garamsh-garam-github-actions-dev" "s|486152169996:role/garamsh-garam-github-actions-dev|123456789012:role/garamsh-garam-github-actions-dev|"
+# The release role under its corrected name and its former one, the
+# publisher's former name, and a role of the same name elsewhere.
+for role in garam-github-actions garamsh-garam-github-actions garamsh-garam-github-actions-dev; do
+	refused "env: $target refuses arn:aws:iam::486152169996:role/$role" "s|^  TEST_IMAGE_PUBLISHER_ROLE: .*|  TEST_IMAGE_PUBLISHER_ROLE: arn:aws:iam::486152169996:role/$role|"
+done
+refused "env: TEST_IMAGE_PUBLISHER_ROLE is arn:aws:iam::123456789012:role/garam-github-actions-dev" "s|486152169996:role/garam-github-actions-dev|123456789012:role/garam-github-actions-dev|"
 refused "env: TEST_IMAGE_ECR_REPOSITORY is garam/garam-test-2, want $want_repository" "s|^  TEST_IMAGE_ECR_REPOSITORY: .*|  TEST_IMAGE_ECR_REPOSITORY: garam/garam-test-2|"
 refused "env: $target refuses" "s|^  TEST_IMAGE_ECR_REPOSITORY: .*|  TEST_IMAGE_ECR_REPOSITORY: Garam Test|"
 refused 'publish: scripts/image-push.sh takes IMAGE_REPOSITORY 486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam/other' '/^      - env:$/{n;/IMAGE_REPOSITORY/{N;/image-push/s|IMAGE_REPOSITORY: .*\n|IMAGE_REPOSITORY: 486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam/other\n|;};}'
@@ -310,8 +314,9 @@ refused 'publish: the run: at line' 's|^      - run: scripts/oidc-subject.sh|   
 refused 'publish: the run: at line' 's|^      - run: scripts/oidc-subject.sh|      - run: \|\n          # ${{ github.ref_name }}\n          scripts/oidc-subject.sh|'
 
 # The script on its own, beyond what the workflow names today: the
-# release role, a foreign account and an empty repository are
-# refused, the declared pair is admitted.
+# release role under either name, any role but the publisher, a
+# foreign account and an empty repository are refused, the declared
+# pair is admitted.
 admits() {
 	cases=$((cases + 1))
 	if "$target" "$2" "$3" >/dev/null 2>&1; then got=0; else got=1; fi
@@ -321,8 +326,12 @@ admits() {
 	}
 }
 admits 0 "$publisher" garam/garam-test
+admits 1 arn:aws:iam::486152169996:role/garam-github-actions garam/garam-test
 admits 1 arn:aws:iam::486152169996:role/garamsh-garam-github-actions garam/garam-test
-admits 1 arn:aws:iam::123456789012:role/garam-test-publisher garam/garam-test
+admits 1 arn:aws:iam::486152169996:role/garamsh-garam-github-actions-dev garam/garam-test
+admits 1 arn:aws:iam::486152169996:role/garam-github-actions-dev-2 garam/garam-test
+admits 1 arn:aws:iam::486152169996:role/path/garam-github-actions-dev garam/garam-test
+admits 1 arn:aws:iam::123456789012:role/garam-github-actions-dev garam/garam-test
 admits 1 "$publisher" ''
 admits 1 "$publisher" garam/Garam-Test
 

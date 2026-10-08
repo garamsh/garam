@@ -23,8 +23,9 @@ strict, Tailwind and shadcn/ui
 repository that is not Go, it carries a toolchain and a gate of its
 own, and it ships as one of the two images a version tag publishes
 ([ADR-0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)),
-into the one repository its development builds share under a tag that
-is not a release version
+and its development builds go to `dev/garam-web`
+([ADR-0095](./adr/0095-development-images-live-under-dev-and-garam-holds-releases-only.md))
+under a tag that is not a release version
 ([ADR-0071](./adr/0071-a-development-image-shares-the-release-repository-and-its-tag-says-it-is-not-a-release.md)).
 
 It stays its own image for what each of the two holds while it runs.
@@ -474,3 +475,6 @@ The rest bear on it without being about it:
   — `structure.md` governs what a module under `web/src/` may import,
   so a feature reaches a sibling through its declared entry points and
   the stack file no longer refuses that edge
+- [ADR-0095](./adr/0095-development-images-live-under-dev-and-garam-holds-releases-only.md)
+  — that development build lives in `dev/garam-web`, apart from
+  the release repository

@@ -1,10 +1,11 @@
 #!/bin/sh
 # Checks which tags scripts/image-build.sh accepts for a development
-# build (ADR-0071), and that a refused one reaches no build. Each case
-# runs the script in a scratch repository holding this tree's copy of
-# it and of .github/workflows/release.yml, committed once, with a
-# `docker` on PATH that records its arguments: the tree is clean
-# whatever state this one is in, and nothing reaches a daemon.
+# build (ADR-0071), that it names the development namespace and never
+# the release's (ADR-0095), and that a refused one reaches no build.
+# Each case runs the script in a scratch repository holding this
+# tree's copy of it and of .github/workflows/release.yml, committed
+# once, with a `docker` on PATH that records its arguments: the tree is
+# clean whatever state this one is in, and nothing reaches a daemon.
 #
 # Every refusal is read beside a control the same mechanism accepts,
 # so a script refusing everything fails here as surely as one refusing
@@ -78,25 +79,27 @@ accepted() {
 }
 
 reg=registry.invalid
+ns=dev
 
 # The check's own names are what they were before a development build
-# existed, and a development build moves only the registry and the tag.
+# existed. A development build takes the release's repository names
+# into `dev/`, the release workflow naming them under `garam/`.
 accepted '. garam-server:ci' --names
 accepted 'web garam-web:ci' --names
-accepted ". $reg/garam/garam-server:$short" --names --registry "$reg"
-accepted "web $reg/garam/garam-web:$short" --names --registry "$reg"
+accepted ". $reg/$ns/garam-server:$short" --names --registry "$reg"
+accepted "web $reg/$ns/garam-web:$short" --names --registry "$reg"
 
 # A release version against the prerelease it is one suffix from.
 refused 'is a release version' --names --registry "$reg" --tag 1.2.3
 refused 'is a release version' --registry "$reg" --tag 1.2.3
 refused 'is a release version' --registry "$reg" --tag v1.2.3
-accepted ". $reg/garam/garam-server:1.2.3-rc.1" --names --registry "$reg" --tag 1.2.3-rc.1
-accepted ". $reg/garam/garam-server:1.2.3-0.dev.x-1" --names --registry "$reg" --tag 1.2.3-0.dev.x-1
+accepted ". $reg/$ns/garam-server:1.2.3-rc.1" --names --registry "$reg" --tag 1.2.3-rc.1
+accepted ". $reg/$ns/garam-server:1.2.3-0.dev.x-1" --names --registry "$reg" --tag 1.2.3-0.dev.x-1
 
 # A commit prefix names HEAD or is refused.
 refused 'is not a prefix of HEAD' --names --registry "$reg" --tag 0000000
-accepted ". $reg/garam/garam-server:$head" --names --registry "$reg" --tag "$head"
-accepted ". $reg/garam/garam-server:$(printf '%s' "$head" | cut -c1-7)" \
+accepted ". $reg/$ns/garam-server:$head" --names --registry "$reg" --tag "$head"
+accepted ". $reg/$ns/garam-server:$(printf '%s' "$head" | cut -c1-7)" \
 	--names --registry "$reg" --tag "$(printf '%s' "$head" | cut -c1-7)"
 
 # Anything else is refused.
@@ -108,16 +111,19 @@ done
 # A tag needs the registry it is for; a registry is a host alone.
 refused 'names the registry it is for' --names --tag 1.2.3-rc.1
 refused 'is not a host[:port]' --names --registry "$reg/garam"
-accepted ". $reg:5000/garam/garam-server:1.2.3-rc.1" --names --registry "$reg:5000" --tag 1.2.3-rc.1
+accepted ". $reg:5000/$ns/garam-server:1.2.3-rc.1" --names --registry "$reg:5000" --tag 1.2.3-rc.1
 
 # The build itself: labels name HEAD and the tag, and a tree that is
 # not HEAD is refused before docker is called.
 cases=$((cases + 1))
 if ! run --registry "$reg" --tag 1.2.3-rc.1; then
 	fail 'refused a clean development build'
-elif ! grep -Fq -- "build -t $reg/garam/garam-server:1.2.3-rc.1 " "$log" \
+elif ! grep -Fq -- "build -t $reg/$ns/garam-server:1.2.3-rc.1 " "$log" \
+	|| ! grep -Fq -- "build -t $reg/$ns/garam-web:1.2.3-rc.1 " "$log" \
 	|| ! grep -Fq -- "--build-arg IMAGE_REVISION=$head --build-arg IMAGE_VERSION=1.2.3-rc.1 " "$log"; then
 	fail "built with other arguments: $(cat "$log")"
+elif grep -Fq -- "$reg/garam/" "$log"; then
+	fail "a development build named the release namespace: $(cat "$log")"
 fi
 touch "$repo/untracked"
 refused 'differs from HEAD' --registry "$reg" --tag 1.2.3-rc.1

@@ -9,8 +9,9 @@ question why `dev` needs Actions at all when a development push to ECR
 can be a direct one, that the test image is pushed by an operator. The
 PM recorded both on #1227. The owner then decided that development
 images live under the `dev/` namespace, answering `garamsh/infra` on
-2026-10-08 (#1234, which reserves ADR-0095 for that decision), and the
-test image is one.
+2026-10-08 (#1234, recorded in
+[ADR-0095](./0095-development-images-live-under-dev-and-garam-holds-releases-only.md)),
+and the test image is one.
 
 ## Contents
 - Context
@@ -133,7 +134,8 @@ workflow holds a credential for it.**
   are the policy #1227 records going in; `dev/garam-test` is one of
   the development repositories #1234 lists for `garamsh/infra` to
   declare.
-- **The `dev/` namespace itself**, which is ADR-0095's (#1234).
+- **The `dev/` namespace itself**, which is
+  [ADR-0095](./0095-development-images-live-under-dev-and-garam-holds-releases-only.md)'s (#1234).
 - **When the GHCR package is retired**, and what announces it.
 - **What the repository costs.** No storage is measured here.
 

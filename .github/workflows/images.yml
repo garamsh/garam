@@ -13,10 +13,11 @@ name: images
 # property that holds today rather than one the build enforces, and a
 # filter that quietly stops covering a change is what #850 is about.
 #
-# `branches` is inert while `main` is the only branch on `origin`, and
-# `dev` is what makes it live: a pull request into `dev` then starts no
-# runner at all, the property the paragraph above buys for `docs/**`.
-# Adding it after `dev` exists would leave a window where one does.
+# `dev` is the default branch and every pull request but the
+# promotion pull request targets it (`docs/convention/git.md`
+# §Promotion), so `branches` selects the promotion pull request and a
+# pull request into `dev` starts no runner at all, the property the
+# paragraph above buys for `docs/**`.
 on:
   pull_request:
     branches: [main]

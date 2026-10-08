@@ -2,8 +2,8 @@
 # Builds the test image (ADR-0092) from tests/testprincipal/Dockerfile
 # as `<repository>:<commit>`, the commit being HEAD's full hash, which
 # the revision label records as well. The repository defaults to
-# `garam-test`; the publishing workflow names its registry's. Nothing
-# is pushed.
+# `garam-test`; scripts/image-test-push.sh names the ECR repository's
+# (ADR-0093). Nothing is pushed.
 #
 # The tag and the label both name HEAD, so a working tree that differs
 # from it is refused before anything is built: the image would claim a

@@ -170,16 +170,18 @@ Without `IMAGE_REGISTRY`, `make image-build` builds both images as
 ## Test image
 
 Another repository's CI copies `garam`, `testprincipal` and the
-migrations of one commit out of the test image, which
-`.github/workflows/test-image.yml` publishes on every push to `dev`
-([ADR-0092](./docs/architecture/adr/0092-a-test-image-is-published-to-ghcr-from-dev-and-no-release-carries-it.md))
-to an ECR repository of its own
-([ADR-0093](./docs/architecture/adr/0093-the-test-image-is-published-to-the-accounts-ecr-and-its-retention-is-infrastructure-code.md)).
+migrations of one commit out of the test image
+([ADR-0092](./docs/architecture/adr/0092-a-test-image-is-published-to-ghcr-from-dev-and-no-release-carries-it.md)),
+which an operator pushes to an ECR repository of its own under their
+own AWS credentials; no workflow publishes it
+([ADR-0093](./docs/architecture/adr/0093-an-operator-pushes-the-test-image-to-the-accounts-ecr.md)).
 From a clean checkout:
 
 ```sh
-make test-image      # builds garam-test:<HEAD>
-make test-image-e2e  # builds it, then checks the paths, linking and label
+make test-image       # builds garam-test:<HEAD>
+make test-image-e2e   # builds it, then checks the paths, linking and label
+make test-image-push  # builds and checks it, then pushes it to ECR
+make test-image-pin COMMIT=<hash> CONSUMER=<name>  # moves pinned-<name>
 ```
 
 `tests/testprincipal/README.md` §The test image is the consumer's

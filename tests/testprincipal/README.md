@@ -82,9 +82,9 @@ nothing verifies that a module cache copy serves.
 ## The test image
 
 The test image holds this command, `garam` and the migrations of one
-Garam commit, for a CI that cannot read this repository (ADR-0092). It
-is published to an ECR repository of its own, which `garamsh/infra`
-declares (ADR-0093):
+Garam commit, for a CI that cannot read this repository (ADR-0092). An
+operator pushes it to an ECR repository of its own, which
+`garamsh/infra` declares; no workflow publishes it (ADR-0093):
 
 ```sh
 REPOSITORY=486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam/garam-test
@@ -102,10 +102,10 @@ Its label `org.opencontainers.image.revision` names the full commit.
 `make test-image` builds it from `tests/testprincipal/Dockerfile`, and
 `make test-image-e2e` checks those paths, the linking and the label.
 
-**Pin the digest, not the tag.** Every push to `dev` publishes one
-image tagged with the commit's full hash. The repository holds that
-tag immutable, but immutability is a setting of the repository and
-not of the reference; the digest cannot name other bytes:
+**Pin the digest, not the tag.** An image is tagged with its commit's
+full hash. The repository holds that tag immutable, but immutability
+is a setting of the repository and not of the reference; the digest
+cannot name other bytes:
 
 ```sh
 docker buildx imagetools inspect --format '{{.Manifest.Digest}}' \
@@ -130,16 +130,50 @@ Then run them as §Invocation says, with `-migrations ./migrations`.
   also carries its commit's tag, and the commit rule expires it
   (ADR-0093). So pin again whenever the commit you test against
   moves, and move to a newer commit before the one you hold is 90
-  days old: ask the Garam PM, who runs
-  `.github/workflows/test-image.yml` by dispatch with the commit and
-  your name, which moves `pinned-<consumer>` to it.
+  days old: ask the Garam PM, and an operator pushes that commit's
+  image and moves `pinned-<consumer>` to it (§Pushing and pinning).
 - **The GHCR package.** Images published before ADR-0093 are in
   `ghcr.io/garamsh/garam-test`, which nothing publishes to or prunes
-  any longer. Retiring it is a separate step, announced once the ECR
-  repository publishes.
+  any longer. It stays until the ECR repository holds a pinned image,
+  and retiring it is a separate step, announced first.
+- **No image per commit.** Nothing pushes one on a push to `dev`. A
+  commit's image exists once an operator has pushed it, which happens
+  when a pin moves to it.
 - **What it refuses outside a test database.** `/testprincipal` is
   this command at that commit, and refuses everything §What it
   refuses lists: a server off the machine, a database it did not
   create, and a partial database. `/garam` is the ordinary server and
   refuses nothing of its own here; it serves whatever database it is
   given, so give it the `databaseUrl` `prepare` printed.
+
+### Pushing and pinning
+
+An operator runs both from a Garam checkout, under their own AWS
+credentials, with Docker and the AWS CLI on PATH; neither is in
+`make ci`. First the image, from a clean checkout of the commit:
+
+```sh
+git switch --detach <commit>
+make test-image-push
+```
+
+`scripts/image-test-push.sh` refuses a working tree that differs from
+HEAD, logs Docker in with `aws ecr get-login-password`, builds the
+image and runs `make test-image-e2e`'s checks on it, pushes
+`$REPOSITORY:<commit>`, and prints the digest it reads back from the
+registry. A commit already in the repository is reported with its
+digest, and nothing is built.
+
+Then the pin, from a checkout that has this target:
+
+```sh
+make test-image-pin COMMIT=<commit> CONSUMER=<consumer>
+```
+
+`scripts/image-test-pin.sh` refuses a commit that is not a full
+lowercase hash and a consumer name of anything but lowercase letters,
+digits and inner hyphens, puts the commit's manifest under
+`pinned-<consumer>` with the digest it was read with, and prints the
+digest the tag reads back as. Where the registry refuses moving an
+existing pin, it names tag immutability without the `pinned-*`
+exclusion as the likely cause.

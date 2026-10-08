@@ -1,21 +1,22 @@
 #!/bin/sh
-# Moves the tag `pinned-<consumer>` to the test image of one commit
-# (ADR-0092), for .github/workflows/test-image.yml, its only caller.
-# The manifest is copied as it is, so the pinned tag and the commit's
-# tag resolve to one digest, and the consumer's previous version under
-# that tag loses it in the same push. What the repository's lifecycle
-# policy keeps under the tag is ADR-0093's.
+# Moves the tag `pinned-<consumer>` to the test image of one commit in
+# its ECR repository (ADR-0093), for `make test-image-pin`, under the
+# caller's AWS credentials. The commit's manifest is put again under
+# the pinned tag with the digest it was read with, so the registry
+# stores the same bytes rather than a copy that could name another
+# digest, and the consumer's previous image under that tag loses it in
+# the same call.
 #
 # Moving the tag depends on the repository exempting `pinned-*` from
 # its tag immutability, an exclusion filter garamsh/infra declares
 # (ADR-0093). Without it a consumer's first pin succeeds and every
 # later one is refused by the registry.
 #
-#   scripts/image-test-pin.sh <repository> <commit> <consumer>
+#   scripts/image-test-pin.sh <repository-uri> <commit> <consumer>
 set -eu
 
 [ $# -eq 3 ] || {
-	echo 'usage: scripts/image-test-pin.sh <repository> <commit> <consumer>' >&2
+	echo 'usage: scripts/image-test-pin.sh <repository-uri> <commit> <consumer>' >&2
 	exit 2
 }
 repository=$1 commit=$2 consumer=$3
@@ -25,25 +26,57 @@ refuse() {
 	exit 1
 }
 
+printf '%s' "$repository" | grep -Eq '^[0-9]{12}\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com/[a-z0-9]+([._-][a-z0-9]+)*(/[a-z0-9]+([._-][a-z0-9]+)*)*$' \
+	|| refuse "repository '$repository' is not an ECR repository URI, <account>.dkr.ecr.<region>.amazonaws.com/<name>"
 printf '%s' "$commit" | grep -Eq '^[0-9a-f]{40}$' \
-	|| refuse "commit '$commit' is not a full lowercase commit hash, which is the only tag the image is published under"
+	|| refuse "commit '$commit' is not a full lowercase commit hash, which is the only tag the image is pushed under"
 # A tag is at most 128 characters, and `pinned-` takes 7 of them.
 printf '%s' "$consumer" | grep -Eq '^[a-z0-9]([a-z0-9-]{0,119}[a-z0-9])?$' \
 	|| refuse "consumer '$consumer' is not lowercase letters, digits and inner hyphens of at most 121 characters"
 
-source=$repository:$commit
-pinned=$repository:pinned-$consumer
+host=${repository%%/*}
+name=${repository#*/}
+account=${host%%.*}
+region=${host#*.dkr.ecr.}
+region=${region%.amazonaws.com}
+pinned=pinned-$consumer
 
-digest() {
-	docker buildx imagetools inspect --format '{{.Manifest.Digest}}' "$1"
+# Answers a tag's digest, media type and manifest, one per line in
+# that order, or `None` for an absent tag. An index is not an accepted
+# type, so a tag naming one reads as absent.
+image() {
+	aws ecr batch-get-image --region "$region" --registry-id "$account" \
+		--repository-name "$name" --image-ids "imageTag=$1" \
+		--accepted-media-types application/vnd.oci.image.manifest.v1+json application/vnd.docker.distribution.manifest.v2+json \
+		--query "images[0].$2" --output text
 }
 
-want=$(digest "$source") || refuse "$source could not be read from the registry"
-docker buildx imagetools create --prefer-index=false --tag "$pinned" "$source" \
-	|| refuse "the registry refused moving $pinned to $source; if $pinned already exists, the likely cause is tag immutability without the pinned-* exclusion filter"
-got=$(digest "$pinned")
+want=$(image "$commit" imageId.imageDigest) \
+	|| refuse "$repository could not be read with the caller's AWS credentials"
+[ "$want" != None ] \
+	|| refuse "$repository holds no image manifest tagged $commit; push it first with make test-image-push from that commit"
+held=$(image "$pinned" imageId.imageDigest) \
+	|| refuse "$repository:$pinned could not be read"
+if [ "$held" = "$want" ]; then
+	echo "image-test-pin: $repository:$pinned is already $commit, $want"
+	exit 0
+fi
+media=$(image "$commit" imageManifestMediaType) \
+	|| refuse "$repository:$commit's media type could not be read"
+manifest=$(image "$commit" imageManifest) \
+	|| refuse "$repository:$commit's manifest could not be read"
+if ! aws ecr put-image --region "$region" --registry-id "$account" \
+	--repository-name "$name" --image-tag "$pinned" \
+	--image-manifest "$manifest" --image-manifest-media-type "$media" \
+	--image-digest "$want" >/dev/null; then
+	[ "$held" = None ] \
+		|| refuse "the registry refused moving $pinned from $held to $commit; the likely cause is tag immutability without the pinned-* exclusion filter"
+	refuse "the registry refused tagging $commit as $pinned"
+fi
+got=$(image "$pinned" imageId.imageDigest) \
+	|| refuse "$repository:$pinned could not be read back"
 [ "$got" = "$want" ] || {
-	echo "image-test-pin: $pinned resolves to $got, not $source's $want" >&2
+	echo "image-test-pin: $repository:$pinned resolves to $got, not $commit's $want" >&2
 	exit 1
 }
-echo "image-test-pin: $pinned is $source, $want"
+echo "image-test-pin: $repository:$pinned is $commit, $want"

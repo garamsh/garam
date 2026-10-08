@@ -1,6 +1,9 @@
 # ADR 0071: A development image shares the release repository, and its tag says it is not a release
 
-> Status: accepted
+> Status: accepted — §Decision's "Each image has one repository, and
+> it holds every build of that image", and the release's repository
+> paths it gives a development build, are superseded by
+> [ADR-0095](./0095-development-images-live-under-dev-and-garam-holds-releases-only.md)
 > Date: 2026-09-27
 
 ## Contents

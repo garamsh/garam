@@ -75,7 +75,7 @@ jobs:
 
       - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
         with:
-          role-to-assume: arn:aws:iam::486152169996:role/garamsh-garam-github-actions
+          role-to-assume: arn:aws:iam::486152169996:role/garam-github-actions
           aws-region: ap-northeast-2
 
       - id: ecr

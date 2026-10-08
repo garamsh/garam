@@ -14,6 +14,7 @@ owner's delegation after `garamsh/infra`'s review.
 - What this does not decide
 - Consequences
 - Rejected alternatives
+- Errata
 
 ## Context
 
@@ -148,3 +149,14 @@ release image carries what it holds.**
   puts `tests/` into the release image's build context, which the
   root `.dockerignore` keeps out so that no test command can reach a
   release image (ADR-0081).
+
+## Errata
+
+- 2026-10-08 — §Decision names the release role
+  `garamsh-garam-github-actions`. It was wrong when written: the name
+  `garamsh/infra` approved in its #293 carries no `garamsh-` prefix,
+  and the prefixed form came from a relayed refinement nobody
+  approved. The release role is `garam-github-actions`, which
+  `.github/workflows/release.yml` assumes since #1229. The decision
+  stands: no AWS identity, under either name, is assumed for the test
+  image.

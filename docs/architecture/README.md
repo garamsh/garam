@@ -258,7 +258,8 @@ What this repository runs against itself. `docs/convention/ci.md` decides how a 
   them because these files say so is a release after that reading.
   A development build, which `make image-build` produces when given
   `IMAGE_REGISTRY`, carries the same two labels, the version being its
-  tag, and reaches a repository only by a person's push (ADR-0071);
+  tag (ADR-0071), and reaches `dev/garam-server` or
+  `dev/garam-web` only by a person's push (ADR-0095);
   without it the target tags `:ci` and passes neither label a value.
   A reference this repository did not publish is still one only its
   builder can vouch for, which after the label is a claim about where
@@ -394,8 +395,8 @@ ADRs:
   — the engine learns a subject's memberships and enforces its own scope
 - [0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)
   — a version tag publishes both images to the account's registry;
-  superseded in part by 0071, which lets the same repositories hold a
-  development build, and by 0092 for non-release artifacts
+  superseded in part by 0071, which lets a person push a development
+  build, and by 0092 for non-release artifacts
 - [0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)
   — the machine listener presents a pinned garam server certificate, and
   certificates rotate without a restart
@@ -507,7 +508,8 @@ ADRs:
   it is not a release: one repository per image, a bare `X.Y.Z` for a
   release alone, a commit-derived or prerelease tag for a development
   build `make image-build` produces locally and pushes nowhere.
-  Supersedes ADR-0039's "the only trigger that publishes" in part
+  Supersedes ADR-0039's "the only trigger that publishes" in part; its
+  one repository per image is superseded by 0095
 - [0072](./adr/0072-the-console-presents-a-group-as-a-team-with-a-page-of-its-own.md)
   — the console presents a group as a team with a page of its own:
   Teams and People replace Groups and Members in the console, a team
@@ -647,3 +649,9 @@ ADRs:
   `b02fe37` with six more template commits; `web/` is governed by
   `structure.md` again, and `db32912` makes `internal/cli` the
   composition site `stack-go.md` provides
+- [0095](./adr/0095-development-images-live-under-dev-and-garam-holds-releases-only.md)
+  — development images live under `dev/`, and `garam/` holds
+  releases only: `make image-build` names `dev/<image>` and
+  refuses a release version there, a person pushes under their own
+  identity, and the costs the PM stated against it are accepted.
+  Supersedes ADR-0071's repository decision only

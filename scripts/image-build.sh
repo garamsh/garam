@@ -10,19 +10,20 @@
 # nothing: a caller needing one image's name reads it from this parse
 # instead of keeping a second copy that goes stale (#870).
 #
-# `--registry <host>` builds a development image instead (ADR-0071):
-# each is tagged `<host>/<path>:<tag>`, the path being the one the
-# release pushes to, and `--tag` names a commit-derived or prerelease
-# tag, defaulting to the first twelve hex digits of HEAD. A bare
-# release version is refused, as is any other tag, before anything is
-# built. The resulting references are what a person pushes; this
-# script pushes nothing.
+# `--registry <host>` builds a development image instead: each is
+# tagged `<host>/dev/<repository>:<tag>`, the development
+# namespace beside the release's `garam/` (ADR-0095), and `--tag` names
+# a commit-derived or prerelease tag, defaulting to the first twelve
+# hex digits of HEAD (ADR-0071). A bare release version is refused, as
+# is any other tag, before anything is built. The resulting references
+# are what a person pushes; this script pushes nothing.
 set -eu
 
 workflow=.github/workflows/release.yml
 tag=ci
 names=false
 registry=
+devnamespace=dev
 devtag=
 dev=false
 
@@ -70,7 +71,7 @@ if [ "$dev" = true ]; then
 	[ -n "$registry" ] \
 		|| refuse "--tag names a development tag, and --registry names the registry it is for; none was given"
 	printf '%s' "$registry" | grep -Eq '^[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:[0-9]+)?$' \
-		|| refuse "registry $registry is not a host[:port]; the path under it is the one $workflow pushes to"
+		|| refuse "registry $registry is not a host[:port]; the path under it is $devnamespace/<repository>"
 	revision=$(git rev-parse --verify HEAD) \
 		|| refuse "no commit to derive a development tag or its revision from"
 	[ -n "$devtag" ] || devtag=$(printf '%s' "$revision" | cut -c1-12)
@@ -92,12 +93,12 @@ fi
 
 # One line per image the release builds:
 #
-#   <repository> <path> <context> <dockerfile> <per-run> <build-arg>...
+#   <repository> <context> <dockerfile> <per-run> <build-arg>...
 #
 # A step counts when it runs docker/build-push-action, whatever its id,
 # so an image added to the release is built here without this file
 # moving. The repository is `tags:`' last path segment without its
-# version, and the path is everything after the registry expression.
+# version.
 # `platforms:`, `provenance:` and `sbom:` are not read: they shape what
 # a release publishes, not what a build proves.
 #
@@ -113,7 +114,7 @@ fi
 images=$(awk '
 	function emit() {
 		if (build && name != "") {
-			printf "%s %s %s %s %s %s\n", name, path, context, file, \
+			printf "%s %s %s %s %s\n", name, context, file, \
 				(perrun == "" ? "-" : perrun), args
 			written++
 		}
@@ -158,13 +159,14 @@ images=$(awk '
 }
 
 # The reference an image takes: `<repository>:ci` for the check, and
-# the release's own path under the given registry for a development
-# build.
+# that repository in the development namespace under the given registry
+# for a development build. The release's path is never one, so no
+# development push lands where a release lives.
 ref() {
 	if [ "$dev" = true ]; then
-		echo "$registry/$1:$tag"
+		echo "$registry/$devnamespace/$1:$tag"
 	else
-		echo "$2:$tag"
+		echo "$1:$tag"
 	fi
 }
 
@@ -172,7 +174,7 @@ ref() {
 # it knows two. Any other is refused here rather than after the first
 # image has been built.
 if [ "$dev" = true ]; then
-	for arg in $(printf '%s\n' "$images" | awk '$5 != "-" { print $5 }' | tr ',' ' '); do
+	for arg in $(printf '%s\n' "$images" | awk '$4 != "-" { print $4 }' | tr ',' ' '); do
 		case $arg in
 		IMAGE_REVISION | IMAGE_VERSION) ;;
 		*) refuse "$workflow resolves $arg per run and a development build has no value for it" ;;
@@ -181,8 +183,8 @@ if [ "$dev" = true ]; then
 fi
 
 if [ "$names" = true ]; then
-	while read -r name path context _; do
-		echo "$context $(ref "$path" "$name")"
+	while read -r name context _; do
+		echo "$context $(ref "$name")"
 	done <<EOF
 $images
 EOF
@@ -203,12 +205,12 @@ fi
 
 echo "image-build: $(printf '%s\n' "$images" | wc -l | tr -d ' ') images, read from $workflow"
 
-while read -r name path context file perrun args; do
+while read -r name context file perrun args; do
 	[ -n "$context" ] && [ -n "$file" ] || {
 		echo "image-build: $workflow gives $name no context or no Dockerfile" >&2
 		exit 1
 	}
-	image=$(ref "$path" "$name")
+	image=$(ref "$name")
 	set --
 	for arg in $args; do set -- "$@" --build-arg "$arg"; done
 	for arg in $(printf '%s' "$perrun" | tr ',' ' '); do

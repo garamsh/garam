@@ -44,6 +44,14 @@ behind it, and the suite is left exercising the stand-in. The e2e row's
 obligation is met separately, by `tests/e2e/`, which drives the built
 binary and fails without a store (#900).
 
+**A test constructs what it puts under test** — the unit and whatever
+stands in for its dependencies, or the server its client is pointed at.
+What it does not construct is the shipped graph, the real
+implementations wired together as the application ships them: where
+that graph is the subject, the test calls the place that assembles it
+for the application. A copy assembled inside the test goes on passing
+after the shipped wiring breaks.
+
 ## Behavior over implementation
 
 Assert on outputs and side-effects only:
@@ -100,6 +108,14 @@ caught it.
   mechanism accepts nothing of its own, as with a check that only
   narrows — an input everything around it accepts. Assert both in the
   same test, so they are read together.
+- **A test verifies that its setup produced the state it asked for.** A
+  setup call reports success for writing what the environment allowed,
+  not what the test requested, and the difference is silent. Prefer a
+  call the environment cannot alter; where none exists, read the state
+  back and assert it before asserting behaviour on it. Otherwise a case
+  that degenerated into another case still runs, still passes, and
+  reports the assertion it never tested. Where the degenerate form is
+  the control's own state, the control cannot see it.
 - **Assert the property, not the absence of its consequence.** A field
   that is false and a field that is absent are different states, and
   most assertions cannot tell them apart. Only one of them is the

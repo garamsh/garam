@@ -647,3 +647,8 @@ ADRs:
   `b02fe37` with six more template commits; `web/` is governed by
   `structure.md` again, and `db32912` makes `internal/cli` the
   composition site `stack-go.md` provides
+- [0096](./adr/0096-garam-syncs-the-convention-template-to-f7de866.md)
+  — garam syncs the conventions template to `f7de866`, taking every
+  commit since `6fbfd5d` that lands on a file it keeps; `stack-go.md`
+  §1 keeps naming an implementation package for its technology, and
+  three adapted stack files keep their checked-against headers

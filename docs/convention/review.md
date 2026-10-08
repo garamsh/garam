@@ -33,7 +33,7 @@ Decision: approve / request changes / reject
 ```
 
 - An approve requires the Scope, Verification, and Depth rows to read
-  `pass`. The other three may read `unverified`, with a stated reason
+  `pass`. The remaining rows may read `unverified`, with a stated reason
   (some PRs change nothing a responsibility document describes). A
   `fail` in any row is a request-changes or a reject, never an approve.
 - A check you did not verify is marked `unverified` — never guessed.
@@ -106,7 +106,7 @@ taste. A line that traces to an acceptance criterion is in scope however
 large it is, and a correct one-line drive-by is out of scope however
 small. Out-of-scope work is not wrong — it is a separate issue.
 
-**Depth** is the check the other five cannot make. They ask whether the
+**Depth** is the check the other rows cannot make. They ask whether the
 change follows the rules; Depth asks whether it is right: a correctness
 risk the tests do not cover, a materially simpler approach passed over,
 a defect no convention happens to name. Marking it `pass` asserts the
@@ -170,8 +170,8 @@ the diff again does not re-examine the belief.
   the claim was written is a Verification row. The work is finding them
   — `pass` asserted from the understanding that produced the diff is
   what this section exists to name.
-- Nothing else relaxes. Scope, Verification and Depth still read `pass`
-  for an approve, and a `fail` in any row is still not one.
+- Nothing else relaxes. §Submitting a review holds for a self-review
+  unchanged.
 
 ## Responding to a review (author)
 

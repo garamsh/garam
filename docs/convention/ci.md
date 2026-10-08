@@ -22,12 +22,12 @@ second way to run it.
 ## One entry point per task
 
 - **One name per task.** Each of lint, format, test, and build has
-  exactly one name that a human and CI both invoke. What implements that
-  name — a task runner, a script, a package manifest entry — is the
-  project's choice; the name is the contract.
-- **One name for the whole set.** A single name runs lint, format, test,
-  and build in order, so "run the checks" is one command locally and one
-  step in CI.
+  exactly one name that a human and CI both invoke, once the project has
+  a command for it. What implements that name — a task runner, a
+  script, a package manifest entry — is the project's choice; the name
+  is the contract, so it arrives with the command and not ahead of it.
+- **One name for the whole set.** A single name runs those names in
+  order, so "run the checks" is one command locally and one step in CI.
 - **A change shows that the whole set ran before it landed.** Once the
   project has a pipeline, every change that can land on the default
   branch carries, on the change itself, the record of a run of the
@@ -43,12 +43,12 @@ second way to run it.
   test, a generator that found no input, a check that read only tracked
   files — each exits zero and reads exactly like the run that did the
   work. The output has to tell those apart: a count of what was covered,
-  or a failure when the count is zero.
-- **Entry points stay thin.** An entry point that has grown past a few
-  lines is one name doing several jobs; re-split it into named tasks
-  rather than letting it become a script. What it may not become is a
-  pipeline component: it runs on a contributor's machine as well as in
-  CI.
+  or a failure when the count is zero. A count taken over a set chosen
+  for convenience is as honest as one taken over everything the task is
+  meant to cover, and the two read the same, so the output names beside
+  the count how the set it counted was selected.
+- **An entry point may not become a pipeline component.** It runs on a
+  contributor's machine as well as in CI.
 
 ## Run the checks before pushing
 
@@ -180,8 +180,7 @@ documentation-only pull request does not start.
   for the candidate version.
 - **Toolchain setup**: use the official setup action for the project's
   language; take its version and inputs from its own docs.
-- **Checks**: run `make lint`, `make format`, `make test`, `make build`
-  — the targets, not the commands inside them.
+- **Checks**: run `make ci` — the target, not the commands inside it.
 - **Artifacts**: use the artifact action.
 - **Permissions**: `permissions: read-all` at the workflow top; `write`
   granted per job.

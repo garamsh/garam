@@ -38,8 +38,10 @@ Violations are grounds for PR rejection.
 - A file may state once at the top what it was checked against, and then
   every claim in it holds for that. That statement records a check; it
   promises nothing about later versions. A reader past it holds claims
-  nobody checked there, and moving the statement means re-checking the
-  claims under it rather than editing the number.
+  nobody checked there, so moving the statement means re-checking the
+  claims under it rather than editing the number, and a project
+  receiving the statement over claims it has changed re-checks those
+  claims or drops the statement.
 - Where the claim is about a package's health rather than a release
   (`unmaintained`, `legacy`), do not rest a rule on it: name what to use
   instead, which does not expire.
@@ -108,9 +110,7 @@ These are documentation too.
 - A `## Contents` list indexes a file's `##` headings, so how many of
   them there are decides whether it carries one and the file's length
   does not: more than eight, it opens with the list; three or fewer, it
-  carries none; between the two, the writer decides. A Contents list is
-  never the remedy for a file that has outgrown one topic — see §Keep it
-  maintainable.
+  carries none; between the two, the writer decides.
 - A file whose headings come from a template owes no Contents list,
   however many it has. Those headings are the same in every file written
   from that template, so listing them tells a reader only what the

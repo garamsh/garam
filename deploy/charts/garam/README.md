@@ -388,15 +388,18 @@ The images are pinned separately, through `image.server.tag` and
 that tag with the `v` dropped; one commit publishes both images under
 one version, so a deployment pins one version across the pair
 (ADR-0039). The tags are immutable, so the tag answers what is deployed
-on its own. The same repositories hold development builds, tagged by a
-commit prefix or `X.Y.Z-<prerelease>` rather than a bare version
-(ADR-0071), so a tag of either form pins a build nobody released.
+on its own. The release repositories, `garam/garam-server` and
+`garam/garam-web`, hold releases only. A development build
+is in `dev/garam-server` or `dev/garam-web` (ADR-0095),
+tagged by a commit prefix or `X.Y.Z-<prerelease>` rather than a bare
+version (ADR-0071), so running one sets `image.*.repository` as well
+as the tag, and pins a build nobody released.
 
 **A digest is optional and names the bytes.** `image.server.digest` and
 `image.web.digest` render after the tag rather than in place of it —
 `repository:tag@digest`, the form a kubelet resolves by digest — so the
 tag goes on naming the version a deployment chose and the two are one
-value a reader holds in one place. Against the two repositories above
+value a reader holds in one place. Against the two release repositories
 it restates what an immutable tag already fixes; what it is for is an
 image mirrored into a registry that is not, and a deployment whose
 policy is that a reference names bytes.

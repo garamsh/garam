@@ -170,8 +170,8 @@ make test-image-pin COMMIT=<commit> CONSUMER=<consumer>
 ```
 
 `scripts/image-test-pin.sh` refuses a commit that is not 12 to 40
-lowercase hex digits and a consumer name of anything but lowercase letters,
-digits and inner hyphens, puts the commit's manifest under
+lowercase hex digits and a consumer name of anything but lowercase
+letters, digits and inner hyphens, puts the commit's manifest under
 `pinned-<consumer>` with the digest it was read with, and prints the
 digest the tag reads back as. Where the registry refuses moving an
 existing pin, it names tag immutability without the `pinned-*`

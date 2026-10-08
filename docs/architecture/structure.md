@@ -91,13 +91,24 @@ Nothing here states what goes *inside* a boundary, or how the system is deployed
 
 garam's composition root is `internal/cli`, the package `cmd/garam/main.go` calls: the concrete types behind the seams the domains declare are constructed there, and `cmd/garam/main.go` constructs nothing itself.
 
-`docs/convention/stack-go.md` §Project envelope decides this case differently. Its first bullet puts that construction in `cmd/<binary>/main.go` and nowhere else, and asks that the file be kept thin. That rule governs — a stack-specific convention file outranks this document ([README.md](./README.md) §Rules, rule 8) — and what garam does not satisfy is the path it names: `cmd/garam/main.go` is thin because the construction is not in it.
+This is the composition site `docs/convention/stack-go.md` §Project
+envelope provides for a module whose tests have to reach it. That
+section puts the site in `cmd/<binary>/main.go` unless a test has to
+reach it, and puts it in a package `main.go` calls when one does. The
+paragraph below names the tests that reach it, so the two documents
+decide this case the same way
+([ADR-0094](./adr/0094-structural-rules-yield-only-to-what-a-framework-imposes.md)).
 
 **The environment is read in the composition root and nowhere else.** Every name the module reads is declared in one block in `internal/cli/cli.go`, and the `envOr` beside it holds the only environment read under `internal/` and `cmd/`, so what the source reads is enumerable from those declarations rather than from the spelling of the calls that read them. A second read there is the defect this states, and `make chart-render` fails on one rather than leaving it to a reviewer: it counts the reads under those two trees and expects the one, because a name read outside the block is one it cannot enumerate against the chart. The suites under `tests/` read `GARAM_TEST_DATABASE_URL` for themselves and are outside both the rule and the count.
 
 **The placement is what the in-process integration tests rest on.** `package main` cannot be imported, which `docs/convention/stack-go.md` §7 states where it makes a test of one internal by necessity, and the same section designates `tests/` for the integration and E2E tests that wire multiple domains. `tests/integration/issue_certificate_test.go` and `tests/integration/migrate_test.go` reach the shipped command tree through `cli.NewRootCommand()`. Construction moved into `cmd/garam/main.go` is construction those two cannot reach: what they exercise goes uncovered, or is rebuilt beside them as a second copy of the wiring — and a copy does not fail when the shipped wiring breaks.
 
-**This records the divergence and does not change the rule.** Nothing here amends `stack-go.md`, and nothing here makes garam compliant. Whether that rule should name a property rather than a path is the convention owner's to answer; #756 carries the referral, and the alternative it rejected — moving the construction up into `cmd/garam/main.go` — with what that would cost. Until the rule is answered, `internal/cli` holding the composition root is a position this project recorded and not a defect nobody noticed.
+**This section once recorded a divergence, and that record has ended.**
+`stack-go.md` used to put construction in `cmd/<binary>/main.go` and
+nowhere else, and this section recorded `internal/cli` as diverging from
+it. #756 put the question to the template, which answered it in
+`garamsh/convention-driven-project@db32912` (#337). ADR-0094 adopts that
+answer, so the divergence record ends and no question is left open.
 
 ## When a new boundary is earned
 
@@ -160,6 +171,14 @@ A conversion to a wire format the boundaries already share is not a shared kerne
   what the tree does under both readings, why widening forbids nothing
   it does, and why what composes several boundaries stays outside the
   rule.
+- [ADR-0094](./adr/0094-structural-rules-yield-only-to-what-a-framework-imposes.md)
+  — this document's rules yield to a stack file only where the stack's
+  framework imposes the case. The ADR records the adoption of that rule
+  from the conventions template, which moves `web/`: a feature there now
+  reaches a sibling through its declared surface. It also records the
+  adoption of the template's composition-site rule, which ends
+  §Where the composition root lives' divergence from
+  `docs/convention/stack-go.md`.
 
 ## Open questions
 

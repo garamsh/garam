@@ -61,6 +61,14 @@ These are documentation too.
 - **Facts only.** No rhetoric, no self-assessment, no inflated language
   ("perfect", "massive improvement"). State what changed, where, and
   why.
+- **A claim names a basis that could have contradicted it.** Name what
+  established it — the command with its arguments, the repository and
+  revision of a file read, the source consulted — precisely enough that
+  a reader can repeat it. A basis that would read the same had the claim
+  been false establishes nothing: an expression matching nothing shows
+  an absence only where the same expression is shown to match what is
+  present, and a run whose output nobody has read is not a basis at
+  all.
 - **Stay inside the template.** No extra sections beyond the template
   fields; leave no field empty — write `N/A` with a reason.
 - **A closing keyword precedes each issue number.**

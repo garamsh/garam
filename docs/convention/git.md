@@ -12,8 +12,8 @@ merge.
 - `refactor/<short-name>` — behavior-preserving restructure
 - `test/<short-name>` — test-only changes
 
-One task, one branch. Branch from `main`; never commit to `main`
-directly.
+One task, one branch. Branch from the default branch; never commit to
+it directly.
 
 **Exception — Orca worktree branches.** Orca creates the branch and the
 worktree before a dispatched worker exists, naming it
@@ -24,10 +24,13 @@ them. The prefixes above govern every branch created by hand.
 
 ## Commits
 
-Only the PR title reaches `main`, together with the trailer naming the
-squashed commits' authors. A branch's commit messages are otherwise a
-working record for the reviewer reading the branch, not the permanent
-history.
+A squash merge puts the PR title on the default branch and drops the
+authors of the commits behind it. Whoever merges ensures the commit that
+reaches the default branch carries a `Co-authored-by:` trailer for each
+of them, and confirms it by reading that commit against the commits it
+squashed rather than assuming the merge carried them over. A branch's
+commit messages are otherwise a working record for the reviewer reading
+the branch, not the permanent history.
 
 Format: `<type>: <imperative summary>`
 
@@ -60,8 +63,7 @@ Format: `<type>: <imperative summary>`
   diff. A body never restates what changed.
 - The message contains only what the project put there — no line a tool
   appended unasked. A `Co-authored-by:` naming an author of the squashed
-  commits is not such a line: squash drops those authors and the trailer
-  is where they survive.
+  commits is not such a line: the project asks for it.
 - Reversing an earlier decision mid-branch is an ordinary commit
   describing the new state. Earlier commits are not rewritten to hide
   that the decision changed.
@@ -73,8 +75,8 @@ Format: `<type>: <imperative summary>`
 ## PRs
 
 - Title follows the commit format: `<type>: <imperative summary>`. It
-  becomes the commit on `main`, so it is the permanent record of the
-  change.
+  becomes the commit on the default branch, so it is the permanent
+  record of the change.
 - Body follows `.github/PULL_REQUEST_TEMPLATE.md`.
-- PRs are squash-merged. Branch commits do not appear on `main`; do not
-  rewrite them to be pretty.
+- PRs are squash-merged. Branch commits do not appear on the default
+  branch; do not rewrite them to be pretty.

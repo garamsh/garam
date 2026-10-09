@@ -280,8 +280,8 @@ func keyDue(keys []*SigningKey, now time.Time) (time.Duration, bool) {
 	if current == nil {
 		return 0, true
 	}
-	for _, k := range keys {
-		if k.SignsFrom.After(now) && k.WithdrawnAt == nil {
+	for _, k := range announced(keys) {
+		if k.SignsFrom.After(now) {
 			return 0, false
 		}
 	}
@@ -293,10 +293,11 @@ func keyDue(keys []*SigningKey, now time.Time) (time.Duration, bool) {
 
 // signingAt is the key that signs at now: the last to have begun
 // signing, unless it was withdrawn. An older key never signs again,
-// because a later one has begun.
+// because a later one has begun; a key withdrawn before it began is not
+// one that began.
 func signingAt(keys []*SigningKey, now time.Time) *SigningKey {
 	var current *SigningKey
-	for _, k := range keys {
+	for _, k := range announced(keys) {
 		if !k.SignsFrom.After(now) {
 			current = k
 		}
@@ -311,6 +312,7 @@ func signingAt(keys []*SigningKey, now time.Time) *SigningKey {
 // signing stays while a signature it made can still be valid, plus the
 // skew allowance and one cache lifetime; a withdrawn key never appears.
 func published(keys []*SigningKey, now time.Time, validity time.Duration) []*SigningKey {
+	keys = announced(keys)
 	var out []*SigningKey
 	for i, k := range keys {
 		if k.WithdrawnAt != nil {
@@ -322,6 +324,21 @@ func published(keys []*SigningKey, now time.Time, validity time.Duration) []*Sig
 		}
 		stopped, ok := stoppedSigning(keys[i+1:], now)
 		if !ok || now.Before(stopped.Add(validity+SkewAllowance+KeySetMaxAge)) {
+			out = append(out, k)
+		}
+	}
+	return out
+}
+
+// announced drops the keys withdrawn before they began. Such a key
+// never signed, so it is as if it had never been announced: the key it
+// would have replaced goes on signing, and the next one is announced
+// with the full lead. A key withdrawn after it began did sign, and stays,
+// so the key before it does not sign again.
+func announced(keys []*SigningKey) []*SigningKey {
+	out := make([]*SigningKey, 0, len(keys))
+	for _, k := range keys {
+		if k.WithdrawnAt == nil || !k.WithdrawnAt.Before(k.SignsFrom) {
 			out = append(out, k)
 		}
 	}

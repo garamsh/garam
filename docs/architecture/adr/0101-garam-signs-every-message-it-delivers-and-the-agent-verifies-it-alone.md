@@ -209,6 +209,10 @@ content nor a detached signature over it. The payload is:
   deployment's first key, and the replacement for one retired at once:
   there is no earlier set either could be missing from, and nothing
   else can sign meanwhile.
+- **A next key retired before it begins was never announced.** The
+  current key goes on signing past the retired key's start, and the
+  replacement is announced with the full lead; nothing signs at once
+  for it.
 - **Who rotates.** garam announces the next key on its own once the
   current one has signed for 90 days less the lead, one at a time. It
   checks whenever it signs a claim or serves the set, so a deployment

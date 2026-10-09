@@ -40,7 +40,7 @@ not touched.
 |---|---|---|---|
 | G1 | garam | the token store, `POST /tokens`, `POST /agents/{agent}/tokens`, the operator and supervisor credentials, issue and re-issue on the browser API and in the console, every machine route accepting `Garam-Token` under the v2 contract values beside the v1 ones, introspection accepting a token where it takes `certificatePem`, a metric counting requests by how they authenticated | ADR-0100 accepted |
 | G2 | garam | the adapter's token mode — two token files, read per request, `Garam-Placement` as its own header, `agent-execution.v2` — and the standalone commands on a supervisor credential | G1 |
-| O1 | garam-agent-operator | an Operator release carrying four pull requests, landed on `dev` in the order §O1 is one release of four pull requests gives | a garam release carrying G1 and G2, deployed |
+| O1 | garam-agent-operator | an Operator release carrying four pull requests, landed on `dev` in the order §O1 is one release of four pull requests gives | on each deployment, a garam carrying G1 and G2 deployed there and both credentials placed; on the lab, that is the garam `garamsh/gitops` pins |
 | G3 | garam | the certificate path removed: the listener stops requesting a client certificate, the seven issuing routes (`recoverAgentCredential` in its v1 form only), `garam issue-certificate` and the v1 contract values go, and with them ADR-0091's chain | O1 deployed on every operator garam knows of, and the G1 metric reading no certificate-authenticated request for seven days |
 | G4 | garam | the authorities retired: `internal/ca`, the sealer, the key-encryption key `garam serve machine` reads, and a migration dropping the certificate and enrollment tables | G3 released |
 
@@ -81,8 +81,10 @@ garam ships first, and the cut is hard on the Operator's side alone.
 - **G1, G2.** garam accepts both. Nothing the Operator runs today
   breaks, and no Operator release is waiting on garam.
 - **O1.** A hard cut: one release of four pull requests, token mode
-  only, no certificate fallback. It needs a garam carrying G1 and G2 already deployed, so
-  the upgrade order is fixed — garam, then the Operator. That is the
+  only, no certificate fallback. It needs a garam carrying G1 and G2
+  already deployed on the deployment it reaches — on the lab, the
+  garam gitops pins (§How a running operator moves over) — so the
+  upgrade order is fixed: garam, then the Operator. That is the
   price of the Operator carrying no compatibility, and it is
   admissible now because no release yet claims a tested compatibility
   window ([ADR-0079](../architecture/adr/0079-interservice-contracts-keep-adjacent-releases-compatible-and-replay-by-stable-identifier.md)
@@ -219,7 +221,24 @@ ADR-0100 §Tokens is authoritative for these values.
 
 ## How a running operator moves over
 
-For each registered operator, after G1 and G2 are deployed:
+**On the lab, O1's precondition is that the lab runs G1 and G2, not
+that a release carries them.** `garamsh/gitops` pins the garam image
+the lab runs as well as the Operator's, so a garam release carrying G1
+and G2 changes nothing on the lab until gitops moves that pin and the
+rollout completes. The order on the lab is therefore:
+
+1. gitops moves the garam pin to a release carrying G1 and G2, and the
+   lab runs it.
+2. Both credentials are issued against that garam and placed (§The
+   control service's own credential).
+3. gitops moves the Operator pin to the release carrying O1.
+
+The lab's rollout in progress — the Operator at `4c425a7`, waiting on
+a Sherlock agent image that accepts `--assignment-epoch` — is on the
+certificate path and is unaffected. G1 still accepts it.
+
+For each registered operator, on any deployment, after G1 and G2 are
+deployed there:
 
 1. An owner or admin issues a credential in the console to each
    operator record the deployment runs. That is the controller and,

@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const BASE_URL = process.env.GARAM_E2E_BASE_URL ?? "http://localhost:3000";
+const served = new URL(BASE_URL);
 
 /**
  * The e2e suite drives the built app against the real backend: the Go
@@ -19,7 +20,18 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   webServer: {
+    // The app is served as the image ships it (deploy/local/
+    // Dockerfile.web): the standalone server `output: "standalone"`
+    // emits, beside the static and public assets it does not carry.
+    // `next start` is not that server, and warns that it does not work
+    // with standalone output. The server binds HOSTNAME and PORT, so
+    // both come from the address the suite reaches, never from a
+    // HOSTNAME the shell happens to export.
     command: "pnpm build && pnpm start",
+    env: {
+      HOSTNAME: served.hostname,
+      PORT: served.port || (served.protocol === "https:" ? "443" : "80"),
+    },
     url: BASE_URL,
     // The subject is what this tree builds. `url` is answered by
     // anything listening on the port, so reusing took a stale `next

@@ -110,7 +110,9 @@ verifies it with no code of garam's.
 ### What is signed
 
 The signed bytes are the JWS Signing Input of RFC 7515 — the encoded
-header, a dot, the encoded payload. The payload is:
+header, a dot, the encoded payload — and the content enters them as a
+digest of its raw octets. That is neither a canonical form of the
+content nor a detached signature over it. The payload is:
 
 | Claim | Value |
 |---|---|

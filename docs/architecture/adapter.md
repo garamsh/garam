@@ -291,11 +291,14 @@ contract binds:
 | An outbox entry is `<id>.json`, written whole under a dot-prefixed temporary name, carrying `created_at` once | `tools/message_send/message_send.go`, `internal/message/message.go` | The forwarder could read a partial entry or invent an age |
 
 Read in Sherlock at
-[`v0.4.0`](https://github.com/garamsh/sherlock/tree/6054666584e6a0f22c19d563e26240d6eefc1258)
-(`6054666584e6a0f22c19d563e26240d6eefc1258`), the release a signing
-adapter binds, in `docs/architecture/gateway.md` §Signed messages,
-which governs Sherlock's ingress. The v0.1.0 rows above still hold for
-an unsigned message.
+[`v0.5.0`](https://github.com/garamsh/sherlock/tree/7b4a2bb6905164c16ffd20719aba0d0920a10b2f)
+(`7b4a2bb6905164c16ffd20719aba0d0920a10b2f`), the release garam's
+real-runtime suites pin, in `docs/architecture/gateway.md` §Signed
+messages, which governs Sherlock's ingress. Against
+[`v0.4.0`](https://github.com/garamsh/sherlock/tree/6054666584e6a0f22c19d563e26240d6eefc1258),
+the first release a signing adapter can run beside, that section only
+gains the deployment order §Stable identifiers and the outbox repeats.
+The v0.1.0 rows above still hold for an unsigned message.
 
 | Fact | Where | What breaks without it |
 |---|---|---|

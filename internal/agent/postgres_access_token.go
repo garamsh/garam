@@ -78,7 +78,10 @@ func (s *PostgresStore) MintAccessToken(ctx context.Context, caller grn.GRN, t *
 		IssuedAt:    pgtype.Timestamptz{Time: t.IssuedAt, Valid: true},
 		ExpiresAt:   pgtype.Timestamptz{Time: t.ExpiresAt, Valid: true},
 	}); err != nil {
-		return pgxerr.Classify(err, "record agent token", nil, nil)
+		// The execution row is held, so the one key a missing row can
+		// refuse here is the audience's: a hosted operator deleted
+		// since the service read its registration.
+		return pgxerr.Classify(err, "record agent token", ErrAccessTokenAudience, nil)
 	}
 	if err := q.TrimAgentTokens(ctx, db.TrimAgentTokensParams{
 		AgentGrn: t.Agent.String(), AudienceGrn: audience, Keep: LiveAccessTokensPerAudience,

@@ -1618,7 +1618,7 @@ func TestPolicyStore_LifecycleRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	created, err := s.CreatePolicy(ctx, authz.NewPolicy(g, orgGRN, "read-only"), policyDoc("v1", wire.EffectAllow), author)
 	require.NoError(t, err)
-	assert.Equal(t, authz.PolicyStatusDraft, created.Status())
+	assert.Equal(t, wire.PolicyStatusDraft, created.Status())
 	assert.Equal(t, 1, created.DefaultVersion())
 
 	policies, err := s.ListPolicies(ctx, orgGRN)
@@ -1631,9 +1631,9 @@ func TestPolicyStore_LifecycleRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, active)
 
-	activated, err := s.SetPolicyStatus(ctx, g, authz.PolicyStatusActive)
+	activated, err := s.SetPolicyStatus(ctx, g, wire.PolicyStatusActive)
 	require.NoError(t, err)
-	assert.Equal(t, authz.PolicyStatusActive, activated.Status())
+	assert.Equal(t, wire.PolicyStatusActive, activated.Status())
 	active, err = s.ActivePolicies(ctx, orgGRN)
 	require.NoError(t, err)
 	require.Len(t, active, 1)
@@ -1809,7 +1809,7 @@ func TestPolicyCache_InvalidatedByNotify(t *testing.T) {
 	require.NoError(t, err)
 	_, err = s.CreatePolicy(ctx, authz.NewPolicy(g, orgGRN, "read-only"), policyDoc("v1", wire.EffectAllow), grnOf("user", "ada"))
 	require.NoError(t, err)
-	_, err = s.SetPolicyStatus(ctx, g, authz.PolicyStatusActive)
+	_, err = s.SetPolicyStatus(ctx, g, wire.PolicyStatusActive)
 	require.NoError(t, err)
 
 	// The listener registers its LISTEN concurrently with the writes
@@ -2057,7 +2057,7 @@ func TestPolicyAttachment_DenyOverridesAcrossSources(t *testing.T) {
 	require.NoError(t, err)
 	_, err = s.CreatePolicy(ctx, authz.NewPolicy(g, orgGRN, "no-read"), denyRead, ada)
 	require.NoError(t, err)
-	_, err = s.SetPolicyStatus(ctx, g, authz.PolicyStatusActive)
+	_, err = s.SetPolicyStatus(ctx, g, wire.PolicyStatusActive)
 	require.NoError(t, err)
 	_, err = s.AttachPolicy(ctx, g, eng)
 	require.NoError(t, err)

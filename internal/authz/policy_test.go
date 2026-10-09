@@ -91,7 +91,7 @@ func TestParsePolicyDocument_RefusesWhatItCannotCarry(t *testing.T) {
 }
 
 func TestParsePolicyStatus(t *testing.T) {
-	for _, s := range []authz.PolicyStatus{authz.PolicyStatusDraft, authz.PolicyStatusActive, authz.PolicyStatusArchived} {
+	for _, s := range []wire.PolicyStatus{wire.PolicyStatusDraft, wire.PolicyStatusActive, wire.PolicyStatusArchived} {
 		got, err := authz.ParsePolicyStatus(string(s))
 		require.NoError(t, err)
 		assert.Equal(t, s, got)
@@ -109,7 +109,7 @@ func TestNewPolicy_StartsAsADraftOnTheFirstVersion(t *testing.T) {
 	assert.Equal(t, authz.ServiceTypePolicy, g.ServiceType)
 
 	p := authz.NewPolicy(g, acme, "read-only")
-	assert.Equal(t, authz.PolicyStatusDraft, p.Status())
+	assert.Equal(t, wire.PolicyStatusDraft, p.Status())
 	assert.Equal(t, 1, p.DefaultVersion())
 	assert.Equal(t, acme, p.Organization())
 	assert.Equal(t, "read-only", p.Name())

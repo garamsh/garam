@@ -416,9 +416,9 @@ collaborate on a shared plan.
 - `internal/grn/` — identifier; shared primitive.
 - `internal/errorx/` — typed errors; shared primitive.
 - `internal/wire/` — the conversions onto the wire formats the request
-  surfaces share: the statement `Effect` and its authz-proto mapping,
-  errorx kinds rendered as HTTP statuses and read back from gRPC codes;
-  shared primitive.
+  surfaces share: the statement `Effect` and a policy's status with
+  their authz-proto mappings, errorx kinds rendered as HTTP statuses and
+  as gRPC codes and read back from them; shared primitive.
 - `internal/keyfile/` — the owner-only rule every key material file is
   read under (ADR-0015); shared primitive.
 - `internal/listfilter/` — the offset/limit filter a domain's list call

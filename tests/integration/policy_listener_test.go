@@ -188,7 +188,7 @@ func TestListenPolicyChanges_ResynchronisesAfterADroppedConnection(t *testing.T)
 	require.NoError(t, err)
 	_, err = s.CreatePolicy(ctx, authz.NewPolicy(before, orgGRN, "before"), policyDoc("before", wire.EffectAllow), author)
 	require.NoError(t, err)
-	_, err = s.SetPolicyStatus(ctx, before, authz.PolicyStatusActive)
+	_, err = s.SetPolicyStatus(ctx, before, wire.PolicyStatusActive)
 	require.NoError(t, err)
 
 	require.Eventually(t, func() bool {
@@ -207,13 +207,13 @@ func TestListenPolicyChanges_ResynchronisesAfterADroppedConnection(t *testing.T)
 	// are made with nothing listening on the channel at all.
 	requireListenerSessions(t, p, policyListenerAppName, authz.PolicyChannel, 0)
 
-	_, err = s.SetPolicyStatus(ctx, before, authz.PolicyStatusArchived)
+	_, err = s.SetPolicyStatus(ctx, before, wire.PolicyStatusArchived)
 	require.NoError(t, err)
 	after, err := authz.NewPolicyGRN(orgGRN)
 	require.NoError(t, err)
 	_, err = s.CreatePolicy(ctx, authz.NewPolicy(after, orgGRN, "after"), policyDoc("after", wire.EffectAllow), author)
 	require.NoError(t, err)
-	_, err = s.SetPolicyStatus(ctx, after, authz.PolicyStatusActive)
+	_, err = s.SetPolicyStatus(ctx, after, wire.PolicyStatusActive)
 	require.NoError(t, err)
 
 	// The control: with the connection down the cache still answers

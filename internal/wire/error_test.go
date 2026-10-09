@@ -120,3 +120,35 @@ func TestKindOf(t *testing.T) {
 		})
 	}
 }
+
+// TestCodeOf closes the round trip with KindOf over every kind, so a
+// kind whose code mapping changes on one side alone fails here. The
+// last case is a kind no constant names, which renders as Unknown and
+// reads back as KindUnknown rather than as itself.
+func TestCodeOf(t *testing.T) {
+	kinds := []errorx.Kind{
+		errorx.KindUnknown,
+		errorx.KindInternal,
+		errorx.KindCanceled,
+		errorx.KindInvalidArgument,
+		errorx.KindDeadlineExceeded,
+		errorx.KindNotFound,
+		errorx.KindAlreadyExists,
+		errorx.KindPermissionDenied,
+		errorx.KindResourceExhausted,
+		errorx.KindFailedPrecondition,
+		errorx.KindAborted,
+		errorx.KindOutOfRange,
+		errorx.KindUnimplemented,
+		errorx.KindUnavailable,
+		errorx.KindDataLoss,
+		errorx.KindUnauthenticated,
+	}
+	for _, k := range kinds {
+		t.Run(k.String(), func(t *testing.T) {
+			assert.Equal(t, k, wire.KindOf(wire.CodeOf(k)))
+		})
+	}
+
+	assert.Equal(t, codes.Unknown, wire.CodeOf(errorx.Kind(99)))
+}

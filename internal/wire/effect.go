@@ -1,9 +1,9 @@
 // Package wire holds the conversions between the shared primitives
-// (errorx kinds, GRNs, the statement Effect) and the wire formats the
-// request surfaces share: the authz gRPC contract and HTTP status
-// codes. api, machineapi and authz each import it and never import
-// each other (ADR-0003, ADR-0017); what every surface converts the
-// same way is declared once, here.
+// (errorx kinds, GRNs, the statement Effect, a policy's status) and
+// the wire formats the request surfaces share: the authz gRPC contract
+// and HTTP status codes. api, machineapi and authz each import it and
+// never import each other (ADR-0003, ADR-0017); what every surface
+// converts the same way is declared once, here.
 package wire
 
 import (

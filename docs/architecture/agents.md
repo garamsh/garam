@@ -457,6 +457,34 @@ supervisor that stops leaves the workload running.
   `--adapter-machine-url` is the machine listener as seen from the
   runtime's namespace, where a rootless host's loopback is not; it
   defaults to the supervisor's `--machine-url` (ADR-0087).
+- **The runtime trusts garam's issuer by the key set it fetches
+  itself** (ADR-0101, step 4). The supervisor adds one `issuers` entry
+  to the runtime's configuration, once, when it creates the runtime:
+  `issuer` is garam's — `--message-issuer`, by default the origin of
+  `--machine-url` — `keys-url` is the adapter's address for garam
+  followed by `/message-signing-keys`, and `keys-ca-file` is the garam
+  server root the adapter verifies garam by, copied into the runtime
+  for its owner alone. The host's own entries stay, and one naming
+  garam's issuer is refused. **The issuer and the URL may differ, and
+  that is deliberate.** The issuer is garam's identity, compared byte
+  for byte against every signature; the URL is only where the runtime
+  reaches the set, and the runtime shares the adapter's network
+  namespace, where a rootless host's loopback is not the host's, so it
+  reaches garam wherever the adapter does (ADR-0087). The runtime
+  fetches the set again on a key it does not hold, which covers a
+  rotation, a first key and a key retired at once, so nothing on the
+  host refreshes it. **`keys-ca-file` is not in Sherlock `0.3.0`**: it
+  arrives in the release after it (garamsh/sherlock#1008). A `0.3.0`
+  runtime starts with the entry, reading no such member
+  (`internal/config/issuers.go` at `v0.3.0`), and fetches the set
+  against the system roots, which do not reach garam's private root,
+  so it refuses a signed message and accepts an unsigned one as
+  before.
+  The runtime refuses a signed message from an issuer it has no entry
+  for, which is why this lands before the adapter forwards a signature
+  (#1258); until then the entry admits nothing new. A generation
+  started before the rendering keeps the configuration it was given
+  until it is replaced.
 - **An engine it cannot reach decides nothing.** The supervisor starts,
   signals and activates nothing, and the generation keeps running with
   its adapter's token. A daemon stop may stop the runtime, and recovery

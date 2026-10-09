@@ -19,6 +19,7 @@ import (
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/keyfile"
+	"github.com/garamsh/garam/internal/message"
 	"github.com/garamsh/garam/internal/workload"
 	"github.com/garamsh/garam/internal/workload/docker"
 )
@@ -46,6 +47,9 @@ type runSettings struct {
 	images           workload.Images
 	replace          bool
 	moveMemoryTo     string
+	// messageIssuer is garam's message-signing issuer; empty is the
+	// origin of machineURL.
+	messageIssuer string
 }
 
 // newStandaloneRunCommand constructs `garam standalone run`: the host's
@@ -80,6 +84,8 @@ func newStandaloneRunCommand(dirs *hostDirs) *cobra.Command {
 	f.StringVar(&s.images.Adapter, "adapter-image", "", "the garam image the adapter runs, by digest (required)")
 	f.StringVar(&s.prefix, "name-prefix", "garam-", "what every container and volume name begins with")
 	f.BoolVar(&s.replace, "replace", false, "start a new generation even where the running one is what is desired")
+	f.StringVar(&s.messageIssuer, "message-issuer", "",
+		"garam's message-signing issuer, as its machine.issuer names it (default the origin of --machine-url)")
 	f.StringVar(&s.moveMemoryTo, "move-memory-to", "",
 		"drain the generation, copy and verify the agent's memory into this new volume, and run the next generation on it")
 	for _, name := range []string{"agent-dir", "engine", "machine-url", "config", "model-env-file",
@@ -134,6 +140,10 @@ func runStandalone(ctx context.Context, s runSettings) error {
 	if err != nil {
 		return err
 	}
+	issuer, err := messageIssuerOf(s.messageIssuer, base)
+	if err != nil {
+		return err
+	}
 	engine, err := docker.New(s.engine)
 	if err != nil {
 		return err
@@ -141,11 +151,28 @@ func runStandalone(ctx context.Context, s runSettings) error {
 	defer func() { _ = engine.Close() }()
 	supervisor, err := workload.NewSupervisor(engine, activator, workload.Config{
 		Dir: dirs.supervisor, Prefix: s.prefix, Desired: desired, Adapter: files,
+		MessageIssuer: string(issuer),
 	})
 	if err != nil {
 		return err
 	}
 	return supervisor.Run(ctx)
+}
+
+// messageIssuerOf is garam's message-signing issuer: the one named, or
+// the origin of the machine listener the host reaches, which is what
+// garam's machine.issuer names where the host reaches the listener at
+// its external origin. Either is held to garam's one spelling, since
+// the runtime compares it byte for byte.
+func messageIssuerOf(named, machineBase string) (message.Issuer, error) {
+	if named == "" {
+		named = machineBase
+	}
+	issuer, err := message.ParseIssuer(named)
+	if err != nil {
+		return "", errorx.Wrap(err, "--message-issuer")
+	}
+	return issuer, nil
 }
 
 // desiredRuntime reads what the host asks to run: the runtime's

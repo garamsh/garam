@@ -145,7 +145,13 @@ type host struct {
 	garam  *stubGaram
 	dir    string
 	id     identity
+	// machineURL is where the adapter, and the runtime beside it,
+	// reach garam.
+	machineURL string
 }
+
+// testIssuer is garam's message-signing issuer in these tests.
+const testIssuer = "https://garam.example"
 
 func newHost(t *testing.T) *host {
 	t.Helper()
@@ -154,7 +160,8 @@ func newHost(t *testing.T) *host {
 	dir, err := os.MkdirTemp("", "wl")
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
-	return &host{t: t, engine: newStubEngine(), garam: &stubGaram{}, dir: dir, id: newIdentity(t, testAgent.String())}
+	return &host{t: t, engine: newStubEngine(), garam: &stubGaram{}, dir: dir, id: newIdentity(t, testAgent.String()),
+		machineURL: "https://garam.example"}
 }
 
 func (h *host) config(edit ...func(*workload.Desired)) workload.Config {
@@ -170,8 +177,9 @@ func (h *host) config(edit ...func(*workload.Desired)) workload.Config {
 		Dir: h.dir, Prefix: "garam-test-", Desired: d,
 		Adapter: workload.AdapterFiles{
 			CertificatePEM: h.id.leafPEM, KeyPEM: h.id.keyPEM, IssuerPEM: h.id.issuerPEM,
-			ServerRootPEM: h.id.issuerPEM, MachineURL: "https://garam.example",
+			ServerRootPEM: h.id.issuerPEM, MachineURL: h.machineURL,
 		},
+		MessageIssuer: testIssuer,
 	}
 }
 

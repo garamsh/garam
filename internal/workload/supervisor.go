@@ -63,6 +63,10 @@ type Config struct {
 	Prefix  string
 	Desired Desired
 	Adapter AdapterFiles
+	// MessageIssuer is garam's message-signing issuer, which the runtime
+	// trusts by garam's key set (ADR-0101). The caller holds it to
+	// garam's one spelling.
+	MessageIssuer string
 }
 
 // Supervisor runs one agent's workload on a standalone host.
@@ -71,6 +75,9 @@ type Supervisor struct {
 	garam  Activator
 	cfg    Config
 	issuer *x509.CertPool
+	// renderedConfig is the host's runtime configuration with garam's
+	// issuers entry added, which is what the runtime is handed.
+	renderedConfig []byte
 
 	// mu guards st and its writes, which the control handlers share
 	// with the run.
@@ -107,7 +114,14 @@ func NewSupervisor(engine Engine, garam Activator, cfg Config) (*Supervisor, err
 	if !issuer.AppendCertsFromPEM(cfg.Adapter.IssuerPEM) {
 		return nil, errorx.New(errorx.KindInvalidArgument, "workload: the agent's issuer holds no certificate")
 	}
-	return &Supervisor{engine: engine, garam: garam, cfg: cfg, issuer: issuer}, nil
+	if cfg.MessageIssuer == "" || cfg.Adapter.MachineURL == "" {
+		return nil, errorx.New(errorx.KindInvalidArgument, "workload: garam's message issuer and the adapter's address for garam are required")
+	}
+	renderedConfig, err := withIssuer(d.Config, cfg.MessageIssuer, cfg.Adapter.MachineURL+keySetPath, runtimeServerRoot)
+	if err != nil {
+		return nil, err
+	}
+	return &Supervisor{engine: engine, garam: garam, cfg: cfg, issuer: issuer, renderedConfig: renderedConfig}, nil
 }
 
 // Run brings the desired generation up, or adopts the one running, and

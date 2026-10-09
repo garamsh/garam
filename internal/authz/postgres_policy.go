@@ -9,6 +9,7 @@ import (
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/pgxerr"
+	"github.com/garamsh/garam/internal/wire"
 )
 
 // CreatePolicy stores the policy and its first version in one
@@ -115,7 +116,7 @@ func (s *PostgresStore) ListPolicyVersions(ctx context.Context, g grn.GRN) ([]*P
 }
 
 // SetPolicyStatus moves the policy through its lifecycle.
-func (s *PostgresStore) SetPolicyStatus(ctx context.Context, g grn.GRN, status PolicyStatus) (*Policy, error) {
+func (s *PostgresStore) SetPolicyStatus(ctx context.Context, g grn.GRN, status wire.PolicyStatus) (*Policy, error) {
 	row, err := s.q.SetPolicyStatus(ctx, db.SetPolicyStatusParams{
 		Grn:       g.String(),
 		Status:    string(status),

@@ -17,20 +17,10 @@ import (
 // ServiceTypePolicy is the GRN service type of a stored policy.
 const ServiceTypePolicy = "policy"
 
-// PolicyStatus is a policy's lifecycle state (ADR-0002), declared in
-// wire beside its conversion so the engine and the surface share it.
-type PolicyStatus = wire.PolicyStatus
-
-const (
-	PolicyStatusDraft    = wire.PolicyStatusDraft
-	PolicyStatusActive   = wire.PolicyStatusActive
-	PolicyStatusArchived = wire.PolicyStatusArchived
-)
-
-// ParsePolicyStatus parses a PolicyStatus from its stored form.
-func ParsePolicyStatus(s string) (PolicyStatus, error) {
-	switch p := PolicyStatus(s); p {
-	case PolicyStatusDraft, PolicyStatusActive, PolicyStatusArchived:
+// ParsePolicyStatus parses a wire.PolicyStatus from its stored form.
+func ParsePolicyStatus(s string) (wire.PolicyStatus, error) {
+	switch p := wire.PolicyStatus(s); p {
+	case wire.PolicyStatusDraft, wire.PolicyStatusActive, wire.PolicyStatusArchived:
 		return p, nil
 	}
 	return "", errorx.New(errorx.KindInvalidArgument, "authz: unknown policy status")
@@ -42,7 +32,7 @@ type Policy struct {
 	grn            grn.GRN
 	orgGRN         grn.GRN
 	name           string
-	status         PolicyStatus
+	status         wire.PolicyStatus
 	defaultVersion int
 	createdAt      time.Time
 	updatedAt      time.Time
@@ -56,20 +46,20 @@ func NewPolicy(g, orgGRN grn.GRN, name string) *Policy {
 		grn:            g,
 		orgGRN:         orgGRN,
 		name:           name,
-		status:         PolicyStatusDraft,
+		status:         wire.PolicyStatusDraft,
 		defaultVersion: firstPolicyVersion,
 		createdAt:      now,
 		updatedAt:      now,
 	}
 }
 
-func (p *Policy) GRN() grn.GRN          { return p.grn }
-func (p *Policy) Organization() grn.GRN { return p.orgGRN }
-func (p *Policy) Name() string          { return p.name }
-func (p *Policy) Status() PolicyStatus  { return p.status }
-func (p *Policy) DefaultVersion() int   { return p.defaultVersion }
-func (p *Policy) CreatedAt() time.Time  { return p.createdAt }
-func (p *Policy) UpdatedAt() time.Time  { return p.updatedAt }
+func (p *Policy) GRN() grn.GRN              { return p.grn }
+func (p *Policy) Organization() grn.GRN     { return p.orgGRN }
+func (p *Policy) Name() string              { return p.name }
+func (p *Policy) Status() wire.PolicyStatus { return p.status }
+func (p *Policy) DefaultVersion() int       { return p.defaultVersion }
+func (p *Policy) CreatedAt() time.Time      { return p.createdAt }
+func (p *Policy) UpdatedAt() time.Time      { return p.updatedAt }
 
 // PolicyVersion is one immutable revision of a policy's document.
 type PolicyVersion struct {

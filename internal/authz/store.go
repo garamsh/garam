@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/wire"
 )
 
 // Store persists policies and their append-only versions (ADR-0002).
@@ -21,7 +22,7 @@ type Store interface {
 	AddPolicyVersion(ctx context.Context, g grn.GRN, doc PolicyDocument, createdBy grn.GRN) (*PolicyVersion, error)
 	ListPolicyVersions(ctx context.Context, g grn.GRN) ([]*PolicyVersion, error)
 
-	SetPolicyStatus(ctx context.Context, g grn.GRN, status PolicyStatus) (*Policy, error)
+	SetPolicyStatus(ctx context.Context, g grn.GRN, status wire.PolicyStatus) (*Policy, error)
 	// SetPolicyDefaultVersion points the policy at an existing
 	// version, or fails with ErrPolicyVersionNotFound.
 	SetPolicyDefaultVersion(ctx context.Context, g grn.GRN, version int) (*Policy, error)

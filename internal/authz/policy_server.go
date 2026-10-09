@@ -130,7 +130,7 @@ func (s *PolicyGRPCServer) ActivatePolicy(ctx context.Context, req *authzv1.Acti
 	if err != nil {
 		return nil, grpcError(errorx.Wrap(err, "policy_grn"))
 	}
-	p, err := s.store.SetPolicyStatus(ctx, g, PolicyStatusActive)
+	p, err := s.store.SetPolicyStatus(ctx, g, wire.PolicyStatusActive)
 	if err != nil {
 		return nil, grpcError(err)
 	}
@@ -145,7 +145,7 @@ func (s *PolicyGRPCServer) ArchivePolicy(ctx context.Context, req *authzv1.Archi
 	if err != nil {
 		return nil, grpcError(errorx.Wrap(err, "policy_grn"))
 	}
-	p, err := s.store.SetPolicyStatus(ctx, g, PolicyStatusArchived)
+	p, err := s.store.SetPolicyStatus(ctx, g, wire.PolicyStatusArchived)
 	if err != nil {
 		return nil, grpcError(err)
 	}

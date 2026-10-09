@@ -13,6 +13,7 @@ import (
 	"github.com/garamsh/garam/internal/authz/db"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/wire"
 )
 
 const corrupt = "not a grn"
@@ -24,7 +25,7 @@ func policyRow() db.Policy {
 		Grn:            "grn:acme:default:policy:9f2ac1b40d8e7a35",
 		OrgGrn:         "grn:root:default:org:acme",
 		Name:           "read-only",
-		Status:         string(PolicyStatusDraft),
+		Status:         string(wire.PolicyStatusDraft),
 		DefaultVersion: 1,
 	}
 }

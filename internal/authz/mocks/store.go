@@ -9,6 +9,7 @@ import (
 
 	"github.com/garamsh/garam/internal/authz"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/wire"
 	mock "github.com/stretchr/testify/mock"
 )
 
@@ -751,7 +752,7 @@ func (_c *MockStore_SetPolicyDefaultVersion_Call) RunAndReturn(run func(ctx cont
 }
 
 // SetPolicyStatus provides a mock function for the type MockStore
-func (_mock *MockStore) SetPolicyStatus(ctx context.Context, g grn.GRN, status authz.PolicyStatus) (*authz.Policy, error) {
+func (_mock *MockStore) SetPolicyStatus(ctx context.Context, g grn.GRN, status wire.PolicyStatus) (*authz.Policy, error) {
 	ret := _mock.Called(ctx, g, status)
 
 	if len(ret) == 0 {
@@ -760,17 +761,17 @@ func (_mock *MockStore) SetPolicyStatus(ctx context.Context, g grn.GRN, status a
 
 	var r0 *authz.Policy
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, authz.PolicyStatus) (*authz.Policy, error)); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, wire.PolicyStatus) (*authz.Policy, error)); ok {
 		return returnFunc(ctx, g, status)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, authz.PolicyStatus) *authz.Policy); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, wire.PolicyStatus) *authz.Policy); ok {
 		r0 = returnFunc(ctx, g, status)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*authz.Policy)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, grn.GRN, authz.PolicyStatus) error); ok {
+	if returnFunc, ok := ret.Get(1).(func(context.Context, grn.GRN, wire.PolicyStatus) error); ok {
 		r1 = returnFunc(ctx, g, status)
 	} else {
 		r1 = ret.Error(1)
@@ -786,12 +787,12 @@ type MockStore_SetPolicyStatus_Call struct {
 // SetPolicyStatus is a helper method to define mock.On call
 //   - ctx context.Context
 //   - g grn.GRN
-//   - status authz.PolicyStatus
+//   - status wire.PolicyStatus
 func (_e *MockStore_Expecter) SetPolicyStatus(ctx any, g any, status any) *MockStore_SetPolicyStatus_Call {
 	return &MockStore_SetPolicyStatus_Call{Call: _e.mock.On("SetPolicyStatus", ctx, g, status)}
 }
 
-func (_c *MockStore_SetPolicyStatus_Call) Run(run func(ctx context.Context, g grn.GRN, status authz.PolicyStatus)) *MockStore_SetPolicyStatus_Call {
+func (_c *MockStore_SetPolicyStatus_Call) Run(run func(ctx context.Context, g grn.GRN, status wire.PolicyStatus)) *MockStore_SetPolicyStatus_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -801,9 +802,9 @@ func (_c *MockStore_SetPolicyStatus_Call) Run(run func(ctx context.Context, g gr
 		if args[1] != nil {
 			arg1 = args[1].(grn.GRN)
 		}
-		var arg2 authz.PolicyStatus
+		var arg2 wire.PolicyStatus
 		if args[2] != nil {
-			arg2 = args[2].(authz.PolicyStatus)
+			arg2 = args[2].(wire.PolicyStatus)
 		}
 		run(
 			arg0,
@@ -819,7 +820,7 @@ func (_c *MockStore_SetPolicyStatus_Call) Return(policy *authz.Policy, err error
 	return _c
 }
 
-func (_c *MockStore_SetPolicyStatus_Call) RunAndReturn(run func(ctx context.Context, g grn.GRN, status authz.PolicyStatus) (*authz.Policy, error)) *MockStore_SetPolicyStatus_Call {
+func (_c *MockStore_SetPolicyStatus_Call) RunAndReturn(run func(ctx context.Context, g grn.GRN, status wire.PolicyStatus) (*authz.Policy, error)) *MockStore_SetPolicyStatus_Call {
 	_c.Call.Return(run)
 	return _c
 }

@@ -1,6 +1,6 @@
 module github.com/garamsh/garam
 
-go 1.26.7
+go 1.27.2
 
 require (
 	github.com/containerd/errdefs v1.0.0

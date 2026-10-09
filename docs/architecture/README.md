@@ -668,3 +668,9 @@ ADRs:
   the template's §Rules every shape carries and bootstrap line are
   declined, and the section-scope rule is taken where Garam keeps the
   file it lands on
+- [0101](./adr/0101-garam-signs-every-message-it-delivers-and-the-agent-verifies-it-alone.md)
+  — proposed: garam signs each message at every hand-out with an ES256
+  JWS beside the content, binding issuer, sender, audience,
+  organization, message identifier, content digest and a lease-long
+  expiry; it publishes its keys as a JWK Set and rotates them with
+  overlap, and the agent verifies without trusting the path

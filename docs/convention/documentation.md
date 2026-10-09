@@ -107,6 +107,9 @@ These are documentation too.
   diverges from the rule exactly where the exception applies.
   `scripts/check-line-width.sh` counts what the rule forbids.
 - Start each file with one line stating what it governs.
+- A section whose territory abuts another document's states what it
+  states — in its heading where that is shorter, in one opening sentence
+  otherwise. The statement names the section's scope, not its rules.
 - A `## Contents` list indexes a file's `##` headings, so how many of
   them there are decides whether it carries one and the file's length
   does not: more than eight, it opens with the list; three or fewer, it

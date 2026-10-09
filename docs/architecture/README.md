@@ -83,24 +83,12 @@ Current architecture of the system and the decisions behind it. This file is the
    nothing; the later one is what a reviewer still holds, and it names
    the ADR it is pairing and the commit that added it. That puts both
    ends of the window in the record. Without it a late pairing and a
-   performed one are the same diff, which is why none of the four on
-   record was ever called. **The four sort by what followed the ADR
-   and by nothing visible when it merged.** ADR-0038's pairing arrived
-   in 20 minutes (`1d67d5c`) and ADR-0037's in 4 days 17 hours
-   (`40a0c32`), and each left a responsibility document positively
-   false in between: [authz.md](./authz.md) went on reading that an
-   unattached policy's scope is the caller's obligation and not the
-   engine's, which ADR-0038 had just moved, and
-   [adapter.md](./adapter.md) §Not decided went on calling garam's own
-   server certificate undecided, which ADR-0037 had just decided.
-   Three of the four decisions had a pull request implementing them,
-   which carried the pairing in 34 minutes, 3 hours 45 and 20;
-   ADR-0037's was superseded by ADR-0040 before anything implemented
-   it, so nothing was coming and the false line waited for a reader to
-   meet it in passing. A permission conditioned on the follow-up would
-   admit the four-day window on the terms that admit the twenty-minute
-   one, which is why this is a breach and not a bound
-   ([ADR-0063](./adr/0063-a-late-pairing-is-a-breach-and-the-pull-request-that-performs-it-records-the-window.md)).
+   performed one are the same diff. It is a breach and not a bound,
+   because what decides how long a window stays open follows the ADR's
+   merge, so a permission conditioned on the follow-up admits a long
+   window on the terms that admit a short one
+   ([ADR-0063](./adr/0063-a-late-pairing-is-a-breach-and-the-pull-request-that-performs-it-records-the-window.md)
+   records the four late pairings that show it).
 4. Keep this index current: every responsibility document and every ADR
    is listed here. `structures/` is not — bootstrap deletes it, and an
    entry for a file that is about to go leaves the index wrong. An ADR
@@ -131,16 +119,13 @@ Current architecture of the system and the decisions behind it. This file is the
    was owed. This paragraph earned ADR-0060 on the second arm alone: it
    puts no passage in violation, and #946 and #953 had answered its
    question opposite ways with both merged. Where a rule was first
-   decided is no part of this test. #603 and #612 adopted rules 5 to 8
-   from `garamsh/convention-driven-project` and recorded the adoption
-   nowhere; under this line both would have owed an ADR, and neither is
-   a breach, since it binds only what is written after it. What binds a
-   contributor here is this project taking a rule in, which those two
-   did oppositely within the hour, so an adoption is read by the same
-   two arms as any other change — and the ADR one owes records the
-   taking in, routing to the template commit rather than
-   restating the rule
-   ([ADR-0061](./adr/0061-adopting-a-rule-the-template-decided-is-a-decision-taken-here.md)).
+   decided is no part of this test: what binds a contributor here is
+   this project taking a rule in, so an adoption is read by the same two
+   arms as any other change — and the ADR one owes records the taking
+   in, routing to the template commit rather than restating the rule.
+   The test binds only what is written after it
+   ([ADR-0061](./adr/0061-adopting-a-rule-the-template-decided-is-a-decision-taken-here.md)
+   records the adoptions that divided the record).
 5. **Every domain or concern has a responsibility document.** The PR
    that introduces one adds its document; the PR that removes one
    deletes it. A system with no code yet has no more than `structure.md`

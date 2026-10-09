@@ -164,7 +164,7 @@ own for the `garam-dev/` repositories, which this repository neither
 holds nor grants, and the release's push role admits `v*` tags only.
 Those repositories are `garamsh/infra`'s to declare, and its
 `ba73529` (garamsh/infra#309) declares them.
-`GARAM_WEB_IMAGE=<registry>/dev/garam-web:<tag> make web-image-e2e`
+`GARAM_WEB_IMAGE=<registry>/garam-dev/garam-web:<tag> make web-image-e2e`
 checks the web image you built before you push it.
 A deployment running it sets `image.*.repository` to the `garam-dev/`
 repository as well as the tag.

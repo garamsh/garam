@@ -153,6 +153,30 @@ tokens splits it in two:
 
 The writer fence and the placement token are unaffected.
 
+### Token lifetime and the refresh margin
+
+ADR-0100 §Tokens is authoritative for these values.
+
+- **Lifetime.** An agent token lives one hour by default. Its
+  configuration is bounded to 20 minutes at least and 24 hours at
+  most. The operator and supervisor tokens live one hour, a constant.
+- **Refresh.** The Operator mints the next agent token at a random
+  point between two thirds and three quarters of the current one's
+  life, so at least a quarter remains: 15 minutes at the default, 5
+  at the lower bound.
+- **Overlap.** A refresh voids nothing. The older token stays good to
+  its expiry, so the Pod may hold either while the Secret update
+  propagates.
+- **The margin the Operator keeps.** The new token must reach the file
+  the adapter reads before the old one expires. That path is the
+  kubelet's propagation of the Secret, about a minute by default, plus
+  the interval of whatever keeps the Pod's owner-only copy current
+  (O1's second pull request). If that sum does not fit inside a
+  quarter of the lifetime, the deployment raises the lifetime.
+- **Both files.** The adapter reads the garam token and the
+  control-service token per request, so a rewrite of either needs no
+  restart. A file is replaced by a rename, never written in place.
+
 ## How a running operator moves over
 
 For each registered operator, after G1 and G2 are deployed:

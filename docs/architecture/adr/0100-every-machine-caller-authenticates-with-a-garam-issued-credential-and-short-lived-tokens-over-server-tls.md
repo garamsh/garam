@@ -149,7 +149,9 @@ Actions Runner Controller's:
   lineage it was minted at.
 - **An operator or supervisor token lives one hour**, a constant, from
   `POST /tokens` with `Authorization: Garam-Credential <credential>`.
-  The caller refreshes it after two thirds of its life.
+  The caller refreshes it inside the refresh window below and holds
+  it in memory, so no file and no propagation delay stands between
+  the exchange and its use.
 - **An agent token is minted by the agent's assignee** on
   `POST /agents/{agent}/tokens`, presenting its own token. garam
   answers an operator for an agent assigned to it at the current epoch
@@ -159,11 +161,26 @@ Actions Runner Controller's:
   opens it in its own transaction, and recovery replaces it
   (§Recovery under hourly tokens). Initial issuance has nothing left
   to issue, so `issueInitialCertificate` takes no new value and goes
-  with the certificate path. Its lifetime is configuration, one hour
-  by default, bounded at both ends as `GARAM_CERTIFICATE_LIFETIME` is,
-  and the assignee mints the next once two thirds of it has passed, at
-  a point it jitters so a fleet does not refresh at one moment
-  (ADR-0015).
+  with the certificate path. Its lifetime is configuration: one hour
+  by default, at least 20 minutes and at most 24 hours. A service
+  configured outside that range does not start, as with
+  `GARAM_CERTIFICATE_LIFETIME` today.
+- **A refresh never voids the token it replaces.** The older token
+  stays good until its own expiry, so a holder may present either
+  while the newer one propagates. Only a revocation ends a token
+  early.
+- **The refresh window is from two thirds to three quarters of a
+  token's life.** The holder or assignee picks a point in it at random,
+  so a fleet does not refresh at one moment (ADR-0015). That leaves at
+  least a quarter of the lifetime as the margin for the new token to
+  reach the file its holder reads: 15 minutes at the default and 5 at
+  the lower bound. The lower bound is set for that margin. A
+  Kubernetes Secret update reaches a mounted volume after the
+  kubelet's sync period and cache delay, which is about a minute by
+  default and not guaranteed, and an assignee that copies the token
+  onward adds its own interval. An assignee whose propagation does not
+  fit the margin configures a longer lifetime; it does not refresh
+  later.
 - **A token is accepted only by its audience.** A token minted for
   garam is accepted on garam's routes. A token minted for a hosted
   operator's GRN is accepted by garam only on the introspection routes
@@ -291,9 +308,14 @@ nothing else in the path moves.
   the supervisor obtained for it.** The supervisor compares it, in
   constant time, with the token it handed that generation, over the
   socket and server-only TLS ADR-0085 decided; it asks garam nothing.
-- **The adapter reads its token files per request**, as it reads the
-  placement token per attempt today, so a refreshed token needs no
-  restart. The Operator's copy of the credential into the Pod must
+  It accepts any token it handed that generation that has not
+  expired, because a refresh leaves the older one good.
+- **The adapter reads both token files per request** — the garam
+  token before each call to garam, and the control-service token
+  before each call to the control service — as it reads the placement
+  token per attempt today. So a rewrite of either file is safe without
+  a restart, provided the file is replaced atomically, as ADR-0040
+  already requires of the files it reads per handshake. The Operator's copy of the credential into the Pod must
   therefore stay current rather than happen once at start; the plan
   names that change.
 
@@ -359,7 +381,7 @@ here.
   are usable for the rest of the certificate's lifetime, a day by
   default.
 - **An agent depends on its assignee to stay current.** An Operator
-  down for longer than the last third of an agent token's life stops
+  down for longer than the margin left at its last refresh stops
   that agent reaching garam, where today a certificate lives a day. The
   lifetime is the knob, and its upper bound is the trade.
 - **Every machine request costs one indexed read**, measured above.

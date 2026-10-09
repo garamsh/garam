@@ -1,5 +1,5 @@
-import { cleanup, render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { cleanup, render, screen, within } from "@testing-library/react";
+import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
@@ -27,18 +27,34 @@ function refuses(status: number, kind: string, message: string) {
 }
 
 /**
+ * Enters text into one field the way a person pastes it. Typing a key
+ * at a time does work for every character, and on a loaded host that
+ * work is what outran the test's budget; nothing here turns on
+ * keystrokes. A paste lands where focus is, so the field must hold it
+ * first: a step outliving its test meets its own unmounted field here
+ * and stops, rather than pasting into the next test's form.
+ */
+async function enter(user: UserEvent, field: HTMLElement, text: string) {
+  await user.click(field);
+  expect(field).toHaveFocus();
+  await user.paste(text);
+}
+
+/**
  * Signs in through the form and answers with what the page then shows:
- * the refusal on its own, and the whole rendered text around it.
+ * the refusal on its own, and the whole rendered text around it. Every
+ * query is scoped to this render rather than to the document.
  */
 async function signIn(username: string, password: string) {
   const user = userEvent.setup();
   const { container } = render(<PasswordSignInForm />);
+  const form = within(container);
 
-  await user.type(screen.getByLabelText("Username"), username);
-  await user.type(screen.getByLabelText("Password"), password);
-  await user.click(screen.getByRole("button", { name: "Sign in" }));
+  await enter(user, form.getByLabelText("Username"), username);
+  await enter(user, form.getByLabelText("Password"), password);
+  await user.click(form.getByRole("button", { name: "Sign in" }));
 
-  const refusal = await screen.findByRole("alert");
+  const refusal = await form.findByRole("alert");
   return { refusal: refusal.textContent, rendered: container.textContent };
 }
 

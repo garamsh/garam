@@ -1,15 +1,15 @@
 # GRN Model
 
 Garam Resource Names — one identifier for every resource in garam.
-Implementation: [`internal/grn/grn.go`](../../internal/grn/grn.go).
+Implementation: [`internal/grn/grn.go`](../../internal/grn/grn.go),
+whose doc comments are authoritative for constructing, rendering,
+parsing and validating a GRN, and for `GRN` being a value type.
 
 ## Contents
 - Format
 - Ownership
 - service_type catalogue
 - identifier
-- Rego package note (historical)
-- API
 
 ## Format
 
@@ -83,23 +83,3 @@ every colon, so a GRN carrying one names a different resource than the
 one written, in a different organization. The catalogue constrains
 which service types exist; it is the character rule that keeps a GRN
 meaning one thing.
-
-## Rego package note (historical)
-
-An earlier design compiled Rego policies under `package garam.authz`.
-That direction is superseded by IAM-style policy documents
-([ADR-0002](./adr/0002-iam-style-policy-model.md)); no Rego package
-exists.
-
-## API
-
-```go
-g := grn.New("acme", "frontend", "user", "alice")
-s := g.String()                 // "grn:acme:frontend:user:alice"
-
-g, err := grn.Parse(s)
-err := g.Validate()
-if g.IsZero() { ... }
-```
-
-`GRN` is a value type. Two structs with equal fields are equal.

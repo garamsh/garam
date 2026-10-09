@@ -42,6 +42,11 @@ Violations are grounds for PR rejection.
   claims under it rather than editing the number, and a project
   receiving the statement over claims it has changed re-checks those
   claims or drops the statement.
+- A citation of a rule numbered outside this project — in another
+  project's document, or in this project's copy of one — quotes its
+  heading or the rule's opening words, not its number. A renamed heading
+  stops matching, so the citation breaks where a reader sees it; a
+  reassigned number goes on resolving, to whatever rule took it.
 - Where the claim is about a package's health rather than a release
   (`unmaintained`, `legacy`), do not rest a rule on it: name what to use
   instead, which does not expire.
@@ -107,6 +112,9 @@ These are documentation too.
   diverges from the rule exactly where the exception applies.
   `scripts/check-line-width.sh` counts what the rule forbids.
 - Start each file with one line stating what it governs.
+- A section whose territory abuts another document's states what it
+  states — in its heading where that is shorter, in one opening sentence
+  otherwise. The statement names the section's scope, not its rules.
 - A `## Contents` list indexes a file's `##` headings, so how many of
   them there are decides whether it carries one and the file's length
   does not: more than eight, it opens with the list; three or fewer, it

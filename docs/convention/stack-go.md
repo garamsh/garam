@@ -120,17 +120,17 @@ name and not a boundary.
 
 ### Project envelope
 
-- **The module has one composition site**: the place that constructs
-  concrete types and passes them to interfaces, deciding which
-  implementation each interface gets. Everything else takes what it
-  depends on as an argument. Keep it thin.
-- **That site is `cmd/<binary>/main.go`, unless a test outside
-  `cmd/<binary>/` has to reach it** — a suite in `tests/` (§7) among
-  them. Only a test in its own directory can import a main package, so
-  where such a test exercises the wired binary the site is in a package
-  `main.go` calls, and `main.go` holds that call. A site a test cannot
-  call is one the test copies instead, and the copy goes on passing
-  after the shipped wiring breaks.
+This section states which Go file holds the composition site, what
+`internal/` and `pkg/` hold, and what the directories this project adds
+to the layout hold.
+
+- **The composition site is `cmd/<binary>/main.go`, unless a test
+  outside `cmd/<binary>/` has to reach it** — a suite in `tests/` (§7)
+  among them. Only a test in its own directory can import a main
+  package, so where such a test exercises the wired binary the site is
+  in a package `main.go` calls, and `main.go` holds that call. A site a
+  test cannot call is one the test copies instead, and the copy goes on
+  passing after the shipped wiring breaks.
 - `internal/` is enforced by the Go toolchain. Use it for everything not
   explicitly public.
 - `pkg/` is for code other modules import. Most services don't need it.
@@ -189,6 +189,8 @@ file declares and which depends.
 
 ## 3. Naming
 
+This section states only the form each kind of Go identifier takes.
+
 - **Packages:** single word, lowercase, no underscores. Singular for
   one kind of thing (`user`, `order`); pluralize only for genuine
   collections (`errors`, `flags`).
@@ -221,6 +223,9 @@ file declares and which depends.
 
 ## 4. Error handling
 
+This section states the Go error forms, and which file or layer
+translates, wraps, logs or recovers one.
+
 - Errors are values. Use `error` interface, never panics in libraries.
 - An HTTP server still holds a recover middleware: `net/http` recovers
   a handler's panic and logs the stack itself, but aborts the response
@@ -242,9 +247,11 @@ at that boundary, so they are not used here.
 - Domain sentinels are declared once in the owning package
   (`var ErrUserNotFound = errorx.New(errorx.KindNotFound, "user not found")`);
   shared ones live in `internal/errorx`.
-- `errors.New` and `fmt.Errorf("…: %w", …)` lose or drift the kind, and
-  `errors.Is` does not read it. Do not mix them with `errorx`.
-- Do not add kinds. Map at the transport boundary if you need more.
+- `errors.New` and `fmt.Errorf("…: %w", …)` lose or drift the kind. Do
+  not mix them with `errorx`.
+- Do not add kinds. Where two errors of one kind need different codes,
+  the transport tells their sentinels apart with `errors.Is`, which
+  reads a sentinel's identity and not its kind.
 
 ## 5. Logging & observability
 
@@ -304,7 +311,7 @@ Within `internal/<domain>/`:
 - Test names: `TestFunctionName` or `TestFunctionName_Scenario`.
 - Benchmarks: `func BenchmarkXxx(b *testing.B)`.
 
-### Generated mocks
+### Generated mocks — tool, configuration, output, injection
 
 Where the project generates mocks, generate them with
 **[mockery v3](https://vektra.github.io/mockery/)**.

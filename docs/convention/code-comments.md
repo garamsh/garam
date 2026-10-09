@@ -51,6 +51,9 @@ an ADR.
 
 ## Inline vs doc comments
 
+This section states where each kind of comment earns its place, not its
+style or tooling.
+
 **Inline** (inside function bodies) — earn their place when they flag a
 non-obvious invariant, an ordering constraint, or an external constraint
 a future reader would otherwise re-derive incorrectly.

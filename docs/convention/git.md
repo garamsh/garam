@@ -77,6 +77,11 @@ Format: `<type>: <imperative summary>`
 - Title follows the commit format: `<type>: <imperative summary>`. It
   becomes the commit on the default branch, so it is the permanent
   record of the change.
+- A change to a file other projects copy from this one that renames,
+  renumbers, or removes a heading or a numbered rule names the old one
+  in its pull request title. That title is what reaches a project taking
+  the change, and nothing else tells it which of its citations to
+  re-check.
 - Body follows `.github/PULL_REQUEST_TEMPLATE.md`.
 - PRs into `dev` are squash-merged. Branch commits do not appear on the
   default branch; do not rewrite them to be pretty. The promotion PR is

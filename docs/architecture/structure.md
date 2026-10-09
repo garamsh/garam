@@ -89,16 +89,25 @@ Nothing here states what goes *inside* a boundary, or how the system is deployed
 
 ## Where the composition root lives
 
+- **The application has one composition site.** It is the one place
+  that constructs concrete implementations, and it decides which
+  implementation each declared abstraction receives.
+- **Every other unit receives what it depends on and constructs none of
+  it**, whatever the shape makes the unit — a domain, a layer, or an
+  adapter.
+- **The composition site stays thin.** It constructs and passes; it
+  decides nothing else.
+
 garam's composition root is `internal/cli`, the package `cmd/garam/main.go` calls: the concrete types behind the seams the domains declare are constructed there, and `cmd/garam/main.go` constructs nothing itself.
 
-This is the composition site `docs/convention/stack-go.md` §Project
-envelope provides for a module whose tests have to reach it. That
-section puts the site in `cmd/<binary>/main.go` unless a test outside
-`cmd/<binary>/` has to reach it, and puts it in a package `main.go`
-calls when one does. The
-paragraph below names the tests that reach it, so the two documents
-decide this case the same way
-([ADR-0094](./adr/0094-structural-rules-yield-only-to-what-a-framework-imposes.md)).
+The rule is the three bullets above, and
+`docs/convention/stack-go.md` §Project envelope states only which Go
+file the site takes. That section puts it in `cmd/<binary>/main.go`
+unless a test outside `cmd/<binary>/` has to reach it, and in a package
+`main.go` calls when one does. The paragraph below names the tests that
+reach it, so `internal/cli` is the file that section names for garam
+([ADR-0094](./adr/0094-structural-rules-yield-only-to-what-a-framework-imposes.md),
+[ADR-0098](./adr/0098-garam-syncs-the-convention-template-to-b29f0f1.md)).
 
 **The environment is read in the composition root and nowhere else.** Every name the module reads is declared in one block in `internal/cli/cli.go`, and the `envOr` beside it holds the only environment read under `internal/` and `cmd/`, so what the source reads is enumerable from those declarations rather than from the spelling of the calls that read them. A second read there is the defect this states, and `make chart-render` fails on one rather than leaving it to a reviewer: it counts the reads under those two trees and expects the one, because a name read outside the block is one it cannot enumerate against the chart. The suites under `tests/` read `GARAM_TEST_DATABASE_URL` for themselves and are outside both the rule and the count.
 
@@ -191,6 +200,11 @@ A conversion to a wire format the boundaries already share is not a shared kerne
   adoption of the template's composition-site rule, which ends
   §Where the composition root lives' divergence from
   `docs/convention/stack-go.md`.
+- [ADR-0098](./adr/0098-garam-syncs-the-convention-template-to-b29f0f1.md)
+  — the composition-site rule is this document's. The ADR records the
+  template sync that moved the rule out of
+  `docs/convention/stack-go.md` and into §Where the composition root
+  lives, which leaves that file only the Go path of the site.
 
 ## Open questions
 

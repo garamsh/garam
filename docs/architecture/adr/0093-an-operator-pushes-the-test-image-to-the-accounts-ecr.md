@@ -23,6 +23,7 @@ and the test image is one.
 - What this does not decide
 - Consequences
 - Rejected alternatives
+- Errata
 
 ## Context
 
@@ -190,3 +191,19 @@ workflow holds a credential for it.**
   needs a Docker login, and nothing in it ties the bytes it pushes to
   the digest it read. ECR's `PutImage` takes the manifest with that
   digest and refuses one that does not match it.
+
+## Errata
+
+- 2026-10-09 — §Decision's "The consumer pulls with its own role"
+  grants pull to
+  `arn:aws:iam::486152169996:role/garam-agent-operator-github-actions`
+  (`garamsh/infra#292`). That was wrong when written: #292 names that
+  role as `garamsh/garam-agent-operator`'s push role, scoped to its
+  published `garam/garam-agent-operator` and
+  `garam/garam-agent-operator-control`, so it could not pull the test
+  image, and #292 places a CI pull of another project's image out of
+  its scope. The consumer's pull role is
+  `garam-agent-operator-github-actions-pull`, the name
+  `garamsh/garam-agent-operator#317` uses, tracked as
+  `garamsh/infra#311`. It is not yet created, so it has no ARN to name
+  here. The decision stands: the consumer pulls with its own role.

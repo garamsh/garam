@@ -70,14 +70,9 @@ already expose, built in parallel rather than gating P3.
   application under `/console`.
 - Sign-in with a username and a password beside Google, registered
   from an invitation (ADR-0041).
-- Mutations, phase 1: create an organization, invite a member by link,
-  accept an invitation.
-- Read-only in the console: groups and projects. Policies are neither
-  read nor written there — `web/src/app/console/orgs/[org]/policies/`
-  holds the section's place and says they are managed over the HTTP API
-  ([web-app.md](../architecture/web-app.md) §What it serves), and the
-  "In the console today" block of `web/src/app/(marketing)/page.tsx`
-  does not name them.
+- What each section of an organization reads and writes — Teams,
+  People, Agents, Projects, Operators, Consents and Permissions — is
+  [web-app.md](../architecture/web-app.md) §What it serves.
 
 ## P3 — Workflow core (not started)
 
@@ -91,8 +86,8 @@ already expose, built in parallel rather than gating P3.
   Handlers log the route pattern, never the concrete path, so an
   invitation token cannot reach a log line.
 - Prometheus metrics and OpenTelemetry tracing — metrics done for
-  `serve api` and `serve authz`, which export on the listener each
-  already runs; `serve machine` collects and serves none
+  `serve api` and `serve authz`, on the listener each already runs, and
+  for `serve machine`, on its probe port
   ([api-surface.md](../architecture/api-surface.md) §The surfaces).
   Spans are minted and propagated but not exported: there is nowhere to
   ship them yet.

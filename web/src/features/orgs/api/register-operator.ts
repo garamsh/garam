@@ -3,11 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-import {
-  GaramApiError,
-  GaramUnreachableError,
-  garamFetchAuthenticated,
-} from "@/lib/garam";
+import { garamFetchAuthenticated, refusal } from "@/lib/garam";
 import {
   parseOperatorDescription,
   parseOperatorIdentifier,
@@ -101,13 +97,7 @@ export async function registerOperator(
   } catch (error) {
     // An unreachable API is a state the form renders, not a throw: the
     // boundary would replace the form and the identifier typed into it.
-    if (
-      error instanceof GaramApiError ||
-      error instanceof GaramUnreachableError
-    ) {
-      return { status: "error", message: error.message };
-    }
-    throw error;
+    return refusal(error);
   }
 
   revalidatePath(`/console/orgs/${org}/operators`, "layout");

@@ -3,11 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-import {
-  GaramApiError,
-  GaramUnreachableError,
-  garamFetchAuthenticated,
-} from "@/lib/garam";
+import { GaramApiError, garamFetchAuthenticated, refusal } from "@/lib/garam";
 import type { components } from "@/types/api";
 
 import { parseGrn } from "../grn";
@@ -65,13 +61,7 @@ export async function attachPolicy(
         message: "Already attached. The page now shows it.",
       };
     }
-    if (
-      error instanceof GaramApiError ||
-      error instanceof GaramUnreachableError
-    ) {
-      return { status: "error", message: error.message };
-    }
-    throw error;
+    return refusal(error);
   }
 
   revalidatePath(`/console/orgs/${org}/permissions`, "layout");

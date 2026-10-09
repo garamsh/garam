@@ -4,11 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import {
-  GaramApiError,
-  GaramUnreachableError,
-  garamFetchAuthenticated,
-} from "@/lib/garam";
+import { garamFetchAuthenticated, refusal } from "@/lib/garam";
 
 /** What the accept form has to show: nothing yet, or a refusal. */
 export type AcceptInvitationState =
@@ -42,13 +38,7 @@ export async function acceptInvitation(
     // token is in the URL and no boundary covers this route, so throwing
     // replaces the console with `global-error.tsx` and the only retry
     // path the visitor holds is a page that no longer renders.
-    if (
-      error instanceof GaramApiError ||
-      error instanceof GaramUnreachableError
-    ) {
-      return { status: "error", message: error.message };
-    }
-    throw error;
+    return refusal(error);
   }
 
   revalidatePath("/console/orgs");

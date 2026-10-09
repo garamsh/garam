@@ -334,6 +334,13 @@ func TestTokenContracts_EachValueTakesItsOwnCredentialField(t *testing.T) {
 	got = s.lifecycle(t, s.hostedTLS, path, "", string(both))
 	assert.Equal(t, http.StatusBadRequest, got.status, "token is refused beside a certificate: %s", got.body)
 
+	another := s.agentToken(t, s.createdV2(t, "c-2").agent, &s.hosted)
+	raw, err := json.Marshal(map[string]any{"token": another.Token})
+	require.NoError(t, err)
+	got = s.v2(t, http.MethodPost, path, agent.TokenExecutionContractVersion, s.hostedToken, "", string(raw))
+	assert.Equal(t, http.StatusUnprocessableEntity, got.status,
+		"another agent's token shown to the caller proves nothing of this one: %s", got.body)
+
 	got = s.v2(t, http.MethodPost, "/agents/"+m.agent.String()+"/credential-recovery", agent.TokenExecutionContractVersion,
 		s.hostedToken, "any", `{"requestId":"rec-1","epoch":"1","certificateRequestPem":"x"}`)
 	assert.Equal(t, http.StatusBadRequest, got.status, "a v2 recovery refuses a certificate request: %s", got.body)

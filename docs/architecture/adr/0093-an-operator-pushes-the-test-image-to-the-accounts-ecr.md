@@ -1,6 +1,10 @@
 # ADR 0093: An operator pushes the test image to the account's ECR, and no workflow holds a credential for it
 
-> Status: accepted
+> Status: accepted — its repository URI and §Decision's "The namespace
+> is `dev/`" are superseded by
+> [ADR-0097](./0097-development-images-live-under-garam-dev-and-garam-holds-releases-only.md),
+> under which the test image's repository is
+> `486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam-dev/garam-test`
 > Date: 2026-10-08
 
 Drafted for #1227, which reserved this number. On 2026-10-08 the owner

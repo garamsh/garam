@@ -72,8 +72,11 @@ decision the owner reversed.
   refusals are unchanged. ADR-0095's supersession of
   [ADR-0071](./0071-a-development-image-shares-the-release-repository-and-its-tag-says-it-is-not-a-release.md)'s
   repository decision carries over unchanged.
-- **This supersedes ADR-0095.** ADR-0093's decision is untouched: it
-  took the namespace from ADR-0095 rather than deciding it.
+- **This supersedes ADR-0095, and ADR-0093's namespace**: its
+  repository URI and its "The namespace is `dev/`". The test image's
+  repository is
+  `486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam-dev/garam-test`.
+  The rest of ADR-0093 stands.
 
 ## What this does not decide
 

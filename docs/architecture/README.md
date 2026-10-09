@@ -651,7 +651,8 @@ ADRs:
   repository's lifecycle policy in `garamsh/infra` expires an unpinned
   image 90 days after its push and bounds pins by a count of 50, not
   by age; supersedes ADR-0092's registry, its commit tag, its
-  publishing from `dev` and its retention
+  publishing from `dev` and its retention; its repository URI and its
+  namespace are superseded by 0097
 - [0094](./adr/0094-structural-rules-yield-only-to-what-a-framework-imposes.md)
   — a structural rule yields to a stack file only where the stack's
   framework imposes the case, taken from the conventions template at
@@ -673,4 +674,5 @@ ADRs:
   — development images live under `garam-dev/`, as the owner set it
   after 0095; `garam/` still holds releases only, and
   `make image-build`, `make test-image-push` and `make test-image-pin`
-  name `garam-dev/<image>`. Supersedes 0095
+  name `garam-dev/<image>`. Supersedes 0095, and ADR-0093's
+  repository URI and namespace

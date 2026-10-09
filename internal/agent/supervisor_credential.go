@@ -36,6 +36,11 @@ var (
 	// ErrSupervisorAudience refuses an exchange naming an audience: a
 	// supervisor's token is garam's alone.
 	ErrSupervisorAudience = errorx.New(errorx.KindInvalidArgument, "a supervisor's token names no audience")
+	// ErrSupervisorMintAudience refuses a supervisor minting its
+	// agent's token for an audience: it mints for garam alone, for the
+	// one agent it holds (ADR-0100).
+	ErrSupervisorMintAudience = errorx.New(errorx.KindInvalidArgument,
+		"a supervisor mints its agent's tokens for garam alone")
 )
 
 // SupervisorCredential is the credential a standalone-enrollment.v2

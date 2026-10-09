@@ -164,18 +164,24 @@ func standaloneContract(w http.ResponseWriter, version machinegen.StandaloneCont
 	return true
 }
 
-// supervisorRoutes is everything a supervisor reaches (ADR-0082,
-// ADR-0100): its own identity, its own renewal, the execution routes it
-// holds lifecycle authority on, and the mint of its one agent's
-// tokens. They are the router's patterns, so a route added later is
-// outside the set until named here.
+// supervisorRoutes is everything a supervisor reaches (ADR-0082): its
+// own identity, its own renewal and the execution routes it holds
+// lifecycle authority on. They are the router's patterns, so a route
+// added later is outside the set until named here.
 var supervisorRoutes = map[string]bool{
 	http.MethodGet + " /identity":                                              true,
 	http.MethodPost + " /supervisors/self/certificate":                         true,
 	http.MethodPost + " /agents/{agent}/activations":                           true,
 	http.MethodPost + " /agents/{agent}/activations/{activation}/deactivation": true,
 	http.MethodPost + " /agents/{agent}/execution/introspection":               true,
-	http.MethodPost + " /agents/{agent}/tokens":                                true,
+}
+
+// supervisorTokenRoutes is what a supervisor reaches beside
+// supervisorRoutes when it presents its own token: the mint of its one
+// agent's tokens (ADR-0100). A supervisor's certificate reaches no more
+// than it did under standalone-enrollment.v1.
+var supervisorTokenRoutes = map[string]bool{
+	http.MethodPost + " /agents/{agent}/tokens": true,
 }
 
 // ConfineSupervisors refuses a supervisor's request to any route
@@ -187,7 +193,8 @@ var supervisorRoutes = map[string]bool{
 func ConfineSupervisors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		identity, ok := machine.IdentityOf(r)
-		if ok && identity.GRN().ServiceType == agent.ServiceTypeSupervisor && !supervisorRoutes[r.Pattern] {
+		if ok && identity.GRN().ServiceType == agent.ServiceTypeSupervisor && !supervisorRoutes[r.Pattern] &&
+			(identity.Method() != machine.MethodToken || !supervisorTokenRoutes[r.Pattern]) {
 			writeError(w, errorx.New(errorx.KindPermissionDenied, "a supervisor reaches its lifecycle routes alone"))
 			return
 		}

@@ -124,6 +124,9 @@ func (s *service) MintAccessToken(ctx context.Context, caller, agentGRN grn.GRN,
 			return nil, err
 		}
 	}
+	if audience != nil && caller.ServiceType == ServiceTypeSupervisor {
+		return nil, ErrSupervisorMintAudience
+	}
 	if audience != nil {
 		if audience.ServiceType != ServiceTypeOperator ||
 			audience.Organization != agentGRN.Organization || *audience == caller {

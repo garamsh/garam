@@ -116,8 +116,8 @@ type Forwarded interface{ forwarded() }
 type ForwardedCertificate struct{ Leaf *x509.Certificate }
 
 // ForwardedToken is an agent token its assignee minted to be shown to
-// the caller, or, where the caller is the assignee itself, one it
-// minted for garam.
+// the caller, or, where the caller is a standalone host's supervisor,
+// the token it minted for garam.
 type ForwardedToken string
 
 func (ForwardedCertificate) forwarded() {}
@@ -200,8 +200,8 @@ func NewExecutionService(store Store, executions ExecutionStore, authorizer Life
 
 // prove answers the credential a forwarded one stands for once it
 // names agentGRN: a certificate chaining to the agent's organization,
-// or a token minted for the agent to be shown to caller or by caller
-// for garam. Neither is
+// or a token minted for the agent to be shown to caller or, for a
+// supervisor caller, by caller for garam. Neither is
 // judged current here; the execution fence does that.
 func (s *executionService) prove(ctx context.Context, caller, agentGRN grn.GRN, forwarded Forwarded) (Credential, error) {
 	switch f := forwarded.(type) {
@@ -217,6 +217,13 @@ func (s *executionService) prove(ctx context.Context, caller, agentGRN grn.GRN, 
 			return Credential{}, err
 		}
 		if holder.Agent != agentGRN {
+			return Credential{}, ErrTokenNotProven
+		}
+		// A token minted for garam proves the agent only to the
+		// supervisor that minted it, which is the assignee and the
+		// lifecycle authority at once; every other caller forwards a
+		// token shown to it (ADR-0100).
+		if holder.Audience == nil && caller.ServiceType != ServiceTypeSupervisor {
 			return Credential{}, ErrTokenNotProven
 		}
 		return Credential{Serial: holder.Serial, NotBefore: holder.IssuedAt, NotAfter: holder.ExpiresAt}, nil

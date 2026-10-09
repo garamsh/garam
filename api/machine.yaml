@@ -440,12 +440,14 @@ paths:
       summary: Mint the token an agent authenticates with in place of a certificate.
       description: >-
         Answers a short-lived token for an agent the calling operator
-        holds at the current epoch (ADR-0100), under `machine-token.v1`.
-        The operator hands it to the agent's adapter, which presents it
-        as `Authorization: Garam-Token <token>`. It is accepted for an
-        hour unless the deployment configures another lifetime, and the
-        operator mints the next before it runs out; minting a new one
-        voids nothing, and an agent keeps its newest five per audience.
+        holds at the current epoch, or for the one agent a standalone
+        host's supervisor holds, which presents its own token to mint
+        (ADR-0100), under `machine-token.v1`. The assignee hands it to
+        the agent's adapter, which presents it as `Authorization:
+        Garam-Token <token>`. It is accepted for an hour unless the
+        deployment configures another lifetime, and the assignee mints
+        the next before it runs out; minting a new one voids nothing,
+        and an agent keeps its newest five per audience.
 
         The token is minted at the assignment's epoch and in the
         lineage the agent's execution holds, and every request
@@ -460,7 +462,9 @@ paths:
 
         With an `audience` naming another operator of the agent's
         organization, the token is minted to be shown to that hosted
-        operator, and garam accepts it on no operation here.
+        operator, and garam accepts it on no operation here. A
+        supervisor mints for garam alone, and an `audience` from it is
+        400.
       parameters:
         - $ref: '#/components/parameters/agent'
         - $ref: '#/components/parameters/tokenContractVersion'

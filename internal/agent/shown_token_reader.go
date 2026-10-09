@@ -9,8 +9,9 @@ import (
 // ShownTokenReader reads an agent token a lifecycle authority forwards
 // to garam where it forwarded the agent's certificate before
 // (ADR-0100): one the assignee minted to be shown to that hosted
-// operator, or, where the authority is the assignee itself — a
-// standalone host's supervisor — one it minted for garam.
+// operator, or one a standalone host's supervisor, the assignee and
+// the authority at once, minted for garam. The execution service, not
+// this read, admits the second for a supervisor alone.
 type ShownTokenReader interface {
 	// AccessTokenShownTo answers what the token tokenHash names where
 	// it was minted to be shown to audience, or minted by audience for

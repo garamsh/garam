@@ -36,8 +36,7 @@ test.describe("organization mutations", () => {
   }) => {
     // The owner creates an invitation and copies its link.
     await page.goto(`/console/orgs/${signedIn.orgSlug}/people`);
-    await page.getByLabel("Role").click();
-    await page.getByRole("option", { name: "Member" }).click();
+    await page.getByLabel("Role").selectOption("member");
     await page.getByRole("button", { name: "Create invitation" }).click();
 
     const linkField = page.getByLabel("Invitation link");

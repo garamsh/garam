@@ -106,9 +106,9 @@ reading stops.
   wrong rule.
 - **A rule appears once** — inside a file as much as across files. A
   section that restates earlier rules in the negative is a second site
-  to keep in sync, not a summary. A derived file that repeats a base
-  rule it does not change is that same defect: what it does not hold, it
-  does not copy.
+  to keep in sync, not a summary. A derived file — one the Extends
+  column gives a base — that repeats a base rule it does not change is
+  that same defect: what it does not hold, it does not copy.
 - **Two files' rules may share a reason.** That is not duplication. Each
   states its own reason; neither points at the other for it.
 - **A convention file does not send the reader to another convention

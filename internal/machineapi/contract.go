@@ -34,8 +34,8 @@ var (
 
 // served stamps the value the request's credential takes on the answer,
 // and refuses a request that asked for another with the refusal naming
-// that value, before anything else is read. A request that proved no
-// identity takes the certificate's value.
+// that value, before anything else is read. A request presenting no
+// token takes the certificate's value.
 func served(w http.ResponseWriter, r *http.Request, version string, values contractValues) bool {
 	expected, refusal := values.certificate, values.certificateRefusal
 	if tokenBorne(r) {
@@ -49,12 +49,15 @@ func served(w http.ResponseWriter, r *http.Request, version string, values contr
 	return true
 }
 
-// tokenBorne reports whether a token authenticated r, which decides
-// the contract value it is served under and where the values that
-// share Authorization beside a certificate travel instead (ADR-0100).
+// tokenBorne reports whether r presents a token, which decides the
+// contract value it is served under and where the values that share
+// Authorization beside a certificate travel instead (ADR-0100). It reads
+// the scheme presented and not whether the token proved anything, so a
+// token the listener refused is still held to the token's value and
+// reaches the refusal the listener read, rather than one naming the
+// certificate's value.
 func tokenBorne(r *http.Request) bool {
-	identity, ok := machine.IdentityOf(r)
-	return ok && identity.Method() == machine.MethodToken
+	return strings.HasPrefix(r.Header.Get("Authorization"), machine.TokenScheme+" ")
 }
 
 // operationOf answers the operation authority or reference r carries:

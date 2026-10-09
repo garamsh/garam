@@ -17,13 +17,14 @@ import (
 // ServiceTypePolicy is the GRN service type of a stored policy.
 const ServiceTypePolicy = "policy"
 
-// PolicyStatus is a policy's lifecycle state (ADR-0002).
-type PolicyStatus string
+// PolicyStatus is a policy's lifecycle state (ADR-0002), declared in
+// wire beside its conversion so the engine and the surface share it.
+type PolicyStatus = wire.PolicyStatus
 
 const (
-	PolicyStatusDraft    PolicyStatus = "draft"
-	PolicyStatusActive   PolicyStatus = "active"
-	PolicyStatusArchived PolicyStatus = "archived"
+	PolicyStatusDraft    = wire.PolicyStatusDraft
+	PolicyStatusActive   = wire.PolicyStatusActive
+	PolicyStatusArchived = wire.PolicyStatusArchived
 )
 
 // ParsePolicyStatus parses a PolicyStatus from its stored form.

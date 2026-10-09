@@ -8,6 +8,7 @@ import (
 
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/wire"
 	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
 )
 
@@ -177,7 +178,7 @@ func policyFromProto(p *authzv1.Policy) (*Policy, error) {
 		GRN:            g,
 		OrgGRN:         orgGRN,
 		Name:           p.GetName(),
-		Status:         policyStatusFromProto(p.GetStatus()),
+		Status:         wire.PolicyStatusFromProto(p.GetStatus()),
 		DefaultVersion: int(p.GetDefaultVersion()),
 		CreatedAt:      p.GetCreatedAt().AsTime(),
 		UpdatedAt:      p.GetUpdatedAt().AsTime(),
@@ -212,19 +213,4 @@ func attachmentFromProto(a *authzv1.PolicyAttachment) (*PolicyAttachment, error)
 		return nil, errorx.Wrap(err, "attachment subject grn", errorx.KindInternal)
 	}
 	return &PolicyAttachment{PolicyGRN: g, SubjectGRN: subject, CreatedAt: a.GetCreatedAt().AsTime()}, nil
-}
-
-// policyStatusFromProto maps the wire enum to the seam's status. An
-// unspecified status keeps the zero value, which no handler renders as
-// a lifecycle state.
-func policyStatusFromProto(s authzv1.PolicyStatus) PolicyStatus {
-	switch s {
-	case authzv1.PolicyStatus_POLICY_STATUS_DRAFT:
-		return PolicyStatusDraft
-	case authzv1.PolicyStatus_POLICY_STATUS_ACTIVE:
-		return PolicyStatusActive
-	case authzv1.PolicyStatus_POLICY_STATUS_ARCHIVED:
-		return PolicyStatusArchived
-	}
-	return ""
 }

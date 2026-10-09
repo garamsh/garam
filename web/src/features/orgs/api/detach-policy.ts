@@ -3,11 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-import {
-  GaramApiError,
-  GaramUnreachableError,
-  garamFetchAuthenticated,
-} from "@/lib/garam";
+import { GaramApiError, garamFetchAuthenticated, refusal } from "@/lib/garam";
 
 import { parseGrn } from "../grn";
 
@@ -58,13 +54,7 @@ export async function detachPolicy(
     if (error instanceof GaramApiError && error.status === 409) {
       return { status: "last-attachment" };
     }
-    if (
-      error instanceof GaramApiError ||
-      error instanceof GaramUnreachableError
-    ) {
-      return { status: "error", message: error.message };
-    }
-    throw error;
+    return refusal(error);
   }
 
   revalidatePath(`/console/orgs/${org}/permissions`, "layout");

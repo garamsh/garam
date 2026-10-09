@@ -7,6 +7,7 @@ import {
   GaramContractError,
   GaramUnreachableError,
   garamFetch,
+  refusal,
 } from "@/lib/garam";
 import { API_URL, alice } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
@@ -102,4 +103,42 @@ describe("garamFetch", () => {
       message: "no session",
     });
   });
+});
+
+// The expected failures a Server Action returns rather than throws
+// (stack-nextjs.md §Errors — returned, thrown, or caught): a refusal and
+// an outage come back as the state a form renders, carrying garam's own
+// words, and anything else — a contract garam broke, a bug in this
+// application — is thrown on as the very error it was.
+describe("refusal", () => {
+  it("returns a refusal and an outage as the error state", () => {
+    expect(refusal(new GaramApiError(409, "the team is not empty"))).toEqual({
+      status: "error",
+      message: "the team is not empty",
+    });
+    expect(refusal(new GaramUnreachableError())).toEqual({
+      status: "error",
+      message: "the garam API could not be reached",
+    });
+  });
+
+  it("throws anything else on unchanged", () => {
+    const broken = new GaramContractError("/orgs");
+    const bug = new TypeError("undefined is not a function");
+
+    expect(thrownBy(broken)).toBe(broken);
+    expect(thrownBy(bug)).toBe(bug);
+    expect(thrownBy("not even an Error")).toBe("not even an Error");
+  });
+
+  // What refusal threw, compared by identity: a rethrow that wrapped or
+  // copied the error would lose its stack and its class.
+  function thrownBy(error: unknown): unknown {
+    try {
+      refusal(error);
+    } catch (caught) {
+      return caught;
+    }
+    return "nothing was thrown";
+  }
 });

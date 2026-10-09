@@ -3,11 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-import {
-  GaramApiError,
-  GaramUnreachableError,
-  garamFetchAuthenticated,
-} from "@/lib/garam";
+import { garamFetchAuthenticated, refusal } from "@/lib/garam";
 import {
   CONTRACT_VERSION,
   CONTRACT_VERSION_HEADER,
@@ -57,14 +53,4 @@ export async function withdrawDelegation(
 
 function delegationPath(org: string, operator: string): string {
   return `/orgs/${orgPath(org)}/operators/${orgPath(operator)}/delegation`;
-}
-
-function refusal(error: unknown): DelegationState {
-  if (
-    error instanceof GaramApiError ||
-    error instanceof GaramUnreachableError
-  ) {
-    return { status: "error", message: error.message };
-  }
-  throw error;
 }

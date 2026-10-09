@@ -1,10 +1,11 @@
 import { cleanup, render, screen, within } from "@testing-library/react";
-import userEvent, { type UserEvent } from "@testing-library/user-event";
+import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { PasswordSignInForm } from "@/features/auth/components/password-sign-in-form";
 import { PASSWORD_REFUSED } from "@/lib/password-credentials";
+import { enter } from "@/testing/enter";
 import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
@@ -24,20 +25,6 @@ function refuses(status: number, kind: string, message: string) {
       HttpResponse.json({ kind, message }, { status }),
     ),
   );
-}
-
-/**
- * Enters text into one field the way a person pastes it. Typing a key
- * at a time does work for every character, and on a loaded host that
- * work is what outran the test's budget; nothing here turns on
- * keystrokes. A paste lands where focus is, so the field must hold it
- * first: a step outliving its test meets its own unmounted field here
- * and stops, rather than pasting into the next test's form.
- */
-async function enter(user: UserEvent, field: HTMLElement, text: string) {
-  await user.click(field);
-  expect(field).toHaveFocus();
-  await user.paste(text);
 }
 
 /**

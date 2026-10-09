@@ -1,9 +1,10 @@
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import AgentPage from "@/app/console/orgs/[org]/agents/[agent]/page";
+import { enter } from "@/testing/enter";
 import { renderServerComponent } from "@/testing/render";
 import { API_URL, fieldAgent, reportedAgent } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
@@ -75,13 +76,15 @@ describe("agent page", () => {
       }),
     );
     const user = userEvent.setup();
-    await renderServerComponent(AgentPage(params));
+    const page = within(
+      (await renderServerComponent(AgentPage(params))).container,
+    );
 
-    await user.clear(screen.getByLabelText("Name"));
-    await user.type(screen.getByLabelText("Name"), " Ranger ");
-    await user.click(screen.getByRole("button", { name: "Save name" }));
+    await user.clear(page.getByLabelText("Name"));
+    await enter(user, page.getByLabelText("Name"), " Ranger ");
+    await user.click(page.getByRole("button", { name: "Save name" }));
 
-    expect(await screen.findByRole("status")).toHaveTextContent(
+    expect(await page.findByRole("status")).toHaveTextContent(
       "Renamed to Ranger.",
     );
     expect(body).toEqual({ name: "Ranger" });

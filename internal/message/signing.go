@@ -50,11 +50,14 @@ var ErrNoSuchSigningKey = errorx.New(errorx.KindNotFound, "no such message signi
 type Issuer string
 
 // ParseIssuer reads an issuer, refusing anything that is not exactly an
-// https origin: a verifier compares the value byte for byte, so
-// `https://x/` and `https://x` would be two issuers.
+// https origin in one spelling: a verifier compares the value byte for
+// byte, so `https://x/`, `https://x:` and `https://X` would each be a
+// second issuer for `https://x`. The host is lowercase and not empty,
+// and a port, where there is one, is not empty either.
 func ParseIssuer(s string) (Issuer, error) {
 	u, err := url.Parse(s)
-	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil || u.Opaque != "" ||
+	if err != nil || u.Scheme != "https" || u.Hostname() == "" || strings.HasSuffix(u.Host, ":") ||
+		u.Host != strings.ToLower(u.Host) || u.User != nil || u.Opaque != "" ||
 		u.Path != "" || u.RawQuery != "" || u.ForceQuery || strings.Contains(s, "#") || u.String() != s {
 		return "", errorx.New(errorx.KindInvalidArgument,
 			"message: issuer must be an https origin with no path, query, fragment or trailing slash")
@@ -138,8 +141,8 @@ type keyring struct {
 // ceiling cfg sets from when its claim was taken, so it does not
 // outlive that claim.
 func NewKeyring(store SigningKeyStore, sealer Sealer, issuer Issuer, cfg Config) (Keyring, error) {
-	if issuer == "" {
-		return nil, errorx.New(errorx.KindInvalidArgument, "message: an issuer is required to sign")
+	if _, err := ParseIssuer(string(issuer)); err != nil {
+		return nil, err
 	}
 	return &keyring{store: store, sealer: sealer, issuer: issuer, validity: withDefaults(cfg).LeaseCeiling}, nil
 }

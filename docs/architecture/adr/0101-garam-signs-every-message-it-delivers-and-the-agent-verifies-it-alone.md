@@ -118,7 +118,7 @@ content nor a detached signature over it. The payload is:
 
 | Claim | Value |
 |---|---|
-| `iss` | the deployment's issuer: the machine listener's external `https` origin, with no path and no trailing slash, which the deployment configures and keeps for its life |
+| `iss` | the deployment's issuer: the machine listener's external `https` origin in one spelling — a lowercase host, no empty port, no path and no trailing slash — which the deployment configures and keeps for its life |
 | `sub` | the sender garam vouches for: the GRN its listener authenticated as the poster, or `iss` itself for a message garam authored |
 | `aud` | the recipient's GRN, as one string |
 | `org` | the recipient's organization, the GRN's organization segment ([grn-model.md](../grn-model.md)) |

@@ -194,11 +194,11 @@ fails without them:
   listener's four key-material files is read from, less whichever of
   them names a Secret of its own (§Key material and secrets).
 - `machine.issuer` — the issuer every message signature names: the
-  machine listener's external https origin, with no path and no
-  trailing slash (ADR-0101). A verifier compares it byte for byte and
-  reads the key set at it followed by `/message-signing-keys`, so a
-  deployment keeps it for its life; the binary refuses any other shape
-  at startup.
+  machine listener's external https origin, with a lowercase host, no
+  empty port, no path and no trailing slash (ADR-0101). A verifier
+  compares it byte for byte and reads the key set at it followed by
+  `/message-signing-keys`, so a deployment keeps it for its life; the
+  binary refuses any other shape at startup.
 - `web.apiUrl` — the address the web process reaches `serve api` on,
   baked into the image at build time as the `/api/*` rewrite target and
   read again at runtime by every server-side render

@@ -382,8 +382,9 @@ alone. What binds instead is who signs them
 
 **`GARAM_MACHINE_ISSUER` names the deployment to every verifier, and a
 changed value is a different issuer.** `garam serve machine` refuses to
-start without one, and refuses anything but an https origin with no
-path and no trailing slash (`internal/message/signing.go`,
+start without one, and refuses anything but an https origin in one
+spelling — a lowercase host, no empty port, no path and no trailing
+slash (`internal/message/signing.go`,
 `ParseIssuer`), because a verifier compares it byte for byte and reads
 the key set at it followed by `/message-signing-keys`
 ([ADR-0101](./adr/0101-garam-signs-every-message-it-delivers-and-the-agent-verifies-it-alone.md)).

@@ -227,11 +227,18 @@ func TestParseIssuer_AcceptsAnHTTPSOriginAlone(t *testing.T) {
 		{"empty fragment", "https://garam.example#"},
 		{"user info", "https://u@garam.example"},
 		{"no scheme", "garam.example"},
+		{"empty host", "https://:443"},
+		{"empty port", "https://garam.example:"},
+		{"uppercase host", "https://GARAM.example"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := message.ParseIssuer(tt.issuer)
 			assert.Error(t, err)
+			// The keyring takes the same rule, so no caller reaches
+			// signing with an issuer the parse would have refused.
+			_, err = message.NewKeyring(&keyring{}, plainSealer{}, message.Issuer(tt.issuer), message.Config{})
+			assert.Error(t, err, "the keyring took it")
 		})
 	}
 }

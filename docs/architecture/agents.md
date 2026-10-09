@@ -152,19 +152,46 @@ release of that contract and no compatibility window (ADR-0049).
 
 ## Tokens in place of certificates
 
-**Unbuilt: an agent and a supervisor still authenticate with
-certificates.**
+**Built for an agent's operator; a supervisor-held agent and the
+control service's contracts are not yet.**
 [ADR-0100](./adr/0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
-replaces both with short-lived tokens. An agent's token is minted by
-its assignee — its operator at the current epoch, which is ADR-0015's
-rule, or its supervisor — and joins the agent's current lineage, so
-the execution fence judges it as it judges a certificate; recovery
-ends a lineage of tokens that may have been taken rather than
-certifying a new key. A supervisor holds a credential an administrator
-is shown once. The order is the plan's,
-`docs/plans/2026-10-09-machine-identity-migration.md`: the agent's
-tokens are step G1b, the control service's contracts G1c and the
-supervisor's credential G1d.
+replaces an agent's certificate with a short-lived token, and the
+order is the plan's,
+`docs/plans/2026-10-09-machine-identity-migration.md`: this is step
+G1b; a supervisor minting its agent's tokens, and its own
+credential, are G1d; the control service introspecting a token is G1c.
+Until then a certificate still authenticates as it did.
+
+- **The assignee mints, at the current epoch.** `mintAgentToken`
+  answers an operator for an agent assigned to it now and no other,
+  which is ADR-0015's rule. The token names that assignee and epoch
+  and the lineage the agent's execution holds, read under the
+  execution row; it is admitted where the certificate route would be —
+  an agent still legacy whose cutover is not switched — and for an
+  agent whose lifecycle authority opened a lineage, inside it.
+- **Every request reads it against both as they stand.** The token's
+  row is joined to the agent's assignment and execution, so a
+  reassignment or a recovery refuses it from the next request, on a
+  connection already open too, and the execution fence admits a
+  protected write on the token's serial only in the same terms
+  (`migrations/000039_agent_tokens.up.sql`). A fenced agent's calls
+  carry their activation's token in a `Garam-Execution` header of its
+  own, since the agent token takes `Authorization`.
+- **It lives an hour by default**, configurable from twenty minutes to
+  a day, and its start is backdated by the minute a certificate's is,
+  so a database whose clock trails the minting process finds it
+  current at once. A mint voids nothing; an agent keeps its newest
+  five tokens per audience and its newest ten in all, and an audience
+  is an operator the organization registered, so naming more
+  audiences widens nothing. A token renews no certificate: an agent
+  holding one is minted another by its assignee.
+- **An unfenced agent's token comes the same way.** A `Garam`-source
+  agent of the Operator, whose adapter runs in garam's legacy mode
+  with no control settings (garam-agent-operator ADR 0068), is held by
+  its operator at an epoch like any other, so the operator mints its
+  token on the same route and refreshes it by minting the next before
+  the current one runs out. What changes for that adapter is only
+  where it reads the token from, which is step G2's.
 
 ## Separated execution
 

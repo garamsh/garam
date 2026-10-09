@@ -84,8 +84,8 @@ const (
 )
 
 // Method returns how the identity was proven. One a token proved
-// carries no certificate: its serial is empty, and its dates are the
-// token's expiry alone.
+// carries no certificate: its serial and dates are the token's, and an
+// operator's token has no serial at all.
 func (i Identity) Method() Method { return i.method }
 
 // GRN returns the identity's GRN, which is the whole of what the

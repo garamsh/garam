@@ -19,6 +19,16 @@ var tokenRoutes = map[string]bool{
 	http.MethodPost + " /agents/{agent}/provisioning-state": true,
 	http.MethodGet + " /definitions":                        true,
 	http.MethodPost + " /definitions/{agent}/claim":         true,
+	http.MethodPost + " /agents/{agent}/tokens":             true,
+	// An agent's own routes (ADR-0100 G1b): what its adapter calls.
+	http.MethodPost + " /agents/{agent}/runtime-state":             true,
+	http.MethodPost + " /agents/{agent}/claims":                    true,
+	http.MethodPost + " /agents/{agent}/claims/{claim}/renewal":    true,
+	http.MethodPost + " /agents/{agent}/claims/{claim}/completion": true,
+	http.MethodPost + " /agents/{agent}/turn-events":               true,
+	http.MethodPost + " /messages":                                 true,
+	http.MethodGet + " /messages/{message}":                        true,
+	http.MethodPost + " /outbox-messages":                          true,
 }
 
 // ConfineTokens refuses a request a token authenticated on any route

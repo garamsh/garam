@@ -47,6 +47,7 @@ sql:
       - migrations/000029_agent_execution_fence.up.sql
       - migrations/000031_agent_standalone_supervisors.up.sql
       - migrations/000033_agent_cutovers.up.sql
+      - migrations/000039_agent_tokens.up.sql
     queries: internal/agent/queries.sql
     gen:
       go:

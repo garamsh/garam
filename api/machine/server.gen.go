@@ -372,6 +372,27 @@ type AgentAssignment struct {
 	Operator string `json:"operator"`
 }
 
+// AgentToken defines model for AgentToken.
+type AgentToken struct {
+	// Audience The hosted operator the token is minted for, where one was asked for.
+	Audience *string `json:"audience,omitempty"`
+
+	// Epoch The assignment epoch the token was minted at.
+	Epoch int `json:"epoch"`
+
+	// ExpiresAt When garam stops accepting the token.
+	ExpiresAt time.Time `json:"expiresAt"`
+
+	// Grn The agent the token authenticates as.
+	Grn string `json:"grn"`
+
+	// ServerRootPem The garam server root the holder verifies garam by (ADR-0040).
+	ServerRootPem string `json:"serverRootPem"`
+
+	// Token The token itself, prefixed `garam_at_`, answered once. garam stores only its hash.
+	Token string `json:"token"`
+}
+
 // AuthorityIntrospection defines model for AuthorityIntrospection.
 type AuthorityIntrospection struct {
 	// Authority The opaque authority, carried in the body so it never reaches a URL.
@@ -1029,6 +1050,12 @@ type IssueInitialCertificateParams struct {
 	EnrollmentContractVersion EnrollmentContractVersion `json:"Garam-Contract-Version"`
 }
 
+// MintAgentTokenParams defines parameters for MintAgentToken.
+type MintAgentTokenParams struct {
+	// TokenContractVersion Must be `machine-token.v1` (ADR-0100); any other value is refused with 400 naming it.
+	TokenContractVersion TokenContractVersion `json:"Garam-Contract-Version"`
+}
+
 // IntrospectOperationAuthorityParams defines parameters for IntrospectOperationAuthority.
 type IntrospectOperationAuthorityParams struct {
 	// ContractVersion Must be `operation-authority.v1` (ADR-0079); any other value is refused with 400 naming it.
@@ -1055,7 +1082,7 @@ type CreateManagedAgentParams struct {
 
 // PostOutboxMessageParams defines parameters for PostOutboxMessage.
 type PostOutboxMessageParams struct {
-	// DeliveryContractVersion Must be `durable-delivery.v1` (ADR-0083); any other value is refused with 400 naming it.
+	// DeliveryContractVersion `durable-delivery.v1` where the caller presents a certificate and `durable-delivery.v2` where it presents an agent token (ADR-0083, ADR-0100); any other value, or one that disagrees with the credential, is refused with 400 naming the value the credential takes.
 	DeliveryContractVersion DeliveryContractVersion `json:"Garam-Contract-Version"`
 }
 
@@ -1100,6 +1127,9 @@ type ReportProvisioningStateJSONRequestBody = ProvisioningStateReport
 
 // ReportRuntimeStateJSONRequestBody defines body for ReportRuntimeState for application/json ContentType.
 type ReportRuntimeStateJSONRequestBody = RuntimeStateReport
+
+// MintAgentTokenJSONRequestBody defines body for MintAgentToken for application/json ContentType.
+type MintAgentTokenJSONRequestBody = TokenExchange
 
 // ForwardTurnEventJSONRequestBody defines body for ForwardTurnEvent for application/json ContentType.
 type ForwardTurnEventJSONRequestBody = TurnEvent
@@ -1181,6 +1211,9 @@ type ServerInterface interface {
 	// ReportRuntimeState Report what an agent says about itself.
 	// (POST /agents/{agent}/runtime-state)
 	ReportRuntimeState(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn)
+	// MintAgentToken Mint the token an agent authenticates with in place of a certificate.
+	// (POST /agents/{agent}/tokens)
+	MintAgentToken(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn, params MintAgentTokenParams)
 	// ForwardTurnEvent Forward one turn event to whoever is watching the agent.
 	// (POST /agents/{agent}/turn-events)
 	ForwardTurnEvent(w http.ResponseWriter, r *http.Request, agentGrn AgentGrn)
@@ -1968,6 +2001,60 @@ func (siw *ServerInterfaceWrapper) ReportRuntimeState(w http.ResponseWriter, r *
 	handler.ServeHTTP(w, r)
 }
 
+// MintAgentToken operation middleware
+func (siw *ServerInterfaceWrapper) MintAgentToken(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "agent" -------------
+	var agentGrn AgentGrn
+
+	err = runtime.BindStyledParameterWithOptions("simple", "agent", r.PathValue("agent"), &agentGrn, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "agent", Err: err})
+		return
+	}
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params MintAgentTokenParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Garam-Contract-Version" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Garam-Contract-Version")]; found {
+		var TokenContractVersion TokenContractVersion
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Garam-Contract-Version", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Garam-Contract-Version", valueList[0], &TokenContractVersion, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Garam-Contract-Version", Err: err})
+			return
+		}
+
+		params.TokenContractVersion = TokenContractVersion
+
+	} else {
+		err := fmt.Errorf("Header parameter Garam-Contract-Version is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Garam-Contract-Version", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MintAgentToken(w, r, agentGrn, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ForwardTurnEvent operation middleware
 func (siw *ServerInterfaceWrapper) ForwardTurnEvent(w http.ResponseWriter, r *http.Request) {
 
@@ -2598,6 +2685,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/enrollment", wrapper.EnrollOperator)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents", wrapper.CreateAgent)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/certificate", wrapper.IssueAgentCertificate)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/tokens", wrapper.MintAgentToken)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/provisioning-state", wrapper.ReportProvisioningState)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/runtime-state", wrapper.ReportRuntimeState)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/definitions", wrapper.ListDefinitions)

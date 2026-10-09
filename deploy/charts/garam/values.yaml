@@ -126,6 +126,12 @@ machine:
   # where those identities rewrite their own files without a restart —
   # see the README, §Key material and secrets.
   certificateLifetime: 24h
+  # How long an agent token garam mints is accepted (ADR-0100). The
+  # agent's operator mints the next between two thirds and three
+  # quarters of the lifetime, so a quarter of it is the margin a
+  # Secret's propagation into the agent's Pod has to fit in. The binary
+  # refuses the start outside twenty minutes and twenty-four hours.
+  agentTokenLifetime: 1h
   # The issuer every message signature names (ADR-0101): an identity,
   # compared byte for byte, that need not resolve or be reachable.
   # Prefer a stable name the deployment owns, such as the dev cluster's

@@ -71,7 +71,9 @@ func (l namedLeaves) VerifyLeaf(_ context.Context, _ grn.GRN, leaf *x509.Certifi
 
 // leafNamed is a parsed certificate standing for the one namedLeaves
 // knows by name.
-func leafNamed(name string) *x509.Certificate { return &x509.Certificate{SubjectKeyId: []byte(name)} }
+func leafNamed(name string) agent.Forwarded {
+	return agent.ForwardedCertificate{Leaf: &x509.Certificate{SubjectKeyId: []byte(name)}}
+}
 
 // countingSigner signs under chain, the one it holds now.
 type countingSigner struct {
@@ -140,7 +142,7 @@ func newLifecycle(t *testing.T) lifecycle {
 	}
 	l.issuer.next.Store(1000)
 	leaves := namedLeaves{"leaf-1": valid("1"), "leaf-2": valid("2"), "expired": expiredCredential("1")}
-	l.service = agent.NewExecutionService(f.agents, f.exec, l.authorizer, l.operations, leaves, l.signer, l.issuer)
+	l.service = agent.NewExecutionService(f.agents, f.exec, l.authorizer, l.operations, leaves, f.agents, l.signer, l.issuer)
 	return l
 }
 
@@ -153,7 +155,7 @@ func expiredCredential(serial string) agent.Credential {
 func (l lifecycle) input(requestID string, gen agent.Generation, replaces *agent.ActivationID, leaf string) agent.ActivationInput {
 	return agent.ActivationInput{
 		Agent: l.agent, RequestID: agent.RequestID(requestID), Epoch: l.epochNow(),
-		Generation: gen, Replaces: replaces, Certificate: leafNamed(leaf),
+		Generation: gen, Replaces: replaces, Credential: leafNamed(leaf),
 	}
 }
 
@@ -299,6 +301,41 @@ func (l lifecycle) handoff(authority, body string) {
 	}
 }
 
+// countingShown counts the forwarded-token reads it passes on.
+type countingShown struct {
+	agent.ShownTokenReader
+	reads int
+}
+
+func (c *countingShown) AccessTokenShownTo(ctx context.Context, tokenHash string, audience grn.GRN) (agent.AccessTokenHolder, error) {
+	c.reads++
+	return c.ShownTokenReader.AccessTokenShownTo(ctx, tokenHash, audience)
+}
+
+// holds that a forwarded value no mint could have produced is refused
+// before the store is asked (ADR-0100). The well-formed unknown token
+// beside it is asked and refused the same way, so what spared the store
+// is the shape.
+func TestExecutionService_AMalformedForwardedTokenReadsNothing(t *testing.T) {
+	ctx := context.Background()
+	l := newLifecycle(t)
+	reader := &countingShown{ShownTokenReader: l.agents}
+	service := agent.NewExecutionService(l.agents, l.exec, l.authorizer, l.operations, namedLeaves{}, reader, l.signer, l.issuer)
+
+	for _, malformed := range []string{
+		"", agent.AccessTokenPrefix + strings.Repeat("0", 63), agent.AccessTokenPrefix + strings.Repeat("Z", 64),
+		"garam_ot_" + strings.Repeat("0", 64),
+	} {
+		_, err := service.Introspect(ctx, l.audience, l.agent, agent.ForwardedToken(malformed), nil)
+		require.ErrorIs(t, err, agent.ErrTokenNotProven, malformed)
+	}
+	assert.Zero(t, reader.reads, "a malformed token reads nothing")
+
+	_, err := service.Introspect(ctx, l.audience, l.agent, agent.ForwardedToken(agent.AccessTokenPrefix+strings.Repeat("0", 64)), nil)
+	require.ErrorIs(t, err, agent.ErrTokenNotProven)
+	assert.Equal(t, 1, reader.reads, "control: a well-formed unknown token is read")
+}
+
 func TestExecutionService_RecoveryIsBoundToItsExactBodyAndAnsweredOnce(t *testing.T) {
 	ctx := context.Background()
 	l := newLifecycle(t)
@@ -318,8 +355,9 @@ func TestExecutionService_RecoveryIsBoundToItsExactBodyAndAnsweredOnce(t *testin
 	in.Body = []byte(body)
 	recovered, err := l.service.Recover(ctx, l.audience, in)
 	require.NoError(t, err, "control: the exact body recovers, the handoff was not spent")
-	assert.Equal(t, "signed 2", recovered.CertificatePEM)
-	assert.Equal(t, agent.Chain{IssuerPEM: "issuer 1", ServerRootPEM: "server root 1"}, recovered.Chain,
+	require.NotNil(t, recovered.Signed, "a recovery carrying a certificate request signs it")
+	assert.Equal(t, "signed 2", recovered.Signed.CertificatePEM)
+	assert.Equal(t, agent.Chain{IssuerPEM: "issuer 1", ServerRootPEM: "server root 1"}, recovered.Signed.Chain,
 		"the chain the signer produced")
 	assert.Equal(t, agent.AdmissionTokenStale, l.admit(t, &res.Token, valid("1")))
 
@@ -334,8 +372,9 @@ func TestExecutionService_RecoveryIsBoundToItsExactBodyAndAnsweredOnce(t *testin
 	forgetChain(t, l.p, l.agent.String(), "rec-1")
 	legacy, err := l.service.Recover(ctx, l.audience, in)
 	require.NoError(t, err)
-	assert.Equal(t, recovered.CertificatePEM, legacy.CertificatePEM)
-	assert.Equal(t, l.signer.chain, legacy.Chain,
+	require.NotNil(t, legacy.Signed)
+	assert.Equal(t, recovered.Signed.CertificatePEM, legacy.Signed.CertificatePEM)
+	assert.Equal(t, l.signer.chain, legacy.Signed.Chain,
 		"a recovery recorded before 000036 is answered with the chain the signer holds now")
 	assert.Equal(t, int32(1), l.signer.calls.Load(), "which signs nothing")
 
@@ -430,7 +469,7 @@ func TestExecutionService_IntrospectionNeverMixesTwoExecutions(t *testing.T) {
 
 	store := &interleaving{Store: l.exec}
 	leaves := namedLeaves{"leaf-1": valid("1"), "leaf-2": valid("2")}
-	service := agent.NewExecutionService(l.agents, store, l.authorizer, l.operations, leaves, l.signer, l.issuer)
+	service := agent.NewExecutionService(l.agents, store, l.authorizer, l.operations, leaves, l.agents, l.signer, l.issuer)
 	next := generation(2)
 	store.between = func() {
 		body := `{"request_id":"rec-1","certificate_request_pem":"csr-2"}`

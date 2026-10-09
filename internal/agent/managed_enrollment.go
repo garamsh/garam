@@ -13,12 +13,22 @@ import (
 // routes serve, carried in the Garam-Contract-Version header.
 const EnrollmentContractVersion = "managed-enrollment.v1"
 
+// TokenEnrollmentContractVersion is the same contract for a creation a
+// token authenticated. Creation opens the agent's lineage under either,
+// and its assignee then mints the agent's tokens in it; initial
+// issuance has no value of its own here (ADR-0100).
+const TokenEnrollmentContractVersion = "managed-enrollment.v2"
+
 // Managed enrollment sentinels (ADR-0077, ADR-0078).
 var (
 	// ErrUnsupportedEnrollmentContract refuses a request carrying no
 	// contract version, or another.
 	ErrUnsupportedEnrollmentContract = errorx.New(errorx.KindInvalidArgument,
 		"unsupported Garam-Contract-Version: this route serves "+EnrollmentContractVersion)
+	// ErrUnsupportedTokenEnrollmentContract is that refusal for a
+	// creation a token authenticated (ADR-0100).
+	ErrUnsupportedTokenEnrollmentContract = errorx.New(errorx.KindInvalidArgument,
+		"unsupported Garam-Contract-Version: a request presenting a token is served under "+TokenEnrollmentContractVersion)
 	// ErrCreationConflict refuses a creation whose reference binds
 	// another controller or request identifier, a request identifier
 	// an earlier creation holds under another reference, and the retry

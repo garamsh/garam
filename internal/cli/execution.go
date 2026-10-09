@@ -33,7 +33,8 @@ func newExecutionService(pool *pgxpool.Pool, engine grpc.ClientConnInterface, au
 	if now == nil {
 		now = time.Now
 	}
-	return agent.NewExecutionService(agent.NewPostgresStore(pool), agentpg.New(pool),
+	agents := agent.NewPostgresStore(pool)
+	return agent.NewExecutionService(agents, agentpg.New(pool),
 		lifecycleAuthorization{
 			grants:      operatorpg.New(pool),
 			supervisors: agentpg.New(pool),
@@ -43,6 +44,7 @@ func newExecutionService(pool *pgxpool.Pool, engine grpc.ClientConnInterface, au
 		},
 		operationAuthorities{service: authority},
 		provenLeaves{identities: identities},
+		agents,
 		requestSigner{issuer: issuer, serverRoot: serverRoot},
 		certificates{issuer: issuer, serverRoot: serverRoot})
 }

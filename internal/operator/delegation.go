@@ -15,6 +15,11 @@ import (
 // Garam-Contract-Version header and answers with it.
 const ContractVersion = "operation-authority.v1"
 
+// TokenAuthorityContractVersion is the same contract for a request a
+// token authenticated, under which a controller proof takes the
+// controller's token rather than its certificate (ADR-0100).
+const TokenAuthorityContractVersion = "operation-authority.v2"
+
 // ContractVersionHeader carries ContractVersion on requests and
 // answers.
 const ContractVersionHeader = "Garam-Contract-Version"
@@ -23,6 +28,12 @@ const ContractVersionHeader = "Garam-Contract-Version"
 // this release does not serve, and names the one it does.
 var ErrUnsupportedContract = errorx.New(errorx.KindInvalidArgument,
 	"unsupported "+ContractVersionHeader+": this route serves "+ContractVersion)
+
+// ErrUnsupportedTokenAuthorityContract is that refusal for a request a
+// token authenticated, which is served under the token's value
+// (ADR-0100).
+var ErrUnsupportedTokenAuthorityContract = errorx.New(errorx.KindInvalidArgument,
+	"unsupported "+ContractVersionHeader+": a request presenting a token is served under "+TokenAuthorityContractVersion)
 
 // Bounds on a grant (#1160). They are constants, not configuration: a
 // deployment tuning them would be widening what an administrator can

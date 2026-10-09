@@ -1,0 +1,2 @@
+ALTER TABLE agent_tokens DROP CONSTRAINT agent_tokens_audience_registered;
+ALTER TABLE operator_tokens DROP CONSTRAINT operator_tokens_audience_registered;

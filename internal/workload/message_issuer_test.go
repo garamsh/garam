@@ -78,6 +78,23 @@ func TestRun_RendersNothingWithoutAnIssuer(t *testing.T) {
 
 	assert.Equal(t, "revision: r1\n", string(runtime.files["/etc/sherlock/config.yaml"].Data))
 	assert.NotContains(t, runtime.files, "/etc/sherlock/garam-server-root.pem")
+	_, _, adapter := h.serving()
+	assert.NotContains(t, adapter.spec.Env, "GARAM_ADAPTER_SIGN_MESSAGES=true", "the adapter signs nothing")
+}
+
+// TestRun_SignsWhereTheRuntimeTrustsGaramsIssuer holds the one setting
+// that turns signing on end to end (#1312): naming garam's issuer
+// renders the runtime's entry and turns the adapter's signing on with
+// it, so neither is on without the other. TestRun_RendersNothingWithout
+// AnIssuer is the control, where both stay off.
+func TestRun_SignsWhereTheRuntimeTrustsGaramsIssuer(t *testing.T) {
+	h := newHost(t)
+	h.start()
+	runtime, _, adapter := h.serving()
+
+	_, issuers := runtimeConfigOf(t, runtime)
+	require.Len(t, issuers, 1, "the setup rendered the runtime's entry")
+	assert.Contains(t, adapter.spec.Env, "GARAM_ADAPTER_SIGN_MESSAGES=true")
 }
 
 // TestRun_TakesTheKeySetFromTheAdaptersAddressAndTheIssuerFromGaram

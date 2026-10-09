@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
-	"strings"
 
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/agent"
@@ -31,7 +30,7 @@ var cutoverReasons = []struct {
 // from, for a caller holding the agent's lifecycle authority and an
 // agent:cutover reference (ADR-0086).
 func (s *Server) GetAgentCutover(w http.ResponseWriter, r *http.Request, agentGRN machinegen.AgentGrn, params machinegen.GetAgentCutoverParams) {
-	if !cutoverContract(w, params.CutoverContractVersion) {
+	if !served(w, r, params.CutoverContractVersion, cutoverValues) {
 		return
 	}
 	caller, subject, ref, ok := s.cutoverParties(w, r, agentGRN)
@@ -73,7 +72,7 @@ func (s *Server) GetAgentCutover(w http.ResponseWriter, r *http.Request, agentGR
 // FreezeAgentCutover freezes a legacy agent's source once it matches
 // the digest the Operator imported.
 func (s *Server) FreezeAgentCutover(w http.ResponseWriter, r *http.Request, agentGRN machinegen.AgentGrn, params machinegen.FreezeAgentCutoverParams) {
-	if !cutoverContract(w, params.CutoverContractVersion) {
+	if !served(w, r, params.CutoverContractVersion, cutoverValues) {
 		return
 	}
 	r, cancel := lifecycleBudget(r)
@@ -127,7 +126,7 @@ func freezeInput(subject grn.GRN, ref, target string, body machinegen.CutoverFre
 // SwitchAgentCutover records that the Operator owns a frozen agent's
 // source.
 func (s *Server) SwitchAgentCutover(w http.ResponseWriter, r *http.Request, agentGRN machinegen.AgentGrn, params machinegen.SwitchAgentCutoverParams) {
-	if !cutoverContract(w, params.CutoverContractVersion) {
+	if !served(w, r, params.CutoverContractVersion, cutoverValues) {
 		return
 	}
 	r, cancel := lifecycleBudget(r)
@@ -142,7 +141,7 @@ func (s *Server) SwitchAgentCutover(w http.ResponseWriter, r *http.Request, agen
 
 // RollBackAgentCutover ends a frozen attempt.
 func (s *Server) RollBackAgentCutover(w http.ResponseWriter, r *http.Request, agentGRN machinegen.AgentGrn, params machinegen.RollBackAgentCutoverParams) {
-	if !cutoverContract(w, params.CutoverContractVersion) {
+	if !served(w, r, params.CutoverContractVersion, cutoverValues) {
 		return
 	}
 	r, cancel := lifecycleBudget(r)
@@ -186,15 +185,18 @@ func writeAttempt(w http.ResponseWriter, r *http.Request, attempt *agent.Cutover
 
 // cutoverParties answers the caller, read again for this decision, the
 // agent the path names and the agent:cutover reference the request
-// carries as `Authorization: Garam-Operation <ref>`.
+// carries: as `Authorization: Garam-Operation <ref>` beside a
+// certificate, and in a Garam-Operation header beside a token
+// (ADR-0100).
 func (s *Server) cutoverParties(w http.ResponseWriter, r *http.Request, agentGRN machinegen.AgentGrn) (grn.GRN, grn.GRN, string, bool) {
 	caller, subject, ok := s.lifecycleParties(w, r, agentGRN)
 	if !ok {
 		return grn.GRN{}, grn.GRN{}, "", false
 	}
-	ref, ok := strings.CutPrefix(r.Header.Get("Authorization"), operationScheme)
-	if !ok || ref == "" {
-		writeError(w, errorx.New(errorx.KindUnauthenticated, "a cutover carries Authorization: Garam-Operation <agent:cutover reference>"))
+	ref, ok := operationOf(r)
+	if !ok {
+		writeError(w, errorx.New(errorx.KindUnauthenticated,
+			"a cutover carries its agent:cutover reference as Authorization: Garam-Operation <reference> beside a certificate, or in a Garam-Operation header beside a token"))
 		return grn.GRN{}, grn.GRN{}, "", false
 	}
 	return caller, subject, ref, true
@@ -219,17 +221,6 @@ func attemptToAPI(a *agent.CutoverAttempt) machinegen.CutoverAttempt {
 		SwitchedAt:   a.SwitchedAt,
 		EndedAt:      a.EndedAt,
 	}
-}
-
-// cutoverContract stamps the cutover contract version on the answer and
-// refuses a request that asked for another.
-func cutoverContract(w http.ResponseWriter, version machinegen.CutoverContractVersion) bool {
-	w.Header().Set("Garam-Contract-Version", agent.CutoverContractVersion)
-	if version != agent.CutoverContractVersion {
-		writeError(w, agent.ErrUnsupportedCutoverContract)
-		return false
-	}
-	return true
 }
 
 // writeCutoverError answers a cutover refusal with the reason its

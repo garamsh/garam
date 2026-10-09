@@ -41,7 +41,7 @@ not touched.
 | G1 | garam | the token store, `POST /tokens`, `POST /agents/{agent}/tokens`, the operator and supervisor credentials, issue and re-issue on the browser API and in the console, every machine route accepting `Garam-Token` under the v2 contract values beside the v1 ones, introspection accepting a token where it takes `certificatePem`, a metric counting requests by how they authenticated | ADR-0100 accepted |
 | G2 | garam | the adapter's token mode — two token files, read per request, `Garam-Placement` as its own header, `agent-execution.v2` — and the standalone commands on a supervisor credential | G1 |
 | O1 | garam-agent-operator | an Operator release carrying four pull requests, landed on `dev` in the order §O1 is one release of four pull requests gives | a garam release carrying G1 and G2, deployed |
-| G3 | garam | the certificate path removed: the listener stops requesting a client certificate, the seven issuing routes, `garam issue-certificate` and the v1 contract values go | O1 deployed on every operator garam knows of, and the G1 metric reading no certificate-authenticated request for seven days |
+| G3 | garam | the certificate path removed: the listener stops requesting a client certificate, the seven issuing routes (`recoverAgentCredential` in its v1 form only), `garam issue-certificate` and the v1 contract values go, and with them ADR-0091's chain | O1 deployed on every operator garam knows of, and the G1 metric reading no certificate-authenticated request for seven days |
 | G4 | garam | the authorities retired: `internal/ca`, the sealer, the key-encryption key `garam serve machine` reads, and a migration dropping the certificate and enrollment tables | G3 released |
 
 G1 and G2 may land in one release; G3 and G4 may not, because G4's
@@ -61,7 +61,8 @@ these four, landed on the Operator's `dev` in this order:
    introspection.** The control service runs on a credential of its
    own and checks operators by introspection.
 4. **The certificate paths removed.** Enrollment, renewal, the
-   initial-certificate route and the certificate half of recovery go.
+   initial-certificate route and the certificate half of recovery go
+   (§What replaces credential recovery).
 
 Nothing of the Operator is deployed on the token path until all four
 are on `dev`, and they are released together. A reader therefore
@@ -131,6 +132,26 @@ It sits beside it.
 - **G2.** The placement token leaves `Authorization`, which the
   control-service token now occupies, for a `Garam-Placement` header;
   its value and its file are unchanged.
+
+### What replaces credential recovery
+
+The Operator built recovery on `recoverAgentCredential` under an
+`agent:recover` handoff (ADR-0091). ADR-0100 §Recovery under hourly
+tokens splits it in two:
+
+- **A lost credential: re-minting, with no route.** The assignee mints
+  another agent token, as it does every refresh. O1's fourth pull
+  request removes the key, the certificate request and the chain the
+  Operator's recovery handles today.
+- **A token that may have been taken: recovery, without a
+  certificate.** The handoff, the route and `agent:recover` stay, and
+  under `execution-fence.v2` the route ends the lineage and answers no
+  certificate or chain. O1 keeps the handoff path and sends the v2
+  body: `requestId` and `epoch`.
+- **G3** removes the v1 form, its certificate request and ADR-0091's
+  chain. `agent:recover` and the v2 route stay.
+
+The writer fence and the placement token are unaffected.
 
 ## How a running operator moves over
 

@@ -155,9 +155,11 @@ Actions Runner Controller's:
   answers an operator for an agent assigned to it at the current epoch
   and no other, which is ADR-0015's rule and may not be skipped for a
   fast path; it answers a supervisor for the one agent it holds. For a
-  fenced agent the token joins the current lineage: initial issuance
-  opens it and recovery replaces it, each under the reference it takes
-  today (ADR-0078, ADR-0086). Its lifetime is configuration, one hour
+  fenced agent the token joins the current lineage: a managed creation
+  opens it in its own transaction, and recovery replaces it
+  (§Recovery under hourly tokens). Initial issuance has nothing left
+  to issue, so `issueInitialCertificate` takes no new value and goes
+  with the certificate path. Its lifetime is configuration, one hour
   by default, bounded at both ends as `GARAM_CERTIFICATE_LIFETIME` is,
   and the assignee mints the next once two thirds of it has passed, at
   a point it jitters so a fleet does not refresh at one moment
@@ -215,6 +217,35 @@ key lookup like the one ADR-0070 added per connection. A lifetime
 short enough to be a revocation bound would have to be minutes, and
 every agent would then cost its assignee an exchange every few
 minutes, for a bound that is still not immediate.
+
+### Recovery under hourly tokens
+
+ADR-0078's recovery replaced a lost or expired credential for the same
+GRN, and ADR-0091 made its answer name the chain. Under tokens the two
+halves of that come apart.
+
+- **A lost or expired agent token needs no recovery.** The assignee
+  mints another in the current lineage, as it does every refresh. No
+  key exists to lose, and none is certified.
+- **A token that may have been taken is what recovery still answers.**
+  Without it, such a token stays good until it expires, which is an
+  hour by default and up to the lifetime's upper bound. An
+  administrator's `agent:recover` handoff, presented by the lifecycle
+  authority on `recoverAgentCredential` under `execution-fence.v2`,
+  ends the agent's lineage and opens the next under the execution
+  lock. Every token minted before it is refused from the next
+  request, on a connection already open too, and the assignee then
+  mints in the new lineage.
+- **The v2 request carries `requestId` and `epoch` and no certificate
+  request.** The answer names the GRN and the new lineage, and no
+  certificate, issuer or server root. ADR-0091's stored chain has no
+  object and goes whole. The handoff, its single use and its refusals
+  are unchanged.
+- **What goes at the certificate path's removal**: the v1 form of
+  `recoverAgentCredential`, its `certificateRequestPem`, the chain its
+  answer names and the chain stored with each recovery. What stays is
+  `agent:recover`, the handoff and the route under
+  `execution-fence.v2`.
 
 ### Server TLS only
 
@@ -285,7 +316,7 @@ Status lines move when this is accepted, not before.
 | 0064 | the enrollment token, the certificate request, `POST /enrollment`, the identity written from `VerifyConnection` | a secret answered once and stored as a hash, signing kept out of `garam serve api` |
 | 0067 | the second enrollment token | its open question is answered: a re-issue replaces and never adds, so no identity has two credential paths |
 | 0070 | the record read per connection through a seam of the trust root's shape | the delete, `operator:delete`, the refusal while a definition names the operator, the record as what admits |
-| 0078 | a lineage of certificates | the generation fence, delegated authority, recovery for the same GRN, now replacing a lineage of tokens |
+| 0078 | a lineage of certificates, and recovery as the way a lost credential is replaced | the generation fence, delegated authority, recovery for the same GRN, now ending a lineage of tokens that may have been taken |
 | 0082 | the host's key pairs, spending by certificate requests, the supervisor's certificate renewal | a supervisor for one agent, an administrator standing it up, the assignee, its execution routes, replacement and revocation, the secret out of the runtime's reach |
 | 0084 | the agent's leaf over mTLS as the transport's authentication, `Garam-Placement` in `Authorization` | the routes, bodies, refusals, the request identifier's derivation, the highest token version, the two modes |
 | 0085 | the adapter presenting the agent's certificate on the socket | the three containers, the socket, the generation's serving root, the drain |

@@ -677,3 +677,8 @@ ADRs:
   `make image-build`, `make test-image-push` and `make test-image-pin`
   name `garam-dev/<image>`. Supersedes 0095, and ADR-0093's
   repository URI and namespace
+- [0100](./adr/0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
+  — proposed: every machine caller exchanges a credential garam issues
+  for short-lived tokens it presents over server TLS alone, retiring
+  client certificates and the per-organization authorities; the
+  migration is `docs/plans/2026-10-09-machine-identity-migration.md`

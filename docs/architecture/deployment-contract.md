@@ -409,16 +409,14 @@ names another spelling refuses every message garam signs. A changed
 issuer reaches a running generation only when it is replaced, since
 the runtime reads its issuers at startup.
 
-**The runtime's trusted issuer is the same string.** A runtime that
-verifies garam's signature names garam in its configuration's
-`issuers` entry by an exact `iss` (Sherlock v0.4.0,
-`docs/architecture/gateway.md` §Signed messages), and that value must
-equal this chart's `machine.issuer` byte for byte. This repository
-renders `machine.issuer`; whatever runs the agent renders the
-`issuers` entry: garamsh/garam-agent-operator from its
-`--garam-issuer`, and on a standalone host the supervisor (#1269).
-Nothing checks the two against each other. A mismatch reads as 403
-`signature rejected: issuer` on every message once the adapter's
+**An Operator's runtime trusts the same string.** On a cluster the
+agent's runtime names garam in its configuration's `issuers` entry by
+an exact `iss` (Sherlock v0.4.0, `docs/architecture/gateway.md`
+§Signed messages), which garamsh/garam-agent-operator renders from its
+`--garam-issuer`, and that value must equal this chart's
+`machine.issuer` byte for byte, as a standalone host's must above.
+Nothing checks the two against each other: a mismatch on either reads
+as 403 `signature rejected: issuer` on every message once the adapter's
 `GARAM_ADAPTER_SIGN_MESSAGES` is on, and not as an error at start
 (adapter.md §Stable identifiers and the outbox).
 

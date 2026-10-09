@@ -115,6 +115,13 @@ func TestAgentToken_ReassignmentRefusesTheNextRequestOverAnOpenConnection(t *tes
 	status, _ = tokenCall(t, client, http.MethodPost, url+"/agents/"+bot.String()+"/tokens",
 		firstToken, operator.TokenContractVersion, `{}`)
 	assert.Equal(t, http.StatusForbidden, status, "the operator the reassignment replaced mints nothing")
+
+	// A reassignment to the same operator moves the epoch alone, and
+	// that refuses the token minted at the earlier one.
+	_, err = agent.NewPostgresStore(p).Assign(ctx, bot, second)
+	require.NoError(t, err)
+	status, _ = tokenCall(t, client, http.MethodPost, claims, again.Token, "", "")
+	assert.Equal(t, http.StatusUnauthorized, status, "a token minted at an earlier epoch is refused")
 	assert.Equal(t, 1, *connections, "every request travelled over one connection")
 }
 

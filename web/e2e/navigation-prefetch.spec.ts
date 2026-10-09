@@ -1,9 +1,11 @@
 import { expect, test } from "./fixtures";
 
-// The sidebar's sections prefetch only once the visitor shows intent
-// (#1209): a console page that merely shows them renders none of them on
-// the server, and the section the pointer rests on is prefetched before
-// the click. Prefetching runs only in a production build, which is what
+// The sidebar's sections and the breadcrumb prefetch only once the
+// visitor shows intent (#1209): a console page that merely shows them
+// renders none of them on the server, and the section the pointer rests
+// on is prefetched before the click. Consents is the page under test
+// because its own content links nowhere, so every prefetch on it is the
+// shell's. Prefetching runs only in a production build, which is what
 // this suite serves.
 test.describe("console navigation prefetch", () => {
   test("prefetches a section only once the visitor points at it", async ({
@@ -18,13 +20,13 @@ test.describe("console navigation prefetch", () => {
       }
     });
 
-    await page.goto(base);
+    await page.goto(`${base}/consents`);
     const sections = page.getByLabel("Organization sections");
     await expect(sections.getByRole("link", { name: "Teams" })).toBeVisible();
     await page.waitForLoadState("networkidle");
     expect(
-      prefetched.filter((path) => path.startsWith(`${base}/`)),
-      "no section is prefetched for being on screen",
+      prefetched,
+      "no section or crumb is prefetched for being on screen",
     ).toEqual([]);
 
     await sections.getByRole("link", { name: "Teams" }).hover();

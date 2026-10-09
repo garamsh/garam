@@ -530,6 +530,47 @@ func (q *Queries) LockAgentExecution(ctx context.Context, agentGrn string) (stri
 	return agent_grn, err
 }
 
+const recordAgentToken = `-- name: RecordAgentToken :exec
+WITH swept AS (
+    DELETE FROM agent_tokens
+    WHERE agent_grn = $3 AND expires_at <= now()
+)
+INSERT INTO agent_tokens (token_hash, serial, agent_grn, assignee_grn, epoch, lineage,
+                          audience_grn, issued_at, expires_at)
+VALUES ($1, $2, $3, $4,
+        $5, $6, $7,
+        $8, $9)
+`
+
+type RecordAgentTokenParams struct {
+	TokenHash   string
+	Serial      string
+	AgentGrn    string
+	AssigneeGrn string
+	Epoch       int32
+	Lineage     pgtype.UUID
+	AudienceGrn pgtype.Text
+	IssuedAt    pgtype.Timestamptz
+	ExpiresAt   pgtype.Timestamptz
+}
+
+// A mint sweeps the agent's expired tokens in the statement that
+// records the new one.
+func (q *Queries) RecordAgentToken(ctx context.Context, arg RecordAgentTokenParams) error {
+	_, err := q.db.Exec(ctx, recordAgentToken,
+		arg.TokenHash,
+		arg.Serial,
+		arg.AgentGrn,
+		arg.AssigneeGrn,
+		arg.Epoch,
+		arg.Lineage,
+		arg.AudienceGrn,
+		arg.IssuedAt,
+		arg.ExpiresAt,
+	)
+	return err
+}
+
 const renameAgentDefinition = `-- name: RenameAgentDefinition :one
 WITH renamed AS (
     UPDATE agent_definitions SET name = $1
@@ -652,6 +693,41 @@ func (q *Queries) ReportAgentRuntimeState(ctx context.Context, arg ReportAgentRu
 	return i, err
 }
 
+const resolveAgentToken = `-- name: ResolveAgentToken :one
+SELECT t.agent_grn, t.serial, t.audience_grn, t.issued_at, t.expires_at
+FROM agent_tokens t
+JOIN agent_assignments a
+  ON a.agent_grn = t.agent_grn AND a.assignee_grn = t.assignee_grn AND a.epoch = t.epoch
+JOIN agent_executions e
+  ON e.agent_grn = t.agent_grn AND t.lineage IS NOT DISTINCT FROM e.lineage
+WHERE t.token_hash = $1 AND t.expires_at > now()
+`
+
+type ResolveAgentTokenRow struct {
+	AgentGrn    string
+	Serial      string
+	AudienceGrn pgtype.Text
+	IssuedAt    pgtype.Timestamptz
+	ExpiresAt   pgtype.Timestamptz
+}
+
+// The read every request presenting an agent token takes (ADR-0100):
+// the token's row joined to the agent's assignment and execution as
+// they stand now, so a reassignment or a recovery refuses it from the
+// next request.
+func (q *Queries) ResolveAgentToken(ctx context.Context, tokenHash string) (ResolveAgentTokenRow, error) {
+	row := q.db.QueryRow(ctx, resolveAgentToken, tokenHash)
+	var i ResolveAgentTokenRow
+	err := row.Scan(
+		&i.AgentGrn,
+		&i.Serial,
+		&i.AudienceGrn,
+		&i.IssuedAt,
+		&i.ExpiresAt,
+	)
+	return i, err
+}
+
 const shareAgentExecution = `-- name: ShareAgentExecution :one
 SELECT mode FROM agent_executions WHERE agent_grn = $1 FOR SHARE
 `
@@ -664,4 +740,50 @@ func (q *Queries) ShareAgentExecution(ctx context.Context, agentGrn string) (str
 	var mode string
 	err := row.Scan(&mode)
 	return mode, err
+}
+
+const shareAgentLineage = `-- name: ShareAgentLineage :one
+SELECT mode, lineage FROM agent_executions WHERE agent_grn = $1 FOR SHARE
+`
+
+type ShareAgentLineageRow struct {
+	Mode    string
+	Lineage pgtype.UUID
+}
+
+// The execution a token is minted against, held FOR SHARE so a
+// recovery or a cutover switch committing first is seen and one
+// committing after waits for the mint (ADR-0100). The assignment and
+// the cutover are read by statements of their own after it, so their
+// snapshot is taken once this lock is granted.
+func (q *Queries) ShareAgentLineage(ctx context.Context, agentGrn string) (ShareAgentLineageRow, error) {
+	row := q.db.QueryRow(ctx, shareAgentLineage, agentGrn)
+	var i ShareAgentLineageRow
+	err := row.Scan(&i.Mode, &i.Lineage)
+	return i, err
+}
+
+const trimAgentTokens = `-- name: TrimAgentTokens :exec
+DELETE FROM agent_tokens t
+WHERE t.agent_grn = $1
+  AND t.audience_grn IS NOT DISTINCT FROM $2
+  AND t.token_hash NOT IN (
+      SELECT k.token_hash FROM agent_tokens k
+      WHERE k.agent_grn = $1
+        AND k.audience_grn IS NOT DISTINCT FROM $2
+      ORDER BY k.issued_at DESC, k.token_hash DESC
+      LIMIT $3)
+`
+
+type TrimAgentTokensParams struct {
+	AgentGrn    string
+	AudienceGrn pgtype.Text
+	Keep        int32
+}
+
+// Keeps an agent's newest tokens for one audience and drops the rest,
+// which bounds what an assignee's mints can write (ADR-0100).
+func (q *Queries) TrimAgentTokens(ctx context.Context, arg TrimAgentTokensParams) error {
+	_, err := q.db.Exec(ctx, trimAgentTokens, arg.AgentGrn, arg.AudienceGrn, arg.Keep)
+	return err
 }

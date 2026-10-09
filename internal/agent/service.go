@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"time"
 
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
@@ -56,17 +57,74 @@ type Service interface {
 	// is read: the connection is what bounds it, and the epoch is what
 	// fences it.
 	ReportRuntimeState(ctx context.Context, caller, agentGRN grn.GRN, epoch int, state RuntimeState, fence Fencing) error
+	// MintAccessToken answers a token the agent authenticates with in
+	// place of a certificate, for an agent the calling operator holds
+	// at the current epoch, accepted by garam where audience is nil and
+	// by that hosted operator where it names one (ADR-0100). It is
+	// admitted where the certificate route would be, and inside the
+	// lineage of an agent whose lifecycle authority opened one; every
+	// other caller and agent is refused as AccessTokenStore says.
+	MintAccessToken(ctx context.Context, caller, agentGRN grn.GRN, audience *grn.GRN) (*AccessToken, error)
+}
+
+// Config holds what an agent token is minted with.
+type Config struct {
+	// TokenLifetime is how long an agent token is accepted; zero is
+	// DefaultAccessTokenLifetime. NewService refuses one outside the
+	// bounds.
+	TokenLifetime time.Duration
+	// ServerRootPEM is the garam server root answered beside every
+	// agent token, for its holder to pin garam by (ADR-0040, ADR-0100).
+	ServerRootPEM []byte
+	// Now supplies the time a token is minted at, so a test can hold it
+	// still. Zero takes time.Now.
+	Now func() time.Time
 }
 
 type service struct {
-	store  Store
-	issuer Issuer
+	store         Store
+	tokens        AccessTokenStore
+	issuer        Issuer
+	tokenLifetime time.Duration
+	serverRoot    []byte
+	now           func() time.Time
 }
 
 // NewService constructs the service over the store it reads
-// assignments from and the issuer it signs through.
-func NewService(store Store, issuer Issuer) Service {
-	return &service{store: store, issuer: issuer}
+// assignments from, the store agent tokens are recorded in, and the
+// issuer it signs through.
+func NewService(store Store, tokens AccessTokenStore, issuer Issuer, cfg Config) (Service, error) {
+	lifetime, err := ParseAccessTokenLifetime(cfg.TokenLifetime)
+	if err != nil {
+		return nil, err
+	}
+	now := cfg.Now
+	if now == nil {
+		now = time.Now
+	}
+	return &service{store: store, tokens: tokens, issuer: issuer, tokenLifetime: lifetime,
+		serverRoot: cfg.ServerRootPEM, now: now}, nil
+}
+
+func (s *service) MintAccessToken(ctx context.Context, caller, agentGRN grn.GRN, audience *grn.GRN) (*AccessToken, error) {
+	if err := operates(caller); err != nil {
+		return nil, err
+	}
+	if audience != nil && (audience.ServiceType != ServiceTypeOperator ||
+		audience.Organization != agentGRN.Organization || *audience == caller) {
+		return nil, ErrAccessTokenAudience
+	}
+	value, err := newAccessTokenValue()
+	if err != nil {
+		return nil, err
+	}
+	now := s.now().UTC()
+	token := &AccessToken{Value: value, Agent: agentGRN, Audience: audience,
+		IssuedAt: now, ExpiresAt: now.Add(s.tokenLifetime), ServerRootPEM: s.serverRoot}
+	if err := s.tokens.MintAccessToken(ctx, caller, token); err != nil {
+		return nil, err
+	}
+	return token, nil
 }
 
 func (s *service) Create(ctx context.Context, operator grn.GRN) (*Assignment, error) {

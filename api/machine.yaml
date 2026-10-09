@@ -15,11 +15,12 @@ info:
     `Authorization: Garam-Token <token>`, on the operations whose
     `security` lists `machineToken` and on no other (ADR-0100). An
     operator obtains one from `exchangeToken`, presenting the
-    credential its organization issued it, and the listener reads the
-    token's row beside the operator's registration on every request,
-    so a deleted operator or a re-issued credential is refused from
-    the next request on a connection already open too. A request
-    presents a token or a certificate, never both.
+    credential its organization issued it, and mints one for an agent
+    it holds from `mintAgentToken`. The listener reads a token's row
+    beside what it rests on, on every request: a deleted operator, a
+    re-issued credential, a reassigned agent or a recovered lineage
+    is refused from the next request on a connection already open
+    too. A request presents a token or a certificate, never both.
 
     Three operations are reached without a certificate, and each
     carries `security: []`. Two are how a caller obtains its first
@@ -420,6 +421,62 @@ paths:
           $ref: '#/components/responses/Error'
         '409':
           $ref: '#/components/responses/Error'
+  /agents/{agent}/tokens:
+    post:
+      operationId: mintAgentToken
+      tags: [agent]
+      security:
+        - machineCertificate: []
+        - machineToken: []
+      summary: Mint the token an agent authenticates with in place of a certificate.
+      description: >-
+        Answers a short-lived token for an agent the calling operator
+        holds at the current epoch (ADR-0100), under `machine-token.v1`.
+        The operator hands it to the agent's adapter, which presents it
+        as `Authorization: Garam-Token <token>`. It is accepted for an
+        hour unless the deployment configures another lifetime, and the
+        operator mints the next before it runs out; minting a new one
+        voids nothing, and an agent keeps its newest five per audience.
+
+        The token is minted at the assignment's epoch and in the
+        lineage the agent's execution holds, and every request
+        presenting it is read against both as they stand then: a
+        reassignment or a recovery refuses it from the next request,
+        on a connection already open too. It is admitted where the
+        certificate route would be — an agent still legacy whose
+        cutover is not switched — and for an agent whose lifecycle
+        authority opened a lineage, inside it. A fenced agent's protected
+        calls still carry their activation's token, in the
+        `Garam-Execution` header.
+
+        With an `audience` naming another operator of the agent's
+        organization, the token is minted to be shown to that hosted
+        operator, and garam accepts it on no operation here.
+      parameters:
+        - $ref: '#/components/parameters/agent'
+        - $ref: '#/components/parameters/tokenContractVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenExchange'
+      responses:
+        '201':
+          description: Token minted, shown once.
+          headers:
+            Garam-Contract-Version:
+              $ref: '#/components/headers/TokenContractVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentToken'
+        '400':
+          $ref: '#/components/responses/TokenContractError'
+        '401':
+          $ref: '#/components/responses/TokenContractError'
+        '403':
+          $ref: '#/components/responses/TokenContractError'
   /agents/{agent}/provisioning-state:
     post:
       operationId: reportProvisioningState
@@ -481,6 +538,9 @@ paths:
         - machineCertificate: []
           executionToken: []
         - machineCertificate: []
+        - machineToken: []
+          executionHeader: []
+        - machineToken: []
       summary: Report what an agent says about itself.
       description: >-
         The agent's own account of whether it is running (ADR-0012).
@@ -633,6 +693,9 @@ paths:
         - machineCertificate: []
           executionToken: []
         - machineCertificate: []
+        - machineToken: []
+          executionHeader: []
+        - machineToken: []
       summary: Post a message to a recipient.
       description: >-
         The sender is what the certificate names, so the body carries
@@ -705,6 +768,9 @@ paths:
         - machineCertificate: []
           executionToken: []
         - machineCertificate: []
+        - machineToken: []
+          executionHeader: []
+        - machineToken: []
       summary: Post a durable reply under the creation instant its outbox entry holds.
       description: >-
         The same message write as `postMessage`, reached under contract
@@ -788,6 +854,9 @@ paths:
         - machineCertificate: []
           executionToken: []
         - machineCertificate: []
+        - machineToken: []
+          executionHeader: []
+        - machineToken: []
       summary: Read how far a message the caller sent has got.
       description: >-
         What garam knows about the message and the sender does not: the
@@ -887,6 +956,9 @@ paths:
         - machineCertificate: []
           executionToken: []
         - machineCertificate: []
+        - machineToken: []
+          executionHeader: []
+        - machineToken: []
       summary: Claim the next message addressed to an agent.
       description: >-
         A long poll: the call waits for a message rather than answering
@@ -933,6 +1005,9 @@ paths:
         - machineCertificate: []
           executionToken: []
         - machineCertificate: []
+        - machineToken: []
+          executionHeader: []
+        - machineToken: []
       summary: Extend a claim while the message is still being worked on.
       description: >-
         Renewal is what keeps a long turn from losing its claim
@@ -978,6 +1053,9 @@ paths:
         - machineCertificate: []
           executionToken: []
         - machineCertificate: []
+        - machineToken: []
+          executionHeader: []
+        - machineToken: []
       summary: Forward one turn event to whoever is watching the agent.
       description: >-
         What the agent is saying now, on its way to the browsers
@@ -1039,6 +1117,9 @@ paths:
         - machineCertificate: []
           executionToken: []
         - machineCertificate: []
+        - machineToken: []
+          executionHeader: []
+        - machineToken: []
       summary: Report the claimed message delivered.
       description: >-
         Completion is fenced by the claim rather than by the message,
@@ -1997,7 +2078,12 @@ components:
       name: Garam-Contract-Version
       in: header
       required: true
-      description: Must be `durable-delivery.v1` (ADR-0083); any other value is refused with 400 naming it.
+      description: >-
+        `durable-delivery.v1` where the caller presents a certificate and
+        `durable-delivery.v2` where it presents an agent token (ADR-0083,
+        ADR-0100); any other value, or one that disagrees with the
+        credential, is refused with 400 naming the value the credential
+        takes.
       x-go-name: DeliveryContractVersion
       schema:
         type: string
@@ -2188,6 +2274,32 @@ components:
           type: string
           format: date-time
           description: When garam stops accepting the token.
+    AgentToken:
+      type: object
+      required: [token, grn, epoch, expiresAt, serverRootPem]
+      properties:
+        token:
+          type: string
+          description: >-
+            The token itself, prefixed `garam_at_`, answered once. garam
+            stores only its hash.
+        grn:
+          type: string
+          description: The agent the token authenticates as.
+          example: grn:acme:default:agent:0a1b2c3d4e5f6071
+        epoch:
+          type: integer
+          description: The assignment epoch the token was minted at.
+        audience:
+          type: string
+          description: The hosted operator the token is minted for, where one was asked for.
+        expiresAt:
+          type: string
+          format: date-time
+          description: When garam stops accepting the token.
+        serverRootPem:
+          type: string
+          description: The garam server root the holder verifies garam by (ADR-0040).
     Enrollment:
       type: object
       description: >-
@@ -3080,7 +3192,9 @@ components:
       schema:
         type: string
     DeliveryContractVersion:
-      description: The contract version this answer follows, `durable-delivery.v1`.
+      description: >-
+        The contract version this answer follows: `durable-delivery.v1`
+        or `durable-delivery.v2`, as the request's credential takes.
       schema:
         type: string
     CutoverContractVersion:
@@ -3170,14 +3284,25 @@ components:
       type: http
       scheme: Garam-Token
       description: >-
-        A token `exchangeToken` answered, as `Authorization: Garam-Token
-        <token>`, presented without a client certificate (ADR-0100). The
-        listener reads the token's row joined to the registration it
-        rests on for every request, so a token whose operator was
-        deleted or whose credential was re-issued is refused from the
-        next request. A token minted for another audience is refused on
-        every operation that lists this scheme. garam stores only its
-        hash.
+        A token `exchangeToken` or `mintAgentToken` answered, as
+        `Authorization: Garam-Token <token>`, presented without a client
+        certificate (ADR-0100). The listener reads the token's row joined
+        to what it rests on for every request — an operator's
+        registration, an agent's assignment and lineage — so a token
+        whose operator was deleted or whose credential was re-issued,
+        and an agent's after a reassignment or a recovery, is refused
+        from the next request. A token minted for another audience is
+        refused on every operation that lists this scheme. garam stores
+        only its hash.
+    executionHeader:
+      type: apiKey
+      in: header
+      name: Garam-Execution
+      description: >-
+        The token an activation issued, in a header of its own, on a
+        request whose `Authorization` carries an agent token
+        (`machineToken`), which takes that header (ADR-0100). It means
+        what `executionToken` means beside a certificate.
     machineCredential:
       type: http
       scheme: Garam-Credential

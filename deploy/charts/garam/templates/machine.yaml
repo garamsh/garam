@@ -100,6 +100,8 @@ spec:
               value: {{ printf "/run/garam/key-material/%s" (required "machine.keyMaterial.kekKey is required" .Values.machine.keyMaterial.kekKey) | quote }}
             - name: GARAM_CERTIFICATE_LIFETIME
               value: {{ required "machine.certificateLifetime is required" .Values.machine.certificateLifetime | quote }}
+            - name: GARAM_AGENT_TOKEN_LIFETIME
+              value: {{ required "machine.agentTokenLifetime is required" .Values.machine.agentTokenLifetime | quote }}
             - name: GARAM_MACHINE_ISSUER
               value: {{ required "machine.issuer is required" .Values.machine.issuer | quote }}
           ports:

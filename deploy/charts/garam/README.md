@@ -233,6 +233,14 @@ about key material). Lowering it is safe only where each of those
 identities renews and rewrites its own files without a restart, which
 this chart does not deploy and cannot check.
 
+`machine.agentTokenLifetime` defaults to the binary's own `1h` and
+bounds every agent token garam mints (ADR-0100): the binary refuses to
+start outside twenty minutes and twenty-four hours. The agent's
+operator mints the next token once two thirds to three quarters of the
+lifetime has passed, so a quarter of it is the margin its propagation
+into the agent's Pod has to fit in; a deployment whose propagation
+does not fit raises the lifetime rather than refreshing later.
+
 `resources` is empty on every workload. No figure has been measured for
 any garam process and setting none is not neutral, both of which
 `docs/architecture/deployment-contract.md` §Not established states — so

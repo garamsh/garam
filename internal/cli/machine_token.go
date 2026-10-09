@@ -3,46 +3,76 @@ package cli
 import (
 	"context"
 	"net/http"
-	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/errorx"
-	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/machine"
 	"github.com/garamsh/garam/internal/operator"
 )
 
 // identityTokens answers what a token presented on the machine
 // listener stands for, from the domain that issued it, which its
-// prefix names (ADR-0100). It is read on every request that presents a
-// token, so what it reads beside the token — the operator's
-// registration — refuses a deleted operator or a re-issued credential
-// from the next request.
+// prefix names (ADR-0100): an operator's from internal/operator, an
+// agent's from internal/agent. It is read on every request that
+// presents a token, so what it reads beside the token — the operator's
+// registration, or the agent's assignment and lineage — refuses a
+// deleted operator, a re-issued credential, a reassignment or a
+// recovery from the next request.
 type identityTokens struct {
 	operators operator.TokenStore
+	agents    agent.AccessTokenStore
 }
 
-func (k identityTokens) Resolve(ctx context.Context, token string) (grn.GRN, time.Time, error) {
+func (k identityTokens) Resolve(ctx context.Context, token string) (machine.Bearer, error) {
 	// A value no issuance could have produced is refused before any
 	// read, so a caller sending noise costs the database nothing.
-	if !operator.WellFormed(token, operator.TokenPrefix) {
-		return grn.GRN{}, time.Time{}, errorx.New(errorx.KindUnauthenticated, "machine: not a token garam issues")
+	switch {
+	case operator.WellFormed(token, operator.TokenPrefix):
+		return k.operator(ctx, token)
+	case agent.WellFormedAccessToken(token):
+		return k.agent(ctx, token)
 	}
+	return machine.Bearer{}, errorx.New(errorx.KindUnauthenticated, "machine: not a token garam issues")
+}
+
+func (k identityTokens) operator(ctx context.Context, token string) (machine.Bearer, error) {
 	holder, err := k.operators.ResolveToken(ctx, operator.HashToken(token))
 	if err != nil {
-		if errorx.IsKind(err, errorx.KindUnauthenticated) {
-			return grn.GRN{}, time.Time{}, err
-		}
-		return grn.GRN{}, time.Time{}, errorx.Wrap(err, "machine: token", errorx.KindUnavailable)
+		return machine.Bearer{}, unresolved(err)
 	}
-	// A token minted for a hosted operator is shown to it, and garam
-	// accepts it on no route a token reaches here.
 	if holder.Audience != nil {
-		return grn.GRN{}, time.Time{}, errorx.New(errorx.KindUnauthenticated,
-			"machine: the token is minted for another audience")
+		return machine.Bearer{}, minted()
 	}
-	return holder.Operator, holder.ExpiresAt, nil
+	return machine.Bearer{Subject: holder.Operator, ExpiresAt: holder.ExpiresAt}, nil
+}
+
+func (k identityTokens) agent(ctx context.Context, token string) (machine.Bearer, error) {
+	holder, err := k.agents.ResolveAccessToken(ctx, agent.HashAccessToken(token))
+	if err != nil {
+		return machine.Bearer{}, unresolved(err)
+	}
+	if holder.Audience != nil {
+		return machine.Bearer{}, minted()
+	}
+	return machine.Bearer{Subject: holder.Agent, Serial: holder.Serial,
+		IssuedAt: holder.IssuedAt, ExpiresAt: holder.ExpiresAt}, nil
+}
+
+// unresolved keeps a refusal as the caller's and makes any other
+// failure the listener's.
+func unresolved(err error) error {
+	if errorx.IsKind(err, errorx.KindUnauthenticated) {
+		return err
+	}
+	return errorx.Wrap(err, "machine: token", errorx.KindUnavailable)
+}
+
+// minted refuses a token minted for a hosted operator, which is shown
+// to it and accepted by garam on no route a token reaches here.
+func minted() error {
+	return errorx.New(errorx.KindUnauthenticated, "machine: the token is minted for another audience")
 }
 
 // machineRequestsMetric counts the machine listener's requests by how

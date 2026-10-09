@@ -94,21 +94,25 @@ up to admit it. What an admitted caller may do is decided after that
 terms an agent does
 ([ADR-0015](./adr/0015-operator-identity.md)).
 
-**Or a token, which is ADR-0100's direction and is built for an
-operator alone.** An operator exchanges the credential its organization
-issued it for a one-hour token at `exchangeToken`, and presents the
-token as `Authorization: Garam-Token <token>` with no certificate
+**Or a token, which is ADR-0100's direction and is built for an operator
+and an agent its operator holds.** An operator exchanges the credential
+its organization issued it for a one-hour token at `exchangeToken`, and
+presents the token as `Authorization: Garam-Token <token>` with no
+certificate
 ([ADR-0100](./adr/0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)).
-The token is read on every request, beside the registration it rests
-on, so a deleted operator or a re-issued credential is refused from the
-next request on a connection already open; a request presenting a
-token beside a certificate is refused rather than read as either. A
-token reaches only the operations `api/machine.yaml` lists
-`machineToken` on — `ConfineTokens` in
-`internal/machineapi/token.go` refuses it everywhere else — and one
-minted for another audience reaches none. An agent and a supervisor
-present certificates until the plan's later steps
-(`docs/plans/2026-10-09-machine-identity-migration.md`).
+The token is read on every request, beside the registration it rests on,
+so a deleted operator or a re-issued credential is refused from the next
+request on a connection already open; a request presenting a token
+beside a certificate is refused rather than read as either. A token
+reaches only the operations `api/machine.yaml` lists `machineToken` on —
+`ConfineTokens` in `internal/machineapi/token.go` refuses it everywhere
+else — and one minted for another audience reaches none. An agent's
+token is minted by its operator at `mintAgentToken` and read against the
+agent's current assignment and lineage, and beside it a fenced agent's
+execution token travels in a `Garam-Execution` header of its own; a
+durable submission it authenticates is served under
+`durable-delivery.v2`. A supervisor presents a certificate until the
+plan's step G1d (`docs/plans/2026-10-09-machine-identity-migration.md`).
 
 **The listener requests a client certificate and does not require
 one** — `tls.RequestClientCert` in `internal/machine/listener.go` — so

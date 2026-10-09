@@ -52,7 +52,12 @@ and this process keeps running.
 moves the adapter from the agent's certificate to two short-lived
 tokens, one for garam and one for the control service, each read from
 its file per request, with the placement token moved to a
-`Garam-Placement` header under `agent-execution.v2`. It is step G2 of
+`Garam-Placement` header under `agent-execution.v2`. An unfenced adapter
+— a `Garam`-source agent of the Operator, which garam-agent-operator ADR
+0068 leaves with no control settings — takes the garam token alone,
+which its operator mints and refreshes on `mintAgentToken` as for any
+agent it holds ([agents.md](./agents.md) §Tokens in place of
+certificates). It is step G2 of
 `docs/plans/2026-10-09-machine-identity-migration.md`.
 
 ## The delivery loop

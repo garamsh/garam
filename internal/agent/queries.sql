@@ -168,3 +168,50 @@ SELECT agent_execution_admit(
     sqlc.arg('agent_grn'), sqlc.narg('token_hash')::bytea, sqlc.arg('serial'),
     sqlc.arg('not_before')::timestamptz, sqlc.arg('not_after')::timestamptz
 )::text;
+
+-- The execution a token is minted against, held FOR SHARE so a
+-- recovery or a cutover switch committing first is seen and one
+-- committing after waits for the mint (ADR-0100). The assignment and
+-- the cutover are read by statements of their own after it, so their
+-- snapshot is taken once this lock is granted.
+-- name: ShareAgentLineage :one
+SELECT mode, lineage FROM agent_executions WHERE agent_grn = $1 FOR SHARE;
+
+-- A mint sweeps the agent's expired tokens in the statement that
+-- records the new one.
+-- name: RecordAgentToken :exec
+WITH swept AS (
+    DELETE FROM agent_tokens
+    WHERE agent_grn = sqlc.arg('agent_grn') AND expires_at <= now()
+)
+INSERT INTO agent_tokens (token_hash, serial, agent_grn, assignee_grn, epoch, lineage,
+                          audience_grn, issued_at, expires_at)
+VALUES (sqlc.arg('token_hash'), sqlc.arg('serial'), sqlc.arg('agent_grn'), sqlc.arg('assignee_grn'),
+        sqlc.arg('epoch'), sqlc.narg('lineage'), sqlc.narg('audience_grn'),
+        sqlc.arg('issued_at'), sqlc.arg('expires_at'));
+
+-- Keeps an agent's newest tokens for one audience and drops the rest,
+-- which bounds what an assignee's mints can write (ADR-0100).
+-- name: TrimAgentTokens :exec
+DELETE FROM agent_tokens t
+WHERE t.agent_grn = sqlc.arg('agent_grn')
+  AND t.audience_grn IS NOT DISTINCT FROM sqlc.narg('audience_grn')
+  AND t.token_hash NOT IN (
+      SELECT k.token_hash FROM agent_tokens k
+      WHERE k.agent_grn = sqlc.arg('agent_grn')
+        AND k.audience_grn IS NOT DISTINCT FROM sqlc.narg('audience_grn')
+      ORDER BY k.issued_at DESC, k.token_hash DESC
+      LIMIT sqlc.arg('keep'));
+
+-- The read every request presenting an agent token takes (ADR-0100):
+-- the token's row joined to the agent's assignment and execution as
+-- they stand now, so a reassignment or a recovery refuses it from the
+-- next request.
+-- name: ResolveAgentToken :one
+SELECT t.agent_grn, t.serial, t.audience_grn, t.issued_at, t.expires_at
+FROM agent_tokens t
+JOIN agent_assignments a
+  ON a.agent_grn = t.agent_grn AND a.assignee_grn = t.assignee_grn AND a.epoch = t.epoch
+JOIN agent_executions e
+  ON e.agent_grn = t.agent_grn AND t.lineage IS NOT DISTINCT FROM e.lineage
+WHERE t.token_hash = $1 AND t.expires_at > now();

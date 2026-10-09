@@ -294,6 +294,19 @@ runtime status; `OP:internal/execution/session.go:11-22`,
 `OP:internal/execution/activation.go:140-175`). That is replaced, and
 nothing else in the path moves.
 
+- **The control service keeps its own server TLS.** It still serves
+  its own certificate, from files it reloads, and its callers still
+  verify it against the root they are given for it:
+  - the adapter against `GARAM_ADAPTER_CONTROL_ROOT_FILE`;
+  - the manager against its control trust file
+    (`OP:cmd/control/main.go:174-183`, `OP:cmd/main.go:103-108`).
+
+  What goes is the client-certificate request alone
+  (`ClientAuth: tls.RequestClientCert`,
+  `OP:cmd/control/main.go:201-217`). Every caller authenticates by its
+  `Authorization` header instead. "Server TLS only" means the server
+  authenticates by its certificate and the client does not, on this
+  listener as on garam's.
 - **The adapter authenticates to the control service with an agent
   token whose audience is that control service.** The assignee mints
   it beside the agent's garam token and hands both to the adapter. The

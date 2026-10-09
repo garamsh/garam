@@ -153,6 +153,23 @@ tokens splits it in two:
 
 The writer fence and the placement token are unaffected.
 
+### The control service's listener
+
+**Its server TLS stays, and only the client-certificate requirement
+goes.**
+
+- **What O1 keeps.** The control service serves its own certificate
+  as it does today, and the adapter and the manager verify it against
+  the roots they hold for it.
+- **What O1 removes.** O1's third pull request removes
+  `ClientAuth: tls.RequestClientCert` and the reading of a peer leaf
+  (`OP:cmd/control/main.go:201-217`,
+  `OP:internal/execution/session.go:11-22`,
+  `OP:internal/distribution/session.go:21-29`).
+- **How callers authenticate instead.** Every caller authenticates by
+  its `Authorization: Garam-Token` header, and the control service
+  checks that token by introspection.
+
 ### The control service's own credential
 
 **Two credentials, issued separately.** The control service is a

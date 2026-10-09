@@ -40,12 +40,33 @@ not touched.
 |---|---|---|---|
 | G1 | garam | the token store, `POST /tokens`, `POST /agents/{agent}/tokens`, the operator and supervisor credentials, issue and re-issue on the browser API and in the console, every machine route accepting `Garam-Token` under the v2 contract values beside the v1 ones, introspection accepting a token where it takes `certificatePem`, a metric counting requests by how they authenticated | ADR-0100 accepted |
 | G2 | garam | the adapter's token mode — two token files, read per request, `Garam-Placement` as its own header, `agent-execution.v2` — and the standalone commands on a supervisor credential | G1 |
-| O1 | garam-agent-operator | the manager and the control service on credentials and tokens only; agent tokens minted per agent for garam and for the control service; the Pod's copy kept current; enrollment, renewal and the certificate-request paths removed; control's operator-principal checks by introspection | a garam release carrying G1 and G2, deployed |
+| O1 | garam-agent-operator | an Operator release carrying four pull requests, landed on `dev` in the order §O1 is one release of four pull requests gives | a garam release carrying G1 and G2, deployed |
 | G3 | garam | the certificate path removed: the listener stops requesting a client certificate, the seven issuing routes, `garam issue-certificate` and the v1 contract values go | O1 deployed on every operator garam knows of, and the G1 metric reading no certificate-authenticated request for seven days |
 | G4 | garam | the authorities retired: `internal/ca`, the sealer, the key-encryption key `garam serve machine` reads, and a migration dropping the certificate and enrollment tables | G3 released |
 
 G1 and G2 may land in one release; G3 and G4 may not, because G4's
 migration drops what G3's predecessor still reads.
+
+### O1 is one release of four pull requests
+
+O1 is an Operator release, not a pull request. The release carries
+these four, landed on the Operator's `dev` in this order:
+
+1. **The manager's credential exchange and per-agent token minting.**
+   The manager exchanges its credential and mints both tokens for each
+   agent it runs.
+2. **The rendered Pod.** The Pod gets the two token files, kept
+   current, and `Garam-Placement` as its own header.
+3. **The control service's identity, and its operator check by
+   introspection.** The control service runs on a credential of its
+   own and checks operators by introspection.
+4. **The certificate paths removed.** Enrollment, renewal, the
+   initial-certificate route and the certificate half of recovery go.
+
+Nothing of the Operator is deployed on the token path until all four
+are on `dev`, and they are released together. A reader therefore
+expects one release and four reviews, each of which can be checked
+against garam's G1 and G2 on its own.
 
 ## Answers to the Operator's questions
 
@@ -58,8 +79,8 @@ garam ships first, and the cut is hard on the Operator's side alone.
 
 - **G1, G2.** garam accepts both. Nothing the Operator runs today
   breaks, and no Operator release is waiting on garam.
-- **O1.** A hard cut: one release, token mode only, no certificate
-  fallback. It needs a garam carrying G1 and G2 already deployed, so
+- **O1.** A hard cut: one release of four pull requests, token mode
+  only, no certificate fallback. It needs a garam carrying G1 and G2 already deployed, so
   the upgrade order is fixed — garam, then the Operator. That is the
   price of the Operator carrying no compatibility, and it is
   admissible now because no release yet claims a tested compatibility
@@ -120,7 +141,7 @@ For each registered operator, after G1 and G2 are deployed:
    authenticating, because G1 still accepts one.
 2. The person puts the credential in the operator's Secret, beside the
    material that is there.
-3. The Operator is upgraded to O1. The manager exchanges the
+3. The Operator is upgraded to the release carrying O1. The manager exchanges the
    credential, mints both tokens for each agent it runs, and rolls each
    agent's Pod onto the adapter's token mode. The control service does
    the same for itself.

@@ -66,6 +66,7 @@ machine:
     kekKey: ca-kek.hex
     kekSecretName: garam-machine-ca-kek
   certificateLifetime: 1h
+  issuer: https://machine.garam.example
 web:
   serviceAccount:
     name: garam-web

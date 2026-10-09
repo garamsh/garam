@@ -1,0 +1,5 @@
+# No issuer. The render must refuse and name machine.issuer: the
+# machine listener signs every message it hands out under it (ADR-0101)
+# and refuses to start without one.
+machine:
+  issuer: ""

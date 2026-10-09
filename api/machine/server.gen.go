@@ -161,6 +161,66 @@ func (e ExecutionIntrospectionMode) Valid() bool {
 	}
 }
 
+// Defines values for MessageSigningKeyAlg.
+const (
+	ES256 MessageSigningKeyAlg = "ES256"
+)
+
+// Valid indicates whether the value is a known member of the MessageSigningKeyAlg enum.
+func (e MessageSigningKeyAlg) Valid() bool {
+	switch e {
+	case ES256:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessageSigningKeyCrv.
+const (
+	P256 MessageSigningKeyCrv = "P-256"
+)
+
+// Valid indicates whether the value is a known member of the MessageSigningKeyCrv enum.
+func (e MessageSigningKeyCrv) Valid() bool {
+	switch e {
+	case P256:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessageSigningKeyKty.
+const (
+	EC MessageSigningKeyKty = "EC"
+)
+
+// Valid indicates whether the value is a known member of the MessageSigningKeyKty enum.
+func (e MessageSigningKeyKty) Valid() bool {
+	switch e {
+	case EC:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for MessageSigningKeyUse.
+const (
+	Sig MessageSigningKeyUse = "sig"
+)
+
+// Valid indicates whether the value is a known member of the MessageSigningKeyUse enum.
+func (e MessageSigningKeyUse) Valid() bool {
+	switch e {
+	case Sig:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for MessageState.
 const (
 	MessageStateClaimed   MessageState = "claimed"
@@ -325,10 +385,13 @@ type BoundAssignment struct {
 	OperatorGrn string `json:"operatorGrn"`
 }
 
-// Claim One caller's hold on one message, and the token that fences it. Renewal and completion carry that token, and a hold handed on to the next caller stops matching.
+// Claim One caller's hold on one message, and the token that fences it. A claim also carries the message's content and garam's signature over it (ADR-0101); a renewal carries neither, because it hands nothing out. Renewal and completion carry that token, and a hold handed on to the next caller stops matching.
 type Claim struct {
 	// Attempt Which delivery of this message the caller is holding. Delivery is at-least-once (ADR-0018), so this is what tells a first delivery from a repeat; a message that reaches the bound is not handed out again.
 	Attempt int `json:"attempt"`
+
+	// Content What the runtime is handed for this message: the `garam-message.v1` object of `contract`, `sender` and `body`, in that order, encoded so that every attempt of one message carries the same characters. `signature` binds a SHA-256 over their UTF-8 octets, so a relay forwards them unaltered.
+	Content *string `json:"content,omitempty"`
 
 	// ExpiresAt When the hold lapses and the message is handed to the next caller. garam measures it, so no caller's clock decides it.
 	ExpiresAt time.Time `json:"expiresAt"`
@@ -338,6 +401,9 @@ type Claim struct {
 
 	// Message One stored message, under an identifier the queue minted.
 	Message Message `json:"message"`
+
+	// Signature garam's signature over this hand-out, a compact JWS signed with ES256 and typed `agent-message+jwt` (ADR-0101). Its claims name the issuer, the sender garam vouches for, the recipient as audience and its organization, the message's identifier, the content's digest, and an expiry the lease ceiling after the claim was taken. Each claim signs afresh, and every attempt of one message carries the same content and identifier under it.
+	Signature *string `json:"signature,omitempty"`
 
 	// Watchers How many streams garam was holding for this agent when it answered, which is what says whether to forward the turn's events (ADR-0022). Zero is the ordinary answer and the field is always here: garam stores nothing for an agent nobody watches, so it is answered in the same shape as one somebody watches. Every renewal carries the count again, so a person who opened the view mid-turn is seen without a call of their own — and one who left is stopped forwarding to.
 	Watchers int `json:"watchers"`
@@ -622,6 +688,38 @@ type Message struct {
 	IdempotencyKey string `json:"idempotencyKey"`
 	Recipient      string `json:"recipient"`
 	Sender         string `json:"sender"`
+}
+
+// MessageSigningKey One public P-256 key as a JWK. `kid` is its JWK thumbprint (RFC 7638), which is what a signature's header names.
+type MessageSigningKey struct {
+	Alg MessageSigningKeyAlg `json:"alg"`
+	Crv MessageSigningKeyCrv `json:"crv"`
+	Kid string               `json:"kid"`
+	Kty MessageSigningKeyKty `json:"kty"`
+	Use MessageSigningKeyUse `json:"use"`
+
+	// X The x coordinate, base64url without padding.
+	X string `json:"x"`
+
+	// Y The y coordinate, base64url without padding.
+	Y string `json:"y"`
+}
+
+// MessageSigningKeyAlg defines model for MessageSigningKey.Alg.
+type MessageSigningKeyAlg string
+
+// MessageSigningKeyCrv defines model for MessageSigningKey.Crv.
+type MessageSigningKeyCrv string
+
+// MessageSigningKeyKty defines model for MessageSigningKey.Kty.
+type MessageSigningKeyKty string
+
+// MessageSigningKeyUse defines model for MessageSigningKey.Use.
+type MessageSigningKeyUse string
+
+// MessageSigningKeySet A JWK Set (RFC 7517) of the keys garam signs messages with.
+type MessageSigningKeySet struct {
+	Keys []MessageSigningKey `json:"keys"`
 }
 
 // MessageState How far a message has got. `pending` is waiting for a reader or waiting to be handed out again; `claimed` is held by a reader whose lease has not run out; `completed` is reported delivered; `exhausted` has spent its attempts and is handed out no further (ADR-0018). Nothing here means expired — a message the sweep deleted is answered by `getMessageStatus` as one that is not there (ADR-0055).
@@ -1065,6 +1163,9 @@ type ServerInterface interface {
 	// RenewIdentityCertificate Renew the certificate the connection authenticated with.
 	// (POST /identity/certificate)
 	RenewIdentityCertificate(w http.ResponseWriter, r *http.Request)
+	// GetMessageSigningKeys Read the public keys garam signs messages with.
+	// (GET /message-signing-keys)
+	GetMessageSigningKeys(w http.ResponseWriter, r *http.Request)
 	// PostMessage Post a message to a recipient.
 	// (POST /messages)
 	PostMessage(w http.ResponseWriter, r *http.Request)
@@ -1936,6 +2037,20 @@ func (siw *ServerInterfaceWrapper) RenewIdentityCertificate(w http.ResponseWrite
 	handler.ServeHTTP(w, r)
 }
 
+// GetMessageSigningKeys operation middleware
+func (siw *ServerInterfaceWrapper) GetMessageSigningKeys(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetMessageSigningKeys(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // PostMessage operation middleware
 func (siw *ServerInterfaceWrapper) PostMessage(w http.ResponseWriter, r *http.Request) {
 
@@ -2405,6 +2520,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/messages", wrapper.PostMessage)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/outbox-messages", wrapper.PostOutboxMessage)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/messages/{message}", wrapper.GetMessageStatus)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/message-signing-keys", wrapper.GetMessageSigningKeys)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/claims", wrapper.ClaimMessage)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/claims/{claim}/renewal", wrapper.RenewClaim)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/turn-events", wrapper.ForwardTurnEvent)

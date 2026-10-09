@@ -252,7 +252,7 @@ func TestService_PostsToARecipientNothingKnowsAbout(t *testing.T) {
 	require.NoError(t, err)
 
 	unknown := grn.New("acme", grn.DefaultProject, "agent", "nobodyhaseverseenthisone")
-	stored, err := s.Post(ctx, senderGRN(), unknown, "key-1", "hello", nil)
+	stored, err := s.Post(ctx, senderGRN(), unknown, "key-1", "hello", message.AuthorSender, nil)
 	require.NoError(t, err)
 	assert.Equal(t, unknown, stored.Recipient())
 	assert.Equal(t, senderGRN(), stored.Sender(), "the sender is the caller rather than anything the body said")
@@ -260,9 +260,9 @@ func TestService_PostsToARecipientNothingKnowsAbout(t *testing.T) {
 	assert.Zero(t, stored.Attempts(), "a stored message has not been handed out")
 	assert.Len(t, store.stored, 1)
 
-	_, err = s.Post(ctx, senderGRN(), grn.GRN{}, "key-1", "hello", nil)
+	_, err = s.Post(ctx, senderGRN(), grn.GRN{}, "key-1", "hello", message.AuthorSender, nil)
 	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), "a message addressed to nothing")
-	_, err = s.Post(ctx, senderGRN(), unknown, "", "hello", nil)
+	_, err = s.Post(ctx, senderGRN(), unknown, "", "hello", message.AuthorSender, nil)
 	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), "a message with no key to suppress a duplicate by")
 	assert.Len(t, store.stored, 1, "a refused message reached the queue")
 }
@@ -279,13 +279,13 @@ func TestService_PostWithinBudgetLeavesTheBudgetToTheStore(t *testing.T) {
 	require.NoError(t, err)
 
 	long := time.Now().Add(-2 * message.SubmissionBudget)
-	stored, err := s.PostWithinBudget(ctx, senderGRN(), recipientGRN(), "entry-1", "hello", long, nil)
+	stored, err := s.PostWithinBudget(ctx, senderGRN(), recipientGRN(), "entry-1", "hello", message.AuthorSender, long, nil)
 	require.NoError(t, err)
 	assert.Equal(t, senderGRN(), stored.Sender())
 	assert.Equal(t, "entry-1", stored.IdempotencyKey())
 	assert.Equal(t, []time.Time{long}, store.created, "the creation instant reached the store unjudged")
 
-	_, err = s.PostWithinBudget(ctx, senderGRN(), recipientGRN(), "", "hello", long, nil)
+	_, err = s.PostWithinBudget(ctx, senderGRN(), recipientGRN(), "", "hello", message.AuthorSender, long, nil)
 	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), "a message with no key to suppress a duplicate by")
 	assert.Len(t, store.stored, 1, "a refused message reached the queue")
 }
@@ -302,12 +302,12 @@ func TestService_RefusesABodyPastTheBoundBeforeStoringIt(t *testing.T) {
 	require.NoError(t, err)
 
 	past := strings.Repeat("b", message.MaxBodyLength+1)
-	_, err = s.Post(ctx, senderGRN(), recipientGRN(), "key-1", past, nil)
+	_, err = s.Post(ctx, senderGRN(), recipientGRN(), "key-1", past, message.AuthorSender, nil)
 	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
 	assert.Empty(t, store.stored, "a refused body reached the queue")
 
 	at := strings.Repeat("b", message.MaxBodyLength)
-	stored, err := s.Post(ctx, senderGRN(), recipientGRN(), "key-2", at, nil)
+	stored, err := s.Post(ctx, senderGRN(), recipientGRN(), "key-2", at, message.AuthorSender, nil)
 	require.NoError(t, err)
 	assert.Equal(t, at, stored.Body())
 	assert.Len(t, store.stored, 1, "a body at the bound is stored")

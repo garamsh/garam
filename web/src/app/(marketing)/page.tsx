@@ -197,8 +197,8 @@ export default function LandingPage() {
             In the console today
           </h2>
           <p className="max-w-xl text-lead text-pretty text-muted-foreground">
-            The organizations you belong to, and for each one its groups,
-            projects, and members with their roles.
+            The organizations you belong to, and for each one its teams,
+            people, agents, projects, operators, consents, and permissions.
           </p>
           <Button asChild size="lg" className="mt-1">
             <Link href="/console">Open the console</Link>

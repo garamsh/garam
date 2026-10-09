@@ -2,11 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 
-import {
-  GaramApiError,
-  GaramUnreachableError,
-  garamFetchAuthenticated,
-} from "@/lib/garam";
+import { GaramApiError, garamFetchAuthenticated, refusal } from "@/lib/garam";
 
 import { slugFromGrn } from "../grn";
 import { PolicyAttachmentParser, PolicyParser } from "./policies";
@@ -65,12 +61,6 @@ export async function checkOrgWideScope(
     if (error instanceof GaramApiError && error.status === 403) {
       return { status: "confirm-unknown-scope" };
     }
-    if (
-      error instanceof GaramApiError ||
-      error instanceof GaramUnreachableError
-    ) {
-      return { status: "error", message: error.message };
-    }
-    throw error;
+    return refusal(error);
   }
 }

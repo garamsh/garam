@@ -67,6 +67,24 @@ export function parserFor<T>() {
   ): z.ZodType<T> => parser;
 }
 
+/**
+ * What a Server Action returns when garam refused it or could not be
+ * reached: the expected failures, which the form renders beside what
+ * was typed rather than a boundary replacing it
+ * (`docs/convention/stack-nextjs.md` §Errors — returned, thrown, or
+ * caught). Anything else is a bug and is
+ * thrown on, so `return refusal(error)` is a catch clause's last line.
+ */
+export function refusal(error: unknown): { status: "error"; message: string } {
+  if (
+    error instanceof GaramApiError ||
+    error instanceof GaramUnreachableError
+  ) {
+    return { status: "error", message: error.message };
+  }
+  throw error;
+}
+
 /** True when the error is the backend rejecting an absent session. */
 export function isUnauthenticated(error: unknown): boolean {
   return error instanceof GaramApiError && error.status === 401;

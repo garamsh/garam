@@ -2,11 +2,7 @@
 
 import { z } from "zod";
 
-import {
-  GaramApiError,
-  GaramUnreachableError,
-  garamFetchAuthenticated,
-} from "@/lib/garam";
+import { garamFetchAuthenticated, refusal } from "@/lib/garam";
 import type { components } from "@/types/api";
 
 import { InvitationParser } from "./orgs";
@@ -55,12 +51,6 @@ export async function createInvitation(
   } catch (error) {
     // An unreachable API is a state the form renders, not a throw: the
     // boundary would replace the form and the role chosen in it.
-    if (
-      error instanceof GaramApiError ||
-      error instanceof GaramUnreachableError
-    ) {
-      return { status: "error", message: error.message };
-    }
-    throw error;
+    return refusal(error);
   }
 }

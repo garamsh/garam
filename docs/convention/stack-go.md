@@ -181,8 +181,9 @@ file declares and which depends.
 - **The import goes one way.** `internal/<domain>/<technology>/` may
   import `internal/<domain>` for the types in the interface's
   signatures; the reverse import never happens.
-- Go rejects an import cycle at compile time, and a type that contains
-  itself by value (`invalid recursive type`). A cycle through a
+- Go rejects an import cycle at compile time, and a struct holding
+  itself by value through another (`type A struct{ b B }`, `type B
+  struct{ a A }`) as `invalid recursive type`. A cycle through a
   pointer, slice, map or interface compiles; those are found by
   reading.
 - **A boundary that erases a static type is read back with the comma-ok
@@ -371,12 +372,16 @@ Where the project generates mocks, generate them with
 - **Generated location:** declared in that file by `dir`, the output
   directory, with `filename` for the file itself — at the top level,
   per package under `packages.<path>.config:`, or per interface in
-  that interface's `config:` block under `interfaces:`. Default:
-  `mocks_test.go` in the interface's own directory and package, so a
-  shared location — `mocks/<package>/` at module root, or
-  `internal/<domain>/mocks/` for a dependency interface, which is
-  scoped to the one domain that declares it — is set with `dir`. Pick
-  one convention per project.
+  that interface's `config:` block under `interfaces:`. With neither
+  set, mockery writes `mocks_test.go` in the interface's own directory
+  and package, so `mocks/<package>/<Interface>.go` at module root is
+  one `dir` and `filename` declare. A dependency interface is scoped to
+  the one domain that declares it, so `dir: internal/<domain>/mocks/`
+  fits it too. A project whose tests live outside the interface's
+  directory — a suite in `tests/` among them — sets `dir` and
+  `filename` to a location those tests can import, because a
+  `_test.go` mock is not importable across directories. Pick one
+  convention per project.
 - **Generation:** `mockery` (reads config) or `go generate ./...`
   when interfaces carry `//go:generate mockery` directives. Pick one.
 - **In tests:** the generated mock satisfies the interface; pass it

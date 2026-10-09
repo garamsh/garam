@@ -152,9 +152,11 @@ using multiple root layouts.
 Add to **specific interactive components**, not layouts or whole
 pages. Once a file is `'use client'`, all its imports become
 client-bundled. Use `import 'server-only'` for modules that must
-never reach the client. Non-`NEXT_PUBLIC_` env vars are not inlined:
-they read as `undefined` in the browser, but a Client Component's
-server render reads the real value and can put it into the HTML.
+never reach the client. Non-`NEXT_PUBLIC_` env vars are not inlined
+into the client bundle and read as `undefined` in the browser, but a
+Client Component's server render reads the real value. The prefix
+keeps a value out of the bundle, not out of the page: a secret read
+in a `'use client'` module reaches the HTML.
 
 ## 4. Server Components — pages and layouts
 
@@ -162,12 +164,12 @@ server render reads the real value and can put it into the HTML.
   no `'use client'`, no `useEffect`.
 - `params` and `searchParams` are **promises** in v15+ — `await`
   them.
-- Layouts **do not re-render** on navigation and do not receive
-  `searchParams` at all. Read them in the page, or live in a Client
-  Component (`useSearchParams`).
-- A layout reading uncached data (`cookies()`, `headers()`, an
-  uncached `fetch`) **blocks** `loading.tsx`. Wrap the fetch in
-  `<Suspense>` or move it to `page.tsx`.
+- Layouts **do not re-render** on navigation, so they receive no
+  `searchParams`. Read live values in a Client Component.
+- `loading.tsx` shows no fallback for a layout reading uncached data
+  (`cookies()`, `headers()`, an uncached `fetch`). Without
+  `cacheComponents` navigation blocks on it; with it, `next build`
+  fails. Wrap the read in `<Suspense>` or move it to `page.tsx`.
 
 ## 5. Server Actions
 
@@ -270,8 +272,7 @@ back/forward. The pieces, for a photo modal:
   `_next/image`, `favicon.ico`, `sitemap.xml` and `robots.txt`.
 - v16 renamed `middleware.ts` → `proxy.ts`. Codemod:
   `npx @next/codemod@16.3.1 middleware-to-proxy .`.
-- Use cases: auth gate (redirect), geolocation, A/B headers, CORS
-  preflight for `/api/*`.
+- Use cases: auth gate (redirect), geolocation, A/B headers.
 - **Anti-patterns:** don't use as a general middleware hub; don't
   rely on it for Server Action security — matchers can exclude
   paths silently (§5).
@@ -296,9 +297,10 @@ back/forward. The pieces, for a photo modal:
   segment, not here.
 - Nothing outside a test imports `src/testing/`.
 - The test setup stubs `server-only` to an empty module. That package
-  throws on import wherever the `react-server` export condition is
-  absent, as it is under Vitest, so without the stub every test
-  reaching a server-only module fails before it runs.
+  throws wherever it resolves without the `react-server` export
+  condition — in a Client Component, and in a Vitest run — so
+  without the stub every test reaching a server-only module fails
+  before it runs.
 - This stack's substitutes: MSW for outbound HTTP, a Prisma/Drizzle
   test double or SQLite for the database, a fake session for auth,
   `testcontainers` for real service dependencies.

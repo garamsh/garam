@@ -292,11 +292,10 @@ SELECT id FROM supervisor_credentials WHERE id = $1 FOR UPDATE;
 -- name: RecordSupervisorToken :exec
 WITH swept AS (
     DELETE FROM supervisor_tokens
-    WHERE supervisor_grn = sqlc.arg('supervisor_grn') AND expires_at <= now()
+    WHERE credential_id = sqlc.arg('credential_id') AND expires_at <= now()
 )
-INSERT INTO supervisor_tokens (token_hash, credential_id, supervisor_grn, issued_at, expires_at)
-VALUES (sqlc.arg('token_hash'), sqlc.arg('credential_id'), sqlc.arg('supervisor_grn'),
-        sqlc.arg('issued_at'), sqlc.arg('expires_at'));
+INSERT INTO supervisor_tokens (token_hash, credential_id, issued_at, expires_at)
+VALUES (sqlc.arg('token_hash'), sqlc.arg('credential_id'), sqlc.arg('issued_at'), sqlc.arg('expires_at'));
 
 -- name: TrimSupervisorTokens :exec
 DELETE FROM supervisor_tokens t
@@ -308,9 +307,10 @@ WHERE t.credential_id = sqlc.arg('credential_id')
       LIMIT sqlc.arg('keep'));
 
 -- name: ResolveSupervisorToken :one
-SELECT t.supervisor_grn, t.issued_at, t.expires_at
+SELECT c.supervisor_grn, t.issued_at, t.expires_at
 FROM supervisor_tokens t
-JOIN agent_supervisors s ON s.grn = t.supervisor_grn
+JOIN supervisor_credentials c ON c.id = t.credential_id
+JOIN agent_supervisors s ON s.grn = c.supervisor_grn
 WHERE t.token_hash = $1 AND t.expires_at > now() AND s.ended_at IS NULL;
 
 -- Cutover (ADR-0086). Every stage takes the execution row FOR UPDATE

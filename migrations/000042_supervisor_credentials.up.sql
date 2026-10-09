@@ -34,10 +34,11 @@ ALTER TABLE agent_supervisors
 -- alone, and the tokens it is exchanged for, as operator_credentials
 -- and operator_tokens hold an operator's (000038). A supervisor holds
 -- one credential: a retried spending re-issues it, deleting the row and
--- every token minted under it. Both cascade from the registration; a
--- revocation or a replacement ends the registration rather than
--- deleting it, and every read of a credential or a token joins it to a
--- registration that has not ended.
+-- every token minted under it. The credential cascades from the
+-- registration and a token from the credential, which names the
+-- supervisor; a revocation or a replacement ends the registration
+-- rather than deleting it, and every read of a credential or a token
+-- joins it to a registration that has not ended.
 CREATE TABLE supervisor_credentials (
     id              bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     supervisor_grn  text NOT NULL REFERENCES agent_supervisors (grn) ON DELETE CASCADE,
@@ -49,12 +50,11 @@ CREATE TABLE supervisor_credentials (
 );
 
 CREATE TABLE supervisor_tokens (
-    token_hash     text PRIMARY KEY,
-    credential_id  bigint NOT NULL REFERENCES supervisor_credentials (id) ON DELETE CASCADE,
-    supervisor_grn text NOT NULL REFERENCES agent_supervisors (grn) ON DELETE CASCADE,
-    issued_at      timestamptz NOT NULL,
-    expires_at     timestamptz NOT NULL
+    token_hash    text PRIMARY KEY,
+    credential_id bigint NOT NULL REFERENCES supervisor_credentials (id) ON DELETE CASCADE,
+    issued_at     timestamptz NOT NULL,
+    expires_at    timestamptz NOT NULL
 );
 
--- The trim an exchange runs reads a credential's tokens by age.
+-- The sweep and the trim an exchange runs read a credential's tokens.
 CREATE INDEX supervisor_tokens_credential_id_issued_at_idx ON supervisor_tokens (credential_id, issued_at);

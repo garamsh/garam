@@ -1590,26 +1590,23 @@ func (q *Queries) ReassignSupervisor(ctx context.Context, arg ReassignSupervisor
 const recordSupervisorToken = `-- name: RecordSupervisorToken :exec
 WITH swept AS (
     DELETE FROM supervisor_tokens
-    WHERE supervisor_grn = $3 AND expires_at <= now()
+    WHERE credential_id = $2 AND expires_at <= now()
 )
-INSERT INTO supervisor_tokens (token_hash, credential_id, supervisor_grn, issued_at, expires_at)
-VALUES ($1, $2, $3,
-        $4, $5)
+INSERT INTO supervisor_tokens (token_hash, credential_id, issued_at, expires_at)
+VALUES ($1, $2, $3, $4)
 `
 
 type RecordSupervisorTokenParams struct {
-	TokenHash     string
-	CredentialID  int64
-	SupervisorGrn string
-	IssuedAt      pgtype.Timestamptz
-	ExpiresAt     pgtype.Timestamptz
+	TokenHash    string
+	CredentialID int64
+	IssuedAt     pgtype.Timestamptz
+	ExpiresAt    pgtype.Timestamptz
 }
 
 func (q *Queries) RecordSupervisorToken(ctx context.Context, arg RecordSupervisorTokenParams) error {
 	_, err := q.db.Exec(ctx, recordSupervisorToken,
 		arg.TokenHash,
 		arg.CredentialID,
-		arg.SupervisorGrn,
 		arg.IssuedAt,
 		arg.ExpiresAt,
 	)
@@ -1661,9 +1658,10 @@ func (q *Queries) ReplaceToken(ctx context.Context, arg ReplaceTokenParams) erro
 }
 
 const resolveSupervisorToken = `-- name: ResolveSupervisorToken :one
-SELECT t.supervisor_grn, t.issued_at, t.expires_at
+SELECT c.supervisor_grn, t.issued_at, t.expires_at
 FROM supervisor_tokens t
-JOIN agent_supervisors s ON s.grn = t.supervisor_grn
+JOIN supervisor_credentials c ON c.id = t.credential_id
+JOIN agent_supervisors s ON s.grn = c.supervisor_grn
 WHERE t.token_hash = $1 AND t.expires_at > now() AND s.ended_at IS NULL
 `
 

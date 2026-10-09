@@ -250,11 +250,10 @@ type SupervisorCredential struct {
 }
 
 type SupervisorToken struct {
-	TokenHash     string
-	CredentialID  int64
-	SupervisorGrn string
-	IssuedAt      pgtype.Timestamptz
-	ExpiresAt     pgtype.Timestamptz
+	TokenHash    string
+	CredentialID int64
+	IssuedAt     pgtype.Timestamptz
+	ExpiresAt    pgtype.Timestamptz
 }
 
 type User struct {

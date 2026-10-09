@@ -33,8 +33,7 @@ func (s *Store) RecordSupervisorToken(ctx context.Context, holder agent.Supervis
 			return storageError(err, "hold supervisor credential", agent.ErrSupervisorCredentialInvalid, nil)
 		}
 		if err := q.RecordSupervisorToken(ctx, db.RecordSupervisorTokenParams{
-			TokenHash: t.Hash(), CredentialID: holder.ID, SupervisorGrn: holder.Supervisor.String(),
-			IssuedAt: stamp(t.IssuedAt), ExpiresAt: stamp(t.ExpiresAt),
+			TokenHash: t.Hash(), CredentialID: holder.ID, IssuedAt: stamp(t.IssuedAt), ExpiresAt: stamp(t.ExpiresAt),
 		}); err != nil {
 			return storageError(err, "record supervisor token", nil, nil)
 		}

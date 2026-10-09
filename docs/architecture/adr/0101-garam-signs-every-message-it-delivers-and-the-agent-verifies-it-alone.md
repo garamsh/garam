@@ -224,13 +224,22 @@ is forged, altered, addressed elsewhere or expired.
 6. **The content.** `content_sha256` equals the digest of the content
    received, and `message_id` equals the identifier the message
    arrived under.
-7. **Replay**, judged by `message_id` within `(iss, sub)`, on state the
-   verifier keeps. A second arrival of an identifier with the same
-   content is a redelivery and is answered as one; other content under
-   it is refused. The verifier keeps an identifier at least until the
-   latest `exp` it accepted for it plus the skew allowance; after that
-   no signature for it verifies, and another attempt arrives under a
-   new one.
+7. **Replay and redelivery**, both judged by `message_id` within
+   `(iss, sub)`, are two questions with two different records.
+   - **A replayed signature** is the same signature presented again.
+     It needs no record past its `exp` plus the skew allowance, because
+     after that check 5 refuses it.
+   - **A redelivered message** is the same `message_id` and content
+     under a new, valid signature, and the verifier's own idempotency
+     record answers it: same content as the redelivery it is, other
+     content refused. This contract does not shorten that record.
+     garam hands a message out again until it is completed or its
+     attempts are spent, keeps an undelivered one thirty days from
+     storage, and still hands one out past that until the sweep reaches
+     it ([ADR-0034](./0034-a-delivered-message-keeps-its-key-and-drops-its-body.md),
+     [messaging.md](../messaging.md)). A verifier that keeps a committed
+     identifier for less than that whole window can run a message's
+     turn twice.
 
 The verifier caches a set for its `max-age`. While a refetch fails it
 may go on with the set it holds for up to 24 hours more, and after that

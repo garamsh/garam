@@ -195,9 +195,10 @@ content nor a detached signature over it. The payload is:
 - **Rotation with overlap.** A published key is in one of three
   states: *next*, published and signing nothing; *current*, the one
   key signing; *retired*, signing nothing and still published. A next
-  key is published at least two cache lifetimes, two hours, before it
-  signs. A retired key stays published until its last signature has
-  expired, plus the skew allowance, plus one cache lifetime.
+  key is published for the lead §What a verifier checks promises
+  before it signs. A retired key stays published until its last
+  signature has expired, plus the skew allowance, plus one cache
+  lifetime.
 - **Who rotates.** garam replaces the current key on its own at most
   90 days after it began signing. A person retires a key at once with
   a command on the footing of `garam issue-certificate`, a sibling of
@@ -251,6 +252,12 @@ garam promises in return:
 - Every attempt of one message carries the same content, `message_id`,
   `sub`, `aud` and `org`.
 - `exp` never exceeds `iat` by more than the lease ceiling.
+- **A key is published at least two hours — two cache lifetimes —
+  before it signs anything.** That lead is the refresh deadline for a
+  set supplied as a file: a renderer (step 4 of §Consequences) that
+  replaces the file within two hours of the published set changing
+  never leaves its verifier without the key a message is signed with.
+  Shortening it is a change to this contract, not to garam's practice.
 - A key leaves the set only once nothing it signed is still valid, or
   because it was retired at once.
 - Nothing in the format names garam except the value of `iss`, so

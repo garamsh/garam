@@ -247,9 +247,11 @@ at that boundary, so they are not used here.
 - Domain sentinels are declared once in the owning package
   (`var ErrUserNotFound = errorx.New(errorx.KindNotFound, "user not found")`);
   shared ones live in `internal/errorx`.
-- `errors.New` and `fmt.Errorf("…: %w", …)` lose or drift the kind, and
-  `errors.Is` does not read it. Do not mix them with `errorx`.
-- Do not add kinds. Map at the transport boundary if you need more.
+- `errors.New` and `fmt.Errorf("…: %w", …)` lose or drift the kind. Do
+  not mix them with `errorx`.
+- Do not add kinds. Where two errors of one kind need different codes,
+  the transport tells their sentinels apart with `errors.Is`, which
+  reads a sentinel's identity and not its kind.
 
 ## 5. Logging & observability
 

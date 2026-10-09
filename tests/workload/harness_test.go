@@ -245,6 +245,7 @@ func (h *host) config(edit ...func(*workload.Desired)) workload.Config {
 			// while garam is unreachable.
 			MachineURL: h.machineURL,
 		},
+		MessageIssuer: "https://garam.test",
 	}
 }
 

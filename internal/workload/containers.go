@@ -271,8 +271,9 @@ func (s *Supervisor) spec(in *intent, r Role, genDir string) ContainerSpec {
 }
 
 // files is what is copied into a container before it starts, below
-// /etc: the runtime's configuration, and the adapter's credential,
-// roots and placement token. Each is owned by the account the
+// /etc: the runtime's configuration and the garam server root it
+// verifies garam's key set by, and the adapter's credential, roots and
+// placement token. Each is owned by the account the
 // container runs as and readable by it alone.
 func (s *Supervisor) files(in *intent, r Role, root []byte) []File {
 	own := func(path string, data []byte, mode os.FileMode) File {
@@ -284,7 +285,10 @@ func (s *Supervisor) files(in *intent, r Role, root []byte) []File {
 	a := s.cfg.Adapter
 	switch r {
 	case RoleRuntime:
-		files := []File{dir("sherlock"), own("sherlock/config.yaml", s.cfg.Desired.Config, 0o600)}
+		files := []File{dir("sherlock"), own("sherlock/config.yaml", s.renderedConfig, 0o600)}
+		if s.cfg.MessageIssuer != "" {
+			files = append(files, own("sherlock/garam-server-root.pem", a.ServerRootPEM, 0o600))
+		}
 		if ego := s.cfg.Desired.Ego; ego != nil {
 			files = append(files, own("sherlock/ego.md", ego, 0o600))
 		}

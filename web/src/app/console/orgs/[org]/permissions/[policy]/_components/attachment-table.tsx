@@ -7,10 +7,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { KIND_LABEL } from "@/features/orgs";
 
 import { DetachPolicyForm } from "../../_components/detach-policy-form";
 import {
-  KIND_LABEL,
   KIND_PLURAL,
   subjectLabel,
   type AttachedSubject,

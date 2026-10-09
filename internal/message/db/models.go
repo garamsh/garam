@@ -107,6 +107,7 @@ type Message struct {
 	CompletedAt    pgtype.Timestamptz
 	Attempts       int32
 	ClaimedAt      pgtype.Timestamptz
+	Author         string
 }
 
 type MessageConsent struct {
@@ -114,6 +115,15 @@ type MessageConsent struct {
 	OrgB         string
 	AConsentedAt pgtype.Timestamptz
 	BConsentedAt pgtype.Timestamptz
+}
+
+type MessageSigningKey struct {
+	ID               string
+	PublicKey        []byte
+	SealedPrivateKey []byte
+	CreatedAt        pgtype.Timestamptz
+	SignsFrom        pgtype.Timestamptz
+	WithdrawnAt      pgtype.Timestamptz
 }
 
 type Org struct {

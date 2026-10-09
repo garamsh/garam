@@ -111,6 +111,7 @@ func (s *PostgresStore) Enqueue(ctx context.Context, m *Message, fence *Fence) (
 			SenderGrn:      m.sender.String(),
 			IdempotencyKey: m.idempotencyKey,
 			Body:           pgtype.Text{String: m.body, Valid: true},
+			Author:         string(m.author),
 		})
 		return pgxerr.Classify(err, "enqueue", nil, nil)
 	})
@@ -145,6 +146,7 @@ func (s *PostgresStore) EnqueueWithinBudget(ctx context.Context, m *Message, cre
 			SenderGrn:      m.sender.String(),
 			IdempotencyKey: m.idempotencyKey,
 			Body:           m.body,
+			Author:         string(m.author),
 			Budget:         interval(SubmissionBudget),
 		})
 		if err != nil {
@@ -300,6 +302,10 @@ func rowToMessage(row db.Message) (*Message, error) {
 	if err != nil {
 		return nil, errorx.Wrap(err, "sender grn", errorx.KindInternal)
 	}
+	author, err := parseAuthor(row.Author)
+	if err != nil {
+		return nil, errorx.Wrap(err, "author", errorx.KindInternal)
+	}
 	return &Message{
 		id:             ID(row.ID),
 		recipient:      recipient,
@@ -309,6 +315,7 @@ func rowToMessage(row db.Message) (*Message, error) {
 		// half-states, so an absent body reads as none rather than as
 		// corruption.
 		body:      row.Body.String,
+		author:    author,
 		createdAt: row.CreatedAt.Time,
 		attempts:  int(row.Attempts),
 	}, nil
@@ -321,7 +328,7 @@ func rowToClaim(row db.Message) (*Claim, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !row.ClaimID.Valid || !row.ClaimExpiresAt.Valid {
+	if !row.ClaimID.Valid || !row.ClaimExpiresAt.Valid || !row.ClaimedAt.Valid {
 		return nil, errorx.New(errorx.KindInternal, "claimed row carries no claim")
 	}
 	// A claim matches only an undelivered row, which the schema requires
@@ -332,6 +339,7 @@ func rowToClaim(row db.Message) (*Claim, error) {
 	return &Claim{
 		message:   m,
 		id:        ClaimID(row.ClaimID.String),
+		claimedAt: row.ClaimedAt.Time,
 		expiresAt: row.ClaimExpiresAt.Time,
 	}, nil
 }

@@ -97,6 +97,32 @@ type (
 	ClaimID string
 )
 
+// Author is who wrote a message, which is what garam signs as its
+// sender when it hands the message out (ADR-0101).
+type Author string
+
+const (
+	// AuthorSender is a message the identity its listener authenticated
+	// posted, which is every message but one kind.
+	AuthorSender Author = "sender"
+	// AuthorGaram is a message garam wrote itself: the refusal of a
+	// cross-organization post, stored under the intended recipient's
+	// identity (ADR-0035). No caller posted it, so garam signs it as its
+	// own.
+	AuthorGaram Author = "garam"
+)
+
+// parseAuthor reads an author. The set is closed, so anything else is a
+// caller or a row this process does not understand.
+func parseAuthor(s string) (Author, error) {
+	switch Author(s) {
+	case AuthorSender, AuthorGaram:
+		return Author(s), nil
+	default:
+		return "", errorx.New(errorx.KindInvalidArgument, "message: unknown author "+s)
+	}
+}
+
 // Message is one message addressed to a recipient. The body is opaque:
 // the queue carries it and never reads it. It is dropped at completion
 // (ADR-0034), so a message read back after delivery carries none.
@@ -106,6 +132,7 @@ type Message struct {
 	sender         grn.GRN
 	idempotencyKey string
 	body           string
+	author         Author
 	createdAt      time.Time
 	attempts       int
 }
@@ -116,6 +143,14 @@ type Message struct {
 // message (ADR-0013), so an unknown recipient is not a reason to refuse
 // one.
 func New(recipient, sender grn.GRN, idempotencyKey, body string) (*Message, error) {
+	return newAuthored(recipient, sender, idempotencyKey, body, AuthorSender)
+}
+
+// newAuthored is New for a message whose author is given.
+func newAuthored(recipient, sender grn.GRN, idempotencyKey, body string, author Author) (*Message, error) {
+	if _, err := parseAuthor(string(author)); err != nil {
+		return nil, err
+	}
 	if err := recipient.Validate(); err != nil {
 		return nil, errorx.Wrap(err, "message: recipient")
 	}
@@ -143,6 +178,7 @@ func New(recipient, sender grn.GRN, idempotencyKey, body string) (*Message, erro
 		sender:         sender,
 		idempotencyKey: idempotencyKey,
 		body:           body,
+		author:         author,
 	}, nil
 }
 
@@ -151,6 +187,7 @@ func (m *Message) Recipient() grn.GRN     { return m.recipient }
 func (m *Message) Sender() grn.GRN        { return m.sender }
 func (m *Message) IdempotencyKey() string { return m.idempotencyKey }
 func (m *Message) Body() string           { return m.body }
+func (m *Message) Author() Author         { return m.author }
 
 // CreatedAt is when the queue stored the message, on the database's
 // clock — the one the retention sweep measures with — and the zero time
@@ -170,12 +207,18 @@ func (m *Message) Attempts() int { return m.attempts }
 type Claim struct {
 	message   *Message
 	id        ClaimID
+	claimedAt time.Time
 	expiresAt time.Time
 }
 
 func (c *Claim) Message() *Message    { return c.message }
 func (c *Claim) ID() ClaimID          { return c.id }
 func (c *Claim) ExpiresAt() time.Time { return c.expiresAt }
+
+// ClaimedAt is when the claim was taken, on the database's clock. The
+// lease ceiling is measured from it, and so is a hand-out's signature
+// (ADR-0101).
+func (c *Claim) ClaimedAt() time.Time { return c.claimedAt }
 
 // State is how far a message has got, as its sender may observe it
 // (ADR-0055). The four are exhaustive over a stored message: what is

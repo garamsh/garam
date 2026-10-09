@@ -58,7 +58,7 @@ WHERE id = (
     LIMIT 1
     FOR UPDATE SKIP LOCKED
 )
-RETURNING id, recipient_grn, sender_grn, idempotency_key, body, created_at, claim_id, claim_expires_at, completed_at, attempts, claimed_at
+RETURNING id, recipient_grn, sender_grn, idempotency_key, body, created_at, claim_id, claim_expires_at, completed_at, attempts, claimed_at, author
 `
 
 type ClaimMessageParams struct {
@@ -97,6 +97,7 @@ func (q *Queries) ClaimMessage(ctx context.Context, arg ClaimMessageParams) (Mes
 		&i.CompletedAt,
 		&i.Attempts,
 		&i.ClaimedAt,
+		&i.Author,
 	)
 	return i, err
 }
@@ -172,6 +173,19 @@ func (q *Queries) CountConsentsByOrg(ctx context.Context, org string) (int64, er
 	return count, err
 }
 
+const databaseNow = `-- name: DatabaseNow :one
+SELECT now()::timestamptz
+`
+
+// DatabaseNow is the instant the keys above are judged against, read in
+// the same transaction so both describe one moment.
+func (q *Queries) DatabaseNow(ctx context.Context) (pgtype.Timestamptz, error) {
+	row := q.db.QueryRow(ctx, databaseNow)
+	var column_1 pgtype.Timestamptz
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const deleteExpiredMessages = `-- name: DeleteExpiredMessages :exec
 DELETE FROM messages
 WHERE completed_at IS NULL
@@ -213,11 +227,11 @@ func (q *Queries) DropEmptyConsent(ctx context.Context, arg DropEmptyConsentPara
 }
 
 const enqueueMessage = `-- name: EnqueueMessage :one
-INSERT INTO messages (id, recipient_grn, sender_grn, idempotency_key, body, created_at)
-VALUES ($1, $2, $3, $4, $5, now())
+INSERT INTO messages (id, recipient_grn, sender_grn, idempotency_key, body, author, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, now())
 ON CONFLICT (sender_grn, idempotency_key) DO UPDATE SET
     idempotency_key = messages.idempotency_key
-RETURNING id, recipient_grn, sender_grn, idempotency_key, body, created_at, claim_id, claim_expires_at, completed_at, attempts, claimed_at
+RETURNING id, recipient_grn, sender_grn, idempotency_key, body, created_at, claim_id, claim_expires_at, completed_at, attempts, claimed_at, author
 `
 
 type EnqueueMessageParams struct {
@@ -226,6 +240,7 @@ type EnqueueMessageParams struct {
 	SenderGrn      string
 	IdempotencyKey string
 	Body           pgtype.Text
+	Author         string
 }
 
 // EnqueueMessage stores the message, unless the sender already used the
@@ -240,6 +255,7 @@ func (q *Queries) EnqueueMessage(ctx context.Context, arg EnqueueMessageParams) 
 		arg.SenderGrn,
 		arg.IdempotencyKey,
 		arg.Body,
+		arg.Author,
 	)
 	var i Message
 	err := row.Scan(
@@ -254,6 +270,7 @@ func (q *Queries) EnqueueMessage(ctx context.Context, arg EnqueueMessageParams) 
 		&i.CompletedAt,
 		&i.Attempts,
 		&i.ClaimedAt,
+		&i.Author,
 	)
 	return i, err
 }
@@ -262,12 +279,13 @@ const enqueueWithinBudget = `-- name: EnqueueWithinBudget :one
 WITH decision AS MATERIALIZED (
     SELECT clock_timestamp() AS decided_at
 ), stored AS (
-    INSERT INTO messages (id, recipient_grn, sender_grn, idempotency_key, body, created_at)
+    INSERT INTO messages (id, recipient_grn, sender_grn, idempotency_key, body, author, created_at)
     SELECT $2::text, $3::text, $4::text,
-           $5::text, $6::text, decision.decided_at
+           $5::text, $6::text, $7::text,
+           decision.decided_at
     FROM decision
     WHERE $1::timestamptz <= decision.decided_at
-      AND $1::timestamptz + $7::interval > decision.decided_at
+      AND $1::timestamptz + $8::interval > decision.decided_at
     ON CONFLICT (sender_grn, idempotency_key) DO UPDATE SET
         idempotency_key = messages.idempotency_key
     RETURNING 1
@@ -287,6 +305,7 @@ type EnqueueWithinBudgetParams struct {
 	SenderGrn      string
 	IdempotencyKey string
 	Body           string
+	Author         string
 	Budget         pgtype.Interval
 }
 
@@ -307,6 +326,7 @@ func (q *Queries) EnqueueWithinBudget(ctx context.Context, arg EnqueueWithinBudg
 		arg.SenderGrn,
 		arg.IdempotencyKey,
 		arg.Body,
+		arg.Author,
 		arg.Budget,
 	)
 	var verdict string
@@ -348,6 +368,31 @@ func (q *Queries) GrantConsent(ctx context.Context, arg GrantConsentParams) (Mes
 	return i, err
 }
 
+const insertSigningKey = `-- name: InsertSigningKey :exec
+INSERT INTO message_signing_keys (id, public_key, sealed_private_key, signs_from)
+VALUES ($1, $2, $3,
+        now() + $4::interval)
+`
+
+type InsertSigningKeyParams struct {
+	ID               string
+	PublicKey        []byte
+	SealedPrivateKey []byte
+	Lead             pgtype.Interval
+}
+
+// InsertSigningKey stores a new key that signs once lead has passed on
+// the database's clock.
+func (q *Queries) InsertSigningKey(ctx context.Context, arg InsertSigningKeyParams) error {
+	_, err := q.db.Exec(ctx, insertSigningKey,
+		arg.ID,
+		arg.PublicKey,
+		arg.SealedPrivateKey,
+		arg.Lead,
+	)
+	return err
+}
+
 const listConsents = `-- name: ListConsents :many
 SELECT org_a, org_b, a_consented_at, b_consented_at FROM message_consents
 WHERE org_a = $1 OR org_b = $1
@@ -382,8 +427,20 @@ func (q *Queries) ListConsents(ctx context.Context, org string) ([]MessageConsen
 	return items, nil
 }
 
+const lockSigningKeys = `-- name: LockSigningKeys :exec
+SELECT pg_advisory_xact_lock(hashtext('message_signing_keys'))
+`
+
+// LockSigningKeys serializes rotation across every replica for the
+// rest of the transaction, so two processes that both find a key due
+// create one between them.
+func (q *Queries) LockSigningKeys(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, lockSigningKeys)
+	return err
+}
+
 const messageByKey = `-- name: MessageByKey :one
-SELECT id, recipient_grn, sender_grn, idempotency_key, body, created_at, claim_id, claim_expires_at, completed_at, attempts, claimed_at FROM messages
+SELECT id, recipient_grn, sender_grn, idempotency_key, body, created_at, claim_id, claim_expires_at, completed_at, attempts, claimed_at, author FROM messages
 WHERE sender_grn = $1 AND idempotency_key = $2
 `
 
@@ -410,6 +467,7 @@ func (q *Queries) MessageByKey(ctx context.Context, arg MessageByKeyParams) (Mes
 		&i.CompletedAt,
 		&i.Attempts,
 		&i.ClaimedAt,
+		&i.Author,
 	)
 	return i, err
 }
@@ -478,7 +536,7 @@ WHERE recipient_grn = $3
   AND claim_id = $4
   AND completed_at IS NULL
   AND claim_expires_at > now()
-RETURNING id, recipient_grn, sender_grn, idempotency_key, body, created_at, claim_id, claim_expires_at, completed_at, attempts, claimed_at
+RETURNING id, recipient_grn, sender_grn, idempotency_key, body, created_at, claim_id, claim_expires_at, completed_at, attempts, claimed_at, author
 `
 
 type RenewClaimParams struct {
@@ -514,8 +572,45 @@ func (q *Queries) RenewClaim(ctx context.Context, arg RenewClaimParams) (Message
 		&i.CompletedAt,
 		&i.Attempts,
 		&i.ClaimedAt,
+		&i.Author,
 	)
 	return i, err
+}
+
+const signingKeys = `-- name: SigningKeys :many
+SELECT id, public_key, sealed_private_key, created_at, signs_from, withdrawn_at FROM message_signing_keys
+ORDER BY signs_from, created_at, id
+`
+
+// SigningKeys reads every key garam has signed messages with or will,
+// in the order they take over signing (ADR-0101). The rows are few —
+// one per rotation — so which of them signs and which are published is
+// decided over all of them rather than in a predicate.
+func (q *Queries) SigningKeys(ctx context.Context) ([]MessageSigningKey, error) {
+	rows, err := q.db.Query(ctx, signingKeys)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []MessageSigningKey
+	for rows.Next() {
+		var i MessageSigningKey
+		if err := rows.Scan(
+			&i.ID,
+			&i.PublicKey,
+			&i.SealedPrivateKey,
+			&i.CreatedAt,
+			&i.SignsFrom,
+			&i.WithdrawnAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const withdrawConsent = `-- name: WithdrawConsent :exec
@@ -542,4 +637,20 @@ type WithdrawConsentParams struct {
 func (q *Queries) WithdrawConsent(ctx context.Context, arg WithdrawConsentParams) error {
 	_, err := q.db.Exec(ctx, withdrawConsent, arg.Org, arg.Other)
 	return err
+}
+
+const withdrawSigningKey = `-- name: WithdrawSigningKey :one
+UPDATE message_signing_keys SET withdrawn_at = coalesce(withdrawn_at, now())
+WHERE id = $1
+RETURNING id
+`
+
+// WithdrawSigningKey stops a key signing and removes it from the
+// published set at once. Withdrawing one already withdrawn keeps the
+// instant it was first withdrawn.
+func (q *Queries) WithdrawSigningKey(ctx context.Context, id string) (string, error) {
+	row := q.db.QueryRow(ctx, withdrawSigningKey, id)
+	var id_2 string
+	err := row.Scan(&id_2)
+	return id_2, err
 }

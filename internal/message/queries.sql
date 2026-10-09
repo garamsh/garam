@@ -16,8 +16,8 @@ WHERE completed_at IS NULL
 -- itself, which is what makes RETURNING yield that row. Postgres stamps
 -- created_at, so the window the sweep measures starts on its clock too.
 -- name: EnqueueMessage :one
-INSERT INTO messages (id, recipient_grn, sender_grn, idempotency_key, body, created_at)
-VALUES ($1, $2, $3, $4, $5, now())
+INSERT INTO messages (id, recipient_grn, sender_grn, idempotency_key, body, author, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, now())
 ON CONFLICT (sender_grn, idempotency_key) DO UPDATE SET
     idempotency_key = messages.idempotency_key
 RETURNING *;
@@ -42,9 +42,10 @@ WHERE sender_grn = sqlc.arg('sender_grn') AND idempotency_key = sqlc.arg('idempo
 WITH decision AS MATERIALIZED (
     SELECT clock_timestamp() AS decided_at
 ), stored AS (
-    INSERT INTO messages (id, recipient_grn, sender_grn, idempotency_key, body, created_at)
+    INSERT INTO messages (id, recipient_grn, sender_grn, idempotency_key, body, author, created_at)
     SELECT sqlc.arg('id')::text, sqlc.arg('recipient_grn')::text, sqlc.arg('sender_grn')::text,
-           sqlc.arg('idempotency_key')::text, sqlc.arg('body')::text, decision.decided_at
+           sqlc.arg('idempotency_key')::text, sqlc.arg('body')::text, sqlc.arg('author')::text,
+           decision.decided_at
     FROM decision
     WHERE sqlc.arg('created')::timestamptz <= decision.decided_at
       AND sqlc.arg('created')::timestamptz + sqlc.arg('budget')::interval > decision.decided_at
@@ -226,3 +227,37 @@ SELECT agent_execution_admit(
     sqlc.arg('agent_grn'), sqlc.narg('token_hash')::bytea, sqlc.arg('serial'),
     sqlc.arg('not_before')::timestamptz, sqlc.arg('not_after')::timestamptz
 )::text;
+
+-- SigningKeys reads every key garam has signed messages with or will,
+-- in the order they take over signing (ADR-0101). The rows are few —
+-- one per rotation — so which of them signs and which are published is
+-- decided over all of them rather than in a predicate.
+-- name: SigningKeys :many
+SELECT * FROM message_signing_keys
+ORDER BY signs_from, created_at, id;
+
+-- DatabaseNow is the instant the keys above are judged against, read in
+-- the same transaction so both describe one moment.
+-- name: DatabaseNow :one
+SELECT now()::timestamptz;
+
+-- LockSigningKeys serializes rotation across every replica for the
+-- rest of the transaction, so two processes that both find a key due
+-- create one between them.
+-- name: LockSigningKeys :exec
+SELECT pg_advisory_xact_lock(hashtext('message_signing_keys'));
+
+-- InsertSigningKey stores a new key that signs once lead has passed on
+-- the database's clock.
+-- name: InsertSigningKey :exec
+INSERT INTO message_signing_keys (id, public_key, sealed_private_key, signs_from)
+VALUES (sqlc.arg('id'), sqlc.arg('public_key'), sqlc.arg('sealed_private_key'),
+        now() + sqlc.arg('lead')::interval);
+
+-- WithdrawSigningKey stops a key signing and removes it from the
+-- published set at once. Withdrawing one already withdrawn keeps the
+-- instant it was first withdrawn.
+-- name: WithdrawSigningKey :one
+UPDATE message_signing_keys SET withdrawn_at = coalesce(withdrawn_at, now())
+WHERE id = sqlc.arg('id')
+RETURNING id;

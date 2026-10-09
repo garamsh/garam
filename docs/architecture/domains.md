@@ -53,8 +53,9 @@ the Go package implementing it is in parentheses.
 - [machine-identity.md](./machine-identity.md) — who is calling on the
   listener a machine identity authenticates on (`internal/machine`)
 - [messaging.md](./messaging.md) — the durable queue a message reaches
-  an agent through, and the consent that lets one cross an organization
-  boundary (`internal/message`)
+  an agent through, the consent that lets one cross an organization
+  boundary, and the signature on every message garam hands out
+  (`internal/message`)
 
 ## The shape a domain takes
 

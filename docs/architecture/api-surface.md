@@ -103,7 +103,7 @@ enrolling exists to issue
 ([ADR-0064](./adr/0064-an-operator-enrols-with-a-one-time-token-and-keeps-its-key-in-its-own-cluster.md)).
 A connection whose certificate does not authenticate is not refused
 there either; it carries no identity instead, and every operation but
-two refuses a request that carries none. The identity a handler holds
+three refuses a request that carries none. The identity a handler holds
 is the one the handshake's own verification returned, so nothing
 derives it a second time and a certificate naming any GRN under a
 chain nothing signed reaches no handler that asks for one. Which
@@ -111,6 +111,11 @@ operations opt out is read from `api/machine.yaml` rather than
 remembered: `enrollOperator` and `enrollStandaloneAgent` carry
 `security: []`, as an operation on the browser-facing listener does,
 and each is authenticated by what it is spent with instead.
+`getMessageSigningKeys` carries it too and is authenticated by nothing,
+because what it answers is public: the keys a verifier anywhere checks
+garam's signature on a message with
+([ADR-0101](./adr/0101-garam-signs-every-message-it-delivers-and-the-agent-verifies-it-alone.md)),
+read at the issuer followed by `/message-signing-keys`.
 
 Why a connection did not authenticate is written to the listener's own
 log and nowhere else: what crosses the wire says only that no identity
@@ -121,12 +126,13 @@ authenticate is recorded as an anomaly.
 
 **Each handler makes that refusal itself, and a test is what makes it
 true of every route.** `internal/machineapi/identity_test.go`, in
-`TestServer_EnrollmentsAreTheOnlyRoutesAnUncertifiedCallerReaches`, is
-authoritative for that: every operation `api/machine.yaml` declares
-except `POST /enrollment` and `POST /agent-enrollments` answers `401`
-naming the missing identity to a caller carrying none, sent from the
-same client that enrols, so what admitted those two was the route
-rather than a listener that had stopped checking.
+`TestServer_EnrollmentsAndTheKeySetAreTheOnlyRoutesAnUncertifiedCallerReaches`,
+is authoritative for that: every operation `api/machine.yaml` declares
+except `POST /enrollment`, `POST /agent-enrollments` and
+`GET /message-signing-keys` answers `401` naming the missing identity
+to a caller carrying none, sent from the same client that enrols, so
+what admitted those three was the route rather than a listener that
+had stopped checking.
 The routes it sends to are derived and not listed — read off the
 registration `make gen` writes from that specification, and held
 against the operation count of the generated interface — so an
@@ -672,3 +678,7 @@ document owes an update.
   — a durable reply is admitted on a versioned route of its own under
   a fixed seven-day budget from its creation, and its key is answered
   after it
+- [ADR-0101](./adr/0101-garam-signs-every-message-it-delivers-and-the-agent-verifies-it-alone.md)
+  — garam signs every message the machine listener hands out, and that
+  listener publishes the keys it signs with on an operation a caller
+  with no certificate reaches

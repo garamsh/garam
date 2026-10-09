@@ -1,7 +1,8 @@
 # Messaging
 
-The durable queue a message reaches an agent through (ADR-0013), and
-the consent that lets one cross an organization boundary (ADR-0035).
+The durable queue a message reaches an agent through (ADR-0013), the
+consent that lets one cross an organization boundary (ADR-0035), and
+the signature garam puts on every message it hands out (ADR-0101).
 Implemented by `internal/message`.
 
 **garam announces nothing to a sender, and one of the two reports it
@@ -27,6 +28,10 @@ state of a message it sent, described below (ADR-0055).
 | `ConsentStore` | the consent relation: an organization granting or withdrawing its own half, and the send path asking whether both halves stand |
 | `ActionSend` | the action a policy names to decide what one identity may send to another |
 | `SubmissionBudget` | how long after its creation a durable reply may still store a message, fixed by `durable-delivery.v1` (ADR-0083) |
+| `Author` | who wrote a message: its sender, or garam for the refusal it writes itself — what a signature names as the sender garam vouches for (ADR-0101) |
+| `Signer` | signs each hand-out of a message and answers the keys a verifier checks the signature with (ADR-0101) |
+| `SigningKeyStore` | the keys messages are signed with, read with the database's clock, rotated under one lock, withdrawn at once |
+| `Issuer` | the deployment's issuer: the machine listener's external https origin, compared byte for byte |
 
 Messages are their own domain rather than part of the agents one: a
 recipient is addressed by GRN, so nothing here depends on the agent
@@ -142,6 +147,39 @@ message becomes ready when a lease runs out as well as when a sender
 stores one, and a lease running out is a moment passing that nothing
 announces. The interval is the delivery latency ADR-0013 accepted in
 place of a push.
+
+**Every hand-out is signed**
+([ADR-0101](./adr/0101-garam-signs-every-message-it-delivers-and-the-agent-verifies-it-alone.md)).
+A claim answers the message's content — `garam-message.v1`, which
+garam now encodes itself, so every attempt of one message carries the
+same characters — and a compact ES256 JWS binding the issuer, the
+sender garam vouches for, the recipient as audience and its
+organization, the message's identifier and a digest of the content,
+valid for the lease ceiling from when the claim was taken on the
+database's clock. The key is opened before the queue is asked, so a key
+garam cannot open refuses the claim as a server error with nothing
+claimed and none of the message's attempts spent. A renewal hands
+nothing out and carries no signature. The sender garam vouches for is the row's
+author: the caller the listener authenticated for everything a caller
+posted, and garam's own issuer for the cross-organization refusal it
+writes under the intended recipient's identity, whose content keeps
+that stored sender. ADR-0101 §What a verifier checks is the contract a
+verifier holds garam to; `api/machine.yaml` is authoritative for the
+claim's members and the key-set route.
+
+The keys are rows of their own, never deleted, each sealed under the
+key-encryption key the certificate authorities are sealed under and
+bound to its row. Whichever path reads them first — a claim or the key
+set — creates the key that is due under a lock every replica takes:
+with no key signing, one that signs at once, which is a deployment's
+first and the replacement for one retired at once; otherwise the next
+one, announced two hours before it signs once the current one has
+signed for 90 days less that lead, and one at a time. The published set
+holds the key signing, the one announced, and one that stopped while a
+signature it made can still be valid, plus the skew allowance and one
+cache lifetime. `garam retire-message-signing-key` withdraws a key from
+signing and from the set at once, which is how a compromised key is
+withdrawn.
 
 The HTTP surface is the machine listener, and the reader on the other
 side of it is the adapter garam ships ([adapter.md](./adapter.md)).

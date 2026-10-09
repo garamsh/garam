@@ -1,13 +1,14 @@
 # ADR 0101: garam signs every message it delivers, and the agent verifies it alone
 
-> Status: proposed
+> Status: accepted
 > Date: 2026-10-09
 
 Drafted for #1252, which reserved this number and records the owner's
-decision of 2026-10-09. Facts about garam hold at `a7148f8`. Facts
-about Sherlock hold at `garamsh/sherlock@08c32c2`
-(`08c32c227d17acb850858189b3b3cad9a7a7d178`), the head of its `dev`
-when read; Sherlock's half of this is garamsh/sherlock#993.
+decision of 2026-10-09; the owner accepted it the same day (#1256).
+Facts about garam hold at `a7148f8`. Facts about Sherlock hold at
+`garamsh/sherlock@08c32c2` (`08c32c227d17acb850858189b3b3cad9a7a7d178`),
+the head of its `dev` when read; Sherlock's half of this is
+garamsh/sherlock#993.
 
 ## Contents
 - Context
@@ -117,14 +118,14 @@ content nor a detached signature over it. The payload is:
 
 | Claim | Value |
 |---|---|
-| `iss` | the deployment's issuer: the machine listener's external `https` base URL with no trailing slash, which the deployment configures and keeps for its life |
+| `iss` | the deployment's issuer: the machine listener's external `https` origin, with no path and no trailing slash, which the deployment configures and keeps for its life |
 | `sub` | the sender garam vouches for: the GRN its listener authenticated as the poster, or `iss` itself for a message garam authored |
 | `aud` | the recipient's GRN, as one string |
 | `org` | the recipient's organization, the GRN's organization segment ([grn-model.md](../grn-model.md)) |
 | `message_id` | garam's identifier for the message, the one it is delivered under |
 | `content_sha256` | SHA-256 over the content's octets, base64url without padding |
-| `iat` | when garam signed, on the database's clock |
-| `exp` | `iat` plus the lease ceiling, five minutes at the default |
+| `iat` | when the claim was taken, on the database's clock |
+| `exp` | `iat` plus the lease ceiling, five minutes at the default: when the claim's ceiling ends |
 
 - **The content's octets are the UTF-8 encoding of the content string
   as received**, after the transport's own decoding — not a JSON text
@@ -133,7 +134,8 @@ content nor a detached signature over it. The payload is:
   encoding is already the same on every redelivery (adapter.md §Stable
   identifiers and the outbox).
 - **garam produces the content as well as the signature.** The claim
-  answer carries both, and the adapter forwards each byte for byte.
+  answer carries both, and the adapter forwards each byte for byte. A
+  renewal hands nothing out and carries neither.
   The content keeps the form ADR-0084 states; what moves is which side
   encodes it, so the digest is taken over the bytes that are delivered
   rather than over a second encoding of the same members.
@@ -158,7 +160,9 @@ content nor a detached signature over it. The payload is:
 ### Attempts and relaying
 
 - **garam signs at each hand-out, never at storage.** Every claim signs
-  afresh with that claim's `iat` and `exp`. The content,
+  afresh with that claim's `iat` and `exp`. The key is opened before
+  the claim is taken, so a key garam cannot open refuses the claim and
+  spends none of the message's attempts. The content,
   `message_id`, `sub`, `aud`, `org` and digest are the same in every
   attempt, so the runtime's replay check on identifier and content
   holds unchanged, while no signature outlives the claim it was issued
@@ -201,11 +205,18 @@ content nor a detached signature over it. The payload is:
   before it signs. A retired key stays published until its last
   signature has expired, plus the skew allowance, plus one cache
   lifetime.
-- **Who rotates.** garam replaces the current key on its own at most
-  90 days after it began signing. A person retires a key at once with
-  a command on the footing of `garam issue-certificate`, a sibling of
-  `serve`; a key retired that way leaves the set immediately, which is
-  how a compromised key is withdrawn.
+- **With no key signing, the key created signs at once.** That is a
+  deployment's first key, and the replacement for one retired at once:
+  there is no earlier set either could be missing from, and nothing
+  else can sign meanwhile.
+- **Who rotates.** garam announces the next key on its own once the
+  current one has signed for 90 days less the lead, one at a time. It
+  checks whenever it signs a claim or serves the set, so a deployment
+  that does neither in that window announces it at the next one. A
+  person retires a key at once with
+  `garam retire-message-signing-key <kid>`, a sibling of `serve` as
+  `garam issue-certificate` is; a key retired that way leaves the set
+  immediately, which is how a compromised key is withdrawn.
 
 ### What a verifier checks
 
@@ -262,11 +273,13 @@ garam promises in return:
   `sub`, `aud` and `org`.
 - `exp` never exceeds `iat` by more than the lease ceiling.
 - **A key is published at least two hours — two cache lifetimes —
-  before it signs anything.** That lead is the refresh deadline for a
-  set supplied as a file: a renderer (step 4 of §Consequences) that
-  replaces the file within two hours of the published set changing
-  never leaves its verifier without the key a message is signed with.
-  Shortening it is a change to this contract, not to garam's practice.
+  before it signs anything,** except the two §Keys names that sign at
+  once, which no set could hold in advance. That lead is the refresh
+  deadline for a set supplied as a file: a renderer (step 4 of
+  §Consequences) that replaces the file within two hours of the
+  published set changing never leaves its verifier without the key a
+  message is signed with. Shortening it is a change to this contract,
+  not to garam's practice.
 - A key leaves the set only once nothing it signed is still valid, or
   because it was retired at once.
 - Nothing in the format names garam except the value of `iss`, so
@@ -308,8 +321,6 @@ below.
 - **Whether keys ADR-0100 introduces are published beside these.** This
   set holds message keys only, and asks nothing of ADR-0100's.
 - **An agent's own signature on what it sends** (§Replies).
-- **The rotation command's name and flags**, which the implementing
-  pull request chooses.
 
 ## Consequences
 
@@ -369,16 +380,17 @@ being refused.
   serves the set; ADR-0079 and ADR-0084, whose content form is
   unchanged while its encoder moves to garam.
 - **The test of which routes a caller with no certificate reaches**
-  (`TestServer_EnrollmentsAreTheOnlyRoutesAnUncertifiedCallerReaches`,
-  `internal/machineapi/identity_test.go`) gains the publication route,
-  and its name stops being true.
-- **A claim garam cannot sign is not handed out.** It fails as the
-  claim's server error and the message stays pending, so signing's
-  availability is the claim's.
+  (`internal/machineapi/identity_test.go`) gains the publication route,
+  and is renamed for it.
+- **A claim garam cannot sign is not handed out.** It is refused as a
+  server error before the queue is asked, and the message stays
+  pending with its attempts unspent, so signing's availability is the
+  claim's.
 - **Losing the key-encryption key also loses the message keys.** Unlike
-  an authority, a message key is replaceable: a new one is generated
-  and published, and a verifier fetches it on the unknown `kid`; one
-  holding the set as a file is refused until its file is replaced.
+  an authority, a message key is replaceable: retiring the key that no
+  longer opens makes the next hand-out create one sealed under the key
+  present, and a verifier fetches it on the unknown `kid`; one holding
+  the set as a file is refused until its file is replaced.
 
 ## Signs the decision was wrong
 

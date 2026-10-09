@@ -13,7 +13,7 @@ import (
 // binds, to its audience only and once current state still authorizes
 // it (ADR-0078). It consumes nothing.
 func (s *Server) IntrospectOperationAuthority(w http.ResponseWriter, r *http.Request, params machinegen.IntrospectOperationAuthorityParams) {
-	if !contract(w, params.ContractVersion) {
+	if !served(w, r, params.ContractVersion, authorityValues) {
 		return
 	}
 	identity, ok := caller(w, r)
@@ -39,7 +39,7 @@ func (s *Server) IntrospectOperationAuthority(w http.ResponseWriter, r *http.Req
 // its audience, as an Operator does before activating a new desired
 // revision. It is not a restart capability.
 func (s *Server) CheckOperationReference(w http.ResponseWriter, r *http.Request, ref machinegen.OperationRef, params machinegen.CheckOperationReferenceParams) {
-	if !contract(w, params.ContractVersion) {
+	if !served(w, r, params.ContractVersion, authorityValues) {
 		return
 	}
 	identity, ok := caller(w, r)
@@ -52,17 +52,6 @@ func (s *Server) CheckOperationReference(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	writeJSON(w, http.StatusOK, bindingToAPI(b))
-}
-
-// contract stamps the contract version on the answer and refuses a
-// request that asked for another, before anything else is read.
-func contract(w http.ResponseWriter, version machinegen.ContractVersion) bool {
-	w.Header().Set(operator.ContractVersionHeader, operator.ContractVersion)
-	if version != operator.ContractVersion {
-		writeError(w, operator.ErrUnsupportedContract)
-		return false
-	}
-	return true
 }
 
 func bindingToAPI(b operator.Binding) machinegen.OperationBinding {

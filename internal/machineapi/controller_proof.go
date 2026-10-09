@@ -1,6 +1,7 @@
 package machineapi
 
 import (
+	"context"
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
@@ -17,15 +18,17 @@ import (
 // IntrospectController answers a positive proof of a controller's
 // current authority to the hosted operator calling, for one lifecycle
 // decision (ADR-0078). The connection authenticated once, so every
-// check is read again on this request: the caller's own certificate
-// and registration, then the controller's certificate exactly as the
-// caller forwarded it — never a GRN the caller asserts — then the
-// grant, a named agent's placement and current policy.
+// check is read again on this request: the caller's own credential and
+// registration, then the controller's credential exactly as the caller
+// forwarded it — its certificate, or under operation-authority.v2 its
+// token minted for the caller (ADR-0100), never a GRN the caller
+// asserts — then the grant, a named agent's placement and current
+// policy.
 func (s *Server) IntrospectController(w http.ResponseWriter, r *http.Request, controller machinegen.ControllerGrn, params machinegen.IntrospectControllerParams) {
-	if !contract(w, params.ContractVersion) {
+	if !served(w, r, params.ContractVersion, authorityValues) {
 		return
 	}
-	identity, ok := callerCertificate(w, r)
+	identity, ok := identityOf(w, r)
 	if !ok {
 		return
 	}
@@ -39,7 +42,7 @@ func (s *Server) IntrospectController(w http.ResponseWriter, r *http.Request, co
 		writeError(w, errorx.Wrap(err, "controller introspection", errorx.KindInvalidArgument))
 		return
 	}
-	leaf, err := leafOf(body.CertificatePem)
+	prove, err := s.controllerCredential(r, subject, identity.GRN(), body)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -63,10 +66,10 @@ func (s *Server) IntrospectController(w http.ResponseWriter, r *http.Request, co
 		writeError(w, err)
 		return
 	}
-	if err := s.certificates.Verify(ctx, subject, leaf); err != nil {
-		// A certificate that does not prove the controller is the one
+	if err := prove(ctx); err != nil {
+		// A credential that does not prove the controller is the one
 		// refusal this route answers as 422 rather than 400, so a caller
-		// tells a defect of its request from the certificate it
+		// tells a defect of its request from the credential it
 		// forwarded.
 		status := wire.StatusOf(errorx.KindOf(err))
 		if errorx.IsKind(err, errorx.KindInvalidArgument) {
@@ -85,6 +88,31 @@ func (s *Server) IntrospectController(w http.ResponseWriter, r *http.Request, co
 		out.Agent = &machinegen.ProvenAgent{Grn: proof.Agent.Agent.String(), Epoch: proof.Agent.Epoch}
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// controllerCredential parses the controller's credential the request
+// forwards and answers what proves it: its certificate under
+// operation-authority.v1, and under operation-authority.v2 its token
+// minted for the caller (ADR-0100). Each contract takes its own field
+// and refuses the other's.
+func (s *Server) controllerCredential(r *http.Request, controller, caller grn.GRN, body machinegen.ControllerIntrospection) (func(context.Context) error, error) {
+	if tokenBorne(r) {
+		if body.CertificatePem != nil || body.Token == nil {
+			return nil, errorx.New(errorx.KindInvalidArgument,
+				"under "+operator.TokenAuthorityContractVersion+" the controller's credential is token, and certificatePem is refused")
+		}
+		token := *body.Token
+		return func(ctx context.Context) error { return s.operators.VerifyShown(ctx, controller, caller, token) }, nil
+	}
+	if body.Token != nil || body.CertificatePem == nil {
+		return nil, errorx.New(errorx.KindInvalidArgument,
+			"under "+operator.ContractVersion+" the controller's credential is certificatePem, and token is refused")
+	}
+	leaf, err := leafOf(*body.CertificatePem)
+	if err != nil {
+		return nil, err
+	}
+	return func(ctx context.Context) error { return s.certificates.Verify(ctx, controller, leaf) }, nil
 }
 
 // leafOf parses the one PEM certificate a request forwards. Anything

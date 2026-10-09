@@ -64,9 +64,10 @@ type Config struct {
 	Desired Desired
 	Adapter AdapterFiles
 	// MessageIssuer is garam's message-signing issuer, which the runtime
-	// trusts by garam's key set (ADR-0101). The caller holds it to
-	// garam's one spelling. Empty renders no issuers entry: the runtime
-	// is handed the host's configuration as it stands.
+	// trusts by garam's key set and the adapter then signs for
+	// (ADR-0101). The caller holds it to garam's one spelling. Empty
+	// renders no issuers entry and leaves the adapter unsigned: the
+	// runtime is handed the host's configuration as it stands.
 	MessageIssuer string
 }
 

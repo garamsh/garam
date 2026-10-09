@@ -152,15 +152,15 @@ release of that contract and no compatibility window (ADR-0049).
 
 ## Tokens in place of certificates
 
-**Built for an agent's operator; a supervisor-held agent and the
-control service's contracts are not yet.**
+**Built for an agent's operator and for the control service's
+contracts; a supervisor-held agent is not yet.**
 [ADR-0100](./adr/0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
 replaces an agent's certificate with a short-lived token, and the
 order is the plan's,
-`docs/plans/2026-10-09-machine-identity-migration.md`: this is step
-G1b; a supervisor minting its agent's tokens, and its own
-credential, are G1d; the control service introspecting a token is G1c.
-Until then a certificate still authenticates as it did.
+`docs/plans/2026-10-09-machine-identity-migration.md`: this is steps
+G1b and G1c; a supervisor minting its agent's tokens, and its own
+credential, are G1d. Until then a certificate still authenticates as
+it did.
 
 - **The assignee mints, at the current epoch.** `mintAgentToken`
   answers an operator for an agent assigned to it now and no other,
@@ -185,6 +185,19 @@ Until then a certificate still authenticates as it did.
   is an operator the organization registered, so naming more
   audiences widens nothing. A token renews no certificate: an agent
   holding one is minted another by its assignee.
+- **A token shown to a hosted operator is forwarded, not presented.**
+  The assignee may mint one naming the control service as its
+  audience; garam accepts it on no route, and the control service
+  forwards it where it forwarded the agent's certificate, on activation
+  and execution introspection under `execution-fence.v2`. garam reads
+  that token's row as it was minted, requires it to name the agent and
+  the caller as its audience, and hands its serial and dates to the
+  execution fence, which judges it as it judges a certificate: a token
+  of an earlier epoch or lineage, or an expired one, is answered fenced
+  while its row is kept, and not proven once a mint has swept or
+  trimmed it; either way it may not act.
+  Deleting the hosted operator takes the tokens shown to it
+  (`migrations/000041`).
 - **An unfenced agent's token comes the same way.** A `Garam`-source
   agent of the Operator, whose adapter runs in garam's legacy mode
   with no control settings (garam-agent-operator ADR 0068), is held by
@@ -270,7 +283,12 @@ in #1157.
   the bound controller, its execution and the creation record are one
   transaction (migration 000030), so a failure leaves no agent, and the
   same reference answers the same GRN and epoch while the agent stays
-  where its creation put it. The operator's own route still creates in
+  where its creation put it. Under `managed-enrollment.v2` the control
+  service presents its token and nothing else changes: creation opens
+  the agent's lineage under either value, and its controller then
+  mints the agent's tokens in it (§Tokens in place of certificates)
+  where it would have obtained the initial certificate, which takes no
+  token. The operator's own route still creates in
   two writes, as `Service.Create` in `internal/agent/service.go` says,
   and creates legacy agents alone.
 - **A managed agent is fenced from birth.** Its execution starts
@@ -320,10 +338,17 @@ in #1157.
   administrator's `agent:recover` handoff for the exact request body,
   and the agent's earlier certificates stop authorizing from the next
   request, on a connection already open too. Ordinary renewal stays in
-  the lineage the renewing certificate is current in.
-- **A recovery's answer names its chain**: the authority that signed
-  the recovered certificate and the garam server root the holder
-  verifies garam by, as initial issuance's does, so a holder verifies
+  the lineage the renewing certificate is current in. Under
+  `execution-fence.v2` it answers what may have been taken rather than
+  what was lost: it signs nothing, ends the lineage and opens the next,
+  so every token minted before it is refused from the next request, and
+  the assignee mints in the new one. The handoff travels in a
+  `Garam-Operation` header there, and the recovery records no
+  certificate or chain (`migrations/000040`).
+- **A recovery's answer under `execution-fence.v1` names its chain**:
+  the authority that signed the recovered certificate and the garam
+  server root the holder verifies garam by, as initial issuance's
+  does, so a holder verifies
   the recovered credential from the answer alone
   ([ADR-0091](./adr/0091-a-recovered-credential-names-its-chain-and-garam-stores-it-with-the-recovery.md)).
   Both are what the signer produced and are stored with the recovery,
@@ -515,16 +540,28 @@ supervisor that stops leaves the workload running.
   host fails every key fetch with 503 `issuer keys unavailable`. The
   runtime fetches the set again on a key it does not hold, which
   covers a rotation, a first key and a key retired at once, so nothing
-  on the host refreshes it. **`keys-ca-file` arrives in Sherlock
-  `v0.4.0`** (garamsh/sherlock#1008). A `0.3.0` runtime starts with
-  the entry, reading no such member (`internal/config/issuers.go` at
-  `v0.3.0`), and fetches the set against the system roots, which do
-  not reach garam's private root, so it refuses a signed message and
-  accepts an unsigned one as before. The runtime refuses a signed
-  message from an issuer it has no entry for, which is why this lands
-  before the adapter forwards a signature (#1258); until then the
-  entry admits nothing new. A generation started before the rendering
-  keeps the configuration it was given until it is replaced.
+  on the host refreshes it.
+- **The same setting turns the adapter's signing on** (#1312). Where
+  the supervisor renders garam's entry it also sets the adapter's
+  `GARAM_ADAPTER_SIGN_MESSAGES`, and where it renders none the adapter
+  signs nothing, so a host never signs to a runtime that does not trust
+  garam, and an unconfigured host is as it was. The order adapter.md
+  §Stable identifiers and the outbox asks for holds within one
+  generation: the runtime starts with its entry before the adapter
+  starts. **The floor is Sherlock `v0.4.0`, and naming the issuer is
+  what asserts it.** `keys-ca-file` arrives there
+  (garamsh/sherlock#1008), and nothing the supervisor reads from an
+  image reference says which release it is. On an older runtime the
+  rendered entry cannot reach garam's set either: a `0.3.0` runtime
+  starts with it, reading no such member (`internal/config/issuers.go`
+  at `v0.3.0`), and fetches against the system roots, which do not
+  reach garam's private root. So a host on a runtime older than
+  `v0.4.0` names no issuer, and one that does has every message
+  refused and handed out again. `tests/standalone/signing_test.go`
+  holds the configured case against Sherlock `v0.5.0`: a runtime that
+  refuses anything unsigned takes the message. A generation started
+  before the rendering keeps the configuration and the adapter it was
+  given until it is replaced.
 - **An engine it cannot reach decides nothing.** The supervisor starts,
   signals and activates nothing, and the generation keeps running with
   its adapter's token. A daemon stop may stop the runtime, and recovery

@@ -2,7 +2,6 @@ package integration_test
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/golang-migrate/migrate/v4"
@@ -16,28 +15,27 @@ import (
 )
 
 // forgetChain makes the recovery recorded under requestID read as one
-// recorded before 000036, which stored no chain. The check 000036 adds
-// refuses that write, so it is dropped and added back NOT VALID inside
-// the transaction, as 000036 adds it.
+// recorded before 000036, which stored no chain. The check refuses that
+// write, so it is dropped and added back NOT VALID inside the
+// transaction, as the migration that last defined it adds it: the
+// definition is read first, so the one 000040 replaced 000036's with is
+// what stands afterwards.
 func forgetChain(t *testing.T, p *pgxpool.Pool, agentGRN, requestID string) {
 	t.Helper()
 	ctx := context.Background()
 	tx, err := p.Begin(ctx)
 	require.NoError(t, err)
 	defer func() { _ = tx.Rollback(ctx) }()
-	for _, statement := range []string{
-		`ALTER TABLE agent_recoveries DROP CONSTRAINT agent_recoveries_chain`,
-		`UPDATE agent_recoveries SET issuer_pem = NULL, server_root_pem = NULL WHERE agent_grn = $1 AND request_id = $2`,
-		`ALTER TABLE agent_recoveries ADD CONSTRAINT agent_recoveries_chain
-			CHECK (issuer_pem IS NOT NULL AND server_root_pem IS NOT NULL) NOT VALID`,
-	} {
-		var args []any
-		if strings.HasPrefix(statement, "UPDATE") {
-			args = []any{agentGRN, requestID}
-		}
-		_, err := tx.Exec(ctx, statement, args...)
-		require.NoError(t, err)
-	}
+	var definition string
+	require.NoError(t, tx.QueryRow(ctx, `SELECT pg_get_constraintdef(oid) FROM pg_constraint
+		WHERE conname = 'agent_recoveries_chain'`).Scan(&definition))
+	_, err = tx.Exec(ctx, `ALTER TABLE agent_recoveries DROP CONSTRAINT agent_recoveries_chain`)
+	require.NoError(t, err)
+	_, err = tx.Exec(ctx, `UPDATE agent_recoveries SET issuer_pem = NULL, server_root_pem = NULL
+		WHERE agent_grn = $1 AND request_id = $2`, agentGRN, requestID)
+	require.NoError(t, err)
+	_, err = tx.Exec(ctx, `ALTER TABLE agent_recoveries ADD CONSTRAINT agent_recoveries_chain `+definition)
+	require.NoError(t, err)
 	require.NoError(t, tx.Commit(ctx))
 }
 

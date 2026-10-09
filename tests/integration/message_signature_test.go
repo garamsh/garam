@@ -16,6 +16,7 @@ import (
 	"time"
 
 	jose "github.com/go-jose/go-jose/v4"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -353,9 +354,17 @@ func TestMessageSignature_GaramSignsTheRefusalItWroteAsItsOwn(t *testing.T) {
 // they began in, which the scheduler decides.
 func TestMessageSigningKeys_ConcurrentRotationsStoreOneKey(t *testing.T) {
 	ctx := context.Background()
-	p := pool(t)
+	const replicas = 8
+	// The lock's holder, every waiting rotation and the poll counting
+	// them hold a connection at once. pgxpool's default MaxConns is
+	// max(4, NumCPU), which on a runner with few cores fits fewer.
+	cfg := pool(t).Config()
+	cfg.MaxConns = replicas + 2
+	p, err := pgxpool.NewWithConfig(ctx, cfg)
+	require.NoError(t, err)
+	t.Cleanup(p.Close)
 	key := make([]byte, ca.KeySize)
-	_, err := rand.Read(key)
+	_, err = rand.Read(key)
 	require.NoError(t, err)
 	sealer, err := ca.NewAESGCMSealer(key)
 	require.NoError(t, err)
@@ -367,7 +376,6 @@ func TestMessageSigningKeys_ConcurrentRotationsStoreOneKey(t *testing.T) {
 	_, err = holder.Exec(ctx, `SELECT pg_advisory_lock(hashtext('message_signing_keys'))`)
 	require.NoError(t, err)
 
-	const replicas = 8
 	var wg sync.WaitGroup
 	errs := make([]error, replicas)
 	for i := range replicas {

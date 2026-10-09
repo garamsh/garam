@@ -35,9 +35,13 @@ import (
 func NewServer(s Service, tokens Tokens, certificate ServerCertificate, next http.Handler) *http.Server {
 	// TLS 1.3 only: both ends of this surface are garam's, so neither
 	// needs an older one.
+	// Every connection is served a clone of base, so base names the
+	// ALPN protocols itself: ServeTLS adds them to a config of its own
+	// (go1.27.2 net/http), which the clone never sees.
 	base := &tls.Config{
 		MinVersion: tls.VersionTLS13,
 		ClientAuth: tls.RequestClientCert,
+		NextProtos: []string{"h2", "http/1.1"},
 	}
 	// Asked per handshake rather than frozen into Certificates, so a
 	// replaced certificate is presented on the next connection with
@@ -51,8 +55,7 @@ func NewServer(s Service, tokens Tokens, certificate ServerCertificate, next htt
 	// callback below no other way: a lookup then ends with the
 	// connection that needed it instead of outliving it, and the cell
 	// the outcome is written to is the one this connection's requests
-	// read. Cloning only then also carries what serving the config
-	// added to it, the ALPN protocols among them.
+	// read.
 	base.GetConfigForClient = func(hello *tls.ClientHelloInfo) (*tls.Config, error) {
 		ctx := hello.Context()
 		cfg := base.Clone()

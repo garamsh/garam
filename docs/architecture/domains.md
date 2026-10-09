@@ -68,7 +68,7 @@ Each domain's package contains:
   has none.
 - `postgres/` — the `Store` implementation against PostgreSQL, in a
   package named for the technology it implements against, which is what
-  `docs/convention/stack-go.md` §1 requires
+  `docs/convention/stack-go.md` §Service layout requires
   ([ADR-0069](./adr/0069-the-aggregates-are-data-carriers-so-the-driver-leaves-the-domain-package.md)).
   It holds the hand-written `postgres.go`, the domain's hand-written
   `queries.sql`, and the `db/` package sqlc generates from that file and
@@ -393,8 +393,9 @@ is where it was born and, under the decision above, not what owns
 it.
 
 `internal/wire` holds the conversions onto the wire formats the request
-surfaces share: the statement `Effect` and its authz-proto mapping, and
-`errorx` kinds rendered as HTTP statuses and read back from gRPC codes.
+surfaces share: the statement `Effect` and a policy's status with their
+authz-proto mappings, and `errorx` kinds rendered as HTTP statuses and
+as gRPC codes and read back from them.
 One domain imports it, so the threshold is not what places it; the
 carve-out is. Its whole exported surface is a wire type and conversions
 in both directions, and nothing in it chooses a behaviour, which is

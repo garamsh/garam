@@ -6,16 +6,7 @@ import (
 	"time"
 
 	"github.com/garamsh/garam/internal/grn"
-)
-
-// PolicyStatus is a stored policy's lifecycle state. It mirrors the
-// wire model; the engine owns the semantics (ADR-0002).
-type PolicyStatus string
-
-const (
-	PolicyStatusDraft    PolicyStatus = "draft"
-	PolicyStatusActive   PolicyStatus = "active"
-	PolicyStatusArchived PolicyStatus = "archived"
+	"github.com/garamsh/garam/internal/wire"
 )
 
 // Policy is an org's versioned rule set as the engine reports it.
@@ -23,7 +14,7 @@ type Policy struct {
 	GRN            grn.GRN
 	OrgGRN         grn.GRN
 	Name           string
-	Status         PolicyStatus
+	Status         wire.PolicyStatus
 	DefaultVersion int
 	CreatedAt      time.Time
 	UpdatedAt      time.Time

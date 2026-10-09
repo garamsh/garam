@@ -8,6 +8,7 @@ import (
 
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/wire"
 	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
 )
 
@@ -129,7 +130,7 @@ func (s *PolicyGRPCServer) ActivatePolicy(ctx context.Context, req *authzv1.Acti
 	if err != nil {
 		return nil, grpcError(errorx.Wrap(err, "policy_grn"))
 	}
-	p, err := s.store.SetPolicyStatus(ctx, g, PolicyStatusActive)
+	p, err := s.store.SetPolicyStatus(ctx, g, wire.PolicyStatusActive)
 	if err != nil {
 		return nil, grpcError(err)
 	}
@@ -144,7 +145,7 @@ func (s *PolicyGRPCServer) ArchivePolicy(ctx context.Context, req *authzv1.Archi
 	if err != nil {
 		return nil, grpcError(errorx.Wrap(err, "policy_grn"))
 	}
-	p, err := s.store.SetPolicyStatus(ctx, g, PolicyStatusArchived)
+	p, err := s.store.SetPolicyStatus(ctx, g, wire.PolicyStatusArchived)
 	if err != nil {
 		return nil, grpcError(err)
 	}
@@ -243,7 +244,7 @@ func policyToProto(p *Policy) *authzv1.Policy {
 		Grn:            p.GRN().String(),
 		OrgGrn:         p.Organization().String(),
 		Name:           p.Name(),
-		Status:         policyStatusToProto(p.Status()),
+		Status:         wire.PolicyStatusToProto(p.Status()),
 		DefaultVersion: int32(p.DefaultVersion()),
 		CreatedAt:      timestamppb.New(p.CreatedAt()),
 		UpdatedAt:      timestamppb.New(p.UpdatedAt()),
@@ -270,16 +271,4 @@ func attachmentToProto(a *PolicyAttachment) *authzv1.PolicyAttachment {
 		SubjectGrn: a.Subject().String(),
 		CreatedAt:  timestamppb.New(a.CreatedAt()),
 	}
-}
-
-func policyStatusToProto(s PolicyStatus) authzv1.PolicyStatus {
-	switch s {
-	case PolicyStatusDraft:
-		return authzv1.PolicyStatus_POLICY_STATUS_DRAFT
-	case PolicyStatusActive:
-		return authzv1.PolicyStatus_POLICY_STATUS_ACTIVE
-	case PolicyStatusArchived:
-		return authzv1.PolicyStatus_POLICY_STATUS_ARCHIVED
-	}
-	return authzv1.PolicyStatus_POLICY_STATUS_UNSPECIFIED
 }

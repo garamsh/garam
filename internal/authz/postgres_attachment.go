@@ -8,6 +8,7 @@ import (
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/pgxerr"
+	"github.com/garamsh/garam/internal/wire"
 )
 
 // AttachPolicy binds the policy to a subject. The schema rejects an
@@ -53,7 +54,7 @@ func (s *PostgresStore) DetachPolicy(ctx context.Context, policyGRN, subjectGRN 
 	if rows == 0 {
 		return ErrAttachmentNotFound
 	}
-	if policy.Status == string(PolicyStatusActive) {
+	if policy.Status == string(wire.PolicyStatusActive) {
 		remaining, err := q.CountPolicyAttachments(ctx, policyGRN.String())
 		if err != nil {
 			return pgxerr.Classify(err, "detach policy", nil, nil)

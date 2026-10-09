@@ -16,6 +16,7 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/org"
 	"github.com/garamsh/garam/internal/user"
+	"github.com/garamsh/garam/internal/wire"
 )
 
 const policyDocument = `{"Version":"2026-07-25","Statement":[{"Sid":"AllowOrgRead","Effect":"Allow","Action":["org:read"],"Resource":["grn:acme:*"]}]}`
@@ -30,7 +31,7 @@ func policyFixture(orgSlug string) (grn.GRN, *api.Policy) {
 		GRN:            g,
 		OrgGRN:         orgGRN,
 		Name:           "read-only",
-		Status:         api.PolicyStatusDraft,
+		Status:         wire.PolicyStatusDraft,
 		DefaultVersion: 1,
 		CreatedAt:      at,
 		UpdatedAt:      at,

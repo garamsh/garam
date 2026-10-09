@@ -24,7 +24,8 @@ named beside it, not from the working tree.
 
 ## What the arm is, and what it reaches
 
-`docs/architecture/README.md` rule 4 puts a change to the rules under
+`docs/architecture/README.md`'s rule "Keep this index current" puts a
+change to the rules under
 `docs/architecture/` on its own ground: such a change earns an ADR
 "unless both arms hold — no passage that had passed review is in
 violation after it, and the record it writes down was undivided".
@@ -37,7 +38,7 @@ where a rule was first decided is no part of the test.
 
 Two boundaries follow, and the issue's framing crosses both.
 
-- **The arms reach `docs/architecture/` and nothing else.** Rule 4's
+- **The arms reach `docs/architecture/` and nothing else.** That rule's
   second clause says a rule in `docs/convention/` "earns no ADR however
   much it binds", and ADR-0061 §What this does not decide says the same
   of an adoption into that directory: "Nothing, and rule 4's second
@@ -203,7 +204,7 @@ the one that fails.
 ## The six adoptions the arm reaches
 
 These are the adoptions that touched `docs/architecture/`, which is the
-only ground rule 4's third clause covers. ADR-0060 §Rejected
+only ground that rule's third clause covers. ADR-0060 §Rejected
 alternatives refuses to make the test retroactive, so none of these is
 judged a breach; the arm is applied here as a measurement.
 
@@ -446,8 +447,8 @@ the issue names as the shape — #607, whose file set is 4 of 4 under
   React components, test files and reviews. None was run against the
   tree at its adoption commit. Their verdict here is *not measured*,
   not *satisfied*.
-- **`docs/architecture/README.md` rule 1, the responsibility document
-  skeleton.** Whether a document's current decisions are consolidated
+- **`docs/architecture/README.md`'s "Responsibility document
+  skeleton".** Whether a document's current decisions are consolidated
   and synthesized is not decidable by a query, which §What nothing
   detects in that file already records at length.
 - **Every rule governing a review or a commit message.** `review.md`
@@ -480,7 +481,8 @@ the issue names as the shape — #607, whose file set is 4 of 4 under
   not asking it. Against #603 and #612, where the author did ask and
   wrote the answer down, one instance of not asking is a thin sample.
 - **Whether #379 was a breach.** It was not, and nothing here says
-  otherwise: `docs/convention/` adoptions owe no arm, and rule 4 binds
+  otherwise: `docs/convention/` adoptions owe no arm, and "Keep this
+  index current" binds
   what is written after it.
 - **What to do about the 31 unmeasured adoptions.** Naming them is
   cheap; running their rules against the tree at their commits is not,

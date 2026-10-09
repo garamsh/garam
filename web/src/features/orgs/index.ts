@@ -69,3 +69,10 @@ export {
   type PolicyVersion,
 } from "./api/policies";
 export { parseGrn, slugFromGrn } from "./grn";
+export {
+  KIND_LABEL,
+  kindFromGrn,
+  type Catalog,
+  type Lookup,
+  type SubjectKind,
+} from "./subject";

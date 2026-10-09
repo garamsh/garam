@@ -7,15 +7,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { KIND_LABEL, type Lookup } from "@/features/orgs";
 
 import { RemoveTeamMemberForm } from "./remove-team-member-form";
-import {
-  KIND_LABEL,
-  isNamedAgent,
-  memberLabel,
-  type Lookup,
-  type TeamMember,
-} from "./team-member";
+import { isNamedAgent, memberLabel, type TeamMember } from "./team-member";
 
 /**
  * What stands where a member without a name would have one: a person
@@ -70,10 +65,10 @@ export function TeamMemberTable({
                 <span
                   className={isNamedAgent(member) ? undefined : "font-mono"}
                 >
-                  {member.name}
+                  {member.label}
                 </span>
               ) : (
-                (member.name ?? (
+                (member.label ?? (
                   <span className="font-normal text-muted-foreground">
                     {
                       PLACEHOLDER[

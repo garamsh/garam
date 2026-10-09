@@ -319,7 +319,8 @@ func (s *Supervisor) files(in *intent, r Role, root []byte) []File {
 // outbox makes sure the memory volume's outbox is a directory of its
 // own before the adapter mounts it alone, read through the runtime
 // container that mounts the volume. Where it is absent and create is
-// set, it is made, owned by the runtime's account. Anything but a
+// set, it is made 0700 and owned by the runtime's account, as Sherlock
+// v0.5.0 keeps it (sherlock#1025). Anything but a
 // directory there, a link above all, refuses: a link inside the volume
 // would hand the adapter the whole of it, and the path is never
 // repaired, since replacing it could drop what it holds. No turn runs
@@ -331,7 +332,7 @@ func (s *Supervisor) outbox(ctx context.Context, runtimeID string, create bool) 
 	st, err := s.engine.StatPath(ctx, runtimeID, path)
 	if errors.Is(err, ErrAbsent) && create {
 		return s.engine.CopyFiles(ctx, runtimeID, memoryTarget, []File{
-			{Path: outboxDir, Mode: 0o755, Dir: true, UID: runtimeUID, GID: runtimeUID},
+			{Path: outboxDir, Mode: 0o700, Dir: true, UID: runtimeUID, GID: runtimeUID},
 		})
 	}
 	if errors.Is(err, ErrAbsent) {

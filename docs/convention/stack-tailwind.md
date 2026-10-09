@@ -4,8 +4,8 @@ Defaults for Tailwind CSS projects. How styles are composed: utilities
 in markup first, with `@apply`, `@utility`, and theme tokens only where
 they earn their place.
 
-Checked against Tailwind CSS 4. A claim below that names no version
-holds for it.
+Checked against tailwindcss and @tailwindcss/postcss 4.3.3. A claim
+below that names no version holds for it.
 
 ## Contents
 - Core principle
@@ -42,9 +42,10 @@ Tailwind's own locators for a version check:
   browsers, stay on v3.4.
 - Custom utilities: `@utility <name> { ... }` (replaces
   `@layer utilities` from v3).
-- `corePlugins`, `safelist`, `resolveConfig`, `theme()` function — all
-  gone or replaced in v4. The upgrade tool (`npx @tailwindcss/upgrade`)
-  handles most migrations.
+- `corePlugins`, `safelist` (`@source inline()` instead) and
+  `resolveConfig` are gone in v4; the `theme()` function still works but
+  is deprecated in favour of the theme variables. The upgrade tool
+  (`npx @tailwindcss/upgrade`) handles most migrations.
 - Native CSS nesting supported — no preprocessor step needed.
 
 ## Composition: inline utilities first
@@ -92,10 +93,10 @@ Rung 2 — the chain repeats, so it becomes a class:
 ```
 
 Rung 3 — a class Tailwind does not ship, left open so variants can
-target it (`lg:scrollbar-none`, `hover:scrollbar-none`):
+target it (`lg:no-scrollbar`, `hover:no-scrollbar`):
 
 ```css
-@utility scrollbar-none {
+@utility no-scrollbar {
   scrollbar-width: none;
   &::-webkit-scrollbar {
     display: none;
@@ -130,8 +131,10 @@ tokens, never those.
 - **Responsive** — mobile-first: `md:grid-cols-2 lg:grid-cols-3`.
 - **State** — `hover:`, `focus:`, `active:`, `disabled:`,
   `group-hover:`, `peer-*`.
-- **Dark mode** — `dark:bg-gray-900`. Toggle via `<html class="dark">`
-  or `@media (prefers-color-scheme: dark)`.
+- **Dark mode** — `dark:bg-gray-900` follows
+  `@media (prefers-color-scheme: dark)` by default. Toggling with
+  `<html class="dark">` needs the variant overridden:
+  `@custom-variant dark (&:where(.dark, .dark *));`.
 - **Layout** — prefer flex/grid + `gap-*` over `space-x-*` / `space-y-*`
   (v4 selector change for performance).
 - **Sizing** — `size-*` for square; `w-*`/`h-*` otherwise.

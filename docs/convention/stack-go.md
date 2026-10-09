@@ -3,8 +3,9 @@
 > How a Go module is laid out and where each kind of code belongs:
 > directories, naming, errors, logging, comments, tests, imports.
 >
-> Checked against Go 1.21 and mockery 3. A claim below that names no
-> version holds for these.
+> Checked against go1.27.2, mockery v3.8.0 and goimports
+> (golang.org/x/tools) v0.51.0. A claim below that names no version
+> holds for these.
 
 ## Contents
 - 0. Folder & file naming — strict
@@ -180,12 +181,15 @@ file declares and which depends.
 - **The import goes one way.** `internal/<domain>/<technology>/` may
   import `internal/<domain>` for the types in the interface's
   signatures; the reverse import never happens.
-- Go rejects an import cycle at compile time but does not detect a
-  `type → struct → type` cycle. Those are found by reading.
+- Go rejects an import cycle at compile time, and a type that contains
+  itself by value (`invalid recursive type`). A cycle through a
+  pointer, slice, map or interface compiles; those are found by
+  reading.
 - **A boundary that erases a static type is read back with the comma-ok
   form.** `context.Value` returns `any`, and probing whether a request
-  satisfies an interface has no other syntax. `v, ok := x.(T)` with an
-  explicit branch for `!ok` is the accepted form; a bare `x.(T)` is not,
+  satisfies an interface has no syntax but a type assertion or a type
+  switch. `v, ok := x.(T)` with an explicit branch for `!ok`, or a type
+  switch with a `default`, is the accepted form; a bare `x.(T)` is not,
   because it panics instead of handling the case.
 
 ## 3. Naming
@@ -361,14 +365,17 @@ Where the project generates mocks, generate them with
   which mockery reads equally. One or the other, not both. It declares
   which interfaces to mock, output directory, package names,
   per-interface overrides. The leading dot is load-bearing: mockery
-  v3.7.2 discovers only the dotted names, and an undotted file is
-  reachable only through `--config`.
+  discovers only the dotted names, in the working directory or a
+  parent, and an undotted file is reachable only through `--config` or
+  `MOCKERY_CONFIG`.
 - **Generated location:** declared in that file by `dir`, the output
   directory, with `filename` for the file itself — at the top level,
-  or per interface in that interface's `config:` block under
-  `interfaces:`. Default: `mocks/<package>/<Interface>.go` at module
-  root. A dependency interface is scoped to the one domain that
-  declares it, so `dir: internal/<domain>/mocks/` fits it too. Pick
+  per package under `packages.<path>.config:`, or per interface in
+  that interface's `config:` block under `interfaces:`. Default:
+  `mocks_test.go` in the interface's own directory and package, so a
+  shared location — `mocks/<package>/` at module root, or
+  `internal/<domain>/mocks/` for a dependency interface, which is
+  scoped to the one domain that declares it — is set with `dir`. Pick
   one convention per project.
 - **Generation:** `mockery` (reads config) or `go generate ./...`
   when interfaces carry `//go:generate mockery` directives. Pick one.
@@ -384,8 +391,9 @@ Three groups, separated by blank lines:
 3. Internal module
 
 `goimports -local <module path>` produces the third group. Plain
-`goimports` emits two — standard library and everything else — so the
-`-local` flag is what separates the internal module.
+`goimports` separates only the standard library from everything else,
+and keeps a blank-line group the author wrote without creating one, so
+the `-local` flag is what separates the internal module.
 Use `go mod tidy` after every change. Don't commit `go.sum` updates
 you don't recognize. `go vet ./...`. `golangci-lint run` if
 configured.
@@ -395,11 +403,12 @@ configured.
 These are the commands that sit behind the project's entry-point
 names.
 
-`go test` prints only `ok <pkg>` for a package that passes and discards
-the rest of its output; the full output appears on failure, or under
-`-v`. So anything a test binary prints about what it covered is missing
-from exactly the run that needed it. An entry point that has something
-to report prints it itself, before invoking `go test`.
+In package list mode (`go test ./...`), `go test` prints only `ok <pkg>`
+for a package that passes and discards the rest of its output; the full
+output appears on failure, or under `-v` or `-bench`. So anything a test
+binary prints about what it covered is missing from exactly the run that
+needed it. An entry point that has something to report prints it itself,
+before invoking `go test`.
 
 | Task | Command |
 |------|---------|
@@ -416,12 +425,13 @@ to report prints it itself, before invoking `go test`.
 
 Every tool the module invokes is built with a toolchain at least the
 module's `go` directive. `go install tool@version` and `go run
-tool@version` take the toolchain from the tool's own `go.mod`, not from
-this module — mockery 3.7.3 declares `go 1.25.5` — so a tool whose
-directive is older yields a binary that refuses to load the module's
-packages, fatally and at package-load time. Set that floor once for the
-module rather than per tool: `GOTOOLCHAIN` with an `+auto` suffix sets a
-minimum without stopping a tool that needs more.
+tool@version` run outside this module, so they choose a toolchain from
+the tool's own `go.mod` and the default toolchain, never from this
+module's `go` line — mockery v3.8.0 declares `go 1.25.5` — so a tool
+whose directive is older yields a binary that refuses to load the
+module's packages, fatally and at package-load time. Set that floor once
+for the module rather than per tool: `GOTOOLCHAIN` with an `+auto`
+suffix sets a minimum without stopping a tool that needs more.
 
 A task runner (Taskfile, Mage, Make) wraps these under the entry-point
 names; the underlying go commands stay the same.

@@ -236,10 +236,13 @@ SELECT agent_execution_admit(
 SELECT * FROM message_signing_keys
 ORDER BY signs_from, created_at, id;
 
--- DatabaseNow is the instant the keys above are judged against, read in
--- the same transaction so both describe one moment.
+-- DatabaseNow is the instant the keys above are judged against. It is
+-- the clock when the statement runs, not now(), which is when the
+-- transaction began: under the rotation lock that is before the wait,
+-- so a key a replica stored while this one waited would read as not
+-- yet begun, and the lead would be short by the wait.
 -- name: DatabaseNow :one
-SELECT now()::timestamptz;
+SELECT clock_timestamp()::timestamptz;
 
 -- LockSigningKeys serializes rotation across every replica for the
 -- rest of the transaction, so two processes that both find a key due
@@ -247,12 +250,12 @@ SELECT now()::timestamptz;
 -- name: LockSigningKeys :exec
 SELECT pg_advisory_xact_lock(hashtext('message_signing_keys'));
 
--- InsertSigningKey stores a new key that signs once lead has passed on
--- the database's clock.
+-- InsertSigningKey stores a new key that signs from signs_from, which
+-- the caller derives from the instant it decided the key was due.
 -- name: InsertSigningKey :exec
 INSERT INTO message_signing_keys (id, public_key, sealed_private_key, signs_from)
 VALUES (sqlc.arg('id'), sqlc.arg('public_key'), sqlc.arg('sealed_private_key'),
-        now() + sqlc.arg('lead')::interval);
+        sqlc.arg('signs_from'));
 
 -- WithdrawSigningKey stops a key signing and removes it from the
 -- published set at once. Withdrawing one already withdrawn keeps the

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"sync"
 	"testing"
 	"time"
 
@@ -23,6 +24,7 @@ import (
 	capg "github.com/garamsh/garam/internal/ca/postgres"
 	"github.com/garamsh/garam/internal/delivery"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/message"
 	"github.com/garamsh/garam/internal/org"
 )
 
@@ -305,4 +307,52 @@ func TestMessageSignature_GaramSignsTheRefusalItWroteAsItsOwn(t *testing.T) {
 	claims, err = verify(set, string(testIssuer), strangerGRN.String(), claimed.Message.Id, *claimed.Content, *claimed.Signature)
 	require.NoError(t, err)
 	assert.Equal(t, siblingGRN.String(), claims.Sub)
+}
+
+// TestMessageSigningKeys_ConcurrentRotationsStoreOneKey holds the
+// rotation lock against Postgres: every replica that finds no key
+// signing decides again once it holds the lock, on the clock as it then
+// stands, so however many rotate at once one key is stored. The test
+// holds the lock itself until every rotation is waiting on it, which is
+// the moment the decision instant would otherwise have been fixed.
+func TestMessageSigningKeys_ConcurrentRotationsStoreOneKey(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	key := make([]byte, ca.KeySize)
+	_, err := rand.Read(key)
+	require.NoError(t, err)
+	sealer, err := ca.NewAESGCMSealer(key)
+	require.NoError(t, err)
+	require.Equal(t, 0, countRows(t, p, `SELECT count(*) FROM message_signing_keys`), "the setup started with no key")
+
+	holder, err := p.Acquire(ctx)
+	require.NoError(t, err)
+	defer holder.Release()
+	_, err = holder.Exec(ctx, `SELECT pg_advisory_lock(hashtext('message_signing_keys'))`)
+	require.NoError(t, err)
+
+	const replicas = 8
+	var wg sync.WaitGroup
+	errs := make([]error, replicas)
+	for i := range replicas {
+		ring, err := message.NewKeyring(message.NewPostgresStore(p), sealer, testIssuer, message.Config{})
+		require.NoError(t, err)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, errs[i] = ring.PublishedKeys(ctx)
+		}()
+	}
+	require.Eventually(t, func() bool {
+		return countRows(t, p, `SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND NOT granted
+			AND database = (SELECT oid FROM pg_database WHERE datname = current_database())`) == replicas
+	}, 10*time.Second, 20*time.Millisecond, "every rotation was waiting on the lock")
+
+	_, err = holder.Exec(ctx, `SELECT pg_advisory_unlock(hashtext('message_signing_keys'))`)
+	require.NoError(t, err)
+	wg.Wait()
+	for _, err := range errs {
+		require.NoError(t, err)
+	}
+	assert.Equal(t, 1, countRows(t, p, `SELECT count(*) FROM message_signing_keys`))
 }

@@ -174,11 +174,14 @@ func (q *Queries) CountConsentsByOrg(ctx context.Context, org string) (int64, er
 }
 
 const databaseNow = `-- name: DatabaseNow :one
-SELECT now()::timestamptz
+SELECT clock_timestamp()::timestamptz
 `
 
-// DatabaseNow is the instant the keys above are judged against, read in
-// the same transaction so both describe one moment.
+// DatabaseNow is the instant the keys above are judged against. It is
+// the clock when the statement runs, not now(), which is when the
+// transaction began: under the rotation lock that is before the wait,
+// so a key a replica stored while this one waited would read as not
+// yet begun, and the lead would be short by the wait.
 func (q *Queries) DatabaseNow(ctx context.Context) (pgtype.Timestamptz, error) {
 	row := q.db.QueryRow(ctx, databaseNow)
 	var column_1 pgtype.Timestamptz
@@ -371,24 +374,24 @@ func (q *Queries) GrantConsent(ctx context.Context, arg GrantConsentParams) (Mes
 const insertSigningKey = `-- name: InsertSigningKey :exec
 INSERT INTO message_signing_keys (id, public_key, sealed_private_key, signs_from)
 VALUES ($1, $2, $3,
-        now() + $4::interval)
+        $4)
 `
 
 type InsertSigningKeyParams struct {
 	ID               string
 	PublicKey        []byte
 	SealedPrivateKey []byte
-	Lead             pgtype.Interval
+	SignsFrom        pgtype.Timestamptz
 }
 
-// InsertSigningKey stores a new key that signs once lead has passed on
-// the database's clock.
+// InsertSigningKey stores a new key that signs from signs_from, which
+// the caller derives from the instant it decided the key was due.
 func (q *Queries) InsertSigningKey(ctx context.Context, arg InsertSigningKeyParams) error {
 	_, err := q.db.Exec(ctx, insertSigningKey,
 		arg.ID,
 		arg.PublicKey,
 		arg.SealedPrivateKey,
-		arg.Lead,
+		arg.SignsFrom,
 	)
 	return err
 }

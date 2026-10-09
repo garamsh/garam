@@ -213,6 +213,11 @@ content nor a detached signature over it. The payload is:
   current key goes on signing past the retired key's start, and the
   replacement is announced with the full lead; nothing signs at once
   for it.
+- **Rotation decides on the clock as it stands once the lock is held.**
+  Every replica that finds a key due takes one lock, reads the keys
+  and the database's clock after it holds it, and a key it stores
+  signs from that instant plus its lead, so replicas rotating at once
+  store one key between them and no lead is shortened by the wait.
 - **Who rotates.** garam announces the next key on its own once the
   current one has signed for 90 days less the lead, one at a time. It
   checks whenever it signs a claim or serves the set, so a deployment

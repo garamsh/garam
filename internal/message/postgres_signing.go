@@ -32,7 +32,9 @@ func (s *PostgresStore) SigningKeys(ctx context.Context) ([]*SigningKey, time.Ti
 }
 
 // RotateSigningKeys runs prepare under the rotation lock, so two
-// replicas that both found a key due store one between them.
+// replicas that both found a key due store one between them. The keys
+// and the clock are read after the lock is held, and the key stored
+// signs from that same instant plus its lead.
 func (s *PostgresStore) RotateSigningKeys(ctx context.Context, prepare func(keys []*SigningKey, now time.Time) (*NewSigningKey, error)) error {
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		q := s.q.WithTx(tx)
@@ -51,7 +53,7 @@ func (s *PostgresStore) RotateSigningKeys(ctx context.Context, prepare func(keys
 			ID:               string(key.ID),
 			PublicKey:        key.PublicKey,
 			SealedPrivateKey: key.SealedPrivateKey,
-			Lead:             interval(key.Lead),
+			SignsFrom:        stamp(now.Add(key.Lead)),
 		})
 		return pgxerr.Classify(err, "insert signing key", nil, nil)
 	})

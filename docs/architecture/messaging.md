@@ -170,7 +170,8 @@ claim's members and the key-set route.
 The keys are rows of their own, never deleted, each sealed under the
 key-encryption key the certificate authorities are sealed under and
 bound to its row. Whichever path reads them first — a claim or the key
-set — creates the key that is due under a lock every replica takes:
+set — creates the key that is due under a lock every replica takes,
+deciding on the database's clock read once the lock is held:
 with no key signing, one that signs at once, which is a deployment's
 first and the replacement for one retired at once; otherwise the next
 one, announced two hours before it signs once the current one has

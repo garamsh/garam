@@ -59,8 +59,9 @@ type Service interface {
 	ReportRuntimeState(ctx context.Context, caller, agentGRN grn.GRN, epoch int, state RuntimeState, fence Fencing) error
 	// MintAccessToken answers a token the agent authenticates with in
 	// place of a certificate, for an agent the calling operator or
-	// supervisor holds at the current epoch, accepted by garam where audience is nil and
-	// by that hosted operator where it names one (ADR-0100). It is
+	// supervisor holds at the current epoch, accepted by garam where
+	// audience is nil and by that hosted operator where it names one
+	// (ADR-0100). It is
 	// admitted where the certificate route would be, and inside the
 	// lineage of an agent whose lifecycle authority opened one; every
 	// other caller and agent is refused as AccessTokenStore says.

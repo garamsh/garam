@@ -166,8 +166,9 @@ func standaloneContract(w http.ResponseWriter, version machinegen.StandaloneCont
 
 // supervisorRoutes is everything a supervisor reaches (ADR-0082,
 // ADR-0100): its own identity, its own renewal, the execution routes it
-// holds lifecycle authority on, and the mint of its one agent's tokens. They are the router's
-// patterns, so a route added later is outside the set until named here.
+// holds lifecycle authority on, and the mint of its one agent's
+// tokens. They are the router's patterns, so a route added later is
+// outside the set until named here.
 var supervisorRoutes = map[string]bool{
 	http.MethodGet + " /identity":                                              true,
 	http.MethodPost + " /supervisors/self/certificate":                         true,

@@ -116,9 +116,10 @@ changes is served to a token under its v2 value and to a certificate
 under v1, and a request whose value disagrees with its credential is
 refused naming the value the credential takes; beside a token an
 operation authority or reference travels in a `Garam-Operation`
-header, since the token takes `Authorization`. A supervisor presents a
-certificate until the plan's step G1d
-(`docs/plans/2026-10-09-machine-identity-migration.md`).
+header, since the token takes `Authorization`. A standalone host's
+supervisor exchanges the credential its v2 enrollment answered for a
+token on the same `exchangeToken`, prefixed `garam_st_`, and
+`ConfineSupervisors` bounds its token as it bounds its certificate.
 
 **The listener requests a client certificate and does not require
 one** — `tls.RequestClientCert` in `internal/machine/listener.go` — so
@@ -277,10 +278,14 @@ answer that cannot be decided from current state is the listener's
 decided on `agent:enroll` from current state and carry no contract
 version, as an operator's registration does not; on the machine
 listener `enrollStandaloneAgent` and `renewSupervisorCertificate`
-require and answer `Garam-Contract-Version: standalone-enrollment.v1`.
-A supervisor's certificate is admitted to those, to `getIdentity` and
-to the three execution routes it holds authority on, and refused on
-every other route at the router before a handler runs. The
+require and answer `Garam-Contract-Version: standalone-enrollment.v1`,
+and `enrollStandaloneAgent` answers `standalone-enrollment.v2` as well,
+the value the request names: an approval binding the host's keys is
+spent under v1 alone and one binding none under v2 alone (ADR-0100). A
+supervisor, by certificate or by token, is admitted to those, to
+`getIdentity`, to the three execution routes it holds authority on and
+to its agent's token mint, and refused on every other route at the
+router before a handler runs. The
 specifications are authoritative for their forms, and
 [agents.md](./agents.md) §Standalone hosts for what they decide.
 

@@ -393,8 +393,9 @@ is where it was born and, under the decision above, not what owns
 it.
 
 `internal/wire` holds the conversions onto the wire formats the request
-surfaces share: the statement `Effect` and its authz-proto mapping, and
-`errorx` kinds rendered as HTTP statuses and read back from gRPC codes.
+surfaces share: the statement `Effect` and a policy's status with their
+authz-proto mappings, and `errorx` kinds rendered as HTTP statuses and
+as gRPC codes and read back from them.
 One domain imports it, so the threshold is not what places it; the
 carve-out is. Its whole exported surface is a wire type and conversions
 in both directions, and nothing in it chooses a behaviour, which is

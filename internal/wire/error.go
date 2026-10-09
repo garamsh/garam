@@ -110,6 +110,45 @@ func messageOfKind(k errorx.Kind) string {
 	}
 }
 
+// CodeOf maps error kinds to gRPC status codes by name; [KindOf] is
+// its inverse.
+func CodeOf(k errorx.Kind) codes.Code {
+	switch k {
+	case errorx.KindCanceled:
+		return codes.Canceled
+	case errorx.KindInvalidArgument:
+		return codes.InvalidArgument
+	case errorx.KindDeadlineExceeded:
+		return codes.DeadlineExceeded
+	case errorx.KindNotFound:
+		return codes.NotFound
+	case errorx.KindAlreadyExists:
+		return codes.AlreadyExists
+	case errorx.KindPermissionDenied:
+		return codes.PermissionDenied
+	case errorx.KindResourceExhausted:
+		return codes.ResourceExhausted
+	case errorx.KindFailedPrecondition:
+		return codes.FailedPrecondition
+	case errorx.KindAborted:
+		return codes.Aborted
+	case errorx.KindOutOfRange:
+		return codes.OutOfRange
+	case errorx.KindUnimplemented:
+		return codes.Unimplemented
+	case errorx.KindInternal:
+		return codes.Internal
+	case errorx.KindUnavailable:
+		return codes.Unavailable
+	case errorx.KindDataLoss:
+		return codes.DataLoss
+	case errorx.KindUnauthenticated:
+		return codes.Unauthenticated
+	default:
+		return codes.Unknown
+	}
+}
+
 // KindOf maps gRPC status codes back to error kinds by name.
 func KindOf(c codes.Code) errorx.Kind {
 	switch c {

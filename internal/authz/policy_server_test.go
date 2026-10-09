@@ -146,7 +146,7 @@ func TestPolicyGRPCServer_ActivateInvalidatesTheOrgCache(t *testing.T) {
 	store := mocks.NewMockStore(t)
 	store.EXPECT().ActivePolicies(mock.Anything, acme).
 		Return(nil, nil).Once()
-	store.EXPECT().SetPolicyStatus(mock.Anything, mock.Anything, authz.PolicyStatusActive).
+	store.EXPECT().SetPolicyStatus(mock.Anything, mock.Anything, wire.PolicyStatusActive).
 		Return(authz.NewPolicy(policyGRN(t, acme), acme, "read-only"), nil).Once()
 	store.EXPECT().ActivePolicies(mock.Anything, acme).
 		Return([]authz.ActivePolicy{orgWidePolicy("activated", wire.EffectAllow)}, nil).Once()
@@ -174,7 +174,7 @@ func TestPolicyGRPCServer_ArchiveInvalidatesTheOrgCache(t *testing.T) {
 	store := mocks.NewMockStore(t)
 	store.EXPECT().ActivePolicies(mock.Anything, acme).
 		Return([]authz.ActivePolicy{orgWidePolicy("active", wire.EffectAllow)}, nil).Once()
-	store.EXPECT().SetPolicyStatus(mock.Anything, mock.Anything, authz.PolicyStatusArchived).
+	store.EXPECT().SetPolicyStatus(mock.Anything, mock.Anything, wire.PolicyStatusArchived).
 		Return(authz.NewPolicy(policyGRN(t, acme), acme, "read-only"), nil).Once()
 	store.EXPECT().ActivePolicies(mock.Anything, acme).
 		Return(nil, nil).Once()
@@ -204,7 +204,7 @@ func TestPolicyGRPCServer_ArchiveRejectsBadGRN(t *testing.T) {
 	acme := orgGRN("acme")
 	g := policyGRN(t, acme)
 	store := mocks.NewMockStore(t)
-	store.EXPECT().SetPolicyStatus(mock.Anything, g, authz.PolicyStatusArchived).
+	store.EXPECT().SetPolicyStatus(mock.Anything, g, wire.PolicyStatusArchived).
 		Return(authz.NewPolicy(g, acme, "read-only"), nil).Once()
 	srv := authz.NewPolicyGRPCServer(store, authz.NewPolicyCache(store))
 

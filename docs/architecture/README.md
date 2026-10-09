@@ -318,14 +318,18 @@ ADRs:
 - [0012](./adr/0012-agent-operator-model.md) — agents provisioned by
   operators garam never dials
 - [0013](./adr/0013-agent-messaging.md) — agent messaging through a
-  garam API an adapter polls
+  garam API an adapter polls; its per-organization authority issuing
+  the adapter's certificates is superseded by 0100
 - [0014](./adr/0014-agent-authentication.md) — agents authenticate with
   mTLS on a listener of their own; an agent's revocation by lifetime is
-  superseded by 0078
+  superseded by 0078, and the client certificate, its authority and
+  revocation by lifetime by 0100
 - [0015](./adr/0015-operator-identity.md) — operators authenticate as
-  agents do; key material travels as files
+  agents do; key material travels as files; mTLS for operators, the
+  out-of-band first certificate and the shared expiry are superseded by
+  0100
 - [0016](./adr/0016-ca-key-custody.md) — a certificate authority's key
-  is sealed by a key the process holds
+  is sealed by a key the process holds; superseded by 0100
 - [0017](./adr/0017-machine-process.md) — machine identities are served
   by a process of their own
 - [0018](./adr/0018-delivery-acknowledgement.md) — a message is
@@ -360,10 +364,12 @@ ADRs:
 - [0031](./adr/0031-detaching-an-active-policys-last-attachment-is-refused.md)
   — detaching an active policy's last attachment is refused
 - [0032](./adr/0032-garam-ships-the-command-that-mints-an-operators-first-certificate.md)
-  — garam ships the command that mints an operator's first certificate
+  — garam ships the command that mints an operator's first certificate;
+  superseded by 0100
 - [0033](./adr/0033-an-operator-claims-the-agent-a-definition-mints.md)
   — an operator claims the agent a definition mints; superseded by
-  0077 as the controller's source and as how a managed agent is created
+  0077 as the controller's source and as how a managed agent is
+  created, and by 0100 as what admits it to a certificate route
 - [0034](./adr/0034-a-delivered-message-keeps-its-key-and-drops-its-body.md)
   — a delivered message keeps its key and drops its body
 - [0035](./adr/0035-a-cross-organization-message-needs-both-organizations-consent.md)
@@ -382,7 +388,9 @@ ADRs:
   registry and publishing 0093 supersedes in turn
 - [0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)
   — the machine listener presents a pinned garam server certificate, and
-  certificates rotate without a restart
+  certificates rotate without a restart; its client certificates, the
+  issuing authority in the answer and the agent's self-renewal are
+  superseded by 0100
 - [0041](./adr/0041-a-password-is-garams-own-credential-verified-by-argon2id.md)
   — a password is garam's own credential, verified by Argon2id and
   minted by an invitation
@@ -396,10 +404,11 @@ ADRs:
   — the development-only sign-in provider is removed, superseding
   ADR-0010
 - [0045](./adr/0045-an-organization-registers-an-operator.md) — an
-  organization registers an operator, and a definition may name no other
+  organization registers an operator, and a definition may name no
+  other; that a registration issues no credential is superseded by 0100
 - [0046](./adr/0046-an-operator-renews-its-certificate-by-presenting-the-one-it-holds.md)
   — an operator renews its certificate by presenting the one it holds,
-  and only the newest one renews
+  and only the newest one renews; superseded by 0100
 - [0047](./adr/0047-a-domain-reaches-a-sibling-through-its-declared-surface.md)
   — garam is partitioned by domain, and a boundary reaches a sibling
   through the surface that sibling declares
@@ -457,7 +466,9 @@ ADRs:
   recorded on the pull request that performs it
 - [0064](./adr/0064-an-operator-enrols-with-a-one-time-token-and-keeps-its-key-in-its-own-cluster.md)
   — an operator enrols with a one-time token, generates its own key pair
-  in its own cluster, and garam signs a key it never holds
+  in its own cluster, and garam signs a key it never holds; the token,
+  the request, the route and the handshake identity are superseded by
+  0100
 - [0065](./adr/0065-garam-states-what-deleting-an-organization-destroys-before-the-act.md)
   — garam answers what deleting an organization would destroy before
   the act, counting on the server and naming the certificate authority
@@ -470,7 +481,8 @@ ADRs:
 - [0067](./adr/0067-a-member-mints-a-second-enrollment-token-where-the-operator-holds-no-certificate.md)
   — a member mints an operator another enrollment token where it holds
   no certificate, superseding ADR-0064's open item, and the refusal
-  where it holds one is where that question stays open
+  where it holds one is where that question stays open; superseded by
+  0100, which answers it
 - [0069](./adr/0069-the-aggregates-are-data-carriers-so-the-driver-leaves-the-domain-package.md)
   — the aggregates are data carriers, so the driver leaves the domain
   package: no method on one assigns a field, so the fields are exported,
@@ -485,7 +497,8 @@ ADRs:
   so deleting stops the operator with no revocation list, no responder
   and no stored serial. Supersedes ADR-0045's refusal of a delete route
   and, for an operator alone, ADR-0014's "revocation is by lifetime";
-  an agent is answered without a read and its certificate is untouched
+  an agent is answered without a read and its certificate is untouched;
+  its per-connection read is superseded by 0100's per-request one
 - [0071](./adr/0071-a-development-image-shares-the-release-repository-and-its-tag-says-it-is-not-a-release.md)
   — a development image shares the release repository, and its tag says
   it is not a release: one repository per image, a bare `X.Y.Z` for a
@@ -532,7 +545,8 @@ ADRs:
   lineages are refused per request, applied configuration is the
   runtime's report, and execution authority is a scoped expiring
   delegation plus a high-trust permission; garam's generation fence and
-  recovery are built, and the shipped adapter does not use them yet
+  recovery are built, and the shipped adapter does not use them yet; a
+  lineage of certificates is superseded by 0100's lineage of tokens
 - [0079](./adr/0079-interservice-contracts-keep-adjacent-releases-compatible-and-replay-by-stable-identifier.md)
   — interservice contracts keep adjacent releases compatible in both
   upgrade orders and refuse what they do not support, a message replays
@@ -556,7 +570,9 @@ ADRs:
   registers for one agent on an administrator's approval of the host's
   own keys; it activates that agent on the execution routes, renews
   its own certificate, and is replaced or revoked only by an
-  administrator; the host's runner is 0085's
+  administrator; the host's runner is 0085's; its key pairs, spending
+  by certificate requests and certificate renewal are superseded by
+  0100
 - [0083](./adr/0083-a-durable-reply-is-admitted-under-a-fixed-budget-from-its-creation-and-its-key-is-answered-after-it.md)
   — `POST /outbox-messages` under `durable-delivery.v1` stores a
   durable reply only while its creation instant is inside a fixed
@@ -570,7 +586,9 @@ ADRs:
   request identifier, a verified binding, the highest token version,
   and no protected call before activation or after a definite refusal;
   the adapter's half is built, a standalone supervisor serves it
-  (0085), and the Operator control service does not yet
+  (0085), and the Operator control service does not yet; its mTLS
+  transport and `Garam-Placement` in `Authorization` are superseded by
+  0100
 - [0085](./adr/0085-a-standalone-supervisor-owns-each-generation-as-three-containers-on-a-rootless-docker-daemon.md)
   — a standalone supervisor, a foreground host process holding the
   Docker socket alone, owns each generation as a runtime, a workspace
@@ -578,14 +596,16 @@ ADRs:
   it created and recognises by a nonce; it adopts by a recorded name
   and nonce, drains with SIGTERM and no deadline until both writers
   exit, and serves the adapter's activation over TLS on a socket only
-  that generation mounts
+  that generation mounts; the adapter's certificate there is superseded
+  by 0100
 - [0086](./adr/0086-a-legacy-agent-cuts-over-through-stages-garam-records-under-its-execution-lock.md)
   — a legacy agent moves its source to the Operator under its GRN
   through `agent-cutover.v1`: garam freezes the source against the
   import's digest and records the switch under the agent's execution
   lock, holds the agent's first activation and its operator's
   certificate route on that switch, keeps the values archival, and
-  names each refusal in the machine `Error`'s `reason`
+  names each refusal in the machine `Error`'s `reason`; the
+  certificate route's refusal is superseded by 0100
 - [0087](./adr/0087-a-standalone-runtime-revision-names-its-ego-and-instructions-and-the-adapter-has-its-own-way-to-garam.md)
   — a standalone runtime takes its ego and operator instructions from
   files the host names, and its configuration's revision names both,
@@ -618,7 +638,8 @@ ADRs:
   stores the chain the signer produced with the recovery so a retry
   answers it again, and a recovery recorded before 000036 is answered
   with the chain the signer signs under now, which holds while neither
-  the organization's authority nor the server root has been replaced
+  the organization's authority nor the server root has been replaced;
+  superseded by 0100
 - [0092](./adr/0092-a-test-image-is-published-to-ghcr-from-dev-and-no-release-carries-it.md)
   — a test image holding `garam`, `testprincipal` and the migrations
   is published on every push to `dev` to a private GHCR package of its
@@ -669,6 +690,13 @@ ADRs:
   the template's §Rules every shape carries and bootstrap line are
   declined, and the section-scope rule is taken where Garam keeps the
   file it lands on
+- [0100](./adr/0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
+  — every machine caller exchanges a credential garam issues for
+  short-lived tokens it presents over server TLS alone, retiring client
+  certificates and the per-organization authorities; an operator's
+  credential, its tokens and their per-request revocation are built
+  (G1a), and the rest lands in the steps of
+  `docs/plans/2026-10-09-machine-identity-migration.md`
 - [0101](./adr/0101-garam-signs-every-message-it-delivers-and-the-agent-verifies-it-alone.md)
   — garam signs each message at every hand-out with an ES256 JWS beside
   the content, binding issuer, sender, audience, organization, message

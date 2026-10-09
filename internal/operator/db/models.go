@@ -68,6 +68,14 @@ type OperatorCertificate struct {
 	IssuedAt    pgtype.Timestamptz
 }
 
+type OperatorCredential struct {
+	ID             int64
+	OperatorGrn    string
+	CredentialHash string
+	IssuedBy       string
+	IssuedAt       pgtype.Timestamptz
+}
+
 type OperatorDelegation struct {
 	ID          string
 	OrgGrn      string
@@ -92,6 +100,15 @@ type OperatorEnrollmentToken struct {
 	MintedBy    string
 	MintedAt    pgtype.Timestamptz
 	ExpiresAt   pgtype.Timestamptz
+}
+
+type OperatorToken struct {
+	TokenHash    string
+	CredentialID int64
+	OperatorGrn  string
+	AudienceGrn  pgtype.Text
+	IssuedAt     pgtype.Timestamptz
+	ExpiresAt    pgtype.Timestamptz
 }
 
 type Org struct {

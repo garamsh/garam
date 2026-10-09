@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 )
 
@@ -48,24 +49,58 @@ type Service interface {
 	// key where it will be used, and garam signs what it is sent
 	// (ADR-0064).
 	Enroll(ctx context.Context, token string, request CertificateRequest) (*Certificate, error)
+	// Exchange answers a token for the operator credential belongs to,
+	// accepted by garam where audience is nil and by that hosted
+	// operator where it names one, for [TokenTTL] (ADR-0100). It
+	// refuses a credential no registered operator holds with
+	// ErrCredentialInvalid, and an audience that is not another
+	// operator of the same organization with ErrAudienceInvalid.
+	Exchange(ctx context.Context, credential string, audience *grn.GRN) (*Token, error)
 }
 
 type service struct {
 	store       CertificateStore
 	enrollments EnrollmentStore
+	tokens      TokenStore
 	issuer      Issuer
 	now         func() time.Time
 }
 
 // NewService constructs the service over the record it keeps of each
-// operator's certificate, the tokens an enrollment spends, and the
-// issuer it signs through.
-func NewService(store CertificateStore, enrollments EnrollmentStore, issuer Issuer, cfg Config) Service {
+// operator's certificate, the tokens an enrollment spends, the tokens
+// a credential is exchanged for, and the issuer it signs through.
+func NewService(store CertificateStore, enrollments EnrollmentStore, tokens TokenStore, issuer Issuer, cfg Config) Service {
 	now := cfg.Now
 	if now == nil {
 		now = time.Now
 	}
-	return &service{store: store, enrollments: enrollments, issuer: issuer, now: now}
+	return &service{store: store, enrollments: enrollments, tokens: tokens, issuer: issuer, now: now}
+}
+
+func (s *service) Exchange(ctx context.Context, credential string, audience *grn.GRN) (*Token, error) {
+	// A value no issuance could have produced reads nothing.
+	if !WellFormed(credential, CredentialPrefix) {
+		return nil, ErrCredentialInvalid
+	}
+	holder, err := s.tokens.CredentialHolder(ctx, HashToken(credential))
+	if err != nil {
+		return nil, err
+	}
+	if audience != nil && (audience.ServiceType != ServiceType ||
+		audience.Organization != holder.Operator.Organization || *audience == holder.Operator) {
+		return nil, ErrAudienceInvalid
+	}
+	value, err := secret(TokenPrefix)
+	if err != nil {
+		return nil, errorx.Wrap(err, "operator token")
+	}
+	now := s.now().UTC()
+	token := &Token{Value: value, Operator: holder.Operator, Audience: audience,
+		IssuedAt: now, ExpiresAt: now.Add(TokenTTL)}
+	if err := s.tokens.RecordToken(ctx, holder, token); err != nil {
+		return nil, err
+	}
+	return token, nil
 }
 
 func (s *service) Issue(ctx context.Context, subject grn.GRN) (*IssuedCertificate, error) {
@@ -140,6 +175,13 @@ func current(subject grn.GRN, serial Serial, now time.Time) Current {
 func renewable(c Credential, now time.Time) error {
 	if c.Subject.ServiceType != ServiceType {
 		return ErrNotAnOperator
+	}
+	// A credential naming no certificate is one a token proved, and a
+	// renewal replaces a certificate (ADR-0100): without this its zero
+	// NotBefore would read as a lifetime begun at year one, every
+	// moment of which is inside the window.
+	if c.Serial == "" || c.NotBefore.IsZero() {
+		return ErrNoCertificate
 	}
 	remaining := c.NotAfter.Sub(now)
 	switch {

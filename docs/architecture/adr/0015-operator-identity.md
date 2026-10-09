@@ -1,6 +1,9 @@
 # ADR 0015: Operators authenticate as agents do, and key material travels as files
 
-> Status: accepted — the out-of-band bootstrap is named by [ADR-0032](./0032-garam-ships-the-command-that-mints-an-operators-first-certificate.md)
+> Status: accepted — the out-of-band bootstrap is named by [ADR-0032](./0032-garam-ships-the-command-that-mints-an-operators-first-certificate.md);
+> mTLS for operators, the out-of-band first certificate and the shared
+> expiry are superseded by
+> [ADR-0100](./0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
 > Date: 2026-08-16
 
 ## Contents

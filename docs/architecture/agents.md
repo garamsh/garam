@@ -150,6 +150,22 @@ release of its peer in both upgrade orders, and unsupported semantics
 are refused by name. None of it is built, so garam still publishes no
 release of that contract and no compatibility window (ADR-0049).
 
+## Tokens in place of certificates
+
+**Unbuilt: an agent and a supervisor still authenticate with
+certificates.**
+[ADR-0100](./adr/0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
+replaces both with short-lived tokens. An agent's token is minted by
+its assignee — its operator at the current epoch, which is ADR-0015's
+rule, or its supervisor — and joins the agent's current lineage, so
+the execution fence judges it as it judges a certificate; recovery
+ends a lineage of tokens that may have been taken rather than
+certifying a new key. A supervisor holds a credential an administrator
+is shown once. The order is the plan's,
+`docs/plans/2026-10-09-machine-identity-migration.md`: the agent's
+tokens are step G1b, the control service's contracts G1c and the
+supervisor's credential G1d.
+
 ## Separated execution
 
 **Built here is garam's half of four parts: managed creation and its

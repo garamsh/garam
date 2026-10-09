@@ -1,6 +1,8 @@
 # ADR 0082: A standalone host runs its agent under a supervisor an administrator approves by its keys
 
-> Status: accepted
+> Status: accepted — the host's key pairs, spending by certificate
+> requests and the supervisor's certificate renewal are superseded by
+> [ADR-0100](./0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
 > Date: 2026-10-05
 
 Decided by the PM for #1168 on 2026-10-04 and 2026-10-05, reviewing the

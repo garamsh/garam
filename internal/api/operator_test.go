@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -610,5 +611,83 @@ func TestOperatorUpdate_ChangesTheFieldsItNamesAndNothingElse(t *testing.T) {
 	assert.Equal(t, "Renamed", decodeBody[apigen.Operator](t, rec).Name, "a refused patch changes nothing")
 
 	rec = f.do(t, "PATCH", "/orgs/"+slug+"/operators/never-registered", `{"name":"Ghost"}`, owner)
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+// TestOperatorReissueCredential_AdminReissuesWhereOthersAreRefused
+// covers the re-issue route's authorization and answers (ADR-0100).
+//
+// Each refusal has its control in the same test: the admin's re-issue
+// is answered, so what refuses a reader of the operators is the action
+// it lacks; the outsider's re-issue in its own organization is
+// answered, so what refuses it here is the organization; and an
+// operator the organization holds is re-issued for where an unknown
+// one is not found.
+func TestOperatorReissueCredential_AdminReissuesWhereOthersAreRefused(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	otherOwner := f.sessionCookieFor(t, "other-owner-sub", "Other Owner")
+	otherSlug := createOrg(t, f, otherOwner, "globex")
+
+	f.permit(
+		permission{userGRNOf("admin-sub"), org.ActionOperatorRegister},
+		permission{userGRNOf("admin-sub"), org.ActionOperatorReissue},
+		permission{userGRNOf("reader-sub"), org.ActionOperatorRead},
+		permission{userGRNOf("reader-sub"), org.ActionOperatorRegister},
+		permission{userGRNOf("outsider-sub"), org.ActionOperatorRegister},
+		permission{userGRNOf("outsider-sub"), org.ActionOperatorReissue},
+	)
+	admin := f.sessionCookieFor(t, "admin-sub", "Admin")
+	reader := f.sessionCookieFor(t, "reader-sub", "Reader")
+	outsider := f.sessionCookieFor(t, "outsider-sub", "Outsider")
+	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(slug), userGRNOf("admin-sub"), org.RoleAdmin)))
+	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(slug), userGRNOf("reader-sub"), org.RoleMember)))
+	require.NoError(t, f.orgs.AddMember(testCtx(t), org.NewMembership(orgGRNOf(otherSlug), userGRNOf("outsider-sub"), org.RoleMember)))
+
+	rec := f.do(t, "POST", "/orgs/"+slug+"/operators", `{"identifier":"field-one"}`, admin)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	registered := decodeBody[apigen.RegisteredOperator](t, rec)
+	require.True(t, strings.HasPrefix(registered.Credential.Credential, operator.CredentialPrefix))
+	held, ok := f.operators.credentialOf(operatorGRNOf(slug, "field-one"))
+	require.True(t, ok)
+	require.Equal(t, operator.HashToken(registered.Credential.Credential), held,
+		"registration stores the hash of the credential it answers")
+	require.Equal(t, http.StatusCreated,
+		f.do(t, "POST", "/orgs/"+otherSlug+"/operators", `{"identifier":"field-one"}`, outsider).Code)
+
+	path := "/orgs/" + slug + "/operators/field-one/credential"
+
+	// A member that reads and registers operators and does not hold the
+	// re-issue is refused: neither action carries it.
+	rec = f.do(t, "POST", path, "", reader)
+	assert.Equal(t, http.StatusForbidden, rec.Code)
+
+	// A member of another organization is refused here, and the same
+	// request against its own organization's operator is answered.
+	rec = f.do(t, "POST", path, "", outsider)
+	assert.Equal(t, http.StatusForbidden, rec.Code)
+	rec = f.do(t, "POST", "/orgs/"+otherSlug+"/operators/field-one/credential", "", outsider)
+	assert.Equal(t, http.StatusCreated, rec.Code)
+
+	// Signed out is refused.
+	rec = f.do(t, "POST", path, "")
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+
+	// The admin's re-issue answers a new credential, and the store now
+	// holds its hash in place of the registration's.
+	rec = f.do(t, "POST", path, "", admin)
+	require.Equal(t, http.StatusCreated, rec.Code)
+	reissued := decodeBody[apigen.OperatorCredential](t, rec)
+	assert.True(t, strings.HasPrefix(reissued.Credential, operator.CredentialPrefix))
+	assert.NotEqual(t, registered.Credential.Credential, reissued.Credential)
+	held, ok = f.operators.credentialOf(operatorGRNOf(slug, "field-one"))
+	require.True(t, ok)
+	assert.Equal(t, operator.HashToken(reissued.Credential), held)
+	assert.NotEqual(t, operator.HashToken(registered.Credential.Credential), held,
+		"the registration's credential is no longer held")
+
+	// An operator the organization never registered is not found.
+	rec = f.do(t, "POST", "/orgs/"+slug+"/operators/never-registered/credential", "", admin)
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 }

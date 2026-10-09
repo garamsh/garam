@@ -1,6 +1,6 @@
 # ADR 0032: garam ships the command that mints an operator's first certificate
 
-> Status: accepted
+> Status: superseded by [ADR-0100](./0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
 > Date: 2026-08-18
 
 ## Contents

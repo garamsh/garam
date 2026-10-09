@@ -47,7 +47,7 @@ describe("register operator form", () => {
     ).toBeEnabled();
   });
 
-  it("posts the identifier alone when no name is given, and shows the enrollment token once", async () => {
+  it("posts the identifier alone when no name is given, and shows the credential and the enrollment token once", async () => {
     const posted = recordRegistrations();
     const user = userEvent.setup();
     render(<RegisterOperatorForm org="acme" />);
@@ -63,6 +63,14 @@ describe("register operator form", () => {
     expect(screen.getByLabelText("Enrollment token")).toHaveValue(
       fieldOneRegistered.enrollment.token,
     );
+    expect(screen.getByLabelText("Credential")).toHaveValue(
+      fieldOneRegistered.credential.credential,
+    );
+    // Presence: the claim under test is that the credential cannot be
+    // shown again, and the sentence goes on to name the recovery.
+    expect(
+      screen.getByText(/This is the only time this credential is shown/),
+    ).toBeInTheDocument();
     // Presence rather than identity: the sentence is longer than the
     // claim under test, which is that the page says the token is gone
     // after this.
@@ -149,7 +157,12 @@ describe("register operator form", () => {
     // deletion. The recovery named beside it is a new token, which the
     // API mints (ADR-0067), and not a deletion.
     expect(
-      await screen.findByText(/on garam's machine listener/),
+      await screen.findByText(
+        /on garam's machine listener for the short-lived tokens/,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/on garam's machine listener\. It works once/),
     ).toBeInTheDocument();
     expect(
       screen.getByText(/ask an administrator to mint a new enrollment token/),
@@ -164,6 +177,7 @@ describe("register operator form", () => {
     // is absent until the answer that carries one arrives, so what put
     // it on screen was the registration.
     expect(screen.queryByLabelText("Enrollment token")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Credential")).not.toBeInTheDocument();
   });
 
   it("refuses an identifier outside the character rule without a round trip", async () => {

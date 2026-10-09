@@ -20,6 +20,7 @@ import { useHydrated } from "@/hooks/use-hydrated";
 import type { Parsed } from "@/lib/parsed";
 
 import { orgHref } from "../../../../_components/navigation";
+import { SecretField } from "./secret-field";
 
 const initialState: RegisterOperatorState = { status: "idle" };
 
@@ -34,10 +35,10 @@ const initialState: RegisterOperatorState = { status: "idle" };
  * the identity; the name can, so it is optional and falls back to the
  * identifier.
  *
- * The enrollment token comes back with the record and is rendered
- * once. Nothing can fetch it again — garam stores its hash — so the
- * panel says so where the person reads the token rather than
- * afterwards (ADR-0064).
+ * The enrollment token and the credential come back with the record
+ * and are rendered once. Nothing can fetch either again — garam stores
+ * their hashes — so the panel says so where the person reads each
+ * rather than afterwards (ADR-0064, ADR-0100).
  *
  * Only what has to be read before typing stands above the field: what
  * registering does. What the operator does with the token is beside
@@ -74,7 +75,7 @@ export function RegisterOperatorForm({ org }: { org: string }) {
       </h2>
       <p className="max-w-2xl text-sm text-muted-foreground">
         Registering records that this organization has the operator and hands
-        back a one-time token it enrols with.
+        back the credential it authenticates with.
       </p>
       <form action={formAction} className="flex max-w-2xl flex-col gap-6">
         <input type="hidden" name="org" value={org} />
@@ -143,11 +144,12 @@ export function RegisterOperatorForm({ org }: { org: string }) {
       </form>
 
       {state.status === "registered" && (
-        <EnrollmentToken
+        <Registered
           href={`${orgHref(org, "operators")}/${state.operator}`}
           name={state.name}
           token={state.token}
           expiresAt={state.expiresAt}
+          credential={state.credential}
         />
       )}
     </section>
@@ -155,72 +157,52 @@ export function RegisterOperatorForm({ org }: { org: string }) {
 }
 
 /**
- * The one-time token, shown where the person can copy it and nowhere
- * else afterwards.
+ * The one-time token and the credential, shown where the person can
+ * copy them and nowhere else afterwards.
  *
- * The warning sits above the token rather than below it: someone who
+ * Each warning sits above its value rather than below it: someone who
  * has already navigated away has no way back, so it has to be read
  * before the panel is dismissed.
  */
-function EnrollmentToken({
+function Registered({
   href,
   name,
   token,
   expiresAt,
+  credential,
 }: {
   href: string;
   name: string;
   token: string;
   expiresAt: string;
+  credential: string;
 }) {
-  // Keyed by token, as the invitation panel is: a later registration is
-  // a different token, so neither the claim that it was copied nor the
-  // failure the previous one reported carries over to it.
-  const [attempt, setAttempt] = useState<CopyAttempt | null>(null);
-  const outcome = attempt?.token === token ? attempt.outcome : null;
-
   return (
     <div className="flex max-w-2xl flex-col gap-3 rounded-md border border-border p-4">
       <h3 className="font-heading text-sm font-semibold wrap-anywhere">
         Registered {name}
       </h3>
+      <h4 className="text-sm font-medium">Credential</h4>
+      <p className="text-sm text-destructive">
+        This is the only time this credential is shown; garam keeps no copy. If
+        it is lost, re-issue it on the operator&apos;s page, which voids this
+        one.
+      </p>
+      <SecretField value={credential} label="Credential" noun="credential" />
+      <p className="text-sm text-muted-foreground">
+        Place it in the operator&apos;s cluster as a file only the operator
+        reads. The operator exchanges it at{" "}
+        <code className="font-mono">POST /tokens</code> on garam&apos;s machine
+        listener for the short-lived tokens it authenticates with.
+      </p>
+      <h4 className="text-sm font-medium">Enrollment token</h4>
       <p className="text-sm text-destructive">
         This is the only time this token is shown; garam keeps no copy. If it is
         lost, ask an administrator to mint a new enrollment token.
       </p>
-      <div className="flex gap-2">
-        <Input
-          readOnly
-          value={token}
-          aria-label="Enrollment token"
-          onFocus={(event) => event.target.select()}
-          className="min-w-0 flex-1 bg-muted font-mono text-xs"
-        />
-        <Button
-          type="button"
-          variant="outline"
-          onClick={async () => {
-            // No boundary catches a handler. `navigator.clipboard` is
-            // absent outside a secure context, so the try covers the
-            // property access and not only the rejection.
-            try {
-              await navigator.clipboard.writeText(token);
-              setAttempt({ token, outcome: "copied" });
-            } catch {
-              setAttempt({ token, outcome: "failed" });
-            }
-          }}
-        >
-          {outcome === "copied" ? "Copied" : "Copy"}
-        </Button>
-      </div>
-      {outcome === "failed" && (
-        <p role="alert" className="text-sm text-destructive">
-          Could not copy the token. Select it in the field and copy it yourself.
-        </p>
-      )}
+      <SecretField value={token} label="Enrollment token" noun="token" />
       <p className="text-sm text-muted-foreground">
-        Give it to the operator to enrol with at{" "}
+        An operator that still obtains a certificate enrols with it at{" "}
         <code className="font-mono">POST /enrollment</code> on garam&apos;s
         machine listener. It works once and expires at{" "}
         <ExpiresAt at={expiresAt} />.
@@ -238,9 +220,6 @@ function EnrollmentToken({
 function errorOf<T>(parsed: Parsed<T>): string | null {
   return parsed.status === "error" ? parsed.message : null;
 }
-
-/** What the clipboard answered for one enrollment token. */
-type CopyAttempt = { token: string; outcome: "copied" | "failed" };
 
 /**
  * The expiry, rendered in the reader's own time zone.

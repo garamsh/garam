@@ -3,7 +3,9 @@
 > Status: accepted — §Decision's machine read, as the controller's
 > source for a GRN, and its claim, as how a managed agent is created,
 > are superseded by
-> [ADR-0077](./0077-execution-definitions-move-to-the-operator-control-service-and-each-agent-cuts-over-alone.md)
+> [ADR-0077](./0077-execution-definitions-move-to-the-operator-control-service-and-each-agent-cuts-over-alone.md);
+> the claim admitting the operator to a certificate route is superseded
+> by [ADR-0100](./0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
 > Date: 2026-08-19
 
 ## Contents

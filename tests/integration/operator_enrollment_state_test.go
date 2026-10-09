@@ -23,7 +23,7 @@ func register(t *testing.T, s *operator.PostgresStore, id string) (grn.GRN, *ope
 	require.NoError(t, err)
 	e, err := operator.NewEnrollment(o.GRN(), registeredBy)
 	require.NoError(t, err)
-	_, err = s.Register(context.Background(), o, e)
+	_, err = s.Register(context.Background(), o, e, credentialFor(t, o))
 	require.NoError(t, err)
 	return o.GRN(), e
 }
@@ -162,7 +162,7 @@ func TestOperatorEnrollmentState_ACertificateOutranksATokenBesideIt(t *testing.T
 	require.NoError(t, err)
 	e, err := operator.NewEnrollment(o.GRN(), registeredBy)
 	require.NoError(t, err)
-	registered, err := s.Register(ctx, o, e)
+	registered, err := s.Register(ctx, o, e, credentialFor(t, o))
 	require.NoError(t, err)
 
 	// The control is the operator beside it: the same registration

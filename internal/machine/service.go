@@ -218,6 +218,7 @@ func identityOf(leaf *x509.Certificate) (Identity, error) {
 	}
 	return Identity{
 		grn:       subject,
+		method:    MethodCertificate,
 		serial:    leaf.SerialNumber.String(),
 		notBefore: leaf.NotBefore,
 		notAfter:  leaf.NotAfter,

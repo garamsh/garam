@@ -155,7 +155,7 @@ func service(t *testing.T, store operator.CertificateStore, issuer operator.Issu
 func serviceEnrolling(t *testing.T, store operator.CertificateStore, enrollments operator.EnrollmentStore, issuer operator.Issuer) (operator.Service, *clock) {
 	t.Helper()
 	c := &clock{at: time.Date(2026, time.August, 25, 12, 0, 0, 0, time.UTC)}
-	return operator.NewService(store, enrollments, issuer, operator.Config{Now: c.now}), c
+	return operator.NewService(store, enrollments, newExchanges(), issuer, operator.Config{Now: c.now}), c
 }
 
 // TestService_IssueAdoptsTheCertificateItMinted is the bootstrap

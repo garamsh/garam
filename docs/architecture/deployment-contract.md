@@ -403,9 +403,10 @@ A standalone host trusts that same value only where it names it:
 `garam standalone run --message-issuer` renders it into the runtime's
 configuration, exactly as `GARAM_MACHINE_ISSUER` spells it, beside the
 address the runtime fetches garam's key set at (`agents.md`
-§Standalone hosts). Nothing stands in for it: a host that names no
-issuer renders no entry and trusts no garam signature, and one that
-names another spelling refuses every message garam signs. A changed
+§Standalone hosts), and turns the adapter's signing on with it.
+Nothing stands in for it: a host that names no issuer renders no entry,
+signs nothing and trusts no garam signature, and one that names another
+spelling refuses every message garam signs. A changed
 issuer reaches a running generation only when it is replaced, since
 the runtime reads its issuers at startup.
 

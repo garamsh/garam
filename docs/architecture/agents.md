@@ -510,16 +510,28 @@ supervisor that stops leaves the workload running.
   host fails every key fetch with 503 `issuer keys unavailable`. The
   runtime fetches the set again on a key it does not hold, which
   covers a rotation, a first key and a key retired at once, so nothing
-  on the host refreshes it. **`keys-ca-file` arrives in Sherlock
-  `v0.4.0`** (garamsh/sherlock#1008). A `0.3.0` runtime starts with
-  the entry, reading no such member (`internal/config/issuers.go` at
-  `v0.3.0`), and fetches the set against the system roots, which do
-  not reach garam's private root, so it refuses a signed message and
-  accepts an unsigned one as before. The runtime refuses a signed
-  message from an issuer it has no entry for, which is why this lands
-  before the adapter forwards a signature (#1258); until then the
-  entry admits nothing new. A generation started before the rendering
-  keeps the configuration it was given until it is replaced.
+  on the host refreshes it.
+- **The same setting turns the adapter's signing on** (#1312). Where
+  the supervisor renders garam's entry it also sets the adapter's
+  `GARAM_ADAPTER_SIGN_MESSAGES`, and where it renders none the adapter
+  signs nothing, so a host never signs to a runtime that does not trust
+  garam, and an unconfigured host is as it was. The order adapter.md
+  §Stable identifiers and the outbox asks for holds within one
+  generation: the runtime starts with its entry before the adapter
+  starts. **The floor is Sherlock `v0.4.0`, and naming the issuer is
+  what asserts it.** `keys-ca-file` arrives there
+  (garamsh/sherlock#1008), and nothing the supervisor reads from an
+  image reference says which release it is. On an older runtime the
+  rendered entry cannot reach garam's set either: a `0.3.0` runtime
+  starts with it, reading no such member (`internal/config/issuers.go`
+  at `v0.3.0`), and fetches against the system roots, which do not
+  reach garam's private root. So a host on a runtime older than
+  `v0.4.0` names no issuer, and one that does has every message
+  refused and handed out again. `tests/standalone/signing_test.go`
+  holds the configured case against Sherlock `v0.5.0`: a runtime that
+  refuses anything unsigned takes the message. A generation started
+  before the rendering keeps the configuration and the adapter it was
+  given until it is replaced.
 - **An engine it cannot reach decides nothing.** The supervisor starts,
   signals and activates nothing, and the generation keeps running with
   its adapter's token. A daemon stop may stop the runtime, and recovery

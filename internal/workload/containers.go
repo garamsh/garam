@@ -266,6 +266,13 @@ func (s *Supervisor) spec(in *intent, r Role, genDir string) ContainerSpec {
 			"GARAM_ADAPTER_CONTROL_SOCKET=" + socketTarget + "/" + socketName,
 			"GARAM_ADAPTER_OUTBOX_DIR=" + outboxTarget,
 		}
+		// The adapter signs where the runtime beside it trusts garam's
+		// issuer, which the supervisor renders from the same setting
+		// (ADR-0101). The runtime starts first, so its entry is in
+		// place before a signature reaches it.
+		if s.cfg.MessageIssuer != "" {
+			spec.Env = append(spec.Env, "GARAM_ADAPTER_SIGN_MESSAGES=true")
+		}
 	}
 	return spec
 }

@@ -3,7 +3,6 @@ package authz
 import (
 	"context"
 
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	"github.com/garamsh/garam/internal/errorx"
@@ -37,7 +36,7 @@ func (s *GRPCServer) Check(ctx context.Context, req *authzv1.CheckRequest) (*aut
 	if err != nil {
 		return nil, grpcError(err)
 	}
-	allowed, err := decide(ctx, in, s.policies.Statements)
+	_, allowed, err := decide(ctx, in, s.policies.Statements)
 	if err != nil {
 		return nil, grpcError(err)
 	}
@@ -52,7 +51,7 @@ func (s *GRPCServer) CheckCurrent(ctx context.Context, req *authzv1.CheckCurrent
 	if err != nil {
 		return nil, grpcError(err)
 	}
-	allowed, err := decide(ctx, in, s.policies.CurrentStatements)
+	_, allowed, err := decide(ctx, in, s.policies.CurrentStatements)
 	if err != nil {
 		return nil, grpcError(err)
 	}
@@ -60,20 +59,22 @@ func (s *GRPCServer) CheckCurrent(ctx context.Context, req *authzv1.CheckCurrent
 }
 
 // decide scopes the request, reads the persisted statements through
-// read and evaluates them with the caller's.
-func decide(ctx context.Context, in checkInput, read readStatements) (bool, error) {
+// read and evaluates them with the caller's. It returns the statements
+// it evaluated beside the decision, so Explain traces the set Check
+// decided over and takes its answer from the same evaluator.
+func decide(ctx context.Context, in checkInput, read readStatements) ([]Statement, bool, error) {
 	if err := in.checkScope(); err != nil {
-		return false, err
+		return nil, false, err
 	}
 	statements, err := applicable(ctx, in, read)
 	if err != nil {
-		return false, err
+		return nil, false, err
 	}
 	d := NewStatementEvaluator(statements).Evaluate(ctx, Context{
 		Object: grnObject{in.object},
 		Action: in.action,
 	})
-	return d == DecisionAllow, nil
+	return statements, d == DecisionAllow, nil
 }
 
 // Explain evaluates the same input and reports every statement's
@@ -83,32 +84,19 @@ func (s *GRPCServer) Explain(ctx context.Context, req *authzv1.ExplainRequest) (
 	if err != nil {
 		return nil, grpcError(err)
 	}
-	if err := in.checkScope(); err != nil {
-		return nil, grpcError(err)
-	}
-	statements, err := applicable(ctx, in, s.policies.Statements)
+	statements, allowed, err := decide(ctx, in, s.policies.Statements)
 	if err != nil {
 		return nil, grpcError(err)
 	}
 	traces := make([]*authzv1.StatementTrace, 0, len(statements))
-	denied, allowed := false, false
 	for _, st := range statements {
-		matched := st.Matches(in.action, in.object.String())
 		traces = append(traces, &authzv1.StatementTrace{
 			Sid:     st.Sid,
-			Matched: matched,
+			Matched: st.Matches(in.action, in.object.String()),
 			Effect:  effectToProto(st.Effect),
 		})
-		if !matched {
-			continue
-		}
-		if st.Effect == wire.EffectDeny {
-			denied = true
-		} else {
-			allowed = true
-		}
 	}
-	return &authzv1.ExplainResponse{Allowed: allowed && !denied, Traces: traces}, nil
+	return &authzv1.ExplainResponse{Allowed: allowed, Traces: traces}, nil
 }
 
 // serviceTypeOrg is the GRN service type of an organization. The
@@ -248,7 +236,7 @@ func effectToProto(e wire.Effect) authzv1.Effect {
 // chain.
 func grpcError(err error) error {
 	return disclosed{
-		status: status.New(codeOf(errorx.KindOf(err)), wire.MessageOf(err)),
+		status: status.New(wire.CodeOf(errorx.KindOf(err)), wire.MessageOf(err)),
 		cause:  err,
 	}
 }
@@ -268,44 +256,6 @@ func (d disclosed) Error() string { return d.cause.Error() }
 func (d disclosed) Unwrap() error { return d.cause }
 
 func (d disclosed) GRPCStatus() *status.Status { return d.status }
-
-// codeOf maps error kinds to gRPC status codes by name.
-func codeOf(k errorx.Kind) codes.Code {
-	switch k {
-	case errorx.KindCanceled:
-		return codes.Canceled
-	case errorx.KindInvalidArgument:
-		return codes.InvalidArgument
-	case errorx.KindDeadlineExceeded:
-		return codes.DeadlineExceeded
-	case errorx.KindNotFound:
-		return codes.NotFound
-	case errorx.KindAlreadyExists:
-		return codes.AlreadyExists
-	case errorx.KindPermissionDenied:
-		return codes.PermissionDenied
-	case errorx.KindResourceExhausted:
-		return codes.ResourceExhausted
-	case errorx.KindFailedPrecondition:
-		return codes.FailedPrecondition
-	case errorx.KindAborted:
-		return codes.Aborted
-	case errorx.KindOutOfRange:
-		return codes.OutOfRange
-	case errorx.KindUnimplemented:
-		return codes.Unimplemented
-	case errorx.KindInternal:
-		return codes.Internal
-	case errorx.KindUnavailable:
-		return codes.Unavailable
-	case errorx.KindDataLoss:
-		return codes.DataLoss
-	case errorx.KindUnauthenticated:
-		return codes.Unauthenticated
-	default:
-		return codes.Unknown
-	}
-}
 
 // grnObject adapts a parsed GRN to the Object seam for wire-driven
 // checks.

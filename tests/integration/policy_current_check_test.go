@@ -47,7 +47,7 @@ func activateStatement(t *testing.T, s *authz.PostgresStore, orgGRN grn.GRN, sid
 	require.NoError(t, err)
 	_, err = s.CreatePolicy(ctx, authz.NewPolicy(g, orgGRN, sid), statementDoc(sid, effect, "project:read", "grn:acme:*"), grnOf("user", "ada"))
 	require.NoError(t, err)
-	_, err = s.SetPolicyStatus(ctx, g, authz.PolicyStatusActive)
+	_, err = s.SetPolicyStatus(ctx, g, wire.PolicyStatusActive)
 	require.NoError(t, err)
 	return g
 }
@@ -86,7 +86,7 @@ func TestCheckCurrent_SeesAWithdrawalNoInvalidationReported(t *testing.T) {
 			activateStatement(t, s, orgGRN, "deny-read", wire.EffectDeny)
 		}},
 		{"the Allow revoked", func(t *testing.T, s *authz.PostgresStore, _, allow grn.GRN) {
-			_, err := s.SetPolicyStatus(context.Background(), allow, authz.PolicyStatusArchived)
+			_, err := s.SetPolicyStatus(context.Background(), allow, wire.PolicyStatusArchived)
 			require.NoError(t, err)
 		}},
 	}

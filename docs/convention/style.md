@@ -5,6 +5,9 @@ own what formatters cannot judge.
 
 ## Naming consistency
 
+These rules state which names must agree, not their concrete form:
+casing, affixes, a file name's spelling, or the names a stack bans.
+
 - **Same concept, same name.** Pick one term per domain concept and use
   it everywhere. Mixing `user` and `member` for one thing is a defect,
   not a choice.

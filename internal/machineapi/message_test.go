@@ -125,7 +125,7 @@ func submission(recipient grn.GRN, key string) string {
 // posted is the call the surface makes to the queue for a message it
 // accepted.
 func posted(sender, recipient grn.GRN, key string) messageCall {
-	return messageCall{method: "post", caller: sender, recipient: recipient, key: key, body: "hello"}
+	return messageCall{method: "post", caller: sender, recipient: recipient, key: key, body: "hello", author: message.AuthorSender}
 }
 
 // messageCall is one thing the surface asked the message service for.
@@ -137,6 +137,7 @@ type messageCall struct {
 	id        message.ID
 	key       string
 	body      string
+	author    message.Author
 	created   time.Time
 }
 
@@ -154,16 +155,16 @@ type messageService struct {
 	calls []messageCall
 }
 
-func (s *messageService) Post(_ context.Context, sender, recipient grn.GRN, key, body string, _ *message.Fence) (*message.Message, error) {
-	s.calls = append(s.calls, messageCall{method: "post", caller: sender, recipient: recipient, key: key, body: body})
+func (s *messageService) Post(_ context.Context, sender, recipient grn.GRN, key, body string, author message.Author, _ *message.Fence) (*message.Message, error) {
+	s.calls = append(s.calls, messageCall{method: "post", caller: sender, recipient: recipient, key: key, body: body, author: author})
 	if s.err != nil {
 		return nil, s.err
 	}
 	return message.New(recipient, sender, key, body)
 }
 
-func (s *messageService) PostWithinBudget(_ context.Context, sender, recipient grn.GRN, key, body string, created time.Time, _ *message.Fence) (*message.Message, error) {
-	s.calls = append(s.calls, messageCall{method: "post within budget", caller: sender, recipient: recipient, key: key, body: body, created: created})
+func (s *messageService) PostWithinBudget(_ context.Context, sender, recipient grn.GRN, key, body string, author message.Author, created time.Time, _ *message.Fence) (*message.Message, error) {
+	s.calls = append(s.calls, messageCall{method: "post within budget", caller: sender, recipient: recipient, key: key, body: body, author: author, created: created})
 	if s.err != nil {
 		return nil, s.err
 	}
@@ -290,6 +291,7 @@ func TestServer_PostsUnderTheSenderTheCertificateNames(t *testing.T) {
 		recipient: recipient,
 		key:       "key-1",
 		body:      "hello",
+		author:    message.AuthorSender,
 	}}, messages.calls, "the sender is the caller and the recipient is what the body named")
 
 	// A recipient that is not a GRN addresses nothing, and the queue is
@@ -397,6 +399,7 @@ func TestServer_SendsWhereTheSendersOwnOrganizationReaches(t *testing.T) {
 			recipient: sender,
 			key:       "consent-refused:" + sender.String() + ":key-2",
 			body:      "garam could not deliver your message to " + stranger.String() + ": the organizations acme and globex do not both consent to cross-organization messages",
+			author:    message.AuthorGaram,
 		},
 	}, messages.calls, "the sibling's message was stored and the stranger's came back to the sender")
 
@@ -462,6 +465,7 @@ func TestServer_AConsentRelationCarriesAMessageAcrossTheBoundary(t *testing.T) {
 			recipient: sender,
 			key:       "consent-refused:" + sender.String() + ":key-2",
 			body:      "garam could not deliver your message to " + bystander.String() + ": the organizations acme and initech do not both consent to cross-organization messages",
+			author:    message.AuthorGaram,
 		},
 		{
 			method:    "post",
@@ -469,6 +473,7 @@ func TestServer_AConsentRelationCarriesAMessageAcrossTheBoundary(t *testing.T) {
 			recipient: sender,
 			key:       "consent-refused:" + sender.String() + ":key-3",
 			body:      "garam could not deliver your message to " + foreign.String() + ": the organizations acme and globex do not both consent to cross-organization messages",
+			author:    message.AuthorGaram,
 		},
 	}, messages.calls, "exactly the consenting pair's message crossed")
 	assert.Empty(t, policies.asked, "the engine was never asked a cross-organization question")
@@ -756,7 +761,7 @@ func TestServer_RefusesAnOutboxMessageBeforeTheQueueWithoutItsContractOrCreation
 	assert.Contains(t, body, `"sender":"`+sender.String()+`"`)
 	assert.Equal(t, []messageCall{{
 		method: "post within budget", caller: sender, recipient: recipient, key: "entry-1", body: "hello",
-		created: time.Date(2026, time.October, 4, 18, 7, 52, 100000000, time.UTC),
+		author: message.AuthorSender, created: time.Date(2026, time.October, 4, 18, 7, 52, 100000000, time.UTC),
 	}}, messages.calls)
 
 	tests := []struct {
@@ -839,12 +844,46 @@ func TestServer_RefusesAnOutboxMessageAcrossTheBoundaryUnderItsBudget(t *testing
 	assert.Contains(t, body, `"sender":"`+stranger.String()+`"`)
 
 	assert.Equal(t, []messageCall{
-		{method: "post within budget", caller: sender, recipient: foreign, key: "entry-1", body: "hello", created: created},
+		{method: "post within budget", caller: sender, recipient: foreign, key: "entry-1", body: "hello", author: message.AuthorSender, created: created},
 		{
 			method: "post within budget", caller: stranger, recipient: sender,
 			key:     "consent-refused:" + sender.String() + ":entry-2",
 			body:    "garam could not deliver your message to " + stranger.String() + ": the organizations acme and initech do not both consent to cross-organization messages",
+			author:  message.AuthorGaram,
 			created: created,
 		},
 	}, messages.calls)
+}
+
+// unopenableKeyring is a keyring whose key does not open, as under a
+// key-encryption key other than the one it was sealed with.
+type unopenableKeyring struct{ stubKeyring }
+
+func (unopenableKeyring) Signer(context.Context) (message.Signer, error) {
+	return nil, errorx.New(errorx.KindInternal, "message: open signing key k-1")
+}
+
+// TestServer_AClaimGaramCannotSignSpendsNoAttempt holds the order the
+// claim route keeps: the signing key is opened before the queue is
+// asked, so a key that does not open answers 500 with nothing claimed,
+// rather than spending an attempt on an answer the caller never gets
+// (ADR-0101). The same request against a key that opens is the control:
+// it reaches the queue.
+func TestServer_AClaimGaramCannotSignSpendsNoAttempt(t *testing.T) {
+	caller := agentGRN("acme", "0a1b2c3d4e5f6071")
+	claims := "/agents/" + caller.String() + "/claims"
+
+	unsigned := &messageService{}
+	url, client := serveTLS(t, machineapi.NewServer(&agentService{}, nil, unsigned, consenting(), unwatched(t),
+		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, unopenableKeyring{}), caller)
+	status, body := send(t, client, http.MethodPost, url+claims, "")
+	assert.Equal(t, http.StatusInternalServerError, status, body)
+	assert.Empty(t, unsigned.calls, "the queue was asked for a claim garam could not sign")
+
+	signed := &messageService{}
+	url, client = serveTLS(t, machineapi.NewServer(&agentService{}, nil, signed, consenting(), unwatched(t),
+		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, stubKeyring{}), caller)
+	status, body = send(t, client, http.MethodPost, url+claims, "")
+	assert.Equal(t, http.StatusNoContent, status, body)
+	assert.Equal(t, []messageCall{{method: "claim", caller: caller, recipient: caller}}, signed.calls)
 }

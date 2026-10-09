@@ -276,8 +276,8 @@ Responsibility documents:
 - [machine-identity.md](./machine-identity.md) — who is calling on the
   listener a machine identity authenticates on
 - [messaging.md](./messaging.md) — the durable queue a message reaches
-  an agent through, and the consent that lets one cross an organization
-  boundary
+  an agent through, the consent that lets one cross an organization
+  boundary, and the signature on every message garam hands out
 - [grn-model.md](./grn-model.md) — the GRN resource naming model
 - [authz.md](./authz.md) — the authorization policy domain: the rules
   that decide what a subject may do, and the engine that decides
@@ -668,3 +668,10 @@ ADRs:
   the template's §Rules every shape carries and bootstrap line are
   declined, and the section-scope rule is taken where Garam keeps the
   file it lands on
+- [0101](./adr/0101-garam-signs-every-message-it-delivers-and-the-agent-verifies-it-alone.md)
+  — garam signs each message at every hand-out with an ES256 JWS beside
+  the content, binding issuer, sender, audience, organization, message
+  identifier, content digest and a lease-long expiry; it publishes its
+  keys as a JWK Set and rotates them with overlap, and the agent
+  verifies without trusting the path; garam's half is built, and the
+  adapter's forwarding and Sherlock's verification are not

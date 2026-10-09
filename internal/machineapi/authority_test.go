@@ -24,7 +24,7 @@ import (
 // listener to a client holding caller's certificate.
 func authorityListener(t *testing.T, authority operator.AuthorityService, caller grn.GRN) (string, *http.Client) {
 	t.Helper()
-	return serveTLS(t, machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, authority, nil, nil, nil, nil), caller)
+	return serveTLS(t, machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, authority, nil, nil, nil, nil, nil), caller)
 }
 
 // versioned sends a request with the contract version header set to

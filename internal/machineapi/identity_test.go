@@ -173,20 +173,22 @@ func fillPath(t *testing.T, path string, values map[string]string) string {
 	}
 }
 
-// enrollmentRoute and standaloneEnrollmentRoute are the operations
-// reached without a certificate (ADR-0064, ADR-0082). They are named
-// here so that what a reader checks is the exemption rather than the
-// routes that are not exempt, which are whatever is left.
+// enrollmentRoute, standaloneEnrollmentRoute and keySetRoute are the
+// operations reached without a certificate (ADR-0064, ADR-0082,
+// ADR-0101). They are named here so that what a reader checks is the
+// exemption rather than the routes that are not exempt, which are
+// whatever is left.
 const (
 	enrollmentRoute           = http.MethodPost + " /enrollment"
 	standaloneEnrollmentRoute = http.MethodPost + " /agent-enrollments"
+	keySetRoute               = http.MethodGet + " /message-signing-keys"
 )
 
-// TestServer_EnrollmentsAreTheOnlyRoutesAnUncertifiedCallerReaches is the
-// control on the one above: the same client that enrols is refused
-// everywhere else, so what admitted it was the route and not a listener
-// that stopped checking.
-func TestServer_EnrollmentsAreTheOnlyRoutesAnUncertifiedCallerReaches(t *testing.T) {
+// TestServer_EnrollmentsAndTheKeySetAreTheOnlyRoutesAnUncertifiedCallerReaches
+// is the control on the one above: the same client that enrols is
+// refused everywhere else, so what admitted it was the route and not a
+// listener that stopped checking.
+func TestServer_EnrollmentsAndTheKeySetAreTheOnlyRoutesAnUncertifiedCallerReaches(t *testing.T) {
 	enrolling := operatorGRN("acme")
 	operators := &operatorService{certificate: &operator.Certificate{Subject: enrolling}}
 	url, _ := listener(t, &agentService{}, operators, &messageService{}, consenting(), unwatched(t), &memberGroups{}, &engine{}, enrolling)
@@ -222,6 +224,14 @@ func TestServer_EnrollmentsAreTheOnlyRoutesAnUncertifiedCallerReaches(t *testing
 	status, body := send(t, client, standalone.method, url+standalone.path, "")
 	assert.Equal(t, http.StatusUnauthorized, status)
 	assert.Contains(t, body, "standalone bootstrap")
+
+	// The key set is public: a verifier anywhere reads it (ADR-0101).
+	keySet, ok := routes[keySetRoute]
+	require.True(t, ok, "the exemption names no operation the specification declares")
+	delete(routes, keySetRoute)
+	status, body = send(t, client, keySet.method, url+keySet.path, "")
+	assert.Equal(t, http.StatusOK, status)
+	assert.Contains(t, body, `"kid":"`+string(stubKeyID)+`"`)
 
 	// No body is sent, because a handler that reads one before it reads
 	// the identity has already done work for a caller it has not

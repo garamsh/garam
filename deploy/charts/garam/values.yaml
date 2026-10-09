@@ -126,6 +126,14 @@ machine:
   # where those identities rewrite their own files without a restart —
   # see the README, §Key material and secrets.
   certificateLifetime: 24h
+  # The issuer every message signature names (ADR-0101): this
+  # listener's external https origin as a verifier reaches it, with a
+  # lowercase host, no empty port, no path and no trailing slash. A
+  # verifier compares it byte for byte and fetches the key set from it
+  # followed by /message-signing-keys, so it stays the same for the
+  # deployment's life. Required; the binary refuses any other shape at
+  # startup.
+  issuer: ""
   # Runs the copy that gives the process a file it owns. The garam image
   # is scratch and carries no shell. Pinned by digest, the reference
   # deploy/local/minikube/garam.yaml already uses.

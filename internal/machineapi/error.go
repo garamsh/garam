@@ -164,7 +164,13 @@ func writeErrorBody(w http.ResponseWriter, status int, err error, reason *string
 
 // writeJSON encodes v as JSON with the given status.
 func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json")
+	writeJSONAs(w, status, "application/json", v)
+}
+
+// writeJSONAs is writeJSON under a JSON media type of its own, such as
+// a JWK Set's.
+func writeJSONAs(w http.ResponseWriter, status int, mediaType string, v any) {
+	w.Header().Set("Content-Type", mediaType)
 	w.WriteHeader(status)
 	// A failed write after WriteHeader cannot be reported to the
 	// caller; the server logs at the transport layer.

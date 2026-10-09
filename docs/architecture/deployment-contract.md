@@ -385,7 +385,7 @@ alone. What binds instead is who signs them
 - **Concurrent runs are safe** by the driver's mechanism:
   golang-migrate's Postgres driver takes an advisory lock, so a second
   `migrate` waits and then finds nothing to do. That claim holds at
-  `github.com/golang-migrate/migrate/v4` v4.19.1 (`go.mod`) and is
+  `github.com/golang-migrate/migrate/v4` v4.20.1 (`go.mod`) and is
   checkable against the driver it pins.
 
 ## Termination

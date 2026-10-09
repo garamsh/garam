@@ -322,19 +322,30 @@ in:
    adapter of the adjacent release ignores them
    ([ADR-0079](./0079-interservice-contracts-keep-adjacent-releases-compatible-and-replay-by-stable-identifier.md)).
 2. **garam:** the adapter forwards the claim's content and signature
-   byte for byte instead of encoding the content itself.
+   byte for byte instead of encoding the content itself. It sends the
+   signature in the member or header Sherlock's ingress names, and only
+   to a runtime release that accepts it, and chooses no name of its
+   own.
 3. **garamsh/sherlock** (#993): the ingress takes the signature beside
    `content`, verifies it, and judges the sender by it; a deployment
-   configures garam's issuer and its set.
+   configures garam's issuer and its set. The name the signature
+   travels under at that hop is Sherlock's ingress contract: #993
+   states it in Sherlock's `docs/architecture/gateway.md`, and
+   adapter.md §Foreign facts this rests on records it, with the
+   release, when step 2 lands.
 4. **garamsh/garam-agent-operator, and the standalone supervisor in
    garam** ([ADR-0085](./0085-a-standalone-supervisor-owns-each-generation-as-three-containers-on-a-rootless-docker-daemon.md)):
    render the issuer and the set's location, or the set itself, into
    the runtime's configuration. Nothing here changes the Operator's
    repository; this names what it must do.
 
-Steps 1 and 2 deliver a signature that a runtime ignores until step 3,
-so they ship before Sherlock is ready, and step 3 is where an unsigned
-message starts being refused.
+Step 1 and the content half of step 2 ship before Sherlock is ready,
+because nothing a runtime receives changes. The signature half of step
+2 does not: Sherlock's ingress refuses a member it does not know
+(Sherlock `internal/gateway/handler.go`, `postMessageRequest`), so the
+adapter sends the signature only once step 3 has named where it goes
+and a release accepts it. Step 3 is where an unsigned message starts
+being refused.
 
 - **Responsibility documents paired by the pull request that implements
   each step** (rule 3): [messaging.md](../messaging.md) for signing at

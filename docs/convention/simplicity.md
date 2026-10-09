@@ -18,6 +18,9 @@ is wrong.
 
 ## Rules
 
+These rules state what earns a division or an abstraction, not the count
+or size that marks the point.
+
 - **A division is a response, not a plan.** Start flat. Split a file, or
   introduce a folder, when the current shape already holds more than one
   thing — never because a division is expected later. An empty container

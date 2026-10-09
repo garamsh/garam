@@ -13,7 +13,6 @@ import (
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
-	"github.com/garamsh/garam/internal/machine"
 	"github.com/garamsh/garam/internal/message"
 	"github.com/garamsh/garam/internal/wire"
 )
@@ -69,7 +68,7 @@ func (s *Server) PostMessage(w http.ResponseWriter, r *http.Request) {
 // contract version, checked before anything else is read, and a
 // budget, which the store judges at its insert.
 func (s *Server) PostOutboxMessage(w http.ResponseWriter, r *http.Request, params machinegen.PostOutboxMessageParams) {
-	if !deliveryContract(w, r, params.DeliveryContractVersion) {
+	if !served(w, r, params.DeliveryContractVersion, deliveryValues) {
 		return
 	}
 	sender, fence, ok := fenced(w, r)
@@ -127,23 +126,6 @@ func parseCreatedAt(s string) (time.Time, error) {
 		return time.Time{}, errorx.New(errorx.KindInvalidArgument, "createdAt is not an RFC 3339 instant")
 	}
 	return created, nil
-}
-
-// deliveryContract stamps the durable submission contract version the
-// request's credential takes on the answer — v1 for a certificate, v2
-// for a token (ADR-0100) — and refuses a request that asked for
-// another.
-func deliveryContract(w http.ResponseWriter, r *http.Request, version machinegen.DeliveryContractVersion) bool {
-	expected, refusal := message.DeliveryContractVersion, message.ErrUnsupportedDeliveryContract
-	if identity, ok := machine.IdentityOf(r); ok && identity.Method() == machine.MethodToken {
-		expected, refusal = message.TokenDeliveryContractVersion, message.ErrUnsupportedTokenDeliveryContract
-	}
-	w.Header().Set("Garam-Contract-Version", expected)
-	if version != expected {
-		writeError(w, refusal)
-		return false
-	}
-	return true
 }
 
 // crossingRefusal is what a post no consent relation carries across its

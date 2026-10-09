@@ -14,15 +14,17 @@ import (
 
 // CreateManagedAgent creates an agent assigned to a controller for the
 // hosted control service calling, under a member's agent:create
-// reference (ADR-0077). The caller's own certificate and registration
-// are read again first, as on every lifecycle decision.
+// reference (ADR-0077). The caller's own credential and registration
+// are read again first, as on every lifecycle decision. Creation opens
+// the agent's lineage under managed-enrollment.v1 and v2 alike; under
+// v2 its assignee then mints the agent's tokens in it (ADR-0100).
 func (s *Server) CreateManagedAgent(w http.ResponseWriter, r *http.Request, controllerGRN machinegen.ControllerGrn, params machinegen.CreateManagedAgentParams) {
-	if !enrollmentContract(w, params.EnrollmentContractVersion) {
+	if !served(w, r, params.EnrollmentContractVersion, enrollmentValues) {
 		return
 	}
 	r, cancel := lifecycleBudget(r)
 	defer cancel()
-	identity, ok := callerCertificate(w, r)
+	identity, ok := identityOf(w, r)
 	if !ok || !s.recheck(w, r, identity) {
 		return
 	}
@@ -57,9 +59,17 @@ func (s *Server) CreateManagedAgent(w http.ResponseWriter, r *http.Request, cont
 // IssueInitialCertificate signs a managed agent's first certificate
 // over the key its controller generated, for the hosted control
 // service calling under the agent's creation reference. The answer is
-// public: no private key reaches garam or leaves it.
+// public: no private key reaches garam or leaves it. It goes with the
+// certificate path and refuses a token itself, beside ConfineTokens:
+// an agent created under managed-enrollment.v2 is minted tokens by its
+// assignee instead (ADR-0100).
 func (s *Server) IssueInitialCertificate(w http.ResponseWriter, r *http.Request, agentGRN machinegen.AgentGrn, params machinegen.IssueInitialCertificateParams) {
-	if !enrollmentContract(w, params.EnrollmentContractVersion) {
+	if tokenBorne(r) {
+		writeError(w, errorx.New(errorx.KindUnauthenticated,
+			"initial issuance takes no token: the assignee mints a token-borne agent's tokens instead"))
+		return
+	}
+	if !served(w, r, params.EnrollmentContractVersion, enrollmentValues) {
 		return
 	}
 	r, cancel := lifecycleBudget(r)
@@ -111,15 +121,4 @@ func createdOrReplayed(created bool) int {
 		return http.StatusCreated
 	}
 	return http.StatusOK
-}
-
-// enrollmentContract stamps the managed enrollment contract version on
-// the answer and refuses a request that asked for another.
-func enrollmentContract(w http.ResponseWriter, version machinegen.EnrollmentContractVersion) bool {
-	w.Header().Set("Garam-Contract-Version", agent.EnrollmentContractVersion)
-	if version != agent.EnrollmentContractVersion {
-		writeError(w, agent.ErrUnsupportedEnrollmentContract)
-		return false
-	}
-	return true
 }

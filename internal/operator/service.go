@@ -2,6 +2,7 @@ package operator
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/garamsh/garam/internal/errorx"
@@ -54,8 +55,15 @@ type Service interface {
 	// operator where it names one, for [TokenTTL] (ADR-0100). It
 	// refuses a credential no registered operator holds with
 	// ErrCredentialInvalid, and an audience that is not another
-	// operator of the same organization with ErrAudienceInvalid.
+	// operator the organization registered with ErrAudienceInvalid.
 	Exchange(ctx context.Context, credential string, audience *grn.GRN) (*Token, error)
+	// VerifyShown refuses a token presented on another operator's
+	// behalf unless it is a live token subject exchanged its credential
+	// for, to be shown to audience — the token-borne form of the
+	// certificate machine.Service.Verify proves (ADR-0100). One that
+	// does not prove subject is ErrTokenNotProven, and a read that
+	// could not be made is unavailable.
+	VerifyShown(ctx context.Context, subject, audience grn.GRN, token string) error
 }
 
 type service struct {
@@ -101,6 +109,24 @@ func (s *service) Exchange(ctx context.Context, credential string, audience *grn
 		return nil, err
 	}
 	return token, nil
+}
+
+func (s *service) VerifyShown(ctx context.Context, subject, audience grn.GRN, token string) error {
+	// A value no exchange could have produced reads nothing.
+	if !WellFormed(token, TokenPrefix) {
+		return ErrTokenNotProven
+	}
+	holder, err := s.tokens.ResolveToken(ctx, HashToken(token))
+	if errors.Is(err, ErrTokenInvalid) {
+		return ErrTokenNotProven
+	}
+	if err != nil {
+		return err
+	}
+	if holder.Operator != subject || holder.Audience == nil || *holder.Audience != audience {
+		return ErrTokenNotProven
+	}
+	return nil
 }
 
 func (s *service) Issue(ctx context.Context, subject grn.GRN) (*IssuedCertificate, error) {

@@ -139,7 +139,7 @@ type AgentRecovery struct {
 	OperationRef   string
 	BodySha256     []byte
 	Lineage        pgtype.UUID
-	CertificatePem string
+	CertificatePem pgtype.Text
 	CreatedAt      pgtype.Timestamptz
 	IssuerPem      pgtype.Text
 	ServerRootPem  pgtype.Text

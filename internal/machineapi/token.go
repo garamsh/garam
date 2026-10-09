@@ -29,6 +29,21 @@ var tokenRoutes = map[string]bool{
 	http.MethodPost + " /messages":                                 true,
 	http.MethodGet + " /messages/{message}":                        true,
 	http.MethodPost + " /outbox-messages":                          true,
+	// A hosted operator's lifecycle routes under their v2 contract
+	// values (ADR-0100 G1c). Initial issuance is not among them: it goes
+	// with the certificate path.
+	http.MethodPost + " /operation-authorities/introspection":                  true,
+	http.MethodGet + " /operation-references/{ref}":                            true,
+	http.MethodPost + " /operators/{controller}/introspection":                 true,
+	http.MethodPost + " /agents/{agent}/activations":                           true,
+	http.MethodPost + " /agents/{agent}/activations/{activation}/deactivation": true,
+	http.MethodPost + " /agents/{agent}/execution/introspection":               true,
+	http.MethodPost + " /agents/{agent}/credential-recovery":                   true,
+	http.MethodGet + " /agents/{agent}/cutover":                                true,
+	http.MethodPost + " /agents/{agent}/cutover/freeze":                        true,
+	http.MethodPost + " /agents/{agent}/cutover/switch":                        true,
+	http.MethodPost + " /agents/{agent}/cutover/rollback":                      true,
+	http.MethodPost + " /operators/{controller}/managed-agents":                true,
 }
 
 // ConfineTokens refuses a request a token authenticated on any route

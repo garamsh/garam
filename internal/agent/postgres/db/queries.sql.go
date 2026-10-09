@@ -983,7 +983,7 @@ type InsertRecoveryParams struct {
 	OperationRef   string
 	BodySha256     []byte
 	Lineage        pgtype.UUID
-	CertificatePem string
+	CertificatePem pgtype.Text
 	IssuerPem      pgtype.Text
 	ServerRootPem  pgtype.Text
 	CreatedAt      pgtype.Timestamptz

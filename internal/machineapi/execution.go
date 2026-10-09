@@ -19,23 +19,28 @@ import (
 	"github.com/garamsh/garam/internal/watch"
 )
 
-// Authorization schemes the execution routes read (ADR-0078). Each is
-// carried beside the client certificate, never instead of it.
+// Authorization schemes the execution routes read beside a client
+// certificate (ADR-0078), and the headers that carry the same values
+// beside a token (ADR-0100).
 const (
 	executionScheme = "Garam-Execution "
 	// executionHeader carries the execution token beside an agent token,
 	// which takes Authorization (ADR-0100).
 	executionHeader = "Garam-Execution"
 	operationScheme = "Garam-Operation "
+	// operationHeader carries an operation authority or reference
+	// beside a token, which takes Authorization (ADR-0100).
+	operationHeader = "Garam-Operation"
 )
 
 // ActivateAgent admits a runtime generation of an agent for the hosted
 // control service calling (ADR-0078, ADR-0080). The caller's own
-// certificate and registration are read again first, as on every
-// lifecycle decision; the agent's forwarded certificate is parsed here
-// and proven by the execution service.
+// credential and registration are read again first, as on every
+// lifecycle decision; the agent's forwarded credential — its
+// certificate, or its token minted for the caller (ADR-0100) — is
+// parsed here and proven by the execution service.
 func (s *Server) ActivateAgent(w http.ResponseWriter, r *http.Request, agentGRN machinegen.AgentGrn, params machinegen.ActivateAgentParams) {
-	if !executionContract(w, params.ExecutionContractVersion) {
+	if !served(w, r, params.ExecutionContractVersion, executionValues) {
 		return
 	}
 	r, cancel := lifecycleBudget(r)
@@ -49,7 +54,7 @@ func (s *Server) ActivateAgent(w http.ResponseWriter, r *http.Request, agentGRN 
 		writeError(w, errorx.Wrap(err, "activation", errorx.KindInvalidArgument))
 		return
 	}
-	in, err := activationInput(subject, body)
+	in, err := activationInput(r, subject, body)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -84,7 +89,7 @@ func (s *Server) ActivateAgent(w http.ResponseWriter, r *http.Request, agentGRN 
 }
 
 // activationInput parses what an activation request carries.
-func activationInput(subject grn.GRN, body machinegen.ActivationRequest) (agent.ActivationInput, error) {
+func activationInput(r *http.Request, subject grn.GRN, body machinegen.ActivationRequest) (agent.ActivationInput, error) {
 	requestID, err := agent.ParseRequestID(body.RequestId)
 	if err != nil {
 		return agent.ActivationInput{}, err
@@ -108,16 +113,39 @@ func activationInput(subject grn.GRN, body machinegen.ActivationRequest) (agent.
 		}
 		in.Replaces = &id
 	}
-	if in.Certificate, err = boundedLeaf(body.CertificatePem); err != nil {
+	if in.Credential, err = forwardedOf(r, body.CertificatePem, body.Token); err != nil {
 		return agent.ActivationInput{}, err
 	}
 	return in, nil
 }
 
+// forwardedOf parses the agent's credential a lifecycle request
+// forwards: its certificate under execution-fence.v1, and its token
+// minted for the caller under execution-fence.v2 (ADR-0100). Each
+// contract takes its own field and refuses the other's.
+func forwardedOf(r *http.Request, certificatePEM, token *string) (agent.Forwarded, error) {
+	if tokenBorne(r) {
+		if certificatePEM != nil || token == nil {
+			return nil, errorx.New(errorx.KindInvalidArgument,
+				"under "+agent.TokenExecutionContractVersion+" the agent's credential is token, and certificatePem is refused")
+		}
+		return agent.ForwardedToken(*token), nil
+	}
+	if token != nil || certificatePEM == nil {
+		return nil, errorx.New(errorx.KindInvalidArgument,
+			"under "+agent.ExecutionContractVersion+" the agent's credential is certificatePem, and token is refused")
+	}
+	leaf, err := boundedLeaf(*certificatePEM)
+	if err != nil {
+		return nil, err
+	}
+	return agent.ForwardedCertificate{Leaf: leaf}, nil
+}
+
 // DeactivateAgent ends an activation if it is still the agent's current
 // one, and answers the same when it already ended.
 func (s *Server) DeactivateAgent(w http.ResponseWriter, r *http.Request, agentGRN machinegen.AgentGrn, activationID machinegen.ActivationId, params machinegen.DeactivateAgentParams) {
-	if !executionContract(w, params.ExecutionContractVersion) {
+	if !served(w, r, params.ExecutionContractVersion, executionValues) {
 		return
 	}
 	r, cancel := lifecycleBudget(r)
@@ -139,9 +167,9 @@ func (s *Server) DeactivateAgent(w http.ResponseWriter, r *http.Request, agentGR
 }
 
 // IntrospectAgentExecution answers whether a forwarded agent
-// certificate and a generation are current, from one snapshot.
+// credential and a generation are current, from one snapshot.
 func (s *Server) IntrospectAgentExecution(w http.ResponseWriter, r *http.Request, agentGRN machinegen.AgentGrn, params machinegen.IntrospectAgentExecutionParams) {
-	if !executionContract(w, params.ExecutionContractVersion) {
+	if !served(w, r, params.ExecutionContractVersion, executionValues) {
 		return
 	}
 	caller, subject, ok := s.lifecycleParties(w, r, agentGRN)
@@ -153,7 +181,7 @@ func (s *Server) IntrospectAgentExecution(w http.ResponseWriter, r *http.Request
 		writeError(w, errorx.Wrap(err, "execution introspection", errorx.KindInvalidArgument))
 		return
 	}
-	leaf, err := boundedLeaf(body.CertificatePem)
+	forwarded, err := forwardedOf(r, body.CertificatePem, body.Token)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -167,7 +195,7 @@ func (s *Server) IntrospectAgentExecution(w http.ResponseWriter, r *http.Request
 		}
 		generation = &g
 	}
-	in, err := s.executions.Introspect(r.Context(), caller, subject, leaf, generation)
+	in, err := s.executions.Introspect(r.Context(), caller, subject, forwarded, generation)
 	if err != nil {
 		writeExecutionError(w, r, err)
 		return
@@ -189,9 +217,11 @@ func (s *Server) IntrospectAgentExecution(w http.ResponseWriter, r *http.Request
 }
 
 // RecoverAgentCredential moves an agent to a new credential lineage
-// under an administrator's handoff for exactly this request body.
+// under an administrator's handoff for exactly this request body. Under
+// execution-fence.v2 it signs nothing and answers the lineage alone
+// (ADR-0100).
 func (s *Server) RecoverAgentCredential(w http.ResponseWriter, r *http.Request, agentGRN machinegen.AgentGrn, params machinegen.RecoverAgentCredentialParams) {
-	if !executionContract(w, params.ExecutionContractVersion) {
+	if !served(w, r, params.ExecutionContractVersion, executionValues) {
 		return
 	}
 	r, cancel := lifecycleBudget(r)
@@ -200,9 +230,10 @@ func (s *Server) RecoverAgentCredential(w http.ResponseWriter, r *http.Request, 
 	if !ok {
 		return
 	}
-	authority, ok := strings.CutPrefix(r.Header.Get("Authorization"), operationScheme)
-	if !ok || authority == "" {
-		writeError(w, errorx.New(errorx.KindUnauthenticated, "a recovery carries Authorization: Garam-Operation <authority>"))
+	authority, ok := operationOf(r)
+	if !ok {
+		writeError(w, errorx.New(errorx.KindUnauthenticated,
+			"a recovery carries its authority as Authorization: Garam-Operation <authority> beside a certificate, or in a Garam-Operation header beside a token"))
 		return
 	}
 	// The digest the handoff binds is of these exact bytes, so they are
@@ -227,26 +258,52 @@ func (s *Server) RecoverAgentCredential(w http.ResponseWriter, r *http.Request, 
 		writeError(w, err)
 		return
 	}
+	request, err := certificateRequestOf(r, body.CertificateRequestPem)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	recovered, err := s.executions.Recover(r.Context(), caller, agent.RecoveryInput{
 		Agent: subject, RequestID: requestID, Epoch: epoch, Authority: authority,
-		Body: raw, CertificateRequestPEM: []byte(body.CertificateRequestPem),
+		Body: raw, CertificateRequestPEM: request,
 	})
 	if err != nil {
 		writeExecutionError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, machinegen.RecoveredCredential{
-		Grn: subject.String(), Lineage: recovered.Lineage.String(), CertificatePem: recovered.CertificatePEM,
-		IssuerPem: recovered.Chain.IssuerPEM, ServerRootPem: recovered.Chain.ServerRootPEM,
-	})
+	out := machinegen.RecoveredCredential{Grn: subject.String(), Lineage: recovered.Lineage.String()}
+	if signed := recovered.Signed; signed != nil {
+		out.CertificatePem, out.IssuerPem = &signed.CertificatePEM, &signed.Chain.IssuerPEM
+		out.ServerRootPem = &signed.Chain.ServerRootPEM
+	}
+	writeJSON(w, http.StatusCreated, out)
+}
+
+// certificateRequestOf parses the certificate request a recovery
+// carries: required under execution-fence.v1, and refused under
+// execution-fence.v2, whose recovery signs nothing (ADR-0100).
+func certificateRequestOf(r *http.Request, pem *string) ([]byte, error) {
+	if tokenBorne(r) {
+		if pem != nil {
+			return nil, errorx.New(errorx.KindInvalidArgument,
+				"under "+agent.TokenExecutionContractVersion+" a recovery signs nothing, and certificateRequestPem is refused")
+		}
+		return nil, nil
+	}
+	if pem == nil {
+		return nil, errorx.New(errorx.KindInvalidArgument,
+			"under "+agent.ExecutionContractVersion+" a recovery carries certificateRequestPem")
+	}
+	return []byte(*pem), nil
 }
 
 // lifecycleParties answers the calling identity, read again for this
 // decision, and the agent the path names. A connection authenticates
-// once, so the caller's validity and registration are rechecked on
-// every lifecycle request.
+// once, so a certificate's validity and registration are rechecked on
+// every lifecycle request; a token's were read for this request, and
+// the recheck holds it to the same dates and record (ADR-0100).
 func (s *Server) lifecycleParties(w http.ResponseWriter, r *http.Request, agentGRN machinegen.AgentGrn) (grn.GRN, grn.GRN, bool) {
-	identity, ok := callerCertificate(w, r)
+	identity, ok := identityOf(w, r)
 	if !ok {
 		return grn.GRN{}, grn.GRN{}, false
 	}
@@ -261,7 +318,7 @@ func (s *Server) lifecycleParties(w http.ResponseWriter, r *http.Request, agentG
 	return identity.GRN(), subject, true
 }
 
-// recheck reads the caller's certificate validity and registration
+// recheck reads the caller's credential validity and registration
 // again for this decision, and writes the refusal itself.
 func (s *Server) recheck(w http.ResponseWriter, r *http.Request, identity machine.Identity) bool {
 	if err := s.certificates.Recheck(r.Context(), identity); err != nil {
@@ -370,17 +427,6 @@ func parseEpoch(s string) (int, error) {
 	return epoch, nil
 }
 
-// executionContract stamps the execution contract version on the
-// answer and refuses a request that asked for another.
-func executionContract(w http.ResponseWriter, version machinegen.ExecutionContractVersion) bool {
-	w.Header().Set("Garam-Contract-Version", agent.ExecutionContractVersion)
-	if version != agent.ExecutionContractVersion {
-		writeError(w, agent.ErrUnsupportedExecutionContract)
-		return false
-	}
-	return true
-}
-
 // lifecycleBudget bounds an activation, a recovery or a deactivation
 // by agent.LifecycleDeadline from before its first authority read, the
 // caller's own recheck, to its commit.
@@ -399,11 +445,11 @@ func withinBudget(r *http.Request, err error) error {
 }
 
 // writeExecutionError answers 422 for the refusal of what a request
-// forwarded rather than how it was formed: a certificate that does not
-// prove the agent.
+// forwarded rather than how it was formed: a certificate or a token
+// that does not prove the agent.
 func writeExecutionError(w http.ResponseWriter, r *http.Request, err error) {
 	err = withinBudget(r, err)
-	if errors.Is(err, agent.ErrLeafNotProven) {
+	if errors.Is(err, agent.ErrLeafNotProven) || errors.Is(err, agent.ErrTokenNotProven) {
 		writeErrorStatus(w, http.StatusUnprocessableEntity, err)
 		return
 	}

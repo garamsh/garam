@@ -293,9 +293,13 @@ certificate path goes; until then an operator may present either.
   credential cannot grow the table. A value that is not a credential's
   shape is refused before anything is read. A token never mints a
   token. One may name an
-  audience — another operator of the same organization, a hosted
+  audience — another operator the organization registered, a hosted
   control service it is to be shown to — and garam accepts such a
-  token on no route yet.
+  token on no route; it reads one only when that audience forwards it
+  for a controller proof (§Controller proof).
+  `migrations/000041`'s foreign key refuses an audience nobody
+  registered, and deleting that operator takes the tokens minted to be
+  shown to it.
 - **Revocation is a read on every request.** The machine listener
   resolves a presented token by its row joined to the registration, so
   deleting the operator, which takes the credential and its tokens by
@@ -416,7 +420,9 @@ is lifecycle authority (ADR-0078).
 
 The routes and their wire forms are `api/openapi.yaml` §operator and
 `api/machine.yaml` §authority, which are authoritative for them; each
-carries the `operation-authority.v1` contract version (ADR-0079). A
+carries the `operation-authority.v1` contract version (ADR-0079), and
+the machine listener's answers `operation-authority.v2` to a token
+(ADR-0100). A
 release that does not know an operation refuses to mint it, so an
 older garam never mints a read without its request target.
 
@@ -430,17 +436,22 @@ service, not a description of it.
 
 A hosted operator proves a controller's current authority before each
 lifecycle decision it makes for that controller (ADR-0078). It
-forwards the controller's leaf certificate exactly as the controller
-presented it in its own handshake, and garam verifies that certificate
-rather than any GRN the caller asserts. A proof is answered only when
-every check passes, each read on the request, because the caller's
-connection authenticated once when it was made:
+forwards the controller's credential exactly as the controller
+presented it: under `operation-authority.v1` its leaf certificate,
+and under `operation-authority.v2` the token the controller exchanged
+its credential for to be shown to that hosted operator (ADR-0100).
+garam verifies that credential rather than any GRN the caller asserts.
+A proof is answered only when every check passes, each read on the
+request, because the caller's connection authenticated once when it
+was made:
 
-- the caller's own certificate is still within its validity and its
+- the caller's own credential is still within its validity and its
   registration is still held;
 - the forwarded certificate names the controller, chains to the
   organization's authority, is within its validity, and the controller
-  is still registered;
+  is still registered; or the forwarded token is live, names the
+  controller and names the caller as its audience, which the token's
+  read against the registration already decides;
 - the caller's current grant covers `agent:activate` for that
   controller;
 - a named agent belongs to the organization and is currently assigned
@@ -451,10 +462,12 @@ connection authenticated once when it was made:
   lifecycle — does not deny it, and an explicit Deny wins.
 
 Certificates are `internal/machine`'s to verify
-([machine-identity.md](./machine-identity.md)); this domain decides the
-grant, the placement and the policy on GRNs. A read that cannot be made
-is unavailable, never an answer from something older. The proof holds
-as of its reads and is no transaction with the caller's store.
+([machine-identity.md](./machine-identity.md)) and a controller's token
+is this domain's, which issued it (`Service.VerifyShown`); this domain
+decides the grant, the placement and the policy on GRNs. A read that
+cannot be made is unavailable, never an answer from something older. The
+proof holds as of its reads and is no transaction with the caller's
+store.
 
 **A session proof releases no agent.** Before releasing an agent's
 desired content, deciding its placement or forwarding its certificate
@@ -464,9 +477,9 @@ again after a long wait; it never reuses a proof across decisions. The
 route, its fields and its refusal statuses are `api/machine.yaml`
 `introspectController`, which is authoritative for them.
 
-**Each certificate is proven by the route for its kind.** These are
-obligations on the Operator control service; garam's routes for both
-are built.
+**Each certificate is proven by the route for its kind, and so is the
+token that replaces it under the v2 values.** These are obligations on
+the Operator control service; garam's routes for both are built.
 
 - **A controller's leaf** is proven here. The control service may keep
   the exact public leaf a controller presented when it registered the

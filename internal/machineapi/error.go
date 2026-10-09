@@ -47,7 +47,7 @@ func RecoverPanics(next http.Handler) http.Handler {
 // so there is no format for one to fail and nothing to tell a caller
 // beyond that a parameter could not be read. The one is the contract
 // version header, and a missing one is answered as an unsupported one
-// so the refusal names the version the route serves.
+// so the refusal names the value the request's credential takes there.
 //
 // The composition root supplies this as ErrorHandlerFunc, and nothing
 // else answers on this path.
@@ -56,20 +56,20 @@ func BindingError(w http.ResponseWriter, r *http.Request, err error) {
 	if errors.As(err, &header) && header.ParamName == operator.ContractVersionHeader {
 		switch {
 		case executionRoute(r):
-			executionContract(w, "")
+			served(w, r, "", executionValues)
 		case enrollmentRoute(r):
-			enrollmentContract(w, "")
+			served(w, r, "", enrollmentValues)
 		case standaloneRoute(r):
 			standaloneContract(w, "")
 		case cutoverRoute(r):
-			cutoverContract(w, "")
+			served(w, r, "", cutoverValues)
 		case r.URL.Path == "/outbox-messages":
-			deliveryContract(w, r, "")
+			served(w, r, "", deliveryValues)
 		case tokenRoute(r):
 			w.Header().Set("Garam-Contract-Version", operator.TokenContractVersion)
 			writeError(w, operator.ErrUnsupportedTokenContract)
 		default:
-			contract(w, "")
+			served(w, r, "", authorityValues)
 		}
 		return
 	}
@@ -77,7 +77,7 @@ func BindingError(w http.ResponseWriter, r *http.Request, err error) {
 }
 
 // executionRoute reports whether r is one of the execution routes,
-// whose contract is execution-fence.v1 rather than the operation
+// whose contract is execution-fence rather than the operation
 // authority's. Every one of them is a POST under /agents/.
 func executionRoute(r *http.Request) bool {
 	p := r.URL.Path
@@ -87,7 +87,7 @@ func executionRoute(r *http.Request) bool {
 }
 
 // enrollmentRoute reports whether r is one of the managed enrollment
-// routes, whose contract is managed-enrollment.v1. Both are POSTs.
+// routes, whose contract is managed-enrollment. Both are POSTs.
 func enrollmentRoute(r *http.Request) bool {
 	p := r.URL.Path
 	return (strings.HasPrefix(p, "/operators/") && strings.HasSuffix(p, "/managed-agents")) ||
@@ -95,7 +95,7 @@ func enrollmentRoute(r *http.Request) bool {
 }
 
 // cutoverRoute reports whether r is one of the cutover routes, whose
-// contract is agent-cutover.v1: the read of an agent's cutover and the
+// contract is agent-cutover: the read of an agent's cutover and the
 // three stages under it.
 func cutoverRoute(r *http.Request) bool {
 	p := r.URL.Path

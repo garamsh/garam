@@ -17,6 +17,12 @@ import (
 // serve, carried in the Garam-Contract-Version header.
 const ExecutionContractVersion = "execution-fence.v1"
 
+// TokenExecutionContractVersion is the same contract for a request a
+// token authenticated: activation and introspection take the agent's
+// token minted for the caller, and a recovery signs nothing
+// (ADR-0100).
+const TokenExecutionContractVersion = "execution-fence.v2"
+
 // Execution sentinels (ADR-0078). A refusal of a protected write names
 // which part of the fence refused it; none says which process holds
 // the agent now.
@@ -63,10 +69,19 @@ var (
 	// contract version, or another.
 	ErrUnsupportedExecutionContract = errorx.New(errorx.KindInvalidArgument,
 		"unsupported Garam-Contract-Version: this route serves "+ExecutionContractVersion)
+	// ErrUnsupportedTokenExecutionContract is that refusal for a
+	// request a token authenticated (ADR-0100).
+	ErrUnsupportedTokenExecutionContract = errorx.New(errorx.KindInvalidArgument,
+		"unsupported Garam-Contract-Version: a request presenting a token is served under "+TokenExecutionContractVersion)
 	// ErrLeafNotProven refuses a forwarded certificate that does not
 	// prove the agent it is presented for: another SAN, or a chain to
 	// no authority of the agent's organization.
 	ErrLeafNotProven = errorx.New(errorx.KindInvalidArgument, "the certificate does not prove the agent it is presented for")
+	// ErrTokenNotProven refuses a forwarded token that does not prove
+	// the agent it is presented for: not a token's shape, unknown,
+	// minted for another agent, or minted to be shown to another
+	// audience (ADR-0100).
+	ErrTokenNotProven = errorx.New(errorx.KindInvalidArgument, "the token does not prove the agent it is presented for")
 	// ErrRecoveryConflict refuses a recovery request identifier reused
 	// with another body or reference, or a reference that already
 	// recovered.
@@ -332,18 +347,27 @@ type RecoveryRequest struct {
 }
 
 // Recovery is what a recovery recorded, the first time and on a retry.
-// Chain is nil for a recovery recorded before migration 000036, which
-// stored none.
+// CertificatePEM is empty for one that signed nothing (ADR-0100), and
+// Chain is nil for it and for a recovery recorded before migration
+// 000036, which stored none.
 type Recovery struct {
 	Lineage        Lineage
 	CertificatePEM string
 	Chain          *Chain
 }
 
-// RecoveredCredential is what a recovery answers: the certificate, and
-// the chain it was signed under.
+// RecoveredCredential is what a recovery answers: the new lineage, and
+// under execution-fence.v1 the certificate signed in it. Signed is nil
+// for a recovery under execution-fence.v2, which signs nothing
+// (ADR-0100).
 type RecoveredCredential struct {
-	Lineage        Lineage
+	Lineage Lineage
+	Signed  *SignedRecovery
+}
+
+// SignedRecovery is the certificate a recovery signed, and the chain it
+// was signed under.
+type SignedRecovery struct {
 	CertificatePEM string
 	Chain          Chain
 }

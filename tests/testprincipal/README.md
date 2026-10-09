@@ -131,10 +131,10 @@ Then run them as §Invocation says, with `-migrations ./migrations`.
   another commit, ask the Garam PM, and an operator pushes that
   commit's image and moves `pinned-<consumer>` to it (§Pushing and
   pinning).
-- **The GHCR package.** Images published before ADR-0093 are in
-  `ghcr.io/garamsh/garam-test`, which nothing publishes to or prunes
-  any longer. It stays until the ECR repository holds a pinned image,
-  and retiring it is a separate step, announced first.
+- **The GHCR package.** Images published before ADR-0093 were in
+  `ghcr.io/garamsh/garam-test`. It was deleted on 2026-10-09, once
+  the ECR repository held a pinned image that its one consumer pulls
+  by digest, and nothing reads it any longer.
 - **No image per commit.** Nothing pushes one on a push to `dev`. A
   commit's image exists once an operator has pushed it, which happens
   when a pin moves to it.

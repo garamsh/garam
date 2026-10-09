@@ -14,15 +14,18 @@ import (
 	"github.com/garamsh/garam/internal/operator"
 )
 
-// exchanges is the TokenStore in memory: credentials by hash, and the
-// tokens recorded under them.
+// exchanges is the TokenStore in memory: credentials by hash, the
+// tokens recorded under them, and the live tokens by hash with how
+// many times one was read.
 type exchanges struct {
 	credentials map[string]operator.CredentialHolder
 	recorded    []*operator.Token
+	live        map[string]operator.TokenHolder
+	resolved    int
 }
 
 func newExchanges() *exchanges {
-	return &exchanges{credentials: map[string]operator.CredentialHolder{}}
+	return &exchanges{credentials: map[string]operator.CredentialHolder{}, live: map[string]operator.TokenHolder{}}
 }
 
 func (e *exchanges) CredentialHolder(_ context.Context, credentialHash string) (operator.CredentialHolder, error) {
@@ -38,8 +41,13 @@ func (e *exchanges) RecordToken(_ context.Context, _ operator.CredentialHolder, 
 	return nil
 }
 
-func (e *exchanges) ResolveToken(context.Context, string) (operator.TokenHolder, error) {
-	return operator.TokenHolder{}, operator.ErrTokenInvalid
+func (e *exchanges) ResolveToken(_ context.Context, tokenHash string) (operator.TokenHolder, error) {
+	e.resolved++
+	holder, ok := e.live[tokenHash]
+	if !ok {
+		return operator.TokenHolder{}, operator.ErrTokenInvalid
+	}
+	return holder, nil
 }
 
 // issued registers a credential for subject in store and answers the
@@ -183,4 +191,45 @@ type countingExchanges struct {
 func (c *countingExchanges) CredentialHolder(ctx context.Context, hash string) (operator.CredentialHolder, error) {
 	c.asked++
 	return c.exchanges.CredentialHolder(ctx, hash)
+}
+
+// holds the controller proof's token half (ADR-0100): a token proves
+// the operator it names only to the audience it was minted to be shown
+// to. The token shown to the caller is the control, proven, so each
+// refusal beside it is the one property its case changes. A value no
+// exchange could have produced is refused before any read.
+func TestService_VerifyShownProvesAnOperatorOnlyToTheAudienceItsTokenNames(t *testing.T) {
+	controller, hosted := operatorGRN("acme", "controller"), operatorGRN("acme", "hosted")
+	other := operatorGRN("acme", "other")
+	store := newExchanges()
+	live := func(holder operator.TokenHolder) string {
+		value := operator.TokenPrefix + strings.Repeat(string(rune('a'+len(store.live))), 64)
+		store.live[operator.HashToken(value)] = holder
+		return value
+	}
+	shown := live(operator.TokenHolder{Operator: controller, Audience: &hosted})
+	elsewhere := live(operator.TokenHolder{Operator: controller, Audience: &other})
+	garams := live(operator.TokenHolder{Operator: controller})
+	svc, _ := exchanging(t, store)
+	ctx := context.Background()
+
+	require.NoError(t, svc.VerifyShown(ctx, controller, hosted, shown), "control: the token shown to the caller proves it")
+	for name, tc := range map[string]struct {
+		subject, audience grn.GRN
+		token             string
+	}{
+		"shown to another audience": {controller, hosted, elsewhere},
+		"garam's own token":         {controller, hosted, garams},
+		"naming another operator":   {other, hosted, shown},
+		"presented by another":      {controller, other, shown},
+		"not live":                  {controller, hosted, operator.TokenPrefix + strings.Repeat("f", 64)},
+	} {
+		assert.ErrorIs(t, svc.VerifyShown(ctx, tc.subject, tc.audience, tc.token), operator.ErrTokenNotProven, name)
+	}
+
+	read := store.resolved
+	for _, malformed := range []string{shown[:len(shown)-1], operator.CredentialPrefix + strings.Repeat("0", 64), ""} {
+		assert.ErrorIs(t, svc.VerifyShown(ctx, controller, hosted, malformed), operator.ErrTokenNotProven)
+	}
+	assert.Equal(t, read, store.resolved, "a malformed token reads nothing")
 }

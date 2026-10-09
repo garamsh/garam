@@ -114,8 +114,8 @@ reach it, so `internal/cli` is the file that section names for garam
 **The placement is what the in-process integration tests rest on.** Only
 a test in its own directory can import a main package, which
 `docs/convention/stack-go.md` §Project envelope states where it moves
-the site out of `main.go`, and §7 of that file designates `tests/` for
-the integration and E2E tests that wire multiple domains
+the site out of `main.go`, and §Testing of that file designates
+`tests/` for the integration and E2E tests that wire multiple domains
 ([ADR-0096](./adr/0096-garam-syncs-the-convention-template-to-f7de866.md)).
 `tests/integration/issue_certificate_test.go` and
 `tests/integration/migrate_test.go` reach the shipped command tree
@@ -169,7 +169,8 @@ A conversion to a wire format the boundaries already share is not a shared kerne
   layout rule. Superseded by ADR-0069, on the condition ADR-0066 wrote
   for itself: it was contingent on ADR-0051's reservation and lasted as
   long as that reservation did. Read it for what conforming to
-  `docs/convention/stack-go.md` §1 would have cost while the fields
+  `docs/convention/stack-go.md` §Service layout would have cost while
+  the fields
   were closed, and for why a layout rule is still not a reason to open
   one.
 - [ADR-0069](./adr/0069-the-aggregates-are-data-carriers-so-the-driver-leaves-the-domain-package.md) — the aggregates are data carriers, so the driver
@@ -178,7 +179,7 @@ A conversion to a wire format the boundaries already share is not a shared kerne
   across the ten domain packages and no method that assigns a field.
   The store moves to `internal/<domain>/postgres/`, named for the
   technology it implements against, which is what
-  `docs/convention/stack-go.md` §1 requires.
+  `docs/convention/stack-go.md` §Service layout requires.
 - [ADR-0052](./adr/0052-a-concern-is-owned-by-the-boundary-whose-subject-matter-it-is.md)
   — a concern is owned by the boundary whose subject matter it is. The
   threshold above names a destination for a concern shared by two and

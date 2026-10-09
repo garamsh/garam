@@ -68,7 +68,7 @@ Each domain's package contains:
   has none.
 - `postgres/` — the `Store` implementation against PostgreSQL, in a
   package named for the technology it implements against, which is what
-  `docs/convention/stack-go.md` §1 requires
+  `docs/convention/stack-go.md` §Service layout requires
   ([ADR-0069](./adr/0069-the-aggregates-are-data-carriers-so-the-driver-leaves-the-domain-package.md)).
   It holds the hand-written `postgres.go`, the domain's hand-written
   `queries.sql`, and the `db/` package sqlc generates from that file and

@@ -70,7 +70,8 @@ own things a reader might come here for, and none of them is restated:
   ([ADR-0042](./adr/0042-a-chart-is-the-description-of-a-garam-deployment.md)).
 - `docs/convention/stack-nextjs.md` governs how the application is laid
   out inside `web/src/`: which folder holds what, and the two entry
-  points a feature declares (§13). What may import what there is
+  points a feature declares (§Feature entry points and file naming).
+  What may import what there is
   [structure.md](./structure.md) §Boundaries and dependency direction's
   ([ADR-0094](./adr/0094-structural-rules-yield-only-to-what-a-framework-imposes.md)),
   and `web/eslint.config.mjs`'s `garam/import-direction` rule is what
@@ -335,12 +336,14 @@ prerequisite rather than a check.
 Tests are in two locations by decision, not by accident: Vitest owns
 the tests colocated under `web/src/`, Playwright owns `web/e2e/`, and
 each config names the other's territory so neither collects the other's
-files (ADR-0009, `docs/convention/stack-nextjs.md` §12).
+files (ADR-0009, `docs/convention/stack-nextjs.md` §Testing — three
+layers, two locations).
 
 ## Not established
 
 - **Whether a responsibility document is owed per domain or per index
-  entry.** `#605` records that the line defining what rule 5 binds
+  entry.** `#605` records that the line defining what "Every domain or
+  concern has a responsibility document" binds
   differs from the template garam adopted it from, and that the two
   readings point at different files. This document is owed under
   either, so nothing here turns on the answer, and nothing here

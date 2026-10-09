@@ -550,14 +550,15 @@ has four places to reach, guarded by different things:
 
 - **The ADR** that records it.
 - **This document**, where the surfaces and what admits a caller are
-  the present state. Rule 3 in [README.md](./README.md) pairs an ADR
+  the present state. "Decisions land in pairs" in
+  [README.md](./README.md) pairs an ADR
   with the responsibility documents it affects, and this is the one the
   API has.
 - **The specification for the listener it changed** — schema and prose
   both. The schema is guarded by `make check-gen`; the prose is guarded
   by nobody, which is the whole of §What nothing checks.
 - **The responsibility document for the domain whose behaviour
-  changed**, under the same rule 3.
+  changed**, under the same rule.
 
 The third is the one that has been missed twice. Reaching it depends on
 an author having read this far, which is weaker than a check; §Not
@@ -565,7 +566,8 @@ decided says what closing that would take.
 
 ## Not decided
 
-- **Whether rule 3 reaches a specification.** It names the
+- **Whether "Decisions land in pairs" reaches a specification.** It
+  names the
   responsibility documents and [README.md](./README.md) itself. This
   one is inside its reach; `api/openapi.yaml` and `api/machine.yaml`
   are neither and are not. Listing the API as a concern closes the

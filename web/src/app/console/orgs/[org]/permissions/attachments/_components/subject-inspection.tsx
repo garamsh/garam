@@ -1,6 +1,11 @@
 import Link from "next/link";
 
-import { slugFromGrn, type Group, type Policy } from "@/features/orgs";
+import {
+  KIND_LABEL,
+  slugFromGrn,
+  type Group,
+  type Policy,
+} from "@/features/orgs";
 
 import { AttachPolicyForm } from "../../_components/attach-policy-form";
 import { DetachPolicyForm } from "../../_components/detach-policy-form";
@@ -8,11 +13,7 @@ import {
   POLICY_STATUS_LABEL,
   PolicyStatusBadge,
 } from "../../_components/policy-status-badge";
-import {
-  KIND_LABEL,
-  type Inspection,
-  type Subject,
-} from "../../_components/subjects";
+import { type Inspection, type Subject } from "../../_components/subjects";
 
 /** A policy's name, linking to its page, and its state. */
 function PolicyName({

@@ -8,11 +8,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { slugFromGrn } from "@/features/orgs";
+import { KIND_LABEL, slugFromGrn } from "@/features/orgs";
 
 import { PolicyStatusBadge } from "../../_components/policy-status-badge";
 import {
-  KIND_LABEL,
   reachOf,
   subjectLabel,
   type Catalogs,

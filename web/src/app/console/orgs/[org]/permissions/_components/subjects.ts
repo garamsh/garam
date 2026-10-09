@@ -1,31 +1,24 @@
 import {
+  KIND_LABEL,
   agentChoiceLabel,
   directoryAgents,
+  kindFromGrn,
   lookUpAgent,
-  parseGrn,
   refusedAgentLists,
   slugFromGrn,
   type Agent,
   type AgentDefinition,
+  type Catalog,
   type Group,
   type GroupMember,
+  type Lookup,
   type Member,
   type Policy,
   type PolicyAttachment,
+  type SubjectKind,
 } from "@/features/orgs";
 
 import type { ChoiceGroup } from "./attach-policy-form";
-
-/** What a policy can be attached to, as the console names it. */
-export type SubjectKind = "team" | "person" | "agent";
-
-/**
- * A list the page reads subjects from, or the fact that garam refused
- * the caller that list. A refused list names no one and proves no one
- * absent.
- */
-export type Catalog<T> =
-  { status: "ok"; data: readonly T[] } | { status: "forbidden" };
 
 /**
  * The organization's teams, people and agents, as the page read them.
@@ -59,15 +52,7 @@ export type AttachedSubject = {
   kind: SubjectKind | "unknown";
   identifier: string;
   label: string | null;
-  lookup: "found" | "missing" | "refused";
-};
-
-/** The word a subject's type is shown as. */
-export const KIND_LABEL: Record<SubjectKind | "unknown", string> = {
-  team: "Team",
-  person: "Person",
-  agent: "Agent",
-  unknown: "Unknown",
+  lookup: Lookup;
 };
 
 /** The plural a refused list is named by. */
@@ -100,20 +85,6 @@ export function subjectChoices(
         label: `${subject.label} · ${KIND_LABEL[kind]}`,
       })),
   }));
-}
-
-/** What a subject GRN names, by its service type. */
-function kindOf(grn: string): SubjectKind | "unknown" {
-  switch (parseGrn(grn)?.serviceType) {
-    case "group":
-      return "team";
-    case "user":
-      return "person";
-    case "agent":
-      return "agent";
-    default:
-      return "unknown";
-  }
 }
 
 /** A person's name, or what stands in for one. */
@@ -188,7 +159,7 @@ export function describeSubject(
   catalogs: Catalogs,
 ): AttachedSubject {
   const identifier = slugFromGrn(grn);
-  const kind = kindOf(grn);
+  const kind = kindFromGrn(grn);
   if (kind === "unknown") {
     return { grn, kind, identifier, label: null, lookup: "missing" };
   }

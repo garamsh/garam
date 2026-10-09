@@ -654,7 +654,8 @@ ADRs:
 - [0096](./adr/0096-garam-syncs-the-convention-template-to-f7de866.md)
   — garam syncs the conventions template to `f7de866`, taking every
   commit since `6fbfd5d` that lands on a file it keeps; `stack-go.md`
-  §1 keeps naming an implementation package for its technology, and
+  §Service layout keeps naming an implementation package for its
+  technology, and
   three adapted stack files keep their checked-against headers
 - [0097](./adr/0097-development-images-live-under-garam-dev-and-garam-holds-releases-only.md)
   — development images live under `garam-dev/`, as the owner set it

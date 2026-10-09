@@ -302,7 +302,7 @@ func machineListenerAround(t *testing.T, obs *observability, subject grn.GRN, ne
 	require.NoError(t, err)
 
 	srv := obs.machineServer(machine.NewService(certificateAuthorities{store: store}, everyRecordHeld{}, machine.Config{}),
-		keys.listener, next)
+		identityTokens{operators: liveTokens{}}, keys.listener, next)
 	lis, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	go func() { _ = srv.ServeTLS(lis, "", "") }()

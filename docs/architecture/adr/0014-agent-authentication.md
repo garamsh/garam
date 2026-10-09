@@ -1,6 +1,10 @@
 # ADR 0014: Agents authenticate with mTLS on a listener of their own
 
-> Status: accepted — §Decision's rotation term is superseded by [ADR-0040](./0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md); §Consequences' revocation term is superseded, for an operator, by [ADR-0070](./0070-an-organization-deletes-an-operator-and-the-record-it-withdraws-is-what-that-operator-authenticated-on.md), and for an agent's credential lineage by [ADR-0078](./0078-a-lifecycle-authority-activates-a-runtime-generation-and-old-generations-and-lineages-are-fenced.md)
+> Status: accepted — §Decision's rotation term is superseded by [ADR-0040](./0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md); §Consequences' revocation term is superseded, for an operator, by [ADR-0070](./0070-an-organization-deletes-an-operator-and-the-record-it-withdraws-is-what-that-operator-authenticated-on.md), and for an agent's credential lineage by [ADR-0078](./0078-a-lifecycle-authority-activates-a-runtime-generation-and-old-generations-and-lineages-are-fenced.md);
+> its client certificate, the per-organization authority that signs it,
+> revocation by lifetime and its rejection of an opaque bearer
+> credential are superseded by
+> [ADR-0100](./0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
 > Date: 2026-08-16
 
 ## Contents

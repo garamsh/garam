@@ -78,6 +78,7 @@ func TestActionConstants_SpellTheirWireStrings(t *testing.T) {
 		{org.ActionOperatorRegister, "operator:register"},
 		{org.ActionOperatorUpdate, "operator:update"},
 		{org.ActionOperatorDelete, "operator:delete"},
+		{org.ActionOperatorReissue, "operator:reissue"},
 		{org.ActionOperatorDelegate, "operator:delegate"},
 
 		{org.ActionAgentRead, "agent:read"},
@@ -106,7 +107,7 @@ func TestRoleActions_GrantSets(t *testing.T) {
 		[]string{
 			"org:*", "group:*", "project:*", "policy:*", "consent:*",
 			org.ActionOperatorRead, org.ActionOperatorRegister, org.ActionOperatorUpdate,
-			org.ActionOperatorDelete, org.ActionOperatorDelegate, org.ActionAgentRead,
+			org.ActionOperatorDelete, org.ActionOperatorReissue, org.ActionOperatorDelegate, org.ActionAgentRead,
 			org.ActionAgentRename, org.ActionAgentCreate,
 			org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentEnroll, org.ActionAgentTemplateRead,
 			org.ActionAgentTemplatePublish,
@@ -118,7 +119,7 @@ func TestRoleActions_GrantSets(t *testing.T) {
 			org.ActionOrgRead, org.ActionOrgUpdate, org.ActionOrgMemberList, org.ActionOrgInvite,
 			"group:*", "project:*", "policy:*", "consent:*",
 			org.ActionOperatorRead, org.ActionOperatorRegister, org.ActionOperatorUpdate,
-			org.ActionOperatorDelete, org.ActionOperatorDelegate, org.ActionAgentRead,
+			org.ActionOperatorDelete, org.ActionOperatorReissue, org.ActionOperatorDelegate, org.ActionAgentRead,
 			org.ActionAgentRename, org.ActionAgentCreate,
 			org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentEnroll, org.ActionAgentTemplateRead,
 			org.ActionAgentTemplatePublish,
@@ -182,7 +183,7 @@ func TestRoleActions_OnlyOwnerAndAdminRegisterAnOperator(t *testing.T) {
 		assert.Contains(t, r.Actions(), org.ActionOperatorRead, string(r))
 		assert.NotContains(t, r.Actions(), "operator:*", string(r))
 	}
-	for _, action := range []string{org.ActionOperatorRegister, org.ActionOperatorUpdate, org.ActionOperatorDelete} {
+	for _, action := range []string{org.ActionOperatorRegister, org.ActionOperatorUpdate, org.ActionOperatorDelete, org.ActionOperatorReissue} {
 		assert.Contains(t, org.RoleOwner.Actions(), action)
 		assert.Contains(t, org.RoleAdmin.Actions(), action)
 		assert.NotContains(t, org.RoleMember.Actions(), action)
@@ -236,7 +237,7 @@ func TestActionsFor_UnionsKnownRoles(t *testing.T) {
 			org.ActionOrgUpdate, org.ActionOrgInvite,
 			"group:*", "project:*", "policy:*", "consent:*",
 			org.ActionOperatorRegister, org.ActionOperatorUpdate, org.ActionOperatorDelete,
-			org.ActionOperatorDelegate, org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentEnroll,
+			org.ActionOperatorReissue, org.ActionOperatorDelegate, org.ActionAgentConfigure, org.ActionAgentRecover, org.ActionAgentEnroll,
 			org.ActionAgentTemplatePublish, org.ActionAgentExecutionRead, org.ActionAgentCutover,
 		},
 		org.ActionsFor([]string{"member", "admin"}))

@@ -6,6 +6,9 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strings"
+
+	"github.com/garamsh/garam/internal/errorx"
 )
 
 // NewServer returns the machine-facing HTTP server: it terminates TLS
@@ -22,7 +25,14 @@ import (
 // elsewhere: what an admitted caller may do is decided by the identity
 // it holds, and a request that carries none reaches no handler that
 // asks for one.
-func NewServer(s Service, certificate ServerCertificate, next http.Handler) *http.Server {
+//
+// A request may present a token instead, under [TokenScheme]: then
+// tokens is asked for that request, and what it answers is the
+// request's identity (ADR-0100). A request presenting a token over a
+// connection whose certificate authenticated is refused rather than
+// read as either, because two credentials naming two identities have
+// no single answer to who is calling.
+func NewServer(s Service, tokens Tokens, certificate ServerCertificate, next http.Handler) *http.Server {
 	// TLS 1.3 only: both ends of this surface are garam's, so neither
 	// needs an older one.
 	base := &tls.Config{
@@ -71,7 +81,7 @@ func NewServer(s Service, certificate ServerCertificate, next http.Handler) *htt
 		return cfg, nil
 	}
 	return &http.Server{
-		Handler:   identify(next),
+		Handler:   identify(tokens, next),
 		TLSConfig: base,
 		// The cell has to exist before the handshake writes to it, and
 		// this is the one hook that runs first: net/http derives the
@@ -131,23 +141,78 @@ func authenticatedOf(ctx context.Context) (*authenticated, bool) {
 	return cell, ok
 }
 
-// identify hands next the identity the connection authenticated as,
-// where it authenticated as one. What it passes on is what
+// identify hands next the identity the request proved, where it proved
+// one. A request presenting a token is answered by tokens, read for
+// this request (ADR-0100). Any other request carries what
 // [Service.Authenticate] returned during the handshake, so an identity
 // reaching a handler is one whose chain was verified — nothing here
 // reads the presented certificate a second time.
-func identify(next http.Handler) http.Handler {
+//
+// A token that proves nothing leaves the request without an identity,
+// as a certificate that does not authenticate leaves its connection,
+// and the reason travels beside it for the handler's refusal to carry.
+func identify(tokens Tokens, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cell, ok := authenticatedOf(r.Context())
-		if !ok || cell.identity == nil {
+		certified := ok && cell.identity != nil
+		token, presented := tokenOf(r)
+		switch {
+		case presented && certified:
+			refuse(w, r, next, errorx.New(errorx.KindUnauthenticated,
+				"machine: a request presents a token or a certificate, not both"))
+		case presented:
+			subject, expiresAt, err := tokens.Resolve(r.Context(), token)
+			if err != nil {
+				// A token that proves nothing is the caller's to fix and
+				// is answered 401; only a read that could not be made is
+				// the listener's anomaly.
+				level := slog.LevelDebug
+				if errorx.IsKind(err, errorx.KindUnavailable) {
+					level = slog.LevelWarn
+				}
+				slog.Log(r.Context(), level, "token not resolved", slog.String("error", err.Error()))
+				refuse(w, r, next, err)
+				return
+			}
+			identity := Identity{grn: subject, method: MethodToken, notAfter: expiresAt}
+			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), identityKey{}, identity)))
+		case certified:
+			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), identityKey{}, *cell.identity)))
+		default:
 			next.ServeHTTP(w, r)
-			return
 		}
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), identityKey{}, *cell.identity)))
 	})
 }
 
+// tokenOf returns the token a request presents under [TokenScheme].
+// Another scheme is not a token: the execution and operation headers
+// share Authorization on routes a certificate authenticates.
+func tokenOf(r *http.Request) (string, bool) {
+	token, ok := strings.CutPrefix(r.Header.Get("Authorization"), TokenScheme+" ")
+	return token, ok
+}
+
+// refuse hands next the request with no identity and the reason it
+// carries none.
+func refuse(w http.ResponseWriter, r *http.Request, next http.Handler, err error) {
+	next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), refusalKey{}, err)))
+}
+
 type identityKey struct{}
+
+type refusalKey struct{}
+
+// RefusalOf returns why a request that presented a token carries no
+// identity: the token proved nothing, or could not be read, or arrived
+// beside a certificate. A request that presented none answers nil, and
+// its absence of identity is the handler's to decide on.
+func RefusalOf(r *http.Request) error {
+	err, ok := r.Context().Value(refusalKey{}).(error)
+	if !ok {
+		return nil
+	}
+	return err
+}
 
 // IdentityOf returns the machine identity the request authenticated
 // as. The comma-ok is the whole of the distinction this listener

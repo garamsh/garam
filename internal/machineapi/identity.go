@@ -3,9 +3,11 @@ package machineapi
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
 )
 
@@ -18,6 +20,53 @@ func (s *Server) GetIdentity(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, machinegen.Identity{Grn: identity.String()})
+}
+
+// ExchangeToken answers a short-lived token for the operator the
+// presented credential belongs to (ADR-0100).
+//
+// Like EnrollOperator it reads no identity off the connection: what
+// authenticates the request is the credential in its Authorization
+// header, which a member of the operator's organization issued.
+func (s *Server) ExchangeToken(w http.ResponseWriter, r *http.Request, params machinegen.ExchangeTokenParams) {
+	w.Header().Set("Garam-Contract-Version", operator.TokenContractVersion)
+	// The credential is read first, so a caller that presents none
+	// learns what authenticates this route before what it serves.
+	credential, ok := strings.CutPrefix(r.Header.Get("Authorization"), operator.CredentialScheme+" ")
+	if !ok || credential == "" {
+		writeError(w, errorx.New(errorx.KindUnauthenticated,
+			"an exchange carries Authorization: "+operator.CredentialScheme+" <credential>"))
+		return
+	}
+	if params.TokenContractVersion != operator.TokenContractVersion {
+		writeError(w, operator.ErrUnsupportedTokenContract)
+		return
+	}
+	var body machinegen.TokenExchange
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, errorx.Wrap(err, "token exchange", errorx.KindInvalidArgument))
+		return
+	}
+	var audience *grn.GRN
+	if body.Audience != nil {
+		g, err := grn.Parse(*body.Audience)
+		if err != nil {
+			writeError(w, errorx.Wrap(err, "audience", errorx.KindInvalidArgument))
+			return
+		}
+		audience = &g
+	}
+	token, err := s.operators.Exchange(r.Context(), credential, audience)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	answer := machinegen.MachineToken{Token: token.Value, Grn: token.Operator.String(), ExpiresAt: token.ExpiresAt}
+	if token.Audience != nil {
+		named := token.Audience.String()
+		answer.Audience = &named
+	}
+	writeJSON(w, http.StatusCreated, answer)
 }
 
 // EnrollOperator answers with the certificate signed for the operator

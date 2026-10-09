@@ -47,7 +47,12 @@ func (s *Server) RegisterOperator(w http.ResponseWriter, r *http.Request, orgSlu
 		writeError(w, err)
 		return
 	}
-	registered, err := s.operators.Register(r.Context(), o, enrollment)
+	credential, err := operator.NewIssuedCredential(o.GRN(), u.GRN)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	registered, err := s.operators.Register(r.Context(), o, enrollment, credential)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -58,7 +63,46 @@ func (s *Server) RegisterOperator(w http.ResponseWriter, r *http.Request, orgSlu
 			Token:     enrollment.Token(),
 			ExpiresAt: enrollment.ExpiresAt(),
 		},
+		Credential: credentialToAPI(credential),
 	})
+}
+
+// ReissueOperatorCredential issues the operator a new credential and
+// answers it once, voiding the previous one and every token exchanged
+// for it (ADR-0100). Requires the admin role.
+//
+// It is authorized on an action of its own rather than on the one that
+// registers, for the reason DeleteOperator is: it withdraws what the
+// operator runs on until the new credential is placed.
+func (s *Server) ReissueOperatorCredential(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org, operatorSlug apigen.OperatorSlug) {
+	u, err := s.currentUser(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.authorize(r, orgGRN(orgSlug), u, org.ActionOperatorReissue); err != nil {
+		writeError(w, err)
+		return
+	}
+	g, err := operator.GRNOf(orgGRN(orgSlug), operatorSlug)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	credential, err := operator.NewIssuedCredential(g, u.GRN)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if err := s.operators.ReissueCredential(r.Context(), credential); err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, credentialToAPI(credential))
+}
+
+func credentialToAPI(c *operator.IssuedCredential) apigen.OperatorCredential {
+	return apigen.OperatorCredential{Credential: c.Value(), IssuedAt: c.IssuedAt()}
 }
 
 // MintOperatorEnrollment mints the operator a fresh enrollment token

@@ -662,6 +662,21 @@ type MachineCertificate struct {
 	ServerRootPem string `json:"serverRootPem"`
 }
 
+// MachineToken defines model for MachineToken.
+type MachineToken struct {
+	// Audience The hosted operator the token is minted for, where one was asked for.
+	Audience *string `json:"audience,omitempty"`
+
+	// ExpiresAt When garam stops accepting the token.
+	ExpiresAt time.Time `json:"expiresAt"`
+
+	// Grn The operator the token authenticates as.
+	Grn string `json:"grn"`
+
+	// Token The token itself, prefixed `garam_ot_`, answered once. garam stores only its hash.
+	Token string `json:"token"`
+}
+
 // ManagedAgent defines model for ManagedAgent.
 type ManagedAgent struct {
 	// Epoch The first assignment's epoch. Opaque.
@@ -879,6 +894,12 @@ type SupervisorRenewalRequest struct {
 	RequestId             string `json:"requestId"`
 }
 
+// TokenExchange What an exchange asks for: a token garam accepts, or one minted for a hosted operator of the same organization.
+type TokenExchange struct {
+	// Audience The GRN of another operator of the caller's organization the token is to be shown to. Absent, the token is garam's.
+	Audience *string `json:"audience,omitempty"`
+}
+
 // TurnEvent One event from the agent's monitoring stream, as the agent platform emitted it. garam carries it and never reads it, so what a kind means and what a body holds are the platform's to say.
 type TurnEvent struct {
 	// Body The event itself. It may be empty and it may span lines.
@@ -924,6 +945,9 @@ type OperationRef = string
 // StandaloneContractVersion defines model for standaloneContractVersion.
 type StandaloneContractVersion = string
 
+// TokenContractVersion defines model for tokenContractVersion.
+type TokenContractVersion = string
+
 // ContractError defines model for ContractError.
 type ContractError = Error
 
@@ -941,6 +965,9 @@ type ExecutionContractError = Error
 
 // StandaloneContractError defines model for StandaloneContractError.
 type StandaloneContractError = Error
+
+// TokenContractError defines model for TokenContractError.
+type TokenContractError = Error
 
 // EnrollStandaloneAgentParams defines parameters for EnrollStandaloneAgent.
 type EnrollStandaloneAgentParams struct {
@@ -1038,6 +1065,12 @@ type RenewSupervisorCertificateParams struct {
 	StandaloneContractVersion StandaloneContractVersion `json:"Garam-Contract-Version"`
 }
 
+// ExchangeTokenParams defines parameters for ExchangeToken.
+type ExchangeTokenParams struct {
+	// TokenContractVersion Must be `machine-token.v1` (ADR-0100); any other value is refused with 400 naming it.
+	TokenContractVersion TokenContractVersion `json:"Garam-Contract-Version"`
+}
+
 // EnrollStandaloneAgentJSONRequestBody defines body for EnrollStandaloneAgent for application/json ContentType.
 type EnrollStandaloneAgentJSONRequestBody = StandaloneEnrollmentRequest
 
@@ -1091,6 +1124,9 @@ type PostOutboxMessageJSONRequestBody = OutboxSubmission
 
 // RenewSupervisorCertificateJSONRequestBody defines body for RenewSupervisorCertificate for application/json ContentType.
 type RenewSupervisorCertificateJSONRequestBody = SupervisorRenewalRequest
+
+// ExchangeTokenJSONRequestBody defines body for ExchangeToken for application/json ContentType.
+type ExchangeTokenJSONRequestBody = TokenExchange
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
@@ -1190,6 +1226,9 @@ type ServerInterface interface {
 	// RenewSupervisorCertificate Renew the calling supervisor's certificate over a key it generated.
 	// (POST /supervisors/self/certificate)
 	RenewSupervisorCertificate(w http.ResponseWriter, r *http.Request, params RenewSupervisorCertificateParams)
+	// ExchangeToken Exchange an operator's credential for a short-lived token.
+	// (POST /tokens)
+	ExchangeToken(w http.ResponseWriter, r *http.Request, params ExchangeTokenParams)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -2388,6 +2427,51 @@ func (siw *ServerInterfaceWrapper) RenewSupervisorCertificate(w http.ResponseWri
 	handler.ServeHTTP(w, r)
 }
 
+// ExchangeToken operation middleware
+func (siw *ServerInterfaceWrapper) ExchangeToken(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ExchangeTokenParams
+
+	headers := r.Header
+
+	// ------------- Required header parameter "Garam-Contract-Version" -------------
+	if valueList, found := headers[http.CanonicalHeaderKey("Garam-Contract-Version")]; found {
+		var TokenContractVersion TokenContractVersion
+		n := len(valueList)
+		if n != 1 {
+			siw.ErrorHandlerFunc(w, r, &TooManyValuesForParamError{ParamName: "Garam-Contract-Version", Count: n})
+			return
+		}
+
+		err = runtime.BindStyledParameterWithOptions("simple", "Garam-Contract-Version", valueList[0], &TokenContractVersion, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: true, Type: "string", Format: ""})
+		if err != nil {
+			siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "Garam-Contract-Version", Err: err})
+			return
+		}
+
+		params.TokenContractVersion = TokenContractVersion
+
+	} else {
+		err := fmt.Errorf("Header parameter Garam-Contract-Version is required, but not found")
+		siw.ErrorHandlerFunc(w, r, &RequiredHeaderError{ParamName: "Garam-Contract-Version", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ExchangeToken(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 type UnescapedCookieParamError struct {
 	ParamName string
 	Err       error
@@ -2510,6 +2594,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/identity", wrapper.GetIdentity)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/identity/certificate", wrapper.RenewIdentityCertificate)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/tokens", wrapper.ExchangeToken)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/enrollment", wrapper.EnrollOperator)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents", wrapper.CreateAgent)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/agents/{agent}/certificate", wrapper.IssueAgentCertificate)

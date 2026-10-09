@@ -21,6 +21,7 @@ import { DelegationForm } from "./_components/delegation-form";
 import { DeleteOperatorForm } from "./_components/delete-operator-form";
 import { NamingDefinitions } from "./_components/naming-definitions";
 import { OperatorDetailsForm } from "./_components/operator-details-form";
+import { ReissueCredentialForm } from "./_components/reissue-credential-form";
 
 /** Head metadata for an operator's route; Next.js reads it by name. */
 export const metadata: Metadata = { title: "Operator — garam" };
@@ -210,6 +211,10 @@ export default async function OperatorPage({ params }: Params) {
           name={o.name}
           description={o.description}
         />
+        <div className="flex max-w-2xl flex-col gap-2">
+          <h3 className="text-sm font-medium">Credential</h3>
+          <ReissueCredentialForm org={org} operator={operator} name={o.name} />
+        </div>
         <div className="flex max-w-2xl flex-col gap-2">
           <h3 className="text-sm font-medium">Delete registration</h3>
           <DeleteOperatorForm

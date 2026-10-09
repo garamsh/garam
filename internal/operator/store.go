@@ -27,7 +27,17 @@ type Store interface {
 	// A GRN that already holds a certificate is registered under the
 	// GRN that certificate names, and answers `enrolled` on the
 	// registration that minted it a token it does not need.
-	Register(ctx context.Context, o *Operator, e *Enrollment) (*Operator, error)
+	//
+	// The credential c is written in the same transaction, so a
+	// registration never exists without the credential its operator
+	// exchanges for tokens (ADR-0100).
+	Register(ctx context.Context, o *Operator, e *Enrollment, c *IssuedCredential) (*Operator, error)
+	// ReissueCredential replaces the operator's credential with c, and
+	// every token minted under the one it replaces goes with it
+	// (ADR-0100). An operator holding none is issued its first. It
+	// answers ErrOperatorNotFound where the organization holds no record
+	// under that GRN.
+	ReissueCredential(ctx context.Context, c *IssuedCredential) error
 	// Remint replaces the operator's enrollment token with the one
 	// minted here, so what was live before it stops being spendable
 	// and one identity is never reachable by two (ADR-0067).

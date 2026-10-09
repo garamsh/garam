@@ -117,7 +117,7 @@ which is authoritative for them, and 000025 holds the same ones.
 There is a delete, and it is the one write here that takes something
 away (ADR-0070). It leaves the identifier holding nothing — the unspent
 token goes by the foreign key that was declared for this route ahead of
-it, the credential and its tokens go by `migrations/000037`'s, and the
+it, the credential and its tokens go by `migrations/000038`'s, and the
 record of the certificate garam last issued has no such key
 and is removed by name in the same transaction. That second removal is
 load bearing rather than tidy: left standing, the row would answer
@@ -280,7 +280,7 @@ certificate path goes; until then an operator may present either.
 - **An operator holds one credential, and re-issuing replaces it.**
   `reissueOperatorCredential` deletes the row and inserts its successor
   in one transaction; every token minted under the previous one goes
-  with it by `migrations/000037`'s foreign key, so the operator's next
+  with it by `migrations/000038`'s foreign key, so the operator's next
   request on any of them is refused. Re-issuing is `operator:reissue`,
   which owner and admin hold, because it withdraws what an operator runs
   on until the new credential is placed. An operator registered before

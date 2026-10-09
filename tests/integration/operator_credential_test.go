@@ -52,7 +52,7 @@ func exchangeService(s *operator.PostgresStore) operator.Service {
 // TestOperatorCredential_ReissueVoidsTheTokensOfThePreviousOne is
 // ADR-0100's re-issue against real Postgres: the previous credential
 // exchanges nothing afterwards, and a token exchanged for it resolves
-// to nothing, by 000037's cascade rather than a statement of its own.
+// to nothing, by 000038's cascade rather than a statement of its own.
 //
 // The token exchanged for the new credential is the control: it
 // resolves, so what refuses the first is the re-issue and not the
@@ -105,7 +105,7 @@ func TestOperatorCredential_ReissueIssuesAFirstOrRefusesAnUnknownOperator(t *tes
 	require.NoError(t, err)
 	require.Equal(t, 0, countRows(t, p,
 		`SELECT count(*) FROM operator_credentials WHERE operator_grn = $1`, subject.String()),
-		"the operator holds no credential, as one registered before 000037 does")
+		"the operator holds no credential, as one registered before 000038 does")
 
 	first, err := operator.NewIssuedCredential(subject, scopedGRN("acme", "user", "ada"))
 	require.NoError(t, err)

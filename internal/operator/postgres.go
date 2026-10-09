@@ -129,7 +129,7 @@ func (s *PostgresStore) Remint(ctx context.Context, e *Enrollment) error {
 
 // ReissueCredential deletes the operator's credential and inserts c in
 // one transaction. The delete carries every token minted under the
-// previous credential with it, by 000037's foreign key, so the
+// previous credential with it, by 000038's foreign key, so the
 // operator's next request on any of them is refused; the insert's
 // foreign key to the registration is what refuses an operator the
 // organization holds no record of.

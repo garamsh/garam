@@ -139,7 +139,7 @@ DELETE FROM operator_credentials WHERE operator_grn = $1
 `
 
 // Re-issuing is these two in one transaction: the delete takes the
-// previous credential and, by 000037's foreign key, every token minted
+// previous credential and, by 000038's foreign key, every token minted
 // under it, and the insert writes the successor. An operator the
 // organization holds no record of fails the insert's foreign key.
 func (q *Queries) DeleteOperatorCredential(ctx context.Context, operatorGrn string) error {

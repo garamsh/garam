@@ -363,7 +363,7 @@ type ActivationRequest struct {
 	ReplacesActivationId *string `json:"replacesActivationId"`
 	RequestId            string  `json:"requestId"`
 
-	// Token Under `execution-fence.v2`, the agent's token its assignee minted to be shown to the caller, exactly as the agent presented it (ADR-0100). Required there, and refused under `execution-fence.v1`.
+	// Token Under `execution-fence.v2`, the agent's token its assignee minted to be shown to the caller, or, where the caller is the assignee itself — a standalone host's supervisor — the token it minted for garam, exactly as the agent presented it (ADR-0100). Required there, and refused under `execution-fence.v1`.
 	Token *string `json:"token,omitempty"`
 }
 
@@ -638,7 +638,7 @@ type ExecutionIntrospectionRequest struct {
 	// Generation A generation to compare with the active one.
 	Generation *string `json:"generation,omitempty"`
 
-	// Token Under `execution-fence.v2`, the agent's token its assignee minted to be shown to the caller, exactly as the agent presented it (ADR-0100). Required there, and refused under `execution-fence.v1`.
+	// Token Under `execution-fence.v2`, the agent's token its assignee minted to be shown to the caller, or, where the caller is the assignee itself — a standalone host's supervisor — the token it minted for garam, exactly as the agent presented it (ADR-0100). Required there, and refused under `execution-fence.v1`.
 	Token *string `json:"token,omitempty"`
 }
 
@@ -700,10 +700,10 @@ type MachineToken struct {
 	// ExpiresAt When garam stops accepting the token.
 	ExpiresAt time.Time `json:"expiresAt"`
 
-	// Grn The operator the token authenticates as.
+	// Grn The operator or the supervisor the token authenticates as.
 	Grn string `json:"grn"`
 
-	// Token The token itself, prefixed `garam_ot_`, answered once. garam stores only its hash.
+	// Token The token itself, prefixed `garam_ot_` for an operator and `garam_st_` for a supervisor, answered once. garam stores only its hash.
 	Token string `json:"token"`
 }
 
@@ -886,9 +886,13 @@ type RuntimeStateReport struct {
 	State RuntimeState `json:"state"`
 }
 
-// StandaloneEnrollment What an enrollment issued: both certificates, the authority that signed them and the garam server root the host verifies garam by. It carries no private key.
+// StandaloneEnrollment What an enrollment issued and the garam server root the host verifies garam by: under `standalone-enrollment.v1` both certificates and the authority that signed them, carrying no private key; under v2 the supervisor's credential (ADR-0100).
 type StandaloneEnrollment struct {
-	AgentCertificatePem string `json:"agentCertificatePem"`
+	// AgentCertificatePem Under `standalone-enrollment.v1` alone.
+	AgentCertificatePem *string `json:"agentCertificatePem,omitempty"`
+
+	// Credential Under `standalone-enrollment.v2` alone: the supervisor's credential, prefixed `garam_sc_`, answered by this call alone. garam stores only its hash, and a retry re-issues it.
+	Credential *string `json:"credential,omitempty"`
 
 	// Epoch Opaque. The assignment epoch the supervisor holds the agent at.
 	Epoch string `json:"epoch"`
@@ -896,26 +900,28 @@ type StandaloneEnrollment struct {
 	// Grn The agent's GRN.
 	Grn string `json:"grn"`
 
-	// IssuerPem The authority that signed both. It is not what garam is verified against (ADR-0040).
-	IssuerPem string             `json:"issuerPem"`
+	// IssuerPem The authority that signed both, under `standalone-enrollment.v1` alone. It is not what garam is verified against (ADR-0040).
+	IssuerPem *string            `json:"issuerPem,omitempty"`
 	Lineage   openapi_types.UUID `json:"lineage"`
 
 	// ServerRootPem The garam server root, which the host verifies garam's listener against (ADR-0040).
-	ServerRootPem            string `json:"serverRootPem"`
-	SupervisorCertificatePem string `json:"supervisorCertificatePem"`
-	SupervisorGrn            string `json:"supervisorGrn"`
+	ServerRootPem string `json:"serverRootPem"`
+
+	// SupervisorCertificatePem Under `standalone-enrollment.v1` alone.
+	SupervisorCertificatePem *string `json:"supervisorCertificatePem,omitempty"`
+	SupervisorGrn            string  `json:"supervisorGrn"`
 }
 
 // StandaloneEnrollmentRequest defines model for StandaloneEnrollmentRequest.
 type StandaloneEnrollmentRequest struct {
-	// AgentCertificateRequestPem A PKCS#10 request over the agent key whose fingerprint was approved.
-	AgentCertificateRequestPem string `json:"agentCertificateRequestPem"`
+	// AgentCertificateRequestPem A PKCS#10 request over the agent key whose fingerprint was approved. Required under `standalone-enrollment.v1`, and refused under v2.
+	AgentCertificateRequestPem *string `json:"agentCertificateRequestPem,omitempty"`
 
 	// RequestId The identifier the host chose and the administrator approved.
 	RequestId string `json:"requestId"`
 
-	// SupervisorCertificateRequestPem A PKCS#10 request over the supervisor key whose fingerprint was approved.
-	SupervisorCertificateRequestPem string `json:"supervisorCertificateRequestPem"`
+	// SupervisorCertificateRequestPem A PKCS#10 request over the supervisor key whose fingerprint was approved. Required under `standalone-enrollment.v1`, and refused under v2.
+	SupervisorCertificateRequestPem *string `json:"supervisorCertificateRequestPem,omitempty"`
 }
 
 // SupervisorRenewalRequest defines model for SupervisorRenewalRequest.
@@ -1001,7 +1007,7 @@ type TokenContractError = Error
 
 // EnrollStandaloneAgentParams defines parameters for EnrollStandaloneAgent.
 type EnrollStandaloneAgentParams struct {
-	// StandaloneContractVersion Must be `standalone-enrollment.v1`; any other value is refused with 400 naming it.
+	// StandaloneContractVersion `standalone-enrollment.v1` or, on `enrollStandaloneAgent`, `standalone-enrollment.v2` (ADR-0100); any other value is refused with 400 naming what the route serves. `renewSupervisorCertificate` takes no v2 value.
 	StandaloneContractVersion StandaloneContractVersion `json:"Garam-Contract-Version"`
 }
 
@@ -1097,7 +1103,7 @@ type PostOutboxMessageParams struct {
 
 // RenewSupervisorCertificateParams defines parameters for RenewSupervisorCertificate.
 type RenewSupervisorCertificateParams struct {
-	// StandaloneContractVersion Must be `standalone-enrollment.v1`; any other value is refused with 400 naming it.
+	// StandaloneContractVersion `standalone-enrollment.v1` or, on `enrollStandaloneAgent`, `standalone-enrollment.v2` (ADR-0100); any other value is refused with 400 naming what the route serves. `renewSupervisorCertificate` takes no v2 value.
 	StandaloneContractVersion StandaloneContractVersion `json:"Garam-Contract-Version"`
 }
 
@@ -1169,7 +1175,7 @@ type ExchangeTokenJSONRequestBody = TokenExchange
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
-	// EnrollStandaloneAgent Spend an administrator's approval and obtain a supervisor's and its agent's first certificates.
+	// EnrollStandaloneAgent Spend an administrator's approval and obtain a supervisor's credential, or its and its agent's first certificates.
 	// (POST /agent-enrollments)
 	EnrollStandaloneAgent(w http.ResponseWriter, r *http.Request, params EnrollStandaloneAgentParams)
 	// CreateAgent Create an agent and assign it to the calling operator.
@@ -1268,7 +1274,7 @@ type ServerInterface interface {
 	// RenewSupervisorCertificate Renew the calling supervisor's certificate over a key it generated.
 	// (POST /supervisors/self/certificate)
 	RenewSupervisorCertificate(w http.ResponseWriter, r *http.Request, params RenewSupervisorCertificateParams)
-	// ExchangeToken Exchange an operator's credential for a short-lived token.
+	// ExchangeToken Exchange an operator's or a supervisor's credential for a short-lived token.
 	// (POST /tokens)
 	ExchangeToken(w http.ResponseWriter, r *http.Request, params ExchangeTokenParams)
 }

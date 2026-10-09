@@ -160,10 +160,12 @@ func (s *executionStack) enrolled(t *testing.T, h standaloneHost, got reply) sta
 	epoch, err := strconv.Atoi(e.Epoch)
 	require.NoError(t, err)
 	assert.NotContains(t, got.body, "PRIVATE KEY", "an enrollment answers no private key")
+	require.NotNil(t, e.SupervisorCertificatePem, "a v1 enrollment answers its certificates")
+	require.NotNil(t, e.AgentCertificatePem)
 	return standaloneAgent{
 		agent: a, supervisor: sup, epoch: epoch,
-		supervisorTLS: clientOver(t, e.SupervisorCertificatePem, h.supervisorKey), supervisorLeaf: e.SupervisorCertificatePem,
-		agentTLS: clientOver(t, e.AgentCertificatePem, h.agentKey), agentLeaf: e.AgentCertificatePem,
+		supervisorTLS: clientOver(t, *e.SupervisorCertificatePem, h.supervisorKey), supervisorLeaf: *e.SupervisorCertificatePem,
+		agentTLS: clientOver(t, *e.AgentCertificatePem, h.agentKey), agentLeaf: *e.AgentCertificatePem,
 	}
 }
 

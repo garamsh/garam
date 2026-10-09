@@ -145,6 +145,22 @@ func (q *Queries) CredentialCurrent(ctx context.Context, arg CredentialCurrentPa
 	return column_1, err
 }
 
+const deleteSupervisorCredential = `-- name: DeleteSupervisorCredential :exec
+
+DELETE FROM supervisor_credentials WHERE supervisor_grn = $1
+`
+
+// A supervisor's credential and tokens under standalone-enrollment.v2
+// (ADR-0100 G1d). Every read joins the registration and requires it
+// not to have ended, so a revocation or a replacement refuses the
+// credential and every token from the next request.
+// A retried spending re-issues the credential: deleting the row takes
+// every token minted under it.
+func (q *Queries) DeleteSupervisorCredential(ctx context.Context, supervisorGrn string) error {
+	_, err := q.db.Exec(ctx, deleteSupervisorCredential, supervisorGrn)
+	return err
+}
+
 const endActivation = `-- name: EndActivation :exec
 UPDATE agent_activations SET ended_reason = $2, ended_at = $3
 WHERE id = $1 AND ended_reason IS NULL
@@ -672,6 +688,25 @@ func (q *Queries) GetSupervisorByEnrollment(ctx context.Context, enrollmentID pg
 	return i, err
 }
 
+const getSupervisorCredentialHolder = `-- name: GetSupervisorCredentialHolder :one
+SELECT c.id, c.supervisor_grn
+FROM supervisor_credentials c
+JOIN agent_supervisors s ON s.grn = c.supervisor_grn
+WHERE c.credential_hash = $1 AND s.ended_at IS NULL
+`
+
+type GetSupervisorCredentialHolderRow struct {
+	ID            int64
+	SupervisorGrn string
+}
+
+func (q *Queries) GetSupervisorCredentialHolder(ctx context.Context, credentialHash string) (GetSupervisorCredentialHolderRow, error) {
+	row := q.db.QueryRow(ctx, getSupervisorCredentialHolder, credentialHash)
+	var i GetSupervisorCredentialHolderRow
+	err := row.Scan(&i.ID, &i.SupervisorGrn)
+	return i, err
+}
+
 const getSupervisorRenewal = `-- name: GetSupervisorRenewal :one
 SELECT r.supervisor_grn, r.predecessor_serial, r.request_id, r.request_sha256, r.serial, r.certificate_pem, r.issuer_pem, r.server_root_pem, r.not_after, r.created_at, (s.ended_at IS NULL AND s.serial = r.serial)::boolean AS current
 FROM agent_supervisor_renewals r
@@ -1014,7 +1049,7 @@ type InsertSupervisorParams struct {
 	AgentGrn     string
 	EnrollmentID pgtype.UUID
 	HostName     string
-	Serial       string
+	Serial       pgtype.Text
 	NotAfter     pgtype.Timestamptz
 	RegisteredAt pgtype.Timestamptz
 }
@@ -1029,6 +1064,21 @@ func (q *Queries) InsertSupervisor(ctx context.Context, arg InsertSupervisorPara
 		arg.NotAfter,
 		arg.RegisteredAt,
 	)
+	return err
+}
+
+const insertSupervisorCredential = `-- name: InsertSupervisorCredential :exec
+INSERT INTO supervisor_credentials (supervisor_grn, credential_hash, issued_at) VALUES ($1, $2, $3)
+`
+
+type InsertSupervisorCredentialParams struct {
+	SupervisorGrn  string
+	CredentialHash string
+	IssuedAt       pgtype.Timestamptz
+}
+
+func (q *Queries) InsertSupervisorCredential(ctx context.Context, arg InsertSupervisorCredentialParams) error {
+	_, err := q.db.Exec(ctx, insertSupervisorCredential, arg.SupervisorGrn, arg.CredentialHash, arg.IssuedAt)
 	return err
 }
 
@@ -1429,6 +1479,19 @@ func (q *Queries) LockSupervisor(ctx context.Context, grn string) (AgentSupervis
 	return i, err
 }
 
+const lockSupervisorCredential = `-- name: LockSupervisorCredential :one
+SELECT id FROM supervisor_credentials WHERE id = $1 FOR UPDATE
+`
+
+// An exchange holds the credential's row while it records and trims,
+// so two exchanges at once leave no more live tokens than the bound.
+func (q *Queries) LockSupervisorCredential(ctx context.Context, id int64) (int64, error) {
+	row := q.db.QueryRow(ctx, lockSupervisorCredential, id)
+	var id_2 int64
+	err := row.Scan(&id_2)
+	return id_2, err
+}
+
 const moveLineage = `-- name: MoveLineage :exec
 UPDATE agent_executions SET
     lineage       = $1,
@@ -1455,7 +1518,7 @@ UPDATE agent_supervisors SET serial = $2, not_after = $3 WHERE grn = $1
 
 type MoveSupervisorCertificateParams struct {
 	Grn      string
-	Serial   string
+	Serial   pgtype.Text
 	NotAfter pgtype.Timestamptz
 }
 
@@ -1524,6 +1587,35 @@ func (q *Queries) ReassignSupervisor(ctx context.Context, arg ReassignSupervisor
 	return epoch, err
 }
 
+const recordSupervisorToken = `-- name: RecordSupervisorToken :exec
+WITH swept AS (
+    DELETE FROM supervisor_tokens
+    WHERE supervisor_grn = $3 AND expires_at <= now()
+)
+INSERT INTO supervisor_tokens (token_hash, credential_id, supervisor_grn, issued_at, expires_at)
+VALUES ($1, $2, $3,
+        $4, $5)
+`
+
+type RecordSupervisorTokenParams struct {
+	TokenHash     string
+	CredentialID  int64
+	SupervisorGrn string
+	IssuedAt      pgtype.Timestamptz
+	ExpiresAt     pgtype.Timestamptz
+}
+
+func (q *Queries) RecordSupervisorToken(ctx context.Context, arg RecordSupervisorTokenParams) error {
+	_, err := q.db.Exec(ctx, recordSupervisorToken,
+		arg.TokenHash,
+		arg.CredentialID,
+		arg.SupervisorGrn,
+		arg.IssuedAt,
+		arg.ExpiresAt,
+	)
+	return err
+}
+
 const remintActivation = `-- name: RemintActivation :one
 UPDATE agent_activations SET token_version = token_version + 1
 WHERE id = $1
@@ -1566,6 +1658,26 @@ type ReplaceTokenParams struct {
 func (q *Queries) ReplaceToken(ctx context.Context, arg ReplaceTokenParams) error {
 	_, err := q.db.Exec(ctx, replaceToken, arg.AgentGrn, arg.TokenHash, arg.UpdatedAt)
 	return err
+}
+
+const resolveSupervisorToken = `-- name: ResolveSupervisorToken :one
+SELECT t.supervisor_grn, t.issued_at, t.expires_at
+FROM supervisor_tokens t
+JOIN agent_supervisors s ON s.grn = t.supervisor_grn
+WHERE t.token_hash = $1 AND t.expires_at > now() AND s.ended_at IS NULL
+`
+
+type ResolveSupervisorTokenRow struct {
+	SupervisorGrn string
+	IssuedAt      pgtype.Timestamptz
+	ExpiresAt     pgtype.Timestamptz
+}
+
+func (q *Queries) ResolveSupervisorToken(ctx context.Context, tokenHash string) (ResolveSupervisorTokenRow, error) {
+	row := q.db.QueryRow(ctx, resolveSupervisorToken, tokenHash)
+	var i ResolveSupervisorTokenRow
+	err := row.Scan(&i.SupervisorGrn, &i.IssuedAt, &i.ExpiresAt)
+	return i, err
 }
 
 const rollBackCutover = `-- name: RollBackCutover :one
@@ -1693,6 +1805,26 @@ func (q *Queries) SwitchCutover(ctx context.Context, arg SwitchCutoverParams) (A
 		&i.EndedAt,
 	)
 	return i, err
+}
+
+const trimSupervisorTokens = `-- name: TrimSupervisorTokens :exec
+DELETE FROM supervisor_tokens t
+WHERE t.credential_id = $1
+  AND t.token_hash NOT IN (
+      SELECT k.token_hash FROM supervisor_tokens k
+      WHERE k.credential_id = $1
+      ORDER BY k.issued_at DESC, k.token_hash DESC
+      LIMIT $2)
+`
+
+type TrimSupervisorTokensParams struct {
+	CredentialID int64
+	Keep         int32
+}
+
+func (q *Queries) TrimSupervisorTokens(ctx context.Context, arg TrimSupervisorTokensParams) error {
+	_, err := q.db.Exec(ctx, trimSupervisorTokens, arg.CredentialID, arg.Keep)
+	return err
 }
 
 const withdrawEnrollment = `-- name: WithdrawEnrollment :exec

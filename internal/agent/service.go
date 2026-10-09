@@ -58,8 +58,8 @@ type Service interface {
 	// fences it.
 	ReportRuntimeState(ctx context.Context, caller, agentGRN grn.GRN, epoch int, state RuntimeState, fence Fencing) error
 	// MintAccessToken answers a token the agent authenticates with in
-	// place of a certificate, for an agent the calling operator holds
-	// at the current epoch, accepted by garam where audience is nil and
+	// place of a certificate, for an agent the calling operator or
+	// supervisor holds at the current epoch, accepted by garam where audience is nil and
 	// by that hosted operator where it names one (ADR-0100). It is
 	// admitted where the certificate route would be, and inside the
 	// lineage of an agent whose lifecycle authority opened one; every
@@ -115,8 +115,13 @@ func NewService(store Store, tokens AccessTokenStore, audiences RegisteredOperat
 }
 
 func (s *service) MintAccessToken(ctx context.Context, caller, agentGRN grn.GRN, audience *grn.GRN) (*AccessToken, error) {
-	if err := operates(caller); err != nil {
-		return nil, err
+	// An assignee mints: an operator, or the supervisor a standalone
+	// host runs the agent under (ADR-0100). The store answers either for
+	// the agent it holds at the current epoch and no other.
+	if caller.ServiceType != ServiceTypeSupervisor {
+		if err := operates(caller); err != nil {
+			return nil, err
+		}
 	}
 	if audience != nil {
 		if audience.ServiceType != ServiceTypeOperator ||

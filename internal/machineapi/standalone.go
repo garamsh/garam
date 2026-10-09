@@ -22,12 +22,20 @@ const bootstrapScheme = "Garam-Bootstrap "
 
 // EnrollStandaloneAgent spends an administrator's approval of a
 // standalone host and answers its supervisor's and its agent's first
-// certificates. Like EnrollOperator it is reached without a client
-// certificate: the bootstrap secret is what authenticates it.
+// certificates under standalone-enrollment.v1, or the supervisor's
+// credential under v2 (ADR-0100). Like EnrollOperator it is reached
+// without a client certificate: the bootstrap secret is what
+// authenticates it, under either value, so the value the request names
+// decides the contract, and the approval refuses the one it was not
+// made for.
 func (s *Server) EnrollStandaloneAgent(w http.ResponseWriter, r *http.Request, params machinegen.EnrollStandaloneAgentParams) {
-	if !standaloneContract(w, params.StandaloneContractVersion) {
+	version := params.StandaloneContractVersion
+	if version != agent.StandaloneContractVersion && version != agent.CredentialStandaloneContractVersion {
+		w.Header().Set("Garam-Contract-Version", agent.StandaloneContractVersion)
+		writeError(w, agent.ErrUnsupportedEnrollmentStandaloneContract)
 		return
 	}
+	w.Header().Set("Garam-Contract-Version", version)
 	r, cancel := lifecycleBudget(r)
 	defer cancel()
 	secret, ok := strings.CutPrefix(r.Header.Get("Authorization"), bootstrapScheme)
@@ -52,21 +60,51 @@ func (s *Server) EnrollStandaloneAgent(w http.ResponseWriter, r *http.Request, p
 		writeError(w, err)
 		return
 	}
+	requests, err := certificateRequestsOf(version, body)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	result, created, err := s.supervisors.Enroll(r.Context(), agent.EnrollmentInput{
-		Secret: secret, RequestID: requestID, Body: raw,
-		SupervisorCertificateRequestPEM: []byte(body.SupervisorCertificateRequestPem),
-		AgentCertificateRequestPEM:      []byte(body.AgentCertificateRequestPem),
+		Secret: secret, RequestID: requestID, Body: raw, Requests: requests,
 	})
 	if err != nil {
 		writeCertificateRequestError(w, r, err)
 		return
 	}
-	writeJSON(w, createdOrReplayed(created), machinegen.StandaloneEnrollment{
+	out := machinegen.StandaloneEnrollment{
 		Grn: result.Agent.String(), SupervisorGrn: result.Supervisor.String(),
 		Epoch: strconv.Itoa(result.Epoch), Lineage: openapi_types.UUID(result.Lineage),
-		SupervisorCertificatePem: result.SupervisorCertificatePEM, AgentCertificatePem: result.AgentCertificatePEM,
-		IssuerPem: result.IssuerPEM, ServerRootPem: result.ServerRootPEM,
-	})
+		ServerRootPem: result.ServerRootPEM,
+	}
+	if c := result.Certificates; c != nil {
+		out.SupervisorCertificatePem, out.AgentCertificatePem = &c.SupervisorCertificatePEM, &c.AgentCertificatePEM
+		out.IssuerPem = &c.IssuerPEM
+	}
+	if result.Credential != "" {
+		out.Credential = &result.Credential
+	}
+	writeJSON(w, createdOrReplayed(created), out)
+}
+
+// certificateRequestsOf parses the certificate requests an enrollment
+// carries: both under standalone-enrollment.v1, and neither under v2,
+// which signs nothing (ADR-0100).
+func certificateRequestsOf(version string, body machinegen.StandaloneEnrollmentRequest) (*agent.CertificateRequests, error) {
+	if version == agent.CredentialStandaloneContractVersion {
+		if body.SupervisorCertificateRequestPem != nil || body.AgentCertificateRequestPem != nil {
+			return nil, errorx.New(errorx.KindInvalidArgument,
+				"under "+agent.CredentialStandaloneContractVersion+" an enrollment signs nothing, and certificate requests are refused")
+		}
+		return nil, nil
+	}
+	if body.SupervisorCertificateRequestPem == nil || body.AgentCertificateRequestPem == nil {
+		return nil, errorx.New(errorx.KindInvalidArgument,
+			"under "+agent.StandaloneContractVersion+" an enrollment carries both certificate requests")
+	}
+	return &agent.CertificateRequests{
+		SupervisorPEM: []byte(*body.SupervisorCertificateRequestPem), AgentPEM: []byte(*body.AgentCertificateRequestPem),
+	}, nil
 }
 
 // RenewSupervisorCertificate issues the calling supervisor's next
@@ -126,9 +164,9 @@ func standaloneContract(w http.ResponseWriter, version machinegen.StandaloneCont
 	return true
 }
 
-// supervisorRoutes is everything a supervisor's certificate reaches
-// (ADR-0082): its own identity, its own renewal, and the execution
-// routes it holds lifecycle authority on. They are the router's
+// supervisorRoutes is everything a supervisor reaches (ADR-0082,
+// ADR-0100): its own identity, its own renewal, the execution routes it
+// holds lifecycle authority on, and the mint of its one agent's tokens. They are the router's
 // patterns, so a route added later is outside the set until named here.
 var supervisorRoutes = map[string]bool{
 	http.MethodGet + " /identity":                                              true,
@@ -136,6 +174,7 @@ var supervisorRoutes = map[string]bool{
 	http.MethodPost + " /agents/{agent}/activations":                           true,
 	http.MethodPost + " /agents/{agent}/activations/{activation}/deactivation": true,
 	http.MethodPost + " /agents/{agent}/execution/introspection":               true,
+	http.MethodPost + " /agents/{agent}/tokens":                                true,
 }
 
 // ConfineSupervisors refuses a supervisor's request to any route

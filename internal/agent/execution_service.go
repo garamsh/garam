@@ -116,7 +116,8 @@ type Forwarded interface{ forwarded() }
 type ForwardedCertificate struct{ Leaf *x509.Certificate }
 
 // ForwardedToken is an agent token its assignee minted to be shown to
-// the caller.
+// the caller, or, where the caller is the assignee itself, one it
+// minted for garam.
 type ForwardedToken string
 
 func (ForwardedCertificate) forwarded() {}
@@ -199,7 +200,8 @@ func NewExecutionService(store Store, executions ExecutionStore, authorizer Life
 
 // prove answers the credential a forwarded one stands for once it
 // names agentGRN: a certificate chaining to the agent's organization,
-// or a token minted for the agent to be shown to caller. Neither is
+// or a token minted for the agent to be shown to caller or by caller
+// for garam. Neither is
 // judged current here; the execution fence does that.
 func (s *executionService) prove(ctx context.Context, caller, agentGRN grn.GRN, forwarded Forwarded) (Credential, error) {
 	switch f := forwarded.(type) {

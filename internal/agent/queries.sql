@@ -232,7 +232,13 @@ WHERE t.agent_grn = sqlc.arg('agent_grn')
 -- token of an earlier epoch or lineage is answered fenced while its row
 -- is kept. A mint's sweep and trim delete rows, and a token whose row
 -- is gone is not proven.
+--
+-- A token the caller itself minted for garam proves the agent too: a
+-- standalone host's supervisor is the assignee and the lifecycle
+-- authority at once, and forwards the agent's own token (ADR-0100).
 -- name: GetAgentTokenShownTo :one
 SELECT agent_grn, serial, audience_grn, issued_at, expires_at
 FROM agent_tokens
-WHERE token_hash = $1 AND audience_grn = $2;
+WHERE token_hash = sqlc.arg('token_hash')
+  AND (audience_grn = sqlc.arg('caller_grn')
+       OR (audience_grn IS NULL AND assignee_grn = sqlc.arg('caller_grn')));

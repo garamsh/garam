@@ -484,8 +484,8 @@ func enrollHost(ctx context.Context, dirs hostDirs, machineURL, rootFile string)
 	}
 	body, err := json.Marshal(machinegen.StandaloneEnrollmentRequest{
 		RequestId:                       p.RequestID,
-		SupervisorCertificateRequestPem: p.SupervisorRequestPEM,
-		AgentCertificateRequestPem:      p.AgentRequestPEM,
+		SupervisorCertificateRequestPem: &p.SupervisorRequestPEM,
+		AgentCertificateRequestPem:      &p.AgentRequestPEM,
 	})
 	if err != nil {
 		return nil, errorx.Wrap(err, "enrollment", errorx.KindInternal)
@@ -495,7 +495,10 @@ func enrollHost(ctx context.Context, dirs hostDirs, machineURL, rootFile string)
 		"Garam-Bootstrap "+p.Secret, body, &result); err != nil {
 		return nil, err
 	}
-	supervisorPEM := append([]byte(result.SupervisorCertificatePem), p.SupervisorKeyPEM...)
+	if result.SupervisorCertificatePem == nil || result.AgentCertificatePem == nil || result.IssuerPem == nil {
+		return nil, errorx.New(errorx.KindInternal, "garam answered a "+agent.StandaloneContractVersion+" enrollment without its certificates")
+	}
+	supervisorPEM := append([]byte(*result.SupervisorCertificatePem), p.SupervisorKeyPEM...)
 	if _, err := tls.X509KeyPair(supervisorPEM, []byte(p.SupervisorKeyPEM)); err != nil {
 		return nil, errorx.Wrap(err, "the supervisor certificate garam answered is not for the prepared key", errorx.KindInternal)
 	}
@@ -504,8 +507,8 @@ func enrollHost(ctx context.Context, dirs hostDirs, machineURL, rootFile string)
 		data []byte
 		perm fs.FileMode
 	}{
-		{filepath.Join(dirs.agent, agentCertFile), []byte(result.AgentCertificatePem), 0o644},
-		{filepath.Join(dirs.agent, issuerFile), []byte(result.IssuerPem), 0o644},
+		{filepath.Join(dirs.agent, agentCertFile), []byte(*result.AgentCertificatePem), 0o644},
+		{filepath.Join(dirs.agent, issuerFile), []byte(*result.IssuerPem), 0o644},
 		{filepath.Join(dirs.agent, serverRootFile), []byte(result.ServerRootPem), 0o644},
 		{filepath.Join(dirs.supervisor, serverRootFile), []byte(result.ServerRootPem), 0o644},
 		{filepath.Join(dirs.supervisor, supervisorFile), supervisorPEM, 0o600},

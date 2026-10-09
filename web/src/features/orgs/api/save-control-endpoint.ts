@@ -3,11 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-import {
-  GaramApiError,
-  GaramUnreachableError,
-  garamFetchAuthenticated,
-} from "@/lib/garam";
+import { garamFetchAuthenticated, refusal } from "@/lib/garam";
 import {
   CONTRACT_VERSION,
   CONTRACT_VERSION_HEADER,
@@ -72,13 +68,7 @@ export async function saveControlEndpoint(
           },
     ));
   } catch (error) {
-    if (
-      error instanceof GaramApiError ||
-      error instanceof GaramUnreachableError
-    ) {
-      return { status: "error", message: error.message };
-    }
-    throw error;
+    return refusal(error);
   }
   revalidatePath(`/console/orgs/${org}`, "layout");
   return { status: "saved", endpoint: saved ?? null };

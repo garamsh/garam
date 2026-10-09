@@ -4,11 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import {
-  GaramApiError,
-  GaramUnreachableError,
-  garamFetchAuthenticated,
-} from "@/lib/garam";
+import { garamFetchAuthenticated, refusal } from "@/lib/garam";
 import { parsePolicyDocument } from "@/lib/policy-document";
 import type { PolicyDocument } from "@/lib/policy-document";
 import type { components } from "@/types/api";
@@ -71,13 +67,7 @@ export async function createPolicy(
     // A refused document, a refusal or an outage is a state the form
     // renders, not a throw: the boundary would replace the form and
     // the document typed into it.
-    if (
-      error instanceof GaramApiError ||
-      error instanceof GaramUnreachableError
-    ) {
-      return { status: "error", message: error.message };
-    }
-    throw error;
+    return refusal(error);
   }
 
   revalidatePath(`/console/orgs/${org}/permissions`, "layout");

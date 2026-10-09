@@ -301,6 +301,41 @@ func (l lifecycle) handoff(authority, body string) {
 	}
 }
 
+// countingShown counts the forwarded-token reads it passes on.
+type countingShown struct {
+	agent.ShownTokenReader
+	reads int
+}
+
+func (c *countingShown) AccessTokenShownTo(ctx context.Context, tokenHash string, audience grn.GRN) (agent.AccessTokenHolder, error) {
+	c.reads++
+	return c.ShownTokenReader.AccessTokenShownTo(ctx, tokenHash, audience)
+}
+
+// holds that a forwarded value no mint could have produced is refused
+// before the store is asked (ADR-0100). The well-formed unknown token
+// beside it is asked and refused the same way, so what spared the store
+// is the shape.
+func TestExecutionService_AMalformedForwardedTokenReadsNothing(t *testing.T) {
+	ctx := context.Background()
+	l := newLifecycle(t)
+	reader := &countingShown{ShownTokenReader: l.agents}
+	service := agent.NewExecutionService(l.agents, l.exec, l.authorizer, l.operations, namedLeaves{}, reader, l.signer, l.issuer)
+
+	for _, malformed := range []string{
+		"", agent.AccessTokenPrefix + strings.Repeat("0", 63), agent.AccessTokenPrefix + strings.Repeat("Z", 64),
+		"garam_ot_" + strings.Repeat("0", 64),
+	} {
+		_, err := service.Introspect(ctx, l.audience, l.agent, agent.ForwardedToken(malformed), nil)
+		require.ErrorIs(t, err, agent.ErrTokenNotProven, malformed)
+	}
+	assert.Zero(t, reader.reads, "a malformed token reads nothing")
+
+	_, err := service.Introspect(ctx, l.audience, l.agent, agent.ForwardedToken(agent.AccessTokenPrefix+strings.Repeat("0", 64)), nil)
+	require.ErrorIs(t, err, agent.ErrTokenNotProven)
+	assert.Equal(t, 1, reader.reads, "control: a well-formed unknown token is read")
+}
+
 func TestExecutionService_RecoveryIsBoundToItsExactBodyAndAnsweredOnce(t *testing.T) {
 	ctx := context.Background()
 	l := newLifecycle(t)

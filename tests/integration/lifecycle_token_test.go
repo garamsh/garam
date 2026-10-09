@@ -16,6 +16,7 @@ import (
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/message"
 	"github.com/garamsh/garam/internal/operator"
 )
 
@@ -247,7 +248,17 @@ func TestTokenContracts_AHostedOperatorDrivesAManagedAgentWithTokensAlone(t *tes
 	require.Equal(t, http.StatusCreated, again.status, again.body)
 	assert.JSONEq(t, got.body, again.body, "a retry answers the recorded lineage")
 
-	got = s.v2(t, http.MethodPost, path+"/activations/"+activation.ActivationId+"/deactivation",
+	replaces := activation.ActivationId
+	got = s.v2(t, http.MethodPost, path+"/activations", agent.TokenExecutionContractVersion, s.hostedToken, "",
+		tokenActivationBody("second", generation(2), &replaces, nil, shown.Token))
+	assert.Equal(t, http.StatusConflict, got.status, "the replaced lineage's token activates nothing: %s", got.body)
+	assert.Contains(t, got.body, "credential is not current", "the fence refused it")
+	got = s.v2(t, http.MethodPost, path+"/activations", agent.TokenExecutionContractVersion, s.hostedToken, "",
+		tokenActivationBody("second", generation(2), &replaces, nil, next.Token))
+	require.Equal(t, http.StatusCreated, got.status, "control: the new lineage's token activates: %s", got.body)
+	second := activationOf(t, got)
+
+	got = s.v2(t, http.MethodPost, path+"/activations/"+second.ActivationId+"/deactivation",
 		agent.TokenExecutionContractVersion, s.hostedToken, "", "")
 	assert.Equal(t, http.StatusOK, got.status, got.body)
 }
@@ -287,6 +298,7 @@ func TestTokenContracts_EachCredentialIsServedUnderItsOwnValue(t *testing.T) {
 		{"execution fence", http.MethodPost, agentPath + "/execution/introspection", agent.ExecutionContractVersion, agent.TokenExecutionContractVersion},
 		{"cutover", http.MethodGet, agentPath + "/cutover", agent.CutoverContractVersion, agent.TokenCutoverContractVersion},
 		{"managed enrollment", http.MethodPost, "/operators/" + s.controller.String() + "/managed-agents", agent.EnrollmentContractVersion, agent.TokenEnrollmentContractVersion},
+		{"durable delivery", http.MethodPost, "/outbox-messages", message.DeliveryContractVersion, message.TokenDeliveryContractVersion},
 	} {
 		t.Run(family.name, func(t *testing.T) {
 			byToken := func(version string) reply {
@@ -301,6 +313,22 @@ func TestTokenContracts_EachCredentialIsServedUnderItsOwnValue(t *testing.T) {
 			got = byToken(family.token)
 			assert.Equal(t, family.token, got.version)
 			assert.NotContains(t, got.body, "Garam-Contract-Version", "control: the token's value passes the check")
+
+			// A token the listener refused is still a token: it is held
+			// to the token's value, and under it meets the listener's
+			// refusal rather than one naming the certificate's value.
+			refused := func(version string) reply {
+				return s.tokenSend(t, family.method, family.path, map[string]string{
+					"Authorization":                "Garam-Token " + operator.TokenPrefix + strings.Repeat("0", 64),
+					operator.ContractVersionHeader: version,
+				}, `{}`)
+			}
+			got = refused(family.token)
+			assert.Equal(t, http.StatusUnauthorized, got.status, "a refused token under its value: %s", got.body)
+			assert.Equal(t, family.token, got.version)
+			got = refused(family.certificate)
+			assert.Equal(t, http.StatusBadRequest, got.status, got.body)
+			assert.Contains(t, got.body, "served under "+family.token, "not the certificate's value")
 
 			got = s.send(t, s.hostedTLS, family.method, family.path, family.token, "", `{}`)
 			assert.Equal(t, http.StatusBadRequest, got.status, got.body)

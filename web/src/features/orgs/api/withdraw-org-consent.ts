@@ -3,11 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-import {
-  GaramApiError,
-  GaramUnreachableError,
-  garamFetchAuthenticated,
-} from "@/lib/garam";
+import { garamFetchAuthenticated, refusal } from "@/lib/garam";
 
 /**
  * What the withdraw control has to show: nothing yet, or a refusal.
@@ -51,13 +47,7 @@ export async function withdrawOrgConsent(
   } catch (error) {
     // A refusal is rendered beside the relation rather than thrown: the
     // boundary would take the whole list down over one row.
-    if (
-      error instanceof GaramApiError ||
-      error instanceof GaramUnreachableError
-    ) {
-      return { status: "error", message: error.message };
-    }
-    throw error;
+    return refusal(error);
   }
 
   revalidatePath(`/console/orgs/${org}/consents`);

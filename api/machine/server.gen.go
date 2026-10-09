@@ -347,8 +347,8 @@ type Activation struct {
 
 // ActivationRequest defines model for ActivationRequest.
 type ActivationRequest struct {
-	// CertificatePem The agent's leaf certificate in PEM form, exactly as the agent presented it to the caller.
-	CertificatePem string `json:"certificatePem"`
+	// CertificatePem Under `execution-fence.v1`, the agent's leaf certificate in PEM form, exactly as the agent presented it to the caller. Required there, and refused under `execution-fence.v2`.
+	CertificatePem *string `json:"certificatePem,omitempty"`
 
 	// Epoch The assignment's epoch the caller expects. Opaque.
 	Epoch string `json:"epoch"`
@@ -362,6 +362,9 @@ type ActivationRequest struct {
 	// ReplacesActivationId The agent's most recent activation, null only before the first.
 	ReplacesActivationId *string `json:"replacesActivationId"`
 	RequestId            string  `json:"requestId"`
+
+	// Token Under `execution-fence.v2`, the agent's token its assignee minted to be shown to the caller, exactly as the agent presented it (ADR-0100). Required there, and refused under `execution-fence.v1`.
+	Token *string `json:"token,omitempty"`
 }
 
 // AgentAssignment An agent and the operator that runs it, at the epoch that binding holds.
@@ -435,8 +438,11 @@ type ControllerIntrospection struct {
 	// Agent An agent GRN, to prove that agent's placement on the controller. Absent or null proves the controller alone.
 	Agent *string `json:"agent,omitempty"`
 
-	// CertificatePem The controller's leaf certificate in PEM form, exactly as the controller presented it in its TLS handshake with the caller.
-	CertificatePem string `json:"certificatePem"`
+	// CertificatePem Under `operation-authority.v1`, the controller's leaf certificate in PEM form, exactly as the controller presented it in its TLS handshake with the caller. Required there, and refused under `operation-authority.v2`.
+	CertificatePem *string `json:"certificatePem,omitempty"`
+
+	// Token Under `operation-authority.v2`, the token the controller exchanged its credential for to be shown to the caller, exactly as the controller presented it (ADR-0100). Required there, and refused under `operation-authority.v1`.
+	Token *string `json:"token,omitempty"`
 }
 
 // ControllerProof defines model for ControllerProof.
@@ -453,8 +459,8 @@ type ControllerProof struct {
 
 // CredentialRecoveryRequest defines model for CredentialRecoveryRequest.
 type CredentialRecoveryRequest struct {
-	// CertificateRequestPem A PEM-encoded PKCS#10 request over an ECDSA P-256 key the holder generated. Only its key is read.
-	CertificateRequestPem string `json:"certificateRequestPem"`
+	// CertificateRequestPem Under `execution-fence.v1`, a PEM-encoded PKCS#10 request over an ECDSA P-256 key the holder generated; only its key is read. Required there, and refused under `execution-fence.v2`, whose recovery signs nothing: the assignee mints the agent's tokens in the new lineage (ADR-0100).
+	CertificateRequestPem *string `json:"certificateRequestPem,omitempty"`
 
 	// Epoch The assignment's epoch the caller expects. Opaque.
 	Epoch     string `json:"epoch"`
@@ -626,11 +632,14 @@ type ExecutionIntrospectionMode string
 
 // ExecutionIntrospectionRequest defines model for ExecutionIntrospectionRequest.
 type ExecutionIntrospectionRequest struct {
-	// CertificatePem The agent's leaf certificate in PEM form, exactly as the agent presented it to the caller.
-	CertificatePem string `json:"certificatePem"`
+	// CertificatePem Under `execution-fence.v1`, the agent's leaf certificate in PEM form, exactly as the agent presented it to the caller. Required there, and refused under `execution-fence.v2`.
+	CertificatePem *string `json:"certificatePem,omitempty"`
 
 	// Generation A generation to compare with the active one.
 	Generation *string `json:"generation,omitempty"`
+
+	// Token Under `execution-fence.v2`, the agent's token its assignee minted to be shown to the caller, exactly as the agent presented it (ADR-0100). Required there, and refused under `execution-fence.v1`.
+	Token *string `json:"token,omitempty"`
 }
 
 // Identity defines model for Identity.
@@ -852,17 +861,17 @@ type ProvisioningStateReport struct {
 	State ProvisioningState `json:"state"`
 }
 
-// RecoveredCredential The recovered certificate, the authority that signed it and the garam server root the holder verifies garam by. It carries no private key.
+// RecoveredCredential The agent and its new lineage. Under `execution-fence.v1` it adds the recovered certificate, the authority that signed it and the garam server root the holder verifies garam by, and carries no private key; under `execution-fence.v2` it carries none of the three (ADR-0100).
 type RecoveredCredential struct {
-	CertificatePem string `json:"certificatePem"`
-	Grn            string `json:"grn"`
+	CertificatePem *string `json:"certificatePem,omitempty"`
+	Grn            string  `json:"grn"`
 
 	// IssuerPem The authority that signed `certificatePem`. It is not what garam is verified against (ADR-0040).
-	IssuerPem string `json:"issuerPem"`
-	Lineage   string `json:"lineage"`
+	IssuerPem *string `json:"issuerPem,omitempty"`
+	Lineage   string  `json:"lineage"`
 
 	// ServerRootPem The garam server root the recovered credential trusts, which the holder verifies garam's listener against (ADR-0040).
-	ServerRootPem string `json:"serverRootPem"`
+	ServerRootPem *string `json:"serverRootPem,omitempty"`
 }
 
 // RuntimeState What the agent reports about itself. `unknown` is an agent that has not reported since it was created.
@@ -998,55 +1007,55 @@ type EnrollStandaloneAgentParams struct {
 
 // ActivateAgentParams defines parameters for ActivateAgent.
 type ActivateAgentParams struct {
-	// ExecutionContractVersion Must be `execution-fence.v1`; any other value is refused with 400 naming it.
+	// ExecutionContractVersion `execution-fence.v1` where the caller presents a certificate and `execution-fence.v2` where it presents a token (ADR-0100); any other value, or one that disagrees with the credential, is refused with 400 naming the value the credential takes.
 	ExecutionContractVersion ExecutionContractVersion `json:"Garam-Contract-Version"`
 }
 
 // DeactivateAgentParams defines parameters for DeactivateAgent.
 type DeactivateAgentParams struct {
-	// ExecutionContractVersion Must be `execution-fence.v1`; any other value is refused with 400 naming it.
+	// ExecutionContractVersion `execution-fence.v1` where the caller presents a certificate and `execution-fence.v2` where it presents a token (ADR-0100); any other value, or one that disagrees with the credential, is refused with 400 naming the value the credential takes.
 	ExecutionContractVersion ExecutionContractVersion `json:"Garam-Contract-Version"`
 }
 
 // RecoverAgentCredentialParams defines parameters for RecoverAgentCredential.
 type RecoverAgentCredentialParams struct {
-	// ExecutionContractVersion Must be `execution-fence.v1`; any other value is refused with 400 naming it.
+	// ExecutionContractVersion `execution-fence.v1` where the caller presents a certificate and `execution-fence.v2` where it presents a token (ADR-0100); any other value, or one that disagrees with the credential, is refused with 400 naming the value the credential takes.
 	ExecutionContractVersion ExecutionContractVersion `json:"Garam-Contract-Version"`
 }
 
 // GetAgentCutoverParams defines parameters for GetAgentCutover.
 type GetAgentCutoverParams struct {
-	// CutoverContractVersion Must be `agent-cutover.v1` (ADR-0086); any other value is refused with 400 naming it.
+	// CutoverContractVersion `agent-cutover.v1` where the caller presents a certificate and `agent-cutover.v2` where it presents a token (ADR-0086, ADR-0100); any other value, or one that disagrees with the credential, is refused with 400 naming the value the credential takes.
 	CutoverContractVersion CutoverContractVersion `json:"Garam-Contract-Version"`
 }
 
 // FreezeAgentCutoverParams defines parameters for FreezeAgentCutover.
 type FreezeAgentCutoverParams struct {
-	// CutoverContractVersion Must be `agent-cutover.v1` (ADR-0086); any other value is refused with 400 naming it.
+	// CutoverContractVersion `agent-cutover.v1` where the caller presents a certificate and `agent-cutover.v2` where it presents a token (ADR-0086, ADR-0100); any other value, or one that disagrees with the credential, is refused with 400 naming the value the credential takes.
 	CutoverContractVersion CutoverContractVersion `json:"Garam-Contract-Version"`
 }
 
 // RollBackAgentCutoverParams defines parameters for RollBackAgentCutover.
 type RollBackAgentCutoverParams struct {
-	// CutoverContractVersion Must be `agent-cutover.v1` (ADR-0086); any other value is refused with 400 naming it.
+	// CutoverContractVersion `agent-cutover.v1` where the caller presents a certificate and `agent-cutover.v2` where it presents a token (ADR-0086, ADR-0100); any other value, or one that disagrees with the credential, is refused with 400 naming the value the credential takes.
 	CutoverContractVersion CutoverContractVersion `json:"Garam-Contract-Version"`
 }
 
 // SwitchAgentCutoverParams defines parameters for SwitchAgentCutover.
 type SwitchAgentCutoverParams struct {
-	// CutoverContractVersion Must be `agent-cutover.v1` (ADR-0086); any other value is refused with 400 naming it.
+	// CutoverContractVersion `agent-cutover.v1` where the caller presents a certificate and `agent-cutover.v2` where it presents a token (ADR-0086, ADR-0100); any other value, or one that disagrees with the credential, is refused with 400 naming the value the credential takes.
 	CutoverContractVersion CutoverContractVersion `json:"Garam-Contract-Version"`
 }
 
 // IntrospectAgentExecutionParams defines parameters for IntrospectAgentExecution.
 type IntrospectAgentExecutionParams struct {
-	// ExecutionContractVersion Must be `execution-fence.v1`; any other value is refused with 400 naming it.
+	// ExecutionContractVersion `execution-fence.v1` where the caller presents a certificate and `execution-fence.v2` where it presents a token (ADR-0100); any other value, or one that disagrees with the credential, is refused with 400 naming the value the credential takes.
 	ExecutionContractVersion ExecutionContractVersion `json:"Garam-Contract-Version"`
 }
 
 // IssueInitialCertificateParams defines parameters for IssueInitialCertificate.
 type IssueInitialCertificateParams struct {
-	// EnrollmentContractVersion Must be `managed-enrollment.v1`; any other value is refused with 400 naming it.
+	// EnrollmentContractVersion `managed-enrollment.v1` where the caller presents a certificate and, on `createManagedAgent`, `managed-enrollment.v2` where it presents a token (ADR-0100); any other value, or one that disagrees with the credential, is refused with 400 naming the value the credential takes. `issueInitialCertificate` takes no token and no v2 value.
 	EnrollmentContractVersion EnrollmentContractVersion `json:"Garam-Contract-Version"`
 }
 
@@ -1058,25 +1067,25 @@ type MintAgentTokenParams struct {
 
 // IntrospectOperationAuthorityParams defines parameters for IntrospectOperationAuthority.
 type IntrospectOperationAuthorityParams struct {
-	// ContractVersion Must be `operation-authority.v1` (ADR-0079); any other value is refused with 400 naming it.
+	// ContractVersion `operation-authority.v1` where the caller presents a certificate and `operation-authority.v2` where it presents a token (ADR-0079, ADR-0100); any other value, or one that disagrees with the credential, is refused with 400 naming the value the credential takes.
 	ContractVersion ContractVersion `json:"Garam-Contract-Version"`
 }
 
 // CheckOperationReferenceParams defines parameters for CheckOperationReference.
 type CheckOperationReferenceParams struct {
-	// ContractVersion Must be `operation-authority.v1` (ADR-0079); any other value is refused with 400 naming it.
+	// ContractVersion `operation-authority.v1` where the caller presents a certificate and `operation-authority.v2` where it presents a token (ADR-0079, ADR-0100); any other value, or one that disagrees with the credential, is refused with 400 naming the value the credential takes.
 	ContractVersion ContractVersion `json:"Garam-Contract-Version"`
 }
 
 // IntrospectControllerParams defines parameters for IntrospectController.
 type IntrospectControllerParams struct {
-	// ContractVersion Must be `operation-authority.v1` (ADR-0079); any other value is refused with 400 naming it.
+	// ContractVersion `operation-authority.v1` where the caller presents a certificate and `operation-authority.v2` where it presents a token (ADR-0079, ADR-0100); any other value, or one that disagrees with the credential, is refused with 400 naming the value the credential takes.
 	ContractVersion ContractVersion `json:"Garam-Contract-Version"`
 }
 
 // CreateManagedAgentParams defines parameters for CreateManagedAgent.
 type CreateManagedAgentParams struct {
-	// EnrollmentContractVersion Must be `managed-enrollment.v1`; any other value is refused with 400 naming it.
+	// EnrollmentContractVersion `managed-enrollment.v1` where the caller presents a certificate and, on `createManagedAgent`, `managed-enrollment.v2` where it presents a token (ADR-0100); any other value, or one that disagrees with the credential, is refused with 400 naming the value the credential takes. `issueInitialCertificate` takes no token and no v2 value.
 	EnrollmentContractVersion EnrollmentContractVersion `json:"Garam-Contract-Version"`
 }
 

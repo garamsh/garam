@@ -57,7 +57,10 @@ func (s *PostgresStore) RecordToken(ctx context.Context, holder CredentialHolder
 		IssuedAt:     stamp(t.IssuedAt),
 		ExpiresAt:    stamp(t.ExpiresAt),
 	}); err != nil {
-		return pgxerr.Classify(err, "record operator token", nil, nil)
+		// The credential's row is held, so the one key a missing row
+		// can refuse here is the audience's: an operator the
+		// organization never registered, or deleted meanwhile.
+		return pgxerr.Classify(err, "record operator token", ErrAudienceInvalid, nil)
 	}
 	if err := q.TrimOperatorTokens(ctx, db.TrimOperatorTokensParams{
 		CredentialID: holder.ID, Keep: LiveTokensPerCredential,

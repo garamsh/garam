@@ -111,8 +111,14 @@ token is minted by its operator at `mintAgentToken` and read against the
 agent's current assignment and lineage, and beside it a fenced agent's
 execution token travels in a `Garam-Execution` header of its own; a
 durable submission it authenticates is served under
-`durable-delivery.v2`. A supervisor presents a certificate until the
-plan's step G1d (`docs/plans/2026-10-09-machine-identity-migration.md`).
+`durable-delivery.v2`. Every contract below whose transport ADR-0100
+changes is served to a token under its v2 value and to a certificate
+under v1, and a request whose value disagrees with its credential is
+refused naming the value the credential takes; beside a token an
+operation authority or reference travels in a `Garam-Operation`
+header, since the token takes `Authorization`. A supervisor presents a
+certificate until the plan's step G1d
+(`docs/plans/2026-10-09-machine-identity-migration.md`).
 
 **The listener requests a client certificate and does not require
 one** — `tls.RequestClientCert` in `internal/machine/listener.go` — so
@@ -244,19 +250,21 @@ as the body (#1170); the machine listener answers that authority
 and its durable reference to the operator it names and no other, and
 proves a controller's current authority to that operator before each
 lifecycle decision. Each
-requires and answers `Garam-Contract-Version: operation-authority.v1`,
-and a request naming none or another is refused naming the one served
-(ADR-0079). The specifications are authoritative for their forms, and
-[operators.md](./operators.md) §Delegated operation authority for what
-they decide.
+requires and answers `Garam-Contract-Version: operation-authority.v1`
+beside a certificate and `operation-authority.v2` beside a token, and a
+request naming none or another is refused naming the one its
+credential takes (ADR-0079, ADR-0100). The specifications are
+authoritative for their forms, and [operators.md](./operators.md)
+§Delegated operation authority for what they decide.
 
 **An agent's execution is a versioned contract of its own on the
 machine listener** (ADR-0078). Activation, deactivation, introspection
 and recovery each require and answer `Garam-Contract-Version:
-execution-fence.v1`, and a request naming none or another is refused
-naming that version, not the operation authority's. An agent's own
-protected calls carry `Authorization: Garam-Execution <token>` once its
-GRN has cut over, under the `executionToken` scheme each declares.
+execution-fence.v1` beside a certificate and `execution-fence.v2`
+beside a token, and a request naming none or another is refused naming
+the one its credential takes, not the operation authority's. An agent's
+own protected calls carry `Authorization: Garam-Execution <token>` once
+its GRN has cut over, under the `executionToken` scheme each declares.
 `api/machine.yaml` is authoritative for both, and
 [machine-identity.md](./machine-identity.md) §Generation and lineage
 for what they decide. No route adds a 5xx of its own (ADR-0050): an
@@ -279,11 +287,12 @@ specifications are authoritative for their forms, and
 **Managed enrollment is a third versioned contract on the machine
 listener** (ADR-0077, ADR-0078). Creating a managed agent and issuing
 its first certificate each require and answer `Garam-Contract-Version:
-managed-enrollment.v1`, and a request naming none or another is
-refused naming that version. Neither carries a private key. The
-operator's bodyless `createAgent` and its `issueAgentCertificate`
-stay as they were for legacy agents and reach no managed one.
-`api/machine.yaml` is authoritative for the wire, and
+managed-enrollment.v1`, and creation answers `managed-enrollment.v2`
+to a token; a request naming none or another is refused naming the one
+its credential takes. Initial issuance takes no token. Neither carries a
+private key. The operator's bodyless `createAgent` and its
+`issueAgentCertificate` stay as they were for legacy agents and reach no
+managed one. `api/machine.yaml` is authoritative for the wire, and
 [agents.md](./agents.md) §Separated execution for what they decide.
 
 **Durable submission is a fourth versioned contract on the machine
@@ -312,13 +321,15 @@ branches on these answers, each carrying the header:
 **Cutover is a fifth versioned contract on the machine listener**
 ([ADR-0086](./adr/0086-a-legacy-agent-cuts-over-through-stages-garam-records-under-its-execution-lock.md)).
 Reading a legacy agent's cutover and its freeze, switch and rollback
-each require and answer `Garam-Contract-Version: agent-cutover.v1`, and
-carry `Authorization: Garam-Operation` over an `agent:cutover` reference
-minted for that route's request target. A refusal there keeps `kind` the
-errorx kind and names which one it is in the machine `Error`'s `reason`,
-from the set the contract lists; `activateAgent` sets `reason` only to
-`cutover_required`, and every other route and refusal leaves it out.
-`api/machine.yaml` §cutover is authoritative for the wire, and
+each require and answer `Garam-Contract-Version: agent-cutover.v1`
+beside a certificate and `agent-cutover.v2` beside a token, and carry
+an `agent:cutover` reference minted for that route's request target —
+in `Authorization: Garam-Operation` beside a certificate, and in a
+`Garam-Operation` header beside a token. A refusal there keeps `kind`
+the errorx kind and names which one it is in the machine `Error`'s
+`reason`, from the set the contract lists; `activateAgent` sets `reason`
+only to `cutover_required`, and every other route and refusal leaves it
+out. `api/machine.yaml` §cutover is authoritative for the wire, and
 [agents.md](./agents.md) §Separated execution for what it decides.
 
 Every certificate after the first is replaced over the connection the

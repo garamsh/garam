@@ -393,20 +393,22 @@ func recovered(t *testing.T, got reply, key *ecdsa.PrivateKey) (*http.Client, st
 	require.NoError(t, chainsToIssuer(t, issued), "the recovered certificate chains to the issuer its answer names")
 	der, err := x509.MarshalECPrivateKey(key)
 	require.NoError(t, err)
-	pair, err := tls.X509KeyPair([]byte(issued.CertificatePem), pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: der}))
+	pair, err := tls.X509KeyPair([]byte(*issued.CertificatePem), pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: der}))
 	require.NoError(t, err)
-	return machineClient(t, pair), issued.CertificatePem
+	return machineClient(t, pair), *issued.CertificatePem
 }
 
 // chainsToIssuer verifies a recovered certificate against the issuer
 // its answer names, as a holder with nothing but the answer would.
 func chainsToIssuer(t *testing.T, issued machinegen.RecoveredCredential) error {
 	t.Helper()
-	issuerBlock, _ := pem.Decode([]byte(issued.IssuerPem))
+	require.NotNil(t, issued.IssuerPem, "the answer names its issuer")
+	require.NotNil(t, issued.CertificatePem, "the answer names its certificate")
+	issuerBlock, _ := pem.Decode([]byte(*issued.IssuerPem))
 	require.NotNil(t, issuerBlock, "the answer names its issuer")
 	issuer, err := x509.ParseCertificate(issuerBlock.Bytes)
 	require.NoError(t, err)
-	leafBlock, _ := pem.Decode([]byte(issued.CertificatePem))
+	leafBlock, _ := pem.Decode([]byte(*issued.CertificatePem))
 	require.NotNil(t, leafBlock)
 	leaf, err := x509.ParseCertificate(leafBlock.Bytes)
 	require.NoError(t, err)
@@ -621,11 +623,13 @@ func TestExecutionFence_RecoveryFencesTheOldLineageOnAnOpenConnection(t *testing
 	recoveredTLS, recoveredLeaf := recovered(t, answer, r.key)
 	var named machinegen.RecoveredCredential
 	require.NoError(t, json.Unmarshal([]byte(answer.body), &named))
-	assert.Equal(t, string(s.config.ServerRoot), named.ServerRootPem, "the answer names the server root")
+	require.NotNil(t, named.ServerRootPem)
+	assert.Equal(t, string(s.config.ServerRoot), *named.ServerRootPem, "the answer names the server root")
 	other, err := s.issuer.Issue(context.Background(), scopedGRN("globex", operator.ServiceType, "other"))
 	require.NoError(t, err)
 	substituted := named
-	substituted.IssuerPem = string(other.IssuerPEM())
+	otherIssuer := string(other.IssuerPEM())
+	substituted.IssuerPem = &otherIssuer
 	assert.Error(t, chainsToIssuer(t, substituted), "control: another organization's issuer verifies nothing")
 	retry := s.recover(t, r, r.body)
 	assert.Equal(t, http.StatusCreated, retry.status, retry.body)

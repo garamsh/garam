@@ -10,5 +10,6 @@ database:
 machine:
   keyMaterial:
     secretName: garam-machine-key-material
+  issuer: https://garam-machine.example
 web:
   apiUrl: http://garam-api:8080

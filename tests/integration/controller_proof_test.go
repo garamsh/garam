@@ -129,6 +129,7 @@ func newProofStack(t *testing.T, engine *grpc.ClientConn, p *pgxpool.Pool, polic
 	presented := loopbackCertificate(t)
 	srv, err := cli.NewMachineServer(p, cli.MachineConfig{
 		Sealer:      sealer,
+		Issuer:      testIssuer,
 		Certificate: presented,
 		ServerRoot:  certificatePEM(presented),
 		Delivery:    briefDelivery(),

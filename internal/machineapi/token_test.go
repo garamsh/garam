@@ -95,7 +95,7 @@ func TestConfineTokens_ATokenReachesTheRoutesThatListIt(t *testing.T) {
 	subject := operatorGRN("acme")
 	operators := &operatorService{certificate: &operator.Certificate{Subject: subject}}
 	srv := machineapi.NewServer(&agentService{}, operators, &messageService{}, consenting(), unwatched(t),
-		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil)
+		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, stubKeyring{})
 	url, certified := serveTLSTokens(t, srv, subject, presentedTokens{"garam_ot_live": subject},
 		machineapi.ConfineTokens)
 	client := anonymous(t)
@@ -133,7 +133,7 @@ func TestServer_ARouteReadingTheCertificateRefusesAToken(t *testing.T) {
 	subject := operatorGRN("acme")
 	operators := &operatorService{certificate: &operator.Certificate{Subject: subject}}
 	srv := machineapi.NewServer(&agentService{}, operators, &messageService{}, consenting(), unwatched(t),
-		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil)
+		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, stubKeyring{})
 	url, certified := serveTLSTokens(t, srv, subject, presentedTokens{"garam_ot_live": subject})
 
 	req, err := http.NewRequest(http.MethodPost, url+"/identity/certificate", nil)

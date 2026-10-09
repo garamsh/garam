@@ -42,7 +42,7 @@ func TestConfineSupervisors_ASupervisorReachesItsLifecycleRoutesAlone(t *testing
 	// No service stands behind the server: a request the boundary
 	// admits reaches a handler that cannot answer, which is what tells
 	// it apart from one the boundary refused.
-	srv := machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+	srv := machineapi.NewServer(nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	supervisorURL, supervisor := serveTLS(t, srv, grn.New("acme", "default", "supervisor", "0a1b2c3d4e5f6071"), middlewares...)
 	agentURL, agentClient := serveTLS(t, srv, agentGRN("acme", "0a1b2c3d4e5f6071"), middlewares...)
 

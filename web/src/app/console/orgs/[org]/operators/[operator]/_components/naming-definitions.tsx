@@ -1,7 +1,11 @@
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
-import { slugFromGrn, type AgentDefinition } from "@/features/orgs";
+import {
+  slugFromGrn,
+  type AgentDefinition,
+  type Catalog,
+} from "@/features/orgs";
 
 import { CutoverBadge } from "../../../../../_components/cutover-marker";
 
@@ -18,8 +22,7 @@ export function NamingDefinitions({
   definitions,
   agentsHref,
 }: {
-  definitions:
-    { status: "ok"; data: AgentDefinition[] } | { status: "forbidden" };
+  definitions: Catalog<AgentDefinition>;
   agentsHref: string;
 }) {
   return (

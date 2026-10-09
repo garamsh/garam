@@ -116,7 +116,7 @@ func NewRootCommand() *cobra.Command {
 	}
 	root.AddCommand(newServeCommand(), newMigrateCommand(), newProbeCommand(),
 		newIssueCertificateCommand(), newAdapterCommand(), newStandaloneCommand(),
-		newCutoverInventoryCommand(), newCopyMemoryCommand())
+		newCutoverInventoryCommand(), newCopyMemoryCommand(), newRetireMessageSigningKeyCommand())
 	silenceUsageOnRun(root)
 	return root
 }
@@ -184,6 +184,7 @@ const (
 	envMachineTLSCertFile    envName = "GARAM_MACHINE_TLS_CERT_FILE"
 	envMachineTLSKeyFile     envName = "GARAM_MACHINE_TLS_KEY_FILE"
 	envMachineServerRootFile envName = "GARAM_MACHINE_SERVER_ROOT_FILE"
+	envMachineIssuer         envName = "GARAM_MACHINE_ISSUER"
 	envAdapterAgent          envName = "GARAM_ADAPTER_AGENT"
 	envAdapterMachineURL     envName = "GARAM_ADAPTER_MACHINE_URL"
 	envAdapterGatewayURL     envName = "GARAM_ADAPTER_GATEWAY_URL"

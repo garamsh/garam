@@ -73,15 +73,15 @@ type Config struct {
 // (ADR-0080), and the store runs it with the write. A sender that is
 // not an agent carries none.
 type Service interface {
-	// Post stores a message from sender to recipient and answers with
-	// what is stored. Posting the same idempotency key twice stores one
-	// message.
-	Post(ctx context.Context, sender, recipient grn.GRN, idempotencyKey, body string, fence *Fence) (*Message, error)
+	// Post stores a message from sender to recipient, written by
+	// author, and answers with what is stored. Posting the same
+	// idempotency key twice stores one message.
+	Post(ctx context.Context, sender, recipient grn.GRN, idempotencyKey, body string, author Author, fence *Fence) (*Message, error)
 	// PostWithinBudget is Post for a durable submission created at
 	// created: it stores a message only inside SubmissionBudget of that
 	// instant, and answers what the key already stores at any time
 	// (ADR-0083).
-	PostWithinBudget(ctx context.Context, sender, recipient grn.GRN, idempotencyKey, body string, created time.Time, fence *Fence) (*Message, error)
+	PostWithinBudget(ctx context.Context, sender, recipient grn.GRN, idempotencyKey, body string, author Author, created time.Time, fence *Fence) (*Message, error)
 	// Claim hands the caller the oldest message addressed to it, waiting
 	// until one is ready rather than answering an empty queue at once,
 	// and returns ErrNoMessageReady when none arrives in that time.
@@ -150,9 +150,10 @@ func withDefaults(cfg Config) Config {
 //
 // fence is the requesting agent's, which is not always sender: a
 // refusal garam stores in reply is sent under the intended recipient's
-// identity, and it is still the requester's write that is fenced.
-func (s *service) Post(ctx context.Context, sender, recipient grn.GRN, idempotencyKey, body string, fence *Fence) (*Message, error) {
-	m, err := New(recipient, sender, idempotencyKey, body)
+// identity, and it is still the requester's write that is fenced. Its
+// author is garam (ADR-0101).
+func (s *service) Post(ctx context.Context, sender, recipient grn.GRN, idempotencyKey, body string, author Author, fence *Fence) (*Message, error) {
+	m, err := newAuthored(recipient, sender, idempotencyKey, body, author)
 	if err != nil {
 		return nil, err
 	}
@@ -162,8 +163,8 @@ func (s *service) Post(ctx context.Context, sender, recipient grn.GRN, idempoten
 // PostWithinBudget is Post, with the budget judged by the store at its
 // insert rather than here: a request delayed on its way there is judged
 // when it writes.
-func (s *service) PostWithinBudget(ctx context.Context, sender, recipient grn.GRN, idempotencyKey, body string, created time.Time, fence *Fence) (*Message, error) {
-	m, err := New(recipient, sender, idempotencyKey, body)
+func (s *service) PostWithinBudget(ctx context.Context, sender, recipient grn.GRN, idempotencyKey, body string, author Author, created time.Time, fence *Fence) (*Message, error) {
+	m, err := newAuthored(recipient, sender, idempotencyKey, body, author)
 	if err != nil {
 		return nil, err
 	}

@@ -21,14 +21,18 @@ info:
     the next request on a connection already open too. A request
     presents a token or a certificate, never both.
 
-    Two operations are reached without a certificate, because each is
-    how a caller obtains its first one, and both carry `security: []`:
-    `enrollOperator` is authenticated by the one-time token the console
-    minted (ADR-0064), and `enrollStandaloneAgent` by the bootstrap
-    secret whose hash an administrator approved (ADR-0082). Every other
-    operation requires the
-    certificate, and which is which is read from this file rather than
-    remembered. An enrolling caller still verifies garam against the
+    Three operations are reached without a certificate, and each
+    carries `security: []`. Two are how a caller obtains its first
+    certificate: `enrollOperator` is authenticated by the one-time
+    token the console minted (ADR-0064), and `enrollStandaloneAgent` by
+    the bootstrap secret whose hash an administrator approved
+    (ADR-0082). The third, `getMessageSigningKeys`, publishes the
+    public keys a verifier checks garam's signature on a message with
+    (ADR-0101), which anyone may read. `exchangeToken` is reached
+    without one too, authenticated by the operator's credential under
+    `machineCredential`. Every other operation requires the
+    certificate, or a token where it lists `machineToken`, and which is
+    which is read from this file rather than remembered. An enrolling caller still verifies garam against the
     garam server root, which it holds before it calls: the listener
     presents that root's leaf to everyone (ADR-0040), and a caller that
     does not check it is talking to whoever answered.
@@ -844,6 +848,37 @@ paths:
           $ref: '#/components/responses/Error'
         '409':
           $ref: '#/components/responses/Error'
+  /message-signing-keys:
+    get:
+      operationId: getMessageSigningKeys
+      tags: [message]
+      summary: Read the public keys garam signs messages with.
+      description: >-
+        The JWK Set (RFC 7517) a verifier checks the signature on a
+        claimed message against (ADR-0101): the key that signs now, a
+        key announced to sign next, and a key that stopped signing while
+        a signature it made can still be valid. A key retired at once is
+        not in it. Its URL is the deployment's issuer followed by this
+        path, and the answer is complete in itself, so a deployment
+        whose verifier cannot reach garam hands it the same document as
+        a file.
+
+        A key is published at least two hours before it signs. The
+        answer may be cached for the hour `Cache-Control` names; a
+        verifier meeting a `kid` it does not hold reads this again.
+      security: []
+      responses:
+        '200':
+          description: The published keys.
+          headers:
+            Cache-Control:
+              description: '`max-age=3600`.'
+              schema:
+                type: string
+          content:
+            application/jwk-set+json:
+              schema:
+                $ref: '#/components/schemas/MessageSigningKeySet'
   /agents/{agent}/claims:
     post:
       operationId: claimMessage
@@ -2421,6 +2456,9 @@ components:
       type: object
       description: >-
         One caller's hold on one message, and the token that fences it.
+        A claim also carries the message's content and garam's
+        signature over it (ADR-0101); a renewal carries neither, because
+        it hands nothing out.
         Renewal and completion carry that token, and a hold handed on to
         the next caller stops matching.
       required: [id, expiresAt, attempt, watchers, message]
@@ -2456,6 +2494,61 @@ components:
             own — and one who left is stopped forwarding to.
         message:
           $ref: '#/components/schemas/Message'
+        content:
+          type: string
+          description: >-
+            What the runtime is handed for this message: the
+            `garam-message.v1` object of `contract`, `sender` and `body`,
+            in that order, encoded so that every attempt of one message
+            carries the same characters. `signature` binds a SHA-256 over
+            their UTF-8 octets, so a relay forwards them unaltered.
+        signature:
+          type: string
+          description: >-
+            garam's signature over this hand-out, a compact JWS signed
+            with ES256 and typed `agent-message+jwt` (ADR-0101). Its
+            claims name the issuer, the sender garam vouches for, the
+            recipient as audience and its organization, the message's
+            identifier, the content's digest, and an expiry the lease
+            ceiling after the claim was taken. Each claim signs afresh,
+            and every attempt of one message carries the same content
+            and identifier under it.
+    MessageSigningKeySet:
+      type: object
+      description: A JWK Set (RFC 7517) of the keys garam signs messages with.
+      required: [keys]
+      properties:
+        keys:
+          type: array
+          items:
+            $ref: '#/components/schemas/MessageSigningKey'
+    MessageSigningKey:
+      type: object
+      description: >-
+        One public P-256 key as a JWK. `kid` is its JWK thumbprint
+        (RFC 7638), which is what a signature's header names.
+      required: [kid, kty, crv, alg, use, x, 'y']
+      properties:
+        kid:
+          type: string
+        kty:
+          type: string
+          enum: [EC]
+        crv:
+          type: string
+          enum: [P-256]
+        alg:
+          type: string
+          enum: [ES256]
+        use:
+          type: string
+          enum: [sig]
+        x:
+          type: string
+          description: The x coordinate, base64url without padding.
+        'y':
+          type: string
+          description: The y coordinate, base64url without padding.
     TurnEvent:
       type: object
       description: >-

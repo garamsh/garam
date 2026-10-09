@@ -1,13 +1,6 @@
 import type { Agent, AgentDefinition } from "./api/orgs";
 import { slugFromGrn } from "./grn";
-
-/**
- * A list a page looks agents up in, or the fact that garam refused the
- * caller that list. A refused list names no agent and proves none
- * absent.
- */
-export type AgentCatalog<T> =
-  { status: "ok"; data: readonly T[] } | { status: "forbidden" };
+import type { Catalog, Lookup } from "./subject";
 
 /**
  * The two lists an agent can be known by: what operators reported and
@@ -16,8 +9,8 @@ export type AgentCatalog<T> =
  * team or given a policy while still awaiting one (ADR-0075).
  */
 export type AgentDirectory = {
-  agents: AgentCatalog<Agent>;
-  definitions: AgentCatalog<AgentDefinition>;
+  agents: Catalog<Agent>;
+  definitions: Catalog<AgentDefinition>;
 };
 
 /**
@@ -78,7 +71,7 @@ export function directoryAgents(directory: AgentDirectory): DirectoryAgent[] {
 export function lookUpAgent(
   directory: AgentDirectory,
   grn: string,
-): { lookup: "found" | "missing" | "refused"; agent?: DirectoryAgent } {
+): { lookup: Lookup; agent?: DirectoryAgent } {
   const agent = directoryAgents(directory).find(
     (candidate) => candidate.grn === grn,
   );

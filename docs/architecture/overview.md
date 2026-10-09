@@ -446,8 +446,9 @@ collaborate on a shared plan.
 - `internal/machineapi/` — handlers implementing the ServerInterface
   generated from the machine listener's spec.
 - `internal/message/` — the durable queue a message reaches an agent
-  through; one reader claims a message at a time, and whose queue a
-  caller may act on is decided here.
+  through; one reader claims a message at a time, whose queue a caller
+  may act on is decided here, and every hand-out is signed under keys
+  kept here (ADR-0101).
 - `internal/delivery/` — the adapter's delivery loop: it claims a
   message for one agent, posts it into that agent's gateway under
   garam's identifier, completes the claim the platform says committed,
@@ -530,6 +531,7 @@ it and imports no request surface and no domain.
 | `machine.ServerCertificate` | `internal/machine` | what the listener presents, asked per handshake so a replaced one needs no restart |
 | `message.Message` | `internal/message` | one message addressed to a recipient |
 | `message.Claim` | `internal/message` | one reader's hold on a message, fenced by a token |
+| `message.Keyring` | `internal/message` | the keys every hand-out is signed under: opens the one signing, rotates them, publishes the set (ADR-0101) |
 | `watch.Event` | `internal/watch` | one forwarded turn event, carried and never stored |
 | `watch.Subscription` | `internal/watch` | one open watch: the stream its holder reads |
 | `watch.Service` | `internal/watch` | opens a watch, carries a forwarded event to the watchers of that agent, counts them |
@@ -568,6 +570,7 @@ it and imports no request surface and no domain.
 | The console is a sidebar shell over org sections | One structure for switching orgs, moving between sections, and knowing where you are. | [adr/0011-console-shell.md](./adr/0011-console-shell.md) |
 | Agents are provisioned by operators garam never dials | An operator is a peer, so a user can supply their own; garam is never the side that connects. | [adr/0012-agent-operator-model.md](./adr/0012-agent-operator-model.md) |
 | Messages reach an agent by polling, not by push | A queue in Postgres has no connection to route to, so any instance answers any poll. | [adr/0013-agent-messaging.md](./adr/0013-agent-messaging.md) |
+| garam signs every message it hands out | An agent judges a message by a signature that travels with it, not by the path it arrived on, so it can verify garam without trusting garam's transport. | [adr/0101-garam-signs-every-message-it-delivers-and-the-agent-verifies-it-alone.md](./adr/0101-garam-signs-every-message-it-delivers-and-the-agent-verifies-it-alone.md) |
 | Agents authenticate by mTLS on a listener of their own | A GRN in a SAN needs no user row; a separate listener needs no trusted proxy header. | [adr/0014-agent-authentication.md](./adr/0014-agent-authentication.md) |
 | garam presents one pinned server certificate and certificates rotate without a restart | A server picks its certificate before the client sends one, so per-organization selection is unreachable; expiry is the only revocation, and a lifetime short enough to be one is unusable when every rotation is a restart. | [adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md) |
 | An organization registers an operator, and a definition may name no other | A definition naming an operator nobody registered was a definition no operator would ever claim, and nothing reported it. | [adr/0045-an-organization-registers-an-operator.md](./adr/0045-an-organization-registers-an-operator.md) |

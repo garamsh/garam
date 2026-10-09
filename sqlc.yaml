@@ -100,6 +100,7 @@ sql:
       - migrations/000015_cross_org_consent.up.sql
       - migrations/000004_agents.up.sql
       - migrations/000029_agent_execution_fence.up.sql
+      - migrations/000037_message_signing.up.sql
     queries: internal/message/queries.sql
     gen:
       go:

@@ -54,6 +54,9 @@ type Server struct {
 	// supervisors is how a standalone host's supervisor enrolls and
 	// renews (ADR-0082).
 	supervisors agent.SupervisorService
+	// keys signs each message handed out and publishes the keys it
+	// signs with (ADR-0101).
+	keys message.Keyring
 }
 
 // Compile-time check that Server satisfies the generated interface.
@@ -68,11 +71,12 @@ var _ machinegen.ServerInterface = (*Server)(nil)
 // hosted operator reads its delegated operations back through, what
 // verifies a certificate again on a decision, what proves a
 // controller's current authority to that operator, what activates,
-// inspects, recovers and renews an agent's execution, and how a
-// standalone host's supervisor enrolls and renews.
-func NewServer(agents agent.Service, operators operator.Service, messages message.Service, consents message.ConsentStore, watches watch.Service, groups Groups, evaluator Evaluator, authority operator.AuthorityService, certificates machine.Service, proofs operator.ProofService, executions agent.ExecutionService, supervisors agent.SupervisorService) *Server {
+// inspects, recovers and renews an agent's execution, how a standalone
+// host's supervisor enrolls and renews, and what signs each message
+// handed out.
+func NewServer(agents agent.Service, operators operator.Service, messages message.Service, consents message.ConsentStore, watches watch.Service, groups Groups, evaluator Evaluator, authority operator.AuthorityService, certificates machine.Service, proofs operator.ProofService, executions agent.ExecutionService, supervisors agent.SupervisorService, keys message.Keyring) *Server {
 	return &Server{agents: agents, operators: operators, messages: messages, consents: consents, watches: watches, groups: groups, evaluator: evaluator, authority: authority,
-		certificates: certificates, proofs: proofs, executions: executions, supervisors: supervisors}
+		certificates: certificates, proofs: proofs, executions: executions, supervisors: supervisors, keys: keys}
 }
 
 // caller returns the GRN the request proved, by certificate or by

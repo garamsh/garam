@@ -1,34 +1,25 @@
 import {
   agentChoiceLabel,
   directoryAgents,
+  kindFromGrn,
   lookUpAgent,
-  parseGrn,
   slugFromGrn,
   type AgentDirectory,
+  type Catalog,
   type GroupMember,
+  type Lookup,
   type Member,
+  type SubjectKind,
 } from "@/features/orgs";
 
-/** What a team member is, read from its GRN's service type. */
-export type MemberKind = "person" | "agent" | "unknown";
-
 /**
- * A list the page looks members up in, or the fact that garam refused
- * the caller that list. A refused list resolves nobody and names no
- * one missing.
+ * What a team member is, read from its GRN's service type. A team
+ * holds no team, so a member GRN naming one is of no known kind.
  */
-export type Catalog<T> =
-  { status: "ok"; data: readonly T[] } | { status: "forbidden" };
+export type MemberKind = Exclude<SubjectKind, "team"> | "unknown";
 
 /**
- * What looking a member up found: the identity, no such identity in
- * the organization, or nothing, because the list it would be in was
- * refused to the caller.
- */
-export type Lookup = "found" | "missing" | "refused";
-
-/**
- * One membership of a team, as the page shows it. `name` is what this
+ * One membership of a team, as the page shows it. `label` is what this
  * organization calls the member, null where it has no name for it.
  * Neither it nor `lookup` is inferred from the other: a person whose
  * user row is gone is found and nameless.
@@ -37,7 +28,7 @@ export type TeamMember = {
   grn: string;
   identifier: string;
   kind: MemberKind;
-  name: string | null;
+  label: string | null;
   lookup: Lookup;
 };
 
@@ -47,18 +38,6 @@ export type Candidate = {
   kind: "person" | "agent";
   label: string;
 };
-
-/** What a member GRN names, by its service type. */
-function kindOf(grn: string): MemberKind {
-  switch (parseGrn(grn)?.serviceType) {
-    case "user":
-      return "person";
-    case "agent":
-      return "agent";
-    default:
-      return "unknown";
-  }
-}
 
 /** Looks `grn` up in `catalog` by the key `keyOf` reads. */
 function lookUp<T>(
@@ -88,7 +67,8 @@ export function resolveTeamMembers(
 ): TeamMember[] {
   return members.map(({ memberGrn }) => {
     const identifier = slugFromGrn(memberGrn);
-    const kind = kindOf(memberGrn);
+    const subjectKind = kindFromGrn(memberGrn);
+    const kind: MemberKind = subjectKind === "team" ? "unknown" : subjectKind;
     switch (kind) {
       case "person": {
         const { lookup, entry } = lookUp(people, memberGrn, (p) => p.userGrn);
@@ -96,7 +76,7 @@ export function resolveTeamMembers(
           grn: memberGrn,
           identifier,
           kind,
-          name: entry?.nickname ?? null,
+          label: entry?.nickname ?? null,
           lookup,
         };
       }
@@ -107,7 +87,7 @@ export function resolveTeamMembers(
           grn: memberGrn,
           identifier,
           kind,
-          name: agent?.name ?? identifier,
+          label: agent?.name ?? identifier,
           lookup,
         };
       }
@@ -116,7 +96,7 @@ export function resolveTeamMembers(
           grn: memberGrn,
           identifier,
           kind,
-          name: null,
+          label: null,
           lookup: "missing",
         };
     }
@@ -164,8 +144,8 @@ export function teamCandidates(
 export function isNamedAgent(member: TeamMember): boolean {
   return (
     member.kind === "agent" &&
-    member.name !== null &&
-    member.name !== member.identifier
+    member.label !== null &&
+    member.label !== member.identifier
   );
 }
 
@@ -175,8 +155,8 @@ export function isNamedAgent(member: TeamMember): boolean {
  * two different sentences.
  */
 export function memberLabel(member: TeamMember): string {
-  if (isNamedAgent(member)) return `${member.name} (${member.identifier})`;
-  if (member.name !== null) return member.name;
+  if (isNamedAgent(member)) return `${member.label} (${member.identifier})`;
+  if (member.label !== null) return member.label;
   switch (member.kind) {
     case "person":
       return `the person ${member.identifier}`;
@@ -186,10 +166,3 @@ export function memberLabel(member: TeamMember): string {
       return `the unknown member ${member.identifier}`;
   }
 }
-
-/** The word a member's type is shown as. */
-export const KIND_LABEL: Record<MemberKind, string> = {
-  person: "Person",
-  agent: "Agent",
-  unknown: "Unknown",
-};

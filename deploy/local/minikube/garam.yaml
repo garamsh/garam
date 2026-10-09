@@ -248,6 +248,10 @@ spec:
               value: /run/garam/throwaway/server-root.pem
             - name: GARAM_CA_KEY_FILE
               value: /run/garam/throwaway/ca-kek.hex
+            # The issuer every message signature names (ADR-0101). No
+            # verifier outside the cluster reaches this one.
+            - name: GARAM_MACHINE_ISSUER
+              value: https://garam-machine:8443
           ports:
             - name: mtls
               containerPort: 8443

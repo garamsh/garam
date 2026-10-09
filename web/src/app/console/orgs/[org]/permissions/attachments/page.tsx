@@ -11,6 +11,7 @@ import {
   lookupGroups,
   lookupOrgMembers,
   slugFromGrn,
+  type Catalog,
 } from "@/features/orgs";
 
 import { ApiUnreachable } from "../../../../_components/api-unreachable";
@@ -27,7 +28,6 @@ import {
   resolveSubjectQuery,
   subjectChoices,
   subjectQuery,
-  type Catalog,
   type Catalogs,
   type PolicyScope,
   type TeamMembership,

@@ -85,6 +85,11 @@ func serveMachine(cmd *cobra.Command) error {
 		return err
 	}
 
+	issuer, err := message.ParseIssuer(envOr(envMachineIssuer, ""))
+	if err != nil {
+		return errorx.Wrap(err, string(envMachineIssuer))
+	}
+
 	// Whom an agent may send to is decided by the policy engine, which
 	// runs as a process of its own and is reached over gRPC (ADR-0003).
 	// Insecure transport: both processes run inside one trust boundary;
@@ -103,6 +108,7 @@ func serveMachine(cmd *cobra.Command) error {
 
 	srv, err := NewMachineServer(pool, MachineConfig{
 		Sealer:      keys.sealer,
+		Issuer:      issuer,
 		Certificate: keys.listener,
 		ServerRoot:  keys.serverRoot,
 		Authority:   ca.Config{CertificateLifetime: lifetime},
@@ -144,8 +150,12 @@ func serveMachine(cmd *cobra.Command) error {
 // configuration; a test supplies its own.
 type MachineConfig struct {
 	// Sealer opens the sealed private keys of the certificate
-	// authorities (ADR-0016).
+	// authorities (ADR-0016) and of the keys messages are signed with
+	// (ADR-0101).
 	Sealer ca.Sealer
+	// Issuer is the value every message signature names as its issuer:
+	// this listener's external https origin (ADR-0101).
+	Issuer message.Issuer
 	// Certificate is what the listener presents (ADR-0040).
 	Certificate machine.ServerCertificate
 	// ServerRoot is the garam root handed out beside every certificate
@@ -203,6 +213,13 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 	if err != nil {
 		return nil, err
 	}
+	// Each hand-out is signed under a key sealed by the same
+	// key-encryption key as the authorities, valid for the lease ceiling
+	// the queue holds a claim to (ADR-0101).
+	keyring, err := message.NewKeyring(message.NewPostgresStore(pool), cfg.Sealer, cfg.Issuer, cfg.Delivery)
+	if err != nil {
+		return nil, err
+	}
 	// The consent a cross-organization post needs is the message
 	// domain's relation (ADR-0035); this process reads it and `serve
 	// api` is where an organization grants and withdraws its half.
@@ -239,7 +256,7 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 			memberGroups{store: org.NewPostgresStore(pool)}, machineapi.NewGRPCEvaluator(cfg.Engine),
 			authority, identities, newProofService(pool, cfg.Engine, cfg.Now),
 			newExecutionService(pool, cfg.Engine, authority, identities, issuer, cfg.ServerRoot, cfg.Now),
-			newSupervisorService(pool, cfg.Engine, issuer, cfg.ServerRoot, cfg.Now)),
+			newSupervisorService(pool, cfg.Engine, issuer, cfg.ServerRoot, cfg.Now), keyring),
 		machinegen.StdHTTPServerOptions{
 			Middlewares: []machinegen.MiddlewareFunc{machineapi.ConfineTokens, machineapi.ConfineSupervisors, machineapi.RecoverPanics,
 				obs.logMachineRequests, countMachineRequests(requests)},

@@ -44,9 +44,13 @@ Violations are grounds for PR rejection.
   claims or drops the statement.
 - A citation of a rule numbered outside this project — in another
   project's document, or in this project's copy of one — quotes its
-  heading or the rule's opening words, not its number. A renamed heading
-  stops matching, so the citation breaks where a reader sees it; a
-  reassigned number goes on resolving, to whatever rule took it.
+  heading or the rule's opening words, not its number, unless it stands
+  in that same document, where whatever moves the number carries the
+  citation with it. A renamed heading stops matching, so the citation
+  breaks where a reader sees it; a reassigned number goes on resolving,
+  to whatever rule took it. The number a whole document is filed under,
+  an ADR's among them, is not a rule's: no edit to the rules inside a
+  document moves it, so a citation keeps it.
 - Where the claim is about a package's health rather than a release
   (`unmaintained`, `legacy`), do not rest a rule on it: name what to use
   instead, which does not expire.
@@ -71,11 +75,11 @@ These are documentation too.
 - **A claim names a basis that could have contradicted it.** Name what
   established it — the command with its arguments, the repository and
   revision of a file read, the source consulted — precisely enough that
-  a reader can repeat it. A basis that would read the same had the claim
-  been false establishes nothing: an expression matching nothing shows
-  an absence only where the same expression is shown to match what is
-  present, and a run whose output nobody has read is not a basis at
-  all.
+  a reader can repeat it. A basis that would read the same had a part of
+  the claim been false establishes nothing about that part: an
+  expression matching nothing shows an absence only where the same
+  expression is shown to match what is present, and a run whose output
+  nobody has read is not a basis at all.
 - **Stay inside the template.** No extra sections beyond the template
   fields; leave no field empty — write `N/A` with a reason.
 - **A closing keyword precedes each issue number.**

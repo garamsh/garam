@@ -302,9 +302,9 @@ func requestWith(t *testing.T, client *http.Client, method, url, token string) (
 
 // TestOperatorToken_ReachesTheOperatorRoutesAloneOnTheShippedListener
 // is ConfineTokens as `serve machine` wires it (ADR-0100): a live token
-// is refused on a route outside the six that list it — one whose
-// handler reads only the caller's GRN, so the confinement is what
-// refuses it — and on the renewal, which reads a certificate the token
+// is refused on a route outside the set that lists it — the signing
+// keys, whose handler reads nothing of the caller, so the confinement
+// is what refuses it — and on the renewal, which reads a certificate the token
 // does not carry. The same token on GET /identity is the control.
 func TestOperatorToken_ReachesTheOperatorRoutesAloneOnTheShippedListener(t *testing.T) {
 	ctx := context.Background()
@@ -320,8 +320,7 @@ func TestOperatorToken_ReachesTheOperatorRoutesAloneOnTheShippedListener(t *test
 	status, _ := requestWith(t, client, http.MethodGet, url+"/identity", token)
 	require.Equal(t, http.StatusOK, status, "the token authenticates where it is listed")
 
-	status, body := tokenCall(t, client, http.MethodGet, url+"/operation-references/ref-1", token,
-		operator.ContractVersion, "")
+	status, body := tokenCall(t, client, http.MethodGet, url+"/message-signing-keys", token, "", "")
 	assert.Equal(t, http.StatusUnauthorized, status)
 	assert.Contains(t, body, "this operation does not accept a token")
 

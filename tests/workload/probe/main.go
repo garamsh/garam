@@ -25,7 +25,7 @@ import (
 
 func main() {
 	if len(os.Args) < 2 {
-		fail("usage: probe report|daemon|post|get|size|cat|collect|ls|put|find|garam|flip|remove ...")
+		fail("usage: probe report|daemon|post|get|size|stat|cat|collect|ls|put|find|garam|flip|remove ...")
 	}
 	var err error
 	switch os.Args[1] {
@@ -39,6 +39,8 @@ func main() {
 		err = get(os.Args[2])
 	case "size":
 		err = size(os.Args[2])
+	case "stat":
+		err = stat(os.Args[2])
 	case "cat":
 		err = cat(os.Args[2])
 	case "collect":
@@ -230,6 +232,20 @@ func size(path string) error {
 		return err
 	}
 	fmt.Println(info.Size())
+	return nil
+}
+
+// stat prints a path's mode and owner, as "<mode> <uid>:<gid>".
+func stat(path string) error {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	owner, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return fmt.Errorf("%s: no owner", path)
+	}
+	fmt.Printf("%s %d:%d\n", info.Mode(), owner.Uid, owner.Gid)
 	return nil
 }
 

@@ -12,6 +12,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io/fs"
 	"math/big"
 	"net"
 	"net/http"
@@ -325,6 +326,10 @@ func TestRun_BringsAGenerationUpInTheArrangementsShape(t *testing.T) {
 	}
 	assert.Equal(t, "65532:65532", runtime.spec.User)
 	assert.Equal(t, "65532:65532", adapter.spec.User, "the adapter reads and removes outbox entries the runtime wrote 0600")
+	h.engine.mu.Lock()
+	outbox := h.engine.paths[memory]["outbox"]
+	h.engine.mu.Unlock()
+	assert.Equal(t, fs.ModeDir|0o700, outbox.Mode, "the outbox is made owner-only, as Sherlock v0.5.0 keeps it")
 	assert.Contains(t, runtime.spec.Cmd, testAgent.String())
 	assert.NotContains(t, runtime.spec.Cmd, "--require-store", "the first start on a new volume creates the store")
 

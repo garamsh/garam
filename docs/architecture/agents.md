@@ -409,9 +409,14 @@ supervisor that stops leaves the workload running.
   first, and refuses one that is gone or carries another nonce; it
   creates nothing to replace it, and a person decides what follows.
 - **The outbox is a directory before the adapter mounts it.** The
-  supervisor makes it in the runtime's first start and checks it again
-  before the adapter is created; a link or anything else there
-  refuses, and the path is never repaired.
+  supervisor makes it in the runtime's first start, 0700 and owned by
+  65532, and checks it again before the adapter is created; a link or
+  anything else there refuses, and the path is never repaired. The
+  store files the runtime creates beside it are 0600 and 65532's, the
+  modes Sherlock v0.5.0 keeps its state in (sherlock#1025), so an
+  account other than the runtime's on that volume can neither list
+  what the agent is about to send nor read its memory. The adapter
+  runs as 65532 and reads the outbox all the same.
 - **`--require-store` follows the record.** Every start passes it once
   the memory volume's record says a runtime served on it, which the
   first runtime-status report saying `serving` writes; nothing infers

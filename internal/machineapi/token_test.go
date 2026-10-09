@@ -159,6 +159,42 @@ func TestServer_ARouteReadingTheCertificateRefusesAToken(t *testing.T) {
 	assert.Len(t, operators.renewed, 1)
 }
 
+// TestServer_InitialIssuanceRefusesATokenItself holds that initial
+// issuance, which goes with the certificate path (ADR-0100), refuses a
+// token without ConfineTokens in front of it, now that the lifecycle
+// routes beside it admit one. The certificate is the control: the same
+// request with it is answered past that refusal, by the contract check
+// naming the certificate's value.
+func TestServer_InitialIssuanceRefusesATokenItself(t *testing.T) {
+	subject := operatorGRN("acme")
+	srv := machineapi.NewServer(&agentService{}, &operatorService{}, &messageService{}, consenting(), unwatched(t),
+		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil, stubKeyring{})
+	url, certified := serveTLSTokens(t, srv, subject, presentedTokens{"garam_ot_live": subject})
+	path := url + "/agents/" + agentGRN("acme", "bot").String() + "/initial-certificate"
+
+	send := func(client *http.Client, token string) (int, string) {
+		req, err := http.NewRequest(http.MethodPost, path, strings.NewReader(`{}`))
+		require.NoError(t, err)
+		req.Header.Set("Garam-Contract-Version", agent.TokenEnrollmentContractVersion)
+		if token != "" {
+			req.Header.Set("Authorization", "Garam-Token "+token)
+		}
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		body, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		require.NoError(t, resp.Body.Close())
+		return resp.StatusCode, string(body)
+	}
+	status, body := send(anonymous(t), "garam_ot_live")
+	assert.Equal(t, http.StatusUnauthorized, status, body)
+	assert.Contains(t, body, "initial issuance takes no token")
+
+	status, body = send(certified, "")
+	assert.Equal(t, http.StatusBadRequest, status, body)
+	assert.Contains(t, body, agent.EnrollmentContractVersion, "control: a certificate reaches the contract check")
+}
+
 // TestTokenRoutes_AreTheOperationsTheSpecificationListsMachineTokenOn
 // holds the hand-kept route set against the file that states it: every
 // operation api/machine.yaml lists machineToken on is in the set, and

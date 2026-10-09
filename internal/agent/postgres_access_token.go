@@ -85,6 +85,11 @@ func (s *PostgresStore) MintAccessToken(ctx context.Context, caller grn.GRN, t *
 	}); err != nil {
 		return pgxerr.Classify(err, "trim agent tokens", nil, nil)
 	}
+	if err := q.TrimAgentTokensTotal(ctx, db.TrimAgentTokensTotalParams{
+		AgentGrn: t.Agent.String(), Keep: LiveAccessTokensPerAgent,
+	}); err != nil {
+		return pgxerr.Classify(err, "trim agent tokens", nil, nil)
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return errorx.Wrap(err, "commit")
 	}

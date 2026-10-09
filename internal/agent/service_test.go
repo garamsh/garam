@@ -612,7 +612,7 @@ func TestService_ClaimAdmitsTheOperatorToTheCertificateRoute(t *testing.T) {
 // configuration and no token store.
 func mustService(t *testing.T, store Store, issuer Issuer) Service {
 	t.Helper()
-	svc, err := NewService(store, nil, issuer, Config{})
+	svc, err := NewService(store, nil, nil, issuer, Config{})
 	if err != nil {
 		t.Fatal(err)
 	}

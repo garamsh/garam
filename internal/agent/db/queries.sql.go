@@ -787,3 +787,25 @@ func (q *Queries) TrimAgentTokens(ctx context.Context, arg TrimAgentTokensParams
 	_, err := q.db.Exec(ctx, trimAgentTokens, arg.AgentGrn, arg.AudienceGrn, arg.Keep)
 	return err
 }
+
+const trimAgentTokensTotal = `-- name: TrimAgentTokensTotal :exec
+DELETE FROM agent_tokens t
+WHERE t.agent_grn = $1
+  AND t.token_hash NOT IN (
+      SELECT k.token_hash FROM agent_tokens k
+      WHERE k.agent_grn = $1
+      ORDER BY k.issued_at DESC, k.token_hash DESC
+      LIMIT $2)
+`
+
+type TrimAgentTokensTotalParams struct {
+	AgentGrn string
+	Keep     int32
+}
+
+// Keeps an agent's newest tokens across every audience, so naming
+// more audiences does not widen what one agent's tokens can occupy.
+func (q *Queries) TrimAgentTokensTotal(ctx context.Context, arg TrimAgentTokensTotalParams) error {
+	_, err := q.db.Exec(ctx, trimAgentTokensTotal, arg.AgentGrn, arg.Keep)
+	return err
+}

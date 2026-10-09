@@ -8,6 +8,7 @@ import (
 
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/machine"
 	"github.com/garamsh/garam/internal/operator"
 )
@@ -58,6 +59,17 @@ func (k identityTokens) agent(ctx context.Context, token string) (machine.Bearer
 	}
 	return machine.Bearer{Subject: holder.Agent, Serial: holder.Serial,
 		IssuedAt: holder.IssuedAt, ExpiresAt: holder.ExpiresAt}, nil
+}
+
+// registeredOperators answers whether an organization holds a record
+// of an operator, which an agent token's audience must be (ADR-0100).
+type registeredOperators struct {
+	operators operator.Store
+}
+
+func (r registeredOperators) Registered(ctx context.Context, g grn.GRN) error {
+	_, err := r.operators.Get(ctx, g)
+	return err
 }
 
 // unresolved keeps a refusal as the caller's and makes any other

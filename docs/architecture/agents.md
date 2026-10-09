@@ -178,9 +178,13 @@ Until then a certificate still authenticates as it did.
   carry their activation's token in a `Garam-Execution` header of its
   own, since the agent token takes `Authorization`.
 - **It lives an hour by default**, configurable from twenty minutes to
-  a day. A mint voids nothing, and an agent keeps its newest five
-  tokens per audience. A token renews no certificate: an agent holding
-  one is minted another by its assignee.
+  a day, and its start is backdated by the minute a certificate's is,
+  so a database whose clock trails the minting process finds it
+  current at once. A mint voids nothing; an agent keeps its newest
+  five tokens per audience and its newest ten in all, and an audience
+  is an operator the organization registered, so naming more
+  audiences widens nothing. A token renews no certificate: an agent
+  holding one is minted another by its assignee.
 - **An unfenced agent's token comes the same way.** A `Garam`-source
   agent of the Operator, whose adapter runs in garam's legacy mode
   with no control settings (garam-agent-operator ADR 0068), is held by

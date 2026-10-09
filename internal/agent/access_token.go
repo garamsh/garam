@@ -27,9 +27,15 @@ const (
 )
 
 // LiveAccessTokensPerAudience is how many live tokens an agent holds
-// for one audience: a mint beyond it drops the oldest, which bounds
-// what an assignee's mints can write (ADR-0100).
-const LiveAccessTokensPerAudience = 5
+// for one audience, and LiveAccessTokensPerAgent how many it holds in
+// all: a mint beyond either drops the oldest, which bounds what an
+// assignee's mints can write however many audiences it names
+// (ADR-0100). An assignee refreshes a garam token and a control
+// service's, so the total is two audiences' worth.
+const (
+	LiveAccessTokensPerAudience = 5
+	LiveAccessTokensPerAgent    = 2 * LiveAccessTokensPerAudience
+)
 
 // accessTokenBytes sizes the secret: 256 bits (ADR-0100).
 const accessTokenBytes = 32

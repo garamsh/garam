@@ -15,7 +15,8 @@ type AccessTokenStore interface {
 	// lineage is admitted as the certificate route admits it — legacy
 	// and not switched — and one with a lineage is admitted inside it,
 	// because the lifecycle authority opened that lineage. It keeps the
-	// agent's newest LiveAccessTokensPerAudience for t's audience.
+	// agent's newest LiveAccessTokensPerAudience for t's audience and
+	// its newest LiveAccessTokensPerAgent in all.
 	//
 	// It answers ErrNotAssigned where caller does not hold the agent or
 	// the agent does not exist, ErrIssuedByLifecycle for a fenced agent

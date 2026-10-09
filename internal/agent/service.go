@@ -73,6 +73,11 @@ type Config struct {
 	// DefaultAccessTokenLifetime. NewService refuses one outside the
 	// bounds.
 	TokenLifetime time.Duration
+	// Backdate is how far before now a token's IssuedAt is set, so a
+	// token is current at once on a database whose clock trails this
+	// process's, as a certificate's NotBefore is backdated. It moves
+	// the start alone; ExpiresAt is measured from now.
+	Backdate time.Duration
 	// ServerRootPEM is the garam server root answered beside every
 	// agent token, for its holder to pin garam by (ADR-0040, ADR-0100).
 	ServerRootPEM []byte
@@ -84,16 +89,19 @@ type Config struct {
 type service struct {
 	store         Store
 	tokens        AccessTokenStore
+	audiences     RegisteredOperators
 	issuer        Issuer
 	tokenLifetime time.Duration
+	backdate      time.Duration
 	serverRoot    []byte
 	now           func() time.Time
 }
 
 // NewService constructs the service over the store it reads
-// assignments from, the store agent tokens are recorded in, and the
-// issuer it signs through.
-func NewService(store Store, tokens AccessTokenStore, issuer Issuer, cfg Config) (Service, error) {
+// assignments from, the store agent tokens are recorded in, the
+// operators a token's audience is checked against, and the issuer it
+// signs through.
+func NewService(store Store, tokens AccessTokenStore, audiences RegisteredOperators, issuer Issuer, cfg Config) (Service, error) {
 	lifetime, err := ParseAccessTokenLifetime(cfg.TokenLifetime)
 	if err != nil {
 		return nil, err
@@ -102,17 +110,25 @@ func NewService(store Store, tokens AccessTokenStore, issuer Issuer, cfg Config)
 	if now == nil {
 		now = time.Now
 	}
-	return &service{store: store, tokens: tokens, issuer: issuer, tokenLifetime: lifetime,
-		serverRoot: cfg.ServerRootPEM, now: now}, nil
+	return &service{store: store, tokens: tokens, audiences: audiences, issuer: issuer, tokenLifetime: lifetime,
+		backdate: cfg.Backdate, serverRoot: cfg.ServerRootPEM, now: now}, nil
 }
 
 func (s *service) MintAccessToken(ctx context.Context, caller, agentGRN grn.GRN, audience *grn.GRN) (*AccessToken, error) {
 	if err := operates(caller); err != nil {
 		return nil, err
 	}
-	if audience != nil && (audience.ServiceType != ServiceTypeOperator ||
-		audience.Organization != agentGRN.Organization || *audience == caller) {
-		return nil, ErrAccessTokenAudience
+	if audience != nil {
+		if audience.ServiceType != ServiceTypeOperator ||
+			audience.Organization != agentGRN.Organization || *audience == caller {
+			return nil, ErrAccessTokenAudience
+		}
+		if err := s.audiences.Registered(ctx, *audience); err != nil {
+			if errorx.IsKind(err, errorx.KindNotFound) {
+				return nil, ErrAccessTokenAudience
+			}
+			return nil, errorx.Wrap(err, "token audience", errorx.KindUnavailable)
+		}
 	}
 	value, err := newAccessTokenValue()
 	if err != nil {
@@ -120,7 +136,7 @@ func (s *service) MintAccessToken(ctx context.Context, caller, agentGRN grn.GRN,
 	}
 	now := s.now().UTC()
 	token := &AccessToken{Value: value, Agent: agentGRN, Audience: audience,
-		IssuedAt: now, ExpiresAt: now.Add(s.tokenLifetime), ServerRootPEM: s.serverRoot}
+		IssuedAt: now.Add(-s.backdate), ExpiresAt: now.Add(s.tokenLifetime), ServerRootPEM: s.serverRoot}
 	if err := s.tokens.MintAccessToken(ctx, caller, token); err != nil {
 		return nil, err
 	}

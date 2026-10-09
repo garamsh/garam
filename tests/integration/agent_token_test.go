@@ -154,3 +154,72 @@ func TestAgentToken_AnAgentHoldsItsNewestFiveTokens(t *testing.T) {
 	status, _ = tokenCall(t, client, http.MethodPost, claims, tokens[6], "", "")
 	assert.Equal(t, http.StatusNoContent, status, "the newest claims")
 }
+
+// TestAgentToken_AnAudienceTokenReachesNoGaramRoute is ADR-0100's
+// audience rule on the agent's own routes: a token minted for a hosted
+// operator the organization registered is refused where the token
+// minted for garam claims, and an audience no record names is refused
+// at the mint.
+func TestAgentToken_AnAudienceTokenReachesNoGaramRoute(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	_, sealer := keyEncryptionKey(t)
+	_, engine := policyEngine(t, p)
+	url := machineListener(t, p, sealer, engine)
+	operators := operator.NewPostgresStore(p)
+	_, credential := registerCredentialed(t, operators, "controller")
+	hosted, _ := registerCredentialed(t, operators, "control")
+	client, _ := tokenClient(t)
+	operatorToken := exchangeOver(t, client, url, credential)
+	bot := createdBy(t, client, url, operatorToken)
+	mint := url + "/agents/" + bot.String() + "/tokens"
+	claims := url + "/agents/" + bot.String() + "/claims"
+
+	status, body := tokenCall(t, client, http.MethodPost, mint, operatorToken, operator.TokenContractVersion,
+		`{"audience":"`+hosted.String()+`"}`)
+	require.Equal(t, http.StatusCreated, status, body)
+	var audienced machinegen.AgentToken
+	require.NoError(t, json.Unmarshal([]byte(body), &audienced))
+	status, _ = tokenCall(t, client, http.MethodPost, claims, audienced.Token, "", "")
+	assert.Equal(t, http.StatusUnauthorized, status, "a token minted for the control service claims nothing at garam")
+
+	garam := mintedFor(t, client, url, operatorToken, bot)
+	status, _ = tokenCall(t, client, http.MethodPost, claims, garam.Token, "", "")
+	assert.Equal(t, http.StatusNoContent, status, "control: the token minted for garam claims")
+
+	status, _ = tokenCall(t, client, http.MethodPost, mint, operatorToken, operator.TokenContractVersion,
+		`{"audience":"`+scopedGRN("acme", operator.ServiceType, "x1").String()+`"}`)
+	assert.Equal(t, http.StatusBadRequest, status, "an audience the organization never registered is refused")
+}
+
+// TestAgentToken_AnAgentHoldsTenTokensAcrossItsAudiences holds the
+// bound across audiences (ADR-0100): five mints for each of three
+// registered audiences leave ten live tokens, so naming more audiences
+// does not widen what one agent's tokens occupy.
+func TestAgentToken_AnAgentHoldsTenTokensAcrossItsAudiences(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	_, sealer := keyEncryptionKey(t)
+	_, engine := policyEngine(t, p)
+	url := machineListener(t, p, sealer, engine)
+	operators := operator.NewPostgresStore(p)
+	_, credential := registerCredentialed(t, operators, "controller")
+	first, _ := registerCredentialed(t, operators, "first")
+	second, _ := registerCredentialed(t, operators, "second")
+	client, _ := tokenClient(t)
+	operatorToken := exchangeOver(t, client, url, credential)
+	bot := createdBy(t, client, url, operatorToken)
+	mint := url + "/agents/" + bot.String() + "/tokens"
+
+	for _, body := range []string{`{}`, `{"audience":"` + first.String() + `"}`, `{"audience":"` + second.String() + `"}`} {
+		for range agent.LiveAccessTokensPerAudience {
+			status, answered := tokenCall(t, client, http.MethodPost, mint, operatorToken, operator.TokenContractVersion, body)
+			require.Equal(t, http.StatusCreated, status, answered)
+		}
+	}
+
+	assert.Equal(t, agent.LiveAccessTokensPerAgent, countRows(t, p,
+		`SELECT count(*) FROM agent_tokens WHERE agent_grn = $1`, bot.String()))
+}

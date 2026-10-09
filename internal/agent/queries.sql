@@ -215,3 +215,14 @@ JOIN agent_assignments a
 JOIN agent_executions e
   ON e.agent_grn = t.agent_grn AND t.lineage IS NOT DISTINCT FROM e.lineage
 WHERE t.token_hash = $1 AND t.expires_at > now();
+
+-- Keeps an agent's newest tokens across every audience, so naming
+-- more audiences does not widen what one agent's tokens can occupy.
+-- name: TrimAgentTokensTotal :exec
+DELETE FROM agent_tokens t
+WHERE t.agent_grn = sqlc.arg('agent_grn')
+  AND t.token_hash NOT IN (
+      SELECT k.token_hash FROM agent_tokens k
+      WHERE k.agent_grn = sqlc.arg('agent_grn')
+      ORDER BY k.issued_at DESC, k.token_hash DESC
+      LIMIT sqlc.arg('keep'));

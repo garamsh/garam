@@ -205,13 +205,6 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 	if err != nil {
 		return nil, err
 	}
-	agentStore := agent.NewPostgresStore(pool)
-	agents, err := agent.NewService(agentStore, agentStore,
-		certificates{issuer: issuer, serverRoot: cfg.ServerRoot},
-		agent.Config{TokenLifetime: cfg.AgentTokenLifetime, ServerRootPEM: cfg.ServerRoot, Now: cfg.Now})
-	if err != nil {
-		return nil, err
-	}
 	// An operator obtains its first certificate on this listener by
 	// enrolling (ADR-0064) and renews it here afterwards (ADR-0046),
 	// through the same authority and the same server root its agents
@@ -222,6 +215,16 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 	operatorStore := operator.NewPostgresStore(pool)
 	operators := operator.NewService(operatorStore, operatorStore, operatorStore,
 		operatorCertificates{issuer: issuer, serverRoot: cfg.ServerRoot}, operator.Config{})
+	// An agent token's start is backdated by the allowance a
+	// certificate's is, and its audience is an operator the
+	// organization registered (ADR-0100).
+	agentStore := agent.NewPostgresStore(pool)
+	agents, err := agent.NewService(agentStore, agentStore, registeredOperators{operators: operatorStore},
+		certificates{issuer: issuer, serverRoot: cfg.ServerRoot},
+		agent.Config{TokenLifetime: cfg.AgentTokenLifetime, Backdate: ca.ClockSkew, ServerRootPEM: cfg.ServerRoot, Now: cfg.Now})
+	if err != nil {
+		return nil, err
+	}
 	messages, err := message.NewService(message.NewPostgresStore(pool), cfg.Delivery)
 	if err != nil {
 		return nil, err

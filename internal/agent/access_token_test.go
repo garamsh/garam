@@ -37,11 +37,26 @@ func (m *minted) ResolveAccessToken(context.Context, string) (AccessTokenHolder,
 	return AccessTokenHolder{}, ErrAccessTokenInvalid
 }
 
+// registered is RegisteredOperators in memory: the operators an
+// organization holds a record of.
+type registered map[grn.GRN]bool
+
+func (r registered) Registered(_ context.Context, operator grn.GRN) error {
+	if !r[operator] {
+		return errorx.New(errorx.KindNotFound, "operator not found")
+	}
+	return nil
+}
+
+// hosted is the one operator the registry below holds besides the
+// controller: the hosted control service a token may be shown to.
+var hosted = grn.New("acme", grn.DefaultProject, ServiceTypeOperator, "control")
+
 func minting(t *testing.T, store *minted, lifetime time.Duration) (Service, time.Time) {
 	t.Helper()
 	at := time.Date(2026, time.October, 9, 12, 0, 0, 0, time.UTC)
-	svc, err := NewService(nil, store, nil, Config{TokenLifetime: lifetime, ServerRootPEM: []byte("root"),
-		Now: func() time.Time { return at }})
+	svc, err := NewService(nil, store, registered{hosted: true}, nil, Config{TokenLifetime: lifetime,
+		Backdate: time.Minute, ServerRootPEM: []byte("root"), Now: func() time.Time { return at }})
 	require.NoError(t, err)
 	return svc, at
 }
@@ -59,7 +74,9 @@ func TestService_MintAccessTokenAnswersATokenForTheAgentAtItsEpoch(t *testing.T)
 	assert.Equal(t, bot, token.Agent)
 	assert.Equal(t, controller, token.Assignee)
 	assert.Equal(t, 4, token.Epoch)
-	assert.Equal(t, at.Add(DefaultAccessTokenLifetime), token.ExpiresAt)
+	assert.Equal(t, at.Add(DefaultAccessTokenLifetime), token.ExpiresAt, "the expiry is measured from now")
+	assert.Equal(t, at.Add(-time.Minute), token.IssuedAt,
+		"the start is backdated, so a database whose clock trails this one finds it current")
 	assert.Equal(t, []byte("root"), token.ServerRootPEM)
 	assert.True(t, strings.HasPrefix(token.Serial(), "t"))
 	assert.Len(t, token.Serial(), 33)
@@ -80,13 +97,13 @@ func TestService_MintAccessTokenRefusesWhatTheStoreIsNotAsked(t *testing.T) {
 	_, err := svc.MintAccessToken(context.Background(), bot, bot, nil)
 	assert.ErrorIs(t, err, ErrNotAnOperator, "an agent mints no token")
 
-	hosted := grn.New("acme", grn.DefaultProject, ServiceTypeOperator, "control")
 	_, err = svc.MintAccessToken(context.Background(), controller, bot, &hosted)
 	require.NoError(t, err)
 	for name, audience := range map[string]grn.GRN{
 		"the caller":      controller,
 		"another org":     grn.New("globex", grn.DefaultProject, ServiceTypeOperator, "control"),
 		"not an operator": bot,
+		"not registered":  grn.New("acme", grn.DefaultProject, ServiceTypeOperator, "x1"),
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := svc.MintAccessToken(context.Background(), controller, bot, &audience)
@@ -102,11 +119,11 @@ func TestService_MintAccessTokenRefusesWhatTheStoreIsNotAsked(t *testing.T) {
 
 func TestNewService_BoundsTheTokenLifetime(t *testing.T) {
 	for _, lifetime := range []time.Duration{0, MinAccessTokenLifetime, MaxAccessTokenLifetime} {
-		_, err := NewService(nil, &minted{}, nil, Config{TokenLifetime: lifetime})
+		_, err := NewService(nil, &minted{}, nil, nil, Config{TokenLifetime: lifetime})
 		assert.NoError(t, err, lifetime)
 	}
 	for _, lifetime := range []time.Duration{MinAccessTokenLifetime - time.Second, MaxAccessTokenLifetime + time.Second} {
-		_, err := NewService(nil, &minted{}, nil, Config{TokenLifetime: lifetime})
+		_, err := NewService(nil, &minted{}, nil, nil, Config{TokenLifetime: lifetime})
 		assert.ErrorIs(t, err, ErrAccessTokenLifetime, lifetime)
 		assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument))
 	}

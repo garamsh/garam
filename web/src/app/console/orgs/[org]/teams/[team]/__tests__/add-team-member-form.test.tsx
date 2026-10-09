@@ -140,4 +140,42 @@ describe("add team member form", () => {
       ),
     ).not.toBeInTheDocument();
   });
+
+  it("keeps the member chosen when garam refuses the addition", async () => {
+    const posted: unknown[] = [];
+    server.use(
+      http.post(MEMBERS, async ({ request }) => {
+        posted.push(await request.json());
+        return HttpResponse.json(
+          { kind: "permission_denied", message: "permission denied" },
+          { status: 403 },
+        );
+      }),
+    );
+    const user = userEvent.setup();
+    render(
+      <AddTeamMemberForm
+        org="acme"
+        team="eng"
+        candidates={candidates}
+        unlisted={[]}
+      />,
+    );
+
+    // Not the first offered, so a reset to it would show as well as a
+    // reset to the prompt.
+    await user.selectOptions(
+      screen.getByLabelText("Person or agent"),
+      "field-agent · Agent",
+    );
+    await user.click(screen.getByRole("button", { name: "Add to team" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "permission denied",
+    );
+    expect(posted).toEqual([{ memberGrn: reportedAgent.grn }]);
+    expect(screen.getByLabelText("Person or agent")).toHaveValue(
+      reportedAgent.grn,
+    );
+  });
 });

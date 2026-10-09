@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 
+import { KeptSelect } from "@/components/kept-select";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { attachPolicy, type AttachPolicyState } from "@/features/orgs/actions";
@@ -39,6 +40,13 @@ export function AttachPolicyForm({
   const [chosen, setChosen] = useState("");
   const chosenName = fixed.name === "policy" ? "subject" : "policy";
   const offered = choose.groups.filter((group) => group.options.length > 0);
+  // Once attached, the choice is no longer offered, and it goes back to
+  // the prompt rather than to whatever is listed first.
+  const choice = offered.some((group) =>
+    group.options.some((option) => option.value === chosen),
+  )
+    ? chosen
+    : "";
 
   return (
     <div className="flex flex-col gap-3">
@@ -53,11 +61,11 @@ export function AttachPolicyForm({
           <input type="hidden" name={fixed.name} value={fixed.value} />
           <div className="flex min-w-0 flex-1 flex-col gap-2">
             <Label htmlFor={`attach-${chosenName}`}>{choose.label}</Label>
-            <select
+            <KeptSelect
               id={`attach-${chosenName}`}
               name={chosenName}
               required
-              value={chosen}
+              value={choice}
               onChange={(event) => setChosen(event.target.value)}
               className="h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
             >
@@ -73,7 +81,7 @@ export function AttachPolicyForm({
                   ))}
                 </optgroup>
               ))}
-            </select>
+            </KeptSelect>
           </div>
           <Button type="submit" disabled={pending}>
             {pending ? "Attaching…" : "Attach"}

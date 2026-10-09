@@ -1,7 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 
+import { KeptSelect } from "@/components/kept-select";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import {
@@ -40,6 +41,12 @@ export function AddTeamMemberForm({
     addGroupMember,
     initialState,
   );
+  const [chosen, setChosen] = useState("");
+  // Once added, the member is no longer offered, and the choice goes
+  // back to the prompt rather than to whoever is listed first.
+  const choice = candidates.some((candidate) => candidate.grn === chosen)
+    ? chosen
+    : "";
   const people = candidates.filter((candidate) => candidate.kind === "person");
   const agents = candidates.filter((candidate) => candidate.kind === "agent");
 
@@ -73,11 +80,12 @@ export function AddTeamMemberForm({
           <input type="hidden" name="group" value={team} />
           <div className="flex min-w-0 flex-1 flex-col gap-2">
             <Label htmlFor="member">Person or agent</Label>
-            <select
+            <KeptSelect
               id="member"
               name="member"
               required
-              defaultValue=""
+              value={choice}
+              onChange={(event) => setChosen(event.target.value)}
               className="h-9 w-full min-w-0 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
             >
               <option value="" disabled>
@@ -101,7 +109,7 @@ export function AddTeamMemberForm({
                   ))}
                 </optgroup>
               )}
-            </select>
+            </KeptSelect>
           </div>
           <Button type="submit" disabled={pending}>
             {pending ? "Adding…" : "Add to team"}

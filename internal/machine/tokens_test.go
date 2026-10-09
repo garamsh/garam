@@ -27,15 +27,16 @@ type tokens struct {
 
 func newTokens() *tokens { return &tokens{live: map[string]grn.GRN{}} }
 
-func (k *tokens) Resolve(_ context.Context, token string) (grn.GRN, time.Time, error) {
+func (k *tokens) Resolve(_ context.Context, token string) (machine.Bearer, error) {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	k.asked++
 	subject, ok := k.live[token]
 	if !ok {
-		return grn.GRN{}, time.Time{}, errorx.New(errorx.KindUnauthenticated, "token not live")
+		return machine.Bearer{}, errorx.New(errorx.KindUnauthenticated, "token not live")
 	}
-	return subject, time.Now().Add(time.Hour), nil
+	return machine.Bearer{Subject: subject, Serial: "t" + token, IssuedAt: time.Now(),
+		ExpiresAt: time.Now().Add(time.Hour)}, nil
 }
 
 func (k *tokens) set(token string, subject grn.GRN) {

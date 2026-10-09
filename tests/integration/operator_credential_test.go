@@ -320,7 +320,8 @@ func TestOperatorToken_ReachesTheOperatorRoutesAloneOnTheShippedListener(t *test
 	status, _ := requestWith(t, client, http.MethodGet, url+"/identity", token)
 	require.Equal(t, http.StatusOK, status, "the token authenticates where it is listed")
 
-	status, body := requestWith(t, client, http.MethodGet, url+"/messages/m-1", token)
+	status, body := tokenCall(t, client, http.MethodGet, url+"/operation-references/ref-1", token,
+		operator.ContractVersion, "")
 	assert.Equal(t, http.StatusUnauthorized, status)
 	assert.Contains(t, body, "this operation does not accept a token")
 

@@ -64,7 +64,10 @@ func BindingError(w http.ResponseWriter, r *http.Request, err error) {
 		case cutoverRoute(r):
 			cutoverContract(w, "")
 		case r.URL.Path == "/outbox-messages":
-			deliveryContract(w, "")
+			deliveryContract(w, r, "")
+		case tokenRoute(r):
+			w.Header().Set("Garam-Contract-Version", operator.TokenContractVersion)
+			writeError(w, operator.ErrUnsupportedTokenContract)
 		default:
 			contract(w, "")
 		}
@@ -175,4 +178,12 @@ func writeJSONAs(w http.ResponseWriter, status int, mediaType string, v any) {
 	// A failed write after WriteHeader cannot be reported to the
 	// caller; the server logs at the transport layer.
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+// tokenRoute reports whether r is one of the two routes that answer a
+// token under machine-token.v1: an operator's exchange and an agent's
+// mint (ADR-0100).
+func tokenRoute(r *http.Request) bool {
+	return r.URL.Path == "/tokens" ||
+		(strings.HasPrefix(r.URL.Path, "/agents/") && strings.HasSuffix(r.URL.Path, "/tokens"))
 }

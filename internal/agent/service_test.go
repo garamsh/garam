@@ -222,7 +222,7 @@ func operatorGRN(org, id string) grn.GRN {
 func TestService_CreateAssignsTheAgentToTheCallingOperator(t *testing.T) {
 	ctx := context.Background()
 	store := newMemoryStore()
-	svc := NewService(store, &signer{})
+	svc := mustService(t, store, &signer{})
 	operator := operatorGRN("acme", "one")
 
 	assignment, err := svc.Create(ctx, operator)
@@ -257,7 +257,7 @@ func TestService_IssueCertificateAnswersOnlyForAnAgentTheOperatorHolds(t *testin
 	ctx := context.Background()
 	store := newMemoryStore()
 	issuer := &signer{}
-	svc := NewService(store, issuer)
+	svc := mustService(t, store, issuer)
 
 	holder := operatorGRN("acme", "one")
 	sibling := operatorGRN("acme", "two")
@@ -331,7 +331,7 @@ func TestService_IssueCertificateIsAnOperatorsRouteForALegacyAgent(t *testing.T)
 	ctx := context.Background()
 	store := newMemoryStore()
 	issuer := &signer{}
-	svc := NewService(store, issuer)
+	svc := mustService(t, store, issuer)
 
 	operator := operatorGRN("acme", "one")
 	held, err := svc.Create(ctx, operator)
@@ -360,7 +360,7 @@ func TestService_IssueCertificateAnswersNothingOnceTheCutoverIsSwitched(t *testi
 	ctx := context.Background()
 	store := newMemoryStore()
 	issuer := &signer{}
-	svc := NewService(store, issuer)
+	svc := mustService(t, store, issuer)
 	operator := operatorGRN("acme", "one")
 	held, err := svc.Create(ctx, operator)
 	require.NoError(t, err)
@@ -392,7 +392,7 @@ func TestService_IssueCertificateAnswersNothingOnceTheCutoverIsSwitched(t *testi
 func TestService_ReportProvisioningStateIsAcceptedFromTheHolderAtTheCurrentEpoch(t *testing.T) {
 	ctx := context.Background()
 	store := newMemoryStore()
-	svc := NewService(store, &signer{})
+	svc := mustService(t, store, &signer{})
 
 	holder := operatorGRN("acme", "one")
 	sibling := operatorGRN("acme", "two")
@@ -450,7 +450,7 @@ func TestService_ReportProvisioningStateIsAcceptedFromTheHolderAtTheCurrentEpoch
 func TestService_ReportRuntimeStateIsAcceptedOnlyFromTheAgentItself(t *testing.T) {
 	ctx := context.Background()
 	store := newMemoryStore()
-	svc := NewService(store, &signer{})
+	svc := mustService(t, store, &signer{})
 
 	operator := operatorGRN("acme", "one")
 	held, err := svc.Create(ctx, operator)
@@ -517,7 +517,7 @@ func define(t *testing.T, store *memoryStore, operator grn.GRN, values Values) *
 func TestService_DefinitionsAnswersThoseNamingTheCaller(t *testing.T) {
 	ctx := context.Background()
 	store := newMemoryStore()
-	svc := NewService(store, &signer{})
+	svc := mustService(t, store, &signer{})
 
 	caller := operatorGRN("acme", "one")
 	unclaimed := define(t, store, caller, Values{"model": "haiku"})
@@ -560,7 +560,7 @@ func TestService_ClaimAdmitsTheOperatorToTheCertificateRoute(t *testing.T) {
 	ctx := context.Background()
 	store := newMemoryStore()
 	issuer := &signer{}
-	svc := NewService(store, issuer)
+	svc := mustService(t, store, issuer)
 
 	caller := operatorGRN("acme", "one")
 	d := define(t, store, caller, Values{"model": "haiku"})
@@ -606,4 +606,15 @@ func TestService_ClaimAdmitsTheOperatorToTheCertificateRoute(t *testing.T) {
 
 	assert.Equal(t, []grn.GRN{d.Agent()}, issuer.signed,
 		"nothing was signed for a claim that was refused")
+}
+
+// mustService is the service over store and issuer with the default
+// configuration and no token store.
+func mustService(t *testing.T, store Store, issuer Issuer) Service {
+	t.Helper()
+	svc, err := NewService(store, nil, nil, issuer, Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return svc
 }

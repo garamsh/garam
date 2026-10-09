@@ -122,6 +122,9 @@ func TestStandaloneCredential_ASupervisorRunsItsAgentOnTokensAlone(t *testing.T)
 	status, _ = s.supervisorExchange(t, c.credential, `{"audience":"`+s.hosted.String()+`"}`)
 	assert.Equal(t, http.StatusBadRequest, status, "a supervisor's token names no audience")
 
+	shown := s.v2(t, http.MethodPost, "/agents/"+c.agent.String()+"/tokens", operator.TokenContractVersion, token, "",
+		`{"audience":"`+s.hosted.String()+`"}`)
+	assert.Equal(t, http.StatusBadRequest, shown.status, "a supervisor mints for garam alone: %s", shown.body)
 	minted := s.v2(t, http.MethodPost, "/agents/"+c.agent.String()+"/tokens", operator.TokenContractVersion, token, "", `{}`)
 	require.Equal(t, http.StatusCreated, minted.status, "the supervisor mints its agent's token: %s", minted.body)
 	var own machinegen.AgentToken
@@ -261,4 +264,92 @@ func TestStandaloneCredential_ConcurrentRetriesLeaveOneLiveCredential(t *testing
 		}
 	}
 	assert.Equal(t, 1, live, "exactly one answered credential is live")
+}
+
+// enrolledV2 approves a keyless host, spends it under v2 and answers
+// the enrollment with the supervisor's token.
+func (s *tokenStack) enrolledV2(t *testing.T) (credentialed, string) {
+	t.Helper()
+	h := newStandaloneHost(t)
+	status, body := s.approve(t, s.owner, "acme", h.credentialApproval(t))
+	require.Equal(t, http.StatusCreated, status, body)
+	c := credentialOf(t, s.spendV2(t, h.secret, h.credentialEnrollment()))
+	status, token := s.supervisorExchange(t, c.credential, `{}`)
+	require.Equal(t, http.StatusCreated, status)
+	return c, token
+}
+
+// TestStandaloneCredential_ASupervisorReachesItsOwnAgentAlone holds a
+// supervisor's token to the one agent it holds: at another
+// supervisor's agent it mints nothing and activates nothing, while the
+// same calls at its own agent are the control. A supervisor's
+// certificate reaches no mint at all, which v1 never offered it.
+func TestStandaloneCredential_ASupervisorReachesItsOwnAgentAlone(t *testing.T) {
+	p := pool(t)
+	_, engine := policyEngine(t, p)
+	s := &tokenStack{executionStack: newExecutionStack(t, p, engine)}
+	s.client, _ = tokenClient(t)
+	mine, token := s.enrolledV2(t)
+	theirs, theirToken := s.enrolledV2(t)
+
+	mint := func(g grn.GRN) reply {
+		return s.v2(t, http.MethodPost, "/agents/"+g.String()+"/tokens", operator.TokenContractVersion, token, "", `{}`)
+	}
+	assert.Equal(t, http.StatusForbidden, mint(theirs.agent).status, "another supervisor's agent")
+	own := mint(mine.agent)
+	require.Equal(t, http.StatusCreated, own.status, "control: its own agent: %s", own.body)
+	var minted machinegen.AgentToken
+	require.NoError(t, json.Unmarshal([]byte(own.body), &minted))
+
+	got := s.v2(t, http.MethodPost, "/agents/"+theirs.agent.String()+"/tokens", operator.TokenContractVersion, theirToken, "", `{}`)
+	require.Equal(t, http.StatusCreated, got.status, got.body)
+	var theirMinted machinegen.AgentToken
+	require.NoError(t, json.Unmarshal([]byte(got.body), &theirMinted))
+	activate := func(g grn.GRN, forwarded string) reply {
+		return s.v2(t, http.MethodPost, "/agents/"+g.String()+"/activations", agent.TokenExecutionContractVersion, token, "",
+			tokenActivationBody("first", generation(1), nil, nil, forwarded))
+	}
+	assert.Equal(t, http.StatusForbidden, activate(theirs.agent, theirMinted.Token).status,
+		"another supervisor's agent activates nothing")
+	assert.Equal(t, http.StatusCreated, activate(mine.agent, minted.Token).status, "control: its own agent activates")
+
+	_, v1 := s.standaloneOf(t)
+	byCertificate := s.send(t, v1.supervisorTLS, http.MethodPost, "/agents/"+v1.agent.String()+"/tokens",
+		operator.TokenContractVersion, "", `{}`)
+	assert.Equal(t, http.StatusForbidden, byCertificate.status, "a supervisor's certificate mints nothing: %s", byCertificate.body)
+}
+
+// TestStandaloneCredential_AReplacementEndsTheRetryWindow holds a v2
+// retry to the registration it re-issues for: answered while the
+// approval's supervisor holds the agent, and refused once a
+// replacement has moved the agent to another, which writes nothing.
+func TestStandaloneCredential_AReplacementEndsTheRetryWindow(t *testing.T) {
+	p := pool(t)
+	_, engine := policyEngine(t, p)
+	s := &tokenStack{executionStack: newExecutionStack(t, p, engine)}
+	s.client, _ = tokenClient(t)
+	h := newStandaloneHost(t)
+	status, body := s.approve(t, s.owner, "acme", h.credentialApproval(t))
+	require.Equal(t, http.StatusCreated, status, body)
+	first := credentialOf(t, s.spendV2(t, h.secret, h.credentialEnrollment()))
+	again := s.spendV2(t, h.secret, h.credentialEnrollment())
+	require.Equal(t, http.StatusOK, again.status, "control: a retry before the replacement: %s", again.body)
+	current := credentialOf(t, again)
+
+	next := newStandaloneHost(t)
+	var approval map[string]any
+	require.NoError(t, json.Unmarshal([]byte(next.credentialApproval(t)), &approval))
+	approval["replaces"] = map[string]any{"agentGrn": first.agent.String(), "assigneeGrn": first.supervisor.String(), "epoch": 1}
+	raw, err := json.Marshal(approval)
+	require.NoError(t, err)
+	status, body = s.approve(t, s.owner, "acme", string(raw))
+	require.Equal(t, http.StatusCreated, status, body)
+	replaced := credentialOf(t, s.spendV2(t, next.secret, next.credentialEnrollment()))
+	require.Equal(t, first.agent, replaced.agent, "the replacement holds the same agent")
+
+	after := s.spendV2(t, h.secret, h.credentialEnrollment())
+	assert.Equal(t, http.StatusConflict, after.status, "the replaced registration's retry: %s", after.body)
+	assert.NotContains(t, after.body, agent.SupervisorCredentialPrefix)
+	status, _ = s.supervisorExchange(t, current.credential, `{}`)
+	assert.Equal(t, http.StatusUnauthorized, status, "and its credential exchanges nothing")
 }

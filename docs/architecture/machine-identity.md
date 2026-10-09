@@ -63,11 +63,13 @@ its tickets lasted.
 Three kinds of route read them again on every request:
 
 - **The controller proof** ([operators.md](./operators.md) §Controller
-  proof) asks `Recheck` of the caller's identity — its certificate's
+  proof) asks `Recheck` of the caller's identity — its credential's
   dates against the clock, then its record — and `Verify` of the
   controller certificate the caller forwards, which proves the identity
   it is presented for by its SAN, by its organization's authority, by
-  its validity at the decision and by its record. The chain is verified
+  its validity at the decision and by its record. A controller token
+  forwarded under `operation-authority.v2` is the operator domain's to
+  prove instead. The chain is verified
   at a time inside the certificate's validity and the validity at the
   decision is checked apart from it, so a certificate nothing signed
   and one that has run out are told apart.
@@ -77,7 +79,9 @@ Three kinds of route read them again on every request:
   chains to its organization's authority; whether it is valid now and
   in the current lineage is the execution fence's to judge (§Generation
   and lineage), so an expired agent certificate is answered as fenced
-  rather than as unproven.
+  rather than as unproven. An agent token forwarded under
+  `execution-fence.v2` is proven the same way by the agent domain, and
+  judged by the same fence.
 - **An agent's protected calls** are judged by the execution fence on
   the certificate's serial and dates as the handshake read them, so a
   certificate that expired on an open connection is refused there
@@ -113,7 +117,7 @@ supervisor presents a certificate until the migration's step G1d.**
 ADR-0100 moves every machine caller from a client certificate to a
 short-lived token it obtains with a credential garam issued, and
 `docs/plans/2026-10-09-machine-identity-migration.md` is the order it
-lands in. What runs now is its steps G1a and G1b.
+lands in. What runs now is its steps G1a, G1b and G1c.
 
 - **A request may present a token instead of a certificate**, as
   `Authorization: Garam-Token <token>`. The listener asks `Tokens` for
@@ -135,11 +139,22 @@ lands in. What runs now is its steps G1a and G1b.
   already open; an agent's joins the agent's assignment and execution,
   so a reassignment or a recovery does. A token minted for another
   audience — a hosted operator it is to be shown to — answers as no
-  token here.
+  token here; that operator forwards it in a request body instead,
+  for the lifecycle decision it is shown for
+  ([operators.md](./operators.md) §Controller proof,
+  [agents.md](./agents.md) §Tokens in place of certificates).
 - **A token or a certificate, never both.** A request presenting a
   token over a connection whose certificate authenticated carries no
   identity, and the reason travels with it, as it does for a token
   that proved nothing, so the handler's refusal says why.
+- **A token takes its contract's v2 value.** Each contract whose
+  transport changes is served to a token under its v2 value and to a
+  certificate under v1, and a request whose value and credential
+  disagree is refused with 400 naming the value its credential takes;
+  `internal/machineapi/contract.go` holds the pairs. The values that
+  share `Authorization` beside a certificate — an execution token, an
+  operation authority or reference — travel in a header of their own
+  beside a token, `Garam-Execution` and `Garam-Operation`.
 - **A token reaches the operations `api/machine.yaml` lists
   `machineToken` on, and no other.** `ConfineTokens` in
   `internal/machineapi/token.go` is where that is decided, as
@@ -192,9 +207,9 @@ The routes and their schemes are `api/machine.yaml`'s, under the
 The hosted control service is a lifecycle caller. It activates,
 deactivates, inspects and recovers an agent's execution on the routes
 tagged `execution` in `api/machine.yaml`, which is authoritative for
-their wire and their `execution-fence.v1` contract version, and cuts a
-legacy agent over on the routes tagged `cutover`, authoritative for
-theirs and `agent-cutover.v1`. A
+their wire and their `execution-fence.v1` and `.v2` contract values,
+and cuts a legacy agent over on the routes tagged `cutover`,
+authoritative for theirs and `agent-cutover.v1` and `.v2`. A
 standalone host's supervisor is the other: on the same routes it
 activates, deactivates and inspects the one agent it is registered
 for and holds, and recovers nothing; its certificate reaches no
@@ -202,8 +217,8 @@ route but those, its own renewal and its identity
 ([agents.md](./agents.md) §Standalone hosts). The hosted control
 service alone creates a managed agent and obtains its first
 certificate, on the routes tagged `enrollment`, authoritative for
-theirs and `managed-enrollment.v1`.
-Each request rereads the caller's certificate and registration; each
+theirs and `managed-enrollment.v1` and `.v2`.
+Each request rereads the caller's credential and registration; each
 but creation rereads its grant, or a supervisor's registration and
 assignment, and current policy too, and creation rereads the member's
 `agent:create` reference instead. An agent's own certificate and a
@@ -212,8 +227,8 @@ Activation, deactivation, recovery, creation and initial issuance are
 each bounded by a ten-second server deadline over both their authority
 reads and their write, and past it answer unavailable without saying
 whether the write committed (ADR-0080). Introspection answers a
-certificate's standing and a generation's from one snapshot; a 200 is
-a status answer, and only `credential` and `generation` both
-`current`, with the expected binding, is positive. The certificate's
+forwarded credential's standing and a generation's from one snapshot;
+a 200 is a status answer, and only `credential` and `generation` both
+`current`, with the expected binding, is positive. The credential's
 GRN still answers who is calling; these answer whether that caller is
 still the one allowed to act.

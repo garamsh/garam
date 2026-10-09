@@ -292,7 +292,7 @@ func newGaramActivator(dir, base string, agentGRN grn.GRN) (*garamActivator, err
 func (g *garamActivator) Activate(ctx context.Context, req workload.ActivationRequest) (*workload.Activation, error) {
 	body := machinegen.ActivationRequest{
 		RequestId: req.RequestID, Epoch: req.Epoch, Generation: req.Generation,
-		CertificatePem: req.CertificatePEM,
+		CertificatePem: &req.CertificatePEM,
 	}
 	if req.Replaces != "" {
 		body.ReplacesActivationId = &req.Replaces

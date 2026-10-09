@@ -226,3 +226,13 @@ WHERE t.agent_grn = sqlc.arg('agent_grn')
       WHERE k.agent_grn = sqlc.arg('agent_grn')
       ORDER BY k.issued_at DESC, k.token_hash DESC
       LIMIT sqlc.arg('keep'));
+
+-- A token as it was minted to be shown to one audience, with no join to
+-- the agent's current state: the execution fence judges that, so a
+-- token of an earlier epoch or lineage is answered fenced while its row
+-- is kept. A mint's sweep and trim delete rows, and a token whose row
+-- is gone is not proven.
+-- name: GetAgentTokenShownTo :one
+SELECT agent_grn, serial, audience_grn, issued_at, expires_at
+FROM agent_tokens
+WHERE token_hash = $1 AND audience_grn = $2;

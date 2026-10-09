@@ -12,8 +12,12 @@ import (
 	"github.com/garamsh/garam/internal/pgxerr"
 )
 
-// Compile-time check that PostgresStore satisfies AccessTokenStore.
-var _ AccessTokenStore = (*PostgresStore)(nil)
+// Compile-time checks that PostgresStore satisfies AccessTokenStore and
+// ShownTokenReader.
+var (
+	_ AccessTokenStore = (*PostgresStore)(nil)
+	_ ShownTokenReader = (*PostgresStore)(nil)
+)
 
 // MintAccessToken holds the agent's execution row FOR SHARE, reads the
 // assignment and the cutover after it, decides, and records the token
@@ -78,7 +82,10 @@ func (s *PostgresStore) MintAccessToken(ctx context.Context, caller grn.GRN, t *
 		IssuedAt:    pgtype.Timestamptz{Time: t.IssuedAt, Valid: true},
 		ExpiresAt:   pgtype.Timestamptz{Time: t.ExpiresAt, Valid: true},
 	}); err != nil {
-		return pgxerr.Classify(err, "record agent token", nil, nil)
+		// The execution row is held, so the one key a missing row can
+		// refuse here is the audience's: a hosted operator deleted
+		// since the service read its registration.
+		return pgxerr.Classify(err, "record agent token", ErrAccessTokenAudience, nil)
 	}
 	if err := q.TrimAgentTokens(ctx, db.TrimAgentTokensParams{
 		AgentGrn: t.Agent.String(), AudienceGrn: audience, Keep: LiveAccessTokensPerAudience,
@@ -94,6 +101,23 @@ func (s *PostgresStore) MintAccessToken(ctx context.Context, caller grn.GRN, t *
 		return errorx.Wrap(err, "commit")
 	}
 	return nil
+}
+
+// AccessTokenShownTo reads the token's row alone, by its hash and the
+// audience it was minted to be shown to.
+func (s *PostgresStore) AccessTokenShownTo(ctx context.Context, tokenHash string, audience grn.GRN) (AccessTokenHolder, error) {
+	row, err := s.q.GetAgentTokenShownTo(ctx, db.GetAgentTokenShownToParams{
+		TokenHash: tokenHash, AudienceGrn: pgtype.Text{String: audience.String(), Valid: true},
+	})
+	if err != nil {
+		return AccessTokenHolder{}, pgxerr.Classify(err, "agent token shown to an audience", ErrTokenNotProven, nil)
+	}
+	agentGRN, err := grn.Parse(row.AgentGrn)
+	if err != nil {
+		return AccessTokenHolder{}, errorx.Wrap(err, "stored agent grn", errorx.KindInternal)
+	}
+	return AccessTokenHolder{Agent: agentGRN, Serial: row.Serial, Audience: &audience,
+		IssuedAt: row.IssuedAt.Time, ExpiresAt: row.ExpiresAt.Time}, nil
 }
 
 // ResolveAccessToken answers what a live token names. The statement

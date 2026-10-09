@@ -83,7 +83,13 @@ var (
 	// minted for a hosted operator is shown to it, so the audience is
 	// a peer the organization registered and never the caller itself.
 	ErrAudienceInvalid = errorx.New(errorx.KindInvalidArgument,
-		"a token's audience is another operator of the same organization")
+		"a token's audience is another operator the organization registered")
+	// ErrTokenNotProven refuses a token presented on another
+	// operator's behalf that does not prove it: not a token's shape,
+	// not live, naming another operator, or minted to be shown to
+	// another audience (ADR-0100).
+	ErrTokenNotProven = errorx.New(errorx.KindInvalidArgument,
+		"the token does not prove the operator it is presented for")
 )
 
 // IssuedCredential is a credential garam generated for an operator,

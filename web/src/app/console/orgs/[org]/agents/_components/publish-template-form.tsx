@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { mintOperationAuthority } from "@/features/orgs/actions";
 import type { HostedOperator } from "@/features/orgs";
+import { useHydrated } from "@/hooks/use-hydrated";
 import {
   PublishedParser,
   callControl,
@@ -34,6 +35,43 @@ function parseTools(text: string): Record<string, string> | null {
   return tools;
 }
 
+/** What each field holds, by the name it submits under. */
+type Values = {
+  name: string;
+  profileName: string;
+  profileVersion: string;
+  provider: string;
+  baseUrl: string;
+  model: string;
+  apiKeyRef: string;
+  embeddingBaseUrl: string;
+  embeddingModel: string;
+  embeddingApiKeyRef: string;
+  ego: string;
+  tools: string;
+};
+
+/** The fields as the version on screen fills them, or empty. */
+function startingValues(from: TemplateVersion | null): Values {
+  const model = from?.configuration.model;
+  return {
+    name: from?.name ?? "",
+    profileName: from?.profile.name ?? "",
+    profileVersion: from ? String(from.profile.version) : "",
+    provider: model?.provider ?? "",
+    baseUrl: model?.baseUrl ?? "",
+    model: model?.name ?? "",
+    apiKeyRef: model?.apiKeyRef ?? "",
+    embeddingBaseUrl: model?.embedding?.baseUrl ?? "",
+    embeddingModel: model?.embedding?.name ?? "",
+    embeddingApiKeyRef: model?.embedding?.apiKeyRef ?? "",
+    ego: from?.configuration.ego ?? "",
+    tools: Object.entries(from?.configuration.tools ?? {})
+      .map(([tool, pin]) => `${tool}=${pin}`)
+      .join("\n"),
+  };
+}
+
 /**
  * Publishes the next immutable version of a template (#1170), started
  * from the version on screen where one is. The control service numbers
@@ -55,6 +93,18 @@ export function PublishTemplateForm({
 }) {
   const [outcome, setOutcome] = useState<Outcome>({ status: "idle" });
   const [pending, setPending] = useState(false);
+  const hydrated = useHydrated();
+  // Controlled, so a refused publish keeps what was typed: a form action
+  // resets an uncontrolled field when it completes, refusal included.
+  const [values, setValues] = useState(() => startingValues(from));
+  const control = (name: keyof Values) => ({
+    name,
+    value: values[name],
+    disabled: !hydrated,
+    onChange: (
+      event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+    ) => setValues((held) => ({ ...held, [name]: event.target.value })),
+  });
 
   async function publish(form: FormData) {
     const field = (name: string) => String(form.get(name) ?? "").trim();
@@ -124,91 +174,60 @@ export function PublishTemplateForm({
     }
   }
 
-  const model = from?.configuration.model;
   return (
     <form action={publish} className="flex max-w-2xl flex-col gap-3">
       <h3 className="text-sm font-medium">Publish a template version</h3>
       <div className="grid gap-3 sm:grid-cols-2">
-        <Field
-          id="publish-name"
-          name="name"
-          label="Template"
-          value={from?.name}
-        />
+        <Field id="publish-name" label="Template" {...control("name")} />
         <Field
           id="publish-profile"
-          name="profileName"
           label="Profile"
-          value={from?.profile.name}
+          {...control("profileName")}
         />
         <Field
           id="publish-profile-version"
-          name="profileVersion"
           label="Profile version"
-          value={from ? String(from.profile.version) : undefined}
+          {...control("profileVersion")}
         />
         <Field
           id="publish-provider"
-          name="provider"
           label="Model provider"
-          value={model?.provider}
+          {...control("provider")}
         />
         <Field
           id="publish-base-url"
-          name="baseUrl"
           label="Model base URL"
-          value={model?.baseUrl}
+          {...control("baseUrl")}
         />
-        <Field
-          id="publish-model"
-          name="model"
-          label="Model name"
-          value={model?.name}
-        />
+        <Field id="publish-model" label="Model name" {...control("model")} />
         <Field
           id="publish-api-key-ref"
-          name="apiKeyRef"
           label="API key reference"
-          value={model?.apiKeyRef}
+          {...control("apiKeyRef")}
         />
         <Field
           id="publish-embedding-base-url"
-          name="embeddingBaseUrl"
           label="Embedding base URL"
-          value={model?.embedding?.baseUrl}
+          {...control("embeddingBaseUrl")}
         />
         <Field
           id="publish-embedding-model"
-          name="embeddingModel"
           label="Embedding model name"
-          value={model?.embedding?.name}
+          {...control("embeddingModel")}
         />
         <Field
           id="publish-embedding-api-key-ref"
-          name="embeddingApiKeyRef"
           label="Embedding API key reference"
-          value={model?.embedding?.apiKeyRef}
+          {...control("embeddingApiKeyRef")}
         />
       </div>
       <div className="flex flex-col gap-2">
         <Label htmlFor="publish-ego">Ego</Label>
-        <Textarea
-          id="publish-ego"
-          name="ego"
-          rows={3}
-          defaultValue={from?.configuration.ego}
-        />
+        <Textarea id="publish-ego" rows={3} {...control("ego")} />
       </div>
       <div className="flex flex-col gap-2">
         <Label htmlFor="publish-tools">Tools, one tool=pin per line</Label>
-        <Textarea
-          id="publish-tools"
-          name="tools"
-          rows={3}
-          defaultValue={Object.entries(from?.configuration.tools ?? {})
-            .map(([tool, pin]) => `${tool}=${pin}`)
-            .join("\n")}
-        />
+        <Textarea id="publish-tools" rows={3} {...control("tools")} />
       </div>
       {outcome.status === "error" && (
         <p role="alert" className="text-sm text-destructive">
@@ -222,7 +241,7 @@ export function PublishTemplateForm({
         </p>
       )}
       <div>
-        <Button type="submit" variant="outline" disabled={pending}>
+        <Button type="submit" variant="outline" disabled={!hydrated || pending}>
           {pending ? "Publishing…" : "Publish version"}
         </Button>
       </div>
@@ -232,19 +251,16 @@ export function PublishTemplateForm({
 
 function Field({
   id,
-  name,
   label,
-  value,
+  ...input
 }: {
   id: string;
-  name: string;
   label: string;
-  value: string | undefined;
-}) {
+} & React.ComponentProps<typeof Input>) {
   return (
     <div className="flex flex-col gap-2">
       <Label htmlFor={id}>{label}</Label>
-      <Input id={id} name={name} defaultValue={value} />
+      <Input id={id} {...input} />
     </div>
   );
 }

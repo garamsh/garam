@@ -1,7 +1,6 @@
 package standalone_test
 
 import (
-	"strings"
 	"testing"
 	"time"
 
@@ -23,10 +22,10 @@ const signingConfig = "revision: r1\nrequire-signature: true\nmodel:\n  provider
 // runtime trust garam's key set and its adapter sign, so a message
 // reaches a runtime that refuses anything unsigned, and its turn
 // completes. The control is a second host naming an issuer garam does
-// not sign as: its adapter signs too, its runtime refuses the issuer,
-// and the message is handed out again rather than delivered, so what
-// delivered the first was the signature verifying and not a runtime
-// taking messages unchecked.
+// not sign as: its adapter signs too, its runtime answers 403
+// "signature rejected: issuer", and the message is handed out again
+// rather than delivered, so what delivered the first was the signature
+// verifying and not a runtime taking messages unchecked.
 func TestStandalone_SignsWhereTheHostNamesGaramsIssuer(t *testing.T) {
 	s := newStack(t)
 	from := s.newSender()
@@ -79,11 +78,5 @@ func TestStandalone_SignsWhereTheHostNamesGaramsIssuer(t *testing.T) {
 	require.Len(t, got, 1)
 	assert.False(t, got[0].Completed, "the control: a runtime trusting another issuer delivered garam's message")
 	logs, _ := s.docker("logs", stranger.container("adapter"))
-	var refused []string
-	for _, line := range strings.Split(logs, "\n") {
-		if strings.Contains(line, "message not posted") {
-			refused = append(refused, line)
-		}
-	}
-	t.Logf("the control's adapter, on the refused post:\n%s", s.scrub(strings.Join(refused, "\n")))
+	assert.Contains(t, logs, "signature rejected: issuer", "the control's runtime refused the signature's issuer, not something else")
 }

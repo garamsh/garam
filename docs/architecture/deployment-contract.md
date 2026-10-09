@@ -382,18 +382,22 @@ alone. What binds instead is who signs them
 
 **`GARAM_MACHINE_ISSUER` names the deployment to every verifier, and a
 changed value is a different issuer.** `garam serve machine` refuses to
-start without one, and refuses anything but an https origin in one
+start without one, and refuses anything but an https URL in one
 spelling — a lowercase host, no empty port, no path and no trailing
-slash (`internal/message/signing.go`,
-`ParseIssuer`), because a verifier compares it byte for byte and reads
-the key set at it followed by `/message-signing-keys`
+slash (`internal/message/signing.go`, `ParseIssuer`), because a
+verifier compares it byte for byte
 ([ADR-0101](./adr/0101-garam-signs-every-message-it-delivers-and-the-agent-verifies-it-alone.md)).
-What the binary cannot check is that the value stays the same: a
-verifier configured with the old one refuses every message signed
-under the new one. So a deployment picks the machine listener's
-external origin once and keeps it; the chart renders it from
-`machine.issuer` (`deploy/charts/garam/README.md` §Values a deployment
-must supply).
+**It is an identity, not an address.** It need not resolve or be
+reachable, and a verifier fetches the key set from a `keys-url` of its
+own, which is where it reaches the machine listener; so it asks for
+nothing to be published. What the binary cannot check is that the
+value stays the same: a verifier configured with the old one refuses
+every message signed under the new one. So a deployment picks a
+stable name it owns once, rather than the cluster's DNS, so that
+moving or exposing the listener never changes it, and keeps it; the
+dev cluster's is `https://machine.dev.garam.sh`. The chart renders it
+from `machine.issuer` (`deploy/charts/garam/README.md` §Values a
+deployment must supply).
 
 A standalone host trusts that same value only where it names it:
 `garam standalone run --message-issuer` renders it into the runtime's

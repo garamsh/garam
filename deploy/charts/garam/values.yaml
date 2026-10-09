@@ -126,13 +126,14 @@ machine:
   # where those identities rewrite their own files without a restart —
   # see the README, §Key material and secrets.
   certificateLifetime: 24h
-  # The issuer every message signature names (ADR-0101): this
-  # listener's external https origin as a verifier reaches it, with a
-  # lowercase host, no empty port, no path and no trailing slash. A
-  # verifier compares it byte for byte and fetches the key set from it
-  # followed by /message-signing-keys, so it stays the same for the
-  # deployment's life. Required; the binary refuses any other shape at
-  # startup.
+  # The issuer every message signature names (ADR-0101): an identity,
+  # compared byte for byte, that need not resolve or be reachable.
+  # Prefer a stable name the deployment owns, such as the dev cluster's
+  # https://machine.dev.garam.sh, and keep it for the deployment's life.
+  # An https URL with a lowercase host, no empty port, no path and no
+  # trailing slash. A verifier fetches the key set from its own
+  # keys-url, where it reaches this listener, and not from this value.
+  # Required; the binary refuses any other shape at startup.
   issuer: ""
   # Runs the copy that gives the process a file it owns. The garam image
   # is scratch and carries no shell. Pinned by digest, the reference

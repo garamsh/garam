@@ -127,6 +127,15 @@ Actions Runner Controller's:
   own held by owner and admin: re-issuing withdraws what an operator
   runs on, which is the reason ADR-0070 gave `operator:delete` its own
   action rather than reading it off `operator:register`.
+- **Each registered operator holds its own credential, and the hosted
+  control service is one of them.** The control service and each
+  controller it acts for are distinct operator records of one
+  organization ([operators.md](../operators.md) §Delegated operation
+  authority), so a deployment of both holds two credentials. Each is
+  issued on its own operator's page and shown to whoever issues it,
+  who places it where that process reads it. garam issues neither on
+  the other's behalf, and one credential never authenticates two
+  records.
 - **A supervisor credential has the same shape.** An administrator
   registers a standalone host's supervisor for one agent and one host
   name on `agent:enroll`, as ADR-0082 has it, and is answered the

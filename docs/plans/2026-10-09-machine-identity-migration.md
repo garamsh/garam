@@ -153,6 +153,29 @@ tokens splits it in two:
 
 The writer fence and the placement token are unaffected.
 
+### The control service's own credential
+
+**Two credentials, issued separately.** The control service is a
+registered operator of its own, distinct from the controller it acts
+for (ADR-0078), so it has its own credential. That credential replaces
+the certificate pair the control service loads once
+(`OP:cmd/control/main.go:219-254`).
+
+- **Who issues.** An owner or admin issues each credential on that
+  operator's own page in the console. The two are separate acts, and
+  re-issuing one leaves the other untouched.
+- **Who places.** Whoever issues a credential places it, because the
+  console shows it to them once and garam keeps only its hash.
+  - The controller's credential goes in the manager's Secret.
+  - The control service's goes in a Secret the control Deployment
+    mounts.
+  - Each is an owner-only file in the process that reads it
+    (ADR-0015).
+- **The lab.** Both Secrets are deployment changes. `garamsh/gitops`
+  needs them in place before O1 reaches the lab: the credentials are
+  issued once the lab's garam carries G1, and placed by its secret
+  mechanism, never committed as values.
+
 ### Token lifetime and the refresh margin
 
 ADR-0100 §Tokens is authoritative for these values.
@@ -181,11 +204,13 @@ ADR-0100 §Tokens is authoritative for these values.
 
 For each registered operator, after G1 and G2 are deployed:
 
-1. An owner or admin issues the operator a credential in the console.
-   Issuing it voids nothing the operator holds: its certificate keeps
+1. An owner or admin issues a credential in the console to each
+   operator record the deployment runs. That is the controller and,
+   where there is one, the hosted control service: two separate issues.
+   Issuing voids nothing an operator holds. Its certificate keeps
    authenticating, because G1 still accepts one.
-2. The person puts the credential in the operator's Secret, beside the
-   material that is there.
+2. The person puts each credential in the Secret its process mounts,
+   beside the material already there.
 3. The Operator is upgraded to the release carrying O1. The manager exchanges the
    credential, mints both tokens for each agent it runs, and rolls each
    agent's Pod onto the adapter's token mode. The control service does

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -48,6 +49,9 @@ type signedClaims struct {
 // and the identifier a message arrived under. It answers the claims, or
 // why it refused.
 func verify(set jose.JSONWebKeySet, issuer, audience, arrivedAs, content, signature string) (signedClaims, error) {
+	if err := headerHoldsOnly(signature, "alg", "kid", "typ"); err != nil {
+		return signedClaims{}, err
+	}
 	signed, err := jose.ParseSigned(signature, []jose.SignatureAlgorithm{jose.ES256})
 	if err != nil {
 		return signedClaims{}, err
@@ -88,6 +92,34 @@ func verify(set jose.JSONWebKeySet, issuer, audience, arrivedAs, content, signat
 		return claims, errors.New("signed for another identifier")
 	}
 	return claims, nil
+}
+
+// headerHoldsOnly refuses a protected header holding any member but
+// these: a verifier takes no key, and no place to fetch one, from the
+// message it is judging (ADR-0101), and go-jose reads `jku` and `jwk`
+// without being asked whether they may be there.
+func headerHoldsOnly(signature string, members ...string) error {
+	encoded, _, ok := strings.Cut(signature, ".")
+	if !ok {
+		return errors.New("not a compact JWS")
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(encoded)
+	if err != nil {
+		return err
+	}
+	var header map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &header); err != nil {
+		return err
+	}
+	if len(header) != len(members) {
+		return errors.New("the header holds a member beside alg, kid and typ")
+	}
+	for _, m := range members {
+		if _, ok := header[m]; !ok {
+			return errors.New("the header lacks " + m)
+		}
+	}
+	return nil
 }
 
 // keySet reads the published set the way a verifier anywhere does: with

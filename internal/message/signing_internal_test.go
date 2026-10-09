@@ -88,6 +88,38 @@ func newRing(t *testing.T, keys *clockedKeys) Keyring {
 	return ring
 }
 
+// TestSigner_TheHeaderHoldsAlgKidAndTypAndNothingElse holds the header
+// ADR-0101 fixes: a verifier takes no key, and no place to fetch one,
+// from the message, so no member beside these three is there to take.
+func TestSigner_TheHeaderHoldsAlgKidAndTypAndNothingElse(t *testing.T) {
+	keys := &clockedKeys{now: start}
+	header := signedBy(t, newRing(t, keys), keys)
+
+	require.Len(t, keys.keys, 1)
+	assert.Equal(t, map[string]string{"alg": "ES256", "kid": string(keys.keys[0].ID), "typ": "agent-message+jwt"}, header)
+}
+
+// TestSigner_SignsUnderTheKeyThatHasBegunAcrossARotation holds which key
+// signs on either side of a rotation: the current key until the second
+// its successor begins, and the successor from that second.
+func TestSigner_SignsUnderTheKeyThatHasBegunAcrossARotation(t *testing.T) {
+	keys := &clockedKeys{now: start}
+	ring := newRing(t, keys)
+	first := signedBy(t, ring, keys)["kid"]
+
+	keys.now = start.Add(SigningKeyLifetime - SigningKeyLead)
+	assert.Equal(t, first, signedBy(t, ring, keys)["kid"], "the announced key does not sign before its lead has passed")
+	require.Len(t, keys.keys, 2, "the next key was announced")
+	next := keys.keys[1]
+
+	keys.now = next.SignsFrom.Add(-time.Second)
+	assert.Equal(t, first, signedBy(t, ring, keys)["kid"])
+
+	keys.now = next.SignsFrom
+	assert.Equal(t, string(next.ID), signedBy(t, ring, keys)["kid"])
+	assert.Len(t, keys.keys, 2, "the rotation created no further key")
+}
+
 // TestSigner_RetiringTheNextKeyLeavesTheCurrentOneSigning holds the
 // two-hour promise through a retired announcement: retiring the next key
 // before it begins leaves the current key signing, announces a

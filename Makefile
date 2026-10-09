@@ -377,14 +377,26 @@ e2e:
 	@test -n '$(TEST_DATABASE_URL)' || { echo "e2e: no postgres published on this host — run make db-up" >&2; exit 1; }
 	GARAM_TEST_DATABASE_URL='$(TEST_DATABASE_URL)' go test -count=1 $(E2E_PKGS)
 
+# The Sherlock release the real-runtime suites below run against, by
+# tag and digest, and the one place it is recorded (#1220). v0.4.0 is
+# the release whose ingress verifies garam's signature on a message
+# (ADR-0101). The PM moves it, as AGENTS.md §Roles has the PM move a
+# pinned dependency that names no other mover: both images together,
+# to a release garamsh/sherlock published. A GARAM_TEST_RUNTIME_IMAGE
+# or GARAM_TEST_WORKSPACE_IMAGE in the environment still overrides it.
+SHERLOCK_REGISTRY := 486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam
+GARAM_TEST_RUNTIME_IMAGE ?= $(SHERLOCK_REGISTRY)/sherlock-agent:0.4.0@sha256:91cd1d9ba1127da7301df7a1f7faae95f217fa58837857b9dbad5b5d3e6025de
+GARAM_TEST_WORKSPACE_IMAGE ?= $(SHERLOCK_REGISTRY)/sherlock-workspace:0.4.0@sha256:b5092fce18c2debfff07e02f7f13dcf39d40e1bf8d9e79855ba1827774235fae
+export GARAM_TEST_RUNTIME_IMAGE GARAM_TEST_WORKSPACE_IMAGE
+
 # workload-integration runs a standalone host's supervisor against a
 # real Docker daemon and the images it runs (ADR-0085). It is in no
 # whole-set name and in no workflow: the pinned Sherlock images are
 # pulled from a registry CI holds no credential for.
 # GARAM_TEST_DOCKER_HOST names the daemon, a rootless one's unix://
-# socket; GARAM_TEST_RUNTIME_IMAGE, GARAM_TEST_WORKSPACE_IMAGE and
-# GARAM_TEST_ADAPTER_IMAGE name the images by digest or ID, the adapter
-# being this tree's garam image.
+# socket; GARAM_TEST_RUNTIME_IMAGE and GARAM_TEST_WORKSPACE_IMAGE
+# default to the Sherlock pin above, and GARAM_TEST_ADAPTER_IMAGE names
+# this tree's garam image by digest or ID.
 WORKLOAD_PKGS = $(shell go list -f '{{if or .TestGoFiles .XTestGoFiles}}{{.ImportPath}}{{end}}' ./tests/workload/...)
 WORKLOAD_TEST_FILES = $(shell go list -f '{{range .TestGoFiles}}{{.}} {{end}}{{range .XTestGoFiles}}{{.}} {{end}}' ./tests/workload/...)
 

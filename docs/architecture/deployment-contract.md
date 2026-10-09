@@ -395,6 +395,19 @@ external origin once and keeps it; the chart renders it from
 `machine.issuer` (`deploy/charts/garam/README.md` §Values a deployment
 must supply).
 
+**The runtime's trusted issuer is the same string.** A runtime that
+verifies garam's signature names garam in its configuration's
+`issuers` entry by an exact `iss` (Sherlock v0.4.0,
+`docs/architecture/gateway.md` §Signed messages), and that value must
+equal this chart's `machine.issuer` byte for byte. This repository
+renders `machine.issuer`; whatever runs the agent renders the
+`issuers` entry: garamsh/garam-agent-operator from its
+`--garam-issuer`, and on a standalone host the supervisor (#1269).
+Nothing checks the two against each other. A mismatch reads as 403
+`signature rejected: issuer` on every message once the adapter's
+`GARAM_ADAPTER_SIGN_MESSAGES` is on, and not as an error at start
+(adapter.md §Stable identifiers and the outbox).
+
 ## The migrate job
 
 `migrate` applies all pending migrations and exits

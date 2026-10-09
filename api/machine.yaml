@@ -858,10 +858,12 @@ paths:
         claimed message against (ADR-0101): the key that signs now, a
         key announced to sign next, and a key that stopped signing while
         a signature it made can still be valid. A key retired at once is
-        not in it. Its URL is the deployment's issuer followed by this
-        path, and the answer is complete in itself, so a deployment
-        whose verifier cannot reach garam hands it the same document as
-        a file.
+        not in it. It is served at this path on the machine listener,
+        and a verifier fetches it from wherever it reaches that
+        listener, which is not the issuer: the issuer is an identity and
+        need not resolve. The answer is complete in itself, so a
+        deployment whose verifier cannot reach garam hands it the same
+        document as a file.
 
         A key is published at least two hours before it signs. The
         answer may be cached for the hour `Cache-Control` names; a

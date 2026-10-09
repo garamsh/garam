@@ -17,6 +17,7 @@ garamsh/sherlock#993.
 - Consequences
 - Signs the decision was wrong
 - Rejected alternatives
+- Errata
 
 ## Context
 
@@ -457,3 +458,15 @@ being refused.
   attempt of one message.
 - **A key location in the message (`jku`).** A verifier following it
   trusts whoever wrote the message.
+
+## Errata
+
+- 2026-10-10 — §Keys' "Its URL is the issuer followed by that path" was
+  too strong when written. The issuer is an identity, compared byte for
+  byte, and need not resolve: the dev cluster's
+  `https://machine.dev.garam.sh` does not. A verifier fetches the set
+  from its own `keys-url`, whose host must be the host it reaches the
+  machine listener at — on a standalone host, the adapter's — because
+  Sherlock verifies that host against the listener's certificate
+  (#1269, #1287). The decision stands: garam serves the set at
+  `/message-signing-keys` on its machine listener.

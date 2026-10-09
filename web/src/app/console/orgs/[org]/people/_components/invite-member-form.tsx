@@ -2,16 +2,10 @@
 
 import { useActionState, useState } from "react";
 
+import { KeptSelect } from "@/components/kept-select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   createInvitation,
   type CreateInvitationState,
@@ -35,6 +29,7 @@ export function InviteMemberForm({ org }: { org: string }) {
   // different token, so neither the claim that it was copied nor the
   // failure the previous one reported carries over to it.
   const [attempt, setAttempt] = useState<CopyAttempt | null>(null);
+  const [role, setRole] = useState("member");
 
   const invitation =
     state.status === "created"
@@ -53,15 +48,16 @@ export function InviteMemberForm({ org }: { org: string }) {
         <input type="hidden" name="org" value={org} />
         <div className="flex flex-col gap-2">
           <Label htmlFor="role">Role</Label>
-          <Select name="role" defaultValue="member">
-            <SelectTrigger id="role" className="w-40">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="member">Member</SelectItem>
-              <SelectItem value="admin">Admin</SelectItem>
-            </SelectContent>
-          </Select>
+          <KeptSelect
+            id="role"
+            name="role"
+            value={role}
+            onChange={(event) => setRole(event.target.value)}
+            className="h-9 w-40 rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+          >
+            <option value="member">Member</option>
+            <option value="admin">Admin</option>
+          </KeptSelect>
         </div>
         <Button type="submit" disabled={pending}>
           {pending ? "Creating…" : "Create invitation"}

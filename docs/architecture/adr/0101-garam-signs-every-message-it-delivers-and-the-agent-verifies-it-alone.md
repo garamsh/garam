@@ -117,7 +117,7 @@ content nor a detached signature over it. The payload is:
 
 | Claim | Value |
 |---|---|
-| `iss` | the deployment's issuer: the machine listener's external `https` base URL, which the deployment configures and keeps for its life |
+| `iss` | the deployment's issuer: the machine listener's external `https` base URL with no trailing slash, which the deployment configures and keeps for its life |
 | `sub` | the sender garam vouches for: the GRN its listener authenticated as the poster, or `iss` itself for a message garam authored |
 | `aud` | the recipient's GRN, as one string |
 | `org` | the recipient's organization, the GRN's organization segment ([grn-model.md](../grn-model.md)) |
@@ -190,6 +190,8 @@ content nor a detached signature over it. The payload is:
   `Cache-Control: max-age=3600` and no credential required — the
   footing `enrollOperator` already has (`security: []`,
   `api/machine.yaml`). Its URL is the issuer followed by that path. The
+  issuer carries no trailing slash and is compared byte for byte, so
+  `https://x/` and `https://x` are two issuers and not one. The
   document is complete in itself, so a deployment whose verifier cannot
   reach garam supplies the same document to it as a file.
 - **Rotation with overlap.** A published key is in one of three
@@ -213,7 +215,8 @@ is forged, altered, addressed elsewhere or expired.
 
 1. **The issuer, before anything is fetched.** The verifier reads
    `iss` from the payload while it is still unverified, only to choose
-   which set to use. It refuses an `iss` it is not configured to trust
+   which set to use, comparing it byte for byte with the issuers it is
+   configured for. It refuses an `iss` it is not configured to trust
    without fetching anything, and takes a set's location from its own
    configuration, never from the message.
 2. **The header.** `alg` is `ES256`, `typ` is `agent-message+jwt`, and

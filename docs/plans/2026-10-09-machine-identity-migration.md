@@ -247,10 +247,10 @@ deployed there:
    authenticating, because G1 still accepts one.
 2. The person puts each credential in the Secret its process mounts,
    beside the material already there.
-3. The Operator is upgraded to the release carrying O1. The manager exchanges the
-   credential, mints both tokens for each agent it runs, and rolls each
-   agent's Pod onto the adapter's token mode. The control service does
-   the same for itself.
+3. The Operator is upgraded to the release carrying O1. The manager
+   exchanges the credential, mints both tokens for each agent it runs,
+   and rolls each agent's Pod onto the adapter's token mode. The
+   control service does the same for itself.
 4. The old certificate is no longer presented, and it expires within
    its lifetime, a day by default. Nothing has to be deleted.
 

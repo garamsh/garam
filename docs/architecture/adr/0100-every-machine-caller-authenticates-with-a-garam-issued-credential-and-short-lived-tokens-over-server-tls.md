@@ -337,9 +337,10 @@ nothing else in the path moves.
   before each call to the control service — as it reads the placement
   token per attempt today. So a rewrite of either file is safe without
   a restart, provided the file is replaced atomically, as ADR-0040
-  already requires of the files it reads per handshake. The Operator's copy of the credential into the Pod must
-  therefore stay current rather than happen once at start; the plan
-  names that change.
+  already requires of the files it reads per handshake. The
+  Operator's copy of the credential into the Pod must therefore stay
+  current rather than happen once at start; the plan names that
+  change.
 
 ## What it supersedes and what survives
 

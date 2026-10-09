@@ -162,8 +162,9 @@ G1b to G1d, and a supervisor's own credential is §Standalone hosts'.
 A certificate still authenticates as it did until G3.
 
 - **The assignee mints, at the current epoch.** `mintAgentToken`
-  answers an operator, or a standalone host's supervisor, for an agent
-  assigned to it now and no other,
+  answers an operator, or a standalone host's supervisor presenting its
+  own token and naming no audience, for an agent assigned to it now and
+  no other,
   which is ADR-0015's rule. The token names that assignee and epoch
   and the lineage the agent's execution holds, read under the
   execution row; it is admitted where the certificate route would be —
@@ -402,9 +403,11 @@ unverified (#1180, #1169).
   and the credential answered before goes with every token it was
   exchanged for; garam keeps no audit trail of that or of any other
   void. The supervisor exchanges the credential for hour-long tokens
-  on `exchangeToken`, mints its agent's tokens, and on the execution
-  routes forwards the agent token it minted for garam, since it is the
-  assignee itself. A revocation or a replacement ends the
+  on `exchangeToken`, mints its agent's tokens for garam alone, and on
+  the execution routes forwards the agent token it minted for garam;
+  that form is a supervisor's alone, since it is the assignee and the
+  lifecycle authority at once, and an operator forwards a token shown
+  to it. A revocation or a replacement ends the
   registration, and every read of the credential or a token joins a
   registration that has not ended.
 - **The supervisor activates its own agent and nothing else.** On the
@@ -414,9 +417,9 @@ unverified (#1180, #1169).
   the execution lock beside the assignment, so an activation queued
   behind a revocation or a replacement is refused rather than
   installing a token. Its first activation rests on the approval,
-  where a managed creation's needs its reference. By certificate or
-  by token it reaches its own identity, its renewal, those three
-  execution routes and its agent's token mint, and nothing else:
+  where a managed creation's needs its reference. It reaches its own
+  identity, its renewal and those three execution routes, and with its
+  own token its agent's token mint as well, and nothing else:
   `ConfineSupervisors` in
   `internal/machineapi/standalone.go` refuses every other route at the
   router, so a supervisor posts, claims and reads no message and acts

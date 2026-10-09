@@ -282,9 +282,9 @@ require and answer `Garam-Contract-Version: standalone-enrollment.v1`,
 and `enrollStandaloneAgent` answers `standalone-enrollment.v2` as well,
 the value the request names: an approval binding the host's keys is
 spent under v1 alone and one binding none under v2 alone (ADR-0100). A
-supervisor, by certificate or by token, is admitted to those, to
-`getIdentity`, to the three execution routes it holds authority on and
-to its agent's token mint, and refused on every other route at the
+supervisor is admitted to those, to `getIdentity` and to the three
+execution routes it holds authority on, and by its own token to its
+agent's token mint as well, and refused on every other route at the
 router before a handler runs. The
 specifications are authoritative for their forms, and
 [agents.md](./agents.md) §Standalone hosts for what they decide.

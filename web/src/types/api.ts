@@ -596,6 +596,7 @@ export interface paths {
          *     It mints the operator's enrollment token in the same write, and answers with it once (ADR-0064). **No route reads a token back**: garam stores only its hash, so a caller that loses this one asks for another rather than for this one again. `mintOperatorEnrollment` is that ask, and it answers only for an operator that holds no certificate (ADR-0067); for one that already enrolled, the recovery is the command ADR-0032 ships, which mints a certificate out of band and reads no record here.
          *     The token is not a credential to the operator's identity. It is permission to ask for one certificate, once, from `enrollOperator` on the machine listener, and it stops being spendable ten minutes after this call. The operator generates its own key pair in its own cluster and sends a certificate signing request presenting the token: no private key is transmitted here, displayed here, or held by garam at any point.
          *     The record is what the operator authenticates on. A handshake presenting its certificate is checked against this record as well as against the organization's certificate authority, so `deleteOperator` stops the operator rather than only tidying a list (ADR-0070). An unspent token goes with the record, because the row holding it references the registration, and so does the record of the certificate garam last issued.
+         *     It also issues the operator's credential in the same write, and answers it once (ADR-0100). The credential is what the operator exchanges on the machine listener for the short-lived tokens it authenticates with in place of a certificate. garam stores only its hash, so a caller that loses it re-issues it with `reissueOperatorCredential`, which voids this one.
          */
         post: operations["registerOperator"];
         delete?: never;
@@ -635,6 +636,28 @@ export interface paths {
          *     It is authorized on an action of its own, `operator:update`, rather than on the one that registers or the one that deletes, because it grants nothing and withdraws nothing.
          */
         patch: operations["updateOperator"];
+        trace?: never;
+    };
+    "/orgs/{org}/operators/{operator}/credential": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Re-issue a registered operator's credential, voiding the previous one. Requires the `admin` role.
+         * @description Issues the operator a new credential and answers it once (ADR-0100). **The credential it replaces stops authenticating at the moment this returns, and so does every token the operator exchanged it for**: the next request presenting one of those tokens is refused, on a connection already open too. An operator that holds no credential yet — one registered before credentials existed — is issued its first.
+         *     It is authorized on an action of its own, `operator:reissue`, rather than on the one that registers: re-issuing withdraws what the operator runs on until the new credential is placed in its cluster, which is why `deleteOperator` has an action of its own too (ADR-0070).
+         *     The credential is answered to the caller of this route and to nobody else, and garam stores only its hash. It authenticates one operation, `exchangeToken` on the machine listener.
+         */
+        post: operations["reissueOperatorCredential"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/orgs/{org}/operators/{operator}/enrollment": {
@@ -1294,10 +1317,21 @@ export interface components {
              */
             certificateIssuedAt?: string;
         };
-        /** @description The record the registration wrote, and the enrollment token it minted. garam holds the token's hash and no route reads one back (ADR-0064), so this answer and `mintOperatorEnrollment`'s are the only places a token exists in a form anyone can present. */
+        /** @description The record the registration wrote, the enrollment token it minted and the credential it issued. garam holds the hash of each and no route reads one back (ADR-0064, ADR-0100), so this answer, `mintOperatorEnrollment`'s and `reissueOperatorCredential`'s are the only places either exists in a form anyone can present. */
         RegisteredOperator: {
             operator: components["schemas"]["Operator"];
             enrollment: components["schemas"]["OperatorEnrollment"];
+            credential: components["schemas"]["OperatorCredential"];
+        };
+        /** @description The credential an operator exchanges for short-lived tokens on the machine listener (ADR-0100). It does not expire; a re-issue or deleting the operator is what ends it. */
+        OperatorCredential: {
+            /**
+             * @description The credential itself, answered once. Show it once and say it cannot be shown again; garam cannot answer it a second time. It is placed in the operator's cluster as a file only the operator's process reads.
+             * @example garam_oc_8f14e45fceea167a5a36dedd4bea2543a1ba1ffc2fbd07a1c4ca4238a0b92382
+             */
+            credential: string;
+            /** Format: date-time */
+            issuedAt: string;
         };
         /** @description The one-time token the operator enrols with, and when it stops being spendable. It is permission to ask for one certificate, once, and it authenticates nothing else. */
         OperatorEnrollment: {
@@ -2707,7 +2741,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Operator registered, with the enrollment token shown once. */
+            /** @description Operator registered, with the enrollment token and the credential shown once. */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -2805,6 +2839,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Operator"];
+                };
+            };
+            400: components["responses"]["Error"];
+            401: components["responses"]["Error"];
+            403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    reissueOperatorCredential: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization identifier (the last GRN segment). */
+                org: components["parameters"]["org"];
+                /** @description Operator identifier (the last GRN segment). */
+                operator: components["parameters"]["operator"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Credential issued, shown once. The previous one and its tokens no longer authenticate. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperatorCredential"];
                 };
             };
             400: components["responses"]["Error"];

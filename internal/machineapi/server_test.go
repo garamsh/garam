@@ -300,6 +300,24 @@ func (stubKeyring) PublishedKeys(context.Context) ([]message.PublishedKey, error
 // a test names them.
 func serveTLS(t *testing.T, srv *machineapi.Server, caller grn.GRN, middlewares ...machinegen.MiddlewareFunc) (string, *http.Client) {
 	t.Helper()
+	return serveTLSTokens(t, srv, caller, presentedTokens{}, middlewares...)
+}
+
+// presentedTokens is the machine.Tokens seam in memory: the GRN each
+// live token names. One no entry names is refused.
+type presentedTokens map[string]grn.GRN
+
+func (k presentedTokens) Resolve(_ context.Context, token string) (grn.GRN, time.Time, error) {
+	subject, ok := k[token]
+	if !ok {
+		return grn.GRN{}, time.Time{}, errorx.New(errorx.KindUnauthenticated, "token not live")
+	}
+	return subject, time.Now().Add(time.Hour), nil
+}
+
+// serveTLSTokens is serveTLS answering a presented token from tokens.
+func serveTLSTokens(t *testing.T, srv *machineapi.Server, caller grn.GRN, tokens machine.Tokens, middlewares ...machinegen.MiddlewareFunc) (string, *http.Client) {
+	t.Helper()
 	store := authorities{}
 	key := make([]byte, ca.KeySize)
 	_, err := rand.Read(key)
@@ -315,6 +333,7 @@ func serveTLS(t *testing.T, srv *machineapi.Server, caller grn.GRN, middlewares 
 
 	served := machine.NewServer(
 		machine.NewService(trustRoots{store: store}, everyRecordHeld{}, machine.Config{}),
+		tokens,
 		loopback(t),
 		machinegen.HandlerWithOptions(srv, machinegen.StdHTTPServerOptions{
 			ErrorHandlerFunc: machineapi.BindingError, Middlewares: middlewares,

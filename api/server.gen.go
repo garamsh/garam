@@ -535,6 +535,13 @@ type Operator struct {
 	RegisteredBy string `json:"registeredBy"`
 }
 
+// OperatorCredential The credential an operator exchanges for short-lived tokens on the machine listener (ADR-0100). It does not expire; a re-issue or deleting the operator is what ends it.
+type OperatorCredential struct {
+	// Credential The credential itself, answered once. Show it once and say it cannot be shown again; garam cannot answer it a second time. It is placed in the operator's cluster as a file only the operator's process reads.
+	Credential string    `json:"credential"`
+	IssuedAt   time.Time `json:"issuedAt"`
+}
+
 // OperatorDescription At most 1000 characters once surrounding space is trimmed. Empty is no description, and on an update clears the one there was.
 type OperatorDescription = string
 
@@ -758,8 +765,11 @@ type ProjectPatch struct {
 	Roles *ScopedRoles `json:"roles,omitempty"`
 }
 
-// RegisteredOperator The record the registration wrote, and the enrollment token it minted. garam holds the token's hash and no route reads one back (ADR-0064), so this answer and `mintOperatorEnrollment`'s are the only places a token exists in a form anyone can present.
+// RegisteredOperator The record the registration wrote, the enrollment token it minted and the credential it issued. garam holds the hash of each and no route reads one back (ADR-0064, ADR-0100), so this answer, `mintOperatorEnrollment`'s and `reissueOperatorCredential`'s are the only places either exists in a form anyone can present.
 type RegisteredOperator struct {
+	// Credential The credential an operator exchanges for short-lived tokens on the machine listener (ADR-0100). It does not expire; a re-issue or deleting the operator is what ends it.
+	Credential OperatorCredential `json:"credential"`
+
 	// Enrollment The one-time token the operator enrols with, and when it stops being spendable. It is permission to ask for one certificate, once, and it authenticates nothing else.
 	Enrollment OperatorEnrollment `json:"enrollment"`
 
@@ -1106,6 +1116,9 @@ type ServerInterface interface {
 	// SetOperatorControlEndpoint Register where a hosted operator's control service answers the console. Requires current `operator:delegate`.
 	// (PUT /orgs/{org}/operators/{operator}/control-endpoint)
 	SetOperatorControlEndpoint(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug, params SetOperatorControlEndpointParams)
+	// ReissueOperatorCredential Re-issue a registered operator's credential, voiding the previous one. Requires the `admin` role.
+	// (POST /orgs/{org}/operators/{operator}/credential)
+	ReissueOperatorCredential(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug)
 	// EndOperatorDelegation Withdraw a hosted operator's delegation. Requires current `operator:delegate`.
 	// (DELETE /orgs/{org}/operators/{operator}/delegation)
 	EndOperatorDelegation(w http.ResponseWriter, r *http.Request, org Org, operatorSlug OperatorSlug, params EndOperatorDelegationParams)
@@ -2687,6 +2700,41 @@ func (siw *ServerInterfaceWrapper) SetOperatorControlEndpoint(w http.ResponseWri
 	handler.ServeHTTP(w, r)
 }
 
+// ReissueOperatorCredential operation middleware
+func (siw *ServerInterfaceWrapper) ReissueOperatorCredential(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "org" -------------
+	var org Org
+
+	err = runtime.BindStyledParameterWithOptions("simple", "org", r.PathValue("org"), &org, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "org", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "operator" -------------
+	var operatorSlug OperatorSlug
+
+	err = runtime.BindStyledParameterWithOptions("simple", "operator", r.PathValue("operator"), &operatorSlug, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "operator", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ReissueOperatorCredential(w, r, org, operatorSlug)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // EndOperatorDelegation operation middleware
 func (siw *ServerInterfaceWrapper) EndOperatorDelegation(w http.ResponseWriter, r *http.Request) {
 
@@ -3718,6 +3766,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/operators/{operator}", wrapper.DeleteOperator)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/operators/{operator}", wrapper.GetOperator)
 	m.HandleFunc(http.MethodPatch+" "+options.BaseURL+"/orgs/{org}/operators/{operator}", wrapper.UpdateOperator)
+	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/credential", wrapper.ReissueOperatorCredential)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/enrollment", wrapper.MintOperatorEnrollment)
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/delegation", wrapper.EndOperatorDelegation)
 	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/orgs/{org}/operators/{operator}/delegation", wrapper.GetOperatorDelegation)

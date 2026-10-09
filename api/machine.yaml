@@ -11,6 +11,16 @@ info:
     carries. This is a different listener from the one
     `api/openapi.yaml` describes and shares nothing with it.
 
+    A caller may present a short-lived token instead, as
+    `Authorization: Garam-Token <token>`, on the operations whose
+    `security` lists `machineToken` and on no other (ADR-0100). An
+    operator obtains one from `exchangeToken`, presenting the
+    credential its organization issued it, and the listener reads the
+    token's row beside the operator's registration on every request,
+    so a deleted operator or a re-issued credential is refused from
+    the next request on a connection already open too. A request
+    presents a token or a certificate, never both.
+
     Three operations are reached without a certificate, and each
     carries `security: []`. Two are how a caller obtains its first
     certificate: `enrollOperator` is authenticated by the one-time
@@ -18,9 +28,11 @@ info:
     the bootstrap secret whose hash an administrator approved
     (ADR-0082). The third, `getMessageSigningKeys`, publishes the
     public keys a verifier checks garam's signature on a message with
-    (ADR-0101), which anyone may read. Every other operation requires
-    the certificate, and which is which is read from this file rather
-    than remembered. An enrolling caller still verifies garam against the
+    (ADR-0101), which anyone may read. `exchangeToken` is reached
+    without one too, authenticated by the operator's credential under
+    `machineCredential`. Every other operation requires the
+    certificate, or a token where it lists `machineToken`, and which is
+    which is read from this file rather than remembered. An enrolling caller still verifies garam against the
     garam server root, which it holds before it calls: the listener
     presents that root's leaf to everyone (ADR-0040), and a caller that
     does not check it is talking to whoever answered.
@@ -148,6 +160,9 @@ paths:
     get:
       operationId: getIdentity
       tags: [identity]
+      security:
+        - machineCertificate: []
+        - machineToken: []
       summary: Return the identity the connection authenticated as.
       responses:
         '200':
@@ -202,6 +217,53 @@ paths:
           $ref: '#/components/responses/Error'
         '409':
           $ref: '#/components/responses/Error'
+  /tokens:
+    post:
+      operationId: exchangeToken
+      tags: [identity]
+      summary: Exchange an operator's credential for a short-lived token.
+      description: >-
+        Answers a token for the operator the presented credential
+        belongs to (ADR-0100), under `machine-token.v1`. The token is
+        accepted for an hour and is refreshed by exchanging again in
+        the last third of that hour; nothing here renews one token into
+        another, so only the credential mints them.
+
+        With no `audience`, the token is accepted by garam on the
+        operations that list `machineToken`. With an `audience` naming
+        another operator of the same organization — a hosted control
+        service — the token is minted to be shown to that service, and
+        garam accepts it on no operation here: it is the audience's to
+        present for introspection, which no route offers yet.
+
+        A credential the operator's organization re-issued or withdrew
+        with the operator exchanges nothing, and every token it was
+        exchanged for is refused from the next request. Unknown,
+        voided and withdrawn credentials are one refusal.
+      security:
+        - machineCredential: []
+      parameters:
+        - $ref: '#/components/parameters/tokenContractVersion'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenExchange'
+      responses:
+        '201':
+          description: Token issued, shown once.
+          headers:
+            Garam-Contract-Version:
+              $ref: '#/components/headers/TokenContractVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MachineToken'
+        '400':
+          $ref: '#/components/responses/TokenContractError'
+        '401':
+          $ref: '#/components/responses/TokenContractError'
   /enrollment:
     post:
       operationId: enrollOperator
@@ -258,6 +320,9 @@ paths:
     post:
       operationId: createAgent
       tags: [agent]
+      security:
+        - machineCertificate: []
+        - machineToken: []
       summary: Create an agent and assign it to the calling operator.
       description: >-
         garam mints the agent's GRN in the calling operator's
@@ -298,6 +363,7 @@ paths:
         - machineCertificate: []
           executionToken: []
         - machineCertificate: []
+        - machineToken: []
       summary: Issue the certificate an agent authenticates with.
       description: >-
         Answers for an agent assigned to the calling operator at the
@@ -358,6 +424,9 @@ paths:
     post:
       operationId: reportProvisioningState
       tags: [agent]
+      security:
+        - machineCertificate: []
+        - machineToken: []
       summary: Report what the operator sees of an agent's pod.
       description: >-
         What the calling operator says about the agent it provisioned
@@ -469,6 +538,9 @@ paths:
     get:
       operationId: listDefinitions
       tags: [definition]
+      security:
+        - machineCertificate: []
+        - machineToken: []
       summary: List the definitions naming the calling operator.
       description: >-
         The agents the organization says this operator should run
@@ -521,6 +593,9 @@ paths:
     post:
       operationId: claimDefinition
       tags: [definition]
+      security:
+        - machineCertificate: []
+        - machineToken: []
       summary: Claim the agent a definition minted for the calling operator.
       description: >-
         Binds the calling operator to the definition's agent GRN: the
@@ -1910,6 +1985,14 @@ components:
       x-go-name: EnrollmentContractVersion
       schema:
         type: string
+    tokenContractVersion:
+      name: Garam-Contract-Version
+      in: header
+      required: true
+      description: Must be `machine-token.v1` (ADR-0100); any other value is refused with 400 naming it.
+      x-go-name: TokenContractVersion
+      schema:
+        type: string
     deliveryContractVersion:
       name: Garam-Contract-Version
       in: header
@@ -2073,6 +2156,38 @@ components:
             serves it to the agent on no route.
         state:
           $ref: '#/components/schemas/RuntimeState'
+    TokenExchange:
+      type: object
+      description: >-
+        What an exchange asks for: a token garam accepts, or one minted
+        for a hosted operator of the same organization.
+      properties:
+        audience:
+          type: string
+          description: >-
+            The GRN of another operator of the caller's organization the
+            token is to be shown to. Absent, the token is garam's.
+          example: grn:acme:default:operator:control
+    MachineToken:
+      type: object
+      required: [token, grn, expiresAt]
+      properties:
+        token:
+          type: string
+          description: >-
+            The token itself, prefixed `garam_ot_`, answered once. garam
+            stores only its hash.
+        grn:
+          type: string
+          description: The operator the token authenticates as.
+          example: grn:acme:default:operator:controller
+        audience:
+          type: string
+          description: The hosted operator the token is minted for, where one was asked for.
+        expiresAt:
+          type: string
+          format: date-time
+          description: When garam stops accepting the token.
     Enrollment:
       type: object
       description: >-
@@ -2952,6 +3067,10 @@ components:
             `cutover_required` and nothing else. Branch on it only on
             those routes; a new reason is a new contract value.
   headers:
+    TokenContractVersion:
+      description: The contract version this answer follows, `machine-token.v1`.
+      schema:
+        type: string
     StandaloneContractVersion:
       description: The contract version this answer follows, `standalone-enrollment.v1`.
       schema:
@@ -2979,6 +3098,15 @@ components:
   responses:
     Error:
       description: Error response.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    TokenContractError:
+      description: Error response of the token exchange.
+      headers:
+        Garam-Contract-Version:
+          $ref: '#/components/headers/TokenContractVersion'
       content:
         application/json:
           schema:
@@ -3038,6 +3166,26 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
   securitySchemes:
+    machineToken:
+      type: http
+      scheme: Garam-Token
+      description: >-
+        A token `exchangeToken` answered, as `Authorization: Garam-Token
+        <token>`, presented without a client certificate (ADR-0100). The
+        listener reads the token's row joined to the registration it
+        rests on for every request, so a token whose operator was
+        deleted or whose credential was re-issued is refused from the
+        next request. A token minted for another audience is refused on
+        every operation that lists this scheme. garam stores only its
+        hash.
+    machineCredential:
+      type: http
+      scheme: Garam-Credential
+      description: >-
+        An operator's credential, as `Authorization: Garam-Credential
+        <credential>`, which `exchangeToken` alone accepts (ADR-0100).
+        It is issued once in the console and stored there only as a
+        hash.
     executionToken:
       type: http
       scheme: Garam-Execution

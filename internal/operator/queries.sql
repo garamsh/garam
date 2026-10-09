@@ -135,3 +135,61 @@ DELETE FROM operator_certificates WHERE operator_grn = $1;
 -- `operator_certificates` carries no foreign key and keeps its row
 -- (ADR-0045 errata).
 SELECT count(*) FROM operators WHERE org_grn = $1;
+
+-- Re-issuing is these two in one transaction: the delete takes the
+-- previous credential and, by 000038's foreign key, every token minted
+-- under it, and the insert writes the successor. An operator the
+-- organization holds no record of fails the insert's foreign key.
+-- name: DeleteOperatorCredential :exec
+DELETE FROM operator_credentials WHERE operator_grn = $1;
+
+-- name: InsertOperatorCredential :exec
+INSERT INTO operator_credentials (operator_grn, credential_hash, issued_by, issued_at)
+VALUES (sqlc.arg('operator_grn'), sqlc.arg('credential_hash'), sqlc.arg('issued_by'), sqlc.arg('issued_at'));
+
+-- Which operator a presented credential belongs to, read beside the
+-- registration it rests on.
+-- name: GetOperatorCredentialHolder :one
+SELECT c.id, c.operator_grn
+FROM operator_credentials c
+JOIN operators o ON o.grn = c.operator_grn
+WHERE c.credential_hash = $1;
+
+-- An exchange sweeps the operator's expired tokens in the statement
+-- that records the new one, so the table stays proportional to what is
+-- live without a job of its own. The two never touch one row: the
+-- sweep deletes what has expired and the insert writes what has not.
+-- name: RecordOperatorToken :exec
+WITH swept AS (
+    DELETE FROM operator_tokens
+    WHERE operator_grn = sqlc.arg('operator_grn') AND expires_at <= now()
+)
+INSERT INTO operator_tokens (token_hash, credential_id, operator_grn, audience_grn, issued_at, expires_at)
+VALUES (sqlc.arg('token_hash'), sqlc.arg('credential_id'), sqlc.arg('operator_grn'),
+        sqlc.narg('audience_grn'), sqlc.arg('issued_at'), sqlc.arg('expires_at'));
+
+-- The read every request presenting a token takes (ADR-0100): the
+-- token's row joined to the registration it rests on, so a deleted
+-- operator or a re-issued credential refuses it from the next request.
+-- name: ResolveOperatorToken :one
+SELECT t.operator_grn, t.audience_grn, t.expires_at
+FROM operator_tokens t
+JOIN operators o ON o.grn = t.operator_grn
+WHERE t.token_hash = $1 AND t.expires_at > now();
+
+-- An exchange holds the credential issuance's row while it records and
+-- trims, so two exchanges at once cannot leave more live tokens than
+-- the bound. A row gone since its holder was read answers no row.
+-- name: LockOperatorCredential :one
+SELECT id FROM operator_credentials WHERE id = $1 FOR UPDATE;
+
+-- Keeps the issuance's newest tokens and drops the rest, which bounds
+-- what a leaked credential can write (ADR-0100).
+-- name: TrimOperatorTokens :exec
+DELETE FROM operator_tokens t
+WHERE t.credential_id = sqlc.arg('credential_id')
+  AND t.token_hash NOT IN (
+      SELECT k.token_hash FROM operator_tokens k
+      WHERE k.credential_id = sqlc.arg('credential_id')
+      ORDER BY k.issued_at DESC, k.token_hash DESC
+      LIMIT sqlc.arg('keep'));

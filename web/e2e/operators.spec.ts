@@ -51,6 +51,10 @@ test.describe("operators", () => {
     await expect(
       page.getByText("This is the only time this token is shown"),
     ).toBeVisible();
+    // So is the credential the operator exchanges for tokens (ADR-0100).
+    const credential = page.getByLabel("Credential", { exact: true });
+    await expect(credential).toHaveValue(/^garam_oc_[0-9a-f]{64}$/);
+    const issued = await credential.inputValue();
 
     await page
       .getByRole("link", { name: "Open operator", exact: true })
@@ -68,6 +72,18 @@ test.describe("operators", () => {
     await expect(
       page.getByLabel("Enrollment token", { exact: true }),
     ).toBeHidden();
+
+    // Re-issuing answers a credential other than the one registration
+    // answered, once, after the confirmation.
+    await page
+      .getByRole("button", { name: "Re-issue credential", exact: true })
+      .click();
+    await page
+      .getByRole("button", { name: "Confirm re-issue", exact: true })
+      .click();
+    const reissued = page.getByLabel("Credential", { exact: true });
+    await expect(reissued).toHaveValue(/^garam_oc_[0-9a-f]{64}$/);
+    expect(await reissued.inputValue()).not.toBe(issued);
 
     // Renaming keeps the identifier the page is addressed by.
     const name = page.getByLabel("Name", { exact: true });

@@ -62,6 +62,7 @@ sql:
       - migrations/000025_operator_details.up.sql
       - migrations/000028_operator_delegations.up.sql
       - migrations/000032_operator_control_endpoints.up.sql
+      - migrations/000038_operator_credentials.up.sql
     queries: internal/operator/queries.sql
     gen:
       go:

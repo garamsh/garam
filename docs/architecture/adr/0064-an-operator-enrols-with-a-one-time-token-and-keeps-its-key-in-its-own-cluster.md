@@ -1,6 +1,9 @@
 # ADR 0064: An operator enrols with a one-time token and keeps its key in its own cluster
 
-> Status: accepted
+> Status: accepted — the enrollment token, the certificate request,
+> `POST /enrollment` and the identity written from `VerifyConnection`
+> are superseded by
+> [ADR-0100](./0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
 > Date: 2026-09-04
 
 ## Contents

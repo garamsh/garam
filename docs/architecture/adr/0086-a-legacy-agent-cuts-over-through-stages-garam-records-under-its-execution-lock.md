@@ -1,6 +1,8 @@
 # ADR 0086: A legacy agent cuts over through stages garam records under its execution lock
 
-> Status: accepted
+> Status: accepted — the operator's certificate route refusing a
+> switched agent is superseded by
+> [ADR-0100](./0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
 > Date: 2026-10-05
 
 Drafted for #1171. The contract was proposed on #1171 (comment

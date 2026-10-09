@@ -82,6 +82,12 @@ const (
 	// member does here that takes a machine identity away: registering
 	// grants nothing and this withdraws what an operator runs on.
 	ActionOperatorDelete = "operator:delete"
+	// ActionOperatorReissue is issuing an operator a new credential,
+	// which voids the one it holds and every token exchanged for it
+	// (ADR-0100). It is an action of its own for the reason deleting
+	// is: it withdraws what an operator runs on until the new
+	// credential is placed, which registering does not.
+	ActionOperatorReissue = "operator:reissue"
 	// ActionOperatorUpdate is changing what the org says about an
 	// operator: its name and description (ADR-0074). It is an action of
 	// its own because it neither grants what registering does nor
@@ -180,6 +186,7 @@ var machineActions = []struct {
 	{ActionOperatorRegister, false},
 	{ActionOperatorUpdate, false},
 	{ActionOperatorDelete, false},
+	{ActionOperatorReissue, false},
 	{ActionOperatorDelegate, false},
 	{ActionAgentRead, true},
 	{ActionAgentRename, true},

@@ -1,6 +1,9 @@
 # ADR 0040: The machine listener presents a pinned garam server certificate, and certificates rotate without a restart
 
-> Status: accepted
+> Status: accepted — §Decision items 1, 4 and 6 (client
+> certificates, the issuing authority in the answer, the agent's
+> self-renewal) are superseded by
+> [ADR-0100](./0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
 > Date: 2026-08-24
 
 ## Contents

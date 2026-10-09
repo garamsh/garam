@@ -1,0 +1,39 @@
+package machineapi
+
+import (
+	"net/http"
+
+	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/internal/machine"
+)
+
+// tokenRoutes is every route a token reaches (ADR-0100): the
+// operations api/machine.yaml lists `machineToken` on. They are the
+// router's patterns, so a route added later is outside the set until
+// named here, and so is every route a certificate alone reaches today —
+// the plan's later steps add them as each accepts a token.
+var tokenRoutes = map[string]bool{
+	http.MethodGet + " /identity":                           true,
+	http.MethodPost + " /agents":                            true,
+	http.MethodPost + " /agents/{agent}/certificate":        true,
+	http.MethodPost + " /agents/{agent}/provisioning-state": true,
+	http.MethodGet + " /definitions":                        true,
+	http.MethodPost + " /definitions/{agent}/claim":         true,
+}
+
+// ConfineTokens refuses a request a token authenticated on any route
+// outside tokenRoutes before its handler runs. The handlers behind it
+// answer a machine identity without asking how it was proven, and a
+// route that reads a certificate's serial or dates — a renewal, the
+// execution fence — has nothing to read off a token. It reads the
+// route the router matched, so it runs inside the router.
+func ConfineTokens(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		identity, ok := machine.IdentityOf(r)
+		if ok && identity.Method() == machine.MethodToken && !tokenRoutes[r.Pattern] {
+			writeError(w, errorx.New(errorx.KindUnauthenticated, "this operation does not accept a token"))
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}

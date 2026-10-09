@@ -422,10 +422,7 @@ test.describe("control service, as contract tests against the agreed Operator wi
     );
 
     // The control: the same model, naming the embedding, is published.
-    // The form is refilled because React resets it after each action.
-    for (const [label, value] of fields) {
-      await page.getByLabel(label, { exact: true }).fill(value);
-    }
+    // Only the embedding is typed: the refusal left the rest as typed.
     await page
       .getByLabel("Embedding base URL", { exact: true })
       .fill(EMBEDDING.baseUrl);

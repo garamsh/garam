@@ -152,15 +152,15 @@ release of that contract and no compatibility window (ADR-0049).
 
 ## Tokens in place of certificates
 
-**Built for an agent's operator; a supervisor-held agent and the
-control service's contracts are not yet.**
+**Built for an agent's operator and for the control service's
+contracts; a supervisor-held agent is not yet.**
 [ADR-0100](./adr/0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
 replaces an agent's certificate with a short-lived token, and the
 order is the plan's,
-`docs/plans/2026-10-09-machine-identity-migration.md`: this is step
-G1b; a supervisor minting its agent's tokens, and its own
-credential, are G1d; the control service introspecting a token is G1c.
-Until then a certificate still authenticates as it did.
+`docs/plans/2026-10-09-machine-identity-migration.md`: this is steps
+G1b and G1c; a supervisor minting its agent's tokens, and its own
+credential, are G1d. Until then a certificate still authenticates as
+it did.
 
 - **The assignee mints, at the current epoch.** `mintAgentToken`
   answers an operator for an agent assigned to it now and no other,
@@ -185,6 +185,17 @@ Until then a certificate still authenticates as it did.
   is an operator the organization registered, so naming more
   audiences widens nothing. A token renews no certificate: an agent
   holding one is minted another by its assignee.
+- **A token shown to a hosted operator is forwarded, not presented.**
+  The assignee may mint one naming the control service as its
+  audience; garam accepts it on no route, and the control service
+  forwards it where it forwarded the agent's certificate, on activation
+  and execution introspection under `execution-fence.v2`. garam reads
+  that token's row as it was minted, requires it to name the agent and
+  the caller as its audience, and hands its serial and dates to the
+  execution fence, which judges it as it judges a certificate: a token
+  of an earlier epoch or lineage is answered fenced, not unknown.
+  Deleting the hosted operator takes the tokens shown to it
+  (`migrations/000041`).
 - **An unfenced agent's token comes the same way.** A `Garam`-source
   agent of the Operator, whose adapter runs in garam's legacy mode
   with no control settings (garam-agent-operator ADR 0068), is held by
@@ -270,7 +281,12 @@ in #1157.
   the bound controller, its execution and the creation record are one
   transaction (migration 000030), so a failure leaves no agent, and the
   same reference answers the same GRN and epoch while the agent stays
-  where its creation put it. The operator's own route still creates in
+  where its creation put it. Under `managed-enrollment.v2` the control
+  service presents its token and nothing else changes: creation opens
+  the agent's lineage under either value, and its controller then
+  mints the agent's tokens in it (§Tokens in place of certificates)
+  where it would have obtained the initial certificate, which takes no
+  token. The operator's own route still creates in
   two writes, as `Service.Create` in `internal/agent/service.go` says,
   and creates legacy agents alone.
 - **A managed agent is fenced from birth.** Its execution starts
@@ -320,10 +336,17 @@ in #1157.
   administrator's `agent:recover` handoff for the exact request body,
   and the agent's earlier certificates stop authorizing from the next
   request, on a connection already open too. Ordinary renewal stays in
-  the lineage the renewing certificate is current in.
-- **A recovery's answer names its chain**: the authority that signed
-  the recovered certificate and the garam server root the holder
-  verifies garam by, as initial issuance's does, so a holder verifies
+  the lineage the renewing certificate is current in. Under
+  `execution-fence.v2` it answers what may have been taken rather than
+  what was lost: it signs nothing, ends the lineage and opens the next,
+  so every token minted before it is refused from the next request, and
+  the assignee mints in the new one. The handoff travels in a
+  `Garam-Operation` header there, and the recovery records no
+  certificate or chain (`migrations/000040`).
+- **A recovery's answer under `execution-fence.v1` names its chain**:
+  the authority that signed the recovered certificate and the garam
+  server root the holder verifies garam by, as initial issuance's
+  does, so a holder verifies
   the recovered credential from the answer alone
   ([ADR-0091](./adr/0091-a-recovered-credential-names-its-chain-and-garam-stores-it-with-the-recovery.md)).
   Both are what the signer produced and are stored with the recovery,

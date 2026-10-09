@@ -677,3 +677,9 @@ ADRs:
   `make image-build`, `make test-image-push` and `make test-image-pin`
   name `garam-dev/<image>`. Supersedes 0095, and ADR-0093's
   repository URI and namespace
+- [0098](./adr/0098-garam-syncs-the-convention-template-to-b29f0f1.md)
+  — garam syncs the conventions template to `b29f0f1`: the
+  composition-site rule moves from `stack-go.md` into `structure.md`,
+  the template's §Rules every shape carries and bootstrap line are
+  declined, and the section-scope rule is taken where Garam keeps the
+  file it lands on

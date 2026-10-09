@@ -15,7 +15,7 @@ for it.
 - 4. Server Components — pages and layouts
 - 5. Server Actions
 - 6. Route Handlers — external use only
-- 7. Errors
+- 7. Errors — returned, thrown, or caught
 - 8. Env (single typed loader at project root)
 - 9. Multi-layout via route groups
 - 10. Parallel routes and intercepts (modal pattern)
@@ -185,7 +185,7 @@ inside the Server Action.**
   the signature is missing or fails. A body already parsed as JSON
   can no longer be verified.
 
-## 7. Errors
+## 7. Errors — returned, thrown, or caught
 
 - **Expected failure is a return value.** A rejected password or a
   taken email comes back from the Server Action as data, and

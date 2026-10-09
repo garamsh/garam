@@ -58,9 +58,10 @@ line count crossed unnoticed.
 - `internal/<domain>/<group>.go` — the service's method bodies
   (`create.go`, `update.go`, `lifecycle.go`).
 - `internal/<domain>/service_test.go` — the service's tests (§7).
-- `internal/<domain>/<technology>/` — one package per implementation of
-  that dependency interface (`postgres/postgres.go`,
-  `memory/memory.go`); the in-memory one serves tests and dev.
+- `internal/<domain>/<technology>/` — where a domain keeps an
+  implementation of that dependency interface outside its package: one
+  package per technology (`postgres/postgres.go`, `memory/memory.go`);
+  the in-memory one serves tests and dev.
 - `internal/<crosscutting>/` — a concern extracted below the domains,
   named by what it is.
 - `go.mod`, `go.sum` — module root.
@@ -73,16 +74,15 @@ line count crossed unnoticed.
   `update.go`); where several verbs serve one responsibility they
   share one file, named for the responsibility (`lifecycle.go` for
   create/activate/deactivate).
-- **A dependency interface's implementations go in
-  `internal/<domain>/<technology>/` where a neighbouring package can
-  construct the aggregate**, so a driver import (`pgx`, a vendor SDK)
-  stays out of the domain package's import graph and its tests; where
-  unexported fields close the aggregate, only its own package can
-  construct one, so the implementation stays beside it and this rule
-  does not reach that domain. The package is named for the technology
-  it implements against rather than for the interface it satisfies:
-  `postgres/`, `memory/`. Two technologies are two sibling packages
-  and not two files in one.
+- **An implementation that imports a driver (`pgx`, a vendor SDK)
+  sits outside the domain package's import graph**, so the driver
+  stays out of that package and its tests; where unexported fields
+  close the aggregate, only its own package can construct one, so the
+  implementation stays beside it and this rule does not reach that
+  domain. A package written for an implementation is named for the
+  technology it implements against rather than for the interface it
+  satisfies: `postgres/`, `memory/`. Two technologies are two sibling
+  packages and not two files in one. A generated mock is §7's.
 
 **One file vs several** inside `internal/<domain>/<technology>/`:
 

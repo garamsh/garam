@@ -30,14 +30,26 @@ func (s *PostgresStore) CredentialHolder(ctx context.Context, credentialHash str
 }
 
 // RecordToken stores the token under the credential issuance holder
-// names. The foreign key to that issuance is what refuses a token for
-// a credential re-issued or withdrawn after it was read.
+// names, and keeps that issuance's newest LiveTokensPerCredential, in
+// one transaction holding the issuance's row. Holding the row is what
+// keeps two exchanges at once inside the bound, and finding it gone is
+// the refusal of a credential re-issued or withdrawn after it was read.
 func (s *PostgresStore) RecordToken(ctx context.Context, holder CredentialHolder, t *Token) error {
 	audience := pgtype.Text{}
 	if t.Audience != nil {
 		audience = pgtype.Text{String: t.Audience.String(), Valid: true}
 	}
-	if err := s.q.RecordOperatorToken(ctx, db.RecordOperatorTokenParams{
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return errorx.Wrap(err, "begin", errorx.KindUnavailable)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	q := s.q.WithTx(tx)
+	if _, err := q.LockOperatorCredential(ctx, holder.ID); err != nil {
+		return pgxerr.Classify(err, "hold operator credential", ErrCredentialInvalid, nil)
+	}
+	if err := q.RecordOperatorToken(ctx, db.RecordOperatorTokenParams{
 		TokenHash:    t.Hash(),
 		CredentialID: holder.ID,
 		OperatorGrn:  holder.Operator.String(),
@@ -45,10 +57,15 @@ func (s *PostgresStore) RecordToken(ctx context.Context, holder CredentialHolder
 		IssuedAt:     stamp(t.IssuedAt),
 		ExpiresAt:    stamp(t.ExpiresAt),
 	}); err != nil {
-		if pgxerr.IsForeignKeyViolation(err) {
-			return ErrCredentialInvalid
-		}
 		return pgxerr.Classify(err, "record operator token", nil, nil)
+	}
+	if err := q.TrimOperatorTokens(ctx, db.TrimOperatorTokensParams{
+		CredentialID: holder.ID, Keep: LiveTokensPerCredential,
+	}); err != nil {
+		return pgxerr.Classify(err, "trim operator tokens", nil, nil)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return errorx.Wrap(err, "commit")
 	}
 	return nil
 }

@@ -281,6 +281,20 @@ func (q *Queries) ListOperatorsByOrg(ctx context.Context, orgGrn string) ([]List
 	return items, nil
 }
 
+const lockOperatorCredential = `-- name: LockOperatorCredential :one
+SELECT id FROM operator_credentials WHERE id = $1 FOR UPDATE
+`
+
+// An exchange holds the credential issuance's row while it records and
+// trims, so two exchanges at once cannot leave more live tokens than
+// the bound. A row gone since its holder was read answers no row.
+func (q *Queries) LockOperatorCredential(ctx context.Context, id int64) (int64, error) {
+	row := q.db.QueryRow(ctx, lockOperatorCredential, id)
+	var id_2 int64
+	err := row.Scan(&id_2)
+	return id_2, err
+}
+
 const mintOperatorEnrollment = `-- name: MintOperatorEnrollment :exec
 WITH pruned AS (
     DELETE FROM operator_enrollment_tokens
@@ -359,8 +373,6 @@ type RecordOperatorTokenParams struct {
 // that records the new one, so the table stays proportional to what is
 // live without a job of its own. The two never touch one row: the
 // sweep deletes what has expired and the insert writes what has not.
-// A credential re-issued between reading its holder and this insert
-// fails the foreign key, and nothing is recorded.
 func (q *Queries) RecordOperatorToken(ctx context.Context, arg RecordOperatorTokenParams) error {
 	_, err := q.db.Exec(ctx, recordOperatorToken,
 		arg.TokenHash,
@@ -433,6 +445,28 @@ func (q *Queries) SpendOperatorEnrollment(ctx context.Context, tokenHash string)
 	var operator_grn string
 	err := row.Scan(&operator_grn)
 	return operator_grn, err
+}
+
+const trimOperatorTokens = `-- name: TrimOperatorTokens :exec
+DELETE FROM operator_tokens t
+WHERE t.credential_id = $1
+  AND t.token_hash NOT IN (
+      SELECT k.token_hash FROM operator_tokens k
+      WHERE k.credential_id = $1
+      ORDER BY k.issued_at DESC, k.token_hash DESC
+      LIMIT $2)
+`
+
+type TrimOperatorTokensParams struct {
+	CredentialID int64
+	Keep         int32
+}
+
+// Keeps the issuance's newest tokens and drops the rest, which bounds
+// what a leaked credential can write (ADR-0100).
+func (q *Queries) TrimOperatorTokens(ctx context.Context, arg TrimOperatorTokensParams) error {
+	_, err := q.db.Exec(ctx, trimOperatorTokens, arg.CredentialID, arg.Keep)
+	return err
 }
 
 const updateOperatorDetails = `-- name: UpdateOperatorDetails :execrows

@@ -78,6 +78,10 @@ func NewService(store CertificateStore, enrollments EnrollmentStore, tokens Toke
 }
 
 func (s *service) Exchange(ctx context.Context, credential string, audience *grn.GRN) (*Token, error) {
+	// A value no issuance could have produced reads nothing.
+	if !WellFormed(credential, CredentialPrefix) {
+		return nil, ErrCredentialInvalid
+	}
 	holder, err := s.tokens.CredentialHolder(ctx, HashToken(credential))
 	if err != nil {
 		return nil, err
@@ -171,6 +175,13 @@ func current(subject grn.GRN, serial Serial, now time.Time) Current {
 func renewable(c Credential, now time.Time) error {
 	if c.Subject.ServiceType != ServiceType {
 		return ErrNotAnOperator
+	}
+	// A credential naming no certificate is one a token proved, and a
+	// renewal replaces a certificate (ADR-0100): without this its zero
+	// NotBefore would read as a lifetime begun at year one, every
+	// moment of which is inside the window.
+	if c.Serial == "" || c.NotBefore.IsZero() {
+		return ErrNoCertificate
 	}
 	remaining := c.NotAfter.Sub(now)
 	switch {

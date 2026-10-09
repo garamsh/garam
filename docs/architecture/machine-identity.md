@@ -120,7 +120,10 @@ lands in. What runs now is its first step.
   that request, and the identity it answers carries `MethodToken`, the
   GRN and the token's expiry, and no serial: there is no certificate
   for a renewal or the execution fence to read.
-- **The read is per request, not per connection.** The composition
+- **The read is per request, not per connection.** A value that is
+  not a token's shape is refused before it is read, and a refusal is
+  logged at debug: it is the caller's to fix, and only a read that
+  could not be made is the listener's anomaly. The composition
   root satisfies `Tokens` from `internal/operator`, whose read joins
   the token's row to the operator's registration, so deleting the
   operator or re-issuing its credential refuses the next request on a
@@ -133,8 +136,11 @@ lands in. What runs now is its first step.
 - **A token reaches the operations `api/machine.yaml` lists
   `machineToken` on, and no other.** `ConfineTokens` in
   `internal/machineapi/token.go` is where that is decided, as
-  `ConfineSupervisors` decides a supervisor's reach: the handlers
-  behind it answer an identity without asking how it was proven.
+  `ConfineSupervisors` decides a supervisor's reach, and a test holds
+  its route set against that file. A route that reads the certificate
+  a connection presented — a renewal, the execution fence — refuses a
+  token's identity by itself as well, so that refusal does not rest on
+  the route set alone.
 
 ## Generation and lineage
 

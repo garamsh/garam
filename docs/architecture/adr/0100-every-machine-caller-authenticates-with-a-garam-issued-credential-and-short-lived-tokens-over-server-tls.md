@@ -157,6 +157,13 @@ Actions Runner Controller's:
   kind, its audience, its expiry, and the credential it was exchanged
   under — or, for an agent, the assignment epoch and credential
   lineage it was minted at.
+- **What one credential can write is bounded.** A credential issuance
+  holds its newest five live tokens, and an exchange beyond that drops
+  the oldest, so a leaked credential cannot grow the table faster than
+  its holder could use what it mints. A value that is not a prefix and
+  256 bits of lowercase hex — a credential or a token — is refused
+  before anything is read for it. Neither bounds the rate of guessing,
+  which §What this does not decide leaves open.
 - **An operator or supervisor token lives one hour**, a constant, from
   `POST /tokens` with `Authorization: Garam-Credential <credential>`.
   The caller refreshes it inside the refresh window below and holds

@@ -163,7 +163,14 @@ func identify(tokens Tokens, next http.Handler) http.Handler {
 		case presented:
 			subject, expiresAt, err := tokens.Resolve(r.Context(), token)
 			if err != nil {
-				slog.Log(r.Context(), slog.LevelWarn, "token not resolved", slog.String("error", err.Error()))
+				// A token that proves nothing is the caller's to fix and
+				// is answered 401; only a read that could not be made is
+				// the listener's anomaly.
+				level := slog.LevelDebug
+				if errorx.IsKind(err, errorx.KindUnavailable) {
+					level = slog.LevelWarn
+				}
+				slog.Log(r.Context(), level, "token not resolved", slog.String("error", err.Error()))
 				refuse(w, r, next, err)
 				return
 			}

@@ -128,3 +128,59 @@ func TestService_ExchangeMintsForAnotherOperatorOfTheSameOrganizationAlone(t *te
 	}
 	assert.Len(t, store.recorded, 1, "a refused audience records no token")
 }
+
+// TestService_RenewRefusesACallerThatPresentedNoCertificate holds the
+// renewal's own refusal of a token's holder (ADR-0100): a credential
+// with no serial and no start is refused before anything is signed.
+// The certificate inside its window is the control: the same service
+// renews it, so what refuses the first is the missing certificate and
+// not a window everything fails.
+func TestService_RenewRefusesACallerThatPresentedNoCertificate(t *testing.T) {
+	issuer := &signer{}
+	svc, c := service(t, newRecords(), issuer)
+	subject := operatorGRN("acme", "one")
+	now := c.now()
+
+	_, err := svc.Renew(context.Background(), operator.Credential{Subject: subject, NotAfter: now.Add(time.Hour)})
+	require.ErrorIs(t, err, operator.ErrNoCertificate)
+	assert.True(t, errorx.IsKind(err, errorx.KindUnauthenticated))
+
+	_, err = svc.Renew(context.Background(), operator.Credential{
+		Subject: subject, Serial: "1", NotBefore: now.Add(-lifetime + time.Hour), NotAfter: now.Add(time.Hour),
+	})
+	assert.NoError(t, err, "a certificate inside its window renews")
+}
+
+// TestService_ExchangeRefusesAMalformedCredentialWithoutAReadForIt
+// holds that a value no issuance could have produced is refused before
+// the store is asked. The well-formed unknown credential beside it is
+// asked, so what spared the store is the format.
+func TestService_ExchangeRefusesAMalformedCredentialWithoutAReadForIt(t *testing.T) {
+	store := &countingExchanges{exchanges: newExchanges()}
+	svc := operator.NewService(newRecords(), newTokens(), store, &signer{}, operator.Config{})
+
+	for _, credential := range []string{
+		"garam_ot_" + strings.Repeat("0", 64),
+		operator.CredentialPrefix + strings.Repeat("0", 63),
+		operator.CredentialPrefix + strings.Repeat("Z", 64),
+	} {
+		_, err := svc.Exchange(context.Background(), credential, nil)
+		require.ErrorIs(t, err, operator.ErrCredentialInvalid)
+	}
+	assert.Equal(t, 0, store.asked)
+
+	_, err := svc.Exchange(context.Background(), operator.CredentialPrefix+strings.Repeat("0", 64), nil)
+	require.ErrorIs(t, err, operator.ErrCredentialInvalid)
+	assert.Equal(t, 1, store.asked)
+}
+
+// countingExchanges counts the credentials the store was asked about.
+type countingExchanges struct {
+	*exchanges
+	asked int
+}
+
+func (c *countingExchanges) CredentialHolder(ctx context.Context, hash string) (operator.CredentialHolder, error) {
+	c.asked++
+	return c.exchanges.CredentialHolder(ctx, hash)
+}

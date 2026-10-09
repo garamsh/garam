@@ -289,7 +289,10 @@ certificate path goes; until then an operator may present either.
   else.** `exchangeToken` on the machine listener answers a token
   prefixed `garam_ot_`, stored as its hash beside the credential
   issuance it was minted under; the exchange sweeps the operator's
-  expired tokens. A token never mints a token. One may name an
+  expired tokens and keeps the issuance's newest five, so a leaked
+  credential cannot grow the table. A value that is not a credential's
+  shape is refused before anything is read. A token never mints a
+  token. One may name an
   audience — another operator of the same organization, a hosted
   control service it is to be shown to — and garam accepts such a
   token on no route yet.

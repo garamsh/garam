@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,15 +21,22 @@ import (
 // liveTokens is the operator TokenStore's read half: the one token it
 // answers is liveToken, for liveOperator, and audiencedToken for the
 // same operator minted for a hosted one.
-type liveTokens struct{ operator.TokenStore }
+type liveTokens struct {
+	operator.TokenStore
+	// reads counts the lookups made, where a test asks.
+	reads *int
+}
 
 var (
 	liveOperator   = grn.New("acme", grn.DefaultProject, operator.ServiceType, "one")
-	liveToken      = operator.TokenPrefix + "live"
-	audiencedToken = operator.TokenPrefix + "audienced"
+	liveToken      = operator.TokenPrefix + strings.Repeat("a", 64)
+	audiencedToken = operator.TokenPrefix + strings.Repeat("b", 64)
 )
 
-func (liveTokens) ResolveToken(_ context.Context, hash string) (operator.TokenHolder, error) {
+func (k liveTokens) ResolveToken(_ context.Context, hash string) (operator.TokenHolder, error) {
+	if k.reads != nil {
+		*k.reads++
+	}
 	switch hash {
 	case operator.HashToken(liveToken):
 		return operator.TokenHolder{Operator: liveOperator, ExpiresAt: time.Now().Add(time.Hour)}, nil
@@ -52,14 +60,39 @@ func TestIdentityTokens_AnswersAGaramTokenAndNothingElse(t *testing.T) {
 
 	for name, token := range map[string]string{
 		"another audience": audiencedToken,
-		"another prefix":   "garam_at_live",
-		"no live row":      operator.TokenPrefix + "unknown",
+		"no live row":      operator.TokenPrefix + strings.Repeat("c", 64),
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, _, err := tokens.Resolve(context.Background(), token)
 			assert.True(t, errorx.IsKind(err, errorx.KindUnauthenticated), "%v", err)
 		})
 	}
+}
+
+// TestIdentityTokens_RefusesAMalformedTokenWithoutAReadForIt holds that
+// a value no issuance could have produced costs the store nothing: each
+// malformed value is refused with no lookup, and the well-formed one
+// beside them is looked up, so what spared the store is the format.
+func TestIdentityTokens_RefusesAMalformedTokenWithoutAReadForIt(t *testing.T) {
+	var reads int
+	tokens := identityTokens{operators: liveTokens{reads: &reads}}
+
+	for name, token := range map[string]string{
+		"another prefix": "garam_at_" + strings.Repeat("a", 64),
+		"too short":      operator.TokenPrefix + strings.Repeat("a", 63),
+		"uppercase hex":  operator.TokenPrefix + strings.Repeat("A", 64),
+		"not hex":        operator.TokenPrefix + strings.Repeat("g", 64),
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, _, err := tokens.Resolve(context.Background(), token)
+			assert.True(t, errorx.IsKind(err, errorx.KindUnauthenticated), "%v", err)
+		})
+	}
+	assert.Equal(t, 0, reads, "no malformed value was looked up")
+
+	_, _, err := tokens.Resolve(context.Background(), liveToken)
+	require.NoError(t, err)
+	assert.Equal(t, 1, reads, "the well-formed token was")
 }
 
 // TestCountMachineRequests_CountsEachRequestByHowItAuthenticated drives

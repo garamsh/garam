@@ -17,9 +17,10 @@ type TokenStore interface {
 	// registered operator holds that credential.
 	CredentialHolder(ctx context.Context, credentialHash string) (CredentialHolder, error)
 	// RecordToken stores t's hash under the credential issuance holder
-	// names, sweeping the operator's expired tokens in the same
-	// statement. It answers ErrCredentialInvalid where that issuance
-	// has been re-issued or withdrawn since it was read.
+	// names, sweeping the operator's expired tokens and keeping that
+	// issuance's newest LiveTokensPerCredential. It answers
+	// ErrCredentialInvalid where that issuance has been re-issued or
+	// withdrawn since it was read.
 	RecordToken(ctx context.Context, holder CredentialHolder, t *Token) error
 	// ResolveToken answers what the live token tokenHash names, read
 	// joined to the registration it rests on, or ErrTokenInvalid where

@@ -75,35 +75,30 @@ func NewServer(agents agent.Service, operators operator.Service, messages messag
 		certificates: certificates, proofs: proofs, executions: executions, supervisors: supervisors}
 }
 
-// caller returns the GRN the connection authenticated as, and writes
-// the refusal itself when there is none. It is what a handler needing
-// only the identity takes it through; see callerCertificate for why
-// taking it is not optional.
+// caller returns the GRN the request proved, by certificate or by
+// token, and writes the refusal itself when there is none. It is what a
+// handler needing only the identity takes it through; see
+// identityOf for why taking it is not optional.
 func caller(w http.ResponseWriter, r *http.Request) (grn.GRN, bool) {
-	identity, ok := callerCertificate(w, r)
+	identity, ok := identityOf(w, r)
 	return identity.GRN(), ok
 }
 
-// callerCertificate returns the identity and the certificate it
-// authenticated with, and writes the refusal itself when there is none.
+// identityOf returns the identity the request proved, and writes the
+// refusal itself when there is none.
 //
 // The listener admits a connection whose certificate does not
 // authenticate, so that an operator with no certificate yet can reach
 // the enrollment route (ADR-0064). That makes this refusal the only one
 // standing between such a connection and a handler: every handler but
-// EnrollOperator has to take its identity through here, or through
-// parties, and a new one that does not is a route an unauthenticated
-// caller reaches.
-//
-// A route takes the certificate rather than the GRN alone where a
-// decision rests on which certificate authenticated: what may replace
-// it (ADR-0046), a recheck on every request, or the execution fence's
-// judgement of its validity and lineage (ADR-0080).
+// EnrollOperator has to take its identity through here, through
+// callerCertificate, or through parties, and a new one that does not is
+// a route an unauthenticated caller reaches.
 //
 // A request that presented a token which proved nothing is refused
 // with the reason the listener read (ADR-0100), so a caller holding a
 // voided token learns that rather than that it presented nothing.
-func callerCertificate(w http.ResponseWriter, r *http.Request) (machine.Identity, bool) {
+func identityOf(w http.ResponseWriter, r *http.Request) (machine.Identity, bool) {
 	identity, ok := machine.IdentityOf(r)
 	if !ok {
 		if err := machine.RefusalOf(r); err != nil {
@@ -111,6 +106,29 @@ func callerCertificate(w http.ResponseWriter, r *http.Request) (machine.Identity
 			return machine.Identity{}, false
 		}
 		writeError(w, errorx.New(errorx.KindUnauthenticated, "no machine identity"))
+		return machine.Identity{}, false
+	}
+	return identity, true
+}
+
+// callerCertificate returns the identity and the certificate it
+// authenticated with, and writes the refusal itself when there is none.
+//
+// A route takes the certificate rather than the GRN alone where a
+// decision rests on which certificate authenticated: what may replace
+// it (ADR-0046), a recheck on every request, or the execution fence's
+// judgement of its validity and lineage (ADR-0080). A token carries no
+// certificate, so an identity a token proved is refused here whatever
+// route reached it: ConfineTokens keeps tokens off these routes, and
+// this is what still holds where a route list does not (ADR-0100).
+func callerCertificate(w http.ResponseWriter, r *http.Request) (machine.Identity, bool) {
+	identity, ok := identityOf(w, r)
+	if !ok {
+		return machine.Identity{}, false
+	}
+	if identity.Method() != machine.MethodCertificate {
+		writeError(w, errorx.New(errorx.KindUnauthenticated,
+			"this operation reads the certificate a connection presented, and a token carries none"))
 		return machine.Identity{}, false
 	}
 	return identity, true

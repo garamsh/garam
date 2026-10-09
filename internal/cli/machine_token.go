@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -25,7 +24,9 @@ type identityTokens struct {
 }
 
 func (k identityTokens) Resolve(ctx context.Context, token string) (grn.GRN, time.Time, error) {
-	if !strings.HasPrefix(token, operator.TokenPrefix) {
+	// A value no issuance could have produced is refused before any
+	// read, so a caller sending noise costs the database nothing.
+	if !operator.WellFormed(token, operator.TokenPrefix) {
 		return grn.GRN{}, time.Time{}, errorx.New(errorx.KindUnauthenticated, "machine: not a token garam issues")
 	}
 	holder, err := k.operators.ResolveToken(ctx, operator.HashToken(token))

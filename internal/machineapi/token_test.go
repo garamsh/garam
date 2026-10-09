@@ -4,11 +4,14 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"os"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/grn"
@@ -117,4 +120,72 @@ func TestConfineTokens_ATokenReachesTheRoutesThatListIt(t *testing.T) {
 		"a route a certificate alone reaches refuses the token")
 	assert.NotEqual(t, http.StatusUnauthorized, request(certified, http.MethodPost, "/identity/certificate", ""),
 		"the same route admits the certificate")
+}
+
+// TestServer_ARouteReadingTheCertificateRefusesAToken holds the refusal
+// that does not rest on ConfineTokens: with no confinement in front of
+// it, a token's identity still reaches no route that reads the
+// certificate a connection presented (ADR-0100). The renewal is that
+// route, and the certificate reaching it is the control: the same
+// route renews for a certificate, so what refuses the token is the
+// missing certificate and not the route refusing everyone.
+func TestServer_ARouteReadingTheCertificateRefusesAToken(t *testing.T) {
+	subject := operatorGRN("acme")
+	operators := &operatorService{certificate: &operator.Certificate{Subject: subject}}
+	srv := machineapi.NewServer(&agentService{}, operators, &messageService{}, consenting(), unwatched(t),
+		&memberGroups{}, &engine{}, nil, nil, nil, nil, nil)
+	url, certified := serveTLSTokens(t, srv, subject, presentedTokens{"garam_ot_live": subject})
+
+	req, err := http.NewRequest(http.MethodPost, url+"/identity/certificate", nil)
+	require.NoError(t, err)
+	req.Header.Set("Authorization", "Garam-Token garam_ot_live")
+	resp, err := anonymous(t).Do(req)
+	require.NoError(t, err)
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	assert.Contains(t, string(body), "a token carries none")
+	assert.Empty(t, operators.renewed, "nothing reached the renewal")
+
+	status, _ := do(t, certified, http.MethodPost, url+"/identity/certificate")
+	assert.Equal(t, http.StatusCreated, status, "the certificate renews")
+	assert.Len(t, operators.renewed, 1)
+}
+
+// TestTokenRoutes_AreTheOperationsTheSpecificationListsMachineTokenOn
+// holds the hand-kept route set against the file that states it: every
+// operation api/machine.yaml lists machineToken on is in the set, and
+// nothing else is. The count of operations read is asserted too, so a
+// file that failed to parse into paths could not pass as one listing
+// none.
+func TestTokenRoutes_AreTheOperationsTheSpecificationListsMachineTokenOn(t *testing.T) {
+	raw, err := os.ReadFile("../../api/machine.yaml")
+	require.NoError(t, err)
+	var spec struct {
+		Paths map[string]map[string]struct {
+			OperationID string                `yaml:"operationId"`
+			Security    []map[string][]string `yaml:"security"`
+		} `yaml:"paths"`
+	}
+	require.NoError(t, yaml.Unmarshal(raw, &spec))
+
+	listed := map[string]bool{}
+	operations := 0
+	for path, methods := range spec.Paths {
+		for method, operation := range methods {
+			if operation.OperationID == "" {
+				continue
+			}
+			operations++
+			for _, requirement := range operation.Security {
+				if _, ok := requirement["machineToken"]; ok {
+					listed[strings.ToUpper(method)+" "+path] = true
+				}
+			}
+		}
+	}
+	require.Equal(t, reflect.TypeOf((*machinegen.ServerInterface)(nil)).Elem().NumMethod(), operations,
+		"every operation the generated interface declares was read")
+	assert.Equal(t, listed, machineapi.TokenRoutes)
 }

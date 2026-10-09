@@ -3,6 +3,7 @@ package operator
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"strings"
 	"time"
 
 	"github.com/garamsh/garam/internal/errorx"
@@ -35,6 +36,28 @@ const TokenTTL = time.Hour
 // secretBytes sizes a credential and a token: 256 bits each (ADR-0100).
 const secretBytes = 32
 
+// LiveTokensPerCredential is how many live tokens one credential
+// issuance holds: an exchange beyond it drops the oldest (ADR-0100).
+// An operator refreshes its token once an hour at most, so five covers
+// every refresh it makes and bounds what a leaked credential can write.
+const LiveTokensPerCredential = 5
+
+// WellFormed reports whether value is a secret prefix issued: the
+// prefix followed by 256 bits in lowercase hex. A value that is not is
+// refused before anything is read for it.
+func WellFormed(value, prefix string) bool {
+	rest, ok := strings.CutPrefix(value, prefix)
+	if !ok || len(rest) != 2*secretBytes {
+		return false
+	}
+	for _, c := range rest {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
 // Sentinels of the credential and token half.
 var (
 	// ErrCredentialInvalid refuses a credential that authenticates no
@@ -50,6 +73,11 @@ var (
 	// contract version, or another.
 	ErrUnsupportedTokenContract = errorx.New(errorx.KindInvalidArgument,
 		"unsupported Garam-Contract-Version: this route serves "+TokenContractVersion)
+	// ErrNoCertificate refuses a renewal for a caller that presented
+	// no certificate to renew: a token's holder exchanges its
+	// credential instead (ADR-0100).
+	ErrNoCertificate = errorx.New(errorx.KindUnauthenticated,
+		"no certificate was presented: a token is not renewed, its credential is exchanged again")
 	// ErrAudienceInvalid refuses an audience that is not another
 	// operator of the exchanging operator's organization. A token
 	// minted for a hosted operator is shown to it, so the audience is

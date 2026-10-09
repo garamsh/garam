@@ -159,8 +159,6 @@ WHERE c.credential_hash = $1;
 -- that records the new one, so the table stays proportional to what is
 -- live without a job of its own. The two never touch one row: the
 -- sweep deletes what has expired and the insert writes what has not.
--- A credential re-issued between reading its holder and this insert
--- fails the foreign key, and nothing is recorded.
 -- name: RecordOperatorToken :exec
 WITH swept AS (
     DELETE FROM operator_tokens
@@ -178,3 +176,20 @@ SELECT t.operator_grn, t.audience_grn, t.expires_at
 FROM operator_tokens t
 JOIN operators o ON o.grn = t.operator_grn
 WHERE t.token_hash = $1 AND t.expires_at > now();
+
+-- An exchange holds the credential issuance's row while it records and
+-- trims, so two exchanges at once cannot leave more live tokens than
+-- the bound. A row gone since its holder was read answers no row.
+-- name: LockOperatorCredential :one
+SELECT id FROM operator_credentials WHERE id = $1 FOR UPDATE;
+
+-- Keeps the issuance's newest tokens and drops the rest, which bounds
+-- what a leaked credential can write (ADR-0100).
+-- name: TrimOperatorTokens :exec
+DELETE FROM operator_tokens t
+WHERE t.credential_id = sqlc.arg('credential_id')
+  AND t.token_hash NOT IN (
+      SELECT k.token_hash FROM operator_tokens k
+      WHERE k.credential_id = sqlc.arg('credential_id')
+      ORDER BY k.issued_at DESC, k.token_hash DESC
+      LIMIT sqlc.arg('keep'));

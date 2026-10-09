@@ -22,8 +22,14 @@ type envelope struct {
 	Body     string `json:"body"`
 }
 
-// Content encodes what the runtime is told about a claimed message.
+// Content is what the runtime is told about a claimed message: the
+// octets garam answered the claim with, unchanged, because its
+// signature binds them. A garam that answers none predates ADR-0101,
+// and the adapter encodes the same members itself.
 func (c *Claim) Content() (string, error) {
+	if c.Encoded != "" {
+		return c.Encoded, nil
+	}
 	encoded, err := json.Marshal(envelope{Contract: MessageContract, Sender: c.Sender.String(), Body: c.Body})
 	if err != nil {
 		return "", errorx.Wrap(err, "delivery: message content", errorx.KindInternal)

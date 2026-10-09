@@ -67,8 +67,10 @@ certificates). It is step G2 of
    verified, and the content and garam's signature over it
    (§Stable identifiers and the outbox).
 2. Post it into the gateway under garam's message identifier, never the
-   claim's, as `garam-message.v1` (§Stable identifiers and the outbox).
-   Hold the claim under that identifier, in memory.
+   claim's, as `garam-message.v1`: the content garam answered, byte for
+   byte, and garam's signature beside it where the deployment turned
+   signing on (§Stable identifiers and the outbox). Hold the claim
+   under that identifier, in memory.
 3. Watch the gateway's event stream for a turn ending.
 4. When a turn reports success and names a message, complete that
    message's claim at garam.
@@ -293,6 +295,25 @@ contract binds:
 | The ingress body is bounded at 1 MiB | `internal/gateway/handler.go` | A maximal envelope could be cut |
 | An outbox entry is `<id>.json`, written whole under a dot-prefixed temporary name, carrying `created_at` once | `tools/message_send/message_send.go`, `internal/message/message.go` | The forwarder could read a partial entry or invent an age |
 
+Read in Sherlock at
+[`v0.5.0`](https://github.com/garamsh/sherlock/tree/7b4a2bb6905164c16ffd20719aba0d0920a10b2f)
+(`7b4a2bb6905164c16ffd20719aba0d0920a10b2f`), the release garam's
+real-runtime suites pin, in `docs/architecture/gateway.md` §Signed
+messages, which governs Sherlock's ingress. Against
+[`v0.4.0`](https://github.com/garamsh/sherlock/tree/6054666584e6a0f22c19d563e26240d6eefc1258),
+the first release a signing adapter can run beside, that section only
+gains the deployment order §Stable identifiers and the outbox repeats.
+The v0.1.0 rows above still hold for an unsigned message.
+
+| Fact | Where | What breaks without it |
+|---|---|---|
+| A post takes `signature`, a string holding a compact JWS, beside `id` and `content`, and verifies it when present | `docs/architecture/gateway.md` §Signed messages | The signature would have nowhere to travel |
+| Sherlock v0.2.1 and earlier refuse a post carrying `signature` with 400 `invalid message body`, so no release before v0.3.0 takes it | `internal/gateway/handler.go` at v0.2.1, `postMessage` | The switch would not need the release floor |
+| A signed message is keyed by the verified `(iss, sub)` and its `id`, where an unsigned one is keyed by the transport caller | `docs/architecture/gateway.md` §Signed messages | Two attempts of one signed message would be two sources |
+| The lookup answers the transport principal that posted, signed or not, `pending`, `completed` or `unknown` | `docs/architecture/gateway.md` §Signed messages | A lost event on a signed message could not be recovered |
+| A signature is refused with 403 `signature rejected: <check>`, a missing one under `require-signature` with 403 `signature required`, and an issuer with no usable key set with 503 `issuer keys unavailable` | `docs/architecture/gateway.md` §Signed messages | A refusal would not read as a message not delivered |
+| A trusted issuer is an exact `iss` in the runtime's `issuers` | `docs/architecture/gateway.md` §Signed messages | garam's `GARAM_MACHINE_ISSUER` would not need to match it byte for byte (deployment-contract.md §The message issuer is kept for the deployment's life) |
+
 This promotes an observability surface into a delivery contract, and
 the two carry different obligations: observability may lose an event, a
 delivery contract may not. Naming the buffer here is what makes it
@@ -318,16 +339,36 @@ pins it for this adapter.
   garam's claim verified and `body` the original body as one string, so
   nothing in the body overrides the envelope and a redelivery encodes
   to the same bytes.
-- **The adapter does not yet forward what garam signs.** garam's claim
-  answers the same content, which garam encodes itself, and a signature
-  over it
-  ([ADR-0101](./adr/0101-garam-signs-every-message-it-delivers-and-the-agent-verifies-it-alone.md));
-  `tests/integration/message_signature_test.go` holds garam's content
-  equal to this adapter's own encoding. The adapter still posts the
-  content it encoded and drops the signature. Forwarding both byte for
-  byte is ADR-0101's step 2, and it waits for Sherlock's ingress to
-  name the member the signature travels in (garamsh/sherlock#993),
-  because that ingress refuses a member it does not know.
+- **The adapter forwards what garam signs.** garam's claim answers the
+  content, which garam encodes itself, and a signature over its octets
+  ([ADR-0101](./adr/0101-garam-signs-every-message-it-delivers-and-the-agent-verifies-it-alone.md)).
+  The adapter posts that content byte for byte and never encodes it
+  again. It encodes the members above itself only for a garam whose
+  claim answers no content, which predates ADR-0101, and then sends no
+  signature: a signature goes only beside the octets garam signed.
+  `tests/integration/adapter_test.go` holds that the bytes the runtime
+  receives verify against the set garam publishes.
+- **Signing is a deployment's switch, off by default.**
+  `GARAM_ADAPTER_SIGN_MESSAGES` sends garam's signature in the
+  ingress member `signature`, beside `id` and `content`. Nothing the
+  adapter can read tells it whether the runtime takes the member or
+  trusts garam's issuer: Sherlock's status is the same at v0.4.0 as at
+  v0.2.1, and a runtime that takes the member and trusts no issuer
+  refuses every signed message, as one that predates the member does.
+  So whoever runs the adapter turns the switch on, and only in this
+  order: the runtime is Sherlock v0.4.0 or later; its `issuers` entry
+  for garam, rendered by whatever runs the agent, is rolled out; then
+  the switch. Sherlock's `require-signature` comes after, if at all
+  (#1258).
+- **A refused signature is a message not delivered.** Sherlock answers
+  403 `signature rejected: <check>`, 403 `signature required` or 503
+  `issuer keys unavailable` (§Foreign facts this rests on), and each
+  takes the path every unusable answer takes: nothing is paired, the
+  lease lapses, and garam hands the message out again, signed afresh.
+  A signature refused for its time is mended by that, and a key set
+  the runtime could not read yet may be read by then. A configuration
+  that stays wrong is refused on every attempt, and the message spends
+  its attempts as any undelivered one does (§Failure and attempts).
 - **A reply leaves through a durable outbox.** The adapter reads each
   entry as a bounded regular file inside the outbox directory, never
   through a link, and requires its agent to be this adapter's GRN. It

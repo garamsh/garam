@@ -45,14 +45,14 @@ func TestHTTPGateway_PostCarriesGaramsIdentifierAndReadsTheRuntimesProgress(t *t
 		writeJSON(w, status, map[string]string{"id": "message-1", "agent_id": agentGRN().String(), "status": wire})
 	})
 
-	progress, err := gateway.Post(context.Background(), "message-1", `{"contract":"garam-message.v1"}`)
+	progress, err := gateway.Post(context.Background(), "message-1", `{"contract":"garam-message.v1"}`, "")
 	require.NoError(t, err)
 	assert.Equal(t, delivery.ProgressPending, progress)
 	assert.Equal(t, "/agents/"+agentGRN().String()+"/messages", route)
 	assert.Equal(t, map[string]any{"id": "message-1", "content": `{"contract":"garam-message.v1"}`}, sent)
 
 	status, wire = http.StatusOK, "completed"
-	progress, err = gateway.Post(context.Background(), "message-1", `{"contract":"garam-message.v1"}`)
+	progress, err = gateway.Post(context.Background(), "message-1", `{"contract":"garam-message.v1"}`, "")
 	require.NoError(t, err)
 	assert.Equal(t, delivery.ProgressCompleted, progress, "a replay of a completed message")
 }
@@ -67,9 +67,53 @@ func TestHTTPGateway_PostReportsWhatTheGatewayRefusedWith(t *testing.T) {
 		writeJSON(w, http.StatusConflict, map[string]string{"error": "id reused with different content"})
 	})
 
-	_, err := gateway.Post(context.Background(), "message-1", "content")
+	_, err := gateway.Post(context.Background(), "message-1", "content", "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "id reused with different content")
+}
+
+// TestHTTPGateway_PostCarriesTheSignatureInTheMemberSherlockNames is
+// the ingress body Sherlock v0.4.0 takes (gateway.md, §Signed
+// messages): the signature as the string member signature, beside the
+// content it covers, both as they were handed in. The unsigned post in
+// the test above is the control: it carries no such member at all.
+func TestHTTPGateway_PostCarriesTheSignatureInTheMemberSherlockNames(t *testing.T) {
+	var sent map[string]any
+	gateway := gatewayAnswering(t, func(w http.ResponseWriter, r *http.Request) {
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&sent))
+		writeJSON(w, http.StatusAccepted, map[string]string{"id": "message-1", "status": "queued"})
+	})
+	content := `{"contract":"garam-message.v1","sender":"s","body":"caf\u00e9"}`
+
+	_, err := gateway.Post(context.Background(), "message-1", content, "header.payload.signature")
+	require.NoError(t, err)
+	assert.Equal(t, map[string]any{"id": "message-1", "content": content, "signature": "header.payload.signature"}, sent)
+}
+
+// TestHTTPGateway_PostReadsEachSignatureRefusalAsUndelivered holds the
+// refusals Sherlock's ingress answers about a signature to the answer
+// the loop leaves to lapse: each is an unavailable error carrying the
+// runtime's own words, never one that completes or pairs anything.
+func TestHTTPGateway_PostReadsEachSignatureRefusalAsUndelivered(t *testing.T) {
+	refusals := map[string]struct {
+		status int
+		error  string
+	}{
+		"rejected":         {http.StatusForbidden, "signature rejected: audience"},
+		"required":         {http.StatusForbidden, "signature required"},
+		"keys unavailable": {http.StatusServiceUnavailable, "issuer keys unavailable"},
+	}
+	for name, refused := range refusals {
+		t.Run(name, func(t *testing.T) {
+			gateway := gatewayAnswering(t, func(w http.ResponseWriter, _ *http.Request) {
+				writeJSON(w, refused.status, map[string]string{"error": refused.error})
+			})
+			_, err := gateway.Post(context.Background(), "message-1", "content", "header.payload.signature")
+			require.Error(t, err)
+			assert.True(t, errorx.IsKind(err, errorx.KindUnavailable), "left to lapse and redelivered: %v", err)
+			assert.Contains(t, err.Error(), refused.error)
+		})
+	}
 }
 
 // TestHTTPGateway_PostRefusesAnAnswerAboutAnotherMessage covers the
@@ -88,14 +132,14 @@ func TestHTTPGateway_PostRefusesAnAnswerAboutAnotherMessage(t *testing.T) {
 			gateway := gatewayAnswering(t, func(w http.ResponseWriter, _ *http.Request) {
 				writeJSON(w, http.StatusAccepted, answer)
 			})
-			_, err := gateway.Post(context.Background(), "message-1", "content")
+			_, err := gateway.Post(context.Background(), "message-1", "content", "")
 			require.Error(t, err)
 		})
 	}
 	control := gatewayAnswering(t, func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusAccepted, map[string]string{"id": "message-1", "status": "queued"})
 	})
-	_, err := control.Post(context.Background(), "message-1", "content")
+	_, err := control.Post(context.Background(), "message-1", "content", "")
 	require.NoError(t, err, "the control: an answer about the message")
 }
 

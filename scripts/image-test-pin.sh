@@ -28,7 +28,7 @@ commit=$1 consumer=$2
 # image or a pin at another account, region or repository.
 account=486152169996
 region=ap-northeast-2
-name=dev/garam-test
+name=garam-dev/garam-test
 host=$account.dkr.ecr.$region.amazonaws.com
 repository=$host/$name
 

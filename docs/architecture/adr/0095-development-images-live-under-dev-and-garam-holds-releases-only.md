@@ -1,6 +1,7 @@
 # ADR 0095: Development images live under `dev/`, and `garam/` holds releases only
 
-> Status: accepted
+> Status: superseded by
+> [ADR-0097](./0097-development-images-live-under-garam-dev-and-garam-holds-releases-only.md)
 > Date: 2026-10-09
 
 Drafted for #1234, which reserved this number. The decision is the

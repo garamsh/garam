@@ -184,7 +184,7 @@ format:
 # Two tests are outside Go, each needing git or nothing and no Docker,
 # and each printing its own count: scripts/image-build-test.sh, which
 # tags a development image-build accepts (ADR-0071) and under which
-# namespace it names them (ADR-0095), and
+# namespace it names them (ADR-0097), and
 # scripts/image-test-ecr-test.sh, what test-image-push and
 # test-image-pin refuse before they reach AWS (ADR-0093).
 TEST_PKGS = $(filter-out %/tests/integration %/tests/e2e %/tests/workload %/tests/standalone,$(GO_PKGS))
@@ -585,7 +585,7 @@ web-e2e:
 # not that the images do (#760).
 #
 # IMAGE_REGISTRY makes it a development build (ADR-0071): the release's
-# repositories under `dev/` in that registry (ADR-0095), tagged
+# repositories under `garam-dev/` in that registry (ADR-0097), tagged
 # IMAGE_TAG or, when that is empty, the first twelve hex digits of HEAD.
 # The script refuses a bare release version or any other tag before it
 # builds, and pushes nothing.

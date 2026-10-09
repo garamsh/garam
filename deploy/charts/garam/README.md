@@ -390,7 +390,7 @@ one version, so a deployment pins one version across the pair
 (ADR-0039). The tags are immutable, so the tag answers what is deployed
 on its own. The release repositories, `garam/garam-server` and
 `garam/garam-web`, hold releases only. A development build
-is in `dev/garam-server` or `dev/garam-web` (ADR-0095),
+is in `garam-dev/garam-server` or `garam-dev/garam-web` (ADR-0097),
 tagged by a commit prefix or `X.Y.Z-<prerelease>` rather than a bare
 version (ADR-0071), so running one sets `image.*.repository` as well
 as the tag, and pins a build nobody released.

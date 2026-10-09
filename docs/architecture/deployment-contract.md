@@ -48,8 +48,8 @@ The repositories the chart's `image.*.repository` names,
 `X.Y.Z`, which only a `vX.Y.Z` git tag publishes
 ([ADR-0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)).
 A development build a person made and pushed is in
-`dev/garam-server` or `dev/garam-web`
-([ADR-0095](./adr/0095-development-images-live-under-dev-and-garam-holds-releases-only.md)),
+`garam-dev/garam-server` or `garam-dev/garam-web`
+([ADR-0097](./adr/0097-development-images-live-under-garam-dev-and-garam-holds-releases-only.md)),
 under a commit-derived or prerelease tag
 ([ADR-0071](./adr/0071-a-development-image-shares-the-release-repository-and-its-tag-says-it-is-not-a-release.md)),
 so a deployment running one sets the repository as well as the tag.
@@ -57,9 +57,9 @@ so a deployment running one sets the repository as well as the tag.
 references this repository produces, and refuses every other tag
 before it builds; `README.md` §Development images is the procedure.
 The test image is none of these: an operator pushes it for another
-repository's CI to `dev/garam-test`, an ECR repository of its own that
-no release writes to; no deployment runs it, and the chart names it
-nowhere
+repository's CI to `garam-dev/garam-test`, an ECR repository of its
+own that no release writes to; no deployment runs it, and the chart
+names it nowhere
 ([ADR-0092](./adr/0092-a-test-image-is-published-to-ghcr-from-dev-and-no-release-carries-it.md),
 [ADR-0093](./adr/0093-an-operator-pushes-the-test-image-to-the-accounts-ecr.md)).
 
@@ -528,8 +528,8 @@ that would assert one:
 - [ADR-0071](./adr/0071-a-development-image-shares-the-release-repository-and-its-tag-says-it-is-not-a-release.md)
   — a development build is told apart by its tag, which this
   repository refuses to make a bare release version
-- [ADR-0095](./adr/0095-development-images-live-under-dev-and-garam-holds-releases-only.md)
-  — a development build lives under `dev/`, and the release
+- [ADR-0097](./adr/0097-development-images-live-under-garam-dev-and-garam-holds-releases-only.md)
+  — a development build lives under `garam-dev/`, and the release
   repositories hold releases only
 - [ADR-0092](./adr/0092-a-test-image-is-published-to-ghcr-from-dev-and-no-release-carries-it.md)
   — the test image is published outside the release repositories,

@@ -106,7 +106,7 @@ esac
 EOF
 chmod +x "$bin/aws" "$bin/docker"
 
-ecr=486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/dev/garam-test
+ecr=486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam-dev/garam-test
 want=sha256:want
 cases=0
 failed=0
@@ -197,7 +197,7 @@ called "^check $ecr:$head\$" && called "^docker push $ecr:$short\$" \
 # its name, and Docker logs in to and pushes to its host alone.
 cases=$((cases + 1))
 aws_calls=$(grep '^aws ecr batch-get-image ' "$calls" | wc -l)
-aws_ours=$(grep -c -- '--region ap-northeast-2 --registry-id 486152169996 --repository-name dev/garam-test ' "$calls" || true)
+aws_ours=$(grep -c -- '--region ap-northeast-2 --registry-id 486152169996 --repository-name garam-dev/garam-test ' "$calls" || true)
 [ "$aws_calls" -gt 0 ] && [ "$aws_ours" -eq "$aws_calls" ] \
 	&& called '^aws ecr get-login-password --region ap-northeast-2$' \
 	&& called '^docker login --username AWS --password-stdin 486152169996\.dkr\.ecr\.ap-northeast-2\.amazonaws\.com$' \
@@ -206,8 +206,8 @@ aws_ours=$(grep -c -- '--region ap-northeast-2 --registry-id 486152169996 --repo
 
 # A repository named on the command line is refused, whatever it is:
 # another account, another region, the release namespace, or this one.
-untouched 'usage: scripts/image-test-push.sh' $push 123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/dev/garam-test
-untouched 'usage: scripts/image-test-push.sh' $push 486152169996.dkr.ecr.us-east-1.amazonaws.com/dev/garam-test
+untouched 'usage: scripts/image-test-push.sh' $push 123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/garam-dev/garam-test
+untouched 'usage: scripts/image-test-push.sh' $push 486152169996.dkr.ecr.us-east-1.amazonaws.com/garam-dev/garam-test
 untouched 'usage: scripts/image-test-push.sh' $push 486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam/garam-test
 untouched 'usage: scripts/image-test-push.sh' $push "$ecr"
 
@@ -268,13 +268,13 @@ grep -Fq -- "--image-tag pinned-consumer --image-manifest {\"schemaVersion\":2} 
 
 cases=$((cases + 1))
 aws_calls=$(grep -c '^aws ecr ' "$calls" || true)
-aws_ours=$(grep -c -- '--region ap-northeast-2 --registry-id 486152169996 --repository-name dev/garam-test ' "$calls" || true)
+aws_ours=$(grep -c -- '--region ap-northeast-2 --registry-id 486152169996 --repository-name garam-dev/garam-test ' "$calls" || true)
 [ "$aws_calls" -gt 0 ] && [ "$aws_ours" -eq "$aws_calls" ] && ! called '^docker ' \
 	|| fail "the pin control reached another repository: $(cat "$calls")"
 
 untouched 'usage: scripts/image-test-pin.sh' $pin "$head"
-for other in 123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/dev/garam-test \
-	486152169996.dkr.ecr.us-east-1.amazonaws.com/dev/garam-test \
+for other in 123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/garam-dev/garam-test \
+	486152169996.dkr.ecr.us-east-1.amazonaws.com/garam-dev/garam-test \
 	486152169996.dkr.ecr.ap-northeast-2.amazonaws.com/garam/garam-test "$ecr"; do
 	untouched 'usage: scripts/image-test-pin.sh' $pin "$other" "$head" consumer
 done

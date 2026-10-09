@@ -255,8 +255,8 @@ What this repository runs against itself. `docs/convention/ci.md` decides how a 
   them because these files say so is a release after that reading.
   A development build, which `make image-build` produces when given
   `IMAGE_REGISTRY`, carries the same two labels, the version being its
-  tag (ADR-0071), and reaches `dev/garam-server` or
-  `dev/garam-web` only by a person's push (ADR-0095);
+  tag (ADR-0071), and reaches `garam-dev/garam-server` or
+  `garam-dev/garam-web` only by a person's push (ADR-0097);
   without it the target tags `:ci` and passes neither label a value.
   A reference this repository did not publish is still one only its
   builder can vouch for, which after the label is a claim about where
@@ -642,8 +642,9 @@ ADRs:
   it" in part; its registry, its commit tag, its publishing from `dev`
   and its retention are superseded by 0093
 - [0093](./adr/0093-an-operator-pushes-the-test-image-to-the-accounts-ecr.md)
-  — an operator pushes the test image to `dev/garam-test` in the
-  account's ECR, under ADR-0071's commit-prefix tag, and moves its
+  — an operator pushes the test image to a repository of its own in
+  the development namespace of the account's ECR, which 0095 and then
+  0097 name, under ADR-0071's commit-prefix tag, and moves its
   pins, under their own AWS identity with `make test-image-push` and
   `make test-image-pin`; no workflow holds a
   credential for it, so no image appears per `dev` commit; the
@@ -659,12 +660,17 @@ ADRs:
   composition site `stack-go.md` provides
 - [0095](./adr/0095-development-images-live-under-dev-and-garam-holds-releases-only.md)
   — development images live under `dev/`, and `garam/` holds
-  releases only: `make image-build` names `dev/<image>` and
-  refuses a release version there, a person pushes under their own
-  identity, and the costs the PM stated against it are accepted.
-  Supersedes ADR-0071's repository decision only
+  releases only: `make image-build` names each image under `dev/`
+  and refuses a release version there, a person pushes under their
+  own identity, and the costs the PM stated against it are accepted.
+  Supersedes ADR-0071's repository decision only; superseded by 0097
 - [0096](./adr/0096-garam-syncs-the-convention-template-to-f7de866.md)
   — garam syncs the conventions template to `f7de866`, taking every
   commit since `6fbfd5d` that lands on a file it keeps; `stack-go.md`
   §1 keeps naming an implementation package for its technology, and
   three adapted stack files keep their checked-against headers
+- [0097](./adr/0097-development-images-live-under-garam-dev-and-garam-holds-releases-only.md)
+  — development images live under `garam-dev/`, as the owner set it
+  after 0095; `garam/` still holds releases only, and
+  `make image-build`, `make test-image-push` and `make test-image-pin`
+  name `garam-dev/<image>`. Supersedes 0095

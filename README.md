@@ -134,9 +134,9 @@ stays outside `make web-ci`.
 
 ## Development images
 
-A development image goes into `dev/garam-server` or
-`dev/garam-web`
-([ADR-0095](./docs/architecture/adr/0095-development-images-live-under-dev-and-garam-holds-releases-only.md)),
+A development image goes into `garam-dev/garam-server` or
+`garam-dev/garam-web`
+([ADR-0097](./docs/architecture/adr/0097-development-images-live-under-garam-dev-and-garam-holds-releases-only.md)),
 and its tag is what says it is not a release
 ([ADR-0071](./docs/architecture/adr/0071-a-development-image-shares-the-release-repository-and-its-tag-says-it-is-not-a-release.md)).
 `garam/garam-server` and `garam/garam-web` hold releases only: a bare
@@ -151,7 +151,7 @@ make image-build IMAGE_REGISTRY=<registry> IMAGE_TAG=0.4.0-rc.1  # a prerelease 
 
 `<registry>` is the host in the chart's `image.*.repository`
 (`deploy/charts/garam/values.yaml`); the path under it is
-`dev/<image>`, and the contexts, the Dockerfiles and the build
+`garam-dev/<image>`, and the contexts, the Dockerfiles and the build
 arguments are the ones the release reads. Each image is labelled with
 HEAD and the tag.
 `scripts/image-build.sh` refuses, before building anything, a bare
@@ -160,13 +160,13 @@ HEAD's, and a working tree that differs from HEAD; its last line names
 the commit built.
 
 Nothing here pushes the result. Pushing takes a credential of your
-own for the `dev/` repositories, which this repository neither
+own for the `garam-dev/` repositories, which this repository neither
 holds nor grants, and the release's push role admits `v*` tags only.
-Those repositories are asked of `garamsh/infra` and do not exist until
-it creates them (#1234).
+Those repositories are `garamsh/infra`'s to declare, and its
+`ba73529` (garamsh/infra#309) declares them.
 `GARAM_WEB_IMAGE=<registry>/dev/garam-web:<tag> make web-image-e2e`
 checks the web image you built before you push it.
-A deployment running it sets `image.*.repository` to the `dev/`
+A deployment running it sets `image.*.repository` to the `garam-dev/`
 repository as well as the tag.
 
 Without `IMAGE_REGISTRY`, `make image-build` builds both images as

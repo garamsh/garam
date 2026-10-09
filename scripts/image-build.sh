@@ -11,8 +11,8 @@
 # instead of keeping a second copy that goes stale (#870).
 #
 # `--registry <host>` builds a development image instead: each is
-# tagged `<host>/dev/<repository>:<tag>`, the development
-# namespace beside the release's `garam/` (ADR-0095), and `--tag` names
+# tagged `<host>/garam-dev/<repository>:<tag>`, the development
+# namespace beside the release's `garam/` (ADR-0097), and `--tag` names
 # a commit-derived or prerelease tag, defaulting to the first twelve
 # hex digits of HEAD (ADR-0071). A bare release version is refused, as
 # is any other tag, before anything is built. The resulting references
@@ -23,7 +23,7 @@ workflow=.github/workflows/release.yml
 tag=ci
 names=false
 registry=
-devnamespace=dev
+devnamespace=garam-dev
 devtag=
 dev=false
 

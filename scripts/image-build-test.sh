@@ -1,7 +1,7 @@
 #!/bin/sh
 # Checks which tags scripts/image-build.sh accepts for a development
 # build (ADR-0071), that it names the development namespace and never
-# the release's (ADR-0095), and that a refused one reaches no build.
+# the release's (ADR-0097), and that a refused one reaches no build.
 # Each case runs the script in a scratch repository holding this
 # tree's copy of it and of .github/workflows/release.yml, committed
 # once, with a `docker` on PATH that records its arguments: the tree is
@@ -79,11 +79,11 @@ accepted() {
 }
 
 reg=registry.invalid
-ns=dev
+ns=garam-dev
 
 # The check's own names are what they were before a development build
 # existed. A development build takes the release's repository names
-# into `dev/`, the release workflow naming them under `garam/`.
+# into `garam-dev/`, the release workflow naming them under `garam/`.
 accepted '. garam-server:ci' --names
 accepted 'web garam-web:ci' --names
 accepted ". $reg/$ns/garam-server:$short" --names --registry "$reg"

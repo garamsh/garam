@@ -170,25 +170,24 @@ const CLAIMS: Claim[] = [
     ],
   },
   {
-    prose: ["In the console today", "The organizations you belong to"],
+    prose: [
+      "In the console today",
+      "The organizations you belong to, and for each one its teams, people, agents, projects, operators, consents, and permissions.",
+    ],
     pinned: [],
     facts: [
-      {
-        kind: "path",
-        path: "web/src/app/console/orgs/[org]/teams",
-        exists: true,
-      },
-      {
-        kind: "path",
-        path: "web/src/app/console/orgs/[org]/people",
-        exists: true,
-      },
-      {
-        kind: "path",
-        path: "web/src/app/console/orgs/[org]/projects",
-        exists: true,
-      },
-    ],
+      "teams",
+      "people",
+      "agents",
+      "projects",
+      "operators",
+      "consents",
+      "permissions",
+    ].map((section) => ({
+      kind: "path" as const,
+      path: `web/src/app/console/orgs/[org]/${section}`,
+      exists: true,
+    })),
   },
 ];
 

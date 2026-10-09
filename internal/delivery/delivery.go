@@ -63,12 +63,19 @@ type (
 // Claim is a message garam handed this adapter and the hold it has on
 // it: the message and its verified sender go to the runtime, and the
 // hold is what completes.
+//
+// Encoded and Signature are what garam answered the claim with
+// (ADR-0101): the content as garam encoded it and its signature over
+// those octets. Both are empty from a garam that predates them, and a
+// renewal carries neither.
 type Claim struct {
 	ID        ClaimID
 	ExpiresAt time.Time
 	Message   MessageID
 	Sender    grn.GRN
 	Body      string
+	Encoded   string
+	Signature string
 }
 
 // TurnOutcome is how a turn ended. The platform emits exactly one

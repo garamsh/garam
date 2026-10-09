@@ -53,7 +53,7 @@ func TestBounds_StalledPeerIsRefusedWithinItsBound(t *testing.T) {
 		"Claim":    func(c context.Context) error { _, e := q.Claim(c); return e },
 		"Renew":    func(c context.Context) error { _, e := q.Renew(c, "id"); return e },
 		"Complete": func(c context.Context) error { return q.Complete(c, "id") },
-		"Post":     func(c context.Context) error { _, e := g.Post(c, "message-1", "hi"); return e },
+		"Post":     func(c context.Context) error { _, e := g.Post(c, "message-1", "hi", ""); return e },
 		"Lookup":   func(c context.Context) error { _, e := g.Lookup(c, "message-1"); return e },
 		"Status":   func(c context.Context) error { _, e := g.Status(c); return e },
 		"Submit":   func(c context.Context) error { _, e := q.Post(c, outbound()); return e },

@@ -1,6 +1,9 @@
 # ADR 0084: The adapter activates its generation and reports runtime status under a contract garam owns
 
-> Status: accepted
+> Status: accepted — the agent's leaf over mTLS, `Garam-Placement`
+> in `Authorization` and `agent-execution.v1` as the identifier's first
+> field are superseded by
+> [ADR-0100](./0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
 > Date: 2026-10-05
 
 Drafted for #1186. The Operator PM recorded on

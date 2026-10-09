@@ -1,6 +1,6 @@
 # ADR 0067: A member mints an operator a second enrollment token where it holds no certificate, and the refusal where it holds one is where that question stays open
 
-> Status: accepted
+> Status: superseded by [ADR-0100](./0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
 > Date: 2026-09-05
 
 ## Contents

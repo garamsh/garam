@@ -99,9 +99,17 @@ func caller(w http.ResponseWriter, r *http.Request) (grn.GRN, bool) {
 // decision rests on which certificate authenticated: what may replace
 // it (ADR-0046), a recheck on every request, or the execution fence's
 // judgement of its validity and lineage (ADR-0080).
+//
+// A request that presented a token which proved nothing is refused
+// with the reason the listener read (ADR-0100), so a caller holding a
+// voided token learns that rather than that it presented nothing.
 func callerCertificate(w http.ResponseWriter, r *http.Request) (machine.Identity, bool) {
 	identity, ok := machine.IdentityOf(r)
 	if !ok {
+		if err := machine.RefusalOf(r); err != nil {
+			writeError(w, err)
+			return machine.Identity{}, false
+		}
 		writeError(w, errorx.New(errorx.KindUnauthenticated, "no machine identity"))
 		return machine.Identity{}, false
 	}

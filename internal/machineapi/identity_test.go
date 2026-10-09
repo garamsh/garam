@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	machinegen "github.com/garamsh/garam/api/machine"
+	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/machineapi"
 	"github.com/garamsh/garam/internal/operator"
 )
@@ -29,6 +30,10 @@ type operatorService struct {
 	err         error
 	renewed     []operator.Credential
 	enrolled    []enrolment
+	// credential is the one the exchange answers for, and audiences
+	// what each exchange asked for.
+	credential string
+	audiences  []*grn.GRN
 }
 
 // enrolment is one call the enrollment route made, as the domain saw
@@ -36,6 +41,17 @@ type operatorService struct {
 type enrolment struct {
 	token   string
 	request operator.CertificateRequest
+}
+
+// Exchange answers a token for the one credential the fake was given,
+// recording the audience asked for.
+func (s *operatorService) Exchange(_ context.Context, credential string, audience *grn.GRN) (*operator.Token, error) {
+	s.audiences = append(s.audiences, audience)
+	if credential != s.credential {
+		return nil, operator.ErrCredentialInvalid
+	}
+	return &operator.Token{Value: operator.TokenPrefix + "answered", Operator: s.certificate.Subject,
+		Audience: audience, ExpiresAt: time.Date(2026, time.October, 9, 13, 0, 0, 0, time.UTC)}, nil
 }
 
 func (s *operatorService) Renew(_ context.Context, c operator.Credential) (*operator.IssuedCertificate, error) {
@@ -180,6 +196,7 @@ func fillPath(t *testing.T, path string, values map[string]string) string {
 const (
 	enrollmentRoute           = http.MethodPost + " /enrollment"
 	standaloneEnrollmentRoute = http.MethodPost + " /agent-enrollments"
+	tokenExchangeRoute        = http.MethodPost + " /tokens"
 )
 
 // TestServer_EnrollmentsAreTheOnlyRoutesAnUncertifiedCallerReaches is the
@@ -222,6 +239,15 @@ func TestServer_EnrollmentsAreTheOnlyRoutesAnUncertifiedCallerReaches(t *testing
 	status, body := send(t, client, standalone.method, url+standalone.path, "")
 	assert.Equal(t, http.StatusUnauthorized, status)
 	assert.Contains(t, body, "standalone bootstrap")
+
+	// So is the token exchange, which refuses on its own credential,
+	// the operator's, rather than on the missing certificate.
+	exchange, ok := routes[tokenExchangeRoute]
+	require.True(t, ok, "the exemption names no operation the specification declares")
+	delete(routes, tokenExchangeRoute)
+	status, body = send(t, client, exchange.method, url+exchange.path, "")
+	assert.Equal(t, http.StatusUnauthorized, status)
+	assert.Contains(t, body, "Garam-Credential")
 
 	// No body is sent, because a handler that reads one before it reads
 	// the identity has already done work for a caller it has not

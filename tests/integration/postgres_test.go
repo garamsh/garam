@@ -156,7 +156,7 @@ func registerOperator(t *testing.T, p *pgxpool.Pool, g grn.GRN) grn.GRN {
 	require.NoError(t, err)
 	enrollment, err := operator.NewEnrollment(o.GRN(), scopedGRN(g.Organization, "user", "ada"))
 	require.NoError(t, err)
-	_, err = store.Register(context.Background(), o, enrollment)
+	_, err = store.Register(context.Background(), o, enrollment, credentialFor(t, o))
 	require.NoError(t, err)
 	return o.GRN()
 }
@@ -1367,7 +1367,7 @@ func TestOperatorStore_RoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	enrollment, err := operator.NewEnrollment(one.GRN(), registeredBy)
 	require.NoError(t, err)
-	_, err = s.Register(ctx, one, enrollment)
+	_, err = s.Register(ctx, one, enrollment, credentialFor(t, one))
 	require.NoError(t, err)
 
 	stored, err := s.Get(ctx, one.GRN())
@@ -1382,7 +1382,7 @@ func TestOperatorStore_RoundTrip(t *testing.T) {
 	// write.
 	again, err := operator.NewEnrollment(one.GRN(), registeredBy)
 	require.NoError(t, err)
-	_, err = s.Register(ctx, one, again)
+	_, err = s.Register(ctx, one, again, credentialFor(t, one))
 	assert.ErrorIs(t, err, operator.ErrOperatorAlreadyRegistered)
 	_, err = s.Spend(ctx, again.TokenHash())
 	assert.ErrorIs(t, err, operator.ErrEnrollmentInvalid,
@@ -1393,7 +1393,7 @@ func TestOperatorStore_RoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	elsewhereEnrollment, err := operator.NewEnrollment(elsewhere.GRN(), scopedGRN("globex", "user", "ada"))
 	require.NoError(t, err)
-	_, err = s.Register(ctx, elsewhere, elsewhereEnrollment)
+	_, err = s.Register(ctx, elsewhere, elsewhereEnrollment, credentialFor(t, elsewhere))
 	require.NoError(t, err)
 	listed, err := s.ListByOrg(ctx, orgRootGRN("acme"))
 	require.NoError(t, err)
@@ -4180,7 +4180,7 @@ func TestMachineSurface_EnrolsAnOperatorWithTheTokenRegisteringItMinted(t *testi
 	require.NoError(t, err)
 	enrollment, err := operator.NewEnrollment(o.GRN(), registeredBy)
 	require.NoError(t, err)
-	_, err = operator.NewPostgresStore(p).Register(ctx, o, enrollment)
+	_, err = operator.NewPostgresStore(p).Register(ctx, o, enrollment, credentialFor(t, o))
 	require.NoError(t, err)
 
 	request, operatorKey := enrollmentRequest(t)

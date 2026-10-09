@@ -58,6 +58,8 @@ export type Operator = components["schemas"]["Operator"];
  * answers that one the same way (ADR-0067).
  */
 export type RegisteredOperator = components["schemas"]["RegisteredOperator"];
+/** An operator's credential as the API answers it, once (ADR-0100). */
+export type OperatorCredential = components["schemas"]["OperatorCredential"];
 /**
  * One cross-organization consent relation, from the side the path
  * named: `orgGrn` is the other organization, and each half says
@@ -197,6 +199,13 @@ export const OperatorParser = parserFor<Operator>()(
   }),
 );
 
+export const OperatorCredentialParser = parserFor<OperatorCredential>()(
+  z.object({
+    credential: z.string().min(1),
+    issuedAt: z.string(),
+  }),
+);
+
 export const RegisteredOperatorParser = parserFor<RegisteredOperator>()(
   z.object({
     operator: OperatorParser,
@@ -204,6 +213,7 @@ export const RegisteredOperatorParser = parserFor<RegisteredOperator>()(
       token: z.string().min(1),
       expiresAt: z.string(),
     }),
+    credential: OperatorCredentialParser,
   }),
 );
 

@@ -2,7 +2,9 @@
 
 > Status: accepted — the Revocation item of §What this does not decide,
 > and the delete-route item of §Rejected alternatives, are superseded by
-> [ADR-0070](./0070-an-organization-deletes-an-operator-and-the-record-it-withdraws-is-what-that-operator-authenticated-on.md)
+> [ADR-0070](./0070-an-organization-deletes-an-operator-and-the-record-it-withdraws-is-what-that-operator-authenticated-on.md);
+> "a registration grants nothing; it issues no credential" is superseded
+> by [ADR-0100](./0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
 > Date: 2026-08-25
 
 ## Contents

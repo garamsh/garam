@@ -71,21 +71,24 @@ collaborate on a shared plan.
   only: it assigns no agent and issues no certificate.
 - An organization **registering** an operator, under
   `/orgs/{org}/operators`, and its members reading the list (ADR-0045).
-  A record is a GRN, who registered it and when: it carries no
-  credential and reports nothing, because garam never dials an
-  operator. What it does grant is admission: the machine listener reads
-  it per connection, so an operator authenticates while its
+  A record is a GRN, who registered it and when, and it reports
+  nothing, because garam never dials an operator. Registering issues
+  the operator's credential in the same write, shown once, which it
+  exchanges for short-lived tokens; re-issuing it voids the previous one
+  and its tokens (ADR-0100). What the record grants is admission: the
+  machine listener reads it per connection for a certificate and per
+  request for a token, so an operator authenticates while its
   organization holds the record and stops when the record goes
   (ADR-0070). The identifier is supplied rather than minted, since an
   operator that already holds a certificate has to be registered under
   the GRN that certificate names. A name and description beside it are
   the organization's words about the record and not its identity
   (ADR-0074). Registering is granted by `operator:register`, reading by
-  `operator:read`, renaming and describing by `operator:update` and
-  deleting by `operator:delete`, each named action by action for the
-  reason the agent actions are — deleting separately from registering,
-  because registering grants nothing and deleting withdraws what an
-  operator runs on.
+  `operator:read`, renaming and describing by `operator:update`,
+  re-issuing the credential by `operator:reissue` and deleting by
+  `operator:delete`, each named action by action for the reason the
+  agent actions are — re-issuing and deleting separately from
+  registering, because each withdraws what an operator runs on.
 - An organization **delegating** bounded execution authority to a
   hosted operator, under `/orgs/{org}/operators/{operator}/delegation`,
   and a member handing it one request-bound operation under
@@ -430,9 +433,10 @@ collaborate on a shared plan.
 - `internal/health/` — what liveness and readiness mean, and the two
   probes every serve command mounts (ADR-0021).
 - `internal/operator/` — the record that an organization has an
-  operator (ADR-0045), which holds no credential and no reported state,
-  and the operator's own certificate: which one garam last issued it,
-  and what it takes to replace that with the next (ADR-0046).
+  operator (ADR-0045), which holds no reported state; the operator's
+  credential and the tokens it exchanges it for (ADR-0100); and the
+  operator's own certificate: which one garam last issued it, and what
+  it takes to replace that with the next (ADR-0046).
 - `internal/agent/` — agent identities and the operator each is
   assigned to.
 - `internal/ca/` — the per-organization certificate authority and the
@@ -518,7 +522,8 @@ it and imports no request surface and no domain.
 | `ca.Certificate` | `internal/ca` | signed client certificate identified by a SAN URI, over a key garam generated or one a request carried |
 | `ca.Sealer` | `internal/ca` | seals key material against a database dump |
 | `operator.Credential` | `internal/operator` | the certificate a connection authenticated with, as the renewal rule reads it |
-| `operator.Service` | `internal/operator` | signs an enrolling operator's certificate request, mints one out of band, and renews the one an operator presents |
+| `operator.Service` | `internal/operator` | signs an enrolling operator's certificate request, mints one out of band, renews the one an operator presents, and exchanges a credential for a token |
+| `operator.IssuedCredential` | `internal/operator` | the credential garam issues an operator and answers once (ADR-0100) |
 | `operator.Enrollment` | `internal/operator` | the one-time token an operator obtains its first certificate with |
 | `machine.Identity` | `internal/machine` | the GRN a verified client certificate names, and which certificate named it |
 | `machine.Service` | `internal/machine` | verifies a presented certificate against its organization's authority |

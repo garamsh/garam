@@ -134,6 +134,19 @@ func (q *Queries) DeleteOperatorCertificate(ctx context.Context, operatorGrn str
 	return err
 }
 
+const deleteOperatorCredential = `-- name: DeleteOperatorCredential :exec
+DELETE FROM operator_credentials WHERE operator_grn = $1
+`
+
+// Re-issuing is these two in one transaction: the delete takes the
+// previous credential and, by 000037's foreign key, every token minted
+// under it, and the insert writes the successor. An operator the
+// organization holds no record of fails the insert's foreign key.
+func (q *Queries) DeleteOperatorCredential(ctx context.Context, operatorGrn string) error {
+	_, err := q.db.Exec(ctx, deleteOperatorCredential, operatorGrn)
+	return err
+}
+
 const getOperator = `-- name: GetOperator :one
 SELECT o.grn, o.org_grn, o.registered_by, o.created_at, o.name, o.description, o.control_endpoint,
        c.issued_at AS certificate_issued_at,
@@ -175,6 +188,49 @@ func (q *Queries) GetOperator(ctx context.Context, grn string) (GetOperatorRow, 
 		&i.LiveToken,
 	)
 	return i, err
+}
+
+const getOperatorCredentialHolder = `-- name: GetOperatorCredentialHolder :one
+SELECT c.id, c.operator_grn
+FROM operator_credentials c
+JOIN operators o ON o.grn = c.operator_grn
+WHERE c.credential_hash = $1
+`
+
+type GetOperatorCredentialHolderRow struct {
+	ID          int64
+	OperatorGrn string
+}
+
+// Which operator a presented credential belongs to, read beside the
+// registration it rests on.
+func (q *Queries) GetOperatorCredentialHolder(ctx context.Context, credentialHash string) (GetOperatorCredentialHolderRow, error) {
+	row := q.db.QueryRow(ctx, getOperatorCredentialHolder, credentialHash)
+	var i GetOperatorCredentialHolderRow
+	err := row.Scan(&i.ID, &i.OperatorGrn)
+	return i, err
+}
+
+const insertOperatorCredential = `-- name: InsertOperatorCredential :exec
+INSERT INTO operator_credentials (operator_grn, credential_hash, issued_by, issued_at)
+VALUES ($1, $2, $3, $4)
+`
+
+type InsertOperatorCredentialParams struct {
+	OperatorGrn    string
+	CredentialHash string
+	IssuedBy       string
+	IssuedAt       pgtype.Timestamptz
+}
+
+func (q *Queries) InsertOperatorCredential(ctx context.Context, arg InsertOperatorCredentialParams) error {
+	_, err := q.db.Exec(ctx, insertOperatorCredential,
+		arg.OperatorGrn,
+		arg.CredentialHash,
+		arg.IssuedBy,
+		arg.IssuedAt,
+	)
+	return err
 }
 
 const listOperatorsByOrg = `-- name: ListOperatorsByOrg :many
@@ -278,6 +334,66 @@ func (q *Queries) MintOperatorEnrollment(ctx context.Context, arg MintOperatorEn
 		arg.ExpiresAt,
 	)
 	return err
+}
+
+const recordOperatorToken = `-- name: RecordOperatorToken :exec
+WITH swept AS (
+    DELETE FROM operator_tokens
+    WHERE operator_grn = $3 AND expires_at <= now()
+)
+INSERT INTO operator_tokens (token_hash, credential_id, operator_grn, audience_grn, issued_at, expires_at)
+VALUES ($1, $2, $3,
+        $4, $5, $6)
+`
+
+type RecordOperatorTokenParams struct {
+	TokenHash    string
+	CredentialID int64
+	OperatorGrn  string
+	AudienceGrn  pgtype.Text
+	IssuedAt     pgtype.Timestamptz
+	ExpiresAt    pgtype.Timestamptz
+}
+
+// An exchange sweeps the operator's expired tokens in the statement
+// that records the new one, so the table stays proportional to what is
+// live without a job of its own. The two never touch one row: the
+// sweep deletes what has expired and the insert writes what has not.
+// A credential re-issued between reading its holder and this insert
+// fails the foreign key, and nothing is recorded.
+func (q *Queries) RecordOperatorToken(ctx context.Context, arg RecordOperatorTokenParams) error {
+	_, err := q.db.Exec(ctx, recordOperatorToken,
+		arg.TokenHash,
+		arg.CredentialID,
+		arg.OperatorGrn,
+		arg.AudienceGrn,
+		arg.IssuedAt,
+		arg.ExpiresAt,
+	)
+	return err
+}
+
+const resolveOperatorToken = `-- name: ResolveOperatorToken :one
+SELECT t.operator_grn, t.audience_grn, t.expires_at
+FROM operator_tokens t
+JOIN operators o ON o.grn = t.operator_grn
+WHERE t.token_hash = $1 AND t.expires_at > now()
+`
+
+type ResolveOperatorTokenRow struct {
+	OperatorGrn string
+	AudienceGrn pgtype.Text
+	ExpiresAt   pgtype.Timestamptz
+}
+
+// The read every request presenting a token takes (ADR-0100): the
+// token's row joined to the registration it rests on, so a deleted
+// operator or a re-issued credential refuses it from the next request.
+func (q *Queries) ResolveOperatorToken(ctx context.Context, tokenHash string) (ResolveOperatorTokenRow, error) {
+	row := q.db.QueryRow(ctx, resolveOperatorToken, tokenHash)
+	var i ResolveOperatorTokenRow
+	err := row.Scan(&i.OperatorGrn, &i.AudienceGrn, &i.ExpiresAt)
+	return i, err
 }
 
 const setOperatorControlEndpoint = `-- name: SetOperatorControlEndpoint :execrows

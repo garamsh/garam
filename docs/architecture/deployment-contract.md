@@ -422,8 +422,8 @@ A request carries a bound of its own, thirty seconds to arrive, on two
 of the four HTTP listeners garam starts: the browser-facing one and the
 machine one (`requestReadTimeout` in `internal/cli/cli.go`, and on the
 machine listener it covers the handshake read too). The other two carry
-no such bound — the machine process's health port and the authz
-process's probe and metrics port — and each of those is reachable on a
+no such bound — the machine process's probe and metrics port and the
+authz process's — and each of those is reachable on a
 Service the chart renders. It bounds reading rather than a handler — a
 watch stream and a message claim both outlive it by design — so what it
 disconnects is a client that has

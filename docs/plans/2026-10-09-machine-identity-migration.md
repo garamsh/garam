@@ -38,14 +38,19 @@ not touched.
 
 | Step | Repository | What lands | Needs |
 |---|---|---|---|
-| G1 | garam | the token store, `POST /tokens`, `POST /agents/{agent}/tokens`, the operator and supervisor credentials, issue and re-issue on the browser API and in the console, every machine route accepting `Garam-Token` under the v2 contract values beside the v1 ones, introspection accepting a token where it takes `certificatePem`, a metric counting requests by how they authenticated | ADR-0100 accepted |
-| G2 | garam | the adapter's token mode — two token files, read per request, `Garam-Placement` as its own header, `agent-execution.v2` — and the standalone commands on a supervisor credential | G1 |
+| G1a | garam | ADR-0100 accepted; the operator credential, issued on registration and re-issued on `operator:reissue`, in the browser API and the console; `POST /tokens` under `machine-token.v1`; the listener reading `Garam-Token` per request on the operator routes that carry no contract value; the metric counting requests by how they authenticated | ADR-0100 accepted |
+| G1b | garam | `POST /agents/{agent}/tokens`, minted by the assignee at the current epoch and recorded in the agent's lineage; every agent route accepting a token, `Garam-Execution` in its own header and `durable-delivery.v2` | G1a |
+| G1c | garam | introspection accepting a token minted for the caller where it takes `certificatePem`; `operation-authority.v2`, `execution-fence.v2`, `agent-cutover.v2` and `managed-enrollment.v2` | G1b |
+| G1d | garam | the supervisor credential under `standalone-enrollment.v2`, and supervisor tokens on the execution routes | G1a |
+| G2 | garam | the adapter's token mode — two token files, read per request, `Garam-Placement` as its own header, `agent-execution.v2` — and the standalone commands on a supervisor credential | G1a to G1d |
 | O1 | garam-agent-operator | an Operator release carrying four pull requests, landed on `dev` in the order §O1 is one release of four pull requests gives | on each deployment, a garam carrying G1 and G2 deployed there and both credentials placed; on the lab, that is the garam `garamsh/gitops` pins |
 | G3 | garam | the certificate path removed: the listener stops requesting a client certificate, the seven issuing routes (`recoverAgentCredential` in its v1 form only), `garam issue-certificate` and the v1 contract values go, and with them ADR-0091's chain | O1 deployed on every operator garam knows of, and the G1 metric reading no certificate-authenticated request for seven days |
 | G4 | garam | the authorities retired: `internal/ca`, the sealer, the key-encryption key `garam serve machine` reads, and a migration dropping the certificate and enrollment tables | G3 released |
 
-G1 and G2 may land in one release; G3 and G4 may not, because G4's
-migration drops what G3's predecessor still reads.
+G1 is four pull requests in that order, each keeping every v1 path
+passing its own tests unchanged; G1 below names all four. G1 and G2 may
+land in one release; G3 and G4 may not, because G4's migration drops
+what G3's predecessor still reads.
 
 ### O1 is one release of four pull requests
 
@@ -118,7 +123,7 @@ today.
 - **O1.** The control service's own identity at garam is a credential
   and a token like any operator's, replacing the pair it loads once
   (`OP:cmd/control/main.go:219-254`).
-- **G1** is what makes this possible: introspection taking a token.
+- **G1c** is what makes this possible: introspection taking a token.
 
 ### Whether the per-agent credential replaces the placement token
 
@@ -300,18 +305,25 @@ metric reads no certificate-authenticated request for seven days.
 
 ## What is paired where
 
-ADR-0100 is proposed and pairs with no responsibility document in
-its own pull request. The pull request that accepts it moves the
-status lines of the ADRs it supersedes, and rule 3 then binds the
-implementation pull requests:
+ADR-0100 lands as `accepted` with G1a, the first implementation pull
+request, together with the status lines of the ADRs it supersedes.
+Rule 3 then binds each implementation pull request to the documents it
+moves:
 
-- **G1**: [machine-identity.md](../architecture/machine-identity.md),
+- **G1a**: [machine-identity.md](../architecture/machine-identity.md),
   [operators.md](../architecture/operators.md),
-  [agents.md](../architecture/agents.md),
-  [api-surface.md](../architecture/api-surface.md) and
-  [web-app.md](../architecture/web-app.md), each describing the token
-  path beside the certificate one.
-- **G2**: [adapter.md](../architecture/adapter.md) and
+  [api-surface.md](../architecture/api-surface.md),
+  [web-app.md](../architecture/web-app.md) and
+  [deployment-contract.md](../architecture/deployment-contract.md), for
+  the operator's credential and token path beside the certificate one
+  and the metrics the machine process now serves.
+- **G1b**: [agents.md](../architecture/agents.md) and
+  [machine-identity.md](../architecture/machine-identity.md)
+  §Generation and lineage, for agent tokens.
+- **G1c**: [operators.md](../architecture/operators.md) §Controller
+  proof and [agents.md](../architecture/agents.md) §Separated
+  execution.
+- **G1d** and **G2**: [adapter.md](../architecture/adapter.md) and
   [agents.md](../architecture/agents.md) §Standalone hosts.
 - **G3**: [machine-identity.md](../architecture/machine-identity.md),
   [operators.md](../architecture/operators.md),

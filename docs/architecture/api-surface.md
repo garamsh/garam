@@ -36,10 +36,10 @@ repeated. A second copy is a second thing to keep true.
 | Surface | Served by | Described by | A caller reaches it as |
 |---|---|---|---|
 | Browser-facing HTTP | `garam serve api` | `api/openapi.yaml` | a signed-in person, through the web app's same-origin `/api/*` rewrite (ADR-0009) |
-| Machine | `garam serve machine` | `api/machine.yaml` | an operator or an agent holding a certificate garam issued (ADR-0014, ADR-0015) |
+| Machine | `garam serve machine` | `api/machine.yaml` | an operator or an agent holding a certificate garam issued (ADR-0014, ADR-0015), or an operator presenting a token it exchanged its credential for (ADR-0100) |
 | Policy engine | `garam serve authz` | `proto/garam/authz/v1` | one of the two listeners above, over gRPC (ADR-0003) |
 | Probes | every serve command, and the web app | no specification | anything that can open the port (ADR-0021, ADR-0023) |
-| Metrics | `garam serve api` and `garam serve authz`, on the listener each already runs | no specification | anything that can open the port (§Not decided) |
+| Metrics | `garam serve api` and `garam serve authz`, on the listener each already runs, and `garam serve machine`, on its probe port | no specification | anything that can open the port (§Not decided) |
 
 The first two are separate processes
 ([ADR-0017](./adr/0017-machine-process.md)), and neither may call the
@@ -94,6 +94,22 @@ up to admit it. What an admitted caller may do is decided after that
 terms an agent does
 ([ADR-0015](./adr/0015-operator-identity.md)).
 
+**Or a token, which is ADR-0100's direction and is built for an
+operator alone.** An operator exchanges the credential its organization
+issued it for a one-hour token at `exchangeToken`, and presents the
+token as `Authorization: Garam-Token <token>` with no certificate
+([ADR-0100](./adr/0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)).
+The token is read on every request, beside the registration it rests
+on, so a deleted operator or a re-issued credential is refused from the
+next request on a connection already open; a request presenting a
+token beside a certificate is refused rather than read as either. A
+token reaches only the operations `api/machine.yaml` lists
+`machineToken` on — `ConfineTokens` in
+`internal/machineapi/token.go` refuses it everywhere else — and one
+minted for another audience reaches none. An agent and a supervisor
+present certificates until the plan's later steps
+(`docs/plans/2026-10-09-machine-identity-migration.md`).
+
 **The listener requests a client certificate and does not require
 one** — `tls.RequestClientCert` in `internal/machine/listener.go` — so
 a handshake completes for a caller that presents none at all. It has
@@ -103,14 +119,16 @@ enrolling exists to issue
 ([ADR-0064](./adr/0064-an-operator-enrols-with-a-one-time-token-and-keeps-its-key-in-its-own-cluster.md)).
 A connection whose certificate does not authenticate is not refused
 there either; it carries no identity instead, and every operation but
-two refuses a request that carries none. The identity a handler holds
+three refuses a request that carries none. The identity a handler holds
 is the one the handshake's own verification returned, so nothing
 derives it a second time and a certificate naming any GRN under a
 chain nothing signed reaches no handler that asks for one. Which
 operations opt out is read from `api/machine.yaml` rather than
 remembered: `enrollOperator` and `enrollStandaloneAgent` carry
 `security: []`, as an operation on the browser-facing listener does,
-and each is authenticated by what it is spent with instead.
+and each is authenticated by what it is spent with instead;
+`exchangeToken` carries `machineCredential`, and is authenticated by
+the operator's credential.
 
 Why a connection did not authenticate is written to the listener's own
 log and nowhere else: what crosses the wire says only that no identity
@@ -123,10 +141,11 @@ authenticate is recorded as an anomaly.
 true of every route.** `internal/machineapi/identity_test.go`, in
 `TestServer_EnrollmentsAreTheOnlyRoutesAnUncertifiedCallerReaches`, is
 authoritative for that: every operation `api/machine.yaml` declares
-except `POST /enrollment` and `POST /agent-enrollments` answers `401`
-naming the missing identity to a caller carrying none, sent from the
-same client that enrols, so what admitted those two was the route
-rather than a listener that had stopped checking.
+except `POST /enrollment`, `POST /agent-enrollments` and
+`POST /tokens` answers `401` naming the missing identity to a caller
+carrying none, sent from the same client that enrols, so what admitted
+those three was the route rather than a listener that had stopped
+checking.
 The routes it sends to are derived and not listed — read off the
 registration `make gen` writes from that specification, and held
 against the operation count of the generated interface — so an
@@ -163,6 +182,16 @@ decided. The command ADR-0032 ships still mints out of band and is what
 recovers the operator that already holds a certificate; it remains a
 root-level subcommand no serve path references
 ([ADR-0032](./adr/0032-garam-ships-the-command-that-mints-an-operators-first-certificate.md)).
+
+**An operator's credential is issued on the browser-facing listener
+too, by two operations.** `registerOperator` issues the first in the
+write that records the operator, and `reissueOperatorCredential`
+issues the next, voiding the previous one and every token exchanged
+for it (ADR-0100). Both answer the credential once and neither reads
+one back. Re-issuing is authorized on `operator:reissue`, which owner
+and admin hold, for the reason deleting has an action of its own: it
+withdraws what an operator runs on. An operator registered before
+credentials existed holds none, and re-issuing issues its first.
 
 **`getOperator` and `updateOperator` read one operator and change
 its name and description**, on `operator:read` and `operator:update`
@@ -539,22 +568,19 @@ decided says what closing that would take.
   a responsibility document to be paired with — and leaves the half
   only a rule can. What that rule should say is the index's to decide
   and not this document's.
-- **What decides the metrics surface. Nothing does, on any process.**
+- **What decides the metrics surface, on two processes of three.**
   `/metrics` is served by `garam serve api` and `garam serve authz`
   (§The surfaces) and decided by no ADR: every ADR that names it treats
   it as a surface that already exists. ADR-0014 and ADR-0017 name it as
   the shape a listener of its own follows, ADR-0021 puts the probes on
   the listener its metrics already use, and ADR-0030 counts it among
   the paths that write nothing — context and reasoning, never a
-  decision. So the absence is uniform rather than particular to one
-  process. Where it costs something is `garam serve machine`, which
-  builds the same registry (`newObservability` in
-  `internal/cli/observability.go`) and instruments its HTTP handler and
-  its gRPC client against it (`internal/cli/machine.go`), while
-  `metricsHandler` is mounted only in `internal/cli/serve.go` — so that
-  process pays for telemetry no scraper can read. Exposing it there, or
-  ceasing to collect it, is a decision about what a listener serves
-  rather than a defect to fix in a handler.
+  decision. `garam serve machine` is the exception: it serves
+  `/metrics` on its probe port because ADR-0100's migration plan gates
+  removing the certificate path on a count of the listener's requests
+  by how each authenticated, `garam_machine_requests_total`
+  (`internal/cli/machine_token.go`). That decides that this process
+  exposes the count, and nothing about what the other two expose.
 - **Whether anything outside the cluster reaches any listener.** The
   chart renders four `ClusterIP` Services and refuses to offer a value
   that would expose one (ADR-0042), so exposure is the deployment's

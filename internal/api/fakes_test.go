@@ -1074,6 +1074,9 @@ type fakeOperatorStore struct {
 	mu          sync.Mutex
 	operators   map[string]*operator.Operator
 	enrollments map[string]*operator.Enrollment
+	// The hash of each operator's credential, by operator GRN: one per
+	// operator, as the real store's unique key holds it (ADR-0100).
+	credentials map[string]string
 	// The operators a certificate has been recorded for. The real
 	// store derives this from a table beside the record; nothing here
 	// issues certificates, so a test says which operators hold one.
@@ -1088,18 +1091,19 @@ func newFakeOperatorStore() *fakeOperatorStore {
 	return &fakeOperatorStore{
 		operators:   map[string]*operator.Operator{},
 		enrollments: map[string]*operator.Enrollment{},
+		credentials: map[string]string{},
 		enrolled:    map[string]bool{},
 
 		namedByDefinition: map[string]bool{},
 	}
 }
 
-// Register writes the record and the token together, as the statement
-// does: a refused registration mints nothing. It answers the operator
+// Register writes the record, the token and the credential together,
+// as the statement does: a refused registration mints nothing. It answers the operator
 // it stored, which is what the real store reads back inside the same
 // transaction; this one holds no certificates, so the state it answers
 // is the token's.
-func (s *fakeOperatorStore) Register(_ context.Context, o *operator.Operator, e *operator.Enrollment) (*operator.Operator, error) {
+func (s *fakeOperatorStore) Register(_ context.Context, o *operator.Operator, e *operator.Enrollment, c *operator.IssuedCredential) (*operator.Operator, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.operators[o.GRN().String()]; ok {
@@ -1107,7 +1111,31 @@ func (s *fakeOperatorStore) Register(_ context.Context, o *operator.Operator, e 
 	}
 	s.operators[o.GRN().String()] = o
 	s.enrollments[e.TokenHash()] = e
+	s.credentials[o.GRN().String()] = c.Hash()
 	return o, nil
+}
+
+// ReissueCredential replaces the operator's credential hash, which is
+// what the real store's delete-and-insert leaves: the previous value
+// authenticates nothing afterwards.
+func (s *fakeOperatorStore) ReissueCredential(_ context.Context, c *operator.IssuedCredential) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	g := c.Operator().String()
+	if _, ok := s.operators[g]; !ok {
+		return operator.ErrOperatorNotFound
+	}
+	s.credentials[g] = c.Hash()
+	return nil
+}
+
+// credentialOf returns the hash of the operator's credential, which is
+// what the fake holds instead of the value the caller was answered.
+func (s *fakeOperatorStore) credentialOf(g grn.GRN) (string, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	hash, ok := s.credentials[g.String()]
+	return hash, ok
 }
 
 // Remint replaces the operator's token with the one minted, which is
@@ -1173,6 +1201,7 @@ func (s *fakeOperatorStore) Delete(_ context.Context, g grn.GRN) error {
 	}
 	delete(s.operators, g.String())
 	delete(s.enrolled, g.String())
+	delete(s.credentials, g.String())
 	for hash, held := range s.enrollments {
 		if held.Operator() == g {
 			delete(s.enrollments, hash)

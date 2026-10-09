@@ -1,7 +1,7 @@
 # Machine Identity
 
 Who is calling on the listener a machine identity authenticates on
-(ADR-0014, ADR-0015). Implemented by `internal/machine`.
+(ADR-0014, ADR-0015, ADR-0100). Implemented by `internal/machine`.
 
 | Type | Responsibility |
 |------|----------------|
@@ -10,6 +10,8 @@ Who is calling on the listener a machine identity authenticates on
 | `TrustRoot` | supplies the authority a presented certificate has to chain to |
 | `Registration` | answers whether the organization still holds its record of the identity a certificate names: an operator's record (ADR-0070) or a supervisor's current registration (ADR-0082) |
 | `ServerCertificate` | supplies the certificate the listener presents, asked per handshake so a replaced one needs no restart (ADR-0040) |
+| `Tokens` | answers what a token a request presents stands for, read for that request beside the record it rests on (ADR-0100) |
+| `Method` | how a request's identity was proven: a certificate the handshake verified, or a token the request presented |
 
 An agent, an operator and a supervisor are the same kind of caller
 here and the listener does not branch on which. It asks one question
@@ -103,6 +105,36 @@ no step that generates it and hands a container a file that container
 owns. The Kubernetes stacks under `deploy/` have that step — an init
 container copies the key material as the UID the listener runs as — so
 what compose lacks is the step, not something a container cannot do.
+
+## Tokens
+
+**Built for an operator; an agent and a supervisor present
+certificates until the migration's later steps.** ADR-0100 moves every
+machine caller from a client certificate to a short-lived token it
+obtains with a credential garam issued, and
+`docs/plans/2026-10-09-machine-identity-migration.md` is the order it
+lands in. What runs now is its first step.
+
+- **A request may present a token instead of a certificate**, as
+  `Authorization: Garam-Token <token>`. The listener asks `Tokens` for
+  that request, and the identity it answers carries `MethodToken`, the
+  GRN and the token's expiry, and no serial: there is no certificate
+  for a renewal or the execution fence to read.
+- **The read is per request, not per connection.** The composition
+  root satisfies `Tokens` from `internal/operator`, whose read joins
+  the token's row to the operator's registration, so deleting the
+  operator or re-issuing its credential refuses the next request on a
+  connection already open. A token minted for another audience — a
+  hosted operator it is to be shown to — answers as no token here.
+- **A token or a certificate, never both.** A request presenting a
+  token over a connection whose certificate authenticated carries no
+  identity, and the reason travels with it, as it does for a token
+  that proved nothing, so the handler's refusal says why.
+- **A token reaches the operations `api/machine.yaml` lists
+  `machineToken` on, and no other.** `ConfineTokens` in
+  `internal/machineapi/token.go` is where that is decided, as
+  `ConfineSupervisors` decides a supervisor's reach: the handlers
+  behind it answer an identity without asking how it was proven.
 
 ## Generation and lineage
 

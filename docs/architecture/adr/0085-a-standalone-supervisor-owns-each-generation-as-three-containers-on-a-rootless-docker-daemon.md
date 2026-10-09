@@ -1,6 +1,8 @@
 # ADR 0085: A standalone supervisor owns each generation as three containers on a rootless Docker daemon
 
-> Status: accepted
+> Status: accepted — the adapter presenting the agent's certificate
+> on the socket is superseded by
+> [ADR-0100](./0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
 > Date: 2026-10-05
 
 Drafted for #1180, which reserved this number. The arrangement is the

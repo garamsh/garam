@@ -1,6 +1,8 @@
 # ADR 0013: Agents exchange messages through a garam API an adapter polls
 
-> Status: accepted
+> Status: accepted — §Consequences' per-organization authority
+> issuing the adapter's certificates is superseded by
+> [ADR-0100](./0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
 > Date: 2026-08-16
 
 ## Contents

@@ -47,6 +47,14 @@ It presents its certificate per handshake rather than holding what it
 read at startup, so a renewed one is presented on the next connection
 and this process keeps running.
 
+**Unbuilt: its token mode.**
+[ADR-0100](./adr/0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
+moves the adapter from the agent's certificate to two short-lived
+tokens, one for garam and one for the control service, each read from
+its file per request, with the placement token moved to a
+`Garam-Placement` header under `agent-execution.v2`. It is step G2 of
+`docs/plans/2026-10-09-machine-identity-migration.md`.
+
 ## The delivery loop
 
 1. Claim a message for its agent from garam's queue. The claim carries

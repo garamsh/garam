@@ -1,13 +1,14 @@
 # ADR 0100: Every machine caller authenticates with a Garam-issued credential and short-lived tokens over server TLS
 
-> Status: proposed
+> Status: accepted
 > Date: 2026-10-09
 
 Drafted for #1251, which reserved this number. The direction is the
 owner's, given on 2026-10-09 in the PM's session and recorded in that
-issue; this record states it, justifies it and plans the move. It is
-proposed: no status line of another ADR moves and no responsibility
-document changes until it is accepted, and the migration plan is
+issue; this record states it, justifies it and plans the move. It was
+proposed in #1254 and accepted at `003311e` by the PM on 2026-10-09,
+under the owner's delegation, and it lands with step G1 of the
+migration plan,
 [docs/plans/2026-10-09-machine-identity-migration.md](../../plans/2026-10-09-machine-identity-migration.md).
 
 Facts about garam hold at `a7148f8`. Facts about the Operator hold at

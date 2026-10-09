@@ -95,6 +95,12 @@
 //	                       replies the adapter forwards (required beside
 //	                       the control settings; otherwise optional, and
 //	                       nothing is forwarded without it)
+//	GARAM_ADAPTER_SIGN_MESSAGES  forward garam's signature beside each
+//	                       message (default false; accepts what
+//	                       strconv.ParseBool does). Turned on only once
+//	                       the runtime is Sherlock v0.4.0 or later and
+//	                       trusts garam's issuer (docs/architecture/
+//	                       adapter.md §Foreign facts this rests on)
 package cli
 
 import (
@@ -200,6 +206,7 @@ const (
 	envAdapterPlacementToken envName = "GARAM_ADAPTER_PLACEMENT_TOKEN_FILE"
 	envAdapterOutboxDir      envName = "GARAM_ADAPTER_OUTBOX_DIR"
 	envAdapterControlSocket  envName = "GARAM_ADAPTER_CONTROL_SOCKET"
+	envAdapterSignMessages   envName = "GARAM_ADAPTER_SIGN_MESSAGES"
 )
 
 // envOr reads a declared name, or the fallback when it is unset or

@@ -6,9 +6,10 @@
 // It needs GARAM_TEST_DOCKER_HOST (a rootless daemon's unix:// socket)
 // and the three images by digest or ID: GARAM_TEST_RUNTIME_IMAGE,
 // GARAM_TEST_WORKSPACE_IMAGE and GARAM_TEST_ADAPTER_IMAGE. `make
-// workload-integration` runs it; it fails rather than skips without
-// them. Every container and volume it makes is named under testPrefix,
-// and it removes only those.
+// workload-integration` runs it, naming the first two from the
+// Makefile's Sherlock pin unless they are set; it fails rather than
+// skips without them. Every container and volume it makes is named
+// under testPrefix, and it removes only those.
 package workload_test
 
 import (

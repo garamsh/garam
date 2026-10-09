@@ -74,6 +74,12 @@ type Config struct {
 	OutboxInterval time.Duration
 	// MaxRetryDelay caps the backoff of an undecided answer.
 	MaxRetryDelay time.Duration
+	// ForwardSignature sends garam's signature beside the content it
+	// covers (ADR-0101). It is off unless whoever runs the adapter
+	// turns it on, because nothing the adapter can read says whether
+	// the runtime accepts the member or trusts garam's issuer, and a
+	// runtime that does neither refuses every signed message.
+	ForwardSignature bool
 }
 
 // Ends is the agent the loop runs beside, what it carries between and
@@ -298,14 +304,20 @@ func (s *service) claimRefused(ctx context.Context, err error) {
 }
 
 // post hands a claimed message to the runtime as garam-message.v1
-// under garam's identifier for it.
+// under garam's identifier for it, with garam's signature where the
+// adapter forwards one. A signature goes only beside the content garam
+// signed, never beside one the adapter encoded.
 func (s *service) post(ctx context.Context, claim *Claim) (pairing, error) {
 	content, err := claim.Content()
 	if err != nil {
 		return pairing{}, err
 	}
+	signature := ""
+	if s.cfg.ForwardSignature && claim.Encoded != "" {
+		signature = claim.Signature
+	}
 	postCtx, cancel := context.WithTimeout(ctx, s.cfg.CallTimeout)
-	progress, err := s.ends.Gateway.Post(postCtx, claim.Message, content)
+	progress, err := s.ends.Gateway.Post(postCtx, claim.Message, content, signature)
 	cancel()
 	if err != nil {
 		return pairing{}, err

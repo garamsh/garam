@@ -227,32 +227,72 @@ This section states only the form each kind of Go identifier takes.
 This section states the Go error forms, and which file or layer
 translates, wraps, logs or recovers one.
 
-- Errors are values. Use `error` interface, never panics in libraries.
-- An HTTP server still holds a recover middleware: `net/http` recovers
-  a handler's panic and logs the stack itself, but aborts the response
+- **An adapter translates before it returns.**
+  `postgres/postgres.go` turns `pgx.ErrNoRows` into
+  `ErrUserNotFound`; the driver's error does not leave the file that
+  imports the driver. The errors an implementation returns are part of
+  the interface it satisfies, so one that leaks its library's errors is
+  not one `memory/memory.go` can stand in for.
+- **Sentinel** when the caller branches on which failure and the
+  failure carries no data: `var ErrNotFound = errors.New("not
+  found")`, read with `errors.Is`.
+- **Typed** when the caller needs data out of the failure: a struct
+  with `Error()`, read with `errors.As`, and `Is(target error) bool`
+  or `Unwrap() error` where it wraps another.
+- **Opaque** when the caller has no business branching. A sentinel or
+  a type a caller can match on is API you have to keep working; where
+  nothing needs to branch, publish neither.
+- **`%w` publishes the error it wraps.** A caller can reach through
+  it with `errors.Is` and `errors.As`, so replacing what is inside
+  breaks them later. Wrap with `%w` where a caller is meant to branch
+  on the wrapped error, `%v` where it is not, `errors.Join` where the
+  caller needs all of several.
+- Add context at a boundary — network, IO, an external call — not on
+  every line: `fmt.Errorf("create user: %w", err)`.
+- **Each transport translates in one place.** Whatever implements a
+  transport owns the mapping from domain error to that transport's
+  codes — `httpserver.go` answering 404 to `ErrUserNotFound`, or the
+  type satisfying a generated gRPC service — and nothing else names
+  one. A second transport gets its own translator, not a share of the
+  first. A domain outlives the transport it is served over, and a
+  mapping spread across handlers gives one sentinel several codes.
+- **Don't log and return.** Return, and let the outermost boundary log
+  once: the transport translator where the module has one, `main`
+  where it has none. Logging on the way up prints one failure several
+  times, some lines carrying the request's `trace_id` and some not.
+- **A panic does not cross a package boundary.** A violated invariant
+  may panic — recovering from one hides the bug that caused it — but
+  that ends the program rather than answering the caller. An HTTP
+  server still holds a recover middleware: `net/http` recovers a
+  handler's panic and logs the stack itself, but aborts the response
   instead of answering — the client gets a closed connection, or an
   HTTP/2 `RST_STREAM` — so the middleware exists to reply 500.
-- Don't log and return — pick one (usually return; let the caller
-  decide to log).
-- Wrap at boundaries (network, IO, external calls), not on every line.
 
-Every error carries a kind, through `internal/errorx`. ADR-0003 decides
-this: the api and authz processes talk over gRPC, and gRPC status codes
-carry `errorx` kinds without translation. Stdlib sentinels lose the kind
-at that boundary, so they are not used here.
+Every error carries a kind, through `internal/errorx`. The rules below
+are this project's own, because ADR-0003 carries `errorx` kinds over
+gRPC as status codes without translation and each transport picks its
+code from the kind; an error whose chain holds no `errorx` error reaches
+a transport as unknown.
 
-- `errorx.New(kind, msg)` — a new error with a fixed kind.
-- `errorx.Wrap(err, msg, kind...)` — attach context. Falls back to the
-  chain's kind when no override is given.
-- `errorx.IsKind(err, kind)` — kind check across the chain.
-- Domain sentinels are declared once in the owning package
-  (`var ErrUserNotFound = errorx.New(errorx.KindNotFound, "user not found")`);
-  shared ones live in `internal/errorx`.
-- `errors.New` and `fmt.Errorf("…: %w", …)` lose or drift the kind. Do
-  not mix them with `errorx`.
-- Do not add kinds. Where two errors of one kind need different codes,
-  the transport tells their sentinels apart with `errors.Is`, which
-  reads a sentinel's identity and not its kind.
+- **A sentinel is declared with `errorx.New(kind, msg)`, not
+  `errors.New`,** so it carries a kind. It is still read with
+  `errors.Is`; `errorx.IsKind` reads the kind instead.
+- **Context is added with `errorx.Wrap(err, msg, kind...)`, not
+  `fmt.Errorf`.** It keeps the chain's kind unless one is given, and
+  publishes what it wraps as `%w` does. `%v` and `errors.Join` cut the
+  chain `errorx.KindOf` follows, so they never carry an error a
+  transport reads.
+- **Do not add kinds.** The kinds are gRPC's status codes, which
+  ADR-0003 carries without translation, so a new kind has no code to
+  travel as.
+- **Both HTTP surfaces read one kind-to-status table, in
+  `internal/wire`.** This applies "Each transport translates in one
+  place" above: its two examples, an HTTP server and a gRPC service,
+  make a transport a protocol, so garam's two HTTP surfaces are one
+  transport with one translation (`docs/architecture/overview.md`
+  §Non-functional goals, `docs/architecture/domains.md` §Shared code
+  below the domains). It is stated here because the table is one of
+  `errorx` kinds, which only ADR-0003 gives this project.
 
 ## 5. Logging & observability
 

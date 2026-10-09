@@ -4,7 +4,10 @@
 > only trigger that publishes" is superseded in part by
 > [ADR-0071](./0071-a-development-image-shares-the-release-repository-and-its-tag-says-it-is-not-a-release.md),
 > and superseded for non-release artifacts by
-> [ADR-0092](./0092-a-test-image-is-published-to-ghcr-from-dev-and-no-release-carries-it.md)
+> [ADR-0092](./0092-a-test-image-is-published-to-ghcr-from-dev-and-no-release-carries-it.md),
+> whose registry, commit tag, publishing from `dev` and retention are
+> in turn superseded by
+> [ADR-0093](./0093-an-operator-pushes-the-test-image-to-the-accounts-ecr.md)
 > Date: 2026-08-22
 
 ## Contents

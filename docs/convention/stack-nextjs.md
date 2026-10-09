@@ -4,8 +4,10 @@ How a Next.js project is laid out and where each kind of code
 belongs: routes, the server/client boundary, mutations, env, and
 tests.
 
-Checked against Next.js 16. A claim below that names no version holds
-for it.
+Checked against next 16.3.1 with react 19.2.4, @playwright/test
+1.62.1, vitest 4.1.10, @testing-library/react 16.3.2 over
+@testing-library/dom 10.4.1, msw 2.15.0 and server-only 0.0.1. A claim
+below that names no version holds for these.
 
 ## Contents
 - 0. Folder & file naming
@@ -33,7 +35,8 @@ adopt it.
   assets), `src/` — optional in Next.js, required here (§1) — and
   the App Router file conventions
   (`layout.tsx`, `page.tsx`, `loading.tsx`, `error.tsx`, `route.ts`,
-  `template.tsx`, `default.tsx`, `proxy.ts` / `middleware.ts`).
+  `template.tsx`, `default.tsx`, `proxy.ts`, whose deprecated v16
+  name is `middleware.ts`).
 - Files named for a concept: `src/lib/format-currency.ts`,
   `src/lib/email-validation.ts`.
 
@@ -96,10 +99,10 @@ Never mix the App Router and the Pages Router in one project: no
 | `loading.tsx` | Suspense fallback. | Cannot show when layout reads uncached data — wrap in `<Suspense>` or move to `page`. |
 | `error.tsx` | Error boundary. | **Must be a Client Component** (`'use client'`). |
 | `global-error.tsx` | Replaces root layout on catastrophic error. | Must include own `<html>` and `<body>`. |
-| `not-found.tsx` | UI for `notFound()` and unmatched URLs. | Streamed → 200, non-streamed → 404. |
-| `route.ts` | HTTP request handler. Exports `GET`/`POST`/`PUT`/`PATCH`/`DELETE`/`HEAD`/`OPTIONS`. | Web `Request`/`Response` only. No JSX. |
+| `not-found.tsx` | UI for `notFound()`; the root `app/not-found.tsx` also handles unmatched URLs. | Streamed → 200, non-streamed → 404. |
+| `route.ts` | HTTP request handler. Exports `GET`/`POST`/`PUT`/`PATCH`/`DELETE`/`HEAD`/`OPTIONS`. | Web `Request`/`Response`, or Next's `NextRequest`/`NextResponse` extending them. No JSX. |
 | `template.tsx` | Like layout but re-mounts on navigation. | Use sparingly. |
-| `default.tsx` | Fallback for unmatched parallel route slots. | Required when using parallel routes. |
+| `default.tsx` | Fallback for unmatched parallel route slots. | Required when using parallel routes, except for a leaf slot or one under a catch-all. |
 
 ### Folder conventions
 
@@ -130,7 +133,7 @@ using multiple root layouts.
 | Public REST/JSON API | — | no | **only choice** |
 | OAuth callbacks | — | no | yes |
 | Streaming (ReadableStream) | partial, via Suspense | — | yes |
-| Works without JS | yes | yes | no |
+| Works without JS | yes | yes, bound to `<form action>` | yes, reached by a link or a form; no from `fetch` |
 
 ### Decision rule
 
@@ -140,15 +143,18 @@ using multiple root layouts.
    `useTransition` / `useActionState`
 4. **Read data for a page** → Server Component (async, fetch inline)
 5. **React to a mutation** → Server Action calls `revalidatePath` /
-   `revalidateTag`, `redirect()`, or `router.refresh()`
+   `revalidateTag(tag, profile)` / `updateTag`, `redirect()`, or
+   `refresh()` from `next/cache`; a Client Component calls
+   `router.refresh()`
 
 ### `'use client'` placement
 
 Add to **specific interactive components**, not layouts or whole
 pages. Once a file is `'use client'`, all its imports become
 client-bundled. Use `import 'server-only'` for modules that must
-never reach the client. Non-`NEXT_PUBLIC_` env vars are not inlined
-and read as `undefined` in the client.
+never reach the client. Non-`NEXT_PUBLIC_` env vars are not inlined:
+they read as `undefined` in the browser, but a Client Component's
+server render reads the real value and can put it into the HTML.
 
 ## 4. Server Components — pages and layouts
 
@@ -156,9 +162,9 @@ and read as `undefined` in the client.
   no `'use client'`, no `useEffect`.
 - `params` and `searchParams` are **promises** in v15+ — `await`
   them.
-- Layouts **do not re-render** on navigation, so a `searchParams`
-  value read there is unreliable. Read live values in a Client
-  Component.
+- Layouts **do not re-render** on navigation and do not receive
+  `searchParams` at all. Read them in the page, or live in a Client
+  Component (`useSearchParams`).
 - A layout reading uncached data (`cookies()`, `headers()`, an
   uncached `fetch`) **blocks** `loading.tsx`. Wrap the fetch in
   `<Suspense>` or move it to `page.tsx`.
@@ -210,8 +216,9 @@ inside the Server Action.**
   destination reads what the action just wrote.
 - **An error boundary catches renders, not handlers.** A throw inside
   an `onClick` reaches no boundary and the interaction stops with
-  nothing shown. Run it through `startTransition`, whose throws do
-  bubble, or catch it and put it in state.
+  nothing shown. Run it through the `startTransition` that
+  `useTransition` returns, whose throws do bubble (the standalone
+  `startTransition` does not), or catch it and put it in state.
 
 ## 8. Env (single typed loader at project root)
 
@@ -260,9 +267,9 @@ back/forward. The pieces, for a photo modal:
   function and a
   `config` object whose `matcher` selects the paths it runs on —
   conventionally everything except `/api`, `_next/static`,
-  `_next/image`, and `favicon.ico`.
+  `_next/image`, `favicon.ico`, `sitemap.xml` and `robots.txt`.
 - v16 renamed `middleware.ts` → `proxy.ts`. Codemod:
-  `npx @next/codemod@16.3.8 middleware-to-proxy .`.
+  `npx @next/codemod@16.3.1 middleware-to-proxy .`.
 - Use cases: auth gate (redirect), geolocation, A/B headers, CORS
   preflight for `/api/*`.
 - **Anti-patterns:** don't use as a general middleware hub; don't
@@ -289,22 +296,26 @@ back/forward. The pieces, for a photo modal:
   segment, not here.
 - Nothing outside a test imports `src/testing/`.
 - The test setup stubs `server-only` to an empty module. That package
-  throws wherever it is imported outside a Server Component, so
-  without the stub every test reaching a server-only module fails
-  before it runs.
+  throws on import wherever the `react-server` export condition is
+  absent, as it is under Vitest, so without the stub every test
+  reaching a server-only module fails before it runs.
 - This stack's substitutes: MSW for outbound HTTP, a Prisma/Drizzle
   test double or SQLite for the database, a fake session for auth,
   `testcontainers` for real service dependencies.
-- The built app is `next start`.
+- The built app is `next start`, or `node .next/standalone/server.js`
+  under `output: 'standalone'`, where `next start` warns that it does
+  not work.
 - Assert on rendered text, ARIA, emitted form payloads, and
   navigated URLs — **never** on the internal React tree shape or
   component identity.
 - A text assertion is either identity or presence, and the call says
   which. The two libraries default oppositely, so the form does too.
-  **Playwright** matches a substring, so identity is opt-in —
-  `exact: true`, and an appended word then fails it. **Testing Library**
-  matches the whole accessible name, so identity is what a string
-  already gives and presence is the one written out: a regular
+  **Playwright** locators (`getByText`, `getByRole` with `name`) match a
+  case-insensitive substring, so identity is opt-in — `exact: true`, and
+  an appended word then fails it; `toHaveText` with a string already
+  compares the whole text, and `toContainText` is presence. **Testing
+  Library** matches the whole accessible name, so identity is what a
+  string already gives and presence is the one written out: a regular
   expression, with a call-site comment saying why. `getByRole` takes no
   `exact` option, so a string is identity there and a regex is presence.
 

@@ -284,8 +284,9 @@ type GetAgentTokenShownToRow struct {
 
 // A token as it was minted to be shown to one audience, with no join to
 // the agent's current state: the execution fence judges that, so a
-// token of an earlier epoch or lineage is answered fenced rather than
-// unknown.
+// token of an earlier epoch or lineage is answered fenced while its row
+// is kept. A mint's sweep and trim delete rows, and a token whose row
+// is gone is not proven.
 func (q *Queries) GetAgentTokenShownTo(ctx context.Context, arg GetAgentTokenShownToParams) (GetAgentTokenShownToRow, error) {
 	row := q.db.QueryRow(ctx, getAgentTokenShownTo, arg.TokenHash, arg.AudienceGrn)
 	var i GetAgentTokenShownToRow

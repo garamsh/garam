@@ -193,7 +193,9 @@ it did.
   that token's row as it was minted, requires it to name the agent and
   the caller as its audience, and hands its serial and dates to the
   execution fence, which judges it as it judges a certificate: a token
-  of an earlier epoch or lineage is answered fenced, not unknown.
+  of an earlier epoch or lineage, or an expired one, is answered fenced
+  while its row is kept, and not proven once a mint has swept or
+  trimmed it; either way it may not act.
   Deleting the hosted operator takes the tokens shown to it
   (`migrations/000041`).
 - **An unfenced agent's token comes the same way.** A `Garam`-source

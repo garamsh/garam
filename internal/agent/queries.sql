@@ -229,8 +229,9 @@ WHERE t.agent_grn = sqlc.arg('agent_grn')
 
 -- A token as it was minted to be shown to one audience, with no join to
 -- the agent's current state: the execution fence judges that, so a
--- token of an earlier epoch or lineage is answered fenced rather than
--- unknown.
+-- token of an earlier epoch or lineage is answered fenced while its row
+-- is kept. A mint's sweep and trim delete rows, and a token whose row
+-- is gone is not proven.
 -- name: GetAgentTokenShownTo :one
 SELECT agent_grn, serial, audience_grn, issued_at, expires_at
 FROM agent_tokens

@@ -1477,7 +1477,10 @@ paths:
 
         Under `execution-fence.v2` `token` replaces `certificatePem` as
         `activateAgent` describes. A token of an earlier epoch or
-        lineage, or one that has expired, is answered `fenced`, not 422
+        lineage, or one that has expired, is answered `fenced` while
+        garam still holds its row, and 422 once the row is gone: a mint
+        deletes the agent's expired tokens and keeps its newest five
+        per audience. Either answer means the token may not act
         (ADR-0100).
       parameters:
         - $ref: '#/components/parameters/executionContractVersion'

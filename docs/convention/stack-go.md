@@ -145,9 +145,10 @@ Each bullet names the ADR that owns its directory where one does;
 - `proto/` — `.proto` sources and generated code (ADR-0003).
 - `migrations/` — SQL migrations; the schema's source of truth. The Go
   file beside them tests the migrations and declares no schema.
-- `tests/` — black-box tests: `tests/integration/` against modules in
-  process, `tests/e2e/` against the built binary, `tests/image/`
-  against the built image.
+- `tests/` — black-box tests and test-only code, one directory per
+  subject. A suite needing what CI does not hold has its own `make`
+  target, named by no whole-set target or workflow, whose comment
+  names what it needs.
 - `web/` — the frontend, which is not Go, so this file does not govern
   it (ADR-0009).
 - `deploy/` — `local/` is what is needed to run the built images

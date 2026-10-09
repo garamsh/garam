@@ -29,7 +29,8 @@ state of a message it sent, described below (ADR-0055).
 | `ActionSend` | the action a policy names to decide what one identity may send to another |
 | `SubmissionBudget` | how long after its creation a durable reply may still store a message, fixed by `durable-delivery.v1` (ADR-0083) |
 | `Author` | who wrote a message: its sender, or garam for the refusal it writes itself — what a signature names as the sender garam vouches for (ADR-0101) |
-| `Signer` | signs each hand-out of a message and answers the keys a verifier checks the signature with (ADR-0101) |
+| `Keyring` | the keys messages are signed with: opens the one that signs now, before a claim is taken, and answers the published set (ADR-0101) |
+| `Signer` | signs one hand-out under the key the keyring opened, reading nothing |
 | `SigningKeyStore` | the keys messages are signed with, read with the database's clock, rotated under one lock, withdrawn at once |
 | `Issuer` | the deployment's issuer: the machine listener's external https origin, compared byte for byte |
 
@@ -150,22 +151,22 @@ place of a push.
 
 **Every hand-out is signed**
 ([ADR-0101](./adr/0101-garam-signs-every-message-it-delivers-and-the-agent-verifies-it-alone.md)).
-A claim answers the message's content — `garam-message.v1`, which
-garam now encodes itself, so every attempt of one message carries the
-same characters — and a compact ES256 JWS binding the issuer, the
-sender garam vouches for, the recipient as audience and its
-organization, the message's identifier and a digest of the content,
-valid for the lease ceiling from when the claim was taken on the
-database's clock. The key is opened before the queue is asked, so a key
-garam cannot open refuses the claim as a server error with nothing
-claimed and none of the message's attempts spent. A renewal hands
-nothing out and carries no signature. The sender garam vouches for is the row's
-author: the caller the listener authenticated for everything a caller
-posted, and garam's own issuer for the cross-organization refusal it
-writes under the intended recipient's identity, whose content keeps
-that stored sender. ADR-0101 §What a verifier checks is the contract a
-verifier holds garam to; `api/machine.yaml` is authoritative for the
-claim's members and the key-set route.
+A claim answers the message's content — `garam-message.v1`, which garam
+now encodes itself, so every attempt of one message carries the same
+characters — and a compact ES256 JWS binding the issuer, the sender
+garam vouches for, the recipient as audience and its organization, the
+message's identifier and a digest of the content, valid for the lease
+ceiling from when the claim was taken on the database's clock. The key
+is opened before the queue is asked, so a key garam cannot open refuses
+the claim as a server error with nothing claimed and none of the
+message's attempts spent. A renewal hands nothing out and carries no
+signature. The sender garam vouches for is the row's author: the caller
+the listener authenticated for everything a caller posted, and garam's
+own issuer for the cross-organization refusal it writes under the
+intended recipient's identity, whose content keeps that stored sender.
+ADR-0101 §What a verifier checks is the contract a verifier holds garam
+to; `api/machine.yaml` is authoritative for the claim's members and the
+key-set route.
 
 The keys are rows of their own, never deleted, each sealed under the
 key-encryption key the certificate authorities are sealed under and

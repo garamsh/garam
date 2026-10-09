@@ -395,6 +395,13 @@ being refused.
   server error before the queue is asked, and the message stays
   pending with its attempts unspent, so signing's availability is the
   claim's.
+- **A key retired while a claim waits still signs that claim, and that
+  window is accepted.** The key is opened before the claim's wait,
+  which runs up to its 30 seconds, so a key retired at once during it
+  signs the message the wait hands out. That key has already left the
+  set, so a verifier refuses the hand-out: one attempt is spent, the
+  lease lapses, and the redelivery is signed under the replacement. The
+  cost is bounded by the wait and is a redelivery, not a loss.
 - **Losing the key-encryption key also loses the message keys.** Unlike
   an authority, a message key is replaceable: retiring the key that no
   longer opens makes the next hand-out create one sealed under the key

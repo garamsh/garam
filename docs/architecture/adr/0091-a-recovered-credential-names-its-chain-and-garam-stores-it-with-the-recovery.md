@@ -1,6 +1,6 @@
 # ADR 0091: A recovered credential names its chain, and garam stores it with the recovery
 
-> Status: accepted
+> Status: superseded by [ADR-0100](./0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
 > Date: 2026-10-07
 
 Drafted for #1222, which reserved this number. The scope is the PM's

@@ -259,6 +259,7 @@ func (s *stack) startMachine(authz string) {
 		"-e", "GARAM_DATABASE_URL="+s.inside(), "-e", "GARAM_AUTHZ_ADDR="+authz+":9090",
 		"-e", "GARAM_MACHINE_TLS_CERT_FILE=/etc/garam/tls.crt", "-e", "GARAM_MACHINE_TLS_KEY_FILE=/etc/garam/tls.key",
 		"-e", "GARAM_MACHINE_SERVER_ROOT_FILE=/etc/garam/server-root.pem", "-e", "GARAM_CA_KEY_FILE=/etc/garam/kek",
+		"-e", "GARAM_MACHINE_ISSUER=https://garam.test",
 		s.garam, "serve", "machine")
 	s.mustDocker("network", "connect", "bridge", name)
 	place := func(ips ...net.IP) {

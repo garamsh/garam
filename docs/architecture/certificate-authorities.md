@@ -4,6 +4,13 @@ The certificate authority an organization signs machine identities
 with (ADR-0014). Implemented by `internal/ca`, whose PostgreSQL store
 is `internal/ca/postgres`.
 
+**Retired by decision, not yet in fact.**
+[ADR-0100](./adr/0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
+moves every machine caller to credentials and tokens, and once no
+route issues a certificate the authorities, the sealer and the
+key-encryption key go with this document (step G4 of
+`docs/plans/2026-10-09-machine-identity-migration.md`). Until then everything below runs as it describes.
+
 | Type | Responsibility |
 |------|----------------|
 | `Authority` | an organization's CA: the certificate it signs with, and its private key in sealed form |

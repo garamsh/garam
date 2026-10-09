@@ -7,6 +7,7 @@ What a garam deployment must plan for that no manifest can carry: what readiness
 - What readiness reports
 - What the binary enforces about key material
 - The key-encryption key cannot be regenerated
+- The message issuer is kept for the deployment's life
 - The migrate job
 - Termination
 - The PodSecurity level is the deployment's
@@ -240,6 +241,16 @@ renewed for its organization (`internal/ca/service.go`); the only
 remedy is a new authority per organization and a reissue of every
 certificate under it.
 
+It seals one other kind of key: the keys garam signs messages with
+([ADR-0101](./adr/0101-garam-signs-every-message-it-delivers-and-the-agent-verifies-it-alone.md)).
+Under a different key-encryption key the signing key does not open
+either, and every claim answers 500 naming that key in the listener's
+log. That one is replaceable where an authority is not:
+`garam retire-message-signing-key <kid>` withdraws it, and the next
+hand-out signs under a new key sealed by the key present. A verifier
+holding the published set as a file refuses the new key's signatures
+until the file is replaced.
+
 Nothing detects the substitution at start: the arrival checks above
 pass on any well-formed key, and nothing compares it against what the
 database already holds (`internal/cli/machine.go`). The wrong key
@@ -367,6 +378,23 @@ alone. What binds instead is who signs them
   certificate is permitted — the token it mints beside the record is
   one that operator does not need and does not have to spend.
 
+## The message issuer is kept for the deployment's life
+
+**`GARAM_MACHINE_ISSUER` names the deployment to every verifier, and a
+changed value is a different issuer.** `garam serve machine` refuses to
+start without one, and refuses anything but an https origin in one
+spelling — a lowercase host, no empty port, no path and no trailing
+slash (`internal/message/signing.go`,
+`ParseIssuer`), because a verifier compares it byte for byte and reads
+the key set at it followed by `/message-signing-keys`
+([ADR-0101](./adr/0101-garam-signs-every-message-it-delivers-and-the-agent-verifies-it-alone.md)).
+What the binary cannot check is that the value stays the same: a
+verifier configured with the old one refuses every message signed
+under the new one. So a deployment picks the machine listener's
+external origin once and keeps it; the chart renders it from
+`machine.issuer` (`deploy/charts/garam/README.md` §Values a deployment
+must supply).
+
 ## The migrate job
 
 `migrate` applies all pending migrations and exits
@@ -422,8 +450,8 @@ A request carries a bound of its own, thirty seconds to arrive, on two
 of the four HTTP listeners garam starts: the browser-facing one and the
 machine one (`requestReadTimeout` in `internal/cli/cli.go`, and on the
 machine listener it covers the handshake read too). The other two carry
-no such bound — the machine process's health port and the authz
-process's probe and metrics port — and each of those is reachable on a
+no such bound — the machine process's probe and metrics port and the
+authz process's — and each of those is reachable on a
 Service the chart renders. It bounds reading rather than a handler — a
 watch stream and a message claim both outlive it by design — so what it
 disconnects is a client that has
@@ -562,3 +590,7 @@ that would assert one:
   — an operator enrols with a one-time token and keeps its key in its
   own cluster, so the first certificate is a call rather than a file a
   deployment moves
+- [ADR-0101](./adr/0101-garam-signs-every-message-it-delivers-and-the-agent-verifies-it-alone.md)
+  — garam signs every message it hands out under keys the
+  key-encryption key seals, and names itself by an issuer the
+  deployment keeps for its life

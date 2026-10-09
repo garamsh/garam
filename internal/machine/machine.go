@@ -51,8 +51,9 @@ var (
 )
 
 // Identity is the machine identity a verified client certificate
-// names, and which certificate named it. Only [Service.Authenticate]
-// and [Service.Prove] construct one, so an Identity holds a GRN whose
+// names, and which certificate named it, or the identity a token the
+// request presented stands for. Only [Service.Authenticate],
+// [Service.Prove] and the listener's token read construct one, so an Identity holds a GRN whose
 // certificate chained to its own organization's certificate authority.
 // One Authenticate returned was also valid, and its record held, when
 // its connection was made; one Prove returned establishes neither, and
@@ -64,10 +65,28 @@ var (
 // is what a caller asking to replace it is answered by (ADR-0046).
 type Identity struct {
 	grn       grn.GRN
+	method    Method
 	serial    string
 	notBefore time.Time
 	notAfter  time.Time
 }
+
+// Method is how a request proved the identity it carries.
+type Method string
+
+const (
+	// MethodCertificate is a client certificate the connection's
+	// handshake verified (ADR-0014).
+	MethodCertificate Method = "certificate"
+	// MethodToken is a token the request presented, read with the
+	// record it rests on for that request (ADR-0100).
+	MethodToken Method = "token"
+)
+
+// Method returns how the identity was proven. One a token proved
+// carries no certificate: its serial is empty, and its dates are the
+// token's expiry alone.
+func (i Identity) Method() Method { return i.method }
 
 // GRN returns the identity's GRN, which is the whole of what the
 // certificate carries.

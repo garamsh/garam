@@ -62,6 +62,7 @@ sql:
       - migrations/000025_operator_details.up.sql
       - migrations/000028_operator_delegations.up.sql
       - migrations/000032_operator_control_endpoints.up.sql
+      - migrations/000038_operator_credentials.up.sql
     queries: internal/operator/queries.sql
     gen:
       go:
@@ -99,6 +100,7 @@ sql:
       - migrations/000015_cross_org_consent.up.sql
       - migrations/000004_agents.up.sql
       - migrations/000029_agent_execution_fence.up.sql
+      - migrations/000037_message_signing.up.sql
     queries: internal/message/queries.sql
     gen:
       go:

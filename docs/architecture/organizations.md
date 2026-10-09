@@ -59,7 +59,8 @@ definitions and agent templates `internal/agent` owns, the operators
 `internal/operator` registers, and the organization's certificate
 authority. Through those: a group's and a project's members, a
 policy's versions and attachments, an agent's assignment, and an
-operator's unspent enrollment tokens.
+operator's unspent enrollment tokens, its credential and the tokens
+exchanged for it.
 
 Two of those reach further than one organization. A consent relation
 is a pair, so deleting one organization removes the relation the other

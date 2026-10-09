@@ -273,13 +273,50 @@ func (c listenerCertificate) Get() (*tls.Certificate, error) {
 // carried.
 func listener(t *testing.T, agents agent.Service, operators operator.Service, messages message.Service, standing message.ConsentStore, watches watch.Service, groups machineapi.Groups, engine machineapi.Evaluator, caller grn.GRN) (string, *http.Client) {
 	t.Helper()
-	return serveTLS(t, machineapi.NewServer(agents, operators, messages, standing, watches, groups, engine, nil, nil, nil, nil, nil), caller)
+	return serveTLS(t, machineapi.NewServer(agents, operators, messages, standing, watches, groups, engine, nil, nil, nil, nil, nil, stubKeyring{}), caller)
+}
+
+// stubKeyID is the one key stubSigner publishes.
+const stubKeyID message.KeyID = "stub-key"
+
+// stubKeyring stands in for the message keyring, whose signatures and
+// keys are exercised against the real queue and keys in
+// tests/integration. It answers fixed values, so a test here reads the
+// surface's rendering of them.
+type stubKeyring struct{}
+
+func (stubKeyring) Signer(context.Context) (message.Signer, error) { return stubKeyring{}, nil }
+
+func (stubKeyring) Sign(*message.Claim) (message.Signed, error) {
+	return message.Signed{Content: "stub content", Signature: "stub.signature.value"}, nil
+}
+
+func (stubKeyring) PublishedKeys(context.Context) ([]message.PublishedKey, error) {
+	return []message.PublishedKey{{ID: stubKeyID, X: make([]byte, 32), Y: make([]byte, 32)}}, nil
 }
 
 // serveTLS serves srv behind the machine listener, as listener does,
 // for a test that composes the server itself, inside middlewares where
 // a test names them.
 func serveTLS(t *testing.T, srv *machineapi.Server, caller grn.GRN, middlewares ...machinegen.MiddlewareFunc) (string, *http.Client) {
+	t.Helper()
+	return serveTLSTokens(t, srv, caller, presentedTokens{}, middlewares...)
+}
+
+// presentedTokens is the machine.Tokens seam in memory: the GRN each
+// live token names. One no entry names is refused.
+type presentedTokens map[string]grn.GRN
+
+func (k presentedTokens) Resolve(_ context.Context, token string) (grn.GRN, time.Time, error) {
+	subject, ok := k[token]
+	if !ok {
+		return grn.GRN{}, time.Time{}, errorx.New(errorx.KindUnauthenticated, "token not live")
+	}
+	return subject, time.Now().Add(time.Hour), nil
+}
+
+// serveTLSTokens is serveTLS answering a presented token from tokens.
+func serveTLSTokens(t *testing.T, srv *machineapi.Server, caller grn.GRN, tokens machine.Tokens, middlewares ...machinegen.MiddlewareFunc) (string, *http.Client) {
 	t.Helper()
 	store := authorities{}
 	key := make([]byte, ca.KeySize)
@@ -296,6 +333,7 @@ func serveTLS(t *testing.T, srv *machineapi.Server, caller grn.GRN, middlewares 
 
 	served := machine.NewServer(
 		machine.NewService(trustRoots{store: store}, everyRecordHeld{}, machine.Config{}),
+		tokens,
 		loopback(t),
 		machinegen.HandlerWithOptions(srv, machinegen.StdHTTPServerOptions{
 			ErrorHandlerFunc: machineapi.BindingError, Middlewares: middlewares,
@@ -395,7 +433,7 @@ func TestServer_AnswersNothingToAConnectionThatAuthenticatedNobody(t *testing.T)
 	// The same surface served any other way carries no identity, and no
 	// handler invents one.
 	relay := &announced{}
-	plain := httptest.NewServer(machinegen.Handler(machineapi.NewServer(agents, nil, messages, consenting(), watching(t, relay), groups, policies, nil, nil, nil, nil, nil)))
+	plain := httptest.NewServer(machinegen.Handler(machineapi.NewServer(agents, nil, messages, consenting(), watching(t, relay), groups, policies, nil, nil, nil, nil, nil, nil)))
 	t.Cleanup(plain.Close)
 	bot := agentGRN("acme", "0a1b2c3d4e5f6071").String()
 	routes := map[string]struct{ method, path string }{

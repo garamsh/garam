@@ -2,9 +2,11 @@ package machineapi
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	machinegen "github.com/garamsh/garam/api/machine"
@@ -49,11 +51,11 @@ func (s *Server) PostMessage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	from, to, key, body := sender, recipient, submitted.IdempotencyKey, submitted.Body
+	from, to, key, body, author := sender, recipient, submitted.IdempotencyKey, submitted.Body, message.AuthorSender
 	if !admitted {
-		from, to, key, body = crossingRefusal(sender, recipient, key)
+		from, to, key, body, author = crossingRefusal(sender, recipient, key)
 	}
-	stored, err := s.messages.Post(r.Context(), from, to, key, body, messageFence(fence))
+	stored, err := s.messages.Post(r.Context(), from, to, key, body, author, messageFence(fence))
 	if err != nil {
 		writeError(w, err)
 		return
@@ -93,11 +95,11 @@ func (s *Server) PostOutboxMessage(w http.ResponseWriter, r *http.Request, param
 		writeError(w, err)
 		return
 	}
-	from, to, key, body := sender, recipient, submitted.IdempotencyKey, submitted.Body
+	from, to, key, body, author := sender, recipient, submitted.IdempotencyKey, submitted.Body, message.AuthorSender
 	if !admitted {
-		from, to, key, body = crossingRefusal(sender, recipient, key)
+		from, to, key, body, author = crossingRefusal(sender, recipient, key)
 	}
-	stored, err := s.messages.PostWithinBudget(r.Context(), from, to, key, body, created, messageFence(fence))
+	stored, err := s.messages.PostWithinBudget(r.Context(), from, to, key, body, author, created, messageFence(fence))
 	if errors.Is(err, message.ErrSubmissionExpired) {
 		// The shared mapping answers the kind 504, which reads as a
 		// timeout a retry outlasts; the sentinel, not the kind, picks
@@ -145,12 +147,13 @@ func deliveryContract(w http.ResponseWriter, version machinegen.DeliveryContract
 // intended recipient's identity because garam holds none of its own
 // (ADR-0024); the body says garam refused, and the key derives from the
 // sender's so a retried post is answered with the refusal already
-// stored rather than piling up one per retry.
-func crossingRefusal(sender, recipient grn.GRN, key string) (from, to grn.GRN, refusalKey, body string) {
+// stored rather than piling up one per retry. garam is its author, so
+// its signature names garam as the sender it vouches for (ADR-0101).
+func crossingRefusal(sender, recipient grn.GRN, key string) (from, to grn.GRN, refusalKey, body string, author message.Author) {
 	body = "garam could not deliver your message to " + recipient.String() +
 		": the organizations " + sender.Organization + " and " + recipient.Organization +
 		" do not both consent to cross-organization messages"
-	return recipient, sender, "consent-refused:" + sender.String() + ":" + key, body
+	return recipient, sender, "consent-refused:" + sender.String() + ":" + key, body, message.AuthorGaram
 }
 
 // authorizeSend reports whether sender may post to recipient. A
@@ -267,6 +270,14 @@ func (s *Server) ClaimMessage(w http.ResponseWriter, r *http.Request, agentGRN m
 	if !ok {
 		return
 	}
+	// Every hand-out is signed (ADR-0101), and the key is opened before
+	// anything is claimed: a claim taken and then not signed would spend
+	// one of the message's attempts on an answer the caller never got.
+	signer, err := s.keys.Signer(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	claim, err := s.messages.Claim(r.Context(), claimant, recipient, messageFence(fence))
 	if errorx.IsKind(err, errorx.KindNotFound) {
 		// A poll that waited its time and found nothing is the ordinary
@@ -283,10 +294,42 @@ func (s *Server) ClaimMessage(w http.ResponseWriter, r *http.Request, agentGRN m
 		writeError(w, err)
 		return
 	}
+	signed, err := signer.Sign(claim)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
 	// The count is read once the message is claimed, so it is the count
 	// at the moment the turn starts rather than at the start of a wait
 	// that may have run for its whole length.
-	writeJSON(w, http.StatusOK, claimBody(claim, s.watchers(r.Context(), claimant, recipient)))
+	body := claimBody(claim, s.watchers(r.Context(), claimant, recipient))
+	body.Content, body.Signature = &signed.Content, &signed.Signature
+	writeJSON(w, http.StatusOK, body)
+}
+
+// GetMessageSigningKeys publishes the keys garam signs messages with,
+// as a JWK Set (ADR-0101). It takes no identity: a verifier anywhere
+// may read it, and it carries nothing a key set does not.
+func (s *Server) GetMessageSigningKeys(w http.ResponseWriter, r *http.Request) {
+	keys, err := s.keys.PublishedKeys(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	set := machinegen.MessageSigningKeySet{Keys: make([]machinegen.MessageSigningKey, 0, len(keys))}
+	for _, k := range keys {
+		set.Keys = append(set.Keys, machinegen.MessageSigningKey{
+			Kid: string(k.ID),
+			Kty: machinegen.EC,
+			Crv: machinegen.P256,
+			Alg: machinegen.ES256,
+			Use: machinegen.Sig,
+			X:   base64.RawURLEncoding.EncodeToString(k.X),
+			Y:   base64.RawURLEncoding.EncodeToString(k.Y),
+		})
+	}
+	w.Header().Set("Cache-Control", "max-age="+strconv.Itoa(int(message.KeySetMaxAge.Seconds())))
+	writeJSONAs(w, http.StatusOK, "application/jwk-set+json", set)
 }
 
 // RenewClaim extends the caller's hold on a message it is still working

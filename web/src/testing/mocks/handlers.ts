@@ -82,6 +82,11 @@ export const fieldOneRegistered: RegisteredOperator = {
     token: "8f14e45fceea167a5a36dedd4bea2543a1ba1ffc2fbd07a1",
     expiresAt: "2026-01-02T03:14:05Z",
   },
+  credential: {
+    credential:
+      "garam_oc_3c59dc048e8850243be8079a5c74d079c4ca4238a0b923820dcc509a6f75849b",
+    issuedAt: "2026-01-02T03:04:05Z",
+  },
 };
 
 /**

@@ -121,7 +121,7 @@ func truncate(t *testing.T, p *pgxpool.Pool) {
 		policies, policy_versions, policy_attachments, agents,
 		agent_assignments, agent_definitions, operators, certificate_authorities,
 		operator_certificates,
-		messages, message_consents, agent_watches CASCADE`)
+		messages, message_consents, message_signing_keys, agent_watches CASCADE`)
 	require.NoError(t, err)
 }
 
@@ -156,7 +156,7 @@ func registerOperator(t *testing.T, p *pgxpool.Pool, g grn.GRN) grn.GRN {
 	require.NoError(t, err)
 	enrollment, err := operator.NewEnrollment(o.GRN(), scopedGRN(g.Organization, "user", "ada"))
 	require.NoError(t, err)
-	_, err = store.Register(context.Background(), o, enrollment)
+	_, err = store.Register(context.Background(), o, enrollment, credentialFor(t, o))
 	require.NoError(t, err)
 	return o.GRN()
 }
@@ -1367,7 +1367,7 @@ func TestOperatorStore_RoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	enrollment, err := operator.NewEnrollment(one.GRN(), registeredBy)
 	require.NoError(t, err)
-	_, err = s.Register(ctx, one, enrollment)
+	_, err = s.Register(ctx, one, enrollment, credentialFor(t, one))
 	require.NoError(t, err)
 
 	stored, err := s.Get(ctx, one.GRN())
@@ -1382,7 +1382,7 @@ func TestOperatorStore_RoundTrip(t *testing.T) {
 	// write.
 	again, err := operator.NewEnrollment(one.GRN(), registeredBy)
 	require.NoError(t, err)
-	_, err = s.Register(ctx, one, again)
+	_, err = s.Register(ctx, one, again, credentialFor(t, one))
 	assert.ErrorIs(t, err, operator.ErrOperatorAlreadyRegistered)
 	_, err = s.Spend(ctx, again.TokenHash())
 	assert.ErrorIs(t, err, operator.ErrEnrollmentInvalid,
@@ -1393,7 +1393,7 @@ func TestOperatorStore_RoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	elsewhereEnrollment, err := operator.NewEnrollment(elsewhere.GRN(), scopedGRN("globex", "user", "ada"))
 	require.NoError(t, err)
-	_, err = s.Register(ctx, elsewhere, elsewhereEnrollment)
+	_, err = s.Register(ctx, elsewhere, elsewhereEnrollment, credentialFor(t, elsewhere))
 	require.NoError(t, err)
 	listed, err := s.ListByOrg(ctx, orgRootGRN("acme"))
 	require.NoError(t, err)
@@ -3130,6 +3130,11 @@ func policyEngine(t *testing.T, p *pgxpool.Pool) (*authz.PolicyGRPCServer, *grpc
 	return authz.NewPolicyGRPCServer(store, cache), conn
 }
 
+// testIssuer is the issuer every listener here signs messages as
+// (ADR-0101). No verifier dials it: a test reads the key set from the
+// listener's own address.
+const testIssuer message.Issuer = "https://garam.test"
+
 // machineListener serves the server `garam serve machine` builds,
 // over the stores Postgres holds, and returns its URL. What the command
 // reads from its configuration is supplied here instead: the sealer and
@@ -3140,6 +3145,7 @@ func machineListener(t *testing.T, p *pgxpool.Pool, sealer ca.Sealer, engine grp
 	presented := loopbackCertificate(t)
 	srv, err := cli.NewMachineServer(p, cli.MachineConfig{
 		Sealer:      sealer,
+		Issuer:      testIssuer,
 		Certificate: presented,
 		ServerRoot:  certificatePEM(presented),
 		Delivery:    briefDelivery(),
@@ -4180,7 +4186,7 @@ func TestMachineSurface_EnrolsAnOperatorWithTheTokenRegisteringItMinted(t *testi
 	require.NoError(t, err)
 	enrollment, err := operator.NewEnrollment(o.GRN(), registeredBy)
 	require.NoError(t, err)
-	_, err = operator.NewPostgresStore(p).Register(ctx, o, enrollment)
+	_, err = operator.NewPostgresStore(p).Register(ctx, o, enrollment, credentialFor(t, o))
 	require.NoError(t, err)
 
 	request, operatorKey := enrollmentRequest(t)

@@ -20,11 +20,13 @@ import { RegisteredOperatorParser, type RegisteredOperator } from "./orgs";
 
 /** What the register form has to show: nothing yet, a refusal, or the
  * operator the organization now holds a record of together with the
- * one-time token that enrols it.
+ * one-time token that enrols it and the credential it exchanges for
+ * tokens.
  *
- * The token is carried in this state because the answer that created it
- * is the only place it exists: garam stores its hash, so nothing can
- * fetch it again once this state is replaced (ADR-0064). */
+ * The token and the credential are carried in this state because the
+ * answer that created them is the only place they exist: garam stores
+ * their hashes, so nothing can fetch either again once this state is
+ * replaced (ADR-0064, ADR-0100). */
 export type RegisterOperatorState =
   | { status: "idle" }
   | { status: "error"; message: string }
@@ -34,6 +36,7 @@ export type RegisterOperatorState =
       name: string;
       token: string;
       expiresAt: string;
+      credential: string;
     };
 
 const Schema = z.object({
@@ -45,7 +48,8 @@ const Schema = z.object({
 
 /**
  * Registers an operator of the organization (ADR-0045) and returns the
- * one-time token it enrols with (ADR-0064).
+ * one-time token it enrols with (ADR-0064) and the credential it
+ * exchanges for tokens (ADR-0100).
  *
  * No private key passes through here. The operator generates its own
  * key pair in its own cluster and presents this token with a
@@ -114,5 +118,6 @@ export async function registerOperator(
     name: registered.operator.name,
     token: registered.enrollment.token,
     expiresAt: registered.enrollment.expiresAt,
+    credential: registered.credential.credential,
   };
 }

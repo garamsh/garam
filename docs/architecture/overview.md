@@ -71,21 +71,24 @@ collaborate on a shared plan.
   only: it assigns no agent and issues no certificate.
 - An organization **registering** an operator, under
   `/orgs/{org}/operators`, and its members reading the list (ADR-0045).
-  A record is a GRN, who registered it and when: it carries no
-  credential and reports nothing, because garam never dials an
-  operator. What it does grant is admission: the machine listener reads
-  it per connection, so an operator authenticates while its
+  A record is a GRN, who registered it and when, and it reports
+  nothing, because garam never dials an operator. Registering issues
+  the operator's credential in the same write, shown once, which it
+  exchanges for short-lived tokens; re-issuing it voids the previous one
+  and its tokens (ADR-0100). What the record grants is admission: the
+  machine listener reads it per connection for a certificate and per
+  request for a token, so an operator authenticates while its
   organization holds the record and stops when the record goes
   (ADR-0070). The identifier is supplied rather than minted, since an
   operator that already holds a certificate has to be registered under
   the GRN that certificate names. A name and description beside it are
   the organization's words about the record and not its identity
   (ADR-0074). Registering is granted by `operator:register`, reading by
-  `operator:read`, renaming and describing by `operator:update` and
-  deleting by `operator:delete`, each named action by action for the
-  reason the agent actions are — deleting separately from registering,
-  because registering grants nothing and deleting withdraws what an
-  operator runs on.
+  `operator:read`, renaming and describing by `operator:update`,
+  re-issuing the credential by `operator:reissue` and deleting by
+  `operator:delete`, each named action by action for the reason the
+  agent actions are — re-issuing and deleting separately from
+  registering, because each withdraws what an operator runs on.
 - An organization **delegating** bounded execution authority to a
   hosted operator, under `/orgs/{org}/operators/{operator}/delegation`,
   and a member handing it one request-bound operation under
@@ -430,9 +433,10 @@ collaborate on a shared plan.
 - `internal/health/` — what liveness and readiness mean, and the two
   probes every serve command mounts (ADR-0021).
 - `internal/operator/` — the record that an organization has an
-  operator (ADR-0045), which holds no credential and no reported state,
-  and the operator's own certificate: which one garam last issued it,
-  and what it takes to replace that with the next (ADR-0046).
+  operator (ADR-0045), which holds no reported state; the operator's
+  credential and the tokens it exchanges it for (ADR-0100); and the
+  operator's own certificate: which one garam last issued it, and what
+  it takes to replace that with the next (ADR-0046).
 - `internal/agent/` — agent identities and the operator each is
   assigned to.
 - `internal/ca/` — the per-organization certificate authority and the
@@ -442,8 +446,9 @@ collaborate on a shared plan.
 - `internal/machineapi/` — handlers implementing the ServerInterface
   generated from the machine listener's spec.
 - `internal/message/` — the durable queue a message reaches an agent
-  through; one reader claims a message at a time, and whose queue a
-  caller may act on is decided here.
+  through; one reader claims a message at a time, whose queue a caller
+  may act on is decided here, and every hand-out is signed under keys
+  kept here (ADR-0101).
 - `internal/delivery/` — the adapter's delivery loop: it claims a
   message for one agent, posts it into that agent's gateway under
   garam's identifier, completes the claim the platform says committed,
@@ -518,13 +523,15 @@ it and imports no request surface and no domain.
 | `ca.Certificate` | `internal/ca` | signed client certificate identified by a SAN URI, over a key garam generated or one a request carried |
 | `ca.Sealer` | `internal/ca` | seals key material against a database dump |
 | `operator.Credential` | `internal/operator` | the certificate a connection authenticated with, as the renewal rule reads it |
-| `operator.Service` | `internal/operator` | signs an enrolling operator's certificate request, mints one out of band, and renews the one an operator presents |
+| `operator.Service` | `internal/operator` | signs an enrolling operator's certificate request, mints one out of band, renews the one an operator presents, and exchanges a credential for a token |
+| `operator.IssuedCredential` | `internal/operator` | the credential garam issues an operator and answers once (ADR-0100) |
 | `operator.Enrollment` | `internal/operator` | the one-time token an operator obtains its first certificate with |
 | `machine.Identity` | `internal/machine` | the GRN a verified client certificate names, and which certificate named it |
 | `machine.Service` | `internal/machine` | verifies a presented certificate against its organization's authority |
 | `machine.ServerCertificate` | `internal/machine` | what the listener presents, asked per handshake so a replaced one needs no restart |
 | `message.Message` | `internal/message` | one message addressed to a recipient |
 | `message.Claim` | `internal/message` | one reader's hold on a message, fenced by a token |
+| `message.Keyring` | `internal/message` | the keys every hand-out is signed under: opens the one signing, rotates them, publishes the set (ADR-0101) |
 | `watch.Event` | `internal/watch` | one forwarded turn event, carried and never stored |
 | `watch.Subscription` | `internal/watch` | one open watch: the stream its holder reads |
 | `watch.Service` | `internal/watch` | opens a watch, carries a forwarded event to the watchers of that agent, counts them |
@@ -563,6 +570,7 @@ it and imports no request surface and no domain.
 | The console is a sidebar shell over org sections | One structure for switching orgs, moving between sections, and knowing where you are. | [adr/0011-console-shell.md](./adr/0011-console-shell.md) |
 | Agents are provisioned by operators garam never dials | An operator is a peer, so a user can supply their own; garam is never the side that connects. | [adr/0012-agent-operator-model.md](./adr/0012-agent-operator-model.md) |
 | Messages reach an agent by polling, not by push | A queue in Postgres has no connection to route to, so any instance answers any poll. | [adr/0013-agent-messaging.md](./adr/0013-agent-messaging.md) |
+| garam signs every message it hands out | An agent judges a message by a signature that travels with it, not by the path it arrived on, so it can verify garam without trusting garam's transport. | [adr/0101-garam-signs-every-message-it-delivers-and-the-agent-verifies-it-alone.md](./adr/0101-garam-signs-every-message-it-delivers-and-the-agent-verifies-it-alone.md) |
 | Agents authenticate by mTLS on a listener of their own | A GRN in a SAN needs no user row; a separate listener needs no trusted proxy header. | [adr/0014-agent-authentication.md](./adr/0014-agent-authentication.md) |
 | garam presents one pinned server certificate and certificates rotate without a restart | A server picks its certificate before the client sends one, so per-organization selection is unreachable; expiry is the only revocation, and a lifetime short enough to be one is unusable when every rotation is a restart. | [adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md) |
 | An organization registers an operator, and a definition may name no other | A definition naming an operator nobody registered was a definition no operator would ever claim, and nothing reported it. | [adr/0045-an-organization-registers-an-operator.md](./adr/0045-an-organization-registers-an-operator.md) |

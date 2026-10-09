@@ -47,6 +47,10 @@ export {
   type RegisterOperatorState,
 } from "./api/register-operator";
 export {
+  reissueOperatorCredential,
+  type ReissueOperatorCredentialState,
+} from "./api/reissue-operator-credential";
+export {
   removeGroupMember,
   type RemoveGroupMemberState,
 } from "./api/remove-group-member";

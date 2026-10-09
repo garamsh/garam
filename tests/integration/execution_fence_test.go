@@ -158,7 +158,7 @@ func newLegacyStack(t *testing.T, p *pgxpool.Pool, engine grpc.ClientConnInterfa
 	s := &executionStack{
 		pool: p, browser: browser.URL, clock: clock,
 		config: cli.MachineConfig{
-			Sealer: sealer, Certificate: presented, ServerRoot: certificatePEM(presented),
+			Sealer: sealer, Issuer: testIssuer, Certificate: presented, ServerRoot: certificatePEM(presented),
 			Delivery: briefDelivery(), Engine: engine,
 			Logger: slog.New(slog.NewJSONHandler(io.Discard, nil)), Now: clock.now,
 		},

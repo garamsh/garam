@@ -182,7 +182,7 @@ cannot be regenerated, which carries what the only remedy costs).
 
 ## Values a deployment must supply
 
-`values.yaml` documents each. These five have no default and the render
+`values.yaml` documents each. These six have no default and the render
 fails without them:
 
 - `image.server.tag`, `image.web.tag` — the version a deployment runs is
@@ -193,6 +193,12 @@ fails without them:
 - `machine.keyMaterial.secretName` — the Secret each of the machine
   listener's four key-material files is read from, less whichever of
   them names a Secret of its own (§Key material and secrets).
+- `machine.issuer` — the issuer every message signature names: the
+  machine listener's external https origin, with a lowercase host, no
+  empty port, no path and no trailing slash (ADR-0101). A verifier
+  compares it byte for byte and reads the key set at it followed by
+  `/message-signing-keys`, so a deployment keeps it for its life; the
+  binary refuses any other shape at startup.
 - `web.apiUrl` — the address the web process reaches `serve api` on,
   baked into the image at build time as the `/api/*` rewrite target and
   read again at runtime by every server-side render

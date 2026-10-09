@@ -1,6 +1,8 @@
 # ADR 0078: A lifecycle authority activates a runtime generation, and old generations and lineages are fenced
 
-> Status: accepted
+> Status: accepted — a lineage of certificates, and recovery as the
+> way a lost credential is replaced, are superseded by
+> [ADR-0100](./0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
 > Date: 2026-10-04
 
 Decided by the PM under the owner's explicit delegation of 2026-10-04,

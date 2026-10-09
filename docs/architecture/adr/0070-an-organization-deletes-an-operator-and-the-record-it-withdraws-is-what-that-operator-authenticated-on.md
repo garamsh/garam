@@ -1,6 +1,9 @@
 # ADR 0070: An organization deletes an operator, and the record it withdraws is what that operator authenticated on
 
-> Status: accepted
+> Status: accepted — the record read per connection through a seam
+> of the trust root's shape is superseded by
+> [ADR-0100](./0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md),
+> which reads it per request beside the token
 > Date: 2026-09-06
 
 ## Contents

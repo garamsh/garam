@@ -34,7 +34,7 @@ func NewPostgresStore(pool *pgxpool.Pool) *PostgresStore {
 // transaction: the enrollment state is derived from tables this write
 // does not touch, so assuming it here would answer `pending` for a GRN
 // that already holds a certificate.
-func (s *PostgresStore) Register(ctx context.Context, o *Operator, e *Enrollment) (*Operator, error) {
+func (s *PostgresStore) Register(ctx context.Context, o *Operator, e *Enrollment, c *IssuedCredential) (*Operator, error) {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return nil, errorx.Wrap(err, "begin", errorx.KindUnavailable)
@@ -60,6 +60,9 @@ func (s *PostgresStore) Register(ctx context.Context, o *Operator, e *Enrollment
 		ExpiresAt:   stamp(e.expiresAt),
 	}); err != nil {
 		return nil, pgxerr.Classify(err, "mint enrollment token", nil, nil)
+	}
+	if err := q.InsertOperatorCredential(ctx, credentialParams(c)); err != nil {
+		return nil, pgxerr.Classify(err, "issue operator credential", nil, nil)
 	}
 	row, err := q.GetOperator(ctx, o.grn.String())
 	if err != nil {
@@ -122,6 +125,44 @@ func (s *PostgresStore) Remint(ctx context.Context, e *Enrollment) error {
 		return errorx.Wrap(err, "commit")
 	}
 	return nil
+}
+
+// ReissueCredential deletes the operator's credential and inserts c in
+// one transaction. The delete carries every token minted under the
+// previous credential with it, by 000038's foreign key, so the
+// operator's next request on any of them is refused; the insert's
+// foreign key to the registration is what refuses an operator the
+// organization holds no record of.
+func (s *PostgresStore) ReissueCredential(ctx context.Context, c *IssuedCredential) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return errorx.Wrap(err, "begin", errorx.KindUnavailable)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	q := s.q.WithTx(tx)
+	if err := q.DeleteOperatorCredential(ctx, c.operator.String()); err != nil {
+		return pgxerr.Classify(err, "void operator credential", nil, nil)
+	}
+	if err := q.InsertOperatorCredential(ctx, credentialParams(c)); err != nil {
+		if pgxerr.IsForeignKeyViolation(err) {
+			return ErrOperatorNotFound
+		}
+		return pgxerr.Classify(err, "issue operator credential", nil, nil)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return errorx.Wrap(err, "commit")
+	}
+	return nil
+}
+
+func credentialParams(c *IssuedCredential) db.InsertOperatorCredentialParams {
+	return db.InsertOperatorCredentialParams{
+		OperatorGrn:    c.operator.String(),
+		CredentialHash: c.Hash(),
+		IssuedBy:       c.issuedBy.String(),
+		IssuedAt:       stamp(c.issuedAt),
+	}
 }
 
 // UpdateDetails writes the patch and reads the operator back in one

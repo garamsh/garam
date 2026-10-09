@@ -164,6 +164,7 @@ func TestServe_ExitsZeroOnSIGTERM(t *testing.T) {
 				"GARAM_MACHINE_TLS_KEY_FILE=" + keyFile,
 				"GARAM_CA_KEY_FILE=" + kekFile,
 				"GARAM_MACHINE_SERVER_ROOT_FILE=" + rootFile,
+				"GARAM_MACHINE_ISSUER=https://garam.test",
 			}, "http://" + healthAddr
 		}},
 	}

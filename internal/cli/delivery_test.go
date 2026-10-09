@@ -202,7 +202,7 @@ func TestAdapterClient_MeetsTheMachineListenerOverHTTP11(t *testing.T) {
 
 	pair, err := tls.LoadX509KeyPair(certFile, keyFile)
 	require.NoError(t, err)
-	srv := machine.NewServer(anyMachineIdentity{}, heldCertificate{pair: &pair},
+	srv := machine.NewServer(anyMachineIdentity{}, identityTokens{operators: liveTokens{}}, heldCertificate{pair: &pair},
 		http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)

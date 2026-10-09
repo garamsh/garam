@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -84,6 +85,11 @@ func serveMachine(cmd *cobra.Command) error {
 		return err
 	}
 
+	issuer, err := message.ParseIssuer(envOr(envMachineIssuer, ""))
+	if err != nil {
+		return errorx.Wrap(err, string(envMachineIssuer))
+	}
+
 	// Whom an agent may send to is decided by the policy engine, which
 	// runs as a process of its own and is reached over gRPC (ADR-0003).
 	// Insecure transport: both processes run inside one trust boundary;
@@ -102,6 +108,7 @@ func serveMachine(cmd *cobra.Command) error {
 
 	srv, err := NewMachineServer(pool, MachineConfig{
 		Sealer:      keys.sealer,
+		Issuer:      issuer,
 		Certificate: keys.listener,
 		ServerRoot:  keys.serverRoot,
 		Authority:   ca.Config{CertificateLifetime: lifetime},
@@ -111,6 +118,7 @@ func serveMachine(cmd *cobra.Command) error {
 		Delivery: message.Config{},
 		Engine:   conn,
 		Logger:   obs.logger,
+		Metrics:  obs.registry,
 	})
 	if err != nil {
 		return err
@@ -142,8 +150,12 @@ func serveMachine(cmd *cobra.Command) error {
 // configuration; a test supplies its own.
 type MachineConfig struct {
 	// Sealer opens the sealed private keys of the certificate
-	// authorities (ADR-0016).
+	// authorities (ADR-0016) and of the keys messages are signed with
+	// (ADR-0101).
 	Sealer ca.Sealer
+	// Issuer is the value every message signature names as its issuer:
+	// this listener's external https origin (ADR-0101).
+	Issuer message.Issuer
 	// Certificate is what the listener presents (ADR-0040).
 	Certificate machine.ServerCertificate
 	// ServerRoot is the garam root handed out beside every certificate
@@ -160,6 +172,9 @@ type MachineConfig struct {
 	// Logger takes one line per served request and every recovered
 	// panic.
 	Logger *slog.Logger
+	// Metrics is where the count of requests by how they authenticated
+	// is registered (ADR-0100). Nil registers it nowhere.
+	Metrics prometheus.Registerer
 	// Now supplies the time a certificate and a grant are measured
 	// against on every decision, so a test can move it across an
 	// expiry on an open connection. Zero takes time.Now.
@@ -171,8 +186,11 @@ type MachineConfig struct {
 // behind the listener machineServer builds. The caller sets the
 // address and serves it.
 func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, error) {
-	// This listener serves no /metrics, so no registry is collected.
 	obs := &observability{logger: cfg.Logger}
+	requests, err := newMachineRequestCounter(cfg.Metrics)
+	if err != nil {
+		return nil, err
+	}
 
 	authorities := capg.New(pool)
 	issuer, err := ca.NewService(authorities, cfg.Sealer, cfg.Authority)
@@ -184,12 +202,21 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 	// An operator obtains its first certificate on this listener by
 	// enrolling (ADR-0064) and renews it here afterwards (ADR-0046),
 	// through the same authority and the same server root its agents
-	// are given. One store answers both halves: what garam last issued
-	// an operator, and the token an enrollment spends.
+	// are given, and it exchanges its credential for tokens here
+	// (ADR-0100). One store answers all three: what garam last issued
+	// an operator, the token an enrollment spends, and the tokens a
+	// credential is exchanged for.
 	operatorStore := operator.NewPostgresStore(pool)
-	operators := operator.NewService(operatorStore, operatorStore,
+	operators := operator.NewService(operatorStore, operatorStore, operatorStore,
 		operatorCertificates{issuer: issuer, serverRoot: cfg.ServerRoot}, operator.Config{})
 	messages, err := message.NewService(message.NewPostgresStore(pool), cfg.Delivery)
+	if err != nil {
+		return nil, err
+	}
+	// Each hand-out is signed under a key sealed by the same
+	// key-encryption key as the authorities, valid for the lease ceiling
+	// the queue holds a claim to (ADR-0101).
+	keyring, err := message.NewKeyring(message.NewPostgresStore(pool), cfg.Sealer, cfg.Issuer, cfg.Delivery)
 	if err != nil {
 		return nil, err
 	}
@@ -229,15 +256,16 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 			memberGroups{store: org.NewPostgresStore(pool)}, machineapi.NewGRPCEvaluator(cfg.Engine),
 			authority, identities, newProofService(pool, cfg.Engine, cfg.Now),
 			newExecutionService(pool, cfg.Engine, authority, identities, issuer, cfg.ServerRoot, cfg.Now),
-			newSupervisorService(pool, cfg.Engine, issuer, cfg.ServerRoot, cfg.Now)),
+			newSupervisorService(pool, cfg.Engine, issuer, cfg.ServerRoot, cfg.Now), keyring),
 		machinegen.StdHTTPServerOptions{
-			Middlewares: []machinegen.MiddlewareFunc{machineapi.ConfineSupervisors, machineapi.RecoverPanics, obs.logMachineRequests},
+			Middlewares: []machinegen.MiddlewareFunc{machineapi.ConfineTokens, machineapi.ConfineSupervisors, machineapi.RecoverPanics,
+				obs.logMachineRequests, countMachineRequests(requests)},
 			// A parameter the router cannot bind is refused before any
 			// handler runs, so this is the only place the surface's own
 			// error body reaches that refusal.
 			ErrorHandlerFunc: machineapi.BindingError,
 		})
-	return obs.machineServer(identities, cfg.Certificate, handler), nil
+	return obs.machineServer(identities, identityTokens{operators: operatorStore}, cfg.Certificate, handler), nil
 }
 
 // machineServer is the listener `serve machine` serves: TLS a client
@@ -249,8 +277,8 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 // The wrapping is assigned rather than passed in, because NewServer
 // puts that check outside the handler it is given and the check runs
 // per request too.
-func (o *observability) machineServer(identities machine.Service, certificate machine.ServerCertificate, next http.Handler) *http.Server {
-	srv := machine.NewServer(identities, certificate,
+func (o *observability) machineServer(identities machine.Service, tokens machine.Tokens, certificate machine.ServerCertificate, next http.Handler) *http.Server {
+	srv := machine.NewServer(identities, tokens, certificate,
 		otelhttp.NewHandler(next, serviceMachine))
 	srv.Handler = o.recoverPanics(http.MaxBytesHandler(srv.Handler, maxRequestBody))
 	// A handshake that fails outright — a client that speaks no TLS
@@ -264,12 +292,14 @@ func (o *observability) machineServer(identities machine.Service, certificate ma
 // machineProbeHandler is what `serve machine` answers on the port
 // beside its TLS one, because the listener above answers a probe on no
 // route: what it serves is the machine specification's operations. It
-// carries no /metrics: this process serves none (api-surface.md
-// §The surfaces). recoverPanics is outermost, as on every listener a
-// serve command runs.
+// carries /metrics beside the probes, as `serve authz`'s does, because
+// the count of requests by how they authenticated is what decides when
+// the certificate path may go (ADR-0100). recoverPanics is outermost,
+// as on every listener a serve command runs.
 func (o *observability) machineProbeHandler(deps ...health.Dependency) http.Handler {
 	mux := http.NewServeMux()
 	health.Register(mux, deps...)
+	mux.Handle("GET /metrics", o.metricsHandler())
 	return o.recoverPanics(mux)
 }
 

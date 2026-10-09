@@ -47,11 +47,20 @@ It presents its certificate per handshake rather than holding what it
 read at startup, so a renewed one is presented on the next connection
 and this process keeps running.
 
+**Unbuilt: its token mode.**
+[ADR-0100](./adr/0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
+moves the adapter from the agent's certificate to two short-lived
+tokens, one for garam and one for the control service, each read from
+its file per request, with the placement token moved to a
+`Garam-Placement` header under `agent-execution.v2`. It is step G2 of
+`docs/plans/2026-10-09-machine-identity-migration.md`.
+
 ## The delivery loop
 
 1. Claim a message for its agent from garam's queue. The claim carries
    a lease, garam's identifier for the message and the sender garam
-   verified.
+   verified, and the content and garam's signature over it
+   (§Stable identifiers and the outbox).
 2. Post it into the gateway under garam's message identifier, never the
    claim's, as `garam-message.v1` (§Stable identifiers and the outbox).
    Hold the claim under that identifier, in memory.
@@ -304,6 +313,16 @@ pins it for this adapter.
   garam's claim verified and `body` the original body as one string, so
   nothing in the body overrides the envelope and a redelivery encodes
   to the same bytes.
+- **The adapter does not yet forward what garam signs.** garam's claim
+  answers the same content, which garam encodes itself, and a signature
+  over it
+  ([ADR-0101](./adr/0101-garam-signs-every-message-it-delivers-and-the-agent-verifies-it-alone.md));
+  `tests/integration/message_signature_test.go` holds garam's content
+  equal to this adapter's own encoding. The adapter still posts the
+  content it encoded and drops the signature. Forwarding both byte for
+  byte is ADR-0101's step 2, and it waits for Sherlock's ingress to
+  name the member the signature travels in (garamsh/sherlock#993),
+  because that ingress refuses a member it does not know.
 - **A reply leaves through a durable outbox.** The adapter reads each
   entry as a bounded regular file inside the outbox directory, never
   through a link, and requires its agent to be this adapter's GRN. It

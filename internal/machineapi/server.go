@@ -54,6 +54,9 @@ type Server struct {
 	// supervisors is how a standalone host's supervisor enrolls and
 	// renews (ADR-0082).
 	supervisors agent.SupervisorService
+	// keys signs each message handed out and publishes the keys it
+	// signs with (ADR-0101).
+	keys message.Keyring
 }
 
 // Compile-time check that Server satisfies the generated interface.
@@ -68,41 +71,68 @@ var _ machinegen.ServerInterface = (*Server)(nil)
 // hosted operator reads its delegated operations back through, what
 // verifies a certificate again on a decision, what proves a
 // controller's current authority to that operator, what activates,
-// inspects, recovers and renews an agent's execution, and how a
-// standalone host's supervisor enrolls and renews.
-func NewServer(agents agent.Service, operators operator.Service, messages message.Service, consents message.ConsentStore, watches watch.Service, groups Groups, evaluator Evaluator, authority operator.AuthorityService, certificates machine.Service, proofs operator.ProofService, executions agent.ExecutionService, supervisors agent.SupervisorService) *Server {
+// inspects, recovers and renews an agent's execution, how a standalone
+// host's supervisor enrolls and renews, and what signs each message
+// handed out.
+func NewServer(agents agent.Service, operators operator.Service, messages message.Service, consents message.ConsentStore, watches watch.Service, groups Groups, evaluator Evaluator, authority operator.AuthorityService, certificates machine.Service, proofs operator.ProofService, executions agent.ExecutionService, supervisors agent.SupervisorService, keys message.Keyring) *Server {
 	return &Server{agents: agents, operators: operators, messages: messages, consents: consents, watches: watches, groups: groups, evaluator: evaluator, authority: authority,
-		certificates: certificates, proofs: proofs, executions: executions, supervisors: supervisors}
+		certificates: certificates, proofs: proofs, executions: executions, supervisors: supervisors, keys: keys}
 }
 
-// caller returns the GRN the connection authenticated as, and writes
-// the refusal itself when there is none. It is what a handler needing
-// only the identity takes it through; see callerCertificate for why
-// taking it is not optional.
+// caller returns the GRN the request proved, by certificate or by
+// token, and writes the refusal itself when there is none. It is what a
+// handler needing only the identity takes it through; see
+// identityOf for why taking it is not optional.
 func caller(w http.ResponseWriter, r *http.Request) (grn.GRN, bool) {
-	identity, ok := callerCertificate(w, r)
+	identity, ok := identityOf(w, r)
 	return identity.GRN(), ok
 }
 
-// callerCertificate returns the identity and the certificate it
-// authenticated with, and writes the refusal itself when there is none.
+// identityOf returns the identity the request proved, and writes the
+// refusal itself when there is none.
 //
 // The listener admits a connection whose certificate does not
 // authenticate, so that an operator with no certificate yet can reach
 // the enrollment route (ADR-0064). That makes this refusal the only one
 // standing between such a connection and a handler: every handler but
-// EnrollOperator has to take its identity through here, or through
-// parties, and a new one that does not is a route an unauthenticated
-// caller reaches.
+// EnrollOperator has to take its identity through here, through
+// callerCertificate, or through parties, and a new one that does not is
+// a route an unauthenticated caller reaches.
+//
+// A request that presented a token which proved nothing is refused
+// with the reason the listener read (ADR-0100), so a caller holding a
+// voided token learns that rather than that it presented nothing.
+func identityOf(w http.ResponseWriter, r *http.Request) (machine.Identity, bool) {
+	identity, ok := machine.IdentityOf(r)
+	if !ok {
+		if err := machine.RefusalOf(r); err != nil {
+			writeError(w, err)
+			return machine.Identity{}, false
+		}
+		writeError(w, errorx.New(errorx.KindUnauthenticated, "no machine identity"))
+		return machine.Identity{}, false
+	}
+	return identity, true
+}
+
+// callerCertificate returns the identity and the certificate it
+// authenticated with, and writes the refusal itself when there is none.
 //
 // A route takes the certificate rather than the GRN alone where a
 // decision rests on which certificate authenticated: what may replace
 // it (ADR-0046), a recheck on every request, or the execution fence's
-// judgement of its validity and lineage (ADR-0080).
+// judgement of its validity and lineage (ADR-0080). A token carries no
+// certificate, so an identity a token proved is refused here whatever
+// route reached it: ConfineTokens keeps tokens off these routes, and
+// this is what still holds where a route list does not (ADR-0100).
 func callerCertificate(w http.ResponseWriter, r *http.Request) (machine.Identity, bool) {
-	identity, ok := machine.IdentityOf(r)
+	identity, ok := identityOf(w, r)
 	if !ok {
-		writeError(w, errorx.New(errorx.KindUnauthenticated, "no machine identity"))
+		return machine.Identity{}, false
+	}
+	if identity.Method() != machine.MethodCertificate {
+		writeError(w, errorx.New(errorx.KindUnauthenticated,
+			"this operation reads the certificate a connection presented, and a token carries none"))
 		return machine.Identity{}, false
 	}
 	return identity, true

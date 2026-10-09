@@ -119,7 +119,7 @@ func TestOperatorUpdateDetails_ReachesOneOrganizationsRecord(t *testing.T) {
 	require.NoError(t, err)
 	e, err := operator.NewEnrollment(theirs.GRN(), scopedGRN("globex", "user", "ada"))
 	require.NoError(t, err)
-	_, err = store.Register(ctx, theirs, e)
+	_, err = store.Register(ctx, theirs, e, credentialFor(t, theirs))
 	require.NoError(t, err)
 
 	_, err = store.UpdateDetails(ctx, mine, detailsPatch(t, "Acme one", "Acme's."))

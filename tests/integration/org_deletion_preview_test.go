@@ -99,7 +99,7 @@ func TestOrgDeletionPreview_CountsMatchWhatTheCascadeTakes(t *testing.T) {
 	require.NoError(t, err)
 	enrollment, err := operator.NewEnrollment(op.GRN(), ownerGRN)
 	require.NoError(t, err)
-	_, err = operators.Register(ctx, op, enrollment)
+	_, err = operators.Register(ctx, op, enrollment, credentialFor(t, op))
 	require.NoError(t, err)
 
 	agentGRN, err := agent.NewGRN(orgGRN)

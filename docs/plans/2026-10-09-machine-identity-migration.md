@@ -219,6 +219,37 @@ ADR-0100 §Tokens is authoritative for these values.
   control-service token per request, so a rewrite of either needs no
   restart. A file is replaced by a rename, never written in place.
 
+### The contract values the Operator sends and checks
+
+ADR-0100 §Contract values is authoritative for these. O1 moves the
+Operator's clients and servers as follows, and sends or accepts no v1
+value afterwards.
+
+| Value | The Operator | Where |
+|---|---|---|
+| `machine-token.v1` | sends | the manager and the control service, to `POST /tokens`; the manager, to `POST /agents/{agent}/tokens` |
+| `operation-authority.v2` | sends | the control service, to `introspectOperationAuthority`, `checkOperationReference` and `introspectController` |
+| `execution-fence.v2` | sends | the control service, to `activateAgent`, `deactivateAgent`, `introspectAgentExecution` and `recoverAgentCredential` |
+| `agent-cutover.v2` | sends | the control service, to the four cutover routes |
+| `managed-enrollment.v2` | sends | the control service, to `createManagedAgent` |
+| `agent-execution.v2` | checks and answers | the control service's `activations` and `runtime-status`, refusing any other value |
+
+Two routes the Operator calls today take no v2 value and go at G3:
+
+- `issueInitialCertificate`;
+- `issueAgentCertificate`.
+
+Three values are not the Operator's:
+
+- `standalone-enrollment.v2` is `garam standalone`'s;
+- `durable-delivery.v2` is the adapter's, sent to garam;
+- the definitions read, the claim and the provisioning report carry
+  no value. On them the manager sends only `Garam-Token`.
+
+The Operator's ports may go on refusing an unknown value with 503
+(the Operator's #293). That choice is the Operator's, and garam
+answers each value with the same value.
+
 ## How a running operator moves over
 
 **On the lab, O1's precondition is that the lab runs G1 and G2, not

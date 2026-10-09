@@ -201,9 +201,47 @@ Actions Runner Controller's:
   <token>`.** The values that share that header today move to headers
   of their own: `Garam-Execution`, `Garam-Operation` and
   `Garam-Placement`. Each contract whose transport changes takes a new
-  value: `execution-fence.v2`, `operation-authority.v2`,
-  `agent-cutover.v2`, `managed-enrollment.v2`,
-  `standalone-enrollment.v2` and `agent-execution.v2`.
+  value, which §Contract values names.
+
+### Contract values
+
+Every `Garam-Contract-Version` value whose transport changes is
+replaced. The v2 values are below, with the one new value.
+
+**Wire changes common to every v2 value.**
+
+- **The caller's credential.** A v2 request authenticates by
+  `Authorization: Garam-Token <token>` and presents no client
+  certificate.
+- **The per-operation headers.** `Garam-Execution`, `Garam-Operation`
+  and `Garam-Placement` each travel in a header of that name.
+- **The answer.** It carries the same value in its own
+  `Garam-Contract-Version` header.
+- **A mismatch is refused.** A request whose value and credential
+  disagree is refused with 400, naming the value its credential
+  takes: a v1 value with a token, or a v2 value with a certificate.
+
+A route that carries no contract version today still carries none.
+These are the definitions read, the claim, the provisioning and
+runtime reports, the message routes and `getIdentity`, and on them the
+`Authorization` scheme tells the two mechanisms apart.
+
+| Value | Replaces | Routes | What else changes | Sent by | Checked by |
+|---|---|---|---|---|---|
+| `machine-token.v1` | nothing; new | `POST /tokens`, `POST /agents/{agent}/tokens` | — | the manager, the control service, a supervisor | garam |
+| `operation-authority.v2` | `operation-authority.v1` | `introspectOperationAuthority`, `checkOperationReference`, `introspectController` | `introspectController` takes the controller's token minted for the caller, where it took `certificatePem` | the control service | garam |
+| `execution-fence.v2` | `execution-fence.v1` | `activateAgent`, `deactivateAgent`, `introspectAgentExecution`, `recoverAgentCredential` | introspection and activation take the agent's token minted for the caller, where they took `certificatePem`; recovery takes `requestId` and `epoch` and answers no certificate or chain | the control service, a supervisor | garam |
+| `agent-cutover.v2` | `agent-cutover.v1` | `getAgentCutover`, `freezeAgentCutover`, `switchAgentCutover`, `rollBackAgentCutover` | the reference moves to `Garam-Operation` | the control service | garam |
+| `managed-enrollment.v2` | `managed-enrollment.v1` | `createManagedAgent` | creation opens the lineage; `issueInitialCertificate` takes no v2 value | the control service | garam |
+| `standalone-enrollment.v2` | `standalone-enrollment.v1` | `enrollStandaloneAgent` | it answers a supervisor credential where it signed two requests; `renewSupervisorCertificate` takes no v2 value | `garam standalone` | garam |
+| `durable-delivery.v2` | `durable-delivery.v1` | `postOutboxMessage` | the execution token moves to `Garam-Execution` | the adapter | garam |
+| `agent-execution.v2` | `agent-execution.v1` | the control service's `activations` and `runtime-status` | the caller's token minted for the control service; the placement token in `Garam-Placement`; the request identifier's first field is `agent-execution.v2` | the adapter | the control service, a supervisor |
+
+The last change is not cosmetic. ADR-0084 derives the activation
+request identifier from six fields, and the first is the contract
+value, so a v2 adapter presents new intent and receives a new
+activation after its first v2 start. That happens once, when its Pod
+rolls onto the token mode, and a restart already costs an activation.
 
 ### Revocation holds because every request reads the row
 
@@ -363,7 +401,7 @@ Status lines move when this is accepted, not before.
 | 0070 | the record read per connection through a seam of the trust root's shape | the delete, `operator:delete`, the refusal while a definition names the operator, the record as what admits |
 | 0078 | a lineage of certificates, and recovery as the way a lost credential is replaced | the generation fence, delegated authority, recovery for the same GRN, now ending a lineage of tokens that may have been taken |
 | 0082 | the host's key pairs, spending by certificate requests, the supervisor's certificate renewal | a supervisor for one agent, an administrator standing it up, the assignee, its execution routes, replacement and revocation, the secret out of the runtime's reach |
-| 0084 | the agent's leaf over mTLS as the transport's authentication, `Garam-Placement` in `Authorization` | the routes, bodies, refusals, the request identifier's derivation, the highest token version, the two modes |
+| 0084 | the agent's leaf over mTLS as the transport's authentication, `Garam-Placement` in `Authorization`, and `agent-execution.v1` as the identifier's first field | the routes, bodies, refusals, the request identifier's derivation from six fields, the highest token version, the two modes |
 | 0085 | the adapter presenting the agent's certificate on the socket | the three containers, the socket, the generation's serving root, the drain |
 | 0086 | the operator's certificate route refusing a switched agent | the stages and the lock, the agent-token route refusing a switched agent's operator instead |
 | 0091 | whole: a recovery answers no chain | nothing |

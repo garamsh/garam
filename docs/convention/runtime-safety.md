@@ -21,6 +21,9 @@ does only what the types prove it can do.
 
 ## Type system
 
+This section states what strictness and which type shapes are required,
+not the setting or syntax that provides them.
+
 Enable the strictest mode your stack supports — strict nullability, no
 implicit escape to an "unknown/any/object" shape, no implicit
 conversions. Strictness catches more bugs at compile time than it costs
@@ -42,6 +45,9 @@ in effort.
   the wrong value at the type level.
 
 ## Trust boundaries
+
+This section states where untrusted data is proved and what the boundary
+hands on, not the parser, validator or loader that does it.
 
 External data is untrusted. The boundary between outside and inside is
 where you prove what's true.
@@ -85,6 +91,9 @@ Prefer functions that handle every case explicitly.
   to partial ones.
 
 ## Errors reach a handler
+
+This section states which failure reaches which kind of place, not the
+form an error takes or the mechanism that maps it.
 
 - **Expected failure** (validation, lookup miss, network error) is
   declared where it is produced and reaches exactly one place obliged to

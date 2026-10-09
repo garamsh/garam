@@ -8,9 +8,10 @@ import "context"
 // process serving it.
 type Gateway interface {
 	// Post hands one message to the agent under garam's identifier for
-	// it, and answers how far the runtime has already got with it. An
-	// identical replay of a completed message runs no second turn.
-	Post(ctx context.Context, id MessageID, content string) (Progress, error)
+	// it, with garam's signature over content where signature is not
+	// empty, and answers how far the runtime has already got with it.
+	// An identical replay of a completed message runs no second turn.
+	Post(ctx context.Context, id MessageID, content, signature string) (Progress, error)
 	// Lookup answers how far the runtime has got with a message it was
 	// handed, which recovers a completion whose event was lost.
 	Lookup(ctx context.Context, id MessageID) (Progress, error)

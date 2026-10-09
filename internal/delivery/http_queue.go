@@ -228,13 +228,20 @@ func decodeClaim(body io.Reader) (*Claim, error) {
 	if err != nil {
 		return nil, errorx.Wrap(err, "delivery: garam answered a claim with no sender", errorx.KindInternal)
 	}
-	return &Claim{
+	claim := &Claim{
 		ID:        ClaimID(answer.Id),
 		ExpiresAt: answer.ExpiresAt,
 		Message:   MessageID(answer.Message.Id),
 		Sender:    sender,
 		Body:      answer.Message.Body,
-	}, nil
+	}
+	if answer.Content != nil {
+		claim.Encoded = *answer.Content
+	}
+	if answer.Signature != nil {
+		claim.Signature = *answer.Signature
+	}
+	return claim, nil
 }
 
 // fenced records a refusal of what the call presented, and answers it.

@@ -21,6 +21,9 @@ second way to run it.
 
 ## One entry point per task
 
+This section states which names exist and what each owes, not the
+commands behind them.
+
 - **One name per task.** Each of lint, format, test, and build has
   exactly one name that a human and CI both invoke, once the project has
   a command for it. What implements that name — a task runner, a
@@ -76,6 +79,9 @@ For each of those steps:
    to hand-roll per-job.
 
 ## Verify a pinned dependency before adopting it
+
+This section states what to establish before pinning and what makes a
+reference a pin, not which reference a given artifact takes.
 
 Before pinning anything the pipeline pulls in — a published component,
 container image, or tool version — read its own documentation and

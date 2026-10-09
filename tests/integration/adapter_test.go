@@ -283,6 +283,13 @@ func startAdapter(t *testing.T, s *executionStack, c *controlStandIn, rt *runtim
 // startAdapterWith is startAdapter forwarding the outbox in dir.
 func startAdapterWith(t *testing.T, s *executionStack, c *controlStandIn, rt *runtimeDouble, held *heldPair, tokenFile, dir string) *adapterProcess {
 	t.Helper()
+	return startAdapterSigning(t, s, c, rt, held, tokenFile, dir, false)
+}
+
+// startAdapterSigning is startAdapterWith with the adapter's signing
+// switch as sign says.
+func startAdapterSigning(t *testing.T, s *executionStack, c *controlStandIn, rt *runtimeDouble, held *heldPair, tokenFile, dir string, sign bool) *adapterProcess {
+	t.Helper()
 	execution := delivery.NewFencedExecution()
 	client := presenting(t, held)
 	queue, err := delivery.NewHTTPQueue(client, s.machine, s.agent, execution)
@@ -300,6 +307,7 @@ func startAdapterWith(t *testing.T, s *executionStack, c *controlStandIn, rt *ru
 		RetryDelay: 10 * time.Millisecond, MaxRetryDelay: 50 * time.Millisecond, MinRenewInterval: 50 * time.Millisecond,
 		StatusInterval: 10 * time.Millisecond, OutboxInterval: 50 * time.Millisecond,
 		ClaimTimeout: 5 * time.Second, CallTimeout: 2 * time.Second,
+		ForwardSignature: sign,
 	})
 	require.NoError(t, err)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -497,6 +505,49 @@ func TestAdapter_CarriesAMessageAndAReplacementFencesTheGenerationBefore(t *test
 		"the current generation carries the next message")
 	assert.Equal(t, next, second.received()[0]["id"])
 	assert.Len(t, first.received(), 1, "the fenced process carried nothing more")
+}
+
+// TestAdapter_ForwardsWhatGaramSignedSoTheRuntimeCanVerifyIt is
+// ADR-0101 step 2 end to end: garam signs the claim, the adapter with
+// its switch on posts the content and the signature, and the bytes the
+// runtime received verify against the set garam publishes, under the
+// audience the runtime serves and the identifier the message arrived
+// under. A second adapter with the switch off is the control: it posts
+// the same content and no signature member at all.
+func TestAdapter_ForwardsWhatGaramSignedSoTheRuntimeCanVerifyIt(t *testing.T) {
+	p := pool(t)
+	_, engine := policyEngine(t, p)
+	s := newExecutionStack(t, p, engine)
+	c := newControlStandIn(t, s)
+	held := &heldPair{pair: s.agentPair(t)}
+	token := placementToken(t, "placement-1")
+
+	signing := newRuntimeDouble(t, s.agent, s.epoch, generationOf(1))
+	one := startAdapterSigning(t, s, c, signing, held, token, t.TempDir(), true)
+	id := s.postTo(t, "café")
+	require.Eventually(t, func() bool { return len(signing.received()) == 1 }, 10*time.Second, 10*time.Millisecond,
+		"the message reaches the runtime")
+	got := signing.received()[0]
+	require.Contains(t, got, "signature", "the switch on sends the signature")
+
+	claims, err := verify(keySet(t, s.machine), string(testIssuer), s.agent.String(), got["id"], got["content"], got["signature"])
+	require.NoError(t, err, "the bytes the runtime received verify against garam's published set")
+	assert.Equal(t, id, claims.MessageID)
+	assert.Equal(t, s.peer.String(), claims.Sub, "garam vouches for the sender its listener authenticated")
+	_, err = verify(keySet(t, s.machine), string(testIssuer), s.agent.String(), got["id"], got["content"]+" ", got["signature"])
+	require.Error(t, err, "the control on the verifier: one more byte of content is refused")
+	signing.finish(id)
+	require.Eventually(t, func() bool { return s.stateOf(t, id) == "completed" }, 10*time.Second, 20*time.Millisecond,
+		"the signed message completes like any other")
+	one.stop()
+
+	unsigned := newRuntimeDouble(t, s.agent, s.epoch, generationOf(2))
+	startAdapter(t, s, c, unsigned, held, token)
+	next := s.postTo(t, "café")
+	require.Eventually(t, func() bool { return len(unsigned.received()) == 1 }, 10*time.Second, 10*time.Millisecond,
+		"the next message reaches the runtime")
+	assert.Equal(t, map[string]string{"id": next, "content": got["content"]}, unsigned.received()[0],
+		"the switch off sends the same content and no signature member")
 }
 
 // TestAdapter_ReplaysItsActivationAcrossRenewalAndRestart is the

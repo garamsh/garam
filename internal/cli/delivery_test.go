@@ -179,7 +179,7 @@ func (h heldCertificate) Get() (*tls.Certificate, error) { return h.pair, nil }
 
 // TestAdapterClient_MeetsTheMachineListenerOverHTTP11 pins the protocol
 // the shipped client and the shipped listener actually agree on. The
-// listener offers h2 — machine.NewServer sets no NextProtos and
+// listener offers h2 — machine.NewServer names it in NextProtos and
 // ServeTLS configures HTTP/2 when TLSNextProto is nil — and the client
 // declines it, because a Transport carrying a TLSClientConfig has
 // HTTP/2 disabled unless ForceAttemptHTTP2 says otherwise, which

@@ -1156,6 +1156,9 @@ paths:
     post:
       operationId: introspectOperationAuthority
       tags: [authority]
+      security:
+        - machineCertificate: []
+        - machineToken: []
       summary: Read what an operation authority binds, once current state still authorizes it.
       description: >-
         The calling operator must be the authority's audience. Unknown,
@@ -1197,6 +1200,9 @@ paths:
     get:
       operationId: checkOperationReference
       tags: [authority]
+      security:
+        - machineCertificate: []
+        - machineToken: []
       summary: Recheck a durable operation reference before activating a new desired revision.
       description: >-
         Decides the reference as introspection decides an authority,
@@ -1229,6 +1235,9 @@ paths:
     post:
       operationId: introspectController
       tags: [authority]
+      security:
+        - machineCertificate: []
+        - machineToken: []
       summary: Prove a controller's current authority, and an agent's placement on it, for one decision.
       description: >-
         The calling operator is the hosted control audience and forwards
@@ -1260,6 +1269,15 @@ paths:
         or an agent assigned elsewhere — is 403; and authority garam
         cannot read as current is 503. This proves current authority as
         of its reads and is not a transaction with the caller's store.
+
+
+        Under `operation-authority.v2` the caller presents its own token
+        and no certificate, and forwards `token` in place of
+        `certificatePem`: the token the controller exchanged its
+        credential for to be shown to the caller. It proves `controller`
+        only while it is live, names `controller`, and names the caller
+        as its audience; one that does not is 422, as a certificate that
+        does not prove `controller` is (ADR-0100).
       parameters:
         - $ref: '#/components/parameters/contractVersion'
         - $ref: '#/components/parameters/controller'
@@ -1293,6 +1311,9 @@ paths:
     post:
       operationId: activateAgent
       tags: [execution]
+      security:
+        - machineCertificate: []
+        - machineToken: []
       summary: Admit a runtime generation of an agent, and issue the token its calls carry.
       description: >-
         The caller is the hosted Operator control service, which has
@@ -1348,6 +1369,16 @@ paths:
         activation that has ended, is 409. Past garam's ten-second
         deadline the answer is 503, which does not say whether the
         activation committed: retry it under the same `requestId`.
+
+
+        Under `execution-fence.v2` the caller presents its own token and
+        no certificate, and forwards `token` in place of
+        `certificatePem`: the agent's token its assignee minted to be
+        shown to the caller. A token that is not one minted for this
+        agent and this caller is 422. The fence judges it as it judges a
+        certificate: current while inside its dates, minted at the
+        agent's current assignee and epoch, and in its current lineage
+        (ADR-0100).
       parameters:
         - $ref: '#/components/parameters/executionContractVersion'
         - $ref: '#/components/parameters/agent'
@@ -1392,6 +1423,9 @@ paths:
     post:
       operationId: deactivateAgent
       tags: [execution]
+      security:
+        - machineCertificate: []
+        - machineToken: []
       summary: End an activation of an agent, if it is still the current one.
       description: >-
         Authorized as `activateAgent` is, on every call. Ending the
@@ -1426,6 +1460,9 @@ paths:
     post:
       operationId: introspectAgentExecution
       tags: [execution]
+      security:
+        - machineCertificate: []
+        - machineToken: []
       summary: Ask whether an agent certificate and a generation are current, together.
       description: >-
         Authorized as `activateAgent` is, on every call. `certificatePem`
@@ -1436,6 +1473,12 @@ paths:
         credential lineage, and `fenced` otherwise, including when it
         has expired. The answer is read from one snapshot, so its parts
         were current together. Ask per decision, never per connection.
+
+
+        Under `execution-fence.v2` `token` replaces `certificatePem` as
+        `activateAgent` describes. A token of an earlier epoch or
+        lineage, or one that has expired, is answered `fenced`, not 422
+        (ADR-0100).
       parameters:
         - $ref: '#/components/parameters/executionContractVersion'
         - $ref: '#/components/parameters/agent'
@@ -1472,6 +1515,8 @@ paths:
       security:
         - machineCertificate: []
           operationAuthority: []
+        - machineToken: []
+          operationHeader: []
       summary: Replace an agent's credential lineage under an administrator's handoff.
       description: >-
         For an agent whose credential is lost or compromised. The
@@ -1498,6 +1543,15 @@ paths:
         the same reference, is 409. Past garam's ten-second deadline the
         answer is 503, which does not say whether the recovery
         committed: retry it under the same `requestId`.
+
+
+        Under `execution-fence.v2` the caller presents its own token,
+        and the handoff travels in a `Garam-Operation` header of its
+        own. The body carries `requestId` and `epoch` and no
+        `certificateRequestPem`: nothing is signed, and the answer names
+        `grn` and the new `lineage` alone. Every agent token minted
+        before it is refused from the next request, and the assignee
+        mints the agent's tokens in the new lineage (ADR-0100).
       parameters:
         - $ref: '#/components/parameters/executionContractVersion'
         - $ref: '#/components/parameters/agent'
@@ -1534,6 +1588,8 @@ paths:
       security:
         - machineCertificate: []
           operationAuthority: []
+        - machineToken: []
+          operationHeader: []
       summary: Read what the Operator imports a legacy agent from, and its most recent cutover attempt.
       description: >-
         Authorized as `activateAgent` is, and additionally by
@@ -1561,6 +1617,11 @@ paths:
         the values cannot be read. The name is not covered and stays
         garam's. `attempt` is the agent's most recent attempt, null
         before the first freeze.
+
+
+        Under `agent-cutover.v2` the caller presents its own token, and
+        the `agent:cutover` reference travels in a `Garam-Operation`
+        header of its own rather than in `Authorization` (ADR-0100).
       parameters:
         - $ref: '#/components/parameters/cutoverContractVersion'
         - $ref: '#/components/parameters/agent'
@@ -1589,6 +1650,8 @@ paths:
       security:
         - machineCertificate: []
           operationAuthority: []
+        - machineToken: []
+          operationHeader: []
       summary: Freeze a legacy agent's source, verified against the digest the Operator imported.
       description: >-
         Authorized as `getAgentCutover` is. In one transaction, under
@@ -1612,6 +1675,11 @@ paths:
         answer the recorded attempt with 200. Past garam's ten-second
         deadline the answer is 503, which does not say whether the
         freeze committed: read the agent's cutover back before retrying.
+
+
+        Under `agent-cutover.v2` the caller presents its own token, and
+        the `agent:cutover` reference travels in a `Garam-Operation`
+        header of its own rather than in `Authorization` (ADR-0100).
       parameters:
         - $ref: '#/components/parameters/cutoverContractVersion'
         - $ref: '#/components/parameters/agent'
@@ -1659,6 +1727,8 @@ paths:
       security:
         - machineCertificate: []
           operationAuthority: []
+        - machineToken: []
+          operationHeader: []
       summary: Record that the Operator owns a frozen agent's source, before it releases anything.
       description: >-
         Authorized as `getAgentCutover` is, under the same two locks as
@@ -1675,6 +1745,11 @@ paths:
         other than the open attempt's is 409 `attempt_open`, and one the
         agent never froze is 404. Past garam's ten-second deadline the
         answer is 503; repeating the request is safe.
+
+
+        Under `agent-cutover.v2` the caller presents its own token, and
+        the `agent:cutover` reference travels in a `Garam-Operation`
+        header of its own rather than in `Authorization` (ADR-0100).
       parameters:
         - $ref: '#/components/parameters/cutoverContractVersion'
         - $ref: '#/components/parameters/agent'
@@ -1711,6 +1786,8 @@ paths:
       security:
         - machineCertificate: []
           operationAuthority: []
+        - machineToken: []
+          operationHeader: []
       summary: End a frozen attempt, which lists the agent's definition to its operator again.
       description: >-
         Authorized as `getAgentCutover` is, under the same two locks as
@@ -1725,6 +1802,11 @@ paths:
         is 404, so an earlier attempt's request never undoes a later
         one. Past garam's ten-second deadline the answer is 503;
         repeating the request is safe.
+
+
+        Under `agent-cutover.v2` the caller presents its own token, and
+        the `agent:cutover` reference travels in a `Garam-Operation`
+        header of its own rather than in `Authorization` (ADR-0100).
       parameters:
         - $ref: '#/components/parameters/cutoverContractVersion'
         - $ref: '#/components/parameters/agent'
@@ -1758,6 +1840,9 @@ paths:
     post:
       operationId: createManagedAgent
       tags: [enrollment]
+      security:
+        - machineCertificate: []
+        - machineToken: []
       summary: Create an agent assigned to a controller, under a member's agent:create reference.
       description: >-
         The caller is the hosted Operator control service, the
@@ -1794,6 +1879,13 @@ paths:
         another audience's; a reference of another kind is 403, and so
         is one current state no longer authorizes. Authority garam
         cannot read as current is 503.
+
+
+        Under `managed-enrollment.v2` the caller presents its own token
+        and no certificate; nothing else changes. Creation opens the
+        agent's lineage under either value, and under v2 the controller
+        mints the agent's tokens in it with `mintAgentToken` instead of
+        `issueInitialCertificate`, which takes no token (ADR-0100).
       parameters:
         - $ref: '#/components/parameters/enrollmentContractVersion'
         - $ref: '#/components/parameters/controller'
@@ -2064,7 +2156,13 @@ components:
       name: Garam-Contract-Version
       in: header
       required: true
-      description: Must be `managed-enrollment.v1`; any other value is refused with 400 naming it.
+      description: >-
+        `managed-enrollment.v1` where the caller presents a certificate
+        and, on `createManagedAgent`, `managed-enrollment.v2` where it
+        presents a token (ADR-0100); any other value, or one that
+        disagrees with the credential, is refused with 400 naming the
+        value the credential takes. `issueInitialCertificate` takes no
+        token and no v2 value.
       x-go-name: EnrollmentContractVersion
       schema:
         type: string
@@ -2093,7 +2191,11 @@ components:
       name: Garam-Contract-Version
       in: header
       required: true
-      description: Must be `agent-cutover.v1` (ADR-0086); any other value is refused with 400 naming it.
+      description: >-
+        `agent-cutover.v1` where the caller presents a certificate and
+        `agent-cutover.v2` where it presents a token (ADR-0086, ADR-0100); any other
+        value, or one that disagrees with the credential, is refused
+        with 400 naming the value the credential takes.
       x-go-name: CutoverContractVersion
       schema:
         type: string
@@ -2101,7 +2203,11 @@ components:
       name: Garam-Contract-Version
       in: header
       required: true
-      description: Must be `execution-fence.v1`; any other value is refused with 400 naming it.
+      description: >-
+        `execution-fence.v1` where the caller presents a certificate and
+        `execution-fence.v2` where it presents a token (ADR-0100); any other
+        value, or one that disagrees with the credential, is refused
+        with 400 naming the value the credential takes.
       x-go-name: ExecutionContractVersion
       schema:
         type: string
@@ -2117,7 +2223,11 @@ components:
       name: Garam-Contract-Version
       in: header
       required: true
-      description: Must be `operation-authority.v1` (ADR-0079); any other value is refused with 400 naming it.
+      description: >-
+        `operation-authority.v1` where the caller presents a certificate and
+        `operation-authority.v2` where it presents a token (ADR-0079, ADR-0100); any other
+        value, or one that disagrees with the credential, is refused
+        with 400 naming the value the credential takes.
       x-go-name: ContractVersion
       schema:
         type: string
@@ -2762,13 +2872,22 @@ components:
           description: Opaque.
     ControllerIntrospection:
       type: object
-      required: [certificatePem]
       properties:
         certificatePem:
           type: string
           description: >-
-            The controller's leaf certificate in PEM form, exactly as the
-            controller presented it in its TLS handshake with the caller.
+            Under `operation-authority.v1`, the controller's leaf
+            certificate in PEM form, exactly as the controller presented
+            it in its TLS handshake with the caller. Required there, and
+            refused under `operation-authority.v2`.
+        token:
+          type: string
+          pattern: '^garam_ot_[0-9a-f]{64}$'
+          description: >-
+            Under `operation-authority.v2`, the token the controller
+            exchanged its credential for to be shown to the caller,
+            exactly as the controller presented it (ADR-0100). Required
+            there, and refused under `operation-authority.v1`.
         agent:
           type: [string, 'null']
           description: >-
@@ -2800,7 +2919,7 @@ components:
           description: The current assignment's epoch. Opaque; compare it for equality only.
     ActivationRequest:
       type: object
-      required: [requestId, epoch, generation, replacesActivationId, operationRef, certificatePem]
+      required: [requestId, epoch, generation, replacesActivationId, operationRef]
       properties:
         requestId:
           type: string
@@ -2824,7 +2943,18 @@ components:
         certificatePem:
           type: string
           maxLength: 8192
-          description: The agent's leaf certificate in PEM form, exactly as the agent presented it to the caller.
+          description: >-
+            Under `execution-fence.v1`, the agent's leaf certificate in
+            PEM form, exactly as the agent presented it to the caller.
+            Required there, and refused under `execution-fence.v2`.
+        token:
+          type: string
+          pattern: '^garam_at_[0-9a-f]{64}$'
+          description: >-
+            Under `execution-fence.v2`, the agent's token its assignee
+            minted to be shown to the caller, exactly as the agent
+            presented it (ADR-0100). Required there, and refused under
+            `execution-fence.v1`.
     Activation:
       type: object
       required: [activationId, token, tokenVersion, grn, epoch, generation, lineage]
@@ -2963,12 +3093,22 @@ components:
           pattern: '^[A-Za-z0-9._~-]{1,128}$'
     ExecutionIntrospectionRequest:
       type: object
-      required: [certificatePem]
       properties:
         certificatePem:
           type: string
           maxLength: 8192
-          description: The agent's leaf certificate in PEM form, exactly as the agent presented it to the caller.
+          description: >-
+            Under `execution-fence.v1`, the agent's leaf certificate in
+            PEM form, exactly as the agent presented it to the caller.
+            Required there, and refused under `execution-fence.v2`.
+        token:
+          type: string
+          pattern: '^garam_at_[0-9a-f]{64}$'
+          description: >-
+            Under `execution-fence.v2`, the agent's token its assignee
+            minted to be shown to the caller, exactly as the agent
+            presented it (ADR-0100). Required there, and refused under
+            `execution-fence.v1`.
         generation:
           type: [string, 'null']
           description: A generation to compare with the active one.
@@ -3007,7 +3147,7 @@ components:
           description: The current activation, null when none is.
     CredentialRecoveryRequest:
       type: object
-      required: [requestId, epoch, certificateRequestPem]
+      required: [requestId, epoch]
       properties:
         requestId:
           type: string
@@ -3019,15 +3159,20 @@ components:
           type: string
           maxLength: 4096
           description: >-
-            A PEM-encoded PKCS#10 request over an ECDSA P-256 key the
-            holder generated. Only its key is read.
+            Under `execution-fence.v1`, a PEM-encoded PKCS#10 request
+            over an ECDSA P-256 key the holder generated; only its key is
+            read. Required there, and refused under `execution-fence.v2`,
+            whose recovery signs nothing: the assignee mints the agent's
+            tokens in the new lineage (ADR-0100).
     RecoveredCredential:
       type: object
       description: >-
-        The recovered certificate, the authority that signed it and the
-        garam server root the holder verifies garam by. It carries no
-        private key.
-      required: [grn, lineage, certificatePem, issuerPem, serverRootPem]
+        The agent and its new lineage. Under `execution-fence.v1` it adds
+        the recovered certificate, the authority that signed it and the
+        garam server root the holder verifies garam by, and carries no
+        private key; under `execution-fence.v2` it carries none of the
+        three (ADR-0100).
+      required: [grn, lineage]
       properties:
         grn:
           type: string
@@ -3190,7 +3335,9 @@ components:
       schema:
         type: string
     EnrollmentContractVersion:
-      description: The contract version this answer follows, `managed-enrollment.v1`.
+      description: >-
+        The contract version this answer follows: `managed-enrollment.v1` or
+        `managed-enrollment.v2`, as the request's credential takes.
       schema:
         type: string
     DeliveryContractVersion:
@@ -3200,15 +3347,21 @@ components:
       schema:
         type: string
     CutoverContractVersion:
-      description: The contract version this answer follows, `agent-cutover.v1`.
+      description: >-
+        The contract version this answer follows: `agent-cutover.v1` or
+        `agent-cutover.v2`, as the request's credential takes.
       schema:
         type: string
     ExecutionContractVersion:
-      description: The contract version this answer follows, `execution-fence.v1`.
+      description: >-
+        The contract version this answer follows: `execution-fence.v1` or
+        `execution-fence.v2`, as the request's credential takes.
       schema:
         type: string
     ContractVersion:
-      description: The contract version this answer follows, `operation-authority.v1`.
+      description: >-
+        The contract version this answer follows: `operation-authority.v1` or
+        `operation-authority.v2`, as the request's credential takes.
       schema:
         type: string
   responses:
@@ -3323,6 +3476,15 @@ components:
         that offers this scheme, and is refused without it; one never
         activated presents none, and is refused with one. garam stores
         only its hash.
+    operationHeader:
+      type: apiKey
+      in: header
+      name: Garam-Operation
+      description: >-
+        What `operationAuthority` carries, in a header of its own, on a
+        request whose `Authorization` carries a token (`machineToken`),
+        which takes that header (ADR-0100). It means what
+        `operationAuthority` means beside a certificate.
     operationAuthority:
       type: http
       scheme: Garam-Operation

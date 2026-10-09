@@ -56,12 +56,14 @@ type ExecutionService interface {
 	// Deactivate ends the activation id names if it is the agent's
 	// current one, and does nothing if it already ended.
 	Deactivate(ctx context.Context, caller, agentGRN grn.GRN, id ActivationID) error
-	// Introspect answers whether a presented certificate and
+	// Introspect answers whether a forwarded credential and a
 	// generation are current for the agent.
-	Introspect(ctx context.Context, caller, agentGRN grn.GRN, leaf *x509.Certificate, generation *Generation) (*Introspection, error)
+	Introspect(ctx context.Context, caller, agentGRN grn.GRN, credential Forwarded, generation *Generation) (*Introspection, error)
 	// Recover moves the agent to a new credential lineage under a
-	// fresh handoff, answering the certificate signed over the
-	// request's key and the chain it was signed under.
+	// fresh handoff. Under execution-fence.v1 it answers the
+	// certificate signed over the request's key and the chain it was
+	// signed under; under execution-fence.v2 it signs nothing, and the
+	// assignee mints the agent's tokens in the new lineage.
 	Recover(ctx context.Context, caller grn.GRN, in RecoveryInput) (*RecoveredCredential, error)
 	// Renew issues the calling agent's next certificate inside the
 	// lineage the presented one is current in.
@@ -97,10 +99,28 @@ type ActivationInput struct {
 	Generation   Generation
 	Replaces     *ActivationID
 	OperationRef *string
-	// Certificate is the agent's leaf as the caller received it over
-	// mTLS, parsed and not yet proven.
-	Certificate *x509.Certificate
+	// Credential is the agent's, as the caller received it and not yet
+	// proven.
+	Credential Forwarded
 }
+
+// Forwarded is an agent's credential as a lifecycle authority received
+// it from the agent and forwards it: a ForwardedCertificate under
+// execution-fence.v1, a ForwardedToken under execution-fence.v2
+// (ADR-0100). Proving it establishes only that it names the agent;
+// whether it is current is the execution fence's to judge.
+type Forwarded interface{ forwarded() }
+
+// ForwardedCertificate is the agent's leaf as the caller received it
+// over mTLS, parsed.
+type ForwardedCertificate struct{ Leaf *x509.Certificate }
+
+// ForwardedToken is an agent token its assignee minted to be shown to
+// the caller.
+type ForwardedToken string
+
+func (ForwardedCertificate) forwarded() {}
+func (ForwardedToken) forwarded()       {}
 
 // ActivationResult is an activation and the token that admits it.
 type ActivationResult struct {
@@ -112,11 +132,14 @@ type ActivationResult struct {
 // RecoveryInput is a recovery request as received. Body is the exact
 // bytes the handoff's digest covers.
 type RecoveryInput struct {
-	Agent                 grn.GRN
-	RequestID             RequestID
-	Epoch                 int
-	Authority             string
-	Body                  []byte
+	Agent     grn.GRN
+	RequestID RequestID
+	Epoch     int
+	Authority string
+	Body      []byte
+	// CertificateRequestPEM is what a recovery under
+	// execution-fence.v1 signs, and nil under execution-fence.v2,
+	// which signs nothing (ADR-0100).
 	CertificateRequestPEM []byte
 }
 
@@ -158,17 +181,45 @@ type executionService struct {
 	authorizer LifecycleAuthorizer
 	operations OperationResolver
 	leaves     LeafVerifier
+	tokens     ShownTokenReader
 	signer     RequestSigner
 	issuer     Issuer
 }
 
 // NewExecutionService constructs the execution service over the store
 // it reads assignments from, the execution store, and the authority,
-// verification and signing boundaries it consults.
-func NewExecutionService(store Store, executions ExecutionStore, authorizer LifecycleAuthorizer, operations OperationResolver, leaves LeafVerifier, signer RequestSigner, issuer Issuer) ExecutionService {
+// verification and signing boundaries it consults: a forwarded
+// certificate is proven by leaves and a forwarded token by tokens.
+func NewExecutionService(store Store, executions ExecutionStore, authorizer LifecycleAuthorizer, operations OperationResolver, leaves LeafVerifier, tokens ShownTokenReader, signer RequestSigner, issuer Issuer) ExecutionService {
 	return &executionService{
 		store: store, executions: executions, authorizer: authorizer,
-		operations: operations, leaves: leaves, signer: signer, issuer: issuer,
+		operations: operations, leaves: leaves, tokens: tokens, signer: signer, issuer: issuer,
+	}
+}
+
+// prove answers the credential a forwarded one stands for once it
+// names agentGRN: a certificate chaining to the agent's organization,
+// or a token minted for the agent to be shown to caller. Neither is
+// judged current here; the execution fence does that.
+func (s *executionService) prove(ctx context.Context, caller, agentGRN grn.GRN, forwarded Forwarded) (Credential, error) {
+	switch f := forwarded.(type) {
+	case ForwardedCertificate:
+		return s.leaves.VerifyLeaf(ctx, agentGRN, f.Leaf)
+	case ForwardedToken:
+		// A value no mint could have produced reads nothing.
+		if !WellFormedAccessToken(string(f)) {
+			return Credential{}, ErrTokenNotProven
+		}
+		holder, err := s.tokens.AccessTokenShownTo(ctx, HashAccessToken(string(f)), caller)
+		if err != nil {
+			return Credential{}, err
+		}
+		if holder.Agent != agentGRN {
+			return Credential{}, ErrTokenNotProven
+		}
+		return Credential{Serial: holder.Serial, NotBefore: holder.IssuedAt, NotAfter: holder.ExpiresAt}, nil
+	default:
+		return Credential{}, errorx.New(errorx.KindInternal, "agent: a forwarded credential of no known kind")
 	}
 }
 
@@ -205,7 +256,7 @@ func (s *executionService) Activate(ctx context.Context, caller grn.GRN, in Acti
 			return nil, err
 		}
 	}
-	credential, err := s.leaves.VerifyLeaf(ctx, in.Agent, in.Certificate)
+	credential, err := s.prove(ctx, caller, in.Agent, in.Credential)
 	if err != nil {
 		return nil, err
 	}
@@ -283,12 +334,12 @@ func (s *executionService) Deactivate(ctx context.Context, caller, agentGRN grn.
 	return err
 }
 
-func (s *executionService) Introspect(ctx context.Context, caller, agentGRN grn.GRN, leaf *x509.Certificate, generation *Generation) (*Introspection, error) {
+func (s *executionService) Introspect(ctx context.Context, caller, agentGRN grn.GRN, forwarded Forwarded, generation *Generation) (*Introspection, error) {
 	assignment, _, err := s.authorize(ctx, caller, agentGRN, OperationActivate)
 	if err != nil {
 		return nil, err
 	}
-	credential, err := s.leaves.VerifyLeaf(ctx, agentGRN, leaf)
+	credential, err := s.prove(ctx, caller, agentGRN, forwarded)
 	if err != nil {
 		return nil, err
 	}
@@ -371,16 +422,22 @@ func (s *executionService) Recover(ctx context.Context, caller grn.GRN, in Recov
 		return nil, err
 	}
 	if prior == nil {
-		signed, err := s.signer.SignRequest(ctx, in.Agent, in.CertificateRequestPEM)
-		if err != nil {
-			return nil, err
+		req.Lineage = NewLineage()
+		if in.CertificateRequestPEM != nil {
+			signed, err := s.signer.SignRequest(ctx, in.Agent, in.CertificateRequestPEM)
+			if err != nil {
+				return nil, err
+			}
+			req.Credential, req.CertificatePEM = signed.Credential, signed.CertificatePEM
+			req.Chain = Chain{IssuerPEM: signed.IssuerPEM, ServerRootPEM: signed.ServerRootPEM}
 		}
-		req.Lineage, req.Credential, req.CertificatePEM = NewLineage(), signed.Credential, signed.CertificatePEM
-		req.Chain = Chain{IssuerPEM: signed.IssuerPEM, ServerRootPEM: signed.ServerRootPEM}
 	}
 	recovered, err := s.executions.Recover(ctx, req)
 	if err != nil {
 		return nil, err
+	}
+	if recovered.CertificatePEM == "" {
+		return &RecoveredCredential{Lineage: recovered.Lineage}, nil
 	}
 	chain := recovered.Chain
 	if chain == nil {
@@ -393,7 +450,8 @@ func (s *executionService) Recover(ctx context.Context, caller grn.GRN, in Recov
 			return nil, err
 		}
 	}
-	return &RecoveredCredential{Lineage: recovered.Lineage, CertificatePEM: recovered.CertificatePEM, Chain: *chain}, nil
+	return &RecoveredCredential{Lineage: recovered.Lineage,
+		Signed: &SignedRecovery{CertificatePEM: recovered.CertificatePEM, Chain: *chain}}, nil
 }
 
 func (s *executionService) Renew(ctx context.Context, caller grn.GRN, fence Fencing) (*Certificate, error) {

@@ -263,6 +263,42 @@ func (q *Queries) GetAgentTemplate(ctx context.Context, grn string) (AgentTempla
 	return i, err
 }
 
+const getAgentTokenShownTo = `-- name: GetAgentTokenShownTo :one
+SELECT agent_grn, serial, audience_grn, issued_at, expires_at
+FROM agent_tokens
+WHERE token_hash = $1 AND audience_grn = $2
+`
+
+type GetAgentTokenShownToParams struct {
+	TokenHash   string
+	AudienceGrn pgtype.Text
+}
+
+type GetAgentTokenShownToRow struct {
+	AgentGrn    string
+	Serial      string
+	AudienceGrn pgtype.Text
+	IssuedAt    pgtype.Timestamptz
+	ExpiresAt   pgtype.Timestamptz
+}
+
+// A token as it was minted to be shown to one audience, with no join to
+// the agent's current state: the execution fence judges that, so a
+// token of an earlier epoch or lineage is answered fenced rather than
+// unknown.
+func (q *Queries) GetAgentTokenShownTo(ctx context.Context, arg GetAgentTokenShownToParams) (GetAgentTokenShownToRow, error) {
+	row := q.db.QueryRow(ctx, getAgentTokenShownTo, arg.TokenHash, arg.AudienceGrn)
+	var i GetAgentTokenShownToRow
+	err := row.Scan(
+		&i.AgentGrn,
+		&i.Serial,
+		&i.AudienceGrn,
+		&i.IssuedAt,
+		&i.ExpiresAt,
+	)
+	return i, err
+}
+
 const isAgentCutOver = `-- name: IsAgentCutOver :one
 SELECT EXISTS (
     SELECT 1 FROM agent_cutovers WHERE agent_grn = $1 AND stage = 'switched'

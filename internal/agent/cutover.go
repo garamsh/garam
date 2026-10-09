@@ -17,6 +17,11 @@ import (
 // carried in the Garam-Contract-Version header (ADR-0086).
 const CutoverContractVersion = "agent-cutover.v1"
 
+// TokenCutoverContractVersion is the same contract for a request a
+// token authenticated, whose agent:cutover reference travels in a
+// Garam-Operation header of its own (ADR-0100).
+const TokenCutoverContractVersion = "agent-cutover.v2"
+
 // Cutover sentinels (ADR-0086). The machine listener names each on
 // the wire as a reason beside its kind, so the Operator can tell a
 // stale replay from a source that moved.
@@ -52,6 +57,10 @@ var (
 	// contract version, or another.
 	ErrUnsupportedCutoverContract = errorx.New(errorx.KindInvalidArgument,
 		"unsupported Garam-Contract-Version: this route serves "+CutoverContractVersion)
+	// ErrUnsupportedTokenCutoverContract is that refusal for a request
+	// a token authenticated (ADR-0100).
+	ErrUnsupportedTokenCutoverContract = errorx.New(errorx.KindInvalidArgument,
+		"unsupported Garam-Contract-Version: a request presenting a token is served under "+TokenCutoverContractVersion)
 )
 
 // ImportID is the Operator's identifier for one import of an agent's

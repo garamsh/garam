@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 
+import { KeptSelect } from "@/components/kept-select";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { mintOperationAuthority } from "@/features/orgs/actions";
@@ -43,6 +44,10 @@ export function CreateFromTemplate({
 }) {
   const [outcome, setOutcome] = useState<Outcome>({ status: "idle" });
   const [pending, setPending] = useState(false);
+  // Null is the first option, which the lists below are not read in
+  // time to name.
+  const [templateChoice, setTemplateChoice] = useState<string | null>(null);
+  const [controllerChoice, setControllerChoice] = useState<string | null>(null);
   const blocker =
     controlBlocker(hosted, "agent:create") ??
     controlBlocker(hosted, "agent-template:read");
@@ -141,9 +146,11 @@ export function CreateFromTemplate({
     <form action={create} className="flex max-w-2xl flex-col gap-3">
       <div className="flex flex-col gap-2">
         <Label htmlFor="create-template">Template</Label>
-        <select
+        <KeptSelect
           id="create-template"
           name="template"
+          value={templateChoice ?? published[0]?.name ?? ""}
+          onChange={(event) => setTemplateChoice(event.target.value)}
           className="h-9 max-w-sm rounded-md border bg-transparent px-3 text-sm"
         >
           {published.map((t) => (
@@ -151,13 +158,15 @@ export function CreateFromTemplate({
               {t.name} version {t.version}
             </option>
           ))}
-        </select>
+        </KeptSelect>
       </div>
       <div className="flex flex-col gap-2">
         <Label htmlFor="create-controller">Controller</Label>
-        <select
+        <KeptSelect
           id="create-controller"
           name="controller"
+          value={controllerChoice ?? delegated[0] ?? ""}
+          onChange={(event) => setControllerChoice(event.target.value)}
           className="h-9 max-w-sm rounded-md border bg-transparent px-3 text-sm"
         >
           {delegated.map((c) => (
@@ -165,7 +174,7 @@ export function CreateFromTemplate({
               {controllers[c] ?? c}
             </option>
           ))}
-        </select>
+        </KeptSelect>
       </div>
       {outcome.status === "error" && (
         <p role="alert" className="text-sm text-destructive">

@@ -144,8 +144,10 @@ describe("invite member form", () => {
     const user = userEvent.setup();
     render(<InviteMemberForm org="acme" />);
 
-    await user.click(screen.getByRole("combobox", { name: "Role" }));
-    await user.click(screen.getByRole("option", { name: "Admin" }));
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: "Role" }),
+      "Admin",
+    );
     await user.click(screen.getByRole("button", { name: "Create invitation" }));
 
     expect(await screen.findByLabelText("Invitation link")).toBeInTheDocument();
@@ -184,5 +186,33 @@ describe("invite member form", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "requires the admin role",
     );
+  });
+
+  it("keeps the role chosen when garam refuses the invitation", async () => {
+    const roles: unknown[] = [];
+    server.use(
+      http.post(`${API_URL}/orgs/acme/invitations`, async ({ request }) => {
+        roles.push(((await request.json()) as { role: string }).role);
+        return HttpResponse.json(
+          { kind: "denied", message: "requires the admin role" },
+          { status: 403 },
+        );
+      }),
+    );
+    const user = userEvent.setup();
+    render(<InviteMemberForm org="acme" />);
+
+    // Not the starting role, so a reset to it shows.
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: "Role" }),
+      "Admin",
+    );
+    await user.click(screen.getByRole("button", { name: "Create invitation" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "requires the admin role",
+    );
+    expect(roles).toEqual(["admin"]);
+    expect(screen.getByRole("combobox", { name: "Role" })).toHaveValue("admin");
   });
 });

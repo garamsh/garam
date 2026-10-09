@@ -7,6 +7,9 @@ import (
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/errorx"
+	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/machine"
+	"github.com/garamsh/garam/internal/operator"
 )
 
 // CreateAgent creates an agent in the calling operator's organization
@@ -48,9 +51,14 @@ func (s *Server) IssueAgentCertificate(w http.ResponseWriter, r *http.Request, a
 	if fence != nil {
 		// An agent renews its own certificate inside its execution
 		// fence, so a superseded generation or lineage renews nothing
-		// (ADR-0078).
+		// (ADR-0078). An agent holding a token has no certificate to
+		// renew: its assignee mints it another token (ADR-0100).
 		if subject != identity {
 			writeError(w, agent.ErrNotTheAgent)
+			return
+		}
+		if presented, ok := machine.IdentityOf(r); ok && presented.Method() == machine.MethodToken {
+			writeError(w, agent.ErrNoCertificate)
 			return
 		}
 		certificate, err = s.executions.Renew(r.Context(), identity, *fence)
@@ -128,4 +136,48 @@ func (s *Server) ReportRuntimeState(w http.ResponseWriter, r *http.Request, agen
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// MintAgentToken answers a token for an agent the calling operator
+// holds at the current epoch, which the agent authenticates with in
+// place of a certificate (ADR-0100). The assignment, the agent's
+// admission and the epoch and lineage the token is minted in are the
+// agent domain's to decide; this reads the caller, the path and the
+// audience asked for.
+func (s *Server) MintAgentToken(w http.ResponseWriter, r *http.Request, agentGRN machinegen.AgentGrn, params machinegen.MintAgentTokenParams) {
+	w.Header().Set("Garam-Contract-Version", operator.TokenContractVersion)
+	if params.TokenContractVersion != operator.TokenContractVersion {
+		writeError(w, operator.ErrUnsupportedTokenContract)
+		return
+	}
+	caller, subject, ok := parties(w, r, agentGRN)
+	if !ok {
+		return
+	}
+	var body machinegen.TokenExchange
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, errorx.Wrap(err, "token request", errorx.KindInvalidArgument))
+		return
+	}
+	var audience *grn.GRN
+	if body.Audience != nil {
+		g, err := grn.Parse(*body.Audience)
+		if err != nil {
+			writeError(w, errorx.Wrap(err, "audience", errorx.KindInvalidArgument))
+			return
+		}
+		audience = &g
+	}
+	token, err := s.agents.MintAccessToken(r.Context(), caller, subject, audience)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	answer := machinegen.AgentToken{Token: token.Value, Grn: token.Agent.String(), Epoch: token.Epoch,
+		ExpiresAt: token.ExpiresAt, ServerRootPem: string(token.ServerRootPEM)}
+	if token.Audience != nil {
+		named := token.Audience.String()
+		answer.Audience = &named
+	}
+	writeJSON(w, http.StatusCreated, answer)
 }

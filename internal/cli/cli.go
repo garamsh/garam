@@ -65,6 +65,9 @@
 //	                       issue-certificate)
 //	GARAM_CERTIFICATE_LIFETIME  how long a certificate garam signs stays
 //	                       valid (default "24h"; internal/ca bounds it)
+//	GARAM_AGENT_TOKEN_LIFETIME  how long an agent token garam mints is
+//	                       accepted (default "1h"; internal/agent bounds
+//	                       it to 20m-24h)
 //	GARAM_ADAPTER_AGENT    GRN of the agent the adapter carries messages
 //	                       for, which the gateway serves it under too
 //	                       (required for adapter)
@@ -92,6 +95,12 @@
 //	                       replies the adapter forwards (required beside
 //	                       the control settings; otherwise optional, and
 //	                       nothing is forwarded without it)
+//	GARAM_ADAPTER_SIGN_MESSAGES  forward garam's signature beside each
+//	                       message (default false; accepts what
+//	                       strconv.ParseBool does). Turned on only once
+//	                       the runtime is Sherlock v0.4.0 or later and
+//	                       trusts garam's issuer (docs/architecture/
+//	                       adapter.md §Foreign facts this rests on)
 package cli
 
 import (
@@ -179,6 +188,7 @@ const (
 	envGoogleRedirectURL     envName = "GOOGLE_REDIRECT_URL"
 	envCAKeyFile             envName = "GARAM_CA_KEY_FILE"
 	envCertificateLifetime   envName = "GARAM_CERTIFICATE_LIFETIME"
+	envAgentTokenLifetime    envName = "GARAM_AGENT_TOKEN_LIFETIME"
 	envMachineAddr           envName = "GARAM_MACHINE_ADDR"
 	envMachineHealthAddr     envName = "GARAM_MACHINE_HEALTH_ADDR"
 	envMachineTLSCertFile    envName = "GARAM_MACHINE_TLS_CERT_FILE"
@@ -196,6 +206,7 @@ const (
 	envAdapterPlacementToken envName = "GARAM_ADAPTER_PLACEMENT_TOKEN_FILE"
 	envAdapterOutboxDir      envName = "GARAM_ADAPTER_OUTBOX_DIR"
 	envAdapterControlSocket  envName = "GARAM_ADAPTER_CONTROL_SOCKET"
+	envAdapterSignMessages   envName = "GARAM_ADAPTER_SIGN_MESSAGES"
 )
 
 // envOr reads a declared name, or the fallback when it is unset or
@@ -235,6 +246,20 @@ const maxRequestBody = 1 << 20
 // unset value is zero, which takes internal/ca's own default rather
 // than restating it here;
 // a value outside the bounds that package states refuses the start.
+// agentTokenLifetime reads how long an agent token is accepted; unset
+// is zero, which agent.NewService takes as its default.
+func agentTokenLifetime() (time.Duration, error) {
+	raw := envOr(envAgentTokenLifetime, "")
+	if raw == "" {
+		return 0, nil
+	}
+	lifetime, err := time.ParseDuration(raw)
+	if err != nil {
+		return 0, errorx.Wrap(err, string(envAgentTokenLifetime), errorx.KindInvalidArgument)
+	}
+	return lifetime, nil
+}
+
 func certificateLifetime() (time.Duration, error) {
 	raw := envOr(envCertificateLifetime, "")
 	if raw == "" {

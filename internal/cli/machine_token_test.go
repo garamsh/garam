@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
@@ -47,23 +48,48 @@ func (k liveTokens) ResolveToken(_ context.Context, hash string) (operator.Token
 	return operator.TokenHolder{}, operator.ErrTokenInvalid
 }
 
+// liveAgentTokens is the agent AccessTokenStore's read half: the one
+// token it answers is liveAgentToken, for liveAgent.
+type liveAgentTokens struct{ agent.AccessTokenStore }
+
+var (
+	liveAgent       = grn.New("acme", grn.DefaultProject, agent.ServiceType, "0a1b2c3d4e5f6071")
+	liveAgentToken  = agent.AccessTokenPrefix + strings.Repeat("d", 64)
+	liveAgentSerial = "t" + strings.Repeat("e", 32)
+)
+
+func (liveAgentTokens) ResolveAccessToken(_ context.Context, hash string) (agent.AccessTokenHolder, error) {
+	if hash != agent.HashAccessToken(liveAgentToken) {
+		return agent.AccessTokenHolder{}, agent.ErrAccessTokenInvalid
+	}
+	return agent.AccessTokenHolder{Agent: liveAgent, Serial: liveAgentSerial,
+		IssuedAt: time.Now(), ExpiresAt: time.Now().Add(time.Hour)}, nil
+}
+
 // TestIdentityTokens_AnswersAGaramTokenAndNothingElse covers the seam's
 // adapter: a live token minted for garam is the operator it names, and
 // one minted for a hosted operator, one with another prefix and one no
 // row stands for are each refused as unauthenticated.
 func TestIdentityTokens_AnswersAGaramTokenAndNothingElse(t *testing.T) {
-	tokens := identityTokens{operators: liveTokens{}}
+	tokens := identityTokens{operators: liveTokens{}, agents: liveAgentTokens{}}
 
-	subject, _, err := tokens.Resolve(context.Background(), liveToken)
+	bearer, err := tokens.Resolve(context.Background(), liveToken)
 	require.NoError(t, err)
-	assert.Equal(t, liveOperator, subject)
+	assert.Equal(t, liveOperator, bearer.Subject)
+	assert.Empty(t, bearer.Serial, "an operator's token carries no serial")
+
+	bearer, err = tokens.Resolve(context.Background(), liveAgentToken)
+	require.NoError(t, err)
+	assert.Equal(t, liveAgent, bearer.Subject)
+	assert.Equal(t, liveAgentSerial, bearer.Serial, "an agent's token carries the serial the fence reads")
 
 	for name, token := range map[string]string{
-		"another audience": audiencedToken,
-		"no live row":      operator.TokenPrefix + strings.Repeat("c", 64),
+		"another audience":        audiencedToken,
+		"no live row":             operator.TokenPrefix + strings.Repeat("c", 64),
+		"an agent's, no live row": agent.AccessTokenPrefix + strings.Repeat("c", 64),
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, _, err := tokens.Resolve(context.Background(), token)
+			_, err := tokens.Resolve(context.Background(), token)
 			assert.True(t, errorx.IsKind(err, errorx.KindUnauthenticated), "%v", err)
 		})
 	}
@@ -78,19 +104,19 @@ func TestIdentityTokens_RefusesAMalformedTokenWithoutAReadForIt(t *testing.T) {
 	tokens := identityTokens{operators: liveTokens{reads: &reads}}
 
 	for name, token := range map[string]string{
-		"another prefix": "garam_at_" + strings.Repeat("a", 64),
+		"another prefix": "garam_xx_" + strings.Repeat("a", 64),
 		"too short":      operator.TokenPrefix + strings.Repeat("a", 63),
 		"uppercase hex":  operator.TokenPrefix + strings.Repeat("A", 64),
 		"not hex":        operator.TokenPrefix + strings.Repeat("g", 64),
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, _, err := tokens.Resolve(context.Background(), token)
+			_, err := tokens.Resolve(context.Background(), token)
 			assert.True(t, errorx.IsKind(err, errorx.KindUnauthenticated), "%v", err)
 		})
 	}
 	assert.Equal(t, 0, reads, "no malformed value was looked up")
 
-	_, _, err := tokens.Resolve(context.Background(), liveToken)
+	_, err := tokens.Resolve(context.Background(), liveToken)
 	require.NoError(t, err)
 	assert.Equal(t, 1, reads, "the well-formed token was")
 }

@@ -238,6 +238,14 @@ about key material). Lowering it is safe only where each of those
 identities renews and rewrites its own files without a restart, which
 this chart does not deploy and cannot check.
 
+`machine.agentTokenLifetime` defaults to the binary's own `1h` and
+bounds every agent token garam mints (ADR-0100): the binary refuses to
+start outside twenty minutes and twenty-four hours. The agent's
+operator mints the next token once two thirds to three quarters of the
+lifetime has passed, so a quarter of it is the margin its propagation
+into the agent's Pod has to fit in; a deployment whose propagation
+does not fit raises the lifetime rather than refreshing later.
+
 `resources` is empty on every workload. No figure has been measured for
 any garam process and setting none is not neutral, both of which
 `docs/architecture/deployment-contract.md` §Not established states — so
@@ -275,6 +283,7 @@ that the source no longer reads.
 | `GARAM_ADAPTER_PLACEMENT_TOKEN_FILE` | Same: the adapter's own deployment. |
 | `GARAM_ADAPTER_OUTBOX_DIR` | Same: the adapter's own deployment. |
 | `GARAM_ADAPTER_CONTROL_SOCKET` | Same: the adapter's own deployment, which on a standalone host is its supervisor (ADR-0085). |
+| `GARAM_ADAPTER_SIGN_MESSAGES` | Same: the adapter's own deployment, which alone knows whether the runtime beside it accepts a signature (ADR-0101). |
 | `GARAM_MIGRATIONS_DIR` | The migrations ship inside the image and the default resolves to them there. A value here could only point the Job away from them. |
 
 Two things sit outside that comparison:

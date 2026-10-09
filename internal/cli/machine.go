@@ -84,6 +84,10 @@ func serveMachine(cmd *cobra.Command) error {
 	if err != nil {
 		return err
 	}
+	tokenLifetime, err := agentTokenLifetime()
+	if err != nil {
+		return err
+	}
 
 	issuer, err := message.ParseIssuer(envOr(envMachineIssuer, ""))
 	if err != nil {
@@ -115,10 +119,11 @@ func serveMachine(cmd *cobra.Command) error {
 		// The delivery parameters default narrow (ADR-0018), and the
 		// defaults are what this process runs on until something asks
 		// for another value.
-		Delivery: message.Config{},
-		Engine:   conn,
-		Logger:   obs.logger,
-		Metrics:  obs.registry,
+		Delivery:           message.Config{},
+		AgentTokenLifetime: tokenLifetime,
+		Engine:             conn,
+		Logger:             obs.logger,
+		Metrics:            obs.registry,
 	})
 	if err != nil {
 		return err
@@ -172,6 +177,9 @@ type MachineConfig struct {
 	// Logger takes one line per served request and every recovered
 	// panic.
 	Logger *slog.Logger
+	// AgentTokenLifetime is how long an agent token is accepted
+	// (ADR-0100); zero is the default, and agent.NewService bounds it.
+	AgentTokenLifetime time.Duration
 	// Metrics is where the count of requests by how they authenticated
 	// is registered (ADR-0100). Nil registers it nowhere.
 	Metrics prometheus.Registerer
@@ -197,8 +205,6 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 	if err != nil {
 		return nil, err
 	}
-	agents := agent.NewService(agent.NewPostgresStore(pool),
-		certificates{issuer: issuer, serverRoot: cfg.ServerRoot})
 	// An operator obtains its first certificate on this listener by
 	// enrolling (ADR-0064) and renews it here afterwards (ADR-0046),
 	// through the same authority and the same server root its agents
@@ -209,6 +215,16 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 	operatorStore := operator.NewPostgresStore(pool)
 	operators := operator.NewService(operatorStore, operatorStore, operatorStore,
 		operatorCertificates{issuer: issuer, serverRoot: cfg.ServerRoot}, operator.Config{})
+	// An agent token's start is backdated by the allowance a
+	// certificate's is, and its audience is an operator the
+	// organization registered (ADR-0100).
+	agentStore := agent.NewPostgresStore(pool)
+	agents, err := agent.NewService(agentStore, agentStore, registeredOperators{operators: operatorStore},
+		certificates{issuer: issuer, serverRoot: cfg.ServerRoot},
+		agent.Config{TokenLifetime: cfg.AgentTokenLifetime, Backdate: ca.ClockSkew, ServerRootPEM: cfg.ServerRoot, Now: cfg.Now})
+	if err != nil {
+		return nil, err
+	}
 	messages, err := message.NewService(message.NewPostgresStore(pool), cfg.Delivery)
 	if err != nil {
 		return nil, err
@@ -265,7 +281,7 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 			// error body reaches that refusal.
 			ErrorHandlerFunc: machineapi.BindingError,
 		})
-	return obs.machineServer(identities, identityTokens{operators: operatorStore}, cfg.Certificate, handler), nil
+	return obs.machineServer(identities, identityTokens{operators: operatorStore, agents: agentStore}, cfg.Certificate, handler), nil
 }
 
 // machineServer is the listener `serve machine` serves: TLS a client

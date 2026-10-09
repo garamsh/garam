@@ -67,11 +67,14 @@ func NewHTTPGateway(client *http.Client, base string, agent grn.GRN) (*HTTPGatew
 }
 
 // ingress is what the gateway takes: the caller's identifier for the
-// message and its content, and nothing about who is sending, which the
-// connection says.
+// message, its content, and garam's signature over that content when
+// there is one to send. The member is absent rather than empty
+// otherwise, because a runtime that predates it refuses it however it
+// is filled.
 type ingress struct {
-	ID      string `json:"id"`
-	Content string `json:"content"`
+	ID        string `json:"id"`
+	Content   string `json:"content"`
+	Signature string `json:"signature,omitempty"`
 }
 
 // progress is what the gateway answers a post and a lookup with.
@@ -84,8 +87,8 @@ type progress struct {
 // volatile buffer rather than that it will be processed, which is why
 // nothing is completed on it; a 200 is a replay of a message whose turn
 // already committed, and runs nothing.
-func (g *HTTPGateway) Post(ctx context.Context, id MessageID, content string) (Progress, error) {
-	payload, err := json.Marshal(ingress{ID: string(id), Content: content})
+func (g *HTTPGateway) Post(ctx context.Context, id MessageID, content, signature string) (Progress, error) {
+	payload, err := json.Marshal(ingress{ID: string(id), Content: content, Signature: signature})
 	if err != nil {
 		return "", errorx.Wrap(err, "delivery: gateway request", errorx.KindInvalidArgument)
 	}
@@ -223,7 +226,9 @@ func (g *HTTPGateway) Subscribe(ctx context.Context) (TurnStream, error) {
 // refused renders a gateway answer this loop cannot use. Every one of
 // them is transient as far as the loop is concerned: nothing was
 // delivered, so the claim is left to lapse and the message arrives
-// again.
+// again. A refused signature is one of them. garam signs each claim
+// afresh, so the next attempt carries a signature of its own, and a
+// verifier that cannot read garam's keys yet may by then.
 func refused(resp *http.Response) error {
 	said := "gateway answered " + strconv.Itoa(resp.StatusCode)
 	var problem struct {

@@ -153,6 +153,18 @@ type AgentTemplate struct {
 	UpdatedAt   pgtype.Timestamptz
 }
 
+type AgentToken struct {
+	TokenHash   string
+	Serial      string
+	AgentGrn    string
+	AssigneeGrn string
+	Epoch       int32
+	Lineage     pgtype.UUID
+	AudienceGrn pgtype.Text
+	IssuedAt    pgtype.Timestamptz
+	ExpiresAt   pgtype.Timestamptz
+}
+
 type Group struct {
 	Grn       string
 	OrgGrn    string

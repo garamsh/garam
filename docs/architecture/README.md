@@ -694,8 +694,9 @@ ADRs:
   — every machine caller exchanges a credential garam issues for
   short-lived tokens it presents over server TLS alone, retiring client
   certificates and the per-organization authorities; an operator's
-  credential, its tokens and their per-request revocation are built
-  (G1a), and the rest lands in the steps of
+  credential and tokens, and the tokens it mints for the agents it
+  holds, are built with their per-request revocation (G1a, G1b), and
+  the rest lands in the steps of
   `docs/plans/2026-10-09-machine-identity-migration.md`
 - [0101](./adr/0101-garam-signs-every-message-it-delivers-and-the-agent-verifies-it-alone.md)
   — garam signs each message at every hand-out with an ES256 JWS beside

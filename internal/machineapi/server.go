@@ -115,6 +115,24 @@ func identityOf(w http.ResponseWriter, r *http.Request) (machine.Identity, bool)
 	return identity, true
 }
 
+// callerCredential returns the identity and the credential it presented
+// — a certificate, or an agent's token, whose serial and dates the
+// execution fence reads as it reads a certificate's (ADR-0100) — and
+// writes the refusal itself where there is none. An operator's token
+// carries no serial, so it is refused here.
+func callerCredential(w http.ResponseWriter, r *http.Request) (machine.Identity, bool) {
+	identity, ok := identityOf(w, r)
+	if !ok {
+		return machine.Identity{}, false
+	}
+	if identity.Method() == machine.MethodToken && identity.Serial() == "" {
+		writeError(w, errorx.New(errorx.KindUnauthenticated,
+			"this operation reads a credential's serial, and this token carries none"))
+		return machine.Identity{}, false
+	}
+	return identity, true
+}
+
 // callerCertificate returns the identity and the certificate it
 // authenticated with, and writes the refusal itself when there is none.
 //

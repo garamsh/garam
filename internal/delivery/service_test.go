@@ -40,8 +40,12 @@ const emptyPollWait = 10 * time.Millisecond
 // queued is one message in the fake queue and the hold that is out on
 // it, if any.
 type queued struct {
-	id         string
-	body       string
+	id   string
+	body string
+	// content is what garam answers each claim with beside a signature
+	// of that attempt's own; empty, garam answers neither, as one that
+	// predates ADR-0101 does.
+	content    string
 	claim      string
 	expiresAt  time.Time
 	deliveries int
@@ -211,7 +215,7 @@ func (q *garamQueue) handOut() *machinegen.Claim {
 }
 
 func (q *garamQueue) claimOf(m *queued) *machinegen.Claim {
-	return &machinegen.Claim{
+	claim := &machinegen.Claim{
 		Id:        m.claim,
 		ExpiresAt: m.expiresAt,
 		Attempt:   m.deliveries,
@@ -219,6 +223,26 @@ func (q *garamQueue) claimOf(m *queued) *machinegen.Claim {
 			Id: m.id, Sender: senderGRN().String(), Recipient: agentGRN().String(), Body: m.body,
 		},
 	}
+	if m.content != "" {
+		content, signature := m.content, signatureOf(m.id, m.deliveries)
+		claim.Content, claim.Signature = &content, &signature
+	}
+	return claim
+}
+
+// signatureOf stands for garam's signature over one attempt of a
+// message: each claim signs afresh (ADR-0101), so two attempts carry
+// two signatures over the same content.
+func signatureOf(message string, attempt int) string {
+	return fmt.Sprintf("signature-of-%s-attempt-%d", message, attempt)
+}
+
+// signs makes garam answer every claim of message with content and a
+// signature of the attempt's own.
+func (q *garamQueue) signs(message int, content string) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.messages[message].content = content
 }
 
 func (q *garamQueue) renew(w http.ResponseWriter, r *http.Request) {
@@ -471,12 +495,24 @@ type agentGateway struct {
 	// statusReads counts the status reads answered.
 	closed      bool
 	statusReads int
+	// refuseNext answers the next posts with these refusals, one each,
+	// oldest first, and takes nothing.
+	refuseNext []refusal
+	// refusedPosts is every post it refused.
+	refusedPosts []posted
 }
 
-// posted is one post the gateway took.
+// refusal is one answer the gateway refuses a post with.
+type refusal struct {
+	status int
+	error  string
+}
+
+// posted is one post the gateway took, with the signature it carried.
 type posted struct {
-	id      string
-	content string
+	id        string
+	content   string
+	signature string
 }
 
 func newAgentGateway(t *testing.T) *agentGateway {
@@ -505,16 +541,30 @@ func (g *agentGateway) post(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var submitted struct {
-		ID      string `json:"id"`
-		Content string `json:"content"`
+		ID        string  `json:"id"`
+		Content   string  `json:"content"`
+		Signature *string `json:"signature"`
 	}
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&submitted); err != nil || submitted.Content == "" {
+	if err := decoder.Decode(&submitted); err != nil || submitted.Content == "" ||
+		(submitted.Signature != nil && *submitted.Signature == "") {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid message body"})
 		return
 	}
+	signature := ""
+	if submitted.Signature != nil {
+		signature = *submitted.Signature
+	}
 	g.mu.Lock()
+	if len(g.refuseNext) > 0 {
+		refused := g.refuseNext[0]
+		g.refuseNext = g.refuseNext[1:]
+		g.refusedPosts = append(g.refusedPosts, posted{id: submitted.ID, content: submitted.Content, signature: signature})
+		g.mu.Unlock()
+		writeJSON(w, refused.status, map[string]string{"error": refused.error})
+		return
+	}
 	held, known := g.sources[submitted.ID]
 	switch {
 	case known && held != submitted.Content:
@@ -525,7 +575,7 @@ func (g *agentGateway) post(w http.ResponseWriter, r *http.Request) {
 		g.sources[submitted.ID] = submitted.Content
 		g.order = append(g.order, submitted.ID)
 	}
-	g.taken = append(g.taken, posted{id: submitted.ID, content: submitted.Content})
+	g.taken = append(g.taken, posted{id: submitted.ID, content: submitted.Content, signature: signature})
 	done := g.completed[submitted.ID]
 	lose := g.loseAnswers > 0
 	if lose {
@@ -686,6 +736,20 @@ func (g *agentGateway) posted() []posted {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	return append([]posted(nil), g.taken...)
+}
+
+// refusing makes the gateway refuse the next posts with these.
+func (g *agentGateway) refusing(refusals ...refusal) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.refuseNext = append(g.refuseNext, refusals...)
+}
+
+// refused is every post the gateway refused.
+func (g *agentGateway) refused() []posted {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return append([]posted(nil), g.refusedPosts...)
 }
 
 // sourceCount is how many distinct messages the runtime holds.
@@ -1052,6 +1116,120 @@ func TestRun_PostsTwoClaimsOfOneMessageAsOneSource(t *testing.T) {
 	eventually(t, func() bool { return queue.delivered() == 1 }, "the claim held now is the one completed")
 }
 
+// garamsContent is garam-message.v1 for body as garam might encode it:
+// equal as JSON to the adapter's own encoding, and other octets, so a
+// post that carries it was forwarded and not encoded again.
+func garamsContent(body string) string {
+	return strings.Replace(expected(body), "é", `\u00e9`, 1)
+}
+
+// TestRun_ForwardsGaramsContentAndNoSignatureByDefault is ADR-0101
+// step 2 with the switch left off: the runtime is handed the octets
+// garam answered the claim with, unchanged, and no signature member,
+// which a runtime older than Sherlock v0.3.0 refuses and one that does
+// not trust garam's issuer refuses too. The second message is a claim
+// from a garam that predates ADR-0101, which the adapter still encodes
+// itself; the first assertion is what makes the test able to tell the
+// two apart.
+func TestRun_ForwardsGaramsContentAndNoSignatureByDefault(t *testing.T) {
+	queue := newGaramQueue(t, time.Second, "café", "older")
+	queue.signs(0, garamsContent("café"))
+	require.NotEqual(t, expected("café"), garamsContent("café"), "garam's octets differ from the adapter's own encoding")
+	gateway := newAgentGateway(t)
+	run(t, queue, gateway)
+
+	eventually(t, func() bool { return len(gateway.posted()) == 2 }, "both messages reach the gateway")
+	assert.ElementsMatch(t, []posted{
+		{id: "message-0", content: garamsContent("café")},
+		{id: "message-1", content: expected("older")},
+	}, gateway.posted(), "garam's content byte for byte, and no signature while the switch is off")
+}
+
+// TestRun_ForwardsEachAttemptsSignatureOnceSwitchedOn is the switch on:
+// the signature travels in the member Sherlock's ingress names, beside
+// the content it covers, and a redelivery carries the signature of its
+// own attempt over the same content. A claim garam answered with no
+// content carries no signature either, which is the control: a
+// signature goes only beside the octets garam signed.
+func TestRun_ForwardsEachAttemptsSignatureOnceSwitchedOn(t *testing.T) {
+	queue := newGaramQueue(t, 200*time.Millisecond, "café", "older")
+	queue.signs(0, garamsContent("café"))
+	gateway := newAgentGateway(t)
+	cfg := brief()
+	cfg.ForwardSignature = true
+	runWith(t, queue, gateway, cfg)
+
+	holding(t, queue, 0, 0)
+	holding(t, queue, 1, 0)
+	queue.refuseRenewals()
+	eventually(t, func() bool { return queue.deliveries(0) >= 2 }, "the lapsed message is handed out under a new claim")
+	eventually(t, func() bool { return len(gateway.posted()) >= 3 }, "and posted again")
+
+	var signed []posted
+	for _, p := range gateway.posted() {
+		switch p.id {
+		case "message-0":
+			signed = append(signed, p)
+		case "message-1":
+			assert.Equal(t, posted{id: "message-1", content: expected("older")}, p,
+				"no signature beside content the adapter encoded")
+		}
+	}
+	require.GreaterOrEqual(t, len(signed), 2)
+	assert.Equal(t, posted{id: "message-0", content: garamsContent("café"), signature: signatureOf("message-0", 1)}, signed[0])
+	assert.Equal(t, posted{id: "message-0", content: garamsContent("café"), signature: signatureOf("message-0", 2)}, signed[1],
+		"the second attempt carries its own signature over the same content")
+}
+
+// TestRun_RedeliversAMessageWhoseSignatureTheRuntimeRefused holds the
+// three refusals Sherlock's ingress answers about a signature
+// (gateway.md at v0.4.0, §Signed messages) to the adapter's contract
+// for every answer it cannot use: nothing is paired or completed, the
+// lease lapses, and garam hands the message out again, signed afresh.
+// A signature refused for its time is mended by that, and a set the
+// runtime could not read yet may be read by then. One refused for a
+// configuration that stays wrong — an issuer the runtime does not
+// trust, or require-signature on with the switch off — is refused
+// again, and the message spends its attempts like any other that is
+// not delivered. A missing signature is answered to an unsigned post,
+// so that case runs with the switch off.
+func TestRun_RedeliversAMessageWhoseSignatureTheRuntimeRefused(t *testing.T) {
+	cases := map[string]struct {
+		refused refusal
+		signed  bool
+	}{
+		"a rejected signature":    {refusal{http.StatusForbidden, "signature rejected: time"}, true},
+		"a missing signature":     {refusal{http.StatusForbidden, "signature required"}, false},
+		"keys it cannot read yet": {refusal{http.StatusServiceUnavailable, "issuer keys unavailable"}, true},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			queue := newGaramQueue(t, 200*time.Millisecond, "café")
+			queue.signs(0, garamsContent("café"))
+			gateway := newAgentGateway(t)
+			gateway.refusing(c.refused)
+			cfg := brief()
+			cfg.ForwardSignature = c.signed
+			runWith(t, queue, gateway, cfg)
+
+			first, second := "", ""
+			if c.signed {
+				first, second = signatureOf("message-0", 1), signatureOf("message-0", 2)
+			}
+			eventually(t, func() bool { return len(gateway.posted()) == 1 }, "the redelivery is taken")
+			assert.Equal(t, []posted{{id: "message-0", content: garamsContent("café"), signature: first}},
+				gateway.refused(), "the first attempt was refused")
+			assert.Equal(t, second, gateway.posted()[0].signature, "the redelivery carries a signature of its own")
+			assert.GreaterOrEqual(t, queue.deliveries(0), 2, "garam handed the message out again")
+			assert.Zero(t, queue.completionCalls(), "a refused post completes nothing")
+
+			holding(t, queue, 0, queue.renewalsOf(0))
+			gateway.endTurn(delivery.TurnFinished, "message-0")
+			eventually(t, func() bool { return queue.delivered() == 1 }, "the attempt the runtime took completes it")
+		})
+	}
+}
+
 // TestRun_RecoversAPostWhoseAnswerWasLost is the response the runtime
 // took and never answered: nothing was paired, the lease lapses, and
 // the redelivery is posted under the same identifier, which the runtime
@@ -1216,7 +1394,7 @@ func (q *heldQueue) renewed() int {
 // with what it is holding is the subject, not what ends a hold.
 type idleGateway struct{ done <-chan struct{} }
 
-func (g idleGateway) Post(context.Context, delivery.MessageID, string) (delivery.Progress, error) {
+func (g idleGateway) Post(context.Context, delivery.MessageID, string, string) (delivery.Progress, error) {
 	return delivery.ProgressPending, nil
 }
 

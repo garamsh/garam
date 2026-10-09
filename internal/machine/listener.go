@@ -164,7 +164,7 @@ func identify(tokens Tokens, next http.Handler) http.Handler {
 			refuse(w, r, next, errorx.New(errorx.KindUnauthenticated,
 				"machine: a request presents a token or a certificate, not both"))
 		case presented:
-			subject, expiresAt, err := tokens.Resolve(r.Context(), token)
+			bearer, err := tokens.Resolve(r.Context(), token)
 			if err != nil {
 				// A token that proves nothing is the caller's to fix and
 				// is answered 401; only a read that could not be made is
@@ -177,7 +177,8 @@ func identify(tokens Tokens, next http.Handler) http.Handler {
 				refuse(w, r, next, err)
 				return
 			}
-			identity := Identity{grn: subject, method: MethodToken, notAfter: expiresAt}
+			identity := Identity{grn: bearer.Subject, method: MethodToken, serial: bearer.Serial,
+				notBefore: bearer.IssuedAt, notAfter: bearer.ExpiresAt}
 			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), identityKey{}, identity)))
 		case certified:
 			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), identityKey{}, *cell.identity)))

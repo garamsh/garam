@@ -55,6 +55,10 @@ func adapt(cmd *cobra.Command) error {
 		return err
 	}
 
+	sign, err := envBool(envAdapterSignMessages, "false")
+	if err != nil {
+		return err
+	}
 	loop, err := adapterLoop(adapterSettings{
 		agent:          envOr(envAdapterAgent, ""),
 		machineURL:     envOr(envAdapterMachineURL, ""),
@@ -67,6 +71,7 @@ func adapt(cmd *cobra.Command) error {
 		placementToken: envOr(envAdapterPlacementToken, ""),
 		outboxDir:      envOr(envAdapterOutboxDir, ""),
 		controlSocket:  envOr(envAdapterControlSocket, ""),
+		sign:           sign,
 	})
 	if err != nil {
 		return err
@@ -90,6 +95,9 @@ type adapterSettings struct {
 	// in place of controlURL's host, which TLS still verifies: a
 	// standalone supervisor serves control on one (ADR-0085).
 	controlSocket string
+	// sign forwards garam's signature beside each message (ADR-0101).
+	// It is whoever runs the adapter who knows the runtime accepts it.
+	sign bool
 }
 
 // fenced reports which mode the settings choose (ADR-0084): all three
@@ -176,7 +184,7 @@ func adapterLoop(s adapterSettings) (delivery.Service, error) {
 	if ends.Gateway, err = delivery.NewHTTPGateway(gatewayClient(), s.gatewayURL, agent); err != nil {
 		return nil, err
 	}
-	return delivery.NewService(ends, delivery.Config{})
+	return delivery.NewService(ends, delivery.Config{ForwardSignature: s.sign})
 }
 
 // gatewayClient reaches the platform beside this adapter. It carries no

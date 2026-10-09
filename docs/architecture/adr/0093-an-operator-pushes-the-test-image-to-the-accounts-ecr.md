@@ -207,3 +207,26 @@ workflow holds a credential for it.**
   `garamsh/garam-agent-operator#317` uses, tracked as
   `garamsh/infra#311`. It is not yet created, so it has no ARN to name
   here. The decision stands: the consumer pulls with its own role.
+- 2026-10-09 — §Decision's "The repository's policy grants pull to"
+  names a mechanism that is not in place, and was not when written.
+  The repository has no resource policy:
+  `aws ecr get-repository-policy --repository-name garam-dev/garam-test`
+  answers `RepositoryPolicyNotFoundException`, read by the PM on
+  2026-10-09 (#1245). The pull role and the repository are in the same
+  account, so the grant is the role's identity policy, one inline
+  policy named `ecr-pull`; a resource policy is what a pull from
+  another account would need. The pull role this section's earlier
+  entry could not name has since been created by `garamsh/infra#314`
+  (`b5865cb`):
+  `arn:aws:iam::486152169996:role/garam-agent-operator-github-actions-pull`,
+  created 2026-10-09T04:46:16Z, trusting `aud` `sts.amazonaws.com` and
+  `sub`
+  `repo:garamsh@307152666/garam-agent-operator@1335647420:environment:promotion-e2e`,
+  as the PM read it back with `aws iam get-role`. A pull under it is
+  proved by `garamsh/garam-agent-operator` run
+  https://github.com/garamsh/garam-agent-operator/actions/runs/37886063452
+  (job 113676230332, success, head `75cf44d`): its log shows that
+  subject assuming that role and pulling
+  `garam-dev/garam-test@sha256:7a8fc22f7abb7fc653241a1eb1d0779eab41e97f9f26419de9f0ba201f1dc328`,
+  revision label `d6874d21faf3582ffe4e814643f5b15068333622`. The
+  decision stands: the consumer pulls with its own role.

@@ -211,12 +211,18 @@ This is the contract garam promises: a verifier that performs these
 checks accepts every message garam delivers to it, and refuses one that
 is forged, altered, addressed elsewhere or expired.
 
-1. **The header.** `alg` is `ES256`, `typ` is `agent-message+jwt`, and
-   `kid` names a key in the set the verifier holds for the issuer it
-   expects. An unknown `kid` refetches that set, at most once a minute.
-2. **The signature** verifies under that key.
-3. **The issuer.** `iss` is one the verifier is configured to trust,
-   and the key came from that issuer's set.
+1. **The issuer, before anything is fetched.** The verifier reads
+   `iss` from the payload while it is still unverified, only to choose
+   which set to use. It refuses an `iss` it is not configured to trust
+   without fetching anything, and takes a set's location from its own
+   configuration, never from the message.
+2. **The header.** `alg` is `ES256`, `typ` is `agent-message+jwt`, and
+   `kid` names a key in the set chosen by step 1. An unknown `kid`
+   refetches that set, at most once a minute for each configured
+   issuer, so a forged message can neither choose where the verifier
+   fetches from nor make it fetch a trusted issuer's set any faster.
+3. **The signature** verifies under that key, which binds `iss`: the
+   key came from the set of the issuer that `iss` names.
 4. **The audience.** `aud` equals the verifier's own identity — for an
    agent garam delivers to, its GRN — compared as strings.
 5. **The time.** `exp` is later than now minus 60 seconds, and `iat`

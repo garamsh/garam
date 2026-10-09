@@ -65,6 +65,21 @@ func TestRun_RendersGaramsIssuerIntoTheRuntime(t *testing.T) {
 	assert.Equal(t, 65532, root.UID)
 }
 
+// TestRun_RendersNothingWithoutAnIssuer holds the host that names no
+// issuer on today's footing: the runtime is handed its configuration
+// byte for byte and no garam server root, so it trusts no garam
+// signature until the host names garam's issuer. The rendering test
+// above is the control.
+func TestRun_RendersNothingWithoutAnIssuer(t *testing.T) {
+	h := newHost(t)
+	h.issuer = ""
+	h.start()
+	runtime, _, _ := h.serving()
+
+	assert.Equal(t, "revision: r1\n", string(runtime.files["/etc/sherlock/config.yaml"].Data))
+	assert.NotContains(t, runtime.files, "/etc/sherlock/garam-server-root.pem")
+}
+
 // TestRun_TakesTheKeySetFromTheAdaptersAddressAndTheIssuerFromGaram
 // holds the two values apart: the issuer is garam's identity and stays
 // what garam names, while the set is fetched where the runtime reaches

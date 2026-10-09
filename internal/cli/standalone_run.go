@@ -47,8 +47,8 @@ type runSettings struct {
 	images           workload.Images
 	replace          bool
 	moveMemoryTo     string
-	// messageIssuer is garam's message-signing issuer; empty is the
-	// origin of machineURL.
+	// messageIssuer is garam's message-signing issuer; empty renders
+	// no issuers entry.
 	messageIssuer string
 }
 
@@ -85,7 +85,7 @@ func newStandaloneRunCommand(dirs *hostDirs) *cobra.Command {
 	f.StringVar(&s.prefix, "name-prefix", "garam-", "what every container and volume name begins with")
 	f.BoolVar(&s.replace, "replace", false, "start a new generation even where the running one is what is desired")
 	f.StringVar(&s.messageIssuer, "message-issuer", "",
-		"garam's message-signing issuer, as its machine.issuer names it (default the origin of --machine-url)")
+		"garam's message-signing issuer, exactly as its machine.issuer names it; empty trusts no garam signature")
 	f.StringVar(&s.moveMemoryTo, "move-memory-to", "",
 		"drain the generation, copy and verify the agent's memory into this new volume, and run the next generation on it")
 	for _, name := range []string{"agent-dir", "engine", "machine-url", "config", "model-env-file",
@@ -140,7 +140,7 @@ func runStandalone(ctx context.Context, s runSettings) error {
 	if err != nil {
 		return err
 	}
-	issuer, err := messageIssuerOf(s.messageIssuer, base)
+	issuer, err := messageIssuerOf(s.messageIssuer)
 	if err != nil {
 		return err
 	}
@@ -159,14 +159,14 @@ func runStandalone(ctx context.Context, s runSettings) error {
 	return supervisor.Run(ctx)
 }
 
-// messageIssuerOf is garam's message-signing issuer: the one named, or
-// the origin of the machine listener the host reaches, which is what
-// garam's machine.issuer names where the host reaches the listener at
-// its external origin. Either is held to garam's one spelling, since
-// the runtime compares it byte for byte.
-func messageIssuerOf(named, machineBase string) (message.Issuer, error) {
+// messageIssuerOf is garam's message-signing issuer as the host names
+// it, held to garam's one spelling, since the runtime compares it byte
+// for byte. Nothing named is no issuer: the issuer is an identity, not
+// an address, so no address the host reaches garam at stands in for it,
+// and a host not ready to verify stays as it was.
+func messageIssuerOf(named string) (message.Issuer, error) {
 	if named == "" {
-		named = machineBase
+		return "", nil
 	}
 	issuer, err := message.ParseIssuer(named)
 	if err != nil {

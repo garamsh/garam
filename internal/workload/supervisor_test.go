@@ -148,6 +148,8 @@ type host struct {
 	// machineURL is where the adapter, and the runtime beside it,
 	// reach garam.
 	machineURL string
+	// issuer is garam's message issuer the host names; empty is none.
+	issuer string
 }
 
 // testIssuer is garam's message-signing issuer in these tests.
@@ -161,7 +163,7 @@ func newHost(t *testing.T) *host {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	return &host{t: t, engine: newStubEngine(), garam: &stubGaram{}, dir: dir, id: newIdentity(t, testAgent.String()),
-		machineURL: "https://garam.example"}
+		machineURL: "https://garam.example", issuer: testIssuer}
 }
 
 func (h *host) config(edit ...func(*workload.Desired)) workload.Config {
@@ -179,7 +181,7 @@ func (h *host) config(edit ...func(*workload.Desired)) workload.Config {
 			CertificatePEM: h.id.leafPEM, KeyPEM: h.id.keyPEM, IssuerPEM: h.id.issuerPEM,
 			ServerRootPEM: h.id.issuerPEM, MachineURL: h.machineURL,
 		},
-		MessageIssuer: testIssuer,
+		MessageIssuer: h.issuer,
 	}
 }
 

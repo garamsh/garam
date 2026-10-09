@@ -458,33 +458,41 @@ supervisor that stops leaves the workload running.
   runtime's namespace, where a rootless host's loopback is not; it
   defaults to the supervisor's `--machine-url` (ADR-0087).
 - **The runtime trusts garam's issuer by the key set it fetches
-  itself** (ADR-0101, step 4). The supervisor adds one `issuers` entry
-  to the runtime's configuration, once, when it creates the runtime:
-  `issuer` is garam's — `--message-issuer`, by default the origin of
-  `--machine-url` — `keys-url` is the adapter's address for garam
-  followed by `/message-signing-keys`, and `keys-ca-file` is the garam
-  server root the adapter verifies garam by, copied into the runtime
-  for its owner alone. The host's own entries stay, and one naming
-  garam's issuer is refused. **The issuer and the URL may differ, and
-  that is deliberate.** The issuer is garam's identity, compared byte
-  for byte against every signature; the URL is only where the runtime
-  reaches the set, and the runtime shares the adapter's network
-  namespace, where a rootless host's loopback is not the host's, so it
-  reaches garam wherever the adapter does (ADR-0087). The runtime
-  fetches the set again on a key it does not hold, which covers a
-  rotation, a first key and a key retired at once, so nothing on the
-  host refreshes it. **`keys-ca-file` is not in Sherlock `0.3.0`**: it
-  arrives in the release after it (garamsh/sherlock#1008). A `0.3.0`
-  runtime starts with the entry, reading no such member
-  (`internal/config/issuers.go` at `v0.3.0`), and fetches the set
-  against the system roots, which do not reach garam's private root,
-  so it refuses a signed message and accepts an unsigned one as
-  before.
-  The runtime refuses a signed message from an issuer it has no entry
-  for, which is why this lands before the adapter forwards a signature
-  (#1258); until then the entry admits nothing new. A generation
-  started before the rendering keeps the configuration it was given
-  until it is replaced.
+  itself, where the host names that issuer** (ADR-0101, step 4). With
+  `--message-issuer` set, exactly as garam's `machine.issuer` names
+  it, the supervisor adds one `issuers` entry to the runtime's
+  configuration, once, when it creates the runtime: `issuer` is that
+  value, `keys-url` is the adapter's address for garam followed by
+  `/message-signing-keys`, and `keys-ca-file` is the garam server root
+  the adapter verifies garam by, copied into the runtime for its owner
+  alone. The host's own entries stay, and one naming garam's issuer is
+  refused. **Without `--message-issuer` it renders no entry and copies
+  no root**, as the Operator's renderer does (garam-agent-operator#337):
+  the issuer is an identity, so no address the host reaches garam at
+  stands in for it, and a host not ready to verify stays as it was.
+  **The issuer and the URL differ, and that is deliberate.** The issuer
+  is compared byte for byte against every signature and need not
+  resolve; the URL is only where the runtime reaches the set, and the
+  runtime shares the adapter's network namespace, where a rootless
+  host's loopback is not the host's, so it reaches garam wherever the
+  adapter does (ADR-0087). **`keys-url`'s host must be the adapter's
+  machine-listener host.** Sherlock checks that host against the
+  listener's certificate with standard TLS, `keys-ca-file` replacing
+  the roots and not the hostname check; the adapter dials it the same
+  way, so it is a name on the listener's certificate, and any other
+  host fails every key fetch with 503 `issuer keys unavailable`. The
+  runtime fetches the set again on a key it does not hold, which
+  covers a rotation, a first key and a key retired at once, so nothing
+  on the host refreshes it. **`keys-ca-file` arrives in Sherlock
+  `v0.4.0`** (garamsh/sherlock#1008). A `0.3.0` runtime starts with
+  the entry, reading no such member (`internal/config/issuers.go` at
+  `v0.3.0`), and fetches the set against the system roots, which do
+  not reach garam's private root, so it refuses a signed message and
+  accepts an unsigned one as before. The runtime refuses a signed
+  message from an issuer it has no entry for, which is why this lands
+  before the adapter forwards a signature (#1258); until then the
+  entry admits nothing new. A generation started before the rendering
+  keeps the configuration it was given until it is replaced.
 - **An engine it cannot reach decides nothing.** The supervisor starts,
   signals and activates nothing, and the generation keeps running with
   its adapter's token. A daemon stop may stop the runtime, and recovery

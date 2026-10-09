@@ -7,21 +7,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestMessageIssuerOf_DefaultsToTheMachineOriginAndTakesGaramsSpelling
-// holds the issuer the runtime compares byte for byte: the machine
-// listener's origin by default, the one named otherwise, and a spelling
-// garam's issuer cannot have refused rather than rendered.
-func TestMessageIssuerOf_DefaultsToTheMachineOriginAndTakesGaramsSpelling(t *testing.T) {
-	issuer, err := messageIssuerOf("", "https://garam.example:8443")
+// TestMessageIssuerOf_TakesOnlyTheIssuerNamedInGaramsSpelling holds the
+// issuer the runtime compares byte for byte: the one named, held to
+// garam's spelling, and none at all where none is named, since no
+// address the host reaches garam at stands in for an identity.
+func TestMessageIssuerOf_TakesOnlyTheIssuerNamedInGaramsSpelling(t *testing.T) {
+	issuer, err := messageIssuerOf("https://machine.dev.garam.sh")
 	require.NoError(t, err)
-	assert.Equal(t, "https://garam.example:8443", string(issuer))
+	assert.Equal(t, "https://machine.dev.garam.sh", string(issuer))
 
-	issuer, err = messageIssuerOf("https://machine.garam.example", "https://10.0.0.1:8443")
+	issuer, err = messageIssuerOf("")
 	require.NoError(t, err)
-	assert.Equal(t, "https://machine.garam.example", string(issuer))
+	assert.Empty(t, issuer, "nothing named is no issuer")
 
-	_, err = messageIssuerOf("https://GARAM.example", "https://garam.example")
+	_, err = messageIssuerOf("https://GARAM.example")
 	assert.Error(t, err)
-	_, err = messageIssuerOf("", "https://GARAM.example")
-	assert.Error(t, err, "a machine URL in another spelling is no default")
 }

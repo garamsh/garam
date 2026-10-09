@@ -285,10 +285,9 @@ func (s *Supervisor) files(in *intent, r Role, root []byte) []File {
 	a := s.cfg.Adapter
 	switch r {
 	case RoleRuntime:
-		files := []File{
-			dir("sherlock"),
-			own("sherlock/config.yaml", s.renderedConfig, 0o600),
-			own("sherlock/garam-server-root.pem", a.ServerRootPEM, 0o600),
+		files := []File{dir("sherlock"), own("sherlock/config.yaml", s.renderedConfig, 0o600)}
+		if s.cfg.MessageIssuer != "" {
+			files = append(files, own("sherlock/garam-server-root.pem", a.ServerRootPEM, 0o600))
 		}
 		if ego := s.cfg.Desired.Ego; ego != nil {
 			files = append(files, own("sherlock/ego.md", ego, 0o600))

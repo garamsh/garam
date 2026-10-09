@@ -344,9 +344,13 @@ func TestMessageSignature_GaramSignsTheRefusalItWroteAsItsOwn(t *testing.T) {
 // TestMessageSigningKeys_ConcurrentRotationsStoreOneKey holds the
 // rotation lock against Postgres: every replica that finds no key
 // signing decides again once it holds the lock, on the clock as it then
-// stands, so however many rotate at once one key is stored. The test
-// holds the lock itself until every rotation is waiting on it, which is
-// the moment the decision instant would otherwise have been fixed.
+// stands, so however many rotate at once one key is stored, and that
+// key begins no earlier than the lock was released. The test holds the
+// lock itself until every rotation is waiting on it. A decision instant
+// fixed when each transaction began would precede the release for every
+// one of them, so the key's start is what fails deterministically; the
+// count fails only when the waiters reach the lock out of the order
+// they began in, which the scheduler decides.
 func TestMessageSigningKeys_ConcurrentRotationsStoreOneKey(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
@@ -380,11 +384,17 @@ func TestMessageSigningKeys_ConcurrentRotationsStoreOneKey(t *testing.T) {
 			AND database = (SELECT oid FROM pg_database WHERE datname = current_database())`) == replicas
 	}, 10*time.Second, 20*time.Millisecond, "every rotation was waiting on the lock")
 
+	var released time.Time
+	require.NoError(t, holder.QueryRow(ctx, `SELECT clock_timestamp()`).Scan(&released))
 	_, err = holder.Exec(ctx, `SELECT pg_advisory_unlock(hashtext('message_signing_keys'))`)
 	require.NoError(t, err)
 	wg.Wait()
 	for _, err := range errs {
 		require.NoError(t, err)
 	}
-	assert.Equal(t, 1, countRows(t, p, `SELECT count(*) FROM message_signing_keys`))
+	require.Equal(t, 1, countRows(t, p, `SELECT count(*) FROM message_signing_keys`))
+	var signsFrom time.Time
+	require.NoError(t, p.QueryRow(ctx, `SELECT signs_from FROM message_signing_keys`).Scan(&signsFrom))
+	assert.False(t, signsFrom.Before(released),
+		"the key begins at %s, before the lock was released at %s: the rotation decided on a clock read before it held the lock", signsFrom, released)
 }

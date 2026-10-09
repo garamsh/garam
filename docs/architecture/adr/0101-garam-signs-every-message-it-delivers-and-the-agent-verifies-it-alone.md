@@ -93,19 +93,20 @@ Facts the design has to fit:
 
 **A message's signature is a JWS in compact serialization (RFC 7515)
 whose payload is a JWT claims set (RFC 7519), signed with ES256
-(RFC 7518 §3.4).** It travels beside the message's content, never
-inside it, and binds the content by digest. A stock JOSE library
-verifies it with no code of garam's.
+(RFC 7518, "Digital Signature with ECDSA").** It travels beside the
+message's content, never inside it, and binds the content by digest. A
+stock JOSE library verifies it with no code of garam's.
 
 - **The protected header holds `alg`, `kid` and `typ` and nothing
   else.** `alg` is `ES256`; `kid` is the key's JWK thumbprint
   (RFC 7638); `typ` is `agent-message+jwt`, so a token of another kind
-  from the same issuer cannot pass as a message (RFC 8725 §3.11). No
-  `jku`, `x5u` or `jwk`: a verifier never takes a key, or a place to
-  fetch one, from the message it is judging.
-- **ES256 and only ES256.** RFC 7518 §3.1 marks it Recommended+, and
-  every mainstream JOSE library implements it. One algorithm means a
-  verifier pins it rather than negotiating one.
+  from the same issuer cannot pass as a message (RFC 8725, "Use
+  Explicit Typing"). No `jku`, `x5u` or `jwk`: a verifier never takes a
+  key, or a place to fetch one, from the message it is judging.
+- **ES256 and only ES256.** RFC 7518's table of `alg` values for JWS
+  marks it Recommended+, and every mainstream JOSE library implements
+  it. One algorithm means a verifier pins it rather than negotiating
+  one.
 
 ### What is signed
 
@@ -182,8 +183,9 @@ content nor a detached signature over it. The payload is:
 - **These keys sign messages and nothing else.** Anything else garam
   signs uses keys of its own.
 - **Publication.** The machine listener serves the public half of every
-  published key as a JWK Set (RFC 7517 §5), one key per entry with
-  `kid`, `kty` `EC`, `crv` `P-256`, `alg` `ES256` and `use` `sig`, at
+  published key as a JWK Set (RFC 7517, "JWK Set Format"), one key per
+  entry with `kid`, `kty` `EC`, `crv` `P-256`, `alg` `ES256` and `use`
+  `sig`, at
   `GET /message-signing-keys`, as `application/jwk-set+json`, with
   `Cache-Control: max-age=3600` and no credential required — the
   footing `enrollOperator` already has (`security: []`,

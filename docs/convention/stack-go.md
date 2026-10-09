@@ -228,11 +228,11 @@ This section states the Go error forms, and which file or layer
 translates, wraps, logs or recovers one.
 
 - **An adapter translates before it returns.**
-  `repository/postgres.go` turns `pgx.ErrNoRows` into
+  `postgres/postgres.go` turns `pgx.ErrNoRows` into
   `ErrUserNotFound`; the driver's error does not leave the file that
   imports the driver. The errors an implementation returns are part of
   the interface it satisfies, so one that leaks its library's errors is
-  not one `repository/memory.go` can stand in for.
+  not one `memory/memory.go` can stand in for.
 - **Sentinel** when the caller branches on which failure and the
   failure carries no data: `var ErrNotFound = errors.New("not
   found")`, read with `errors.Is`.
@@ -285,13 +285,14 @@ a transport as unknown.
 - **Do not add kinds.** The kinds are gRPC's status codes, which
   ADR-0003 carries without translation, so a new kind has no code to
   travel as.
-- **A kind-to-code table belongs to a protocol, not a transport.** A
-  kind is not a transport's code, so every transport speaking one
-  protocol reads one table: both HTTP surfaces read the one in
-  `internal/wire` (`docs/architecture/overview.md` §Non-functional
-  goals, `docs/architecture/domains.md` §Shared code below the
-  domains). What a transport maps beyond the kind, a sentinel it
-  answers with another code, stays in that transport.
+- **Both HTTP surfaces read one kind-to-status table, in
+  `internal/wire`.** This applies "Each transport translates in one
+  place" above: its two examples, an HTTP server and a gRPC service,
+  make a transport a protocol, so garam's two HTTP surfaces are one
+  transport with one translation (`docs/architecture/overview.md`
+  §Non-functional goals, `docs/architecture/domains.md` §Shared code
+  below the domains). It is stated here because the table is one of
+  `errorx` kinds, which only ADR-0003 gives this project.
 
 ## 5. Logging & observability
 

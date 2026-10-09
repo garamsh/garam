@@ -51,7 +51,7 @@ body. So `stack-go.md` says one thing, `internal/` does another, and
 the reconciliation is reachable only by knowing to open #638.
 
 **What conforming costs was measured**, in
-[`../plans/2026-09-04-package-layout-boundary-crossings.md`](../plans/2026-09-04-package-layout-boundary-crossings.md):
+[`../plans/2026-09-04-package-layout-boundary-crossings.md`](https://github.com/garamsh/garam/blob/5f178278626fa295aaab08afef158625bfe9945e/docs/plans/2026-09-04-package-layout-boundary-crossings.md):
 move each domain's store files into `internal/<domain>/store/`, rewrite
 the package clause, dot-import the domain so every *exported*
 identifier still resolves, and build. The residual errors are exactly

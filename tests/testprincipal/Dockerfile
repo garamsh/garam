@@ -7,7 +7,7 @@
 
 # The base deploy/local/Dockerfile builds garam on, pinned by digest on
 # the same terms; `make check-toolchain` holds its tag against go.mod.
-FROM golang:1.26.7-alpine3.24@sha256:28d89ee9cc0ff9fec75c82ca201e6bf7fdf9a679d4b7b24dfa04f2bb766bb468 AS build
+FROM golang:1.27.2-alpine3.24@sha256:85dc1069ac644ea3c527b177303a406eb3358192816cd7f9e5848eb658851673 AS build
 
 WORKDIR /src
 

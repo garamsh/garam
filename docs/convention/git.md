@@ -83,9 +83,14 @@ Format: `<type>: <imperative summary>`
   the change, and nothing else tells it which of its citations to
   re-check.
 - Body follows `.github/PULL_REQUEST_TEMPLATE.md`.
-- PRs into `dev` are squash-merged. Branch commits do not appear on the
-  default branch; do not rewrite them to be pretty. The promotion PR is
-  never merged: §Promotion moves `main` to its head instead.
+- A promotion is a PR from the default branch into a branch that only
+  promotions move. It is merged by fast-forward, never by a squash, a
+  rebase or a merge commit: each of those leaves that branch holding a
+  commit the default branch never held. Its title becomes no commit;
+  the commits it carries keep the titles and trailers their own squash
+  merges gave them.
+- PRs other than a promotion are squash-merged. Branch commits do not
+  appear on the default branch; do not rewrite them to be pretty.
 
 ## Promotion
 
@@ -99,11 +104,6 @@ procedure.
   `ci.yml` and `images.yml` on the forge. Every job of both passes on
   the head being promoted. A run that was never dispatched is handled
   as `AGENTS.md` §Roles states.
-- **A fast-forward, never a squash, a rebase or a merge commit.** A
-  squash or a rebase puts commits on `main` that `dev` does not have,
-  so `main` stops being an ancestor of `dev` and every later promotion
-  diverges. A merge commit leaves `main` holding a commit no run
-  tested.
 - **The steps**, with `<n>` the promotion PR and `<head>` the commit
   its runs tested:
   1. Open the PR with base `main` and head `dev`.
@@ -115,12 +115,13 @@ procedure.
      answers `0`.
   4. Move `main` with a non-forced ref update:
      `gh api -X PATCH repos/garamsh/garam/git/refs/heads/main -f sha=<head> -F force=false`.
-     The forge refuses one that is not a fast-forward, and marks the PR
-     merged because `main` now holds its head.
+     This is the fast-forward the promotion is merged by: the forge
+     refuses one that is not a fast-forward, and marks the PR merged
+     once `main` holds its head.
   5. Read back that `main` is `<head>`:
      `gh api repos/garamsh/garam/git/refs/heads/main --jq .object.sha`.
-- **Nothing else moves `main`:** no push, no merge of any PR into
-  `main`, no other ref update. Branch protection and rulesets are
+- **Nothing else moves `main`:** no push, no merge of a PR into `main`
+  but step 4's, no other ref update. Branch protection and rulesets are
   unavailable on this repository's plan (the API answered 403 on
   2026-10-08, #1215), so this rule is the whole of `main`'s defence. A
   fix `main` needs reaches it through `dev` and the next promotion.

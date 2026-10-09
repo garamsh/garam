@@ -393,7 +393,8 @@ ADRs:
 - [0039](./adr/0039-a-version-tag-publishes-both-images-to-the-accounts-registry.md)
   — a version tag publishes both images to the account's registry;
   superseded in part by 0071, which lets a person push a development
-  build, and by 0092 for non-release artifacts
+  build, and by 0092 for non-release artifacts, whose test-image
+  registry and publishing 0093 supersedes in turn
 - [0040](./adr/0040-a-pinned-garam-server-certificate-that-rotates-without-a-restart.md)
   — the machine listener presents a pinned garam server certificate, and
   certificates rotate without a restart

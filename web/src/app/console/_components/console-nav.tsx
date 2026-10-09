@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import {
@@ -11,6 +10,7 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 
+import { IntentLink } from "./intent-link";
 import { CONSOLE_SECTIONS, orgHref, parseConsolePath } from "./navigation";
 
 /** The sections of the selected organization. */
@@ -38,13 +38,13 @@ export function ConsoleNav() {
                 isActive={current}
                 tooltip={section.label}
               >
-                <Link
+                <IntentLink
                   href={orgHref(location.org, section.segment)}
                   aria-current={ariaCurrent}
                 >
                   <section.icon />
                   <span>{section.label}</span>
-                </Link>
+                </IntentLink>
               </SidebarMenuButton>
             </SidebarMenuItem>
           );

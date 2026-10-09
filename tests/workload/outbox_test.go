@@ -25,6 +25,14 @@ func TestRealEngine_TheAdapterMountsTheOutboxAlone(t *testing.T) {
 	runtime, adapter := h.container(workload.RoleRuntime), h.container(workload.RoleAdapter)
 	require.Equal(t, "ok", h.report(runtime, "--open", "/data/memory.db").Open["/data/memory.db"],
 		"the store exists on the volume")
+	// Owner-only, as Sherlock v0.5.0 keeps its state (sherlock#1025):
+	// the supervisor makes the outbox so, and the runtime the store.
+	for path, want := range map[string]string{
+		"/data/outbox":    "drwx------ 65532:65532",
+		"/data/memory.db": "-rw------- 65532:65532",
+	} {
+		assert.Equal(t, want, strings.TrimSpace(h.mustDocker("exec", runtime, h.probe(runtime), "stat", path)), path)
+	}
 
 	ad := h.report(adapter, "--open", "/data/memory.db", "--open", "/outbox/memory.db",
 		"--open", "/outbox/../memory.db", "--open", "/memory.db")

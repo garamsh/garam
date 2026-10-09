@@ -153,6 +153,8 @@ var storedAt = time.Date(2026, time.September, 1, 12, 0, 0, 0, time.UTC)
 type messageService struct {
 	err   error
 	calls []messageCall
+	// fences is what each claim was handed to judge its caller by.
+	fences []*message.Fence
 }
 
 func (s *messageService) Post(_ context.Context, sender, recipient grn.GRN, key, body string, author message.Author, _ *message.Fence) (*message.Message, error) {
@@ -171,8 +173,9 @@ func (s *messageService) PostWithinBudget(_ context.Context, sender, recipient g
 	return message.New(recipient, sender, key, body)
 }
 
-func (s *messageService) Claim(_ context.Context, caller, recipient grn.GRN, _ *message.Fence) (*message.Claim, error) {
+func (s *messageService) Claim(_ context.Context, caller, recipient grn.GRN, fence *message.Fence) (*message.Claim, error) {
 	s.calls = append(s.calls, messageCall{method: "claim", caller: caller, recipient: recipient})
+	s.fences = append(s.fences, fence)
 	if s.err != nil {
 		return nil, s.err
 	}
@@ -221,6 +224,8 @@ func send(t *testing.T, client *http.Client, method, url, body string) (int, str
 		version = agent.CutoverContractVersion
 	case strings.HasSuffix(req.URL.Path, "/outbox-messages"):
 		version = message.DeliveryContractVersion
+	case strings.HasSuffix(req.URL.Path, "/tokens"):
+		version = operator.TokenContractVersion
 	}
 	req.Header.Set(operator.ContractVersionHeader, version)
 	resp, err := client.Do(req)

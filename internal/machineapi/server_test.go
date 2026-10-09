@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -68,6 +69,8 @@ type agentService struct {
 	assignment   *agent.Assignment
 	provisioning []stateReport
 	runtime      []stateReport
+	// audiences is what each mint asked for.
+	audiences []*grn.GRN
 }
 
 func (s *agentService) Create(_ context.Context, operator grn.GRN) (*agent.Assignment, error) {
@@ -76,6 +79,19 @@ func (s *agentService) Create(_ context.Context, operator grn.GRN) (*agent.Assig
 		return nil, errorx.New(errorx.KindUnimplemented, "an assignment is internal/agent's to construct")
 	}
 	return nil, s.err
+}
+
+// MintAccessToken answers a token for the agent named, recording the
+// caller and audience it was asked with.
+func (s *agentService) MintAccessToken(_ context.Context, caller, agentGRN grn.GRN, audience *grn.GRN) (*agent.AccessToken, error) {
+	s.calls = append(s.calls, call{operator: caller, subject: agentGRN})
+	s.audiences = append(s.audiences, audience)
+	if s.err != nil {
+		return nil, s.err
+	}
+	return &agent.AccessToken{Value: agent.AccessTokenPrefix + strings.Repeat("a", 64), Agent: agentGRN,
+		Assignee: caller, Epoch: 3, Audience: audience, ServerRootPEM: []byte("server root"),
+		ExpiresAt: time.Date(2026, time.October, 9, 13, 0, 0, 0, time.UTC)}, nil
 }
 
 func (s *agentService) IssueCertificate(_ context.Context, operator, agentGRN grn.GRN) (*agent.Certificate, error) {
@@ -307,12 +323,19 @@ func serveTLS(t *testing.T, srv *machineapi.Server, caller grn.GRN, middlewares 
 // live token names. One no entry names is refused.
 type presentedTokens map[string]grn.GRN
 
-func (k presentedTokens) Resolve(_ context.Context, token string) (grn.GRN, time.Time, error) {
+func (k presentedTokens) Resolve(_ context.Context, token string) (machine.Bearer, error) {
 	subject, ok := k[token]
 	if !ok {
-		return grn.GRN{}, time.Time{}, errorx.New(errorx.KindUnauthenticated, "token not live")
+		return machine.Bearer{}, errorx.New(errorx.KindUnauthenticated, "token not live")
 	}
-	return subject, time.Now().Add(time.Hour), nil
+	// An agent's token carries a serial the fence reads, as the agent
+	// store answers one; an operator's carries none.
+	serial := ""
+	if subject.ServiceType == agent.ServiceType {
+		serial = "t" + strings.Repeat("0", 32)
+	}
+	return machine.Bearer{Subject: subject, Serial: serial, IssuedAt: time.Now().Add(-time.Minute),
+		ExpiresAt: time.Now().Add(time.Hour)}, nil
 }
 
 // serveTLSTokens is serveTLS answering a presented token from tokens.

@@ -108,27 +108,34 @@ what compose lacks is the step, not something a container cannot do.
 
 ## Tokens
 
-**Built for an operator; an agent and a supervisor present
-certificates until the migration's later steps.** ADR-0100 moves every
-machine caller from a client certificate to a short-lived token it
-obtains with a credential garam issued, and
+**Built for an operator and for an agent its operator holds; a
+supervisor presents a certificate until the migration's step G1d.**
+ADR-0100 moves every machine caller from a client certificate to a
+short-lived token it obtains with a credential garam issued, and
 `docs/plans/2026-10-09-machine-identity-migration.md` is the order it
-lands in. What runs now is its first step.
+lands in. What runs now is its steps G1a and G1b.
 
 - **A request may present a token instead of a certificate**, as
   `Authorization: Garam-Token <token>`. The listener asks `Tokens` for
   that request, and the identity it answers carries `MethodToken`, the
-  GRN and the token's expiry, and no serial: there is no certificate
-  for a renewal or the execution fence to read.
-- **The read is per request, not per connection.** A value that is
-  not a token's shape is refused before it is read, and a refusal is
-  logged at debug: it is the caller's to fix, and only a read that
-  could not be made is the listener's anomaly. The composition
-  root satisfies `Tokens` from `internal/operator`, whose read joins
-  the token's row to the operator's registration, so deleting the
-  operator or re-issuing its credential refuses the next request on a
-  connection already open. A token minted for another audience — a
-  hosted operator it is to be shown to — answers as no token here.
+  GRN and the token's dates. An agent's token carries a serial too —
+  `t` and hex, which no certificate's decimal serial equals — and the
+  execution fence reads it as it reads a certificate's: current while
+  the token is inside its dates, minted at the agent's present
+  assignee and epoch, and in the lineage the execution holds now. An
+  operator's token carries none, so a route reading a credential
+  refuses it, and no token reaches a route that renews a certificate.
+- **The read is per request, not per connection.** A value that is not a
+  token's shape is refused before it is read, and a refusal is logged at
+  debug: it is the caller's to fix, and only a read that could not be
+  made is the listener's anomaly. The composition root satisfies
+  `Tokens` from the domain the token's prefix names. An operator's read
+  joins the token's row to the registration, so deleting the operator or
+  re-issuing its credential refuses the next request on a connection
+  already open; an agent's joins the agent's assignment and execution,
+  so a reassignment or a recovery does. A token minted for another
+  audience — a hosted operator it is to be shown to — answers as no
+  token here.
 - **A token or a certificate, never both.** A request presenting a
   token over a connection whose certificate authenticated carries no
   identity, and the reason travels with it, as it does for a token

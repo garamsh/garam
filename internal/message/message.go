@@ -42,6 +42,11 @@ var (
 	// and names the one it does (ADR-0083).
 	ErrUnsupportedDeliveryContract = errorx.New(errorx.KindInvalidArgument,
 		"unsupported Garam-Contract-Version: this route serves "+DeliveryContractVersion)
+	// ErrUnsupportedTokenDeliveryContract is that refusal for a request
+	// an agent token authenticated, which is served under the token's
+	// value (ADR-0100).
+	ErrUnsupportedTokenDeliveryContract = errorx.New(errorx.KindInvalidArgument,
+		"unsupported Garam-Contract-Version: a request presenting an agent token is served under "+TokenDeliveryContractVersion)
 	// ErrCreatedLater refuses a durable submission created after the
 	// database's decision instant. Its sender's clock runs ahead of the
 	// database's, which time resolves, so the refusal is not final
@@ -89,6 +94,11 @@ const (
 // (ADR-0083). Its route requires the version in the
 // Garam-Contract-Version header and answers with it.
 const DeliveryContractVersion = "durable-delivery.v1"
+
+// TokenDeliveryContractVersion is the same contract for a request an
+// agent token authenticated, whose execution token travels in a header
+// of its own (ADR-0100).
+const TokenDeliveryContractVersion = "durable-delivery.v2"
 
 // ID identifies a stored message. ClaimID identifies one reader's hold
 // on it; the two are never interchangeable.

@@ -16,14 +16,17 @@ import (
 	"github.com/garamsh/garam/internal/grn"
 )
 
+// ClockSkew is how far garam backdates the start of what it issues —
+// a certificate's NotBefore here, an agent token's issue time in
+// internal/agent — so it is usable at once on a peer or a database
+// whose clock trails the issuer's. It moves the start alone.
+const ClockSkew = time.Minute
+
 const (
 	// authorityLifetime outlives every certificate the CA signs by
 	// enough that no organization meets a cliff: losing a CA invalidates
 	// every agent under it (ADR-0014), and nothing rotates one yet.
 	authorityLifetime = 10 * 365 * 24 * time.Hour
-	// clockSkew backdates NotBefore, so a certificate is usable on a
-	// peer whose clock trails the issuer's.
-	clockSkew = time.Minute
 	// jitterFraction is the share of a lifetime that jitter may remove.
 	jitterFraction = 10
 	// serialBits sizes the random serial number.
@@ -96,7 +99,7 @@ func createAuthorityCertificate(orgGRN grn.GRN, key *ecdsa.PrivateKey, now time.
 	template := &x509.Certificate{
 		SerialNumber:          serial,
 		Subject:               pkix.Name{CommonName: orgGRN.String()},
-		NotBefore:             now.Add(-clockSkew),
+		NotBefore:             now.Add(-ClockSkew),
 		NotAfter:              now.Add(authorityLifetime),
 		KeyUsage:              x509.KeyUsageCertSign,
 		BasicConstraintsValid: true,
@@ -120,7 +123,7 @@ func createCertificate(serial *big.Int, uri *url.URL, public *ecdsa.PublicKey, i
 	// what carries the identity here (ADR-0014).
 	template := &x509.Certificate{
 		SerialNumber:          serial,
-		NotBefore:             now.Add(-clockSkew),
+		NotBefore:             now.Add(-ClockSkew),
 		NotAfter:              notAfter,
 		KeyUsage:              x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},

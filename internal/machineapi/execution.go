@@ -23,6 +23,9 @@ import (
 // carried beside the client certificate, never instead of it.
 const (
 	executionScheme = "Garam-Execution "
+	// executionHeader carries the execution token beside an agent token,
+	// which takes Authorization (ADR-0100).
+	executionHeader = "Garam-Execution"
 	operationScheme = "Garam-Operation "
 )
 
@@ -273,9 +276,12 @@ func (s *Server) recheck(w http.ResponseWriter, r *http.Request, identity machin
 }
 
 // fenceOf answers the execution fence a request of an agent presents
-// (ADR-0080): the certificate its connection authenticated with and
-// the token its Authorization header carries, if any. A caller that is
-// not an agent presents none, and nil is its answer.
+// (ADR-0080): the credential it authenticated with — a certificate, or
+// an agent token whose serial and dates stand in for one (ADR-0100) —
+// and the execution token it carries, if any. Beside a certificate that
+// token is in Authorization; beside an agent token, which takes
+// Authorization, it is in a Garam-Execution header of its own. A caller
+// that is not an agent presents none, and nil is its answer.
 func fenceOf(r *http.Request, identity machine.Identity) (*agent.Fencing, error) {
 	if identity.GRN().ServiceType != agent.ServiceType {
 		return nil, nil
@@ -286,13 +292,22 @@ func fenceOf(r *http.Request, identity machine.Identity) (*agent.Fencing, error)
 			Serial: identity.Serial(), NotBefore: identity.NotBefore(), NotAfter: identity.NotAfter(),
 		},
 	}
-	header := r.Header.Get("Authorization")
-	if header == "" {
-		return fence, nil
-	}
-	raw, ok := strings.CutPrefix(header, executionScheme)
-	if !ok {
-		return nil, errorx.New(errorx.KindUnauthenticated, "an agent's Authorization is Garam-Execution <token>")
+	var raw string
+	if identity.Method() == machine.MethodToken {
+		raw = r.Header.Get(executionHeader)
+		if raw == "" {
+			return fence, nil
+		}
+	} else {
+		header := r.Header.Get("Authorization")
+		if header == "" {
+			return fence, nil
+		}
+		var ok bool
+		raw, ok = strings.CutPrefix(header, executionScheme)
+		if !ok {
+			return nil, errorx.New(errorx.KindUnauthenticated, "an agent's Authorization is Garam-Execution <token>")
+		}
 	}
 	token, err := agent.ParseToken(raw)
 	if err != nil {
@@ -324,7 +339,7 @@ func watchFence(f *agent.Fencing) *watch.Fence {
 // fenced answers the caller and the fence its request presents, and
 // writes the refusal itself for a request carrying neither.
 func fenced(w http.ResponseWriter, r *http.Request) (grn.GRN, *agent.Fencing, bool) {
-	identity, ok := callerCertificate(w, r)
+	identity, ok := callerCredential(w, r)
 	if !ok {
 		return grn.GRN{}, nil, false
 	}

@@ -301,6 +301,27 @@ func (l lifecycle) handoff(authority, body string) {
 	}
 }
 
+// TestExecutionService_AnOperatorForwardsNoTokenMintedForGaram holds
+// the forwarded token's second form to a supervisor (ADR-0100): an
+// operator that minted its agent's token for garam, forwarding it on
+// introspection, proves nothing. A token the same operator minted to
+// be shown to the caller, forwarded by that caller, is the control.
+func TestExecutionService_AnOperatorForwardsNoTokenMintedForGaram(t *testing.T) {
+	ctx := context.Background()
+	f := newLegacyFence(t)
+	service := agent.NewExecutionService(f.agents, f.exec, &grantingAuthorizer{}, nil, namedLeaves{}, f.agents, nil, nil)
+
+	own := f.mintedIn(t)
+	_, err := service.Introspect(ctx, f.controller, f.agent, agent.ForwardedToken(own.Value), nil)
+	require.ErrorIs(t, err, agent.ErrTokenNotProven, "an operator forwards no token minted for garam")
+
+	hosted := registerOperator(t, f.p, scopedGRN("acme", agent.ServiceTypeOperator, "hosted"))
+	shown := f.mintedFor(t, &hosted)
+	in, err := service.Introspect(ctx, hosted, f.agent, agent.ForwardedToken(shown.Value), nil)
+	require.NoError(t, err, "control: a token shown to the caller proves the agent")
+	assert.Equal(t, agent.CredentialCurrent, in.Credential)
+}
+
 // countingShown counts the forwarded-token reads it passes on.
 type countingShown struct {
 	agent.ShownTokenReader

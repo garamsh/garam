@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	machinegen "github.com/garamsh/garam/api/machine"
+	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/operator"
@@ -22,12 +23,14 @@ func (s *Server) GetIdentity(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, machinegen.Identity{Grn: identity.String()})
 }
 
-// ExchangeToken answers a short-lived token for the operator the
-// presented credential belongs to (ADR-0100).
+// ExchangeToken answers a short-lived token for the operator or the
+// standalone host's supervisor the presented credential belongs to
+// (ADR-0100); the credential's prefix names which.
 //
 // Like EnrollOperator it reads no identity off the connection: what
 // authenticates the request is the credential in its Authorization
-// header, which a member of the operator's organization issued.
+// header, which a member of the organization issued or an approved
+// enrollment answered.
 func (s *Server) ExchangeToken(w http.ResponseWriter, r *http.Request, params machinegen.ExchangeTokenParams) {
 	w.Header().Set("Garam-Contract-Version", operator.TokenContractVersion)
 	// The credential is read first, so a caller that presents none
@@ -45,6 +48,23 @@ func (s *Server) ExchangeToken(w http.ResponseWriter, r *http.Request, params ma
 	var body machinegen.TokenExchange
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeError(w, errorx.Wrap(err, "token exchange", errorx.KindInvalidArgument))
+		return
+	}
+	// A supervisor's credential, which its prefix names, exchanges for
+	// a token garam alone accepts (ADR-0100).
+	if strings.HasPrefix(credential, agent.SupervisorCredentialPrefix) {
+		if body.Audience != nil {
+			writeError(w, agent.ErrSupervisorAudience)
+			return
+		}
+		token, err := s.supervisors.Exchange(r.Context(), credential)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusCreated, machinegen.MachineToken{
+			Token: token.Value, Grn: token.Supervisor.String(), ExpiresAt: token.ExpiresAt,
+		})
 		return
 	}
 	var audience *grn.GRN

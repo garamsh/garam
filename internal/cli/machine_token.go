@@ -16,14 +16,16 @@ import (
 // identityTokens answers what a token presented on the machine
 // listener stands for, from the domain that issued it, which its
 // prefix names (ADR-0100): an operator's from internal/operator, an
-// agent's from internal/agent. It is read on every request that
-// presents a token, so what it reads beside the token — the operator's
-// registration, or the agent's assignment and lineage — refuses a
-// deleted operator, a re-issued credential, a reassignment or a
-// recovery from the next request.
+// agent's and a supervisor's from internal/agent. It is read on every
+// request that presents a token, so what it reads beside the token —
+// the operator's registration, the agent's assignment and lineage, or
+// the supervisor's registration — refuses a deleted operator, a
+// re-issued credential, a reassignment, a recovery or a revocation from
+// the next request.
 type identityTokens struct {
-	operators operator.TokenStore
-	agents    agent.AccessTokenStore
+	operators   operator.TokenStore
+	agents      agent.AccessTokenStore
+	supervisors agent.SupervisorTokenStore
 }
 
 func (k identityTokens) Resolve(ctx context.Context, token string) (machine.Bearer, error) {
@@ -34,6 +36,8 @@ func (k identityTokens) Resolve(ctx context.Context, token string) (machine.Bear
 		return k.operator(ctx, token)
 	case agent.WellFormedAccessToken(token):
 		return k.agent(ctx, token)
+	case agent.WellFormedSupervisorSecret(token, agent.SupervisorTokenPrefix):
+		return k.supervisor(ctx, token)
 	}
 	return machine.Bearer{}, errorx.New(errorx.KindUnauthenticated, "machine: not a token garam issues")
 }
@@ -59,6 +63,16 @@ func (k identityTokens) agent(ctx context.Context, token string) (machine.Bearer
 	}
 	return machine.Bearer{Subject: holder.Agent, Serial: holder.Serial,
 		IssuedAt: holder.IssuedAt, ExpiresAt: holder.ExpiresAt}, nil
+}
+
+// supervisor resolves a standalone host's supervisor token, read
+// joined to a registration that has not ended (ADR-0100).
+func (k identityTokens) supervisor(ctx context.Context, token string) (machine.Bearer, error) {
+	holder, err := k.supervisors.ResolveSupervisorToken(ctx, agent.HashSupervisorSecret(token))
+	if err != nil {
+		return machine.Bearer{}, unresolved(err)
+	}
+	return machine.Bearer{Subject: holder.Supervisor, IssuedAt: holder.IssuedAt, ExpiresAt: holder.ExpiresAt}, nil
 }
 
 // registeredOperators answers whether an organization holds a record

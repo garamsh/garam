@@ -309,10 +309,10 @@ type AgentEnrollment struct {
 	SupervisorGrn string `json:"supervisorGrn"`
 }
 
-// AgentEnrollmentApproval defines model for AgentEnrollmentApproval.
+// AgentEnrollmentApproval An approval binds the host's two key fingerprints, or neither. With both, the host enrolls under `standalone-enrollment.v1` and is signed a certificate over each key; with neither, it enrolls under `standalone-enrollment.v2` and is answered a supervisor credential. Each contract refuses the other's approval (ADR-0100). One fingerprint without the other is 400.
 type AgentEnrollmentApproval struct {
-	// AgentKeySha256 SHA-256 of the agent key's SubjectPublicKeyInfo DER.
-	AgentKeySha256 string `json:"agentKeySha256"`
+	// AgentKeySha256 SHA-256 of the agent key's SubjectPublicKeyInfo DER, for a host enrolling under `standalone-enrollment.v1`.
+	AgentKeySha256 *string `json:"agentKeySha256,omitempty"`
 
 	// ExpiresAt When the approval stops being spendable; within the next 24 hours.
 	ExpiresAt time.Time `json:"expiresAt"`
@@ -329,8 +329,8 @@ type AgentEnrollmentApproval struct {
 	// SecretSha256 SHA-256 of the bootstrap secret the host keeps.
 	SecretSha256 string `json:"secretSha256"`
 
-	// SupervisorKeySha256 SHA-256 of the supervisor key's SubjectPublicKeyInfo DER.
-	SupervisorKeySha256 string `json:"supervisorKeySha256"`
+	// SupervisorKeySha256 SHA-256 of the supervisor key's SubjectPublicKeyInfo DER, for a host enrolling under `standalone-enrollment.v1`.
+	SupervisorKeySha256 *string `json:"supervisorKeySha256,omitempty"`
 }
 
 // AgentEnrollmentReplacement The assignment a replacement replaces, exactly as it stands when approved.

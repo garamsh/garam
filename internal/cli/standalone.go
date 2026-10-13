@@ -27,12 +27,13 @@ func NewStandaloneService(pool *pgxpool.Pool, engine grpc.ClientConnInterface) a
 }
 
 // newSupervisorService composes how a standalone host's supervisor
-// enrolls and renews over the database, the policy engine, which
-// decides the approving administrator's authority again, and the
-// certificate authority.
+// enrolls, renews and exchanges its credential over the database, the
+// policy engine, which decides the approving administrator's authority
+// again, and the certificate authority.
 func newSupervisorService(pool *pgxpool.Pool, engine grpc.ClientConnInterface, issuer ca.Service, serverRoot []byte, now func() time.Time) agent.SupervisorService {
-	return agent.NewSupervisorService(agentpg.New(pool), memberAuthorization(pool, engine),
-		requestSigner{issuer: issuer, serverRoot: serverRoot}, now)
+	store := agentpg.New(pool)
+	return agent.NewSupervisorService(store, store, memberAuthorization(pool, engine),
+		requestSigner{issuer: issuer, serverRoot: serverRoot}, serverRoot, now)
 }
 
 // memberAuthorization is a user's authority decided from current

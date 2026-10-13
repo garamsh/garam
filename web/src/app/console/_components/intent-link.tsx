@@ -3,18 +3,7 @@
 import Link from "next/link";
 import { useState, type ComponentProps } from "react";
 
-/**
- * A console link that prefetches its route once the visitor shows they
- * may follow it — the pointer rests on it, it takes keyboard focus, or a
- * finger touches it — rather than whenever it is on screen. Next.js
- * prefetches every visible link by default, and the sidebar and the
- * breadcrumb put about a dozen of them on every console page, each a
- * server render of a dynamic route nobody asked for (#1209). Intent
- * comes before the click by enough for the prefetch to be under way, so
- * the link the visitor follows is still the one already fetched
- * (Next.js 16.3.1 `docs/01-app/02-guides/prefetching.mdx`, Hover-
- * triggered prefetch).
- */
+/** Prefetches a console route on pointer, focus, or touch intent. */
 export function IntentLink({
   onMouseEnter,
   onFocus,

@@ -198,11 +198,20 @@ leaving at least a quarter for propagation. Agent lifetime retains its
 20-minute to 24-hour bounds and one-hour default. Two audiences remain
 separate and ordinary refresh does not void an unexpired predecessor.
 
-A definite authentication refusal pauses protected work until key or
-configuration changes; an unavailable endpoint retries with backoff
-and a fresh assertion. Lost exchange answers use a new `jti`, not an
-assertion replay. Lost PEM delivery revokes that issuance and issues
-anew; no download is read back from storage.
+Expired/stale access pauses protected work while bounded exchange
+retries with backoff, using the unchanged valid PEM and a fresh
+assertion and `jti` every time. An outage spanning token expiry needs
+no key/configuration change: after exchange succeeds, obtain fresh
+controller/assignment proof before resuming. An adapter consumes its
+assignee's atomically refreshed file and rechecks current execution
+binding; it neither self-mints nor treats a new token as activation.
+
+Exchange identity/key rejection pauses until credential or
+registration/configuration changes. Token refresh never clears a
+revoked key/registration or generation/lineage/placement fence. No
+same-`jti` retry or shared-secret fallback is allowed, including after
+lost exchange answers. Lost PEM delivery revokes that issuance and
+issues anew; no download is read back from storage.
 
 ## Direct attachment gate
 
@@ -267,6 +276,10 @@ that would fail if the intended check were removed.
 | Replay, concurrency and restart | Same client_id+jti succeeds at most once across replicas and after restart; different kid/signature does not bypass it |
 | Lost exchange response | Fresh assertion succeeds inside live-token bounds; old jti refuses without exposing bearer readback |
 | Replay/key/store outage | 503 and no token; no cached positive or shared-secret fallback |
+| Outage spans access expiry, valid PEM unchanged | Protected calls pause; bounded fresh-assertion exchange recovers when available with a new jti on every attempt; fresh controller/assignment proof precedes resumption |
+| Adapter access expires during outage | Assignee refreshes the atomic token file; adapter rereads with bounded backoff and verifies current execution binding before protected calls; no new key, placement or self-mint |
+| Revoked key/registration after access expiry | Fresh exchange refuses; no resumption, same-jti replay or shared-secret fallback; unchanged valid-key outage case is the control |
+| Generation/lineage/placement fence during refresh | Exchange/mint success never clears the fence; old writer remains refused after new access arrives; current binding is the control |
 | Planned rotation | Successor exchange succeeds before old key withdrawal; both work inside overlap, old key/tokens refuse after withdrawal |
 | Compromise or lost PEM | Immediate replacement; old tokens refuse on an open connection, including raced exchanges |
 | Delete/re-register same operator_id | Old key, assertion and tokens cannot regain authentication through the new record |

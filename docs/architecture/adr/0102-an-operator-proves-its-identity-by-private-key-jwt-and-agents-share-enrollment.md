@@ -186,6 +186,19 @@ profile's choices, not requirements RFC 7523 imposes on every client.
   revealing registration existence. Rate-limit exchanges and key
   issuance before release with a documented bound; saturation answers
   429 with `Retry-After`, never falls back to a shared secret.
+- An expired or stale short-lived access token pauses protected calls,
+  not the ability to authenticate with an unchanged valid private key.
+  Retry exchange with bounded backoff and a fresh assertion and `jti`
+  on every attempt, including after an outage spanning access expiry.
+  On success, obtain fresh controller/assignment proof before resuming
+  decisions. An adapter instead waits for its assignee's refreshed
+  atomic agent-token file and rechecks current execution binding;
+  it never exchanges an agent token for its successor. Exchange
+  rejection of identity/key requires a credential or registration/
+  configuration change; refreshing access cannot clear that rejection
+  or a generation/lineage/placement fence. A successful mint/exchange
+  alone is never evidence the writer or its authorization is current,
+  and neither same-`jti` retry nor shared-secret fallback is allowed.
 - Planned rotation allows two active keys per operator. An authorized
   person issues the successor, confirms its fingerprint, installs it
   atomically and proves an exchange before withdrawing the old key.

@@ -297,9 +297,14 @@ permissions and deployed credential paths remain.
 - ADR-0102 §Assertion exchange profile and §Replay, rotation and
   revocation define the RS256 assertion, replay/rotation and immediate
   token revocation requirements. Startup cannot authenticate until the
-  key and server root are installed; an unavailable exchange retries
-  with backoff and fresh assertions, while a definite authentication
-  refusal pauses until the credential/configuration changes.
+  key and server root are installed. An expired or stale access token
+  pauses protected calls while bounded fresh-assertion exchange retries
+  with backoff; a successful exchange with the unchanged valid PEM
+  permits fresh controller/assignment proof, not automatic resumption.
+  Exchange rejection of the identity/key pauses until its credential
+  or registration/configuration changes. Token refresh never clears a
+  rejected key/registration or a generation/lineage/placement fence;
+  every attempt uses a new `jti` with no shared-secret fallback.
 - Operator ADR-0068's single authentication mode survives. A new
   Operator release moves both binaries together only after Garam adds
   support; Garam's coexistence window is not an Operator fallback.

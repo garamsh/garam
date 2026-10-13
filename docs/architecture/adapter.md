@@ -79,9 +79,14 @@ certificate adapter below remains what the current code runs.
   separate; `Garam-Execution`, `Garam-Operation` and `Garam-Placement`
   retain the v2 meanings ADR-0100 gave them.
 - Activation still waits for lifecycle authority and exclusive writer
-  proof. A definite refusal pauses protected calls and preserves the
-  outbox; unavailability retries with bounded backoff. Runtime status
-  reports and enrollment never activate by themselves.
+  proof. Expired/stale agent API access pauses protected calls and
+  preserves the outbox while the assignee refreshes the atomic token
+  file; the adapter rereads it with bounded backoff. Resume only after
+  current credential and execution binding are proved again, with a
+  fresh controller/assignment proof at the authority. A rejected
+  registration or generation/lineage/placement fence remains paused;
+  token refresh neither clears that refusal nor activates a writer.
+  Runtime status reports and enrollment never activate by themselves.
 - Signed message content/signature travel unchanged to Sherlock, whose
   trusted issuer configuration and authenticated origin are separate
   from the agent's Garam API token. Sherlock proposal
@@ -490,13 +495,16 @@ supervisor when standalone.
   under a request identifier derived from those inputs alone, so a
   restart replays the same intent and receives a newer token. It
   verifies the binding answered and keeps the highest token version.
-- **Undecided answers retry; definite ones pause.** An unavailable
-  authority or garam is retried with bounded backoff and stops nothing
-  local. A refusal, a wrong binding, or garam refusing the token or the
-  credential stops protected work and keeps the outbox, with no
-  time-based retry, until the runtime's generation, epoch or revision,
-  the placement token or the agent's leaf changes. Credential recovery
-  is the manager's, never the adapter's.
+- **Certificate mode: undecided answers retry; definite ones pause.**
+  An unavailable authority or garam is retried with bounded backoff and
+  stops nothing local. A refusal, a wrong binding, or garam refusing the
+  token or the credential stops protected work and keeps the outbox,
+  with no time-based retry, until the runtime's generation, epoch or
+  revision, the placement token or the agent's leaf changes. Credential
+  recovery is the manager's, never the adapter's. The unbuilt token mode
+  follows §API access after common enrollment for expired/stale API
+  access; it does not require a new leaf or placement merely to refresh
+  it.
 - **It reports the runtime's status outward** after activation and on
   each change: the activation, GRN, epoch, generation, revision, state
   and start time as the runtime reported them, and when it read them. A

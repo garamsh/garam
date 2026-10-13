@@ -152,18 +152,19 @@ release of that contract and no compatibility window (ADR-0049).
 
 ## Tokens in place of certificates
 
-**Built for an agent's operator and for the control service's
-contracts; a supervisor-held agent is not yet.**
+**Built for an agent's operator, a standalone host's supervisor and
+the control service's contracts.**
 [ADR-0100](./adr/0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
 replaces an agent's certificate with a short-lived token, and the
 order is the plan's,
 `docs/plans/2026-10-09-machine-identity-migration.md`: this is steps
-G1b and G1c; a supervisor minting its agent's tokens, and its own
-credential, are G1d. Until then a certificate still authenticates as
-it did.
+G1b to G1d, and a supervisor's own credential is §Standalone hosts'.
+A certificate still authenticates as it did until G3.
 
 - **The assignee mints, at the current epoch.** `mintAgentToken`
-  answers an operator for an agent assigned to it now and no other,
+  answers an operator, or a standalone host's supervisor presenting its
+  own token and naming no audience, for an agent assigned to it now and
+  no other,
   which is ADR-0015's rule. The token names that assignee and epoch
   and the lineage the agent's execution holds, read under the
   execution row; it is admitted where the certificate route would be —
@@ -390,6 +391,25 @@ unverified (#1180, #1169).
   spendings queued on one approval create one agent and answer the
   second with the first's result. Withdrawing and spending one
   approval serialize on its row.
+- **Under `standalone-enrollment.v2` the host is answered a credential,
+  not certificates** (ADR-0100). An approval binding the host's keys is
+  spent under v1 alone and one binding none under v2 alone, so neither
+  contract spends the other's approval, and one fingerprint without
+  the other is refused. A v2 spending signs nothing: it places the
+  agent as v1 does, registers the supervisor holding no certificate,
+  and answers a credential garam keeps only the hash of
+  (`migrations/000042`). An identical retry, while the registration
+  still holds the agent, re-issues it under the approval's row lock,
+  and the credential answered before goes with every token it was
+  exchanged for; garam keeps no audit trail of that or of any other
+  void. The supervisor exchanges the credential for hour-long tokens
+  on `exchangeToken`, mints its agent's tokens for garam alone, and on
+  the execution routes forwards the agent token it minted for garam;
+  that form is a supervisor's alone, since it is the assignee and the
+  lifecycle authority at once, and an operator forwards a token shown
+  to it. A revocation or a replacement ends the
+  registration, and every read of the credential or a token joins a
+  registration that has not ended.
 - **The supervisor activates its own agent and nothing else.** On the
   execution routes it is authorized by its current registration, its
   being the agent's assignee and current policy, read per request; it
@@ -397,9 +417,10 @@ unverified (#1180, #1169).
   the execution lock beside the assignment, so an activation queued
   behind a revocation or a replacement is refused rather than
   installing a token. Its first activation rests on the approval,
-  where a managed creation's needs its reference. Its certificate
-  reaches its own identity, its renewal and those three execution
-  routes and nothing else: `ConfineSupervisors` in
+  where a managed creation's needs its reference. It reaches its own
+  identity, its renewal and those three execution routes, and with its
+  own token its agent's token mint as well, and nothing else:
+  `ConfineSupervisors` in
   `internal/machineapi/standalone.go` refuses every other route at the
   router, so a supervisor posts, claims and reads no message and acts
   on no operator route. Every collaboration route admits through the
@@ -417,8 +438,9 @@ unverified (#1180, #1169).
   over a new key in the last third of its validity; the certificate a
   renewal replaced may replay that renewal's public answer for the
   identical request, and two identical renewals racing install one
-  successor. `api/machine.yaml` §standalone is authoritative for the
-  wire and `standalone-enrollment.v1`.
+  successor; a supervisor enrolled under v2 holds no certificate and
+  renews none. `api/machine.yaml` §standalone is authoritative for the
+  wire and both `standalone-enrollment` values.
 - **The host's files.** The supervisor's directory holds the prepared
   secret and key, its current certificate and key in one file a
   renewal replaces in one rename, and a pending renewal kept from

@@ -222,7 +222,7 @@ paths:
     post:
       operationId: exchangeToken
       tags: [identity]
-      summary: Exchange an operator's credential for a short-lived token.
+      summary: Exchange an operator's or a supervisor's credential for a short-lived token.
       description: >-
         Answers a token for the operator the presented credential
         belongs to (ADR-0100), under `machine-token.v1`. The token is
@@ -241,6 +241,15 @@ paths:
         with the operator exchanges nothing, and every token it was
         exchanged for is refused from the next request. Unknown,
         voided and withdrawn credentials are one refusal.
+
+        A standalone host's supervisor exchanges the credential
+        `enrollStandaloneAgent` answered it under
+        `standalone-enrollment.v2` the same way, for a token prefixed
+        `garam_st_` that names no audience; one naming an audience is
+        400. A revocation or a replacement of its registration, and a
+        retried enrollment re-issuing the credential, each refuse the
+        credential and every token it was exchanged for from the next
+        request (ADR-0100).
       security:
         - machineCredential: []
       parameters:
@@ -431,12 +440,14 @@ paths:
       summary: Mint the token an agent authenticates with in place of a certificate.
       description: >-
         Answers a short-lived token for an agent the calling operator
-        holds at the current epoch (ADR-0100), under `machine-token.v1`.
-        The operator hands it to the agent's adapter, which presents it
-        as `Authorization: Garam-Token <token>`. It is accepted for an
-        hour unless the deployment configures another lifetime, and the
-        operator mints the next before it runs out; minting a new one
-        voids nothing, and an agent keeps its newest five per audience.
+        holds at the current epoch, or for the one agent a standalone
+        host's supervisor holds, which presents its own token to mint
+        (ADR-0100), under `machine-token.v1`. The assignee hands it to
+        the agent's adapter, which presents it as `Authorization:
+        Garam-Token <token>`. It is accepted for an hour unless the
+        deployment configures another lifetime, and the assignee mints
+        the next before it runs out; minting a new one voids nothing,
+        and an agent keeps its newest five per audience.
 
         The token is minted at the assignment's epoch and in the
         lineage the agent's execution holds, and every request
@@ -451,7 +462,9 @@ paths:
 
         With an `audience` naming another operator of the agent's
         organization, the token is minted to be shown to that hosted
-        operator, and garam accepts it on no operation here.
+        operator, and garam accepts it on no operation here. A
+        supervisor mints for garam alone, and an `audience` from it is
+        400.
       parameters:
         - $ref: '#/components/parameters/agent'
         - $ref: '#/components/parameters/tokenContractVersion'
@@ -1374,8 +1387,9 @@ paths:
         Under `execution-fence.v2` the caller presents its own token and
         no certificate, and forwards `token` in place of
         `certificatePem`: the agent's token its assignee minted to be
-        shown to the caller. A token that is not one minted for this
-        agent and this caller is 422. The fence judges it as it judges a
+        shown to the caller, or, where the caller is the assignee
+        itself — a standalone host's supervisor — the token it minted
+        for garam. A token that is neither, for this agent, is 422. The fence judges it as it judges a
         certificate: current while inside its dates, minted at the
         agent's current assignee and epoch, and in its current lineage
         (ADR-0100).
@@ -2009,7 +2023,7 @@ paths:
     post:
       operationId: enrollStandaloneAgent
       tags: [standalone]
-      summary: Spend an administrator's approval and obtain a supervisor's and its agent's first certificates.
+      summary: Spend an administrator's approval and obtain a supervisor's credential, or its and its agent's first certificates.
       description: >-
         Authenticated by `Authorization: Garam-Bootstrap <secret>`,
         whose SHA-256 an administrator approved with
@@ -2044,6 +2058,24 @@ paths:
         agent at the recorded epoch; once a later replacement or a
         revocation has ended it, the replay is 409 and discloses
         nothing. Any other body once the approval is spent is 409.
+
+
+        Under `standalone-enrollment.v2` the approval binds no key and
+        the body carries `requestId` alone. Nothing is signed: the agent
+        is placed as above, the supervisor is registered holding no
+        certificate, and the answer names `credential`, the supervisor's
+        credential, beside the agent, the supervisor, the epoch, the
+        lineage and the garam server root. garam stores the credential's
+        hash alone, so an identical retry while the registration still
+        holds the agent re-issues it: the credential answered before,
+        and every token it was exchanged for, is refused from then on.
+        The supervisor exchanges the credential for hour-long tokens
+        with `exchangeToken`, mints its agent's tokens with
+        `mintAgentToken`, and presents its token on the execution routes
+        it holds authority on. An approval binding the host's keys is
+        spent under v1 alone and one binding none under v2 alone;
+        spending either under the other value is 400 and spends nothing
+        (ADR-0100).
       security: []
       parameters:
         - $ref: '#/components/parameters/standaloneContractVersion'
@@ -2151,7 +2183,11 @@ components:
       name: Garam-Contract-Version
       in: header
       required: true
-      description: Must be `standalone-enrollment.v1`; any other value is refused with 400 naming it.
+      description: >-
+        `standalone-enrollment.v1` or, on `enrollStandaloneAgent`,
+        `standalone-enrollment.v2` (ADR-0100); any other value is refused
+        with 400 naming what the route serves. `renewSupervisorCertificate`
+        takes no v2 value.
       x-go-name: StandaloneContractVersion
       schema:
         type: string
@@ -2376,11 +2412,12 @@ components:
         token:
           type: string
           description: >-
-            The token itself, prefixed `garam_ot_`, answered once. garam
-            stores only its hash.
+            The token itself, prefixed `garam_ot_` for an operator and
+            `garam_st_` for a supervisor, answered once. garam stores
+            only its hash.
         grn:
           type: string
-          description: The operator the token authenticates as.
+          description: The operator or the supervisor the token authenticates as.
           example: grn:acme:default:operator:controller
         audience:
           type: string
@@ -2955,8 +2992,10 @@ components:
           pattern: '^garam_at_[0-9a-f]{64}$'
           description: >-
             Under `execution-fence.v2`, the agent's token its assignee
-            minted to be shown to the caller, exactly as the agent
-            presented it (ADR-0100). Required there, and refused under
+            minted to be shown to the caller, or, where the caller is
+            the assignee itself — a standalone host's supervisor — the
+            token it minted for garam, exactly as the agent presented it
+            (ADR-0100). Required there, and refused under
             `execution-fence.v1`.
     Activation:
       type: object
@@ -3109,8 +3148,10 @@ components:
           pattern: '^garam_at_[0-9a-f]{64}$'
           description: >-
             Under `execution-fence.v2`, the agent's token its assignee
-            minted to be shown to the caller, exactly as the agent
-            presented it (ADR-0100). Required there, and refused under
+            minted to be shown to the caller, or, where the caller is
+            the assignee itself — a standalone host's supervisor — the
+            token it minted for garam, exactly as the agent presented it
+            (ADR-0100). Required there, and refused under
             `execution-fence.v1`.
         generation:
           type: [string, 'null']
@@ -3235,7 +3276,7 @@ components:
           description: The `agent:create` reference of this agent's creation.
     StandaloneEnrollmentRequest:
       type: object
-      required: [requestId, supervisorCertificateRequestPem, agentCertificateRequestPem]
+      required: [requestId]
       properties:
         requestId:
           type: string
@@ -3243,18 +3284,25 @@ components:
         supervisorCertificateRequestPem:
           type: string
           maxLength: 4096
-          description: A PKCS#10 request over the supervisor key whose fingerprint was approved.
+          description: >-
+            A PKCS#10 request over the supervisor key whose fingerprint was
+            approved. Required under `standalone-enrollment.v1`, and
+            refused under v2.
         agentCertificateRequestPem:
           type: string
           maxLength: 4096
-          description: A PKCS#10 request over the agent key whose fingerprint was approved.
+          description: >-
+            A PKCS#10 request over the agent key whose fingerprint was
+            approved. Required under `standalone-enrollment.v1`, and
+            refused under v2.
     StandaloneEnrollment:
       type: object
       description: >-
-        What an enrollment issued: both certificates, the authority
-        that signed them and the garam server root the host verifies
-        garam by. It carries no private key.
-      required: [grn, supervisorGrn, epoch, lineage, supervisorCertificatePem, agentCertificatePem, issuerPem, serverRootPem]
+        What an enrollment issued and the garam server root the host
+        verifies garam by: under `standalone-enrollment.v1` both
+        certificates and the authority that signed them, carrying no
+        private key; under v2 the supervisor's credential (ADR-0100).
+      required: [grn, supervisorGrn, epoch, lineage, serverRootPem]
       properties:
         grn:
           type: string
@@ -3269,11 +3317,22 @@ components:
           format: uuid
         supervisorCertificatePem:
           type: string
+          description: Under `standalone-enrollment.v1` alone.
         agentCertificatePem:
           type: string
+          description: Under `standalone-enrollment.v1` alone.
         issuerPem:
           type: string
-          description: The authority that signed both. It is not what garam is verified against (ADR-0040).
+          description: >-
+            The authority that signed both, under
+            `standalone-enrollment.v1` alone. It is not what garam is
+            verified against (ADR-0040).
+        credential:
+          type: string
+          description: >-
+            Under `standalone-enrollment.v2` alone: the supervisor's
+            credential, prefixed `garam_sc_`, answered by this call alone.
+            garam stores only its hash, and a retry re-issues it.
         serverRootPem:
           type: string
           description: The garam server root, which the host verifies garam's listener against (ADR-0040).
@@ -3334,7 +3393,9 @@ components:
       schema:
         type: string
     StandaloneContractVersion:
-      description: The contract version this answer follows, `standalone-enrollment.v1`.
+      description: >-
+        The contract version this answer follows: `standalone-enrollment.v1`
+        or `standalone-enrollment.v2`, as the request named.
       schema:
         type: string
     EnrollmentContractVersion:

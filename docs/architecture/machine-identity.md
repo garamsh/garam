@@ -112,12 +112,13 @@ what compose lacks is the step, not something a container cannot do.
 
 ## Tokens
 
-**Built for an operator and for an agent its operator holds; a
-supervisor presents a certificate until the migration's step G1d.**
-ADR-0100 moves every machine caller from a client certificate to a
-short-lived token it obtains with a credential garam issued, and
-`docs/plans/2026-10-09-machine-identity-migration.md` is the order it
-lands in. What runs now is its steps G1a, G1b and G1c.
+**Built for an operator, an agent and a standalone host's
+supervisor.** ADR-0100 moves every machine caller from a client
+certificate to a short-lived token it obtains with a credential garam
+issued, and `docs/plans/2026-10-09-machine-identity-migration.md` is
+the order it lands in. What runs now is its step G1, the four pull
+requests G1a to G1d; a certificate still authenticates beside a token
+until G3.
 
 - **A request may present a token instead of a certificate**, as
   `Authorization: Garam-Token <token>`. The listener asks `Tokens` for

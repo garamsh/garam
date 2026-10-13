@@ -74,6 +74,28 @@ are on `dev`, and they are released together. A reader therefore
 expects one release and four reviews, each of which can be checked
 against garam's G1 and G2 on its own.
 
+### Two decisions G1d made that ADR-0100 leaves open
+
+ADR-0100 says a v2 enrollment answers a supervisor credential where it
+signed two requests, and says neither what the approval binds then nor
+what a retry answers. The PM decided both on G1d's dispatch, on
+2026-10-10.
+
+- **The approval's keys decide its contract.** An approval binding the
+  host's two key fingerprints is spent under
+  `standalone-enrollment.v1` alone, and one binding neither under
+  `standalone-enrollment.v2` alone; one fingerprint without the other
+  is refused. No field is added, and neither contract can spend the
+  other's approval, because a v2 host presents no key for the
+  fingerprints to prove.
+- **A retry re-issues the credential.** garam stores a credential's
+  hash alone, so it cannot answer a retry with the credential it
+  answered before, as a v1 retry answers the certificates it recorded.
+  An identical v2 retry, while the registration still holds the agent,
+  issues another under the approval's row lock and voids the earlier
+  one with every token exchanged for it. Only the bootstrap secret's
+  holder can retry, and a host that lost the answer is not stuck.
+
 ## Answers to the Operator's questions
 
 The garam-agent-operator PM asked three questions on #1251, each to be

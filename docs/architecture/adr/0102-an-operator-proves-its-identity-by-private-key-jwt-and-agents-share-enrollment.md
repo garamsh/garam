@@ -1,6 +1,6 @@
 # ADR 0102: An operator proves its identity by private_key_jwt and agents share enrollment
 
-> Status: proposed
+> Status: accepted
 > Date: 2026-10-13
 
 Operator authentication and agent enrollment direction for #1353,
@@ -8,8 +8,10 @@ which reserves this number. The owner approved the asymmetric direction
 on 2026-10-13, recorded in
 [the owner's direction](https://github.com/garamsh/garam/issues/1353#issuecomment-6146292449).
 The Garam PM confirmed the initial one-time issued-PEM UX in the
-worker dispatch the same day. Acceptance of
-this record is the PM's; no implementation ships in this change.
+worker dispatch the same day. The PM accepted this target after the
+recovery correction at `c23d87b`, recorded in
+[the acceptance decision](https://github.com/garamsh/garam/issues/1353#issuecomment-6146977963).
+No implementation ships in this change.
 
 ## Context
 
@@ -355,7 +357,7 @@ be built or accepted by this ADR.
 
 ### Supersession and compatibility
 
-On acceptance, ADR-0100 is superseded only for Operator long-lived
+ADR-0100 is superseded only for Operator long-lived
 shared-secret issuance/exchange and its separate target enrollment
 model. Its server TLS, short-lived opaque tokens, audience boundaries,
 refresh overlap, assignment/generation/lineage fences, supervisor

@@ -28,11 +28,12 @@ those revisions alone.
 
 **Asymmetric Operator exchange and common enrollment are unbuilt.**
 [ADR-0102](../architecture/adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)
-is proposed for #1353 following the
-[owner's approved direction](https://github.com/garamsh/garam/issues/1353#issuecomment-6146292449).
+is accepted for #1353 following the
+[owner's approved direction](https://github.com/garamsh/garam/issues/1353#issuecomment-6146292449)
+and [PM acceptance](https://github.com/garamsh/garam/issues/1353#issuecomment-6146977963).
 The accepted ADR-0100's G1 implementation remains available: opaque
 shared-secret exchange and token transport alongside certificates.
-On acceptance ADR-0102 supersedes its Operator long-lived credential
+ADR-0102 supersedes its Operator long-lived credential
 issuance/exchange and separate target enrollment model, not its
 short-lived tokens, server TLS, audiences or fences. ADR-0101's signed
 messages and Garam's signing-private-key custody remain separate.
@@ -91,7 +92,7 @@ not invented tracker numbers or claims implementation has begun.
 
 | Order | Owner and issue | Work and gate |
 |---|---|---|
-| 1 | Garam #1353 | Pair proposed ADR-0102 with affected documents and this plan; PM accepts the profile and custody direction before code |
+| 1 | Garam #1353 | Pair accepted ADR-0102 with affected documents and this plan; acceptance records the profile/custody target, not implementation or merge |
 | 2 | Garam, new asymmetric identity implementation issue | Issue RSA PEM once, store public key only, register key incarnation/state, add `machine-token.v2` on `/oauth/token`, shared replay store, key/token revocation and explicit Bearer alias; preserve every G1 and certificate test |
 | 3 | Garam, new common enrollment implementation issue | Publish `agent-enrollment.v1` wire, approval/admission/refusal forms and public idempotent result; use existing execution lock and scoped authority model for both placements |
 | 4 | Garam #1352 (G2) | Adapter/supervisor token transport, atomic per-request files, v2 control headers; implement direct connector binding without requiring runtime reprovisioning, or split that work into a PM-owned follow-up issue |
@@ -291,8 +292,9 @@ that would fail if the intended check were removed.
 
 - #1353 pairs ADR-0102 and the index with machine identity, operators,
   agents, adapter, messaging, API surface, deployment contract and this
-  existing plan. ADR-0100 body remains frozen; its partial status moves
-  only when the PM accepts the successor. ADR-0101 remains accepted.
+  existing plan. ADR-0100 body remains frozen; its status records
+  partial supersession for Operator long-lived credential issuance/
+  exchange and separate target enrollment only. ADR-0101 stays accepted.
 - Every Garam implementation pairs the affected responsibility sections
   with the current wire/schema and tests. Replace unbuilt descriptions
   with observed state only when that implementation lands.
@@ -303,9 +305,9 @@ that would fail if the intended check were removed.
 
 ## What would stop the plan
 
-- The PM declines or changes ADR-0102's proposed protocol;
-  implementation
-  follows the accepted record, not this draft by inertia.
+- A later owner decision revises ADR-0102's accepted protocol;
+  implementation follows its successor record rather than changing
+  this accepted direction silently.
 - Operator/Sherlock shared-contract review finds a conflicting local
   rule. Present the conflict to the owning PM before implementation.
 - A stock client needs a proprietary assertion format, replay succeeds,

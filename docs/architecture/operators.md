@@ -266,6 +266,48 @@ agent's certificate is not
 this domain's: an agent is admitted to its own by the claim its operator
 made (ADR-0033) and renews on the route ADR-0040 gave it.
 
+## Issued PEM identity
+
+**Unbuilt.** [ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)
+records the replacement target for §Credential and tokens' current
+shared-secret issuance/exchange; the existing registration, identifier,
+permissions and deployed credential paths remain.
+
+- Initial registration issues private PKCS#8 RSA PEM once to the
+  authenticated person, who places it in the Operator cluster. Garam
+  persists only the public verification key and its registration
+  binding. ADR-0102 §Operator identity and custody states the approved
+  issuance UX, exposure, deferred local generation and lost-delivery
+  rule; it never claims Garam did not see the private key.
+- Existing operator_id maps to the canonical operator GRN used as
+  OAuth client_id. Key replacement is `operator:reissue`; a key proves
+  identity and grants no organization permissions. Name/description
+  updates move no key, assignment or authorization.
+- One external/admin writer supplies stable PEM, atomically replaced
+  and reloaded at exchange; `kid` derives from the same key read. The
+  Operator refreshes tokens in memory and never renews/writes that key
+  Secret. Its PM must supersede/pair ADR-0008's certificate renewal
+  writer before cutover; Garam edits no Operator convention or source.
+- The controller and hosted control service each have their own
+  registration, key and one-hour tokens. Both exchange with Garam.
+  Between them the controller presents only an audience-bound token,
+  which the service forwards for §Controller proof. The service asks
+  again for an agent-bound current assignment proof before each
+  decision, after long polls too; it never forwards a private key.
+- ADR-0102 §Assertion exchange profile and §Replay, rotation and
+  revocation define the RS256 assertion, replay/rotation and immediate
+  token revocation requirements. Startup cannot authenticate until the
+  key and server root are installed; an unavailable exchange retries
+  with backoff and fresh assertions, while a definite authentication
+  refusal pauses until the credential/configuration changes.
+- Operator ADR-0068's single authentication mode survives. A new
+  Operator release moves both binaries together only after Garam adds
+  support; Garam's coexistence window is not an Operator fallback.
+
+The public-key registration and new exchange need implementation and
+published API forms; `api/openapi.yaml` §operator and
+`api/machine.yaml` §token still describe the current forms.
+
 ## Credential and tokens
 
 **What is built is the operator's half: its credential, its tokens and

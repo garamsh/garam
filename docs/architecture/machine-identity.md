@@ -110,6 +110,36 @@ owns. The Kubernetes stacks under `deploy/` have that step — an init
 container copies the key material as the UID the listener runs as — so
 what compose lacks is the step, not something a container cannot do.
 
+## Asymmetric Operator exchange
+
+**Unbuilt.** [ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)
+replaces the target Operator shared-secret exchange with signed
+client assertions. The current certificate admission and G1 token
+paths below remain the deployed compatibility cohorts; acceptance of
+the new decision does not make the new exchange available.
+
+- `internal/machine/listener.go` §token admission and
+  `api/machine.yaml` §token are authoritative for current admission.
+  The listener currently reads `Garam-Token`, not OAuth `Bearer`.
+- The new `machine-token.v2` exchange proves the existing operator
+  registration using its bound public key; it issues an opaque token,
+  never treats an assertion as an API credential, and verifies server
+  TLS without a client certificate. ADR-0102 §Assertion exchange
+  profile and §Replay, rotation and revocation define its wire,
+  RSA algorithm, endpoint audience, time bounds and shared replay rule.
+- Token reads must also join the live issuing key and registration
+  incarnation. Revocation ends that key's tokens on the next request
+  on an open connection. Failure to read current state refuses rather
+  than extending authority from a cached proof.
+- The planned `Bearer` alias uses the same token resolver, route
+  confinement and v2 contract selection as `Garam-Token`. It must not
+  fall through to certificate admission when malformed or coexist
+  with a client certificate or another authentication credential.
+- The agent's API token, its execution fence and Sherlock's message
+  issuer verification remain distinct. Common enrollment is
+  [agents.md](./agents.md) §Common managed and direct enrollment;
+  message verification is [messaging.md](./messaging.md).
+
 ## Tokens
 
 **Built for an operator, an agent and a standalone host's

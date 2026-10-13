@@ -4,6 +4,7 @@ What the adapter garam ships must do, and what it rests on to do it.
 
 ## Contents
 - What it is
+- API access after common enrollment
 - The delivery loop
 - Completion
 - Failure and attempts
@@ -49,8 +50,9 @@ and this process keeps running.
 
 **Unbuilt: its token mode.**
 [ADR-0100](./adr/0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
-moves the adapter from the agent's certificate to two short-lived
-tokens, one for garam and one for the control service, each read from
+provides the retained token transport: from the agent's certificate
+to two short-lived tokens, one for garam and one for the control
+service, each read from
 its file per request, with the placement token moved to a
 `Garam-Placement` header under `agent-execution.v2`. An unfenced adapter
 — a `Garam`-source agent of the Operator, which garam-agent-operator ADR
@@ -59,6 +61,42 @@ which its operator mints and refreshes on `mintAgentToken` as for any
 agent it holds ([agents.md](./agents.md) §Tokens in place of
 certificates). It is step G2 of
 `docs/plans/2026-10-09-machine-identity-migration.md`.
+
+## API access after common enrollment
+
+**Unbuilt.** [ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)
+changes G2's target to consume the common enrollment binding; the
+certificate adapter below remains what the current code runs.
+
+- Managed and direct connectors hold agent API access scoped to the
+  current assignee, epoch and lineage; an Operator's long-lived PEM
+  stays with the manager/control service, never this adapter, runtime
+  or workspace. The direct connector can attach to an already-running
+  runtime without provisioning it.
+- Token files remain owner-only, replaced atomically and read per
+  request. Refresh changes access alone, not placement intent or the
+  activation request identifier. Garam/control audiences remain
+  separate; `Garam-Execution`, `Garam-Operation` and `Garam-Placement`
+  retain the v2 meanings ADR-0100 gave them.
+- Activation still waits for lifecycle authority and exclusive writer
+  proof. A definite refusal pauses protected calls and preserves the
+  outbox; unavailability retries with bounded backoff. Runtime status
+  reports and enrollment never activate by themselves.
+- Signed message content/signature travel unchanged to Sherlock, whose
+  trusted issuer configuration and authenticated origin are separate
+  from the agent's Garam API token. Sherlock proposal
+  [#1067](https://github.com/garamsh/sherlock/issues/1067) retains
+  per-caller authorization above the platform; a local ACL needs a
+  separate owner decision and is not a token-mode prerequisite.
+
+`internal/cli/delivery.go` and §Activation and runtime status remain
+authoritative for the current certificate client; #1352 must implement
+the token-facing contract after ADR-0102. Independent direct writer
+proof remains blocked on the owner decision named in
+[agents.md](./agents.md) §Common managed and direct enrollment; an
+attachment lease is only a recommendation, not an accepted mechanism.
+The acceptance sequence is
+in the existing machine-identity migration plan.
 
 ## The delivery loop
 

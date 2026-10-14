@@ -4,14 +4,10 @@ import { CopyId } from "@/components/copy-id";
 import { DescriptionList } from "@/components/description-list";
 import { Time } from "@/components/time";
 import type { HostedOperator } from "@/features/orgs";
+import { controlFailureCopy } from "@/lib/control-refusal-copy";
 import { ExecutionParser, segment } from "@/lib/operation-authority";
 
-import {
-  ControlNotice,
-  NO_FIX,
-  UNAVAILABLE,
-  controlBlocker,
-} from "./control-notice";
+import { ControlNotice, NO_FIX, controlBlocker } from "./control-notice";
 import { useControlRead } from "./use-control-read";
 
 /**
@@ -58,9 +54,7 @@ export function ExecutionPanel({
     return (
       <ControlNotice
         org={org}
-        reason={
-          execution.status === "unavailable" ? UNAVAILABLE : execution.message
-        }
+        reason={controlFailureCopy(execution, "agent:execution-read")}
         fix={NO_FIX}
       />
     );

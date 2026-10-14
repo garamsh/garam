@@ -116,6 +116,28 @@ describe("control service templates", () => {
     expect(within(dialog).getByText("search")).toBeInTheDocument();
   });
 
+  it("says refused template and profile reads in the console's words", async () => {
+    server.use(
+      http.get(`${BASE}/templates`, () => HttpResponse.json({ templates: [] })),
+      http.get(`${BASE}/profiles`, () =>
+        HttpResponse.json(
+          { message: "authority binds another target" },
+          { status: 403 },
+        ),
+      ),
+    );
+    renderPanel();
+
+    expect(
+      await screen.findByText(
+        /^The control service refused this for you: garam no longer authorizes it/,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/authority binds another target/)).toBeNull();
+    // The control: the template read the same panel made was answered.
+    expect(screen.getByText("No template is published.")).toBeInTheDocument();
+  });
+
   it("offers publishing unless the server denies it or the grant lacks it", async () => {
     controlService();
     // The control: granted and not denied, publishing is offered.

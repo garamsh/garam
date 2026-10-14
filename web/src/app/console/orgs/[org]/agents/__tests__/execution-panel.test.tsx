@@ -69,4 +69,25 @@ describe("execution panel", () => {
       }),
     ).toBeInTheDocument();
   });
+
+  it("says a refused read in the console's words, not the control service's", async () => {
+    server.use(
+      http.get(`${ENDPOINT}/v1/orgs/acme/agents/:agent/execution`, () =>
+        HttpResponse.json(
+          { message: "agent has no revision" },
+          { status: 404 },
+        ),
+      ),
+    );
+    render(<ExecutionPanel org="acme" agentGrn={AGENT} hosted={hosted} />, {
+      wrapper: TooltipProvider,
+    });
+
+    expect(
+      await screen.findByText(
+        "The control service holds no revision for this agent, so it has no execution to show. Reload the page to check again.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/agent has no revision/)).toBeNull();
+  });
 });

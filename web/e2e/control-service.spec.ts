@@ -444,7 +444,7 @@ test.describe("control service, as contract tests against the agreed Operator wi
     await publish.click();
     await expect(
       page.getByText(
-        "the model needs an embeddings endpoint with a base URL and a name",
+        "This model needs an embeddings endpoint. Give the embedding's base URL and model name, then try again.",
         { exact: true },
       ),
     ).toBeVisible();

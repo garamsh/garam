@@ -163,4 +163,16 @@ describe("new agent page", () => {
     expect(currentStep()).toHaveTextContent("Control service");
     expect(screen.getByText(REFUSAL_COPY.permissionDenied)).toBeInTheDocument();
   });
+
+  it("lets creating through where the server cannot answer whether it may", async () => {
+    server.use(
+      ...hostedWith(["agent:create", "agent-template:read"]),
+      answerPermissionChecks(() => "unknown"),
+    );
+
+    await renderServerComponent(page());
+
+    expect(currentStep()).toHaveTextContent("Template");
+    expect(screen.queryByText(REFUSAL_COPY.permissionDenied)).toBeNull();
+  });
 });

@@ -228,8 +228,7 @@ export default async function OrgPage({ params }: Params) {
                     tone={signal.tone}
                     label={signal.label}
                     className="tabular-nums"
-                  />
-                  {/* A text node, so "failed in" stays two words when read. */}{" "}
+                  />{" "}
                   <span>in {card.label}</span>
                 </Link>
               </li>

@@ -220,3 +220,27 @@ func TestNewSupervisorTokens_ReadsTheCredentialOwnerOnly(t *testing.T) {
 	_, err = newSupervisorTokens(dir, server.URL, testStandaloneAgent)
 	require.NoError(t, err, "the control: the same file owner-only")
 }
+
+// TestSupervisorTokens_DropsTheAgentTokenGaramRefusedToRenew holds a
+// refused mint to dropping the token held: a refusal is a revocation
+// or a replacement, which refuses that token too, so it is not handed
+// out for the rest of its life. A mint garam did not answer, which
+// keeps the live token, is the control.
+func TestSupervisorTokens_DropsTheAgentTokenGaramRefusedToRenew(t *testing.T) {
+	g := &tokenGaram{life: 400 * time.Millisecond}
+	session := newTokenSession(t, g)
+	first, err := session.Current(context.Background())
+	require.NoError(t, err)
+
+	time.Sleep(310 * time.Millisecond)
+	g.set(func(g *tokenGaram) { g.failMint = true })
+	held, err := session.Current(context.Background())
+	require.NoError(t, err, "the control: an unanswered refresh keeps the live token")
+	assert.Equal(t, first, held)
+
+	g.set(func(g *tokenGaram) { g.failMint, g.refuseMint = false, true })
+	_, err = session.Current(context.Background())
+	assert.True(t, errorx.IsKind(err, errorx.KindUnauthenticated), "%v", err)
+	_, err = session.Current(context.Background())
+	require.Error(t, err, "the refused token is not handed out while it is still live")
+}

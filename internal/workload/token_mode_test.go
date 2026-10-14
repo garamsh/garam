@@ -46,8 +46,8 @@ func agentToken(c string) string { return "garam_at_" + strings.Repeat(c, 64) }
 
 // tokenConfig is the host's configuration in the token mode: no agent
 // certificate, key or issuer, and the agent's token from tokens.
-func (h *host) tokenConfig(tokens workload.AgentTokens) workload.Config {
-	cfg := h.config()
+func (h *host) tokenConfig(tokens workload.AgentTokens, edit ...func(*workload.Desired)) workload.Config {
+	cfg := h.config(edit...)
 	cfg.Adapter.CertificatePEM, cfg.Adapter.KeyPEM, cfg.Adapter.IssuerPEM = nil, nil, nil
 	cfg.Tokens = tokens
 	cfg.TokenCheckInterval = 5 * time.Millisecond
@@ -55,9 +55,9 @@ func (h *host) tokenConfig(tokens workload.AgentTokens) workload.Config {
 }
 
 // startTokens runs the supervisor in the token mode.
-func (h *host) startTokens(tokens workload.AgentTokens) *running {
+func (h *host) startTokens(tokens workload.AgentTokens, edit ...func(*workload.Desired)) *running {
 	h.t.Helper()
-	s, err := workload.NewSupervisor(h.engine, h.garam, h.tokenConfig(tokens))
+	s, err := workload.NewSupervisor(h.engine, h.garam, h.tokenConfig(tokens, edit...))
 	require.NoError(h.t, err)
 	ctx, cancel := context.WithCancel(context.Background())
 	r := &running{cancel: cancel, done: make(chan struct{})}
@@ -275,4 +275,61 @@ func TestNewSupervisor_TakesOneCredentialMode(t *testing.T) {
 	neither.Adapter.IssuerPEM = nil
 	_, err = workload.NewSupervisor(h.engine, h.garam, neither)
 	assert.True(t, errorx.IsKind(err, errorx.KindInvalidArgument), "%v", err)
+}
+
+// controlTokenOf is the control token a generation's adapter was given.
+func (h *host) controlTokenOf(adapter *stubContainer) string {
+	h.engine.mu.Lock()
+	defer h.engine.mu.Unlock()
+	return string(adapter.files["/etc/garam/control-token"].Data)
+}
+
+// TestRun_TokenModeDrawsEachGenerationsControlToken holds the control
+// token to its generation: a replacement draws another, so a token the
+// earlier adapter held is not the next generation's. The same token
+// across a supervisor restart, adopting the same generation, is the
+// control.
+func TestRun_TokenModeDrawsEachGenerationsControlToken(t *testing.T) {
+	h := newHost(t)
+	tokens := &stubTokens{current: agentToken("a")}
+	first := h.startTokens(tokens)
+	runtime, _, adapter := h.serving()
+	firstToken := h.controlTokenOf(adapter)
+	require.NoError(t, first.stop())
+
+	again := h.startTokens(tokens)
+	_, _, adopted := h.serving()
+	assert.Equal(t, firstToken, h.controlTokenOf(adopted), "the control: the same generation keeps its token")
+	require.NoError(t, again.stop())
+
+	h.startTokens(tokens, replace)
+	require.NoError(t, h.engine.await(func() bool { return runtime.status == workload.ContainerExited }))
+	_, _, successor := h.serving()
+	assert.NotEqual(t, firstToken, h.controlTokenOf(successor), "the next generation draws its own")
+	assert.Regexp(t, `^garam_at_[0-9a-f]{64}$`, h.controlTokenOf(successor))
+}
+
+// TestRun_TokenModeDrainsAGenerationTheCertificateModeStarted holds a
+// token-mode supervisor to serving only an intent that holds a control
+// token: a generation the certificate mode started, which holds none,
+// is drained and replaced rather than adopted, so no request is ever
+// compared with an empty token. A certificate-mode restart adopting
+// the same generation is the control.
+func TestRun_TokenModeDrainsAGenerationTheCertificateModeStarted(t *testing.T) {
+	h := newHost(t)
+	first := h.start()
+	runtime, _, _ := h.serving()
+	require.NoError(t, first.stop())
+
+	again := h.start()
+	adopted, _, _ := h.serving()
+	require.Same(t, runtime, adopted, "the control: the same mode adopts its generation")
+	require.NoError(t, again.stop())
+
+	h.startTokens(&stubTokens{current: agentToken("a")})
+	require.NoError(t, h.engine.await(func() bool { return runtime.status == workload.ContainerExited }),
+		"the certificate mode's generation is drained")
+	successor, _, adapter := h.serving()
+	assert.NotSame(t, runtime, successor)
+	assert.Regexp(t, `^garam_at_[0-9a-f]{64}$`, h.controlTokenOf(adapter), "and its successor holds a control token")
 }

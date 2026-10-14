@@ -69,7 +69,7 @@ it.
 | Setting | Holds | Where it is set |
 |---|---|---|
 | `GARAM_ADAPTER_TOKEN_FILE` | The agent token garam accepts: minted with no audience | Every token-mode adapter; it selects the mode |
-| `GARAM_ADAPTER_CONTROL_TOKEN_FILE` | The agent token the lifecycle authority accepts: minted with the control service as its audience | A fenced token-mode adapter, beside the three control settings |
+| `GARAM_ADAPTER_CONTROL_TOKEN_FILE` | The token the lifecycle authority accepts: on a managed agent, an agent token minted with the control service as its audience; on a standalone host, the token the supervisor draws for the generation, which garam never issued ([agents.md](./agents.md) §The host's runner) | A fenced token-mode adapter, beside the three control settings |
 | `GARAM_ADAPTER_SERVER_ROOT_FILE` | The garam server root `mintAgentToken` answers as `serverRootPem` | Every adapter |
 | `GARAM_ADAPTER_CONTROL_ROOT_FILE` | The root the control service's serving certificate chains to | A fenced adapter, as in the certificate mode |
 
@@ -87,7 +87,8 @@ it.
   ([agents.md](./agents.md) §Tokens in place of certificates).
 - **The file format is the token alone**: `garam_at_` and 64 lowercase
   hex characters, which `api/machine.yaml` spells for `AgentToken`.
-  Whitespace around it — a trailing newline — is ignored, and at most
+  Carriage returns and newlines after it are ignored; any other
+  whitespace, leading or inner, makes the file not a token. At most
   1 KiB is read. The writer keeps each file readable by the adapter's
   account alone; the adapter does not check the mode.
 - **Each file is read before every call to its peer and never held.**

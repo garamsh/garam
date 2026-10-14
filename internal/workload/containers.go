@@ -10,7 +10,10 @@ import (
 
 // recover settles the intent the record holds: one still running what
 // is desired is answered to be supervised again; one that ended, was
-// draining, runs something else, or is to be replaced is drained.
+// draining, runs something else, or is to be replaced is drained. An
+// intent the other credential mode wrote runs something else: a
+// token-mode supervisor serves only an intent holding a control token,
+// so none is ever compared with an empty one (ADR-0100).
 func (s *Supervisor) recover(ctx context.Context, replace bool) (*intent, error) {
 	in := s.st.Intent
 	if in == nil || in.Phase == phaseEnded {
@@ -22,7 +25,9 @@ func (s *Supervisor) recover(ctx context.Context, replace bool) (*intent, error)
 			return nil, err
 		}
 		d := s.cfg.Desired
-		if !over && !replace && !d.Replace && in.Revision == d.Revision && in.Epoch == d.Epoch && in.Images == d.Images {
+		sameMode := (s.cfg.Tokens != nil) == (in.ControlToken != "")
+		if !over && !replace && !d.Replace && sameMode &&
+			in.Revision == d.Revision && in.Epoch == d.Epoch && in.Images == d.Images {
 			return in, nil
 		}
 	}

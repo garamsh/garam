@@ -38,10 +38,11 @@ func NewTokenFile(path string) (*TokenFile, error) {
 	return &TokenFile{path: path}, nil
 }
 
-// Read answers the token the file holds now. A file that is missing,
-// or holds anything but one whole token, is KindUnavailable: a writer
-// that does not rename may be part way through, and the next read is
-// the retry.
+// Read answers the token the file holds now, less the carriage
+// returns and newlines that end it. A file that is missing, or holds
+// anything else but one whole token — leading or inner whitespace
+// included — is KindUnavailable: a writer that does not rename may be
+// part way through, and the next read is the retry.
 func (f *TokenFile) Read() (string, error) {
 	file, err := os.Open(f.path)
 	if err != nil {
@@ -52,7 +53,7 @@ func (f *TokenFile) Read() (string, error) {
 	if err != nil {
 		return "", errorx.Wrap(err, "delivery: token file", errorx.KindUnavailable)
 	}
-	token := strings.TrimSpace(string(raw))
+	token := strings.TrimRight(string(raw), "\r\n")
 	if len(raw) > maxTokenFile || !agentToken.MatchString(token) {
 		return "", errorx.New(errorx.KindUnavailable, "delivery: "+f.path+" does not hold one whole agent token")
 	}

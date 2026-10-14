@@ -162,8 +162,7 @@ func (s *Supervisor) caller(w http.ResponseWriter, r *http.Request, in *intent) 
 	}
 	if s.cfg.Tokens != nil {
 		token, ok := strings.CutPrefix(r.Header.Get("Authorization"), tokenScheme+" ")
-		if !ok || in.ControlToken == "" ||
-			subtle.ConstantTimeCompare([]byte(token), []byte(in.ControlToken)) != 1 {
+		if !ok || subtle.ConstantTimeCompare([]byte(token), []byte(in.ControlToken)) != 1 {
 			refuse(w, http.StatusUnauthorized, "unauthenticated", "the generation's control token is required")
 			return nil, false
 		}

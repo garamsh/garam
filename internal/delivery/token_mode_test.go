@@ -52,7 +52,12 @@ func TestTokenFile_ReadsTheTokenTheFileHoldsAtEachRead(t *testing.T) {
 
 	got, err := f.Read()
 	require.NoError(t, err)
-	assert.Equal(t, first, got, "the whitespace a mounted Secret ends in is not the token's")
+	assert.Equal(t, first, got, "the trailing newline a mounted Secret ends in is not the token's")
+	writeToken(t, path, first+"\r\n")
+	got, err = f.Read()
+	require.NoError(t, err)
+	assert.Equal(t, first, got, "nor a carriage return before it")
+	writeToken(t, path, first+"\n")
 	authorization, err := f.Authorization()
 	require.NoError(t, err)
 	assert.Equal(t, "Garam-Token "+first, authorization)
@@ -75,6 +80,8 @@ func TestTokenFile_ReadsTheTokenTheFileHoldsAtEachRead(t *testing.T) {
 		"part way written":   func() { writeToken(t, path, first[:20]) },
 		"another kind":       func() { writeToken(t, path, "garam_st_"+strings.Repeat("a", 64)) },
 		"two tokens":         func() { writeToken(t, path, first+"\n"+second) },
+		"a leading space":    func() { writeToken(t, path, " "+first) },
+		"a trailing space":   func() { writeToken(t, path, first+" \n") },
 		"past the read size": func() { writeToken(t, path, first+strings.Repeat(" ", 2048)) },
 	}
 	for name, spoil := range unreadable {
@@ -186,6 +193,32 @@ func TestHTTPQueue_TokenModeReadsARefusedTokenAsUndecided(t *testing.T) {
 	require.ErrorIs(t, err, delivery.ErrFenced, "the control: a certificate refused is the fence")
 	_, err = certificateExecution.Present()
 	assert.ErrorIs(t, err, delivery.ErrInactive)
+}
+
+// TestHTTPQueue_TokenModeReadsAForbiddenCallAsTheFence holds the token
+// mode's undecided reading to a 401 alone: a 403 is garam refusing
+// what the call presented beside a token it accepted, which is the
+// fence, and closes the execution as in the certificate mode. A 401 on
+// the same queue, which leaves the execution open, is the control.
+func TestHTTPQueue_TokenModeReadsAForbiddenCallAsTheFence(t *testing.T) {
+	f, _ := tokenFile(t, agentTokenOf("a"))
+	for status, fenced := range map[int]bool{http.StatusForbidden: true, http.StatusUnauthorized: false} {
+		g := &recordingGaram{answer: status}
+		server := httptest.NewServer(http.HandlerFunc(g.serve))
+		t.Cleanup(server.Close)
+		execution := delivery.NewLegacyExecution()
+		queue, err := delivery.NewHTTPQueue(server.Client(), server.URL, agentGRN(), execution, f)
+		require.NoError(t, err)
+		_, err = queue.Claim(context.Background())
+		_, presentErr := execution.Present()
+		if fenced {
+			require.ErrorIs(t, err, delivery.ErrFenced, "a 403 is the fence")
+			assert.ErrorIs(t, presentErr, delivery.ErrInactive, "and closes the execution")
+			continue
+		}
+		require.ErrorIs(t, err, delivery.ErrTokenRefused, "the control: a 401 is undecided")
+		assert.NoError(t, presentErr)
+	}
 }
 
 // TestHTTPAuthority_TokenModeCallsUnderAgentExecutionV2 covers the
@@ -409,16 +442,18 @@ func TestRun_FencedTokenModeKeepsItsTwoTokensApart(t *testing.T) {
 
 // TestRun_ARewrittenTokenReasksAPausedActivation is the token mode's
 // re-arming: a definite refusal pauses, no timer asks again, and a
-// rewritten token file asks once more — which is how an adapter learns
-// of the new lineage an agent:recover opened. The authority's answer
-// decides: after a recovery it activates, and where the fence stands
-// the pause holds and nothing more is asked.
+// rewritten token file asks once more. The authority's answer decides:
+// where it activates protected work resumes, and where it refuses the
+// pause holds and nothing more is asked. Against garam, the re-ask of
+// the same generation after an agent:recover is the refusal, and the
+// next generation resumes (adapter.md §Token mode,
+// TestAdapterTokenMode_ARecoveryIsResumedByTheNextGeneration).
 func TestRun_ARewrittenTokenReasksAPausedActivation(t *testing.T) {
 	for name, after := range map[string]struct {
 		answer  error
 		resumes bool
 	}{
-		"a recovery's token is activated": {answer: nil, resumes: true},
+		"an authority that answers activates": {answer: nil, resumes: true},
 		"a standing fence is refused again": {
 			answer: errorx.New(errorx.KindFailedPrecondition, "control refused 409 epoch_superseded"), resumes: false,
 		},

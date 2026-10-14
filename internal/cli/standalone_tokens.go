@@ -91,9 +91,11 @@ func newSupervisorTokens(dir, base string, agentGRN grn.GRN) (*supervisorTokens,
 }
 
 // Current answers the agent's garam token, minting the next once the
-// one held is inside its refresh window. A mint that fails while the
-// one held is still live answers that one, and the next call tries
-// again.
+// one held is inside its refresh window. A mint garam did not answer,
+// while the one held is still live, answers that one, and the next call
+// tries again. A mint garam refused drops the one held: what refused
+// the supervisor is a revocation or a replacement, which refuses that
+// token too, so it is not handed out until it expires.
 func (s *supervisorTokens) Current(ctx context.Context) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -103,6 +105,10 @@ func (s *supervisorTokens) Current(ctx context.Context) (string, error) {
 	}
 	minted, err := s.mint(ctx)
 	if err != nil {
+		if !errorx.IsKind(err, errorx.KindUnavailable) {
+			s.agentToken = heldToken{}
+			return "", err
+		}
 		if s.agentToken.live(now) {
 			slog.Warn("agent token not refreshed; the held one is still live", slog.String("error", err.Error()))
 			return s.agentToken.value, nil

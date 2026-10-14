@@ -116,9 +116,10 @@ organization's identifier and name, the role and whether the
 invitation is pending, accepted or expired, which is what accepting
 it would reveal, and nothing about who invited or who belongs. An
 unknown token, and one whose organization is gone, answer the
-not-found body the accept operation answers. The request line names
-the route pattern rather than the path, so the token does not reach
-the log.
+not-found body the accept operation answers. The request line, and
+the `url.path` of the request's trace span, name the route pattern
+rather than the path, so the token reaches neither the log nor an
+exported span.
 
 **Machine.** A client certificate whose SAN URI holds the caller's GRN
 and nothing else — no roles and no claims

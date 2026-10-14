@@ -195,8 +195,18 @@ sent to `/login` with the path as its `next` parameter, which
 `/login` and `/register` carry between them and return to once a
 session exists, so the token survives either way in
 (`web/src/lib/return-path.ts`, which returns only to a console path).
-The Google round trip carries no return path and lands on the
-console.
+A session the backend rejects behind a cookie the browser still holds
+is sent the same way: `web/src/proxy.ts` stamps each console request
+with its path, and the redirect reads it back. The Google round trip
+carries no return path and lands on the console.
+
+Where the token may appear is fixed:
+
+- **In three same-origin URLs only:** the invitation link, and
+  `/login?next=…` and `/register?next=…`. All three are served with
+  `referrer: no-referrer`, and a link carrying one does not prefetch.
+- **Nowhere else:** in no redirect to another origin, in no client
+  storage, and in no other URL.
 
 No organization, group, project or user is addressed by its GRN
 anywhere in the interface. A policy document is authored text naming

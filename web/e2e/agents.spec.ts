@@ -1,3 +1,4 @@
+import { expectHydrated } from "./axe";
 import { expect, test } from "./fixtures";
 import {
   seedArchivedTemplate,
@@ -104,11 +105,16 @@ test.describe("named agents", () => {
     // membership is its GRN, minted with the definition.
     const team = `/console/orgs/${signedIn.orgSlug}/teams/engineering`;
     await page.goto(team);
-    const choice = page.getByLabel("Person or agent", { exact: true });
-    await expect(choice).toBeEnabled();
-    await choice.selectOption({
-      label: `Ranger (${identifier}) · awaiting operator · Agent`,
-    });
+    await expectHydrated(page);
+    await page
+      .getByRole("combobox", { name: "Person or agent", exact: true })
+      .click();
+    await page
+      .getByRole("option", {
+        name: `Ranger ${identifier} · awaiting operator`,
+        exact: true,
+      })
+      .click();
     await page
       .getByRole("button", { name: "Add to team", exact: true })
       .click();

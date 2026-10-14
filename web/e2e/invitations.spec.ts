@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
 
+import { expectHydrated } from "./axe";
 import { expect, test } from "./fixtures";
 import { seedExpiredSession, seedSignedInOrg, seedSignedInUser } from "./seed";
 
@@ -86,7 +87,7 @@ test.describe("organization mutations", () => {
     // cells, and the assertion asks which role one of them shows.
     await expect(
       page.getByRole("row", { name: invitee.userSlug }),
-    ).toContainText("member");
+    ).toContainText("Member");
 
     await inviteeContext.close();
   });
@@ -309,10 +310,16 @@ test.describe("organization mutations", () => {
  */
 async function createInvitationLink(page: Page, orgSlug: string) {
   await page.goto(`/console/orgs/${orgSlug}/people`);
-  await page.getByLabel("Role").selectOption("member");
-  await page.getByRole("button", { name: "Create invitation" }).click();
+  await expectHydrated(page);
+  await page.getByRole("button", { name: "Invite people" }).click();
+  const dialog = page.getByRole("dialog", { name: "Invite a person" });
+  await dialog.getByRole("combobox", { name: "Role" }).click();
+  await page.getByRole("option", { name: "Member", exact: true }).click();
+  await dialog.getByRole("button", { name: "Create invitation" }).click();
 
-  const linkField = page.getByLabel("Invitation link");
-  await expect(linkField).toBeVisible();
-  return linkField.inputValue();
+  const link = page
+    .getByRole("alertdialog", { name: "Invitation link" })
+    .locator("pre");
+  await expect(link).toBeVisible();
+  return (await link.textContent()) ?? "";
 }

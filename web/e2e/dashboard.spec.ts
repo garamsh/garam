@@ -91,7 +91,7 @@ test.describe("signed in", () => {
     // cells, and the assertion asks which role one of them shows.
     await expect(
       page.getByRole("row", { name: signedIn.userSlug }),
-    ).toContainText("owner");
+    ).toContainText("Owner");
 
     await expect(breadcrumb).toContainText("People");
     await expect(

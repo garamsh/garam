@@ -1,5 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
@@ -19,12 +19,55 @@ vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 const MEMBERS = `${API_URL}/orgs/acme/groups/eng/members`;
 
 const candidates: Candidate[] = [
-  { grn: alice.grn, kind: "person", label: "Alice" },
-  { grn: reportedAgent.grn, kind: "agent", label: "field-agent" },
+  { grn: alice.grn, kind: "person", name: "Alice", identifier: "alice" },
+  {
+    grn: reportedAgent.grn,
+    kind: "agent",
+    name: "field-agent",
+    identifier: "fa01",
+  },
 ];
 
+/**
+ * Opens the choice and picks the option whose name starts with `name`.
+ * Presence: an option's name goes on to carry the identifier.
+ */
+async function choose(user: UserEvent, name: string) {
+  await user.click(screen.getByRole("combobox", { name: "Person or agent" }));
+  await user.click(
+    await screen.findByRole("option", { name: new RegExp(`^${name} `) }),
+  );
+}
+
+function renderForm(props: Partial<Parameters<typeof AddTeamMemberForm>[0]>) {
+  return render(
+    <AddTeamMemberForm
+      org="acme"
+      team="eng"
+      candidates={candidates}
+      unlisted={[]}
+      {...props}
+    />,
+  );
+}
+
 describe("add team member form", () => {
-  it("posts the one chosen, picked by name and type", async () => {
+  it("offers people and agents under their type, each with its identifier", async () => {
+    const user = userEvent.setup();
+    renderForm({});
+
+    await user.click(screen.getByRole("combobox", { name: "Person or agent" }));
+
+    expect(
+      (await screen.findAllByRole("option")).map(
+        (option) => option.textContent,
+      ),
+    ).toEqual(["Alice alice", "field-agent fa01"]);
+    expect(screen.getByRole("group", { name: "People" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Agents" })).toBeInTheDocument();
+  });
+
+  it("posts the one chosen, says whom it added and goes back to the prompt", async () => {
     const posted: unknown[] = [];
     server.use(
       http.post(MEMBERS, async ({ request }) => {
@@ -33,81 +76,91 @@ describe("add team member form", () => {
       }),
     );
     const user = userEvent.setup();
-    render(
-      <AddTeamMemberForm
-        org="acme"
-        team="eng"
-        candidates={candidates}
-        unlisted={[]}
-      />,
-    );
+    renderForm({});
 
-    await user.selectOptions(
-      screen.getByLabelText("Person or agent"),
-      "field-agent · Agent",
-    );
+    await choose(user, "field-agent");
     await user.click(screen.getByRole("button", { name: "Add to team" }));
 
-    await vi.waitFor(() =>
-      expect(posted).toEqual([{ memberGrn: reportedAgent.grn }]),
+    // The status line is always there, empty until the action answers,
+    // so the wait is on what it says.
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "Added field-agent.",
+      ),
     );
+    expect(posted).toEqual([{ memberGrn: reportedAgent.grn }]);
+    // The choice goes back to the prompt even while the member is still
+    // offered, as it is here with no page to refresh the list.
+    expect(
+      screen.getByRole("combobox", { name: "Person or agent" }),
+    ).toHaveTextContent("Choose who to add");
   });
 
-  it("shows a failed addition rather than treating it as done", async () => {
+  it("says a choice is needed when sent without one", async () => {
+    const posted: unknown[] = [];
+    server.use(
+      http.post(MEMBERS, async ({ request }) => {
+        posted.push(await request.json());
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    const user = userEvent.setup();
+    renderForm({});
+
+    // The button is live before a choice, as it is before hydration.
+    await user.click(screen.getByRole("button", { name: "Add to team" }));
+
+    const choice = screen.getByRole("combobox", { name: "Person or agent" });
+    await waitFor(() => expect(choice).toHaveAttribute("aria-invalid", "true"));
+    expect(choice).toHaveAccessibleDescription(
+      "Choose a person or an agent to add.",
+    );
+    expect(posted).toEqual([]);
+    expect(screen.getByRole("status")).toHaveTextContent("");
+  });
+
+  it("attaches a refusal to the choice and sends the same choice again", async () => {
     let refusing = true;
     const posted: unknown[] = [];
     server.use(
       http.post(MEMBERS, async ({ request }) => {
-        if (refusing) {
-          return HttpResponse.json(
-            { kind: "permission_denied", message: "permission denied" },
-            { status: 403 },
-          );
-        }
         posted.push(await request.json());
-        return new HttpResponse(null, { status: 204 });
+        return refusing
+          ? HttpResponse.json(
+              { kind: "permission_denied", message: "permission denied" },
+              { status: 403 },
+            )
+          : new HttpResponse(null, { status: 204 });
       }),
     );
     const user = userEvent.setup();
-    render(
-      <AddTeamMemberForm
-        org="acme"
-        team="eng"
-        candidates={candidates}
-        unlisted={[]}
-      />,
-    );
+    renderForm({});
 
-    await user.selectOptions(
-      screen.getByLabelText("Person or agent"),
-      "Alice · Person",
-    );
+    // Not the first offered, so a reset to it would show as well as a
+    // reset to the prompt.
+    await choose(user, "field-agent");
     await user.click(screen.getByRole("button", { name: "Add to team" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      REFUSAL_COPY.permissionDenied,
-    );
+    const choice = screen.getByRole("combobox", { name: "Person or agent" });
+    await waitFor(() => expect(choice).toHaveAttribute("aria-invalid", "true"));
+    expect(choice).toHaveAccessibleDescription(REFUSAL_COPY.permissionDenied);
+    // Presence: the trigger shows the option's name and identifier.
+    expect(choice).toHaveTextContent(/^field-agent/);
+    expect(screen.getByRole("status")).toHaveTextContent("");
 
-    // The control: the same choice garam accepts is added and the
-    // refusal clears.
+    // The control: submitted again untouched, garam accepts the same
+    // choice and the error clears.
     refusing = false;
-    await user.selectOptions(
-      screen.getByLabelText("Person or agent"),
-      "Alice · Person",
-    );
     await user.click(screen.getByRole("button", { name: "Add to team" }));
-    // The refusal stays until the action answers, so its going is the
-    // answer rendered; the request is recorded before that.
-    await waitFor(() =>
-      expect(screen.queryByText("permission denied")).not.toBeInTheDocument(),
-    );
-    expect(posted).toEqual([{ memberGrn: alice.grn }]);
+    await waitFor(() => expect(choice).not.toHaveAttribute("aria-invalid"));
+    expect(posted).toEqual([
+      { memberGrn: reportedAgent.grn },
+      { memberGrn: reportedAgent.grn },
+    ]);
   });
 
   it("says there is no one left to add instead of an empty choice", () => {
-    render(
-      <AddTeamMemberForm org="acme" team="eng" candidates={[]} unlisted={[]} />,
-    );
+    renderForm({ candidates: [] });
 
     expect(
       screen.getByText(
@@ -118,14 +171,7 @@ describe("add team member form", () => {
   });
 
   it("says which lists were refused rather than claiming no one is left", () => {
-    render(
-      <AddTeamMemberForm
-        org="acme"
-        team="eng"
-        candidates={[]}
-        unlisted={["agents"]}
-      />,
-    );
+    renderForm({ candidates: [], unlisted: ["agents"] });
 
     expect(
       screen.getByText(
@@ -140,43 +186,5 @@ describe("add team member form", () => {
         "Every person and agent of this organization is already in this team.",
       ),
     ).not.toBeInTheDocument();
-  });
-
-  it("keeps the member chosen when garam refuses the addition", async () => {
-    const posted: unknown[] = [];
-    server.use(
-      http.post(MEMBERS, async ({ request }) => {
-        posted.push(await request.json());
-        return HttpResponse.json(
-          { kind: "permission_denied", message: "permission denied" },
-          { status: 403 },
-        );
-      }),
-    );
-    const user = userEvent.setup();
-    render(
-      <AddTeamMemberForm
-        org="acme"
-        team="eng"
-        candidates={candidates}
-        unlisted={[]}
-      />,
-    );
-
-    // Not the first offered, so a reset to it would show as well as a
-    // reset to the prompt.
-    await user.selectOptions(
-      screen.getByLabelText("Person or agent"),
-      "field-agent · Agent",
-    );
-    await user.click(screen.getByRole("button", { name: "Add to team" }));
-
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      REFUSAL_COPY.permissionDenied,
-    );
-    expect(posted).toEqual([{ memberGrn: reportedAgent.grn }]);
-    expect(screen.getByLabelText("Person or agent")).toHaveValue(
-      reportedAgent.grn,
-    );
   });
 });

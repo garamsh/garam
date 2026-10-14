@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 
 import type { Browser, Page } from "@playwright/test";
 
+import { expectHydrated } from "./axe";
 import { expect, test } from "./fixtures";
 
 /**
@@ -18,11 +19,18 @@ function newPassword(): string {
  */
 async function invitationToken(page: Page, orgSlug: string): Promise<string> {
   await page.goto(`/console/orgs/${orgSlug}/people`);
-  await page.getByRole("button", { name: "Create invitation" }).click();
+  await expectHydrated(page);
+  await page.getByRole("button", { name: "Invite people" }).click();
+  const dialog = page.getByRole("dialog", { name: "Invite a person" });
+  await dialog.getByRole("combobox", { name: "Role" }).click();
+  await page.getByRole("option", { name: "Member", exact: true }).click();
+  await dialog.getByRole("button", { name: "Create invitation" }).click();
 
-  const link = page.getByLabel("Invitation link");
+  const link = page
+    .getByRole("alertdialog", { name: "Invitation link" })
+    .locator("pre");
   await expect(link).toBeVisible();
-  const token = (await link.inputValue()).split("/").pop() ?? "";
+  const token = ((await link.textContent()) ?? "").split("/").pop() ?? "";
   expect(token).not.toBe("");
   return token;
 }

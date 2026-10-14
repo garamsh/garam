@@ -1,26 +1,20 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Poppins } from "next/font/google";
-import "./globals.css";
+import { Geist_Mono } from "next/font/google";
+// Pretendard is the one UI face. Its dynamic-subset build binds each
+// of its files to a unicode-range, which next/font/local cannot
+// express, so the package's own stylesheet is imported and the bundler
+// self-hosts the files it names: a page loads only the subsets its
+// text needs.
+import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 
-// `--font-sans`, `--font-geist-mono` and `--font-poppins` are the
-// variables the theme block in globals.css reads.
-const geistSans = Geist({
-  variable: "--font-sans",
-  subsets: ["latin"],
-});
+import { THEME_SCRIPT } from "@/lib/theme";
+import "@/styles/globals.css";
 
+// `--font-geist-mono` is the variable the theme block in globals.css
+// reads for `font-mono`.
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
-});
-
-// The brand face, per the logo kit. The wordmark is SemiBold; Medium is
-// the other weight `font-heading` is asked for, and an undeclared weight
-// resolves to the nearest declared one.
-const poppins = Poppins({
-  variable: "--font-poppins",
-  subsets: ["latin"],
-  weight: ["500", "600"],
 });
 
 /** Head metadata for every route that does not set its own. */
@@ -29,7 +23,11 @@ export const metadata: Metadata = {
   description: "Identity, organization, and authorization for shared work.",
 };
 
-/** The document itself: the root layout owns `<html>` and `<body>`. */
+/**
+ * The document itself: the root layout owns `<html>` and `<body>`. The
+ * theme script sets a class on `<html>` before React hydrates it, which
+ * is the one attribute difference `suppressHydrationWarning` admits.
+ */
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -38,9 +36,13 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${poppins.variable} h-full antialiased`}
+      className={`${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
+      <body className="flex min-h-full flex-col">{children}</body>
     </html>
   );
 }

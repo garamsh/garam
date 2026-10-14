@@ -151,7 +151,7 @@ export function CreateFromTemplate({
           name="template"
           value={templateChoice ?? published[0]?.name ?? ""}
           onChange={(event) => setTemplateChoice(event.target.value)}
-          className="h-9 max-w-sm rounded-md border bg-transparent px-3 text-sm"
+          className="max-w-sm"
         >
           {published.map((t) => (
             <option key={t.name} value={t.name}>
@@ -167,7 +167,7 @@ export function CreateFromTemplate({
           name="controller"
           value={controllerChoice ?? delegated[0] ?? ""}
           onChange={(event) => setControllerChoice(event.target.value)}
-          className="h-9 max-w-sm rounded-md border bg-transparent px-3 text-sm"
+          className="max-w-sm"
         >
           {delegated.map((c) => (
             <option key={c} value={c}>

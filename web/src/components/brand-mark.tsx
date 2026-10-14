@@ -27,8 +27,6 @@ export function BrandMark({ className }: { className?: string }) {
           d="M4 0H96A4 4 0 0 1 100 4V96A4 4 0 0 1 96 100H4A4 4 0 0 1 0 96V4A4 4 0 0 1 4 0ZM17 15H45V29H17ZM45 15H59V85H45ZM17 71H45V85H17ZM59 43H87V57H59Z"
         />
       </svg>
-      {/* Poppins' ascent less its descent is its cap height, so the
-          centred line box centres the caps on the icon. */}
       <span className="font-heading text-[0.7143em] leading-none font-semibold tracking-[0.02em]">
         GARAM
       </span>

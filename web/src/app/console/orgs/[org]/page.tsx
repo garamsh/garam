@@ -140,7 +140,7 @@ export default async function OrgPage({ params }: Params) {
                   {card.count}
                 </CardTitle>
                 {card.attention.length > 0 && (
-                  <p className="text-sm text-destructive">
+                  <p className="text-sm text-destructive tabular-nums">
                     {card.attention.join(" · ")}
                   </p>
                 )}

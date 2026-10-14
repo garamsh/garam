@@ -26,6 +26,20 @@ vi.mock("@/app/console/_components/console-breadcrumb", () => ({
   },
 }));
 
+vi.mock("@/app/console/_components/console-command", () => ({
+  ConsoleCommand: () => {
+    if (shell.pending) throw shell.pending;
+    return <p>Command palette</p>;
+  },
+}));
+
+// The palette's fallback is the client component itself, which reads
+// the router.
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/console/orgs",
+  useRouter: () => ({ push: () => {} }),
+}));
+
 // The provider's own read is a Server Component too; its seeding is
 // covered in console-sidebar-provider.test.tsx.
 vi.mock("@/app/console/_components/console-sidebar-provider", () => ({
@@ -58,6 +72,7 @@ describe("console layout", () => {
     );
     expect(screen.getByText("Sidebar loading")).toBeInTheDocument();
     expect(screen.queryByText("Breadcrumb")).not.toBeInTheDocument();
+    expect(screen.queryByText("Command palette")).not.toBeInTheDocument();
 
     await act(async () => {
       shell.pending = undefined;
@@ -65,6 +80,7 @@ describe("console layout", () => {
     });
     expect(screen.getByText("Sidebar")).toBeInTheDocument();
     expect(screen.getByText("Breadcrumb")).toBeInTheDocument();
+    expect(screen.getByText("Command palette")).toBeInTheDocument();
   });
 
   it("offers the sidebar trigger on every route", () => {

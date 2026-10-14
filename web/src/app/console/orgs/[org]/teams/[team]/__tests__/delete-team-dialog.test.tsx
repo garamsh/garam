@@ -106,4 +106,29 @@ describe("delete team dialog", () => {
       await screen.findByText("NEXT_REDIRECT:/console/orgs/acme/teams"),
     ).toBeInTheDocument();
   });
+  it("drops a refusal once the dialog closes", async () => {
+    server.use(
+      http.delete(GROUP, () =>
+        HttpResponse.json(
+          { kind: "permission_denied", message: "permission denied" },
+          { status: 403 },
+        ),
+      ),
+    );
+    const user = userEvent.setup();
+    renderDialog();
+
+    await user.click(screen.getByRole("button", { name: "Delete team" }));
+    await user.click(screen.getByRole("button", { name: "Delete team" }));
+    // The control: the refusal is shown in the dialog that asked.
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      REFUSAL_COPY.permissionDenied,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    await user.click(screen.getByRole("button", { name: "Delete team" }));
+
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
 });

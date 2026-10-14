@@ -118,4 +118,33 @@ describe("remove team member dialog", () => {
     );
     expect(removed).toHaveLength(1);
   });
+  it("drops a refusal once the dialog closes", async () => {
+    server.use(
+      http.delete(MEMBER, () =>
+        HttpResponse.json(
+          { kind: "permission_denied", message: "permission denied" },
+          { status: 403 },
+        ),
+      ),
+    );
+    const user = userEvent.setup();
+    renderDialog();
+
+    await user.click(
+      screen.getByRole("button", { name: "Remove Alice from Engineering" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Remove from team" }));
+    // The control: the refusal is shown in the dialog that asked.
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      REFUSAL_COPY.permissionDenied,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    await user.click(
+      screen.getByRole("button", { name: "Remove Alice from Engineering" }),
+    );
+
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
 });

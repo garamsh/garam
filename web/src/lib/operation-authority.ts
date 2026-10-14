@@ -33,7 +33,8 @@ export type ControlOperation =
   | "agent-template:read"
   | "agent-template:publish"
   | "execution-profile:read"
-  | "agent:execution-read";
+  | "agent:execution-read"
+  | "operator:read";
 
 /** What a mint needs, as the Server Action takes it. */
 export type MintInput = {

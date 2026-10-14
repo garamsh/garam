@@ -317,3 +317,28 @@ func TestCheckPermissions_AMissingResourceAnswersAsADeniedOne(t *testing.T) {
 		assert.Equal(t, apigen.DecisionDeny, r.Decision, "%s on %s", r.Action, r.Resource.Id)
 	}
 }
+
+// TestCheckPermissions_DecidesOperatorReadByCheck pins operator:read as
+// an action Check decides, though a console may also hand a hosted
+// operator an authority for it (#1374): garam's own operator reads are
+// enforced by Check alone, as agent-template:read's are, and a mint
+// the grant does not cover is refused at the mint. The engine allowing
+// the read and then refusing it are both answered as decided.
+func TestCheckPermissions_DecidesOperatorReadByCheck(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	allowed := true
+	f.evaluator.EXPECT().Evaluate(mock.Anything, mock.Anything).
+		RunAndReturn(func(context.Context, api.EvalInput) (bool, error) { return allowed, nil })
+	ask := func() apigen.PermissionDecision {
+		rec := f.do(t, "POST", "/orgs/"+slug+"/permission-checks",
+			checksBody(t, apigen.PermissionCheck{Action: org.ActionOperatorRead}), owner)
+		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+		return decodeBody[apigen.PermissionCheckAnswer](t, rec).Results[0].Decision
+	}
+
+	assert.Equal(t, apigen.DecisionAllow, ask())
+	allowed = false
+	assert.Equal(t, apigen.DecisionDeny, ask())
+}

@@ -27,6 +27,7 @@ const Schema = z.object({
     "agent-template:publish",
     "execution-profile:read",
     "agent:execution-read",
+    "operator:read",
   ]),
   target: z.string().min(1),
   requestId: z.string().min(1),

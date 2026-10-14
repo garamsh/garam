@@ -3091,7 +3091,7 @@ components:
           type: string
         operation:
           type: string
-          enum: [agent:create, agent:configure, agent:recover, agent-template:read, agent-template:publish, execution-profile:read, agent:execution-read, agent:cutover]
+          enum: [agent:create, agent:configure, agent:recover, agent-template:read, agent-template:publish, execution-profile:read, agent:execution-read, agent:cutover, operator:read]
           description: >-
             Each operation is served on one route with one fixed HTTP
             method. A release that does not know an operation refuses
@@ -3103,8 +3103,8 @@ components:
             `agent:configure`, `agent:recover`,
             `agent:execution-read` and `agent:cutover`; the organization
             for
-            `agent-template:read`, `agent-template:publish` and
-            `execution-profile:read`.
+            `agent-template:read`, `agent-template:publish`,
+            `execution-profile:read` and `operator:read`.
         assignment:
           $ref: '#/components/schemas/BoundAssignment'
         requestId:
@@ -3116,8 +3116,8 @@ components:
           maxLength: 2048
           description: >-
             Present for `agent-template:read`, `agent-template:publish`,
-            `execution-profile:read`, `agent:execution-read` and
-            `agent:cutover`, absent for every other operation. For
+            `execution-profile:read`, `agent:execution-read`,
+            `agent:cutover` and `operator:read`, absent for every other operation. For
             `agent:cutover` it is garam's own cutover route the
             reference is carried to, and garam compares it (ADR-0086).
             Otherwise it is the exact origin-form

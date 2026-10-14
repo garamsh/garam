@@ -112,31 +112,65 @@ what compose lacks is the step, not something a container cannot do.
 
 ## Asymmetric Operator exchange
 
-**Unbuilt.** [ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)
-replaces the target Operator shared-secret exchange with signed
-client assertions. The current certificate admission and G1 token
-paths below remain the deployed compatibility cohorts; acceptance of
-the new decision does not make the new exchange available.
+**Built at garam; no Operator release exchanges yet.**
+[ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)
+adds signed client assertions beside the certificate and shared-secret
+cohorts §Tokens describes, which remain. `api/machine.yaml`
+§exchangeClientAssertion is authoritative for the exchange's wire and
+refusals, and §machineBearer for the alias.
 
-- `internal/machine/listener.go` §token admission and
-  `api/machine.yaml` §token are authoritative for current admission.
-  The listener currently reads `Garam-Token`, not OAuth `Bearer`.
-- The new `machine-token.v2` exchange proves the existing operator
-  registration using its bound public key; it issues an opaque token,
-  never treats an assertion as an API credential, and verifies server
-  TLS without a client certificate. ADR-0102 §Assertion exchange
-  profile and §Replay, rotation and revocation define its wire,
-  RSA algorithm, endpoint audience, time bounds and shared replay rule.
-- Token reads must also join the live issuing key and registration
-  incarnation. Revocation ends that key's tokens on the next request
-  on an open connection. Failure to read current state refuses rather
-  than extending authority from a cached proof.
-- The planned `Bearer` alias uses the same token resolver, route
-  confinement and v2 contract selection as `Garam-Token`. It must not
-  fall through to certificate admission when malformed or coexist
-  with a client certificate or another authentication credential.
+- **`exchangeClientAssertion`, `POST /oauth/token`, is the client
+  credentials grant authenticated by private_key_jwt under
+  `machine-token.v2`.** It reads no client certificate and no
+  `Authorization` header — either refuses as `invalid_request` — so a
+  caller holds one credential there and falls back to none. Its RS256,
+  identity, endpoint audience, lifetime and duplicate-member checks are
+  `internal/operator` `ParseClientAssertion` and
+  `ClientAssertion.Verify`; the key is looked up by `kid` within the
+  `client_id`'s registration alone. Every authentication failure is one
+  `invalid_client`.
+- **One assertion yields one token on every replica and across
+  restarts.** `migrations/000043`'s `operator_assertions` primary key,
+  `(operator_grn, jti)`, is spent in the transaction that records the
+  token and keeps the jti until `exp` plus the skew. The same
+  transaction holds the key's row under the lock a withdrawal's update
+  takes and measures the assertion's dates at the database's time, so
+  a withdrawal either commits first and the exchange records nothing,
+  or waits and deletes the token the exchange recorded. A refused
+  assertion spends no jti.
+- **Token reads join the live key.** A token exchanged under a key is
+  resolved with that key unwithdrawn and inside any rollover, so a
+  withdrawal, an immediate replacement or a passed rollover refuses the
+  next request on a connection already open
+  ([operators.md](./operators.md) §Issued PEM identity). A read that
+  cannot be made refuses rather than extending a cached proof.
+- **`Authorization: Bearer <token>` is the same token as
+  `Garam-Token`.** `machine.PresentedToken` is the one reading of that
+  header the listener and the routes share, so the alias takes the
+  same resolver, route set, v2 contract values and header placement;
+  `api/machine.yaml` lists `machineBearer` beside every `machineToken`
+  and a test holds the two lists equal. The scheme matches
+  case-insensitively, and a `Bearer` value with no token after it is
+  refused rather than read as no token at all.
+- **One process answers at most 60 exchanges per client address and 10
+  verified ones per `client_id` per minute** (`internal/operator`
+  `ExchangesPerSource`, `ExchangesPerClient`), 429 with `Retry-After`
+  past either. The address's count is taken before anything is read,
+  so a flood from one address holds back no other; the client's starts
+  once its key verified, so a stranger knowing the GRN cannot lock the
+  operator out. The listener terminates TLS itself, so the address is
+  the peer's, and clients behind one NAT share it. An unconfigured
+  token endpoint answers 503 and issues nothing.
+- **What tells the cohorts apart.**
+  `garam_machine_token_exchanges_total` counts exchanges by method —
+  operator shared secret, supervisor shared secret, operator
+  private_key_jwt — and outcome, which `garam_machine_requests_total`
+  cannot, since both cohorts present a token afterwards. An idle
+  operator shows in no metric; its keys' `last_exchanged_at` and its
+  tokens' issuance, credential or key, are what an inventory reads.
+  Neither carries a key, assertion or token.
 - The agent's API token, its execution fence and Sherlock's message
-  issuer verification remain distinct. Common enrollment is
+  issuer verification remain distinct. Common enrollment is unbuilt,
   [agents.md](./agents.md) §Common managed and direct enrollment;
   message verification is [messaging.md](./messaging.md).
 
@@ -151,15 +185,16 @@ requests G1a to G1d; a certificate still authenticates beside a token
 until G3.
 
 - **A request may present a token instead of a certificate**, as
-  `Authorization: Garam-Token <token>`. The listener asks `Tokens` for
-  that request, and the identity it answers carries `MethodToken`, the
-  GRN and the token's dates. An agent's token carries a serial too —
+  `Authorization: Garam-Token <token>` or, the same token,
+  `Authorization: Bearer <token>` (ADR-0102). The listener asks `Tokens`
+  for that request, and the identity it answers carries `MethodToken`,
+  the GRN and the token's dates. An agent's token carries a serial too —
   `t` and hex, which no certificate's decimal serial equals — and the
   execution fence reads it as it reads a certificate's: current while
-  the token is inside its dates, minted at the agent's present
-  assignee and epoch, and in the lineage the execution holds now. An
-  operator's token carries none, so a route reading a credential
-  refuses it, and no token reaches a route that renews a certificate.
+  the token is inside its dates, minted at the agent's present assignee
+  and epoch, and in the lineage the execution holds now. An operator's
+  token carries none, so a route reading a credential refuses it, and no
+  token reaches a route that renews a certificate.
 - **The read is per request, not per connection.** A value that is not a
   token's shape is refused before it is read, and a refusal is logged at
   debug: it is the caller's to fix, and only a read that could not be
@@ -177,7 +212,9 @@ until G3.
 - **A token or a certificate, never both.** A request presenting a
   token over a connection whose certificate authenticated carries no
   identity, and the reason travels with it, as it does for a token
-  that proved nothing, so the handler's refusal says why.
+  that proved nothing, so the handler's refusal says why. So does a
+  request carrying more than one `Authorization` header while any of
+  them presents a token.
 - **A token takes its contract's v2 value.** Each contract whose
   transport changes is served to a token under its v2 value and to a
   certificate under v1, and a request whose value and credential

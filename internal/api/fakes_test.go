@@ -1085,6 +1085,10 @@ type fakeOperatorStore struct {
 	// this off the foreign key the delete trips; nothing here writes
 	// definitions, so a test says which operators one names.
 	namedByDefinition map[string]bool
+	// keys holds each operator's keys by GRN, and issuances the
+	// rotation each issuance was asked under.
+	keys      map[string][]operator.Key
+	issuances []operator.KeyRotation
 }
 
 func newFakeOperatorStore() *fakeOperatorStore {
@@ -1095,7 +1099,81 @@ func newFakeOperatorStore() *fakeOperatorStore {
 		enrolled:    map[string]bool{},
 
 		namedByDefinition: map[string]bool{},
+		keys:              map[string][]operator.Key{},
 	}
+}
+
+// IssueKey applies the rotation as the real store does, over keys
+// held in memory: first refuses any key ever issued, withdrawn or not,
+// planned a third live one, and immediate withdraws every live one
+// before recording the new key.
+func (s *fakeOperatorStore) IssueKey(_ context.Context, k *operator.IssuedKey, rotation operator.KeyRotation) (operator.Key, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	g := k.Operator().String()
+	if _, ok := s.operators[g]; !ok {
+		return operator.Key{}, operator.ErrOperatorNotFound
+	}
+	s.issuances = append(s.issuances, rotation)
+	live := 0
+	for _, held := range s.keys[g] {
+		if held.State != operator.KeyStateRevoked {
+			live++
+		}
+	}
+	switch rotation {
+	case operator.KeyRotationFirst:
+		if len(s.keys[g]) > 0 {
+			return operator.Key{}, operator.ErrOperatorWasKeyed
+		}
+	case operator.KeyRotationPlanned:
+		if live >= operator.LiveKeysPerOperator {
+			return operator.Key{}, operator.ErrKeyLimit
+		}
+		for i := range s.keys[g] {
+			if s.keys[g][i].State == operator.KeyStateActive {
+				s.keys[g][i].State = operator.KeyStateRetiring
+			}
+		}
+	case operator.KeyRotationImmediate:
+		for i := range s.keys[g] {
+			s.keys[g][i].State = operator.KeyStateRevoked
+		}
+	}
+	jwk, err := k.PublicJWK()
+	if err != nil {
+		return operator.Key{}, err
+	}
+	public, err := operator.ParsePublicJWK(jwk, k.KID())
+	if err != nil {
+		return operator.Key{}, err
+	}
+	key := operator.Key{ID: int64(len(s.issuances)), Operator: k.Operator(), KID: k.KID(),
+		Algorithm: operator.KeyAlgorithm, Public: public, IssuedBy: k.IssuedBy(), IssuedAt: k.IssuedAt(),
+		State: operator.KeyStateActive}
+	s.keys[g] = append(s.keys[g], key)
+	return key, nil
+}
+
+func (s *fakeOperatorStore) ListKeys(_ context.Context, g grn.GRN) ([]operator.Key, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.operators[g.String()]; !ok {
+		return nil, operator.ErrOperatorNotFound
+	}
+	return append([]operator.Key(nil), s.keys[g.String()]...), nil
+}
+
+func (s *fakeOperatorStore) RevokeKey(_ context.Context, g grn.GRN, kid string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for i, held := range s.keys[g.String()] {
+		if held.KID == kid {
+			s.keys[g.String()][i].State = operator.KeyStateRevoked
+			return nil
+		}
+	}
+	return operator.ErrKeyNotFound
 }
 
 // Register writes the record, the token and the credential together,

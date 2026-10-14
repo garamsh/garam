@@ -25,6 +25,10 @@ type Config struct {
 	// CookieSecure marks cookies Secure. Disable only for local dev
 	// over plain HTTP.
 	CookieSecure bool
+	// TokenURL is the machine listener's token endpoint URL, which
+	// operator.ParseTokenEndpoint read: what an issued key's assertions
+	// name as their audience (ADR-0102). Empty issues no key.
+	TokenURL string
 }
 
 // Server implements apigen.ServerInterface.
@@ -46,6 +50,10 @@ type Server struct {
 	authority   operator.AuthorityService
 	standalone  agent.StandaloneService
 	cfg         Config
+	// keysPerOperator and keysPerProcess bound the keys this process
+	// issues (ADR-0102).
+	keysPerOperator *operator.Limiter
+	keysPerProcess  *operator.Limiter
 }
 
 // Compile-time check that Server satisfies the generated interface.
@@ -58,5 +66,10 @@ func NewServer(users user.Store, orgs org.Store, agents agent.Store, operators o
 	for _, p := range providers {
 		byName[p.Name()] = p
 	}
-	return &Server{users: users, orgs: orgs, agents: agents, operators: operators, consents: consents, watches: watches, sessions: sessions, states: states, credentials: credentials, attempts: attempts, providers: byName, evaluator: evaluator, policies: policies, authorities: authorities, authority: authority, standalone: standalone, cfg: cfg}
+	return &Server{users: users, orgs: orgs, agents: agents, operators: operators, consents: consents, watches: watches, sessions: sessions, states: states, credentials: credentials, attempts: attempts, providers: byName, evaluator: evaluator, policies: policies, authorities: authorities, authority: authority, standalone: standalone, cfg: cfg,
+		keysPerOperator: operator.NewLimiter(operator.LimiterConfig{Limit: operator.KeyIssuancesPerOperator,
+			Window: operator.KeyIssuanceWindow, MaxKeys: operator.TrackedClients}),
+		keysPerProcess: operator.NewLimiter(operator.LimiterConfig{Limit: operator.KeyIssuancesPerProcess,
+			Window: operator.KeyIssuanceWindow, MaxKeys: 1}),
+	}
 }

@@ -11,6 +11,10 @@ import (
 // under (ADR-0100).
 const TokenScheme = "Garam-Token"
 
+// BearerScheme is the OAuth scheme a request may present the same
+// token under instead (ADR-0102, RFC 6750).
+const BearerScheme = "Bearer"
+
 // Tokens answers what a presented token stands for. It is read on
 // every request that presents one, not once per connection, because
 // what it reads beside the token — the record the token rests on — is

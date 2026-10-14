@@ -22,15 +22,26 @@ info:
     is refused from the next request on a connection already open
     too. A request presents a token or a certificate, never both.
 
-    Three operations are reached without a certificate, and each
+    `Authorization: Bearer <token>` is the same token under the OAuth
+    scheme (ADR-0102), listed as `machineBearer` beside every
+    `machineToken`: one resolver reads it, with the same confinement,
+    per-request reads and v2 contract values. A request carrying more
+    than one `Authorization` header while any of them presents a token
+    carries no identity. An operator registered with a key obtains a
+    token from `exchangeClientAssertion` under `machine-token.v2`,
+    authenticated by a client assertion its private key signed.
+
+    Four operations are reached without a certificate, and each
     carries `security: []`. Two are how a caller obtains its first
     certificate: `enrollOperator` is authenticated by the one-time
     token the console minted (ADR-0064), and `enrollStandaloneAgent` by
     the bootstrap secret whose hash an administrator approved
     (ADR-0082). The third, `getMessageSigningKeys`, publishes the
     public keys a verifier checks garam's signature on a message with
-    (ADR-0101), which anyone may read. `exchangeToken` is reached
-    without one too, authenticated by the operator's credential under
+    (ADR-0101), which anyone may read. The fourth,
+    `exchangeClientAssertion`, is authenticated by the client assertion
+    in its body (ADR-0102). `exchangeToken` is reached without one too,
+    authenticated by the operator's credential under
     `machineCredential`. Every other operation requires the
     certificate, or a token where it lists `machineToken`, and which is
     which is read from this file rather than remembered. An enrolling caller still verifies garam against the
@@ -47,6 +58,9 @@ info:
     `Error` schema with `message` set to `internal error` — a 5xx names
     no cause, and what a caller does next is on the status line. `501`
     and `504` are in garam's kind mapping and nothing produces them.
+    `exchangeClientAssertion` is the exception: it answers RFC 6749's
+    error body at every status, its `503` included, because a stock
+    OAuth client reads that and not `Error` (ADR-0102).
 
     `version` above is required by OpenAPI and promises nothing
     (ADR-0049). garam publishes no release of this contract and no
@@ -164,6 +178,7 @@ paths:
       security:
         - machineCertificate: []
         - machineToken: []
+        - machineBearer: []
       summary: Return the identity the connection authenticated as.
       responses:
         '200':
@@ -274,6 +289,97 @@ paths:
           $ref: '#/components/responses/TokenContractError'
         '401':
           $ref: '#/components/responses/TokenContractError'
+  /oauth/token:
+    post:
+      operationId: exchangeClientAssertion
+      tags: [identity]
+      summary: Exchange an operator's signed client assertion for a short-lived token.
+      description: >-
+        The OAuth 2.0 client credentials grant authenticated by
+        `private_key_jwt` (RFC 6749, RFC 7523), under
+        `machine-token.v2` (ADR-0102). It is reached over the listener's
+        verified server TLS with no client certificate and no
+        `Authorization` header: what authenticates the request is the
+        assertion in its body, signed by a live key of the operator
+        `client_id` names. A request presenting either is
+        `invalid_request`.
+
+        The form carries each parameter once: `grant_type`
+        `client_credentials`, `client_id` the operator's canonical GRN,
+        `client_assertion_type`
+        `urn:ietf:params:oauth:client-assertion-type:jwt-bearer`, and
+        `client_assertion` one compact JWT. Its protected header holds
+        `alg` `RS256`, `kid` the key's base64url SHA-256 RFC 7638
+        thumbprint, `typ` `JWT` and nothing else. Its claims hold `iss`
+        and `sub` both equal to `client_id`; `aud` one string equal byte
+        for byte to the token endpoint URL the key issuance answered as
+        `tokenUrl`; integer `iat` and `exp` at most 60 seconds apart; a
+        `jti` of 22 to 128 base64url characters; and optionally an
+        integer `nbf` no later than `exp`. garam allows 30 seconds of
+        skew against its database's clock. No member repeats, in the
+        header, the claims or any object inside them. The optional
+        `audience` names another operator of the same organization —
+        a hosted control service — the token is minted to be shown to,
+        as `exchangeToken`'s does; absent, the token is garam's. A
+        `scope` is `invalid_scope`, a `client_secret` and any other
+        grant are refused, and unrecognised parameters are ignored.
+
+        **Each assertion is exchanged once.** Its (`client_id`, `jti`)
+        is spent in the transaction that records the token, on every
+        replica and across restarts, so two copies yield one token and
+        the other `invalid_client`. A lost answer is recovered with a
+        fresh assertion and `jti`, never by retrying the same one.
+
+        A bad signature, a key that is unknown, withdrawn or past its
+        rollover, a wrong identity, audience or time, and a replay are
+        one refusal, `invalid_client` with 400, which says nothing
+        about which registrations or keys exist. A token is refused
+        from the next request once its key is withdrawn. A process
+        answers at most 60 exchanges per client address, counted before
+        anything is read, and 10 verified ones per `client_id`, each per
+        minute, and 429 with `Retry-After` past either: a flood from one
+        address holds back no other, and an assertion that fails to
+        verify spends no operator's budget. An unconfigured token
+        endpoint, or a database that cannot be read, answers 503 and
+        issues nothing; a defect answers 500 `server_error`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ClientAssertionRequest'
+      responses:
+        '200':
+          description: Token issued, shown once. It is not stored and not cached.
+          headers:
+            Garam-Contract-Version:
+              $ref: '#/components/headers/AssertionContractVersion'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Pragma:
+              $ref: '#/components/headers/NoCache'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthToken'
+        '400':
+          $ref: '#/components/responses/OAuthError'
+        '429':
+          description: Too many exchanges from this process; try again after `Retry-After`.
+          headers:
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
+            Garam-Contract-Version:
+              $ref: '#/components/headers/AssertionContractVersion'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OAuthError'
+        '500':
+          $ref: '#/components/responses/OAuthError'
+        '503':
+          $ref: '#/components/responses/OAuthError'
   /enrollment:
     post:
       operationId: enrollOperator
@@ -333,6 +439,7 @@ paths:
       security:
         - machineCertificate: []
         - machineToken: []
+        - machineBearer: []
       summary: Create an agent and assign it to the calling operator.
       description: >-
         garam mints the agent's GRN in the calling operator's
@@ -374,6 +481,7 @@ paths:
           executionToken: []
         - machineCertificate: []
         - machineToken: []
+        - machineBearer: []
       summary: Issue the certificate an agent authenticates with.
       description: >-
         Answers for an agent assigned to the calling operator at the
@@ -437,6 +545,7 @@ paths:
       security:
         - machineCertificate: []
         - machineToken: []
+        - machineBearer: []
       summary: Mint the token an agent authenticates with in place of a certificate.
       description: >-
         Answers a short-lived token for an agent the calling operator
@@ -497,6 +606,7 @@ paths:
       security:
         - machineCertificate: []
         - machineToken: []
+        - machineBearer: []
       summary: Report what the operator sees of an agent's pod.
       description: >-
         What the calling operator says about the agent it provisioned
@@ -552,8 +662,10 @@ paths:
           executionToken: []
         - machineCertificate: []
         - machineToken: []
+        - machineBearer: []
           executionHeader: []
         - machineToken: []
+        - machineBearer: []
       summary: Report what an agent says about itself.
       description: >-
         The agent's own account of whether it is running (ADR-0012).
@@ -614,6 +726,7 @@ paths:
       security:
         - machineCertificate: []
         - machineToken: []
+        - machineBearer: []
       summary: List the definitions naming the calling operator.
       description: >-
         The agents the organization says this operator should run
@@ -669,6 +782,7 @@ paths:
       security:
         - machineCertificate: []
         - machineToken: []
+        - machineBearer: []
       summary: Claim the agent a definition minted for the calling operator.
       description: >-
         Binds the calling operator to the definition's agent GRN: the
@@ -707,8 +821,10 @@ paths:
           executionToken: []
         - machineCertificate: []
         - machineToken: []
+        - machineBearer: []
           executionHeader: []
         - machineToken: []
+        - machineBearer: []
       summary: Post a message to a recipient.
       description: >-
         The sender is what the certificate names, so the body carries
@@ -782,8 +898,10 @@ paths:
           executionToken: []
         - machineCertificate: []
         - machineToken: []
+        - machineBearer: []
           executionHeader: []
         - machineToken: []
+        - machineBearer: []
       summary: Post a durable reply under the creation instant its outbox entry holds.
       description: >-
         The same message write as `postMessage`, reached under contract
@@ -868,8 +986,10 @@ paths:
           executionToken: []
         - machineCertificate: []
         - machineToken: []
+        - machineBearer: []
           executionHeader: []
         - machineToken: []
+        - machineBearer: []
       summary: Read how far a message the caller sent has got.
       description: >-
         What garam knows about the message and the sender does not: the
@@ -972,8 +1092,10 @@ paths:
           executionToken: []
         - machineCertificate: []
         - machineToken: []
+        - machineBearer: []
           executionHeader: []
         - machineToken: []
+        - machineBearer: []
       summary: Claim the next message addressed to an agent.
       description: >-
         A long poll: the call waits for a message rather than answering
@@ -1021,8 +1143,10 @@ paths:
           executionToken: []
         - machineCertificate: []
         - machineToken: []
+        - machineBearer: []
           executionHeader: []
         - machineToken: []
+        - machineBearer: []
       summary: Extend a claim while the message is still being worked on.
       description: >-
         Renewal is what keeps a long turn from losing its claim
@@ -1069,8 +1193,10 @@ paths:
           executionToken: []
         - machineCertificate: []
         - machineToken: []
+        - machineBearer: []
           executionHeader: []
         - machineToken: []
+        - machineBearer: []
       summary: Forward one turn event to whoever is watching the agent.
       description: >-
         What the agent is saying now, on its way to the browsers
@@ -1133,8 +1259,10 @@ paths:
           executionToken: []
         - machineCertificate: []
         - machineToken: []
+        - machineBearer: []
           executionHeader: []
         - machineToken: []
+        - machineBearer: []
       summary: Report the claimed message delivered.
       description: >-
         Completion is fenced by the claim rather than by the message,
@@ -1172,6 +1300,7 @@ paths:
       security:
         - machineCertificate: []
         - machineToken: []
+        - machineBearer: []
       summary: Read what an operation authority binds, once current state still authorizes it.
       description: >-
         The calling operator must be the authority's audience. Unknown,
@@ -1216,6 +1345,7 @@ paths:
       security:
         - machineCertificate: []
         - machineToken: []
+        - machineBearer: []
       summary: Recheck a durable operation reference before activating a new desired revision.
       description: >-
         Decides the reference as introspection decides an authority,
@@ -1251,6 +1381,7 @@ paths:
       security:
         - machineCertificate: []
         - machineToken: []
+        - machineBearer: []
       summary: Prove a controller's current authority, and an agent's placement on it, for one decision.
       description: >-
         The calling operator is the hosted control audience and forwards
@@ -1327,6 +1458,7 @@ paths:
       security:
         - machineCertificate: []
         - machineToken: []
+        - machineBearer: []
       summary: Admit a runtime generation of an agent, and issue the token its calls carry.
       description: >-
         The caller is the hosted Operator control service, which has
@@ -1440,6 +1572,7 @@ paths:
       security:
         - machineCertificate: []
         - machineToken: []
+        - machineBearer: []
       summary: End an activation of an agent, if it is still the current one.
       description: >-
         Authorized as `activateAgent` is, on every call. Ending the
@@ -1477,6 +1610,7 @@ paths:
       security:
         - machineCertificate: []
         - machineToken: []
+        - machineBearer: []
       summary: Ask whether an agent certificate and a generation are current, together.
       description: >-
         Authorized as `activateAgent` is, on every call. `certificatePem`
@@ -1533,6 +1667,7 @@ paths:
         - machineCertificate: []
           operationAuthority: []
         - machineToken: []
+        - machineBearer: []
           operationHeader: []
       summary: Replace an agent's credential lineage under an administrator's handoff.
       description: >-
@@ -1606,6 +1741,7 @@ paths:
         - machineCertificate: []
           operationAuthority: []
         - machineToken: []
+        - machineBearer: []
           operationHeader: []
       summary: Read what the Operator imports a legacy agent from, and its most recent cutover attempt.
       description: >-
@@ -1668,6 +1804,7 @@ paths:
         - machineCertificate: []
           operationAuthority: []
         - machineToken: []
+        - machineBearer: []
           operationHeader: []
       summary: Freeze a legacy agent's source, verified against the digest the Operator imported.
       description: >-
@@ -1745,6 +1882,7 @@ paths:
         - machineCertificate: []
           operationAuthority: []
         - machineToken: []
+        - machineBearer: []
           operationHeader: []
       summary: Record that the Operator owns a frozen agent's source, before it releases anything.
       description: >-
@@ -1804,6 +1942,7 @@ paths:
         - machineCertificate: []
           operationAuthority: []
         - machineToken: []
+        - machineBearer: []
           operationHeader: []
       summary: End a frozen attempt, which lists the agent's definition to its operator again.
       description: >-
@@ -1860,6 +1999,7 @@ paths:
       security:
         - machineCertificate: []
         - machineToken: []
+        - machineBearer: []
       summary: Create an agent assigned to a controller, under a member's agent:create reference.
       description: >-
         The caller is the hosted Operator control service, the
@@ -2405,6 +2545,70 @@ components:
             The GRN of another operator of the caller's organization the
             token is to be shown to. Absent, the token is garam's.
           example: grn:acme:default:operator:control
+    ClientAssertionRequest:
+      type: object
+      description: >-
+        The client credentials request `exchangeClientAssertion` reads
+        (ADR-0102). Each parameter appears once.
+      required: [grant_type, client_id, client_assertion_type, client_assertion]
+      properties:
+        grant_type:
+          type: string
+          enum: [client_credentials]
+        client_id:
+          type: string
+          description: The operator's canonical GRN, which the assertion's `iss` and `sub` equal.
+          example: grn:acme:default:operator:controller
+        client_assertion_type:
+          type: string
+          enum: ['urn:ietf:params:oauth:client-assertion-type:jwt-bearer']
+        client_assertion:
+          type: string
+          maxLength: 8192
+          description: One compact RS256 JWT the operator's private key signed; never the key itself.
+        audience:
+          type: string
+          description: >-
+            The GRN of another operator of the caller's organization the
+            token is to be shown to. Absent, the token is garam's.
+          example: grn:acme:default:operator:control
+    OAuthToken:
+      type: object
+      description: RFC 6749's successful token response (ADR-0102).
+      required: [access_token, token_type, expires_in]
+      properties:
+        access_token:
+          type: string
+          description: >-
+            The token, prefixed `garam_ot_` and opaque, presented as
+            `Authorization: Bearer` or `Garam-Token`. garam stores only
+            its hash.
+        token_type:
+          type: string
+          enum: [Bearer]
+        expires_in:
+          type: integer
+          description: Seconds the token is accepted for, 3600.
+          example: 3600
+    OAuthError:
+      type: object
+      description: RFC 6749's error response (ADR-0102).
+      required: [error]
+      properties:
+        error:
+          type: string
+          enum: [invalid_request, invalid_client, unsupported_grant_type, invalid_scope, temporarily_unavailable, server_error]
+          description: >-
+            `invalid_request` for a malformed or repeated parameter, a
+            client certificate or `Authorization` header, or an audience
+            that is not another operator of the organization;
+            `invalid_client` for an assertion that authenticates no
+            operator; `unsupported_grant_type` for a grant other than
+            `client_credentials`; `invalid_scope` for any `scope`;
+            `temporarily_unavailable` with 429 or 503; `server_error`
+            with 500.
+        error_description:
+          type: string
     MachineToken:
       type: object
       required: [token, grn, expiresAt]
@@ -3388,6 +3592,25 @@ components:
             `cutover_required` and nothing else. Branch on it only on
             those routes; a new reason is a new contract value.
   headers:
+    AssertionContractVersion:
+      description: The contract version this answer follows, `machine-token.v2`.
+      schema:
+        type: string
+        enum: [machine-token.v2]
+    RetryAfter:
+      description: Seconds until the window that refused the request closes.
+      schema:
+        type: integer
+    NoStore:
+      description: '`no-store`: the answer carries a bearer token no cache keeps.'
+      schema:
+        type: string
+        enum: [no-store]
+    NoCache:
+      description: '`no-cache`, for HTTP/1.0 caches.'
+      schema:
+        type: string
+        enum: [no-cache]
     TokenContractVersion:
       description: The contract version this answer follows, `machine-token.v1`.
       schema:
@@ -3435,6 +3658,15 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/Error'
+    OAuthError:
+      description: RFC 6749's error response of the client assertion exchange.
+      headers:
+        Garam-Contract-Version:
+          $ref: '#/components/headers/AssertionContractVersion'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/OAuthError'
     TokenContractError:
       description: Error response of the token exchange.
       headers:
@@ -3513,6 +3745,15 @@ components:
         from the next request. A token minted for another audience is
         refused on every operation that lists this scheme. garam stores
         only its hash.
+    machineBearer:
+      type: http
+      scheme: bearer
+      description: >-
+        The same token `machineToken` carries, as `Authorization: Bearer
+        <token>` (ADR-0102, RFC 6750): resolved by the same read, held
+        to the same operations, contract values and refusals, and never
+        read as a certificate when it proves nothing. The scheme name
+        matches case-insensitively.
     executionHeader:
       type: apiKey
       in: header

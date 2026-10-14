@@ -3,7 +3,9 @@
 The order Garam, the Operator and Sherlock adopt machine authentication
 and common agent enrollment, and the evidence required before removal.
 
-Garam facts checked at `3beb1569b804f6461b2e956601e2a0377b81152e`.
+Garam facts checked at `3beb1569b804f6461b2e956601e2a0377b81152e`,
+except those attributed to #1356, which were checked at the head of the
+pull request that implements it, #1360.
 Foreign facts below are the PMs' compatibility replies, not a new source
 inspection: Operator at
 `4d2cbc6ca37668b912c4c0f0ae211c11c90bf5f3` on
@@ -26,7 +28,9 @@ those revisions alone.
 
 ## The shape of the move
 
-**Asymmetric Operator exchange and common enrollment are unbuilt.**
+**Garam's half of the asymmetric Operator exchange is built (#1356);
+the Operator client, common enrollment and direct attachment are
+not.**
 [ADR-0102](../architecture/adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)
 is accepted for #1353 following the
 [owner's approved direction](https://github.com/garamsh/garam/issues/1353#issuecomment-6146292449)
@@ -68,6 +72,15 @@ The checked Garam revision contains all four G1 steps:
 | G1c | Token audience introspection, operation/execution/cutover/managed v2 values and audience foreign keys: `internal/machineapi/contract.go`, migrations 000040/000041 |
 | G1d | Supervisor credential and token exchange, `standalone-enrollment.v2` and one-agent confinement: `internal/machineapi/standalone.go`, `internal/agent/supervisor_credential.go`, migration 000042 |
 
+#1356 adds ADR-0102's Garam backend beside them: an issued RSA key
+whose public JWK alone is stored, the `machine-token.v2` private_key_jwt
+exchange at `POST /oauth/token`, a replay store shared across replicas,
+key withdrawal and rotation with next-request token revocation, and
+the `Bearer` alias (`internal/operator/assertion.go`,
+`internal/operator/postgres_key.go`, `internal/machineapi/oauth.go`,
+migration 000043). No Operator release exchanges against it yet, and
+no deployment sets `GARAM_MACHINE_TOKEN_URL`.
+
 The adapter and standalone CLI remain certificate clients
 (`internal/cli/delivery.go`, `internal/cli/standalone_host.go`).
 G2 #1352 is undispatched and must follow ADR-0102 rather than complete
@@ -86,14 +99,15 @@ The managed and standalone mechanisms still differ:
 
 ## The implementation sequence
 
-Only #1353 and #1352 identify current Garam work below. Rows naming
-future issues are instructions for the owning PM to scope and dispatch,
-not invented tracker numbers or claims implementation has begun.
+Only #1353, #1356 and #1352 identify current Garam work below. Rows
+naming future issues are instructions for the owning PM to scope and
+dispatch, not invented tracker numbers or claims implementation has
+begun.
 
 | Order | Owner and issue | Work and gate |
 |---|---|---|
 | 1 | Garam #1353 | Pair accepted ADR-0102 with affected documents and this plan; acceptance records the profile/custody target, not implementation or merge |
-| 2 | Garam, new asymmetric identity implementation issue | Issue RSA PEM once, store public key only, register key incarnation/state, add `machine-token.v2` on `/oauth/token`, shared replay store, key/token revocation and explicit Bearer alias; preserve every G1 and certificate test |
+| 2 | Garam #1356, built | Issue RSA PEM once, store public key only, register key incarnation/state, add `machine-token.v2` on `/oauth/token`, shared replay store, key/token revocation and explicit Bearer alias; preserve every G1 and certificate test |
 | 3 | Garam, new common enrollment implementation issue | Publish `agent-enrollment.v1` wire, approval/admission/refusal forms and public idempotent result; use existing execution lock and scoped authority model for both placements |
 | 4 | Garam #1352 (G2) | Adapter/supervisor token transport, atomic per-request files, v2 control headers; implement direct connector binding without requiring runtime reprovisioning, or split that work into a PM-owned follow-up issue |
 | 5 | Operator PM, new coordinated O1 issues | Review shared contract first, then scope both binaries' PEM exchange, controller introspection, audience/epoch proofs, common managed admission and rendered short-lived token refresh; one cutover release, no compatibility switch |

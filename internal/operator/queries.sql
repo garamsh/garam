@@ -165,17 +165,23 @@ WITH swept AS (
     WHERE operator_grn = sqlc.arg('operator_grn') AND expires_at <= now()
 )
 INSERT INTO operator_tokens (token_hash, credential_id, operator_grn, audience_grn, issued_at, expires_at)
-VALUES (sqlc.arg('token_hash'), sqlc.arg('credential_id'), sqlc.arg('operator_grn'),
+VALUES (sqlc.arg('token_hash'), sqlc.arg('credential_id')::bigint, sqlc.arg('operator_grn'),
         sqlc.narg('audience_grn'), sqlc.arg('issued_at'), sqlc.arg('expires_at'));
 
--- The read every request presenting a token takes (ADR-0100): the
--- token's row joined to the registration it rests on, so a deleted
--- operator or a re-issued credential refuses it from the next request.
+-- The read every request presenting a token takes (ADR-0100,
+-- ADR-0102): the token's row joined to the registration it rests on
+-- and, for one exchanged under a key, to that key while it is live, so
+-- a deleted operator, a re-issued credential, a withdrawn key and a
+-- planned rotation's passed deadline each refuse it from the next
+-- request.
 -- name: ResolveOperatorToken :one
 SELECT t.operator_grn, t.audience_grn, t.expires_at
 FROM operator_tokens t
 JOIN operators o ON o.grn = t.operator_grn
-WHERE t.token_hash = $1 AND t.expires_at > now();
+LEFT JOIN operator_keys k ON k.id = t.key_id
+WHERE t.token_hash = $1 AND t.expires_at > now()
+  AND (t.key_id IS NULL
+       OR (k.revoked_at IS NULL AND (k.retires_at IS NULL OR k.retires_at > now())));
 
 -- An exchange holds the credential issuance's row while it records and
 -- trims, so two exchanges at once cannot leave more live tokens than
@@ -187,9 +193,131 @@ SELECT id FROM operator_credentials WHERE id = $1 FOR UPDATE;
 -- what a leaked credential can write (ADR-0100).
 -- name: TrimOperatorTokens :exec
 DELETE FROM operator_tokens t
-WHERE t.credential_id = sqlc.arg('credential_id')
+WHERE t.credential_id = sqlc.arg('credential_id')::bigint
   AND t.token_hash NOT IN (
       SELECT k.token_hash FROM operator_tokens k
-      WHERE k.credential_id = sqlc.arg('credential_id')
+      WHERE k.credential_id = sqlc.arg('credential_id')::bigint
       ORDER BY k.issued_at DESC, k.token_hash DESC
       LIMIT sqlc.arg('keep'));
+
+-- Holds the operator's registration while its keys change, so two
+-- issuances at once cannot both find room under the bound (ADR-0102).
+-- name: LockOperatorRegistration :one
+SELECT grn FROM operators WHERE grn = $1 FOR UPDATE;
+
+-- Whether the operator has ever been issued a key, withdrawn ones
+-- included: what a first issuance is refused on (ADR-0102).
+-- name: OperatorWasKeyed :one
+SELECT EXISTS (SELECT 1 FROM operator_keys WHERE operator_grn = $1);
+
+-- The keys an operator holds live at the database's time: neither
+-- withdrawn nor past a planned rotation's deadline.
+-- name: ListLiveOperatorKeys :many
+SELECT id, retires_at FROM operator_keys
+WHERE operator_grn = $1 AND revoked_at IS NULL AND (retires_at IS NULL OR retires_at > now())
+ORDER BY issued_at, id;
+
+-- A planned rotation starts the predecessor's rollover window, and
+-- leaves an earlier deadline where one is already set.
+-- name: RetireOperatorKey :exec
+UPDATE operator_keys SET retires_at = now() + sqlc.arg('window_seconds')::bigint * interval '1 second'
+WHERE id = sqlc.arg('id') AND retires_at IS NULL;
+
+-- Withdraws every live key of the operator and answers which, so the
+-- same write deletes their tokens.
+-- name: RevokeLiveOperatorKeys :many
+UPDATE operator_keys SET revoked_at = now()
+WHERE operator_grn = $1 AND revoked_at IS NULL AND (retires_at IS NULL OR retires_at > now())
+RETURNING id;
+
+-- Withdraws one key the operator holds, live or past its deadline, and
+-- answers its row; a key already withdrawn answers none.
+-- name: RevokeOperatorKey :one
+UPDATE operator_keys SET revoked_at = now()
+WHERE operator_grn = sqlc.arg('operator_grn') AND kid = sqlc.arg('kid') AND revoked_at IS NULL
+RETURNING id;
+
+-- name: OperatorKeyExists :one
+SELECT EXISTS (SELECT 1 FROM operator_keys WHERE operator_grn = sqlc.arg('operator_grn') AND kid = sqlc.arg('kid'));
+
+-- name: DeleteOperatorKeyTokens :exec
+DELETE FROM operator_tokens WHERE key_id = ANY(sqlc.arg('key_ids')::bigint[]);
+
+-- name: InsertOperatorKey :one
+INSERT INTO operator_keys (operator_grn, kid, algorithm, public_jwk, issued_by, issued_at)
+VALUES (sqlc.arg('operator_grn'), sqlc.arg('kid'), sqlc.arg('algorithm'), sqlc.arg('public_jwk'),
+        sqlc.arg('issued_by'), sqlc.arg('issued_at'))
+RETURNING id;
+
+-- Every key the operator was issued, with the state the database's
+-- time puts it in.
+-- name: ListOperatorKeys :many
+SELECT id, operator_grn, kid, algorithm, public_jwk, issued_by, issued_at, retires_at, revoked_at, last_exchanged_at,
+       (CASE
+            WHEN revoked_at IS NOT NULL OR retires_at <= now() THEN 'revoked'
+            WHEN retires_at IS NOT NULL THEN 'retiring'
+            ELSE 'active'
+        END)::text AS state
+FROM operator_keys
+WHERE operator_grn = $1
+ORDER BY issued_at, id;
+
+-- The live key a client's assertion names, looked up within that
+-- client's registration alone (ADR-0102).
+-- name: GetLiveOperatorKey :one
+SELECT k.id, k.operator_grn, k.kid, k.algorithm, k.public_jwk, k.issued_by, k.issued_at,
+       k.retires_at, k.revoked_at, k.last_exchanged_at
+FROM operator_keys k
+JOIN operators o ON o.grn = k.operator_grn
+WHERE k.operator_grn = sqlc.arg('operator_grn') AND k.kid = sqlc.arg('kid')
+  AND k.revoked_at IS NULL AND (k.retires_at IS NULL OR k.retires_at > now());
+
+-- An exchange holds the verifying key's row, rereading that it is
+-- still live, under the lock a withdrawal's update takes too: a
+-- withdrawal either commits first and this answers no row, or waits
+-- and deletes the token this exchange records. It answers the
+-- database's time, which the assertion's dates are measured against.
+-- name: HoldLiveOperatorKey :one
+SELECT now()::timestamptz AS decided_at
+FROM operator_keys k
+JOIN operators o ON o.grn = k.operator_grn
+WHERE k.id = sqlc.arg('id') AND k.operator_grn = sqlc.arg('operator_grn')
+  AND k.revoked_at IS NULL AND (k.retires_at IS NULL OR k.retires_at > now())
+FOR NO KEY UPDATE OF k;
+
+-- Drops the client's spent identifiers past their keeping. It is a
+-- statement of its own rather than the spend's CTE, which would share
+-- the spend's snapshot and still conflict with a row it deletes.
+-- name: SweepOperatorAssertions :exec
+DELETE FROM operator_assertions WHERE operator_grn = $1 AND expires_at <= now();
+
+-- Spends a (client, jti). A conflict answers no row: the assertion was
+-- spent already, by this replica or another (ADR-0102).
+-- name: SpendOperatorAssertion :one
+INSERT INTO operator_assertions (operator_grn, jti, expires_at)
+VALUES (sqlc.arg('operator_grn'), sqlc.arg('jti'), sqlc.arg('expires_at'))
+ON CONFLICT (operator_grn, jti) DO NOTHING
+RETURNING jti;
+
+-- name: RecordOperatorKeyToken :exec
+WITH swept AS (
+    DELETE FROM operator_tokens
+    WHERE operator_grn = sqlc.arg('operator_grn') AND expires_at <= now()
+)
+INSERT INTO operator_tokens (token_hash, key_id, operator_grn, audience_grn, issued_at, expires_at)
+VALUES (sqlc.arg('token_hash'), sqlc.arg('key_id')::bigint, sqlc.arg('operator_grn'),
+        sqlc.narg('audience_grn'), sqlc.arg('issued_at'), sqlc.arg('expires_at'));
+
+-- Keeps the key's newest tokens and drops the rest, the bound a
+-- credential's tokens have too.
+-- name: TrimOperatorKeyTokens :exec
+DELETE FROM operator_tokens t
+WHERE t.key_id = sqlc.arg('key_id')::bigint
+  AND t.token_hash NOT IN (
+      SELECT k.token_hash FROM operator_tokens k
+      WHERE k.key_id = sqlc.arg('key_id')::bigint
+      ORDER BY k.issued_at DESC, k.token_hash DESC
+      LIMIT sqlc.arg('keep'));
+
+-- name: MarkOperatorKeyExchanged :exec
+UPDATE operator_keys SET last_exchanged_at = sqlc.arg('at') WHERE id = sqlc.arg('id');

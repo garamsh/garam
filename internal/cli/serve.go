@@ -97,6 +97,10 @@ func serveAPI(cmd *cobra.Command) error {
 	if err != nil {
 		return err
 	}
+	tokenURL, err := operator.ParseTokenEndpoint(envOr(envMachineTokenURL, ""))
+	if err != nil {
+		return errorx.Wrap(err, string(envMachineTokenURL))
+	}
 	providers := []authn.Provider{}
 	if google != nil {
 		providers = append(providers, google)
@@ -140,6 +144,7 @@ func serveAPI(cmd *cobra.Command) error {
 		api.Config{
 			SessionTTL:   ttl,
 			CookieSecure: cookieSecure,
+			TokenURL:     tokenURL,
 		},
 	)
 

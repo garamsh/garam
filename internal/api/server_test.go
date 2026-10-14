@@ -50,7 +50,17 @@ type fixture struct {
 	authority   *operatormocks.MockAuthorityService
 }
 
+// fixtureTokenURL is the token endpoint every fixture is configured
+// with, which an issued key's answer carries (ADR-0102).
+const fixtureTokenURL = "https://machine.garam.test/oauth/token"
+
 func newFixture(t *testing.T, extra ...authn.Provider) *fixture {
+	t.Helper()
+	return newFixtureConfigured(t, api.Config{SessionTTL: time.Hour, TokenURL: fixtureTokenURL}, extra...)
+}
+
+// newFixtureConfigured wires a Server configured as cfg says.
+func newFixtureConfigured(t *testing.T, cfg api.Config, extra ...authn.Provider) *fixture {
 	t.Helper()
 	f := &fixture{
 		users:       newFakeUserStore(),
@@ -79,7 +89,7 @@ func newFixture(t *testing.T, extra ...authn.Provider) *fixture {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	go func() { _ = watches.Receive(ctx) }()
-	srv := api.NewServer(f.users, f.orgs, f.agents, f.operators, f.consents, watches, f.sessions, f.states, f.credentials, f.attempts, append([]authn.Provider{f.provider}, extra...), f.evaluator, f.policies, f.authorities, f.authority, nil, api.Config{SessionTTL: time.Hour})
+	srv := api.NewServer(f.users, f.orgs, f.agents, f.operators, f.consents, watches, f.sessions, f.states, f.credentials, f.attempts, append([]authn.Provider{f.provider}, extra...), f.evaluator, f.policies, f.authorities, f.authority, nil, cfg)
 	// Wired as `serve api` wires it: a binding failure is refused
 	// before any handler runs, so the option is what decides the body.
 	f.handler = apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{

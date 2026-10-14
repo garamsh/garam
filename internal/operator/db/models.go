@@ -62,6 +62,12 @@ type Operator struct {
 	ControlEndpoint pgtype.Text
 }
 
+type OperatorAssertion struct {
+	OperatorGrn string
+	Jti         string
+	ExpiresAt   pgtype.Timestamptz
+}
+
 type OperatorCertificate struct {
 	OperatorGrn string
 	Serial      string
@@ -102,13 +108,27 @@ type OperatorEnrollmentToken struct {
 	ExpiresAt   pgtype.Timestamptz
 }
 
+type OperatorKey struct {
+	ID              int64
+	OperatorGrn     string
+	Kid             string
+	Algorithm       string
+	PublicJwk       string
+	IssuedBy        string
+	IssuedAt        pgtype.Timestamptz
+	RetiresAt       pgtype.Timestamptz
+	RevokedAt       pgtype.Timestamptz
+	LastExchangedAt pgtype.Timestamptz
+}
+
 type OperatorToken struct {
 	TokenHash    string
-	CredentialID int64
+	CredentialID pgtype.Int8
 	OperatorGrn  string
 	AudienceGrn  pgtype.Text
 	IssuedAt     pgtype.Timestamptz
 	ExpiresAt    pgtype.Timestamptz
+	KeyID        pgtype.Int8
 }
 
 type Org struct {

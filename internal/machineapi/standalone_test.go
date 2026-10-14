@@ -38,6 +38,9 @@ func TestConfineSupervisors_ASupervisorReachesItsLifecycleRoutesAlone(t *testing
 		http.MethodPost + " /agents/{agent}/activations":                           true,
 		http.MethodPost + " /agents/{agent}/activations/{activation}/deactivation": true,
 		http.MethodPost + " /agents/{agent}/execution/introspection":               true,
+		// The client assertion exchange refuses every credential
+		// beside its assertion itself, a supervisor's included.
+		http.MethodPost + " /oauth/token": true,
 	}
 	middlewares := []machinegen.MiddlewareFunc{machineapi.ConfineSupervisors, machineapi.RecoverPanics}
 	// No service stands behind the server: a request the boundary

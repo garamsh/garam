@@ -13,7 +13,8 @@ the console, and the proof of a controller's current
 authority that hosted operator obtains before each lifecycle decision
 (ADR-0078), and the credential an operator exchanges for the
 short-lived tokens it authenticates with in place of a certificate
-(ADR-0100). Implemented by `internal/operator`,
+(ADR-0100), and the keys whose signed assertions exchange for the
+same tokens (ADR-0102). Implemented by `internal/operator`,
 whose grants and authorities persist through
 `internal/operator/postgres`.
 
@@ -24,7 +25,7 @@ whose grants and authorities persist through
 | `DetailsPatch` | a parsed name and description, each absent where the caller said nothing: what a registration starts with and what an update changes |
 | `EnrollmentState` | where an operator stands: holding a certificate, holding a token nobody has spent, or holding neither |
 | `Enrollment` | the one-time token an operator obtains its first certificate with: which operator it enrols, who minted it, and when it stops being spendable |
-| `Store` | registers one with the token it enrols with and the credential it exchanges, and answers what it stored, re-issues that credential, mints that token again for one that has not enrolled, changes its name and description, sets or clears its control endpoint, deletes one and everything the identifier held, answers one by GRN, and lists an organization's own |
+| `Store` | registers one with the token it enrols with and the credential it exchanges, and answers what it stored, re-issues that credential, issues, lists and withdraws its keys, mints that token again for one that has not enrolled, changes its name and description, sets or clears its control endpoint, deletes one and everything the identifier held, answers one by GRN, and lists an organization's own |
 | `EnrollmentStore` | spends a token, answering the operator it enrols |
 | `Credential` | the certificate a connection authenticated with — the identity it names, which certificate it is, and how long it is good for |
 | `CertificateRequest` | a certificate signing request as it arrived, holding the public key an enrolling operator generated |
@@ -32,12 +33,19 @@ whose grants and authorities persist through
 | `IssuedCertificate` | a `Certificate` garam generated the key pair for, carrying the private key it returns once |
 | `Current` | the certificate garam last issued an operator: the record a renewal is measured against |
 | `CertificateStore` | records what garam last issued, and moves that record to the successor only where the presented certificate is still it |
-| `Service` | signs an enrolling operator's request, mints a certificate out of band and adopts it, renews the one an operator presents, and exchanges a credential for a token |
+| `Service` | signs an enrolling operator's request, mints a certificate out of band and adopts it, renews the one an operator presents, and exchanges a credential, or a client assertion a live key signed, for a token |
 | `IssuedCredential` | a credential garam generated for an operator, carrying the value it answers once (ADR-0100) |
 | `Token` | a token an operator exchanged its credential for: the operator, the audience it is accepted by, and when it expires |
 | `TokenHolder` | what a live token's row names, read beside the registration it rests on |
 | `CredentialHolder` | the operator a presented credential belongs to, and which issuance of it that is |
-| `TokenStore` | answers the operator a credential belongs to, records a token under that issuance, and resolves a presented token |
+| `TokenStore` | answers the operator a credential belongs to, records a token under that issuance, answers the live key an assertion names, admits a verified assertion and records its token, and resolves a presented token |
+| `IssuedKey` | an RSA key garam generated for an operator, carrying the private PEM it answers once (ADR-0102) |
+| `Key` | the public record of a key: its thumbprint, algorithm, verification key, state and when it last obtained a token |
+| `KeyRotation` | how an issued key stands beside the keys held: first, planned or immediate |
+| `KeyState` | where a key stands at the database's time: active, retiring or revoked |
+| `ClientAssertion` | a compact JWT read far enough to name its key, verified by nothing yet |
+| `VerifiedAssertion` | an assertion whose signature and identity held, admitted under its time bounds and jti |
+| `Limiter` | bounds how often one client or operator exchanges or is issued a key in one process |
 | `Issuer` | signs a certificate for a subject GRN, over a key it generates or over one a request carries, and hands back the garam server root beside it |
 | `Grant` | an immutable delegation to a hosted operator: its controllers, operations and expiry, and whether a replacement or withdrawal ended it |
 | `Binding` | what one operation authority binds: actor, organization, audience, operation, target, grant, request identifier, body digest, for an operation on an existing agent the placement, and for a read or publication the request target |
@@ -268,50 +276,74 @@ made (ADR-0033) and renews on the route ADR-0040 gave it.
 
 ## Issued PEM identity
 
-**Unbuilt.** [ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)
-records the replacement target for §Credential and tokens' current
-shared-secret issuance/exchange; the existing registration, identifier,
-permissions and deployed credential paths remain.
+**garam's half is built; no Operator release exchanges yet.**
+[ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)
+replaces the target for §Credential and tokens' shared-secret
+exchange. The registration, identifier, permissions and the
+shared-secret and certificate cohorts remain, and the Operator's
+single-mode cutover is its own repository's (Operator ADR-0068).
+`api/openapi.yaml` §issueOperatorKey, §listOperatorKeys and
+§revokeOperatorKey are authoritative for the key routes' wire.
 
-- Initial registration issues private PKCS#8 RSA PEM once to the
-  authenticated person, who places it in the Operator cluster. Garam
-  persists only the public verification key and its registration
-  binding. ADR-0102 §Operator identity and custody states the approved
-  issuance UX, exposure, deferred local generation and lost-delivery
-  rule; it never claims Garam did not see the private key.
-- Existing operator_id maps to the canonical operator GRN used as
-  OAuth client_id. Key replacement is `operator:reissue`; a key proves
-  identity and grants no organization permissions. Name/description
-  updates move no key, assignment or authorization.
-- One external/admin writer supplies stable PEM, atomically replaced
-  and reloaded at exchange; `kid` derives from the same key read. The
-  Operator refreshes tokens in memory and never renews/writes that key
-  Secret. Its PM must supersede/pair ADR-0008's certificate renewal
-  writer before cutover; Garam edits no Operator convention or source.
-- The controller and hosted control service each have their own
-  registration, key and one-hour tokens. Both exchange with Garam.
-  Between them the controller presents only an audience-bound token,
-  which the service forwards for §Controller proof. The service asks
-  again for an agent-bound current assignment proof before each
-  decision, after long polls too; it never forwards a private key.
-- ADR-0102 §Assertion exchange profile and §Replay, rotation and
-  revocation define the RS256 assertion, replay/rotation and immediate
-  token revocation requirements. Startup cannot authenticate until the
-  key and server root are installed. An expired or stale access token
-  pauses protected calls while bounded fresh-assertion exchange retries
-  with backoff; a successful exchange with the unchanged valid PEM
-  permits fresh controller/assignment proof, not automatic resumption.
-  Exchange rejection of the identity/key pauses until its credential
-  or registration/configuration changes. Token refresh never clears a
-  rejected key/registration or a generation/lineage/placement fence;
-  every attempt uses a new `jti` with no shared-secret fallback.
-- Operator ADR-0068's single authentication mode survives. A new
-  Operator release moves both binaries together only after Garam adds
-  support; Garam's coexistence window is not an Operator fallback.
+- **A key is issued by `issueOperatorKey`; registering issues none.**
+  The PM decided this on #1356, where the ADR leaves the issuing route
+  open: the key route exists for rotation and lost-issuance
+  replacement anyway, so one path serves the first key too, and no
+  answer carries two secrets while the shared-secret cohort lasts. The
+  cost is a second step for an administrator: register, issue a key,
+  place the PEM and `tokenUrl`, once per registered operator identity.
+  An Operator has two, its manager and its control service, and each
+  is issued its own key.
+- **The first key of an operator that has never been issued one is
+  `operator:register`, as registering it was; any other is
+  `operator:reissue`.** A withdrawn key still counts, so re-keying
+  after a revocation is `operator:reissue`'s: the PM's review of #1360
+  held that any key change on an existing operator is, as ADR-0102
+  §Operator identity and custody says. The store refuses a first
+  issuance under the registration's row lock, in the transaction that
+  would write, so a concurrent issuance cannot split the check from
+  the write.
+- **garam answers the private key once and keeps the public JWK.** The
+  key is RSA 3072 as PKCS#8 `PRIVATE KEY` PEM, answered with
+  `Cache-Control: no-store`; `migrations/000043`'s `operator_keys`
+  holds the JWK, algorithm, RFC 7638 thumbprint `kid`, issuer and
+  state. The PEM exists in the generating process and the answer and
+  in no column, log or metric. A lost answer is replaced with
+  `rotation` `immediate`, never read back.
+- **The answer carries `tokenUrl`, the configured
+  `GARAM_MACHINE_TOKEN_URL`, which an assertion's `aud` equals byte
+  for byte.** The PM decided on #1356 that this is a variable of its
+  own, an absolute https URL with no query or fragment: reusing
+  `GARAM_MACHINE_ISSUER`, ADR-0101's message issuer, would couple two
+  contracts, and the Operator dials garam at an address that need not
+  be its public origin, so it cannot derive `aud` from the address.
+  Unset, no key is issued and the exchange answers 503
+  ([deployment-contract.md](./deployment-contract.md) §Operator key
+  and enrollment rollout).
+- **Planned rotation holds two live keys.** The predecessor reads
+  `retiring` for `RolloverWindow`, 24 hours, and is then withdrawn
+  without a write; a third live key is refused. `immediate` withdraws
+  every live key and deletes their tokens in the write that records
+  the successor. `revokeOperatorKey` withdraws one key and its tokens,
+  and the row stays, listed `revoked`.
+- **A key proves identity and grants no organization permission.**
+  Tokens it obtains are ordinary operator tokens: delegated authority,
+  controller proof and assignment checks apply as they do to a
+  shared-secret token. Replacing a key recovers no agent lineage.
+- **One process issues at most 3 keys per registered operator identity
+  and 30 in all per minute** (`internal/operator`
+  `KeyIssuancesPerOperator`), and answers 429 with `Retry-After` past
+  either; generating the key is the costliest thing a member asks of the
+  browser-facing listener.
+- **The Operator's half is unbuilt.** One external writer supplies the
+  stable PEM, replaced atomically and reloaded at each exchange, with
+  `kid` derived from the same read; the Operator refreshes tokens in
+  memory with a fresh assertion and `jti` each attempt and never
+  writes that key. Its PM supersedes ADR-0008's certificate renewal
+  writer before cutover; garam edits no Operator convention or source.
 
-The public-key registration and new exchange need implementation and
-published API forms; `api/openapi.yaml` §operator and
-`api/machine.yaml` §token still describe the current forms.
+[machine-identity.md](./machine-identity.md) §Asymmetric Operator
+exchange owns the exchange and the token reads.
 
 ## Credential and tokens
 
@@ -351,8 +383,11 @@ certificate path goes; until then an operator may present either.
   resolves a presented token by its row joined to the registration, so
   deleting the operator, which takes the credential and its tokens by
   foreign key, and re-issuing are both refused from the next request
-  ([machine-identity.md](./machine-identity.md) §Tokens). A token's
-  hour bounds one nobody revoked.
+  ([machine-identity.md](./machine-identity.md) §Tokens). A token
+  exchanged under a key rests on that key instead of a credential, so
+  re-issuing the credential leaves it standing and withdrawing the key
+  does not (§Issued PEM identity). A token's hour bounds one nobody
+  revoked.
 
 ## Delegated operation authority
 

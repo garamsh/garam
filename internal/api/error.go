@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"runtime/debug"
+	"strconv"
 
 	apigen "github.com/garamsh/garam/api"
 	"github.com/garamsh/garam/internal/errorx"
@@ -102,6 +103,10 @@ type causeRecorder interface {
 // surface.
 func writeError(w http.ResponseWriter, err error) {
 	status := wire.StatusOf(errorx.KindOf(err))
+	var exceeded *operator.Exceeded
+	if errors.As(err, &exceeded) {
+		w.Header().Set("Retry-After", strconv.Itoa(exceeded.RetryAfterSeconds()))
+	}
 	// What a client reads is never the chain's own text unless this
 	// project wrote every part of it (wire.MessageOf): a driver error
 	// names a table, a constraint and a SQLSTATE, and a decoder quotes

@@ -124,9 +124,21 @@ default or the deployment's own choice, never a decision made here.
 
 ## Operator key and enrollment rollout
 
-**Unbuilt.** [ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)
-requires issued Operator PEM custody and token-mode rollout; the
-current binary checks below do not yet implement that workflow.
+**Unbuilt for deployments.** garam serves key issuance and the
+private_key_jwt exchange
+([ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md))
+once `GARAM_MACHINE_TOKEN_URL` is set, and no deployment sets it: the
+chart renders no value (`deploy/charts/garam/README.md` §Not set by
+this chart), and no deployment has adopted the workflow below.
+
+- Set `GARAM_MACHINE_TOKEN_URL` to the absolute https URL of the
+  machine listener's `/oauth/token` as a caller outside the cluster
+  names it, with no query or fragment, on both `serve api` and
+  `serve machine`, and keep it for the deployment's life: every
+  assertion names it as its audience byte for byte, and changing it
+  refuses every Operator until each is given the new value. Unset,
+  `serve api` issues no key and `serve machine` answers the exchange
+  503. It is not `GARAM_MACHINE_ISSUER`, the message issuer.
 
 - Place each controller/control-service private key in its own
   owner-only file via the deployment's secret mechanism, never in
@@ -143,8 +155,9 @@ current binary checks below do not yet implement that workflow.
   access refresh uses fresh short assertions and never rotates the
   private key. Planned key rotation installs and proves a successor
   before withdrawing the old one; lost/compromised issuance replaces
-  immediately with no overlap. ADR-0102 defines the 24-hour maximum
-  planned overlap and next-request revocation; it is not built yet.
+  immediately with no overlap. garam enforces the 24-hour maximum
+  planned overlap and next-request revocation
+  ([operators.md](./operators.md) §Issued PEM identity).
 - Retain `server-root.pem` for adapter TLS and Sherlock's issuer-fetch
   `keys-ca-file`, moving consumer and mount atomically if their paths
   change. Removing client mTLS does not remove server hostname/root

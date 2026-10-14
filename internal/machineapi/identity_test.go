@@ -189,15 +189,16 @@ func fillPath(t *testing.T, path string, values map[string]string) string {
 	}
 }
 
-// enrollmentRoute, standaloneEnrollmentRoute and keySetRoute are the
-// operations reached without a certificate (ADR-0064, ADR-0082,
-// ADR-0101). They are named here so that what a reader checks is the
+// enrollmentRoute, standaloneEnrollmentRoute, the two exchanges and
+// keySetRoute are the operations reached without a certificate
+// (ADR-0064, ADR-0082, ADR-0100, ADR-0101, ADR-0102). They are named here so that what a reader checks is the
 // exemption rather than the routes that are not exempt, which are
 // whatever is left.
 const (
 	enrollmentRoute           = http.MethodPost + " /enrollment"
 	standaloneEnrollmentRoute = http.MethodPost + " /agent-enrollments"
 	tokenExchangeRoute        = http.MethodPost + " /tokens"
+	assertionExchangeRoute    = http.MethodPost + " /oauth/token"
 	keySetRoute               = http.MethodGet + " /message-signing-keys"
 )
 
@@ -250,6 +251,15 @@ func TestServer_EnrollmentsAndTheKeySetAreTheOnlyRoutesAnUncertifiedCallerReache
 	status, body = send(t, client, exchange.method, url+exchange.path, "")
 	assert.Equal(t, http.StatusUnauthorized, status)
 	assert.Contains(t, body, "Garam-Credential")
+
+	// So is the client assertion exchange, which refuses on its own
+	// form, carrying the assertion, rather than on the certificate.
+	assertion, ok := routes[assertionExchangeRoute]
+	require.True(t, ok, "the exemption names no operation the specification declares")
+	delete(routes, assertionExchangeRoute)
+	status, body = send(t, client, assertion.method, url+assertion.path, "")
+	assert.Equal(t, http.StatusBadRequest, status)
+	assert.Contains(t, body, `"error":"invalid_request"`)
 
 	// The key set is public: a verifier anywhere reads it (ADR-0101).
 	keySet, ok := routes[keySetRoute]

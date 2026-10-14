@@ -16,11 +16,17 @@ import (
 // certificate stays a certificate rather than a permit to hold one.
 const renewalFraction = 3
 
-// Config holds where the renewal rule reads the time from.
+// Config holds where the renewal rule reads the time from, and the
+// token endpoint an assertion names as its audience.
 type Config struct {
 	// Now supplies the current time, so a test can hold it still. Zero
 	// takes time.Now.
 	Now func() time.Time
+	// TokenEndpoint is the absolute https URL of the private_key_jwt
+	// exchange, which an assertion's aud equals byte for byte
+	// (ADR-0102); [ParseTokenEndpoint] reads it. Empty serves no
+	// assertion exchange.
+	TokenEndpoint string
 }
 
 // Service is what an operator's own certificate goes through: the
@@ -57,6 +63,19 @@ type Service interface {
 	// ErrCredentialInvalid, and an audience that is not another
 	// operator the organization registered with ErrAudienceInvalid.
 	Exchange(ctx context.Context, credential string, audience *grn.GRN) (*Token, error)
+	// ExchangeAssertion answers a token for the operator client whose
+	// live key signed assertion, under machine-token.v2's profile
+	// (ADR-0102), accepted by garam where audience is nil and by that
+	// hosted operator where it names one, for [TokenTTL]. An assertion
+	// that authenticates no operator — malformed, unsigned by a live
+	// key of client's registration, naming another identity or
+	// endpoint, outside its time bounds, or spent — is
+	// ErrClientInvalid; an audience that is not another operator of
+	// the organization is ErrAudienceInvalid; no configured endpoint is
+	// ErrAssertionProfileUnavailable. source is the client address the
+	// request arrived from, which bounds how many unverified
+	// assertions one address may send.
+	ExchangeAssertion(ctx context.Context, source string, client grn.GRN, assertion string, audience *grn.GRN) (*Token, error)
 	// VerifyShown refuses a token presented on another operator's
 	// behalf unless it is a live token subject exchanged its credential
 	// for, to be shown to audience — the token-borne form of the
@@ -72,6 +91,12 @@ type service struct {
 	tokens      TokenStore
 	issuer      Issuer
 	now         func() time.Time
+	endpoint    string
+	// perSource bounds the assertion exchanges each client address
+	// sends, checked before anything is read; perClient bounds each
+	// client's verified ones (ADR-0102).
+	perClient *Limiter
+	perSource *Limiter
 }
 
 // NewService constructs the service over the record it keeps of each
@@ -82,7 +107,13 @@ func NewService(store CertificateStore, enrollments EnrollmentStore, tokens Toke
 	if now == nil {
 		now = time.Now
 	}
-	return &service{store: store, enrollments: enrollments, tokens: tokens, issuer: issuer, now: now}
+	return &service{store: store, enrollments: enrollments, tokens: tokens, issuer: issuer, now: now,
+		endpoint: cfg.TokenEndpoint,
+		perClient: NewLimiter(LimiterConfig{Limit: ExchangesPerClient, Window: ExchangeWindow,
+			MaxKeys: TrackedClients, Now: now}),
+		perSource: NewLimiter(LimiterConfig{Limit: ExchangesPerSource, Window: ExchangeWindow,
+			MaxKeys: TrackedClients, Now: now}),
+	}
 }
 
 func (s *service) Exchange(ctx context.Context, credential string, audience *grn.GRN) (*Token, error) {
@@ -94,9 +125,8 @@ func (s *service) Exchange(ctx context.Context, credential string, audience *grn
 	if err != nil {
 		return nil, err
 	}
-	if audience != nil && (audience.ServiceType != ServiceType ||
-		audience.Organization != holder.Operator.Organization || *audience == holder.Operator) {
-		return nil, ErrAudienceInvalid
+	if err := validAudience(holder.Operator, audience); err != nil {
+		return nil, err
 	}
 	value, err := secret(TokenPrefix)
 	if err != nil {
@@ -109,6 +139,61 @@ func (s *service) Exchange(ctx context.Context, credential string, audience *grn
 		return nil, err
 	}
 	return token, nil
+}
+
+func (s *service) ExchangeAssertion(ctx context.Context, source string, client grn.GRN, assertion string, audience *grn.GRN) (*Token, error) {
+	if s.endpoint == "" {
+		return nil, ErrAssertionProfileUnavailable
+	}
+	if err := s.perSource.Check(source); err != nil {
+		return nil, err
+	}
+	if client.ServiceType != ServiceType {
+		return nil, ErrClientInvalid
+	}
+	parsed, err := ParseClientAssertion(assertion)
+	if err != nil {
+		return nil, err
+	}
+	key, err := s.tokens.VerificationKey(ctx, client, parsed.KID())
+	if err != nil {
+		return nil, err
+	}
+	verified, err := parsed.Verify(key, client, s.endpoint)
+	if err != nil {
+		return nil, err
+	}
+	// Counted once the key verified, so only its holder spends the
+	// client's budget: a stranger knowing the GRN cannot lock the
+	// operator out of refreshing.
+	if err := s.perClient.Check(client.String()); err != nil {
+		return nil, err
+	}
+	if err := validAudience(client, audience); err != nil {
+		return nil, err
+	}
+	value, err := secret(TokenPrefix)
+	if err != nil {
+		return nil, errorx.Wrap(err, "operator token")
+	}
+	// The dates are the database's, stamped where the assertion's are
+	// checked against the same clock.
+	token := &Token{Value: value, Operator: client, Audience: audience}
+	if err := s.tokens.RecordAssertionToken(ctx, verified, token); err != nil {
+		return nil, err
+	}
+	return token, nil
+}
+
+// validAudience refuses an audience that is not another operator of
+// subject's organization. A token minted for a hosted operator is
+// shown to it, so the audience is a peer and never the caller itself.
+func validAudience(subject grn.GRN, audience *grn.GRN) error {
+	if audience != nil && (audience.ServiceType != ServiceType ||
+		audience.Organization != subject.Organization || *audience == subject) {
+		return ErrAudienceInvalid
+	}
+	return nil
 }
 
 func (s *service) VerifyShown(ctx context.Context, subject, audience grn.GRN, token string) error {

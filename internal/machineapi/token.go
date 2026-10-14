@@ -46,16 +46,25 @@ var tokenRoutes = map[string]bool{
 	http.MethodPost + " /operators/{controller}/managed-agents":                true,
 }
 
+// clientAssertionRoute is the router's pattern for the client
+// assertion exchange (ADR-0102).
+const clientAssertionRoute = http.MethodPost + " /oauth/token"
+
 // ConfineTokens refuses a request a token authenticated on any route
 // outside tokenRoutes before its handler runs. The handlers behind it
 // answer a machine identity without asking how it was proven, and a
 // route that reads a certificate's serial or dates — a renewal, the
 // execution fence — has nothing to read off a token. It reads the
 // route the router matched, so it runs inside the router.
+//
+// The client assertion exchange is passed through: it refuses every
+// credential beside its assertion itself, in the OAuth error form its
+// caller reads, and so does ConfineSupervisors.
 func ConfineTokens(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		identity, ok := machine.IdentityOf(r)
-		if ok && identity.Method() == machine.MethodToken && !tokenRoutes[r.Pattern] {
+		if ok && identity.Method() == machine.MethodToken && !tokenRoutes[r.Pattern] &&
+			r.Pattern != clientAssertionRoute {
 			writeError(w, errorx.New(errorx.KindUnauthenticated, "this operation does not accept a token"))
 			return
 		}

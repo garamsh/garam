@@ -552,12 +552,15 @@ address holds the specification and nothing under `docs/`:
 What each limit covers is in the two files, named here and not copied.
 
 A caller meets one more limit, which neither file states. **Both
-listeners bound a request body before anything decodes it** — at a
-figure the composition root holds, `maxRequestBody` in
-`internal/cli/cli.go` — and a body past it is refused as an invalid
-argument. It bounds the request rather than a field, which is what
-leaves it standing where §What nothing checks says a declared
-constraint does not.
+listeners bound a request body at 1 MiB before anything decodes it**,
+the figure the composition root holds as `maxRequestBody` in
+`internal/cli/cli.go`. The browser listener answers a body past it
+with 413 and its `Error`, kind `invalid_argument`, from the one decoder
+every browser handler reads a body through. The machine listener
+refuses it as an invalid argument with 400, because each of its
+handlers decodes on its own. The bound is on the request rather than
+a field, which is what leaves it standing where §What nothing checks
+says a declared constraint does not.
 
 The other three surfaces are fixed differently. The engine's wire
 contract is `proto/garam/authz/v1`, generated and checked the same way.

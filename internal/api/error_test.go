@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -79,6 +80,60 @@ func TestDecodeJSON_RefusesABodyThatDoesNotParse(t *testing.T) {
 	rec = f.do(t, "PATCH", "/orgs/"+slug, `{"name":"acme2"}`, owner)
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, "acme2", decodeBody[apigen.Organization](t, rec).Name)
+}
+
+// countingReader serves size bytes of a JSON object holding one long
+// name, and counts how many of them the server read.
+type countingReader struct {
+	body []byte
+	read int
+}
+
+func (c *countingReader) Read(p []byte) (int, error) {
+	if c.read == len(c.body) {
+		return 0, io.EOF
+	}
+	n := copy(p, c.body[c.read:])
+	c.read += n
+	return n, nil
+}
+
+func nameBody(size int) []byte {
+	return []byte(`{"name":"` + strings.Repeat("a", size-len(`{"name":""}`)) + `"}`)
+}
+
+// TestDecodeJSON_AnswersABodyPastTheBoundWith413 sends a body past the
+// bound the composition root puts on every body, here at a small one,
+// and expects 413 with the API's Error shape having read little of it.
+// The same route with a body under the bound is the control, so the 413
+// is the bound's and not the route's.
+func TestDecodeJSON_AnswersABodyPastTheBoundWith413(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	f.permit(permission{grn.New("root", "default", user.ServiceType, "owner-sub"), org.ActionOrgUpdate})
+	const bound = 1024
+	handler := http.MaxBytesHandler(f.handler, bound)
+	send := func(body *countingReader) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPatch, "/orgs/"+slug, body)
+		req.Header.Set("Content-Type", "application/json")
+		req.AddCookie(owner)
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		return rec
+	}
+
+	under := send(&countingReader{body: nameBody(bound / 2)})
+	require.Equal(t, http.StatusOK, under.Code, under.Body.String())
+
+	over := &countingReader{body: nameBody(1 << 20)}
+	rec := send(over)
+	assert.Equal(t, http.StatusRequestEntityTooLarge, rec.Code)
+	assert.Equal(t, apigen.Error{
+		Kind:    "invalid_argument",
+		Message: "the request body is larger than a request may carry",
+	}, decodeBody[apigen.Error](t, rec))
+	assert.Less(t, over.read, len(over.body)/16, "the body is not read whole")
 }
 
 // TestServer_TellsAnEngineThatIsNotThereFromADecisionThatRefused keeps

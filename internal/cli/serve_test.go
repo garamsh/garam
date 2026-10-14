@@ -430,6 +430,6 @@ func TestAPIHandler_RefusesARequestBodyPastTheBound(t *testing.T) {
 
 	status, body = postTo(t, handler, "/auth/password/login", passwordLogin(maxRequestBody))
 
-	assert.Equal(t, http.StatusBadRequest, status, "past the bound the body is not read at all")
-	assert.JSONEq(t, `{"kind":"invalid_argument","message":"the request is not in the required form"}`, body)
+	assert.Equal(t, http.StatusRequestEntityTooLarge, status, "past the bound the body is not read at all")
+	assert.JSONEq(t, `{"kind":"invalid_argument","message":"the request body is larger than a request may carry"}`, body)
 }

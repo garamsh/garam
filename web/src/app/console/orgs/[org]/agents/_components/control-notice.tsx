@@ -119,7 +119,3 @@ export function ControlNotice({
     </Banner>
   );
 }
-
-/** What an unanswered control service looks like on every panel. */
-export const UNAVAILABLE =
-  "The control service is unavailable, so its controls are disabled. Teams, people and agents are unaffected.";

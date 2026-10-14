@@ -202,8 +202,9 @@ test.describe("operators", () => {
     await register
       .getByRole("button", { name: "Register", exact: true })
       .click();
+    // The dialog is named for what it says now: the registration.
     await expect(
-      register.getByText("The operator is registered"),
+      page.getByRole("dialog", { name: "Registered new" }),
     ).toBeVisible();
 
     // `new` is a valid identifier, so it is an operator's page and no

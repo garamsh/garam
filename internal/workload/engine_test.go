@@ -4,7 +4,6 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -122,7 +121,7 @@ func (e *stubEngine) awaitUnless(cond func() bool, stopped <-chan struct{}) erro
 }
 
 // errStopped is awaitUnless giving up on a run that returned.
-var errStopped = errors.New("stub engine: the run returned with the condition unmet")
+var errStopped = errorx.New(errorx.KindAborted, "stub engine: the run returned with the condition unmet")
 
 // named answers every container of role the engine holds, in the
 // order they were created. The caller holds mu.

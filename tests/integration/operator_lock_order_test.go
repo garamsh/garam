@@ -108,7 +108,7 @@ func parkOn(t *testing.T, p *pgxpool.Pool, hashes ...string) pgx.Tx {
 // withdrawal makes the exchange wait for it before it deletes anything.
 func TestOperatorLockOrder_AKeyWithdrawalAndAnExchangeSweepingItsTokensBothComplete(t *testing.T) {
 	ctx := context.Background()
-	pool(t)
+	pool(t) // migrates and truncates the database; the store runs on p
 	p := indexScanPool(t)
 	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	store := operator.NewPostgresStore(p)
@@ -200,7 +200,7 @@ func TestOperatorLockOrder_ACredentialReissueAndADeletionBothComplete(t *testing
 // wait for it.
 func TestOperatorLockOrder_ACredentialReissueAndAKeyExchangeSweepingItsTokensBothComplete(t *testing.T) {
 	ctx := context.Background()
-	pool(t)
+	pool(t) // migrates and truncates the database; the store runs on p
 	p := indexScanPool(t)
 	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
 	store := operator.NewPostgresStore(p)

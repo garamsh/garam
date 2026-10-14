@@ -134,11 +134,10 @@ func (s *PostgresStore) Remint(ctx context.Context, e *Enrollment) error {
 // is refused.
 //
 // The lock comes first because a deletion and every exchange take the
-// registration first too (#1418). Without it, a deletion holding the
-// registration waited on the credential this held, while the insert's
-// foreign key waited on the registration; and the cascade's walk by
-// credential and an exchange's sweep by expiry could lock two expired
-// tokens in opposite orders.
+// registration first too (#1418). A deletion therefore never holds the
+// registration while this holds the credential the deletion cascades
+// into, and the cascade's walk over the credential's tokens never runs
+// beside an exchange's sweep of the same operator.
 func (s *PostgresStore) ReissueCredential(ctx context.Context, c *IssuedCredential) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {

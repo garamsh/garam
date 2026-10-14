@@ -107,8 +107,12 @@ func HashAccessToken(token string) string { return hashAccessToken(token) }
 // WellFormedAccessToken reports whether value is the prefix and 256
 // bits of lowercase hex. A value that is not is refused before anything
 // is read for it.
-func WellFormedAccessToken(value string) bool {
-	rest, ok := strings.CutPrefix(value, AccessTokenPrefix)
+func WellFormedAccessToken(value string) bool { return wellFormedSecret(value, AccessTokenPrefix) }
+
+// wellFormedSecret reports whether value is prefix and 256 bits of
+// lowercase hex, the shape of every secret this package issues.
+func wellFormedSecret(value, prefix string) bool {
+	rest, ok := strings.CutPrefix(value, prefix)
 	if !ok || len(rest) != 2*accessTokenBytes {
 		return false
 	}
@@ -140,10 +144,13 @@ func hashAccessToken(token string) string {
 func accessTokenSerial(hash string) string { return "t" + hash[:32] }
 
 // newAccessTokenValue draws 256 bits behind the prefix.
-func newAccessTokenValue() (string, error) {
+func newAccessTokenValue() (string, error) { return newSecret(AccessTokenPrefix) }
+
+// newSecret draws 256 bits behind prefix.
+func newSecret(prefix string) (string, error) {
 	var b [accessTokenBytes]byte
 	if _, err := rand.Read(b[:]); err != nil {
-		return "", errorx.Wrap(err, "agent token")
+		return "", errorx.Wrap(err, prefix+" secret")
 	}
-	return AccessTokenPrefix + hex.EncodeToString(b[:]), nil
+	return prefix + hex.EncodeToString(b[:]), nil
 }

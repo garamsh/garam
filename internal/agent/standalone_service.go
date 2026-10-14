@@ -83,7 +83,7 @@ func (s *standaloneService) Approve(ctx context.Context, in ApprovalInput) (*Enr
 	e := Enrollment{
 		ID: EnrollmentID(uuid.New()), Org: in.Org, Agent: agentGRN, Supervisor: supervisorGRN,
 		HostName: in.HostName, RequestID: in.RequestID, SecretSHA256: in.SecretSHA256,
-		SupervisorKey: in.SupervisorKey, AgentKey: in.AgentKey, Replaces: in.Replaces,
+		Keys: in.Keys, Replaces: in.Replaces,
 		ApprovedBy: in.Actor, ExpiresAt: in.ExpiresAt.UTC().Truncate(time.Microsecond),
 		CreatedAt: now.UTC().Truncate(time.Microsecond),
 	}
@@ -104,8 +104,8 @@ func (s *standaloneService) Approve(ctx context.Context, in ApprovalInput) (*Enr
 // is the request this approval already approved. The identifiers garam
 // minted and the approver are not part of it.
 func (e *Enrollment) approves(retry Enrollment) bool {
-	same := e.SecretSHA256 == retry.SecretSHA256 && e.SupervisorKey == retry.SupervisorKey &&
-		e.AgentKey == retry.AgentKey && e.HostName == retry.HostName && e.ExpiresAt.Equal(retry.ExpiresAt)
+	same := e.SecretSHA256 == retry.SecretSHA256 && sameKeys(e.Keys, retry.Keys) &&
+		e.HostName == retry.HostName && e.ExpiresAt.Equal(retry.ExpiresAt)
 	switch {
 	case e.Replaces == nil && retry.Replaces == nil:
 		return same
@@ -138,6 +138,15 @@ func (s *standaloneService) Revoke(ctx context.Context, actor, org, supervisor g
 		return err
 	}
 	return s.store.Revoke(ctx, org, supervisor)
+}
+
+// sameKeys reports whether two approvals bind the same keys, or both
+// bind none.
+func sameKeys(a, b *HostKeys) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
 }
 
 // object is what an approval's authority is decided on: the agent a

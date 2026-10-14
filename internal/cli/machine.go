@@ -281,7 +281,7 @@ func NewMachineServer(pool *pgxpool.Pool, cfg MachineConfig) (*http.Server, erro
 			// error body reaches that refusal.
 			ErrorHandlerFunc: machineapi.BindingError,
 		})
-	return obs.machineServer(identities, identityTokens{operators: operatorStore, agents: agentStore}, cfg.Certificate, handler), nil
+	return obs.machineServer(identities, identityTokens{operators: operatorStore, agents: agentStore, supervisors: agentpg.New(pool)}, cfg.Certificate, handler), nil
 }
 
 // machineServer is the listener `serve machine` serves: TLS a client

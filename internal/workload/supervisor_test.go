@@ -329,7 +329,7 @@ func TestRun_BringsAGenerationUpInTheArrangementsShape(t *testing.T) {
 	h.engine.mu.Lock()
 	outbox := h.engine.paths[memory]["outbox"]
 	h.engine.mu.Unlock()
-	assert.Equal(t, fs.ModeDir|0o700, outbox.Mode, "the outbox is made owner-only, as Sherlock v0.5.0 keeps it")
+	assert.Equal(t, fs.ModeDir|0o700, outbox.Mode, "the outbox is made owner-only, as Sherlock keeps it from v0.5.0 on")
 	assert.Contains(t, runtime.spec.Cmd, testAgent.String())
 	assert.NotContains(t, runtime.spec.Cmd, "--require-store", "the first start on a new volume creates the store")
 

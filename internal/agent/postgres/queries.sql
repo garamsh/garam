@@ -265,6 +265,54 @@ INSERT INTO agent_supervisor_renewals (
     certificate_pem, issuer_pem, server_root_pem, not_after, created_at
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);
 
+-- A supervisor's credential and tokens under standalone-enrollment.v2
+-- (ADR-0100 G1d). Every read joins the registration and requires it
+-- not to have ended, so a revocation or a replacement refuses the
+-- credential and every token from the next request.
+
+-- A retried spending re-issues the credential: deleting the row takes
+-- every token minted under it.
+-- name: DeleteSupervisorCredential :exec
+DELETE FROM supervisor_credentials WHERE supervisor_grn = $1;
+
+-- name: InsertSupervisorCredential :exec
+INSERT INTO supervisor_credentials (supervisor_grn, credential_hash, issued_at) VALUES ($1, $2, $3);
+
+-- name: GetSupervisorCredentialHolder :one
+SELECT c.id, c.supervisor_grn
+FROM supervisor_credentials c
+JOIN agent_supervisors s ON s.grn = c.supervisor_grn
+WHERE c.credential_hash = $1 AND s.ended_at IS NULL;
+
+-- An exchange holds the credential's row while it records and trims,
+-- so two exchanges at once leave no more live tokens than the bound.
+-- name: LockSupervisorCredential :one
+SELECT id FROM supervisor_credentials WHERE id = $1 FOR UPDATE;
+
+-- name: RecordSupervisorToken :exec
+WITH swept AS (
+    DELETE FROM supervisor_tokens
+    WHERE credential_id = sqlc.arg('credential_id') AND expires_at <= now()
+)
+INSERT INTO supervisor_tokens (token_hash, credential_id, issued_at, expires_at)
+VALUES (sqlc.arg('token_hash'), sqlc.arg('credential_id'), sqlc.arg('issued_at'), sqlc.arg('expires_at'));
+
+-- name: TrimSupervisorTokens :exec
+DELETE FROM supervisor_tokens t
+WHERE t.credential_id = sqlc.arg('credential_id')
+  AND t.token_hash NOT IN (
+      SELECT k.token_hash FROM supervisor_tokens k
+      WHERE k.credential_id = sqlc.arg('credential_id')
+      ORDER BY k.issued_at DESC, k.token_hash DESC
+      LIMIT sqlc.arg('keep'));
+
+-- name: ResolveSupervisorToken :one
+SELECT c.supervisor_grn, t.issued_at, t.expires_at
+FROM supervisor_tokens t
+JOIN supervisor_credentials c ON c.id = t.credential_id
+JOIN agent_supervisors s ON s.grn = c.supervisor_grn
+WHERE t.token_hash = $1 AND t.expires_at > now() AND s.ended_at IS NULL;
+
 -- Cutover (ADR-0086). Every stage takes the execution row FOR UPDATE
 -- first, then the definition row: the lock a claim serializes on.
 

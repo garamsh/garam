@@ -1219,6 +1219,7 @@ export interface components {
          * @enum {string}
          */
         AgentRuntimeState: "unknown" | "connected" | "disconnected";
+        /** @description An approval binds the host's two key fingerprints, or neither. With both, the host enrolls under `standalone-enrollment.v1` and is signed a certificate over each key; with neither, it enrolls under `standalone-enrollment.v2` and is answered a supervisor credential. Each contract refuses the other's approval (ADR-0100). One fingerprint without the other is 400. */
         AgentEnrollmentApproval: {
             /** @description The host's own identifier for this request. */
             requestId: string;
@@ -1231,10 +1232,10 @@ export interface components {
             expiresAt: string;
             /** @description SHA-256 of the bootstrap secret the host keeps. */
             secretSha256: string;
-            /** @description SHA-256 of the supervisor key's SubjectPublicKeyInfo DER. */
-            supervisorKeySha256: string;
-            /** @description SHA-256 of the agent key's SubjectPublicKeyInfo DER. */
-            agentKeySha256: string;
+            /** @description SHA-256 of the supervisor key's SubjectPublicKeyInfo DER, for a host enrolling under `standalone-enrollment.v1`. */
+            supervisorKeySha256?: string;
+            /** @description SHA-256 of the agent key's SubjectPublicKeyInfo DER, for a host enrolling under `standalone-enrollment.v1`. */
+            agentKeySha256?: string;
             replaces?: components["schemas"]["AgentEnrollmentReplacement"];
         };
         /** @description The assignment a replacement replaces, exactly as it stands when approved. */

@@ -45,6 +45,12 @@ type AuthorityService interface {
 	SetControlEndpoint(ctx context.Context, actor, org, operator grn.GRN, endpoint *ControlEndpoint) (*Operator, error)
 	// Mint hands the audience one operation on the actor's behalf.
 	Mint(ctx context.Context, r MintRequest) (*Minted, error)
+	// AuthorizeOperation decides the actor's half of a mint: whether the
+	// actor currently holds op on object, the resource Mint decides it
+	// on — the organization, or the agent op acts on. Mint and every
+	// recheck of its binding ask exactly this. It reads no grant, so an
+	// allow leaves the grant to decide the rest.
+	AuthorizeOperation(ctx context.Context, actor, org, object grn.GRN, op Operation) error
 	// Introspect answers what an authority binds, to its audience only,
 	// once current state still authorizes it. It consumes nothing.
 	Introspect(ctx context.Context, caller grn.GRN, authority string) (Introspected, error)
@@ -144,7 +150,7 @@ func (s *authorityService) Mint(ctx context.Context, r MintRequest) (*Minted, er
 	if !grant.Covers(b.Operation, controller, now) {
 		return nil, ErrNotDelegated
 	}
-	if err := s.authorize(ctx, r.Actor, r.Org, object, string(r.Operation)); err != nil {
+	if err := s.AuthorizeOperation(ctx, r.Actor, r.Org, object, r.Operation); err != nil {
 		return nil, err
 	}
 	token, err := newAuthorityToken()
@@ -160,6 +166,10 @@ func (s *authorityService) Mint(ctx context.Context, r MintRequest) (*Minted, er
 		return nil, err
 	}
 	return &Minted{Authority: token, ExpiresAt: expiresAt, Ref: ref, Grant: grant.ID}, nil
+}
+
+func (s *authorityService) AuthorizeOperation(ctx context.Context, actor, org, object grn.GRN, op Operation) error {
+	return s.authorize(ctx, actor, org, object, string(op))
 }
 
 // placement reads what b acts on. A creation targets the controller
@@ -253,7 +263,7 @@ func (s *authorityService) recheck(ctx context.Context, b Binding) error {
 	if !grant.Covers(b.Operation, controller, s.now()) {
 		return ErrAuthorityRevoked
 	}
-	if err := s.authorize(ctx, b.Actor, b.Org, object, string(b.Operation)); err != nil {
+	if err := s.AuthorizeOperation(ctx, b.Actor, b.Org, object, b.Operation); err != nil {
 		if errorx.IsKind(err, errorx.KindPermissionDenied) {
 			return ErrAuthorityRevoked
 		}

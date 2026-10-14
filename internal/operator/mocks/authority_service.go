@@ -48,6 +48,81 @@ func (_m *MockAuthorityService) EXPECT() *MockAuthorityService_Expecter {
 	return &MockAuthorityService_Expecter{mock: &_m.Mock}
 }
 
+// AuthorizeOperation provides a mock function for the type MockAuthorityService
+func (_mock *MockAuthorityService) AuthorizeOperation(ctx context.Context, actor grn.GRN, org grn.GRN, object grn.GRN, op operator.Operation) error {
+	ret := _mock.Called(ctx, actor, org, object, op)
+
+	if len(ret) == 0 {
+		panic("no return value specified for AuthorizeOperation")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, grn.GRN, grn.GRN, grn.GRN, operator.Operation) error); ok {
+		r0 = returnFunc(ctx, actor, org, object, op)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockAuthorityService_AuthorizeOperation_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'AuthorizeOperation'
+type MockAuthorityService_AuthorizeOperation_Call struct {
+	*mock.Call
+}
+
+// AuthorizeOperation is a helper method to define mock.On call
+//   - ctx context.Context
+//   - actor grn.GRN
+//   - org grn.GRN
+//   - object grn.GRN
+//   - op operator.Operation
+func (_e *MockAuthorityService_Expecter) AuthorizeOperation(ctx any, actor any, org any, object any, op any) *MockAuthorityService_AuthorizeOperation_Call {
+	return &MockAuthorityService_AuthorizeOperation_Call{Call: _e.mock.On("AuthorizeOperation", ctx, actor, org, object, op)}
+}
+
+func (_c *MockAuthorityService_AuthorizeOperation_Call) Run(run func(ctx context.Context, actor grn.GRN, org grn.GRN, object grn.GRN, op operator.Operation)) *MockAuthorityService_AuthorizeOperation_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 grn.GRN
+		if args[1] != nil {
+			arg1 = args[1].(grn.GRN)
+		}
+		var arg2 grn.GRN
+		if args[2] != nil {
+			arg2 = args[2].(grn.GRN)
+		}
+		var arg3 grn.GRN
+		if args[3] != nil {
+			arg3 = args[3].(grn.GRN)
+		}
+		var arg4 operator.Operation
+		if args[4] != nil {
+			arg4 = args[4].(operator.Operation)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+			arg4,
+		)
+	})
+	return _c
+}
+
+func (_c *MockAuthorityService_AuthorizeOperation_Call) Return(err error) *MockAuthorityService_AuthorizeOperation_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockAuthorityService_AuthorizeOperation_Call) RunAndReturn(run func(ctx context.Context, actor grn.GRN, org grn.GRN, object grn.GRN, op operator.Operation) error) *MockAuthorityService_AuthorizeOperation_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CurrentGrant provides a mock function for the type MockAuthorityService
 func (_mock *MockAuthorityService) CurrentGrant(ctx context.Context, org grn.GRN, operator1 grn.GRN) (*operator.Grant, error) {
 	ret := _mock.Called(ctx, org, operator1)

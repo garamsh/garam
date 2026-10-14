@@ -59,17 +59,13 @@ func approvalInput(actor, org grn.GRN, body apigen.AgentEnrollmentApproval) (age
 	if err != nil {
 		return agent.ApprovalInput{}, errorx.Wrap(err, "secretSha256")
 	}
-	supervisorKey, err := agent.ParseKeyFingerprint(body.SupervisorKeySha256)
+	keys, err := hostKeysOf(body.SupervisorKeySha256, body.AgentKeySha256)
 	if err != nil {
-		return agent.ApprovalInput{}, errorx.Wrap(err, "supervisorKeySha256")
-	}
-	agentKey, err := agent.ParseKeyFingerprint(body.AgentKeySha256)
-	if err != nil {
-		return agent.ApprovalInput{}, errorx.Wrap(err, "agentKeySha256")
+		return agent.ApprovalInput{}, err
 	}
 	in := agent.ApprovalInput{
 		Actor: actor, Org: org, RequestID: requestID, HostName: hostName, ExpiresAt: body.ExpiresAt,
-		SecretSHA256: [32]byte(secret), SupervisorKey: supervisorKey, AgentKey: agentKey,
+		SecretSHA256: [32]byte(secret), Keys: keys,
 	}
 	if r := body.Replaces; r != nil {
 		agentGRN, err := grn.Parse(r.AgentGrn)
@@ -83,6 +79,29 @@ func approvalInput(actor, org grn.GRN, body apigen.AgentEnrollmentApproval) (age
 		in.Replaces = &agent.Replacement{Agent: agentGRN, Assignee: assignee, Epoch: r.Epoch}
 	}
 	return in, nil
+}
+
+// hostKeysOf parses the two fingerprints an approval binds for a host
+// enrolling under standalone-enrollment.v1, or answers nil where it
+// binds neither, for one enrolling under v2 (ADR-0100). One without
+// the other binds no contract.
+func hostKeysOf(supervisorSHA256, agentSHA256 *string) (*agent.HostKeys, error) {
+	if supervisorSHA256 == nil && agentSHA256 == nil {
+		return nil, nil
+	}
+	if supervisorSHA256 == nil || agentSHA256 == nil {
+		return nil, errorx.New(errorx.KindInvalidArgument,
+			"an approval binds both key fingerprints, for a certificate host, or neither, for a credential host")
+	}
+	supervisorKey, err := agent.ParseKeyFingerprint(*supervisorSHA256)
+	if err != nil {
+		return nil, errorx.Wrap(err, "supervisorKeySha256")
+	}
+	agentKey, err := agent.ParseKeyFingerprint(*agentSHA256)
+	if err != nil {
+		return nil, errorx.Wrap(err, "agentKeySha256")
+	}
+	return &agent.HostKeys{Supervisor: supervisorKey, Agent: agentKey}, nil
 }
 
 // WithdrawAgentEnrollment withdraws an approval no host has spent.

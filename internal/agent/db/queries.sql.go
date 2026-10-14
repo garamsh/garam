@@ -266,12 +266,14 @@ func (q *Queries) GetAgentTemplate(ctx context.Context, grn string) (AgentTempla
 const getAgentTokenShownTo = `-- name: GetAgentTokenShownTo :one
 SELECT agent_grn, serial, audience_grn, issued_at, expires_at
 FROM agent_tokens
-WHERE token_hash = $1 AND audience_grn = $2
+WHERE token_hash = $1
+  AND (audience_grn = $2
+       OR (audience_grn IS NULL AND assignee_grn = $2))
 `
 
 type GetAgentTokenShownToParams struct {
-	TokenHash   string
-	AudienceGrn pgtype.Text
+	TokenHash string
+	CallerGrn pgtype.Text
 }
 
 type GetAgentTokenShownToRow struct {
@@ -287,8 +289,12 @@ type GetAgentTokenShownToRow struct {
 // token of an earlier epoch or lineage is answered fenced while its row
 // is kept. A mint's sweep and trim delete rows, and a token whose row
 // is gone is not proven.
+//
+// A token the caller itself minted for garam proves the agent too: a
+// standalone host's supervisor is the assignee and the lifecycle
+// authority at once, and forwards the agent's own token (ADR-0100).
 func (q *Queries) GetAgentTokenShownTo(ctx context.Context, arg GetAgentTokenShownToParams) (GetAgentTokenShownToRow, error) {
-	row := q.db.QueryRow(ctx, getAgentTokenShownTo, arg.TokenHash, arg.AudienceGrn)
+	row := q.db.QueryRow(ctx, getAgentTokenShownTo, arg.TokenHash, arg.CallerGrn)
 	var i GetAgentTokenShownToRow
 	err := row.Scan(
 		&i.AgentGrn,

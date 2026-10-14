@@ -99,8 +99,11 @@ func (a lifecycleAuthorization) Authorize(ctx context.Context, caller, agentGRN,
 // assignment. It covers activation alone; recovery is an
 // administrator's new approval. The authority's identifier is the
 // approval that registered it, so a renewal changes nothing an
-// activation retry is matched by, and it expires with the certificate
-// garam last issued the supervisor.
+// activation retry is matched by. It expires with the certificate
+// garam last issued the supervisor; one enrolled under
+// standalone-enrollment.v2 holds none, and its authority holds while
+// its registration does, which the store reads again under the
+// execution lock, so it is bounded by the decision's own deadline.
 func (a lifecycleAuthorization) supervising(ctx context.Context, caller, agentGRN, assignee grn.GRN, op agent.LifecycleOperation) (agent.Grant, error) {
 	if op != agent.OperationActivate {
 		return agent.Grant{}, errorx.New(errorx.KindPermissionDenied, "a supervisor's authority does not cover "+string(op))
@@ -115,7 +118,11 @@ func (a lifecycleAuthorization) supervising(ctx context.Context, caller, agentGR
 	if registered.Agent != agentGRN || assignee != caller {
 		return agent.Grant{}, errorx.New(errorx.KindPermissionDenied, "the supervisor does not hold this agent")
 	}
-	return agent.Grant{ID: "supervisor:" + registered.Enrollment.String(), ExpiresAt: registered.NotAfter}, nil
+	expires := a.now().Add(agent.LifecycleDeadline)
+	if c := registered.Certificate; c != nil {
+		expires = c.NotAfter
+	}
+	return agent.Grant{ID: "supervisor:" + registered.Enrollment.String(), ExpiresAt: expires}, nil
 }
 
 // delegated answers a hosted operator's authority: its current grant,

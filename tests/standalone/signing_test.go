@@ -18,7 +18,7 @@ const stackIssuer = "https://garam.test"
 const signingConfig = "revision: r1\nrequire-signature: true\nmodel:\n  provider: mock\n"
 
 // TestStandalone_SignsWhereTheHostNamesGaramsIssuer holds #1312 end to
-// end against Sherlock v0.5.0: a host naming garam's issuer has its
+// end against the pinned Sherlock: a host naming garam's issuer has its
 // runtime trust garam's key set and its adapter sign, so a message
 // reaches a runtime that refuses anything unsigned, and its turn
 // completes. The control is a second host naming an issuer garam does

@@ -2725,7 +2725,14 @@ components:
       enum: [unknown, connected, disconnected]
     AgentEnrollmentApproval:
       type: object
-      required: [requestId, hostName, expiresAt, secretSha256, supervisorKeySha256, agentKeySha256]
+      description: >-
+        An approval binds the host's two key fingerprints, or neither.
+        With both, the host enrolls under `standalone-enrollment.v1` and
+        is signed a certificate over each key; with neither, it enrolls
+        under `standalone-enrollment.v2` and is answered a supervisor
+        credential. Each contract refuses the other's approval
+        (ADR-0100). One fingerprint without the other is 400.
+      required: [requestId, hostName, expiresAt, secretSha256]
       properties:
         requestId:
           type: string
@@ -2745,11 +2752,15 @@ components:
         supervisorKeySha256:
           type: string
           pattern: '^[0-9a-f]{64}$'
-          description: SHA-256 of the supervisor key's SubjectPublicKeyInfo DER.
+          description: >-
+            SHA-256 of the supervisor key's SubjectPublicKeyInfo DER, for
+            a host enrolling under `standalone-enrollment.v1`.
         agentKeySha256:
           type: string
           pattern: '^[0-9a-f]{64}$'
-          description: SHA-256 of the agent key's SubjectPublicKeyInfo DER.
+          description: >-
+            SHA-256 of the agent key's SubjectPublicKeyInfo DER, for a host
+            enrolling under `standalone-enrollment.v1`.
         replaces:
           $ref: '#/components/schemas/AgentEnrollmentReplacement'
     AgentEnrollmentReplacement:

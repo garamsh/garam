@@ -150,7 +150,7 @@ type AgentSupervisor struct {
 	AgentGrn     string
 	EnrollmentID pgtype.UUID
 	HostName     string
-	Serial       string
+	Serial       pgtype.Text
 	NotAfter     pgtype.Timestamptz
 	RegisteredAt pgtype.Timestamptz
 	EndedAt      pgtype.Timestamptz
@@ -240,6 +240,20 @@ type Session struct {
 	UserGrn   string
 	CreatedAt pgtype.Timestamptz
 	ExpiresAt pgtype.Timestamptz
+}
+
+type SupervisorCredential struct {
+	ID             int64
+	SupervisorGrn  string
+	CredentialHash string
+	IssuedAt       pgtype.Timestamptz
+}
+
+type SupervisorToken struct {
+	TokenHash    string
+	CredentialID int64
+	IssuedAt     pgtype.Timestamptz
+	ExpiresAt    pgtype.Timestamptz
 }
 
 type User struct {

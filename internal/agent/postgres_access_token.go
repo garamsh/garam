@@ -107,7 +107,7 @@ func (s *PostgresStore) MintAccessToken(ctx context.Context, caller grn.GRN, t *
 // audience it was minted to be shown to.
 func (s *PostgresStore) AccessTokenShownTo(ctx context.Context, tokenHash string, audience grn.GRN) (AccessTokenHolder, error) {
 	row, err := s.q.GetAgentTokenShownTo(ctx, db.GetAgentTokenShownToParams{
-		TokenHash: tokenHash, AudienceGrn: pgtype.Text{String: audience.String(), Valid: true},
+		TokenHash: tokenHash, CallerGrn: pgtype.Text{String: audience.String(), Valid: true},
 	})
 	if err != nil {
 		return AccessTokenHolder{}, pgxerr.Classify(err, "agent token shown to an audience", ErrTokenNotProven, nil)
@@ -116,8 +116,11 @@ func (s *PostgresStore) AccessTokenShownTo(ctx context.Context, tokenHash string
 	if err != nil {
 		return AccessTokenHolder{}, errorx.Wrap(err, "stored agent grn", errorx.KindInternal)
 	}
-	return AccessTokenHolder{Agent: agentGRN, Serial: row.Serial, Audience: &audience,
-		IssuedAt: row.IssuedAt.Time, ExpiresAt: row.ExpiresAt.Time}, nil
+	holder := AccessTokenHolder{Agent: agentGRN, Serial: row.Serial, IssuedAt: row.IssuedAt.Time, ExpiresAt: row.ExpiresAt.Time}
+	if row.AudienceGrn.Valid {
+		holder.Audience = &audience
+	}
+	return holder, nil
 }
 
 // ResolveAccessToken answers what a live token names. The statement

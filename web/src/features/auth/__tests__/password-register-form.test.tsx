@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
@@ -8,6 +8,7 @@ import {
   PASSWORD_MIN_LENGTH,
   USERNAME_MAX_LENGTH,
 } from "@/lib/password-credentials";
+import { enter } from "@/testing/enter";
 import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
@@ -22,17 +23,20 @@ const PASSWORD = "correct-horse-battery-staple";
 
 const TOKEN = "invitation-token-nobody-guesses";
 
-/** Registers through the form and answers with what it then shows. */
+/**
+ * Registers through the form and answers with what it then shows, and
+ * with queries scoped to this render rather than to the document.
+ */
 async function register(token: string, username: string, password: string) {
   const user = userEvent.setup();
-  render(<PasswordRegisterForm />);
+  const form = within(render(<PasswordRegisterForm />).container);
 
-  await user.type(screen.getByLabelText("Invitation token"), token);
-  await user.type(screen.getByLabelText("Username"), username);
-  await user.type(screen.getByLabelText("Password"), password);
-  await user.click(screen.getByRole("button", { name: "Create account" }));
+  await enter(user, form.getByLabelText("Invitation token"), token);
+  await enter(user, form.getByLabelText("Username"), username);
+  await enter(user, form.getByLabelText("Password"), password);
+  await user.click(form.getByRole("button", { name: "Create account" }));
 
-  return (await screen.findByRole("alert")).textContent;
+  return { refusal: (await form.findByRole("alert")).textContent, form };
 }
 
 describe("password register form", () => {
@@ -52,7 +56,7 @@ describe("password register form", () => {
       }),
     );
 
-    const refusal = await register(TOKEN, "alice", PASSWORD);
+    const { refusal } = await register(TOKEN, "alice", PASSWORD);
 
     expect(seen).toEqual([
       {
@@ -79,10 +83,10 @@ describe("password register form", () => {
       ),
     );
 
-    await register(TOKEN, "alice", PASSWORD);
+    const { form } = await register(TOKEN, "alice", PASSWORD);
 
-    expect(screen.getByLabelText("Invitation token")).toHaveValue(TOKEN);
-    expect(screen.getByLabelText("Username")).toHaveValue("alice");
+    expect(form.getByLabelText("Invitation token")).toHaveValue(TOKEN);
+    expect(form.getByLabelText("Username")).toHaveValue("alice");
   });
 
   it("states the bounds the action holds, so they are read before a submission", () => {

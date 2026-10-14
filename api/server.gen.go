@@ -911,14 +911,14 @@ type PermissionCheckRequest struct {
 type PermissionCheckResult struct {
 	Action string `json:"action"`
 
-	// Decision `allow` and `deny` are what enforcement would decide now. `unknown` is an action this operation cannot decide, because its enforcement reads more than the engine's `Check`: render the control and let the operation answer.
+	// Decision `allow` and `deny` are what enforcement would decide now. `unknown` is an action this operation cannot decide: a minted action whose caller check allows, leaving the delegation grant this operation does not read to decide, or an action whose enforcement this operation does not ask at all. Render the control and let the operation answer.
 	Decision PermissionDecision `json:"decision"`
 
 	// Resource A resource of the organization, named by its kind and the last segment of its identifier, as the paths under `/orgs/{org}` name it.
 	Resource *PermissionResource `json:"resource,omitempty"`
 }
 
-// PermissionDecision `allow` and `deny` are what enforcement would decide now. `unknown` is an action this operation cannot decide, because its enforcement reads more than the engine's `Check`: render the control and let the operation answer.
+// PermissionDecision `allow` and `deny` are what enforcement would decide now. `unknown` is an action this operation cannot decide: a minted action whose caller check allows, leaving the delegation grant this operation does not read to decide, or an action whose enforcement this operation does not ask at all. Render the control and let the operation answer.
 type PermissionDecision string
 
 // PermissionResource A resource of the organization, named by its kind and the last segment of its identifier, as the paths under `/orgs/{org}` name it.

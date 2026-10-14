@@ -1204,7 +1204,7 @@ export interface components {
             decision: components["schemas"]["PermissionDecision"];
         };
         /**
-         * @description `allow` and `deny` are what enforcement would decide now. `unknown` is an action this operation cannot decide, because its enforcement reads more than the engine's `Check`: render the control and let the operation answer.
+         * @description `allow` and `deny` are what enforcement would decide now. `unknown` is an action this operation cannot decide: a minted action whose caller check allows, leaving the delegation grant this operation does not read to decide, or an action whose enforcement this operation does not ask at all. Render the control and let the operation answer.
          * @enum {string}
          */
         PermissionDecision: "allow" | "deny" | "unknown";

@@ -10,9 +10,10 @@ test.describe("organization overview", () => {
     await page.goto(`/console/orgs/${signedIn.orgSlug}`);
 
     // The seeded agent reports failed and disconnected, each its own
-    // state (ADR-0053).
-    const banner = page.getByRole("alert");
-    await expect(banner).toContainText("2 states need attention");
+    // state (ADR-0053), and the seeded operator's enrollment expired.
+    // Inside main: the router's announcer is an alert too.
+    const banner = page.getByRole("main").getByRole("alert");
+    await expect(banner).toContainText("3 states need attention");
     await banner.getByRole("link", { name: "1 failed in Agents" }).click();
 
     await expect(page).toHaveURL(`/console/orgs/${signedIn.orgSlug}/agents`);
@@ -64,7 +65,7 @@ test.describe("organization overview", () => {
     test(`passes axe in the ${theme} theme`, async ({ page, signedIn }) => {
       await useTheme(page, theme);
       await page.goto(`/console/orgs/${signedIn.orgSlug}`);
-      await expect(page.getByRole("alert")).toBeVisible();
+      await expect(page.getByRole("main").getByRole("alert")).toBeVisible();
 
       await expectHydrated(page);
       expect(await axeViolations(page)).toEqual([]);

@@ -31,8 +31,9 @@ const Schema = z.object({
  * and reads back the relation.
  *
  * The identifier is not parsed here: the console builds no GRN from it,
- * and an organization garam does not hold is refused by the API, which
- * names it — a refusal the form renders as the sentence it was given.
+ * and an organization garam does not hold, or this one itself, is
+ * refused by the API — a refusal the form renders in this operation's
+ * own sentence.
  */
 export async function grantOrgConsent(
   _state: GrantOrgConsentState,
@@ -57,7 +58,7 @@ export async function grantOrgConsent(
   } catch (error) {
     // An unreachable API is a state the form renders, not a throw: the
     // boundary would replace the form and the identifier typed into it.
-    return refusal(error);
+    return refusal(error, "grantOrgConsent");
   }
 
   revalidatePath(`/console/orgs/${org}/consents`);

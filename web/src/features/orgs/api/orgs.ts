@@ -335,6 +335,20 @@ export function listProjects(org: string): Promise<OrgRead<Project[]>> {
   );
 }
 
+/**
+ * The projects of an organization, for a page that also reads the
+ * organization: a refusal is returned rather than answered with
+ * not-found.
+ */
+export function lookupProjects(org: string): Promise<RefusableRead<Project[]>> {
+  return refusableRead(
+    garamFetchAuthenticated(
+      `/orgs/${orgPath(org)}/projects`,
+      z.array(ProjectParser),
+    ),
+  );
+}
+
 /** The operators an organization has registered. */
 export function listOperators(org: string): Promise<OrgRead<Operator[]>> {
   return orgRead(
@@ -435,9 +449,16 @@ export async function getAgentDefinition(
   }
 }
 
-/** The cross-organization consent relations an organization is a side of. */
-export function listOrgConsents(org: string): Promise<OrgRead<OrgConsent[]>> {
-  return orgRead(
+/**
+ * The cross-organization consent relations an organization is a side
+ * of, for a page that also reads the organization: reading them needs
+ * `consent:read`, which not every member holds, so a refusal is
+ * returned rather than answered with not-found.
+ */
+export function lookupOrgConsents(
+  org: string,
+): Promise<RefusableRead<OrgConsent[]>> {
+  return refusableRead(
     garamFetchAuthenticated(
       `/orgs/${orgPath(org)}/consents`,
       z.array(OrgConsentParser),

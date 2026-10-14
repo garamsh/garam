@@ -32,6 +32,8 @@ func TestParsePolicyDocument_NamesTheRuleAndThePlace(t *testing.T) {
 		{name: "unknown key at the root", document: `{"Version":"v","Bad":1}`, code: authz.ReasonPolicyDocumentUnknownKey, path: "/Bad"},
 		{name: "unknown key in a statement", document: `{"Version":"v","Statement":[{},{"Sid":"b","Bogus/x":1}]}`, code: authz.ReasonPolicyDocumentUnknownKey, path: "/Statement/1/Bogus~1x"},
 		{name: "wrong type", document: `{"Version":1}`, code: authz.ReasonPolicyDocumentWrongType, path: "/Version"},
+		{name: "wrong type, pointed at by the canonical name", document: `{"version":1}`, code: authz.ReasonPolicyDocumentWrongType, path: "/Version"},
+		{name: "wrong type in a statement written in lower case", document: `{"Version":"v","statement":[{"effect":3}]}`, code: authz.ReasonPolicyDocumentWrongType, path: "/Statement/0/Effect"},
 		{name: "wrong type in a list", document: `{"Version":"v","Statement":[{"Action":["a",3]}]}`, code: authz.ReasonPolicyDocumentWrongType, path: "/Statement/0/Action/1"},
 		{name: "no version", document: `{"Statement":[]}`, code: authz.ReasonPolicyDocumentVersionMissing, path: "/Version"},
 		{name: "no statement", document: `{"Version":"v","Statement":[]}`, code: authz.ReasonPolicyDocumentStatementEmpty, path: "/Statement"},

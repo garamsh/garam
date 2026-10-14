@@ -591,7 +591,9 @@ so the API answers the engine's code unchanged.
 /auth/login/{provider}` starts the same flow as `GET` and takes `next`
 in its form body. A path off the console is dropped by the rule the
 console applies to the password sign-in (`internal/api/return_path.go`,
-`web/src/lib/return-path.ts`). What is kept is held on the login's
+`web/src/lib/return-path.ts`), which bounds it in UTF-8 bytes and is
+tested on both sides against one table,
+`internal/api/testdata/return-path-vectors.json`. What is kept is held on the login's
 `oauth_states` row, so it is spent with the state by the callback that
 completes and expires with it. The callback redirects to it, checked
 again, or to `/console`, and no answer repeats it. A cross-site form

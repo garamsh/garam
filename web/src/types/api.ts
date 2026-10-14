@@ -1691,7 +1691,7 @@ export interface components {
             message: string;
             /** @description A stable code naming the rule that refused, present only where the kind alone does not say which refusal it was. A client branches on this rather than on `message`, which may be reworded at any release; a client that does not know a code reads the kind as before, and new codes may be added. Invitations: `invitation_accepted`, `invitation_expired`. Policy documents, each with `path`: `policy_document_malformed`, `policy_document_trailing_data`, `policy_document_wrong_type`, `policy_document_unknown_key`, `policy_document_version_missing`, `policy_document_statement_empty`, `policy_document_effect_invalid`, `policy_document_action_missing`, `policy_document_resource_missing`. */
             reason?: string;
-            /** @description A JSON Pointer (RFC 6901) into the document the request sent, to the place `reason` is about, e.g. `/Statement/1/Effect`. Absent where the reason is about the document as a whole or about no document. */
+            /** @description A JSON Pointer (RFC 6901) into the document the request sent, to the place `reason` is about, e.g. `/Statement/1/Effect`. A key the document's format names is spelled as the format spells it, whatever case the request used: a document accepts `statement` for `Statement`, and the pointer reads `/Statement`. A key the format does not name is spelled as it was sent. Absent where the reason is about the document as a whole or about no document. */
             path?: string;
         };
     };

@@ -113,11 +113,15 @@ func (s shape) find(value any, path string) (code, at, message string, found boo
 		}
 		for _, key := range sortedKeys(object) {
 			name, known := s.keyFor(key)
-			at := path + "/" + escapePointer(key)
 			if !known {
-				return ReasonPolicyDocumentUnknownKey, at, "unknown key " + strconv.Quote(key), true
+				// A key the model does not name has no canonical
+				// spelling, so its pointer is the key as written.
+				return ReasonPolicyDocumentUnknownKey, path + "/" + escapePointer(key),
+					"unknown key " + strconv.Quote(key), true
 			}
-			if code, at, message, found := s.keys[name].find(object[key], at); found {
+			// A known key is pointed at by the model's own name, however
+			// its case was written, as every rule after decoding names it.
+			if code, at, message, found := s.keys[name].find(object[key], path+"/"+name); found {
 				return code, at, message, true
 			}
 		}

@@ -231,6 +231,10 @@ describe("refusal", () => {
     expect(refused("policy_document_wrong_type", "/Statement/0/Action/1")).toBe(
       "Statement 1's Action, item 2 has the wrong type of value.",
     );
+    // The format's own spelling, whatever case the pointer arrived in.
+    expect(
+      refused("policy_document_effect_invalid", "/statement/0/effect"),
+    ).toBe("Statement 1's Effect must be Allow or Deny.");
     expect(refused("policy_document_version_missing", "/Version")).toBe(
       "The document needs a Version.",
     );

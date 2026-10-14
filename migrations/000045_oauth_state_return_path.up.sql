@@ -12,5 +12,5 @@
 ALTER TABLE oauth_states
     ADD COLUMN return_path text
         CHECK (return_path IS NULL
-            OR (char_length(return_path) <= 2048
+            OR (octet_length(return_path) <= 2048
                 AND (return_path = '/console' OR return_path LIKE '/console/%')));

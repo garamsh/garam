@@ -3741,8 +3741,12 @@ components:
           description: >-
             A JSON Pointer (RFC 6901) into the document the request sent,
             to the place `reason` is about, e.g. `/Statement/1/Effect`.
-            Absent where the reason is about the document as a whole or
-            about no document.
+            A key the document's format names is spelled as the format
+            spells it, whatever case the request used: a document
+            accepts `statement` for `Statement`, and the pointer reads
+            `/Statement`. A key the format does not name is spelled as
+            it was sent. Absent where the reason is about the document
+            as a whole or about no document.
   headers:
     ContractVersion:
       description: The contract version this answer follows, `operation-authority.v1`.

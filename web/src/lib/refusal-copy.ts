@@ -111,7 +111,9 @@ function placeIn(path: string | undefined): string {
   const tokens = (path ?? "")
     .split("/")
     .slice(1)
-    .map((token) => token.replaceAll("~1", "/").replaceAll("~0", "~"));
+    .map((token) =>
+      canonical(token.replaceAll("~1", "/").replaceAll("~0", "~")),
+    );
   if (tokens.length === 0) return "the document";
   if (tokens[0] !== "Statement" || tokens.length === 1)
     return tokens.join(" › ");
@@ -119,6 +121,30 @@ function placeIn(path: string | undefined): string {
   if (tokens.length === 2) return statement;
   const item = tokens.length > 3 ? `, item ${Number(tokens[3]) + 1}` : "";
   return `${statement}'s ${tokens[2]}${item}`;
+}
+
+/** The keys the policy format names, as it spells them. */
+const POLICY_KEYS = [
+  "Version",
+  "Statement",
+  "Sid",
+  "Effect",
+  "Action",
+  "Resource",
+  "Condition",
+];
+
+/**
+ * A pointer token in the format's own spelling where it names a key the
+ * format holds. garam already points at known keys by that spelling
+ * (`api/openapi.yaml` `Error.path`); this keeps a sentence in it
+ * whatever case reaches here. Any other token is shown as written.
+ */
+function canonical(token: string): string {
+  return (
+    POLICY_KEYS.find((key) => key.toLowerCase() === token.toLowerCase()) ??
+    token
+  );
 }
 
 /** The pointer to what holds the place `path` leads to. */
@@ -161,6 +187,15 @@ const BY_REASON: Record<string, (path: string | undefined) => string> = {
   policy_document_resource_missing: (path) =>
     `${opening(placeIn(parentOf(path)))} needs at least one Resource.`,
 };
+
+/** The reasons this file writes a sentence for. */
+export const MAPPED_REASONS: readonly string[] = Object.keys(BY_REASON);
+
+/**
+ * Documented reasons this file reads by status and kind on purpose.
+ * None today; a code goes here, with why, rather than being missed.
+ */
+export const UNMAPPED_REASONS: readonly string[] = [];
 
 /** The sentence for a refusal garam answered with. */
 export function refusalCopy(

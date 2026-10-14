@@ -320,8 +320,8 @@ func (s *Supervisor) files(in *intent, r Role, root []byte) []File {
 // own before the adapter mounts it alone, read through the runtime
 // container that mounts the volume. Where it is absent and create is
 // set, it is made 0700 and owned by the runtime's account, as Sherlock
-// v0.5.0 keeps it (sherlock#1025). Anything but a
-// directory there, a link above all, refuses: a link inside the volume
+// keeps it from v0.5.0 on (sherlock#1025). Anything but a directory
+// there, a link above all, refuses: a link inside the volume
 // would hand the adapter the whole of it, and the path is never
 // repaired, since replacing it could drop what it holds. No turn runs
 // before the adapter exists, so nothing changes the path between this

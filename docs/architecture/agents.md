@@ -538,8 +538,8 @@ supervisor that stops leaves the workload running.
   65532, and checks it again before the adapter is created; a link or
   anything else there refuses, and the path is never repaired. The
   store files the runtime creates beside it are 0600 and 65532's, the
-  modes Sherlock v0.5.0 keeps its state in (sherlock#1025), so an
-  account other than the runtime's on that volume can neither list
+  modes Sherlock keeps its state in from v0.5.0 on (sherlock#1025), so
+  an account other than the runtime's on that volume can neither list
   what the agent is about to send nor read its memory. The adapter
   runs as 65532 and reads the outbox all the same.
 - **`--require-store` follows the record.** Every start passes it once
@@ -631,7 +631,7 @@ supervisor that stops leaves the workload running.
   reach garam's private root. So a host on a runtime older than
   `v0.4.0` names no issuer, and one that does has every message
   refused and handed out again. `tests/standalone/signing_test.go`
-  holds the configured case against Sherlock `v0.5.0`: a runtime that
+  holds the configured case against the pinned Sherlock: a runtime that
   refuses anything unsigned takes the message. A generation started
   before the rendering keeps the configuration and the adapter it was
   given until it is replaced.

@@ -90,7 +90,7 @@ func (s *Supervisor) moveOwed() (bool, error) {
 
 // movable refuses a move from a store whose writer was not positively
 // stopped: exited 0 after its drain, as Sherlock requires of a copy
-// (deployment.md §Snapshot and restore at v0.2.0). The writer lock,
+// (deployment.md §Snapshot and restore at v0.6.0). The writer lock,
 // the other half, is the copy's to hold.
 func (s *Supervisor) movable() error {
 	m := s.st.Memory

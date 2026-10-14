@@ -13,7 +13,7 @@ import (
 
 // storeFiles is the runtime's memory file and the two sidecars SQLite
 // keeps beside it, which with the outbox are the agent's stored state
-// (Sherlock v0.2.0, docs/architecture/deployment.md §Snapshot and
+// (Sherlock v0.6.0, docs/architecture/deployment.md §Snapshot and
 // restore). Its writer lock is not state and is not copied.
 var storeFiles = []string{"memory.db", "memory.db-wal", "memory.db-shm"}
 

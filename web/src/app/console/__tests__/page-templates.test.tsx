@@ -67,7 +67,9 @@ describe("DetailPage", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "Field one" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("field-one")).toHaveAccessibleName("Operator ID");
+    expect(screen.getByRole("group", { name: "Operator ID" })).toContainElement(
+      screen.getByText("field-one"),
+    );
     expect(screen.getByText("Enrolled")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Copy operator id" }),

@@ -33,7 +33,9 @@
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
-  --color-destructive: var(--destructive);
+  /* One token for danger: shadcn names it `destructive`, status names
+     it `danger`, and both read `--danger`. */
+  --color-destructive: var(--danger);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -55,6 +57,8 @@
   --color-info: var(--info);
   --text-table: 0.8125rem;
   --text-table--line-height: 1.25rem;
+  --text-caption: 0.6875rem;
+  --text-caption--line-height: 1rem;
   --text-eyebrow: 0.6875rem;
   --text-eyebrow--line-height: 1.2;
   --text-eyebrow--letter-spacing: 0.16em;
@@ -99,14 +103,15 @@
   --muted-foreground: oklch(0.48 0.012 260);
   --accent: oklch(0.955 0.005 260);
   --accent-foreground: oklch(0.21 0.006 260);
-  --destructive: oklch(0.55 0.2 27);
   --border: oklch(0.92 0.004 260);
-  --input: oklch(0.88 0.005 260);
+  /* Control borders hold 3:1 against the page and muted fills (WCAG
+     2.2 SC 1.4.11); status colours hold 3:1 as graphics. */
+  --input: oklch(0.63 0.006 260);
   --ring: oklch(0.55 0.19 264);
   --brand: oklch(0.55 0.19 264);
   --brand-foreground: oklch(0.99 0.003 264);
   --ok: oklch(0.6 0.15 150);
-  --warn: oklch(0.72 0.16 70);
+  --warn: oklch(0.64 0.15 60);
   --danger: oklch(0.58 0.21 27);
   --info: oklch(0.6 0.13 240);
   --chart-1: oklch(0.87 0.004 260);
@@ -115,7 +120,7 @@
   --chart-4: oklch(0.371 0.01 260);
   --chart-5: oklch(0.269 0.008 260);
   --radius: 0.375rem;
-  --sidebar: oklch(0.975 0.003 260);
+  --sidebar: oklch(0.96 0.004 260);
   --sidebar-foreground: oklch(0.36 0.01 260);
   --sidebar-primary: oklch(0.55 0.19 264);
   --sidebar-primary-foreground: oklch(0.99 0.003 264);
@@ -141,9 +146,8 @@
   --muted-foreground: oklch(0.72 0.01 260);
   --accent: oklch(0.27 0.007 260);
   --accent-foreground: oklch(0.96 0.003 260);
-  --destructive: oklch(0.7 0.18 25);
   --border: oklch(1 0 0 / 9%);
-  --input: oklch(1 0 0 / 14%);
+  --input: oklch(0.55 0.008 260);
   --ring: oklch(0.68 0.16 264);
   --brand: oklch(0.68 0.16 264);
   --brand-foreground: oklch(0.17 0.02 264);
@@ -197,6 +201,12 @@
   .lucide {
     stroke-width: 1.5;
   }
+  /* One focus ring: what the primitives draw on focus, given to every
+     other focusable so no browser outline remains. A primitive's own
+     focus utilities still win, being in a later layer. */
+  :where(a, summary, [tabindex], input, select, textarea):focus-visible {
+    @apply rounded-sm outline-hidden ring-3 ring-ring/50;
+  }
   /* Identifiers, keys and timestamps line up in columns. */
   code,
   kbd,
@@ -237,4 +247,20 @@
 [data-slot="alert-dialog-footer"] {
   border-bottom-left-radius: var(--radius-2xl);
   border-bottom-right-radius: var(--radius-2xl);
+}
+
+/* Table density, for every table the CLI's primitive renders: 13px
+   text in tabular figures, and 36px rows. */
+[data-slot="table"] {
+  font-size: var(--text-table);
+  line-height: var(--text-table--line-height);
+  font-variant-numeric: tabular-nums;
+}
+[data-slot="table-head"],
+[data-slot="table-cell"] {
+  height: var(--spacing-row);
+  padding-block: 0.375rem;
+}
+[data-slot="table"][data-density="compact"] [data-slot="table-cell"] {
+  height: var(--spacing-row-compact);
 }

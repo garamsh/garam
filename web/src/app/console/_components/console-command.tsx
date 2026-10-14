@@ -7,5 +7,5 @@ import { listConsoleOrgs } from "./console-orgs";
  */
 export async function ConsoleCommand() {
   const orgs = await listConsoleOrgs();
-  return <CommandPalette orgs={orgs.status === "ok" ? orgs.orgs : []} />;
+  return <CommandPalette orgs={orgs.status === "ok" ? orgs.orgs : null} />;
 }

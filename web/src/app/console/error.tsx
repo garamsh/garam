@@ -23,7 +23,7 @@ export default function ConsoleError({
     <section
       role="alert"
       aria-labelledby="console-error-title"
-      className="mx-auto flex w-full max-w-md flex-col items-start gap-4 py-16"
+      className="flex max-w-lg flex-col items-start gap-4"
     >
       <div className="flex flex-col gap-1.5">
         <h1 id="console-error-title" className="text-xl tracking-tight">

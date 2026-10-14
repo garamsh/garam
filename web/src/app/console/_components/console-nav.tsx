@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { Fragment } from "react";
 
 import {
   SidebarGroup,
@@ -8,16 +9,19 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarSeparator,
 } from "@/components/ui/sidebar";
 
 import { IntentLink } from "./intent-link";
 import {
   CONSOLE_NAV_GROUPS,
+  isUnknownOrg,
   navEntryCurrent,
   orgHref,
   parseConsolePath,
   resolveNavEntry,
   type ConsoleLocation,
+  type ConsoleOrg,
   type NavEntry,
 } from "./navigation";
 
@@ -62,11 +66,14 @@ function NavItems({
 
 /**
  * The sections of the selected organization: the overview, then the
- * groups `CONSOLE_NAV_GROUPS` declares.
+ * groups `CONSOLE_NAV_GROUPS` declares. Nothing is offered for an
+ * organization the caller's list does not hold, since every link would
+ * lead to the same not-found page; `orgs` is null when the list was not
+ * answered, and the sections stay.
  */
-export function ConsoleNav() {
+export function ConsoleNav({ orgs }: { orgs: readonly ConsoleOrg[] | null }) {
   const location = parseConsolePath(usePathname());
-  if (location.kind !== "org") return null;
+  if (location.kind !== "org" || isUnknownOrg(location, orgs)) return null;
 
   return (
     <nav aria-label="Organization sections">
@@ -79,18 +86,22 @@ export function ConsoleNav() {
         />
       </SidebarGroup>
       {CONSOLE_NAV_GROUPS.map((group) => (
-        <SidebarGroup key={group.label} className="py-1">
-          {/* The primitive dims its label below AA contrast at this size. */}
-          <SidebarGroupLabel className="text-sidebar-foreground">
-            {group.label}
-          </SidebarGroupLabel>
-          <NavItems
-            entries={group.entries}
-            org={location.org}
-            location={location}
-            label={group.label}
-          />
-        </SidebarGroup>
+        <Fragment key={group.label}>
+          {/* The collapsed rail hides the labels, so a rule marks where
+              one group ends. */}
+          <SidebarSeparator className="mx-3 hidden group-data-[collapsible=icon]:block" />
+          <SidebarGroup className="pt-3 pb-0 group-data-[collapsible=icon]:pt-2">
+            <SidebarGroupLabel className="h-7 text-[length:var(--text-caption)] font-medium text-muted-foreground group-data-[collapsible=icon]:-mt-7">
+              {group.label}
+            </SidebarGroupLabel>
+            <NavItems
+              entries={group.entries}
+              org={location.org}
+              location={location}
+              label={group.label}
+            />
+          </SidebarGroup>
+        </Fragment>
       ))}
     </nav>
   );

@@ -29,7 +29,13 @@ export function CopyField({
   const { outcome, copy } = useCopy(value);
 
   return (
-    <div className={cn("flex min-w-0 flex-col gap-1", className)}>
+    // The group carries the label: `code` takes no name of its own
+    // (ARIA prohibits naming that role).
+    <div
+      role="group"
+      aria-labelledby={id}
+      className={cn("flex min-w-0 flex-col gap-1", className)}
+    >
       <span
         id={id}
         className={cn("text-muted-foreground", hideLabel && "sr-only")}
@@ -37,10 +43,7 @@ export function CopyField({
         {label}
       </span>
       <div className="flex min-w-0 items-center gap-1">
-        <code
-          aria-labelledby={id}
-          className="min-w-0 truncate rounded-md bg-muted px-1.5 py-0.5 font-mono text-table"
-        >
+        <code className="min-w-0 truncate rounded-md bg-muted px-1.5 py-0.5 font-mono text-table">
           {value}
         </code>
         <Button

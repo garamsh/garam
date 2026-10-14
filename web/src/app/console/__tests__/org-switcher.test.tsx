@@ -21,7 +21,7 @@ const orgs = [
 
 function renderSwitcher(
   pathname: string,
-  list = orgs,
+  list: typeof orgs | null = orgs,
   reported?: { org: string; role: OrgRole },
 ) {
   route.pathname = pathname;
@@ -60,18 +60,41 @@ describe("organization switcher", () => {
     renderSwitcher("/console/orgs/globex");
 
     const trigger = screen.getByRole("button", { name: /Globex/ });
-    expect(trigger).toHaveTextContent("Organization");
+    expect(trigger).toHaveTextContent("G");
     expect(trigger).not.toHaveTextContent("globex");
   });
 
-  it("says so when no organization is selected", () => {
+  it("reads as the organizations list outside an organization", () => {
     renderSwitcher("/console/orgs");
 
     // Presence: the sr-only "Switch organization" opens the trigger's
-    // name and "None selected" closes it.
-    expect(
-      screen.getByRole("button", { name: /Select organization/ }),
-    ).toBeInTheDocument();
+    // name, and the neutral heading follows.
+    const trigger = screen.getByRole("button", { name: /Organizations/ });
+    expect(trigger).not.toHaveTextContent(/select|none/i);
+  });
+
+  it("gives each organization its initial and the active one its role", async () => {
+    const user = userEvent.setup();
+    renderSwitcher("/console/orgs/acme", orgs, { org: "acme", role: "owner" });
+
+    await user.click(screen.getByRole("button", { name: /Acme/ }));
+
+    const acme = await screen.findByRole("menuitem", { name: /Acme/ });
+    expect(acme).toHaveTextContent(/^AAcmeOwner$/);
+    expect(screen.getByRole("menuitem", { name: "Globex" })).toHaveTextContent(
+      /^GGlobex$/,
+    );
+  });
+
+  it("names the organization by its slug when the list was not answered", () => {
+    renderSwitcher("/console/orgs/acme", null);
+
+    // Presence: the sr-only label opens the trigger's name.
+    const trigger = screen.getByRole("button", {
+      name: /Switch organization/,
+    });
+    expect(trigger).toHaveTextContent("acme");
+    expect(trigger).toHaveTextContent("Can’t load organizations");
   });
 
   it("offers every organization and marks the active one", async () => {
@@ -93,10 +116,8 @@ describe("organization switcher", () => {
     const user = userEvent.setup();
     renderSwitcher("/console/orgs");
 
-    // Presence, as above: "None selected" follows in the trigger's name.
-    await user.click(
-      screen.getByRole("button", { name: /Select organization/ }),
-    );
+    // Presence, as above: the neutral heading follows the sr-only label.
+    await user.click(screen.getByRole("button", { name: /Organizations/ }));
 
     expect(
       await screen.findByRole("menuitem", { name: "New organization" }),
@@ -107,10 +128,8 @@ describe("organization switcher", () => {
     const user = userEvent.setup();
     renderSwitcher("/console/orgs", []);
 
-    // Presence, as above: "None selected" follows in the trigger's name.
-    await user.click(
-      screen.getByRole("button", { name: /Select organization/ }),
-    );
+    // Presence, as above: the neutral heading follows the sr-only label.
+    await user.click(screen.getByRole("button", { name: /Organizations/ }));
 
     expect(await screen.findByText("No organizations yet")).toBeInTheDocument();
     expect(

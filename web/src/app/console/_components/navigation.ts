@@ -322,3 +322,38 @@ export function consoleCrumbs(
       return [];
   }
 }
+
+/** What the breadcrumb calls a page that rendered as not found. */
+export const NOT_FOUND_LABEL = "Not found";
+
+/**
+ * Whether the location is inside an organization the caller's list,
+ * read in full, does not hold. A list the API did not answer (`null`)
+ * says nothing either way.
+ */
+export function isUnknownOrg(
+  location: ConsoleLocation,
+  orgs: readonly ConsoleOrg[] | null,
+): boolean {
+  return (
+    location.kind === "org" &&
+    orgs !== null &&
+    !orgs.some((org) => org.slug === location.org)
+  );
+}
+
+/**
+ * The trail to a page that does not exist: the crumbs above it that do,
+ * then "Not found" in place of a name the page never read. An unknown
+ * organization has nothing above it but the organizations list.
+ */
+export function notFoundCrumbs(
+  location: ConsoleLocation,
+  orgs: readonly ConsoleOrg[] | null,
+): Crumb[] {
+  const notFound: Crumb = { label: NOT_FOUND_LABEL };
+  if (location.kind !== "org" || isUnknownOrg(location, orgs)) {
+    return [{ label: "Organizations", href: "/console/orgs" }, notFound];
+  }
+  return [...consoleCrumbs(location, orgs ?? []).slice(0, -1), notFound];
+}

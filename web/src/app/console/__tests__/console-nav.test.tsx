@@ -9,12 +9,17 @@ const route = vi.hoisted(() => ({ pathname: "/console/orgs" }));
 
 vi.mock("next/navigation", () => ({ usePathname: () => route.pathname }));
 
-function renderNav(pathname: string) {
+const ORGS = [{ slug: "acme", name: "Acme" }];
+
+function renderNav(
+  pathname: string,
+  orgs: { slug: string; name: string }[] | null = ORGS,
+) {
   route.pathname = pathname;
   return render(
     <TooltipProvider>
       <SidebarProvider>
-        <ConsoleNav />
+        <ConsoleNav orgs={orgs} />
       </SidebarProvider>
     </TooltipProvider>,
   );
@@ -114,6 +119,23 @@ describe("console navigation", () => {
     expect(screen.getByRole("link", { name: "Templates" })).toHaveAttribute(
       "aria-current",
       "location",
+    );
+  });
+
+  it("offers no sections for an organization the caller does not hold", () => {
+    renderNav("/console/orgs/globex/teams");
+
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+  });
+
+  it("keeps the sections when the organizations list was not answered", () => {
+    // Control for the case above: an unanswered list says nothing about
+    // whether the caller holds the organization.
+    renderNav("/console/orgs/globex/teams", null);
+
+    expect(screen.getByRole("link", { name: "Teams" })).toHaveAttribute(
+      "href",
+      "/console/orgs/globex/teams",
     );
   });
 

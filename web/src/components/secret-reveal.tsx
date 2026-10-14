@@ -14,6 +14,19 @@ import {
 import { Button } from "@/components/ui/button";
 import { useCopy } from "@/hooks/use-copy";
 
+type SecretRevealProps = {
+  open: boolean;
+  title: string;
+  description: React.ReactNode;
+  secret: string;
+  /** What the secret is, in the sentence the acknowledgement reads. */
+  noun: string;
+  /** Offers a download under this name when present. */
+  filename?: string;
+  /** Called once the visitor has kept the secret and closes the dialog. */
+  onDone: () => void;
+};
+
 /**
  * A secret garam answers once — a key, a credential, an enrollment
  * token — shown in a dialog that cannot be dismissed until the secret
@@ -25,47 +38,56 @@ import { useCopy } from "@/hooks/use-copy";
  * revalidation would render again. Download builds the file in the
  * browser from that state, so the secret never becomes a link.
  */
-export function SecretReveal({
-  open,
+export function SecretReveal(props: SecretRevealProps) {
+  // Mounted only while open, and keyed by the secret: whether one was
+  // copied, downloaded or acknowledged never carries over to the next,
+  // and nothing about it stays in state once the dialog closes.
+  if (!props.open) return null;
+  return <OpenSecretReveal key={props.secret} {...props} />;
+}
+
+function OpenSecretReveal({
   title,
   description,
   secret,
   noun,
   filename,
   onDone,
-}: {
-  open: boolean;
-  title: string;
-  description: React.ReactNode;
-  secret: string;
-  /** What the secret is, in the sentence the acknowledgement reads. */
-  noun: string;
-  /** Offers a download under this name when present. */
-  filename?: string;
-  /** Called once the visitor has kept the secret and closes the dialog. */
-  onDone: () => void;
-}) {
+}: SecretRevealProps) {
   const acknowledgeId = useId();
   const { outcome, copy } = useCopy(secret);
-  const [downloaded, setDownloaded] = useState(false);
+  const [downloaded, setDownloaded] = useState<boolean | null>(null);
   const [acknowledged, setAcknowledged] = useState(false);
-  const kept = outcome === "copied" || downloaded || acknowledged;
+  const kept = outcome === "copied" || downloaded === true || acknowledged;
 
+  // Counts as kept only once the file was handed to the browser: a
+  // throw on the way leaves the dialog shut to dismissal.
   function download() {
     if (!filename) return;
-    const href = URL.createObjectURL(
-      new Blob([secret], { type: "application/octet-stream" }),
-    );
-    const anchor = document.createElement("a");
-    anchor.href = href;
-    anchor.download = filename;
-    anchor.click();
-    URL.revokeObjectURL(href);
-    setDownloaded(true);
+    let href: string | undefined;
+    try {
+      href = URL.createObjectURL(
+        new Blob([secret], { type: "application/octet-stream" }),
+      );
+      const anchor = document.createElement("a");
+      anchor.href = href;
+      anchor.download = filename;
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      setDownloaded(true);
+    } catch {
+      setDownloaded(false);
+    } finally {
+      // Revoked after the click's task, which a browser may still be
+      // reading the object URL in.
+      const created = href;
+      if (created) setTimeout(() => URL.revokeObjectURL(created));
+    }
   }
 
   return (
-    <AlertDialog open={open}>
+    <AlertDialog open>
       <AlertDialogContent
         className="data-[size=default]:max-w-[calc(100%-2rem)] data-[size=default]:sm:max-w-lg"
         onEscapeKeyDown={(event) => {
@@ -77,10 +99,7 @@ export function SecretReveal({
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>{description}</AlertDialogDescription>
         </AlertDialogHeader>
-        <pre
-          aria-label={noun}
-          className="max-h-48 overflow-auto rounded-lg border bg-muted px-3 py-2 font-mono text-xs break-all whitespace-pre-wrap select-all"
-        >
+        <pre className="max-h-48 overflow-auto rounded-lg border bg-muted px-3 py-2 font-mono text-xs break-all whitespace-pre-wrap select-all">
           {secret}
         </pre>
         <div className="flex flex-wrap gap-2">
@@ -95,6 +114,11 @@ export function SecretReveal({
             </Button>
           )}
         </div>
+        {downloaded === false && (
+          <p role="alert" className="text-destructive">
+            Could not download the {noun}. Copy it instead.
+          </p>
+        )}
         {outcome === "failed" && (
           <p role="alert" className="text-destructive">
             Could not copy the {noun}. Select it above and copy it yourself.

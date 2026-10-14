@@ -1,36 +1,25 @@
 "use client";
 
-import { Building2, Monitor, Moon, Plus, Search, Sun } from "lucide-react";
-import { usePathname, useRouter } from "next/navigation";
+import { Search } from "lucide-react";
+import dynamic from "next/dynamic";
+import { usePathname } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Kbd } from "@/components/ui/kbd";
-import { useTheme } from "@/hooks/use-theme";
+import { useHydrated } from "@/hooks/use-hydrated";
 
-import {
-  CONSOLE_NAV_GROUPS,
-  orgHref,
-  parseConsolePath,
-  resolveNavEntry,
-  type ConsoleOrg,
-} from "./navigation";
+import { isUnknownOrg, parseConsolePath, type ConsoleOrg } from "./navigation";
 
-/** Whether a key press landed where it is text being typed. */
+const loadDialog = () =>
+  import("./command-palette-dialog").then(
+    (module) => module.CommandPaletteDialog,
+  );
+
+// cmdk and the dialog load on first open, not with every page.
+const CommandPaletteDialog = dynamic(loadDialog, { ssr: false });
+
+/** Whether a key press landed where text is being typed. */
 function typing(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   return (
@@ -54,16 +43,22 @@ function useChordLabel(): string {
 
 /**
  * Jumps anywhere in the console from the keyboard: ⌘K or Ctrl+K from
- * anywhere, and `/` from anywhere text is not being typed. It lists the
- * sections of the organization on screen, the caller's organizations,
- * and the theme.
+ * anywhere, and `/` from anywhere text is not being typed. Neither
+ * opens it over an alert dialog, which holds the visitor until they
+ * answer it — a secret shown once among them. It lists the sections of
+ * the organization on screen, the caller's organizations, and the
+ * theme. `orgs` is null when the list was not answered.
  */
-export function CommandPalette({ orgs }: { orgs: readonly ConsoleOrg[] }) {
+export function CommandPalette({
+  orgs,
+}: {
+  orgs: readonly ConsoleOrg[] | null;
+}) {
   const [open, setOpen] = useState(false);
-  const router = useRouter();
+  const [requested, setRequested] = useState(false);
   const location = parseConsolePath(usePathname());
-  const { setTheme } = useTheme();
   const chordLabel = useChordLabel();
+  const hydrated = useHydrated();
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -76,118 +71,48 @@ export function CommandPalette({ orgs }: { orgs: readonly ConsoleOrg[] }) {
         !event.altKey &&
         !typing(event.target);
       if (!chord && !slash) return;
+      if (document.querySelector('[role="alertdialog"]')) return;
       event.preventDefault();
+      setRequested(true);
       setOpen((wasOpen) => (chord ? !wasOpen : true));
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  function run(action: () => void) {
-    setOpen(false);
-    action();
-  }
-
-  const org = location.kind === "org" ? location.org : null;
-  const sections = org
-    ? [{ section: "" }, ...CONSOLE_NAV_GROUPS.flatMap((group) => group.entries)]
-        .map(resolveNavEntry)
-        .filter((entry) => entry !== undefined)
-    : [];
+  const org =
+    location.kind === "org" && !isUnknownOrg(location, orgs)
+      ? location.org
+      : null;
 
   return (
     <>
       <Button
         type="button"
         variant="outline"
-        onClick={() => setOpen(true)}
+        // A click before hydration would be lost, so the control waits.
+        disabled={!hydrated}
+        onPointerEnter={() => void loadDialog()}
+        onFocus={() => void loadDialog()}
+        onClick={() => {
+          setRequested(true);
+          setOpen(true);
+        }}
         aria-keyshortcuts="Meta+K Control+K /"
-        className="h-8 gap-2 px-2 text-muted-foreground sm:w-56 sm:justify-start"
+        className="gap-2 px-2 text-muted-foreground sm:w-56 sm:justify-start"
       >
         <Search />
         <span className="sr-only sm:not-sr-only">Search or jump to…</span>
         <Kbd className="ml-auto hidden sm:inline-flex">{chordLabel}</Kbd>
       </Button>
-      {/* Composed here rather than with the CLI's CommandDialog, which
-          renders its title outside the dialog and so leaves a heading
-          on every page while the palette is closed. */}
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent
-          showCloseButton={false}
-          className="top-[20%] translate-y-0 overflow-hidden p-0 sm:max-w-lg"
-        >
-          <DialogTitle className="sr-only">Search or jump to</DialogTitle>
-          <DialogDescription className="sr-only">
-            Go to a section, switch organization, or change the theme.
-          </DialogDescription>
-          <Command>
-            <CommandInput placeholder="Search or jump to…" />
-            <CommandList>
-              <CommandEmpty>Nothing matches that.</CommandEmpty>
-              {org && sections.length > 0 && (
-                <CommandGroup heading="Go to">
-                  {sections.map((entry) => (
-                    <CommandItem
-                      key={entry.key}
-                      value={`go ${entry.label}`}
-                      onSelect={() =>
-                        run(() => router.push(orgHref(org, entry.segment)))
-                      }
-                    >
-                      <entry.icon />
-                      {entry.label}
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              )}
-              <CommandGroup heading="Organizations">
-                {orgs.map((candidate) => (
-                  <CommandItem
-                    key={candidate.slug}
-                    value={`org ${candidate.name} ${candidate.slug}`}
-                    onSelect={() =>
-                      run(() => router.push(orgHref(candidate.slug, "")))
-                    }
-                  >
-                    <Building2 />
-                    {candidate.name}
-                  </CommandItem>
-                ))}
-                <CommandItem
-                  value="org new organization create"
-                  onSelect={() => run(() => router.push("/console/orgs/new"))}
-                >
-                  <Plus />
-                  New organization
-                </CommandItem>
-              </CommandGroup>
-              <CommandGroup heading="Theme">
-                <CommandItem
-                  value="theme system"
-                  onSelect={() => run(() => setTheme("system"))}
-                >
-                  <Monitor />
-                  Use system theme
-                </CommandItem>
-                <CommandItem
-                  value="theme light"
-                  onSelect={() => run(() => setTheme("light"))}
-                >
-                  <Sun />
-                  Use light theme
-                </CommandItem>
-                <CommandItem
-                  value="theme dark"
-                  onSelect={() => run(() => setTheme("dark"))}
-                >
-                  <Moon />
-                  Use dark theme
-                </CommandItem>
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </DialogContent>
-      </Dialog>
+      {requested && (
+        <CommandPaletteDialog
+          open={open}
+          onOpenChange={setOpen}
+          org={org}
+          orgs={orgs}
+        />
+      )}
     </>
   );
 }

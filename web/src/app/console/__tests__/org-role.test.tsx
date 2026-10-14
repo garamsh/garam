@@ -9,13 +9,19 @@ import { server } from "@/testing/setup";
 
 const route = vi.hoisted(() => ({ pathname: "/console/orgs/acme" }));
 
+// Thrown in the shape Next.js gives each, digest included, which is
+// what tells a redirect apart from a not-found.
 vi.mock("next/navigation", () => ({
   usePathname: () => route.pathname,
   notFound: () => {
-    throw new Error("notFound");
+    throw Object.assign(new Error("NEXT_HTTP_ERROR_FALLBACK;404"), {
+      digest: "NEXT_HTTP_ERROR_FALLBACK;404",
+    });
   },
-  redirect: () => {
-    throw new Error("redirect");
+  redirect: (url: string) => {
+    throw Object.assign(new Error("NEXT_REDIRECT"), {
+      digest: `NEXT_REDIRECT;replace;${url};307;`,
+    });
   },
 }));
 
@@ -87,5 +93,45 @@ describe("the caller's role in an organization", () => {
     await renderRead();
 
     expect(screen.getByText("No role")).toBeInTheDocument();
+  });
+
+  it("is left out, not a failed page, when the members read errors", async () => {
+    server.use(
+      http.get(`${API_URL}/orgs/acme/members`, () =>
+        HttpResponse.json({ message: "internal" }, { status: 500 }),
+      ),
+    );
+
+    await renderRead();
+
+    expect(screen.getByText("No role")).toBeInTheDocument();
+  });
+
+  it("is left out, not a not-found page, when the members read is 404", async () => {
+    server.use(
+      http.get(`${API_URL}/orgs/acme/members`, () =>
+        HttpResponse.json({ message: "not found" }, { status: 404 }),
+      ),
+    );
+
+    await renderRead();
+
+    expect(screen.getByText("No role")).toBeInTheDocument();
+  });
+
+  it("lets the redirect to sign-in through when the session has ended", async () => {
+    server.use(
+      http.get(`${API_URL}/orgs/acme/members`, () =>
+        HttpResponse.json({ message: "unauthenticated" }, { status: 401 }),
+      ),
+    );
+
+    // Control for the two above: the one failure that is not the read's
+    // own still reaches Next.js.
+    await expect(
+      OrgRoleRead({ org: Promise.resolve("acme") }),
+    ).rejects.toMatchObject({
+      digest: expect.stringMatching(/^NEXT_REDIRECT;/),
+    });
   });
 });

@@ -1,6 +1,13 @@
 "use client";
 
-import { ChevronsUpDown, LogOut, Monitor, Moon, Sun } from "lucide-react";
+import {
+  ChevronsUpDown,
+  LogOut,
+  Monitor,
+  Moon,
+  Sun,
+  UserRound,
+} from "lucide-react";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -29,8 +36,12 @@ const THEMES = [
   { value: "dark", label: "Dark", icon: Moon },
 ] as const;
 
-/** The signed-in identity, the console's theme, and the way out. */
-export function UserMenu({ nickname }: { nickname: string }) {
+/**
+ * The signed-in identity, the console's theme, and the way out.
+ * `nickname` is null when the API did not say who is signed in; the
+ * theme and signing out stay offered, since neither needs the answer.
+ */
+export function UserMenu({ nickname }: { nickname: string | null }) {
   const { isMobile } = useSidebar();
   const { theme, setTheme } = useTheme();
 
@@ -46,12 +57,27 @@ export function UserMenu({ nickname }: { nickname: string }) {
               <span className="sr-only">Open account menu</span>
               <Avatar className="size-8 rounded-lg">
                 <AvatarFallback className="rounded-lg text-xs">
-                  {nickname.slice(0, 2).toUpperCase()}
+                  {nickname ? (
+                    nickname.slice(0, 2).toUpperCase()
+                  ) : (
+                    <UserRound className="size-4" />
+                  )}
                 </AvatarFallback>
               </Avatar>
-              <span className="flex-1 truncate text-left font-medium text-sidebar-accent-foreground">
-                {nickname}
-              </span>
+              {nickname ? (
+                <span className="flex-1 truncate text-left font-medium text-sidebar-accent-foreground">
+                  {nickname}
+                </span>
+              ) : (
+                <span className="grid flex-1 text-left leading-tight">
+                  <span className="truncate font-medium text-sidebar-accent-foreground">
+                    Account
+                  </span>
+                  <span className="truncate text-xs text-muted-foreground">
+                    Can’t load your account
+                  </span>
+                </span>
+              )}
               <ChevronsUpDown className="ml-auto" />
             </SidebarMenuButton>
           </DropdownMenuTrigger>
@@ -61,10 +87,6 @@ export function UserMenu({ nickname }: { nickname: string }) {
             side={isMobile ? "bottom" : "right"}
             sideOffset={4}
           >
-            <DropdownMenuLabel className="text-xs text-muted-foreground">
-              {nickname}
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
             <DropdownMenuLabel className="text-xs text-muted-foreground">
               Theme
             </DropdownMenuLabel>

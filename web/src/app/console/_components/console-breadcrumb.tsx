@@ -8,5 +8,5 @@ import { RouteBreadcrumb } from "./route-breadcrumb";
  */
 export async function ConsoleBreadcrumb() {
   const orgs = await listConsoleOrgs();
-  return <RouteBreadcrumb orgs={orgs.status === "ok" ? orgs.orgs : []} />;
+  return <RouteBreadcrumb orgs={orgs.status === "ok" ? orgs.orgs : null} />;
 }

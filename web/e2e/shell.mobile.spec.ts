@@ -29,10 +29,13 @@ test.describe("console shell on a phone", () => {
     const nav = page.getByRole("navigation", { name: "Organization sections" });
     await expect(nav).toBeHidden();
 
-    await expect(async () => {
-      await page.getByRole("button", { name: "Toggle Sidebar" }).first().tap();
-      await expect(nav).toBeVisible({ timeout: 1_000 });
-    }).toPass({ timeout: 15_000 });
+    // The palette's control is disabled until React has hydrated the
+    // shell, so its being enabled is what says a tap will be handled.
+    await expect(
+      page.getByRole("button", { name: /Search or jump to/ }),
+    ).toBeEnabled();
+    await page.getByRole("button", { name: "Toggle Sidebar" }).first().tap();
+    await expect(nav).toBeVisible();
     await nav.getByRole("link", { name: "People", exact: true }).tap();
 
     await expect(page).toHaveURL(`/console/orgs/${signedIn.orgSlug}/people`);

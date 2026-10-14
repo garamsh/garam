@@ -9,7 +9,13 @@ describe("CopyField", () => {
     render(<CopyField label="Operator ID" value="op-7f3a" />);
 
     expect(screen.getByText("op-7f3a").tagName).toBe("CODE");
-    expect(screen.getByText("op-7f3a")).toHaveAccessibleName("Operator ID");
+    // The group is named, and the code inside it carries no name, which
+    // ARIA prohibits on that role.
+    expect(screen.getByRole("group", { name: "Operator ID" })).toContainElement(
+      screen.getByText("op-7f3a"),
+    );
+    expect(screen.getByText("op-7f3a")).not.toHaveAttribute("aria-labelledby");
+    expect(screen.getByText("op-7f3a")).not.toHaveAttribute("aria-label");
   });
 
   it("copies the value and says so", async () => {

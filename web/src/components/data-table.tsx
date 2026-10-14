@@ -23,7 +23,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { cn } from "@/lib/utils";
 
 export type { ColumnDef } from "@tanstack/react-table";
 
@@ -109,10 +108,10 @@ export function DataTable<TData>({
           />
         </div>
       )}
-      <div className="overflow-hidden rounded-xl border">
-        <Table className="text-table">
+      <div>
+        <Table data-density={density}>
           <caption className="sr-only">{label}</caption>
-          <TableHeader className="bg-muted/40">
+          <TableHeader>
             {table.getHeaderGroups().map((group) => (
               <TableRow key={group.id} className="hover:bg-transparent">
                 {group.headers.map((header) => {
@@ -121,7 +120,7 @@ export function DataTable<TData>({
                     <TableHead
                       key={header.id}
                       aria-sort={sorted ? ARIA_SORT[sorted] : undefined}
-                      className="h-9 px-3 text-xs font-medium text-muted-foreground"
+                      className="px-3 text-xs font-medium text-muted-foreground"
                     >
                       {header.isPlaceholder ? null : header.column.getCanSort() ? (
                         <button
@@ -170,13 +169,7 @@ export function DataTable<TData>({
               rows.map((row) => (
                 <TableRow key={row.id}>
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell
-                      key={cell.id}
-                      className={cn(
-                        "px-3 py-0",
-                        density === "compact" ? "h-row-compact" : "h-row",
-                      )}
-                    >
+                    <TableCell key={cell.id} className="px-3">
                       {flexRender(
                         cell.column.columnDef.cell,
                         cell.getContext(),

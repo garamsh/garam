@@ -108,23 +108,35 @@ describe("command palette", () => {
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
   });
 
-  it("does not open over an alert dialog", async () => {
-    const user = userEvent.setup();
-    render(
-      <>
-        <div role="alertdialog" aria-label="Save the operator key" />
-        <CommandPalette orgs={orgs} />
-      </>,
-    );
+  for (const [key, keys] of [
+    ["/", "/"],
+    ["Ctrl+K", "{Control>}k{/Control}"],
+  ] as const) {
+    it(`does not open on ${key} over an alert dialog`, async () => {
+      const user = userEvent.setup();
+      // Loaded up front, so a dialog that wrongly opened would be on
+      // screen within the wait below rather than still loading.
+      await import("@/app/console/_components/command-palette-dialog");
+      const { rerender } = render(
+        <>
+          <div role="alertdialog" aria-label="Save the operator key" />
+          <CommandPalette orgs={orgs} />
+        </>,
+      );
 
-    await user.keyboard("/");
-    await user.keyboard("{Control>}k{/Control}");
+      await user.keyboard(keys);
+      await expect(
+        screen.findByRole("dialog", undefined, { timeout: 300 }),
+      ).rejects.toThrow();
 
-    // The dialog loads asynchronously, so its absence is waited for.
-    await expect(
-      screen.findByRole("dialog", undefined, { timeout: 300 }),
-    ).rejects.toThrow();
-  });
+      // Control: the same key opens it once the alert dialog is gone.
+      rerender(<CommandPalette orgs={orgs} />);
+      await user.keyboard(keys);
+      expect(
+        await screen.findByRole("dialog", { name: "Search or jump to" }),
+      ).toBeInTheDocument();
+    });
+  }
 
   it("jumps to a section of the organization on screen", async () => {
     const user = userEvent.setup();

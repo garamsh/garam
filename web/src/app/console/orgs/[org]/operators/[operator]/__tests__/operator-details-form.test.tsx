@@ -44,7 +44,7 @@ function renderForm() {
 }
 
 describe("operator details form", () => {
-  it("submits nothing before hydration: the server render disables Save details", () => {
+  it("submits nothing before hydration: the server render disables Save", () => {
     // A form submitted before React hydrates posts fields React never
     // held, so the button waits with the fields it submits.
     const server = document.createElement("div");
@@ -69,7 +69,7 @@ describe("operator details form", () => {
         description=""
       />,
     );
-    expect(screen.getByRole("button", { name: "Save details" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
   });
 
   it("sends the name and description to the operator's own path", async () => {
@@ -80,10 +80,10 @@ describe("operator details form", () => {
     await user.clear(form.getByLabelText("Name"));
     await enter(user, form.getByLabelText("Name"), " Renamed ");
     await user.clear(form.getByLabelText("Description"));
-    await user.click(form.getByRole("button", { name: "Save details" }));
+    await user.click(form.getByRole("button", { name: "Save" }));
 
     expect(await form.findByRole("status")).toHaveTextContent(
-      "Saved as Renamed.",
+      "Saved as Renamed",
     );
     // An emptied description is sent, and clears the one there was.
     expect(patched).toEqual([{ name: "Renamed", description: "" }]);
@@ -99,11 +99,11 @@ describe("operator details form", () => {
     expect(form.getByRole("alert")).toHaveTextContent(
       "Give the operator a name.",
     );
-    expect(form.getByRole("button", { name: "Save details" })).toBeDisabled();
+    expect(form.getByRole("button", { name: "Save" })).toBeDisabled();
 
     // The control: a name typed back is taken.
     await enter(user, form.getByLabelText("Name"), "Field");
-    expect(form.getByRole("button", { name: "Save details" })).toBeEnabled();
+    expect(form.getByRole("button", { name: "Save" })).toBeEnabled();
     expect(patched).toEqual([]);
   });
 
@@ -121,7 +121,7 @@ describe("operator details form", () => {
 
     await user.clear(form.getByLabelText("Name"));
     await enter(user, form.getByLabelText("Name"), "Renamed");
-    await user.click(form.getByRole("button", { name: "Save details" }));
+    await user.click(form.getByRole("button", { name: "Save" }));
 
     expect(await form.findByRole("alert")).toHaveTextContent(
       REFUSAL_COPY.permissionDenied,

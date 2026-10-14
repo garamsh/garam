@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
@@ -41,9 +41,8 @@ function renderForm() {
 
 describe("re-issue credential form", () => {
   it("re-issues on the confirmation and shows the new credential once", async () => {
-    // The refusal and its control are read together: the first click
-    // sends nothing, and the same recorder shows the confirmed one
-    // sending — so what held the request back is the confirmation.
+    // The refusal and its control are read together: opening the dialog
+    // sends nothing, and the same recorder shows the confirmed one.
     const posted = recordReissues();
     const user = userEvent.setup();
     renderForm();
@@ -51,20 +50,23 @@ describe("re-issue credential form", () => {
     await user.click(
       screen.getByRole("button", { name: "Re-issue credential" }),
     );
+    const dialog = screen.getByRole("alertdialog", {
+      name: "Re-issue Field one's credential?",
+    });
+    // Presence: the sentence goes on to say when the operator recovers.
+    expect(dialog).toHaveTextContent(/stop working the moment you confirm/);
     expect(posted).toEqual([]);
-    // Presence: the sentence goes on to say when the operator works
-    // again; the claim under test is that the old credential stops.
+
+    await user.click(
+      within(dialog).getByRole("button", { name: "Re-issue credential" }),
+    );
+
     expect(
-      screen.getByText(/every token it exchanged for it stop authenticating/),
-    ).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "Confirm re-issue" }));
-
-    expect(await screen.findByLabelText("Credential")).toHaveValue(reissued);
+      await screen.findByRole("alertdialog", {
+        name: "Save the new credential",
+      }),
+    ).toHaveTextContent(reissued);
     expect(posted).toEqual(["/orgs/acme/operators/field-one/credential"]);
-    expect(
-      screen.getByText(/This is the only time this credential is shown/),
-    ).toBeInTheDocument();
   });
 
   it("sends nothing when the confirmation is cancelled", async () => {
@@ -77,18 +79,15 @@ describe("re-issue credential form", () => {
     );
     await user.click(screen.getByRole("button", { name: "Cancel" }));
 
-    expect(
-      screen.getByRole("button", { name: "Re-issue credential" }),
-    ).toBeInTheDocument();
-    expect(screen.queryByLabelText("Credential")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect(posted).toEqual([]);
   });
 
-  it("renders the backend's refusal beside the control", async () => {
+  it("renders the backend's refusal in human words beside the control", async () => {
     server.use(
-      http.post(`${API_URL}/orgs/acme/operators/:operator/credential`, () =>
+      http.post(`${API_URL}/orgs/acme/operators/field-one/credential`, () =>
         HttpResponse.json(
-          { kind: "permission_denied", message: "permission denied" },
+          { kind: "permission_denied", message: "denied: operator:reissue" },
           { status: 403 },
         ),
       ),
@@ -99,11 +98,15 @@ describe("re-issue credential form", () => {
     await user.click(
       screen.getByRole("button", { name: "Re-issue credential" }),
     );
-    await user.click(screen.getByRole("button", { name: "Confirm re-issue" }));
+    await user.click(
+      within(screen.getByRole("alertdialog")).getByRole("button", {
+        name: "Re-issue credential",
+      }),
+    );
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
       REFUSAL_COPY.permissionDenied,
     );
-    expect(screen.queryByLabelText("Credential")).not.toBeInTheDocument();
+    expect(screen.queryByText(/operator:reissue/)).not.toBeInTheDocument();
   });
 });

@@ -1,10 +1,12 @@
 "use client";
 
-import { useActionState } from "react";
+import { Check } from "lucide-react";
+import { useActionState, useState } from "react";
 
+import { CopyField } from "@/components/copy-field";
+import { FormField } from "@/components/form-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   saveControlEndpoint,
   type ControlEndpointState,
@@ -35,50 +37,45 @@ export function ControlEndpointForm({
   const hydrated = useHydrated();
   const current =
     state.status === "saved" ? state.endpoint : (endpoint ?? null);
+  // Held in state so a refused save keeps what was typed: React resets
+  // an uncontrolled field to its default after the action.
+  const [draft, setDraft] = useState(endpoint ?? "");
 
   return (
-    <form action={formAction} className="flex max-w-2xl flex-col gap-3">
+    <form action={formAction} className="flex max-w-xl flex-col gap-4">
       <input type="hidden" name="org" value={org} />
       <input type="hidden" name="operator" value={operator} />
-      <p className="text-sm">
-        {current === null ? (
-          "No control endpoint is registered. The console reaches no control service for this operator."
-        ) : (
-          <>
-            The console sends this operator&apos;s operations to{" "}
-            <span className="font-mono break-all">{current}</span> and to no
-            other address.
-          </>
-        )}
-      </p>
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="control-endpoint">Control endpoint</Label>
-        <Input
-          id="control-endpoint"
-          name="url"
-          type="url"
-          placeholder="https://control.example.com"
-          defaultValue={current ?? ""}
-          disabled={!hydrated}
-          className="max-w-xl"
-        />
-      </div>
-      {state.status === "error" && (
-        <p role="alert" className="text-sm text-destructive">
-          {state.message}
+      {current === null ? (
+        <p className="text-muted-foreground">
+          No endpoint is registered, so the console reaches no control service
+          for this operator.
         </p>
+      ) : (
+        <CopyField label="Current endpoint" value={current} />
       )}
-      <p className="text-sm text-muted-foreground">
-        Changing it requires the delegation permission, not the one that renames
-        the operator. Operations already handed over keep the operator they
-        name.
-      </p>
-      <div className="flex flex-wrap gap-2">
+      <FormField
+        label="Endpoint"
+        hint="An https address. The console sends this operator's operations here and nowhere else."
+        error={state.status === "error" ? state.message : undefined}
+      >
+        {(control) => (
+          <Input
+            {...control}
+            name="url"
+            type="url"
+            placeholder="https://control.example.com"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            disabled={!hydrated}
+            className="font-mono"
+          />
+        )}
+      </FormField>
+      <div className="flex flex-wrap items-center gap-2">
         <Button
           type="submit"
           name="intent"
           value="set"
-          variant="outline"
           disabled={!hydrated || pending}
         >
           Save endpoint
@@ -93,6 +90,15 @@ export function ControlEndpointForm({
           >
             Clear endpoint
           </Button>
+        )}
+        {state.status === "saved" && (
+          <span
+            role="status"
+            className="flex items-center gap-1 text-muted-foreground"
+          >
+            <Check aria-hidden className="size-4 text-ok" />
+            {state.endpoint === null ? "Endpoint cleared" : "Endpoint saved"}
+          </span>
         )}
       </div>
     </form>

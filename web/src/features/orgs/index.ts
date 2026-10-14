@@ -72,6 +72,11 @@ export {
   type RegisteredOperator,
 } from "./api/orgs";
 export {
+  listOperatorKeys,
+  type IssuedOperatorKey,
+  type OperatorKey,
+} from "./api/operator-keys";
+export {
   listPolicies,
   listPolicyAttachments,
   listPolicyVersions,

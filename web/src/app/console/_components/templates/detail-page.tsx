@@ -23,6 +23,7 @@ export function DetailPage({
   status,
   actions,
   tabs,
+  defaultTab,
   dangerZone,
 }: {
   name: string;
@@ -34,6 +35,8 @@ export function DetailPage({
   /** The object's actions menu. */
   actions?: React.ReactNode;
   tabs: readonly DetailTab[];
+  /** The tab open first, where it names one; otherwise the first. */
+  defaultTab?: string;
   dangerZone?: readonly DangerAction[];
 }) {
   const last = tabs.at(-1)?.value;
@@ -51,18 +54,30 @@ export function DetailPage({
           <div className="flex shrink-0 items-center gap-2">{actions}</div>
         )}
       </div>
-      <Tabs defaultValue={tabs[0]?.value} className="gap-6">
-        <TabsList variant="line" className="w-full justify-start border-b">
-          {tabs.map((tab) => (
-            <TabsTrigger
-              key={tab.value}
-              value={tab.value}
-              className="flex-none px-2"
-            >
-              {tab.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+      <Tabs
+        defaultValue={
+          tabs.some((tab) => tab.value === defaultTab)
+            ? defaultTab
+            : tabs[0]?.value
+        }
+        className="gap-6"
+      >
+        {/* Scrolls sideways where the tabs outrun a narrow screen, rather
+            than widening the page; the padding keeps the active tab's
+            underline inside the scroll box. */}
+        <div className="overflow-x-auto border-b pb-0.5 [scrollbar-width:none]">
+          <TabsList variant="line" className="w-max min-w-full justify-start">
+            {tabs.map((tab) => (
+              <TabsTrigger
+                key={tab.value}
+                value={tab.value}
+                className="flex-none px-2"
+              >
+                {tab.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
         {tabs.map((tab) => (
           <TabsContent
             key={tab.value}

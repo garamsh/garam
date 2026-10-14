@@ -93,6 +93,11 @@ services:
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GOOGLE_REDIRECT_URL: ${GOOGLE_REDIRECT_URL:-http://localhost:3000/api/auth/callback/google}
+      # Lets the local stack issue operator keys (ADR-0102), which the
+      # console's key setup and its e2e need. No local listener exchanges
+      # them: the stack runs no machine listener, so the URL is only the
+      # audience an issued key's assertions would name.
+      GARAM_MACHINE_TOKEN_URL: ${GARAM_MACHINE_TOKEN_URL:-https://machine.garam.localhost/oauth/token}
     ports:
       - "${GARAM_LOCAL_API_PORT:-8080}:8080"
     depends_on:

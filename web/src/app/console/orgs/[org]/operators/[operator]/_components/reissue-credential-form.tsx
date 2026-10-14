@@ -2,25 +2,31 @@
 
 import { useActionState, useState } from "react";
 
+import { SecretReveal } from "@/components/secret-reveal";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   reissueOperatorCredential,
   type ReissueOperatorCredentialState,
 } from "@/features/orgs/actions";
-
-import { SecretField } from "../../_components/secret-field";
+import { useHydrated } from "@/hooks/use-hydrated";
 
 const initialState: ReissueOperatorCredentialState = { status: "idle" };
 
 /**
- * Re-issues an operator's credential (ADR-0100). What it ends is the
- * credential the operator runs on and every token exchanged for it, so
- * the button asks first and the confirmation says so: the operator is
- * refused from its next request until the new credential is placed in
- * its cluster.
- *
- * The new credential is answered once and rendered here once, with the
- * warning above it, as registration renders the first.
+ * Re-issues an operator's legacy credential (ADR-0100). What it ends is
+ * the credential the operator may run on and every token exchanged for
+ * it, so it asks first and says so; the new credential is shown once.
  */
 export function ReissueCredentialForm({
   org,
@@ -35,67 +41,56 @@ export function ReissueCredentialForm({
     reissueOperatorCredential,
     initialState,
   );
-  const [confirming, setConfirming] = useState(false);
-
-  if (state.status === "issued") {
-    return (
-      <div className="flex max-w-2xl flex-col gap-3 rounded-md border border-border p-4">
-        <p className="text-sm text-destructive">
-          This is the only time this credential is shown; garam keeps no copy.
-          The previous one and its tokens no longer authenticate.
-        </p>
-        <SecretField
-          value={state.credential}
-          label="Credential"
-          noun="credential"
-        />
-        <p className="text-sm text-muted-foreground">
-          Place it in the operator&apos;s cluster in place of the previous one.
-        </p>
-      </div>
-    );
-  }
+  const hydrated = useHydrated();
+  // Which issued credential the person has kept, so the reveal closes
+  // for that answer and opens again for the next.
+  const [kept, setKept] = useState<string | null>(null);
+  const issued = state.status === "issued" ? state.credential : null;
 
   return (
-    <div className="flex flex-col gap-2">
-      {confirming ? (
-        <form action={formAction} className="flex max-w-2xl flex-col gap-3">
-          <input type="hidden" name="org" value={org} />
-          <input type="hidden" name="operator" value={operator} />
-          <p className="text-sm wrap-anywhere">
-            {`Re-issue ${name}'s credential? The one it holds and every token it exchanged for it stop authenticating at once, so it is refused until the new credential is placed in its cluster.`}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Button type="submit" variant="destructive" disabled={pending}>
-              {pending ? "Re-issuing…" : "Confirm re-issue"}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              disabled={pending}
-              autoFocus
-              onClick={() => setConfirming(false)}
-            >
-              Cancel
-            </Button>
-          </div>
-        </form>
-      ) : (
-        <div>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setConfirming(true)}
-          >
+    <div className="flex flex-col items-start gap-3">
+      <AlertDialog>
+        <AlertDialogTrigger asChild>
+          <Button variant="outline" disabled={!hydrated || pending}>
             Re-issue credential
           </Button>
-        </div>
-      )}
+        </AlertDialogTrigger>
+        <AlertDialogContent>
+          <form action={formAction} className="contents">
+            <input type="hidden" name="org" value={org} />
+            <input type="hidden" name="operator" value={operator} />
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                Re-issue {name}&apos;s credential?
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                The current credential, and every token exchanged for it, stop
+                working the moment you confirm. An operator still on it is
+                refused until the new one is placed in its cluster.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction type="submit" variant="destructive">
+                Re-issue credential
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </form>
+        </AlertDialogContent>
+      </AlertDialog>
       {state.status === "error" && (
-        <p role="alert" className="text-sm text-destructive">
+        <p role="alert" className="text-destructive">
           {state.message}
         </p>
       )}
+      <SecretReveal
+        open={issued !== null && kept !== issued}
+        title="Save the new credential"
+        description="The previous credential and its tokens no longer authenticate. This one is shown once."
+        secret={issued ?? ""}
+        noun="credential"
+        onDone={() => setKept(issued)}
+      />
     </div>
   );
 }

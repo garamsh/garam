@@ -1,4 +1,4 @@
-import { parseGrn } from "./grn";
+import { parseGrn } from "@/lib/grn";
 
 /**
  * A list a page looks an organization's subjects up in, or the fact

@@ -2,12 +2,11 @@
 
 import { useState } from "react";
 
+import { FormField } from "@/components/form-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { mintOperationAuthority } from "@/features/orgs/actions";
-import type { HostedOperator } from "@/features/orgs";
 import { useHydrated } from "@/hooks/use-hydrated";
 import {
   PublishedParser,
@@ -16,12 +15,7 @@ import {
   type TemplateVersion,
 } from "@/lib/operation-authority";
 
-import { UNAVAILABLE } from "./control-notice";
-
-type Outcome =
-  | { status: "idle" }
-  | { status: "error"; message: string }
-  | { status: "published"; name: string; version: number };
+import { UNAVAILABLE, type DelegatedOperator } from "./control-notice";
 
 /** Reads `tool=pin` lines into the tool pins a configuration carries. */
 function parseTools(text: string): Record<string, string> | null {
@@ -35,8 +29,11 @@ function parseTools(text: string): Record<string, string> | null {
   return tools;
 }
 
-/** What each field holds, by the name it submits under. */
-type Values = {
+/**
+ * What each field holds, by the name it submits under. The page holds
+ * it, so a draft outlives the dialog the form opens in.
+ */
+export type PublishDraft = {
   name: string;
   profileName: string;
   profileVersion: string;
@@ -51,8 +48,11 @@ type Values = {
   tools: string;
 };
 
+/** The sentence each field the form checks shows when it is wrong. */
+type FieldErrors = Partial<Record<keyof PublishDraft, string>>;
+
 /** The fields as the version on screen fills them, or empty. */
-function startingValues(from: TemplateVersion | null): Values {
+export function startingDraft(from: TemplateVersion | null): PublishDraft {
   const model = from?.configuration.model;
   return {
     name: from?.name ?? "",
@@ -72,58 +72,78 @@ function startingValues(from: TemplateVersion | null): Values {
   };
 }
 
+/** The labelled single-line fields, in the order the form shows them. */
+const INPUTS: readonly { name: keyof PublishDraft; label: string }[] = [
+  { name: "name", label: "Template" },
+  { name: "profileName", label: "Profile" },
+  { name: "profileVersion", label: "Profile version" },
+  { name: "provider", label: "Model provider" },
+  { name: "baseUrl", label: "Model base URL" },
+  { name: "model", label: "Model name" },
+  { name: "apiKeyRef", label: "API key reference" },
+  { name: "embeddingBaseUrl", label: "Embedding base URL" },
+  { name: "embeddingModel", label: "Embedding model name" },
+  { name: "embeddingApiKeyRef", label: "Embedding API key reference" },
+];
+
 /**
- * Publishes the next immutable version of a template (#1170), started
- * from the version on screen where one is. The control service numbers
+ * Publishes the next immutable version of a template (#1170) from the
+ * draft the page holds, which may start from the version on screen. The control service numbers
  * it and validates it; garam only binds the request to the person
- * publishing. A secret is named by reference and never typed here.
+ * publishing. A secret is named by reference and never typed here. A
+ * field the form can check carries its own error; a refusal from the
+ * control service is said beside Publish.
  */
 export function PublishTemplateForm({
   org,
   orgGrn,
   hosted,
-  from,
+  values,
+  onValuesChange,
   onPublished,
 }: {
   org: string;
   orgGrn: string;
-  hosted: HostedOperator;
-  from: TemplateVersion | null;
-  onPublished: () => void;
+  hosted: DelegatedOperator;
+  /** The draft, held by the page so closing the form keeps it. */
+  values: PublishDraft;
+  onValuesChange: (values: PublishDraft) => void;
+  onPublished: (published: { name: string; version: number }) => void;
 }) {
-  const [outcome, setOutcome] = useState<Outcome>({ status: "idle" });
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const [refusal, setRefusal] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const hydrated = useHydrated();
-  // Controlled, so a refused publish keeps what was typed: a form action
-  // resets an uncontrolled field when it completes, refusal included.
-  const [values, setValues] = useState(() => startingValues(from));
-  const control = (name: keyof Values) => ({
+  // Controlled, so a refused publish keeps what was typed: a form
+  // action resets an uncontrolled field when it completes, refusal
+  // included.
+  const control = (name: keyof PublishDraft) => ({
     name,
     value: values[name],
     disabled: !hydrated,
     onChange: (
       event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
-    ) => setValues((held) => ({ ...held, [name]: event.target.value })),
+    ) => onValuesChange({ ...values, [name]: event.target.value }),
   });
 
   async function publish(form: FormData) {
-    const field = (name: string) => String(form.get(name) ?? "").trim();
+    const field = (name: keyof PublishDraft) =>
+      String(form.get(name) ?? "").trim();
     const tools = parseTools(field("tools"));
     const version = Number(field("profileVersion"));
-    if (
-      field("name") === "" ||
-      field("profileName") === "" ||
-      !Number.isInteger(version) ||
-      version < 1 ||
-      tools === null
-    ) {
-      setOutcome({
-        status: "error",
-        message:
-          "Name the template and a published profile version; write each tool as tool=pin.",
-      });
-      return;
-    }
+    const invalid: FieldErrors = {
+      ...(field("name") === "" ? { name: "Name the template." } : {}),
+      ...(field("profileName") === ""
+        ? { profileName: "Name a published profile." }
+        : {}),
+      ...(!Number.isInteger(version) || version < 1
+        ? { profileVersion: "Give the profile's version as a whole number." }
+        : {}),
+      ...(tools === null ? { tools: "Write each tool as tool=pin." } : {}),
+    };
+    setErrors(invalid);
+    setRefusal(null);
+    if (Object.keys(invalid).length > 0 || tools === null) return;
     // An embedding no field names is absent from the wire, not empty.
     const embedding = {
       baseUrl: field("embeddingBaseUrl"),
@@ -164,103 +184,43 @@ export function PublishTemplateForm({
     );
     setPending(false);
     if (result.status === "ok") {
-      setOutcome({ status: "published", ...result.data });
-      onPublished();
+      onPublished(result.data);
     } else {
-      setOutcome({
-        status: "error",
-        message: result.status === "unavailable" ? UNAVAILABLE : result.message,
-      });
+      setRefusal(
+        result.status === "unavailable" ? UNAVAILABLE : result.message,
+      );
     }
   }
 
   return (
-    <form action={publish} className="flex max-w-2xl flex-col gap-3">
-      <h3 className="text-sm font-medium">Publish a template version</h3>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field id="publish-name" label="Template" {...control("name")} />
-        <Field
-          id="publish-profile"
-          label="Profile"
-          {...control("profileName")}
-        />
-        <Field
-          id="publish-profile-version"
-          label="Profile version"
-          {...control("profileVersion")}
-        />
-        <Field
-          id="publish-provider"
-          label="Model provider"
-          {...control("provider")}
-        />
-        <Field
-          id="publish-base-url"
-          label="Model base URL"
-          {...control("baseUrl")}
-        />
-        <Field id="publish-model" label="Model name" {...control("model")} />
-        <Field
-          id="publish-api-key-ref"
-          label="API key reference"
-          {...control("apiKeyRef")}
-        />
-        <Field
-          id="publish-embedding-base-url"
-          label="Embedding base URL"
-          {...control("embeddingBaseUrl")}
-        />
-        <Field
-          id="publish-embedding-model"
-          label="Embedding model name"
-          {...control("embeddingModel")}
-        />
-        <Field
-          id="publish-embedding-api-key-ref"
-          label="Embedding API key reference"
-          {...control("embeddingApiKeyRef")}
-        />
+    <form action={publish} className="flex flex-col gap-4">
+      <div className="grid gap-4 sm:grid-cols-2">
+        {INPUTS.map(({ name, label }) => (
+          <FormField key={name} label={label} error={errors[name]}>
+            {(props) => <Input {...props} {...control(name)} />}
+          </FormField>
+        ))}
       </div>
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="publish-ego">Ego</Label>
-        <Textarea id="publish-ego" rows={3} {...control("ego")} />
-      </div>
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="publish-tools">Tools, one tool=pin per line</Label>
-        <Textarea id="publish-tools" rows={3} {...control("tools")} />
-      </div>
-      {outcome.status === "error" && (
-        <p role="alert" className="text-sm text-destructive">
-          {outcome.message}
-        </p>
-      )}
-      {outcome.status === "published" && (
-        <p role="status" className="text-sm text-muted-foreground">
-          Published {outcome.name} version {outcome.version}. Agents created
-          from earlier versions keep what they copied.
-        </p>
-      )}
-      <div>
-        <Button type="submit" variant="outline" disabled={!hydrated || pending}>
+      <FormField label="Ego">
+        {(props) => <Textarea {...props} rows={3} {...control("ego")} />}
+      </FormField>
+      <FormField
+        label="Tools"
+        hint="One tool=pin per line."
+        error={errors.tools}
+      >
+        {(props) => <Textarea {...props} rows={3} {...control("tools")} />}
+      </FormField>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button type="submit" disabled={!hydrated || pending}>
           {pending ? "Publishing…" : "Publish version"}
         </Button>
+        {refusal !== null && (
+          <p role="alert" className="text-danger">
+            {refusal}
+          </p>
+        )}
       </div>
     </form>
-  );
-}
-
-function Field({
-  id,
-  label,
-  ...input
-}: {
-  id: string;
-  label: string;
-} & React.ComponentProps<typeof Input>) {
-  return (
-    <div className="flex flex-col gap-2">
-      <Label htmlFor={id}>{label}</Label>
-      <Input id={id} {...input} />
-    </div>
   );
 }

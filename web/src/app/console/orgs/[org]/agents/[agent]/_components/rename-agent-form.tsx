@@ -2,9 +2,9 @@
 
 import { useActionState, useState } from "react";
 
+import { FormField } from "@/components/form-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { renameAgent, type RenameAgentState } from "@/features/orgs/actions";
 import { useHydrated } from "@/hooks/use-hydrated";
 
@@ -13,7 +13,8 @@ const initialState: RenameAgentState = { status: "idle" };
 /**
  * Renames the agent. Its identifier, operator and values stay as they
  * are, and no operator is told: the name is the organization's word for
- * the agent and not a setting (ADR-0075).
+ * the agent and not a setting (ADR-0075). A refusal is the name field's
+ * error; the rename's success is said beside its Save.
  */
 export function RenameAgentForm({
   org,
@@ -34,34 +35,34 @@ export function RenameAgentForm({
   const [value, setValue] = useState(name);
 
   return (
-    <form action={formAction} className="flex max-w-2xl flex-col gap-3">
+    <form action={formAction} className="flex max-w-md flex-col gap-3">
       <input type="hidden" name="org" value={org} />
       <input type="hidden" name="agent" value={agent} />
-      <Label htmlFor="agent-name">Name</Label>
-      <div className="flex flex-col gap-3 sm:flex-row">
-        <Input
-          id="agent-name"
-          name="name"
-          required
-          disabled={!hydrated}
-          value={value}
-          onChange={(event) => setValue(event.target.value)}
-          className="max-w-sm"
-        />
+      <FormField
+        label="Name"
+        error={state.status === "error" ? state.message : undefined}
+      >
+        {(control) => (
+          <Input
+            {...control}
+            name="name"
+            required
+            disabled={!hydrated}
+            value={value}
+            onChange={(event) => setValue(event.target.value)}
+          />
+        )}
+      </FormField>
+      <div className="flex flex-wrap items-center gap-3">
         <Button type="submit" variant="outline" disabled={!hydrated || pending}>
           {pending ? "Saving…" : "Save name"}
         </Button>
+        {state.status === "saved" && (
+          <p role="status" className="text-muted-foreground">
+            Renamed to {state.name}.
+          </p>
+        )}
       </div>
-      {state.status === "error" && (
-        <p role="alert" className="text-sm text-destructive">
-          {state.message}
-        </p>
-      )}
-      {state.status === "saved" && (
-        <p role="status" className="text-sm text-muted-foreground">
-          Renamed to {state.name}.
-        </p>
-      )}
     </form>
   );
 }

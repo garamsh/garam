@@ -6,7 +6,7 @@ import { z } from "zod";
 import { GaramApiError, garamFetchAuthenticated, refusal } from "@/lib/garam";
 import type { components } from "@/types/api";
 
-import { parseGrn } from "../grn";
+import { parseGrn } from "@/lib/grn";
 
 /** What the add form has to show: nothing yet, or a refusal. */
 export type AddGroupMemberState =

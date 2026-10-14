@@ -9,7 +9,7 @@ import {
 } from "@/lib/garam";
 import type { components } from "@/types/api";
 
-import { parseGrn } from "../grn";
+import { parseGrn } from "@/lib/grn";
 
 /** An organization, as the API returns one. */
 export type Organization = components["schemas"]["Organization"];

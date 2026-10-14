@@ -1,41 +1,73 @@
 "use client";
 
+import { Plus } from "lucide-react";
 import { useState } from "react";
 
+import { DataTable, type ColumnDef } from "@/components/data-table";
+import { DescriptionList } from "@/components/description-list";
 import { Button } from "@/components/ui/button";
-import type { HostedOperator } from "@/features/orgs";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import type { DelegatedOperation, HostedOperator } from "@/features/orgs";
 import {
   ProfilesParser,
   TemplateVersionParser,
   TemplatesParser,
   segment,
+  type TemplateVersion,
   type VersionRef,
 } from "@/lib/operation-authority";
 
-import { ControlNotice, UNAVAILABLE, controlBlocker } from "./control-notice";
-import { PublishTemplateForm } from "./publish-template-form";
+import {
+  ControlNotice,
+  NO_FIX,
+  UNAVAILABLE,
+  controlBlocker,
+  controlReach,
+} from "./control-notice";
+import {
+  PublishTemplateForm,
+  startingDraft,
+  type PublishDraft,
+} from "./publish-template-form";
 import { useControlRead } from "./use-control-read";
+
+/** One published template, as the control service lists it. */
+type Published = VersionRef & { profile: VersionRef };
 
 /**
  * The templates and profiles a hosted operator's control service has
  * published (#1170). Each version is immutable and an agent copies the
  * one it was created from once, so publishing a new version changes no
  * existing agent. Reading needs `agent-template:read`, publishing
- * `agent-template:publish`, and the profiles `execution-profile:read`.
+ * `agent-template:publish`, and the profiles `execution-profile:read`;
+ * publishing is also left out where the server denies the caller it.
  */
 export function OperatorTemplates({
   org,
   orgGrn,
   hosted,
+  publishDenied,
 }: {
   org: string;
   orgGrn: string;
   hosted: HostedOperator | null;
+  publishDenied: boolean;
 }) {
   const [generation, setGeneration] = useState(0);
   const [selected, setSelected] = useState<VersionRef | null>(null);
+  // The draft lives here rather than in the dialog, so closing the
+  // dialog by Escape or a click outside it keeps what was typed.
+  const [publishing, setPublishing] = useState(false);
+  const [draft, setDraft] = useState<PublishDraft>(() => startingDraft(null));
+  const [published, setPublished] = useState<VersionRef | null>(null);
   const base = `/v1/orgs/${segment(org)}`;
-  const reach = (operation: string, path: string) =>
+  const reach = (operation: DelegatedOperation, path: string) =>
     hosted !== null && controlBlocker(hosted, operation) === null
       ? {
           endpoint: hosted.endpoint,
@@ -45,7 +77,7 @@ export function OperatorTemplates({
         }
       : null;
 
-  const blocker = controlBlocker(hosted, "agent-template:read");
+  const read = controlReach(hosted, "agent-template:read");
   const templates = useControlRead(
     org,
     "agent-template:read",
@@ -71,128 +103,234 @@ export function OperatorTemplates({
     ProfilesParser,
   );
 
-  if (blocker !== null || hosted === null) {
-    return <ControlNotice>{blocker}</ControlNotice>;
+  if (read.status === "blocked") {
+    return <ControlNotice org={org} {...read.block} />;
   }
   if (templates === null || templates.status === "loading") {
     return (
-      <ControlNotice>Reading {hosted.name}&apos;s templates…</ControlNotice>
+      <p role="status" className="text-muted-foreground">
+        Reading {read.hosted.name}&apos;s templates…
+      </p>
     );
   }
-  if (templates.status === "unavailable") {
-    return <ControlNotice>{UNAVAILABLE}</ControlNotice>;
-  }
-  if (templates.status === "refused") {
+  if (templates.status !== "ok") {
     return (
-      <p role="alert" className="text-sm text-destructive">
-        {templates.message}
-      </p>
+      <ControlNotice
+        org={org}
+        reason={
+          templates.status === "unavailable" ? UNAVAILABLE : templates.message
+        }
+        fix={NO_FIX}
+      />
     );
   }
 
-  const canPublish = controlBlocker(hosted, "agent-template:publish") === null;
+  const publish = controlReach(hosted, "agent-template:publish");
+  const canPublish = publish.status === "ready" && !publishDenied;
+  const profileBlock = controlBlocker(hosted, "execution-profile:read");
+  const columns: ColumnDef<Published, unknown>[] = [
+    { id: "name", header: "Template", accessorKey: "name" },
+    {
+      id: "version",
+      header: "Version",
+      accessorFn: (t) => String(t.version),
+      cell: ({ row }) => (
+        <span className="tabular-nums">{row.original.version}</span>
+      ),
+    },
+    {
+      id: "profile",
+      header: "Profile",
+      accessorFn: (t) => `${t.profile.name} version ${t.profile.version}`,
+    },
+    {
+      id: "view",
+      header: () => <span className="sr-only">Actions</span>,
+      enableSorting: false,
+      enableGlobalFilter: false,
+      cell: ({ row }) => (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() =>
+            setSelected({
+              name: row.original.name,
+              version: row.original.version,
+            })
+          }
+        >
+          View {row.original.name}
+        </Button>
+      ),
+    },
+  ];
+
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-sm text-muted-foreground">
-        Published by {hosted.name}. Each version is immutable: an agent copies
-        the version it is created from once, and a later version never changes
-        it.
-      </p>
-      {templates.data.templates.length === 0 ? (
-        <p className="text-sm">No template is published.</p>
-      ) : (
-        <ul className="flex flex-col gap-2">
-          {templates.data.templates.map((t) => (
-            <li key={t.name} className="flex flex-wrap items-center gap-3">
-              <span className="font-medium">{t.name}</span>
-              <span className="text-sm text-muted-foreground">
-                version {t.version}, profile {t.profile.name} version{" "}
-                {t.profile.version}
-              </span>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  setSelected({ name: t.name, version: t.version })
-                }
-              >
-                View {t.name}
-              </Button>
-            </li>
-          ))}
-        </ul>
-      )}
-      {detail !== null && detail.status === "ok" && (
-        <section
-          aria-label={`${detail.data.name} version ${detail.data.version}`}
-          className="flex flex-col gap-1 text-sm"
-        >
-          <h3 className="font-medium">
-            {detail.data.name} version {detail.data.version}
-          </h3>
-          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
-            <dt className="text-muted-foreground">Model</dt>
-            <dd>
-              {detail.data.configuration.model.provider} ·{" "}
-              {detail.data.configuration.model.name}
-            </dd>
-            <dt className="text-muted-foreground">API key</dt>
-            <dd className="font-mono">
-              reference {detail.data.configuration.model.apiKeyRef}
-            </dd>
-            <dt className="text-muted-foreground">Tools</dt>
-            <dd>
-              {Object.keys(detail.data.configuration.tools).join(", ") ||
-                "none"}
-            </dd>
-          </dl>
-        </section>
-      )}
-      {detail !== null && detail.status === "refused" && (
-        <p role="alert" className="text-sm text-destructive">
-          {detail.message}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-muted-foreground">
+          Published by {read.hosted.name}. Each version is immutable: an agent
+          copies the version it is created from once, and a later version never
+          changes it.
+        </p>
+        {canPublish && (
+          <Button type="button" onClick={() => setPublishing(true)}>
+            <Plus aria-hidden />
+            Publish version
+          </Button>
+        )}
+      </div>
+      {published !== null && (
+        <p role="status" className="text-muted-foreground">
+          Published {published.name} version {published.version}. Agents created
+          from earlier versions keep what they copied.
         </p>
       )}
-      <section className="flex flex-col gap-1">
-        <h3 className="text-sm font-medium">Execution profiles</h3>
-        {profiles === null ? (
-          <ControlNotice>
-            {controlBlocker(hosted, "execution-profile:read")}
-          </ControlNotice>
-        ) : profiles.status === "ok" ? (
-          <p className="text-sm">
+      {publish.status === "blocked" && (
+        <ControlNotice org={org} {...publish.block} />
+      )}
+      <DataTable
+        label="Published templates"
+        columns={columns}
+        data={templates.data.templates}
+        getRowId={(t) => t.name}
+        empty={
+          <p className="text-muted-foreground">No template is published.</p>
+        }
+      />
+      <section aria-labelledby="profiles-title" className="flex flex-col gap-1">
+        <h3 id="profiles-title" className="font-medium">
+          Execution profiles
+        </h3>
+        {profileBlock !== null ? (
+          <ControlNotice org={org} {...profileBlock} />
+        ) : profiles === null ||
+          profiles.status === "loading" ? null : profiles.status === "ok" ? (
+          <p>
             {profiles.data.profiles.length === 0
               ? "No profile is published."
               : `Published: ${profiles.data.profiles
                   .map((p) => `${p.name} version ${p.version}`)
                   .join(", ")}.`}{" "}
-            Profiles are published by the deployment, not from the console.
+            <span className="text-muted-foreground">
+              Profiles are published by the deployment, not from the console.
+            </span>
           </p>
-        ) : profiles.status === "loading" ? null : (
-          <ControlNotice>
-            {profiles.status === "unavailable" ? UNAVAILABLE : profiles.message}
-          </ControlNotice>
+        ) : (
+          <ControlNotice
+            org={org}
+            reason={
+              profiles.status === "unavailable" ? UNAVAILABLE : profiles.message
+            }
+            fix={NO_FIX}
+          />
         )}
       </section>
-      {canPublish ? (
-        <PublishTemplateForm
-          key={
-            detail?.status === "ok"
-              ? `${detail.data.name}/${detail.data.version}`
-              : ""
-          }
-          org={org}
-          orgGrn={orgGrn}
-          hosted={hosted}
-          from={detail?.status === "ok" ? detail.data : null}
-          onPublished={() => setGeneration((g) => g + 1)}
-        />
-      ) : (
-        <ControlNotice>
-          {controlBlocker(hosted, "agent-template:publish")}
-        </ControlNotice>
+
+      <Dialog
+        open={selected !== null}
+        onOpenChange={(open) => {
+          if (!open) setSelected(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {selected?.name} version {selected?.version}
+            </DialogTitle>
+            <DialogDescription>
+              What this version configures. It cannot change.
+            </DialogDescription>
+          </DialogHeader>
+          {detail === null || detail.status === "loading" ? (
+            <p role="status" className="text-muted-foreground">
+              Reading the version…
+            </p>
+          ) : detail.status === "ok" ? (
+            <>
+              <VersionFacts version={detail.data} />
+              {canPublish && (
+                <div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setSelected(null);
+                      setDraft(startingDraft(detail.data));
+                      setPublishing(true);
+                    }}
+                  >
+                    Start a new version from this
+                  </Button>
+                </div>
+              )}
+            </>
+          ) : (
+            <p role="alert" className="text-danger">
+              {detail.status === "unavailable" ? UNAVAILABLE : detail.message}
+            </p>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {publish.status === "ready" && (
+        <Dialog open={publishing} onOpenChange={setPublishing}>
+          <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Publish a template version</DialogTitle>
+              <DialogDescription>
+                The control service numbers the version. A secret is named by
+                reference, never typed here.
+              </DialogDescription>
+            </DialogHeader>
+            <PublishTemplateForm
+              org={org}
+              orgGrn={orgGrn}
+              hosted={publish.hosted}
+              values={draft}
+              onValuesChange={setDraft}
+              onPublished={(version) => {
+                setPublishing(false);
+                setDraft(startingDraft(null));
+                setPublished(version);
+                setGeneration((g) => g + 1);
+              }}
+            />
+          </DialogContent>
+        </Dialog>
       )}
     </div>
+  );
+}
+
+/** One template version's configuration, its secrets by reference. */
+function VersionFacts({ version }: { version: TemplateVersion }) {
+  const { model, tools } = version.configuration;
+  return (
+    <DescriptionList
+      items={[
+        {
+          term: "Profile",
+          description: `${version.profile.name} version ${version.profile.version}`,
+        },
+        { term: "Model", description: `${model.provider} · ${model.name}` },
+        {
+          term: "API key",
+          description: (
+            <span className="font-mono">reference {model.apiKeyRef}</span>
+          ),
+        },
+        {
+          term: "Embedding",
+          description:
+            model.embedding === undefined ? "None" : model.embedding.name,
+        },
+        {
+          term: "Tools",
+          description: Object.keys(tools).join(", ") || "None",
+        },
+      ]}
+    />
   );
 }

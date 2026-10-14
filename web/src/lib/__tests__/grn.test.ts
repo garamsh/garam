@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseGrn, slugFromGrn } from "@/features/orgs/grn";
+import { parseGrn, slugFromGrn } from "@/lib/grn";
 
 const malformed = [
   "grn:root:default:org",

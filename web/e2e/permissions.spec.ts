@@ -110,11 +110,12 @@ test.describe("permissions", () => {
     await page
       .getByRole("button", { name: "Create draft", exact: true })
       .click();
+    // The engine names the rule and the place, and the reason crosses
+    // the gRPC hop and the API to the sentence the form shows.
     await expect(
-      page.getByText(
-        "This policy document can't be saved. It needs a Version and at least one statement, and every statement needs an Effect of Allow or Deny, an Action and a Resource. Keys other than Version, Statement, Sid, Effect, Action, Resource and Condition aren't allowed.",
-        { exact: true },
-      ),
+      page.getByText("Statement 1's Effect must be Allow or Deny.", {
+        exact: true,
+      }),
     ).toBeVisible();
     await expect(name).toHaveValue("Deny project renames");
     await expect(document).toHaveValue(refused);

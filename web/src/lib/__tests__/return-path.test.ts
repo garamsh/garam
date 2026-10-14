@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -6,24 +9,44 @@ import {
   withReturnPath,
 } from "@/lib/return-path";
 
+/**
+ * The vectors the Go rule is tested against too
+ * (`internal/api/auth_return_path_test.go`), so a path one rule accepts
+ * and the other drops fails on one side. A `goOnly` vector is raw bytes
+ * a JavaScript string cannot hold.
+ */
+const VECTORS: {
+  name: string;
+  input?: string;
+  accepted: boolean;
+  goOnly?: boolean;
+}[] = JSON.parse(
+  readFileSync(
+    join(
+      import.meta.dirname,
+      "../../../../internal/api/testdata/return-path-vectors.json",
+    ),
+    "utf8",
+  ),
+).vectors;
+
 describe("safeReturnPath", () => {
-  it.each([
-    "/console",
-    "/console/orgs/acme/teams",
-    "/console/invitations/tok-123",
-    "/console/orgs/acme/permissions/attachments?subject=team",
-  ])("returns to a console path (%s)", (path) => {
-    expect(safeReturnPath(path)).toBe(path);
+  it("reads the shared vectors", () => {
+    expect(VECTORS.filter((vector) => !vector.goOnly).length).toBeGreaterThan(
+      10,
+    );
   });
 
+  it.each(VECTORS.filter((vector) => !vector.goOnly))(
+    "holds the shared vector: $name",
+    ({ input, accepted }) => {
+      expect(safeReturnPath(input)).toBe(accepted ? input : null);
+    },
+  );
+
   it.each([
-    ["another origin", "https://evil.example/console"],
-    ["a protocol-relative host", "//evil.example/console"],
-    ["a backslash a browser reads as a slash", "/console/\\\\evil.example"],
-    ["a control character", "/console/\torgs"],
-    ["a public page", "/register"],
-    ["a prefix that is not the console segment", "/consoleevil"],
     ["no value", null],
+    ["a lone surrogate, which is no UTF-8 at all", "/console/\ud800"],
   ])("drops %s", (_, value) => {
     expect(safeReturnPath(value)).toBeNull();
   });

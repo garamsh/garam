@@ -102,15 +102,7 @@ export default async function LoginPage({ searchParams }: Props) {
               <span aria-hidden className="h-px flex-1 bg-border" />
             </div>
             <div className="flex flex-col items-center gap-3">
-              <GoogleSignInButton />
-              {/* The Google round trip lands on the console and carries
-                  no return path, so the invitation is reopened by hand. */}
-              {invitation?.usable && (
-                <p className="text-center text-xs text-pretty text-muted-foreground">
-                  After signing in with Google, open your invitation link again
-                  to accept it.
-                </p>
-              )}
+              <GoogleSignInButton returnPath={returnPath} />
             </div>
           </>
         )}

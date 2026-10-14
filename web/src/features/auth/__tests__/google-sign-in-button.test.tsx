@@ -7,12 +7,26 @@ import { GoogleSignInButton } from "@/features/auth/components/google-sign-in-bu
 // approved label, and both theme variants:
 // https://developers.google.com/identity/branding-guidelines
 describe("Google sign-in button", () => {
-  it("links to the backend OAuth entry point under the approved label", () => {
+  it("posts to the backend OAuth entry point under the approved label", () => {
     render(<GoogleSignInButton />);
 
+    const button = screen.getByRole("button", { name: "Sign in with Google" });
+    const form = button.closest("form");
+    expect(form).toHaveAttribute("method", "post");
+    expect(form).toHaveAttribute("action", "/api/auth/login/google");
+    expect(form?.querySelector('input[name="next"]')).toBeNull();
+  });
+
+  it("carries the return path in the form body, not the URL", () => {
+    render(<GoogleSignInButton returnPath="/console/invitations/tok-1" />);
+
+    const form = screen
+      .getByRole("button", { name: "Sign in with Google" })
+      .closest("form");
+    expect(form).toHaveAttribute("action", "/api/auth/login/google");
     expect(
-      screen.getByRole("link", { name: "Sign in with Google" }),
-    ).toHaveAttribute("href", "/api/auth/login/google");
+      form?.querySelector('input[type="hidden"][name="next"]'),
+    ).toHaveValue("/console/invitations/tok-1");
   });
 
   it("renders Google's own button asset for the light and dark themes", () => {

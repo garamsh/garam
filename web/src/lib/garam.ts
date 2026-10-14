@@ -10,6 +10,7 @@ import {
   type RefusalOperation,
 } from "@/lib/refusal-copy";
 import { SESSION_COOKIE } from "@/lib/session";
+import type { components } from "@/types/api";
 import { redirectToSignIn } from "@/lib/sign-in-redirect";
 
 /**
@@ -23,6 +24,7 @@ export class GaramApiError extends Error {
     readonly status: number,
     message: string,
     readonly kind: string = "unknown",
+    readonly reason?: { code: string; path?: string },
   ) {
     super(message);
     this.name = "GaramApiError";
@@ -99,7 +101,13 @@ export function refusal(
     return {
       status: "error",
       message: refusalCopy(
-        { status: error.status, kind: error.kind, message: error.message },
+        {
+          status: error.status,
+          kind: error.kind,
+          message: error.message,
+          reason: error.reason?.code,
+          path: error.reason?.path,
+        },
         operation,
       ),
     };
@@ -147,8 +155,13 @@ export async function garamRequest(
     throw new GaramUnreachableError();
   }
   if (!response.ok) {
-    const { message, kind } = await errorBody(response);
-    throw new GaramApiError(response.status, message, kind);
+    const { message, kind, reason, path } = await errorBody(response);
+    throw new GaramApiError(
+      response.status,
+      message,
+      kind,
+      reason === undefined ? undefined : { code: reason, path },
+    );
   }
   return response;
 }
@@ -198,7 +211,14 @@ export async function garamFetchAuthenticated<T>(
   }
 }
 
-const ErrorBodyParser = z.object({ kind: z.string(), message: z.string() });
+const ErrorBodyParser = parserFor<components["schemas"]["Error"]>()(
+  z.object({
+    kind: z.string(),
+    message: z.string(),
+    reason: z.string().optional(),
+    path: z.string().optional(),
+  }),
+);
 
 /**
  * Reads the backend's `{ kind, message }` error body. An answer without
@@ -207,7 +227,7 @@ const ErrorBodyParser = z.object({ kind: z.string(), message: z.string() });
  */
 async function errorBody(
   response: Response,
-): Promise<{ kind: string; message: string }> {
+): Promise<components["schemas"]["Error"]> {
   const parsed = ErrorBodyParser.safeParse(
     await response.json().catch(() => null),
   );

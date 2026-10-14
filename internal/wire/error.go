@@ -3,6 +3,7 @@ package wire
 import (
 	"net/http"
 
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -202,5 +203,40 @@ func KindOf(c codes.Code) errorx.Kind {
 // every code it raises but two is replaced on the way out as a 5xx.
 func ErrorOf(err error) error {
 	st, _ := status.FromError(err)
+	for _, detail := range st.Details() {
+		if info, ok := detail.(*errdetails.ErrorInfo); ok && info.GetDomain() == reasonDomain {
+			return errorx.NewWithReason(KindOf(st.Code()),
+				errorx.Reason{Code: info.GetReason(), Path: info.GetMetadata()[reasonPathKey]}, st.Message())
+		}
+	}
 	return errorx.New(KindOf(st.Code()), st.Message())
+}
+
+// The ErrorInfo a reason crosses a gRPC hop as: the reason by name, in
+// this domain, with its JSON Pointer under one metadata key.
+const (
+	reasonDomain  = "garam.sh"
+	reasonPathKey = "path"
+)
+
+// GRPCStatusOf renders err as the status a gRPC peer reads: the code its
+// kind maps to, the message a caller may be told ([MessageOf]), and the
+// reason it carries as an ErrorInfo detail, which [ErrorOf] reads back.
+func GRPCStatusOf(err error) *status.Status {
+	st := status.New(CodeOf(errorx.KindOf(err)), MessageOf(err))
+	reason, ok := errorx.ReasonOf(err)
+	if !ok {
+		return st
+	}
+	info := &errdetails.ErrorInfo{Reason: reason.Code, Domain: reasonDomain}
+	if reason.Path != "" {
+		info.Metadata = map[string]string{reasonPathKey: reason.Path}
+	}
+	withReason, detailErr := st.WithDetails(info)
+	if detailErr != nil {
+		// WithDetails fails only for a status of code OK, which no
+		// refusal maps to; the status without the reason is still true.
+		return st
+	}
+	return withReason
 }

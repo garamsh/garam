@@ -152,13 +152,14 @@ func (s *fakeSessionStore) Delete(_ context.Context, token string) error {
 type fakeOAuthStateStore struct {
 	mu       sync.Mutex
 	expiryOf map[string]time.Time
+	pathOf   map[string]string
 }
 
 func newFakeOAuthStateStore() *fakeOAuthStateStore {
-	return &fakeOAuthStateStore{expiryOf: map[string]time.Time{}}
+	return &fakeOAuthStateStore{expiryOf: map[string]time.Time{}, pathOf: map[string]string{}}
 }
 
-func (s *fakeOAuthStateStore) Issue(_ context.Context, state string, ttl time.Duration) error {
+func (s *fakeOAuthStateStore) Issue(_ context.Context, state string, ttl time.Duration, returnPath string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	now := time.Now().UTC()
@@ -174,18 +175,21 @@ func (s *fakeOAuthStateStore) Issue(_ context.Context, state string, ttl time.Du
 		return authn.ErrOAuthStateRateLimited
 	}
 	s.expiryOf[state] = now.Add(ttl)
+	s.pathOf[state] = returnPath
 	return nil
 }
 
-func (s *fakeOAuthStateStore) Consume(_ context.Context, state string) error {
+func (s *fakeOAuthStateStore) Consume(_ context.Context, state string) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	expiry, ok := s.expiryOf[state]
 	if !ok || !time.Now().UTC().Before(expiry) {
-		return authn.ErrOAuthStateNotLive
+		return "", authn.ErrOAuthStateNotLive
 	}
+	returnPath := s.pathOf[state]
 	delete(s.expiryOf, state)
-	return nil
+	delete(s.pathOf, state)
+	return returnPath, nil
 }
 
 // fakeOrgStore is an in-memory org.Store double for the org, group,

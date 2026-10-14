@@ -36,8 +36,10 @@ describe("login page", () => {
       screen.getByRole("heading", { name: "Sign in to garam" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Sign in with Google" }),
-    ).toHaveAttribute("href", "/api/auth/login/google");
+      screen
+        .getByRole("button", { name: "Sign in with Google" })
+        .closest("form"),
+    ).toHaveAttribute("action", "/api/auth/login/google");
     expect(
       screen.getByRole("link", { name: "Back to the home page" }),
     ).toHaveAttribute("href", "/");
@@ -55,7 +57,7 @@ describe("login page", () => {
     );
     expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Sign in with Google" }),
+      screen.getByRole("button", { name: "Sign in with Google" }),
     ).toBeInTheDocument();
   });
 
@@ -68,7 +70,7 @@ describe("login page", () => {
     server.use(...signedOutWith(["google"]));
     const registered = await renderServerComponent(LoginPage(NO_PARAMS));
     expect(
-      screen.getByRole("link", { name: "Sign in with Google" }),
+      screen.getByRole("button", { name: "Sign in with Google" }),
     ).toBeInTheDocument();
     // Presence: the clause sits in a paragraph that also names the
     // registered account and how accounts are created.
@@ -80,7 +82,7 @@ describe("login page", () => {
     server.use(...signedOutWith([]));
     await renderServerComponent(LoginPage(NO_PARAMS));
     expect(
-      screen.queryByRole("link", { name: "Sign in with Google" }),
+      screen.queryByRole("button", { name: "Sign in with Google" }),
     ).not.toBeInTheDocument();
     // Presence, and wide on purpose: the claim is that no element's
     // text names the provider, which the paragraph above would satisfy
@@ -96,14 +98,14 @@ describe("login page", () => {
     server.use(...signedOutWith(["google"]));
     const known = await renderServerComponent(LoginPage(NO_PARAMS));
     expect(
-      screen.getByRole("link", { name: "Sign in with Google" }),
+      screen.getByRole("button", { name: "Sign in with Google" }),
     ).toBeInTheDocument();
     known.unmount();
 
     server.use(...signedOutWith(["github"]));
     await renderServerComponent(LoginPage(NO_PARAMS));
     expect(
-      screen.queryByRole("link", { name: "Sign in with Google" }),
+      screen.queryByRole("button", { name: "Sign in with Google" }),
     ).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
   });
@@ -112,7 +114,7 @@ describe("login page", () => {
     server.use(...signedOutWith(["google"]));
     const readable = await renderServerComponent(LoginPage(NO_PARAMS));
     expect(
-      screen.getByRole("link", { name: "Sign in with Google" }),
+      screen.getByRole("button", { name: "Sign in with Google" }),
     ).toBeInTheDocument();
     readable.unmount();
 
@@ -122,7 +124,7 @@ describe("login page", () => {
     );
     await renderServerComponent(LoginPage(NO_PARAMS));
     expect(
-      screen.queryByRole("link", { name: "Sign in with Google" }),
+      screen.queryByRole("button", { name: "Sign in with Google" }),
     ).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
   });
@@ -174,7 +176,7 @@ describe("login page", () => {
       screen.getByRole("heading", { name: "Cannot reach the API" }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("link", { name: "Sign in with Google" }),
+      screen.queryByRole("button", { name: "Sign in with Google" }),
     ).not.toBeInTheDocument();
   });
 
@@ -259,5 +261,20 @@ describe("login page", () => {
       screen.getByRole("heading", { name: "Sign in to garam" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
+  });
+
+  it("hands the Google sign-in the invitation it was reached for, in the form body", async () => {
+    server.use(...signedOutWith(["google"]));
+
+    await renderServerComponent(LoginPage(invitedTo("secret-token")));
+
+    const form = screen
+      .getByRole("button", { name: "Sign in with Google" })
+      .closest("form");
+    expect(form).toHaveAttribute("action", "/api/auth/login/google");
+    expect(
+      form?.querySelector('input[type="hidden"][name="next"]'),
+    ).toHaveValue("/console/invitations/secret-token");
+    expect(screen.queryByText(/open your invitation link again/)).toBeNull();
   });
 });

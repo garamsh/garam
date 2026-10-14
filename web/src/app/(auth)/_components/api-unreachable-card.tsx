@@ -15,14 +15,12 @@ export function ApiUnreachableCard({ subject }: { subject: string }) {
   return (
     <Card className="w-full max-w-sm [--card-spacing:--spacing(6)]">
       <CardHeader className="gap-2">
-        <h1 className="font-heading text-2xl font-semibold tracking-tight">
-          {API_UNREACHABLE_TITLE}
-        </h1>
-        <p className="text-sm text-pretty text-muted-foreground">
+        <h1 className="text-xl tracking-tight">{API_UNREACHABLE_TITLE}</h1>
+        <p className="text-pretty text-muted-foreground">
           <ApiUnreachableReason subject={subject} />
         </p>
       </CardHeader>
-      <CardFooter className="justify-center text-xs text-muted-foreground">
+      <CardFooter className="justify-center text-muted-foreground">
         <Link href="/" className="transition-colors hover:text-foreground">
           Back to the home page
         </Link>

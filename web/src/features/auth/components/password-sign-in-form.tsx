@@ -2,9 +2,9 @@
 
 import { useActionState, useState } from "react";
 
+import { FormField } from "@/components/form-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { RETURN_PARAM } from "@/lib/return-path";
 
 import { signInWithPassword, type SignInWithPasswordState } from "../actions";
@@ -17,7 +17,7 @@ const initialState: SignInWithPasswordState = { status: "idle" };
  * The fields carry no rule of their own. A wrong password and a
  * username no account holds are one answer, so the form asks nothing
  * about either before sending them and renders the single refusal the
- * action returns.
+ * action returns, under the password.
  *
  * `returnPath` is where the visitor was going before they were sent
  * here; the action lands there once signed in.
@@ -36,38 +36,44 @@ export function PasswordSignInForm({
   // again to read the answer. The password is not held — the reset
   // leaves the field empty for the next attempt.
   const [username, setUsername] = useState("");
+  const error = state.status === "error" ? state : null;
 
   return (
     <form action={formAction} className="flex w-full flex-col gap-4">
       {returnPath !== null && (
         <input type="hidden" name={RETURN_PARAM} value={returnPath} />
       )}
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="username">Username</Label>
-        <Input
-          id="username"
-          name="username"
-          required
-          value={username}
-          onChange={(event) => setUsername(event.target.value)}
-          autoComplete="username"
-          autoCapitalize="none"
-          spellCheck={false}
-        />
-      </div>
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="password">Password</Label>
-        <Input
-          id="password"
-          name="password"
-          type="password"
-          required
-          autoComplete="current-password"
-        />
-      </div>
-      {state.status === "error" && (
-        <p role="alert" className="text-sm text-destructive">
-          {state.message}
+      <FormField label="Username">
+        {(control) => (
+          <Input
+            {...control}
+            name="username"
+            required
+            value={username}
+            onChange={(event) => setUsername(event.target.value)}
+            autoComplete="username"
+            autoCapitalize="none"
+            spellCheck={false}
+          />
+        )}
+      </FormField>
+      <FormField
+        label="Password"
+        error={error?.field === "password" ? error.message : undefined}
+      >
+        {(control) => (
+          <Input
+            {...control}
+            name="password"
+            type="password"
+            required
+            autoComplete="current-password"
+          />
+        )}
+      </FormField>
+      {error !== null && error.field === undefined && (
+        <p role="alert" className="text-destructive">
+          {error.message}
         </p>
       )}
       <Button type="submit" disabled={pending}>

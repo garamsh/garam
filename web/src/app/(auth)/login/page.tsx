@@ -72,12 +72,12 @@ export default async function LoginPage({ searchParams }: Props) {
   return (
     <Card className="w-full max-w-sm [--card-spacing:--spacing(6)]">
       <CardHeader className="gap-2">
-        <h1 className="font-heading text-2xl font-semibold tracking-tight">
+        <h1 className="text-xl tracking-tight">
           {invitation?.usable
             ? `Sign in to join ${invitation.orgName}`
             : "Sign in to garam"}
         </h1>
-        <p className="text-sm text-pretty text-muted-foreground">
+        <p className="text-pretty text-muted-foreground">
           {/* Only where the backend registered a provider can a
               sign-in create an account, and a failed read is not
               told apart from none. The membership sentence below
@@ -98,7 +98,7 @@ export default async function LoginPage({ searchParams }: Props) {
           <>
             <div className="flex items-center gap-3">
               <span aria-hidden className="h-px flex-1 bg-border" />
-              <span className="text-xs text-muted-foreground">or</span>
+              <span className="text-muted-foreground">or</span>
               <span aria-hidden className="h-px flex-1 bg-border" />
             </div>
             <div className="flex flex-col items-center gap-3">
@@ -107,7 +107,7 @@ export default async function LoginPage({ searchParams }: Props) {
           </>
         )}
       </CardContent>
-      <CardFooter className="flex-col gap-2 text-xs text-muted-foreground">
+      <CardFooter className="flex-col gap-2 text-muted-foreground">
         <p>
           {invitation?.usable
             ? "No garam account yet?"

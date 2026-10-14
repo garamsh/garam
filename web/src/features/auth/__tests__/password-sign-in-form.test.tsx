@@ -76,6 +76,21 @@ describe("password sign-in form", () => {
     expect(bounded.refusal).toBe(REFUSAL_COPY.tooManyRequests);
   });
 
+  it("puts a refused credential under the password and names neither field wrong", async () => {
+    refuses(401, "unauthenticated", "no");
+    const user = userEvent.setup();
+    const form = within(render(<PasswordSignInForm />).container);
+    await enter(user, form.getByLabelText("Username"), "alice");
+    await enter(user, form.getByLabelText("Password"), PASSWORD);
+    await user.click(form.getByRole("button", { name: "Sign in" }));
+    await form.findByRole("alert");
+
+    expect(form.getByLabelText("Password")).toHaveAccessibleDescription(
+      PASSWORD_REFUSED,
+    );
+    expect(form.getByLabelText("Username")).not.toHaveAttribute("aria-invalid");
+  });
+
   it("asks nothing about the username before sending it", async () => {
     // A username registration would refuse on its shape is sent all the
     // same and comes back as the one refusal. A form holding that rule

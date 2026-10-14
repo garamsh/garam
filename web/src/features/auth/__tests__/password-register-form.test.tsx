@@ -74,6 +74,35 @@ describe("password register form", () => {
     expect(document.body.innerHTML).not.toContain(PASSWORD);
   });
 
+  it("puts each refusal under the field it is about", async () => {
+    server.use(
+      http.post(`${API_URL}/auth/password/register`, () =>
+        HttpResponse.json(
+          { kind: "already_exists", message: "user: already exists" },
+          { status: 409 },
+        ),
+      ),
+    );
+
+    const taken = await register(TOKEN, "alice", PASSWORD);
+
+    expect(taken.form.getByLabelText("Username")).toHaveAttribute(
+      "aria-invalid",
+      "true",
+    );
+    expect(taken.form.getByLabelText("Username")).toHaveAccessibleDescription(
+      /That username is taken\. Choose another one\./,
+    );
+    // The control: the other fields are not marked, so the mark is the
+    // refusal's field and not every field the form holds.
+    expect(taken.form.getByLabelText("Invitation token")).not.toHaveAttribute(
+      "aria-invalid",
+    );
+    expect(taken.form.getByLabelText("Password")).not.toHaveAttribute(
+      "aria-invalid",
+    );
+  });
+
   it("keeps the pasted invitation when the API refuses", async () => {
     server.use(
       http.post(`${API_URL}/auth/password/register`, () =>

@@ -5,7 +5,6 @@ import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useHydrated } from "@/hooks/use-hydrated";
 import {
   PASSWORD_MIN_LENGTH,
   USERNAME_MAX_LENGTH,
@@ -43,10 +42,6 @@ export function PasswordRegisterForm({
   // reset leaves the field empty for the next attempt.
   const [invitationToken, setInvitationToken] = useState(invited ?? "");
   const [username, setUsername] = useState("");
-  // The fields are controlled, so text typed before React hydrates is
-  // replaced by the empty state it hydrates with; until then they take
-  // none.
-  const hydrated = useHydrated();
 
   return (
     <form action={formAction} className="flex w-full flex-col gap-4">
@@ -59,7 +54,6 @@ export function PasswordRegisterForm({
             id="invitationToken"
             name="invitationToken"
             required
-            disabled={!hydrated}
             value={invitationToken}
             onChange={(event) => setInvitationToken(event.target.value)}
             autoComplete="off"
@@ -79,7 +73,6 @@ export function PasswordRegisterForm({
           id="username"
           name="username"
           required
-          disabled={!hydrated}
           value={username}
           onChange={(event) => setUsername(event.target.value)}
           autoComplete="username"
@@ -99,7 +92,6 @@ export function PasswordRegisterForm({
           name="password"
           type="password"
           required
-          disabled={!hydrated}
           autoComplete="new-password"
           aria-describedby="password-hint"
         />
@@ -112,7 +104,7 @@ export function PasswordRegisterForm({
           {state.message}
         </p>
       )}
-      <Button type="submit" disabled={!hydrated || pending}>
+      <Button type="submit" disabled={pending}>
         {pending ? "Creating…" : "Create account"}
       </Button>
     </form>

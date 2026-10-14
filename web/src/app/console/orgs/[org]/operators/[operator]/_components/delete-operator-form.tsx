@@ -1,87 +1,135 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import Link from "next/link";
+import { useActionState, useId, useState } from "react";
 
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   deleteOperator,
   type DeleteOperatorState,
 } from "@/features/orgs/actions";
+import { useHydrated } from "@/hooks/use-hydrated";
 
 const initialState: DeleteOperatorState = { status: "idle" };
 
+/** A definition that names the operator, which refuses its deletion. */
+export type BlockingDefinition = { name: string; href: string };
+
 /**
  * Deletes one operator's registration, which stops that operator
- * authenticating to garam (ADR-0070). What it ends is a machine
- * identity, so the button asks first and the confirmation says what
- * stops and what does not: a single click would put a running operator
- * behind a misclick, and a reader could take "delete" to reach into the
- * cluster, which nothing here does.
- *
- * `enrolled` decides which consequence is true. Deleting an operator
- * that holds a certificate refuses that certificate from the next
- * connection; deleting one that never obtained a certificate stops
- * nothing that was running and frees the identifier.
+ * authenticating to garam (ADR-0070). It ends a machine identity, so it
+ * is slow on purpose: the person types the identifier, and the dialog
+ * says what stops and what does not — nothing here reaches into the
+ * cluster. garam refuses the deletion while a definition names the
+ * operator, so those definitions are named here and the control waits
+ * for them to go. `blocking` is null when the definitions were not
+ * listed to the caller, and the server then decides.
  */
 export function DeleteOperatorForm({
   org,
   operator,
   name,
-  enrolled,
+  blocking,
 }: {
   org: string;
   operator: string;
   name: string;
-  enrolled: boolean;
+  blocking: readonly BlockingDefinition[] | null;
 }) {
   const [state, formAction, pending] = useActionState(
     deleteOperator,
     initialState,
   );
-  const [confirming, setConfirming] = useState(false);
+  const hydrated = useHydrated();
+  const [typed, setTyped] = useState("");
+  const confirmId = useId();
+  const blocked = blocking !== null && blocking.length > 0;
 
   return (
-    <div className="flex flex-col gap-2">
-      {confirming ? (
-        <form action={formAction} className="flex max-w-2xl flex-col gap-3">
+    <AlertDialog onOpenChange={() => setTyped("")}>
+      <AlertDialogTrigger asChild>
+        <Button variant="destructive" disabled={!hydrated}>
+          Delete operator
+        </Button>
+      </AlertDialogTrigger>
+      <AlertDialogContent className="data-[size=default]:sm:max-w-md">
+        <form action={formAction} className="contents">
           <input type="hidden" name="org" value={org} />
           <input type="hidden" name="operator" value={operator} />
-          <p className="text-sm wrap-anywhere">
-            {enrolled
-              ? `Delete ${name}? Its new connections to garam are refused. Work already running in its cluster does not stop, and agents it provisioned keep their own certificates.`
-              : `Delete ${name}? It never obtained a certificate, so nothing stops. Its identifier becomes free to register again.`}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <Button type="submit" variant="destructive" disabled={pending}>
-              {pending ? "Deleting…" : "Confirm deletion"}
-            </Button>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              garam refuses its keys, its credential and its certificate from
+              the next request. Work already running in its cluster does not
+              stop, and agents it provisioned keep their own credentials.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {blocked ? (
+            <div className="flex flex-col gap-2">
+              <p>
+                It can&apos;t be deleted while{" "}
+                {blocking.length === 1
+                  ? "this agent definition names it"
+                  : `these ${blocking.length} agent definitions name it`}
+                :
+              </p>
+              <ul className="flex flex-col gap-1">
+                {blocking.map((definition) => (
+                  <li key={definition.href}>
+                    <Link
+                      href={definition.href}
+                      className="font-medium underline-offset-4 hover:underline"
+                    >
+                      {definition.name}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor={confirmId}>
+                Type <span className="font-mono">{operator}</span> to confirm
+              </Label>
+              <Input
+                id={confirmId}
+                value={typed}
+                onChange={(event) => setTyped(event.target.value)}
+                autoComplete="off"
+                spellCheck={false}
+                className="font-mono"
+              />
+            </div>
+          )}
+          {state.status === "error" && (
+            <p role="alert" className="text-destructive">
+              {state.message}
+            </p>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <Button
-              type="button"
-              variant="ghost"
-              disabled={pending}
-              autoFocus
-              onClick={() => setConfirming(false)}
+              type="submit"
+              variant="destructive"
+              disabled={blocked || typed !== operator || pending}
             >
-              Cancel
+              {pending ? "Deleting…" : "Delete operator"}
             </Button>
-          </div>
+          </AlertDialogFooter>
         </form>
-      ) : (
-        <div>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setConfirming(true)}
-          >
-            Delete operator
-          </Button>
-        </div>
-      )}
-      {state.status === "error" && (
-        <p role="alert" className="text-sm text-destructive">
-          {state.message}
-        </p>
-      )}
-    </div>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

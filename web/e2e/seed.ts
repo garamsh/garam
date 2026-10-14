@@ -615,3 +615,31 @@ export async function seedCutoverDefinition(
   }
   return identifier;
 }
+
+/**
+ * Records that the operator's newest key obtained a token. The local
+ * stack runs no machine listener, so nothing exchanges an issued key
+ * there; this writes what an exchange leaves behind, which is all the
+ * console reads of it (ADR-0102).
+ */
+export async function seedKeyExchange(
+  seed: Seed,
+  operatorIdentifier: string = seed.operatorIdentifier,
+): Promise<void> {
+  const client = new Client({ connectionString: DATABASE_URL });
+  await client.connect();
+  try {
+    const result = await client.query(
+      `UPDATE operator_keys SET last_exchanged_at = now()
+        WHERE id = (SELECT max(id) FROM operator_keys WHERE operator_grn = $1)`,
+      [`grn:${seed.orgSlug}:default:operator:${operatorIdentifier}`],
+    );
+    if (result.rowCount !== 1) {
+      throw new Error(
+        `no key of ${operatorIdentifier} to record an exchange for`,
+      );
+    }
+  } finally {
+    await client.end();
+  }
+}

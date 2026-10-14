@@ -35,6 +35,27 @@ function linear(token: string): Rgb {
   ];
 }
 
+/** sRGB's transfer function, between linear light and the encoded value. */
+const encode = (x: number) =>
+  x <= 0.0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - 0.055;
+const decode = (x: number) =>
+  x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+
+/** `top` at `alpha` over `bottom`, blended as a browser composites. */
+function over(top: Rgb, bottom: Rgb, alpha: number): Rgb {
+  return top.map((value, i) =>
+    decode(alpha * encode(value) + (1 - alpha) * encode(bottom[i])),
+  ) as Rgb;
+}
+
+const luminance = ([r, g, b]: Rgb) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
+
+/** WCAG 2.2 contrast ratio between two linear colours. */
+function ratio(a: Rgb, b: Rgb): number {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
 /** WCAG 2.2 contrast ratio between two colours. */
 function contrast(a: string, b: string): number {
   const luminance = ([r, g, bl]: Rgb) => 0.2126 * r + 0.7152 * g + 0.0722 * bl;
@@ -98,4 +119,21 @@ describe("theme tokens", () => {
   it("maps the destructive utility onto the danger token", () => {
     expect(css).toMatch(/--color-destructive:\s*var\(--danger\);/);
   });
+
+  // The destructive button draws danger text on a danger tint: 10% over
+  // the page in light, 20% in dark (`components/ui/button.tsx`).
+  for (const [theme, selector, tint] of [
+    ["light", ":root", 0.1],
+    ["dark", ".dark", 0.2],
+  ] as const) {
+    it(`keeps danger text at 4.5:1 on the destructive button in ${theme}`, () => {
+      const tokens = block(selector);
+      const danger = linear(tokens.get("--danger")!);
+      const page = linear(tokens.get("--background")!);
+
+      expect(ratio(danger, over(danger, page, tint))).toBeGreaterThanOrEqual(
+        4.5,
+      );
+    });
+  }
 });

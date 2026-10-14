@@ -1,10 +1,11 @@
 "use client";
 
+import { Check } from "lucide-react";
 import { useActionState, useState } from "react";
 
+import { FormField } from "@/components/form-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   updateOperator,
@@ -16,10 +17,9 @@ import { parseOperatorDescription, parseOperatorName } from "@/lib/operator";
 const initialState: UpdateOperatorState = { status: "idle" };
 
 /**
- * Edits what the organization calls the operator and what it says the
- * operator is for. The identifier is not a field: it is the identity
- * the operator's certificate names, and saving moves nothing the
- * operator authenticates or enrols by (ADR-0074).
+ * The operator's name and description, which are what the organization
+ * calls it and says it is for (ADR-0074). Neither is its identity, so
+ * either may change; the identifier may not.
  */
 export function OperatorDetailsForm({
   org,
@@ -39,65 +39,72 @@ export function OperatorDetailsForm({
   const hydrated = useHydrated();
   const [draftName, setDraftName] = useState(name);
   const [draftDescription, setDraftDescription] = useState(description);
-
   const parsedName = parseOperatorName(draftName);
   const parsedDescription = parseOperatorDescription(draftDescription);
-  const problem =
+  const nameError =
     parsedName.status === "error"
       ? parsedName.message
-      : parsedDescription.status === "error"
-        ? parsedDescription.message
-        : null;
-  const message = problem ?? (state.status === "error" ? state.message : null);
+      : state.status === "error"
+        ? state.message
+        : undefined;
+  const descriptionError =
+    parsedDescription.status === "error"
+      ? parsedDescription.message
+      : undefined;
 
   return (
-    <form action={formAction} className="flex max-w-2xl flex-col gap-4">
+    <form action={formAction} className="flex max-w-xl flex-col gap-4">
       <input type="hidden" name="org" value={org} />
       <input type="hidden" name="operator" value={operator} />
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="operator-name">Name</Label>
-        <Input
-          id="operator-name"
-          name="name"
-          required
-          disabled={!hydrated}
-          value={draftName}
-          onChange={(event) => setDraftName(event.target.value)}
-          className="max-w-sm"
-        />
-      </div>
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="operator-description">Description</Label>
-        <Textarea
-          id="operator-description"
-          name="description"
-          rows={3}
-          disabled={!hydrated}
-          value={draftDescription}
-          onChange={(event) => setDraftDescription(event.target.value)}
-        />
-      </div>
-      {message && (
-        <p role="alert" className="text-sm text-destructive">
-          {message}
-        </p>
-      )}
-      {state.status === "saved" && problem === null && (
-        <p role="status" className="text-sm text-muted-foreground">
-          Saved as {state.name}.
-        </p>
-      )}
-      <p className="text-sm text-muted-foreground">
-        Saving leaves the identifier, certificate and definitions as they are.
-      </p>
-      <div>
+      <FormField label="Name" error={nameError}>
+        {(control) => (
+          <Input
+            {...control}
+            name="name"
+            required
+            disabled={!hydrated}
+            value={draftName}
+            onChange={(event) => setDraftName(event.target.value)}
+          />
+        )}
+      </FormField>
+      <FormField
+        label="Description"
+        hint="What this operator is for. Optional."
+        error={descriptionError}
+      >
+        {(control) => (
+          <Textarea
+            {...control}
+            name="description"
+            rows={3}
+            disabled={!hydrated}
+            value={draftDescription}
+            onChange={(event) => setDraftDescription(event.target.value)}
+          />
+        )}
+      </FormField>
+      <div className="flex flex-wrap items-center gap-2">
         <Button
           type="submit"
-          variant="outline"
-          disabled={!hydrated || pending || problem !== null}
+          disabled={
+            !hydrated ||
+            pending ||
+            parsedName.status === "error" ||
+            parsedDescription.status === "error"
+          }
         >
-          {pending ? "Saving…" : "Save details"}
+          {pending ? "Saving…" : "Save"}
         </Button>
+        {state.status === "saved" && (
+          <span
+            role="status"
+            className="flex items-center gap-1 text-muted-foreground"
+          >
+            <Check aria-hidden className="size-4 text-ok" />
+            Saved as {state.name}
+          </span>
+        )}
       </div>
     </form>
   );

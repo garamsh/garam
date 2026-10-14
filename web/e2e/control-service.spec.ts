@@ -159,15 +159,19 @@ test.describe("control service, as contract tests against the agreed Operator wi
     signedIn,
   }) => {
     await seedHostedOperator(signedIn, null, []);
-    await page.goto(`/console/orgs/${signedIn.orgSlug}/operators/hosted`);
+    const hosted = `/console/orgs/${signedIn.orgSlug}/operators/hosted`;
+    await page.goto(`${hosted}?tab=control`);
     await expect(
       page.getByText(
-        "No control endpoint is registered. The console reaches no control service for this operator.",
+        "No endpoint is registered, so the console reaches no control service for this operator.",
         { exact: true },
       ),
     ).toBeVisible();
 
-    const endpoint = page.getByLabel("Control endpoint", { exact: true });
+    const endpoint = page.getByRole("textbox", {
+      name: "Endpoint",
+      exact: true,
+    });
     await expect(endpoint).toBeEnabled();
     await endpoint.fill(`${ENDPOINT}/`);
     await page
@@ -187,31 +191,40 @@ test.describe("control service, as contract tests against the agreed Operator wi
       .click();
     await expect(page.getByText(ENDPOINT, { exact: true })).toBeVisible();
 
+    await page.getByRole("tab", { name: "Delegation", exact: true }).click();
     await page.getByRole("checkbox", { name: /Field one/ }).check();
-    for (const operation of ["agent-template:read", "agent:execution-read"]) {
-      await page.getByRole("checkbox", { name: new RegExp(operation) }).check();
+    for (const operation of [
+      "Read published templates",
+      "Read an agent's execution",
+    ]) {
+      await page
+        .getByRole("checkbox", { name: operation, exact: true })
+        .check();
     }
     await page
       .getByRole("button", { name: "Grant delegation", exact: true })
       .click();
     await expect(
-      page.getByText("Delegation granted.", { exact: true }),
+      page.getByText("Delegation granted", { exact: true }),
     ).toBeVisible();
-    await expect(
-      page.getByText("agent-template:read, agent:execution-read", {
-        exact: true,
-      }),
-    ).toBeVisible();
+    // The grant is read back by what each operation lets the operator
+    // do.
+    const operations = page
+      .locator("dt", { hasText: "Operations" })
+      .locator("+ dd");
+    await expect(operations).toContainText("Read published templates");
+    await expect(operations).toContainText("Read an agent's execution");
 
-    const name = page.getByLabel("Name", { exact: true });
+    await page.getByRole("tab", { name: "Settings", exact: true }).click();
+    const name = page.getByRole("textbox", { name: "Name", exact: true });
     await name.fill("Hosted renamed");
-    await page
-      .getByRole("button", { name: "Save details", exact: true })
-      .click();
+    await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(
-      page.getByText("Saved as Hosted renamed.", { exact: true }),
+      page.getByText("Saved as Hosted renamed", { exact: true }),
     ).toBeVisible();
-    await page.reload();
+    // Renaming does not reach the endpoint, which only delegating
+    // moves.
+    await page.goto(`${hosted}?tab=control`);
     await expect(page.getByText(ENDPOINT, { exact: true })).toBeVisible();
   });
 
@@ -638,7 +651,17 @@ test.describe("control service, as contract tests against the agreed Operator wi
       },
     ]);
 
-    await page.goto(agentPage);
+    // The deny was written to the database, and the API's policy cache,
+    // which the owner's visit above filled, drops that org's entry only
+    // when the change notification arrives after the commit
+    // (`internal/authz/cache.go`). A read landing first is decided
+    // without the deny, so the page is read again until it is in force.
+    await expect(async () => {
+      await page.goto(agentPage);
+      await expect(page.getByText(refused, { exact: true })).toBeVisible({
+        timeout: 1_000,
+      });
+    }).toPass({ timeout: 15_000 });
     await expect(
       // A control service's agent has no definition, so no name.
       page.getByRole("heading", {
@@ -650,7 +673,6 @@ test.describe("control service, as contract tests against the agreed Operator wi
     await expect(
       page.getByText(signedIn.agentProvisioningState, { exact: true }),
     ).toBeVisible();
-    await expect(page.getByText(refused, { exact: true })).toBeVisible();
 
     await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/templates`);
     await expect(
@@ -679,7 +701,9 @@ test.describe("control service, as contract tests against the agreed Operator wi
 
     // The control: the operator's own page reads the same delegation,
     // says so in its section, and renders around it.
-    await page.goto(`/console/orgs/${signedIn.orgSlug}/operators/hosted`);
+    await page.goto(
+      `/console/orgs/${signedIn.orgSlug}/operators/hosted?tab=delegation`,
+    );
     await expect(
       page.getByRole("heading", { level: 1, name: "Hosted control" }),
     ).toBeVisible();

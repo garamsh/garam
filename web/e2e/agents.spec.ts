@@ -170,7 +170,13 @@ test.describe("cutover", () => {
     const agents = `/console/orgs/${signedIn.orgSlug}/agents`;
     const operator = `/console/orgs/${signedIn.orgSlug}/operators/${signedIn.operatorIdentifier}`;
 
-    // Where definitions are listed: the roster and the operator's page.
+    const names = new Map([
+      [switched, "Moved"],
+      [frozen, "Moving"],
+      [legacy, "Stayed"],
+    ]);
+    // Where definitions are listed: the roster, by identifier, and the
+    // operator's page, which names an agent and prints no identifier.
     for (const [href, row] of [
       [
         agents,
@@ -180,12 +186,11 @@ test.describe("cutover", () => {
         operator,
         (id: string) =>
           page
-            .locator("section")
-            .filter({
-              has: page.getByRole("heading", { name: "Agent definitions" }),
-            })
+            .getByRole("region", { name: "Agents it runs" })
             .getByRole("listitem")
-            .filter({ hasText: id }),
+            .filter({
+              has: page.getByRole("link", { name: names.get(id), exact: true }),
+            }),
       ],
     ] as const) {
       await page.goto(href);

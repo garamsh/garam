@@ -310,3 +310,38 @@ describe("CONSOLE_NAV_GROUPS", () => {
     ).toBe("agents/templates");
   });
 });
+
+describe("an operator's setup page", () => {
+  it("reads as a page of the operator, not as an identifier", () => {
+    const location = parseConsolePath(
+      "/console/orgs/acme/operators/field-one/connect",
+    );
+
+    expect(location).toMatchObject({
+      kind: "org",
+      item: "field-one",
+      itemPage: { segment: "connect", label: "Connect" },
+    });
+  });
+
+  it("links the operator above its setup and names both", () => {
+    const crumbs = consoleCrumbs(
+      parseConsolePath("/console/orgs/acme/operators/field-one/connect"),
+      orgs,
+      "Field one",
+    );
+
+    expect(crumbs.slice(2)).toEqual([
+      { label: "Operators", href: "/console/orgs/acme/operators" },
+      { label: "Field one", href: "/console/orgs/acme/operators/field-one" },
+      { label: "Connect" },
+    ]);
+  });
+
+  it("reads a page no operator declares as unknown", () => {
+    // Control: only the declared segment is a page of the operator.
+    expect(
+      parseConsolePath("/console/orgs/acme/operators/field-one/elsewhere"),
+    ).toEqual({ kind: "unknown" });
+  });
+});

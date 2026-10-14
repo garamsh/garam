@@ -1,10 +1,11 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import { Component, type ReactNode } from "react";
 import userEvent from "@testing-library/user-event";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { DeleteOperatorForm } from "@/app/console/orgs/[org]/operators/[operator]/_components/delete-operator-form";
+import { enter } from "@/testing/enter";
 import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
@@ -47,34 +48,44 @@ function recordDeletions() {
   return deleted;
 }
 
-function renderForm(enrolled: boolean) {
+function renderForm(blocking: { name: string; href: string }[] | null = []) {
   return render(
     <Navigation>
       <DeleteOperatorForm
         org="acme"
         operator="field-one"
         name="Field cluster one"
-        enrolled={enrolled}
+        blocking={blocking}
       />
     </Navigation>,
   );
 }
 
 describe("delete operator form", () => {
-  it("deletes on the confirmation and returns to the list", async () => {
-    // The refusal and its control are read together: the first click
-    // sends nothing, and the same recorder shows the confirmed one
-    // sending — so what held the request back is the confirmation
-    // rather than a form that never posts.
+  it("deletes once the identifier is typed, and returns to the list", async () => {
     const deleted = recordDeletions();
     const user = userEvent.setup();
-    renderForm(true);
+    renderForm();
 
     await user.click(screen.getByRole("button", { name: "Delete operator" }));
-
-    expect(deleted).toEqual([]);
-
-    await user.click(screen.getByRole("button", { name: "Confirm deletion" }));
+    const dialog = within(
+      screen.getByRole("alertdialog", { name: "Delete Field cluster one?" }),
+    );
+    const confirm = dialog.getByRole("button", { name: "Delete operator" });
+    expect(confirm).toBeDisabled();
+    await enter(
+      user,
+      dialog.getByLabelText(/Type field-one to confirm/),
+      "field-on",
+    );
+    expect(confirm).toBeDisabled();
+    await user.clear(dialog.getByLabelText(/Type field-one to confirm/));
+    await enter(
+      user,
+      dialog.getByLabelText(/Type field-one to confirm/),
+      "field-one",
+    );
+    await user.click(confirm);
 
     expect(
       await screen.findByText("NEXT_REDIRECT:/console/orgs/acme/operators"),
@@ -82,78 +93,75 @@ describe("delete operator form", () => {
     expect(deleted).toEqual(["/orgs/acme/operators/field-one"]);
   });
 
-  it("sends nothing when the confirmation is cancelled", async () => {
+  it("sends nothing when the dialog is cancelled", async () => {
     const deleted = recordDeletions();
     const user = userEvent.setup();
-    renderForm(true);
+    renderForm();
 
     await user.click(screen.getByRole("button", { name: "Delete operator" }));
     await user.click(screen.getByRole("button", { name: "Cancel" }));
 
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     expect(deleted).toEqual([]);
-    expect(
-      screen.getByRole("button", { name: "Delete operator" }),
-    ).toBeInTheDocument();
   });
 
-  it("says what stops and that work in its cluster does not, when it enrolled", async () => {
+  it("says what stops and that work in its cluster does not", async () => {
     const user = userEvent.setup();
-    renderForm(true);
+    renderForm();
 
     await user.click(screen.getByRole("button", { name: "Delete operator" }));
 
-    expect(
-      screen.getByText(
-        "Delete Field cluster one? Its new connections to garam are refused. Work already running in its cluster does not stop, and agents it provisioned keep their own certificates.",
-      ),
-    ).toBeInTheDocument();
+    // Presence: the sentence goes on to name what agents keep.
+    expect(screen.getByRole("alertdialog")).toHaveTextContent(
+      /Work already running in its cluster does not stop/,
+    );
   });
 
-  it("says nothing stops when the operator never enrolled", async () => {
+  it("names the definitions that refuse the delete, and offers no confirmation while they do", async () => {
+    const deleted = recordDeletions();
     const user = userEvent.setup();
-    renderForm(false);
+    renderForm([{ name: "Scout", href: "/console/orgs/acme/agents/scout" }]);
 
     await user.click(screen.getByRole("button", { name: "Delete operator" }));
+    const dialog = within(screen.getByRole("alertdialog"));
 
+    expect(dialog.getByRole("link", { name: "Scout" })).toHaveAttribute(
+      "href",
+      "/console/orgs/acme/agents/scout",
+    );
+    expect(dialog.queryByLabelText(/to confirm/)).not.toBeInTheDocument();
     expect(
-      screen.getByText(
-        "Delete Field cluster one? It never obtained a certificate, so nothing stops. Its identifier becomes free to register again.",
-      ),
-    ).toBeInTheDocument();
+      dialog.getByRole("button", { name: "Delete operator" }),
+    ).toBeDisabled();
+    expect(deleted).toEqual([]);
   });
 
-  it("renders the refusal a naming definition draws, and stays on the page", async () => {
-    let refusing = true;
+  it("renders garam's refusal inside the dialog and keeps it open", async () => {
     server.use(
       http.delete(`${API_URL}/orgs/acme/operators/field-one`, () =>
-        refusing
-          ? HttpResponse.json(
-              {
-                kind: "failed_precondition",
-                message:
-                  "an agent definition names this operator: point it at another operator or delete it first",
-              },
-              { status: 409 },
-            )
-          : new HttpResponse(null, { status: 204 }),
+        HttpResponse.json(
+          {
+            kind: "failed_precondition",
+            message: "an agent definition names this operator",
+          },
+          { status: 409 },
+        ),
       ),
     );
     const user = userEvent.setup();
-    renderForm(true);
+    // Definitions unchecked: the server decides, and refuses.
+    renderForm(null);
 
     await user.click(screen.getByRole("button", { name: "Delete operator" }));
-    await user.click(screen.getByRole("button", { name: "Confirm deletion" }));
-
-    expect(await screen.findByRole("alert")).toHaveTextContent(
-      "an agent definition names this operator",
+    const dialog = within(screen.getByRole("alertdialog"));
+    await enter(
+      user,
+      dialog.getByLabelText(/Type field-one to confirm/),
+      "field-one",
     );
+    await user.click(dialog.getByRole("button", { name: "Delete operator" }));
 
-    // The control: the same confirmation garam accepts returns to the
-    // list, so staying above is garam's refusal and not the form.
-    refusing = false;
-    await user.click(screen.getByRole("button", { name: "Confirm deletion" }));
-    expect(
-      await screen.findByText("NEXT_REDIRECT:/console/orgs/acme/operators"),
-    ).toBeInTheDocument();
+    expect(await dialog.findByRole("alert")).not.toBeEmptyDOMElement();
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
   });
 });

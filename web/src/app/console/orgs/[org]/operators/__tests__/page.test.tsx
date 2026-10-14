@@ -3,6 +3,7 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import OperatorsPage from "@/app/console/orgs/[org]/operators/page";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import {
   API_URL,
   answerPermissionChecks,
@@ -21,25 +22,31 @@ vi.mock("next/navigation", () => ({
   },
 }));
 
-function params(org: string) {
-  return { params: Promise.resolve({ org }) };
+function params(org: string, connect?: string) {
+  return {
+    params: Promise.resolve({ org }),
+    searchParams: Promise.resolve(connect === undefined ? {} : { connect }),
+  };
 }
 
-describe("operators section", () => {
+function renderPage(org = "acme", connect?: string) {
+  return renderServerComponent(OperatorsPage(params(org, connect)), {
+    wrapper: TooltipProvider,
+  });
+}
+
+describe("operators list", () => {
   it("lists an operator by name, linking to its page, with its identifier beneath", async () => {
-    const { container } = await renderServerComponent(
-      OperatorsPage(params("acme")),
-    );
+    const { container } = await renderPage();
 
     expect(
-      screen.getByRole("heading", { name: "Operators" }),
-    ).toBeInTheDocument();
+      screen.getByRole("heading", { level: 1, name: /Operators/ }),
+    ).toHaveTextContent("Operators1");
     expect(
       screen.getByRole("link", { name: "Field cluster one" }),
     ).toHaveAttribute("href", "/console/orgs/acme/operators/field-one");
     expect(screen.getByText("field-one")).toBeInTheDocument();
-    // ADR-0011: the console addresses a resource by the GRN's last
-    // segment and prints no GRN.
+    // ADR-0011: no GRN is printed.
     expect(container.textContent).not.toContain("grn:");
   });
 
@@ -53,175 +60,150 @@ describe("operators section", () => {
       ),
     );
 
-    await renderServerComponent(OperatorsPage(params("acme")));
+    await renderPage();
 
     const links = screen.getAllByRole("link", { name: "Field cluster one" });
     expect(links.map((link) => link.getAttribute("href"))).toEqual([
       "/console/orgs/acme/operators/field-one",
       "/console/orgs/acme/operators/field-two",
     ]);
-    expect(screen.getByText("field-one")).toBeInTheDocument();
-    expect(screen.getByText("field-two")).toBeInTheDocument();
   });
 
-  it("tells the three enrollment states apart and never calls one live", async () => {
+  it("says each certificate state in words and shows no ISO date", async () => {
     server.use(
       http.get(`${API_URL}/orgs/acme/operators`, () =>
         HttpResponse.json([
           fieldOne,
           {
             ...fieldOne,
-            grn: "grn:acme:default:operator:lapsed",
-            enrollmentState: "expired",
-            certificateIssuedAt: undefined,
+            grn: "grn:acme:default:operator:pending-one",
+            enrollmentState: "pending",
           },
           {
             ...fieldOne,
-            grn: "grn:acme:default:operator:waiting",
-            enrollmentState: "pending",
-            certificateIssuedAt: undefined,
+            grn: "grn:acme:default:operator:none-one",
+            enrollmentState: "expired",
           },
         ]),
       ),
     );
 
-    await renderServerComponent(OperatorsPage(params("acme")));
+    const { container } = await renderPage();
 
-    // Three states, three words, under a column that says enrollment
-    // rather than status.
+    const rows = screen.getAllByRole("row").slice(1);
     expect(
-      screen.getByRole("columnheader", { name: "Enrollment" }),
-    ).toBeInTheDocument();
-    expect(screen.getByText("enrolled")).toBeInTheDocument();
-    expect(screen.getByText("expired")).toBeInTheDocument();
-    expect(screen.getByText("pending")).toBeInTheDocument();
+      rows.map((row) => within(row).getAllByRole("cell")[2]?.textContent),
+    ).toEqual(["Issued", "Awaiting enrollment", "None"]);
+    expect(container.textContent).not.toMatch(/\d{4}-\d{2}-\d{2}/);
+  });
+
+  it("names the control service's host where one is registered", async () => {
+    server.use(
+      http.get(`${API_URL}/orgs/acme/operators`, () =>
+        HttpResponse.json([
+          { ...fieldOne, controlEndpoint: "https://control.example.com/v1" },
+        ]),
+      ),
+    );
+
+    await renderPage();
+
+    expect(screen.getByText("control.example.com")).toBeInTheDocument();
+  });
+
+  it("offers connecting an operator to a caller the server allows", async () => {
+    await renderPage();
+
     expect(
-      screen.getByText("Enrollment is not a sign an operator is running."),
+      screen.getByRole("button", { name: "Connect an operator" }),
     ).toBeInTheDocument();
   });
 
-  it("registers under the list, and deletes from none of the rows", async () => {
-    await renderServerComponent(OperatorsPage(params("acme")));
-
-    // Registering has no route of its own: `new` is a valid identifier,
-    // so that segment is an operator's page (ADR-0074).
-    expect(screen.getByLabelText("Identifier")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Register operator" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("link", { name: "Register operator" }),
-    ).not.toBeInTheDocument();
-    const table = screen.getByRole("table");
-    expect(
-      within(table).queryByRole("button", { name: /Delete/ }),
-    ).not.toBeInTheDocument();
-  });
-
-  it("leaves the register form out for a caller the server denies registering", async () => {
-    // The control: an owner, whom the server allows, is offered it.
-    const owner = await renderServerComponent(OperatorsPage(params("acme")));
-    expect(
-      screen.getByRole("button", { name: "Register operator" }),
-    ).toBeInTheDocument();
-    owner.unmount();
-
+  it("leaves connecting out for a caller the server denies registering", async () => {
     server.use(
       answerPermissionChecks((action) =>
         action === "operator:register" ? "deny" : "allow",
       ),
     );
-    await renderServerComponent(OperatorsPage(params("acme")));
+
+    await renderPage();
 
     expect(
-      screen.getByRole("link", { name: "Field cluster one" }),
-    ).toBeInTheDocument();
-    expect(screen.queryByLabelText("Identifier")).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Register operator" }),
+      screen.queryByRole("button", { name: "Connect an operator" }),
     ).not.toBeInTheDocument();
-  });
-
-  it("offers the register form when the check could not be asked", async () => {
-    server.use(
-      http.post(`${API_URL}/orgs/acme/permission-checks`, () =>
-        HttpResponse.error(),
-      ),
-    );
-
-    await renderServerComponent(OperatorsPage(params("acme")));
-
-    // The list still reads, and the server is left to refuse the form.
+    // Control: the list itself is still there.
     expect(
       screen.getByRole("link", { name: "Field cluster one" }),
     ).toBeInTheDocument();
+  });
+
+  it("offers connecting when the server cannot decide", async () => {
+    server.use(answerPermissionChecks(() => "unknown"));
+
+    await renderPage();
+
     expect(
-      screen.getByRole("button", { name: "Register operator" }),
+      screen.getByRole("button", { name: "Connect an operator" }),
     ).toBeInTheDocument();
   });
 
-  it("renders its list and the register form when the check answers outside its contract", async () => {
-    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
-    server.use(
-      http.post(`${API_URL}/orgs/acme/permission-checks`, () =>
-        HttpResponse.json({ results: [] }),
-      ),
-    );
-
-    await renderServerComponent(OperatorsPage(params("acme")));
+  it("opens the connect dialog when the address asks for it", async () => {
+    await renderPage("acme", "");
 
     expect(
-      screen.getByRole("link", { name: "Field cluster one" }),
+      screen.getByRole("dialog", { name: "Connect an operator" }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Register operator" }),
-    ).toBeInTheDocument();
-    logged.mockRestore();
   });
 
-  it("shows an empty state rather than a bare list", async () => {
+  it("names the absence when no operator is registered", async () => {
     server.use(
       http.get(`${API_URL}/orgs/acme/operators`, () => HttpResponse.json([])),
     );
 
-    await renderServerComponent(OperatorsPage(params("acme")));
+    await renderPage();
 
-    expect(
-      screen.getByText("This organization has registered no operators."),
-    ).toBeInTheDocument();
-    expect(screen.getByLabelText("Identifier")).toBeInTheDocument();
+    expect(screen.getByText("No operators registered")).toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 
-  it.each([403, 404])("renders not-found on %i", async (status) => {
+  it("says the list was refused rather than empty when garam answers 403", async () => {
     server.use(
       http.get(`${API_URL}/orgs/acme/operators`, () =>
-        HttpResponse.json({ kind: "denied", message: "no" }, { status }),
+        HttpResponse.json(
+          { kind: "permission_denied", message: "denied" },
+          { status: 403 },
+        ),
       ),
     );
 
-    await expect(
-      renderServerComponent(OperatorsPage(params("acme"))),
-    ).rejects.toThrow("NEXT_NOT_FOUND");
+    await renderPage();
+
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Operators are not listed to you",
+    );
+    expect(
+      screen.queryByText("No operators registered"),
+    ).not.toBeInTheDocument();
   });
 
   it("says the API is unreachable rather than reporting no operators", async () => {
-    server.use(http.get(`${API_URL}/*`, () => HttpResponse.error()));
+    server.use(
+      http.get(`${API_URL}/orgs/acme/operators`, () => HttpResponse.error()),
+    );
 
-    await renderServerComponent(OperatorsPage(params("acme")));
+    await renderPage();
 
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Cannot reach the API",
+    );
     expect(
-      screen.getByRole("heading", { name: "Cannot reach the API" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByText("This organization has registered no operators."),
+      screen.queryByText("No operators registered"),
     ).not.toBeInTheDocument();
   });
 
   it("sends a rejected session to the login page, not to the notice", async () => {
     server.use(...signedOut());
 
-    await expect(
-      renderServerComponent(OperatorsPage(params("acme"))),
-    ).rejects.toThrow("NEXT_REDIRECT:/login");
+    await expect(renderPage()).rejects.toThrow("NEXT_REDIRECT:/login");
   });
 });

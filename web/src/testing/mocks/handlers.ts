@@ -11,6 +11,7 @@ import type {
   InvitationPreview,
   Member,
   Operator,
+  OperatorKey,
   OrgConsent,
   Organization,
   Policy,
@@ -67,6 +68,18 @@ export const fieldOne: Operator = {
   createdAt: "2026-01-02T03:04:05Z",
   enrollmentState: "enrolled",
   certificateIssuedAt: "2026-03-04T05:06:07Z",
+};
+
+/**
+ * The one key `fieldOne` holds: active and already used to sign in, so
+ * a page reading it has a live key with a last exchange to show.
+ */
+export const fieldOneKey: OperatorKey = {
+  kid: "Xq3vNw2dZr5gP0tB8mKcYh7LfA1uJe9sRiOoVnT4Wy6",
+  algorithm: "RS256",
+  state: "active",
+  issuedAt: "2026-10-01T09:00:00Z",
+  lastExchangedAt: "2026-10-14T08:30:00Z",
 };
 
 /**
@@ -260,6 +273,11 @@ const routes: { path: string; guarded: boolean; body: JsonBodyType }[] = [
   { path: "/orgs/acme/members", guarded: true, body: [aliceMembership] },
   { path: "/orgs/acme/operators", guarded: true, body: [fieldOne] },
   { path: "/orgs/acme/operators/field-one", guarded: true, body: fieldOne },
+  {
+    path: "/orgs/acme/operators/field-one/keys",
+    guarded: true,
+    body: { keys: [fieldOneKey] },
+  },
   { path: "/orgs/acme/agents", guarded: true, body: [reportedAgent] },
   { path: "/orgs/acme/agent-definitions", guarded: true, body: [fieldAgent] },
   {

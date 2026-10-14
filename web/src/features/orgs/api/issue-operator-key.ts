@@ -1,0 +1,96 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { z } from "zod";
+
+import {
+  GaramUnreachableError,
+  garamFetchAuthenticated,
+  refusal,
+} from "@/lib/garam";
+import type { components } from "@/types/api";
+
+import {
+  IssuedOperatorKeyParser,
+  type IssuedOperatorKey,
+} from "./operator-keys";
+
+/**
+ * What issuing a key has to show: nothing yet, a refusal, no answer, or
+ * the key. No answer covers both an outage and a garam that issues no
+ * keys because no token endpoint is configured: garam answers the
+ * second with 503, which the seam reads as an outage (#1394).
+ *
+ * The private key is carried in this state because this answer is the
+ * only place it exists: garam keeps the public key alone and answers
+ * the private one once (ADR-0102). It goes nowhere else — no URL, no
+ * revalidated render — and the client holds it in the wizard's state
+ * until the wizard unmounts.
+ */
+export type IssueOperatorKeyState =
+  | { status: "idle" }
+  | { status: "error"; message: string }
+  | { status: "unavailable" }
+  | {
+      status: "issued";
+      kid: string;
+      privateKeyPem: string;
+      clientId: string;
+      tokenUrl: string;
+    };
+
+const Schema = z.object({
+  org: z.string().min(1),
+  operator: z.string().trim().min(1),
+  rotation: z.enum(["planned", "immediate"]),
+});
+
+/**
+ * Issues the operator a key (ADR-0102). `planned` adds it beside the
+ * key in use, which retires 24 hours later; `immediate` withdraws every
+ * live key and its tokens first. For an operator with no live key the
+ * two are the same.
+ */
+export async function issueOperatorKey(
+  _state: IssueOperatorKeyState,
+  formData: FormData,
+): Promise<IssueOperatorKeyState> {
+  const parsed = Schema.safeParse({
+    org: formData.get("org"),
+    operator: formData.get("operator"),
+    rotation: formData.get("rotation"),
+  });
+  if (!parsed.success) {
+    return { status: "error", message: "Choose how the new key stands." };
+  }
+
+  const { org, operator, rotation } = parsed.data;
+  let issued: IssuedOperatorKey;
+  try {
+    issued = await garamFetchAuthenticated(
+      `/orgs/${encodeURIComponent(org)}/operators/${encodeURIComponent(operator)}/keys`,
+      IssuedOperatorKeyParser,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          rotation,
+        } satisfies components["schemas"]["OperatorKeyIssuance"]),
+      },
+    );
+  } catch (error) {
+    if (error instanceof GaramUnreachableError) {
+      return { status: "unavailable" };
+    }
+    return refusal(error);
+  }
+
+  revalidatePath(`/console/orgs/${org}/operators/${operator}`, "layout");
+  return {
+    status: "issued",
+    kid: issued.key.kid,
+    privateKeyPem: issued.privateKeyPem,
+    clientId: issued.clientId,
+    tokenUrl: issued.tokenUrl,
+  };
+}

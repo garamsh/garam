@@ -41,6 +41,10 @@ export {
   grantOrgConsent,
   type GrantOrgConsentState,
 } from "./api/grant-org-consent";
+export {
+  issueOperatorKey,
+  type IssueOperatorKeyState,
+} from "./api/issue-operator-key";
 export { mintOperationAuthority } from "./api/mint-operation-authority";
 export {
   registerOperator,
@@ -55,6 +59,10 @@ export {
   type RemoveGroupMemberState,
 } from "./api/remove-group-member";
 export { renameAgent, type RenameAgentState } from "./api/rename-agent";
+export {
+  revokeOperatorKey,
+  type RevokeOperatorKeyState,
+} from "./api/revoke-operator-key";
 export {
   rollbackPolicy,
   type RollbackPolicyState,

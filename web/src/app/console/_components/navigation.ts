@@ -27,7 +27,12 @@ export type ConsoleSection = {
    * section whose identifiers may be `NEW_ITEM` itself has no create
    * page, so that segment stays an entry's.
    */
-  items?: { create?: string; fallback: string };
+  items?: {
+    create?: string;
+    fallback: string;
+    /** Pages below an entry's own page, each a segment of its own. */
+    pages?: readonly ConsoleItemPage[];
+  };
   /**
    * Named pages below the section beside its entries, each a view of
    * the section rather than an entry of it. A view may have item pages
@@ -44,6 +49,9 @@ export type ConsoleView = {
   icon?: LucideIcon;
   items?: { create?: string; fallback: string };
 };
+
+/** A page below one entry's page, such as an operator's setup. */
+export type ConsoleItemPage = { segment: string; label: string };
 
 /** The segment below an item section that opens its create page. */
 export const NEW_ITEM = "new";
@@ -81,8 +89,14 @@ export const CONSOLE_SECTIONS: readonly ConsoleSection[] = [
     label: "Operators",
     icon: Server,
     // An operator's identifier is typed, and `new` is one: registering
-    // stays on the list page rather than taking that segment (ADR-0074).
-    items: { fallback: "Operator" },
+    // stays on the list page rather than taking that segment
+    // (ADR-0074). `connect` is the operator's setup and `keys` is
+    // reserved beside it; both sit below an identifier, so neither
+    // takes one (ADR-0074).
+    items: {
+      fallback: "Operator",
+      pages: [{ segment: "connect", label: "Connect" }],
+    },
   },
   { segment: "consents", label: "Consents", icon: Handshake },
   {
@@ -204,6 +218,7 @@ export type ConsoleLocation =
       section: ConsoleSection;
       item?: string;
       viewItem?: string;
+      itemPage?: ConsoleItemPage;
     }
   | { kind: "invitation" }
   | { kind: "unknown" };
@@ -236,6 +251,18 @@ export function parseConsolePath(pathname: string): ConsoleLocation {
   if (!section) return { kind: "unknown" };
   if (segments.length === 6) {
     const view = section.views?.find((entry) => entry.segment === segments[4]);
+    const itemPage = section.items?.pages?.find(
+      (page) => page.segment === segments[5],
+    );
+    if (!view && itemPage) {
+      return {
+        kind: "org",
+        org: segments[2],
+        section,
+        item: segments[4],
+        itemPage,
+      };
+    }
     if (!view?.items) return { kind: "unknown" };
     return {
       kind: "org",
@@ -279,7 +306,7 @@ export function consoleCrumbs(
         organizations,
         { label: org?.name ?? location.org, href: orgHref(location.org, "") },
       ];
-      const { section, item, viewItem } = location;
+      const { section, item, viewItem, itemPage } = location;
       if (item === undefined || !section.items) {
         return [...trail, { label: section.label }];
       }
@@ -288,6 +315,17 @@ export function consoleCrumbs(
         label: section.label,
         href: orgHref(location.org, section.segment),
       };
+      if (itemPage && section.items) {
+        return [
+          ...trail,
+          sectionCrumb,
+          {
+            label: itemName ?? section.items.fallback,
+            href: orgHref(location.org, `${section.segment}/${item}`),
+          },
+          { label: itemPage.label },
+        ];
+      }
       if (view?.items && viewItem !== undefined) {
         return [
           ...trail,

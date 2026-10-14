@@ -1,63 +1,82 @@
 import type { Metadata } from "next";
-import { Server } from "lucide-react";
 
-import { Separator } from "@/components/ui/separator";
-import { listOperators } from "@/features/orgs";
+import { Banner } from "@/components/banner";
+import { slugFromGrn, lookupOperators } from "@/features/orgs";
 import { checkPermissions } from "@/lib/permission-check";
 
-import { ApiUnreachable } from "../../../_components/api-unreachable";
-import { EmptyState } from "../../../_components/empty-state";
-import { PageHeader } from "../../../_components/page-header";
-import { OperatorList } from "./_components/operator-list";
-import { RegisterOperatorForm } from "./_components/register-operator-form";
+import {
+  API_UNREACHABLE_TITLE,
+  ApiUnreachableReason,
+} from "@/components/api-unreachable";
+import { orgHref } from "../../../_components/navigation";
+import { ListPage } from "../../../_components/templates/list-page";
+import { ConnectOperatorDialog } from "./_components/connect-operator-dialog";
+import { OperatorTable } from "./_components/operator-table";
 
 /** Head metadata for the operators route; Next.js reads it by name. */
 export const metadata: Metadata = { title: "Operators — garam" };
 
-type Params = { params: Promise<{ org: string }> };
+type Params = {
+  params: Promise<{ org: string }>;
+  searchParams: Promise<{ connect?: string }>;
+};
 
 /**
  * The operators the organization has registered, each opening a page
- * of its own, and the form that registers one more (ADR-0074). The form
- * is here rather than on a create route because an identifier may be
- * `new`, and that route would take the operator's page.
+ * of its own, and the way to connect one more (ADR-0074, ADR-0102).
  *
- * Every role reads the list, and registering is `operator:register`,
- * which owners and admins hold and members do not. The page asks the
- * server whether the caller may register and leaves the form out when
- * the answer is no. A check that could not be asked renders the form,
- * and the API refuses whoever holds only the read.
+ * Every role reads the list; connecting starts by registering, which is
+ * `operator:register`. The page asks the server once and leaves the
+ * control out only where the answer is a denial, so a check that could
+ * not be asked still offers it and the API refuses whoever holds only
+ * the read. `?connect` opens the dialog, which is where an operator's
+ * own setup sends a person to connect its second identity.
  */
-export default async function OperatorsPage({ params }: Params) {
-  const { org } = await params;
+export default async function OperatorsPage({ params, searchParams }: Params) {
+  const [{ org }, { connect }] = await Promise.all([params, searchParams]);
   const [operators, permissions] = await Promise.all([
-    listOperators(org),
+    lookupOperators(org),
     checkPermissions(org, { register: { action: "operator:register" } }),
   ]);
+  const operatorsHref = orgHref(org, "operators");
 
   return (
-    <>
-      <PageHeader
-        title="Operators"
-        description="Operators this organization has registered."
-      />
+    <ListPage
+      title="Operators"
+      description="The Operators that run this organization's agents in its clusters. Each connects two identities: its manager and its control service."
+      count={operators.status === "ok" ? operators.data.length : undefined}
+      primaryAction={
+        permissions.get("register") !== "denied" && (
+          <ConnectOperatorDialog
+            org={org}
+            operatorsHref={operatorsHref}
+            defaultOpen={connect !== undefined}
+          />
+        )
+      }
+    >
       {operators.status === "unreachable" ? (
-        <ApiUnreachable subject="this organization's operators" />
-      ) : operators.data.length === 0 ? (
-        <EmptyState
-          icon={Server}
-          title="No operators registered"
-          description="This organization has registered no operators."
-        />
+        <Banner tone="warn" title={API_UNREACHABLE_TITLE}>
+          <ApiUnreachableReason subject="this organization's operators" />
+        </Banner>
+      ) : operators.status === "forbidden" ? (
+        <Banner tone="info" title="Operators are not listed to you">
+          garam refused to list this organization&apos;s operators to you.
+          Access to them is granted by the organization&apos;s roles and
+          policies.
+        </Banner>
       ) : (
-        <OperatorList org={org} operators={operators.data} />
+        <OperatorTable
+          operatorsHref={operatorsHref}
+          operators={operators.data.map((operator) => ({
+            identifier: slugFromGrn(operator.grn),
+            name: operator.name,
+            enrollmentState: operator.enrollmentState,
+            controlEndpoint: operator.controlEndpoint,
+            createdAt: operator.createdAt,
+          }))}
+        />
       )}
-      {permissions.get("register") !== "denied" && (
-        <>
-          <Separator />
-          <RegisterOperatorForm org={org} />
-        </>
-      )}
-    </>
+    </ListPage>
   );
 }

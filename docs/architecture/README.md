@@ -292,7 +292,8 @@ Responsibility documents:
   established
 - [web-app.md](./web-app.md) — what the application a person uses garam
   through is responsible for, the one seam it reaches the backend
-  through, and what it does not decide
+  through, the design system its pages are built on, and what it does
+  not decide
 
 ADRs:
 
@@ -712,3 +713,11 @@ ADRs:
   Unbuilt; supersedes 0100 only for Operator long-lived
   credential issuance/exchange and separate target enrollment, keeping
   token transport, fencing and existing cohorts. 0101 is unchanged.
+- [0103](./adr/0103-the-console-has-one-design-system-and-asks-the-server-what-a-caller-may-do.md)
+  — the console is built on one design system: principles, oklch
+  tokens in light and dark, Pretendard Variable and Geist Mono, a
+  grouped shell, four page templates, a primitive list and patterns
+  for secrets, destruction, lifecycle, policies, onboarding and
+  feedback, on shadcn/ui over Radix; it asks the server through a
+  permission-check API what a caller may do and hides or disables what
+  is denied, while the server still enforces every write. Unbuilt

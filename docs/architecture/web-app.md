@@ -10,6 +10,7 @@ decide.
 - What it serves
 - How it reaches garam
 - How it reaches a control service
+- Design system
 - What it does not decide
 - Its own toolchain and gate
 - Not established
@@ -292,19 +293,78 @@ origin; the console's own server never calls one.
   Agents and every garam read stay as they are, because no other
   section waits on a control service.
 
+## Design system
+
+**Unbuilt.** No console page is built on this system yet. The
+foundation and each area's migration land under epic #1366, in its
+plan's order, and until a page migrates, §What it serves describes it
+as it is.
+[ADR-0103](./adr/0103-the-console-has-one-design-system-and-asks-the-server-what-a-caller-may-do.md)
+holds the full decision and the reason for each part. This section is
+what a page owes once it is built on the system.
+
+- **Principles.** Content over chrome, one accent, mono and copyable
+  identifiers that are never a title, friction only for secrets and
+  destruction, keyboard first, Korean and English equally first-class,
+  and no raw server string on screen.
+- **Tokens.** These are oklch tokens on `@theme`, in light and dark:
+  - cool-grey neutrals;
+  - one indigo accent;
+  - ok, warn, danger and info status colours, and status is always a
+    dot plus a label.
+
+  Pretendard Variable is the UI face and Geist Mono the face for
+  identifiers, keys, JSON and timestamps. Radius grows from control to
+  card to dialog, density is 36px rows and 32px controls, icons are
+  Lucide at a 1.5 stroke, and motion is short, transform and opacity
+  only, and off under reduced motion.
+- **Shell.** It is ADR-0011's shell, extended:
+  - a collapsible sidebar holding the org switcher with the caller's
+    role;
+  - Overview above four groups: Workloads, Access, Infrastructure and
+    Organization;
+  - the user and the theme control at the bottom;
+  - a top bar holding the breadcrumb and the command palette, which
+    keeps the organization's name on mobile.
+
+  Templates is a sidebar entry under Workloads, while its address and
+  breadcrumb stay as ADR-0075 has them. Standalone hosts and Settings
+  are sections no route serves yet.
+- **Templates.** Every console page is a List, a Detail, a Settings
+  page or a Wizard, as ADR-0103 §Page templates lays each out.
+- **Primitives and patterns.** A page composes the primitives
+  ADR-0103 lists rather than copying markup. It follows the patterns
+  for a secret shown once, a destructive action, lifecycle stages, the
+  policy editor, the operator onboarding wizard and feedback. Success
+  shows inline and an error attaches to its field, with no error
+  toasts.
+- **Component base.** shadcn/ui stays on Radix. Base UI is declined
+  for now, for the reasons ADR-0103 §Component base gives.
+
 ## What it does not decide
 
 The boundary is as much of the responsibility as the contents.
 
-- **No authorization decision.** `web/src/proxy.ts` sends a request to
-  `/console/*` carrying no session cookie to `/login`, and that is a
-  fast path rather than a gate: a cookie can be expired or revoked, so
-  the console verifies the session against `/me`, and a 401 from any
-  read sends the visitor to `/login` regardless. Every org-scoped
-  decision belongs to the policy engine
-  ([ADR-0002](./adr/0002-iam-style-policy-model.md),
-  [authz.md](./authz.md)), and a form the API will refuse is allowed to
-  render and be refused.
+- **No authorization decision; it asks the server instead.**
+  `web/src/proxy.ts` sends a request to `/console/*` carrying no
+  session cookie to `/login`, and that is a fast path rather than a
+  gate: a cookie can be expired or revoked, so the console verifies the
+  session against `/me`, and a 401 from any read sends the visitor to
+  `/login` regardless. Every org-scoped decision belongs to the policy
+  engine ([ADR-0002](./adr/0002-iam-style-policy-model.md),
+  [authz.md](./authz.md)).
+  - **The console asks the server whether the caller may take an
+    action.** It asks through a permission-check API backed by authz
+    `Check`, and hides or disables what the answer denies. The server
+    still enforces every write, so a refusal that is reached still
+    renders.
+  - **An unanswered check shows the control.** The console infers no
+    permission from a role it read
+    ([ADR-0103](./adr/0103-the-console-has-one-design-system-and-asks-the-server-what-a-caller-may-do.md)
+    §Role-aware UI).
+  - **Unbuilt.** The permission-check API does not exist yet. Until it
+    does, a form the API will refuse renders and is refused, as it
+    always has.
 - **Mints no identity and holds no credential.** No GRN, no session, no
   certificate, no invitation token originates here. The session is a
   server-side row and the cookie carries an opaque token whose hash
@@ -417,6 +477,10 @@ These decide the application itself:
 - [ADR-0090](./adr/0090-garam-accepts-no-new-agent-definition-and-keeps-the-ones-it-holds.md)
   — the console offers no form that sends garam a definition, and a
   new agent is created through the control service
+- [ADR-0103](./adr/0103-the-console-has-one-design-system-and-asks-the-server-what-a-caller-may-do.md)
+  — one design system, of principles, tokens, shell, page templates,
+  primitives and patterns, and a console that asks the server what a
+  caller may do rather than rendering what it will refuse; unbuilt
 
 The rest bear on it without being about it:
 
@@ -424,7 +488,8 @@ The rest bear on it without being about it:
   what the API's paths take, which is what the console shows instead of
   a GRN
 - [ADR-0002](./adr/0002-iam-style-policy-model.md) — the engine decides
-  every org-scoped request, so the interface decides none
+  every org-scoped request, so the interface decides none and asks the
+  server instead
 - [ADR-0004](./adr/0004-openapi-first-api.md) — `api/openapi.yaml` is
   the source of truth the client's types are generated from
 - [ADR-0005](./adr/0005-server-side-sessions.md) — a session is a row

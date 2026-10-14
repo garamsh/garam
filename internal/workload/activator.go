@@ -3,7 +3,8 @@ package workload
 import "context"
 
 // Activator is garam's activateAgent, called with the supervisor's own
-// certificate (ADR-0082).
+// certificate (ADR-0082) or, in the token mode, its own token under
+// execution-fence.v2 (ADR-0100).
 //
 // An error of KindUnavailable leaves the outcome unknown and is retried
 // under the same request; KindFailedPrecondition is garam refusing the
@@ -22,8 +23,13 @@ type ActivationRequest struct {
 	// first.
 	Replaces string
 	// CertificatePEM is the agent's leaf as its adapter presented it on
-	// the request being forwarded.
+	// the request being forwarded, in the certificate mode alone.
 	CertificatePEM string
+	// Token is the agent token the supervisor minted for garam, in the
+	// token mode alone: the assignee forwards its own (ADR-0100). garam
+	// does not count it in what makes a retry the same request, so a
+	// retry carries the token current then.
+	Token string
 }
 
 // Activation is garam's answer.

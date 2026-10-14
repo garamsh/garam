@@ -21,6 +21,9 @@ import (
 // new activation. refuse answers every activation instead.
 type control struct {
 	queue *garamQueue
+	// contract is what the authority is called under: the certificate
+	// mode's unless a test names the token mode's.
+	contract string
 
 	mu          sync.Mutex
 	activations map[string]delivery.Activation
@@ -40,6 +43,13 @@ type controlReport struct {
 
 func newControl(queue *garamQueue) *control {
 	return &control{queue: queue, activations: map[string]delivery.Activation{}}
+}
+
+func (c *control) Contract() string {
+	if c.contract != "" {
+		return c.contract
+	}
+	return delivery.ExecutionContract
 }
 
 func (c *control) Activate(_ context.Context, requestID string, b delivery.Binding, placementToken string) (*delivery.Activation, error) {

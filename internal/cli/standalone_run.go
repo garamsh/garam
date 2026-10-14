@@ -132,13 +132,28 @@ func runStandalone(ctx context.Context, s runSettings) error {
 			return err
 		}
 	}
-	files, err := adapterFilesOf(dirs.agent, adapterBase)
-	if err != nil {
-		return err
-	}
-	activator, err := newGaramActivator(dirs.supervisor, base, agentGRN)
-	if err != nil {
-		return err
+	var (
+		files     workload.AdapterFiles
+		activator workload.Activator
+		tokens    workload.AgentTokens
+	)
+	if tokenEnrolled(enrolled) {
+		session, err := newSupervisorTokens(dirs.supervisor, base, agentGRN)
+		if err != nil {
+			return err
+		}
+		activator, tokens = session, session
+		files, err = tokenAdapterFilesOf(dirs.agent, adapterBase)
+		if err != nil {
+			return err
+		}
+	} else {
+		if files, err = adapterFilesOf(dirs.agent, adapterBase); err != nil {
+			return err
+		}
+		if activator, err = newGaramActivator(dirs.supervisor, base, agentGRN); err != nil {
+			return err
+		}
 	}
 	issuer, err := messageIssuerOf(s.messageIssuer)
 	if err != nil {
@@ -151,7 +166,7 @@ func runStandalone(ctx context.Context, s runSettings) error {
 	defer func() { _ = engine.Close() }()
 	supervisor, err := workload.NewSupervisor(engine, activator, workload.Config{
 		Dir: dirs.supervisor, Prefix: s.prefix, Desired: desired, Adapter: files,
-		MessageIssuer: string(issuer),
+		MessageIssuer: string(issuer), Tokens: tokens,
 	})
 	if err != nil {
 		return err
@@ -262,6 +277,17 @@ func adapterFilesOf(dir, machineURL string) (workload.AdapterFiles, error) {
 		*f.into = raw
 	}
 	return files, nil
+}
+
+// tokenAdapterFilesOf reads what a v2 enrollment installed in the
+// agent's directory: the garam server root alone, since the adapter is
+// handed tokens rather than a certificate (ADR-0100).
+func tokenAdapterFilesOf(dir, machineURL string) (workload.AdapterFiles, error) {
+	root, err := os.ReadFile(filepath.Join(dir, serverRootFile))
+	if err != nil {
+		return workload.AdapterFiles{}, errorx.Wrap(err, "agent directory: "+serverRootFile, errorx.KindFailedPrecondition)
+	}
+	return workload.AdapterFiles{ServerRootPEM: root, MachineURL: machineURL}, nil
 }
 
 // garamActivator calls activateAgent with the supervisor's own

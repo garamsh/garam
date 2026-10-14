@@ -37,7 +37,7 @@ func TestStandalone_MovesMemoryThroughAVerifiedHandover(t *testing.T) {
 	tei := s.embedding()
 
 	h := s.newHost("agent")
-	h.prepare()
+	h.prepareV1()
 	h.approve(time.Now().Add(time.Hour))
 	out, err := h.enroll()
 	require.NoError(t, err, out)

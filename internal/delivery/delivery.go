@@ -37,6 +37,11 @@ var (
 	// a protected call presented: no protected call succeeds until what
 	// the adapter presents changes (ADR-0084).
 	ErrFenced = errorx.New(errorx.KindPermissionDenied, "delivery: garam refused the execution token or credential")
+	// ErrTokenRefused is a peer refusing the agent token a token-mode
+	// adapter read from its file: expired, or not yet replaced by its
+	// assignee. It is undecided, so the call is made again after a
+	// backoff with the file read again, and it pauses nothing.
+	ErrTokenRefused = errorx.New(errorx.KindUnavailable, "delivery: the agent token was refused")
 	// ErrUnsupportedPeer is an answer outside the contract the call was
 	// made under: a route the peer does not serve, or an answer that does
 	// not name the contract's version. Nothing falls back from it.

@@ -181,7 +181,10 @@ supervisor.** ADR-0100 moves every machine caller from a client
 certificate to a short-lived token it obtains with a credential garam
 issued, and `docs/plans/2026-10-09-machine-identity-migration.md` is
 the order it lands in. What runs now is its step G1, the four pull
-requests G1a to G1d; a certificate still authenticates beside a token
+requests G1a to G1d, and G2, the adapter presenting an agent token
+from a file and a standalone host running on its supervisor credential
+([adapter.md](./adapter.md) §Token mode, [agents.md](./agents.md)
+§Standalone hosts); a certificate still authenticates beside a token
 until G3.
 
 - **A request may present a token instead of a certificate**, as

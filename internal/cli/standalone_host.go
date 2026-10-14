@@ -20,6 +20,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -48,8 +49,14 @@ const (
 	// renewalFile holds a renewal's key and request from before the
 	// request is sent until its answer is installed.
 	renewalFile = "renewal.json"
-	// enrollmentFile records what the enrollment answered, last.
+	// enrollmentFile records what the enrollment answered, last, and
+	// never the credential: its supervisor certificate or its absence
+	// is what says which contract the host enrolled under.
 	enrollmentFile = "enrollment.json"
+	// credentialFile holds the supervisor's credential a
+	// standalone-enrollment.v2 enrollment answered, which only the
+	// supervisor reads and only to exchange (ADR-0100).
+	credentialFile = "credential"
 	serverRootFile = "server-root.pem"
 	agentKeyFile   = "agent.key"
 	agentCSRFile   = "agent.csr"
@@ -62,9 +69,9 @@ const standaloneCallTimeout = 30 * time.Second
 
 // newStandaloneCommand constructs `garam standalone`: what a standalone
 // host runs to stand its agent up without an operator. It prepares the
-// keys and the bootstrap secret an administrator approves, spends the
-// approval, renews the supervisor's certificate, and runs the
-// supervisor over the agent's workload (ADR-0085).
+// bootstrap secret an administrator approves, spends the approval for
+// the supervisor's credential, renews a v1 host's certificate, and runs
+// the supervisor over the agent's workload (ADR-0085, ADR-0100).
 func newStandaloneCommand() *cobra.Command {
 	var dirs hostDirs
 	cmd := &cobra.Command{
@@ -77,7 +84,7 @@ func newStandaloneCommand() *cobra.Command {
 
 	prepare := &cobra.Command{
 		Use:   "prepare",
-		Short: "Generate the keys and bootstrap secret an administrator approves",
+		Short: "Generate the bootstrap secret an administrator approves",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			request, err := prepareHost(dirs)
 			if err != nil {
@@ -92,7 +99,7 @@ func newStandaloneCommand() *cobra.Command {
 	var machineURL, rootFile string
 	enroll := &cobra.Command{
 		Use:   "enroll",
-		Short: "Spend the approval and install both certificates",
+		Short: "Spend the approval and install the supervisor's credential",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			result, err := enrollHost(cmd.Context(), dirs, machineURL, rootFile)
 			if err != nil {
@@ -111,7 +118,7 @@ func newStandaloneCommand() *cobra.Command {
 
 	renew := &cobra.Command{
 		Use:   "renew",
-		Short: "Renew the supervisor's certificate",
+		Short: "Renew a supervisor certificate a v1 enrollment installed",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			notAfter, err := renewSupervisor(cmd.Context(), dirs.supervisor, machineURL)
 			if err != nil {
@@ -219,36 +226,44 @@ func within(path, dir string) bool {
 }
 
 // prepared is what a host generated before asking for its approval.
-// The secret and the keys never leave the host. AgentKeyPEM is held
-// only until the agent's files are written beside AgentDir, the one
-// directory this preparation owns them in.
+// The secret and the keys never leave the host. A preparation holding
+// keys is one for standalone-enrollment.v1, which this command no
+// longer writes but still finishes; one holding none is for v2, which
+// binds no key (ADR-0100). AgentKeyPEM is held only until the agent's
+// files are written beside AgentDir, the one directory this
+// preparation owns them in.
 type prepared struct {
 	RequestID              string `json:"requestId"`
 	Secret                 string `json:"secret"`
-	SupervisorKeyPEM       string `json:"supervisorKeyPem"`
-	SupervisorRequestPEM   string `json:"supervisorCertificateRequestPem"`
+	SupervisorKeyPEM       string `json:"supervisorKeyPem,omitempty"`
+	SupervisorRequestPEM   string `json:"supervisorCertificateRequestPem,omitempty"`
 	AgentDir               string `json:"agentDir"`
 	AgentKeyPEM            string `json:"agentKeyPem,omitempty"`
-	AgentRequestPEM        string `json:"agentCertificateRequestPem"`
-	AgentKeyFingerprintHex string `json:"agentKeySha256"`
+	AgentRequestPEM        string `json:"agentCertificateRequestPem,omitempty"`
+	AgentKeyFingerprintHex string `json:"agentKeySha256,omitempty"`
 }
 
+// keyed reports a preparation for standalone-enrollment.v1.
+func (p *prepared) keyed() bool { return p.SupervisorRequestPEM != "" }
+
 // approvalRequest is what an administrator approves: hashes and
-// fingerprints alone.
+// fingerprints alone, and under v2 no fingerprint.
 type approvalRequest struct {
 	RequestID           string `json:"requestId"`
 	SecretSHA256        string `json:"secretSha256"`
-	SupervisorKeySHA256 string `json:"supervisorKeySha256"`
-	AgentKeySHA256      string `json:"agentKeySha256"`
+	SupervisorKeySHA256 string `json:"supervisorKeySha256,omitempty"`
+	AgentKeySHA256      string `json:"agentKeySha256,omitempty"`
 }
 
-// prepareHost generates the supervisor's and the agent's keys and
-// requests and the bootstrap secret, durably, and answers what to
-// approve. Run again it answers the same request from what it wrote:
-// an approval is bound to these keys, so they are never regenerated
-// once the request exists, and it finishes a run interrupted before
-// the agent's files were written. It writes no agent credential it did
-// not generate over one already there.
+// prepareHost generates the bootstrap secret and request identifier
+// of a standalone-enrollment.v2 approval, durably, and answers what to
+// approve. Run again it answers the same request from what it wrote,
+// so an approval is never asked for twice. A preparation an earlier
+// release wrote with keys is answered and finished as it was: its
+// approval binds those keys, so they are never regenerated, and a run
+// interrupted before the agent's files were written finishes. It
+// writes no agent credential it did not generate over one already
+// there.
 func prepareHost(dirs hostDirs) (*approvalRequest, error) {
 	dirs, err := resolvedDirs(dirs)
 	if err != nil {
@@ -282,42 +297,26 @@ func prepareHost(dirs hostDirs) (*approvalRequest, error) {
 	return p.request()
 }
 
-// newPrepared generates the keys, requests and secret and writes them
-// in the one record that commits the preparation, before any agent
-// file exists.
+// newPrepared generates the secret and request identifier and writes
+// them in the one record that commits the preparation. A v2 approval
+// binds no key, so none is generated.
 func newPrepared(dirs hostDirs) (*prepared, error) {
-	agentKeyPEM, agentRequestPEM, err := newKeyAndRequest()
-	if err != nil {
-		return nil, err
-	}
-	agentKey, err := agent.RequestedKeyFingerprint(agentRequestPEM)
-	if err != nil {
-		return nil, err
-	}
-	supervisorKeyPEM, supervisorRequestPEM, err := newKeyAndRequest()
-	if err != nil {
-		return nil, err
-	}
 	secret := make([]byte, 32)
 	if _, err := rand.Read(secret); err != nil {
 		return nil, errorx.Wrap(err, "bootstrap secret", errorx.KindInternal)
 	}
 	p := &prepared{
-		RequestID:              uuid.NewString(),
-		Secret:                 base64.RawURLEncoding.EncodeToString(secret),
-		SupervisorKeyPEM:       string(supervisorKeyPEM),
-		SupervisorRequestPEM:   string(supervisorRequestPEM),
-		AgentDir:               dirs.agent,
-		AgentKeyPEM:            string(agentKeyPEM),
-		AgentRequestPEM:        string(agentRequestPEM),
-		AgentKeyFingerprintHex: agentKey.String(),
+		RequestID: uuid.NewString(),
+		Secret:    base64.RawURLEncoding.EncodeToString(secret),
+		AgentDir:  dirs.agent,
 	}
 	return p, p.write(dirs.supervisor)
 }
 
-// installAgentFiles writes the agent's key and request where the
-// record still holds the key, and then drops it from the record. Where
-// the record no longer holds it, the files must be the prepared ones.
+// installAgentFiles writes a v1 preparation's agent key and request
+// where the record still holds the key, and then drops it from the
+// record. Where the record no longer holds it, the files must be the
+// prepared ones. A v2 preparation has none to write.
 //
 // It never replaces a file: one already there is accepted only when it
 // holds exactly the record's bytes — this preparation's own interrupted
@@ -325,6 +324,9 @@ func newPrepared(dirs hostDirs) (*prepared, error) {
 // resuming never takes over an agent directory another preparation
 // filled meanwhile.
 func installAgentFiles(dirs hostDirs, p *prepared) error {
+	if !p.keyed() {
+		return nil
+	}
 	if p.AgentKeyPEM != "" {
 		files := []struct {
 			path string
@@ -432,22 +434,28 @@ func readPrepared(dir string) (*prepared, error) {
 }
 
 func (p *prepared) request() (*approvalRequest, error) {
+	secret := sha256.Sum256([]byte(p.Secret))
+	if !p.keyed() {
+		return &approvalRequest{RequestID: p.RequestID, SecretSHA256: hex.EncodeToString(secret[:])}, nil
+	}
 	supervisorKey, err := agent.RequestedKeyFingerprint([]byte(p.SupervisorRequestPEM))
 	if err != nil {
 		return nil, err
 	}
-	secret := sha256.Sum256([]byte(p.Secret))
 	return &approvalRequest{
 		RequestID: p.RequestID, SecretSHA256: hex.EncodeToString(secret[:]),
 		SupervisorKeySHA256: supervisorKey.String(), AgentKeySHA256: p.AgentKeyFingerprintHex,
 	}, nil
 }
 
-// enrollHost spends the approval of what prepareHost wrote and installs
-// both certificates. Run again after an interruption it sends the same
-// bytes and installs the result garam recorded; once the enrollment
-// record exists it installs nothing, so no replay ever replaces a
-// credential renewed since.
+// enrollHost spends the approval of what prepareHost wrote: under
+// standalone-enrollment.v2 it installs the supervisor's credential, and
+// under v1, for a preparation holding keys, both certificates. Run
+// again after an interruption it sends the same bytes: v1 installs the
+// result garam recorded, and v2 the credential garam re-issues, which
+// voids the one an interrupted run may have written. Once the
+// enrollment record exists it installs nothing, so no replay ever
+// replaces a credential renewed or re-issued since.
 func enrollHost(ctx context.Context, dirs hostDirs, machineURL, rootFile string) (*machinegen.StandaloneEnrollment, error) {
 	base, err := machineEndpoint(machineURL)
 	if err != nil {
@@ -481,6 +489,9 @@ func enrollHost(ctx context.Context, dirs hostDirs, machineURL, rootFile string)
 	client, err := standaloneClient(rootPEM, nil)
 	if err != nil {
 		return nil, err
+	}
+	if !p.keyed() {
+		return enrollCredential(ctx, dirs, p, client, base)
 	}
 	body, err := json.Marshal(machinegen.StandaloneEnrollmentRequest{
 		RequestId:                       p.RequestID,
@@ -526,6 +537,57 @@ func enrollHost(ctx context.Context, dirs hostDirs, machineURL, rootFile string)
 		return nil, errorx.Wrap(err, "enrollment record", errorx.KindInternal)
 	}
 	return &result, writeDurably(filepath.Join(dirs.supervisor, enrollmentFile), record, 0o600)
+}
+
+// enrollCredential spends a v2 approval: the answer is the
+// supervisor's credential and the garam server root, and nothing is
+// signed. The credential is written to its own owner-only file before
+// the record, and never into the record (ADR-0100).
+func enrollCredential(ctx context.Context, dirs hostDirs, p *prepared, client *http.Client, base string) (*machinegen.StandaloneEnrollment, error) {
+	body, err := json.Marshal(machinegen.StandaloneEnrollmentRequest{RequestId: p.RequestID})
+	if err != nil {
+		return nil, errorx.Wrap(err, "enrollment", errorx.KindInternal)
+	}
+	var result machinegen.StandaloneEnrollment
+	if _, err := callStandalone(ctx, client, base+"/agent-enrollments", agent.CredentialStandaloneContractVersion,
+		"Garam-Bootstrap "+p.Secret, body, &result); err != nil {
+		return nil, err
+	}
+	if result.Credential == nil || !supervisorCredential.MatchString(*result.Credential) ||
+		result.SupervisorCertificatePem != nil {
+		return nil, errorx.New(errorx.KindInternal,
+			"garam answered a "+agent.CredentialStandaloneContractVersion+" enrollment without a supervisor credential")
+	}
+	writes := []struct {
+		path string
+		data []byte
+		perm fs.FileMode
+	}{
+		{filepath.Join(dirs.supervisor, credentialFile), []byte(*result.Credential), 0o600},
+		{filepath.Join(dirs.agent, serverRootFile), []byte(result.ServerRootPem), 0o644},
+		{filepath.Join(dirs.supervisor, serverRootFile), []byte(result.ServerRootPem), 0o644},
+	}
+	for _, w := range writes {
+		if err := writeDurably(w.path, w.data, w.perm); err != nil {
+			return nil, err
+		}
+	}
+	result.Credential = nil
+	record, err := json.Marshal(result)
+	if err != nil {
+		return nil, errorx.Wrap(err, "enrollment record", errorx.KindInternal)
+	}
+	return &result, writeDurably(filepath.Join(dirs.supervisor, enrollmentFile), record, 0o600)
+}
+
+// supervisorCredential is a supervisor credential as api/machine.yaml
+// spells one.
+var supervisorCredential = regexp.MustCompile(`^garam_sc_[0-9a-f]{64}$`)
+
+// tokenEnrolled reports an enrollment under standalone-enrollment.v2,
+// whose record names no supervisor certificate.
+func tokenEnrolled(e *machinegen.StandaloneEnrollment) bool {
+	return e.SupervisorCertificatePem == nil
 }
 
 // readEnrollment answers what a completed enrollment recorded, or an
@@ -578,8 +640,14 @@ func renewSupervisor(ctx context.Context, dir, machineURL string) (time.Time, er
 		return time.Time{}, err
 	}
 	defer release()
-	if _, err := readEnrollment(dir); err != nil {
+	enrolled, err := readEnrollment(dir)
+	if err != nil {
 		return time.Time{}, errorx.Wrap(err, "run `garam standalone enroll` first", errorx.KindFailedPrecondition)
+	}
+	if tokenEnrolled(enrolled) {
+		return time.Time{}, errorx.New(errorx.KindFailedPrecondition,
+			"this supervisor enrolled under "+agent.CredentialStandaloneContractVersion+
+				" and holds no certificate to renew: `garam standalone run` exchanges its credential for tokens")
 	}
 	current := filepath.Join(dir, supervisorFile)
 	pending, err := readPending(dir)

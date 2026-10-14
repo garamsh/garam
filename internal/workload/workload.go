@@ -112,7 +112,9 @@ type Desired struct {
 }
 
 // AdapterFiles is what the adapter presents and verifies by, copied
-// into its container before it starts.
+// into its container before it starts. The certificate, its key and
+// its issuer are the certificate mode's alone; the token mode copies
+// tokens in instead (Config.Tokens).
 type AdapterFiles struct {
 	CertificatePEM []byte
 	KeyPEM         []byte

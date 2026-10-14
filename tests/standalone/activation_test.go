@@ -34,7 +34,7 @@ import (
 func TestStandalone_ReplaysALostActivationAndRefusesAnEndedOne(t *testing.T) {
 	s := newStack(t)
 	h := s.newHost("agent")
-	h.prepare()
+	h.prepareV1()
 	h.approve(time.Now().Add(time.Hour))
 	out, err := h.enroll()
 	require.NoError(t, err, out)

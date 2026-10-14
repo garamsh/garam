@@ -84,10 +84,15 @@ type garamQueue struct {
 	// token is the one execution token garam admits, empty for an agent
 	// never cut over, which is admitted presenting none.
 	token string
+	// live is the agent tokens garam accepts in the token mode, nil in
+	// the certificate mode, where the connection authenticates.
+	live map[string]bool
 	// presented is every Authorization a claim carried, in order, and
 	// fenced how many claims the fence refused.
 	presented []string
-	fenced    int
+	// executions is every Garam-Execution header a claim carried.
+	executions []string
+	fenced     int
 	// outbox is the outbox route's state.
 	outbox outboxRoute
 }
@@ -140,6 +145,17 @@ func newGaramQueue(t *testing.T, lease time.Duration, bodies ...string) *garamQu
 // answers the refusal it would write otherwise. The caller holds mu.
 func (q *garamQueue) admits(w http.ResponseWriter, r *http.Request) bool {
 	got := r.Header.Get("Authorization")
+	if q.live != nil {
+		agentToken, ok := strings.CutPrefix(got, "Garam-Token ")
+		if !ok || !q.live[agentToken] {
+			writeJSON(w, http.StatusUnauthorized, machinegen.Error{Kind: "unauthenticated", Message: "agent token is not valid"})
+			return false
+		}
+		got = ""
+		if execution := r.Header.Get("Garam-Execution"); execution != "" {
+			got = "Garam-Execution " + execution
+		}
+	}
 	switch {
 	case q.token == "" && got == "":
 		return true
@@ -153,6 +169,25 @@ func (q *garamQueue) admits(w http.ResponseWriter, r *http.Request) bool {
 		return true
 	}
 	return false
+}
+
+// accept makes garam accept exactly the agent tokens named, which puts
+// the queue in the token mode.
+func (q *garamQueue) accept(tokens ...string) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.live = map[string]bool{}
+	for _, token := range tokens {
+		q.live[token] = true
+	}
+}
+
+// deliveryContract is the outbox contract the mode serves.
+func (q *garamQueue) deliveryContract() string {
+	if q.live != nil {
+		return delivery.TokenDeliveryContract
+	}
+	return delivery.DeliveryContract
 }
 
 // admit makes token the one garam admits, as an activation does.
@@ -170,6 +205,7 @@ func (q *garamQueue) claim(w http.ResponseWriter, r *http.Request) {
 	q.mu.Lock()
 	q.claimCallsSeen++
 	q.presented = append(q.presented, r.Header.Get("Authorization"))
+	q.executions = append(q.executions, r.Header.Get("Garam-Execution"))
 	if !q.admits(w, r) {
 		q.fenced++
 		q.mu.Unlock()
@@ -305,7 +341,7 @@ func (q *garamQueue) submit(w http.ResponseWriter, r *http.Request) {
 	sub.Authorization = r.Header.Get("Authorization")
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	if r.Header.Get("Garam-Contract-Version") != delivery.DeliveryContract {
+	if r.Header.Get("Garam-Contract-Version") != q.deliveryContract() {
 		writeJSON(w, http.StatusBadRequest, machinegen.Error{Kind: "invalid_argument", Message: "version"})
 		return
 	}
@@ -329,7 +365,7 @@ func (q *garamQueue) submit(w http.ResponseWriter, r *http.Request) {
 		}
 		q.outbox.stored[sub.IdempotencyKey] = stored
 	}
-	w.Header().Set("Garam-Contract-Version", delivery.DeliveryContract)
+	w.Header().Set("Garam-Contract-Version", q.deliveryContract())
 	writeJSON(w, http.StatusCreated, stored)
 }
 
@@ -772,8 +808,14 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 	_ = json.NewEncoder(w).Encode(body)
 }
 
+// certificateMode is the certificate mode's credential as a call
+// presents it: nothing in a header, since the connection carries the
+// certificate. Nothing here fingerprints it.
+func certificateMode() delivery.Credential { return delivery.NewCertificate(nil) }
+
 // mounted is what the deployment mounted: the placement token and the
-// serial of the agent certificate, either replaceable mid-test.
+// fingerprint of what the agent's calls present, either replaceable
+// mid-test.
 type mounted struct {
 	mu     sync.Mutex
 	token  string
@@ -788,7 +830,7 @@ func (m *mounted) PlacementToken() (string, error) {
 	return m.token, nil
 }
 
-func (m *mounted) LeafSerial() (string, error) {
+func (m *mounted) Fingerprint() (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.serial, nil
@@ -835,7 +877,7 @@ func ends(t *testing.T, queue *garamQueue, gateway *agentGateway, execution *del
 	authority delivery.Authority, credentials delivery.Credentials, outbox *delivery.Outbox,
 ) delivery.Ends {
 	t.Helper()
-	claims, err := delivery.NewHTTPQueue(queue.server.Client(), queue.server.URL, agentGRN(), execution)
+	claims, err := delivery.NewHTTPQueue(queue.server.Client(), queue.server.URL, agentGRN(), execution, certificateMode())
 	require.NoError(t, err)
 	ingress, err := delivery.NewHTTPGateway(gateway.server.Client(), gateway.server.URL, agentGRN())
 	require.NoError(t, err)

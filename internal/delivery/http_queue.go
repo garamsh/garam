@@ -22,24 +22,35 @@ import (
 const maxAnswerBody = 4 << 10
 
 // DeliveryContract is the outbox submission contract garam's
-// `POST /outbox-messages` serves (ADR-0083). There is no other route an
-// outbox reply is offered on.
+// `POST /outbox-messages` serves (ADR-0083) to a certificate-mode
+// adapter. There is no other route an outbox reply is offered on.
 const DeliveryContract = "durable-delivery.v1"
+
+// TokenDeliveryContract is the same contract for a token-mode adapter,
+// whose execution token moves to a Garam-Execution header (ADR-0100).
+const TokenDeliveryContract = "durable-delivery.v2"
+
+// executionHeader carries a token-mode adapter's execution token, since
+// its agent token takes Authorization (ADR-0100).
+const executionHeader = "Garam-Execution"
 
 // HTTPQueue is garam's queue over the machine API (api/machine.yaml):
 // the claim, its renewal and its completion, for the one agent this
 // adapter runs beside, and the outbox reply it posts for that agent.
 //
-// Who garam takes the caller to be is what the client certificate on
-// the connection names (ADR-0014), so the client passed in is where the
-// agent's identity lives, and the GRN here is only the queue this
-// adapter reads. Every call presents what the execution holds, and a
-// refusal of it is recorded there before it is answered.
+// Who garam takes the caller to be is what the credential presents:
+// the client certificate on the connection (ADR-0014), or the agent
+// token read from its file before every call (ADR-0100). The GRN here
+// is only the queue this adapter reads. Every call presents what the
+// execution holds, and a refusal of it is recorded there before it is
+// answered.
 type HTTPQueue struct {
-	client    *http.Client
-	execution *Execution
-	claims    *url.URL
-	outbox    *url.URL
+	client     *http.Client
+	execution  *Execution
+	credential Credential
+	contract   string
+	claims     *url.URL
+	outbox     *url.URL
 }
 
 // NewHTTPQueue constructs the queue client against garam's machine
@@ -52,9 +63,9 @@ type HTTPQueue struct {
 // [Config.ClaimTimeout] for the poll and [Config.CallTimeout] for the
 // rest — so a peer that accepts and never answers is bounded without
 // the poll being cut short.
-func NewHTTPQueue(client *http.Client, base string, agent grn.GRN, execution *Execution) (*HTTPQueue, error) {
-	if client == nil || execution == nil {
-		return nil, errorx.New(errorx.KindInvalidArgument, "delivery: queue client and execution are required")
+func NewHTTPQueue(client *http.Client, base string, agent grn.GRN, execution *Execution, credential Credential) (*HTTPQueue, error) {
+	if client == nil || execution == nil || credential == nil {
+		return nil, errorx.New(errorx.KindInvalidArgument, "delivery: queue client, execution and credential are required")
 	}
 	if err := agent.Validate(); err != nil {
 		return nil, errorx.Wrap(err, "delivery: agent", errorx.KindInvalidArgument)
@@ -66,11 +77,17 @@ func NewHTTPQueue(client *http.Client, base string, agent grn.GRN, execution *Ex
 	if !root.IsAbs() || root.Host == "" {
 		return nil, errorx.New(errorx.KindInvalidArgument, "delivery: garam address must be an absolute URL")
 	}
+	contract := DeliveryContract
+	if credential.IsToken() {
+		contract = TokenDeliveryContract
+	}
 	return &HTTPQueue{
-		client:    client,
-		execution: execution,
-		claims:    root.JoinPath("agents", agent.String(), "claims"),
-		outbox:    root.JoinPath("outbox-messages"),
+		client:     client,
+		execution:  execution,
+		credential: credential,
+		contract:   contract,
+		claims:     root.JoinPath("agents", agent.String(), "claims"),
+		outbox:     root.JoinPath("outbox-messages"),
 	}, nil
 }
 
@@ -130,7 +147,7 @@ func (q *HTTPQueue) Complete(ctx context.Context, id ClaimID) error {
 	}
 }
 
-// Post offers one outbox reply. The answers durable-delivery.v1 pins
+// Post offers one outbox reply. The answers durable-delivery pins
 // are told apart by status and kind, never by text: an answer outside
 // the contract is a server that does not serve the route, 400
 // out_of_range a creation instant garam's clock has not reached yet,
@@ -156,8 +173,8 @@ func (q *HTTPQueue) Post(ctx context.Context, o Outbound) (*Stored, error) {
 	}
 	// A server older than the route answers 404 naming no contract, and
 	// one newer names another: neither is offered the entry again.
-	if resp.Header.Get(contractHeader) != DeliveryContract {
-		return nil, errorx.Wrap(ErrUnsupportedPeer, "delivery: garam answered outside "+DeliveryContract)
+	if resp.Header.Get(contractHeader) != q.contract {
+		return nil, errorx.Wrap(ErrUnsupportedPeer, "delivery: garam answered outside "+q.contract)
 	}
 	if resp.StatusCode == http.StatusConflict {
 		// 409 is a conflicting key under already_exists and the fence's
@@ -185,10 +202,15 @@ func (q *HTTPQueue) Post(ctx context.Context, o Outbound) (*Stored, error) {
 // 65536 characters garam admits, with room for the fields beside it.
 const maxStoredBody = 1 << 20
 
-// post makes one call to garam, presenting what the execution holds,
-// and answers the token it presented beside the response.
+// post makes one call to garam, presenting the credential as it reads
+// now and what the execution holds, and answers the execution token it
+// presented beside the response.
 func (q *HTTPQueue) post(ctx context.Context, target *url.URL, payload []byte) (*http.Response, Token, error) {
 	presented, err := q.execution.Present()
+	if err != nil {
+		return nil, "", err
+	}
+	authorization, err := q.credential.Authorization()
 	if err != nil {
 		return nil, "", err
 	}
@@ -202,10 +224,16 @@ func (q *HTTPQueue) post(ctx context.Context, target *url.URL, payload []byte) (
 	}
 	if payload != nil {
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set(contractHeader, DeliveryContract)
+		req.Header.Set(contractHeader, q.contract)
 	}
-	if presented != "" {
-		req.Header.Set("Authorization", "Garam-Execution "+string(presented))
+	switch {
+	case authorization != "":
+		req.Header.Set("Authorization", authorization)
+		if presented != "" {
+			req.Header.Set(executionHeader, string(presented))
+		}
+	case presented != "":
+		req.Header.Set("Authorization", executionHeader+" "+string(presented))
 	}
 	resp, err := q.client.Do(req)
 	if err != nil {
@@ -252,11 +280,17 @@ func (q *HTTPQueue) fenced(resp *http.Response, presented Token) error {
 }
 
 // answered renders a refusal as an error carrying what garam said. A
+// refused agent token is undecided, since its assignee replaces it
+// before it expires and the next call reads the file again; any other
 // refused token or credential is the fence, recorded on the execution;
 // a 5xx is undecided; every other refusal carries garam's kind, which
 // the claim loop treats as transient and the forwarder sorts. Only
 // out_of_range clears with time.
 func (q *HTTPQueue) answered(resp *http.Response, presented Token) error {
+	if resp.StatusCode == http.StatusUnauthorized && q.credential.IsToken() {
+		text, _ := said(resp)
+		return errorx.Wrap(ErrTokenRefused, text)
+	}
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 		return q.fenced(resp, presented)
 	}

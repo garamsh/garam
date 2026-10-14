@@ -292,17 +292,17 @@ func startAdapterSigning(t *testing.T, s *executionStack, c *controlStandIn, rt 
 	t.Helper()
 	execution := delivery.NewFencedExecution()
 	client := presenting(t, held)
-	queue, err := delivery.NewHTTPQueue(client, s.machine, s.agent, execution)
+	queue, err := delivery.NewHTTPQueue(client, s.machine, s.agent, execution, delivery.NewCertificate(nil))
 	require.NoError(t, err)
 	gateway, err := delivery.NewHTTPGateway(rt.server.Client(), rt.server.URL, s.agent)
 	require.NoError(t, err)
-	authority, err := delivery.NewHTTPAuthority(presenting(t, held), c.server.URL, s.agent)
+	authority, err := delivery.NewHTTPAuthority(presenting(t, held), c.server.URL, s.agent, delivery.NewCertificate(held.get))
 	require.NoError(t, err)
 	outbox, err := delivery.NewOutbox(dir)
 	require.NoError(t, err)
 	loop, err := delivery.NewService(delivery.Ends{
 		Agent: s.agent, Queue: queue, Gateway: gateway, Execution: execution, Authority: authority,
-		Credentials: delivery.NewFileCredentials(tokenFile, held.get), Outbox: outbox,
+		Credentials: delivery.NewFileCredentials(tokenFile, delivery.NewCertificate(held.get)), Outbox: outbox,
 	}, delivery.Config{
 		RetryDelay: 10 * time.Millisecond, MaxRetryDelay: 50 * time.Millisecond, MinRenewInterval: 50 * time.Millisecond,
 		StatusInterval: 10 * time.Millisecond, OutboxInterval: 50 * time.Millisecond,
@@ -384,7 +384,7 @@ func TestAdapter_ReadsAClaimsConflictAsTheFenceAndARenewalsAsALapse(t *testing.T
 	s.clock.shift(0)
 
 	expired := delivery.NewLegacyExecution()
-	queue, err := delivery.NewHTTPQueue(expiredTLS, s.machine, s.agent, expired)
+	queue, err := delivery.NewHTTPQueue(expiredTLS, s.machine, s.agent, expired, delivery.NewCertificate(nil))
 	require.NoError(t, err)
 	_, err = queue.Claim(context.Background())
 	require.Error(t, err)
@@ -394,7 +394,7 @@ func TestAdapter_ReadsAClaimsConflictAsTheFenceAndARenewalsAsALapse(t *testing.T
 	assert.ErrorIs(t, err, delivery.ErrInactive, "and closes the execution")
 
 	current := delivery.NewLegacyExecution()
-	control, err := delivery.NewHTTPQueue(s.agentTLS, s.machine, s.agent, current)
+	control, err := delivery.NewHTTPQueue(s.agentTLS, s.machine, s.agent, current, delivery.NewCertificate(nil))
 	require.NoError(t, err)
 	s.postTo(t, "hello")
 	claim, err := control.Claim(context.Background())
@@ -417,7 +417,7 @@ func TestAdapter_ALegacyAdapterOfACutOverAgentIsRefusedByGaram(t *testing.T) {
 	s := newExecutionStack(t, p, engine)
 
 	before := delivery.NewLegacyExecution()
-	queue, err := delivery.NewHTTPQueue(s.agentTLS, s.machine, s.agent, before)
+	queue, err := delivery.NewHTTPQueue(s.agentTLS, s.machine, s.agent, before, delivery.NewCertificate(nil))
 	require.NoError(t, err)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -426,7 +426,7 @@ func TestAdapter_ALegacyAdapterOfACutOverAgentIsRefusedByGaram(t *testing.T) {
 
 	s.activated(t, "r-1", generationOf(1), nil, s.leaf)
 	after := delivery.NewLegacyExecution()
-	queue, err = delivery.NewHTTPQueue(s.agentTLS, s.machine, s.agent, after)
+	queue, err = delivery.NewHTTPQueue(s.agentTLS, s.machine, s.agent, after, delivery.NewCertificate(nil))
 	require.NoError(t, err)
 	_, err = queue.Claim(context.Background())
 	assert.True(t, errorx.IsKind(err, errorx.KindPermissionDenied), "%v", err)
@@ -445,7 +445,7 @@ func TestAdapter_ReadsAnotherTenantsRefusalAsTheFence(t *testing.T) {
 	otherTLS := machineClient(t, installed(t, p, s.issuer, other))
 
 	wrong := delivery.NewLegacyExecution()
-	queue, err := delivery.NewHTTPQueue(otherTLS, s.machine, s.agent, wrong)
+	queue, err := delivery.NewHTTPQueue(otherTLS, s.machine, s.agent, wrong, delivery.NewCertificate(nil))
 	require.NoError(t, err)
 	_, err = queue.Claim(context.Background())
 	assert.True(t, errorx.IsKind(err, errorx.KindPermissionDenied), "%v", err)
@@ -453,7 +453,7 @@ func TestAdapter_ReadsAnotherTenantsRefusalAsTheFence(t *testing.T) {
 	assert.ErrorIs(t, err, delivery.ErrInactive, "another tenant's refusal stops protected work")
 
 	own := delivery.NewLegacyExecution()
-	queue, err = delivery.NewHTTPQueue(otherTLS, s.machine, other, own)
+	queue, err = delivery.NewHTTPQueue(otherTLS, s.machine, other, own, delivery.NewCertificate(nil))
 	require.NoError(t, err)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

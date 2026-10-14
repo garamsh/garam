@@ -18,21 +18,31 @@ import (
 // under, on garam's routes and on the lifecycle authority's alike.
 const contractHeader = "Garam-Contract-Version"
 
+// placementHeader carries the placement token under
+// agent-execution.v2, where the control token takes Authorization
+// (ADR-0100).
+const placementHeader = "Garam-Placement"
+
 // HTTPAuthority is the lifecycle authority's two routes over HTTPS
-// (ADR-0084). Who the caller is, is the agent certificate on the
-// connection; the placement token rides activation alone, and garam's
-// execution token never goes here.
+// (ADR-0084). Who the caller is, is what the credential presents: the
+// agent certificate on the connection under agent-execution.v1, or the
+// control token read from its file before every call under
+// agent-execution.v2 (ADR-0100). The placement token rides activation
+// alone, and garam's execution token and garam's agent token never go
+// here.
 type HTTPAuthority struct {
 	client      *http.Client
+	credential  Credential
+	contract    string
 	activations *url.URL
 	status      *url.URL
 }
 
 // NewHTTPAuthority constructs the client against the authority's base
 // address, for the one agent this adapter runs beside.
-func NewHTTPAuthority(client *http.Client, base string, agent grn.GRN) (*HTTPAuthority, error) {
-	if client == nil {
-		return nil, errorx.New(errorx.KindInvalidArgument, "delivery: control client is required")
+func NewHTTPAuthority(client *http.Client, base string, agent grn.GRN, credential Credential) (*HTTPAuthority, error) {
+	if client == nil || credential == nil {
+		return nil, errorx.New(errorx.KindInvalidArgument, "delivery: control client and credential are required")
 	}
 	if err := agent.Validate(); err != nil {
 		return nil, errorx.Wrap(err, "delivery: agent", errorx.KindInvalidArgument)
@@ -45,12 +55,21 @@ func NewHTTPAuthority(client *http.Client, base string, agent grn.GRN) (*HTTPAut
 		return nil, errorx.New(errorx.KindInvalidArgument, "delivery: control address must be an absolute https URL")
 	}
 	served := root.JoinPath("v1", "agents", agent.String())
+	contract := ExecutionContract
+	if credential.IsToken() {
+		contract = TokenExecutionContract
+	}
 	return &HTTPAuthority{
 		client:      client,
+		credential:  credential,
+		contract:    contract,
 		activations: served.JoinPath("activations"),
 		status:      served.JoinPath("runtime-status"),
 	}, nil
 }
+
+// Contract answers the contract the client calls under.
+func (a *HTTPAuthority) Contract() string { return a.contract }
 
 // activationRequest is the activation body ADR-0084 defines.
 type activationRequest struct {
@@ -80,7 +99,7 @@ func (a *HTTPAuthority) Activate(ctx context.Context, requestID string, b Bindin
 	if err != nil {
 		return nil, errorx.Wrap(err, "delivery: activation request", errorx.KindInternal)
 	}
-	resp, err := a.post(ctx, a.activations, payload, "Garam-Placement "+placementToken)
+	resp, err := a.post(ctx, a.activations, payload, placementToken)
 	if err != nil {
 		return nil, err
 	}
@@ -140,17 +159,30 @@ func (a *HTTPAuthority) Report(ctx context.Context, activation string, s *Runtim
 	return controlRefused(resp)
 }
 
-// post makes one call under the contract, and refuses an answer that
-// does not name it before anything else is read from it.
-func (a *HTTPAuthority) post(ctx context.Context, target *url.URL, payload []byte, authorization string) (*http.Response, error) {
+// post makes one call under the contract, carrying the placement token
+// where one is given, and refuses an answer that does not name the
+// contract before anything else is read from it. A refused control
+// token is undecided: its assignee replaces it, and the next call reads
+// the file again.
+func (a *HTTPAuthority) post(ctx context.Context, target *url.URL, payload []byte, placementToken string) (*http.Response, error) {
+	authorization, err := a.credential.Authorization()
+	if err != nil {
+		return nil, err
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, target.String(), bytes.NewReader(payload))
 	if err != nil {
 		return nil, errorx.Wrap(err, "delivery: control request", errorx.KindInternal)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set(contractHeader, ExecutionContract)
-	if authorization != "" {
+	req.Header.Set(contractHeader, a.contract)
+	switch {
+	case authorization != "":
 		req.Header.Set("Authorization", authorization)
+		if placementToken != "" {
+			req.Header.Set(placementHeader, placementToken)
+		}
+	case placementToken != "":
+		req.Header.Set("Authorization", placementHeader+" "+placementToken)
 	}
 	resp, err := a.client.Do(req)
 	if err != nil {
@@ -160,7 +192,11 @@ func (a *HTTPAuthority) post(ctx context.Context, target *url.URL, payload []byt
 		defer func() { _ = resp.Body.Close() }()
 		return nil, errorx.New(errorx.KindUnavailable, "delivery: control answered "+strconv.Itoa(resp.StatusCode))
 	}
-	if resp.Header.Get(contractHeader) != ExecutionContract {
+	if resp.StatusCode == http.StatusUnauthorized && a.credential.IsToken() {
+		defer func() { _ = resp.Body.Close() }()
+		return nil, errorx.Wrap(ErrTokenRefused, controlRefused(resp).Error())
+	}
+	if resp.Header.Get(contractHeader) != a.contract {
 		defer func() { _ = resp.Body.Close() }()
 		return nil, errorx.Wrap(ErrUnsupportedPeer, "delivery: control answered "+strconv.Itoa(resp.StatusCode))
 	}

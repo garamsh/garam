@@ -10,7 +10,10 @@ import (
 
 // recover settles the intent the record holds: one still running what
 // is desired is answered to be supervised again; one that ended, was
-// draining, runs something else, or is to be replaced is drained.
+// draining, runs something else, or is to be replaced is drained. An
+// intent the other credential mode wrote runs something else: a
+// token-mode supervisor serves only an intent holding a control token,
+// so none is ever compared with an empty one (ADR-0100).
 func (s *Supervisor) recover(ctx context.Context, replace bool) (*intent, error) {
 	in := s.st.Intent
 	if in == nil || in.Phase == phaseEnded {
@@ -22,7 +25,9 @@ func (s *Supervisor) recover(ctx context.Context, replace bool) (*intent, error)
 			return nil, err
 		}
 		d := s.cfg.Desired
-		if !over && !replace && !d.Replace && in.Revision == d.Revision && in.Epoch == d.Epoch && in.Images == d.Images {
+		sameMode := (s.cfg.Tokens != nil) == (in.ControlToken != "")
+		if !over && !replace && !d.Replace && sameMode &&
+			in.Revision == d.Revision && in.Epoch == d.Epoch && in.Images == d.Images {
 			return in, nil
 		}
 	}
@@ -191,7 +196,11 @@ func (s *Supervisor) start(ctx context.Context, in *intent, r Role, id string, r
 			return err
 		}
 	}
-	if files := s.files(in, r, root); len(files) > 0 {
+	agentToken, err := s.agentToken(ctx, r)
+	if err != nil {
+		return err
+	}
+	if files := s.files(in, r, root, agentToken); len(files) > 0 {
 		if err := s.engine.CopyFiles(ctx, id, "/etc", files); err != nil {
 			return err
 		}
@@ -257,14 +266,21 @@ func (s *Supervisor) spec(in *intent, r Role, genDir string) ContainerSpec {
 		spec.Env = []string{
 			"GARAM_ADAPTER_AGENT=" + d.Agent.String(),
 			"GARAM_ADAPTER_MACHINE_URL=" + s.cfg.Adapter.MachineURL,
-			"GARAM_ADAPTER_TLS_CERT_FILE=" + adapterFiles + "/agent.crt",
-			"GARAM_ADAPTER_TLS_KEY_FILE=" + adapterFiles + "/agent.key",
 			"GARAM_ADAPTER_SERVER_ROOT_FILE=" + adapterFiles + "/server-root.pem",
 			"GARAM_ADAPTER_CONTROL_URL=https://" + ControlName,
 			"GARAM_ADAPTER_CONTROL_ROOT_FILE=" + adapterFiles + "/control-root.pem",
 			"GARAM_ADAPTER_PLACEMENT_TOKEN_FILE=" + adapterFiles + "/placement-token",
 			"GARAM_ADAPTER_CONTROL_SOCKET=" + socketTarget + "/" + socketName,
 			"GARAM_ADAPTER_OUTBOX_DIR=" + outboxTarget,
+		}
+		if s.cfg.Tokens != nil {
+			spec.Env = append(spec.Env,
+				"GARAM_ADAPTER_TOKEN_FILE="+adapterFiles+"/"+agentTokenFile,
+				"GARAM_ADAPTER_CONTROL_TOKEN_FILE="+adapterFiles+"/"+controlTokenFile)
+		} else {
+			spec.Env = append(spec.Env,
+				"GARAM_ADAPTER_TLS_CERT_FILE="+adapterFiles+"/agent.crt",
+				"GARAM_ADAPTER_TLS_KEY_FILE="+adapterFiles+"/agent.key")
 		}
 		// The adapter signs where the runtime beside it trusts garam's
 		// issuer, which the supervisor renders from the same setting
@@ -280,12 +296,11 @@ func (s *Supervisor) spec(in *intent, r Role, genDir string) ContainerSpec {
 // files is what is copied into a container before it starts, below
 // /etc: the runtime's configuration and the garam server root it
 // verifies garam's key set by, and the adapter's credential, roots and
-// placement token. Each is owned by the account the
-// container runs as and readable by it alone.
-func (s *Supervisor) files(in *intent, r Role, root []byte) []File {
-	own := func(path string, data []byte, mode os.FileMode) File {
-		return File{Path: path, Data: data, Mode: mode, UID: runtimeUID, GID: runtimeUID}
-	}
+// placement token. The adapter's credential is the agent's certificate
+// and key, or in the token mode agentToken and the generation's control
+// token. Each is owned by the account the container runs as and
+// readable by it alone.
+func (s *Supervisor) files(in *intent, r Role, root []byte, agentToken string) []File {
 	dir := func(path string) File {
 		return File{Path: path, Mode: 0o700, Dir: true, UID: runtimeUID, GID: runtimeUID}
 	}
@@ -304,16 +319,28 @@ func (s *Supervisor) files(in *intent, r Role, root []byte) []File {
 		}
 		return files
 	case RoleAdapter:
-		return []File{
+		files := []File{
 			dir("garam"),
-			own("garam/agent.crt", a.CertificatePEM, 0o600),
-			own("garam/agent.key", a.KeyPEM, 0o600),
 			own("garam/server-root.pem", a.ServerRootPEM, 0o600),
 			own("garam/control-root.pem", root, 0o600),
 			own("garam/placement-token", []byte(in.PlacementToken), 0o600),
 		}
+		if s.cfg.Tokens != nil {
+			return append(files,
+				own("garam/"+agentTokenFile, []byte(agentToken), 0o600),
+				own("garam/"+controlTokenFile, []byte(in.ControlToken), 0o600))
+		}
+		return append(files,
+			own("garam/agent.crt", a.CertificatePEM, 0o600),
+			own("garam/agent.key", a.KeyPEM, 0o600))
 	}
 	return nil
+}
+
+// own is a file below /etc owned by the containers' account and
+// readable by it alone, or as mode says.
+func own(path string, data []byte, mode os.FileMode) File {
+	return File{Path: path, Data: data, Mode: mode, UID: runtimeUID, GID: runtimeUID}
 }
 
 // outbox makes sure the memory volume's outbox is a directory of its

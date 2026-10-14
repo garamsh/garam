@@ -203,14 +203,16 @@ retry behavior remain unchanged until explicitly migrated.
 
 ## Tokens in place of certificates
 
-**Built for an agent's operator, a standalone host's supervisor and
-the control service's contracts.**
+**Built for an agent's operator, a standalone host's supervisor, the
+control service's contracts and the adapter.**
 [ADR-0100](./adr/0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)
 replaces an agent's certificate with a short-lived token, and the
 order is the plan's,
 `docs/plans/2026-10-09-machine-identity-migration.md`: this is steps
-G1b to G1d, and a supervisor's own credential is §Standalone hosts'.
-A certificate still authenticates as it did until G3.
+G1b to G1d, with the adapter reading its tokens as G2
+([adapter.md](./adapter.md) §Token mode), and a supervisor's own
+credential is §Standalone hosts'. A certificate still authenticates as
+it did until G3.
 
 - **The assignee mints, at the current epoch.** `mintAgentToken`
   answers an operator, or a standalone host's supervisor presenting its
@@ -256,7 +258,8 @@ A certificate still authenticates as it did until G3.
   its operator at an epoch like any other, so the operator mints its
   token on the same route and refreshes it by minting the next before
   the current one runs out. What changes for that adapter is only
-  where it reads the token from, which is step G2's.
+  where it reads the token from: `GARAM_ADAPTER_TOKEN_FILE`, with no
+  control settings ([adapter.md](./adapter.md) §Token mode).
 
 ## Separated execution
 
@@ -414,9 +417,11 @@ in #1157.
 ## Standalone hosts
 
 **garam's half is built, and so is the host's runner; the joint
-acceptance is not.** A standalone host enrolls and renews with
-`garam standalone prepare`, `enroll` and `renew`
-(`internal/cli/standalone_host.go`), and `garam standalone run`
+acceptance is not.** A standalone host enrolls with
+`garam standalone prepare` and `enroll`, under
+`standalone-enrollment.v2` for a host prepared now and v1 for one an
+earlier release prepared, and a v1 host renews with `renew`
+(`internal/cli/standalone_host.go`); `garam standalone run`
 supervises the runtime, proves the old writer exited and hands the
 adapter its activation (`internal/workload`, ADR-0085). The runner is
 tested against a real rootless daemon and the pinned Sherlock images
@@ -493,11 +498,27 @@ unverified (#1180, #1169).
   successor; a supervisor enrolled under v2 holds no certificate and
   renews none. `api/machine.yaml` §standalone is authoritative for the
   wire and both `standalone-enrollment` values.
+- **`garam standalone` prepares and enrolls under v2 (#1352).**
+  `prepare` writes the bootstrap secret and the request identifier and
+  generates no key, so the approval it asks for binds none. `enroll`
+  spends it and installs the supervisor's credential as `credential` in
+  the supervisor's directory, owner-only, and the server root in both
+  directories; the credential never enters the enrollment record.
+  Interrupted before that record, `enroll` sends the same request, and
+  garam re-issues the credential and voids the one written before. A
+  v2 host has no certificate, so `renew` refuses it.
+- **The record decides the contract, and no flag does.** A preparation
+  or enrollment an earlier release wrote with keys goes on enrolling,
+  renewing and running under v1. A flag would be a second source of
+  truth that could disagree with the record, which already says which
+  approval was asked for.
 - **The host's files.** The supervisor's directory holds the prepared
   secret and key, its current certificate and key in one file a
   renewal replaces in one rename, and a pending renewal kept from
   before its request until its answer is installed. The agent's
-  credential directory holds the agent's key and certificate. Neither
+  credential directory holds the agent's key and certificate. A v2
+  host's supervisor directory holds the credential instead, and its
+  agent directory the server root alone. Neither
   is the agent's memory, outbox or workspace, and no container mounts
   either: the supervisor copies what the adapter needs into it.
 - **The host's commands own what they write.** The two directories
@@ -570,6 +591,16 @@ supervisor that stops leaves the workload running.
   placement token, epoch and revision, its runtime unrestarted, and a
   generation never asked for before. A retry repeats the first
   request, so garam answers the same activation with a newer token.
+- **A v2 host serves `agent-execution.v2` on that socket instead**
+  (ADR-0100). The listener asks for no certificate, and each request
+  presents the generation's control token: 256 random bits the
+  supervisor draws with the intent, records with it and never sends to
+  garam. The supervisor forwards the agent token it minted for garam in
+  place of the leaf, whichever it holds when it forwards. The control
+  path never leaves the host, since the supervisor is the lifecycle
+  authority, and `mintAgentToken` refuses a supervisor an audience; a
+  token garam issued for control would be one garam accepts, which
+  ADR-0100's audiences forbid.
 - **Credentials are copied in, never mounted.** The runtime's
   configuration and the adapter's key, certificate, roots and
   placement token are written into each container before it starts,
@@ -578,6 +609,19 @@ supervisor that stops leaves the workload running.
   isolation: every tool the runtime runs reads its environment, as
   Sherlock passes it on (ADR-0085), and the engine shows it to whoever
   reaches the rootless daemon, which is the host user alone.
+- **A v2 host copies tokens in, and keeps the agent's current.** The
+  adapter receives the agent token and the control token in place of
+  a key and certificate (adapter.md §Token mode). The supervisor
+  exchanges its credential for its own token and mints the agent's,
+  holds both in memory, and replaces each at a point drawn from two
+  thirds to three quarters of its life; a refresh that fails while the
+  token held is live keeps it. Every thirty seconds it compares the
+  agent token it holds with the one it handed the running adapter and
+  copies the newer one in. A copy into a container removes and
+  recreates the file rather than renaming it, which the adapter reads
+  as undecided and retries; a bind mount that would allow a rename is
+  what ADR-0085 refuses, and a rootless host cannot own a file as the
+  adapter's account on one.
 - **The runtime's ego and instructions are the host's.**
   `--ego-file` and `--instructions-file` are copied in beside the
   configuration and named to the runtime; with no ego, the runtime

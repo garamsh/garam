@@ -2,7 +2,11 @@ package integration_test
 
 import (
 	"bytes"
+	"crypto/ecdsa"
+	"crypto/rand"
 	"crypto/tls"
+	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"net/http"
@@ -17,9 +21,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/google/uuid"
+
 	machinegen "github.com/garamsh/garam/api/machine"
+	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/cli"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/operator"
 )
 
 // standaloneCommand runs `garam standalone args...` as the CLI ships it
@@ -62,6 +70,53 @@ func (h hostPaths) prepare(t *testing.T) map[string]string {
 	return request
 }
 
+// prepareV1 is a host an earlier release prepared under
+// standalone-enrollment.v1, finished by this one: the record it
+// committed, and `prepare` writing the agent's key and request from it.
+func (h hostPaths) prepareV1(t *testing.T) map[string]string {
+	t.Helper()
+	legacyPrepared(t, h.supervisor, h.agent)
+	request := h.prepare(t)
+	require.NotEmpty(t, request["agentKeySha256"], "a keyed preparation is answered with its fingerprints")
+	return request
+}
+
+// legacyPrepared writes the record `garam standalone prepare` committed
+// before ADR-0100's G2, when a preparation generated both keys for a
+// standalone-enrollment.v1 approval, as a crash left it: the record and
+// no agent file yet. A preparation that release wrote is one this one
+// still finishes and enrolls, which is how the v1 cohort stays usable.
+func legacyPrepared(t *testing.T, supervisor, agentDir string) {
+	t.Helper()
+	require.NoError(t, os.MkdirAll(supervisor, 0o700))
+	require.NoError(t, os.MkdirAll(agentDir, 0o700))
+	resolved, err := filepath.EvalSymlinks(agentDir)
+	require.NoError(t, err)
+	supervisorRequest, supervisorKey := enrollmentRequest(t)
+	agentRequest, agentKey := enrollmentRequest(t)
+	fingerprint, err := agent.RequestedKeyFingerprint([]byte(agentRequest))
+	require.NoError(t, err)
+	secret := make([]byte, 32)
+	_, err = rand.Read(secret)
+	require.NoError(t, err)
+	raw, err := json.Marshal(map[string]string{
+		"requestId": uuid.NewString(), "secret": base64.RawURLEncoding.EncodeToString(secret),
+		"supervisorKeyPem": keyPEM(t, supervisorKey), "supervisorCertificateRequestPem": supervisorRequest,
+		"agentDir": resolved, "agentKeyPem": keyPEM(t, agentKey), "agentCertificateRequestPem": agentRequest,
+		"agentKeySha256": fingerprint.String(),
+	})
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(supervisor, "prepared.json"), raw, 0o600))
+}
+
+// keyPEM encodes key as the preparation record holds it.
+func keyPEM(t *testing.T, key *ecdsa.PrivateKey) string {
+	t.Helper()
+	der, err := x509.MarshalPKCS8PrivateKey(key)
+	require.NoError(t, err)
+	return string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}))
+}
+
 func (h hostPaths) enroll(t *testing.T, s *executionStack) (string, error) {
 	t.Helper()
 	return standaloneCommand(t, "enroll", "--dir", h.supervisor, "--agent-dir", h.agent,
@@ -76,18 +131,19 @@ func mode(t *testing.T, path string) os.FileMode {
 }
 
 // TestStandaloneHost_PrepareEnrollAndRenewRecoverFromInterruption
-// drives the shipped command against the machine listener: a repeated
-// prepare answers the same request, a repeated enrollment installs the
-// result garam recorded, and a renewal interrupted before its request,
-// after garam answered it, and after it was installed each completes
-// without a second successor.
+// drives the shipped command against the machine listener for a host
+// an earlier release prepared under standalone-enrollment.v1: a
+// repeated prepare answers the same request, a repeated enrollment
+// installs the result garam recorded, and a renewal interrupted before
+// its request, after garam answered it, and after it was installed
+// each completes without a second successor.
 func TestStandaloneHost_PrepareEnrollAndRenewRecoverFromInterruption(t *testing.T) {
 	p := pool(t)
 	_, engine := policyEngine(t, p)
 	s := newExecutionStack(t, p, engine)
 	h := newHostPaths(t, s)
 
-	request := h.prepare(t)
+	request := h.prepareV1(t)
 	assert.Equal(t, request, h.prepare(t), "a repeated prepare answers the request already bound to its keys")
 	assert.NotContains(t, request, "secret", "only the secret's hash is printed")
 	for _, path := range []string{filepath.Join(h.supervisor, "prepared.json"), filepath.Join(h.agent, "agent.key")} {
@@ -208,14 +264,20 @@ func mustParse(t *testing.T, s string) grn.GRN {
 	return g
 }
 
-// approveHost approves what prepare printed, as acme's owner.
+// approveHost approves what prepare printed, as acme's owner: the key
+// fingerprints where it printed them, and none for a v2 preparation.
 func approveHost(t *testing.T, s *executionStack, request map[string]string) {
 	t.Helper()
-	raw, err := json.Marshal(map[string]any{
+	approval := map[string]any{
 		"requestId": request["requestId"], "hostName": "laptop", "expiresAt": time.Now().Add(time.Hour).UTC().Format(time.RFC3339),
-		"secretSha256": request["secretSha256"], "supervisorKeySha256": request["supervisorKeySha256"],
-		"agentKeySha256": request["agentKeySha256"],
-	})
+		"secretSha256": request["secretSha256"],
+	}
+	for _, key := range []string{"supervisorKeySha256", "agentKeySha256"} {
+		if request[key] != "" {
+			approval[key] = request[key]
+		}
+	}
+	raw, err := json.Marshal(approval)
 	require.NoError(t, err)
 	status, approved := s.approve(t, s.owner, "acme", string(raw))
 	require.Equal(t, http.StatusCreated, status, approved)
@@ -245,7 +307,7 @@ func TestStandaloneHost_PrepareWritesNoCredentialItDoesNotOwn(t *testing.T) {
 	_, engine := policyEngine(t, p)
 	s := newExecutionStack(t, p, engine)
 	h := newHostPaths(t, s)
-	request := h.prepare(t)
+	request := h.prepareV1(t)
 	before := snapshot(t, h.agent)
 
 	other := filepath.Join(filepath.Dir(h.supervisor), "second-supervisor")
@@ -361,18 +423,12 @@ func TestStandaloneHost_CredentialsTravelOnlyToTheHTTPSEndpoint(t *testing.T) {
 	assert.NoFileExists(t, filepath.Join(h.supervisor, "renewal.json"), "refused before a renewal is prepared")
 }
 
-// interruptedPrepare runs `prepare` for supervisor against agentDir so
-// that it stops where a crash after committing its record would: the
-// agent directory refuses new files, so the record is written and no
-// agent file is. The directory is writable again afterwards.
+// interruptedPrepare is a v1 preparation an earlier release stopped
+// where a crash after committing its record would: the record written
+// and no agent file.
 func interruptedPrepare(t *testing.T, supervisor, agentDir string) {
 	t.Helper()
-	require.NoError(t, os.MkdirAll(agentDir, 0o700))
-	require.NoError(t, os.WriteFile(filepath.Join(agentDir, ".standalone.lock"), nil, 0o600))
-	require.NoError(t, os.Chmod(agentDir, 0o500))
-	out, err := standaloneCommand(t, "prepare", "--dir", supervisor, "--agent-dir", agentDir)
-	require.NoError(t, os.Chmod(agentDir, 0o700))
-	require.Error(t, err, "the agent directory refused its files: %s", out)
+	legacyPrepared(t, supervisor, agentDir)
 	require.FileExists(t, filepath.Join(supervisor, "prepared.json"), "the record was committed")
 	require.NoFileExists(t, filepath.Join(agentDir, "agent.key"))
 }
@@ -389,6 +445,7 @@ func TestStandaloneHost_AResumedPreparationNeverReplacesAnotherHostsKey(t *testi
 	hostA, hostB := filepath.Join(base, "supervisor-a"), filepath.Join(base, "supervisor-b")
 
 	interruptedPrepare(t, hostA, shared)
+	legacyPrepared(t, hostB, shared)
 	out, err := standaloneCommand(t, "prepare", "--dir", hostB, "--agent-dir", shared)
 	require.NoError(t, err, "B prepares the directory A never wrote: %s", out)
 	before := snapshot(t, shared)
@@ -429,4 +486,82 @@ func TestStandaloneHost_AResumedPreparationNeverReplacesAnotherHostsKey(t *testi
 	require.NoError(t, json.Unmarshal([]byte(out), &request))
 	assert.Equal(t, record.Fingerprint, request["agentKeySha256"])
 	assert.FileExists(t, filepath.Join(own, "agent.csr"))
+}
+
+// exchangeCredential presents a supervisor credential to the token
+// exchange and answers its status.
+func exchangeCredential(t *testing.T, s *executionStack, credential string) int {
+	t.Helper()
+	got, err := s.exchange(anonymousMachineClient(t), http.MethodPost, "/tokens", operator.TokenContractVersion,
+		"Garam-Credential "+credential, "{}")
+	require.NoError(t, err)
+	return got.status
+}
+
+// TestStandaloneHost_EnrollsUnderV2ForACredential drives the shipped
+// command through standalone-enrollment.v2 (ADR-0100): `prepare` binds
+// no key and writes nothing in the agent's directory, `enroll` installs
+// the supervisor's credential owner-only and keeps it out of the
+// record, an enrollment interrupted before its record re-issues the
+// credential and voids the one written before, a completed one
+// installs nothing again, and `renew` has no certificate to renew. The
+// credential installed last exchanging is the control on the voided
+// one refusing.
+func TestStandaloneHost_EnrollsUnderV2ForACredential(t *testing.T) {
+	p := pool(t)
+	_, engine := policyEngine(t, p)
+	s := newExecutionStack(t, p, engine)
+	h := newHostPaths(t, s)
+
+	request := h.prepare(t)
+	assert.Equal(t, request, h.prepare(t), "a repeated prepare answers the same request")
+	assert.Len(t, request, 2, "a v2 approval binds no key: %v", request)
+	assert.NotEmpty(t, request["requestId"])
+	assert.NotEmpty(t, request["secretSha256"])
+	written := snapshot(t, h.agent)
+	delete(written, ".standalone.lock")
+	assert.Empty(t, written, "nothing is generated for the agent")
+	assert.Equal(t, os.FileMode(0o600), mode(t, filepath.Join(h.supervisor, "prepared.json")))
+
+	out, err := h.enroll(t, s)
+	require.Error(t, err, "spending before the approval: %s", out)
+	assert.NoFileExists(t, filepath.Join(h.supervisor, "credential"))
+
+	approveHost(t, s, request)
+	out, err = h.enroll(t, s)
+	require.NoError(t, err, out)
+	credentialPath := filepath.Join(h.supervisor, "credential")
+	first, err := os.ReadFile(credentialPath)
+	require.NoError(t, err)
+	assert.Regexp(t, `^garam_sc_[0-9a-f]{64}$`, string(first))
+	assert.Equal(t, os.FileMode(0o600), mode(t, credentialPath))
+	assert.FileExists(t, filepath.Join(h.agent, "server-root.pem"))
+	record, err := os.ReadFile(filepath.Join(h.supervisor, "enrollment.json"))
+	require.NoError(t, err)
+	assert.NotContains(t, string(record), string(first), "the record never holds the credential")
+	assert.NotContains(t, string(record), "supervisorCertificatePem")
+	assert.Contains(t, out, "enrolled ", "the command reports nothing secret: %s", out)
+	assert.NotContains(t, out, string(first))
+
+	// Interrupted after the credential was written and before the
+	// record: the retry is re-issued, and the first credential voided.
+	require.NoError(t, os.Remove(filepath.Join(h.supervisor, "enrollment.json")))
+	out, err = h.enroll(t, s)
+	require.NoError(t, err, out)
+	second, err := os.ReadFile(credentialPath)
+	require.NoError(t, err)
+	assert.NotEqual(t, first, second, "a retried spending re-issues the credential")
+	assert.Equal(t, http.StatusUnauthorized, exchangeCredential(t, s, string(first)), "the credential re-issued over is void")
+	assert.Equal(t, http.StatusCreated, exchangeCredential(t, s, string(second)), "the control: the installed one exchanges")
+
+	out, err = h.enroll(t, s)
+	require.NoError(t, err, out)
+	unchanged, err := os.ReadFile(credentialPath)
+	require.NoError(t, err)
+	assert.Equal(t, second, unchanged, "a completed enrollment installs nothing again")
+
+	out, err = standaloneCommand(t, "renew", "--dir", h.supervisor, "--machine-url", s.machine)
+	require.Error(t, err, out)
+	assert.Contains(t, err.Error(), "holds no certificate to renew")
+	assert.NoFileExists(t, filepath.Join(h.supervisor, "renewal.json"))
 }

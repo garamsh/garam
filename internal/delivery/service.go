@@ -2,6 +2,7 @@ package delivery
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -247,6 +248,9 @@ func (s *service) hold(ctx context.Context, posted <-chan pairing, ended <-chan 
 // arrives completes nothing and the message is redelivered, which the
 // runtime then answers as completed.
 func (s *service) claim(ctx context.Context, posted chan<- pairing) {
+	// refused is the backoff while garam refuses the agent token, which
+	// the assignee replaces in its file; each attempt reads it again.
+	var refused time.Duration
 	for ctx.Err() == nil {
 		if err := s.ends.Execution.Await(ctx); err != nil {
 			return
@@ -260,6 +264,14 @@ func (s *service) claim(ctx context.Context, posted chan<- pairing) {
 			// not-found (stack-go.md §4).
 			continue
 		}
+		if errors.Is(err, ErrTokenRefused) {
+			refused = s.backoff(refused)
+			slog.WarnContext(ctx, "agent token refused; reading it again after a backoff",
+				slog.Duration("backoff", refused), slog.String("error", err.Error()))
+			s.wait(ctx, refused)
+			continue
+		}
+		refused = 0
 		if err != nil {
 			if ctx.Err() != nil {
 				return

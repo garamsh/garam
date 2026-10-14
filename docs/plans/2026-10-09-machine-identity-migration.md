@@ -81,10 +81,17 @@ the `Bearer` alias (`internal/operator/assertion.go`,
 migration 000043). No Operator release exchanges against it yet, and
 no deployment sets `GARAM_MACHINE_TOKEN_URL`.
 
-The adapter and standalone CLI remain certificate clients
-(`internal/cli/delivery.go`, `internal/cli/standalone_host.go`).
-G2 #1352 is undispatched and must follow ADR-0102 rather than complete
-the superseded shared-secret Operator target by assumption.
+G2 #1352 builds the adapter's token mode and the standalone host's v2
+path on the existing v2 contracts, which ADR-0102 leaves unchanged
+(PM decision of 2026-10-14 on #1352): the adapter reads a garam token
+and, fenced, a control token per request under `durable-delivery.v2`
+and `agent-execution.v2` (`internal/cli/delivery.go`,
+`internal/delivery/token_file.go`), and `garam standalone` prepares,
+enrolls and runs on a supervisor credential
+(`internal/cli/standalone_host.go`, `internal/cli/standalone_tokens.go`,
+`internal/workload/control.go`). The certificate mode and the v1 host
+stay. Adopting `agent-enrollment.v1` and the direct connector are not
+built, and wait on #1355.
 
 The managed and standalone mechanisms still differ:
 
@@ -109,7 +116,7 @@ begun.
 | 1 | Garam #1353 | Pair accepted ADR-0102 with affected documents and this plan; acceptance records the profile/custody target, not implementation or merge |
 | 2 | Garam #1356, built | Issue RSA PEM once, store public key only, register key incarnation/state, add `machine-token.v2` on `/oauth/token`, shared replay store, key/token revocation and explicit Bearer alias; preserve every G1 and certificate test |
 | 3 | Garam, new common enrollment implementation issue | Publish `agent-enrollment.v1` wire, approval/admission/refusal forms and public idempotent result; use existing execution lock and scoped authority model for both placements |
-| 4 | Garam #1352 (G2) | Adapter/supervisor token transport, atomic per-request files, v2 control headers; implement direct connector binding without requiring runtime reprovisioning, or split that work into a PM-owned follow-up issue |
+| 4 | Garam #1352 (G2), built | Adapter/supervisor token transport, per-request files, v2 control headers; the direct connector binding is split out to #1355's decision |
 | 5 | Operator PM, new coordinated O1 issues | Review shared contract first, then scope both binaries' PEM exchange, controller introspection, audience/epoch proofs, common managed admission and rendered short-lived token refresh; one cutover release, no compatibility switch |
 | 6 | Sherlock PM, local proposal/implementation issues | Proposal #1067 compares authenticated origin and channel admission while retaining authorization above Sherlock; Option B needs owner decision; no Operator or Garam private keys |
 | 7 | Owning PMs, joint acceptance issues | Record exact revisions/digests and both upgrade orders, managed/direct message+reply+restart, replay/rotation/revocation failures and all TLS trust consumers |
@@ -146,7 +153,7 @@ wire authority remains `api/machine.yaml`, not this plan.
 | `operation-authority.v1`, `.v2` | Keep controller/operation proofs and audience restrictions |
 | `execution-fence.v1`, `.v2` | Keep lifecycle and per-request generation/lineage fences |
 | `agent-cutover.v1`, `.v2` | Keep staged legacy cutover and archival definitions |
-| `agent-execution.v1`, `.v2` | Preserve explicit control transport selection; G2 builds token mode |
+| `agent-execution.v1`, `.v2` | Preserve explicit control transport selection; G2 built the token mode's v2 client and the standalone supervisor's v2 server |
 | `durable-delivery.v1`, `.v2` | Keep stable outbox keys and seven-day admission budget |
 | `garam-message.v1` | Keep signed content/digest and redelivery identity unchanged |
 

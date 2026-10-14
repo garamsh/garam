@@ -2,8 +2,14 @@ package standalone_test
 
 import (
 	"bytes"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/tls"
+	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,6 +19,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/garamsh/garam/internal/agent"
 )
 
 // host is one standalone host's two directories, as the shipped
@@ -40,17 +48,64 @@ func (h *host) prepare() {
 	require.NoError(h.s.t, json.Unmarshal([]byte(out), &h.request), out)
 }
 
+// prepareV1 is a host an earlier release prepared under
+// standalone-enrollment.v1, finished by this one's `prepare`: the
+// record that release committed before writing the agent's files.
+// Such a host enrolls, renews and runs on certificates, which is the
+// v1 cohort ADR-0100's migration keeps usable.
+func (h *host) prepareV1() {
+	h.s.t.Helper()
+	t := h.s.t
+	require.NoError(t, os.MkdirAll(h.supervisor, 0o700))
+	require.NoError(t, os.MkdirAll(h.agent, 0o700))
+	agentDir, err := filepath.EvalSymlinks(h.agent)
+	require.NoError(t, err)
+	keyAndRequest := func() (string, string) {
+		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		require.NoError(t, err)
+		der, err := x509.MarshalPKCS8PrivateKey(key)
+		require.NoError(t, err)
+		request, err := x509.CreateCertificateRequest(rand.Reader, &x509.CertificateRequest{}, key)
+		require.NoError(t, err)
+		return string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der})),
+			string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: request}))
+	}
+	supervisorKey, supervisorRequest := keyAndRequest()
+	agentKey, agentRequest := keyAndRequest()
+	fingerprint, err := agent.RequestedKeyFingerprint([]byte(agentRequest))
+	require.NoError(t, err)
+	secret := make([]byte, 32)
+	_, err = rand.Read(secret)
+	require.NoError(t, err)
+	raw, err := json.Marshal(map[string]string{
+		"requestId": h.name + "-v1", "secret": base64.RawURLEncoding.EncodeToString(secret),
+		"supervisorKeyPem": supervisorKey, "supervisorCertificateRequestPem": supervisorRequest,
+		"agentDir": agentDir, "agentKeyPem": agentKey, "agentCertificateRequestPem": agentRequest,
+		"agentKeySha256": fingerprint.String(),
+	})
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(h.supervisor, "prepared.json"), raw, 0o600))
+	h.prepare()
+	require.NotEmpty(t, h.request["agentKeySha256"], "a v1 preparation is answered with its fingerprints")
+}
+
 // approve has the stack's principal, the organization's owner, approve
-// the prepared keys through the public API, expiring at expiresAt, and
-// answers the approval's identifier.
+// what prepare printed through the public API, expiring at expiresAt,
+// and answers the approval's identifier: the key fingerprints where a
+// v1 preparation printed them, and none under v2.
 func (h *host) approve(expiresAt time.Time) string {
 	h.s.t.Helper()
-	raw, err := json.Marshal(map[string]string{
+	approval := map[string]string{
 		"requestId": h.request["requestId"], "hostName": h.name,
 		"expiresAt":    expiresAt.UTC().Format(time.RFC3339Nano),
-		"secretSha256": h.request["secretSha256"], "supervisorKeySha256": h.request["supervisorKeySha256"],
-		"agentKeySha256": h.request["agentKeySha256"],
-	})
+		"secretSha256": h.request["secretSha256"],
+	}
+	for _, key := range []string{"supervisorKeySha256", "agentKeySha256"} {
+		if h.request[key] != "" {
+			approval[key] = h.request[key]
+		}
+	}
+	raw, err := json.Marshal(approval)
 	require.NoError(h.s.t, err)
 	status, body := h.s.browse(http.MethodPost, "/orgs/"+h.s.org+"/agent-enrollments", string(raw))
 	require.Equal(h.s.t, http.StatusCreated, status, body)
@@ -147,7 +202,7 @@ type sender struct {
 func (s *stack) newSender() *sender {
 	s.t.Helper()
 	h := s.newHost("sender")
-	h.prepare()
+	h.prepareV1()
 	h.approve(time.Now().Add(time.Hour))
 	out, err := h.enroll()
 	require.NoError(s.t, err, out)

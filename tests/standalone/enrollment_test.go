@@ -12,11 +12,12 @@ import (
 )
 
 // TestStandalone_EnrollsOnlyAnApprovedHost holds the shipped `garam
-// standalone enroll` to an administrator's current approval of the
-// host's own keys (#1157 scenario 2): a preparation nobody approved, an
-// approval past its expiry and a withdrawn one each refuse and install
-// no certificate. The control is the approved preparation, which
-// enrolls and installs both.
+// standalone enroll` to an administrator's current approval (#1157
+// scenario 2), under standalone-enrollment.v2 (ADR-0100): a preparation
+// nobody approved, an approval past its expiry and a withdrawn one each
+// refuse and install no credential. The control is the approved
+// preparation, which enrolls and installs the supervisor's credential
+// owner-only.
 func TestStandalone_EnrollsOnlyAnApprovedHost(t *testing.T) {
 	s := newStack(t)
 	// What garam answers every bootstrap no current approval holds
@@ -29,10 +30,10 @@ func TestStandalone_EnrollsOnlyAnApprovedHost(t *testing.T) {
 		out, err := h.enroll()
 		require.Error(t, err, "%s: %s", why, out)
 		assert.Contains(t, out, refusal, "%s is garam's refusal", why)
-		_, err = os.Stat(filepath.Join(h.agent, "agent.crt"))
-		assert.True(t, os.IsNotExist(err), "%s installs no agent certificate", why)
-		_, err = os.Stat(filepath.Join(h.supervisor, "supervisor.pem"))
-		assert.True(t, os.IsNotExist(err), "%s installs no supervisor certificate", why)
+		_, err = os.Stat(filepath.Join(h.supervisor, "credential"))
+		assert.True(t, os.IsNotExist(err), "%s installs no credential", why)
+		_, err = os.Stat(filepath.Join(h.supervisor, "enrollment.json"))
+		assert.True(t, os.IsNotExist(err), "%s records no enrollment", why)
 	}
 
 	unapproved := s.newHost("unapproved")
@@ -66,10 +67,11 @@ func TestStandalone_EnrollsOnlyAnApprovedHost(t *testing.T) {
 	approved.approve(time.Now().Add(time.Hour))
 	out, err = approved.enroll()
 	require.NoError(t, err, "the control: the approved preparation enrolls: %s", out)
-	for _, path := range []string{filepath.Join(approved.agent, "agent.crt"), filepath.Join(approved.supervisor, "supervisor.pem")} {
-		_, err := os.Stat(path)
-		assert.NoError(t, err, path)
-	}
+	info, err := os.Stat(filepath.Join(approved.supervisor, "credential"))
+	require.NoError(t, err)
+	assert.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+	_, err = os.Stat(filepath.Join(approved.agent, "agent.crt"))
+	assert.True(t, os.IsNotExist(err), "a v2 enrollment signs no certificate")
 }
 
 // otherRoot is a root certificate nothing here signed with.

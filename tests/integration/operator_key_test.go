@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"io"
 	"net/http"
 	"sync"
 	"testing"
@@ -114,7 +115,11 @@ func bearerIdentifies(t *testing.T, client *http.Client, url, token string) int 
 	req.Header.Set("Authorization", "Bearer "+token)
 	resp, err := client.Do(req)
 	require.NoError(t, err)
-	_ = resp.Body.Close()
+	// Drained before closing, so the transport reuses the connection
+	// and a test can count the requests that travelled over one.
+	_, err = io.Copy(io.Discard, resp.Body)
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
 	return resp.StatusCode
 }
 

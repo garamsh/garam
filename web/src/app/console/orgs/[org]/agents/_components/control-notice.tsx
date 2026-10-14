@@ -2,7 +2,8 @@ import Link from "next/link";
 
 import { Banner } from "@/components/banner";
 import { Button } from "@/components/ui/button";
-import type { HostedOperator } from "@/features/orgs";
+import type { DelegatedOperation, HostedOperator } from "@/features/orgs";
+import { DELEGATED_OPERATION_LABEL } from "@/lib/delegated-operations";
 
 import { orgHref } from "../../../../_components/navigation";
 
@@ -13,9 +14,7 @@ import { orgHref } from "../../../../_components/navigation";
  * down, a refusal, an operators list the caller was not shown.
  */
 export type ControlFix =
-  | { at: "operator"; identifier: string }
-  | { at: "operators" }
-  | { at: "none" };
+  { at: "operator"; identifier: string } | { at: "operators" } | { at: "none" };
 
 /** A fix no page the caller can open makes. */
 export const NO_FIX: ControlFix = { at: "none" };
@@ -42,7 +41,7 @@ export type ControlReach =
  */
 export function controlReach(
   hosted: HostedOperator | null,
-  ...operations: string[]
+  ...operations: DelegatedOperation[]
 ): ControlReach {
   const blocked = (reason: string, fix: ControlFix): ControlReach => ({
     status: "blocked",
@@ -70,7 +69,7 @@ export function controlReach(
   );
   if (missing !== undefined) {
     return blocked(
-      `${hosted.name}'s delegation does not include ${missing}.`,
+      `${hosted.name}'s delegation does not include “${DELEGATED_OPERATION_LABEL[missing]}”.`,
       fix,
     );
   }
@@ -80,7 +79,7 @@ export function controlReach(
 /** Why a panel cannot reach `operation`, or null where it can. */
 export function controlBlocker(
   hosted: HostedOperator | null,
-  operation: string,
+  operation: DelegatedOperation,
 ): ControlBlock | null {
   const reach = controlReach(hosted, operation);
   return reach.status === "blocked" ? reach.block : null;

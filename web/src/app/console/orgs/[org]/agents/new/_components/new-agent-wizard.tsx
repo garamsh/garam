@@ -5,7 +5,7 @@ import { useState } from "react";
 
 import { CopyField } from "@/components/copy-field";
 import { Button } from "@/components/ui/button";
-import { parseGrn } from "@/features/orgs/grn";
+import { parseGrn } from "@/lib/grn";
 
 import { WizardPage } from "../../../../../_components/templates/wizard-page";
 import {
@@ -96,8 +96,8 @@ export function NewAgentWizard({
         {start.status === "blocked" ? (
           <>
             <p className="text-muted-foreground">
-              garam no longer defines agents itself: a new agent is created by
-              a hosted operator&apos;s control service, from a template it
+              garam no longer defines agents itself: a new agent is created by a
+              hosted operator&apos;s control service, from a template it
               published.
             </p>
             <ControlNotice org={org} {...start.block} />
@@ -145,8 +145,8 @@ function Created({
   return (
     <>
       <p role="status">
-        Created at revision {created.revision}. It keeps the template version
-        it copied.
+        Created at revision {created.revision}. It keeps the template version it
+        copied.
       </p>
       {readBack !== null && (
         <ExecutionPanel org={org} agentGrn={created.agent} hosted={readBack} />

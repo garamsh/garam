@@ -530,7 +530,14 @@ test.describe("control service, as contract tests against the agreed Operator wi
     );
 
     await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/new`);
-    await expect(page.getByLabel("Template", { exact: true })).toBeVisible();
+    // Nothing is chosen for the visitor: each choice is made.
+    for (const [label, option] of [
+      ["Template", "web agent version 1"],
+      ["Controller", signedIn.operatorName],
+    ] as const) {
+      await page.getByRole("combobox", { name: label, exact: true }).click();
+      await page.getByRole("option", { name: option, exact: true }).click();
+    }
     await page
       .getByRole("button", { name: "Create from template", exact: true })
       .click();
@@ -555,6 +562,14 @@ test.describe("control service, as contract tests against the agreed Operator wi
       profile: { name: "small", version: 1 },
     });
 
+    // The grant carries agent:execution-read, so the last step reads
+    // the agent back from the control service.
+    await expect(
+      page.getByRole("heading", { level: 2, name: "Verify", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Revision 1 (pending)", { exact: true }),
+    ).toBeVisible();
     await expect(
       page.getByRole("group", { name: "Agent identifier" }),
     ).toContainText(signedIn.agentIdentifier);

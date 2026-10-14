@@ -29,8 +29,11 @@ function parseTools(text: string): Record<string, string> | null {
   return tools;
 }
 
-/** What each field holds, by the name it submits under. */
-type Values = {
+/**
+ * What each field holds, by the name it submits under. The page holds
+ * it, so a draft outlives the dialog the form opens in.
+ */
+export type PublishDraft = {
   name: string;
   profileName: string;
   profileVersion: string;
@@ -46,10 +49,10 @@ type Values = {
 };
 
 /** The sentence each field the form checks shows when it is wrong. */
-type FieldErrors = Partial<Record<keyof Values, string>>;
+type FieldErrors = Partial<Record<keyof PublishDraft, string>>;
 
 /** The fields as the version on screen fills them, or empty. */
-function startingValues(from: TemplateVersion | null): Values {
+export function startingDraft(from: TemplateVersion | null): PublishDraft {
   const model = from?.configuration.model;
   return {
     name: from?.name ?? "",
@@ -70,7 +73,7 @@ function startingValues(from: TemplateVersion | null): Values {
 }
 
 /** The labelled single-line fields, in the order the form shows them. */
-const INPUTS: readonly { name: keyof Values; label: string }[] = [
+const INPUTS: readonly { name: keyof PublishDraft; label: string }[] = [
   { name: "name", label: "Template" },
   { name: "profileName", label: "Profile" },
   { name: "profileVersion", label: "Profile version" },
@@ -84,8 +87,8 @@ const INPUTS: readonly { name: keyof Values; label: string }[] = [
 ];
 
 /**
- * Publishes the next immutable version of a template (#1170), started
- * from the version on screen where one is. The control service numbers
+ * Publishes the next immutable version of a template (#1170) from the
+ * draft the page holds, which may start from the version on screen. The control service numbers
  * it and validates it; garam only binds the request to the person
  * publishing. A secret is named by reference and never typed here. A
  * field the form can check carries its own error; a refusal from the
@@ -95,13 +98,16 @@ export function PublishTemplateForm({
   org,
   orgGrn,
   hosted,
-  from,
+  values,
+  onValuesChange,
   onPublished,
 }: {
   org: string;
   orgGrn: string;
   hosted: DelegatedOperator;
-  from: TemplateVersion | null;
+  /** The draft, held by the page so closing the form keeps it. */
+  values: PublishDraft;
+  onValuesChange: (values: PublishDraft) => void;
   onPublished: (published: { name: string; version: number }) => void;
 }) {
   const [errors, setErrors] = useState<FieldErrors>({});
@@ -111,18 +117,18 @@ export function PublishTemplateForm({
   // Controlled, so a refused publish keeps what was typed: a form
   // action resets an uncontrolled field when it completes, refusal
   // included.
-  const [values, setValues] = useState(() => startingValues(from));
-  const control = (name: keyof Values) => ({
+  const control = (name: keyof PublishDraft) => ({
     name,
     value: values[name],
     disabled: !hydrated,
     onChange: (
       event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
-    ) => setValues((held) => ({ ...held, [name]: event.target.value })),
+    ) => onValuesChange({ ...values, [name]: event.target.value }),
   });
 
   async function publish(form: FormData) {
-    const field = (name: keyof Values) => String(form.get(name) ?? "").trim();
+    const field = (name: keyof PublishDraft) =>
+      String(form.get(name) ?? "").trim();
     const tools = parseTools(field("tools"));
     const version = Number(field("profileVersion"));
     const invalid: FieldErrors = {

@@ -56,6 +56,16 @@ function renderStep(onCreated: (created: unknown) => void = () => {}) {
   );
 }
 
+/** Picks `option` in the select labelled `label`, as a visitor does. */
+async function choose(
+  user: ReturnType<typeof userEvent.setup>,
+  label: string,
+  option: string,
+) {
+  await user.click(await screen.findByRole("combobox", { name: label }));
+  await user.click(await screen.findByRole("option", { name: option }));
+}
+
 describe("create from template", () => {
   it("hands the agent the control service created to the next step", async () => {
     const created: unknown[] = [];
@@ -74,8 +84,10 @@ describe("create from template", () => {
     const user = userEvent.setup();
     renderStep((agent) => created.push(agent));
 
+    await choose(user, "Template", "minimax version 1");
+    await choose(user, "Controller", "Controller one");
     await user.click(
-      await screen.findByRole("button", { name: "Create from template" }),
+      screen.getByRole("button", { name: "Create from template" }),
     );
 
     await vi.waitFor(() =>
@@ -109,41 +121,25 @@ describe("create from template", () => {
         { name: "minimax", version: 1, profile: { name: "small", version: 1 } },
       ]),
     );
-    render(
-      <CreateFromTemplate
-        org="acme"
-        orgGrn="grn:root:default:org:acme"
-        hosted={hosted}
-        controllers={{ [FIRST]: "Controller one" }}
-        onCreated={() => {}}
-      />,
+    const user = userEvent.setup();
+    renderStep();
+
+    await user.click(
+      await screen.findByRole("combobox", { name: "Controller" }),
     );
 
-    const controller = await screen.findByLabelText("Controller");
     expect(
-      Array.from((controller as HTMLSelectElement).options, (o) => o.text),
+      (await screen.findAllByRole("option")).map((o) => o.textContent),
     ).toEqual(["Controller one", "controller-two"]);
   });
 
   it("keeps the template and controller chosen when the control service refuses", async () => {
     const posted: unknown[] = [];
     server.use(
-      http.get(`${ENDPOINT}/v1/orgs/acme/templates`, () =>
-        HttpResponse.json({
-          templates: [
-            {
-              name: "minimax",
-              version: 1,
-              profile: { name: "small", version: 1 },
-            },
-            {
-              name: "scout",
-              version: 2,
-              profile: { name: "small", version: 1 },
-            },
-          ],
-        }),
-      ),
+      publishedTemplates([
+        { name: "minimax", version: 1, profile: { name: "small", version: 1 } },
+        { name: "scout", version: 2, profile: { name: "small", version: 1 } },
+      ]),
       http.post(`${ENDPOINT}/v1/orgs/acme/agents`, async ({ request }) => {
         posted.push(await request.json());
         return HttpResponse.json(
@@ -164,8 +160,8 @@ describe("create from template", () => {
     );
 
     // The second of each, so a reset to the first option shows.
-    await user.selectOptions(await screen.findByLabelText("Template"), "scout");
-    await user.selectOptions(screen.getByLabelText("Controller"), SECOND);
+    await choose(user, "Template", "scout version 2");
+    await choose(user, "Controller", "Controller two");
     await user.click(
       screen.getByRole("button", { name: "Create from template" }),
     );
@@ -180,7 +176,75 @@ describe("create from template", () => {
         template: expect.objectContaining({ name: "scout" }),
       }),
     ]);
-    expect(screen.getByLabelText("Template")).toHaveValue("scout");
-    expect(screen.getByLabelText("Controller")).toHaveValue(SECOND);
+    // The form's reset after the action left both choices as they were.
+    expect(
+      screen.getByRole("combobox", { name: "Template" }),
+    ).toHaveTextContent("scout version 2");
+    expect(
+      screen.getByRole("combobox", { name: "Controller" }),
+    ).toHaveTextContent("Controller two");
+  });
+
+  it("flags only the choice left unmade, and sends nothing", async () => {
+    const posted: unknown[] = [];
+    server.use(
+      publishedTemplates([
+        { name: "minimax", version: 1, profile: { name: "small", version: 1 } },
+      ]),
+      http.post(`${ENDPOINT}/v1/orgs/acme/agents`, async ({ request }) => {
+        posted.push(await request.json());
+        return HttpResponse.json({}, { status: 500 });
+      }),
+    );
+    const user = userEvent.setup();
+    renderStep();
+
+    await choose(user, "Template", "minimax version 1");
+    await user.click(
+      screen.getByRole("button", { name: "Create from template" }),
+    );
+
+    const controller = screen.getByRole("combobox", { name: "Controller" });
+    await vi.waitFor(() =>
+      expect(controller).toHaveAttribute("aria-invalid", "true"),
+    );
+    expect(controller).toHaveAccessibleDescription(
+      expect.stringContaining("Choose a controller."),
+    );
+    // The control: the template, which was chosen, is not flagged.
+    expect(
+      screen.getByRole("combobox", { name: "Template" }),
+    ).not.toHaveAttribute("aria-invalid");
+    expect(posted).toEqual([]);
+  });
+
+  it("says a delegation naming no controller is a block, rather than offering an empty choice", async () => {
+    server.use(
+      publishedTemplates([
+        { name: "minimax", version: 1, profile: { name: "small", version: 1 } },
+      ]),
+    );
+    render(
+      <CreateFromTemplate
+        org="acme"
+        orgGrn="grn:root:default:org:acme"
+        hosted={{
+          ...hosted,
+          delegation: { ...hosted.delegation, controllers: [] },
+        }}
+        controllers={{}}
+        onCreated={() => {}}
+      />,
+    );
+
+    expect(
+      await screen.findByText(
+        "Hosted's delegation names no controller, so there is no operator to place an agent on.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Open the operator" }),
+    ).toHaveAttribute("href", "/console/orgs/acme/operators/hosted");
+    expect(screen.queryByRole("combobox")).toBeNull();
   });
 });

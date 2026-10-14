@@ -4,7 +4,12 @@ import { renderToString } from "react-dom/server";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
-import { PublishTemplateForm } from "@/app/console/orgs/[org]/agents/_components/publish-template-form";
+import { useState } from "react";
+
+import {
+  PublishTemplateForm,
+  startingDraft,
+} from "@/app/console/orgs/[org]/agents/_components/publish-template-form";
 import type { DelegatedOperator } from "@/app/console/orgs/[org]/agents/_components/control-notice";
 import { enter } from "@/testing/enter";
 import { server } from "@/testing/setup";
@@ -37,16 +42,23 @@ const hosted: DelegatedOperator = {
   problem: null,
 };
 
-function renderForm() {
-  return render(
+/** The form with its draft held as the page holds it. */
+function Form() {
+  const [values, setValues] = useState(() => startingDraft(null));
+  return (
     <PublishTemplateForm
       org="acme"
       orgGrn="grn:root:default:org:acme"
       hosted={hosted}
-      from={null}
+      values={values}
+      onValuesChange={setValues}
       onPublished={() => {}}
-    />,
+    />
   );
+}
+
+function renderForm() {
+  return render(<Form />);
 }
 
 describe("publish template form", () => {
@@ -54,15 +66,7 @@ describe("publish template form", () => {
     // A form submitted before React hydrates posts fields React never
     // held, so the button waits with the fields it submits.
     const html = document.createElement("div");
-    html.innerHTML = renderToString(
-      <PublishTemplateForm
-        org="acme"
-        orgGrn="grn:root:default:org:acme"
-        hosted={hosted}
-        from={null}
-        onPublished={() => {}}
-      />,
-    );
+    html.innerHTML = renderToString(<Form />);
     expect(
       html.querySelector('button[type="submit"]')?.hasAttribute("disabled"),
     ).toBe(true);

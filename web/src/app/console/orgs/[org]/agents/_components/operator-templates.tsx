@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type { HostedOperator } from "@/features/orgs";
+import type { DelegatedOperation, HostedOperator } from "@/features/orgs";
 import {
   ProfilesParser,
   TemplateVersionParser,
@@ -30,14 +30,15 @@ import {
   controlBlocker,
   controlReach,
 } from "./control-notice";
-import { PublishTemplateForm } from "./publish-template-form";
+import {
+  PublishTemplateForm,
+  startingDraft,
+  type PublishDraft,
+} from "./publish-template-form";
 import { useControlRead } from "./use-control-read";
 
 /** One published template, as the control service lists it. */
 type Published = VersionRef & { profile: VersionRef };
-
-/** What the publish dialog starts from: empty, or a version on screen. */
-type Publishing = { from: TemplateVersion | null } | null;
 
 /**
  * The templates and profiles a hosted operator's control service has
@@ -60,10 +61,13 @@ export function OperatorTemplates({
 }) {
   const [generation, setGeneration] = useState(0);
   const [selected, setSelected] = useState<VersionRef | null>(null);
-  const [publishing, setPublishing] = useState<Publishing>(null);
+  // The draft lives here rather than in the dialog, so closing the
+  // dialog by Escape or a click outside it keeps what was typed.
+  const [publishing, setPublishing] = useState(false);
+  const [draft, setDraft] = useState<PublishDraft>(() => startingDraft(null));
   const [published, setPublished] = useState<VersionRef | null>(null);
   const base = `/v1/orgs/${segment(org)}`;
-  const reach = (operation: string, path: string) =>
+  const reach = (operation: DelegatedOperation, path: string) =>
     hosted !== null && controlBlocker(hosted, operation) === null
       ? {
           endpoint: hosted.endpoint,
@@ -171,7 +175,7 @@ export function OperatorTemplates({
           changes it.
         </p>
         {canPublish && (
-          <Button type="button" onClick={() => setPublishing({ from: null })}>
+          <Button type="button" onClick={() => setPublishing(true)}>
             <Plus aria-hidden />
             Publish version
           </Button>
@@ -253,7 +257,8 @@ export function OperatorTemplates({
                     variant="outline"
                     onClick={() => {
                       setSelected(null);
-                      setPublishing({ from: detail.data });
+                      setDraft(startingDraft(detail.data));
+                      setPublishing(true);
                     }}
                   >
                     Start a new version from this
@@ -270,12 +275,7 @@ export function OperatorTemplates({
       </Dialog>
 
       {publish.status === "ready" && (
-        <Dialog
-          open={publishing !== null}
-          onOpenChange={(open) => {
-            if (!open) setPublishing(null);
-          }}
-        >
+        <Dialog open={publishing} onOpenChange={setPublishing}>
           <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-2xl">
             <DialogHeader>
               <DialogTitle>Publish a template version</DialogTitle>
@@ -285,17 +285,14 @@ export function OperatorTemplates({
               </DialogDescription>
             </DialogHeader>
             <PublishTemplateForm
-              key={
-                publishing?.from
-                  ? `${publishing.from.name}/${publishing.from.version}`
-                  : ""
-              }
               org={org}
               orgGrn={orgGrn}
               hosted={publish.hosted}
-              from={publishing?.from ?? null}
+              values={draft}
+              onValuesChange={setDraft}
               onPublished={(version) => {
-                setPublishing(null);
+                setPublishing(false);
+                setDraft(startingDraft(null));
                 setPublished(version);
                 setGeneration((g) => g + 1);
               }}

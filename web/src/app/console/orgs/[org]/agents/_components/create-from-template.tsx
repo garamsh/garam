@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { slugFromGrn } from "@/features/orgs/grn";
+import { slugFromGrn } from "@/lib/grn";
 import { mintOperationAuthority } from "@/features/orgs/actions";
 import {
   CreatedParser,
@@ -62,10 +62,11 @@ export function CreateFromTemplate({
 }) {
   const [outcome, setOutcome] = useState<Outcome>({ status: "idle" });
   const [pending, setPending] = useState(false);
-  // Null is the first option, which the lists below are not read in
-  // time to name.
-  const [templateChoice, setTemplateChoice] = useState<string | null>(null);
-  const [controllerChoice, setControllerChoice] = useState<string | null>(null);
+  // Each starts unchosen: Radix resets a select in a form to the value
+  // it mounted with, and only an empty one is a reset the handlers
+  // below can tell from a choice.
+  const [template, setTemplate] = useState("");
+  const [controller, setController] = useState("");
   const templates = useControlRead(
     org,
     "agent-template:read",
@@ -128,12 +129,12 @@ export function CreateFromTemplate({
 
   async function create(form: FormData) {
     const chosen = published.find((t) => t.name === form.get("template"));
-    const controller = String(form.get("controller") ?? "");
+    const placedOn = String(form.get("controller") ?? "");
     // Each choice is checked on its own, so the one that is wrong is
     // the one flagged.
     const errors = {
       ...(chosen === undefined ? { template: "Choose a template." } : {}),
-      ...(!delegated.includes(controller)
+      ...(!delegated.includes(placedOn)
         ? { controller: "Choose a controller." }
         : {}),
     };
@@ -150,7 +151,7 @@ export function CreateFromTemplate({
         method: "POST",
         body: {
           requestId,
-          controller,
+          controller: placedOn,
           template: { name: chosen.name, version: chosen.version },
           profile: chosen.profile,
         },
@@ -158,7 +159,7 @@ export function CreateFromTemplate({
         org,
         audience: hosted.grn,
         operation: "agent:create",
-        target: controller,
+        target: placedOn,
         parser: CreatedParser,
       },
       mintOperationAuthority,
@@ -174,8 +175,6 @@ export function CreateFromTemplate({
     });
   }
 
-  const template = templateChoice ?? published[0]?.name ?? "";
-  const controller = controllerChoice ?? delegated[0] ?? "";
   const errors = outcome.status === "invalid" ? outcome.errors : {};
   return (
     <form action={create} className="flex max-w-md flex-col gap-4">
@@ -194,11 +193,11 @@ export function CreateFromTemplate({
               // the empty default; no option is empty, so that is not
               // a choice, and a refused one stays chosen.
               if (value === "") return;
-              setTemplateChoice(value);
+              setTemplate(value);
             }}
           >
             <SelectTrigger {...control} className="w-full min-w-0">
-              <SelectValue />
+              <SelectValue placeholder="Choose a template" />
             </SelectTrigger>
             <SelectContent position="popper">
               {published.map((t) => (
@@ -220,11 +219,11 @@ export function CreateFromTemplate({
             value={controller}
             onValueChange={(value) => {
               if (value === "") return;
-              setControllerChoice(value);
+              setController(value);
             }}
           >
             <SelectTrigger {...control} className="w-full min-w-0">
-              <SelectValue />
+              <SelectValue placeholder="Choose a controller" />
             </SelectTrigger>
             <SelectContent position="popper">
               {delegated.map((c) => (

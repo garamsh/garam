@@ -100,6 +100,31 @@ describe("new agent page", () => {
     ).toHaveAttribute("href", "/console/orgs/acme/operators");
   });
 
+  it("says why when the operators cannot be read, and links to no page the caller cannot open", async () => {
+    // The control: with the operators read, the step links to them.
+    const listed = await renderServerComponent(page());
+    expect(
+      screen.getByRole("link", { name: "Open operators" }),
+    ).toBeInTheDocument();
+    listed.unmount();
+
+    server.use(
+      http.get(`${API_URL}/orgs/acme/operators`, () =>
+        HttpResponse.json(
+          { kind: "permission_denied", message: "no" },
+          { status: 403 },
+        ),
+      ),
+    );
+    await renderServerComponent(page());
+
+    expect(currentStep()).toHaveTextContent("Control service");
+    expect(
+      screen.getByText(/garam refused to list this organization's operators/),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /^Open/ })).toBeNull();
+  });
+
   it("links to the operator whose grant lacks creating", async () => {
     server.use(...hostedWith(["agent-template:read"]));
 
@@ -107,7 +132,9 @@ describe("new agent page", () => {
 
     expect(currentStep()).toHaveTextContent("Control service");
     expect(
-      screen.getByText("Hosted's delegation does not include agent:create."),
+      screen.getByText(
+        "Hosted's delegation does not include “Create agents from published templates”.",
+      ),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Open the operator" }),

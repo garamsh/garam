@@ -15,7 +15,7 @@ import {
 } from "@/lib/operation-authority";
 import type { components } from "@/types/api";
 
-import { slugFromGrn } from "../grn";
+import { slugFromGrn } from "@/lib/grn";
 import { GrnParser, OperatorParser, orgPath, type Operator } from "./orgs";
 
 /**

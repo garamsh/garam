@@ -11,6 +11,16 @@ import {
   researcher,
 } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
+import { fieldOne } from "@/testing/mocks/handlers";
+
+// The control service is read in the browser under an authority a
+// Server Action mints; the page's wiring is the subject here.
+vi.mock("@/features/orgs/actions", () => ({
+  mintOperationAuthority: async () => ({
+    status: "ok",
+    authority: "test-authority",
+  }),
+}));
 
 vi.mock("next/navigation", () => ({
   notFound: () => {
@@ -166,5 +176,57 @@ describe("agent templates view", () => {
     await renderPage();
 
     expect(asked).toEqual(["agent-template:publish"]);
+  });
+
+  it("leaves Publish out where the server denies publishing, and offers it otherwise", async () => {
+    const endpoint = "https://control.example.test/garam";
+    const hosted = "grn:acme:default:operator:hosted";
+    server.use(
+      http.get(`${API_URL}/orgs/acme/operators`, () =>
+        HttpResponse.json([
+          fieldOne,
+          {
+            ...fieldOne,
+            grn: hosted,
+            name: "Hosted",
+            controlEndpoint: endpoint,
+          },
+        ]),
+      ),
+      http.get(`${API_URL}/orgs/acme/operators/hosted/delegation`, () =>
+        HttpResponse.json({
+          grantId: "grant-1",
+          operatorGrn: hosted,
+          controllers: [fieldOne.grn],
+          operations: ["agent-template:read", "agent-template:publish"],
+          expiresAt: "2099-01-01T00:00:00Z",
+          grantedBy: "grn:root:default:user:alice",
+          grantedAt: "2026-10-01T00:00:00Z",
+        }),
+      ),
+      http.get(`${endpoint}/v1/orgs/acme/templates`, () =>
+        HttpResponse.json({ templates: [] }),
+      ),
+    );
+    // The control: allowed, the page offers publishing.
+    const allowed = await renderPage();
+    expect(
+      await screen.findByRole("button", { name: "Publish version" }),
+    ).toBeInTheDocument();
+    allowed.unmount();
+
+    server.use(
+      answerPermissionChecks((action) =>
+        action === "agent-template:publish" ? "deny" : "allow",
+      ),
+    );
+    await renderPage();
+
+    expect(
+      await screen.findByText("No template is published."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Publish version" }),
+    ).toBeNull();
   });
 });

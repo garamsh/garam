@@ -50,7 +50,10 @@ export default async function NewAgentPage({ params }: Params) {
 
   const start: ControlReach =
     permissions.get("create") === "denied"
-      ? { status: "blocked", block: { reason: REFUSAL_COPY.permissionDenied, fix: NO_FIX } }
+      ? {
+          status: "blocked",
+          block: { reason: REFUSAL_COPY.permissionDenied, fix: NO_FIX },
+        }
       : hosted.status !== "ok"
         ? { status: "blocked", block: { reason: hosted.reason, fix: NO_FIX } }
         : controlReach(

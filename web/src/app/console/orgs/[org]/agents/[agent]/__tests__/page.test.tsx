@@ -222,6 +222,55 @@ describe("agent page", () => {
     ).toHaveAttribute("href", "/console/orgs/acme/operators");
   });
 
+  it("says when a report last landed is not checked where reports are refused, never none", async () => {
+    // The control: answered and unclaimed, no report has landed.
+    const allowed = await renderAgent();
+    expect(
+      screen.getByText("Last report").nextElementSibling,
+    ).toHaveTextContent("None");
+    allowed.unmount();
+
+    server.use(
+      http.get(`${API_URL}/orgs/acme/agents`, () =>
+        HttpResponse.json(
+          { kind: "permission_denied", message: "no" },
+          { status: 403 },
+        ),
+      ),
+    );
+    await renderAgent();
+
+    expect(
+      screen.getByText("Last report").nextElementSibling,
+    ).toHaveTextContent("Not checked");
+  });
+
+  it("links to no page the caller was refused: an unlisted operators list gets the reason alone", async () => {
+    // The control: with the list read, the same section links to it.
+    const listed = await renderAgent();
+    await openTab("Execution");
+    expect(
+      screen.getByRole("link", { name: "Open operators" }),
+    ).toBeInTheDocument();
+    listed.unmount();
+
+    server.use(
+      http.get(`${API_URL}/orgs/acme/operators`, () =>
+        HttpResponse.json(
+          { kind: "permission_denied", message: "no" },
+          { status: 403 },
+        ),
+      ),
+    );
+    await renderAgent();
+    await openTab("Execution");
+
+    expect(
+      screen.getByText(/garam refused to list this organization's operators/),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /^Open/ })).toBeNull();
+  });
+
   it("says a refused definition is refused rather than missing", async () => {
     let refusing = false;
     server.use(

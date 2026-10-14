@@ -194,6 +194,74 @@ describe("agents section", () => {
     );
   });
 
+  it("counts an agent failing on its runtime alone, its provisioning ready", async () => {
+    // The control: ready and connected is not failing.
+    server.use(
+      http.get(`${API_URL}/orgs/acme/agents`, () =>
+        HttpResponse.json([
+          {
+            ...reportedAgent,
+            grn: fieldAgent.agentGrn,
+            provisioningState: "ready",
+            runtimeState: "connected",
+          },
+        ]),
+      ),
+    );
+    const calm = await renderPage();
+    expect(screen.queryByText(/is failing$/)).toBeNull();
+    calm.unmount();
+
+    server.use(
+      http.get(`${API_URL}/orgs/acme/agents`, () =>
+        HttpResponse.json([
+          {
+            ...reportedAgent,
+            grn: fieldAgent.agentGrn,
+            provisioningState: "ready",
+            runtimeState: "disconnected",
+          },
+        ]),
+      ),
+    );
+    await renderPage();
+
+    expect(screen.getByText("1 agent is failing")).toBeInTheDocument();
+    expect(listedNames()[0]).toBe("Scout");
+  });
+
+  it("marks a cutover in progress apart from one finished and from a definition with none", async () => {
+    server.use(
+      http.get(`${API_URL}/orgs/acme/agent-definitions`, () =>
+        HttpResponse.json([
+          { ...fieldAgent, cutover: { stage: "frozen" } },
+          {
+            ...fieldAgent,
+            agentGrn: "grn:acme:default:agent:0000000000000001",
+            name: "Ranger",
+            cutover: { stage: "switched" },
+          },
+          {
+            ...fieldAgent,
+            agentGrn: "grn:acme:default:agent:0000000000000002",
+            name: "Legacy",
+            cutover: null,
+          },
+        ]),
+      ),
+    );
+
+    await renderPage();
+
+    // What is asserted is that the markings differ, not which colour
+    // each one takes.
+    const frozen = screen.getByText("Cut-over in progress").dataset.tone;
+    expect(frozen).not.toEqual(
+      screen.getByText("Managed by the Operator").dataset.tone,
+    );
+    expect(frozen).not.toEqual(screen.getByText("Defined").dataset.tone);
+  });
+
   it("names a defined agent's operator and links to it", async () => {
     await renderPage();
 

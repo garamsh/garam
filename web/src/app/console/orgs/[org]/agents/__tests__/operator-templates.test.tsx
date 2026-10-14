@@ -139,7 +139,7 @@ describe("control service templates", () => {
     ).toBeNull();
     expect(
       screen.getByText(
-        "Hosted's delegation does not include agent-template:publish.",
+        "Hosted's delegation does not include “Publish template versions”.",
       ),
     ).toBeInTheDocument();
     expect(
@@ -186,5 +186,34 @@ describe("control service templates", () => {
     );
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(posted).toHaveLength(1);
+  });
+
+  it("keeps a typed draft when the publish dialog is closed and opened again", async () => {
+    controlService();
+    const user = userEvent.setup();
+    renderPanel();
+
+    await user.click(
+      await screen.findByRole("button", { name: "Publish version" }),
+    );
+    const dialog = await screen.findByRole("dialog", {
+      name: "Publish a template version",
+    });
+    expect(within(dialog).getByLabelText("Template")).toHaveValue("");
+    await user.type(within(dialog).getByLabelText("Template"), "drafted");
+    await user.keyboard("{Escape}");
+    await vi.waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+
+    await user.click(screen.getByRole("button", { name: "Publish version" }));
+
+    // The control: the field was empty before it was typed into, so
+    // what reopened is the draft and not a default.
+    expect(
+      within(
+        await screen.findByRole("dialog", {
+          name: "Publish a template version",
+        }),
+      ).getByLabelText("Template"),
+    ).toHaveValue("drafted");
   });
 });

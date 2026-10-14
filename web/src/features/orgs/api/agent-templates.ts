@@ -3,7 +3,7 @@ import { z } from "zod";
 import { garamFetchAuthenticated, parserFor } from "@/lib/garam";
 import type { components } from "@/types/api";
 
-import { parseGrn } from "../grn";
+import { parseGrn } from "@/lib/grn";
 import { orgPath, refusableRead, type RefusableRead } from "./orgs";
 
 /**

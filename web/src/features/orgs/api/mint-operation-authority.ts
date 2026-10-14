@@ -6,6 +6,7 @@ import {
   GaramApiError,
   GaramUnreachableError,
   garamFetchAuthenticated,
+  refusal,
 } from "@/lib/garam";
 import {
   CONTRACT_VERSION,
@@ -76,7 +77,7 @@ export async function mintOperationAuthority(
     if (error instanceof GaramUnreachableError)
       return { status: "unavailable" };
     if (error instanceof GaramApiError) {
-      return { status: "refused", message: error.message };
+      return { status: "refused", message: refusal(error).message };
     }
     throw error;
   }

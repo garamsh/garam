@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -11,23 +12,34 @@ import {
 const initialState: AcceptInvitationState = { status: "idle" };
 
 /** Carries the token out of the URL and into the accept action. */
-export function AcceptInvitationForm({ token }: { token: string }) {
+export function AcceptInvitationForm({
+  token,
+  orgName,
+}: {
+  token: string;
+  orgName: string;
+}) {
   const [state, formAction, pending] = useActionState(
     acceptInvitation,
     initialState,
   );
 
   return (
-    <form action={formAction} className="flex flex-col items-start gap-4">
+    <form action={formAction} className="flex flex-col items-start gap-3">
       <input type="hidden" name="token" value={token} />
       {state.status === "error" && (
         <p role="alert" className="text-sm text-destructive">
           {state.message}
         </p>
       )}
-      <Button type="submit" disabled={pending}>
-        {pending ? "Accepting…" : "Accept invitation"}
-      </Button>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button type="submit" disabled={pending}>
+          {pending ? "Joining…" : `Join ${orgName}`}
+        </Button>
+        <Button asChild variant="ghost">
+          <Link href="/console/orgs">Not now</Link>
+        </Button>
+      </div>
     </form>
   );
 }

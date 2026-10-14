@@ -245,7 +245,7 @@ describe("agent subjects", () => {
 
     expect(agents.map((subject) => subject.label)).toEqual([
       "Scout (9f2ac1b40d8e7a35) · awaiting operator",
-      "1c3d5e7f90a2b4c6",
+      "Unnamed agent (1c3d5e7f90a2b4c6)",
     ]);
     expect(describeSubject(fieldAgent.agentGrn, catalogs)).toMatchObject({
       kind: "agent",

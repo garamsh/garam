@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createInvitation } from "@/features/orgs/api/create-invitation";
 import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
+import { REFUSAL_COPY } from "@/lib/refusal-copy";
 
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
@@ -59,7 +60,7 @@ describe("createInvitation", () => {
     server.use(
       http.post(`${API_URL}/orgs/acme/invitations`, () =>
         HttpResponse.json(
-          { kind: "denied", message: "requires the admin role" },
+          { kind: "permission_denied", message: "requires the admin role" },
           { status: 403 },
         ),
       ),
@@ -72,7 +73,7 @@ describe("createInvitation", () => {
 
     expect(state).toEqual({
       status: "error",
-      message: "requires the admin role",
+      message: REFUSAL_COPY.permissionDenied,
     });
   });
 });

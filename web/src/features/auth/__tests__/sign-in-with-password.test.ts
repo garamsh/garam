@@ -5,6 +5,7 @@ import { signInWithPassword } from "@/features/auth/api/sign-in-with-password";
 import { PASSWORD_REFUSED } from "@/lib/password-credentials";
 import { API_URL, alice } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
+import { REFUSAL_COPY } from "@/lib/refusal-copy";
 
 // `redirect()` throws a control-flow error the router catches; the
 // test only needs to observe where it was sent.
@@ -99,6 +100,35 @@ describe("signInWithPassword", () => {
     ]);
   });
 
+  it("lands where the visitor was going, and only inside the console", async () => {
+    accepts();
+
+    await expect(
+      signInWithPassword(
+        { status: "idle" },
+        form({
+          username: "alice",
+          password: PASSWORD,
+          next: "/console/invitations/secret-token",
+        }),
+      ),
+    ).rejects.toThrow(/^NEXT_REDIRECT:\/console\/invitations\/secret-token$/);
+
+    // The control: a return path off the console is dropped rather
+    // than followed, so the landing above is the path and not a
+    // redirect that goes wherever it is told.
+    await expect(
+      signInWithPassword(
+        { status: "idle" },
+        form({
+          username: "alice",
+          password: PASSWORD,
+          next: "https://evil.example/console",
+        }),
+      ),
+    ).rejects.toThrow(/^NEXT_REDIRECT:\/console$/);
+  });
+
   it("carries the Secure a backend on HTTPS marks the session with", async () => {
     planted.length = 0;
     accepts(`${SET_COOKIE}; Secure`);
@@ -186,7 +216,7 @@ describe("signInWithPassword", () => {
       ),
     ).resolves.toEqual({
       status: "error",
-      message: "too many password verifications are live",
+      message: REFUSAL_COPY.tooManyRequests,
     });
   });
 
@@ -202,7 +232,7 @@ describe("signInWithPassword", () => {
       ),
     ).resolves.toEqual({
       status: "error",
-      message: "the garam API could not be reached",
+      message: REFUSAL_COPY.unreachable,
     });
   });
 

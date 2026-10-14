@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { AttachPolicyForm } from "@/app/console/orgs/[org]/permissions/_components/attach-policy-form";
 import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
+import { REFUSAL_COPY } from "@/lib/refusal-copy";
 
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
@@ -65,7 +66,7 @@ describe("attach policy form", () => {
     await user.click(screen.getByRole("button", { name: "Attach" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "permission denied",
+      REFUSAL_COPY.permissionDenied,
     );
     expect(posted).toEqual([{ subjectGrn: ALICE }]);
     expect(screen.getByLabelText("Team, person or agent")).toHaveValue(ALICE);

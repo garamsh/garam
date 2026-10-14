@@ -67,7 +67,7 @@ export async function createPolicy(
     // A refused document, a refusal or an outage is a state the form
     // renders, not a throw: the boundary would replace the form and
     // the document typed into it.
-    return refusal(error);
+    return refusal(error, "createPolicy");
   }
 
   revalidatePath(`/console/orgs/${org}/permissions`, "layout");

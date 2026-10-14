@@ -20,7 +20,7 @@ function form(entries: Record<string, string>): FormData {
 }
 
 describe("acceptInvitation", () => {
-  it("accepts the token and lands on the organization list", async () => {
+  it("accepts the token and lands in the organization it named", async () => {
     server.use(
       http.post(`${API_URL}/invitations/secret-token/accept`, () =>
         HttpResponse.json({
@@ -33,18 +33,27 @@ describe("acceptInvitation", () => {
 
     await expect(
       acceptInvitation({ status: "idle" }, form({ token: "secret-token" })),
-    ).rejects.toThrow("NEXT_REDIRECT:/console/orgs");
+    ).rejects.toThrow("NEXT_REDIRECT:/console/orgs/acme");
   });
 
-  it.each([404, 409])(
-    "surfaces the error for a missing or spent token (%i)",
-    async (status) => {
+  it.each([
+    [
+      404,
+      "not_found",
+      "This invitation link isn't valid. Check that you opened the whole link, or ask for a new invitation.",
+    ],
+    [
+      409,
+      "failed_precondition",
+      "This invitation can no longer be used: it was already accepted or it has expired. Ask an admin of the organization for a new one.",
+    ],
+    [409, "already_exists", "You're already a member of this organization."],
+  ])(
+    "says why a %i %s refusal stopped the join, in its own words",
+    async (status, kind, message) => {
       server.use(
         http.post(`${API_URL}/invitations/spent/accept`, () =>
-          HttpResponse.json(
-            { kind: "conflict", message: "invitation already accepted" },
-            { status },
-          ),
+          HttpResponse.json({ kind, message: "server text" }, { status }),
         ),
       );
 
@@ -53,10 +62,7 @@ describe("acceptInvitation", () => {
         form({ token: "spent" }),
       );
 
-      expect(state).toEqual({
-        status: "error",
-        message: "invitation already accepted",
-      });
+      expect(state).toEqual({ status: "error", message });
     },
   );
 });

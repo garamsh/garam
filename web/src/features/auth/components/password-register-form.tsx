@@ -18,15 +18,20 @@ import {
 const initialState: RegisterWithPasswordState = { status: "idle" };
 
 /**
- * Registers the account an invitation names (ADR-0041). The token is a
- * field rather than a URL segment: the invitation reaches its holder as
- * a link into the console, which no account can open yet, so this page
- * takes what that link carries.
+ * Registers the account an invitation names (ADR-0041).
+ *
+ * Opened from an invitation link, the page already holds the token and
+ * hands it in as `invitationToken`: it travels as a hidden field, and
+ * nobody copies it by hand. Opened without one, the form asks for it.
  *
  * The hints state the bounds the action holds, so a person meets them
  * before submitting rather than after.
  */
-export function PasswordRegisterForm() {
+export function PasswordRegisterForm({
+  invitationToken: invited = null,
+}: {
+  invitationToken?: string | null;
+}) {
   const [state, formAction, pending] = useActionState(
     registerWithPassword,
     initialState,
@@ -35,28 +40,33 @@ export function PasswordRegisterForm() {
   // username are held here: a refusal that cleared them would cost a
   // person the invitation they pasted. The password is not held — the
   // reset leaves the field empty for the next attempt.
-  const [invitationToken, setInvitationToken] = useState("");
+  const [invitationToken, setInvitationToken] = useState(invited ?? "");
   const [username, setUsername] = useState("");
 
   return (
     <form action={formAction} className="flex w-full flex-col gap-4">
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="invitationToken">Invitation token</Label>
-        <Input
-          id="invitationToken"
-          name="invitationToken"
-          required
-          value={invitationToken}
-          onChange={(event) => setInvitationToken(event.target.value)}
-          autoComplete="off"
-          spellCheck={false}
-          className="font-mono"
-          aria-describedby="invitation-hint"
-        />
-        <p id="invitation-hint" className="text-sm text-muted-foreground">
-          The last part of the invitation link you were sent.
-        </p>
-      </div>
+      {invited !== null ? (
+        <input type="hidden" name="invitationToken" value={invited} />
+      ) : (
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="invitationToken">Invitation token</Label>
+          <Input
+            id="invitationToken"
+            name="invitationToken"
+            required
+            value={invitationToken}
+            onChange={(event) => setInvitationToken(event.target.value)}
+            autoComplete="off"
+            spellCheck={false}
+            className="font-mono"
+            aria-describedby="invitation-hint"
+          />
+          <p id="invitation-hint" className="text-sm text-muted-foreground">
+            The last part of the invitation link you were sent. Opening the link
+            itself fills this in.
+          </p>
+        </div>
+      )}
       <div className="flex flex-col gap-2">
         <Label htmlFor="username">Username</Label>
         <Input

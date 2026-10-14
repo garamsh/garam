@@ -6,8 +6,13 @@ import {
   PASSWORD_MIN_LENGTH,
   USERNAME_MAX_LENGTH,
 } from "@/lib/password-credentials";
-import { API_URL, aliceMembership } from "@/testing/mocks/handlers";
+import {
+  API_URL,
+  acmeInvitation,
+  aliceMembership,
+} from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
+import { REFUSAL_COPY } from "@/lib/refusal-copy";
 
 // `redirect()` throws a control-flow error the router catches; the
 // test only needs to observe where it was sent.
@@ -59,12 +64,17 @@ function recordRegistrations() {
         },
       });
     }),
+    // Read back once the account exists, to land in the organization
+    // the invitation joined it to: spent by now, and still naming it.
+    http.get(`${API_URL}/invitations/${TOKEN}`, () =>
+      HttpResponse.json({ ...acmeInvitation, state: "accepted" }),
+    ),
   );
   return posted;
 }
 
 describe("registerWithPassword", () => {
-  it("posts the invitation, the username and the password, and plants the session", async () => {
+  it("posts the invitation, the username and the password, plants the session, and lands in the organization joined", async () => {
     planted.length = 0;
     const posted = recordRegistrations();
 
@@ -77,7 +87,7 @@ describe("registerWithPassword", () => {
           password: PASSWORD,
         }),
       ),
-    ).rejects.toThrow("NEXT_REDIRECT:/console");
+    ).rejects.toThrow(/^NEXT_REDIRECT:\/console\/orgs\/acme$/);
 
     expect(posted).toEqual([
       { invitationToken: TOKEN, username: "alice", password: PASSWORD },
@@ -117,7 +127,7 @@ describe("registerWithPassword", () => {
     ]);
     expect(state).toEqual({
       status: "error",
-      message: "invitation not found",
+      message: REFUSAL_COPY.invitationNotFound,
     });
     expect(JSON.stringify(state)).not.toContain(PASSWORD);
   });
@@ -245,7 +255,7 @@ describe("registerWithPassword", () => {
       ),
     ).resolves.toEqual({
       status: "error",
-      message: "user: already exists",
+      message: "That username is taken. Choose another one.",
     });
   });
 
@@ -267,7 +277,7 @@ describe("registerWithPassword", () => {
       ),
     ).resolves.toEqual({
       status: "error",
-      message: "the garam API could not be reached",
+      message: REFUSAL_COPY.unreachable,
     });
   });
 

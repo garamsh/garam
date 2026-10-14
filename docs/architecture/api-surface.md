@@ -98,17 +98,27 @@ either through a redirect provider — Google is the only one left
 — or against a password garam verifies itself, which is an endpoint
 rather than a provider
 ([ADR-0041](./adr/0041-a-password-is-garams-own-credential-verified-by-argon2id.md)).
-Starting a login, its callback, the provider list, registering an
-account from an invitation, and signing in with a password carry no
-credential, as do the probes and metrics this process serves from the
-same router. Which operations those are is read from
-`api/openapi.yaml` rather than remembered: an operation carrying
-`security: []` opts out of the cookie requirement the file applies to
-every other one. The login write rate is bounded at the store
+Starting a login, its callback, the provider list, reading an
+invitation, registering an account from one, and signing in with a
+password carry no credential, as do the probes and metrics this
+process serves from the same router. Which operations those are is
+read from `api/openapi.yaml` rather than remembered: an operation
+carrying `security: []` opts out of the cookie requirement the file
+applies to every other one. The login write rate is bounded at the store
 ([ADR-0030](./adr/0030-the-login-write-rate-is-bounded-at-the-store.md)).
 A callback that finds no live record of the login it claims to
 complete is refused as unauthenticated
 ([ADR-0028](./adr/0028-oauth-state-is-a-server-side-record.md)).
+Reading an invitation (`GET /invitations/{token}`) admits on the
+token alone, because possession of it is the whole claim
+([ADR-0006](./adr/0006-invitation-tokens.md)). It answers the
+organization's identifier and name, the role and whether the
+invitation is pending, accepted or expired, which is what accepting
+it would reveal, and nothing about who invited or who belongs. An
+unknown token, and one whose organization is gone, answer the
+not-found body the accept operation answers. The request line names
+the route pattern rather than the path, so the token does not reach
+the log.
 
 **Machine.** A client certificate whose SAN URI holds the caller's GRN
 and nothing else — no roles and no claims

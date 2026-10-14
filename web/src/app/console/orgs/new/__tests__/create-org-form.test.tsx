@@ -7,6 +7,7 @@ import { CreateOrgForm } from "@/app/console/orgs/new/_components/create-org-for
 import { enter } from "@/testing/enter";
 import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
+import { REFUSAL_COPY } from "@/lib/refusal-copy";
 
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
@@ -41,7 +42,10 @@ describe("create organization form", () => {
 
     const form = await submitName("Acme");
 
-    expect(await form.findByText("that name is taken")).toBeInTheDocument();
+    expect(
+      await form.findByText(REFUSAL_COPY.alreadyExists),
+    ).toBeInTheDocument();
+    expect(form.queryByText("that name is taken")).toBeNull();
   });
 
   it("keeps the form when the API never answers", async () => {

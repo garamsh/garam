@@ -100,8 +100,8 @@ starts with it.
 | Path | For | Reached by |
 |---|---|---|
 | `/` | the public landing page | anyone |
-| `/login` | sign in — a password form, and a provider button only where the backend answers with that provider; a visitor already holding a session is sent on to the console | anyone |
-| `/register` | turn an invitation into a password account ([ADR-0041](./adr/0041-a-password-is-garams-own-credential-verified-by-argon2id.md)) | anyone holding an invitation token |
+| `/login` | sign in — a password form, and a provider button only where the backend answers with that provider; signing in lands on the console path the visitor was sent here from, and a visitor already holding a session is sent on to it | anyone |
+| `/register` | turn an invitation into a password account ([ADR-0041](./adr/0041-a-password-is-garams-own-credential-verified-by-argon2id.md)), landing in the organization it joined; reached from an invitation link the token is filled in, and one no longer usable is said instead of the form | anyone holding an invitation token |
 | `/console/*` | the signed-in application | a visitor carrying a session cookie |
 | `/healthz`, `/readyz` | the two probes, spelled as every other process spells them ([ADR-0023](./adr/0023-web-probes.md)) | anything that can open the port |
 | `/api/*` | the same-origin rewrite onto the browser-facing listener ([ADR-0009](./adr/0009-web-frontend.md)) | the browser |
@@ -187,6 +187,16 @@ sections' former addresses, redirect to Teams, People and Permissions
 Organizations are created, and an invitation is accepted at
 `/console/invitations/{token}` — which is itself behind sign-in,
 because accepting one joins an existing account to an organization.
+The page reads the invitation first (`GET /invitations/{token}`, which
+needs no session) and names the organization and role it admits to;
+one already used, expired or unknown is said, with nothing to accept.
+Accepting lands in that organization. A visitor without a session is
+sent to `/login` with the path as its `next` parameter, which
+`/login` and `/register` carry between them and return to once a
+session exists, so the token survives either way in
+(`web/src/lib/return-path.ts`, which returns only to a console path).
+The Google round trip carries no return path and lands on the
+console.
 
 No organization, group, project or user is addressed by its GRN
 anywhere in the interface. A policy document is authored text naming
@@ -203,6 +213,13 @@ resources by the identifier segment the API's own paths take
 backend anywhere under `web/src/`; every read and every Server Action
 goes through it. That is what makes the boundary checkable rather than
 asserted: one file to read to know everything the application asks for.
+
+**It words what it refuses.** A Server Action garam refused returns
+the sentence `web/src/lib/refusal-copy.ts` writes for the answer's
+HTTP status and `kind`, read for the operation that asked where the
+pair means something particular to it, and never one matched from the
+English of `message`. That text reaches a person only quoted inside
+the generic sentence for a refusal nothing maps.
 
 **It checks what it hands back.** Every read gives the seam a parser
 for what `api/openapi.yaml` says the operation carries, so a body that

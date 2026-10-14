@@ -3,12 +3,9 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import {
-  GaramApiError,
-  GaramUnreachableError,
-  garamRequest,
-} from "@/lib/garam";
+import { GaramApiError, garamRequest, refusal } from "@/lib/garam";
 import { PASSWORD_REFUSED } from "@/lib/password-credentials";
+import { RETURN_PARAM, safeReturnPath } from "@/lib/return-path";
 import type { components } from "@/types/api";
 
 import { keepSessionCookie } from "./session-cookie";
@@ -24,7 +21,8 @@ export type SignInWithPasswordState =
 const Schema = z.object({ username: z.string(), password: z.string() });
 
 /**
- * Signs in with a username and a password and lands on the console.
+ * Signs in with a username and a password and lands where the visitor
+ * was going — the return path the form carries — or on the console.
  * The password travels in this request's body and nowhere else: no
  * path, no query, and no field of the state this returns.
  */
@@ -50,24 +48,18 @@ export async function signInWithPassword(
     });
     await keepSessionCookie(response);
   } catch (error) {
-    if (error instanceof GaramApiError) {
-      // A refused credential renders the console's own sentence rather
-      // than the API's, so the one answer the interface gives rests on
-      // nothing it cannot check. Every other status keeps the API's
-      // message: the bound of ADR-0041 answers 429 here, and reporting
-      // that as a wrong password would blame a person for the load.
-      return {
-        status: "error",
-        message: error.status === 401 ? PASSWORD_REFUSED : error.message,
-      };
+    // A refused credential renders the console's own sentence, so the
+    // one answer the interface gives rests on nothing it cannot check.
+    // Every other refusal reads as `refusal` writes it: the bound of
+    // ADR-0041 answers 429 here, and reporting that as a wrong password
+    // would blame a person for the load. An unreachable API is a state
+    // the form renders, not a throw: the boundary would replace the
+    // form and lose what was typed into it.
+    if (error instanceof GaramApiError && error.status === 401) {
+      return { status: "error", message: PASSWORD_REFUSED };
     }
-    // An unreachable API is a state the form renders, not a throw: the
-    // boundary would replace the form and lose what was typed into it.
-    if (error instanceof GaramUnreachableError) {
-      return { status: "error", message: error.message };
-    }
-    throw error;
+    return refusal(error);
   }
 
-  redirect("/console");
+  redirect(safeReturnPath(formData.get(RETURN_PARAM)) ?? "/console");
 }

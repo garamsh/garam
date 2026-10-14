@@ -1,8 +1,13 @@
 import Link from "next/link";
 
+import { CopyId } from "@/components/copy-id";
 import { Card, CardTitle } from "@/components/ui/card";
-import type { Agent, AgentDefinition, DirectoryAgent } from "@/features/orgs";
-import { cn } from "@/lib/utils";
+import {
+  UNNAMED_AGENT,
+  type Agent,
+  type AgentDefinition,
+  type DirectoryAgent,
+} from "@/features/orgs";
 
 import { CutoverBadge } from "../../../../_components/cutover-marker";
 
@@ -23,8 +28,9 @@ export type RosterEntry = {
 /**
  * The organization's agents: every defined agent, claimed or not, and
  * every reported agent no definition read names. Each links to its
- * page; one with no definition, as a control service creates, is named
- * by its identifier. A reported one without a name is said to have no
+ * page; one with no definition, as a control service creates, is called
+ * an unnamed agent, and every one offers its identifier to copy beneath
+ * the name rather than in its place. A reported one without a name is said to have no
  * definition only where the definitions were read: where they were
  * refused, one may exist unread.
  */
@@ -46,23 +52,20 @@ export function AgentRoster({
               <CardTitle className="text-base">
                 <Link
                   href={`/console/orgs/${org}/agents/${directory.identifier}`}
-                  className={cn(
-                    "wrap-anywhere underline-offset-4 hover:underline focus-visible:underline",
-                    directory.name === null && "font-mono",
-                  )}
+                  className="wrap-anywhere underline-offset-4 hover:underline focus-visible:underline"
                 >
-                  {directory.name ?? directory.identifier}
+                  {directory.name ?? UNNAMED_AGENT}
                 </Link>
               </CardTitle>
-              {directory.name === null ? (
+              <CopyId
+                value={directory.identifier}
+                label={directory.name ?? UNNAMED_AGENT}
+              />
+              {directory.name === null && (
                 <p className="text-xs text-muted-foreground">
                   {definitionsRead
                     ? "Reported by an operator without a definition here."
                     : "Reported by an operator. Its definition is not checked."}
-                </p>
-              ) : (
-                <p className="font-mono text-xs text-muted-foreground">
-                  {directory.identifier}
                 </p>
               )}
             </div>

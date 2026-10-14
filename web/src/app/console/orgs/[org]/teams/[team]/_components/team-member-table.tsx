@@ -1,3 +1,4 @@
+import { CopyId } from "@/components/copy-id";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -7,7 +8,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { KIND_LABEL, type Lookup } from "@/features/orgs";
+import { KIND_LABEL, UNNAMED_AGENT, type Lookup } from "@/features/orgs";
 
 import { RemoveTeamMemberForm } from "./remove-team-member-form";
 import { isNamedAgent, memberLabel, type TeamMember } from "./team-member";
@@ -60,12 +61,10 @@ export function TeamMemberTable({
           <TableRow key={member.grn}>
             <TableCell className="align-top font-medium whitespace-normal">
               {member.kind === "agent" ? (
-                // An agent no definition names is called by its
-                // identifier; a named one has its identifier below.
-                <span
-                  className={isNamedAgent(member) ? undefined : "font-mono"}
-                >
-                  {member.label}
+                // An agent no definition names is called unnamed rather
+                // than by its identifier, which is offered below to copy.
+                <span>
+                  {isNamedAgent(member) ? member.label : UNNAMED_AGENT}
                 </span>
               ) : (
                 (member.label ?? (
@@ -78,11 +77,15 @@ export function TeamMemberTable({
                   </span>
                 ))
               )}
-              {(member.kind !== "agent" || isNamedAgent(member)) && (
-                <span className="block font-mono text-xs font-normal text-muted-foreground">
-                  {member.identifier}
-                </span>
-              )}
+              <CopyId
+                value={member.identifier}
+                label={
+                  member.kind === "agent" && !isNamedAgent(member)
+                    ? UNNAMED_AGENT
+                    : (member.label ?? "this member")
+                }
+                className="flex"
+              />
               {member.lookup === "missing" && (
                 <span className="block text-xs font-normal text-destructive">
                   Not found in this organization

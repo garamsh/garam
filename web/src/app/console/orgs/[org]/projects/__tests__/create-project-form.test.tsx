@@ -51,7 +51,7 @@ describe.each(RESOURCES)(
       expect(screen.getAllByRole("textbox")).toHaveLength(1);
     });
 
-    it("posts the name typed into it and reports the identifier back", async () => {
+    it("posts the name typed into it, confirms it by name, and offers the identifier to copy", async () => {
       const posted = recordCreates();
       const user = userEvent.setup();
       const { container } = render(<CreateProjectForm org="acme" />);
@@ -60,7 +60,14 @@ describe.each(RESOURCES)(
       await enter(user, form.getByLabelText(label), typed);
       await user.click(form.getByRole("button", { name: submit }));
 
-      expect(await form.findByText(identifier)).toBeInTheDocument();
+      // The sentence names the project; the identifier is no part of
+      // it, and reaches a person only through the copy control.
+      expect(await form.findByText(`Created ${typed}.`)).toBeInTheDocument();
+      expect(
+        form.getByRole("button", {
+          name: `Copy the identifier of ${typed}: ${identifier}`,
+        }),
+      ).toBeInTheDocument();
       expect(posted).toEqual([{ name: typed }]);
       // The console addresses a resource by the identifier segment and
       // prints no GRN (ADR-0011), the confirmation included.
@@ -85,6 +92,8 @@ describe.each(RESOURCES)(
       await enter(user, form.getByLabelText(label), typed);
       await user.click(form.getByRole("button", { name: submit }));
 
+      // Presence: the server's text stands inside the generic sentence
+      // for a refusal nothing maps.
       expect(await form.findByRole("alert")).toHaveTextContent(
         `this organization already holds a ${kind} named ${typed}`,
       );

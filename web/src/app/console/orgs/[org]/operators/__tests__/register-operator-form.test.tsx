@@ -8,6 +8,7 @@ import { RegisterOperatorForm } from "@/app/console/orgs/[org]/operators/_compon
 import { enter } from "@/testing/enter";
 import { API_URL, fieldOneRegistered } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
+import { REFUSAL_COPY } from "@/lib/refusal-copy";
 
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
@@ -223,7 +224,7 @@ describe("register operator form", () => {
     await user.click(form.getByRole("button", { name: "Register operator" }));
 
     expect(
-      await form.findByText("operator is already registered"),
+      await form.findByText(REFUSAL_COPY.alreadyExists),
     ).toBeInTheDocument();
     expect(form.getByLabelText("Identifier")).toHaveValue("field-one");
   });

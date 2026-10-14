@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { RemoveTeamMemberForm } from "@/app/console/orgs/[org]/teams/[team]/_components/remove-team-member-form";
 import { API_URL, alice } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
+import { REFUSAL_COPY } from "@/lib/refusal-copy";
 
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
@@ -107,7 +108,7 @@ describe("remove team member form", () => {
     await user.click(screen.getByRole("button", { name: "Confirm removal" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "permission denied",
+      REFUSAL_COPY.permissionDenied,
     );
 
     // The control: the same confirmation garam accepts removes the

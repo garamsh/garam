@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createOrg } from "@/features/orgs/api/create-org";
 import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
+import { unmappedRefusalCopy } from "@/lib/refusal-copy";
 
 // `redirect()` throws a control-flow error the router catches; the
 // test only needs to observe where it was sent.
@@ -88,7 +89,7 @@ describe("createOrg", () => {
     server.use(
       http.post(`${API_URL}/orgs`, () =>
         HttpResponse.json(
-          { kind: "invalid", message: "name is required" },
+          { kind: "invalid_argument", message: "name is required" },
           { status: 400 },
         ),
       ),
@@ -96,6 +97,9 @@ describe("createOrg", () => {
 
     const state = await createOrg({ status: "idle" }, form({ name: "x" }));
 
-    expect(state).toEqual({ status: "error", message: "name is required" });
+    expect(state).toEqual({
+      status: "error",
+      message: unmappedRefusalCopy("name is required"),
+    });
   });
 });

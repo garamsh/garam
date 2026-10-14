@@ -83,15 +83,19 @@ export function lookUpAgent(
 }
 
 /**
+ * What an agent garam holds no name for is called: one a control
+ * service created has no definition, and its identifier never stands in
+ * a name's place.
+ */
+export const UNNAMED_AGENT = "Unnamed agent";
+
+/**
  * How an agent is offered in a selector: its name with the identifier
- * beside it, since names repeat, and a note where no operator has
- * reported it yet.
+ * beside it, since names repeat and a selector offers nothing else to
+ * tell two apart, and a note where no operator has reported it yet.
  */
 export function agentChoiceLabel(agent: DirectoryAgent): string {
-  const base =
-    agent.name === null
-      ? agent.identifier
-      : `${agent.name} (${agent.identifier})`;
+  const base = `${agent.name ?? UNNAMED_AGENT} (${agent.identifier})`;
   return agent.reported === "awaiting" ? `${base} · awaiting operator` : base;
 }
 

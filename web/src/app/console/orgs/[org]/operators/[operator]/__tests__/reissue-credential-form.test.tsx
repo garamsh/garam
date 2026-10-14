@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ReissueCredentialForm } from "@/app/console/orgs/[org]/operators/[operator]/_components/reissue-credential-form";
 import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
+import { REFUSAL_COPY } from "@/lib/refusal-copy";
 
 // `revalidatePath` needs a request scope the test does not run in; the
 // action's own answer is what the form renders.
@@ -101,7 +102,7 @@ describe("re-issue credential form", () => {
     await user.click(screen.getByRole("button", { name: "Confirm re-issue" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "permission denied",
+      REFUSAL_COPY.permissionDenied,
     );
     expect(screen.queryByLabelText("Credential")).not.toBeInTheDocument();
   });

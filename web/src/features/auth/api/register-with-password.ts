@@ -3,11 +3,8 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 
-import {
-  GaramApiError,
-  GaramUnreachableError,
-  garamRequest,
-} from "@/lib/garam";
+import { joinedOrgPath } from "@/features/orgs";
+import { garamRequest, refusal } from "@/lib/garam";
 import { parsePassword, parseUsername } from "@/lib/password-credentials";
 import type { components } from "@/types/api";
 
@@ -24,11 +21,12 @@ const Schema = z.object({
 });
 
 /**
- * Creates the account an invitation names, signs it in, and lands on
- * the console. There is no registration without an invitation:
- * organizations grow by invitation rather than by signup (ADR-0006),
- * and the token is what authorizes the account (ADR-0041). The
- * password travels in this request's body and nowhere else.
+ * Creates the account an invitation names, signs it in, and lands in
+ * the organization the invitation joined it to. There is no
+ * registration without an invitation: organizations grow by invitation
+ * rather than by signup (ADR-0006), and the token is what authorizes
+ * the account (ADR-0041). The password travels in this request's body
+ * and nowhere else.
  */
 export async function registerWithPassword(
   _state: RegisterWithPasswordState,
@@ -65,19 +63,10 @@ export async function registerWithPassword(
     });
     await keepSessionCookie(response);
   } catch (error) {
-    // The API's own message: what it refuses here is the invitation or
-    // the username, neither of which is a credential to keep quiet
-    // about.
-    if (error instanceof GaramApiError) {
-      return { status: "error", message: error.message };
-    }
     // An unreachable API is a state the form renders, not a throw: the
     // boundary would replace the form and lose what was typed into it.
-    if (error instanceof GaramUnreachableError) {
-      return { status: "error", message: error.message };
-    }
-    throw error;
+    return refusal(error, "registerPassword");
   }
 
-  redirect("/console");
+  redirect(await joinedOrgPath(parsed.data.invitationToken));
 }

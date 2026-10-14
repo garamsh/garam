@@ -1,3 +1,4 @@
+import { CopyId } from "@/components/copy-id";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -53,9 +54,11 @@ export function AttachmentTable({
                 </span>
               )}
               {subject.label !== subject.identifier && (
-                <span className="block font-mono text-xs font-normal text-muted-foreground">
-                  {subject.identifier}
-                </span>
+                <CopyId
+                  value={subject.identifier}
+                  label={subject.label ?? "this subject"}
+                  className="flex"
+                />
               )}
               {subject.lookup === "missing" && (
                 <span className="block text-xs font-normal text-destructive">

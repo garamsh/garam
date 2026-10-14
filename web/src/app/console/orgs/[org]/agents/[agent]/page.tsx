@@ -2,9 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { CopyId } from "@/components/copy-id";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
+  UNNAMED_AGENT,
   getAgentDefinition,
   getOrg,
   hostedFor,
@@ -93,20 +95,33 @@ export default async function AgentPage({ params }: Params) {
       : undefined;
   if (definition.data === null && reported === undefined) notFound();
   const agentGrn = definition.data?.agentGrn ?? reported?.grn ?? "";
-  const name = definition.data?.name ?? agent;
+  // An agent a control service created carries no name in garam, and
+  // its identifier is never put in a name's place: it is offered to copy
+  // beside the title instead.
+  const name = definition.data?.name || UNNAMED_AGENT;
   const assignee = reported?.assignment?.assigneeGrn;
 
   return (
     <>
       <ItemCrumb label={name} />
-      <PageHeader title={name} description={`Identifier ${agent}`}>
-        <Button asChild variant="outline">
-          <Link
-            href={`${orgHref(org, "permissions")}/attachments?subject=${encodeURIComponent(`agent:${agent}`)}`}
-          >
-            Manage policies
-          </Link>
-        </Button>
+      <PageHeader
+        title={name}
+        description={
+          definition.data === null
+            ? "Created by a control service. garam holds what its operator reports, and no definition."
+            : "An agent this organization defined."
+        }
+      >
+        <div className="flex flex-wrap items-center gap-3">
+          <CopyId value={agent} label={name} />
+          <Button asChild variant="outline">
+            <Link
+              href={`${orgHref(org, "permissions")}/attachments?subject=${encodeURIComponent(`agent:${agent}`)}`}
+            >
+              Manage policies
+            </Link>
+          </Button>
+        </div>
       </PageHeader>
 
       <section className="flex flex-col gap-3">

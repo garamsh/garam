@@ -9,47 +9,82 @@ import {
   CardHeader,
 } from "@/components/ui/card";
 import { PasswordRegisterForm, getSession } from "@/features/auth";
+import {
+  RETURN_PARAM,
+  safeReturnPath,
+  withReturnPath,
+} from "@/lib/return-path";
 
 import { ApiUnreachableCard } from "../_components/api-unreachable-card";
+import {
+  InvitationContext,
+  readInvitationContext,
+} from "../_components/invitation-context";
 
-/** Head metadata for the register route; Next.js reads it by name. */
-export const metadata: Metadata = { title: "Create an account — garam" };
+/**
+ * Head metadata for the register route; Next.js reads it by name. The
+ * return path can hold an invitation token, so no link followed from
+ * here sends it on as a referrer.
+ */
+export const metadata: Metadata = {
+  title: "Create an account — garam",
+  referrer: "no-referrer",
+};
+
+type Props = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
 
 /**
  * Where an invitation becomes an account. Registration is
- * invitation-only (ADR-0041), so the page asks for the token rather
- * than offering an open form. A visitor already holding a session is
- * sent to the console: registering again would mint a second account
- * and sign this browser into it.
+ * invitation-only (ADR-0041). Reached from an invitation link, the
+ * return path carries its token, so the page names the organization
+ * and role and fills the token in; reached without one, it asks for
+ * the token. An invitation that can no longer be used is said instead
+ * of a form that would be refused. A visitor already holding a session
+ * is sent on: registering again would mint a second account and sign
+ * this browser into it.
  */
-export default async function RegisterPage() {
+export default async function RegisterPage({ searchParams }: Props) {
+  const returnPath = safeReturnPath((await searchParams)[RETURN_PARAM]);
   const session = await getSession();
   if (session.status === "signed-in") {
-    redirect("/console");
+    redirect(returnPath ?? "/console");
   }
   if (session.status === "unreachable") {
     return <ApiUnreachableCard subject="the registration form" />;
   }
+  const invitation = await readInvitationContext(returnPath);
+
   return (
     <Card className="w-full max-w-sm [--card-spacing:--spacing(6)]">
       <CardHeader className="gap-2">
         <h1 className="font-heading text-2xl font-semibold tracking-tight">
-          Create your garam account
+          {invitation?.usable
+            ? `Create an account to join ${invitation.orgName}`
+            : "Create your garam account"}
         </h1>
         <p className="text-sm text-pretty text-muted-foreground">
-          Registration takes an invitation: organizations grow by invitation,
-          not by signup. The account this creates is garam&apos;s own, separate
-          from any Google account you hold.
+          {invitation?.usable
+            ? "Your invitation is already filled in. Choose a username and a password, and you'll join as soon as the account exists."
+            : "Registration takes an invitation: organizations grow by invitation, not by signup."}{" "}
+          The account this creates is garam&apos;s own, separate from any other
+          account you hold.
         </p>
       </CardHeader>
-      <CardContent>
-        <PasswordRegisterForm />
+      <CardContent className="flex flex-col gap-6">
+        {invitation !== null && <InvitationContext context={invitation} />}
+        {invitation?.usable === false ? null : (
+          <PasswordRegisterForm
+            invitationToken={invitation?.usable ? invitation.token : null}
+          />
+        )}
       </CardContent>
       <CardFooter className="flex-col gap-2 text-xs text-muted-foreground">
         <p>
           Already registered?{" "}
           <Link
-            href="/login"
+            href={withReturnPath("/login", returnPath)}
             className="text-foreground underline underline-offset-4"
           >
             Sign in

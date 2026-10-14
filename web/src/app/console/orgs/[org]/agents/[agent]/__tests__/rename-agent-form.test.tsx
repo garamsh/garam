@@ -7,6 +7,7 @@ import { RenameAgentForm } from "@/app/console/orgs/[org]/agents/[agent]/_compon
 import { enter } from "@/testing/enter";
 import { API_URL, fieldAgent } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
+import { REFUSAL_COPY } from "@/lib/refusal-copy";
 
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
@@ -40,7 +41,7 @@ describe("rename agent form", () => {
     await user.click(form.getByRole("button", { name: "Save name" }));
 
     expect(await form.findByRole("alert")).toHaveTextContent(
-      "permission denied",
+      REFUSAL_COPY.permissionDenied,
     );
     expect(name).toHaveValue("Ranger");
 

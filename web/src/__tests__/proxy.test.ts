@@ -13,12 +13,22 @@ function request(path: string, { signedIn = false } = {}) {
 }
 
 describe("proxy", () => {
-  it("sends a visitor without a session cookie to the login page", () => {
-    const response = proxy(request("/console/orgs"));
+  it("sends a visitor without a session cookie to the login page, carrying where they were going", () => {
+    const response = proxy(request("/console/orgs?subject=team"));
 
     expect(response.status).toBe(307);
     expect(response.headers.get("location")).toBe(
-      "http://localhost:3000/login",
+      "http://localhost:3000/login?next=%2Fconsole%2Forgs%3Fsubject%3Dteam",
+    );
+  });
+
+  it("keeps an invitation link's token through the redirect", () => {
+    const response = proxy(request("/console/invitations/tok-123"));
+
+    const location = new URL(response.headers.get("location") ?? "");
+    expect(location.pathname).toBe("/login");
+    expect(location.searchParams.get("next")).toBe(
+      "/console/invitations/tok-123",
     );
   });
 

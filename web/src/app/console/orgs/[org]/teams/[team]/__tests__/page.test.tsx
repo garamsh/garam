@@ -102,7 +102,7 @@ describe("team page", () => {
       "Choose who to add",
       "Bob · Person",
       "Scout (9f2ac1b40d8e7a35) · awaiting operator · Agent",
-      `${slugFromGrn(reportedAgent.grn)} · Agent`,
+      `Unnamed agent (${slugFromGrn(reportedAgent.grn)}) · Agent`,
     ]);
   });
 
@@ -190,7 +190,9 @@ describe("team page", () => {
     const offered = within(screen.getByLabelText("Person or agent"))
       .getAllByRole("option")
       .map((option) => option.textContent);
-    expect(offered).toContain(`${slugFromGrn(reportedAgent.grn)} · Agent`);
+    expect(offered).toContain(
+      `Unnamed agent (${slugFromGrn(reportedAgent.grn)}) · Agent`,
+    );
     expect(
       screen.queryByText(/none of them can be chosen/),
     ).not.toBeInTheDocument();

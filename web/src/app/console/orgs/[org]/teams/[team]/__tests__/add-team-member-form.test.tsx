@@ -67,7 +67,7 @@ describe("add team member form", () => {
     expect(screen.getByRole("group", { name: "Agents" })).toBeInTheDocument();
   });
 
-  it("posts the one chosen and offers nothing to post before a choice", async () => {
+  it("posts the one chosen, says whom it added and goes back to the prompt", async () => {
     const posted: unknown[] = [];
     server.use(
       http.post(MEMBERS, async ({ request }) => {
@@ -78,13 +78,41 @@ describe("add team member form", () => {
     const user = userEvent.setup();
     renderForm({});
 
-    expect(screen.getByRole("button", { name: "Add to team" })).toBeDisabled();
     await choose(user, "field-agent");
     await user.click(screen.getByRole("button", { name: "Add to team" }));
 
-    await vi.waitFor(() =>
-      expect(posted).toEqual([{ memberGrn: reportedAgent.grn }]),
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Added field-agent.",
     );
+    expect(posted).toEqual([{ memberGrn: reportedAgent.grn }]);
+    // The choice goes back to the prompt even while the member is still
+    // offered, as it is here with no page to refresh the list.
+    expect(
+      screen.getByRole("combobox", { name: "Person or agent" }),
+    ).toHaveTextContent("Choose who to add");
+  });
+
+  it("says a choice is needed when sent without one", async () => {
+    const posted: unknown[] = [];
+    server.use(
+      http.post(MEMBERS, async ({ request }) => {
+        posted.push(await request.json());
+        return new HttpResponse(null, { status: 204 });
+      }),
+    );
+    const user = userEvent.setup();
+    renderForm({});
+
+    // The button is live before a choice, as it is before hydration.
+    await user.click(screen.getByRole("button", { name: "Add to team" }));
+
+    const choice = screen.getByRole("combobox", { name: "Person or agent" });
+    await waitFor(() => expect(choice).toHaveAttribute("aria-invalid", "true"));
+    expect(choice).toHaveAccessibleDescription(
+      "Choose a person or an agent to add.",
+    );
+    expect(posted).toEqual([]);
+    expect(screen.getByRole("status")).toHaveTextContent("");
   });
 
   it("attaches a refusal to the choice and sends the same choice again", async () => {
@@ -114,6 +142,7 @@ describe("add team member form", () => {
     expect(choice).toHaveAccessibleDescription(REFUSAL_COPY.permissionDenied);
     // Presence: the trigger shows the option's name and identifier.
     expect(choice).toHaveTextContent(/^field-agent/);
+    expect(screen.getByRole("status")).toHaveTextContent("");
 
     // The control: submitted again untouched, garam accepts the same
     // choice and the error clears.

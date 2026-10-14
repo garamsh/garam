@@ -22,16 +22,22 @@ import type { Candidate } from "./team-member";
 
 const initialState: AddGroupMemberState = { status: "idle" };
 
+/** A choice, and the answer on screen when it was made. */
+type Pick = { grn: string; at: AddGroupMemberState };
+
+/** Whom a submission named, and the answer on screen when it was sent. */
+type Sent = { name: string; at: AddGroupMemberState };
+
 /**
  * Adds a person or an agent of this organization to the team, chosen by
  * name under its type. Only people and agents the team does not already
  * hold are offered, so a member cannot be chosen twice.
  *
- * The select stands outside the `<form>` and its choice is submitted
- * from a hidden input. React resets a form after its action, and the
- * select returns to its first value on a reset of the form holding it,
- * while a hidden input's value is its default; so a refused choice is
- * still the one shown and sent when the form is submitted again.
+ * The choice is sent from a hidden input in the form, so the form posts
+ * before hydration as after it. React resets the form after its action,
+ * and the select answers a reset with its empty default, which is no
+ * choice and is ignored: a refused choice stays chosen. An addition
+ * clears the choice and says whom it added beside the button.
  */
 export function AddTeamMemberForm({
   org,
@@ -55,12 +61,21 @@ export function AddTeamMemberForm({
     addGroupMember,
     initialState,
   );
-  const [chosen, setChosen] = useState("");
-  // Once added, the member is no longer offered, and the choice goes
-  // back to the prompt rather than to whoever is listed first.
-  const choice = candidates.some((candidate) => candidate.grn === chosen)
-    ? chosen
-    : "";
+  const [chosen, setChosen] = useState<Pick | null>(null);
+  const [sent, setSent] = useState<Sent | null>(null);
+  // A choice holds while it is still offered and no addition has
+  // answered since it was made; a refusal keeps it.
+  const choice =
+    chosen !== null &&
+    candidates.some((candidate) => candidate.grn === chosen.grn) &&
+    (state === chosen.at || state.status === "error")
+      ? chosen.grn
+      : "";
+  // Read at submission: an added member is no longer offered.
+  const added =
+    sent !== null && state !== sent.at && state.status === "idle"
+      ? sent.name
+      : null;
   const groups = [
     {
       label: "People",
@@ -105,7 +120,17 @@ export function AddTeamMemberForm({
           </p>
         </div>
       ) : (
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+        <form
+          action={formAction}
+          onSubmit={() => {
+            const name = candidates.find((c) => c.grn === choice)?.name;
+            setSent(name === undefined ? null : { name, at: state });
+          }}
+          className="flex flex-col gap-3 sm:flex-row sm:items-start"
+        >
+          <input type="hidden" name="org" value={org} />
+          <input type="hidden" name="group" value={team} />
+          <input type="hidden" name="member" value={choice} />
           <FormField
             label="Person or agent"
             hint={notes.length > 0 ? notes.join(" ") : undefined}
@@ -113,7 +138,15 @@ export function AddTeamMemberForm({
             className="min-w-0 sm:max-w-sm"
           >
             {(control) => (
-              <Select value={choice} onValueChange={setChosen}>
+              <Select
+                value={choice}
+                onValueChange={(value) => {
+                  // The form's reset answers with the empty default; no
+                  // option is empty, so that is not a choice.
+                  if (value === "") return;
+                  setChosen({ grn: value, at: state });
+                }}
+              >
                 <SelectTrigger {...control} className="w-full">
                   <SelectValue placeholder="Choose who to add" />
                 </SelectTrigger>
@@ -141,15 +174,15 @@ export function AddTeamMemberForm({
               </Select>
             )}
           </FormField>
-          <form action={formAction} className="sm:mt-6">
-            <input type="hidden" name="org" value={org} />
-            <input type="hidden" name="group" value={team} />
-            <input type="hidden" name="member" value={choice} />
-            <Button type="submit" disabled={pending || choice === ""}>
+          <div className="flex items-center gap-3 sm:pt-6">
+            <Button type="submit" disabled={pending}>
               {pending ? "Adding…" : "Add to team"}
             </Button>
-          </form>
-        </div>
+            <span role="status" className="text-muted-foreground">
+              {added !== null ? `Added ${added}.` : ""}
+            </span>
+          </div>
+        </form>
       )}
     </section>
   );

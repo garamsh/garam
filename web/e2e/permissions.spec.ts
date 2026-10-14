@@ -112,7 +112,7 @@ test.describe("permissions", () => {
       .click();
     await expect(
       page.getByText(
-        "policy document: statement : Effect must be Allow or Deny",
+        "This policy document can't be saved. It needs a Version and at least one statement, and every statement needs an Effect of Allow or Deny, an Action and a Resource. Keys other than Version, Statement, Sid, Effect, Action, Resource and Condition aren't allowed.",
         { exact: true },
       ),
     ).toBeVisible();

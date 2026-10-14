@@ -1,4 +1,5 @@
 import {
+  UNNAMED_AGENT,
   agentChoiceLabel,
   directoryAgents,
   kindFromGrn,
@@ -150,18 +151,19 @@ export function isNamedAgent(member: TeamMember): boolean {
 }
 
 /**
- * How a member is named in a sentence: its name, or what it is. A
- * named agent carries its identifier, so two agents of one name are
- * two different sentences.
+ * How a member is named in a sentence: its name, or what it is. An
+ * agent carries its identifier beside the name, or beside "Unnamed
+ * agent" where it has none, so two agents are two different sentences.
  */
 export function memberLabel(member: TeamMember): string {
   if (isNamedAgent(member)) return `${member.label} (${member.identifier})`;
+  if (member.kind === "agent") {
+    return `${UNNAMED_AGENT} (${member.identifier})`;
+  }
   if (member.label !== null) return member.label;
   switch (member.kind) {
     case "person":
       return `the person ${member.identifier}`;
-    case "agent":
-      return `the agent ${member.identifier}`;
     case "unknown":
       return `the unknown member ${member.identifier}`;
   }

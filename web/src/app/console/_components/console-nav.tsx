@@ -89,7 +89,7 @@ export function ConsoleNav({ orgs }: { orgs: readonly ConsoleOrg[] | null }) {
         <Fragment key={group.label}>
           {/* The collapsed rail hides the labels, so a rule marks where
               one group ends. */}
-          <SidebarSeparator className="mx-3 hidden group-data-[collapsible=icon]:block" />
+          <SidebarSeparator className="mx-3 hidden group-data-[collapsible=icon]:block data-horizontal:w-auto" />
           <SidebarGroup className="pt-3 pb-0 group-data-[collapsible=icon]:pt-2">
             <SidebarGroupLabel className="h-7 text-[length:var(--text-caption)] font-medium text-muted-foreground group-data-[collapsible=icon]:-mt-7">
               {group.label}

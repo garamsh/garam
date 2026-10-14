@@ -6,11 +6,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -45,6 +47,7 @@ type tokenControlStandIn struct {
 	replaces map[string]*string
 	latest   *string
 	asked    []string
+	tokens   []string
 }
 
 func newTokenControlStandIn(t *testing.T, s *tokenStack, m managed) *tokenControlStandIn {
@@ -96,6 +99,7 @@ func (c *tokenControlStandIn) activate(w http.ResponseWriter, r *http.Request) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.asked = append(c.asked, body.RequestID)
+	c.tokens = append(c.tokens, token)
 	replaces, replay := c.replaces[body.RequestID]
 	if !replay {
 		replaces = c.latest
@@ -155,6 +159,13 @@ func (c *tokenControlStandIn) requests() []string {
 	return append([]string(nil), c.asked...)
 }
 
+// askedWith reports whether an activation was asked for on token.
+func (c *tokenControlStandIn) askedWith(token string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return slices.Contains(c.tokens, token)
+}
+
 // tokenFiles is a token-mode adapter's files: garam's token, control's
 // beside it where the adapter is fenced, and the placement token.
 type tokenFiles struct {
@@ -181,6 +192,45 @@ func replaceToken(t *testing.T, path, token string) {
 	tmp := path + ".next"
 	require.NoError(t, os.WriteFile(tmp, []byte(token+"\n"), 0o600))
 	require.NoError(t, os.Rename(tmp, path))
+}
+
+// projectedTokens is a fenced adapter's two tokens mounted as a Secret
+// volume mounts them: each file links through ..data, and one rename of
+// ..data replaces both at once.
+type projectedTokens struct {
+	tokenFiles
+	dir     string
+	version int
+}
+
+func newProjectedTokens(t *testing.T, garam, control string) *projectedTokens {
+	t.Helper()
+	p := &projectedTokens{dir: t.TempDir()}
+	p.replace(t, garam, control)
+	p.tokenFiles = tokenFiles{
+		garam: filepath.Join(p.dir, "agent-token"), control: filepath.Join(p.dir, "control-token"),
+		placement: filepath.Join(p.dir, "placement-token"),
+	}
+	for _, name := range []string{"agent-token", "control-token"} {
+		require.NoError(t, os.Symlink(filepath.Join("..data", name), filepath.Join(p.dir, name)))
+	}
+	replaceToken(t, p.placement, "placement-1")
+	return p
+}
+
+// replace writes both tokens into a new directory and moves ..data to
+// it in one rename.
+func (p *projectedTokens) replace(t *testing.T, garam, control string) {
+	t.Helper()
+	p.version++
+	version := fmt.Sprintf("..v%d", p.version)
+	require.NoError(t, os.Mkdir(filepath.Join(p.dir, version), 0o700))
+	for name, token := range map[string]string{"agent-token": garam, "control-token": control} {
+		require.NoError(t, os.WriteFile(filepath.Join(p.dir, version, name), []byte(token+"\n"), 0o600))
+	}
+	next := filepath.Join(p.dir, "..data.next")
+	require.NoError(t, os.Symlink(version, next))
+	require.NoError(t, os.Rename(next, filepath.Join(p.dir, "..data")))
 }
 
 // tokenFileOf is the token mode's credential over path.
@@ -369,9 +419,9 @@ func TestAdapterTokenMode_ARecoveryIsResumedByTheNextGeneration(t *testing.T) {
 	own := s.agentToken(t, m.agent, nil)
 	shown := s.agentToken(t, m.agent, &s.hosted)
 	c := newTokenControlStandIn(t, s, m)
-	files := newTokenFiles(t, own.Token, shown.Token)
+	files := newProjectedTokens(t, own.Token, shown.Token)
 	rt := newRuntimeDouble(t, m.agent, 1, generationOf(1))
-	startTokenAdapter(t, s, c, rt, m.agent, files, t.TempDir())
+	startTokenAdapter(t, s, c, rt, m.agent, files.tokenFiles, t.TempDir())
 	carried(t, s.executionStack, rt, s.postToAgent(t, m.agent, "hello"))
 
 	body := `{"requestId":"rec-1","epoch":"1"}`
@@ -382,23 +432,31 @@ func TestAdapterTokenMode_ARecoveryIsResumedByTheNextGeneration(t *testing.T) {
 		agent.TokenExecutionContractVersion, s.hostedToken, authorityOf(t, minted).Authority, body)
 	require.Equal(t, http.StatusCreated, got.status, got.body)
 
-	before := len(c.requests())
-	replaceToken(t, files.garam, s.agentToken(t, m.agent, nil).Token)
-	replaceToken(t, files.control, s.agentToken(t, m.agent, &s.hosted).Token)
-	require.Eventually(t, func() bool { return len(c.requests()) > before }, 10*time.Second, 10*time.Millisecond,
+	// The recovery fences the claim in flight before the swap or after
+	// it, and a fenced adapter asks again once an input changed. The
+	// look after the ask on the new control token re-reads both files,
+	// so the count is taken after it.
+	next := s.agentToken(t, m.agent, &s.hosted).Token
+	files.replace(t, s.agentToken(t, m.agent, nil).Token, next)
+	require.Eventually(t, func() bool { return c.askedWith(next) }, 10*time.Second, 10*time.Millisecond,
 		"the rewritten tokens ask again")
+	looks := rt.looked()
+	require.Eventually(t, func() bool { return rt.looked() >= looks+2 }, 10*time.Second, 10*time.Millisecond,
+		"the adapter looks again at the tokens it asked on")
 	asked := c.requests()
-	assert.Equal(t, asked[before-1], asked[before], "under the same request")
+	for _, id := range asked[1:] {
+		assert.Equal(t, asked[0], id, "under the same request")
+	}
 	waiting := s.postToAgent(t, m.agent, "after the recovery")
 	time.Sleep(time.Second)
-	assert.Len(t, c.requests(), before+1, "the ended activation is not asked for again")
+	assert.Len(t, c.requests(), len(asked), "the ended activation is not asked for again")
 	for _, received := range rt.received() {
 		assert.NotEqual(t, waiting, received["id"], "nothing is carried on the ended activation")
 	}
 
 	rt.restartAs(generationOf(2))
 	carried(t, s.executionStack, rt, waiting)
-	assert.Len(t, c.requests(), before+2, "the next generation is one new request")
+	assert.Len(t, c.requests(), len(asked)+1, "the next generation is one new request")
 }
 
 // sha256Hex is the hex SHA-256 of body.

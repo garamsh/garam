@@ -72,6 +72,9 @@ type runtimeDouble struct {
 	posts       []map[string]string
 	completed   map[string]bool
 	subscribers []chan string
+	// looks counts status reads: the adapter's supervisor reads the
+	// status once at the start of each look.
+	looks int
 }
 
 func newRuntimeDouble(t *testing.T, agentGRN grn.GRN, epoch int, generation agent.Generation) *runtimeDouble {
@@ -86,6 +89,7 @@ func newRuntimeDouble(t *testing.T, agentGRN grn.GRN, epoch int, generation agen
 	mux.HandleFunc("GET "+served+"/status", func(w http.ResponseWriter, _ *http.Request) {
 		r.mu.Lock()
 		defer r.mu.Unlock()
+		r.looks++
 		writeAnswer(w, http.StatusOK, r.status)
 	})
 	mux.HandleFunc("POST "+served+"/messages", func(w http.ResponseWriter, req *http.Request) {
@@ -151,6 +155,13 @@ func (r *runtimeDouble) received() []map[string]string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return append([]map[string]string(nil), r.posts...)
+}
+
+// looked is how many times the status was read.
+func (r *runtimeDouble) looked() int {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.looks
 }
 
 // finish ends a turn that drained the message, committing it first.

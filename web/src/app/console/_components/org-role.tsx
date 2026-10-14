@@ -1,13 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useState,
-  type ReactNode,
-} from "react";
+import { useEffect, useSyncExternalStore } from "react";
 
 import { parseConsolePath } from "./navigation";
 
@@ -24,33 +18,36 @@ export const ROLE_LABEL: Record<OrgRole, string> = {
 /** The caller's role in one organization, and which one it is. */
 type ReportedRole = { org: string; role: OrgRole };
 
-const OrgRoleContext = createContext<{
-  reported: ReportedRole | null;
-  setReported: (role: ReportedRole | null) => void;
-} | null>(null);
+// The organization's layout reads the role; the switcher renders above
+// that layout and never receives its params. A store rather than a
+// context carries it up: a context provider above the page re-renders
+// on the report, and a page boundary still streaming in then switches
+// to client rendering and leaves the streamed copy in the document.
+let reported: ReportedRole | null = null;
+const listeners = new Set<() => void>();
 
-/**
- * Carries the caller's role in the organization on screen up to the
- * sidebar. The organization's own layout reads it; the shell renders
- * above that layout and never receives its params, so the read is
- * handed up the way an item page hands up its breadcrumb name.
- */
-export function OrgRoleProvider({ children }: { children: ReactNode }) {
-  const [reported, setReported] = useState<ReportedRole | null>(null);
-  return (
-    <OrgRoleContext.Provider value={{ reported, setReported }}>
-      {children}
-    </OrgRoleContext.Provider>
-  );
+function report(next: ReportedRole | null) {
+  reported = next;
+  for (const listener of listeners) listener();
 }
 
-/** Reports the caller's role in `org`; renders nothing. */
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+/**
+ * Reports the caller's role in `org` while mounted; renders nothing.
+ * It writes from an effect, so the store is only ever written in a
+ * browser and no request on the server sees another's role.
+ */
 export function ReportOrgRole({ org, role }: ReportedRole) {
-  const setReported = useContext(OrgRoleContext)?.setReported;
   useEffect(() => {
-    setReported?.({ org, role });
-    return () => setReported?.(null);
-  }, [org, role, setReported]);
+    report({ org, role });
+    return () => report(null);
+  }, [org, role]);
   return null;
 }
 
@@ -61,9 +58,13 @@ export function ReportOrgRole({ org, role }: ReportedRole) {
  */
 export function useOrgRole(): OrgRole | undefined {
   const location = parseConsolePath(usePathname());
-  const reported = useContext(OrgRoleContext)?.reported;
-  if (location.kind !== "org" || reported?.org !== location.org) {
+  const current = useSyncExternalStore(
+    subscribe,
+    () => reported,
+    () => null,
+  );
+  if (location.kind !== "org" || current?.org !== location.org) {
     return undefined;
   }
-  return reported.role;
+  return current.role;
 }

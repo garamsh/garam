@@ -3,7 +3,6 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import {
-  OrgRoleProvider,
   ReportOrgRole,
   type OrgRole,
 } from "@/app/console/_components/org-role";
@@ -29,10 +28,8 @@ function renderSwitcher(
   return render(
     <TooltipProvider>
       <SidebarProvider>
-        <OrgRoleProvider>
-          {reported && <ReportOrgRole {...reported} />}
-          <OrgSwitcher orgs={list} />
-        </OrgRoleProvider>
+        {reported && <ReportOrgRole {...reported} />}
+        <OrgSwitcher orgs={list} />
       </SidebarProvider>
     </TooltipProvider>,
   );

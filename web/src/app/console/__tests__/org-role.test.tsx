@@ -3,11 +3,7 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { OrgRoleRead } from "@/app/console/_components/org-role-read";
-import {
-  OrgRoleProvider,
-  ROLE_LABEL,
-  useOrgRole,
-} from "@/app/console/_components/org-role";
+import { ROLE_LABEL, useOrgRole } from "@/app/console/_components/org-role";
 import { API_URL, aliceMembership } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
@@ -33,10 +29,10 @@ async function renderRead(pathname = "/console/orgs/acme") {
   const report = await OrgRoleRead({ org: Promise.resolve("acme") });
   await act(async () => {
     render(
-      <OrgRoleProvider>
+      <>
         {report}
         <RoleProbe />
-      </OrgRoleProvider>,
+      </>,
     );
   });
 }

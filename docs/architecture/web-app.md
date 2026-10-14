@@ -356,6 +356,16 @@ origin; the console's own server never calls one.
   Which models need one is the control service's to decide and refuse
   (garam-agent-operator ADR 0052 and ADR 0053 at `8e1116933408`); the
   console shows the refusal.
+- **It words what it refuses.** A refusal reads the sentence
+  `web/src/lib/control-refusal-copy.ts` writes for the `kind` the
+  control service named, or for the HTTP status where it named none,
+  read for the operation that asked where that means something
+  particular to it. A kind that file does not list, and a status it
+  does not map, read one fixed sentence saying what to try. The control
+  service's `message` is never shown. The kinds listed are the ones the
+  Operator documents for the routes the console calls, at the commits
+  that file cites. Nothing detects a kind the Operator adds later; the
+  fixed sentence is what a person reads for it.
 - **It answers in the section that asked.** A refused mint, a refused
   call, an unreachable service and an answer outside the agreed wire
   each disable that section's controls and say so. Teams, People,

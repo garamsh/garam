@@ -81,6 +81,7 @@ describe("publish template form", () => {
           posted.push(await request.json());
           return HttpResponse.json(
             {
+              kind: "embedding_required",
               message:
                 "the model needs an embeddings endpoint with a base URL and a name",
             },
@@ -109,8 +110,10 @@ describe("publish template form", () => {
     }
     await user.click(form.getByRole("button", { name: "Publish version" }));
 
+    // Identity: the console's sentence for the kind, so the control
+    // service's own text cannot be what is shown.
     expect(await form.findByRole("alert")).toHaveTextContent(
-      "the model needs an embeddings endpoint with a base URL and a name",
+      /^This model needs an embeddings endpoint\. Give the embedding's base URL and model name, then try again\.$/,
     );
     // The refusal is the control service's, so the form reached it.
     expect(posted).toHaveLength(1);

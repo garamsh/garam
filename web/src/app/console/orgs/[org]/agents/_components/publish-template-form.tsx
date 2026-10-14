@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { mintOperationAuthority } from "@/features/orgs/actions";
 import { useHydrated } from "@/hooks/use-hydrated";
+import { controlFailureCopy } from "@/lib/control-refusal-copy";
 import {
   PublishedParser,
   callControl,
@@ -15,7 +16,7 @@ import {
   type TemplateVersion,
 } from "@/lib/operation-authority";
 
-import { UNAVAILABLE, type DelegatedOperator } from "./control-notice";
+import type { DelegatedOperator } from "./control-notice";
 
 /** Reads `tool=pin` lines into the tool pins a configuration carries. */
 function parseTools(text: string): Record<string, string> | null {
@@ -186,9 +187,7 @@ export function PublishTemplateForm({
     if (result.status === "ok") {
       onPublished(result.data);
     } else {
-      setRefusal(
-        result.status === "unavailable" ? UNAVAILABLE : result.message,
-      );
+      setRefusal(controlFailureCopy(result, "agent-template:publish"));
     }
   }
 

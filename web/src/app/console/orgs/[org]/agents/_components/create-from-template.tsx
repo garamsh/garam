@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { slugFromGrn } from "@/lib/grn";
+import { controlFailureCopy } from "@/lib/control-refusal-copy";
 import { mintOperationAuthority } from "@/features/orgs/actions";
 import {
   CreatedParser,
@@ -25,7 +26,6 @@ import {
 import {
   ControlNotice,
   NO_FIX,
-  UNAVAILABLE,
   type DelegatedOperator,
 } from "./control-notice";
 import { useControlRead } from "./use-control-read";
@@ -100,9 +100,7 @@ export function CreateFromTemplate({
     return (
       <ControlNotice
         org={org}
-        reason={
-          templates.status === "unavailable" ? UNAVAILABLE : templates.message
-        }
+        reason={controlFailureCopy(templates, "agent-template:read")}
         fix={NO_FIX}
       />
     );
@@ -171,7 +169,7 @@ export function CreateFromTemplate({
     }
     setOutcome({
       status: "refused",
-      message: result.status === "unavailable" ? UNAVAILABLE : result.message,
+      message: controlFailureCopy(result, "agent:create"),
     });
   }
 

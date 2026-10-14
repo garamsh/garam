@@ -185,7 +185,7 @@ func TestCheckPermissions_AsksAtMostFifty(t *testing.T) {
 
 // TestCheckPermissions_LeavesGrantAndCurrentActionsUnknown asks the
 // owner, whose role allows each of them, about an action a delegation
-// grant decides and two that current policy decides: each is unknown,
+// grant decides and one that current policy decides: each is unknown,
 // because what enforcement asks for them is more than this operation
 // reads — the grant, or current policy.
 // operator:register, which Check alone decides, is the control.
@@ -193,9 +193,42 @@ func TestCheckPermissions_LeavesGrantAndCurrentActionsUnknown(t *testing.T) {
 	s := newCheckStack(t)
 
 	assert.Equal(t, []apigen.PermissionDecision{
-		apigen.DecisionUnknown, apigen.DecisionUnknown, apigen.DecisionUnknown, apigen.DecisionAllow,
-	}, s.check(t, s.owner,
-		org.ActionAgentCreate, org.ActionOperatorDelegate, org.ActionAgentEnroll, org.ActionOperatorRegister))
+		apigen.DecisionUnknown, apigen.DecisionUnknown, apigen.DecisionAllow,
+	}, s.check(t, s.owner, org.ActionAgentCreate, org.ActionAgentEnroll, org.ActionOperatorRegister))
+}
+
+// TestCheckPermissions_AnswersDelegationAsItsWritesDecide holds the
+// operator:delegate answer beside the three writes it describes, over
+// the authority service both serve commands compose. A member's role
+// does not hold it, so the check answers deny and writing the grant,
+// withdrawing it and setting the control endpoint are each refused.
+// The owner is the control for each: allow, and every write lands.
+func TestCheckPermissions_AnswersDelegationAsItsWritesDecide(t *testing.T) {
+	p := pool(t)
+	_, engine := policyEngine(t, p)
+	s := newAuthorityStack(t, engine, p)
+	endpointPath := s.browser + "/orgs/acme/operators/hosted/control-endpoint"
+	grantBody := `{"requestId":"m-1","controllers":["` + s.controller.String() + `"],"operations":["agent:create"],"expiresAt":"` +
+		time.Now().Add(time.Hour).UTC().Format(time.RFC3339) + `"}`
+
+	assert.Equal(t, []apigen.PermissionDecision{apigen.DecisionDeny},
+		permissionDecisions(t, s.browser, s.member, org.ActionOperatorDelegate))
+	assert.Equal(t, []apigen.PermissionDecision{apigen.DecisionAllow},
+		permissionDecisions(t, s.browser, s.owner, org.ActionOperatorDelegate))
+
+	status, got := call(t, http.DefaultClient, http.MethodPut, s.delegationPath(), s.member, grantBody)
+	assert.Equal(t, http.StatusForbidden, status, "the member writes no grant: %s", got)
+	d := s.grant(t, "g-1", nil, org.ActionAgentCreate)
+
+	status, got = call(t, http.DefaultClient, http.MethodPut, endpointPath, s.member, `{"url":"https://control.example.com/garam"}`)
+	assert.Equal(t, http.StatusForbidden, status, "the member sets no endpoint: %s", got)
+	status, got = call(t, http.DefaultClient, http.MethodPut, endpointPath, s.owner, `{"url":"https://control.example.com/garam"}`)
+	assert.Equal(t, http.StatusOK, status, "the owner sets it: %s", got)
+
+	status, got = call(t, http.DefaultClient, http.MethodDelete, s.delegationPath(), s.member, `{"grantId":"`+d.GrantId+`"}`)
+	assert.Equal(t, http.StatusForbidden, status, "the member withdraws nothing: %s", got)
+	status, got = call(t, http.DefaultClient, http.MethodDelete, s.delegationPath(), s.owner, `{"grantId":"`+d.GrantId+`"}`)
+	assert.Equal(t, http.StatusNoContent, status, "the owner withdraws it: %s", got)
 }
 
 // TestCheckPermissions_DeniesAGrantActionItsMintDenies holds the check

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 
@@ -174,8 +175,9 @@ func TestCheckPermissions_RefusesANonMember(t *testing.T) {
 // that an action enforcement decides on more than the engine's Check is
 // answered unknown where everything this operation reads allows it:
 // one case for a delegation grant, whose mint's check allows here, and
-// one for current policy. The engine here allows everything, and the
-// plainly checked action is the control.
+// one for current policy, which this operation does not read. The
+// engine here allows everything, and the plainly checked action is the
+// control.
 func TestCheckPermissions_AnswersUnknownWhereCheckIsNotTheDecision(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
@@ -186,7 +188,7 @@ func TestCheckPermissions_AnswersUnknownWhereCheckIsNotTheDecision(t *testing.T)
 
 	rec := f.do(t, "POST", "/orgs/"+slug+"/permission-checks", checksBody(t,
 		apigen.PermissionCheck{Action: org.ActionAgentCreate},
-		apigen.PermissionCheck{Action: org.ActionOperatorDelegate},
+		apigen.PermissionCheck{Action: org.ActionAgentEnroll},
 		apigen.PermissionCheck{Action: org.ActionOperatorRegister},
 	), owner)
 
@@ -194,7 +196,7 @@ func TestCheckPermissions_AnswersUnknownWhereCheckIsNotTheDecision(t *testing.T)
 	results := decodeBody[apigen.PermissionCheckAnswer](t, rec).Results
 	require.Len(t, results, 3)
 	assert.Equal(t, apigen.DecisionUnknown, results[0].Decision, "a delegation grant decides agent:create")
-	assert.Equal(t, apigen.DecisionUnknown, results[1].Decision, "current policy decides operator:delegate")
+	assert.Equal(t, apigen.DecisionUnknown, results[1].Decision, "current policy decides agent:enroll")
 	assert.Equal(t, apigen.DecisionAllow, results[2].Decision, "Check alone decides operator:register")
 }
 
@@ -243,6 +245,38 @@ func TestCheckPermissions_AsksAGrantActionAsItsMintDoes(t *testing.T) {
 			assert.Equal(t, apigen.DecisionUnknown, ask(), "the mint's check allows, and the grant is left")
 		})
 	}
+}
+
+// TestCheckPermissions_AsksDelegationAsItsWritesDo holds that
+// operator:delegate is put to the check every write of a delegation
+// runs, with the caller and the organization, and answered by it: a
+// deny answers deny, an allow answers allow, and a check that cannot
+// decide fails the request. Each answer is the control for the others.
+func TestCheckPermissions_AsksDelegationAsItsWritesDo(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	asked := func(err error) {
+		f.authority.EXPECT().AuthorizeDelegation(mock.Anything, userGRNOf("owner-sub"), orgGRNOf(slug)).
+			Return(err).Once()
+	}
+	asked(errorx.New(errorx.KindPermissionDenied, "insufficient role"))
+	asked(nil)
+	asked(errorx.New(errorx.KindUnavailable, "current authorization"))
+	ask := func() *httptest.ResponseRecorder {
+		return f.do(t, "POST", "/orgs/"+slug+"/permission-checks",
+			checksBody(t, apigen.PermissionCheck{Action: org.ActionOperatorDelegate}), owner)
+	}
+	decision := func(rec *httptest.ResponseRecorder) apigen.PermissionDecision {
+		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+		return decodeBody[apigen.PermissionCheckAnswer](t, rec).Results[0].Decision
+	}
+
+	assert.Equal(t, apigen.DecisionDeny, decision(ask()), "the writes' check denies")
+	assert.Equal(t, apigen.DecisionAllow, decision(ask()), "the writes' check allows, and nothing else decides them")
+	rec := ask()
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+	assert.NotContains(t, rec.Body.String(), "results", "no pair is answered")
 }
 
 // TestCheckPermissions_FailsWholeWhenAMintCheckCannotDecide holds that
@@ -314,6 +348,7 @@ func TestCheckPermissions_EveryActionPairsWithSomething(t *testing.T) {
 	}
 	f.authority.EXPECT().AuthorizeOperation(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(nil).Maybe()
+	f.authority.EXPECT().AuthorizeDelegation(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	actions := org.Actions()
 	require.NotEmpty(t, actions)
 

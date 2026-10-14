@@ -38,6 +38,10 @@ const (
 	// operation asks too, and a delegation grant to the operator
 	// (ADR-0078), which it does not read.
 	decidedByGrant
+	// decidedByDelegation is the check every write of a delegation runs,
+	// on current policy past the engine's cache, which this operation
+	// asks too.
+	decidedByDelegation
 	// decidedByCurrent is the org's current policy read past the
 	// engine's cache (CheckCurrent), which this operation does not read.
 	decidedByCurrent
@@ -91,7 +95,7 @@ var actionRules = map[string]actionRule{
 	org.ActionOperatorUpdate:   {on: []apigen.PermissionResourceType{onOrg}},
 	org.ActionOperatorDelete:   {on: []apigen.PermissionResourceType{onOrg}},
 	org.ActionOperatorReissue:  {on: []apigen.PermissionResourceType{onOrg}},
-	org.ActionOperatorDelegate: {on: []apigen.PermissionResourceType{onOrg}, decidedBy: decidedByCurrent},
+	org.ActionOperatorDelegate: {on: []apigen.PermissionResourceType{onOrg}, decidedBy: decidedByDelegation},
 
 	org.ActionAgentRead:            {on: []apigen.PermissionResourceType{onOrg, kindAgent}},
 	org.ActionAgentWatch:           {on: []apigen.PermissionResourceType{kindAgent}},
@@ -112,8 +116,9 @@ var actionRules = map[string]actionRule{
 // same statements, groups and engine `Check` authorizeOn uses. It
 // answers allow or deny and never why. An action a delegation grant
 // also decides is denied where its mint's check denies and unknown
-// where only the grant is left; one current policy decides is unknown.
-// Requires membership.
+// where only the grant is left. operator:delegate is answered by the
+// check its writes run, and agent:enroll, which current policy decides,
+// is unknown. Requires membership.
 func (s *Server) CheckPermissions(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org) {
 	u, err := s.currentUser(r)
 	if err != nil {
@@ -163,6 +168,8 @@ func (s *Server) decide(r *http.Request, c *caller, target grn.GRN, action strin
 	switch actionRules[action].decidedBy {
 	case decidedByGrant:
 		return s.decideAsMint(r, c, target, action)
+	case decidedByDelegation:
+		return s.decideAsDelegation(r, c)
 	case decidedByCurrent:
 		return apigen.DecisionUnknown, nil
 	case decidedByCheck:
@@ -190,6 +197,20 @@ func (s *Server) decideAsMint(r *http.Request, c *caller, target grn.GRN, action
 	switch {
 	case err == nil:
 		return apigen.DecisionUnknown, nil
+	case errorx.IsKind(err, errorx.KindPermissionDenied):
+		return apigen.DecisionDeny, nil
+	}
+	return "", err
+}
+
+// decideAsDelegation answers operator:delegate with the check every
+// write of a delegation runs, for the same actor and organization. That
+// check is all of their authority, so it answers allow or deny.
+func (s *Server) decideAsDelegation(r *http.Request, c *caller) (apigen.PermissionDecision, error) {
+	err := s.authority.AuthorizeDelegation(r.Context(), c.user.GRN, c.org)
+	switch {
+	case err == nil:
+		return apigen.DecisionAllow, nil
 	case errorx.IsKind(err, errorx.KindPermissionDenied):
 		return apigen.DecisionDeny, nil
 	}

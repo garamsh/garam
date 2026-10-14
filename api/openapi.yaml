@@ -448,10 +448,14 @@ paths:
         Where it denies, the answer is `deny`, and the mint would
         refuse. Where it allows, the answer is `unknown`: this operation
         reads no grant, so the grant is left to decide.
-        `operator:delegate` and `agent:enroll` are decided on the
-        organization's current policy, read past the engine's cache,
-        and answered `unknown`. A caller renders the control for
-        `unknown` and lets the operation decide.
+        `operator:delegate` is put to the check
+        `writeOperatorDelegation`, `endOperatorDelegation`,
+        `setOperatorControlEndpoint` and `clearOperatorControlEndpoint`
+        run, on the same current policy, and that check is all of their
+        authority, so it is answered `allow` or `deny`. `agent:enroll`
+        is decided on the organization's current policy and answered
+        `unknown`. A caller renders the control for `unknown` and lets
+        the operation decide.
 
 
         A pair without `resource` asks about the organization itself.

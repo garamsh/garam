@@ -141,6 +141,22 @@ refusals, and §machineBearer for the alias.
   or retires a key, so whichever of an exchange and a rotation comes
   second waits for the first to commit, and neither holds a row the
   other is waiting on (#1399). A refused assertion spends no jti.
+- **Every write to an operator's credential, keys or tokens takes its
+  registration's row first** (`internal/operator` `PostgresStore`).
+  - An exchange, by shared secret or by key, holds it `FOR KEY SHARE`
+    for the client, and for the audience when the token names one.
+  - An issuance, a withdrawal and a credential re-issue hold it `FOR
+    UPDATE`; a deletion deletes it.
+
+  Two exchanges proceed together, and their sweeps walk the operator's
+  expired tokens in the same order. Every other pair waits on the
+  registration for the first to commit, before either touches a
+  credential, key or token row. A withdrawal deletes
+  its key's tokens in key order and a re-issue's cascade the
+  credential's in credential order, while a sweep walks them by expiry;
+  taking the registration first is what keeps those walks from locking
+  two tokens in opposite orders, and a deletion from waiting on a
+  credential a re-issue holds (#1418).
 - **Token reads join the live key.** A token exchanged under a key is
   resolved with that key unwithdrawn and inside any rollover, so a
   withdrawal, an immediate replacement or a passed rollover refuses the

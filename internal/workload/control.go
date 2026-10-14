@@ -22,10 +22,28 @@ import (
 
 // ExecutionContract is the adapter-facing activation and runtime-status
 // contract (ADR-0084), which the supervisor serves as the Operator's
-// control service does.
+// control service does, to an adapter presenting the agent's
+// certificate.
 const ExecutionContract = "agent-execution.v1"
 
+// TokenExecutionContract is the same contract served in the token
+// mode: the control token in Authorization and the placement token in
+// a Garam-Placement header of its own (ADR-0100).
+const TokenExecutionContract = "agent-execution.v2"
+
+// controlTokenPrefix spells the control token as an agent token, so
+// the adapter reads its two token files alike. garam never issued it,
+// and refuses it.
+const controlTokenPrefix = "garam_at_"
+
 const contractHeader = "Garam-Contract-Version"
+
+// tokenScheme and placementHeader are the token mode's headers
+// (ADR-0100).
+const (
+	tokenScheme     = "Garam-Token"
+	placementHeader = "Garam-Placement"
+)
 
 // maxBody bounds a request body; both are a handful of short strings.
 const maxBody = 64 << 10
@@ -35,11 +53,6 @@ var (
 	generationPattern = regexp.MustCompile(`^[0-9a-f]{32}$`)
 )
 
-// serveControl serves the two routes on the generation's socket, which
-// lives in a directory only that generation's adapter mounts. The
-// adapter presents the agent's certificate, which must chain to the
-// agent's issuer, and verifies this listener by the generation's own
-// root.
 // controlServer is a generation's control and what reports its
 // listener stopping on its own.
 type controlServer struct {
@@ -47,6 +60,13 @@ type controlServer struct {
 	failed chan error
 }
 
+// serveControl serves the two routes on the generation's socket, which
+// lives in a directory only that generation's adapter mounts. The
+// adapter verifies this listener by the generation's own root. In the
+// certificate mode it presents the agent's certificate, which must
+// chain to the agent's issuer; in the token mode the listener asks for
+// no certificate, and the generation's control token authenticates
+// each request (ADR-0100).
 func (s *Supervisor) serveControl(genDir string, serving *tls.Certificate, in *intent) (*controlServer, error) {
 	dir := filepath.Join(genDir, socketDir)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -78,14 +98,13 @@ func (s *Supervisor) serveControl(genDir string, serving *tls.Certificate, in *i
 	mux.HandleFunc("POST /v1/agents/{agent}/runtime-status", func(w http.ResponseWriter, r *http.Request) {
 		s.report(w, r, in)
 	})
+	config := &tls.Config{Certificates: []tls.Certificate{*serving}, MinVersion: tls.VersionTLS13}
+	if s.issuer != nil {
+		config.ClientAuth, config.ClientCAs = tls.RequireAndVerifyClientCert, s.issuer
+	}
 	srv := &http.Server{
-		Handler: contract(mux),
-		TLSConfig: &tls.Config{
-			Certificates: []tls.Certificate{*serving},
-			ClientAuth:   tls.RequireAndVerifyClientCert,
-			ClientCAs:    s.issuer,
-			MinVersion:   tls.VersionTLS13,
-		},
+		Handler:           contract(s.contract(), mux),
+		TLSConfig:         config,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	ctl := &controlServer{srv: srv, failed: make(chan error, 1)}
@@ -97,13 +116,22 @@ func (s *Supervisor) serveControl(genDir string, serving *tls.Certificate, in *i
 	return ctl, nil
 }
 
-// contract refuses a request made under another contract, and names
-// the contract on every answer, refusals included.
-func contract(next http.Handler) http.Handler {
+// contract answers the contract the supervisor serves: the token
+// mode's or the certificate mode's, never both.
+func (s *Supervisor) contract() string {
+	if s.cfg.Tokens != nil {
+		return TokenExecutionContract
+	}
+	return ExecutionContract
+}
+
+// contract refuses a request made under another contract than served,
+// and names served on every answer, refusals included.
+func contract(served string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set(contractHeader, ExecutionContract)
-		if r.Header.Get(contractHeader) != ExecutionContract {
-			refuse(w, http.StatusBadRequest, "invalid_request", "this route serves "+ExecutionContract)
+		w.Header().Set(contractHeader, served)
+		if r.Header.Get(contractHeader) != served {
+			refuse(w, http.StatusBadRequest, "invalid_request", "this route serves "+served)
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -120,14 +148,26 @@ func refuse(w http.ResponseWriter, status int, kind, message string) {
 	}{kind, message})
 }
 
-// caller answers the certificate the adapter presented, refusing a
-// request for another agent or a certificate that names another. The
-// handshake already verified it against the agent's issuer.
-func (s *Supervisor) caller(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
+// caller authenticates the adapter, refusing a request for another
+// agent. In the token mode it compares the control token presented, in
+// constant time, with the generation's and answers no certificate; in
+// the certificate mode it answers the certificate the adapter
+// presented, refusing one that names another, which the handshake
+// already verified against the agent's issuer.
+func (s *Supervisor) caller(w http.ResponseWriter, r *http.Request, in *intent) ([]byte, bool) {
 	agent := s.cfg.Desired.Agent.String()
 	if r.PathValue("agent") != agent {
 		refuse(w, http.StatusForbidden, "not_authorized", "this supervisor serves another agent")
 		return nil, false
+	}
+	if s.cfg.Tokens != nil {
+		token, ok := strings.CutPrefix(r.Header.Get("Authorization"), tokenScheme+" ")
+		if !ok || in.ControlToken == "" ||
+			subtle.ConstantTimeCompare([]byte(token), []byte(in.ControlToken)) != 1 {
+			refuse(w, http.StatusUnauthorized, "unauthenticated", "the generation's control token is required")
+			return nil, false
+		}
+		return nil, true
 	}
 	if r.TLS == nil || len(r.TLS.PeerCertificates) == 0 {
 		refuse(w, http.StatusUnauthorized, "unauthenticated", "the agent's certificate is required")
@@ -174,11 +214,11 @@ type activationAnswer struct {
 // retry repeats the first request exactly, which garam answers with
 // the same activation and a newer token.
 func (s *Supervisor) activate(w http.ResponseWriter, r *http.Request, in *intent) {
-	leafPEM, ok := s.caller(w, r)
+	leafPEM, ok := s.caller(w, r, in)
 	if !ok {
 		return
 	}
-	token, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Garam-Placement ")
+	token, ok := s.placementOf(r)
 	if !ok || token == "" {
 		refuse(w, http.StatusUnauthorized, "unauthenticated", "the placement token is required")
 		return
@@ -217,6 +257,15 @@ func (s *Supervisor) activate(w http.ResponseWriter, r *http.Request, in *intent
 		refusal(w)
 		return
 	}
+	if s.cfg.Tokens != nil {
+		agentToken, err := s.cfg.Tokens.Current(r.Context())
+		if err != nil {
+			slog.Warn("no agent token to forward", slog.String("intent", in.ID), slog.String("error", err.Error()))
+			refuse(w, http.StatusServiceUnavailable, "undecided", "garam did not answer the agent token")
+			return
+		}
+		req.Token = agentToken
+	}
 	a, err := s.garam.Activate(r.Context(), req)
 	if err != nil {
 		slog.Warn("garam did not activate", slog.String("intent", in.ID),
@@ -224,8 +273,8 @@ func (s *Supervisor) activate(w http.ResponseWriter, r *http.Request, in *intent
 		switch errorx.KindOf(err) {
 		case errorx.KindUnavailable, errorx.KindUnauthenticated:
 			// garam's answer is unknown, or it refused the supervisor's
-			// own certificate, which a renewal can mend: either way the
-			// adapter retries the same request.
+			// own certificate or token, which a renewal or an exchange
+			// can mend: either way the adapter retries the same request.
 			refuse(w, http.StatusServiceUnavailable, "undecided", "garam did not answer the activation")
 		case errorx.KindFailedPrecondition:
 			refuse(w, http.StatusConflict, "activation_superseded", "garam refused the activation as superseded")
@@ -257,6 +306,18 @@ func (s *Supervisor) activate(w http.ResponseWriter, r *http.Request, in *intent
 		ActivationID: a.ID, TokenVersion: a.TokenVersion, Token: a.Token,
 		GRN: agent, Epoch: a.Epoch, Generation: a.Generation, ConfigRevision: in.Revision,
 	})
+}
+
+// placementOf answers the placement token the request carries: in
+// Authorization under the certificate mode, and in a Garam-Placement
+// header of its own under the token mode, where the control token
+// takes Authorization (ADR-0100).
+func (s *Supervisor) placementOf(r *http.Request) (string, bool) {
+	if s.cfg.Tokens != nil {
+		token := r.Header.Get(placementHeader)
+		return token, token != ""
+	}
+	return strings.CutPrefix(r.Header.Get("Authorization"), placementHeader+" ")
 }
 
 // provenance refuses a runtime that is not the container this intent
@@ -317,10 +378,13 @@ func (s *Supervisor) claim(in *intent, body activationBody, leafPEM []byte) (Act
 			refuse(w, http.StatusConflict, "request_reused", "this generation was asked for under another request")
 		}
 	}
-	return ActivationRequest{
-		RequestID: in.RequestID, Epoch: in.Epoch, Generation: in.Generation,
-		Replaces: in.Replaces, CertificatePEM: string(leafPEM),
-	}, nil
+	req := ActivationRequest{
+		RequestID: in.RequestID, Epoch: in.Epoch, Generation: in.Generation, Replaces: in.Replaces,
+	}
+	if leafPEM != nil {
+		req.CertificatePEM = string(leafPEM)
+	}
+	return req, nil
 }
 
 // settle records the activation garam answered as the agent's most
@@ -365,7 +429,7 @@ type statusBody struct {
 // activates nothing; it is the standalone host's record of what the
 // runtime applied.
 func (s *Supervisor) report(w http.ResponseWriter, r *http.Request, in *intent) {
-	if _, ok := s.caller(w, r); !ok {
+	if _, ok := s.caller(w, r, in); !ok {
 		return
 	}
 	var body statusBody

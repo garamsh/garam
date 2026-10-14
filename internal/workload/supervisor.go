@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"regexp"
 	"sync"
+	"time"
 
 	"github.com/garamsh/garam/internal/errorx"
 )
@@ -71,6 +72,16 @@ type Config struct {
 	// renders no issuers entry and leaves the adapter unsigned: the
 	// runtime is handed the host's configuration as it stands.
 	MessageIssuer string
+	// TokenCheckInterval is how often the token mode compares the
+	// running adapter's agent token with the one held; zero is every
+	// thirty seconds.
+	TokenCheckInterval time.Duration
+	// Tokens is the agent's garam token in the token mode, where the
+	// host enrolled under standalone-enrollment.v2 and holds a
+	// supervisor credential (ADR-0100); nil is the certificate mode,
+	// where the adapter presents the agent's certificate and
+	// Adapter's certificate, key and issuer are required.
+	Tokens AgentTokens
 }
 
 // Supervisor runs one agent's workload on a standalone host.
@@ -78,15 +89,21 @@ type Supervisor struct {
 	engine Engine
 	garam  Activator
 	cfg    Config
+	// issuer is what an adapter's certificate chains to, nil in the
+	// token mode.
 	issuer *x509.CertPool
 	// renderedConfig is the host's runtime configuration with garam's
 	// issuers entry added, which is what the runtime is handed.
 	renderedConfig []byte
 
 	// mu guards st and its writes, which the control handlers share
-	// with the run.
+	// with the run, and handed.
 	mu sync.Mutex
 	st *state
+	// handed is the agent token the running adapter was last given, in
+	// the token mode. It is not recorded: a restarted supervisor hands
+	// the adapter the token it holds then.
+	handed string
 	// activating holds one activation attempt at a time (ADR-0084).
 	activating sync.Mutex
 }
@@ -114,9 +131,14 @@ func NewSupervisor(engine Engine, garam Activator, cfg Config) (*Supervisor, err
 	if d.MoveMemoryTo != "" && !volumeName.MatchString(d.MoveMemoryTo) {
 		return nil, errorx.New(errorx.KindInvalidArgument, "workload: not a volume name: "+d.MoveMemoryTo)
 	}
-	issuer := x509.NewCertPool()
-	if !issuer.AppendCertsFromPEM(cfg.Adapter.IssuerPEM) {
-		return nil, errorx.New(errorx.KindInvalidArgument, "workload: the agent's issuer holds no certificate")
+	var issuer *x509.CertPool
+	if cfg.Tokens == nil {
+		issuer = x509.NewCertPool()
+		if !issuer.AppendCertsFromPEM(cfg.Adapter.IssuerPEM) {
+			return nil, errorx.New(errorx.KindInvalidArgument, "workload: the agent's issuer holds no certificate")
+		}
+	} else if len(cfg.Adapter.CertificatePEM)+len(cfg.Adapter.KeyPEM)+len(cfg.Adapter.IssuerPEM) > 0 {
+		return nil, errorx.New(errorx.KindInvalidArgument, "workload: the token mode copies no agent certificate in")
 	}
 	renderedConfig := d.Config
 	if cfg.MessageIssuer != "" {
@@ -212,6 +234,9 @@ func (s *Supervisor) newIntent() (*intent, error) {
 		RequireStore:   s.st.Memory.Served,
 		PlacementToken: base64.RawURLEncoding.EncodeToString(token),
 	}
+	if s.cfg.Tokens != nil {
+		in.ControlToken = controlTokenPrefix + randomHex(32)
+	}
 	for _, r := range roles {
 		in.container(r).Name = s.cfg.Prefix + string(r) + "-" + id
 	}
@@ -260,6 +285,7 @@ func (s *Supervisor) supervise(ctx context.Context, in *intent) error {
 func (s *Supervisor) watch(ctx context.Context, ctl *controlServer, in *intent) error {
 	waitCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	go s.refresh(waitCtx, in.Adapter.ID)
 	exited := make(chan error, len(roles))
 	for _, r := range roles {
 		go func(id string) { exited <- s.engine.WaitExited(waitCtx, id) }(in.container(r).ID)

@@ -37,7 +37,7 @@ func writeOutboxEntry(t *testing.T, dir, id string, agentGRN, target grn.GRN, co
 func forwardingLegacy(t *testing.T, s *executionStack, dir string) func() {
 	t.Helper()
 	execution := delivery.NewLegacyExecution()
-	queue, err := delivery.NewHTTPQueue(s.agentTLS, s.machine, s.agent, execution)
+	queue, err := delivery.NewHTTPQueue(s.agentTLS, s.machine, s.agent, execution, delivery.NewCertificate(nil))
 	require.NoError(t, err)
 	rt := newRuntimeDouble(t, s.agent, s.epoch, generationOf(1))
 	gateway, err := delivery.NewHTTPGateway(rt.server.Client(), rt.server.URL, s.agent)
@@ -46,7 +46,7 @@ func forwardingLegacy(t *testing.T, s *executionStack, dir string) func() {
 	require.NoError(t, err)
 	loop, err := delivery.NewService(delivery.Ends{
 		Agent: s.agent, Queue: queue, Gateway: gateway, Execution: execution,
-		Credentials: delivery.NewFileCredentials("", (&heldPair{pair: s.agentPair(t)}).get), Outbox: outbox,
+		Credentials: delivery.NewFileCredentials("", delivery.NewCertificate((&heldPair{pair: s.agentPair(t)}).get)), Outbox: outbox,
 	}, delivery.Config{
 		RetryDelay: 10 * time.Millisecond, MaxRetryDelay: 50 * time.Millisecond, MinRenewInterval: 50 * time.Millisecond,
 		StatusInterval: 10 * time.Millisecond, OutboxInterval: 20 * time.Millisecond,

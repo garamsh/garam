@@ -90,6 +90,12 @@ type intent struct {
 	RequireStore bool `json:"requireStore"`
 	// PlacementToken is what the adapter presents on activation.
 	PlacementToken string `json:"placementToken"`
+	// ControlToken is what the generation's adapter presents to this
+	// supervisor's control in the token mode, and empty in the
+	// certificate mode. The supervisor draws it with the intent and
+	// never sends it to garam, so garam accepts it nowhere and control
+	// accepts nothing else (ADR-0100).
+	ControlToken string `json:"controlToken,omitempty"`
 
 	Runtime   containerRecord `json:"runtime"`
 	Workspace containerRecord `json:"workspace"`

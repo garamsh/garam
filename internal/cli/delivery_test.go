@@ -51,9 +51,9 @@ func adapterKeyMaterial(t *testing.T) (certFile, keyFile, serverRootFile string)
 
 // TestAdapterLoop_RefusesWhatItCannotRunOn covers what the process will
 // not start without, in either mode ADR-0084 lets the deployment
-// choose. The two working sets are the controls: each case below
-// changes one value of one of them, so what refuses is that value
-// rather than anything beside it.
+// choose and either credential mode ADR-0100 adds. The four working
+// sets are the controls: each case below changes one value of one of
+// them, so what refuses is that value rather than anything beside it.
 func TestAdapterLoop_RefusesWhatItCannotRunOn(t *testing.T) {
 	certFile, keyFile, serverRootFile := adapterKeyMaterial(t)
 	legacy := adapterSettings{
@@ -76,6 +76,15 @@ func TestAdapterLoop_RefusesWhatItCannotRunOn(t *testing.T) {
 	onSocket := fenced
 	onSocket.controlSocket = filepath.Join(t.TempDir(), "control.sock")
 	require.NoError(t, onSocket.build(), "a fenced adapter dials control on a socket where one is named")
+	tokens := legacy
+	tokens.certFile, tokens.keyFile = "", ""
+	tokens.tokenFile = filepath.Join(t.TempDir(), "agent-token")
+	require.NoError(t, tokens.build(), "the unfenced token control: a garam token alone, read per request")
+	fencedTokens := fenced
+	fencedTokens.certFile, fencedTokens.keyFile = "", ""
+	fencedTokens.tokenFile = tokens.tokenFile
+	fencedTokens.controlToken = filepath.Join(t.TempDir(), "control-token")
+	require.NoError(t, fencedTokens.build(), "the fenced token control: both token files beside the control settings")
 
 	tests := map[string]adapterSettings{}
 	change := func(name string, from adapterSettings, edit func(*adapterSettings)) {
@@ -101,6 +110,16 @@ func TestAdapterLoop_RefusesWhatItCannotRunOn(t *testing.T) {
 	change("no outbox beside the control settings", fenced, func(s *adapterSettings) { s.outboxDir = "" })
 	change("a control address that is not https", fenced, func(s *adapterSettings) { s.controlURL = "http://control.example" })
 	change("a control root that is not one", fenced, func(s *adapterSettings) { s.controlRoot = s.keyFile })
+	change("a token file beside the certificate", legacy, func(s *adapterSettings) { s.tokenFile = tokens.tokenFile })
+	change("a token file beside the key alone", tokens, func(s *adapterSettings) { s.keyFile = keyFile })
+	change("a control token beside the certificate", fenced, func(s *adapterSettings) {
+		s.controlToken = fencedTokens.controlToken
+	})
+	change("a control token without the control settings", tokens, func(s *adapterSettings) {
+		s.controlToken = fencedTokens.controlToken
+	})
+	change("no control token beside the control settings", fencedTokens, func(s *adapterSettings) { s.controlToken = "" })
+	change("no credential at all", tokens, func(s *adapterSettings) { s.tokenFile = "" })
 	for name, settings := range tests {
 		t.Run(name, func(t *testing.T) {
 			err := settings.build()

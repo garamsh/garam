@@ -265,7 +265,7 @@ func (h *host) live(role workload.Role) *stubContainer {
 // supervisor by, and its placement token.
 func (h *host) adapterOf(c *stubContainer) (*delivery.HTTPAuthority, string) {
 	h.t.Helper()
-	auth, err := delivery.NewHTTPAuthority(h.clientOf(c, h.id.leaf), "https://"+workload.ControlName, testAgent)
+	auth, err := delivery.NewHTTPAuthority(h.clientOf(c, h.id.leaf), "https://"+workload.ControlName, testAgent, delivery.NewCertificate(nil))
 	require.NoError(h.t, err)
 	return auth, string(c.files["/etc/garam/placement-token"].Data)
 }
@@ -355,7 +355,7 @@ func TestActivate_ForwardsTheGenerationTheRuntimeIs(t *testing.T) {
 	_, _, adapter := h.serving()
 	auth, token := h.adapterOf(adapter)
 	generation := newGeneration()
-	id := delivery.RequestID(binding(generation), token)
+	id := delivery.RequestID(delivery.ExecutionContract, binding(generation), token)
 
 	first, err := auth.Activate(context.Background(), id, binding(generation), token)
 	require.NoError(t, err)
@@ -390,7 +390,7 @@ func TestActivate_RefusesWhatIsNotThisGeneration(t *testing.T) {
 	auth, token := h.adapterOf(adapter)
 
 	activate := func(b delivery.Binding, presented string) error {
-		_, err := auth.Activate(context.Background(), delivery.RequestID(b, presented), b, presented)
+		_, err := auth.Activate(context.Background(), delivery.RequestID(delivery.ExecutionContract, b, presented), b, presented)
 		return err
 	}
 	refusedAs := func(t *testing.T, err error, kind string) {
@@ -416,7 +416,7 @@ func TestActivate_RefusesWhatIsNotThisGeneration(t *testing.T) {
 	assert.Empty(t, h.garam.asked(), "nothing refused reached garam")
 
 	generation := newGeneration()
-	_, err := auth.Activate(context.Background(), delivery.RequestID(binding(generation), token), binding(generation), token)
+	_, err := auth.Activate(context.Background(), delivery.RequestID(delivery.ExecutionContract, binding(generation), token), binding(generation), token)
 	require.NoError(t, err, "the control: this generation's own request is forwarded")
 
 	t.Run("a second generation of the same runtime", func(t *testing.T) {
@@ -442,7 +442,7 @@ func TestActivate_RefusesAnUnauthenticatedCaller(t *testing.T) {
 	_, token := h.adapterOf(adapter)
 	generation := newGeneration()
 	body := fmt.Sprintf(`{"requestId":%q,"epoch":"3","generation":%q,"configRevision":"r1"}`,
-		delivery.RequestID(binding(generation), token), generation)
+		delivery.RequestID(delivery.ExecutionContract, binding(generation), token), generation)
 
 	post := func(client *http.Client, contract, authorization string) (*http.Response, error) {
 		req, err := http.NewRequest(http.MethodPost,
@@ -502,7 +502,7 @@ func TestActivate_MapsGaramsAnswer(t *testing.T) {
 			_, _, adapter := h.serving()
 			auth, token := h.adapterOf(adapter)
 			generation := newGeneration()
-			_, err := auth.Activate(context.Background(), delivery.RequestID(binding(generation), token), binding(generation), token)
+			_, err := auth.Activate(context.Background(), delivery.RequestID(delivery.ExecutionContract, binding(generation), token), binding(generation), token)
 			require.Error(t, err)
 			assert.Equal(t, tt.want, errorx.KindOf(err), err.Error())
 			assert.Contains(t, err.Error(), tt.kind)
@@ -521,7 +521,7 @@ func TestActivate_RefusesAGenerationAnEarlierIntentActivated(t *testing.T) {
 	_, _, adapter := h.serving()
 	auth, token := h.adapterOf(adapter)
 	stale := newGeneration()
-	_, err := auth.Activate(context.Background(), delivery.RequestID(binding(stale), token), binding(stale), token)
+	_, err := auth.Activate(context.Background(), delivery.RequestID(delivery.ExecutionContract, binding(stale), token), binding(stale), token)
 	require.NoError(t, err)
 	require.NoError(t, first.stop())
 
@@ -534,12 +534,12 @@ func TestActivate_RefusesAGenerationAnEarlierIntentActivated(t *testing.T) {
 	successor := h.live(workload.RoleAdapter)
 	h.engine.mu.Unlock()
 	auth, token = h.adapterOf(successor)
-	_, err = auth.Activate(context.Background(), delivery.RequestID(binding(stale), token), binding(stale), token)
+	_, err = auth.Activate(context.Background(), delivery.RequestID(delivery.ExecutionContract, binding(stale), token), binding(stale), token)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "placement_not_current")
 
 	fresh := newGeneration()
-	_, err = auth.Activate(context.Background(), delivery.RequestID(binding(fresh), token), binding(fresh), token)
+	_, err = auth.Activate(context.Background(), delivery.RequestID(delivery.ExecutionContract, binding(fresh), token), binding(fresh), token)
 	require.NoError(t, err, "the control: the successor's own generation")
 	asked := h.garam.asked()
 	require.Len(t, asked, 2)

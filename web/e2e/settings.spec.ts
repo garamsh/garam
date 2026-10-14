@@ -57,6 +57,49 @@ test.describe("organization settings", () => {
     ).toBeVisible();
   });
 
+  test("reads the count again when the dialog opens, not when the page loaded", async ({
+    page,
+    signedIn,
+  }) => {
+    await page.goto(`/console/orgs/${signedIn.orgSlug}/settings`);
+    await expectHydrated(page);
+    // The organization gains a project after the page has loaded.
+    const created = await page.request.post(
+      `/api/orgs/${signedIn.orgSlug}/projects`,
+      { data: { name: "Added later" } },
+    );
+    expect(created.status()).toBe(201);
+
+    await page.getByRole("button", { name: "Delete organization" }).click();
+
+    await expect(
+      page.getByRole("alertdialog").getByRole("listitem"),
+    ).toContainText(["2projects"]);
+  });
+
+  test("shows a name's double space as typed, so it can be typed back", async ({
+    page,
+    signedIn,
+  }) => {
+    const spaced = `Two  Spaces ${signedIn.orgSlug}`;
+    await page.goto(`/console/orgs/${signedIn.orgSlug}/settings`);
+    await expectHydrated(page);
+    const general = page.getByRole("region", { name: "General" });
+    await general.getByLabel("Name", { exact: true }).fill(spaced);
+    await general.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(general.getByRole("status")).toContainText("Saved as");
+
+    await page.getByRole("button", { name: "Delete organization" }).click();
+    const dialog = page.getByRole("alertdialog");
+    // innerText is what is rendered: collapsed whitespace would read
+    // one space here.
+    expect(await dialog.locator("label").innerText()).toContain(spaced);
+    await dialog.getByLabel(/to confirm/).fill(spaced);
+    await expect(
+      dialog.getByRole("button", { name: "Delete organization" }),
+    ).toBeEnabled();
+  });
+
   test("offers a member neither rename nor delete, and still names the organization", async ({
     page,
     context,

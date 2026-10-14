@@ -12,10 +12,14 @@ import { enter } from "@/testing/enter";
 import { API_URL, acmeDeletionPreview } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
+// `refresh` is how an opened dialog reads the preview again; the test
+// records each call.
+const { refresh } = vi.hoisted(() => ({ refresh: vi.fn() }));
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
     throw new Error(`NEXT_REDIRECT:${url}`);
   },
+  useRouter: () => ({ refresh }),
 }));
 
 // `revalidatePath` needs a request scope the test does not run in.
@@ -37,18 +41,26 @@ class Navigation extends Component<
 
 const OK: DeletionPreviewRead = { status: "ok", preview: acmeDeletionPreview };
 
-async function open(read: DeletionPreviewRead = OK) {
+async function open(read: DeletionPreviewRead = OK, name = "Acme") {
   const user = userEvent.setup();
   render(
     <Navigation>
-      <DeleteOrgDialog org="acme" name="Acme" read={read} />
+      <DeleteOrgDialog org="acme" name={name} read={read} />
     </Navigation>,
   );
   await user.click(screen.getByRole("button", { name: "Delete organization" }));
   const dialog = within(
-    screen.getByRole("alertdialog", { name: "Delete Acme?" }),
+    screen.getByRole("alertdialog", { name: `Delete ${name}?` }),
   );
   return { user, dialog };
+}
+
+/** Closes the dialog with Cancel and opens it again. */
+async function reopen(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(screen.queryByRole("alertdialog")).toBeNull();
+  await user.click(screen.getByRole("button", { name: "Delete organization" }));
+  return within(screen.getByRole("alertdialog"));
 }
 
 describe("delete organization dialog", () => {
@@ -83,6 +95,79 @@ describe("delete organization dialog", () => {
     expect(dialog.queryByText("Its certificate authority goes too")).toBeNull();
     // The control: the counts still render in the same dialog.
     expect(dialog.getByText("policies")).toBeInTheDocument();
+  });
+
+  it("reads the preview again each time the dialog opens", async () => {
+    refresh.mockClear();
+    const user = userEvent.setup();
+    render(<DeleteOrgDialog org="acme" name="Acme" read={OK} />);
+
+    // Nothing is read again until the dialog is opened.
+    expect(refresh).not.toHaveBeenCalled();
+    await user.click(
+      screen.getByRole("button", { name: "Delete organization" }),
+    );
+    expect(refresh).toHaveBeenCalledTimes(1);
+    await reopen(user);
+    expect(refresh).toHaveBeenCalledTimes(2);
+  });
+
+  it("says an organization holding nothing counted holds nothing else", async () => {
+    const none = Object.fromEntries(
+      Object.keys(acmeDeletionPreview.counts).map((kind) => [kind, 0]),
+    ) as typeof acmeDeletionPreview.counts;
+    const { dialog } = await open({
+      status: "ok",
+      preview: { certificateAuthority: false, counts: none },
+    });
+
+    expect(dialog.getByText("It holds nothing else yet.")).toBeInTheDocument();
+    expect(dialog.queryAllByRole("listitem")).toEqual([]);
+  });
+
+  it("forgets the typed name and a refusal when the dialog closes", async () => {
+    server.use(
+      http.delete(`${API_URL}/orgs/:org`, () =>
+        HttpResponse.json(
+          { kind: "permission_denied", message: "org: denied" },
+          { status: 403 },
+        ),
+      ),
+    );
+    const { user, dialog } = await open();
+    await enter(user, dialog.getByLabelText(/Type Acme to confirm/), "Acme");
+    await user.click(
+      dialog.getByRole("button", { name: "Delete organization" }),
+    );
+    expect(
+      await dialog.findByText(/^You don't have permission to do this\./),
+    ).toBeInTheDocument();
+
+    const reopened = await reopen(user);
+
+    expect(reopened.getByLabelText(/Type Acme to confirm/)).toHaveValue("");
+    expect(
+      reopened.queryByText(/^You don't have permission to do this\./),
+    ).toBeNull();
+    expect(
+      reopened.getByRole("button", { name: "Delete organization" }),
+    ).toBeDisabled();
+  });
+
+  it("matches a name stored decomposed when it is typed composed", async () => {
+    const stored = "가람".normalize("NFD");
+    const { user, dialog } = await open(OK, stored);
+    const field = dialog.getByLabelText(/to confirm/);
+    const confirm = dialog.getByRole("button", { name: "Delete organization" });
+    expect(stored).not.toBe("가람");
+
+    // The control: a different name stays refused in the same dialog.
+    await enter(user, field, "가랑");
+    expect(confirm).toBeDisabled();
+    await user.clear(field);
+    await enter(user, field, "가람");
+
+    expect(confirm).toBeEnabled();
   });
 
   it("deletes once the name is typed, and returns to the organizations", async () => {

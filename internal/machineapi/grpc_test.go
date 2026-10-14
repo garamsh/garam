@@ -70,32 +70,23 @@ func evalInputWith(effect wire.Effect) machineapi.EvalInput {
 	}
 }
 
-// TestGRPCEvaluator_UnrecognisedEffectIsRefused holds the refusal
-// against the two effects that must still reach the engine intact:
-// alone, the refusal would hold for any reason the plumbing supplied.
-func TestGRPCEvaluator_UnrecognisedEffectIsRefused(t *testing.T) {
-	recognised := []struct {
-		effect wire.Effect
-		want   authzv1.Effect
-	}{
-		{wire.EffectAllow, authzv1.Effect_EFFECT_ALLOW},
-		{wire.EffectDeny, authzv1.Effect_EFFECT_DENY},
-	}
-	for _, c := range recognised {
-		stub := &stubAuthzServer{allowed: true}
-		ev := newGRPCEvaluator(t, stub)
-		allowed, err := ev.Evaluate(context.Background(), evalInputWith(c.effect))
-		require.NoError(t, err, "effect %q", c.effect)
-		assert.True(t, allowed, "effect %q", c.effect)
-		require.Len(t, stub.got.GetStatements(), 1, "effect %q", c.effect)
-		assert.Equal(t, c.want, stub.got.GetStatements()[0].GetEffect(), "effect %q", c.effect)
-	}
-
+// TestGRPCEvaluator_SendsTheStatementItCollected holds what this client
+// adds over the conversions internal/wire tests: the sending question
+// reaches the engine carrying its statement, and a statement the
+// conversion refuses never reaches it. The accepted question is the
+// control on the refusal.
+func TestGRPCEvaluator_SendsTheStatementItCollected(t *testing.T) {
 	stub := &stubAuthzServer{allowed: true}
-	ev := newGRPCEvaluator(t, stub)
-	allowed, err := ev.Evaluate(context.Background(), evalInputWith(wire.Effect("Maybe")))
-	require.Error(t, err)
+	allowed, err := newGRPCEvaluator(t, stub).Evaluate(context.Background(), evalInputWith(wire.EffectAllow))
+	require.NoError(t, err)
+	assert.True(t, allowed)
+	require.Len(t, stub.got.GetStatements(), 1)
+	assert.Equal(t, "machine-own-org", stub.got.GetStatements()[0].GetSid())
+	assert.Equal(t, authzv1.Effect_EFFECT_ALLOW, stub.got.GetStatements()[0].GetEffect())
+
+	refused := &stubAuthzServer{allowed: true}
+	allowed, err = newGRPCEvaluator(t, refused).Evaluate(context.Background(), evalInputWith(wire.Effect("Maybe")))
 	assert.True(t, errorx.IsKind(err, errorx.KindInternal), "got %v", err)
 	assert.False(t, allowed)
-	assert.Nil(t, stub.got, "an unrecognised Effect reached the engine")
+	assert.Nil(t, refused.got, "an unrecognised Effect reached the engine")
 }

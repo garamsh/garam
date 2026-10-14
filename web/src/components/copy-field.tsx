@@ -39,7 +39,7 @@ export function CopyField({
       <div className="flex min-w-0 items-center gap-1">
         <code
           aria-labelledby={id}
-          className="min-w-0 truncate rounded-md bg-muted px-1.5 py-0.5 font-mono text-[0.8125rem]"
+          className="min-w-0 truncate rounded-md bg-muted px-1.5 py-0.5 font-mono text-table"
         >
           {value}
         </code>

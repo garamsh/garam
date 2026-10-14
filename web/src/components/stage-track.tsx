@@ -68,11 +68,11 @@ export function StageTrack({
             <span
               aria-hidden
               className={cn(
-                "flex size-5 shrink-0 items-center justify-center rounded-full border text-[0.625rem]",
+                "flex size-5 shrink-0 items-center justify-center rounded-full border",
                 state === "done" &&
                   "border-primary bg-primary text-primary-foreground",
                 state === "current" && "border-primary ring-3 ring-primary/20",
-                state === "failed" && "border-danger bg-danger text-white",
+                state === "failed" && "border-danger bg-danger text-background",
                 state === "upcoming" && "border-border",
               )}
             >

@@ -86,20 +86,44 @@ describe("organization settings", () => {
     },
   );
 
-  it("leaves out what the server denies, and keeps the name readable", async () => {
-    server.use(answerPermissionChecks(() => "deny"));
+  it("leaves the rename out when only the rename is denied, and keeps the name readable", async () => {
+    server.use(
+      answerPermissionChecks((action) =>
+        action === "org:update" ? "deny" : "allow",
+      ),
+    );
 
     await renderServerComponent(OrgSettingsPage(params("acme")));
 
-    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
-    expect(screen.queryByRole("region", { name: "Danger zone" })).toBeNull();
-    // The control: the same render still names the organization, so
-    // the absences are the deny and not a page that failed to draw.
     const general = screen.getByRole("region", { name: "General" });
+    expect(within(general).queryByRole("button", { name: "Save" })).toBeNull();
     expect(within(general).getByText("Acme")).toBeInTheDocument();
     expect(
       within(general).getByText(/does not let you rename this organization/),
     ).toBeInTheDocument();
+    // The control: the delete, which the server allowed, is still
+    // offered.
+    expect(
+      screen.getByRole("button", { name: "Delete organization" }),
+    ).toBeInTheDocument();
+  });
+
+  it("leaves the danger zone out when only the delete is denied", async () => {
+    server.use(
+      answerPermissionChecks((action) =>
+        action === "org:delete" ? "deny" : "allow",
+      ),
+    );
+
+    await renderServerComponent(OrgSettingsPage(params("acme")));
+
+    expect(screen.queryByRole("region", { name: "Danger zone" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Delete organization" }),
+    ).toBeNull();
+    // The control: the rename, which the server allowed, is still
+    // offered.
+    expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
   });
 
   it("keeps the delete control when only the preview is refused", async () => {

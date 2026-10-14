@@ -12,9 +12,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	apigen "github.com/garamsh/garam/api"
+	"github.com/garamsh/garam/internal/agent"
 	"github.com/garamsh/garam/internal/api"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
 	"github.com/garamsh/garam/internal/user"
 )
@@ -169,15 +171,18 @@ func TestCheckPermissions_RefusesANonMember(t *testing.T) {
 }
 
 // TestCheckPermissions_AnswersUnknownWhereCheckIsNotTheDecision holds
-// that an action enforcement decides on more than the engine's Check
-// is answered unknown even where Check allows it: one case for a
-// delegation grant and one for current policy. The engine here allows
-// everything, and the plainly checked action is the control.
+// that an action enforcement decides on more than the engine's Check is
+// answered unknown where everything this operation reads allows it:
+// one case for a delegation grant, whose mint's check allows here, and
+// one for current policy. The engine here allows everything, and the
+// plainly checked action is the control.
 func TestCheckPermissions_AnswersUnknownWhereCheckIsNotTheDecision(t *testing.T) {
 	f := newFixture(t)
 	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
 	slug := createOrg(t, f, owner, "acme")
 	f.evaluator.EXPECT().Evaluate(mock.Anything, mock.Anything).Return(true, nil).Maybe()
+	f.authority.EXPECT().AuthorizeOperation(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return(nil).Once()
 
 	rec := f.do(t, "POST", "/orgs/"+slug+"/permission-checks", checksBody(t,
 		apigen.PermissionCheck{Action: org.ActionAgentCreate},
@@ -191,6 +196,76 @@ func TestCheckPermissions_AnswersUnknownWhereCheckIsNotTheDecision(t *testing.T)
 	assert.Equal(t, apigen.DecisionUnknown, results[0].Decision, "a delegation grant decides agent:create")
 	assert.Equal(t, apigen.DecisionUnknown, results[1].Decision, "current policy decides operator:delegate")
 	assert.Equal(t, apigen.DecisionAllow, results[2].Decision, "Check alone decides operator:register")
+}
+
+// TestCheckPermissions_AsksAGrantActionAsItsMintDoes holds that every
+// action a delegation grant decides is put to the check its mint runs,
+// with the mint's actor, organization, operation and object: the
+// organization, or the agent the operation acts on. That check denying
+// answers deny, and allowing answers unknown, since the grant is left.
+func TestCheckPermissions_AsksAGrantActionAsItsMintDoes(t *testing.T) {
+	agentX := &apigen.PermissionResource{Type: apigen.PermissionResourceTypeAgent, Id: "x"}
+	tests := []struct {
+		action   string
+		resource *apigen.PermissionResource
+		onAgent  bool
+	}{
+		{org.ActionAgentCreate, nil, false},
+		{org.ActionAgentTemplatePublish, nil, false},
+		{org.ActionExecutionProfileRead, nil, false},
+		{org.ActionAgentConfigure, agentX, true},
+		{org.ActionAgentRecover, agentX, true},
+		{org.ActionAgentCutover, agentX, true},
+		{org.ActionAgentExecutionRead, agentX, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.action, func(t *testing.T) {
+			f := newFixture(t)
+			owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+			slug := createOrg(t, f, owner, "acme")
+			object := orgGRNOf(slug)
+			if tc.onAgent {
+				object = grn.New(slug, grn.DefaultProject, agent.ServiceType, "x")
+			}
+			denied := errorx.New(errorx.KindPermissionDenied, "insufficient role")
+			f.authority.EXPECT().AuthorizeOperation(mock.Anything, userGRNOf("owner-sub"), orgGRNOf(slug), object,
+				operator.Operation(tc.action)).Return(denied).Once()
+			f.authority.EXPECT().AuthorizeOperation(mock.Anything, userGRNOf("owner-sub"), orgGRNOf(slug), object,
+				operator.Operation(tc.action)).Return(nil).Once()
+			ask := func() apigen.PermissionDecision {
+				rec := f.do(t, "POST", "/orgs/"+slug+"/permission-checks",
+					checksBody(t, apigen.PermissionCheck{Action: tc.action, Resource: tc.resource}), owner)
+				require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+				return decodeBody[apigen.PermissionCheckAnswer](t, rec).Results[0].Decision
+			}
+
+			assert.Equal(t, apigen.DecisionDeny, ask(), "the mint's check denies")
+			assert.Equal(t, apigen.DecisionUnknown, ask(), "the mint's check allows, and the grant is left")
+		})
+	}
+}
+
+// TestCheckPermissions_FailsWholeWhenAMintCheckCannotDecide holds that
+// a mint's check that fails to decide fails the request, as an engine
+// error does, rather than reading as a deny. The same request answered
+// is the control.
+func TestCheckPermissions_FailsWholeWhenAMintCheckCannotDecide(t *testing.T) {
+	f := newFixture(t)
+	owner := f.sessionCookieFor(t, "owner-sub", "Owner")
+	slug := createOrg(t, f, owner, "acme")
+	f.authority.EXPECT().AuthorizeOperation(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return(errorx.New(errorx.KindUnavailable, "current authorization")).Once()
+	f.authority.EXPECT().AuthorizeOperation(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return(nil).Once()
+	body := checksBody(t, apigen.PermissionCheck{Action: org.ActionAgentTemplatePublish})
+	path := "/orgs/" + slug + "/permission-checks"
+
+	rec := f.do(t, "POST", path, body, owner)
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+	assert.NotContains(t, rec.Body.String(), "results", "no pair is answered")
+
+	rec = f.do(t, "POST", path, body, owner)
+	assert.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 }
 
 // TestCheckPermissions_RefusesAPairNoOperationChecks refuses an action
@@ -237,6 +312,8 @@ func TestCheckPermissions_EveryActionPairsWithSomething(t *testing.T) {
 	} {
 		resources = append(resources, &apigen.PermissionResource{Type: kind, Id: "x"})
 	}
+	f.authority.EXPECT().AuthorizeOperation(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return(nil).Maybe()
 	actions := org.Actions()
 	require.NotEmpty(t, actions)
 

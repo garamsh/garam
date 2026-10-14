@@ -8,6 +8,7 @@ import (
 	apigen "github.com/garamsh/garam/api"
 	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/grn"
+	"github.com/garamsh/garam/internal/operator"
 	"github.com/garamsh/garam/internal/org"
 )
 
@@ -33,8 +34,9 @@ const (
 	// decidedByCheck is the engine's Check alone, which this operation
 	// asks too.
 	decidedByCheck decidedBy = iota
-	// decidedByGrant is Check and a delegation grant to the operator
-	// (ADR-0078), which this operation does not read.
+	// decidedByGrant is the check a mint of the action runs, which this
+	// operation asks too, and a delegation grant to the operator
+	// (ADR-0078), which it does not read.
 	decidedByGrant
 	// decidedByCurrent is the org's current policy read past the
 	// engine's cache (CheckCurrent), which this operation does not read.
@@ -108,8 +110,10 @@ var actionRules = map[string]actionRule{
 // CheckPermissions answers, for each pair asked, whether enforcement
 // would allow the signed-in caller the action on the resource: the
 // same statements, groups and engine `Check` authorizeOn uses. It
-// answers allow or deny and never why, and unknown for an action
-// enforcement decides on more than that Check. Requires membership.
+// answers allow or deny and never why. An action a delegation grant
+// also decides is denied where its mint's check denies and unknown
+// where only the grant is left; one current policy decides is unknown.
+// Requires membership.
 func (s *Server) CheckPermissions(w http.ResponseWriter, r *http.Request, orgSlug apigen.Org) {
 	u, err := s.currentUser(r)
 	if err != nil {
@@ -157,7 +161,9 @@ func (s *Server) decide(r *http.Request, c *caller, target grn.GRN, action strin
 		return apigen.DecisionDeny, nil
 	}
 	switch actionRules[action].decidedBy {
-	case decidedByGrant, decidedByCurrent:
+	case decidedByGrant:
+		return s.decideAsMint(r, c, target, action)
+	case decidedByCurrent:
 		return apigen.DecisionUnknown, nil
 	case decidedByCheck:
 	}
@@ -169,6 +175,25 @@ func (s *Server) decide(r *http.Request, c *caller, target grn.GRN, action strin
 		return apigen.DecisionAllow, nil
 	}
 	return apigen.DecisionDeny, nil
+}
+
+// decideAsMint answers a grant-decided action with the check its mint
+// runs on the same actor, action and target. A deny there is final; an
+// allow leaves the grant, which this operation does not read, so the
+// answer is unknown.
+func (s *Server) decideAsMint(r *http.Request, c *caller, target grn.GRN, action string) (apigen.PermissionDecision, error) {
+	op, err := operator.ParseOperation(action)
+	if err != nil {
+		return "", err
+	}
+	err = s.authority.AuthorizeOperation(r.Context(), c.user.GRN, c.org, target, op)
+	switch {
+	case err == nil:
+		return apigen.DecisionUnknown, nil
+	case errorx.IsKind(err, errorx.KindPermissionDenied):
+		return apigen.DecisionDeny, nil
+	}
+	return "", err
 }
 
 // permissionTarget is the GRN enforcement checks a pair's resource as,

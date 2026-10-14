@@ -491,19 +491,25 @@ and not in the same place on every surface.
   when it arrives, so an answer is a hint the console renders by and
   not a grant
   ([ADR-0103](./adr/0103-the-console-has-one-design-system-and-asks-the-server-what-a-caller-may-do.md)
-  §Role-aware UI). Each pair is answered one of three ways:
+  §Role-aware UI). Each pair is answered allow, deny or unknown:
   - **allow or deny**, where enforcement is the engine's `Check` alone:
     the same statements and groups, put to the same `Check`. It never
     calls `Explain`, so no answer says why. A missing group or project
     answers as a denied one, so the answer tells no one what exists.
-  - **unknown**, where enforcement reads more than that `Check`: a
-    delegation grant for `agent:create`, `agent:configure`,
+  - **deny or unknown** for an action a mint decides together with a
+    delegation grant: `agent:create`, `agent:configure`,
     `agent:recover`, `agent:cutover`, `agent-template:publish`,
     `execution-profile:read` and `agent:execution-read`
-    ([ADR-0078](./adr/0078-a-lifecycle-authority-activates-a-runtime-generation-and-old-generations-and-lineages-are-fenced.md)),
-    and current policy past the engine's cache for `operator:delegate`
-    and `agent:enroll`. A cached deny there could hide a control the
-    operation would allow.
+    ([ADR-0078](./adr/0078-a-lifecycle-authority-activates-a-runtime-generation-and-old-generations-and-lineages-are-fenced.md)).
+    The pair is put to the check the mint runs, through the one
+    function both call
+    (`internal/operator/authority_service.go`, `AuthorizeOperation`).
+    A deny there is the mint's refusal, so it is answered deny. An
+    allow leaves the grant, which `checkPermissions` does not read, so
+    it is answered unknown.
+  - **unknown**, where enforcement reads current policy past the
+    engine's cache: `operator:delegate` and `agent:enroll`. A cached
+    deny there could hide a control the operation would allow.
   - **deny** for an action garam does not define, because a role's
     wildcard such as `org:*` would otherwise allow a name no operation
     checks.

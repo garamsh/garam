@@ -337,6 +337,10 @@ func TestRun_TokenModeRetriesARefusedTokenAndKeepsTheOutbox(t *testing.T) {
 	files := startTokenMode(t, queue, gateway, nil, outbox)
 
 	eventually(t, func() bool { return queue.claimsAttempted() >= 3 }, "a refused token is retried, not paused")
+	retried := queue.claimsAttempted()
+	time.Sleep(200 * time.Millisecond)
+	assert.Less(t, queue.claimsAttempted()-retried, 40,
+		"the retries back off: at most one per 20ms ceiling, where a loop without backoff spins")
 	assert.Empty(t, queue.submissions(), "nothing is accepted on a refused token")
 	assert.FileExists(t, filepath.Join(dir, "entry-1.json"), "the outbox is kept")
 

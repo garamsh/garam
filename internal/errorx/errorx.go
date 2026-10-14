@@ -87,6 +87,17 @@ type errorx struct {
 	kind    Kind
 	message string
 	cause   error
+	reason  Reason
+}
+
+// Reason is a stable, documented code a client may branch on, where the
+// kind alone does not say which refusal it was. Code names the rule
+// that refused; Path, where the refusal is about one place in a
+// document the caller sent, is a JSON Pointer (RFC 6901) to it. The
+// zero Reason is none.
+type Reason struct {
+	Code string
+	Path string
 }
 
 func (e *errorx) Error() string {
@@ -103,6 +114,34 @@ func (e *errorx) Unwrap() error { return e.cause }
 // New constructs an error with a fixed kind and message.
 func New(kind Kind, message string) Error {
 	return &errorx{kind: kind, message: message}
+}
+
+// NewWithReason constructs an error with a fixed kind, message and
+// reason.
+func NewWithReason(kind Kind, reason Reason, message string) Error {
+	return &errorx{kind: kind, message: message, reason: reason}
+}
+
+// WrapWithReason is [Wrap] with an explicit kind and a reason, for a
+// refusal whose cause is text this project did not write: the cause
+// stays on the chain for the log, and the reason is what a client reads.
+func WrapWithReason(err error, message string, kind Kind, reason Reason) Error {
+	if err == nil {
+		return nil
+	}
+	return &errorx{kind: kind, message: message, cause: err, reason: reason}
+}
+
+// ReasonOf returns the reason the first error in the chain carrying one
+// was constructed with, and false where none does.
+func ReasonOf(err error) (Reason, bool) {
+	for err != nil {
+		if e, ok := err.(*errorx); ok && e.reason.Code != "" {
+			return e.reason, true
+		}
+		err = errors.Unwrap(err)
+	}
+	return Reason{}, false
 }
 
 // Wrap appends a context message to an error chain. Kind is taken

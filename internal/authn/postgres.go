@@ -81,11 +81,12 @@ func NewPostgresOAuthStateStore(pool *pgxpool.Pool) *PostgresOAuthStateStore {
 // ErrOAuthStateRateLimited when MaxLiveOAuthStates are already live.
 // The statement decides: it inserts nothing past the bound, so the
 // rows it reports are the whole answer.
-func (s *PostgresOAuthStateStore) Issue(ctx context.Context, state string, ttl time.Duration) error {
+func (s *PostgresOAuthStateStore) Issue(ctx context.Context, state string, ttl time.Duration, returnPath string) error {
 	issued, err := s.q.IssueOAuthState(ctx, db.IssueOAuthStateParams{
-		StateHash: HashToken(state),
-		ExpiresAt: stamp(time.Now().UTC().Add(ttl)),
-		MaxLive:   MaxLiveOAuthStates,
+		StateHash:  HashToken(state),
+		ExpiresAt:  stamp(time.Now().UTC().Add(ttl)),
+		ReturnPath: pgtype.Text{String: returnPath, Valid: returnPath != ""},
+		MaxLive:    MaxLiveOAuthStates,
 	})
 	if err != nil {
 		return pgxerr.Classify(err, "issue oauth state", nil, nil)
@@ -96,18 +97,16 @@ func (s *PostgresOAuthStateStore) Issue(ctx context.Context, state string, ttl t
 	return nil
 }
 
-// Consume spends a live state, or returns ErrOAuthStateNotLive. The
-// delete is the whole decision: two callbacks racing on one state, one
-// row deleted, so only one of them is told it spent it.
-func (s *PostgresOAuthStateStore) Consume(ctx context.Context, state string) error {
-	spent, err := s.q.ConsumeOAuthState(ctx, HashToken(state))
+// Consume spends a live state and answers its return path, or returns
+// ErrOAuthStateNotLive. The delete is the whole decision: two
+// callbacks racing on one state, one row deleted, so only one of them
+// is told it spent it, and only that one reads the path.
+func (s *PostgresOAuthStateStore) Consume(ctx context.Context, state string) (string, error) {
+	returnPath, err := s.q.ConsumeOAuthState(ctx, HashToken(state))
 	if err != nil {
-		return pgxerr.Classify(err, "consume oauth state", nil, nil)
+		return "", pgxerr.Classify(err, "consume oauth state", ErrOAuthStateNotLive, nil)
 	}
-	if spent == 0 {
-		return ErrOAuthStateNotLive
-	}
-	return nil
+	return returnPath.String, nil
 }
 
 // stamp converts a time.Time to a valid pgtype.Timestamptz.

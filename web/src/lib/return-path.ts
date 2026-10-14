@@ -25,15 +25,44 @@ export const RETURN_PATH_HEADER = "x-garam-return-path";
 
 const INVITATION_PATH = /^\/console\/invitations\/([^/?#]+)$/;
 
-/** `value` as a console path to return to, or null where it is not one. */
+/** The bound on a return path, in UTF-8 bytes, as the backend counts. */
+const MAX_RETURN_PATH_BYTES = 2048;
+
+/**
+ * `value` as a console path to return to, or null where it is not one:
+ * the console or a path below it, well-formed and at most
+ * `MAX_RETURN_PATH_BYTES` in UTF-8, with no backslash, control
+ * character or dot segment. `internal/api/return_path.go` holds the
+ * same rule for the provider sign-in, and
+ * `internal/api/testdata/return-path-vectors.json` is the table both
+ * are tested against.
+ */
 export function safeReturnPath(value: unknown): string | null {
-  if (typeof value !== "string" || value.length > 2048) return null;
+  if (typeof value !== "string" || !value.isWellFormed()) return null;
+  if (new TextEncoder().encode(value).length > MAX_RETURN_PATH_BYTES) {
+    return null;
+  }
   if (value !== "/console" && !value.startsWith("/console/")) return null;
   // A backslash or a control character is read by some browsers as a
   // path separator or dropped, either of which can turn a console path
   // into another origin's.
   if (/[\\\u0000-\u001f\u007f]/.test(value)) return null;
+  if (hasDotSegment(value)) return null;
   return value;
+}
+
+/**
+ * Whether the path part of `path` holds a `.` or `..` segment, written
+ * plainly or percent-encoded, which a browser's URL parser resolves.
+ */
+function hasDotSegment(path: string): boolean {
+  return path
+    .split(/[?#]/, 1)[0]
+    .split("/")
+    .some((segment) => {
+      const plain = segment.toLowerCase().replaceAll("%2e", ".");
+      return plain === "." || plain === "..";
+    });
 }
 
 /**

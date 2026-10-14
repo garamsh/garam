@@ -26,6 +26,26 @@ const (
 
 // Login starts the OAuth authorization code flow with PKCE.
 func (s *Server) Login(w http.ResponseWriter, r *http.Request, provider apigen.Provider) {
+	s.startLogin(w, r, provider, "")
+}
+
+// LoginWithReturnPath starts the same flow, landing on the console path
+// the form body names once it completes. The path is held with the
+// login's state rather than echoed anywhere, and one that is not a
+// console path is dropped: a cross-site form can start a login, and
+// the most it decides is where inside the console that login lands.
+func (s *Server) LoginWithReturnPath(w http.ResponseWriter, r *http.Request, provider apigen.Provider) {
+	if err := r.ParseForm(); err != nil {
+		writeError(w, errorx.Wrap(err, "login form", errorx.KindInvalidArgument))
+		return
+	}
+	returnPath, _ := safeReturnPath(r.PostForm.Get("next"))
+	s.startLogin(w, r, provider, returnPath)
+}
+
+// startLogin issues the state, records it with returnPath, and sends
+// the browser to the provider.
+func (s *Server) startLogin(w http.ResponseWriter, r *http.Request, provider apigen.Provider, returnPath string) {
 	p, ok := s.providers[provider]
 	if !ok {
 		writeError(w, errorx.New(errorx.KindNotFound, "unknown provider"))
@@ -44,7 +64,7 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request, provider apigen.P
 	// Recorded before it is handed out, and for the same lifetime the
 	// cookie gets: the callback spends the record, so a state that
 	// outlived it would be a cookie no callback accepts.
-	if err := s.states.Issue(r.Context(), state, oauthFlowTTL); err != nil {
+	if err := s.states.Issue(r.Context(), state, oauthFlowTTL, returnPath); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -92,7 +112,8 @@ func (s *Server) OauthCallback(w http.ResponseWriter, r *http.Request, provider 
 	// state leave one session between them. Nothing that fails above
 	// reaches here, which leaves the state live for the browser that
 	// owns it — as a refused membership leaves an invitation unburned.
-	if err := s.states.Consume(r.Context(), state.Value); err != nil {
+	returnPath, err := s.states.Consume(r.Context(), state.Value)
+	if err != nil {
 		writeError(w, err)
 		return
 	}
@@ -104,8 +125,14 @@ func (s *Server) OauthCallback(w http.ResponseWriter, r *http.Request, provider 
 	s.expireCookie(w, verifierCookie)
 	s.setCookie(w, sessionCookie, token, s.cfg.SessionTTL)
 	// `/` is the public landing page; a signed-in visitor belongs in
-	// the console.
-	http.Redirect(w, r, "/console", http.StatusFound)
+	// the console, at the path the login was started for where there
+	// is one. It was checked before it was stored, and is checked again
+	// here so a row written by anything else cannot redirect off it.
+	destination, ok := safeReturnPath(returnPath)
+	if !ok {
+		destination = "/console"
+	}
+	http.Redirect(w, r, destination, http.StatusFound)
 }
 
 // ListProviders returns the names of the registered sign-in providers.

@@ -23,12 +23,13 @@ DELETE FROM sessions WHERE token_hash = $1;
 WITH pruned AS (
     DELETE FROM oauth_states WHERE expires_at <= now()
 )
-INSERT INTO oauth_states (state_hash, expires_at)
-SELECT $1, $2
+INSERT INTO oauth_states (state_hash, expires_at, return_path)
+SELECT $1, $2, sqlc.narg('return_path')
 WHERE (SELECT count(*) FROM oauth_states live WHERE live.expires_at > now()) < sqlc.arg('max_live')::bigint;
 
--- name: ConsumeOAuthState :execrows
-DELETE FROM oauth_states WHERE state_hash = $1 AND expires_at > now();
+-- name: ConsumeOAuthState :one
+DELETE FROM oauth_states WHERE state_hash = $1 AND expires_at > now()
+RETURNING return_path;
 
 -- name: CreatePasswordCredential :exec
 INSERT INTO password_credentials (user_grn, verifier, created_at, updated_at)

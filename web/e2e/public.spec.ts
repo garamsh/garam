@@ -71,7 +71,7 @@ test.describe("signed out", () => {
     ).toBeVisible();
     await expect(page.getByLabel("Username")).toBeVisible();
     await expect(
-      page.getByRole("link", { name: "Sign in with Google" }),
+      page.getByRole("button", { name: "Sign in with Google" }),
     ).toHaveCount(0);
   });
 

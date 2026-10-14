@@ -223,8 +223,10 @@ session exists, so the token survives either way in
 (`web/src/lib/return-path.ts`, which returns only to a console path).
 A session the backend rejects behind a cookie the browser still holds
 is sent the same way: `web/src/proxy.ts` stamps each console request
-with its path, and the redirect reads it back. The Google round trip
-carries no return path and lands on the console.
+with its path, and the redirect reads it back. The Google button posts
+the same path in its form body to `POST /auth/login/{provider}`, which
+holds it with the login's state, so the provider round trip lands on
+it too.
 
 Where the token may appear is fixed:
 
@@ -252,8 +254,10 @@ asserted: one file to read to know everything the application asks for.
 
 **It words what it refuses.** A Server Action garam refused returns
 the sentence `web/src/lib/refusal-copy.ts` writes for the answer's
-HTTP status and `kind`, read for the operation that asked where the
-pair means something particular to it, and never one matched from the
+`reason` where garam sent one it documents, naming the place its
+`path` points at. Otherwise the sentence is the one for the HTTP
+status and `kind`, read for the operation that asked where the pair
+means something particular to it. It is never one matched from the
 English of `message`. That text reaches a person only quoted inside
 the generic sentence for a refusal nothing maps.
 

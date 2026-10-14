@@ -272,11 +272,12 @@ JOIN operators o ON o.grn = k.operator_grn
 WHERE k.operator_grn = sqlc.arg('operator_grn') AND k.kid = sqlc.arg('kid')
   AND k.revoked_at IS NULL AND (k.retires_at IS NULL OR k.retires_at > now());
 
--- An exchange holds the registration before the key, the order an
--- issuance takes them in, so neither waits on the other while holding
--- what the other needs (#1399). KEY SHARE is the lock the token's
--- foreign key takes anyway: it waits for an issuance or a deletion of
--- the operator, and for nothing else.
+-- An exchange holds its registration, and its audience's, before the
+-- key or credential and the tokens, the order an issuance or a deletion
+-- takes them in, so neither waits on the other while holding what the
+-- other needs (#1399). KEY SHARE is the lock the token's foreign keys
+-- take anyway: it waits for an issuance or a deletion of the operator,
+-- and for nothing else.
 -- name: HoldOperatorRegistration :one
 SELECT grn FROM operators WHERE grn = $1 FOR KEY SHARE;
 

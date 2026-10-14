@@ -624,7 +624,8 @@ func TestOperatorKey_AnImmediateRotationRacingExchangesLeavesNoTokenOfTheOldKey(
 // uncommitted spend of the same jti, another replica's, parks the
 // exchange there. The rotation waits for the exchange and deletes the
 // token it recorded; holding the two rows in opposite orders, each
-// waited on the other and Postgres aborted one with 40P01.
+// waited on the other and Postgres aborted one with 40P01. Another
+// operator's token, untouched, is the control on the resolve.
 func TestOperatorKey_AnImmediateRotationWaitsForAnExchangeAlreadyHoldingTheKey(t *testing.T) {
 	ctx := context.Background()
 	p := pool(t)
@@ -632,7 +633,11 @@ func TestOperatorKey_AnImmediateRotationWaitsForAnExchangeAlreadyHoldingTheKey(t
 	store := operator.NewPostgresStore(p)
 	svc := keyService(store)
 	subject := registerOperator(t, p, scopedGRN("acme", operator.ServiceType, "controller"))
+	bystander := registerOperator(t, p, scopedGRN("acme", operator.ServiceType, "control"))
 	old, oldKey := issueKey(t, store, subject, operator.KeyRotationFirst)
+	kept, _ := issueKey(t, store, bystander, operator.KeyRotationFirst)
+	keptToken, err := svc.ExchangeAssertion(ctx, testSource, bystander, freshAssertion(t, kept, bystander), nil)
+	require.NoError(t, err)
 	successor, err := operator.NewIssuedKey(subject, scopedGRN("acme", "user", "ada"))
 	require.NoError(t, err)
 	jti := freshJTI(t)
@@ -663,10 +668,82 @@ func TestOperatorKey_AnImmediateRotationWaitsForAnExchangeAlreadyHoldingTheKey(t
 	awaitLockWaiters(t, p, 2)
 	require.NoError(t, replica.Rollback(ctx))
 
-	done := <-exchanged
+	done := receive(t, exchanged)
 	require.NoError(t, done.err, "the exchange holding the key completes")
-	require.NoError(t, <-rotated, "the rotation waits for it rather than deadlocking")
+	require.NoError(t, receive(t, rotated), "the rotation waits for it rather than deadlocking")
 	_, err = store.ResolveToken(ctx, done.token.Hash())
 	assert.ErrorIs(t, err, operator.ErrTokenInvalid, "the rotation deleted the token the exchange recorded")
 	assert.Equal(t, 0, countRows(t, p, `SELECT count(*) FROM operator_tokens WHERE key_id = $1`, oldKey.ID))
+	_, err = store.ResolveToken(ctx, keptToken.Hash())
+	assert.NoError(t, err, "the control: another operator's token resolves throughout")
+}
+
+// TestOperatorKey_AnImmediateRotationAndACredentialExchangeSweepingItsKeyTokenBothComplete
+// is the shared-secret exchange's form of #1399. An operator holding a
+// credential and a key has a key token past expiry, which a credential
+// exchange's sweep deletes and the rotation deletes too. A held key row
+// parks the rotation after it took the registration; the exchange
+// arrives then. Taking the token before the registration, the exchange
+// waited on the rotation while holding the row it was about to delete.
+func TestOperatorKey_AnImmediateRotationAndACredentialExchangeSweepingItsKeyTokenBothComplete(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	store := operator.NewPostgresStore(p)
+	svc := keyService(store)
+	subject, credential := registerCredentialed(t, store, "controller")
+	_, oldKey := issueKey(t, store, subject, operator.KeyRotationFirst)
+	_, err := p.Exec(ctx, `INSERT INTO operator_tokens (token_hash, key_id, operator_grn, issued_at, expires_at)
+		VALUES ('expired-key-token', $1, $2, now() - interval '2 hours', now() - interval '1 hour')`,
+		oldKey.ID, subject.String())
+	require.NoError(t, err)
+	require.Equal(t, 1, countRows(t, p, `SELECT count(*) FROM operator_tokens WHERE key_id = $1`, oldKey.ID),
+		"the old key holds a token past expiry")
+	successor, err := operator.NewIssuedKey(subject, scopedGRN("acme", "user", "ada"))
+	require.NoError(t, err)
+
+	holder, err := p.Begin(ctx)
+	require.NoError(t, err)
+	defer func() { _ = holder.Rollback(ctx) }()
+	_, err = holder.Exec(ctx, `SELECT id FROM operator_keys WHERE id = $1 FOR NO KEY UPDATE`, oldKey.ID)
+	require.NoError(t, err)
+
+	rotated := make(chan error, 1)
+	go func() {
+		_, err := store.IssueKey(ctx, successor, operator.KeyRotationImmediate)
+		rotated <- err
+	}()
+	awaitLockWaiters(t, p, 1)
+	type exchange struct {
+		token *operator.Token
+		err   error
+	}
+	exchanged := make(chan exchange, 1)
+	go func() {
+		token, err := svc.Exchange(ctx, credential, nil)
+		exchanged <- exchange{token, err}
+	}()
+	awaitLockWaiters(t, p, 2)
+	require.NoError(t, holder.Rollback(ctx))
+
+	require.NoError(t, receive(t, rotated), "the rotation completes")
+	done := receive(t, exchanged)
+	require.NoError(t, done.err, "the credential exchange waits for it rather than deadlocking")
+	_, err = store.ResolveToken(ctx, done.token.Hash())
+	assert.NoError(t, err, "the credential's token resolves: the rotation withdrew keys only")
+	assert.Equal(t, 0, countRows(t, p, `SELECT count(*) FROM operator_tokens WHERE key_id = $1`, oldKey.ID))
+}
+
+// receive answers what ch carries, and fails the test rather than
+// hanging the run when nothing arrives.
+func receive[T any](t *testing.T, ch <-chan T) T {
+	t.Helper()
+	select {
+	case v := <-ch:
+		return v
+	case <-time.After(30 * time.Second):
+		require.FailNow(t, "nothing arrived")
+		var zero T
+		return zero
+	}
 }

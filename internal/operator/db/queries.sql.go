@@ -283,11 +283,12 @@ const holdOperatorRegistration = `-- name: HoldOperatorRegistration :one
 SELECT grn FROM operators WHERE grn = $1 FOR KEY SHARE
 `
 
-// An exchange holds the registration before the key, the order an
-// issuance takes them in, so neither waits on the other while holding
-// what the other needs (#1399). KEY SHARE is the lock the token's
-// foreign key takes anyway: it waits for an issuance or a deletion of
-// the operator, and for nothing else.
+// An exchange holds its registration, and its audience's, before the
+// key or credential and the tokens, the order an issuance or a deletion
+// takes them in, so neither waits on the other while holding what the
+// other needs (#1399). KEY SHARE is the lock the token's foreign keys
+// take anyway: it waits for an issuance or a deletion of the operator,
+// and for nothing else.
 func (q *Queries) HoldOperatorRegistration(ctx context.Context, grn string) (string, error) {
 	row := q.db.QueryRow(ctx, holdOperatorRegistration, grn)
 	var grn_2 string

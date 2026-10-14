@@ -10,18 +10,6 @@ function teamUrl(orgSlug: string, team = "engineering"): string {
 }
 
 /**
- * Clicks a control that only works once React has hydrated it. A click
- * taken before then is dropped, not queued, so it is repeated until
- * what it opens is there.
- */
-async function clickUntil(control: Locator, opened: Locator): Promise<void> {
-  await expect(async () => {
-    await control.click();
-    await expect(opened).toBeVisible({ timeout: 1_000 });
-  }).toPass({ timeout: 15_000 });
-}
-
-/**
  * The members-table row naming `text`. Substring on purpose: a row's
  * accessible name is all of its cells, and `text` is one of them.
  */
@@ -34,21 +22,19 @@ function memberRow(page: Page, text: string): Locator {
  * option's name is the member's name and then its identifier.
  */
 async function addMember(page: Page, name: string): Promise<void> {
-  const option = page.getByRole("option", { name, exact: true });
-  await clickUntil(
-    page.getByRole("combobox", { name: "Person or agent", exact: true }),
-    option,
-  );
-  await option.click();
+  await expectHydrated(page);
+  await page
+    .getByRole("combobox", { name: "Person or agent", exact: true })
+    .click();
+  await page.getByRole("option", { name, exact: true }).click();
   await page.getByRole("button", { name: "Add to team", exact: true }).click();
 }
 
 /** Opens the Settings tab of the team page on screen. */
 async function openSettings(page: Page): Promise<void> {
-  await clickUntil(
-    page.getByRole("tab", { name: "Settings", exact: true }),
-    page.getByLabel("Team name", { exact: true }),
-  );
+  await expectHydrated(page);
+  await page.getByRole("tab", { name: "Settings", exact: true }).click();
+  await expect(page.getByLabel("Team name", { exact: true })).toBeVisible();
 }
 
 test.describe("teams", () => {
@@ -163,7 +149,9 @@ test.describe("teams", () => {
       name: "Remove from team",
       exact: true,
     });
-    await clickUntil(remove, confirm);
+    await expectHydrated(page);
+    await remove.click();
+    await expect(confirm).toBeVisible();
     await expect(
       page.getByRole("alertdialog", {
         name: `Remove an unnamed agent from ${signedIn.groupName}?`,
@@ -245,7 +233,9 @@ test.describe("teams", () => {
       name: "Remove from team",
       exact: true,
     });
-    await clickUntil(remove, confirm);
+    await expectHydrated(page);
+    await remove.click();
+    await expect(confirm).toBeVisible();
     await confirm.click();
 
     await expect(

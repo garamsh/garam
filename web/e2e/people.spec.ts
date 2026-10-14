@@ -1,19 +1,22 @@
-import type { Locator } from "@playwright/test";
+import type { Page } from "@playwright/test";
 
 import { axeViolations, expectHydrated, useTheme } from "./axe";
 import { expect, test } from "./fixtures";
 import { seedMember } from "./seed";
 
-/**
- * Clicks a control that only works once React has hydrated it. A click
- * taken before then is dropped, not queued, so it is repeated until
- * what it opens is there.
- */
-async function clickUntil(control: Locator, opened: Locator): Promise<void> {
-  await expect(async () => {
-    await control.click();
-    await expect(opened).toBeVisible({ timeout: 1_000 });
-  }).toPass({ timeout: 15_000 });
+/** Opens the invitation dialog and asks for a member's link. */
+async function inviteMember(page: Page) {
+  await expectHydrated(page);
+  await page
+    .getByRole("button", { name: "Invite people", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog", { name: "Invite a person" });
+  await dialog.getByRole("combobox", { name: "Role", exact: true }).click();
+  await page.getByRole("option", { name: "Member", exact: true }).click();
+  await dialog
+    .getByRole("button", { name: "Create invitation", exact: true })
+    .click();
+  return page.getByRole("alertdialog", { name: "Invitation link" });
 }
 
 test.describe("people", () => {
@@ -34,18 +37,14 @@ test.describe("people", () => {
     );
     await expect(row).not.toContainText(/\d{4}-\d{2}-\d{2}/);
 
-    const dialog = page.getByRole("dialog", { name: "Invite a person" });
-    await clickUntil(
-      page.getByRole("button", { name: "Invite people", exact: true }),
-      dialog,
+    const reveal = await inviteMember(page);
+    await expect(reveal).toHaveAccessibleDescription(
+      // Presence: the description goes on to say it is shown once.
+      /^It admits one person as Member/,
     );
-    await dialog
-      .getByRole("button", { name: "Create invitation", exact: true })
-      .click();
-    const link = dialog
-      .getByRole("group", { name: "Invitation link", exact: true })
-      .locator("code");
-    await expect(link).toHaveText(new RegExp(`/console/invitations/[^/]+$`));
+    await expect(reveal.locator("pre")).toHaveText(
+      new RegExp(`/console/invitations/[^/]+$`),
+    );
   });
 
   test("offers a member no invitation the server denies them", async ({
@@ -95,18 +94,18 @@ test.describe("people", () => {
       await expectHydrated(page);
       expect(await axeViolations(page)).toEqual([]);
 
-      const dialog = page.getByRole("dialog", { name: "Invite a person" });
-      await clickUntil(
-        page.getByRole("button", { name: "Invite people", exact: true }),
-        dialog,
-      );
-      await dialog
-        .getByRole("button", { name: "Create invitation", exact: true })
+      await page
+        .getByRole("button", { name: "Invite people", exact: true })
         .click();
       await expect(
-        dialog.getByRole("group", { name: "Invitation link", exact: true }),
+        page.getByRole("dialog", { name: "Invite a person" }),
       ).toBeVisible();
       expect(await axeViolations(page, ['[role="dialog"]'])).toEqual([]);
+
+      await page.keyboard.press("Escape");
+      const reveal = await inviteMember(page);
+      await expect(reveal).toBeVisible();
+      expect(await axeViolations(page, ['[role="alertdialog"]'])).toEqual([]);
     });
   }
 });

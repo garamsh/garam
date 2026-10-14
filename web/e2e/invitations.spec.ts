@@ -1,5 +1,6 @@
 import type { Page } from "@playwright/test";
 
+import { expectHydrated } from "./axe";
 import { expect, test } from "./fixtures";
 import { seedExpiredSession, seedSignedInOrg, seedSignedInUser } from "./seed";
 
@@ -309,18 +310,16 @@ test.describe("organization mutations", () => {
  */
 async function createInvitationLink(page: Page, orgSlug: string) {
   await page.goto(`/console/orgs/${orgSlug}/people`);
+  await expectHydrated(page);
+  await page.getByRole("button", { name: "Invite people" }).click();
   const dialog = page.getByRole("dialog", { name: "Invite a person" });
-  // A click taken before React hydrates the trigger is dropped, so it
-  // is repeated until the dialog is there.
-  await expect(async () => {
-    await page.getByRole("button", { name: "Invite people" }).click();
-    await expect(dialog).toBeVisible({ timeout: 1_000 });
-  }).toPass({ timeout: 15_000 });
+  await dialog.getByRole("combobox", { name: "Role" }).click();
+  await page.getByRole("option", { name: "Member", exact: true }).click();
   await dialog.getByRole("button", { name: "Create invitation" }).click();
 
-  const link = dialog
-    .getByRole("group", { name: "Invitation link" })
-    .locator("code");
+  const link = page
+    .getByRole("alertdialog", { name: "Invitation link" })
+    .locator("pre");
   await expect(link).toBeVisible();
   return (await link.textContent()) ?? "";
 }

@@ -1,3 +1,4 @@
+import { expectHydrated } from "./axe";
 import { expect, test } from "./fixtures";
 import {
   seedArchivedTemplate,
@@ -104,19 +105,16 @@ test.describe("named agents", () => {
     // membership is its GRN, minted with the definition.
     const team = `/console/orgs/${signedIn.orgSlug}/teams/engineering`;
     await page.goto(team);
-    const option = page.getByRole("option", {
-      name: `Ranger ${identifier} · awaiting operator`,
-      exact: true,
-    });
-    // A click taken before React hydrates the choice is dropped, so it
-    // is repeated until the options are there.
-    await expect(async () => {
-      await page
-        .getByRole("combobox", { name: "Person or agent", exact: true })
-        .click();
-      await expect(option).toBeVisible({ timeout: 1_000 });
-    }).toPass({ timeout: 15_000 });
-    await option.click();
+    await expectHydrated(page);
+    await page
+      .getByRole("combobox", { name: "Person or agent", exact: true })
+      .click();
+    await page
+      .getByRole("option", {
+        name: `Ranger ${identifier} · awaiting operator`,
+        exact: true,
+      })
+      .click();
     await page
       .getByRole("button", { name: "Add to team", exact: true })
       .click();

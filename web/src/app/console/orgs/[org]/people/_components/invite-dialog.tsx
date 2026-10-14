@@ -57,7 +57,9 @@ export function InviteDialog({ org }: { org: string }) {
           Invite people
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      {/* One track no wider than the dialog: the link's full length
+          would otherwise set it and push the content off a phone. */}
+      <DialogContent className="grid-cols-[minmax(0,1fr)] sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Invite a person</DialogTitle>
           <DialogDescription>

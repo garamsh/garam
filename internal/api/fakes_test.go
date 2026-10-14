@@ -1104,8 +1104,9 @@ func newFakeOperatorStore() *fakeOperatorStore {
 }
 
 // IssueKey applies the rotation as the real store does, over keys
-// held in memory: first refuses a live key, planned a third, and
-// immediate withdraws every live one before recording the new key.
+// held in memory: first refuses any key ever issued, withdrawn or not,
+// planned a third live one, and immediate withdraws every live one
+// before recording the new key.
 func (s *fakeOperatorStore) IssueKey(_ context.Context, k *operator.IssuedKey, rotation operator.KeyRotation) (operator.Key, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1122,8 +1123,8 @@ func (s *fakeOperatorStore) IssueKey(_ context.Context, k *operator.IssuedKey, r
 	}
 	switch rotation {
 	case operator.KeyRotationFirst:
-		if live > 0 {
-			return operator.Key{}, operator.ErrOperatorHoldsKey
+		if len(s.keys[g]) > 0 {
+			return operator.Key{}, operator.ErrOperatorWasKeyed
 		}
 	case operator.KeyRotationPlanned:
 		if live >= operator.LiveKeysPerOperator {

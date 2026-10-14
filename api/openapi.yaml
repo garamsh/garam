@@ -1462,15 +1462,16 @@ paths:
         garam keeps the public key alone: the private key is never
         stored, logged or answered again, and a lost answer is recovered
         by issuing anew with `rotation` `immediate`. The answer is not
-        cached. An Operator has two registered identities — its manager
-        and its control service — and each is issued its own key here.
+        cached. Keys are issued per registered operator identity: an
+        Operator has two, its manager and its control service, and each
+        is issued its own key here.
 
         It is the one route that issues a key; registering issues none.
-        The first key of an operator holding no live one is authorized
-        by `operator:register`, as registering it was. Any other —
-        beside or in place of a live key — is `operator:reissue`, and a
-        caller holding only the first finds an operator with a live key
-        refused with 403.
+        The first key of an operator that has never been issued one is
+        authorized by `operator:register`, as registering it was. Any
+        other — beside or in place of a live key, or after every key was
+        withdrawn — is `operator:reissue`, and a caller holding only the
+        first finds an operator that was ever keyed refused with 403.
 
         `rotation` says how the key stands beside the ones the operator
         holds. `planned` adds it beside the key in use, which goes on
@@ -1481,8 +1482,9 @@ paths:
         compromised key or a lost answer. An operator's agents keep
         their own tokens across either, and recovering them is separate.
 
-        One process issues at most 3 keys per operator and 30 in all per
-        minute, and answers 429 with `Retry-After` past either. Where
+        One process issues at most 3 keys per registered operator
+        identity and 30 in all per minute, and answers 429 with
+        `Retry-After` past either. Where
         no token endpoint is configured (`GARAM_MACHINE_TOKEN_URL`), no
         key is issued and the route answers 503: an assertion could name
         no audience garam accepts.

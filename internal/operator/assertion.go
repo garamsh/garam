@@ -45,16 +45,24 @@ const (
 )
 
 // The bounds on the assertion exchanges one process answers (ADR-0102),
-// per ExchangeWindow: in all, counted before anything is read, and per
-// client_id, counted once the assertion verified, over at most
-// TrackedClients client_ids at once. An operator exchanges about once
-// in forty minutes, so ten covers its retries with backoff. They are
-// per replica: N replicas answer N times as many.
+// per ExchangeWindow, each over at most TrackedClients keys at once:
+//
+//   - ExchangesPerSource per client address, counted before anything
+//     is read, so a flood from one address is refused without holding
+//     back any other address;
+//   - ExchangesPerClient per client_id, counted once the assertion
+//     verified, so only the key's holder spends it and a stranger
+//     knowing the GRN cannot lock the operator out.
+//
+// An operator exchanges about once in forty minutes, so ten covers its
+// retries with backoff, and sixty per address covers many operators
+// behind one egress. They are per replica: N replicas answer N times
+// as many.
 const (
-	ExchangesPerClient  = 10
-	ExchangesPerProcess = 600
-	ExchangeWindow      = time.Minute
-	TrackedClients      = 10000
+	ExchangesPerSource = 60
+	ExchangesPerClient = 10
+	ExchangeWindow     = time.Minute
+	TrackedClients     = 10000
 )
 
 // The bounds on the keys one process issues (ADR-0102): per operator

@@ -152,12 +152,15 @@ refusals, and §machineBearer for the alias.
   and a test holds the two lists equal. The scheme matches
   case-insensitively, and a `Bearer` value with no token after it is
   refused rather than read as no token at all.
-- **One process answers at most 600 exchanges in all and 10 verified
-  ones per `client_id` per minute** (`internal/operator`
-  `ExchangesPerClient`), 429 with `Retry-After` past either. The
-  client's count starts once its key verified, so a stranger knowing
-  the GRN cannot lock the operator out. An unconfigured token endpoint
-  answers 503 and issues nothing.
+- **One process answers at most 60 exchanges per client address and 10
+  verified ones per `client_id` per minute** (`internal/operator`
+  `ExchangesPerSource`, `ExchangesPerClient`), 429 with `Retry-After`
+  past either. The address's count is taken before anything is read,
+  so a flood from one address holds back no other; the client's starts
+  once its key verified, so a stranger knowing the GRN cannot lock the
+  operator out. The listener terminates TLS itself, so the address is
+  the peer's, and clients behind one NAT share it. An unconfigured
+  token endpoint answers 503 and issues nothing.
 - **What tells the cohorts apart.**
   `garam_machine_token_exchanges_total` counts exchanges by method —
   operator shared secret, supervisor shared secret, operator

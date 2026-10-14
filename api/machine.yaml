@@ -335,12 +335,13 @@ paths:
         one refusal, `invalid_client` with 400, which says nothing
         about which registrations or keys exist. A token is refused
         from the next request once its key is withdrawn. A process
-        answers at most 600 exchanges in all and 10 verified ones per
-        `client_id` per minute, and 429 with `Retry-After` past either,
-        so an assertion that fails to verify spends no operator's
-        budget; an unconfigured
-        token endpoint, or a database that cannot be read, answers 503
-        and issues nothing.
+        answers at most 60 exchanges per client address, counted before
+        anything is read, and 10 verified ones per `client_id`, each per
+        minute, and 429 with `Retry-After` past either: a flood from one
+        address holds back no other, and an assertion that fails to
+        verify spends no operator's budget. An unconfigured token
+        endpoint, or a database that cannot be read, answers 503 and
+        issues nothing; a defect answers 500 `server_error`.
       security: []
       requestBody:
         required: true
@@ -375,6 +376,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OAuthError'
+        '500':
+          $ref: '#/components/responses/OAuthError'
         '503':
           $ref: '#/components/responses/OAuthError'
   /enrollment:

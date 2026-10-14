@@ -27,8 +27,6 @@ CREATE TABLE operator_keys (
     CONSTRAINT operator_keys_algorithm CHECK (algorithm = 'RS256')
 );
 
-CREATE INDEX operator_keys_operator_grn_idx ON operator_keys (operator_grn);
-
 -- Each (client, jti) an exchange admitted, kept until the assertion's
 -- exp plus the 30 seconds of skew. The primary key is the replay
 -- refusal: two exchanges of one assertion conflict on it whichever

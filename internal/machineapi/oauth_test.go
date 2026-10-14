@@ -28,13 +28,14 @@ type assertionService struct {
 }
 
 type assertionCall struct {
+	source    string
 	client    grn.GRN
 	assertion string
 	audience  *grn.GRN
 }
 
-func (s *assertionService) ExchangeAssertion(_ context.Context, client grn.GRN, assertion string, audience *grn.GRN) (*operator.Token, error) {
-	s.calls = append(s.calls, assertionCall{client: client, assertion: assertion, audience: audience})
+func (s *assertionService) ExchangeAssertion(_ context.Context, source string, client grn.GRN, assertion string, audience *grn.GRN) (*operator.Token, error) {
+	s.calls = append(s.calls, assertionCall{source: source, client: client, assertion: assertion, audience: audience})
 	if s.err != nil {
 		return nil, s.err
 	}
@@ -105,6 +106,7 @@ func TestExchangeClientAssertion_AnswersRFC6749sTokenForm(t *testing.T) {
 	}, token)
 
 	require.Len(t, operators.calls, 1)
+	assert.Equal(t, "127.0.0.1", operators.calls[0].source, "the bound is keyed on the connection's address")
 	assert.Equal(t, assertingClient, operators.calls[0].client)
 	assert.Equal(t, "a.compact.jwt", operators.calls[0].assertion)
 	require.NotNil(t, operators.calls[0].audience)

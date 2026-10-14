@@ -205,6 +205,11 @@ WHERE t.credential_id = sqlc.arg('credential_id')::bigint
 -- name: LockOperatorRegistration :one
 SELECT grn FROM operators WHERE grn = $1 FOR UPDATE;
 
+-- Whether the operator has ever been issued a key, withdrawn ones
+-- included: what a first issuance is refused on (ADR-0102).
+-- name: OperatorWasKeyed :one
+SELECT EXISTS (SELECT 1 FROM operator_keys WHERE operator_grn = $1);
+
 -- The keys an operator holds live at the database's time: neither
 -- withdrawn nor past a planned rotation's deadline.
 -- name: ListLiveOperatorKeys :many

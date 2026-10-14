@@ -291,14 +291,18 @@ single-mode cutover is its own repository's (Operator ADR-0068).
   replacement anyway, so one path serves the first key too, and no
   answer carries two secrets while the shared-secret cohort lasts. The
   cost is a second step for an administrator: register, issue a key,
-  place the PEM and `tokenUrl`. An Operator has two registered
-  identities, its manager and its control service, and each is issued
-  its own key, so onboarding runs once per identity.
-- **The first key of an operator holding no live one is
+  place the PEM and `tokenUrl`, once per registered operator identity.
+  An Operator has two, its manager and its control service, and each
+  is issued its own key.
+- **The first key of an operator that has never been issued one is
   `operator:register`, as registering it was; any other is
-  `operator:reissue`.** The store refuses a first issuance in the
-  transaction that would write, where a live key exists, so a
-  concurrent issuance cannot split the check from the write.
+  `operator:reissue`.** A withdrawn key still counts, so re-keying
+  after a revocation is `operator:reissue`'s: the PM's review of #1360
+  held that any key change on an existing operator is, as ADR-0102
+  §Operator identity and custody says. The store refuses a first
+  issuance under the registration's row lock, in the transaction that
+  would write, so a concurrent issuance cannot split the check from
+  the write.
 - **garam answers the private key once and keeps the public JWK.** The
   key is RSA 3072 as PKCS#8 `PRIVATE KEY` PEM, answered with
   `Cache-Control: no-store`; `migrations/000043`'s `operator_keys`
@@ -326,10 +330,11 @@ single-mode cutover is its own repository's (Operator ADR-0068).
   Tokens it obtains are ordinary operator tokens: delegated authority,
   controller proof and assignment checks apply as they do to a
   shared-secret token. Replacing a key recovers no agent lineage.
-- **One process issues at most 3 keys per operator and 30 in all per
-  minute** (`internal/operator` `KeyIssuancesPerOperator`), and answers
-  429 with `Retry-After` past either; generating the key is the
-  costliest thing a member asks of the browser-facing listener.
+- **One process issues at most 3 keys per registered operator identity
+  and 30 in all per minute** (`internal/operator`
+  `KeyIssuancesPerOperator`), and answers 429 with `Retry-After` past
+  either; generating the key is the costliest thing a member asks of the
+  browser-facing listener.
 - **The Operator's half is unbuilt.** One external writer supplies the
   stable PEM, replaced atomically and reloaded at each exchange, with
   `kid` derived from the same read; the Operator refreshes tokens in

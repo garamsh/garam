@@ -24,6 +24,9 @@ import (
 	"github.com/garamsh/garam/internal/org"
 )
 
+// testSource is the client address every exchange here arrives from.
+const testSource = "192.0.2.10"
+
 // keyService is the operator service over the store alone, configured
 // with the token endpoint the listeners here are (ADR-0102).
 func keyService(s *operator.PostgresStore) operator.Service {
@@ -184,7 +187,7 @@ func TestOperatorKey_OneAssertionYieldsOneTokenAcrossReplicasAndRestarts(t *test
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			_, results[i] = replicas[i%2].ExchangeAssertion(ctx, subject, signed, nil)
+			_, results[i] = replicas[i%2].ExchangeAssertion(ctx, testSource, subject, signed, nil)
 		}()
 	}
 	wg.Wait()
@@ -200,9 +203,9 @@ func TestOperatorKey_OneAssertionYieldsOneTokenAcrossReplicasAndRestarts(t *test
 	assert.Equal(t, 1, countRows(t, p, `SELECT count(*) FROM operator_tokens WHERE operator_grn = $1`, subject.String()))
 
 	restarted := keyService(operator.NewPostgresStore(p))
-	_, err := restarted.ExchangeAssertion(ctx, subject, signed, nil)
+	_, err := restarted.ExchangeAssertion(ctx, testSource, subject, signed, nil)
 	assert.ErrorIs(t, err, operator.ErrClientInvalid, "a restart forgets no spent assertion")
-	_, err = restarted.ExchangeAssertion(ctx, subject, freshAssertion(t, private, subject), nil)
+	_, err = restarted.ExchangeAssertion(ctx, testSource, subject, freshAssertion(t, private, subject), nil)
 	assert.NoError(t, err, "the control: a fresh jti is exchanged")
 }
 
@@ -221,7 +224,7 @@ func TestOperatorKey_ARevocationRacingExchangesLeavesNoTokenOfTheRevokedKey(t *t
 	subject := registerOperator(t, p, scopedGRN("acme", operator.ServiceType, "controller"))
 	revoked, revokedKey := issueKey(t, store, subject, operator.KeyRotationFirst)
 	kept, _ := issueKey(t, store, subject, operator.KeyRotationPlanned)
-	keptToken, err := svc.ExchangeAssertion(ctx, subject, freshAssertion(t, kept, subject), nil)
+	keptToken, err := svc.ExchangeAssertion(ctx, testSource, subject, freshAssertion(t, kept, subject), nil)
 	require.NoError(t, err)
 
 	// Assertions are signed before the race so that the window holds
@@ -239,7 +242,7 @@ func TestOperatorKey_ARevocationRacingExchangesLeavesNoTokenOfTheRevokedKey(t *t
 		go func() {
 			defer wg.Done()
 			<-start
-			token, err := svc.ExchangeAssertion(ctx, subject, signed[i], nil)
+			token, err := svc.ExchangeAssertion(ctx, testSource, subject, signed[i], nil)
 			if err == nil {
 				tokens[i] = token
 			} else {
@@ -260,7 +263,7 @@ func TestOperatorKey_ARevocationRacingExchangesLeavesNoTokenOfTheRevokedKey(t *t
 	}
 	assert.Equal(t, 0, countRows(t, p, `SELECT count(*) FROM operator_tokens WHERE key_id = $1`, revokedKey.ID),
 		"the withdrawal deleted every token the key had, those the race recorded included")
-	_, err = svc.ExchangeAssertion(ctx, subject, freshAssertion(t, revoked, subject), nil)
+	_, err = svc.ExchangeAssertion(ctx, testSource, subject, freshAssertion(t, revoked, subject), nil)
 	assert.ErrorIs(t, err, operator.ErrClientInvalid, "the withdrawn key exchanges nothing afterwards")
 
 	_, err = store.ResolveToken(ctx, keptToken.Hash())
@@ -281,7 +284,7 @@ func TestOperatorKey_PlannedRotationOverlapsForItsWindowAndRefusesAThirdKey(t *t
 	svc := keyService(store)
 	subject := registerOperator(t, p, scopedGRN("acme", operator.ServiceType, "controller"))
 	old, oldKey := issueKey(t, store, subject, operator.KeyRotationFirst)
-	oldToken, err := svc.ExchangeAssertion(ctx, subject, freshAssertion(t, old, subject), nil)
+	oldToken, err := svc.ExchangeAssertion(ctx, testSource, subject, freshAssertion(t, old, subject), nil)
 	require.NoError(t, err)
 
 	successor, _ := issueKey(t, store, subject, operator.KeyRotationPlanned)
@@ -293,9 +296,9 @@ func TestOperatorKey_PlannedRotationOverlapsForItsWindowAndRefusesAThirdKey(t *t
 	assert.WithinDuration(t, time.Now().Add(operator.RolloverWindow), *keys[0].RetiresAt, time.Minute)
 	assert.Equal(t, operator.KeyStateActive, keys[1].State)
 
-	_, err = svc.ExchangeAssertion(ctx, subject, freshAssertion(t, old, subject), nil)
+	_, err = svc.ExchangeAssertion(ctx, testSource, subject, freshAssertion(t, old, subject), nil)
 	assert.NoError(t, err, "the predecessor verifies inside the window")
-	_, err = svc.ExchangeAssertion(ctx, subject, freshAssertion(t, successor, subject), nil)
+	_, err = svc.ExchangeAssertion(ctx, testSource, subject, freshAssertion(t, successor, subject), nil)
 	assert.NoError(t, err, "and so does the successor")
 
 	third, err := operator.NewIssuedKey(subject, scopedGRN("acme", "user", "ada"))
@@ -303,18 +306,18 @@ func TestOperatorKey_PlannedRotationOverlapsForItsWindowAndRefusesAThirdKey(t *t
 	_, err = store.IssueKey(ctx, third, operator.KeyRotationPlanned)
 	assert.ErrorIs(t, err, operator.ErrKeyLimit)
 	_, err = store.IssueKey(ctx, third, operator.KeyRotationFirst)
-	assert.ErrorIs(t, err, operator.ErrOperatorHoldsKey, "a first issuance finds the live keys too")
+	assert.ErrorIs(t, err, operator.ErrOperatorWasKeyed, "a first issuance finds the live keys too")
 
 	_, err = p.Exec(ctx, `UPDATE operator_keys SET retires_at = now() - interval '1 second' WHERE id = $1`, oldKey.ID)
 	require.NoError(t, err)
 	_, err = store.ResolveToken(ctx, oldToken.Hash())
 	assert.ErrorIs(t, err, operator.ErrTokenInvalid, "past the window the predecessor's token is refused")
-	_, err = svc.ExchangeAssertion(ctx, subject, freshAssertion(t, old, subject), nil)
+	_, err = svc.ExchangeAssertion(ctx, testSource, subject, freshAssertion(t, old, subject), nil)
 	assert.ErrorIs(t, err, operator.ErrClientInvalid, "and the predecessor exchanges nothing")
 	keys, err = store.ListKeys(ctx, subject)
 	require.NoError(t, err)
 	assert.Equal(t, operator.KeyStateRevoked, keys[0].State)
-	_, err = svc.ExchangeAssertion(ctx, subject, freshAssertion(t, successor, subject), nil)
+	_, err = svc.ExchangeAssertion(ctx, testSource, subject, freshAssertion(t, successor, subject), nil)
 	assert.NoError(t, err, "the control: the successor goes on")
 }
 
@@ -384,7 +387,7 @@ func TestOperatorKey_AReusedIdentifierRevivesNothingOfTheDeletedRegistration(t *
 	svc := keyService(store)
 	subject := registerOperator(t, p, scopedGRN("acme", operator.ServiceType, "controller"))
 	earlier, _ := issueKey(t, store, subject, operator.KeyRotationFirst)
-	earlierToken, err := svc.ExchangeAssertion(ctx, subject, freshAssertion(t, earlier, subject), nil)
+	earlierToken, err := svc.ExchangeAssertion(ctx, testSource, subject, freshAssertion(t, earlier, subject), nil)
 	require.NoError(t, err)
 
 	require.NoError(t, store.Delete(ctx, subject))
@@ -392,11 +395,11 @@ func TestOperatorKey_AReusedIdentifierRevivesNothingOfTheDeletedRegistration(t *
 
 	_, err = store.ResolveToken(ctx, earlierToken.Hash())
 	assert.ErrorIs(t, err, operator.ErrTokenInvalid)
-	_, err = svc.ExchangeAssertion(ctx, subject, freshAssertion(t, earlier, subject), nil)
+	_, err = svc.ExchangeAssertion(ctx, testSource, subject, freshAssertion(t, earlier, subject), nil)
 	assert.ErrorIs(t, err, operator.ErrClientInvalid, "the earlier incarnation's key proves nothing")
 
 	current, _ := issueKey(t, store, subject, operator.KeyRotationFirst)
-	_, err = svc.ExchangeAssertion(ctx, subject, freshAssertion(t, current, subject), nil)
+	_, err = svc.ExchangeAssertion(ctx, testSource, subject, freshAssertion(t, current, subject), nil)
 	assert.NoError(t, err, "the control: the new registration's key exchanges")
 }
 
@@ -424,18 +427,18 @@ func TestOperatorKey_RefusesAnotherTenantsIdentityOrAudience(t *testing.T) {
 	private, _ := issueKey(t, store, subject, operator.KeyRotationFirst)
 	issueKey(t, store, foreign, operator.KeyRotationFirst)
 
-	_, err := svc.ExchangeAssertion(ctx, subject, freshAssertion(t, private, subject), nil)
+	_, err := svc.ExchangeAssertion(ctx, testSource, subject, freshAssertion(t, private, subject), nil)
 	require.NoError(t, err, "the control: the valid exchange")
 
-	_, err = svc.ExchangeAssertion(ctx, foreign, freshAssertion(t, private, foreign), nil)
+	_, err = svc.ExchangeAssertion(ctx, testSource, foreign, freshAssertion(t, private, foreign), nil)
 	assert.ErrorIs(t, err, operator.ErrClientInvalid, "a key is looked up within the client's registration alone")
-	_, err = svc.ExchangeAssertion(ctx, subject,
+	_, err = svc.ExchangeAssertion(ctx, testSource, subject,
 		assertion(t, private, subject, "https://elsewhere.test/oauth/token", freshJTI(t), time.Now()), nil)
 	assert.ErrorIs(t, err, operator.ErrClientInvalid, "an assertion for another endpoint")
-	_, err = svc.ExchangeAssertion(ctx, subject, freshAssertion(t, private, subject), &foreign)
+	_, err = svc.ExchangeAssertion(ctx, testSource, subject, freshAssertion(t, private, subject), &foreign)
 	assert.ErrorIs(t, err, operator.ErrAudienceInvalid, "an audience in another organization")
 
-	audienced, err := svc.ExchangeAssertion(ctx, subject, freshAssertion(t, private, subject), &peer)
+	audienced, err := svc.ExchangeAssertion(ctx, testSource, subject, freshAssertion(t, private, subject), &peer)
 	require.NoError(t, err)
 	held, err := store.ResolveToken(ctx, audienced.Hash())
 	require.NoError(t, err)
@@ -461,7 +464,7 @@ func TestOperatorKey_AnExpiredTokenRecoversWithAFreshAssertionAndAWithdrawalStay
 	svc := keyService(store)
 	subject := registerOperator(t, p, scopedGRN("acme", operator.ServiceType, "controller"))
 	private, key := issueKey(t, store, subject, operator.KeyRotationFirst)
-	before, err := svc.ExchangeAssertion(ctx, subject, freshAssertion(t, private, subject), nil)
+	before, err := svc.ExchangeAssertion(ctx, testSource, subject, freshAssertion(t, private, subject), nil)
 	require.NoError(t, err)
 
 	_, err = p.Exec(ctx, `UPDATE operator_tokens SET expires_at = now() - interval '1 second' WHERE token_hash = $1`, before.Hash())
@@ -469,13 +472,13 @@ func TestOperatorKey_AnExpiredTokenRecoversWithAFreshAssertionAndAWithdrawalStay
 	_, err = store.ResolveToken(ctx, before.Hash())
 	require.ErrorIs(t, err, operator.ErrTokenInvalid, "the token expired across the outage")
 
-	after, err := svc.ExchangeAssertion(ctx, subject, freshAssertion(t, private, subject), nil)
+	after, err := svc.ExchangeAssertion(ctx, testSource, subject, freshAssertion(t, private, subject), nil)
 	require.NoError(t, err, "the unchanged key recovers with a fresh assertion")
 	_, err = store.ResolveToken(ctx, after.Hash())
 	require.NoError(t, err)
 
 	require.NoError(t, store.RevokeKey(ctx, subject, key.KID))
-	_, err = svc.ExchangeAssertion(ctx, subject, freshAssertion(t, private, subject), nil)
+	_, err = svc.ExchangeAssertion(ctx, testSource, subject, freshAssertion(t, private, subject), nil)
 	assert.ErrorIs(t, err, operator.ErrClientInvalid, "refreshing cannot clear a withdrawn key")
 	_, err = store.ResolveToken(ctx, after.Hash())
 	assert.ErrorIs(t, err, operator.ErrTokenInvalid)
@@ -496,15 +499,116 @@ func TestOperatorKey_AnAssertionOutsideItsTimeBoundsSpendsNothing(t *testing.T) 
 	private, _ := issueKey(t, store, subject, operator.KeyRotationFirst)
 	jti := freshJTI(t)
 
-	_, err := svc.ExchangeAssertion(ctx, subject,
+	_, err := svc.ExchangeAssertion(ctx, testSource, subject,
 		assertion(t, private, subject, testTokenURL, jti, time.Now().Add(-2*time.Minute)), nil)
 	assert.ErrorIs(t, err, operator.ErrClientInvalid, "expired past the skew")
-	_, err = svc.ExchangeAssertion(ctx, subject,
+	_, err = svc.ExchangeAssertion(ctx, testSource, subject,
 		assertion(t, private, subject, testTokenURL, jti, time.Now().Add(time.Minute)), nil)
 	assert.ErrorIs(t, err, operator.ErrClientInvalid, "issued past the skew ahead")
 	assert.Equal(t, 0, countRows(t, p, `SELECT count(*) FROM operator_assertions WHERE jti = $1`, jti))
 
-	_, err = svc.ExchangeAssertion(ctx, subject, assertion(t, private, subject, testTokenURL, jti, time.Now()), nil)
+	_, err = svc.ExchangeAssertion(ctx, testSource, subject, assertion(t, private, subject, testTokenURL, jti, time.Now()), nil)
 	require.NoError(t, err, "the control: the same jti, timely, is accepted")
 	assert.Equal(t, 1, countRows(t, p, `SELECT count(*) FROM operator_assertions WHERE jti = $1`, jti))
+}
+
+// TestOperatorKey_AFirstIssuanceIsRefusedOnceAnyKeyWasIssued is the
+// PM's review of #1360, blocking item 1, against real Postgres: a
+// withdrawn key still refuses KeyRotationFirst, the issuance the
+// registration's authority reaches, so re-keying after a revocation is
+// operator:reissue's. An immediate rotation, which that authority
+// issues, is the control; an operator never keyed takes a first key.
+func TestOperatorKey_AFirstIssuanceIsRefusedOnceAnyKeyWasIssued(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	store := operator.NewPostgresStore(p)
+	subject := registerOperator(t, p, scopedGRN("acme", operator.ServiceType, "controller"))
+	fresh := registerOperator(t, p, scopedGRN("acme", operator.ServiceType, "control"))
+	_, key := issueKey(t, store, subject, operator.KeyRotationFirst)
+	require.NoError(t, store.RevokeKey(ctx, subject, key.KID))
+	require.Equal(t, 0, countRows(t, p, `SELECT count(*) FROM operator_keys
+		WHERE operator_grn = $1 AND revoked_at IS NULL`, subject.String()), "the operator holds no live key")
+
+	next, err := operator.NewIssuedKey(subject, scopedGRN("acme", "user", "ada"))
+	require.NoError(t, err)
+	_, err = store.IssueKey(ctx, next, operator.KeyRotationFirst)
+	assert.ErrorIs(t, err, operator.ErrOperatorWasKeyed)
+	assert.Equal(t, 1, countRows(t, p, `SELECT count(*) FROM operator_keys WHERE operator_grn = $1`, subject.String()),
+		"the refused issuance wrote nothing")
+
+	_, err = store.IssueKey(ctx, next, operator.KeyRotationImmediate)
+	assert.NoError(t, err, "the control: operator:reissue's rotation re-keys")
+	issueKey(t, store, fresh, operator.KeyRotationFirst)
+}
+
+// TestOperatorKey_AnImmediateRotationRacingExchangesLeavesNoTokenOfTheOldKey
+// is the PM's review of #1360, item 6: exchanges under the old key run
+// while an immediate rotation replaces it, and once the rotation has
+// returned no token of the old key resolves however the two
+// interleaved, the old key exchanges nothing, and the successor does.
+// Another operator's key, untouched, is the control on the resolve.
+func TestOperatorKey_AnImmediateRotationRacingExchangesLeavesNoTokenOfTheOldKey(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	store := operator.NewPostgresStore(p)
+	svc := keyService(store)
+	subject := registerOperator(t, p, scopedGRN("acme", operator.ServiceType, "controller"))
+	bystander := registerOperator(t, p, scopedGRN("acme", operator.ServiceType, "control"))
+	old, oldKey := issueKey(t, store, subject, operator.KeyRotationFirst)
+	kept, _ := issueKey(t, store, bystander, operator.KeyRotationFirst)
+	keptToken, err := svc.ExchangeAssertion(ctx, testSource, bystander, freshAssertion(t, kept, bystander), nil)
+	require.NoError(t, err)
+	successor, err := operator.NewIssuedKey(subject, scopedGRN("acme", "user", "ada"))
+	require.NoError(t, err)
+
+	const racing = 8
+	signed := make([]string, racing)
+	for i := range signed {
+		signed[i] = freshAssertion(t, old, subject)
+	}
+	tokens := make([]*operator.Token, racing)
+	var wg sync.WaitGroup
+	start := make(chan struct{})
+	for i := range racing {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			token, err := svc.ExchangeAssertion(ctx, testSource, subject, signed[i], nil)
+			if err == nil {
+				tokens[i] = token
+			} else {
+				assert.ErrorIs(t, err, operator.ErrClientInvalid)
+			}
+		}()
+	}
+	close(start)
+	_, err = store.IssueKey(ctx, successor, operator.KeyRotationImmediate)
+	require.NoError(t, err)
+	wg.Wait()
+
+	for i, token := range tokens {
+		if token == nil {
+			continue
+		}
+		_, err := store.ResolveToken(ctx, token.Hash())
+		assert.ErrorIs(t, err, operator.ErrTokenInvalid, "token %d of the replaced key resolves to nothing", i)
+	}
+	assert.Equal(t, 0, countRows(t, p, `SELECT count(*) FROM operator_tokens WHERE key_id = $1`, oldKey.ID),
+		"the rotation deleted every token of the old key, those the race recorded included")
+	_, err = svc.ExchangeAssertion(ctx, testSource, subject, freshAssertion(t, old, subject), nil)
+	assert.ErrorIs(t, err, operator.ErrClientInvalid, "the replaced key exchanges nothing afterwards")
+
+	block, _ := pem.Decode(successor.PrivatePEM())
+	require.NotNil(t, block)
+	parsed, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	require.NoError(t, err)
+	next, ok := parsed.(*rsa.PrivateKey)
+	require.True(t, ok)
+	_, err = svc.ExchangeAssertion(ctx, testSource, subject, freshAssertion(t, next, subject), nil)
+	assert.NoError(t, err, "the successor exchanges")
+	_, err = store.ResolveToken(ctx, keptToken.Hash())
+	assert.NoError(t, err, "the control: another operator's token resolves throughout")
 }

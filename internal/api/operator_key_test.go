@@ -176,3 +176,24 @@ func TestRevokeOperatorKey_WithdrawsUnderTheReissueAuthority(t *testing.T) {
 	require.Len(t, listed.Keys, 1)
 	assert.Equal(t, apigen.OperatorKeyRevoked, listed.Keys[0].State)
 }
+
+// TestIssueOperatorKey_RegisterCannotReKeyAfterARevocation is the PM's
+// review of #1360, blocking item 1: once an operator has been issued a
+// key, withdrawing it leaves no first issuance for operator:register to
+// make, so the registrar is refused where operator:reissue, the
+// control, issues the replacement.
+func TestIssueOperatorKey_RegisterCannotReKeyAfterARevocation(t *testing.T) {
+	k := newKeyFixture(t, api.Config{SessionTTL: time.Hour, TokenURL: fixtureTokenURL})
+	rec := k.issue(t, "controller", "planned", k.registrar)
+	require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
+	kid := decodeBody[apigen.IssuedOperatorKey](t, rec).Key.Kid
+	require.Equal(t, http.StatusNoContent,
+		k.do(t, "DELETE", "/orgs/"+k.slug+"/operators/controller/keys/"+kid, "", k.admin).Code)
+
+	rec = k.issue(t, "controller", "immediate", k.registrar)
+	assert.Equal(t, http.StatusForbidden, rec.Code, "a revoked key still makes the next issuance operator:reissue")
+	assert.NotContains(t, rec.Body.String(), "PRIVATE KEY")
+
+	rec = k.issue(t, "controller", "immediate", k.admin)
+	assert.Equal(t, http.StatusCreated, rec.Code, "the control: operator:reissue re-keys: %s", rec.Body.String())
+}

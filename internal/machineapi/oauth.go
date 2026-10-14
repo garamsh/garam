@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"mime"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -60,7 +61,7 @@ func (s *Server) ExchangeClientAssertion(w http.ResponseWriter, r *http.Request)
 		}
 		audience = &g
 	}
-	token, err := s.operators.ExchangeAssertion(r.Context(), client, form.Get("client_assertion"), audience)
+	token, err := s.operators.ExchangeAssertion(r.Context(), sourceOf(r), client, form.Get("client_assertion"), audience)
 	if err != nil {
 		writeOAuthError(w, err)
 		return
@@ -70,6 +71,19 @@ func (s *Server) ExchangeClientAssertion(w http.ResponseWriter, r *http.Request)
 		TokenType:   machinegen.Bearer,
 		ExpiresIn:   int(operator.TokenTTL.Seconds()),
 	})
+}
+
+// sourceOf answers the address the request's connection came from,
+// which bounds how many unverified assertions one address may send.
+// The listener terminates TLS itself, so the peer is the client and
+// not a proxy; a NAT or load balancer in front of it makes its egress
+// the address every client behind it shares.
+func sourceOf(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return host
 }
 
 // clientCredentialsForm reads the request as this profile's form, or

@@ -40,8 +40,14 @@ func (s *PostgresStore) IssueKey(ctx context.Context, k *IssuedKey, rotation Key
 	}
 	switch rotation {
 	case KeyRotationFirst:
-		if len(live) > 0 {
-			return Key{}, ErrOperatorHoldsKey
+		// Any row refuses, a withdrawn one included: re-keying after a
+		// revocation is operator:reissue (ADR-0102).
+		keyed, err := q.OperatorWasKeyed(ctx, operatorGRN)
+		if err != nil {
+			return Key{}, pgxerr.Classify(err, "read operator keys", nil, nil)
+		}
+		if keyed {
+			return Key{}, ErrOperatorWasKeyed
 		}
 	case KeyRotationPlanned:
 		if len(live) >= LiveKeysPerOperator {

@@ -585,6 +585,19 @@ func (q *Queries) OperatorKeyExists(ctx context.Context, arg OperatorKeyExistsPa
 	return exists, err
 }
 
+const operatorWasKeyed = `-- name: OperatorWasKeyed :one
+SELECT EXISTS (SELECT 1 FROM operator_keys WHERE operator_grn = $1)
+`
+
+// Whether the operator has ever been issued a key, withdrawn ones
+// included: what a first issuance is refused on (ADR-0102).
+func (q *Queries) OperatorWasKeyed(ctx context.Context, operatorGrn string) (bool, error) {
+	row := q.db.QueryRow(ctx, operatorWasKeyed, operatorGrn)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const recordOperatorKeyToken = `-- name: RecordOperatorKeyToken :exec
 WITH swept AS (
     DELETE FROM operator_tokens

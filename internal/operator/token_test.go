@@ -245,6 +245,10 @@ func TestService_VerifyShownProvesAnOperatorOnlyToTheAudienceItsTokenNames(t *te
 	assert.Equal(t, read, store.resolved, "a malformed token reads nothing")
 }
 
+// testSource is the client address every exchange below arrives from,
+// unless a test names another.
+const testSource = "192.0.2.10"
+
 // keyExchanges is the TokenStore's key half in memory: one live key,
 // and the assertions admitted under it with the tokens they recorded.
 type keyExchanges struct {
@@ -291,7 +295,7 @@ func TestService_ExchangeAssertionAnswersATokenForTheKeysOperator(t *testing.T) 
 	svc, store := assertionExchanging(t, endpoint)
 	now := time.Now()
 
-	token, err := svc.ExchangeAssertion(context.Background(), client, assertionAt(t, now, "jti-0000000000000000000001"), nil)
+	token, err := svc.ExchangeAssertion(context.Background(), testSource, client, assertionAt(t, now, "jti-0000000000000000000001"), nil)
 	require.NoError(t, err)
 	assert.True(t, strings.HasPrefix(token.Value, operator.TokenPrefix))
 	assert.Equal(t, client, token.Operator)
@@ -309,13 +313,13 @@ func TestService_ExchangeAssertionRefusesWithoutAnEndpoint(t *testing.T) {
 	assertion := assertionAt(t, time.Now(), "jti-0000000000000000000002")
 
 	svc, store := assertionExchanging(t, "")
-	_, err := svc.ExchangeAssertion(context.Background(), client, assertion, nil)
+	_, err := svc.ExchangeAssertion(context.Background(), testSource, client, assertion, nil)
 	assert.ErrorIs(t, err, operator.ErrAssertionProfileUnavailable)
 	assert.True(t, errorx.IsKind(err, errorx.KindUnavailable))
 	assert.Empty(t, store.admitted)
 
 	configured, _ := assertionExchanging(t, endpoint)
-	_, err = configured.ExchangeAssertion(context.Background(), client, assertion, nil)
+	_, err = configured.ExchangeAssertion(context.Background(), testSource, client, assertion, nil)
 	assert.NoError(t, err)
 }
 
@@ -330,14 +334,14 @@ func TestService_ExchangeAssertionHoldsTheAudienceToAnotherOperatorOfTheOrganiza
 		agentGRN("acme", "a1"),
 		client,
 	} {
-		_, err := svc.ExchangeAssertion(context.Background(), client,
+		_, err := svc.ExchangeAssertion(context.Background(), testSource, client,
 			assertionAt(t, now, "jti-refused-0000000000000"+strconv.Itoa(i)), &audience)
 		assert.ErrorIs(t, err, operator.ErrAudienceInvalid, audience.String())
 	}
 	assert.Empty(t, store.admitted, "nothing was admitted for a refused audience")
 
 	peer := operatorGRN("acme", "control")
-	token, err := svc.ExchangeAssertion(context.Background(), client, assertionAt(t, now, "jti-peer-00000000000000000"), &peer)
+	token, err := svc.ExchangeAssertion(context.Background(), testSource, client, assertionAt(t, now, "jti-peer-00000000000000000"), &peer)
 	require.NoError(t, err)
 	require.NotNil(t, token.Audience)
 	assert.Equal(t, peer, *token.Audience)
@@ -356,22 +360,45 @@ func TestService_ExchangeAssertionIsBoundedPerClient(t *testing.T) {
 	for i := range 2 * operator.ExchangesPerClient {
 		c := claims(now)
 		c["jti"] = "jti-stranger-0000000000" + strconv.Itoa(100+i)
-		_, err := svc.ExchangeAssertion(context.Background(), client,
+		_, err := svc.ExchangeAssertion(context.Background(), testSource, client,
 			signRaw(t, other, headerFor(t, other), encode(t, c)), nil)
 		require.ErrorIs(t, err, operator.ErrClientInvalid, "a stranger's assertion is refused, not counted")
 	}
 	for i := range operator.ExchangesPerClient {
-		_, err := svc.ExchangeAssertion(context.Background(), client,
+		_, err := svc.ExchangeAssertion(context.Background(), testSource, client,
 			assertionAt(t, now, "jti-bounded-00000000000"+strconv.Itoa(100+i)), nil)
 		require.NoError(t, err)
 	}
-	_, err := svc.ExchangeAssertion(context.Background(), client, assertionAt(t, now, "jti-bounded-over-00000000"), nil)
+	_, err := svc.ExchangeAssertion(context.Background(), testSource, client, assertionAt(t, now, "jti-bounded-over-00000000"), nil)
 	var exceeded *operator.Exceeded
 	require.ErrorAs(t, err, &exceeded)
 	assert.True(t, errorx.IsKind(err, errorx.KindResourceExhausted))
 	assert.Positive(t, exceeded.RetryAfterSeconds())
 	assert.Len(t, store.admitted, operator.ExchangesPerClient, "the refused exchange recorded nothing")
 
-	_, err = svc.ExchangeAssertion(context.Background(), stranger, "not.an.assertion", nil)
+	_, err = svc.ExchangeAssertion(context.Background(), testSource, stranger, "not.an.assertion", nil)
 	assert.ErrorIs(t, err, operator.ErrClientInvalid, "another client is not bounded by this one's count")
+}
+
+// TestService_ExchangeAssertionBoundsUnverifiedTrafficPerAddress is the
+// PM's review of #1360, blocking item 2: a flood of unverified
+// assertions from one address is refused as exhausted once it passes
+// ExchangesPerSource, before anything is read, and a valid client
+// arriving from another address in the same window is still served.
+func TestService_ExchangeAssertionBoundsUnverifiedTrafficPerAddress(t *testing.T) {
+	svc, store := assertionExchanging(t, endpoint)
+	const flooder, operatorHost = "198.51.100.7", "203.0.113.20"
+	for range operator.ExchangesPerSource {
+		_, err := svc.ExchangeAssertion(context.Background(), flooder, client, "not.an.assertion", nil)
+		require.ErrorIs(t, err, operator.ErrClientInvalid)
+	}
+	_, err := svc.ExchangeAssertion(context.Background(), flooder, client, "not.an.assertion", nil)
+	var exceeded *operator.Exceeded
+	require.ErrorAs(t, err, &exceeded, "the flooding address is refused past its bound")
+
+	token, err := svc.ExchangeAssertion(context.Background(), operatorHost, client,
+		assertionAt(t, time.Now(), "jti-another-address-000000"), nil)
+	require.NoError(t, err, "a valid client from another address is served")
+	assert.Equal(t, client, token.Operator)
+	assert.Len(t, store.admitted, 1)
 }

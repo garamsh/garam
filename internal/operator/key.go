@@ -48,11 +48,12 @@ var (
 	// holds two live keys: one is withdrawn first (ADR-0102).
 	ErrKeyLimit = errorx.New(errorx.KindFailedPrecondition,
 		"the operator holds two live keys: withdraw one before issuing another")
-	// ErrOperatorHoldsKey refuses issuing a first key to an operator
-	// that already holds a live one. Issuing beside or in place of a
-	// live key is operator:reissue, not the registration's authority.
-	ErrOperatorHoldsKey = errorx.New(errorx.KindPermissionDenied,
-		"the operator holds a live key: issuing another is operator:reissue")
+	// ErrOperatorWasKeyed refuses issuing a first key to an operator
+	// that has been issued one, live or withdrawn. Any key change on
+	// such an operator, a re-key after a revocation included, is
+	// operator:reissue and not the registration's authority (ADR-0102).
+	ErrOperatorWasKeyed = errorx.New(errorx.KindPermissionDenied,
+		"the operator has been issued a key: issuing another is operator:reissue")
 	// ErrKeyInvalid refuses a stored key that cannot verify: not an
 	// RSA public key of a supported size, or not the recorded
 	// algorithm. The schema and issuance admit no such row, so it is
@@ -65,8 +66,9 @@ var (
 type KeyRotation string
 
 const (
-	// KeyRotationFirst issues a key only to an operator holding no live
-	// one. It is the issuance the registration's authority reaches.
+	// KeyRotationFirst issues a key only to an operator that has never
+	// been issued one. It is the issuance the registration's authority
+	// reaches.
 	KeyRotationFirst KeyRotation = "first"
 	// KeyRotationPlanned adds the key beside the one in use, which is
 	// withdrawn by itself RolloverWindow later. An operator already

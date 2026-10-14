@@ -43,8 +43,9 @@ type Store interface {
 	// public record (ADR-0102). KeyRotationImmediate withdraws every
 	// live key and deletes its tokens in the same write; planned
 	// starts the predecessor's RolloverWindow and refuses a third live
-	// key with ErrKeyLimit; first refuses an operator holding a live
-	// key with ErrOperatorHoldsKey. It answers ErrOperatorNotFound
+	// key with ErrKeyLimit; first refuses an operator that has ever
+	// been issued a key, a withdrawn one included, with
+	// ErrOperatorWasKeyed. It answers ErrOperatorNotFound
 	// where the organization holds no record under that GRN.
 	IssueKey(ctx context.Context, k *IssuedKey, rotation KeyRotation) (Key, error)
 	// ListKeys answers every key the operator was issued, withdrawn

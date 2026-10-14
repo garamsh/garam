@@ -72,8 +72,10 @@ type Service interface {
 	// endpoint, outside its time bounds, or spent — is
 	// ErrClientInvalid; an audience that is not another operator of
 	// the organization is ErrAudienceInvalid; no configured endpoint is
-	// ErrAssertionProfileUnavailable.
-	ExchangeAssertion(ctx context.Context, client grn.GRN, assertion string, audience *grn.GRN) (*Token, error)
+	// ErrAssertionProfileUnavailable. source is the client address the
+	// request arrived from, which bounds how many unverified
+	// assertions one address may send.
+	ExchangeAssertion(ctx context.Context, source string, client grn.GRN, assertion string, audience *grn.GRN) (*Token, error)
 	// VerifyShown refuses a token presented on another operator's
 	// behalf unless it is a live token subject exchanged its credential
 	// for, to be shown to audience — the token-borne form of the
@@ -90,11 +92,11 @@ type service struct {
 	issuer      Issuer
 	now         func() time.Time
 	endpoint    string
-	// perProcess bounds every assertion exchange this process answers,
-	// checked before anything is read; perClient bounds each client's
-	// verified ones (ADR-0102).
-	perClient  *Limiter
-	perProcess *Limiter
+	// perSource bounds the assertion exchanges each client address
+	// sends, checked before anything is read; perClient bounds each
+	// client's verified ones (ADR-0102).
+	perClient *Limiter
+	perSource *Limiter
 }
 
 // NewService constructs the service over the record it keeps of each
@@ -109,8 +111,8 @@ func NewService(store CertificateStore, enrollments EnrollmentStore, tokens Toke
 		endpoint: cfg.TokenEndpoint,
 		perClient: NewLimiter(LimiterConfig{Limit: ExchangesPerClient, Window: ExchangeWindow,
 			MaxKeys: TrackedClients, Now: now}),
-		perProcess: NewLimiter(LimiterConfig{Limit: ExchangesPerProcess, Window: ExchangeWindow,
-			MaxKeys: 1, Now: now}),
+		perSource: NewLimiter(LimiterConfig{Limit: ExchangesPerSource, Window: ExchangeWindow,
+			MaxKeys: TrackedClients, Now: now}),
 	}
 }
 
@@ -139,11 +141,11 @@ func (s *service) Exchange(ctx context.Context, credential string, audience *grn
 	return token, nil
 }
 
-func (s *service) ExchangeAssertion(ctx context.Context, client grn.GRN, assertion string, audience *grn.GRN) (*Token, error) {
+func (s *service) ExchangeAssertion(ctx context.Context, source string, client grn.GRN, assertion string, audience *grn.GRN) (*Token, error) {
 	if s.endpoint == "" {
 		return nil, ErrAssertionProfileUnavailable
 	}
-	if err := s.perProcess.Check(""); err != nil {
+	if err := s.perSource.Check(source); err != nil {
 		return nil, err
 	}
 	if client.ServiceType != ServiceType {

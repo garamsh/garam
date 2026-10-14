@@ -436,14 +436,22 @@ paths:
         that write.
 
 
-        Some actions are decided by more than that `Check`, and those
-        are answered `unknown`, so a caller renders the control and
-        lets the operation decide. `agent:create`, `agent:configure`,
-        `agent:recover`, `agent:cutover`, `agent-template:publish`,
-        `execution-profile:read` and `agent:execution-read` also need a
-        delegation grant to the operator (ADR-0078). `operator:delegate`
-        and `agent:enroll` are decided on the organization's current
-        policy, read past the engine's cache.
+        Some actions are decided by more than that `Check`.
+        `agent:create`, `agent:configure`, `agent:recover`,
+        `agent:cutover`, `agent-template:publish`,
+        `execution-profile:read` and `agent:execution-read` are minted
+        through `mintOperationAuthority`, which decides the caller's
+        authority and then reads a delegation grant to the operator
+        (ADR-0078). Each is put to the check that mint runs, with the
+        same caller, action and resource, on the organization's current
+        policy read past the engine's cache. Where that check denies,
+        the answer is `deny`, and the mint would refuse. Where it
+        allows, the answer is `unknown`: this operation reads no grant,
+        so the grant is left to decide. `operator:delegate` and
+        `agent:enroll` are decided on the organization's current
+        policy, read past the engine's cache, and answered `unknown`.
+        A caller renders the control for `unknown` and lets the
+        operation decide.
 
 
         A pair without `resource` asks about the organization itself.

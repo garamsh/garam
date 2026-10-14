@@ -17,6 +17,7 @@ import (
 	"github.com/garamsh/garam/internal/api"
 	"github.com/garamsh/garam/internal/authn"
 	"github.com/garamsh/garam/internal/authz"
+	"github.com/garamsh/garam/internal/cli"
 	"github.com/garamsh/garam/internal/grn"
 	"github.com/garamsh/garam/internal/message"
 	"github.com/garamsh/garam/internal/org"
@@ -59,7 +60,7 @@ func newCheckStack(t *testing.T) *checkStack {
 
 	srv := api.NewServer(users, orgs, nil, nil, message.NewPostgresStore(p), nil,
 		authn.NewPostgresSessionStore(p), nil, nil, nil, nil,
-		api.NewGRPCEvaluator(engine), nil, nil, nil, nil, api.Config{SessionTTL: time.Hour})
+		api.NewGRPCEvaluator(engine), nil, nil, cli.NewAuthorityService(p, engine), nil, api.Config{SessionTTL: time.Hour})
 	browser := httptest.NewServer(apigen.HandlerWithOptions(srv, apigen.StdHTTPServerOptions{ErrorHandlerFunc: api.BindingError}))
 	t.Cleanup(browser.Close)
 	return &checkStack{url: browser.URL, acme: acme, owner: owner, ownerGRN: ownerGRN, member: member,
@@ -85,16 +86,32 @@ func (s *checkStack) send(t *testing.T, method, path string, cookie *http.Cookie
 // decision per action, in order.
 func (s *checkStack) check(t *testing.T, cookie *http.Cookie, actions ...string) []apigen.PermissionDecision {
 	t.Helper()
+	return permissionDecisions(t, s.url, cookie, actions...)
+}
+
+// permissionDecisions asks the browser-facing listener at url about
+// actions on acme itself as cookie and answers one decision per action,
+// in order.
+func permissionDecisions(t *testing.T, url string, cookie *http.Cookie, actions ...string) []apigen.PermissionDecision {
+	t.Helper()
 	checks := make([]apigen.PermissionCheck, len(actions))
 	for i, a := range actions {
 		checks[i] = apigen.PermissionCheck{Action: a}
 	}
 	raw, err := json.Marshal(apigen.PermissionCheckRequest{Checks: checks})
 	require.NoError(t, err)
-	status, body := s.send(t, http.MethodPost, "/orgs/acme/permission-checks", cookie, string(raw))
-	require.Equal(t, http.StatusOK, status, body)
+	req, err := http.NewRequest(http.MethodPost, url+"/orgs/acme/permission-checks", strings.NewReader(string(raw)))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(cookie)
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+	body, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, resp.StatusCode, string(body))
 	var answer apigen.PermissionCheckAnswer
-	require.NoError(t, json.Unmarshal([]byte(body), &answer))
+	require.NoError(t, json.Unmarshal(body, &answer))
 	decisions := make([]apigen.PermissionDecision, len(answer.Results))
 	for i, r := range answer.Results {
 		decisions[i] = r.Decision
@@ -169,7 +186,8 @@ func TestCheckPermissions_AsksAtMostFifty(t *testing.T) {
 // TestCheckPermissions_LeavesGrantAndCurrentActionsUnknown asks the
 // owner, whose role allows each of them, about an action a delegation
 // grant decides and two that current policy decides: each is unknown,
-// because the engine's Check is not what enforcement asks for them.
+// because what enforcement asks for them is more than this operation
+// reads — the grant, or current policy.
 // operator:register, which Check alone decides, is the control.
 func TestCheckPermissions_LeavesGrantAndCurrentActionsUnknown(t *testing.T) {
 	s := newCheckStack(t)
@@ -178,4 +196,36 @@ func TestCheckPermissions_LeavesGrantAndCurrentActionsUnknown(t *testing.T) {
 		apigen.DecisionUnknown, apigen.DecisionUnknown, apigen.DecisionUnknown, apigen.DecisionAllow,
 	}, s.check(t, s.owner,
 		org.ActionAgentCreate, org.ActionOperatorDelegate, org.ActionAgentEnroll, org.ActionOperatorRegister))
+}
+
+// TestCheckPermissions_DeniesAGrantActionItsMintDenies holds the check
+// beside the mint it describes, over the authority service both serve
+// commands compose and a grant covering both operations. A member's
+// role does not hold agent-template:publish, so the check answers deny
+// and the mint refuses. The owner's is the control: the check answers
+// unknown, since it reads no grant, and the mint, which reads one,
+// succeeds. agent:create, which a member's role holds, is the control
+// for the member: unknown, and minted.
+func TestCheckPermissions_DeniesAGrantActionItsMintDenies(t *testing.T) {
+	p := pool(t)
+	_, engine := policyEngine(t, p)
+	s := newAuthorityStack(t, engine, p)
+	s.grant(t, "g-1", nil, org.ActionAgentTemplatePublish, org.ActionAgentCreate)
+	publish := func(cookie *http.Cookie, requestID string) int {
+		status, _ := call(t, http.DefaultClient, http.MethodPost, s.browser+"/orgs/acme/operation-authorities", cookie,
+			`{"audience":"`+s.hosted.String()+`","operation":"agent-template:publish","target":"`+s.acme.String()+
+				`","requestId":"`+requestID+`","bodySha256":"`+strings.Repeat("c", 64)+
+				`","requestTarget":"/agent-templates/web/versions"}`)
+		return status
+	}
+
+	assert.Equal(t, []apigen.PermissionDecision{apigen.DecisionDeny, apigen.DecisionUnknown},
+		permissionDecisions(t, s.browser, s.member, org.ActionAgentTemplatePublish, org.ActionAgentCreate))
+	assert.Equal(t, http.StatusForbidden, publish(s.member, "pub-member"), "the mint refuses what the check denied")
+	status, got := s.mint(t, s.member, org.ActionAgentCreate, s.controller.String(), "create-member")
+	assert.Equal(t, http.StatusCreated, status, "the mint the check left to the grant: %s", got)
+
+	assert.Equal(t, []apigen.PermissionDecision{apigen.DecisionUnknown},
+		permissionDecisions(t, s.browser, s.owner, org.ActionAgentTemplatePublish))
+	assert.Equal(t, http.StatusCreated, publish(s.owner, "pub-owner"), "the grant the check did not read allows the owner")
 }

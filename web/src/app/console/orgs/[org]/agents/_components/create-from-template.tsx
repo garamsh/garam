@@ -5,8 +5,15 @@ import { useState } from "react";
 
 import { Banner } from "@/components/banner";
 import { FormField } from "@/components/form-field";
-import { KeptSelect } from "@/components/kept-select";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { slugFromGrn } from "@/features/orgs/grn";
 import { mintOperationAuthority } from "@/features/orgs/actions";
 import {
   CreatedParser,
@@ -17,22 +24,18 @@ import {
 
 import {
   ControlNotice,
+  NO_FIX,
   UNAVAILABLE,
   type DelegatedOperator,
 } from "./control-notice";
 import { useControlRead } from "./use-control-read";
-
-/** The last segment of a GRN, which the console shows in its place. */
-export function identifierOf(grn: string): string {
-  return grn.split(":").at(-1) ?? grn;
-}
 
 /** The agent a control service created, as its answer named it. */
 export type CreatedAgent = { agent: string; revision: string };
 
 type Outcome =
   | { status: "idle" }
-  | { status: "invalid" }
+  | { status: "invalid"; errors: { template?: string; controller?: string } }
   | { status: "refused"; message: string };
 
 /**
@@ -75,6 +78,16 @@ export function CreateFromTemplate({
     TemplatesParser,
   );
 
+  const delegated = hosted.delegation.controllers;
+  if (delegated.length === 0) {
+    return (
+      <ControlNotice
+        org={org}
+        reason={`${hosted.name}'s delegation names no controller, so there is no operator to place an agent on.`}
+        fix={{ at: "operator", identifier: hosted.identifier }}
+      />
+    );
+  }
   if (templates === null || templates.status === "loading") {
     return (
       <p role="status" className="text-muted-foreground">
@@ -89,11 +102,11 @@ export function CreateFromTemplate({
         reason={
           templates.status === "unavailable" ? UNAVAILABLE : templates.message
         }
+        fix={NO_FIX}
       />
     );
   }
   const published = templates.data.templates;
-  const delegated = hosted.delegation.controllers;
   if (published.length === 0) {
     return (
       <Banner
@@ -116,8 +129,16 @@ export function CreateFromTemplate({
   async function create(form: FormData) {
     const chosen = published.find((t) => t.name === form.get("template"));
     const controller = String(form.get("controller") ?? "");
-    if (!chosen || !delegated.includes(controller)) {
-      setOutcome({ status: "invalid" });
+    // Each choice is checked on its own, so the one that is wrong is
+    // the one flagged.
+    const errors = {
+      ...(chosen === undefined ? { template: "Choose a template." } : {}),
+      ...(!delegated.includes(controller)
+        ? { controller: "Choose a controller." }
+        : {}),
+    };
+    if (chosen === undefined || Object.keys(errors).length > 0) {
+      setOutcome({ status: "invalid", errors });
       return;
     }
     setPending(true);
@@ -153,48 +174,66 @@ export function CreateFromTemplate({
     });
   }
 
+  const template = templateChoice ?? published[0]?.name ?? "";
+  const controller = controllerChoice ?? delegated[0] ?? "";
+  const errors = outcome.status === "invalid" ? outcome.errors : {};
   return (
     <form action={create} className="flex max-w-md flex-col gap-4">
+      <input type="hidden" name="template" value={template} />
+      <input type="hidden" name="controller" value={controller} />
       <FormField
         label="Template"
         hint="The version is copied once; a later version never changes the agent."
-        error={outcome.status === "invalid" ? "Choose a template." : undefined}
+        error={errors.template}
       >
         {(control) => (
-          <KeptSelect
-            {...control}
-            name="template"
-            value={templateChoice ?? published[0]?.name ?? ""}
-            onChange={(event) => setTemplateChoice(event.target.value)}
+          <Select
+            value={template}
+            onValueChange={(value) => {
+              // Radix answers the form's reset after every action with
+              // the empty default; no option is empty, so that is not
+              // a choice, and a refused one stays chosen.
+              if (value === "") return;
+              setTemplateChoice(value);
+            }}
           >
-            {published.map((t) => (
-              <option key={t.name} value={t.name}>
-                {t.name} version {t.version}
-              </option>
-            ))}
-          </KeptSelect>
+            <SelectTrigger {...control} className="w-full min-w-0">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent position="popper">
+              {published.map((t) => (
+                <SelectItem key={t.name} value={t.name}>
+                  {t.name} version {t.version}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         )}
       </FormField>
       <FormField
         label="Controller"
         hint={`The operators ${hosted.name}'s delegation lets it place an agent on.`}
-        error={
-          outcome.status === "invalid" ? "Choose a controller." : undefined
-        }
+        error={errors.controller}
       >
         {(control) => (
-          <KeptSelect
-            {...control}
-            name="controller"
-            value={controllerChoice ?? delegated[0] ?? ""}
-            onChange={(event) => setControllerChoice(event.target.value)}
+          <Select
+            value={controller}
+            onValueChange={(value) => {
+              if (value === "") return;
+              setControllerChoice(value);
+            }}
           >
-            {delegated.map((c) => (
-              <option key={c} value={c}>
-                {controllers[c] ?? identifierOf(c)}
-              </option>
-            ))}
-          </KeptSelect>
+            <SelectTrigger {...control} className="w-full min-w-0">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent position="popper">
+              {delegated.map((c) => (
+                <SelectItem key={c} value={c}>
+                  {controllers[c] ?? slugFromGrn(c)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         )}
       </FormField>
       <div className="flex flex-wrap items-center gap-3">

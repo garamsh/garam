@@ -14,7 +14,7 @@ import { checkPermissions } from "@/lib/permission-check";
 import { ApiUnreachable } from "../../../../_components/api-unreachable";
 import { EmptyState } from "../../../../_components/empty-state";
 import { ListPage } from "../../../../_components/templates/list-page";
-import { ControlNotice } from "../_components/control-notice";
+import { ControlNotice, NO_FIX } from "../_components/control-notice";
 import { OperatorTemplates } from "../_components/operator-templates";
 import { TemplateTable } from "./_components/template-table";
 
@@ -62,7 +62,7 @@ export default async function AgentTemplatesPage({ params }: Params) {
               publishDenied={permissions.get("publish") === "denied"}
             />
           ) : (
-            <ControlNotice org={org} reason={hosted.reason} fixAt={null} />
+            <ControlNotice org={org} reason={hosted.reason} fix={NO_FIX} />
           )}
         </Section>
       )}

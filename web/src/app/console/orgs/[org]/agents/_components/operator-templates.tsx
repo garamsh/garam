@@ -25,6 +25,7 @@ import {
 
 import {
   ControlNotice,
+  NO_FIX,
   UNAVAILABLE,
   controlBlocker,
   controlReach,
@@ -115,6 +116,7 @@ export function OperatorTemplates({
         reason={
           templates.status === "unavailable" ? UNAVAILABLE : templates.message
         }
+        fix={NO_FIX}
       />
     );
   }
@@ -217,6 +219,7 @@ export function OperatorTemplates({
             reason={
               profiles.status === "unavailable" ? UNAVAILABLE : profiles.message
             }
+            fix={NO_FIX}
           />
         )}
       </section>

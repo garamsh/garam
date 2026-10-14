@@ -1,11 +1,17 @@
 "use client";
 
+import { CopyId } from "@/components/copy-id";
 import { DescriptionList } from "@/components/description-list";
 import { Time } from "@/components/time";
 import type { HostedOperator } from "@/features/orgs";
 import { ExecutionParser, segment } from "@/lib/operation-authority";
 
-import { ControlNotice, UNAVAILABLE, controlBlocker } from "./control-notice";
+import {
+  ControlNotice,
+  NO_FIX,
+  UNAVAILABLE,
+  controlBlocker,
+} from "./control-notice";
 import { useControlRead } from "./use-control-read";
 
 /**
@@ -55,6 +61,7 @@ export function ExecutionPanel({
         reason={
           execution.status === "unavailable" ? UNAVAILABLE : execution.message
         }
+        fix={NO_FIX}
       />
     );
   }
@@ -80,12 +87,26 @@ export function ExecutionPanel({
               "No runtime report"
             ) : (
               <>
-                Revision {effective.revision}, generation{" "}
-                <span className="font-mono">{effective.generation}</span>,
-                reported <Time value={effective.observedAt} />
+                Revision {effective.revision}, reported{" "}
+                <Time value={effective.observedAt} />
               </>
             ),
         },
+        // The generation is an identifier, so it is offered to copy
+        // under a term of its own rather than read inside a sentence.
+        ...(effective === null
+          ? []
+          : [
+              {
+                term: "Generation",
+                description: (
+                  <CopyId
+                    value={effective.generation}
+                    label="the running agent's generation"
+                  />
+                ),
+              },
+            ]),
       ]}
     />
   );

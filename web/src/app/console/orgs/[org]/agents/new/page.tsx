@@ -6,7 +6,11 @@ import { REFUSAL_COPY } from "@/lib/refusal-copy";
 
 import { ApiUnreachable } from "../../../../_components/api-unreachable";
 import { PageHeader } from "../../../../_components/page-header";
-import { controlReach, type ControlReach } from "../_components/control-notice";
+import {
+  NO_FIX,
+  controlReach,
+  type ControlReach,
+} from "../_components/control-notice";
 import { NewAgentWizard } from "./_components/new-agent-wizard";
 
 /** Head metadata for the create-agent route; Next.js reads it by name. */
@@ -46,9 +50,9 @@ export default async function NewAgentPage({ params }: Params) {
 
   const start: ControlReach =
     permissions.get("create") === "denied"
-      ? { status: "blocked", block: { reason: REFUSAL_COPY.permissionDenied } }
+      ? { status: "blocked", block: { reason: REFUSAL_COPY.permissionDenied, fix: NO_FIX } }
       : hosted.status !== "ok"
-        ? { status: "blocked", block: { reason: hosted.reason, fixAt: null } }
+        ? { status: "blocked", block: { reason: hosted.reason, fix: NO_FIX } }
         : controlReach(
             hostedFor(hosted.data, "agent:create"),
             "agent:create",

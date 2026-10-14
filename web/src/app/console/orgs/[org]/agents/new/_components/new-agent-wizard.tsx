@@ -5,35 +5,52 @@ import { useState } from "react";
 
 import { CopyField } from "@/components/copy-field";
 import { Button } from "@/components/ui/button";
+import { parseGrn } from "@/features/orgs/grn";
 
 import { WizardPage } from "../../../../../_components/templates/wizard-page";
 import {
   ControlNotice,
+  controlReach,
   type ControlReach,
+  type DelegatedOperator,
 } from "../../_components/control-notice";
 import {
   CreateFromTemplate,
-  identifierOf,
   type CreatedAgent,
 } from "../../_components/create-from-template";
+import { ExecutionPanel } from "../../_components/execution-panel";
 
-const STEPS = [
-  {
-    id: "service",
-    title: "Control service",
-    description: "Where the agent is created",
-  },
-  { id: "template", title: "Template", description: "What it starts from" },
-  { id: "verify", title: "Verify", description: "The agent it created" },
-] as const;
+/**
+ * The last step verifies only where the grant lets the console read the
+ * agent's execution back; otherwise it shows what was created and is
+ * named for that.
+ */
+function steps(verifies: boolean) {
+  return [
+    {
+      id: "service",
+      title: "Control service",
+      description: "Where the agent is created",
+    },
+    { id: "template", title: "Template", description: "What it starts from" },
+    verifies
+      ? {
+          id: "last",
+          title: "Verify",
+          description: "The control service holds it",
+        }
+      : { id: "last", title: "Created", description: "The agent it created" },
+  ];
+}
 
 /**
  * Creating an agent, in the steps the console takes it: a control
  * service that can create one, the template it starts from, and the
- * agent it created. The first step's state is the server's, so a
- * visitor who fixed the operator and came back resumes at the template;
- * a blocked first step says why and links to the page that fixes it,
- * so the route is never a dead end.
+ * agent it created, read back from the control service where the grant
+ * allows. The first step's state is the server's, so a visitor who fixed
+ * the operator and came back resumes at the template; a blocked first
+ * step says why and links to the page that fixes it, so the route is
+ * never a dead end.
  */
 export function NewAgentWizard({
   org,
@@ -48,25 +65,29 @@ export function NewAgentWizard({
   controllers: Readonly<Record<string, string>>;
 }) {
   const [created, setCreated] = useState<CreatedAgent | null>(null);
+  const verifies =
+    start.status === "ready" &&
+    controlReach(start.hosted, "agent:execution-read").status === "ready";
+  const wizardSteps = steps(verifies);
   const current =
     start.status === "blocked"
       ? "service"
       : created === null
         ? "template"
-        : "verify";
+        : "last";
   const completed =
     current === "service"
       ? []
       : current === "template"
         ? ["service"]
         : ["service", "template"];
-  const step = STEPS.find((s) => s.id === current);
+  const step = wizardSteps.find((s) => s.id === current);
 
   return (
     <WizardPage
       title="New agent"
       description="Create an agent from a template the control service published."
-      steps={STEPS}
+      steps={wizardSteps}
       current={current}
       completed={completed}
     >
@@ -75,8 +96,8 @@ export function NewAgentWizard({
         {start.status === "blocked" ? (
           <>
             <p className="text-muted-foreground">
-              garam no longer defines agents itself: a new agent is created by a
-              hosted operator&apos;s control service, from a template it
+              garam no longer defines agents itself: a new agent is created by
+              a hosted operator&apos;s control service, from a template it
               published.
             </p>
             <ControlNotice org={org} {...start.block} />
@@ -95,7 +116,11 @@ export function NewAgentWizard({
             />
           </>
         ) : (
-          <Created org={org} created={created} />
+          <Created
+            org={org}
+            created={created}
+            readBack={verifies ? start.hosted : null}
+          />
         )}
       </div>
     </WizardPage>
@@ -103,26 +128,41 @@ export function NewAgentWizard({
 }
 
 /**
- * The agent the control service answered with. Its page reads its
- * execution back from the control service, which is what shows the
- * agent exists there.
+ * The agent the control service answered with and, where `readBack`
+ * may read it, its execution as the control service now holds it —
+ * which is what shows the agent exists there.
  */
-function Created({ org, created }: { org: string; created: CreatedAgent }) {
-  const identifier = identifierOf(created.agent);
+function Created({
+  org,
+  created,
+  readBack,
+}: {
+  org: string;
+  created: CreatedAgent;
+  readBack: DelegatedOperator | null;
+}) {
+  const identifier = parseGrn(created.agent)?.identifier ?? null;
   return (
     <>
       <p role="status">
-        Created at revision {created.revision}. It keeps the template version it
-        copied.
+        Created at revision {created.revision}. It keeps the template version
+        it copied.
       </p>
-      <CopyField label="Agent identifier" value={identifier} />
-      <div>
-        <Button asChild>
-          <Link href={`/console/orgs/${org}/agents/${identifier}`}>
-            Open the agent
-          </Link>
-        </Button>
-      </div>
+      {readBack !== null && (
+        <ExecutionPanel org={org} agentGrn={created.agent} hosted={readBack} />
+      )}
+      {identifier !== null && (
+        <>
+          <CopyField label="Agent identifier" value={identifier} />
+          <div>
+            <Button asChild>
+              <Link href={`/console/orgs/${org}/agents/${identifier}`}>
+                Open the agent
+              </Link>
+            </Button>
+          </div>
+        </>
+      )}
     </>
   );
 }

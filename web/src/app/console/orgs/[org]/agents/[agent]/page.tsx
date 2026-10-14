@@ -19,6 +19,7 @@ import {
   slugFromGrn,
   type Agent,
   type AgentDefinition,
+  type Reported as ReportedState,
 } from "@/features/orgs";
 import { checkPermissions } from "@/lib/permission-check";
 
@@ -33,7 +34,7 @@ import {
 } from "../../../../_components/templates/detail-page";
 import { DesiredValues, OperatorName } from "../_components/agent-facts";
 import { reportedDots, type AgentDot } from "../_components/agent-status";
-import { ControlNotice } from "../_components/control-notice";
+import { ControlNotice, NO_FIX } from "../_components/control-notice";
 import { ExecutionPanel } from "../_components/execution-panel";
 import { RenameAgentForm } from "./_components/rename-agent-form";
 
@@ -121,14 +122,13 @@ export default async function AgentPage({ params }: Params) {
   // its identifier is never put in a name's place: the header offers
   // it to copy beside the name instead.
   const name = definition.data?.name || UNNAMED_AGENT;
-  const dots = reportedDots(
+  const state: ReportedState =
     agents.status === "forbidden"
       ? "unchecked"
       : reported
         ? "reported"
-        : "awaiting",
-    reported,
-  );
+        : "awaiting";
+  const dots = reportedDots(state, reported);
 
   const tabs: DetailTab[] = [
     {
@@ -136,7 +136,7 @@ export default async function AgentPage({ params }: Params) {
       label: "Overview",
       content: (
         <>
-          <Reported dots={dots} agent={reported} />
+          <Reported state={state} dots={dots} agent={reported} />
           {definition.data === null ? (
             <Banner tone="info" title="No definition in garam">
               A control service created this agent. garam holds what its
@@ -178,7 +178,7 @@ export default async function AgentPage({ params }: Params) {
               )}
             />
           ) : (
-            <ControlNotice org={org} reason={hosted.reason} fixAt={null} />
+            <ControlNotice org={org} reason={hosted.reason} fix={NO_FIX} />
           )}
         </Section>
       ),
@@ -258,9 +258,11 @@ function Section({
  * landed — nothing expires one.
  */
 function Reported({
+  state,
   dots,
   agent,
 }: {
+  state: ReportedState;
   dots: { provisioning: AgentDot; runtime: AgentDot };
   agent: Agent | undefined;
 }) {
@@ -279,7 +281,11 @@ function Reported({
           {
             term: "Last report",
             description:
-              agent === undefined ? (
+              // A refused list says nothing about whether a report
+              // landed, so it is not checked rather than none.
+              state === "unchecked" ? (
+                <span className="text-muted-foreground">Not checked</span>
+              ) : agent === undefined ? (
                 <span className="text-muted-foreground">None</span>
               ) : (
                 <Time value={agent.updatedAt} />

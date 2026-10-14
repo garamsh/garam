@@ -7,18 +7,21 @@ import type { HostedOperator } from "@/features/orgs";
 import { orgHref } from "../../../../_components/navigation";
 
 /**
- * Why a control service panel cannot act, and where that is fixed: the
- * page of the operator whose endpoint or grant falls short, or the
- * Operators list where no operator has an endpoint to fix.
+ * Where what blocks a panel is fixed: the page of the operator whose
+ * endpoint or grant falls short, the Operators list where no operator
+ * has an endpoint, or nowhere the caller can open — a service that is
+ * down, a refusal, an operators list the caller was not shown.
  */
-export type ControlBlock = {
-  reason: string;
-  /**
-   * The operator whose page fixes it, null for the Operators list, and
-   * absent where no page fixes it — a service that is down, a refusal.
-   */
-  fixAt?: string | null;
-};
+export type ControlFix =
+  | { at: "operator"; identifier: string }
+  | { at: "operators" }
+  | { at: "none" };
+
+/** A fix no page the caller can open makes. */
+export const NO_FIX: ControlFix = { at: "none" };
+
+/** Why a control service panel cannot act, and where that is fixed. */
+export type ControlBlock = { reason: string; fix: ControlFix };
 
 /** A hosted operator whose grant was read. */
 export type DelegatedOperator = HostedOperator & {
@@ -41,23 +44,25 @@ export function controlReach(
   hosted: HostedOperator | null,
   ...operations: string[]
 ): ControlReach {
-  const blocked = (reason: string, fixAt: string | null): ControlReach => ({
+  const blocked = (reason: string, fix: ControlFix): ControlReach => ({
     status: "blocked",
-    block: { reason, fixAt },
+    block: { reason, fix },
   });
+  // The operators were read to find the hosted one, so their list and
+  // each operator's page are pages the caller can open.
   if (hosted === null) {
     return blocked(
       "No control service is registered for this organization. An administrator registers one on an operator's page.",
-      null,
+      { at: "operators" },
     );
   }
-  const fixAt = hosted.identifier;
-  if (hosted.problem !== null) return blocked(hosted.problem, fixAt);
+  const fix: ControlFix = { at: "operator", identifier: hosted.identifier };
+  if (hosted.problem !== null) return blocked(hosted.problem, fix);
   const { delegation } = hosted;
   if (delegation === null) {
     return blocked(
       `${hosted.name} holds no delegation, so its control service is not reachable from here.`,
-      fixAt,
+      fix,
     );
   }
   const missing = operations.find(
@@ -66,7 +71,7 @@ export function controlReach(
   if (missing !== undefined) {
     return blocked(
       `${hosted.name}'s delegation does not include ${missing}.`,
-      fixAt,
+      fix,
     );
   }
   return { status: "ready", hosted: { ...hosted, delegation } };
@@ -88,7 +93,7 @@ export function controlBlocker(
 export function ControlNotice({
   org,
   reason,
-  fixAt,
+  fix,
 }: { org: string } & ControlBlock) {
   const operators = orgHref(org, "operators");
   return (
@@ -96,10 +101,16 @@ export function ControlNotice({
       tone="warn"
       title="The control service can't be used here"
       action={
-        fixAt === undefined ? undefined : (
+        fix.at === "none" ? undefined : (
           <Button asChild variant="outline" size="sm">
-            <Link href={fixAt === null ? operators : `${operators}/${fixAt}`}>
-              {fixAt === null ? "Open operators" : "Open the operator"}
+            <Link
+              href={
+                fix.at === "operators"
+                  ? operators
+                  : `${operators}/${fix.identifier}`
+              }
+            >
+              {fix.at === "operators" ? "Open operators" : "Open the operator"}
             </Link>
           </Button>
         )

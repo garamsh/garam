@@ -162,7 +162,9 @@ test.describe("agents", () => {
     await expect(
       first.getByText("Disconnected", { exact: true }),
     ).toBeVisible();
-    await expect(page.getByRole("alert")).toContainText("1 agent is failing");
+    await expect(
+      page.getByRole("alert").filter({ hasText: "agent is failing" }),
+    ).toContainText("1 agent is failing");
   });
 });
 
@@ -278,8 +280,12 @@ test.describe("agents and templates accessibility", () => {
       ];
       for (const [href, heading, tabs] of routes) {
         await page.goto(href);
+        // A list's heading carries its count after the title.
         await expect(
-          page.getByRole("heading", { level: 1, name: heading, exact: true }),
+          page.getByRole("heading", {
+            level: 1,
+            name: new RegExp(`^${heading}( ?\\d+)?$`),
+          }),
         ).toBeVisible();
         await expectHydrated(page);
         expect(await axeViolations(page), href).toEqual([]);

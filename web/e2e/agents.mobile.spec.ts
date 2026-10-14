@@ -23,8 +23,12 @@ test.describe("agents and templates on a phone", () => {
       [`${agents}/templates/${kept.identifier}`, "Researcher"],
     ] as const) {
       await page.goto(href);
+      // A list's heading carries its count after the title.
       await expect(
-        page.getByRole("heading", { level: 1, name: heading, exact: true }),
+        page.getByRole("heading", {
+          level: 1,
+          name: new RegExp(`^${heading}( ?\\d+)?$`),
+        }),
       ).toBeVisible();
       await expectHydrated(page);
 

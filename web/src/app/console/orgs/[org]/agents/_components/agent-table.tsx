@@ -33,7 +33,7 @@ function columns(org: string): ColumnDef<AgentRow, unknown>[] {
       // The identifier is searched too: names repeat and it does not.
       accessorFn: (row) => `${row.name} ${row.identifier}`,
       cell: ({ row: { original: row } }) => (
-        <div className="flex min-w-0 flex-col gap-0.5">
+        <div className="flex min-w-0 flex-col items-start gap-1.5">
           <Link
             href={`/console/orgs/${org}/agents/${row.identifier}`}
             className="font-medium wrap-anywhere underline-offset-4 hover:underline focus-visible:underline"

@@ -4,7 +4,11 @@ import { describe, expect, it, vi } from "vitest";
 
 import LoginPage from "@/app/(auth)/login/page";
 import { renderServerComponent } from "@/testing/render";
-import { API_URL, signedOutWith } from "@/testing/mocks/handlers";
+import {
+  API_URL,
+  acmeInvitation,
+  signedOutWith,
+} from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
 vi.mock("next/navigation", () => ({
@@ -13,11 +17,20 @@ vi.mock("next/navigation", () => ({
   },
 }));
 
+const NO_PARAMS = { searchParams: Promise.resolve({}) };
+
+/** The page as reached from an invitation link the proxy redirected. */
+function invitedTo(token: string) {
+  return {
+    searchParams: Promise.resolve({ next: `/console/invitations/${token}` }),
+  };
+}
+
 describe("login page", () => {
   it("offers the Google sign-in button while signed out", async () => {
     server.use(...signedOutWith(["google"]));
 
-    await renderServerComponent(LoginPage());
+    await renderServerComponent(LoginPage(NO_PARAMS));
 
     expect(
       screen.getByRole("heading", { name: "Sign in to garam" }),
@@ -33,7 +46,7 @@ describe("login page", () => {
   it("offers the username and password form beside the provider buttons", async () => {
     server.use(...signedOutWith(["google"]));
 
-    await renderServerComponent(LoginPage());
+    await renderServerComponent(LoginPage(NO_PARAMS));
 
     expect(screen.getByLabelText("Username")).toBeInTheDocument();
     expect(screen.getByLabelText("Password")).toHaveAttribute(
@@ -53,7 +66,7 @@ describe("login page", () => {
   // render or a query that never matched anything.
   it("offers a provider button, and names Google, only when the backend registers one", async () => {
     server.use(...signedOutWith(["google"]));
-    const registered = await renderServerComponent(LoginPage());
+    const registered = await renderServerComponent(LoginPage(NO_PARAMS));
     expect(
       screen.getByRole("link", { name: "Sign in with Google" }),
     ).toBeInTheDocument();
@@ -65,7 +78,7 @@ describe("login page", () => {
     registered.unmount();
 
     server.use(...signedOutWith([]));
-    await renderServerComponent(LoginPage());
+    await renderServerComponent(LoginPage(NO_PARAMS));
     expect(
       screen.queryByRole("link", { name: "Sign in with Google" }),
     ).not.toBeInTheDocument();
@@ -81,14 +94,14 @@ describe("login page", () => {
 
   it("offers no button for a provider it holds none for", async () => {
     server.use(...signedOutWith(["google"]));
-    const known = await renderServerComponent(LoginPage());
+    const known = await renderServerComponent(LoginPage(NO_PARAMS));
     expect(
       screen.getByRole("link", { name: "Sign in with Google" }),
     ).toBeInTheDocument();
     known.unmount();
 
     server.use(...signedOutWith(["github"]));
-    await renderServerComponent(LoginPage());
+    await renderServerComponent(LoginPage(NO_PARAMS));
     expect(
       screen.queryByRole("link", { name: "Sign in with Google" }),
     ).not.toBeInTheDocument();
@@ -97,7 +110,7 @@ describe("login page", () => {
 
   it("offers no provider button when the provider list cannot be read", async () => {
     server.use(...signedOutWith(["google"]));
-    const readable = await renderServerComponent(LoginPage());
+    const readable = await renderServerComponent(LoginPage(NO_PARAMS));
     expect(
       screen.getByRole("link", { name: "Sign in with Google" }),
     ).toBeInTheDocument();
@@ -107,7 +120,7 @@ describe("login page", () => {
       ...signedOutWith([]),
       http.get(`${API_URL}/auth/providers`, () => HttpResponse.error()),
     );
-    await renderServerComponent(LoginPage());
+    await renderServerComponent(LoginPage(NO_PARAMS));
     expect(
       screen.queryByRole("link", { name: "Sign in with Google" }),
     ).not.toBeInTheDocument();
@@ -121,7 +134,7 @@ describe("login page", () => {
   // §Failing).
   it("says what a sign-in creates only where a provider is registered, and says what an invitation joins either way", async () => {
     server.use(...signedOutWith(["google"]));
-    const registered = await renderServerComponent(LoginPage());
+    const registered = await renderServerComponent(LoginPage(NO_PARAMS));
     // Presence: each clause shares a paragraph with the others.
     expect(
       screen.getByText(/Signing in with Google creates an account/),
@@ -132,7 +145,7 @@ describe("login page", () => {
     registered.unmount();
 
     server.use(...signedOutWith([]));
-    await renderServerComponent(LoginPage());
+    await renderServerComponent(LoginPage(NO_PARAMS));
     expect(
       screen.queryByText(/Signing in with Google creates an account/),
     ).not.toBeInTheDocument();
@@ -144,7 +157,7 @@ describe("login page", () => {
   it("sends a visitor holding an invitation to the registration page", async () => {
     server.use(...signedOutWith(["google"]));
 
-    await renderServerComponent(LoginPage());
+    await renderServerComponent(LoginPage(NO_PARAMS));
 
     expect(screen.getByRole("link", { name: "Create one" })).toHaveAttribute(
       "href",
@@ -155,7 +168,7 @@ describe("login page", () => {
   it("says the API is unreachable instead of failing", async () => {
     server.use(http.get(`${API_URL}/me`, () => HttpResponse.error()));
 
-    await renderServerComponent(LoginPage());
+    await renderServerComponent(LoginPage(NO_PARAMS));
 
     expect(
       screen.getByRole("heading", { name: "Cannot reach the API" }),
@@ -175,7 +188,7 @@ describe("login page", () => {
       ),
     );
 
-    await renderServerComponent(LoginPage());
+    await renderServerComponent(LoginPage(NO_PARAMS));
 
     expect(
       screen.getByRole("heading", { name: "Cannot reach the API" }),
@@ -186,8 +199,65 @@ describe("login page", () => {
   });
 
   it("sends an already signed-in visitor to the console", async () => {
-    await expect(renderServerComponent(LoginPage())).rejects.toThrow(
+    await expect(renderServerComponent(LoginPage(NO_PARAMS))).rejects.toThrow(
       "NEXT_REDIRECT:/console",
     );
+  });
+
+  it("sends an already signed-in visitor on to where they were going", async () => {
+    await expect(
+      renderServerComponent(LoginPage(invitedTo("secret-token"))),
+    ).rejects.toThrow("NEXT_REDIRECT:/console/invitations/secret-token");
+  });
+
+  // The control is the console path the same parameter carries above:
+  // only a path outside the console is dropped.
+  it("drops a return path that leaves the console", async () => {
+    await expect(
+      renderServerComponent(
+        LoginPage({
+          searchParams: Promise.resolve({ next: "//evil.example/console" }),
+        }),
+      ),
+    ).rejects.toThrow(/^NEXT_REDIRECT:\/console$/);
+  });
+
+  it("names the invitation it was reached for and carries it to sign-in and to register", async () => {
+    server.use(...signedOutWith([]));
+
+    const { container } = await renderServerComponent(
+      LoginPage(invitedTo("secret-token")),
+    );
+
+    expect(
+      screen.getByRole("heading", { name: "Sign in to join Acme" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Joining as an admin")).toBeInTheDocument();
+    expect(
+      container.querySelector('input[type="hidden"][name="next"]'),
+    ).toHaveValue("/console/invitations/secret-token");
+    expect(screen.getByRole("link", { name: "Create one" })).toHaveAttribute(
+      "href",
+      "/register?next=%2Fconsole%2Finvitations%2Fsecret-token",
+    );
+  });
+
+  it("says an invitation can no longer be used, and still offers to sign in", async () => {
+    server.use(
+      ...signedOutWith([]),
+      http.get(`${API_URL}/invitations/secret-token`, () =>
+        HttpResponse.json({ ...acmeInvitation, state: "expired" }),
+      ),
+    );
+
+    await renderServerComponent(LoginPage(invitedTo("secret-token")));
+
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "This invitation has expired",
+    );
+    expect(
+      screen.getByRole("heading", { name: "Sign in to garam" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
   });
 });

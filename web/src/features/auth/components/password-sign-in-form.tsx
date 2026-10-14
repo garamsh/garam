@@ -5,6 +5,7 @@ import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RETURN_PARAM } from "@/lib/return-path";
 
 import { signInWithPassword, type SignInWithPasswordState } from "../actions";
 
@@ -17,8 +18,15 @@ const initialState: SignInWithPasswordState = { status: "idle" };
  * username no account holds are one answer, so the form asks nothing
  * about either before sending them and renders the single refusal the
  * action returns.
+ *
+ * `returnPath` is where the visitor was going before they were sent
+ * here; the action lands there once signed in.
  */
-export function PasswordSignInForm() {
+export function PasswordSignInForm({
+  returnPath = null,
+}: {
+  returnPath?: string | null;
+}) {
   const [state, formAction, pending] = useActionState(
     signInWithPassword,
     initialState,
@@ -31,6 +39,9 @@ export function PasswordSignInForm() {
 
   return (
     <form action={formAction} className="flex w-full flex-col gap-4">
+      {returnPath !== null && (
+        <input type="hidden" name={RETURN_PARAM} value={returnPath} />
+      )}
       <div className="flex flex-col gap-2">
         <Label htmlFor="username">Username</Label>
         <Input

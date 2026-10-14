@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { deleteGroup } from "@/features/orgs/api/delete-group";
 import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
+import { REFUSAL_COPY } from "@/lib/refusal-copy";
 
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 vi.mock("next/navigation", () => ({
@@ -52,7 +53,7 @@ describe("deleteGroup", () => {
 
     await expect(deleteGroup({ status: "idle" }, form())).resolves.toEqual({
       status: "error",
-      message: "permission denied",
+      message: REFUSAL_COPY.permissionDenied,
     });
 
     // The control: the same delete garam accepts returns to the list,

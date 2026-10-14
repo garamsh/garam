@@ -6,6 +6,7 @@ import { addGroupMember } from "@/features/orgs/api/add-group-member";
 import { removeGroupMember } from "@/features/orgs/api/remove-group-member";
 import { API_URL, alice, reportedAgent } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
+import { REFUSAL_COPY } from "@/lib/refusal-copy";
 
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
@@ -84,7 +85,10 @@ describe("addGroupMember", () => {
 
     await expect(
       addGroupMember({ status: "idle" }, form(alice.grn)),
-    ).resolves.toEqual({ status: "error", message: "permission denied" });
+    ).resolves.toEqual({
+      status: "error",
+      message: REFUSAL_COPY.permissionDenied,
+    });
 
     // The control: the same addition garam accepts succeeds.
     refusing = false;
@@ -147,7 +151,7 @@ describe("removeGroupMember", () => {
       removeGroupMember({ status: "idle" }, form(alice.grn)),
     ).resolves.toEqual({
       status: "error",
-      message: "the garam API could not be reached",
+      message: REFUSAL_COPY.unreachable,
     });
 
     // The control: the same removal, answered, succeeds.

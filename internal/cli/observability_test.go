@@ -28,6 +28,8 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -965,4 +967,104 @@ func TestNewLogger_JoinsAHandlersLineToTheRequestItRanIn(t *testing.T) {
 	assert.NotEmpty(t, served["trace_id"], "the request's own line still carries one")
 	assert.Equal(t, served["trace_id"], handled["trace_id"],
 		"the handler's line joins the request rather than minting an id of its own")
+}
+
+// invitationOrgs is the slice of org.Store the invitation read
+// reaches: one live invitation and its organization, and a store fault
+// for every other token.
+type invitationOrgs struct {
+	org.Store
+	token string
+	fault error
+}
+
+func (s invitationOrgs) GetInvitation(_ context.Context, token string) (*org.Invitation, error) {
+	switch token {
+	case s.token:
+		return org.NewInvitation(token, grn.New("root", "default", org.ServiceTypeOrg, "acme"),
+			org.RoleMember, grn.New("root", "default", user.ServiceType, "owner"), time.Now().Add(time.Hour)), nil
+	case "unknown-tok-secret":
+		return nil, org.ErrInvitationNotFound
+	}
+	return nil, s.fault
+}
+
+func (invitationOrgs) GetOrg(_ context.Context, g grn.GRN) (*org.Organization, error) {
+	return org.NewOrganization(g, "Acme"), nil
+}
+
+// TestLogRequests_KeepsAnInvitationTokenOffTheLine drives the
+// unauthenticated invitation read through apiHandler, the router `serve
+// api` builds, for its three answers: found, unknown, and a store fault
+// whose cause the line carries. The path is the token, so the line
+// naming the route pattern is what keeps the token out; the operation
+// asserted on each line is the control that a line was written for
+// this route at all.
+func TestLogRequests_KeepsAnInvitationTokenOffTheLine(t *testing.T) {
+	tests := []struct {
+		name   string
+		token  string
+		status int
+	}{
+		{name: "found", token: "live-tok-secret", status: http.StatusOK},
+		{name: "unknown", token: "unknown-tok-secret", status: http.StatusNotFound},
+		{name: "fault", token: "fault-tok-secret", status: http.StatusInternalServerError},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var out lines
+			orgs := invitationOrgs{
+				token: "live-tok-secret",
+				fault: errorx.Wrap(errorx.New(errorx.KindInternal, "connection reset by peer"), "get invitation"),
+			}
+			srv := api.NewServer(nil, orgs, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{})
+			server := httptest.NewServer(recordingObservability(&out).apiHandler(srv))
+			t.Cleanup(server.Close)
+
+			resp, err := server.Client().Get(server.URL + "/invitations/" + tc.token)
+			require.NoError(t, err)
+			require.NoError(t, resp.Body.Close())
+			require.Equal(t, tc.status, resp.StatusCode)
+
+			line := decodeLine(t, &out)
+			assert.Equal(t, "GET /invitations/{token}", line["operation"])
+			assert.Equal(t, float64(tc.status), line["status"])
+			assert.NotContains(t, out.String(), tc.token)
+		})
+	}
+}
+
+// TestAPIHandler_KeepsAnInvitationTokenOffTheSpan reads the spans
+// apiHandler records for the invitation read: otelhttp takes url.path
+// from the concrete path, which is the token, and a configured exporter
+// would ship it. The span is found by its route before the search, so
+// an empty recording cannot pass for a clean one.
+func TestAPIHandler_KeepsAnInvitationTokenOffTheSpan(t *testing.T) {
+	recorded := tracetest.NewSpanRecorder()
+	previous := otel.GetTracerProvider()
+	otel.SetTracerProvider(sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(recorded)))
+	t.Cleanup(func() { otel.SetTracerProvider(previous) })
+
+	var out lines
+	orgs := invitationOrgs{token: "live-tok-secret"}
+	srv := api.NewServer(nil, orgs, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, api.Config{})
+	server := httptest.NewServer(recordingObservability(&out).apiHandler(srv))
+	t.Cleanup(server.Close)
+
+	resp, err := server.Client().Get(server.URL + "/invitations/live-tok-secret")
+	require.NoError(t, err)
+	require.NoError(t, resp.Body.Close())
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	spans := recorded.Ended()
+	require.Len(t, spans, 1)
+	attrs := map[string]string{}
+	for _, kv := range spans[0].Attributes() {
+		attrs[string(kv.Key)] = kv.Value.Emit()
+	}
+	assert.Equal(t, "/invitations/{token}", attrs["url.path"])
+	for key, value := range attrs {
+		assert.NotContains(t, value, "live-tok-secret", "attribute %s", key)
+	}
+	assert.NotContains(t, spans[0].Name(), "live-tok-secret")
 }

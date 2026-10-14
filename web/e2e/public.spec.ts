@@ -45,10 +45,12 @@ test.describe("signed out", () => {
     ).toBeVisible();
   });
 
-  test("redirects a console page to the login page", async ({ page }) => {
+  test("redirects a console page to the login page, carrying where it was going", async ({
+    page,
+  }) => {
     await page.goto("/console/orgs");
 
-    await expect(page).toHaveURL("/login");
+    await expect(page).toHaveURL("/login?next=%2Fconsole%2Forgs");
     await expect(
       page.getByRole("heading", { name: "Sign in to garam", exact: true }),
     ).toBeVisible();

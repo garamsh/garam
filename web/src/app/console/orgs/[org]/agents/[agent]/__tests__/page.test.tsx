@@ -32,7 +32,11 @@ describe("agent page", () => {
     expect(
       screen.getByRole("heading", { level: 1, name: "Scout" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Identifier 9f2ac1b40d8e7a35")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "Copy the identifier of Scout: 9f2ac1b40d8e7a35",
+      }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("heading", { name: "Reported" }),
     ).toBeInTheDocument();
@@ -51,6 +55,35 @@ describe("agent page", () => {
       "/console/orgs/acme/permissions/attachments?subject=agent%3A9f2ac1b40d8e7a35",
     );
     expect(container.textContent).not.toContain("grn:");
+  });
+
+  it("calls an agent garam holds no name for unnamed, never by its identifier", async () => {
+    server.use(
+      http.get(`${API_URL}/orgs/acme/agent-definitions/1c3d5e7f90a2b4c6`, () =>
+        HttpResponse.json(
+          { kind: "not_found", message: "agent definition not found" },
+          { status: 404 },
+        ),
+      ),
+    );
+
+    await renderServerComponent(
+      AgentPage({
+        params: Promise.resolve({ org: "acme", agent: "1c3d5e7f90a2b4c6" }),
+      }),
+    );
+
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Unnamed agent" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", { name: "1c3d5e7f90a2b4c6" }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("button", {
+        name: "Copy the identifier of Unnamed agent: 1c3d5e7f90a2b4c6",
+      }),
+    ).toBeInTheDocument();
   });
 
   it("shows the states an operator and the agent reported once one claims it", async () => {

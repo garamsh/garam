@@ -1,3 +1,4 @@
+import { CopyId } from "@/components/copy-id";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -11,9 +12,10 @@ import { slugFromGrn, type Member } from "@/features/orgs";
 
 /**
  * The organization's members by name, role and joining date. A member
- * is shown by the name the user row carries and addressed by the
- * identifier segment beneath it (ADR-0011), which is monospaced as
- * every other identifier in the console is.
+ * is shown by the name the user row carries, and the identifier segment
+ * the API addresses them by (ADR-0011) — `local-` and all, for an
+ * account garam minted — is offered beneath it to copy rather than as
+ * text to read.
  *
  * `nickname` is absent only where that row is gone
  * (`api/openapi.yaml` §Member), and the cell then says so rather than
@@ -39,9 +41,11 @@ export function MemberTable({ members }: { members: Member[] }) {
                   No name on record
                 </span>
               )}
-              <span className="block font-mono text-xs font-normal text-muted-foreground">
-                {slugFromGrn(member.userGrn)}
-              </span>
+              <CopyId
+                value={slugFromGrn(member.userGrn)}
+                label={member.nickname ?? "this member"}
+                className="flex"
+              />
             </TableCell>
             <TableCell>
               <Badge variant="secondary">{member.role}</Badge>

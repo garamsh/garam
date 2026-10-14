@@ -14,6 +14,7 @@ import {
   denyDeletesVersions,
 } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
+import { REFUSAL_COPY } from "@/lib/refusal-copy";
 
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 vi.mock("next/navigation", () => ({
@@ -102,7 +103,7 @@ describe("createPolicy", () => {
       ),
     ).resolves.toEqual({
       status: "error",
-      message: "policy document: statement : Effect must be Allow or Deny",
+      message: REFUSAL_COPY.policyDocumentRefused,
     });
 
     // The control: the document the engine takes creates the policy, so
@@ -221,7 +222,7 @@ describe("activatePolicy", () => {
     [
       "an unavailable list refuses to guess",
       () => HttpResponse.error(),
-      { status: "error", message: "the garam API could not be reached" },
+      { status: "error", message: REFUSAL_COPY.unreachable },
     ],
   ])("reads the scope before activating: %s", async (_, answer, state) => {
     const activated: string[] = [];
@@ -318,7 +319,10 @@ describe("archivePolicy", () => {
 
     await expect(
       archivePolicy({ status: "idle" }, form({ policy: "d1e2f3a4b5c6d7e8" })),
-    ).resolves.toEqual({ status: "error", message: "permission denied" });
+    ).resolves.toEqual({
+      status: "error",
+      message: REFUSAL_COPY.permissionDenied,
+    });
 
     // The control: the same archive, allowed, succeeds.
     refusing = false;

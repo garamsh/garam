@@ -5,9 +5,10 @@ import { describe, expect, it, vi } from "vitest";
 import { ConsoleSidebar } from "@/app/console/_components/console-sidebar";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { API_URL, signedOut } from "@/testing/mocks/handlers";
+import { API_URL } from "@/testing/mocks/handlers";
 import { renderServerComponent } from "@/testing/render";
-import { server } from "@/testing/setup";
+import { RETURN_PATH_HEADER } from "@/lib/return-path";
+import { requestHeaders, server } from "@/testing/setup";
 
 const route = vi.hoisted(() => ({ pathname: "/console/orgs/acme" }));
 
@@ -57,10 +58,22 @@ describe("console sidebar", () => {
     expect(container.textContent).not.toContain("grn:");
   });
 
-  it("sends a rejected session to the login page", async () => {
-    server.use(...signedOut());
+  it("sends a rejected session to the login page, carrying the page it was on", async () => {
+    // Only `/me` refuses, so the redirect is the sidebar's own session
+    // check and not the organization read's beside it.
+    server.use(
+      http.get(`${API_URL}/me`, () =>
+        HttpResponse.json(
+          { kind: "unauthenticated", message: "no session" },
+          { status: 401 },
+        ),
+      ),
+    );
+    requestHeaders.set(RETURN_PATH_HEADER, "/console/invitations/tok-123");
 
-    await expect(renderSidebar()).rejects.toThrow("NEXT_REDIRECT:/login");
+    await expect(renderSidebar()).rejects.toThrow(
+      /^NEXT_REDIRECT:\/login\?next=%2Fconsole%2Finvitations%2Ftok-123$/,
+    );
   });
 
   it("keeps the shell, without the controls its reads feed, when the API is unreachable", async () => {

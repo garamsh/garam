@@ -139,6 +139,27 @@ func (e InvitationCreateRole) Valid() bool {
 	}
 }
 
+// Defines values for InvitationPreviewState.
+const (
+	InvitationPreviewStateAccepted InvitationPreviewState = "accepted"
+	InvitationPreviewStateExpired  InvitationPreviewState = "expired"
+	InvitationPreviewStatePending  InvitationPreviewState = "pending"
+)
+
+// Valid indicates whether the value is a known member of the InvitationPreviewState enum.
+func (e InvitationPreviewState) Valid() bool {
+	switch e {
+	case InvitationPreviewStateAccepted:
+		return true
+	case InvitationPreviewStateExpired:
+		return true
+	case InvitationPreviewStatePending:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for OperationAuthorityRequestOperation.
 const (
 	OperationAuthorityRequestOperationAgentConfigure       OperationAuthorityRequestOperation = "agent:configure"
@@ -573,6 +594,22 @@ type InvitationCreate struct {
 
 // InvitationCreateRole Owners are not transferable by invitation.
 type InvitationCreateRole string
+
+// InvitationPreview defines model for InvitationPreview.
+type InvitationPreview struct {
+	ExpiresAt time.Time `json:"expiresAt"`
+
+	// Org Organization identifier (the last GRN segment), the one the API's own paths take.
+	Org     string `json:"org"`
+	OrgName string `json:"orgName"`
+	Role    Role   `json:"role"`
+
+	// State `pending` can still be accepted. `accepted` was used once and never admits again. `expired` passed `expiresAt` unused.
+	State InvitationPreviewState `json:"state"`
+}
+
+// InvitationPreviewState `pending` can still be accepted. `accepted` was used once and never admits again. `expired` passed `expiresAt` unused.
+type InvitationPreviewState string
 
 // IssuedOperatorKey A key garam generated for an operator, answered once. Place `privateKeyPem` and `tokenUrl` in the operator's cluster for the identity `clientId` names; garam cannot answer the private key a second time.
 type IssuedOperatorKey struct {
@@ -1210,6 +1247,9 @@ type ServerInterface interface {
 	// ListProviders List the enabled sign-in providers.
 	// (GET /auth/providers)
 	ListProviders(w http.ResponseWriter, r *http.Request)
+	// GetInvitation Read what an invitation would admit its holder to.
+	// (GET /invitations/{token})
+	GetInvitation(w http.ResponseWriter, r *http.Request, token string)
 	// AcceptInvitation Accept an invitation.
 	// (POST /invitations/{token}/accept)
 	AcceptInvitation(w http.ResponseWriter, r *http.Request, token string)
@@ -1550,6 +1590,32 @@ func (siw *ServerInterfaceWrapper) ListProviders(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListProviders(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetInvitation operation middleware
+func (siw *ServerInterfaceWrapper) GetInvitation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "token" -------------
+	var token string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "token", r.PathValue("token"), &token, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "token", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetInvitation(w, r, token)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -4158,6 +4224,7 @@ func HandlerWithOptions(si ServerInterface, options StdHTTPServerOptions) http.H
 	m.HandleFunc(http.MethodDelete+" "+options.BaseURL+"/orgs/{org}/consents/{other}", wrapper.WithdrawOrgConsent)
 	m.HandleFunc(http.MethodPut+" "+options.BaseURL+"/orgs/{org}/consents/{other}", wrapper.GrantOrgConsent)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/orgs/{org}/invitations", wrapper.CreateInvitation)
+	m.HandleFunc(http.MethodGet+" "+options.BaseURL+"/invitations/{token}", wrapper.GetInvitation)
 	m.HandleFunc(http.MethodPost+" "+options.BaseURL+"/invitations/{token}/accept", wrapper.AcceptInvitation)
 
 	return m

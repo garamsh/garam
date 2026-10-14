@@ -174,8 +174,10 @@ test.describe("control service, as contract tests against the agreed Operator wi
       .getByRole("button", { name: "Save endpoint", exact: true })
       .click();
     await expect(
+      // garam names no stable code for this refusal, so its text
+      // reaches the form inside the generic sentence.
       page.getByText(
-        "control endpoint must be an https URL of at most 2048 bytes with a host and a valid port, and no credentials, query, fragment, dot segment or trailing slash",
+        "garam couldn't complete this request. It answered: “control endpoint must be an https URL of at most 2048 bytes with a host and a valid port, and no credentials, query, fragment, dot segment or trailing slash”",
         { exact: true },
       ),
     ).toBeVisible();
@@ -615,7 +617,12 @@ test.describe("control service, as contract tests against the agreed Operator wi
     // the same page.
     await page.goto(agentPage);
     await expect(
-      page.getByRole("heading", { level: 1, name: signedIn.agentIdentifier }),
+      // A control service's agent has no definition, so no name.
+      page.getByRole("heading", {
+        level: 1,
+        name: "Unnamed agent",
+        exact: true,
+      }),
     ).toBeVisible();
     await expect(page.getByText(refused, { exact: true })).toBeHidden();
 
@@ -633,7 +640,12 @@ test.describe("control service, as contract tests against the agreed Operator wi
 
     await page.goto(agentPage);
     await expect(
-      page.getByRole("heading", { level: 1, name: signedIn.agentIdentifier }),
+      // A control service's agent has no definition, so no name.
+      page.getByRole("heading", {
+        level: 1,
+        name: "Unnamed agent",
+        exact: true,
+      }),
     ).toBeVisible();
     await expect(
       page.getByText(signedIn.agentProvisioningState, { exact: true }),
@@ -681,7 +693,12 @@ test.describe("control service, as contract tests against the agreed Operator wi
       `/console/orgs/${signedIn.orgSlug}/agents/${signedIn.agentIdentifier}`,
     );
     await expect(
-      page.getByRole("heading", { level: 1, name: signedIn.agentIdentifier }),
+      // A control service's agent has no definition, so no name.
+      page.getByRole("heading", {
+        level: 1,
+        name: "Unnamed agent",
+        exact: true,
+      }),
     ).toBeVisible();
     await expect(page.getByText(failed, { exact: true })).toBeVisible();
 

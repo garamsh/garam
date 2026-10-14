@@ -28,13 +28,20 @@ async function invitationToken(page: Page, orgSlug: string): Promise<string> {
 }
 
 /**
- * Registers an account in a browser holding no session, the way an
- * invitee arrives: at the login page, with nothing but the token.
+ * Registers an account in a browser holding no session, at the login
+ * page with nothing but the token pasted by hand — the way in for an
+ * invitee who has the token and not the link. Registering lands in the
+ * organization the invitation named.
  */
 async function registerAccount(
   browser: Browser,
   baseURL: string | undefined,
-  credential: { token: string; username: string; password: string },
+  credential: {
+    token: string;
+    username: string;
+    password: string;
+    orgSlug: string;
+  },
   urls: string[],
 ): Promise<void> {
   const context = await browser.newContext({ baseURL });
@@ -50,7 +57,7 @@ async function registerAccount(
   await page.getByLabel("Password").fill(credential.password);
   await page.getByRole("button", { name: "Create account" }).click();
 
-  await expect(page).toHaveURL("/console/orgs");
+  await expect(page).toHaveURL(`/console/orgs/${credential.orgSlug}`);
   await context.close();
 }
 
@@ -73,7 +80,7 @@ test.describe("password accounts", () => {
     await registerAccount(
       browser,
       baseURL,
-      { token, username, password },
+      { token, username, password, orgSlug: signedIn.orgSlug },
       urls,
     );
     // What the filter at the end of this test rests on. `[].filter()`
@@ -123,7 +130,12 @@ test.describe("password accounts", () => {
     await registerAccount(
       browser,
       baseURL,
-      { token, username, password: newPassword() },
+      {
+        token,
+        username,
+        password: newPassword(),
+        orgSlug: signedIn.orgSlug,
+      },
       [],
     );
 

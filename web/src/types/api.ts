@@ -1038,6 +1038,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/invitations/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read what an invitation would admit its holder to.
+         * @description Answers the organization an invitation names, the role it grants and whether it can still be used, so a page can say what accepting would do before anyone accepts. It needs no session: possession of the token is the whole claim (ADR-0006), and the answer carries nothing accepting it would not reveal — no inviter, no member of the organization. An unknown token is answered as any other not-found.
+         */
+        get: operations["getInvitation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/invitations/{token}/accept": {
         parameters: {
             query?: never;
@@ -1236,6 +1256,19 @@ export interface components {
             token: string;
             orgGrn: string;
             role: components["schemas"]["Role"];
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        InvitationPreview: {
+            /** @description Organization identifier (the last GRN segment), the one the API's own paths take. */
+            org: string;
+            orgName: string;
+            role: components["schemas"]["Role"];
+            /**
+             * @description `pending` can still be accepted. `accepted` was used once and never admits again. `expired` passed `expiresAt` unused.
+             * @enum {string}
+             */
+            state: "pending" | "accepted" | "expired";
             /** Format: date-time */
             expiresAt: string;
         };
@@ -3822,6 +3855,29 @@ export interface operations {
             400: components["responses"]["Error"];
             401: components["responses"]["Error"];
             403: components["responses"]["Error"];
+            404: components["responses"]["Error"];
+        };
+    };
+    getInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The invitation's organization, role and state. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationPreview"];
+                };
+            };
             404: components["responses"]["Error"];
         };
     };

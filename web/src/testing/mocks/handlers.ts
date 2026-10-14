@@ -8,6 +8,7 @@ import type {
   AgentTemplate,
   Group,
   GroupMember,
+  InvitationPreview,
   Member,
   Operator,
   OrgConsent,
@@ -219,6 +220,19 @@ export const baselineRead: Policy = {
 };
 
 /**
+ * A live invitation into Acme, read with the token `secret-token`. Its
+ * org name differs from the identifier, so a page addressing the org
+ * by the one where the other belongs is caught.
+ */
+export const acmeInvitation: InvitationPreview = {
+  org: "acme",
+  orgName: "Acme",
+  role: "admin",
+  state: "pending",
+  expiresAt: "2026-01-09T03:04:05Z",
+};
+
+/**
  * Every route the fixtures model: what it answers signed in, and
  * whether the backend guards it. The split is the one
  * `api/openapi.yaml` records — an operation carrying `security: []`
@@ -228,6 +242,11 @@ export const baselineRead: Policy = {
 const routes: { path: string; guarded: boolean; body: JsonBodyType }[] = [
   { path: "/me", guarded: true, body: alice },
   { path: "/auth/providers", guarded: false, body: ["google"] },
+  {
+    path: "/invitations/secret-token",
+    guarded: false,
+    body: acmeInvitation,
+  },
   { path: "/orgs", guarded: true, body: [acme] },
   { path: "/orgs/acme", guarded: true, body: acme },
   { path: "/orgs/acme/groups", guarded: true, body: [engineering] },

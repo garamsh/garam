@@ -1,4 +1,5 @@
 import {
+  UNNAMED_AGENT,
   agentChoiceLabel,
   directoryAgents,
   kindFromGrn,
@@ -22,7 +23,9 @@ export type MemberKind = Exclude<SubjectKind, "team"> | "unknown";
  * One membership of a team, as the page shows it. `label` is what this
  * organization calls the member, null where it has no name for it.
  * Neither it nor `lookup` is inferred from the other: a person whose
- * user row is gone is found and nameless.
+ * user row is gone is found and nameless. `nameRead` is false where the
+ * list a name would come from was refused, so a null `label` there is
+ * a name not shown rather than none.
  */
 export type TeamMember = {
   grn: string;
@@ -30,6 +33,7 @@ export type TeamMember = {
   kind: MemberKind;
   label: string | null;
   lookup: Lookup;
+  nameRead: boolean;
 };
 
 /** A person or an agent the team does not hold yet. */
@@ -78,17 +82,20 @@ export function resolveTeamMembers(
           kind,
           label: entry?.nickname ?? null,
           lookup,
+          nameRead: people.status !== "forbidden",
         };
       }
       case "agent": {
-        // An agent no definition names has only its identifier.
+        // An agent's name is its definition's; a reported agent no
+        // definition read names has none, or one that was not read.
         const { lookup, agent } = lookUpAgent(agents, memberGrn);
         return {
           grn: memberGrn,
           identifier,
           kind,
-          label: agent?.name ?? identifier,
+          label: agent?.name ?? null,
           lookup,
+          nameRead: agents.definitions.status !== "forbidden",
         };
       }
       case "unknown":
@@ -98,6 +105,7 @@ export function resolveTeamMembers(
           kind,
           label: null,
           lookup: "missing",
+          nameRead: true,
         };
     }
   });
@@ -138,31 +146,37 @@ export function teamCandidates(
 }
 
 /**
- * Whether a member is an agent a definition names. Such a name is not
- * unique (ADR-0075), so wherever it stands the identifier stands too.
+ * What stands in a name's place for a member without one: none on
+ * record, one the organization no longer holds, one whose list was not
+ * read, and an identity of neither type. Never its identifier.
  */
-export function isNamedAgent(member: TeamMember): boolean {
-  return (
-    member.kind === "agent" &&
-    member.label !== null &&
-    member.label !== member.identifier
-  );
+export function memberName(member: TeamMember): string {
+  if (member.label !== null) return member.label;
+  if (member.kind === "unknown") return "Unknown identity";
+  if (member.lookup === "refused" || !member.nameRead) {
+    return "Name not available";
+  }
+  if (member.lookup === "missing") {
+    return member.kind === "agent" ? "Unknown agent" : "Unknown person";
+  }
+  return member.kind === "agent" ? UNNAMED_AGENT : "No name on record";
 }
 
 /**
- * How a member is named in a sentence: its name, or what it is. A
- * named agent carries its identifier, so two agents of one name are
- * two different sentences.
+ * How a member is named in a sentence: its name, or what it is. No
+ * identifier stands in a sentence; the row beside it offers that.
  */
 export function memberLabel(member: TeamMember): string {
-  if (isNamedAgent(member)) return `${member.label} (${member.identifier})`;
   if (member.label !== null) return member.label;
-  switch (member.kind) {
-    case "person":
-      return `the person ${member.identifier}`;
-    case "agent":
-      return `the agent ${member.identifier}`;
-    case "unknown":
-      return `the unknown member ${member.identifier}`;
+  const noun = member.kind === "agent" ? "agent" : "person";
+  if (member.kind === "unknown") return "an unknown member";
+  if (member.lookup === "refused" || !member.nameRead) {
+    return `${member.kind === "agent" ? "an" : "a"} ${noun} whose name is not available`;
   }
+  if (member.lookup === "missing") {
+    return `${member.kind === "agent" ? "an" : "a"} ${noun} no longer in this organization`;
+  }
+  return member.kind === "agent"
+    ? "an unnamed agent"
+    : "a person with no name on record";
 }

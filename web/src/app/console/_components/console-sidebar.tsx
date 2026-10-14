@@ -1,5 +1,3 @@
-import { redirect } from "next/navigation";
-
 import {
   Sidebar,
   SidebarContent,
@@ -9,6 +7,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getSession } from "@/features/auth";
+import { redirectToSignIn } from "@/lib/sign-in-redirect";
 
 import { ConsoleNav } from "./console-nav";
 import { listConsoleOrgs } from "./console-orgs";
@@ -29,7 +28,7 @@ import { UserMenu } from "./user-menu";
 export async function ConsoleSidebar() {
   const [orgs, session] = await Promise.all([listConsoleOrgs(), getSession()]);
   if (session.status === "signed-out") {
-    redirect("/login");
+    await redirectToSignIn();
   }
 
   return (

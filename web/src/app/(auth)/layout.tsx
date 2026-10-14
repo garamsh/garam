@@ -3,7 +3,7 @@ import { BrandMark } from "@/components/brand-mark";
 /** Facts a visitor at the door can verify once inside. */
 const ASSURANCES = [
   "Membership by invitation, with an org role",
-  "Google sign-in, server-side sessions",
+  "Password sign-in, server-side sessions",
   "Policy-based authorization on every request",
 ];
 

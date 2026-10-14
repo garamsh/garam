@@ -59,7 +59,7 @@ export async function addPolicyVersion(
       },
     );
   } catch (error) {
-    return refusal(error);
+    return refusal(error, "addPolicyVersion");
   }
 
   revalidatePath(`/console/orgs/${org}/permissions`, "layout");

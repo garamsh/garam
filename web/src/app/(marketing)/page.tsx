@@ -10,7 +10,9 @@ import { SectionHeading } from "./_components/section-heading";
 /**
  * Every claim on this page has to exist in the product: organizations
  * and invitations, groups and projects, versioned policy documents
- * attached to identities, GRNs, and Google sign-in.
+ * attached to identities, and GRNs. It names no sign-in provider: which
+ * ones a deployment offers is the backend's answer at runtime, and this
+ * page is the same for every deployment.
  */
 const CAPABILITIES = [
   {
@@ -105,7 +107,8 @@ export default function LandingPage() {
               </Button>
             </div>
             <p className="text-sm text-muted-foreground">
-              Sign in with the Google account your organization invited.
+              Membership is by invitation. Open the link your organization sent
+              you to join.
             </p>
           </div>
           <PolicyAttachments />

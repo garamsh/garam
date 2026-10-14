@@ -116,15 +116,24 @@ describe("agents section", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("lists an agent only an operator reported, by identifier, said to have no definition", async () => {
+  it("lists an agent only an operator reported as unnamed, said to have no definition, with its identifier to copy", async () => {
     await renderServerComponent(AgentsPage(params("acme")));
 
     const reported = cardOf("1c3d5e7f90a2b4c6");
     // A control service creates an agent with no definition in garam,
-    // and its page is where its execution is read (#1170).
+    // and its page is where its execution is read (#1170). Its
+    // identifier names nothing, so it is not put where a name goes.
     expect(
-      within(reported).getByRole("link", { name: "1c3d5e7f90a2b4c6" }),
+      within(reported).getByRole("link", { name: "Unnamed agent" }),
     ).toHaveAttribute("href", "/console/orgs/acme/agents/1c3d5e7f90a2b4c6");
+    expect(
+      within(reported).queryByRole("link", { name: "1c3d5e7f90a2b4c6" }),
+    ).toBeNull();
+    expect(
+      within(reported).getByRole("button", {
+        name: "Copy the identifier of Unnamed agent: 1c3d5e7f90a2b4c6",
+      }),
+    ).toBeInTheDocument();
     expect(
       within(reported).getByText(
         "Reported by an operator without a definition here.",
@@ -246,6 +255,11 @@ describe("agents section", () => {
         "Reported by an operator without a definition here.",
       ),
     ).not.toBeInTheDocument();
+    // Nor is it called unnamed: its name is one the page did not read.
+    expect(
+      within(reported).getByRole("link", { name: "Name not available" }),
+    ).toBeInTheDocument();
+    expect(within(reported).queryByText("Unnamed agent")).toBeNull();
     expect(screen.queryByText("Scout")).not.toBeInTheDocument();
   });
 

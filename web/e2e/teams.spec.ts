@@ -90,7 +90,7 @@ test.describe("teams", () => {
     signedIn,
   }) => {
     const person = `${signedIn.nickname} · Person`;
-    const agent = `${signedIn.agentIdentifier} · Agent`;
+    const agent = `Unnamed agent (${signedIn.agentIdentifier}) · Agent`;
 
     // A second team, created through the console, holding the agent.
     await page.goto(`/console/orgs/${signedIn.orgSlug}/teams`);
@@ -133,10 +133,15 @@ test.describe("teams", () => {
     await expect(memberRow(page, signedIn.nickname)).toContainText("Person");
 
     // Removing the agent from this team leaves its other membership.
-    const remove = page.getByRole("button", {
-      name: `Remove ${signedIn.agentIdentifier} from ${signedIn.groupName}`,
-      exact: true,
-    });
+    // The sentence names the agent without its identifier, so its row
+    // is what says which member the control removes.
+    const remove = memberRow(page, signedIn.agentIdentifier).getByRole(
+      "button",
+      {
+        name: `Remove an unnamed agent from ${signedIn.groupName}`,
+        exact: true,
+      },
+    );
     const confirm = page.getByRole("button", {
       name: "Confirm removal",
       exact: true,
@@ -145,9 +150,7 @@ test.describe("teams", () => {
     // Substring on purpose: the question opens a sentence that goes on
     // to say what the removal leaves alone.
     await expect(
-      page.getByText(
-        `Remove ${signedIn.agentIdentifier} from ${signedIn.groupName}?`,
-      ),
+      page.getByText(`Remove an unnamed agent from ${signedIn.groupName}?`),
     ).toBeVisible();
     await confirm.click();
     await expect(memberRow(page, signedIn.agentIdentifier)).toHaveCount(0);

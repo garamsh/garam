@@ -6,6 +6,8 @@ import { z } from "zod";
 
 import { garamFetchAuthenticated, refusal } from "@/lib/garam";
 
+import { joinedOrgPath } from "./invitation-preview";
+
 /** What the accept form has to show: nothing yet, or a refusal. */
 export type AcceptInvitationState =
   { status: "idle" } | { status: "error"; message: string };
@@ -13,8 +15,9 @@ export type AcceptInvitationState =
 const Schema = z.object({ token: z.string().min(1) });
 
 /**
- * Accepts the invitation behind the token. Lands on the organization
- * list: the accept response carries no org identifier to deep-link to.
+ * Accepts the invitation behind the token and lands in the organization
+ * it named. The accept response carries no organization, so where to
+ * land is read back from the invitation itself.
  */
 export async function acceptInvitation(
   _state: AcceptInvitationState,
@@ -27,7 +30,7 @@ export async function acceptInvitation(
 
   try {
     // The membership the API answers with is not read: joining is what
-    // was asked for, and the organization list is what shows it.
+    // was asked for, and the organization is what shows it.
     await garamFetchAuthenticated(
       `/invitations/${encodeURIComponent(parsed.data.token)}/accept`,
       z.unknown(),
@@ -38,9 +41,10 @@ export async function acceptInvitation(
     // token is in the URL and no boundary covers this route, so throwing
     // replaces the console with `global-error.tsx` and the only retry
     // path the visitor holds is a page that no longer renders.
-    return refusal(error);
+    return refusal(error, "acceptInvitation");
   }
 
-  revalidatePath("/console/orgs");
-  redirect("/console/orgs");
+  const destination = await joinedOrgPath(parsed.data.token);
+  revalidatePath("/console", "layout");
+  redirect(destination);
 }

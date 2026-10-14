@@ -8,6 +8,7 @@ import { OperatorDetailsForm } from "@/app/console/orgs/[org]/operators/[operato
 import { enter } from "@/testing/enter";
 import { API_URL, fieldOne } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
+import { REFUSAL_COPY } from "@/lib/refusal-copy";
 
 // `revalidatePath` needs a request scope the test does not run in; the
 // action's own answer is what the form renders.
@@ -123,7 +124,7 @@ describe("operator details form", () => {
     await user.click(form.getByRole("button", { name: "Save details" }));
 
     expect(await form.findByRole("alert")).toHaveTextContent(
-      "permission denied",
+      REFUSAL_COPY.permissionDenied,
     );
     expect(form.getByLabelText("Name")).toHaveValue("Renamed");
   });

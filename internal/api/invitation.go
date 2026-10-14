@@ -65,6 +65,45 @@ func (s *Server) CreateInvitation(w http.ResponseWriter, r *http.Request, orgSlu
 	})
 }
 
+// GetInvitation answers what an invitation would admit its holder to,
+// so a page can name the organization and the role before anyone
+// accepts. It takes no session: holding the token is the whole claim
+// (ADR-0006), and the answer reveals nothing accepting would not.
+//
+// An invitation whose organization is gone admits to nothing, so it is
+// answered as an unknown token rather than as a missing organization:
+// a second not-found sentence would tell the two apart.
+func (s *Server) GetInvitation(w http.ResponseWriter, r *http.Request, token string) {
+	inv, err := s.orgs.GetInvitation(r.Context(), token)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	o, err := s.orgs.GetOrg(r.Context(), inv.Organization())
+	if errorx.IsKind(err, errorx.KindNotFound) {
+		writeError(w, org.ErrInvitationNotFound)
+		return
+	}
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	state := apigen.InvitationPreviewStatePending
+	switch {
+	case inv.Accepted():
+		state = apigen.InvitationPreviewStateAccepted
+	case inv.Expired(time.Now().UTC()):
+		state = apigen.InvitationPreviewStateExpired
+	}
+	writeJSON(w, http.StatusOK, apigen.InvitationPreview{
+		Org:       inv.Organization().Identifier,
+		OrgName:   o.Name(),
+		Role:      apigen.Role(inv.Role()),
+		State:     state,
+		ExpiresAt: inv.ExpiresAt(),
+	})
+}
+
 // AcceptInvitation joins the caller into the invitation's org with the
 // invitation's role.
 func (s *Server) AcceptInvitation(w http.ResponseWriter, r *http.Request, token string) {

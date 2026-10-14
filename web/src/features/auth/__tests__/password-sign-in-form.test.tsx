@@ -8,6 +8,7 @@ import { PASSWORD_REFUSED } from "@/lib/password-credentials";
 import { enter } from "@/testing/enter";
 import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
+import { REFUSAL_COPY } from "@/lib/refusal-copy";
 
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
@@ -62,9 +63,9 @@ describe("password sign-in form", () => {
     expect(unknownUsername.refusal).toBe(PASSWORD_REFUSED);
     expect(unknownUsername).toEqual(wrongPassword);
 
-    // The control: a status that refuses no credential renders garam's
-    // own message, so the sentence above is one the form chooses
-    // rather than every message it drops.
+    // The control: a status that refuses no credential renders the
+    // sentence that status has, so the one above is one the form
+    // chooses for a refused credential rather than for every refusal.
     refuses(
       429,
       "resource_exhausted",
@@ -72,7 +73,7 @@ describe("password sign-in form", () => {
     );
     const bounded = await signIn("alice", PASSWORD);
 
-    expect(bounded.refusal).toBe("too many password verifications are live");
+    expect(bounded.refusal).toBe(REFUSAL_COPY.tooManyRequests);
   });
 
   it("asks nothing about the username before sending it", async () => {
@@ -124,7 +125,7 @@ describe("password sign-in form", () => {
 
     const refused = await signIn("alice", PASSWORD);
 
-    expect(refused.refusal).toBe("the garam API could not be reached");
+    expect(refused.refusal).toBe(REFUSAL_COPY.unreachable);
     expect(screen.getByLabelText("Username")).toHaveValue("alice");
   });
 

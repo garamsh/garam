@@ -102,11 +102,11 @@ describe("team page", () => {
       "Choose who to add",
       "Bob · Person",
       "Scout (9f2ac1b40d8e7a35) · awaiting operator · Agent",
-      `${slugFromGrn(reportedAgent.grn)} · Agent`,
+      `Unnamed agent (${slugFromGrn(reportedAgent.grn)}) · Agent`,
     ]);
   });
 
-  it("tells two agents of one name apart and removes the one chosen", async () => {
+  it("tells two agents of one name apart by their rows and removes the one chosen", async () => {
     const first = fieldAgent.agentGrn;
     const second = "grn:acme:default:agent:0a1b2c3d4e5f6071";
     const removed: string[] = [];
@@ -130,25 +130,28 @@ describe("team page", () => {
     expect(within(rows[0]).getByText("9f2ac1b40d8e7a35")).toBeInTheDocument();
     expect(within(rows[1]).getByText("0a1b2c3d4e5f6071")).toBeInTheDocument();
 
-    // The removal control and its confirmation name the identity, so
-    // the second agent is the one removed and the first stays.
+    // The sentences name the agent and never its identifier: the row
+    // the control stands in is what tells the two apart, so the second
+    // agent is the one removed and the first stays.
     await user.click(
-      screen.getByRole("button", {
-        name: "Remove Scout (0a1b2c3d4e5f6071) from Engineering",
+      within(rows[1]).getByRole("button", {
+        name: "Remove Scout from Engineering",
       }),
     );
     expect(
       screen.getByText(
-        "Remove Scout (0a1b2c3d4e5f6071) from Engineering? Only this team membership goes; nothing else changes in the organization or in other teams.",
+        "Remove Scout from Engineering? Only this team membership goes; nothing else changes in the organization or in other teams.",
       ),
     ).toBeInTheDocument();
+    expect(screen.queryByText(/0a1b2c3d4e5f6071\)/)).toBeNull();
     await user.click(screen.getByRole("button", { name: "Confirm removal" }));
 
     await vi.waitFor(() => expect(removed).toEqual([second]));
     expect(
-      screen.getByRole("button", {
-        name: "Remove Scout (9f2ac1b40d8e7a35) from Engineering",
-      }),
+      within(screen.getByRole("row", { name: /9f2ac1b40d8e7a35/ })).getByRole(
+        "button",
+        { name: "Remove Scout from Engineering" },
+      ),
     ).toBeInTheDocument();
   });
 
@@ -190,7 +193,9 @@ describe("team page", () => {
     const offered = within(screen.getByLabelText("Person or agent"))
       .getAllByRole("option")
       .map((option) => option.textContent);
-    expect(offered).toContain(`${slugFromGrn(reportedAgent.grn)} · Agent`);
+    expect(offered).toContain(
+      `Unnamed agent (${slugFromGrn(reportedAgent.grn)}) · Agent`,
+    );
     expect(
       screen.queryByText(/none of them can be chosen/),
     ).not.toBeInTheDocument();

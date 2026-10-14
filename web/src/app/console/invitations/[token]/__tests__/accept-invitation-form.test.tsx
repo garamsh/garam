@@ -19,39 +19,47 @@ vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
 const ACCEPT = `${API_URL}/invitations/secret-token/accept`;
 
+function renderForm() {
+  render(<AcceptInvitationForm token="secret-token" orgName="Acme" />);
+}
+
 describe("accept invitation form", () => {
-  it("renders the backend's refusal rather than replacing the page", async () => {
+  it("renders a refusal in words written for a person rather than replacing the page", async () => {
     server.use(
       http.post(ACCEPT, () =>
         HttpResponse.json(
-          { kind: "already_exists", message: "invitation already accepted" },
+          {
+            kind: "failed_precondition",
+            message: "invitation already accepted",
+          },
           { status: 409 },
         ),
       ),
     );
     const user = userEvent.setup();
-    render(<AcceptInvitationForm token="secret-token" />);
+    renderForm();
 
-    await user.click(screen.getByRole("button", { name: "Accept invitation" }));
+    await user.click(screen.getByRole("button", { name: "Join Acme" }));
 
-    expect(
-      await screen.findByText("invitation already accepted"),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "This invitation can no longer be used: it was already accepted or it has expired. Ask an admin of the organization for a new one.",
+    );
+    expect(screen.queryByText("invitation already accepted")).toBeNull();
   });
 
   it("keeps the page when the API never answers", async () => {
     server.use(http.post(ACCEPT, () => HttpResponse.error()));
     const user = userEvent.setup();
-    render(<AcceptInvitationForm token="secret-token" />);
+    renderForm();
 
-    await user.click(screen.getByRole("button", { name: "Accept invitation" }));
+    await user.click(screen.getByRole("button", { name: "Join Acme" }));
 
     // No boundary covers this route, so a throw here would replace the
     // console with `global-error.tsx` — and the token is in the URL, so
     // the only retry path the visitor holds is this page.
-    expect(await screen.findByRole("alert")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Accept invitation" }),
-    ).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "garam can't be reached right now. Try again in a moment.",
+    );
+    expect(screen.getByRole("button", { name: "Join Acme" })).toBeEnabled();
   });
 });

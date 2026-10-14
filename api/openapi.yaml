@@ -2310,6 +2310,35 @@ paths:
           $ref: '#/components/responses/Error'
         '404':
           $ref: '#/components/responses/Error'
+  /invitations/{token}:
+    get:
+      operationId: getInvitation
+      tags: [org]
+      summary: Read what an invitation would admit its holder to.
+      description: >-
+        Answers the organization an invitation names, the role it
+        grants and whether it can still be used, so a page can say what
+        accepting would do before anyone accepts. It needs no session:
+        possession of the token is the whole claim (ADR-0006), and the
+        answer carries nothing accepting it would not reveal — no
+        inviter, no member of the organization. An unknown token is
+        answered as any other not-found.
+      security: []
+      parameters:
+        - name: token
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The invitation's organization, role and state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InvitationPreview'
+        '404':
+          $ref: '#/components/responses/Error'
   /invitations/{token}/accept:
     post:
       operationId: acceptInvitation
@@ -2845,6 +2874,28 @@ components:
           type: string
         role:
           $ref: '#/components/schemas/Role'
+        expiresAt:
+          type: string
+          format: date-time
+    InvitationPreview:
+      type: object
+      required: [org, orgName, role, state, expiresAt]
+      properties:
+        org:
+          type: string
+          description: >-
+            Organization identifier (the last GRN segment), the one the
+            API's own paths take.
+        orgName:
+          type: string
+        role:
+          $ref: '#/components/schemas/Role'
+        state:
+          type: string
+          enum: [pending, accepted, expired]
+          description: >-
+            `pending` can still be accepted. `accepted` was used once
+            and never admits again. `expired` passed `expiresAt` unused.
         expiresAt:
           type: string
           format: date-time

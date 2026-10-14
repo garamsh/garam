@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { WithdrawConsentForm } from "@/app/console/orgs/[org]/consents/_components/withdraw-consent-form";
 import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
+import { REFUSAL_COPY } from "@/lib/refusal-copy";
 
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
@@ -101,7 +102,7 @@ describe("withdraw consent form", () => {
     server.use(
       http.delete(`${API_URL}/orgs/acme/consents/globex`, () =>
         HttpResponse.json(
-          { kind: "denied", message: "the admin role is required" },
+          { kind: "permission_denied", message: "the admin role is required" },
           { status: 403 },
         ),
       ),
@@ -115,7 +116,7 @@ describe("withdraw consent form", () => {
     );
 
     expect(
-      await screen.findByText("the admin role is required"),
+      await screen.findByText(REFUSAL_COPY.permissionDenied),
     ).toBeInTheDocument();
   });
 });

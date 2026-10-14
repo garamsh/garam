@@ -7,6 +7,7 @@ import { AddTeamMemberForm } from "@/app/console/orgs/[org]/teams/[team]/_compon
 import type { Candidate } from "@/app/console/orgs/[org]/teams/[team]/_components/team-member";
 import { API_URL, alice, reportedAgent } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
+import { REFUSAL_COPY } from "@/lib/refusal-copy";
 
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
@@ -84,7 +85,7 @@ describe("add team member form", () => {
     await user.click(screen.getByRole("button", { name: "Add to team" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "permission denied",
+      REFUSAL_COPY.permissionDenied,
     );
 
     // The control: the same choice garam accepts is added and the
@@ -171,7 +172,7 @@ describe("add team member form", () => {
     await user.click(screen.getByRole("button", { name: "Add to team" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "permission denied",
+      REFUSAL_COPY.permissionDenied,
     );
     expect(posted).toEqual([{ memberGrn: reportedAgent.grn }]);
     expect(screen.getByLabelText("Person or agent")).toHaveValue(

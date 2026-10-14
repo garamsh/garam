@@ -11,6 +11,7 @@ import {
 import { enter } from "@/testing/enter";
 import { API_URL } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
+import { REFUSAL_COPY } from "@/lib/refusal-copy";
 
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
@@ -69,7 +70,7 @@ describe("password register form", () => {
         },
       },
     ]);
-    expect(refusal).toBe("invitation not found");
+    expect(refusal).toBe(REFUSAL_COPY.invitationNotFound);
     expect(document.body.innerHTML).not.toContain(PASSWORD);
   });
 

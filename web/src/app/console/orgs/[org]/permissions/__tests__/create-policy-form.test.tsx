@@ -9,6 +9,7 @@ import { CreatePolicyForm } from "@/app/console/orgs/[org]/permissions/new/_comp
 import { enter } from "@/testing/enter";
 import { API_URL, denyDeletes } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
+import { REFUSAL_COPY } from "@/lib/refusal-copy";
 
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 const redirected: string[] = [];
@@ -75,7 +76,7 @@ describe("create policy form", () => {
     await user.click(form.getByRole("button", { name: "Create draft" }));
 
     expect(await form.findByRole("alert")).toHaveTextContent(
-      "policy document: Effect must be Allow or Deny",
+      REFUSAL_COPY.policyDocumentRefused,
     );
     expect(name).toHaveValue("Deny deletes");
     expect(document).toHaveValue('{"Statement":[]}');

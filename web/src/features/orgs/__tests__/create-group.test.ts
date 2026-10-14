@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createGroup } from "@/features/orgs/api/create-group";
 import { API_URL, engineering } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
+import { REFUSAL_COPY } from "@/lib/refusal-copy";
 
 // `revalidatePath` only works inside a Next.js request store.
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
@@ -76,7 +77,10 @@ describe("createGroup", () => {
 
     await expect(
       createGroup({ status: "idle" }, form("Engineering")),
-    ).resolves.toEqual({ status: "error", message: "permission denied" });
+    ).resolves.toEqual({
+      status: "error",
+      message: REFUSAL_COPY.permissionDenied,
+    });
 
     // The control: the same submission garam accepts opens the team,
     // so the error above is garam's refusal and not the form's.

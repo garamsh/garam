@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 
+import { CopyId } from "@/components/copy-id";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -55,9 +56,12 @@ export function CreateProjectForm({ org }: { org: string }) {
       </form>
 
       {state.status === "created" && (
-        <p className="text-sm text-muted-foreground">
-          Created {state.name}. The API addresses it as{" "}
-          <code className="font-mono">{state.identifier}</code>.
+        <p
+          role="status"
+          className="flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground"
+        >
+          <span>Created {state.name}.</span>
+          <CopyId value={state.identifier} label={state.name} />
         </p>
       )}
     </section>

@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { updateGroup } from "@/features/orgs/api/update-group";
 import { API_URL, engineering } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
+import { REFUSAL_COPY } from "@/lib/refusal-copy";
 
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
 
@@ -48,7 +49,10 @@ describe("updateGroup", () => {
 
     await expect(
       updateGroup({ status: "idle" }, form("Platform")),
-    ).resolves.toEqual({ status: "error", message: "permission denied" });
+    ).resolves.toEqual({
+      status: "error",
+      message: REFUSAL_COPY.permissionDenied,
+    });
 
     // The control: the same rename garam accepts is saved, so the
     // error above is garam's refusal.

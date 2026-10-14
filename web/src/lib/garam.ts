@@ -1,17 +1,28 @@
 import "server-only";
 
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { env } from "@/env";
+import {
+  UNREACHABLE_COPY,
+  refusalCopy,
+  type RefusalOperation,
+} from "@/lib/refusal-copy";
 import { SESSION_COOKIE } from "@/lib/session";
+import { redirectToSignIn } from "@/lib/sign-in-redirect";
 
-/** A non-2xx response from the backend, carrying its HTTP status. */
+/**
+ * A non-2xx response from the backend, carrying its HTTP status and the
+ * `kind` its error body named (`api/openapi.yaml` `Error`). The two are
+ * what a refusal is told apart by; `message` is the server's English,
+ * which a person reads only through `refusal`.
+ */
 export class GaramApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    readonly kind: string = "unknown",
   ) {
     super(message);
     this.name = "GaramApiError";
@@ -74,13 +85,27 @@ export function parserFor<T>() {
  * (`docs/convention/stack-nextjs.md` §Errors — returned, thrown, or
  * caught). Anything else is a bug and is
  * thrown on, so `return refusal(error)` is a catch clause's last line.
+ *
+ * The message is the sentence `refusal-copy.ts` writes for the
+ * refusal's status and kind, read for `operation` where the same pair
+ * means something particular to it. The server's own text reaches a
+ * person only inside the generic sentence for a refusal nothing maps.
  */
-export function refusal(error: unknown): { status: "error"; message: string } {
-  if (
-    error instanceof GaramApiError ||
-    error instanceof GaramUnreachableError
-  ) {
-    return { status: "error", message: error.message };
+export function refusal(
+  error: unknown,
+  operation?: RefusalOperation,
+): { status: "error"; message: string } {
+  if (error instanceof GaramApiError) {
+    return {
+      status: "error",
+      message: refusalCopy(
+        { status: error.status, kind: error.kind, message: error.message },
+        operation,
+      ),
+    };
+  }
+  if (error instanceof GaramUnreachableError) {
+    return { status: "error", message: UNREACHABLE_COPY };
   }
   throw error;
 }
@@ -122,7 +147,8 @@ export async function garamRequest(
     throw new GaramUnreachableError();
   }
   if (!response.ok) {
-    throw new GaramApiError(response.status, await errorMessage(response));
+    const { message, kind } = await errorBody(response);
+    throw new GaramApiError(response.status, message, kind);
   }
   return response;
 }
@@ -167,21 +193,27 @@ export async function garamFetchAuthenticated<T>(
   try {
     return await garamFetch(path, parser, init);
   } catch (error) {
-    if (isUnauthenticated(error)) redirect("/login");
+    if (isUnauthenticated(error)) await redirectToSignIn();
     throw error;
   }
 }
 
-/** Reads the backend's `{ kind, message }` error body, if it sent one. */
-async function errorMessage(response: Response): Promise<string> {
-  const body: unknown = await response.json().catch(() => null);
-  if (
-    typeof body === "object" &&
-    body !== null &&
-    "message" in body &&
-    typeof body.message === "string"
-  ) {
-    return body.message;
-  }
-  return `${response.status} ${response.statusText}`;
+const ErrorBodyParser = z.object({ kind: z.string(), message: z.string() });
+
+/**
+ * Reads the backend's `{ kind, message }` error body. An answer without
+ * one — a proxy's page in front of garam — keeps its status, with the
+ * kind unknown and the status line as its text.
+ */
+async function errorBody(
+  response: Response,
+): Promise<{ kind: string; message: string }> {
+  const parsed = ErrorBodyParser.safeParse(
+    await response.json().catch(() => null),
+  );
+  if (parsed.success) return parsed.data;
+  return {
+    kind: "unknown",
+    message: `${response.status} ${response.statusText}`,
+  };
 }

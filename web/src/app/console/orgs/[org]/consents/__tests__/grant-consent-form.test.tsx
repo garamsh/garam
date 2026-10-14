@@ -7,6 +7,7 @@ import { GrantConsentForm } from "@/app/console/orgs/[org]/consents/_components/
 import { enter } from "@/testing/enter";
 import { API_URL, globexConsent } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
+import { unmappedRefusalCopy } from "@/lib/refusal-copy";
 
 vi.mock("next/navigation", () => ({
   redirect: (url: string) => {
@@ -92,7 +93,9 @@ describe("grant consent form", () => {
 
     expect(
       await form.findByText(
-        "an organization consents with another, not with itself",
+        unmappedRefusalCopy(
+          "an organization consents with another, not with itself",
+        ),
       ),
     ).toBeInTheDocument();
   });

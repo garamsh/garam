@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createProject } from "@/features/orgs/api/create-project";
 import { API_URL, frontend } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
+import { REFUSAL_COPY, unmappedRefusalCopy } from "@/lib/refusal-copy";
 
 // `revalidatePath` only works inside a Next.js request store.
 vi.mock("next/cache", () => ({ revalidatePath: () => {} }));
@@ -99,7 +100,9 @@ describe.each(RESOURCES)(
 
       await expect(action({ status: "idle" }, form(typed))).resolves.toEqual({
         status: "error",
-        message: `this organization already holds a ${kind} named ${typed}`,
+        message: unmappedRefusalCopy(
+          `this organization already holds a ${kind} named ${typed}`,
+        ),
       });
     });
 
@@ -108,7 +111,7 @@ describe.each(RESOURCES)(
 
       await expect(action({ status: "idle" }, form(typed))).resolves.toEqual({
         status: "error",
-        message: "the garam API could not be reached",
+        message: REFUSAL_COPY.unreachable,
       });
     });
   },

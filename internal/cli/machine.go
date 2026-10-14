@@ -11,10 +11,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spf13/cobra"
-	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 
 	machinegen "github.com/garamsh/garam/api/machine"
 	"github.com/garamsh/garam/internal/agent"
@@ -60,13 +58,9 @@ func serveMachine(cmd *cobra.Command) error {
 		return err
 	}
 
-	databaseURL := envOr(envDatabaseURL, "")
-	if databaseURL == "" {
-		return errorx.New(errorx.KindInvalidArgument, "GARAM_DATABASE_URL is required")
-	}
-	pool, err := pgxpool.New(ctx, databaseURL)
+	pool, err := openPool(ctx)
 	if err != nil {
-		return errorx.Wrap(err, "postgres", errorx.KindUnavailable)
+		return err
 	}
 	defer pool.Close()
 
@@ -100,17 +94,9 @@ func serveMachine(cmd *cobra.Command) error {
 
 	// Whom an agent may send to is decided by the policy engine, which
 	// runs as a process of its own and is reached over gRPC (ADR-0003).
-	// Insecure transport: both processes run inside one trust boundary;
-	// TLS between them is future work.
-	conn, err := grpc.NewClient(
-		envOr(envAuthzAddr, "localhost:9090"),
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		// Carries this request's trace id to the engine, so one id
-		// covers both halves of the hop.
-		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
-	)
+	conn, err := dialAuthz()
 	if err != nil {
-		return errorx.Wrap(err, "authz client", errorx.KindInvalidArgument)
+		return err
 	}
 	defer func() { _ = conn.Close() }()
 

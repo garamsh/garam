@@ -394,8 +394,12 @@ it.
 
 `internal/wire` holds the conversions onto the wire formats the request
 surfaces share: the statement `Effect` and a policy's status with their
-authz-proto mappings, and `errorx` kinds rendered as HTTP statuses and
-as gRPC codes and read back from them.
+authz-proto mappings, a statement rendered onto the authz contract,
+`errorx` kinds rendered as HTTP statuses and as gRPC codes and read
+back from them, and a gRPC error read back as an `errorx` error. Each
+listener still holds the gRPC client behind its own `Evaluator` seam;
+what the two clients share is these conversions and nothing that
+chooses a behaviour.
 One domain imports it, so the threshold is not what places it; the
 carve-out is. Its whole exported surface is a wire type and conversions
 in both directions, and nothing in it chooses a behaviour, which is

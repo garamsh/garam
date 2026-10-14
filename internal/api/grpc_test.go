@@ -86,51 +86,29 @@ func TestGRPCEvaluator_Decision(t *testing.T) {
 	}
 }
 
-// TestGRPCEvaluator_UnrecognisedEffectIsRefused holds the refusal
-// against the two effects that must still reach the engine intact:
-// alone, the refusal would hold for any reason the plumbing supplied.
-func TestGRPCEvaluator_UnrecognisedEffectIsRefused(t *testing.T) {
-	recognised := []struct {
-		effect wire.Effect
-		want   authzv1.Effect
-	}{
-		{wire.EffectAllow, authzv1.Effect_EFFECT_ALLOW},
-		{wire.EffectDeny, authzv1.Effect_EFFECT_DENY},
-	}
-	for _, c := range recognised {
-		stub := &stubAuthzServer{allowed: true}
-		ev := newGRPCEvaluator(t, stub)
-		allowed, err := ev.Evaluate(context.Background(), evalInputWith(c.effect))
-		require.NoError(t, err, "effect %q", c.effect)
-		assert.True(t, allowed, "effect %q", c.effect)
-		require.Len(t, stub.got.GetStatements(), 1)
-		assert.Equal(t, c.want, stub.got.GetStatements()[0].GetEffect(), "effect %q", c.effect)
-	}
-
+// TestGRPCEvaluator_SendsTheQuestionAndReadsTheEnginesRefusal holds what
+// this client adds over the conversions internal/wire tests: the
+// question reaches the engine as a Check carrying its statement, a
+// statement the conversion refuses never reaches it, and a status the
+// engine answers comes back as its kind. The accepted question is the
+// control on the refusal.
+func TestGRPCEvaluator_SendsTheQuestionAndReadsTheEnginesRefusal(t *testing.T) {
 	stub := &stubAuthzServer{allowed: true}
-	ev := newGRPCEvaluator(t, stub)
-	allowed, err := ev.Evaluate(context.Background(), evalInputWith(wire.Effect("Maybe")))
-	require.Error(t, err)
+	allowed, err := newGRPCEvaluator(t, stub).Evaluate(context.Background(), evalInput())
+	require.NoError(t, err)
+	assert.True(t, allowed)
+	require.Len(t, stub.got.GetStatements(), 1)
+	assert.Equal(t, "org-role-owner", stub.got.GetStatements()[0].GetSid())
+	assert.Equal(t, authzv1.Effect_EFFECT_ALLOW, stub.got.GetStatements()[0].GetEffect())
+	assert.Equal(t, "grn:root:default:user:alice", stub.got.GetSubjectGrn())
+
+	refused := &stubAuthzServer{allowed: true}
+	allowed, err = newGRPCEvaluator(t, refused).Evaluate(context.Background(), evalInputWith(wire.Effect("Maybe")))
 	assert.True(t, errorx.IsKind(err, errorx.KindInternal), "got %v", err)
 	assert.False(t, allowed)
-	assert.Nil(t, stub.got, "an unrecognised Effect reached the engine")
-}
+	assert.Nil(t, refused.got, "an unrecognised Effect reached the engine")
 
-func TestGRPCEvaluator_StatusCarriesKind(t *testing.T) {
-	cases := []struct {
-		code codes.Code
-		kind errorx.Kind
-	}{
-		{codes.InvalidArgument, errorx.KindInvalidArgument},
-		{codes.Unavailable, errorx.KindUnavailable},
-		{codes.Internal, errorx.KindInternal},
-	}
-	for _, c := range cases {
-		t.Run(c.code.String(), func(t *testing.T) {
-			ev := newGRPCEvaluator(t, &stubAuthzServer{err: status.Error(c.code, "boom")})
-			_, err := ev.Evaluate(context.Background(), evalInput())
-			require.Error(t, err)
-			assert.True(t, errorx.IsKind(err, c.kind), "got %v", err)
-		})
-	}
+	_, err = newGRPCEvaluator(t, &stubAuthzServer{err: status.Error(codes.Unavailable, "boom")}).
+		Evaluate(context.Background(), evalInput())
+	assert.True(t, errorx.IsKind(err, errorx.KindUnavailable), "got %v", err)
 }

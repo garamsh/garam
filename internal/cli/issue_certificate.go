@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spf13/cobra"
 
 	"github.com/garamsh/garam/internal/agent"
@@ -58,10 +57,12 @@ func issueCertificate(cmd *cobra.Command, subjectRaw, outDir string) error {
 			"subject "+subject.String()+" is not an operator: this command mints an operator's first certificate only (ADR-0015)")
 	}
 
-	databaseURL := envOr(envDatabaseURL, "")
-	if databaseURL == "" {
-		return errorx.New(errorx.KindInvalidArgument, "GARAM_DATABASE_URL is required")
+	pool, err := openPool(ctx)
+	if err != nil {
+		return err
 	}
+	defer pool.Close()
+
 	// The command holds the key-encryption key under the custody
 	// serve machine starts under (ADR-0016): a file its owner alone can
 	// read, and the sealer refuses anything else.
@@ -69,11 +70,6 @@ func issueCertificate(cmd *cobra.Command, subjectRaw, outDir string) error {
 	if err != nil {
 		return errorx.Wrap(err, string(envCAKeyFile))
 	}
-	pool, err := pgxpool.New(ctx, databaseURL)
-	if err != nil {
-		return errorx.Wrap(err, "postgres", errorx.KindUnavailable)
-	}
-	defer pool.Close()
 
 	// The destination is prepared before anything is minted, so a
 	// destination that cannot be written fails before a certificate

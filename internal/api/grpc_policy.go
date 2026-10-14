@@ -38,7 +38,7 @@ func (m *GRPCPolicyManager) CreatePolicy(ctx context.Context, orgGRN grn.GRN, na
 		CreatedBy: createdBy.String(),
 	})
 	if err != nil {
-		return nil, statusError(err)
+		return nil, wire.ErrorOf(err)
 	}
 	return policyFromProto(resp.GetPolicy())
 }
@@ -47,7 +47,7 @@ func (m *GRPCPolicyManager) CreatePolicy(ctx context.Context, orgGRN grn.GRN, na
 func (m *GRPCPolicyManager) ListPolicies(ctx context.Context, orgGRN grn.GRN) ([]*Policy, error) {
 	resp, err := m.client.ListPolicies(ctx, &authzv1.ListPoliciesRequest{OrgGrn: orgGRN.String()})
 	if err != nil {
-		return nil, statusError(err)
+		return nil, wire.ErrorOf(err)
 	}
 	out := make([]*Policy, 0, len(resp.GetPolicies()))
 	for _, p := range resp.GetPolicies() {
@@ -69,7 +69,7 @@ func (m *GRPCPolicyManager) AddPolicyVersion(ctx context.Context, policyGRN grn.
 		CreatedBy: createdBy.String(),
 	})
 	if err != nil {
-		return nil, statusError(err)
+		return nil, wire.ErrorOf(err)
 	}
 	return policyVersionFromProto(resp.GetVersion())
 }
@@ -78,7 +78,7 @@ func (m *GRPCPolicyManager) AddPolicyVersion(ctx context.Context, policyGRN grn.
 func (m *GRPCPolicyManager) ListPolicyVersions(ctx context.Context, policyGRN grn.GRN) ([]*PolicyVersion, error) {
 	resp, err := m.client.ListPolicyVersions(ctx, &authzv1.ListPolicyVersionsRequest{PolicyGrn: policyGRN.String()})
 	if err != nil {
-		return nil, statusError(err)
+		return nil, wire.ErrorOf(err)
 	}
 	out := make([]*PolicyVersion, 0, len(resp.GetVersions()))
 	for _, v := range resp.GetVersions() {
@@ -95,7 +95,7 @@ func (m *GRPCPolicyManager) ListPolicyVersions(ctx context.Context, policyGRN gr
 func (m *GRPCPolicyManager) ActivatePolicy(ctx context.Context, policyGRN grn.GRN) (*Policy, error) {
 	resp, err := m.client.ActivatePolicy(ctx, &authzv1.ActivatePolicyRequest{PolicyGrn: policyGRN.String()})
 	if err != nil {
-		return nil, statusError(err)
+		return nil, wire.ErrorOf(err)
 	}
 	return policyFromProto(resp.GetPolicy())
 }
@@ -104,7 +104,7 @@ func (m *GRPCPolicyManager) ActivatePolicy(ctx context.Context, policyGRN grn.GR
 func (m *GRPCPolicyManager) ArchivePolicy(ctx context.Context, policyGRN grn.GRN) (*Policy, error) {
 	resp, err := m.client.ArchivePolicy(ctx, &authzv1.ArchivePolicyRequest{PolicyGrn: policyGRN.String()})
 	if err != nil {
-		return nil, statusError(err)
+		return nil, wire.ErrorOf(err)
 	}
 	return policyFromProto(resp.GetPolicy())
 }
@@ -118,7 +118,7 @@ func (m *GRPCPolicyManager) RollbackPolicy(ctx context.Context, policyGRN grn.GR
 		Version:   version,
 	})
 	if err != nil {
-		return nil, statusError(err)
+		return nil, wire.ErrorOf(err)
 	}
 	return policyFromProto(resp.GetPolicy())
 }
@@ -130,7 +130,7 @@ func (m *GRPCPolicyManager) AttachPolicy(ctx context.Context, policyGRN, subject
 		SubjectGrn: subjectGRN.String(),
 	})
 	if err != nil {
-		return nil, statusError(err)
+		return nil, wire.ErrorOf(err)
 	}
 	return attachmentFromProto(resp.GetAttachment())
 }
@@ -142,7 +142,7 @@ func (m *GRPCPolicyManager) DetachPolicy(ctx context.Context, policyGRN, subject
 		SubjectGrn: subjectGRN.String(),
 	})
 	if err != nil {
-		return statusError(err)
+		return wire.ErrorOf(err)
 	}
 	return nil
 }
@@ -152,7 +152,7 @@ func (m *GRPCPolicyManager) DetachPolicy(ctx context.Context, policyGRN, subject
 func (m *GRPCPolicyManager) ListPolicyAttachments(ctx context.Context, policyGRN grn.GRN) ([]*PolicyAttachment, error) {
 	resp, err := m.client.ListPolicyAttachments(ctx, &authzv1.ListPolicyAttachmentsRequest{PolicyGrn: policyGRN.String()})
 	if err != nil {
-		return nil, statusError(err)
+		return nil, wire.ErrorOf(err)
 	}
 	out := make([]*PolicyAttachment, 0, len(resp.GetAttachments()))
 	for _, a := range resp.GetAttachments() {

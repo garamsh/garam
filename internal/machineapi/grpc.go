@@ -4,9 +4,7 @@ import (
 	"context"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/status"
 
-	"github.com/garamsh/garam/internal/errorx"
 	"github.com/garamsh/garam/internal/wire"
 	authzv1 "github.com/garamsh/garam/proto/gen/garam/authz/v1"
 )
@@ -45,39 +43,19 @@ func (e *GRPCEvaluator) Evaluate(ctx context.Context, in EvalInput) (bool, error
 		SubjectOrg:    in.SubjectOrg.String(),
 	})
 	if err != nil {
-		return false, statusError(err)
+		return false, wire.ErrorOf(err)
 	}
 	return resp.GetAllowed(), nil
-}
-
-// statusError renders a gRPC error as an errorx error; status codes
-// carry kinds by name (ADR-0003).
-//
-// The message is taken as this project's own, which is what the engine
-// undertakes to send: it decides what a caller may be told while it
-// still holds the chain's types, because a status crossing the hop
-// carries text and nothing that says who wrote it. A status the engine
-// did not answer at all — one gRPC itself raised for a call that never
-// reached a handler — carries gRPC's text under that undertaking, and
-// every code it raises but two is replaced on the way out as a 5xx.
-func statusError(err error) error {
-	st, _ := status.FromError(err)
-	return errorx.New(wire.KindOf(st.Code()), st.Message())
 }
 
 func statementsToProto(in []Statement) ([]*authzv1.Statement, error) {
 	out := make([]*authzv1.Statement, 0, len(in))
 	for _, s := range in {
-		effect, err := wire.EffectToProto(s.Effect)
+		statement, err := wire.StatementToProto(s.Sid, s.Effect, s.Action, s.Resource)
 		if err != nil {
-			return nil, errorx.Wrap(err, "statement "+s.Sid)
+			return nil, err
 		}
-		out = append(out, &authzv1.Statement{
-			Sid:      s.Sid,
-			Effect:   effect,
-			Action:   s.Action,
-			Resource: s.Resource,
-		})
+		out = append(out, statement)
 	}
 	return out, nil
 }

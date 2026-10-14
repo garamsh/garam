@@ -414,9 +414,11 @@ describe("team page", () => {
     const user = userEvent.setup();
     await renderTeam();
 
-    expect(screen.queryByLabelText("Team name")).not.toBeInTheDocument();
-    await user.click(screen.getByRole("tab", { name: "Settings" }));
+    const settings = screen.getByRole("tab", { name: "Settings" });
+    expect(settings).toHaveAttribute("aria-selected", "false");
+    await user.click(settings);
 
+    expect(settings).toHaveAttribute("aria-selected", "true");
     expect(screen.getByLabelText("Team name")).toHaveValue("Engineering");
     const danger = screen.getByRole("region", { name: "Danger zone" });
     expect(

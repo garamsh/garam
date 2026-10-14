@@ -81,8 +81,12 @@ describe("add team member form", () => {
     await choose(user, "field-agent");
     await user.click(screen.getByRole("button", { name: "Add to team" }));
 
-    expect(await screen.findByRole("status")).toHaveTextContent(
-      "Added field-agent.",
+    // The status line is always there, empty until the action answers,
+    // so the wait is on what it says.
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "Added field-agent.",
+      ),
     );
     expect(posted).toEqual([{ memberGrn: reportedAgent.grn }]);
     // The choice goes back to the prompt even while the member is still

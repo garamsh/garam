@@ -28,8 +28,12 @@ describe("rename team form", () => {
     await user.type(name, "Platform");
     await user.click(screen.getByRole("button", { name: "Save name" }));
 
-    expect(await screen.findByRole("status")).toHaveTextContent(
-      "Renamed to Platform.",
+    // The status line is always there, empty until the action answers,
+    // so the wait is on what it says.
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "Renamed to Platform.",
+      ),
     );
     expect(name).not.toHaveAttribute("aria-invalid");
   });

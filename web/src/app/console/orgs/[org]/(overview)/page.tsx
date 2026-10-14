@@ -18,9 +18,9 @@ import {
   type OrgConsent,
 } from "@/features/orgs";
 
-import { ApiUnreachable } from "../../_components/api-unreachable";
-import { PageHeader } from "../../_components/page-header";
-import { CONSOLE_SECTIONS, orgHref } from "../../_components/navigation";
+import { ApiUnreachable } from "../../../_components/api-unreachable";
+import { PageHeader } from "../../../_components/page-header";
+import { CONSOLE_SECTIONS, orgHref } from "../../../_components/navigation";
 
 type Params = { params: Promise<{ org: string }> };
 
@@ -99,7 +99,10 @@ function consentSignals(consents: OrgConsent[]): Signal[] {
   );
 }
 
-/** Tones that mean something has failed, as opposed to waiting. */
+/**
+ * Tones that need attention, as opposed to waiting: `danger` is a
+ * failure and `warn` a warning, and the banner takes the gravest.
+ */
 const FAILING: ReadonlySet<StatusTone> = new Set(["danger", "warn"]);
 
 /**
@@ -210,7 +213,11 @@ export default async function OrgPage({ params }: Params) {
       <PageHeader title={org.data.name} description={DESCRIPTION} />
       {failing.length > 0 ? (
         <Banner
-          tone="danger"
+          tone={
+            failing.some(({ signal }) => signal.tone === "danger")
+              ? "danger"
+              : "warn"
+          }
           title={
             failing.length === 1
               ? "1 state needs attention"

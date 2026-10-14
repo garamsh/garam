@@ -2,9 +2,15 @@ import { screen, within } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
-import OrgPage from "@/app/console/orgs/[org]/page";
+import OrgPage from "@/app/console/orgs/[org]/(overview)/page";
 import { renderServerComponent } from "@/testing/render";
-import { API_URL, fieldOne, signedOut } from "@/testing/mocks/handlers";
+import {
+  API_URL,
+  fieldOne,
+  globexConsent,
+  reportedAgent,
+  signedOut,
+} from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
 // `notFound()` and `redirect()` throw control-flow errors the router
@@ -97,6 +103,45 @@ describe("organization overview page", () => {
 
     await renderServerComponent(OrgPage(params("acme")));
 
+    expect(screen.getByText("Nothing is failing")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("leads with a warning, not a failure, when every state needing attention is a warning", async () => {
+    server.use(
+      http.get(`${API_URL}/orgs/acme/agents`, () =>
+        HttpResponse.json([{ ...reportedAgent, provisioningState: "ready" }]),
+      ),
+    );
+
+    await renderServerComponent(OrgPage(params("acme")));
+
+    // A warning banner is polite status, a danger one an alert.
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    const banner = screen.getByRole("status");
+    expect(banner).toHaveTextContent("1 state needs attention");
+    expect(
+      within(banner).getByRole("link", { name: "1 disconnected in Agents" }),
+    ).toBeInTheDocument();
+  });
+
+  it("counts a pair waiting on this organization without calling it failing", async () => {
+    server.use(
+      http.get(`${API_URL}/orgs/acme/agents`, () => HttpResponse.json([])),
+      http.get(`${API_URL}/orgs/acme/consents`, () =>
+        HttpResponse.json([
+          { ...globexConsent, grantedHere: false, stands: false },
+        ]),
+      ),
+    );
+
+    await renderServerComponent(OrgPage(params("acme")));
+
+    expect(screen.getByRole("link", { name: /^Consents\b/ })).toHaveTextContent(
+      "1 waiting for this organization",
+    );
+    // The control for the count above: waiting is said on its card and
+    // is not among what the banner leads with.
     expect(screen.getByText("Nothing is failing")).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });

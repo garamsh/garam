@@ -9,13 +9,14 @@ import { Badge } from "@/components/ui/badge";
 
 import { EmptyState } from "../../../../_components/empty-state";
 import { orgHref } from "../../../../_components/navigation";
+import { ROLE_LABEL, type OrgRole } from "../../../../_components/org-role";
 
 /** One team as its row shows it. */
 export type TeamRow = {
   name: string;
   /** The segment the team's URL carries (ADR-0011). */
   identifier: string;
-  roles: readonly string[];
+  roles: readonly OrgRole[];
 };
 
 function columns(org: string): ColumnDef<TeamRow, unknown>[] {
@@ -40,7 +41,8 @@ function columns(org: string): ColumnDef<TeamRow, unknown>[] {
     {
       id: "roles",
       header: "Roles it grants",
-      accessorFn: (team) => team.roles.join(" "),
+      accessorFn: (team) =>
+        team.roles.map((role) => ROLE_LABEL[role]).join(" "),
       enableSorting: false,
       cell: ({ row: { original: team } }) =>
         team.roles.length === 0 ? (
@@ -49,7 +51,7 @@ function columns(org: string): ColumnDef<TeamRow, unknown>[] {
           <div className="flex flex-wrap gap-1.5">
             {team.roles.map((role) => (
               <Badge key={role} variant="secondary">
-                {role}
+                {ROLE_LABEL[role]}
               </Badge>
             ))}
           </div>

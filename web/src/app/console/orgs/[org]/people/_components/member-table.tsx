@@ -8,6 +8,7 @@ import { Time } from "@/components/time";
 import type { Member } from "@/features/orgs";
 
 import { EmptyState } from "../../../../_components/empty-state";
+import { ROLE_LABEL } from "../../../../_components/org-role";
 
 /** One member as its row shows it. */
 export type MemberRow = {
@@ -17,12 +18,6 @@ export type MemberRow = {
   nickname: string | null;
   role: Member["role"];
   since: string;
-};
-
-const ROLE_LABEL: Record<Member["role"], string> = {
-  owner: "Owner",
-  admin: "Admin",
-  member: "Member",
 };
 
 const NO_NAME = "No name on record";

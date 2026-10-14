@@ -293,7 +293,7 @@ check-toolchain:
 # template content moves it. Left behind it names commits already
 # received, which is loud; moved past them it goes quiet, so it moves in
 # a diff a reviewer reads rather than in a computation nobody sees.
-TEMPLATE_SYNCED := 6f3ddf87484bde5c675cb85d387d366bf67a744b
+TEMPLATE_SYNCED := ac201ad0aec045b5bf5fa8fb15b857ded621831e
 
 template-diff:
 	@TEMPLATE_SYNCED='$(TEMPLATE_SYNCED)' scripts/template-diff.sh

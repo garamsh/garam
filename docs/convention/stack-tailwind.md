@@ -42,10 +42,17 @@ Tailwind's own locators for a version check:
   browsers, stay on v3.4.
 - Custom utilities: `@utility <name> { ... }` (replaces
   `@layer utilities` from v3).
-- `corePlugins`, `safelist` (`@source inline()` instead) and
-  `resolveConfig` are gone in v4; the `theme()` function still works but
-  is deprecated in favour of the theme variables. The upgrade tool
-  (`npx @tailwindcss/upgrade`) handles most migrations.
+- v3 config features, each with its own fate:
+  - `corePlugins` — not supported. Under `@config` it is ignored
+    without a warning.
+  - `safelist` — not supported, ignored the same way. Use
+    `@source inline("...")`.
+  - `resolveConfig` — removed. Read theme values as CSS variables.
+  - `theme()` — still works, deprecated. Use `var(--color-red-500)`;
+    where a variable cannot go (a media query),
+    `theme(--breakpoint-xl)`.
+- The upgrade tool (`npx @tailwindcss/upgrade`) handles most
+  migrations.
 - Native CSS nesting supported — no preprocessor step needed.
 
 ## Composition: inline utilities first
@@ -93,14 +100,11 @@ Rung 2 — the chain repeats, so it becomes a class:
 ```
 
 Rung 3 — a class Tailwind does not ship, left open so variants can
-target it (`lg:no-scrollbar`, `hover:no-scrollbar`):
+target it (`md:content-auto`, `lg:content-auto`):
 
 ```css
-@utility no-scrollbar {
-  scrollbar-width: none;
-  &::-webkit-scrollbar {
-    display: none;
-  }
+@utility content-auto {
+  content-visibility: auto;
 }
 ```
 
@@ -131,10 +135,9 @@ tokens, never those.
 - **Responsive** — mobile-first: `md:grid-cols-2 lg:grid-cols-3`.
 - **State** — `hover:`, `focus:`, `active:`, `disabled:`,
   `group-hover:`, `peer-*`.
-- **Dark mode** — `dark:bg-gray-900` follows
-  `@media (prefers-color-scheme: dark)` by default. Toggling with
-  `<html class="dark">` needs the variant overridden:
-  `@custom-variant dark (&:where(.dark, .dark *));`.
+- **Dark mode** — `dark:bg-gray-900`. It follows
+  `prefers-color-scheme` by default; toggling via `<html class="dark">`
+  needs `@custom-variant dark (&:where(.dark, .dark *));`.
 - **Layout** — prefer flex/grid + `gap-*` over `space-x-*` / `space-y-*`
   (v4 selector change for performance).
 - **Sizing** — `size-*` for square; `w-*`/`h-*` otherwise.

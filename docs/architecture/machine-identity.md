@@ -141,6 +141,36 @@ refusals, and §machineBearer for the alias.
   or retires a key, so whichever of an exchange and a rotation comes
   second waits for the first to commit, and neither holds a row the
   other is waiting on (#1399). A refused assertion spends no jti.
+- **The store's writes to one operator's own credential, keys and
+  tokens take that operator's registration row first**
+  (`internal/operator` `PostgresStore`).
+  - An exchange, by shared secret or by key, holds it `FOR KEY SHARE`
+    for the client, and for the audience when the token names one.
+  - An issuance, a withdrawal and a credential re-issue hold it `FOR
+    UPDATE`; a deletion deletes it.
+
+  Two exchanges hold it together. Every other pair waits on the
+  registration for the first to commit, before either touches a
+  credential, key or token row. A withdrawal deletes its key's tokens
+  in key order and a re-issue's cascade the credential's in credential
+  order, while an exchange's sweep walks the operator's expired tokens
+  by expiry; taking the registration first keeps those walks from
+  locking two tokens in opposite orders, and a deletion from waiting on
+  a credential a re-issue holds (#1418).
+
+  A writer taking it `FOR UPDATE` waits for every exchange in flight,
+  and Postgres does not queue it ahead of later shared holders. What
+  keeps that wait finite is the exchanges' per-process bound below,
+  which counts both forms, so a leaked credential cannot hold off the
+  re-issue that answers it.
+
+  Two orderings this does not cover are open (#1424):
+  - deleting an operator Y takes, by `migrations/000041`'s cascade,
+    another operator's tokens naming Y as audience while holding only
+    Y's registration;
+  - two exchanges of one operator are not ordered against each other,
+    so one's trim and the other's sweep can both reach tokens that
+    expired between the two transactions' start.
 - **Token reads join the live key.** A token exchanged under a key is
   resolved with that key unwithdrawn and inside any rollover, so a
   withdrawal, an immediate replacement or a passed rollover refuses the
@@ -156,14 +186,17 @@ refusals, and §machineBearer for the alias.
   case-insensitively, and a `Bearer` value with no token after it is
   refused rather than read as no token at all.
 - **One process answers at most 60 exchanges per client address and 10
-  verified ones per `client_id` per minute** (`internal/operator`
+  authenticated ones per operator per minute** (`internal/operator`
   `ExchangesPerSource`, `ExchangesPerClient`), 429 with `Retry-After`
-  past either. The address's count is taken before anything is read,
-  so a flood from one address holds back no other; the client's starts
-  once its key verified, so a stranger knowing the GRN cannot lock the
-  operator out. The listener terminates TLS itself, so the address is
-  the peer's, and clients behind one NAT share it. An unconfigured
-  token endpoint answers 503 and issues nothing.
+  past either. The bounds count the shared-secret and the
+  private_key_jwt exchange together, since each holds the operator's
+  registration. The address's count is taken before anything is read,
+  so a flood from one address holds back no other; the operator's
+  starts once its key verified or its credential resolved, so a
+  stranger knowing the GRN cannot lock the operator out. The listener
+  terminates TLS itself, so the address is the peer's, and clients
+  behind one NAT share it. An unconfigured token endpoint answers 503
+  and issues nothing.
 - **What tells the cohorts apart.**
   `garam_machine_token_exchanges_total` counts exchanges by method —
   operator shared secret, supervisor shared secret, operator

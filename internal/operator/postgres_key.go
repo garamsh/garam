@@ -119,10 +119,13 @@ func (s *PostgresStore) ListKeys(ctx context.Context, g grn.GRN) ([]Key, error) 
 }
 
 // RevokeKey withdraws the key and deletes its tokens in one
-// transaction. The update takes the key's row lock, which an exchange
-// verifying under the key holds, so the two serialize: the exchange
-// either commits first and its token is deleted here, or rereads the
-// key withdrawn and records nothing.
+// transaction, under the registration's row lock, which every exchange
+// of the operator holds first too. The two serialize on it: an
+// exchange either commits first and its token is deleted here, or
+// rereads the key withdrawn and records nothing. The hold also keeps
+// this walk over the key's tokens apart from an exchange's sweep of the
+// operator's expired ones, which visit shared tokens in opposite orders
+// (#1418).
 func (s *PostgresStore) RevokeKey(ctx context.Context, g grn.GRN, kid string) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -131,6 +134,11 @@ func (s *PostgresStore) RevokeKey(ctx context.Context, g grn.GRN, kid string) er
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	q := s.q.WithTx(tx)
+	// An operator the organization holds no record of was never issued
+	// the key.
+	if _, err := q.LockOperatorRegistration(ctx, g.String()); err != nil {
+		return pgxerr.Classify(err, "hold operator", ErrKeyNotFound, nil)
+	}
 	id, err := q.RevokeOperatorKey(ctx, db.RevokeOperatorKeyParams{OperatorGrn: g.String(), Kid: kid})
 	if err := pgxerr.Classify(err, "revoke operator key", errNoLiveKey, nil); err != nil {
 		if !errors.Is(err, errNoLiveKey) {

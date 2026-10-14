@@ -76,7 +76,7 @@ func (s *Server) ExchangeToken(w http.ResponseWriter, r *http.Request, params ma
 		}
 		audience = &g
 	}
-	token, err := s.operators.Exchange(r.Context(), credential, audience)
+	token, err := s.operators.Exchange(r.Context(), sourceOf(r), credential, audience)
 	if err != nil {
 		writeError(w, err)
 		return

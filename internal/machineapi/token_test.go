@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -426,4 +427,40 @@ func TestServer_ABearerTokenTakesWhatAGaramTokenTakes(t *testing.T) {
 		hash := execution.Hash()
 		assert.Equal(t, hash[:], messages.fences[before].TokenHash, "%s: the execution token is read from its own header", scheme)
 	}
+}
+
+// TestServer_AnExchangePastItsBoundIsAnswered429WithRetryAfter holds
+// the wire half of the exchange's bound (#1418): the domain's limiter
+// refusal is answered 429 with the seconds Retry-After names, and the
+// domain is handed the peer's address the bound is counted on. The
+// same exchange the domain serves is the control, answered 201 with no
+// Retry-After.
+func TestServer_AnExchangePastItsBoundIsAnswered429WithRetryAfter(t *testing.T) {
+	subject := operatorGRN("acme")
+	operators := &operatorService{certificate: &operator.Certificate{Subject: subject}, credential: "garam_oc_held"}
+	url, _ := listener(t, &agentService{}, operators, &messageService{}, consenting(), unwatched(t), &memberGroups{}, &engine{}, subject)
+	client := anonymous(t)
+	post := func() *http.Response {
+		req, err := http.NewRequest(http.MethodPost, url+"/tokens", strings.NewReader(`{}`))
+		require.NoError(t, err)
+		req.Header.Set("Authorization", "Garam-Credential garam_oc_held")
+		req.Header.Set("Garam-Contract-Version", operator.TokenContractVersion)
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		_ = resp.Body.Close()
+		return resp
+	}
+
+	served := post()
+	assert.Equal(t, http.StatusCreated, served.StatusCode)
+	assert.Empty(t, served.Header.Get("Retry-After"))
+
+	operators.exchangeErr = &operator.Exceeded{RetryAfter: 30 * time.Second}
+	refused := post()
+	assert.Equal(t, http.StatusTooManyRequests, refused.StatusCode)
+	assert.Equal(t, "30", refused.Header.Get("Retry-After"))
+	assert.Equal(t, operator.TokenContractVersion, refused.Header.Get("Garam-Contract-Version"))
+
+	require.Len(t, operators.sources, 2)
+	assert.Equal(t, "127.0.0.1", operators.sources[0], "the bound is counted on the peer's address")
 }

@@ -65,7 +65,7 @@ func TestOperatorCredential_ReissueVoidsTheTokensOfThePreviousOne(t *testing.T) 
 	svc := exchangeService(store)
 	subject, previous := registerCredentialed(t, store, "one")
 
-	before, err := svc.Exchange(ctx, previous, nil)
+	before, err := svc.Exchange(ctx, testSource, previous, nil)
 	require.NoError(t, err)
 	held, err := store.ResolveToken(ctx, before.Hash())
 	require.NoError(t, err, "the token resolves before the re-issue")
@@ -78,10 +78,10 @@ func TestOperatorCredential_ReissueVoidsTheTokensOfThePreviousOne(t *testing.T) 
 
 	_, err = store.ResolveToken(ctx, before.Hash())
 	assert.ErrorIs(t, err, operator.ErrTokenInvalid, "the previous credential's token goes with it")
-	_, err = svc.Exchange(ctx, previous, nil)
+	_, err = svc.Exchange(ctx, testSource, previous, nil)
 	assert.ErrorIs(t, err, operator.ErrCredentialInvalid, "the previous credential exchanges nothing")
 
-	after, err := svc.Exchange(ctx, next.Value(), nil)
+	after, err := svc.Exchange(ctx, testSource, next.Value(), nil)
 	require.NoError(t, err)
 	_, err = store.ResolveToken(ctx, after.Hash())
 	assert.NoError(t, err, "the new credential's token resolves")
@@ -110,7 +110,7 @@ func TestOperatorCredential_ReissueIssuesAFirstOrRefusesAnUnknownOperator(t *tes
 	first, err := operator.NewIssuedCredential(subject, scopedGRN("acme", "user", "ada"))
 	require.NoError(t, err)
 	require.NoError(t, store.ReissueCredential(ctx, first))
-	_, err = exchangeService(store).Exchange(ctx, first.Value(), nil)
+	_, err = exchangeService(store).Exchange(ctx, testSource, first.Value(), nil)
 	assert.NoError(t, err)
 
 	unknown, err := operator.NewIssuedCredential(scopedGRN("acme", operator.ServiceType, "never"), scopedGRN("acme", "user", "ada"))
@@ -130,16 +130,16 @@ func TestOperatorCredential_DeleteTakesTheCredentialAndItsTokens(t *testing.T) {
 	svc := exchangeService(store)
 	deleted, deletedCredential := registerCredentialed(t, store, "one")
 	_, keptCredential := registerCredentialed(t, store, "two")
-	deletedToken, err := svc.Exchange(ctx, deletedCredential, nil)
+	deletedToken, err := svc.Exchange(ctx, testSource, deletedCredential, nil)
 	require.NoError(t, err)
-	keptToken, err := svc.Exchange(ctx, keptCredential, nil)
+	keptToken, err := svc.Exchange(ctx, testSource, keptCredential, nil)
 	require.NoError(t, err)
 
 	require.NoError(t, store.Delete(ctx, deleted))
 
 	_, err = store.ResolveToken(ctx, deletedToken.Hash())
 	assert.ErrorIs(t, err, operator.ErrTokenInvalid)
-	_, err = svc.Exchange(ctx, deletedCredential, nil)
+	_, err = svc.Exchange(ctx, testSource, deletedCredential, nil)
 	assert.ErrorIs(t, err, operator.ErrCredentialInvalid)
 	_, err = store.ResolveToken(ctx, keptToken.Hash())
 	assert.NoError(t, err, "the operator nobody deleted keeps its token")
@@ -160,7 +160,7 @@ func TestOperatorToken_ExpiredAndSweptAndAudienceKept(t *testing.T) {
 	subject, credential := registerCredentialed(t, store, "controller")
 	hosted, _ := registerCredentialed(t, store, "control")
 
-	expired, err := svc.Exchange(ctx, credential, nil)
+	expired, err := svc.Exchange(ctx, testSource, credential, nil)
 	require.NoError(t, err)
 	_, err = store.ResolveToken(ctx, expired.Hash())
 	require.NoError(t, err, "the token resolves while it is live")
@@ -170,7 +170,7 @@ func TestOperatorToken_ExpiredAndSweptAndAudienceKept(t *testing.T) {
 	_, err = store.ResolveToken(ctx, expired.Hash())
 	assert.ErrorIs(t, err, operator.ErrTokenInvalid, "an expired token resolves to nothing")
 
-	audienced, err := svc.Exchange(ctx, credential, &hosted)
+	audienced, err := svc.Exchange(ctx, testSource, credential, &hosted)
 	require.NoError(t, err)
 	assert.Equal(t, 0, countRows(t, p, `SELECT count(*) FROM operator_tokens WHERE token_hash = $1`, expired.Hash()),
 		"the exchange swept the expired token")
@@ -344,7 +344,7 @@ func TestOperatorToken_ACredentialHoldsItsNewestFiveTokens(t *testing.T) {
 
 	var tokens []*operator.Token
 	for range 7 {
-		token, err := svc.Exchange(ctx, credential, nil)
+		token, err := svc.Exchange(ctx, testSource, credential, nil)
 		require.NoError(t, err)
 		tokens = append(tokens, token)
 	}

@@ -128,11 +128,16 @@ func (s *PostgresStore) Remint(ctx context.Context, e *Enrollment) error {
 }
 
 // ReissueCredential deletes the operator's credential and inserts c in
-// one transaction. The delete carries every token minted under the
-// previous credential with it, by 000038's foreign key, so the
-// operator's next request on any of them is refused; the insert's
-// foreign key to the registration is what refuses an operator the
-// organization holds no record of.
+// one transaction, under the registration's row lock. The delete
+// carries every token minted under the previous credential with it, by
+// 000038's foreign key, so the operator's next request on any of them
+// is refused.
+//
+// The lock comes first because a deletion and every exchange take the
+// registration first too (#1418). A deletion therefore never holds the
+// registration while this holds the credential the deletion cascades
+// into, and the cascade's walk over the credential's tokens never runs
+// beside an exchange's sweep of the same operator.
 func (s *PostgresStore) ReissueCredential(ctx context.Context, c *IssuedCredential) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -141,13 +146,13 @@ func (s *PostgresStore) ReissueCredential(ctx context.Context, c *IssuedCredenti
 	defer func() { _ = tx.Rollback(ctx) }()
 
 	q := s.q.WithTx(tx)
+	if _, err := q.LockOperatorRegistration(ctx, c.operator.String()); err != nil {
+		return pgxerr.Classify(err, "hold operator", ErrOperatorNotFound, nil)
+	}
 	if err := q.DeleteOperatorCredential(ctx, c.operator.String()); err != nil {
 		return pgxerr.Classify(err, "void operator credential", nil, nil)
 	}
 	if err := q.InsertOperatorCredential(ctx, credentialParams(c)); err != nil {
-		if pgxerr.IsForeignKeyViolation(err) {
-			return ErrOperatorNotFound
-		}
 		return pgxerr.Classify(err, "issue operator credential", nil, nil)
 	}
 	if err := tx.Commit(ctx); err != nil {

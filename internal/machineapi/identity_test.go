@@ -31,9 +31,12 @@ type operatorService struct {
 	renewed     []operator.Credential
 	enrolled    []enrolment
 	// credential is the one the exchange answers for, and audiences
-	// what each exchange asked for.
-	credential string
-	audiences  []*grn.GRN
+	// and sources what each exchange asked for and arrived from.
+	// exchangeErr, when set, is what every exchange answers.
+	credential  string
+	audiences   []*grn.GRN
+	sources     []string
+	exchangeErr error
 }
 
 // enrolment is one call the enrollment route made, as the domain saw
@@ -44,9 +47,13 @@ type enrolment struct {
 }
 
 // Exchange answers a token for the one credential the fake was given,
-// recording the audience asked for.
-func (s *operatorService) Exchange(_ context.Context, credential string, audience *grn.GRN) (*operator.Token, error) {
+// recording the audience asked for and the address it came from.
+func (s *operatorService) Exchange(_ context.Context, source, credential string, audience *grn.GRN) (*operator.Token, error) {
 	s.audiences = append(s.audiences, audience)
+	s.sources = append(s.sources, source)
+	if s.exchangeErr != nil {
+		return nil, s.exchangeErr
+	}
 	if credential != s.credential {
 		return nil, operator.ErrCredentialInvalid
 	}

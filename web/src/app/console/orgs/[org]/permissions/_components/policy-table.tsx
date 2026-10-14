@@ -20,7 +20,7 @@ const COLUMNS: ColumnDef<PolicyRow, unknown>[] = [
     header: "Policy",
     accessorFn: (row) => row.policy.name,
     cell: ({ row }) => (
-      <div className="flex min-w-0 flex-col items-start gap-2">
+      <div className="flex min-w-0 flex-col items-start">
         <Link
           href={row.original.href}
           className="font-medium underline-offset-4 hover:underline focus-visible:underline"

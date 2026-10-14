@@ -528,6 +528,38 @@ test.describe("permissions", () => {
 });
 
 test.describe("permissions accessibility", () => {
+  // The policy table stacks each policy's link directly over its
+  // identifier, the crowded case where axe's target-size fails a CopyId
+  // under 24px. A target spaced off its neighbours passes that rule at
+  // any size, so the size is measured too.
+  test("the policy table's identifiers are 24px targets", async ({
+    page,
+    signedIn,
+  }) => {
+    for (const name of ["Deny project deletion", "Deny project renames"]) {
+      await createPolicy(
+        page.request,
+        signedIn,
+        name,
+        denyDocument(signedIn.orgSlug, ["project:delete"]),
+      );
+    }
+    await page.goto(`/console/orgs/${signedIn.orgSlug}/permissions`);
+    await expectHydrated(page);
+    const copies = page
+      .getByRole("table")
+      .getByRole("button", { name: /^Copy the identifier of/ });
+    await expect(copies).toHaveCount(2);
+
+    for (const copy of await copies.all()) {
+      const box = await copy.boundingBox();
+      expect(box?.width).toBeGreaterThanOrEqual(24);
+      expect(box?.height).toBeGreaterThanOrEqual(24);
+    }
+    // WCAG 2.2 AA, which carries target-size.
+    expect(await axeViolations(page, ["table"])).toEqual([]);
+  });
+
   for (const theme of ["light", "dark"] as const) {
     test(`every Permissions route passes axe in the ${theme} theme`, async ({
       page,

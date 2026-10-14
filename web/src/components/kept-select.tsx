@@ -6,9 +6,9 @@ import { cn } from "@/lib/utils";
 
 /**
  * A controlled `<select>` whose choice survives a refused submission.
- * A select in a form whose action can refuse renders through this. A
- * GET form's select, such as the attachments view's subject picker,
- * needs none: no action resets it, so it keeps its `defaultValue`.
+ * A native select in a form whose action can refuse renders through
+ * this. The Radix `Select` primitive meets the same reset as an empty
+ * value, which each caller ignores rather than taking as a choice.
  *
  * React resets a form after its action, refusal included, by calling
  * `form.reset()`, which returns every field to its default. A controlled

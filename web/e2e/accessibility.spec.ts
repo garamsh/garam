@@ -1,9 +1,7 @@
 import { axeViolations, expectHydrated, useTheme } from "./axe";
 import { expect, test } from "./fixtures";
-import { seedMember } from "./seed";
 
-// The console shell in both themes, one existing page in full, and
-// the identifiers its table offers to copy.
+// The console shell in both themes, and one existing page in full.
 test.describe("accessibility", () => {
   for (const theme of ["light", "dark"] as const) {
     test(`the console shell passes axe in the ${theme} theme`, async ({
@@ -45,29 +43,5 @@ test.describe("accessibility", () => {
 
     await expectHydrated(page);
     expect(await axeViolations(page)).toEqual([]);
-  });
-
-  test("the People table's identifiers are 24px targets", async ({
-    page,
-    signedIn,
-  }) => {
-    // A second member, so each identifier has a neighbour to crowd.
-    await seedMember(signedIn);
-    await page.goto(`/console/orgs/${signedIn.orgSlug}/people`);
-    await expectHydrated(page);
-    const copies = page
-      .getByRole("table")
-      .getByRole("button", { name: /^Copy the identifier of/ });
-    await expect(copies).toHaveCount(2);
-
-    // axe's target-size passes a smaller target spaced off its
-    // neighbours, so the size itself is measured as well.
-    for (const copy of await copies.all()) {
-      const box = await copy.boundingBox();
-      expect(box?.width).toBeGreaterThanOrEqual(24);
-      expect(box?.height).toBeGreaterThanOrEqual(24);
-    }
-    // WCAG 2.2 AA, which carries target-size.
-    expect(await axeViolations(page, ["table"])).toEqual([]);
   });
 });

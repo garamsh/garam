@@ -747,3 +747,25 @@ func receive[T any](t *testing.T, ch <-chan T) T {
 		return zero
 	}
 }
+
+// TestOperatorKey_AWithdrawalAnswersErrKeyNotFoundForAKeyNeverIssued
+// holds RevokeKey's contract across the registration it now holds
+// first (#1418): an operator the organization holds no record of was
+// never issued the key and answers ErrKeyNotFound, as an unknown kid of
+// a registered operator does. The registered operator's own key, which
+// withdraws and then withdraws again as a no-op, is the control.
+func TestOperatorKey_AWithdrawalAnswersErrKeyNotFoundForAKeyNeverIssued(t *testing.T) {
+	ctx := context.Background()
+	p := pool(t)
+	require.NoError(t, org.NewPostgresStore(p).CreateOrg(ctx, org.NewOrganization(orgRootGRN("acme"), "acme")))
+	store := operator.NewPostgresStore(p)
+	subject := registerOperator(t, p, scopedGRN("acme", operator.ServiceType, "controller"))
+	_, key := issueKey(t, store, subject, operator.KeyRotationFirst)
+
+	assert.ErrorIs(t, store.RevokeKey(ctx, scopedGRN("acme", operator.ServiceType, "unregistered"), key.KID),
+		operator.ErrKeyNotFound, "an operator the organization holds no record of")
+	assert.ErrorIs(t, store.RevokeKey(ctx, subject, "kid-never-issued"), operator.ErrKeyNotFound,
+		"a kid the registered operator was never issued")
+	require.NoError(t, store.RevokeKey(ctx, subject, key.KID), "the control: its own key withdraws")
+	assert.NoError(t, store.RevokeKey(ctx, subject, key.KID), "and a second withdrawal is a no-op")
+}

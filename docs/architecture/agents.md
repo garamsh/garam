@@ -150,6 +150,57 @@ release of its peer in both upgrade orders, and unsupported semantics
 are refused by name. None of it is built, so garam still publishes no
 release of that contract and no compatibility window (ADR-0049).
 
+## Common managed and direct enrollment
+
+**Unbuilt.** [ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)
+sets one target admission contract, `agent-enrollment.v1`, in place of
+separate target managed/standalone identity models. §Separated
+execution and §Standalone hosts describe the existing implementations
+and compatibility cohorts, not common enrollment already shipped.
+
+- Provisioning and enrollment are separate. A managed runtime is
+  provisioned by the Operator; a direct runtime may already be running
+  independently. Connecting it requires neither an Operator record
+  nor a Kubernetes workload nor the Docker three-container runner.
+- Both use the same approval, identity admission, token delivery and
+  activation stages defined in ADR-0102 §Common agent enrollment. The
+  differences are the approval's authority and placement: the hosted
+  service's delegation/controller proof/member reference, or an
+  administrator-approved one-agent connector using the supervisor
+  registration/authorization shape. A direct connector has no
+  organization-wide operator powers and never enrolls peers.
+- New admission mints one stable GRN, starts fenced with an assignment
+  epoch and lineage and activates no writer. Replacement preserves
+  that GRN and compares the expected assignment before raising the
+  epoch and replacing the lineage. Retry returns the same public
+  binding; changed intent conflicts, superseded placement refuses.
+- The assignee delivers/refreshes short-lived agent API access; the
+  lifecycle authority establishes writer ownership and activates the
+  reported generation. A directly connected runtime's authority must
+  establish that ownership too; unverifiable ownership stops protected
+  Garam work without asserting a second writer is safe. Existing
+  execution locks, cutover gates and recovery permissions remain.
+- The runtime owns memory, replay state, identity/generation reports
+  and trusted message issuers. Its connector owns narrow Garam API
+  access and delivery; no Operator PEM or Garam message-signing key
+  enters the runtime or workspace. Admission grants no Sherlock
+  command/channel permission ([messaging.md](./messaging.md)).
+
+**Open: independent writer proof blocks direct attachment.** Current
+`internal/workload` proves a recorded Docker generation's exit by
+container ID/nonce; runtime status alone cannot prove exclusive
+ownership of an arbitrary process. ADR-0102 §Direct attachment proof
+remains an implementation gate records the proposed local attachment
+lease and process-owning-supervisor options. The PM chose neither;
+the owner must select and validate a proof contract before this new
+connector activates. Identity admission does not close that gate, and
+it does not block Operator asymmetric exchange.
+
+The new wire and direct connector are implementation obligations,
+not additions to the current `api/machine.yaml` §enrollment and
+§standalone. Legacy v1/v2 approval bindings and supervisor credential
+retry behavior remain unchanged until explicitly migrated.
+
 ## Tokens in place of certificates
 
 **Built for an agent's operator, a standalone host's supervisor and

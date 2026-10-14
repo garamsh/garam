@@ -1,373 +1,320 @@
-# Moving machine identity to credentials and short-lived tokens
+# Machine Identity Migration
 
-The order in which garam, `garamsh/garam-agent-operator` and the
-adapter move from client certificates to
-[ADR-0100](../architecture/adr/0100-every-machine-caller-authenticates-with-a-garam-issued-credential-and-short-lived-tokens-over-server-tls.md)'s
-credentials and tokens, how a running operator moves over, and which
-repository each step lands in. Nothing here starts before the owner
-accepts ADR-0100.
+The order Garam, the Operator and Sherlock adopt machine authentication
+and common agent enrollment, and the evidence required before removal.
 
-Checked against garam `a7148f8`, and against
-`garamsh/garam-agent-operator@792f1d4fe65af33ddd32356bf014a71cd72f26d8`,
-cited `OP:`, and Sherlock at `08c32c2`, the head of each repository's
-`dev` on 2026-10-09.
+Garam facts checked at `3beb1569b804f6461b2e956601e2a0377b81152e`.
+Foreign facts below are the PMs' compatibility replies, not a new source
+inspection: Operator at
+`4d2cbc6ca37668b912c4c0f0ae211c11c90bf5f3` on
+[garam#1353](https://github.com/garamsh/garam/issues/1353#issuecomment-6146268863),
+and Sherlock at `2281328366515c1c67a72bdf978c2266b842cdec`, forwarded
+by the Garam PM on 2026-10-13. Claims about those projects hold for
+those revisions alone.
 
 ## Contents
 - The shape of the move
-- The steps
-- Answers to the Operator's questions
+- What is built
+- The implementation sequence
+- Contracts and compatibility
 - How a running operator moves over
+- Direct attachment gate
+- Common enrollment acceptance
+- Authentication acceptance
 - What is paired where
 - What would stop the plan
 
 ## The shape of the move
 
-**garam carries both mechanisms for one window; the Operator carries
-one.** garam ships first and accepts a certificate or a token on every
-machine route. The Operator then cuts over in a single release with no
-certificate mode left in it, which is what its owner directed for
-development. When every operator garam knows of has moved, garam
-removes the certificate path and then the authorities.
+**Asymmetric Operator exchange and common enrollment are unbuilt.**
+[ADR-0102](../architecture/adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)
+is accepted for #1353 following the
+[owner's approved direction](https://github.com/garamsh/garam/issues/1353#issuecomment-6146292449)
+and [PM acceptance](https://github.com/garamsh/garam/issues/1353#issuecomment-6146977963).
+The accepted ADR-0100's G1 implementation remains available: opaque
+shared-secret exchange and token transport alongside certificates.
+ADR-0102 supersedes its Operator long-lived credential
+issuance/exchange and separate target enrollment model, not its
+short-lived tokens, server TLS, audiences or fences. ADR-0101's signed
+messages and Garam's signing-private-key custody remain separate.
 
-The adapter is garam's (`garam adapter`), and the Operator renders it
-into each agent's Pod, so the adapter's token mode ships in garam's
-first step and is switched on by the Operator's release. Sherlock is
-not touched.
+Garam adds support first and keeps the existing cohorts. The Operator
+then cuts over both binaries and rendered agent credentials in one
+coordinated release with one authentication mode. Operator ADR-0068
+forbids development compatibility paths: no dual-auth switch or silent
+fallback is introduced there. Both upgrade orders must be measured
+before any adjacent-release window is advertised; an unsupported new
+client against old Garam refuses by name and changes no state.
 
-## The steps
+Common enrollment admits an identity and placement without
+provisioning. A direct, independently running Sherlock needs a scoped
+connector/lifecycle authority binding, not an Operator, Pod or the
+Docker three-container runner. Garam's direct implementation is
+unbuilt. Sherlock owns incoming message authentication and configured
+issuer trust. The PM retains per-caller authorization above Sherlock
+(Option A of
+[proposal #1067](https://github.com/garamsh/sherlock/issues/1067));
+runtime-local authorization needs a concrete gap and an owner decision,
+not completion of Operator exchange.
 
-| Step | Repository | What lands | Needs |
-|---|---|---|---|
-| G1a | garam | ADR-0100 accepted; the operator credential, issued on registration and re-issued on `operator:reissue`, in the browser API and the console; `POST /tokens` under `machine-token.v1`; the listener reading `Garam-Token` per request on the operator routes that carry no contract value; the metric counting requests by how they authenticated | ADR-0100 accepted |
-| G1b | garam | `POST /agents/{agent}/tokens`, minted by the assignee at the current epoch and recorded in the agent's lineage; every agent route accepting a token, `Garam-Execution` in its own header and `durable-delivery.v2` | G1a |
-| G1c | garam | introspection accepting a token minted for the caller where it takes `certificatePem`; `operation-authority.v2`, `execution-fence.v2`, `agent-cutover.v2` and `managed-enrollment.v2`; before introspection accepts an audience token, the operator exchange checks the audience against the registered operators, as G1b's agent mint already does, and `operator_tokens.audience_grn` and `agent_tokens.audience_grn` gain a foreign key | G1b |
-| G1d | garam | the supervisor credential under `standalone-enrollment.v2`, and supervisor tokens on the execution routes | G1a |
-| G2 | garam | the adapter's token mode — two token files, read per request, `Garam-Placement` as its own header, `agent-execution.v2` — and the standalone commands on a supervisor credential | G1a to G1d |
-| O1 | garam-agent-operator | an Operator release carrying four pull requests, landed on `dev` in the order §O1 is one release of four pull requests gives | on each deployment, a garam carrying G1 and G2 deployed there and both credentials placed; on the lab, that is the garam `garamsh/gitops` pins |
-| G3 | garam | the certificate path removed: the listener stops requesting a client certificate, the seven issuing routes (`recoverAgentCredential` in its v1 form only), `garam issue-certificate` and the v1 contract values go, and with them ADR-0091's chain; `issueAgentCertificate`'s `machineToken` entry goes too, since an operator's token, which carries no serial, has never been able to reach its issuance | O1 deployed on every operator garam knows of, and the G1 metric reading no certificate-authenticated request for seven days |
-| G4 | garam | the authorities retired: `internal/ca`, the sealer, the key-encryption key `garam serve machine` reads, and a migration dropping the certificate and enrollment tables | G3 released |
+## What is built
 
-G1 is four pull requests in that order, each keeping every v1 path
-passing its own tests unchanged; G1 below names all four. G1 and G2 may
-land in one release; G3 and G4 may not, because G4's migration drops
-what G3's predecessor still reads.
+The checked Garam revision contains all four G1 steps:
 
-### O1 is one release of four pull requests
+| Step | Current implementation and evidence |
+|---|---|
+| G1a | Operator shared-secret issuance/re-issue, one-hour exchange and per-request token reads: `internal/operator/token.go`, `internal/machineapi/identity.go`, migration 000038 |
+| G1b | Assignee-minted agent tokens, current epoch/lineage checks and `durable-delivery.v2`: `internal/agent/postgres_access_token.go`, migration 000039 |
+| G1c | Token audience introspection, operation/execution/cutover/managed v2 values and audience foreign keys: `internal/machineapi/contract.go`, migrations 000040/000041 |
+| G1d | Supervisor credential and token exchange, `standalone-enrollment.v2` and one-agent confinement: `internal/machineapi/standalone.go`, `internal/agent/supervisor_credential.go`, migration 000042 |
 
-O1 is an Operator release, not a pull request. The release carries
-these four, landed on the Operator's `dev` in this order:
+The adapter and standalone CLI remain certificate clients
+(`internal/cli/delivery.go`, `internal/cli/standalone_host.go`).
+G2 #1352 is undispatched and must follow ADR-0102 rather than complete
+the superseded shared-secret Operator target by assumption.
 
-1. **The manager's credential exchange and per-agent token minting.**
-   The manager exchanges its credential and mints both tokens for each
-   agent it runs.
-2. **The rendered Pod.** The Pod gets the two token files, kept
-   current, and `Garam-Placement` as its own header.
-3. **The control service's identity, and its operator check by
-   introspection.** The control service runs on a credential of its
-   own and checks operators by introspection.
-4. **The certificate paths removed.** Enrollment, renewal, the
-   initial-certificate route and the certificate half of recovery go
-   (§What replaces credential recovery).
+The managed and standalone mechanisms still differ:
 
-Nothing of the Operator is deployed on the token path until all four
-are on `dev`, and they are released together. A reader therefore
-expects one release and four reviews, each of which can be checked
-against garam's G1 and G2 on its own.
+- `managed-enrollment.v1` creates a managed identity and signs its first
+  credential; v2 creation opens the lineage with no certificate.
+- `standalone-enrollment.v1` spends an approval bound to two public-key
+  fingerprints; v2 spends a keyless approval and answers a supervisor
+  credential. An identical v2 spending retry re-issues the credential
+  under the approval lock and voids its former tokens.
+- These distinct bindings remain enforced. Common admission does not
+  make a v1 approval spendable under v2 or rewrite old replay answers.
 
-### Two decisions G1d made that ADR-0100 leaves open
+## The implementation sequence
 
-ADR-0100 says a v2 enrollment answers a supervisor credential where it
-signed two requests, and says neither what the approval binds then nor
-what a retry answers. The PM decided both on G1d's dispatch, on
-2026-10-10.
+Only #1353 and #1352 identify current Garam work below. Rows naming
+future issues are instructions for the owning PM to scope and dispatch,
+not invented tracker numbers or claims implementation has begun.
 
-- **The approval's keys decide its contract.** An approval binding the
-  host's two key fingerprints is spent under
-  `standalone-enrollment.v1` alone, and one binding neither under
-  `standalone-enrollment.v2` alone; one fingerprint without the other
-  is refused. No field is added, and neither contract can spend the
-  other's approval, because a v2 host presents no key for the
-  fingerprints to prove.
-- **A retry re-issues the credential.** garam stores a credential's
-  hash alone, so it cannot answer a retry with the credential it
-  answered before, as a v1 retry answers the certificates it recorded.
-  An identical v2 retry, while the registration still holds the agent,
-  issues another under the approval's row lock and voids the earlier
-  one with every token exchanged for it. Only the bootstrap secret's
-  holder can retry, and a host that lost the answer is not stuck.
-
-## Answers to the Operator's questions
-
-The garam-agent-operator PM asked three questions on #1251, each to be
-answered per step.
-
-### Which side ships first, and is it a hard cut
-
-garam ships first, and the cut is hard on the Operator's side alone.
-
-- **G1, G2.** garam accepts both. Nothing the Operator runs today
-  breaks, and no Operator release is waiting on garam.
-- **O1.** A hard cut: one release of four pull requests, token mode
-  only, no certificate fallback. It needs a garam carrying G1 and G2
-  already deployed on the deployment it reaches — on the lab, the
-  garam gitops pins (§How a running operator moves over) — so the
-  upgrade order is fixed: garam, then the Operator. That is the
-  price of the Operator carrying no compatibility, and it is
-  admissible now because no release yet claims a tested compatibility
-  window ([ADR-0079](../architecture/adr/0079-interservice-contracts-keep-adjacent-releases-compatible-and-replay-by-stable-identifier.md)
-  §Consequences, "None of this is built").
-- **G3, G4.** garam's own cut, once the metric shows nobody on the old
-  path.
-
-**A hard cut on both sides was weighed and is not the plan.** It needs
-garam and the Operator deployed at one moment. Between the two, every
-operator and every agent on the deployment fails to authenticate —
-on the cluster this project's own agents run on, recorded in
-`garamsh/gitops`, that is all of them — and rolling either back means
-rolling back both. Keeping both paths in garam for one window costs
-garam a second authentication path for the life of that window and
-costs the Operator nothing.
-
-### How the control service verifies operator tokens
-
-By introspection at garam, as it verifies an operation authority
-today.
-
-- **O1.** The manager, a controller, presents to the control service
-  an operator token minted with the control service's GRN as its
-  audience. The control service forwards it to
-  `introspectController` where it forwards the controller's leaf
-  today (`OP:internal/distribution/session.go:21-29`), and garam
-  answers only the audience the token names. The control service
-  already asks for a fresh proof before every decision and never
-  reuses one ([operators.md](../architecture/operators.md)
-  §Controller proof), so this adds no round trip.
-- **O1.** The control service's own identity at garam is a credential
-  and a token like any operator's, replacing the pair it loads once
-  (`OP:cmd/control/main.go:219-254`).
-- **G1c** is what makes this possible: introspection taking a token.
-
-### Whether the per-agent credential replaces the placement token
-
-It sits beside it.
-
-- **G2, O1.** The adapter carries three things: its garam token, its
-  control-service token and the placement token. The placement token
-  says which placement is current and lives as long as that placement;
-  its digest is one of the six fields the activation's request
-  identifier is derived from (ADR-0084). An agent token is replaced
-  hourly, so folding the two together would make every refresh new
-  intent and every refresh a new activation.
-- **G2.** The placement token leaves `Authorization`, which the
-  control-service token now occupies, for a `Garam-Placement` header;
-  its value and its file are unchanged.
-
-### What replaces credential recovery
-
-The Operator built recovery on `recoverAgentCredential` under an
-`agent:recover` handoff (ADR-0091). ADR-0100 §Recovery under hourly
-tokens splits it in two:
-
-- **A lost credential: re-minting, with no route.** The assignee mints
-  another agent token, as it does every refresh. O1's fourth pull
-  request removes the key, the certificate request and the chain the
-  Operator's recovery handles today.
-- **A token that may have been taken: recovery, without a
-  certificate.** The handoff, the route and `agent:recover` stay, and
-  under `execution-fence.v2` the route ends the lineage and answers no
-  certificate or chain. O1 keeps the handoff path and sends the v2
-  body: `requestId` and `epoch`.
-- **G3** removes the v1 form, its certificate request and ADR-0091's
-  chain. `agent:recover` and the v2 route stay.
-
-The writer fence and the placement token are unaffected.
-
-### The control service's listener
-
-**Its server TLS stays, and only the client-certificate requirement
-goes.**
-
-- **What O1 keeps.** The control service serves its own certificate
-  as it does today, and the adapter and the manager verify it against
-  the roots they hold for it.
-- **What O1 removes.** O1's third pull request removes
-  `ClientAuth: tls.RequestClientCert` and the reading of a peer leaf
-  (`OP:cmd/control/main.go:201-217`,
-  `OP:internal/execution/session.go:11-22`,
-  `OP:internal/distribution/session.go:21-29`).
-- **How callers authenticate instead.** Every caller authenticates by
-  its `Authorization: Garam-Token` header, and the control service
-  checks that token by introspection.
-
-### The control service's own credential
-
-**Two credentials, issued separately.** The control service is a
-registered operator of its own, distinct from the controller it acts
-for (ADR-0078), so it has its own credential. That credential replaces
-the certificate pair the control service loads once
-(`OP:cmd/control/main.go:219-254`).
-
-- **Who issues.** An owner or admin issues each credential on that
-  operator's own page in the console. The two are separate acts, and
-  re-issuing one leaves the other untouched.
-- **Who places.** Whoever issues a credential places it, because the
-  console shows it to them once and garam keeps only its hash.
-  - The controller's credential goes in the manager's Secret.
-  - The control service's goes in a Secret the control Deployment
-    mounts.
-  - Each is an owner-only file in the process that reads it
-    (ADR-0015).
-- **The lab.** Both Secrets are deployment changes. `garamsh/gitops`
-  needs them in place before O1 reaches the lab: the credentials are
-  issued once the lab's garam carries G1, and placed by its secret
-  mechanism, never committed as values.
-
-### Token lifetime and the refresh margin
-
-ADR-0100 §Tokens is authoritative for these values.
-
-- **Lifetime.** An agent token lives one hour by default. Its
-  configuration is bounded to 20 minutes at least and 24 hours at
-  most. The operator and supervisor tokens live one hour, a constant.
-- **Refresh.** The Operator mints the next agent token at a random
-  point between two thirds and three quarters of the current one's
-  life, so at least a quarter remains: 15 minutes at the default, 5
-  at the lower bound.
-- **Overlap.** A refresh voids nothing. The older token stays good to
-  its expiry, so the Pod may hold either while the Secret update
-  propagates.
-- **The margin the Operator keeps.** The new token must reach the file
-  the adapter reads before the old one expires. That path is the
-  kubelet's propagation of the Secret, about a minute by default, plus
-  the interval of whatever keeps the Pod's owner-only copy current
-  (O1's second pull request). If that sum does not fit inside a
-  quarter of the lifetime, the deployment raises the lifetime.
-- **Both files.** The adapter reads the garam token and the
-  control-service token per request, so a rewrite of either needs no
-  restart. A file is replaced by a rename, never written in place.
-
-### The contract values the Operator sends and checks
-
-ADR-0100 §Contract values is authoritative for these. O1 moves the
-Operator's clients and servers as follows, and sends or accepts no v1
-value afterwards.
-
-| Value | The Operator | Where |
+| Order | Owner and issue | Work and gate |
 |---|---|---|
-| `machine-token.v1` | sends | the manager and the control service, to `POST /tokens`; the manager, to `POST /agents/{agent}/tokens` |
-| `operation-authority.v2` | sends | the control service, to `introspectOperationAuthority`, `checkOperationReference` and `introspectController` |
-| `execution-fence.v2` | sends | the control service, to `activateAgent`, `deactivateAgent`, `introspectAgentExecution` and `recoverAgentCredential` |
-| `agent-cutover.v2` | sends | the control service, to the four cutover routes |
-| `managed-enrollment.v2` | sends | the control service, to `createManagedAgent` |
-| `agent-execution.v2` | checks and answers | the control service's `activations` and `runtime-status`, refusing any other value |
+| 1 | Garam #1353 | Pair accepted ADR-0102 with affected documents and this plan; acceptance records the profile/custody target, not implementation or merge |
+| 2 | Garam, new asymmetric identity implementation issue | Issue RSA PEM once, store public key only, register key incarnation/state, add `machine-token.v2` on `/oauth/token`, shared replay store, key/token revocation and explicit Bearer alias; preserve every G1 and certificate test |
+| 3 | Garam, new common enrollment implementation issue | Publish `agent-enrollment.v1` wire, approval/admission/refusal forms and public idempotent result; use existing execution lock and scoped authority model for both placements |
+| 4 | Garam #1352 (G2) | Adapter/supervisor token transport, atomic per-request files, v2 control headers; implement direct connector binding without requiring runtime reprovisioning, or split that work into a PM-owned follow-up issue |
+| 5 | Operator PM, new coordinated O1 issues | Review shared contract first, then scope both binaries' PEM exchange, controller introspection, audience/epoch proofs, common managed admission and rendered short-lived token refresh; one cutover release, no compatibility switch |
+| 6 | Sherlock PM, local proposal/implementation issues | Proposal #1067 compares authenticated origin and channel admission while retaining authorization above Sherlock; Option B needs owner decision; no Operator or Garam private keys |
+| 7 | Owning PMs, joint acceptance issues | Record exact revisions/digests and both upgrade orders, managed/direct message+reply+restart, replay/rotation/revocation failures and all TLS trust consumers |
+| 8 | Deployment owners | Adopt only after joint evidence and owner gates; gitops#14 and infra#331 remain. This documentation task deploys nothing |
+| 9 | Garam, later G3/G4 issues | Remove old paths only after inventory and seven-day observation gates; no removal or destructive migration is authorized by #1353 |
 
-Two routes the Operator calls today take no v2 value and go at G3:
+Garam additive support can land while the current Operator continues
+using certificates. O1 requires that support running at its actual
+endpoint, not merely merged or released. Existing Operator #348 gates
+remain as its PM's compatibility reply states; this plan changes no
+other repository's issue or architecture decision.
 
-- `issueInitialCertificate`;
-- `issueAgentCertificate`.
+Sherlock's message verification already exists according to its PM's
+reply (ADR-0026 and `signature.go` at the revision above), while its
+ADR-0014 places per-caller authorization above Sherlock. Its proposal
+#1067
+compares concrete admission cases before changing that boundary;
+no local ACL implementation is required for already-built JWS trust,
+and no SimpleX integration or terminal attach is included.
 
-Three values are not the Operator's:
+## Contracts and compatibility
 
-- `standalone-enrollment.v2` is `garam standalone`'s;
-- `durable-delivery.v2` is the adapter's, sent to garam;
-- the definitions read, the claim and the provisioning report carry
-  no value. On them the manager sends only `Garam-Token`.
+ADR-0102 §Assertion exchange profile and §Supersession and compatibility
+are authoritative for the new profile and retained contracts. Current
+wire authority remains `api/machine.yaml`, not this plan.
 
-The Operator's ports may go on refusing an unknown value with 503
-(the Operator's #293). That choice is the Operator's, and garam
-answers each value with the same value.
+| Value | Migration treatment |
+|---|---|
+| `machine-token.v1` | Preserve existing operator/supervisor exchange and agent mint |
+| `machine-token.v2` | Add Operator client credentials/private_key_jwt exchange; normal OAuth response and bounded replay-safe RS256 assertions |
+| `agent-enrollment.v1` | Add common approval/admission/delivery semantics, with authority/placement differences |
+| `managed-enrollment.v1`, `.v2` | Keep current managed cohorts until an explicitly tested replacement |
+| `standalone-enrollment.v1`, `.v2` | Keep current direct-host cohorts and approval/retry distinctions |
+| `operation-authority.v1`, `.v2` | Keep controller/operation proofs and audience restrictions |
+| `execution-fence.v1`, `.v2` | Keep lifecycle and per-request generation/lineage fences |
+| `agent-cutover.v1`, `.v2` | Keep staged legacy cutover and archival definitions |
+| `agent-execution.v1`, `.v2` | Preserve explicit control transport selection; G2 builds token mode |
+| `durable-delivery.v1`, `.v2` | Keep stable outbox keys and seven-day admission budget |
+| `garam-message.v1` | Keep signed content/digest and redelivery identity unchanged |
+
+No tested adjacent-release window exists at the checked Garam revision.
+Joint acceptance must name the oldest supported peer releases and the
+next ones, execute both orders and record unsupported-profile refusal.
+Garam carrying old/new cohorts does not require a new Operator release
+to understand both. A rollback to an old Operator can use its old
+cohort only while Garam still serves it and its credentials remain
+valid; revocation is never undone to make rollback look successful.
+
+G3's observation includes registered-but-idle callers, standalone
+supervisors, hosted services, legacy agents and audience tokens. Require
+inventory evidence of each cohort's successful new-mode exchange,
+refresh and restart plus seven days of no old-authenticated requests;
+`garam_machine_requests_total` alone cannot detect an idle operator or
+distinguish shared-secret exchange from an asymmetric one. The new
+implementation must add exchange/key-cohort evidence without logging
+assertions, bearer values or private bytes. Removal gates stay open
+until that evidence exists; they are not calendar deadlines.
+
+G3 and G4 remain separate releases: a destructive table drop cannot
+precede retiring readers. Message signing continues to use sealed keys,
+so G4 never drops the key-encryption key or message key storage merely
+because the certificate authorities go.
 
 ## How a running operator moves over
 
-**On the lab, O1's precondition is that the lab runs G1 and G2, not
-that a release carries them.** `garamsh/gitops` pins the garam image
-the lab runs as well as the Operator's, so a garam release carrying G1
-and G2 changes nothing on the lab until gitops moves that pin and the
-rollout completes. The order on the lab is therefore:
+After Garam's additive contracts are deployed at the endpoint:
 
-1. gitops moves the garam pin to a release carrying G1 and G2, and the
-   lab runs it.
-2. Both credentials are issued against that garam and placed (§The
-   control service's own credential).
-3. gitops moves the Operator pin to the release carrying O1.
+1. An authorized person issues a key for each existing controller and
+   hosted service registration separately; each keeps its current GRN.
+   Initial new-key setup preserves the old credential cohort during
+   rollout. The person installs private PEM and the pinned server root
+   as owner-only files; Garam stores public verification material alone.
+2. Declare one external/admin writer for each stable key. Retire the
+   Operator's old renewal writer in its local ADR-0008 pair before
+   cutover. The owned PEM copy is replaced atomically and reloaded for
+   every exchange; `kid` is derived from the same snapshot. Raw Secret
+   projection and `fsGroup` alone do not establish owner-UID/0600.
+3. O1 starts only with those files installed. Both binaries exchange
+   fresh RS256 assertions at Garam for one-hour opaque tokens. The
+   manager obtains a separate audience token for the hosted service;
+   that service introspects it and obtains a fresh agent-bound proof
+   before every lifecycle/release/status/placement/credential decision,
+   after long polling too, comparing the revision's epoch.
+4. Managed agents obtain scoped short-lived tokens under their current
+   epoch/lineage. The Operator keeps both Garam/control token copies
+   current, atomically, and the adapter reads them per request.
+   Placement retains its own life and digest; refresh is not new intent.
+5. Preserve `server-root.pem` for adapter TLS and Sherlock's
+   `keys-ca-file`; move mounts and consumers atomically if needed.
+   Message `iss` still matches configured issuer trust byte for byte;
+   it is not the token endpoint's audience or the fetch URL.
+6. Prove the new release's refresh/restart and key rotation before
+   withdrawing old operator credentials. Removing an old API credential
+   alone does not recover an agent lineage; a suspected agent-token
+   compromise requires separate authorized recovery.
 
-The lab's rollout in progress — the Operator at `4c425a7`, waiting on
-a Sherlock agent image that accepts `--assignment-epoch` — is on the
-certificate path and is unaffected. G1 still accepts it.
+The assertion lives at most 60 seconds with 30 seconds of skew; the
+access token one hour; planned key overlap at most 24 hours. Access
+refresh is jittered between two thirds and three quarters of token life,
+leaving at least a quarter for propagation. Agent lifetime retains its
+20-minute to 24-hour bounds and one-hour default. Two audiences remain
+separate and ordinary refresh does not void an unexpired predecessor.
 
-For each registered operator, on any deployment, after G1 and G2 are
-deployed there:
+Expired/stale access pauses protected work while bounded exchange
+retries with backoff, using the unchanged valid PEM and a fresh
+assertion and `jti` every time. An outage spanning token expiry needs
+no key/configuration change: after exchange succeeds, obtain fresh
+controller/assignment proof before resuming. An adapter consumes its
+assignee's atomically refreshed file and rechecks current execution
+binding; it neither self-mints nor treats a new token as activation.
 
-1. An owner or admin issues a credential in the console to each
-   operator record the deployment runs. That is the controller and,
-   where there is one, the hosted control service: two separate issues.
-   Issuing voids nothing an operator holds. Its certificate keeps
-   authenticating, because G1 still accepts one.
-2. The person puts each credential in the Secret its process mounts,
-   beside the material already there.
-3. The Operator is upgraded to the release carrying O1. The manager
-   exchanges the credential, mints both tokens for each agent it runs,
-   and rolls each agent's Pod onto the adapter's token mode. The
-   control service does the same for itself.
-4. The old certificate is no longer presented, and it expires within
-   its lifetime, a day by default. Nothing has to be deleted.
+Exchange identity/key rejection pauses until credential or
+registration/configuration changes. Token refresh never clears a
+revoked key/registration or generation/lineage/placement fence. No
+same-`jti` retry or shared-secret fallback is allowed, including after
+lost exchange answers. Lost PEM delivery revokes that issuance and
+issues anew; no download is read back from storage.
 
-An agent moves when its Pod rolls, so for the length of that roll some
-agents of one operator authenticate by certificate and some by token.
-G1 accepts both, so the roll stops nothing.
+## Direct attachment gate
 
-A standalone host moves by an administrator registering its supervisor
-again under G2's commands, which is ADR-0082's replacement. No
-standalone host is accepted against garam yet (#1180), so there may be
-nothing to move.
+**Unbuilt and blocked on an owner architecture decision.** The
+current standalone runner can observe recorded Docker container IDs,
+nonces and termination. An independently running Sherlock's status
+cannot supply that proof, and forcing it into the three-container
+runner would contradict the approved separation from provisioning.
 
-The window ends at G3. Its condition is measured rather than dated:
-every operator garam knows of has exchanged a credential, and the G1
-metric reads no certificate-authenticated request for seven days.
+ADR-0102 §Direct attachment proof remains an implementation gate names
+the options presented to the PM: authenticated local attachment with
+an exclusive host lease, or a scoped host authority that can own and
+observe the existing process. Neither is selected. The comparison must
+include crash/restart, stale binding/lease, disconnected authority,
+unobserved predecessor and replacement: expiry or lineage recovery
+alone proves no local writer has stopped. Direct identity admission
+must not activate or bypass the execution fence before this gate closes.
+Operator private-key exchange can proceed independently. The PM owns
+bringing the remaining choice to the owner and scoping the evidence.
+
+## Common enrollment acceptance
+
+Run these against both managed creation and attachment to an already
+running direct Sherlock, with actual authority and runtime processes:
+
+| Case | Required observation |
+|---|---|
+| First admission | One GRN, current assignment/epoch and lineage, fenced mode and no activation; no workload provisioning implied |
+| Identical retry and simultaneous admission | Same public result and one identity; no extra writer, epoch or lineage |
+| Changed binding under request ID | Conflict, with no identity or placement mutation |
+| Expired/withdrawn/other-tenant approval | Refused, no credential or activation; same-cohort valid approval is the control |
+| Unknown authority or unavailable policy/store | No successful admission; unavailable is distinct from positive authorization |
+| Replacement at expected epoch | Same GRN, raised epoch/new lineage; stale expected assignment refuses |
+| Old generation or lineage on open connection | Protected calls refuse; a current generation's control call succeeds |
+| Replacement racing an admitted write | Execution lock orders them; no replaced-generation write commits after replacement |
+| Direct runtime attachment | Runtime/memory stays in place; one-agent authority cannot enroll or access another agent and requires no Operator/Pod/Docker runner |
+| Writer ownership unknown or lost | No new activation or protected calls; no assertion an unobserved writer exited |
+| Lost agent token delivery | Assignee re-mints in current lineage, no enrollment replay or agent self-mint |
+| Legacy standalone v2 replay | Existing credential re-issue/void behavior persists separately from common public retry |
+| Message, reply and restart | Stable signed identifiers/content, durable outbox and memory kept; no long-lived private key in runtime/adapter/workspace |
+
+Enrollment success proves no message admission. Independently verify
+configured issuer, authenticated Origin, altered/wrong-audience/expired
+signature refusal and ordinary redelivery. Garam enrollment does not
+grant
+command authority. Proposal #1067 retains current authorization above
+Sherlock; any future runtime-local authorization requires an owner
+choice and its own acceptance before claiming that behavior.
+
+## Authentication acceptance
+
+Use independent stock OAuth/JOSE client/server test vectors and a real
+multi-replica replay store. Every refusal case includes a valid control
+that would fail if the intended check were removed.
+
+| Case | Required observation |
+|---|---|
+| Standard exchange | Form client credentials request plus issued RSA PEM succeeds with RS256; 200 standard token response and no cache |
+| Identity/key substitution | Wrong client_id/iss/sub, cross-org or another registration's kid refuses |
+| Algorithm/header confusion | none/MAC/ES256, wrong key type, duplicate claims or remote key headers refuse; message JWT cannot exchange |
+| Audience and time | Wrong endpoint spelling/array, future iat/nbf, expired exp and lifetime over 60 seconds refuse at specified boundaries |
+| Replay, concurrency and restart | Same client_id+jti succeeds at most once across replicas and after restart; different kid/signature does not bypass it |
+| Lost exchange response | Fresh assertion succeeds inside live-token bounds; old jti refuses without exposing bearer readback |
+| Replay/key/store outage | 503 and no token; no cached positive or shared-secret fallback |
+| Outage spans access expiry, valid PEM unchanged | Protected calls pause; bounded fresh-assertion exchange recovers when available with a new jti on every attempt; fresh controller/assignment proof precedes resumption |
+| Adapter access expires during outage | Assignee refreshes the atomic token file; adapter rereads with bounded backoff and verifies current execution binding before protected calls; no new key, placement or self-mint |
+| Revoked key/registration after access expiry | Fresh exchange refuses; no resumption, same-jti replay or shared-secret fallback; unchanged valid-key outage case is the control |
+| Generation/lineage/placement fence during refresh | Exchange/mint success never clears the fence; old writer remains refused after new access arrives; current binding is the control |
+| Planned rotation | Successor exchange succeeds before old key withdrawal; both work inside overlap, old key/tokens refuse after withdrawal |
+| Compromise or lost PEM | Immediate replacement; old tokens refuse on an open connection, including raced exchanges |
+| Delete/re-register same operator_id | Old key, assertion and tokens cannot regain authentication through the new record |
+| API alias and versions | Bearer and Garam-Token give equal confinement/fencing; certificate+token or multiple credentials refuse; old v1/v2 controls remain unchanged |
+| Control audience | Manager token shown to control proves current controller/agent only by fresh introspection; never authorizes Garam API use there |
+| Custody and rate bounds | Public-only persistence and redacted logs; no private key on agents; documented exchange saturation returns 429 with Retry-After |
 
 ## What is paired where
 
-ADR-0100 lands as `accepted` with G1a, the first implementation pull
-request, together with the status lines of the ADRs it supersedes.
-Rule 3 then binds each implementation pull request to the documents it
-moves:
-
-- **G1a**: [machine-identity.md](../architecture/machine-identity.md),
-  [operators.md](../architecture/operators.md),
-  [api-surface.md](../architecture/api-surface.md),
-  [web-app.md](../architecture/web-app.md) and
-  [deployment-contract.md](../architecture/deployment-contract.md), for
-  the operator's credential and token path beside the certificate one
-  and the metrics the machine process now serves.
-- **G1b**: [agents.md](../architecture/agents.md) and
-  [machine-identity.md](../architecture/machine-identity.md)
-  §Generation and lineage, for agent tokens.
-- **G1c**: [operators.md](../architecture/operators.md) §Controller
-  proof and [agents.md](../architecture/agents.md) §Separated
-  execution.
-- **G1d** and **G2**: [adapter.md](../architecture/adapter.md) and
-  [agents.md](../architecture/agents.md) §Standalone hosts.
-- **G3**: [machine-identity.md](../architecture/machine-identity.md),
-  [operators.md](../architecture/operators.md),
-  [agents.md](../architecture/agents.md),
-  [api-surface.md](../architecture/api-surface.md),
-  [overview.md](../architecture/overview.md) and
-  [domains.md](../architecture/domains.md), with the certificate path
-  gone.
-- **G4**: [certificate-authorities.md](../architecture/certificate-authorities.md)
-  deleted (rule 5),
-  [deployment-contract.md](../architecture/deployment-contract.md)
-  without the key-encryption key,
-  [organizations.md](../architecture/organizations.md) without the
-  authority a deletion destroys, and the index.
-- **O1** pairs in the Operator's own documents.
+- #1353 pairs ADR-0102 and the index with machine identity, operators,
+  agents, adapter, messaging, API surface, deployment contract and this
+  existing plan. ADR-0100 body remains frozen; its status records
+  partial supersession for Operator long-lived credential issuance/
+  exchange and separate target enrollment only. ADR-0101 stays accepted.
+- Every Garam implementation pairs the affected responsibility sections
+  with the current wire/schema and tests. Replace unbuilt descriptions
+  with observed state only when that implementation lands.
+- Operator and Sherlock PMs own their local issue/ADR/document pairs;
+  this plan edits neither repository and assigns no fictional issues.
+- G3/G4 update all documents affected by actual removal, including
+  certificate authorities, organizations and the architecture index.
 
 ## What would stop the plan
 
-- The owner declining ADR-0100, or accepting it with changes; the plan
-  then follows the accepted text.
-- An operator garam knows of that cannot be upgraded to O1, which
-  holds G3 open indefinitely. The metric is what finds it.
-- Anything other than the machine identities found reading the
-  key-encryption key by the time G4 is reached, which leaves the key in
-  place and retires only the authorities.
+- A later owner decision revises ADR-0102's accepted protocol;
+  implementation follows its successor record rather than changing
+  this accepted direction silently.
+- Operator/Sherlock shared-contract review finds a conflicting local
+  rule. Present the conflict to the owning PM before implementation.
+- A stock client needs a proprietary assertion format, replay succeeds,
+  revocation waits for token expiry, or key material reaches a runtime.
+- Common admission requires reprovisioning an independently running
+  runtime or cannot establish scoped writer ownership and fencing.
+- Any known or idle caller lacks measured new-mode compatibility; G3
+  remains blocked, with its registration named in inventory.
+- The key-encryption key still has a reader, including message signing;
+  keep it and its storage rather than removing them under G4.

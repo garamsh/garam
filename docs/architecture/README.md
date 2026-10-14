@@ -705,3 +705,10 @@ ADRs:
   keys as a JWK Set and rotates them with overlap, and the agent
   verifies without trusting the path; garam's half is built, and the
   adapter's forwarding and Sherlock's verification are not
+- [0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)
+  — an operator proves its existing registration with
+  private_key_jwt using issued RSA PEM and Garam stores public keys;
+  managed/direct agents share admission separately from provisioning.
+  Unbuilt; supersedes 0100 only for Operator long-lived
+  credential issuance/exchange and separate target enrollment, keeping
+  token transport, fencing and existing cohorts. 0101 is unchanged.

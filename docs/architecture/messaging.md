@@ -188,3 +188,34 @@ side of it is the adapter garam ships ([adapter.md](./adapter.md)).
 The retention above is this domain's own work rather than a schedule a
 deployment carries: the sweep rides the enqueue, so a queue being
 written to is a queue being swept (ADR-0034).
+
+## Enrollment does not confer message trust
+
+**Unbuilt: common enrollment.**
+[ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)
+changes Operator API authentication and enrollment, not the queue's
+signed hand-outs or ADR-0101's issuer contract.
+
+- Agent API access proves the connector/runtime to Garam; an Operator
+  assertion proves an operator to the exchange. Neither establishes
+  the sender of incoming content at Sherlock.
+- Sherlock owns trusted issuers and authenticated `(iss, sub)`; Garam
+  keeps the message-signing private key. Enrollment supplies public
+  issuer trust separately from short-lived API access. Neither
+  long-lived signing key enters a runtime.
+- The Sherlock PM checked issuer verification and authenticated Origin
+  at `garamsh/sherlock@2281328366515c1c67a72bdf978c2266b842cdec`,
+  ADR-0026 and `signature.go`. Its ADR-0014 still places per-caller
+  authorization above Sherlock. The PM retains that boundary under
+  Option A of
+  [proposal #1067](https://github.com/garamsh/sherlock/issues/1067);
+  runtime-local sender/channel authorization needs a demonstrated gap
+  and a new owner decision, not completion of Operator exchange. Garam
+  continues deciding organization authorization and cross-org consent.
+- Keep stable message identifiers, fresh hand-out signatures, content
+  digests and durable replay/outbox rules. An assertion's one-use
+  `jti` cache is not the message redelivery record.
+
+ADR-0101 remains accepted. `internal/message/signing.go` and
+`api/machine.yaml` §message implement signed hand-outs and the public
+key set; ADR-0102 introduces no new message channel.

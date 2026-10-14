@@ -5,6 +5,7 @@ What a garam deployment must plan for that no manifest can carry: what readiness
 ## Contents
 - What it is
 - What readiness reports
+- Operator key and enrollment rollout
 - What the binary enforces about key material
 - The key-encryption key cannot be regenerated
 - The message issuer is kept for the deployment's life
@@ -120,6 +121,50 @@ readiness probe carries none of it, so that one workload takes the
 platform's default. Every other probe field —
 `failureThreshold` and `periodSeconds` among them — is the platform's
 default or the deployment's own choice, never a decision made here.
+
+## Operator key and enrollment rollout
+
+**Unbuilt.** [ADR-0102](./adr/0102-an-operator-proves-its-identity-by-private-key-jwt-and-agents-share-enrollment.md)
+requires issued Operator PEM custody and token-mode rollout; the
+current binary checks below do not yet implement that workflow.
+
+- Place each controller/control-service private key in its own
+  owner-only file via the deployment's secret mechanism, never in
+  source, an environment, image or agent/adapter/workspace mount.
+  Garam keeps public verification material only; generation/download
+  expose the key once as ADR-0102 §Operator identity and custody states.
+- Declare one external/admin writer for the stable PEM, never a
+  competing Operator certificate-renewal writer. Atomic replacement
+  and reload per exchange use `kid` from that same key snapshot.
+  Operator owns the exact owner-UID/0600 copy/mount mechanism; raw
+  projection or `fsGroup` alone meets neither proof. Token refresh
+  stays separate from supplying the private key.
+- Install the key and pinned server root before startup. Ordinary
+  access refresh uses fresh short assertions and never rotates the
+  private key. Planned key rotation installs and proves a successor
+  before withdrawing the old one; lost/compromised issuance replaces
+  immediately with no overlap. ADR-0102 defines the 24-hour maximum
+  planned overlap and next-request revocation; it is not built yet.
+- Retain `server-root.pem` for adapter TLS and Sherlock's issuer-fetch
+  `keys-ca-file`, moving consumer and mount atomically if their paths
+  change. Removing client mTLS does not remove server hostname/root
+  verification or fetch trust. The message issuer remains stable and
+  is not the OAuth token endpoint audience.
+- A direct runtime can enroll without provisioning a Kubernetes Pod
+  or Docker generation. Its one-agent connector still supplies current
+  scoped API access and writer/lifecycle fencing; this is a new path,
+  not a claim the current standalone runner already implements it.
+- Garam first accepts old and new cohorts. The Operator then cuts over
+  in one mode after support is deployed; no new Operator compatibility
+  switch is authorized. Inventory and the plan's acceptance evidence
+  gate later removals. gitops#14 and infra#331 remain owner gates.
+- Message signing still seals private keys under the key-encryption
+  key. Retiring per-organization certificate authorities alone never
+  authorizes removing that key, message trust roots or signing rows.
+
+The existing plan,
+`docs/plans/2026-10-09-machine-identity-migration.md`, names sequence
+and evidence; this decision authorizes no deployment or destruction.
 
 ## What the binary enforces about key material
 

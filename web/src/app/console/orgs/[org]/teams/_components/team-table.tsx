@@ -27,8 +27,8 @@ function columns(org: string): ColumnDef<TeamRow, unknown>[] {
       accessorFn: (team) => `${team.name} ${team.identifier}`,
       sortingFn: (a, b) => a.original.name.localeCompare(b.original.name),
       cell: ({ row: { original: team } }) => (
-        // TODO(sauce-git): drop the gap once #1402 sizes CopyId's
-        // target; it keeps that target clear of the link above it.
+        // The gap keeps the name link and the CopyId each a 24px
+        // target apart (WCAG 2.2 SC 2.5.8).
         <div className="flex min-w-0 flex-col gap-2">
           <Link
             href={`${orgHref(org, "teams")}/${team.identifier}`}

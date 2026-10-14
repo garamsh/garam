@@ -108,6 +108,9 @@ type causeRecorder interface {
 // surface.
 func writeError(w http.ResponseWriter, err error) {
 	status := wire.StatusOf(errorx.KindOf(err))
+	if errors.Is(err, errBodyTooLarge) {
+		status = http.StatusRequestEntityTooLarge
+	}
 	var exceeded *operator.Exceeded
 	if errors.As(err, &exceeded) {
 		w.Header().Set("Retry-After", strconv.Itoa(exceeded.RetryAfterSeconds()))
@@ -149,9 +152,18 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
+// errBodyTooLarge is a request body past the bound the listener puts
+// on every body (http.MaxBytesHandler at the composition root).
+// writeError answers it 413 rather than its kind's 400.
+var errBodyTooLarge = errorx.New(errorx.KindInvalidArgument, "the request body is larger than a request may carry")
+
 // decodeJSON parses a JSON request body into v.
 func decodeJSON(r *http.Request, v any) error {
 	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			return errBodyTooLarge
+		}
 		return errorx.Wrap(err, "request body", errorx.KindInvalidArgument)
 	}
 	return nil

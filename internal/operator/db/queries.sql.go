@@ -256,11 +256,10 @@ func (q *Queries) GetOperatorCredentialHolder(ctx context.Context, credentialHas
 
 const holdLiveOperatorKey = `-- name: HoldLiveOperatorKey :one
 SELECT now()::timestamptz AS decided_at
-FROM operator_keys k
-JOIN operators o ON o.grn = k.operator_grn
-WHERE k.id = $1 AND k.operator_grn = $2
-  AND k.revoked_at IS NULL AND (k.retires_at IS NULL OR k.retires_at > now())
-FOR NO KEY UPDATE OF k
+FROM operator_keys
+WHERE id = $1 AND operator_grn = $2
+  AND revoked_at IS NULL AND (retires_at IS NULL OR retires_at > now())
+FOR NO KEY UPDATE
 `
 
 type HoldLiveOperatorKeyParams struct {
@@ -278,6 +277,23 @@ func (q *Queries) HoldLiveOperatorKey(ctx context.Context, arg HoldLiveOperatorK
 	var decided_at pgtype.Timestamptz
 	err := row.Scan(&decided_at)
 	return decided_at, err
+}
+
+const holdOperatorRegistration = `-- name: HoldOperatorRegistration :one
+SELECT grn FROM operators WHERE grn = $1 FOR KEY SHARE
+`
+
+// An exchange holds its registration, and its audience's, before the
+// key or credential and the tokens, the order an issuance or a deletion
+// takes them in, so neither waits on the other while holding what the
+// other needs (#1399). KEY SHARE is the lock the token's foreign keys
+// take anyway: it waits for an issuance or a deletion of the operator,
+// and for nothing else.
+func (q *Queries) HoldOperatorRegistration(ctx context.Context, grn string) (string, error) {
+	row := q.db.QueryRow(ctx, holdOperatorRegistration, grn)
+	var grn_2 string
+	err := row.Scan(&grn_2)
+	return grn_2, err
 }
 
 const insertOperatorCredential = `-- name: InsertOperatorCredential :exec

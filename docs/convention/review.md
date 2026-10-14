@@ -83,11 +83,12 @@ Decision: approve / request changes / reject
   names the old value. Coverage the stand-in does not reach stays
   `unverified`.
 - **Reject maps to request changes.** GitHub has no `reject` review
-  state, so a reject decision is submitted as a request-changes review
-  whose decision line reads `reject` (in single-account setups, the
-  `comment` substitute per §Single-account setups). What reject does
-  that request changes does not: the reviewer closes the PR and files an
-  issue describing the right direction.
+  state in REST API versions `2022-11-28` and `2026-03-10`, so a reject
+  decision is submitted as a request-changes review whose decision line
+  reads `reject` (in single-account setups, the `comment` substitute per
+  §Single-account setups). What reject does that request changes does
+  not: the reviewer closes the PR and files an issue describing the
+  right direction.
 
 ## What each check verifies
 

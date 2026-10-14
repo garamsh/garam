@@ -36,8 +36,22 @@ function renderPolicy(policy = "d1e2f3a4b5c6d7e8") {
   );
 }
 
+/**
+ * The panel of a tab, once that tab is the one selected. Every panel
+ * is mounted, and jsdom loads no stylesheet to hide the inactive ones,
+ * so a read scoped to this panel is what says which tab it is in.
+ */
+function panelOf(name: RegExp) {
+  expect(screen.getByRole("tab", { name })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  return within(screen.getByRole("tabpanel", { name }));
+}
+
 async function openTab(name: RegExp) {
   await userEvent.setup().click(screen.getByRole("tab", { name }));
+  return panelOf(name);
 }
 
 describe("policy page", () => {
@@ -51,20 +65,21 @@ describe("policy page", () => {
     expect(
       screen.getByRole("group", { name: "Policy identifier" }),
     ).toHaveTextContent("d1e2f3a4b5c6d7e8");
+    const document = panelOf(/^Document/);
     expect(
-      screen.getByText(
+      document.getByText(
         "Active: version 1 takes part in every check it reaches.",
       ),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("Applies to Engineering (Team)."),
+      document.getByText("Applies to Engineering (Team)."),
     ).toBeInTheDocument();
     // The editor opens on the default version, v1, and nothing to
     // publish.
     expect(
-      screen.getByRole("textbox", { name: "Statement 1 action 1" }),
+      document.getByRole("textbox", { name: "Statement 1 action 1" }),
     ).toHaveValue("project:delete");
-    expect(screen.getByRole("button", { name: "Publish v3" })).toBeDisabled();
+    expect(document.getByRole("button", { name: "Publish v3" })).toBeDisabled();
     // Archiving is in the danger zone, at the end of the last tab.
     expect(container.textContent).not.toContain("grn:acme:default:group");
   });
@@ -73,17 +88,17 @@ describe("policy page", () => {
     await renderPolicy();
 
     // Presence: a tab's name carries its count.
-    await openTab(/^Versions/);
-    const current = screen.getByRole("row", { name: /^v1/ });
+    const versions = await openTab(/^Versions/);
+    const current = versions.getByRole("row", { name: /^v1/ });
     expect(within(current).getByText("Default · in use")).toBeInTheDocument();
-    const newer = screen.getByRole("row", { name: /^v2/ });
+    const newer = versions.getByRole("row", { name: /^v2/ });
     expect(
       within(newer).getByRole("button", { name: "Make v2 default" }),
     ).toBeInTheDocument();
 
-    await openTab(/^Attachments/);
+    const attachments = await openTab(/^Attachments/);
     // Presence: a row's accessible name is all of its cells.
-    const row = screen.getByRole("row", { name: /Engineering/ });
+    const row = attachments.getByRole("row", { name: /Engineering/ });
     expect(within(row).getByText("Team")).toBeInTheDocument();
     expect(
       within(row).getByRole("button", {
@@ -91,7 +106,7 @@ describe("policy page", () => {
       }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Archive policy" }),
+      attachments.getByRole("button", { name: "Archive policy" }),
     ).toBeInTheDocument();
   });
 
@@ -105,11 +120,12 @@ describe("policy page", () => {
 
     await renderPolicy();
 
+    const document = panelOf(/^Document/);
     expect(
-      screen.getByText("Draft: grants no access until it is activated."),
+      document.getByText("Draft: grants no access until it is activated."),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(
+      document.getByText(
         "Not evaluated while draft. Once active: No attachments: applies to everyone in this organization.",
       ),
     ).toBeInTheDocument();
@@ -123,21 +139,23 @@ describe("policy page", () => {
 
     await renderPolicy("0a1b2c3d4e5f6071");
 
+    const document = panelOf(/^Document/);
     expect(
-      screen.getByText(
+      document.getByText(
         "No attachments: applies to everyone in this organization.",
       ),
     ).toBeInTheDocument();
     // Presence: the warning is a sentence that goes on to say how.
-    expect(screen.getByText(/^Attaching narrows it/)).toBeInTheDocument();
+    expect(document.getByText(/^Attaching narrows it/)).toBeInTheDocument();
   });
 
   it("does not call refused attachments no attachments", async () => {
     // The control: listed as empty, the policy says it has none.
     server.use(http.get(`${DENY}/attachments`, () => HttpResponse.json([])));
     const listed = await renderPolicy();
-    await openTab(/^Attachments/);
-    expect(screen.getByText("No attachments")).toBeInTheDocument();
+    expect(
+      (await openTab(/^Attachments/)).getByText("No attachments"),
+    ).toBeInTheDocument();
     listed.unmount();
 
     server.use(
@@ -149,12 +167,14 @@ describe("policy page", () => {
     await renderPolicy();
     // Presence: the reach is a sentence that goes on to say why.
     expect(
-      screen.getByText(/may apply to everyone in this organization\.$/),
+      panelOf(/^Document/).getByText(
+        /may apply to everyone in this organization\.$/,
+      ),
     ).toBeInTheDocument();
-    await openTab(/^Attachments/);
+    const attachments = await openTab(/^Attachments/);
 
-    expect(screen.getByText("Attachments not shown")).toBeInTheDocument();
-    expect(screen.queryByText("No attachments")).not.toBeInTheDocument();
+    expect(attachments.getByText("Attachments not shown")).toBeInTheDocument();
+    expect(attachments.queryByText("No attachments")).not.toBeInTheDocument();
   });
 
   it("withdraws only the writes the server denies, and keeps the document readable", async () => {
@@ -167,31 +187,34 @@ describe("policy page", () => {
     await renderPolicy();
 
     // Denied a change, the document is shown and not offered for edit.
+    const document = panelOf(/^Document/);
     expect(
-      screen.queryByRole("button", { name: /^Publish/ }),
+      document.queryByRole("button", { name: /^Publish/ }),
     ).not.toBeInTheDocument();
     expect(
-      screen.getByText("Your access lets you read this policy, not change it."),
+      document.getByText(
+        "Your access lets you read this policy, not change it.",
+      ),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("textbox", { name: "Statement 1 action 1" }),
+      document.getByRole("textbox", { name: "Statement 1 action 1" }),
     ).toHaveAttribute("readonly");
 
-    await openTab(/^Versions/);
+    const versions = await openTab(/^Versions/);
     expect(
-      screen.queryByRole("button", { name: "Make v2 default" }),
+      versions.queryByRole("button", { name: "Make v2 default" }),
     ).not.toBeInTheDocument();
 
-    await openTab(/^Attachments/);
+    const attachments = await openTab(/^Attachments/);
     expect(
-      screen.queryByRole("button", { name: /^Detach/ }),
+      attachments.queryByRole("button", { name: /^Detach/ }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Archive policy" }),
+      attachments.queryByRole("button", { name: "Archive policy" }),
     ).not.toBeInTheDocument();
     // The control: attaching, allowed, is still offered.
     expect(
-      screen.getByRole("combobox", { name: "Team, person or agent" }),
+      attachments.getByRole("combobox", { name: "Team, person or agent" }),
     ).toBeInTheDocument();
   });
 
@@ -205,11 +228,10 @@ describe("policy page", () => {
     await renderPolicy();
 
     expect(
-      screen.getByRole("button", { name: "Publish v3" }),
+      panelOf(/^Document/).getByRole("button", { name: "Publish v3" }),
     ).toBeInTheDocument();
-    await openTab(/^Attachments/);
     expect(
-      screen.getByRole("button", {
+      (await openTab(/^Attachments/)).getByRole("button", {
         name: "Detach Deny project deletion from Engineering",
       }),
     ).toBeInTheDocument();
@@ -258,7 +280,9 @@ describe("policy page", () => {
     ).not.toBeInTheDocument();
     // The page still reads: the draft's state is said.
     expect(
-      screen.getByText("Draft: grants no access until it is activated."),
+      panelOf(/^Document/).getByText(
+        "Draft: grants no access until it is activated.",
+      ),
     ).toBeInTheDocument();
   });
 

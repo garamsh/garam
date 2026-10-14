@@ -21,23 +21,27 @@ const DENY = `${API_URL}/orgs/acme/policies/d1e2f3a4b5c6d7e8`;
 const DEFAULT_TEXT = formatPolicyDocument(denyDeletesVersions[0].document);
 
 /** The panel as the policy page holds it, under its outcome provider. */
-function renderPanel() {
-  return render(
+function panel(defaultVersion = 1, nextVersion = 3) {
+  return (
     <OutcomeProvider>
       <DocumentPanel
         org="acme"
         policy="d1e2f3a4b5c6d7e8"
         policyName="Deny project deletion"
         active
-        defaultVersion={1}
-        nextVersion={3}
+        defaultVersion={defaultVersion}
+        nextVersion={nextVersion}
         defaultText={DEFAULT_TEXT}
         reach="Applies to Engineering (Team)."
         orgWide={false}
         canUpdate
       />
-    </OutcomeProvider>,
+    </OutcomeProvider>
   );
+}
+
+function renderPanel() {
+  return render(panel());
 }
 
 /** Changes the first statement's first Action, as a person would. */
@@ -177,6 +181,42 @@ describe("document panel", () => {
 
     expect(
       await screen.findByText("Saved as v3. v1 is still the default."),
+    ).toBeInTheDocument();
+  });
+
+  it("retires a save's notice once the default it names has moved", async () => {
+    let next = 3;
+    server.use(
+      http.post(`${DENY}/versions`, () =>
+        HttpResponse.json(
+          { ...denyDeletesVersions[1], version: next++ },
+          { status: 201 },
+        ),
+      ),
+    );
+    const user = userEvent.setup();
+    const { rerender } = renderPanel();
+    await editAction(user, "project:update");
+    const save = screen.getByRole("button", {
+      name: "Save without publishing",
+    });
+    await user.click(save);
+    expect(
+      await screen.findByText("Saved as v3. v1 is still the default."),
+    ).toBeInTheDocument();
+
+    // v3 is made the default on Versions; the page renders the panel
+    // again with it.
+    rerender(panel(3, 4));
+
+    expect(
+      screen.queryByText(/is still the default\.$/),
+    ).not.toBeInTheDocument();
+    // The control: a save made under the new default says so.
+    await editAction(user, "project:read");
+    await user.click(save);
+    expect(
+      await screen.findByText("Saved as v4. v3 is still the default."),
     ).toBeInTheDocument();
   });
 

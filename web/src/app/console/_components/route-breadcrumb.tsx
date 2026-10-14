@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Fragment } from "react";
 
@@ -13,6 +12,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 
+import { IntentLink } from "./intent-link";
 import { useItemCrumb } from "./item-crumb";
 import { consoleCrumbs, parseConsolePath, type ConsoleOrg } from "./navigation";
 
@@ -39,7 +39,7 @@ export function RouteBreadcrumb({ orgs }: { orgs: ConsoleOrg[] }) {
             >
               {crumb.href ? (
                 <BreadcrumbLink asChild>
-                  <Link href={crumb.href}>{crumb.label}</Link>
+                  <IntentLink href={crumb.href}>{crumb.label}</IntentLink>
                 </BreadcrumbLink>
               ) : (
                 <BreadcrumbPage>{crumb.label}</BreadcrumbPage>

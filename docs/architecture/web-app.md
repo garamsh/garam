@@ -145,6 +145,18 @@ and no create page, since garam's templates are retired read-only
 ([ADR-0075](./adr/0075-an-agent-is-started-from-a-template-copied-once-and-carries-a-name-of-its-own.md),
 [ADR-0088](./adr/0088-garams-agent-templates-are-retired-read-only-and-not-imported.md)).
 
+The shell's links prefetch on intent, not on sight. The sidebar's
+sections and the breadcrumb are `IntentLink`s
+(`web/src/app/console/_components/intent-link.tsx`), which prefetch a
+route once the pointer rests on the link, it takes focus, or it is
+touched. Next.js prefetches every visible link by default, and on a
+console page the shell's links were most of its server work: measured
+against the built app, 19 prefetch renders per page view, against 3.5
+once the shell prefetches on intent (#1209). The cost is a link
+followed with no intent shown first, which waits for its render after
+the click: one server render and one round trip. Links in a page's own
+content, such as the overview's section cards, keep the default.
+
 What a section can do differs, and the difference is the state of the
 API behind it rather than of the console:
 

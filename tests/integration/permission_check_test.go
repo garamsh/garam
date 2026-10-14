@@ -238,6 +238,29 @@ func TestCheckPermissions_AnswersDelegationAsItsWritesDecide(t *testing.T) {
 	assert.Equal(t, http.StatusNoContent, status, "the owner withdraws it: %s", got)
 }
 
+// TestCheckPermissions_AnswersDelegationOnOperatorDelegateAlone holds
+// that what the check and the writes ask for is operator:delegate
+// itself. A policy allows the member that action and nothing else: the
+// check turns from deny to allow and the member sets the endpoint.
+// The answer before the attachment is the control.
+func TestCheckPermissions_AnswersDelegationOnOperatorDelegateAlone(t *testing.T) {
+	p := pool(t)
+	policies, engine := policyEngine(t, p)
+	s := newAuthorityStack(t, engine, p)
+	endpointPath := s.browser + "/orgs/acme/operators/hosted/control-endpoint"
+	require.Equal(t, []apigen.PermissionDecision{apigen.DecisionDeny},
+		permissionDecisions(t, s.browser, s.member, org.ActionOperatorDelegate))
+
+	delegator := activePolicy(t, policies, s.acme, "delegate-only",
+		statementDoc("delegate-only", wire.EffectAllow, org.ActionOperatorDelegate, s.acme.String()))
+	attachPolicy(t, policies, delegator, s.memberGRN)
+
+	assert.Equal(t, []apigen.PermissionDecision{apigen.DecisionAllow},
+		permissionDecisions(t, s.browser, s.member, org.ActionOperatorDelegate))
+	status, got := call(t, http.DefaultClient, http.MethodPut, endpointPath, s.member, `{"url":"https://control.example.com/garam"}`)
+	assert.Equal(t, http.StatusOK, status, "the policy lets the member set the endpoint: %s", got)
+}
+
 // TestCheckPermissions_AsksAnAgentActionOnTheAgentNamed holds that an
 // agent-targeted action is asked on the agent the pair names, as its
 // mint decides it. A policy allows the member agent:configure on one

@@ -4,7 +4,7 @@ import { garamFetchAuthenticated, parserFor } from "@/lib/garam";
 import type { PolicyDocument } from "@/lib/policy-document";
 import type { components } from "@/types/api";
 
-import { parseGrn } from "../grn";
+import { parseGrn } from "@/lib/grn";
 import { orgPath, refusableRead, type RefusableRead } from "./orgs";
 
 /**

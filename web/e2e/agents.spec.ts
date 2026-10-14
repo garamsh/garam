@@ -1,4 +1,4 @@
-import { expectHydrated } from "./axe";
+import { axeViolations, expectHydrated, useTheme } from "./axe";
 import { expect, test } from "./fixtures";
 import {
   seedArchivedTemplate,
@@ -30,10 +30,11 @@ test.describe("archived agent templates", () => {
     await expect(
       page.getByRole("heading", { level: 1, name: "Researcher", exact: true }),
     ).toBeVisible();
-    await expect(page.getByText("papers", { exact: true })).toBeVisible();
     await expect(
       page.getByText(kept.identifier, { exact: true }),
     ).toBeVisible();
+    await page.getByRole("tab", { name: "Values", exact: true }).click();
+    await expect(page.getByText("papers", { exact: true })).toBeVisible();
     await expect(page.getByRole("textbox")).toHaveCount(0);
     await expect(
       page.getByRole("link", { name: "Create agent from template" }),
@@ -41,12 +42,13 @@ test.describe("archived agent templates", () => {
 
     // The new agent page offers the control service alone: no garam
     // template and no form to define an agent in garam (ADR-0090). Its
-    // control service section is the control that the page rendered.
+    // control service step is the control that the page rendered.
     await page.goto(`${agents}/new?template=${kept.identifier}`);
     await expect(
       page.getByRole("heading", {
         level: 2,
-        name: "From the control service",
+        name: "Control service",
+        exact: true,
       }),
     ).toBeVisible();
     await expect(page.getByText("Researcher")).toHaveCount(0);
@@ -82,17 +84,18 @@ test.describe("named agents", () => {
     const identifier = await seedDefinition(signedIn, "Scout");
     await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/${identifier}`);
 
+    await page.getByRole("tab", { name: "Settings", exact: true }).click();
     const rename = page.getByLabel("Name", { exact: true });
     await expect(rename).toBeEnabled();
     await rename.fill("Ranger");
     await page.getByRole("button", { name: "Save name" }).click();
     await expect(page.getByRole("status")).toHaveText("Renamed to Ranger.");
     await page.goto(`/console/orgs/${signedIn.orgSlug}/agents`);
-    const card = page.getByRole("listitem").filter({ hasText: identifier });
+    const row = page.getByRole("row").filter({ hasText: identifier });
     await expect(
-      card.getByRole("link", { name: "Ranger", exact: true }),
+      row.getByRole("link", { name: "Ranger", exact: true }),
     ).toBeVisible();
-    await expect(card.getByText("Awaiting operator")).toBeVisible();
+    await expect(row.getByText("Awaiting operator")).toBeVisible();
   });
 
   test("a team and a policy take a defined agent by name before any claim", async ({
@@ -141,21 +144,27 @@ test.describe("named agents", () => {
 });
 
 test.describe("agents", () => {
-  test("shows a reported agent and the states its two parties reported", async ({
+  test("shows a failing reported agent first, with the states its two parties reported", async ({
     page,
     signedIn,
   }) => {
     await page.goto(`/console/orgs/${signedIn.orgSlug}/agents`);
 
+    // The seeded agent reported a failed provisioning and a lost
+    // connection, so it is listed first and said to be failing.
+    const first = page.getByRole("row").nth(1);
     await expect(
-      page.getByText(signedIn.agentIdentifier, { exact: true }),
+      first.getByText(signedIn.agentIdentifier, { exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByText(signedIn.agentProvisioningState, { exact: true }),
+      first.getByText("Provisioning failed", { exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByText(signedIn.agentRuntimeState, { exact: true }),
+      first.getByText("Disconnected", { exact: true }),
     ).toBeVisible();
+    await expect(
+      page.getByRole("alert").filter({ hasText: "agent is failing" }),
+    ).toContainText("1 agent is failing");
   });
 });
 
@@ -184,10 +193,7 @@ test.describe("cutover", () => {
     // Where definitions are listed: the roster, by identifier, and the
     // operator's page, which names an agent and prints no identifier.
     for (const [href, row] of [
-      [
-        agents,
-        (id: string) => page.getByRole("listitem").filter({ hasText: id }),
-      ],
+      [agents, (id: string) => page.getByRole("row").filter({ hasText: id })],
       [
         operator,
         (id: string) =>
@@ -215,12 +221,14 @@ test.describe("cutover", () => {
       );
     }
 
-    const archival =
-      "These settings are archival and read-only in garam; only the name still changes here.";
+    const archival = "These settings are archival and read-only in garam";
+    const track = page.getByRole("list", { name: "Cut-over" });
     await page.goto(`${agents}/${frozen}`);
-    await expect(
-      page.getByText(`Cut-over in progress. ${archival}`, { exact: true }),
-    ).toBeVisible();
+    await expect(page.getByText(archival, { exact: true })).toBeVisible();
+    await expect(track.locator('[aria-current="step"]')).toContainText(
+      "Cut-over in progress",
+    );
+    await expect(track.getByRole("button")).toHaveCount(0);
 
     await page.goto(`${agents}/${legacy}`);
     await expect(
@@ -229,18 +237,66 @@ test.describe("cutover", () => {
       }),
     ).toBeVisible();
     await expect(page.getByText(archival)).toHaveCount(0);
+    await expect(track).toHaveCount(0);
 
     // A switched definition's values are archival, and its name is the
     // one thing garam still changes (ADR-0086).
     await page.goto(`${agents}/${switched}`);
-    await expect(
-      page.getByText(`Managed by the Operator. ${archival}`, { exact: true }),
-    ).toBeVisible();
+    await expect(page.getByText(archival, { exact: true })).toBeVisible();
+    await expect(track.locator('[aria-current="step"]')).toContainText(
+      "Managed by the Operator",
+    );
     await expect(page.getByText("haiku", { exact: true })).toBeVisible();
+    await page.getByRole("tab", { name: "Settings", exact: true }).click();
     const rename = page.getByLabel("Name", { exact: true });
     await expect(rename).toBeEnabled();
     await rename.fill("Moved on");
     await page.getByRole("button", { name: "Save name" }).click();
     await expect(page.getByRole("status")).toHaveText("Renamed to Moved on.");
   });
+});
+
+test.describe("agents and templates accessibility", () => {
+  for (const theme of ["light", "dark"] as const) {
+    test(`every route in the area passes axe in the ${theme} theme`, async ({
+      page,
+      signedIn,
+    }) => {
+      await useTheme(page, theme);
+      const defined = await seedCutoverDefinition(signedIn, "Moving", "frozen");
+      const kept = await seedArchivedTemplate(signedIn, "Researcher", {
+        workspace: "papers",
+      });
+      const agents = `/console/orgs/${signedIn.orgSlug}/agents`;
+
+      // Each route, with the heading that says it rendered, and the
+      // tabs a detail page hides until they are opened.
+      const routes: [string, string, string[]][] = [
+        [agents, "Agents", []],
+        [`${agents}/${defined}`, "Moving", ["Execution", "Settings"]],
+        [`${agents}/new`, "New agent", []],
+        [`${agents}/templates`, "Templates", []],
+        [`${agents}/templates/${kept.identifier}`, "Researcher", ["Values"]],
+      ];
+      for (const [href, heading, tabs] of routes) {
+        await page.goto(href);
+        // A list's heading carries its count after the title.
+        await expect(
+          page.getByRole("heading", {
+            level: 1,
+            name: new RegExp(`^${heading}( ?\\d+)?$`),
+          }),
+        ).toBeVisible();
+        await expectHydrated(page);
+        expect(await axeViolations(page), href).toEqual([]);
+        for (const tab of tabs) {
+          await page.getByRole("tab", { name: tab, exact: true }).click();
+          await expect(
+            page.getByRole("tab", { name: tab, exact: true }),
+          ).toHaveAttribute("aria-selected", "true");
+          expect(await axeViolations(page), `${href} ${tab}`).toEqual([]);
+        }
+      }
+    });
+  }
 });

@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { GaramApiError, garamFetchAuthenticated, refusal } from "@/lib/garam";
 
-import { parseGrn } from "../grn";
+import { parseGrn } from "@/lib/grn";
 
 /**
  * What a detach control has to show: nothing yet, a refusal, or

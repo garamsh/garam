@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { garamFetchAuthenticated, refusal } from "@/lib/garam";
 
-import { slugFromGrn } from "../grn";
+import { slugFromGrn } from "@/lib/grn";
 import { OrgConsentParser, type OrgConsent } from "./orgs";
 
 /**

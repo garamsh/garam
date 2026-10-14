@@ -1,5 +1,5 @@
 import type { Agent, AgentDefinition } from "./api/orgs";
-import { slugFromGrn } from "./grn";
+import { slugFromGrn } from "@/lib/grn";
 import type { Catalog, Lookup } from "./subject";
 
 /**

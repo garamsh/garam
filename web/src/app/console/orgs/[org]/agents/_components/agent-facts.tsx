@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Fragment } from "react";
+
+import { DescriptionList } from "@/components/description-list";
 
 import { orgHref } from "../../../../_components/navigation";
 
@@ -35,16 +36,15 @@ export function OperatorName({
 export function DesiredValues({ values }: { values: Record<string, string> }) {
   const entries = Object.entries(values);
   if (entries.length === 0) {
-    return <p className="text-sm text-muted-foreground">No values.</p>;
+    return <p className="text-muted-foreground">No values.</p>;
   }
   return (
-    <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 font-mono text-xs">
-      {entries.map(([key, value]) => (
-        <Fragment key={key}>
-          <dt className="text-muted-foreground">{key}</dt>
-          <dd className="wrap-anywhere whitespace-pre-wrap">{value}</dd>
-        </Fragment>
-      ))}
-    </dl>
+    <DescriptionList
+      className="font-mono text-table"
+      items={entries.map(([key, value]) => ({
+        term: key,
+        description: <span className="whitespace-pre-wrap">{value}</span>,
+      }))}
+    />
   );
 }

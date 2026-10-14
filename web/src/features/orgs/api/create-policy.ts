@@ -9,7 +9,7 @@ import { parsePolicyDocument } from "@/lib/policy-document";
 import type { PolicyDocument } from "@/lib/policy-document";
 import type { components } from "@/types/api";
 
-import { slugFromGrn } from "../grn";
+import { slugFromGrn } from "@/lib/grn";
 import { documentRefusal, type DocumentRefusal } from "./document-refusal";
 import { PolicyParser, type Policy } from "./policies";
 

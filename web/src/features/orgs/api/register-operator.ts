@@ -11,7 +11,7 @@ import {
 } from "@/lib/operator";
 import type { components } from "@/types/api";
 
-import { slugFromGrn } from "../grn";
+import { slugFromGrn } from "@/lib/grn";
 import { RegisteredOperatorParser, type RegisteredOperator } from "./orgs";
 
 /** What the register form has to show: nothing yet, a refusal, or the

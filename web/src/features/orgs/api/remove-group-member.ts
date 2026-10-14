@@ -5,7 +5,7 @@ import { z } from "zod";
 
 import { garamFetchAuthenticated, refusal } from "@/lib/garam";
 
-import { parseGrn } from "../grn";
+import { parseGrn } from "@/lib/grn";
 
 /** What a remove control has to show: nothing yet, or a refusal. */
 export type RemoveGroupMemberState =

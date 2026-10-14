@@ -6,7 +6,7 @@ import { z } from "zod";
 import { garamFetchAuthenticated, refusal } from "@/lib/garam";
 import type { components } from "@/types/api";
 
-import { slugFromGrn } from "../grn";
+import { slugFromGrn } from "@/lib/grn";
 import { ProjectParser, type Project } from "./orgs";
 
 /**

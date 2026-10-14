@@ -25,24 +25,28 @@ import {
   type DelegationState,
 } from "@/features/orgs/actions";
 import type { DelegatedOperation, Delegation } from "@/features/orgs";
+import { DELEGATED_OPERATION_LABEL } from "@/lib/delegated-operations";
 import { useHydrated } from "@/hooks/use-hydrated";
 
 const initialState: DelegationState = { status: "idle" };
 
-/** Every operation a grant can carry, and what it lets the operator do. */
-const OPERATIONS: readonly { value: DelegatedOperation; label: string }[] = [
-  { value: "agent:create", label: "Create agents from published templates" },
-  { value: "agent:configure", label: "Configure an agent's execution" },
-  { value: "agent:activate", label: "Activate an agent's runtime generation" },
-  { value: "agent:recover", label: "Recover an agent's credential" },
-  { value: "agent-template:read", label: "Read published templates" },
-  { value: "agent-template:publish", label: "Publish template versions" },
-  { value: "execution-profile:read", label: "Read execution profiles" },
-  { value: "agent:execution-read", label: "Read an agent's execution" },
-  { value: "operator:read", label: "Read operator status" },
-];
-
-const LABEL = new Map(OPERATIONS.map((o) => [o.value, o.label]));
+/**
+ * The operations the form offers a grant, in the order it lists them,
+ * each with what it lets the operator do.
+ */
+const OPERATIONS: readonly { value: DelegatedOperation; label: string }[] = (
+  [
+    "agent:create",
+    "agent:configure",
+    "agent:activate",
+    "agent:recover",
+    "agent-template:read",
+    "agent-template:publish",
+    "execution-profile:read",
+    "agent:execution-read",
+    "operator:read",
+  ] as const
+).map((value) => ({ value, label: DELEGATED_OPERATION_LABEL[value] }));
 
 /** An operator a grant may name as a controller. */
 export type Controller = { grn: string; name: string; identifier: string };
@@ -107,7 +111,9 @@ export function DelegationForm({
               description: (
                 <ul className="flex flex-col gap-0.5">
                   {delegation.operations.map((operation) => (
-                    <li key={operation}>{LABEL.get(operation) ?? operation}</li>
+                    <li key={operation}>
+                      {DELEGATED_OPERATION_LABEL[operation]}
+                    </li>
                   ))}
                 </ul>
               ),

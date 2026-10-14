@@ -3,9 +3,24 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import AgentTemplatesPage from "@/app/console/orgs/[org]/agents/templates/page";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { renderServerComponent } from "@/testing/render";
-import { API_URL, researcher } from "@/testing/mocks/handlers";
+import {
+  API_URL,
+  answerPermissionChecks,
+  researcher,
+} from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
+import { fieldOne } from "@/testing/mocks/handlers";
+
+// The control service is read in the browser under an authority a
+// Server Action mints; the page's wiring is the subject here.
+vi.mock("@/features/orgs/actions", () => ({
+  mintOperationAuthority: async () => ({
+    status: "ok",
+    authority: "test-authority",
+  }),
+}));
 
 vi.mock("next/navigation", () => ({
   notFound: () => {
@@ -18,23 +33,22 @@ vi.mock("next/navigation", () => ({
 
 const params = { params: Promise.resolve({ org: "acme" }) };
 
+function renderPage() {
+  return renderServerComponent(AgentTemplatesPage(params), {
+    wrapper: TooltipProvider,
+  });
+}
+
 describe("agent templates view", () => {
   it("lists each archived template by name as a record, and offers no new one", async () => {
-    const { container } = await renderServerComponent(
-      AgentTemplatesPage(params),
-    );
+    const { container } = await renderPage();
 
     expect(
-      screen.getByRole("heading", { level: 1, name: "Agents" }),
+      screen.getByRole("heading", { level: 1, name: "Templates" }),
     ).toBeInTheDocument();
-    const views = screen.getByRole("navigation", { name: "Agents views" });
-    expect(
-      within(views).getByRole("link", { name: "Templates" }),
-    ).toHaveAttribute("aria-current", "page");
-    const archived = screen.getByRole("heading", {
-      level: 2,
-      name: "Archived garam templates",
-    }).parentElement!;
+    const archived = screen.getByRole("region", {
+      name: /^Archived garam templates/,
+    });
     expect(
       within(archived).getByRole("link", { name: "Researcher" }),
     ).toHaveAttribute(
@@ -51,13 +65,13 @@ describe("agent templates view", () => {
   });
 
   it("puts the control service's templates first, as the ones agents are created from", async () => {
-    await renderServerComponent(AgentTemplatesPage(params));
+    await renderPage();
 
     expect(
       screen
         .getAllByRole("heading", { level: 2 })
         .map((heading) => heading.textContent),
-    ).toEqual(["Control service templates", "Archived garam templates"]);
+    ).toEqual(["Control service templates", "Archived garam templates1"]);
   });
 
   it("tells two templates of one name apart by identifier", async () => {
@@ -73,9 +87,7 @@ describe("agent templates view", () => {
       ),
     );
 
-    const { container } = await renderServerComponent(
-      AgentTemplatesPage(params),
-    );
+    const { container } = await renderPage();
 
     const links = screen.getAllByRole("link", { name: "Researcher" });
     expect(links.map((link) => link.getAttribute("href"))).toEqual([
@@ -94,7 +106,7 @@ describe("agent templates view", () => {
       ),
     );
 
-    await renderServerComponent(AgentTemplatesPage(params));
+    await renderPage();
 
     expect(screen.getByText("No archived templates")).toBeInTheDocument();
     expect(
@@ -116,19 +128,105 @@ describe("agent templates view", () => {
     );
     // The control: answered, the same list names its template and
     // refuses nothing.
-    const allowed = await renderServerComponent(AgentTemplatesPage(params));
+    const allowed = await renderPage();
     expect(
       screen.getByRole("link", { name: "Researcher" }),
     ).toBeInTheDocument();
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("Archived templates are not listed to you"),
+    ).not.toBeInTheDocument();
     allowed.unmount();
 
     refusing = true;
-    await renderServerComponent(AgentTemplatesPage(params));
+    await renderPage();
 
-    expect(screen.getByRole("alert")).toHaveTextContent(
-      "garam refused to show this organization's templates to you.",
-    );
+    expect(
+      screen.getByText("Archived templates are not listed to you"),
+    ).toBeInTheDocument();
     expect(screen.queryByText("No archived templates")).not.toBeInTheDocument();
+  });
+
+  it("says a missing control service in its own section and links to where it is fixed", async () => {
+    await renderPage();
+
+    const control = screen.getByRole("region", {
+      name: "Control service templates",
+    });
+    expect(
+      within(control).getByText(/No control service is registered/),
+    ).toBeInTheDocument();
+    expect(
+      within(control).getByRole("link", { name: "Open operators" }),
+    ).toHaveAttribute("href", "/console/orgs/acme/operators");
+    // The archived list is unaffected.
+    expect(
+      screen.getByRole("link", { name: "Researcher" }),
+    ).toBeInTheDocument();
+  });
+
+  it("asks the server about publishing", async () => {
+    const asked: string[] = [];
+    server.use(
+      answerPermissionChecks((action) => {
+        asked.push(action);
+        return "allow";
+      }),
+    );
+
+    await renderPage();
+
+    expect(asked).toEqual(["agent-template:publish"]);
+  });
+
+  it("leaves Publish out where the server denies publishing, and offers it otherwise", async () => {
+    const endpoint = "https://control.example.test/garam";
+    const hosted = "grn:acme:default:operator:hosted";
+    server.use(
+      http.get(`${API_URL}/orgs/acme/operators`, () =>
+        HttpResponse.json([
+          fieldOne,
+          {
+            ...fieldOne,
+            grn: hosted,
+            name: "Hosted",
+            controlEndpoint: endpoint,
+          },
+        ]),
+      ),
+      http.get(`${API_URL}/orgs/acme/operators/hosted/delegation`, () =>
+        HttpResponse.json({
+          grantId: "grant-1",
+          operatorGrn: hosted,
+          controllers: [fieldOne.grn],
+          operations: ["agent-template:read", "agent-template:publish"],
+          expiresAt: "2099-01-01T00:00:00Z",
+          grantedBy: "grn:root:default:user:alice",
+          grantedAt: "2026-10-01T00:00:00Z",
+        }),
+      ),
+      http.get(`${endpoint}/v1/orgs/acme/templates`, () =>
+        HttpResponse.json({ templates: [] }),
+      ),
+    );
+    // The control: allowed, the page offers publishing.
+    const allowed = await renderPage();
+    expect(
+      await screen.findByRole("button", { name: "Publish version" }),
+    ).toBeInTheDocument();
+    allowed.unmount();
+
+    server.use(
+      answerPermissionChecks((action) =>
+        action === "agent-template:publish" ? "deny" : "allow",
+      ),
+    );
+    await renderPage();
+
+    expect(
+      await screen.findByText("No template is published."),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Publish version" }),
+    ).toBeNull();
   });
 });

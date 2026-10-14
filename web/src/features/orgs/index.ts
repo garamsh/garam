@@ -86,7 +86,7 @@ export {
   type PolicyStatus,
   type PolicyVersion,
 } from "./api/policies";
-export { parseGrn, slugFromGrn } from "./grn";
+export { parseGrn, slugFromGrn } from "@/lib/grn";
 export {
   KIND_LABEL,
   kindFromGrn,

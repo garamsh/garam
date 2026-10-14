@@ -4,7 +4,7 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { CreateFromTemplate } from "@/app/console/orgs/[org]/agents/_components/create-from-template";
-import type { HostedOperator } from "@/features/orgs";
+import type { DelegatedOperator } from "@/app/console/orgs/[org]/agents/_components/control-notice";
 import { server } from "@/testing/setup";
 
 // The authority is minted by a Server Action; what the form does with
@@ -20,7 +20,7 @@ const ENDPOINT = "https://control.example.test/garam";
 const FIRST = "grn:acme:default:operator:controller-one";
 const SECOND = "grn:acme:default:operator:controller-two";
 
-const hosted: HostedOperator = {
+const hosted: DelegatedOperator = {
   grn: "grn:acme:default:operator:hosted",
   identifier: "hosted",
   name: "Hosted",
@@ -37,7 +37,94 @@ const hosted: HostedOperator = {
   problem: null,
 };
 
+/** Answers the control service's template list with `templates`. */
+function publishedTemplates(templates: unknown[]) {
+  return http.get(`${ENDPOINT}/v1/orgs/acme/templates`, () =>
+    HttpResponse.json({ templates }),
+  );
+}
+
+function renderStep(onCreated: (created: unknown) => void = () => {}) {
+  return render(
+    <CreateFromTemplate
+      org="acme"
+      orgGrn="grn:root:default:org:acme"
+      hosted={hosted}
+      controllers={{ [FIRST]: "Controller one" }}
+      onCreated={onCreated}
+    />,
+  );
+}
+
 describe("create from template", () => {
+  it("hands the agent the control service created to the next step", async () => {
+    const created: unknown[] = [];
+    server.use(
+      publishedTemplates([
+        { name: "minimax", version: 1, profile: { name: "small", version: 1 } },
+      ]),
+      http.post(`${ENDPOINT}/v1/orgs/acme/agents`, () =>
+        HttpResponse.json({
+          agent: "grn:acme:default:agent:0123456789abcdef",
+          revision: "1",
+          epoch: "1",
+        }),
+      ),
+    );
+    const user = userEvent.setup();
+    renderStep((agent) => created.push(agent));
+
+    await user.click(
+      await screen.findByRole("button", { name: "Create from template" }),
+    );
+
+    await vi.waitFor(() =>
+      expect(created).toEqual([
+        expect.objectContaining({
+          agent: "grn:acme:default:agent:0123456789abcdef",
+          revision: "1",
+        }),
+      ]),
+    );
+  });
+
+  it("is no dead end when nothing is published: it links to Templates", async () => {
+    server.use(publishedTemplates([]));
+    renderStep();
+
+    expect(
+      await screen.findByText("No template is published yet"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Open templates" }),
+    ).toHaveAttribute("href", "/console/orgs/acme/agents/templates");
+    expect(
+      screen.queryByRole("button", { name: "Create from template" }),
+    ).toBeNull();
+  });
+
+  it("names a controller the organization has not named by its identifier, never its GRN", async () => {
+    server.use(
+      publishedTemplates([
+        { name: "minimax", version: 1, profile: { name: "small", version: 1 } },
+      ]),
+    );
+    render(
+      <CreateFromTemplate
+        org="acme"
+        orgGrn="grn:root:default:org:acme"
+        hosted={hosted}
+        controllers={{ [FIRST]: "Controller one" }}
+        onCreated={() => {}}
+      />,
+    );
+
+    const controller = await screen.findByLabelText("Controller");
+    expect(
+      Array.from((controller as HTMLSelectElement).options, (o) => o.text),
+    ).toEqual(["Controller one", "controller-two"]);
+  });
+
   it("keeps the template and controller chosen when the control service refuses", async () => {
     const posted: unknown[] = [];
     server.use(
@@ -72,6 +159,7 @@ describe("create from template", () => {
         orgGrn="grn:root:default:org:acme"
         hosted={hosted}
         controllers={{ [FIRST]: "Controller one", [SECOND]: "Controller two" }}
+        onCreated={() => {}}
       />,
     );
 

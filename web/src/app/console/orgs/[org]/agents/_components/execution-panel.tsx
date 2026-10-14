@@ -1,5 +1,7 @@
 "use client";
 
+import { DescriptionList } from "@/components/description-list";
+import { Time } from "@/components/time";
 import type { HostedOperator } from "@/features/orgs";
 import { ExecutionParser, segment } from "@/lib/operation-authority";
 
@@ -38,47 +40,53 @@ export function ExecutionPanel({
     ExecutionParser,
   );
 
-  if (blocker !== null || execution === null) {
-    return <ControlNotice>{blocker}</ControlNotice>;
-  }
-  if (execution.status === "loading") {
-    return <ControlNotice>Reading the agent&apos;s execution…</ControlNotice>;
+  if (blocker !== null) return <ControlNotice org={org} {...blocker} />;
+  if (execution === null || execution.status === "loading") {
+    return (
+      <p role="status" className="text-muted-foreground">
+        Reading the agent&apos;s execution…
+      </p>
+    );
   }
   if (execution.status !== "ok") {
     return (
-      <ControlNotice>
-        {execution.status === "unavailable" ? UNAVAILABLE : execution.message}
-      </ControlNotice>
+      <ControlNotice
+        org={org}
+        reason={
+          execution.status === "unavailable" ? UNAVAILABLE : execution.message
+        }
+      />
     );
   }
   const { desired, rendered, effective } = execution.data;
   return (
-    <dl className="grid max-w-2xl grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
-      <dt className="text-muted-foreground">Desired</dt>
-      <dd>
-        Revision {desired.revision}
-        {desired.pending ? " (pending)" : ""}
-      </dd>
-      <dt className="text-muted-foreground">Rendered</dt>
-      <dd>
-        {rendered === null
-          ? "Not rendered yet"
-          : `Revision ${rendered.revision}`}
-      </dd>
-      <dt className="text-muted-foreground">Effective</dt>
-      <dd>
-        {effective === null ? (
-          "No runtime report"
-        ) : (
-          <>
-            Revision {effective.revision}, generation{" "}
-            <span className="font-mono">{effective.generation}</span>, reported{" "}
-            <time dateTime={effective.observedAt}>
-              {effective.observedAt.slice(0, 16).replace("T", " ")} UTC
-            </time>
-          </>
-        )}
-      </dd>
-    </dl>
+    <DescriptionList
+      items={[
+        {
+          term: "Desired",
+          description: `Revision ${desired.revision}${desired.pending ? " (pending)" : ""}`,
+        },
+        {
+          term: "Rendered",
+          description:
+            rendered === null
+              ? "Not rendered yet"
+              : `Revision ${rendered.revision}`,
+        },
+        {
+          term: "Effective",
+          description:
+            effective === null ? (
+              "No runtime report"
+            ) : (
+              <>
+                Revision {effective.revision}, generation{" "}
+                <span className="font-mono">{effective.generation}</span>,
+                reported <Time value={effective.observedAt} />
+              </>
+            ),
+        },
+      ]}
+    />
   );
 }

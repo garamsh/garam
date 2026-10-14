@@ -3,11 +3,11 @@
 import Link from "next/link";
 import { useState } from "react";
 
+import { Banner } from "@/components/banner";
+import { FormField } from "@/components/form-field";
 import { KeptSelect } from "@/components/kept-select";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { mintOperationAuthority } from "@/features/orgs/actions";
-import type { HostedOperator } from "@/features/orgs";
 import {
   CreatedParser,
   TemplatesParser,
@@ -15,32 +15,47 @@ import {
   segment,
 } from "@/lib/operation-authority";
 
-import { ControlNotice, UNAVAILABLE, controlBlocker } from "./control-notice";
+import {
+  ControlNotice,
+  UNAVAILABLE,
+  type DelegatedOperator,
+} from "./control-notice";
 import { useControlRead } from "./use-control-read";
+
+/** The last segment of a GRN, which the console shows in its place. */
+export function identifierOf(grn: string): string {
+  return grn.split(":").at(-1) ?? grn;
+}
+
+/** The agent a control service created, as its answer named it. */
+export type CreatedAgent = { agent: string; revision: string };
 
 type Outcome =
   | { status: "idle" }
-  | { status: "error"; message: string }
-  | { status: "created"; agent: string; revision: string };
+  | { status: "invalid" }
+  | { status: "refused"; message: string };
 
 /**
  * Creates an agent from a template version the hosted operator's
  * control service published (#1170). The control service copies that
  * version into the agent's first revision once; publishing a later
  * version never reaches it. Creating needs `agent:create` and the
- * template list `agent-template:read`, and neither grants the other.
+ * template list `agent-template:read`, and neither grants the other;
+ * the caller has already checked the grant carries both.
  */
 export function CreateFromTemplate({
   org,
   orgGrn,
   hosted,
   controllers,
+  onCreated,
 }: {
   org: string;
   orgGrn: string;
-  hosted: HostedOperator | null;
+  hosted: DelegatedOperator;
   /** Names for the controllers the delegation lists. */
   controllers: Readonly<Record<string, string>>;
+  onCreated: (created: CreatedAgent) => void;
 }) {
   const [outcome, setOutcome] = useState<Outcome>({ status: "idle" });
   const [pending, setPending] = useState(false);
@@ -48,49 +63,61 @@ export function CreateFromTemplate({
   // time to name.
   const [templateChoice, setTemplateChoice] = useState<string | null>(null);
   const [controllerChoice, setControllerChoice] = useState<string | null>(null);
-  const blocker =
-    controlBlocker(hosted, "agent:create") ??
-    controlBlocker(hosted, "agent-template:read");
   const templates = useControlRead(
     org,
     "agent-template:read",
-    hosted !== null && blocker === null
-      ? {
-          endpoint: hosted.endpoint,
-          audience: hosted.grn,
-          path: `/v1/orgs/${segment(org)}/templates`,
-          target: orgGrn,
-        }
-      : null,
+    {
+      endpoint: hosted.endpoint,
+      audience: hosted.grn,
+      path: `/v1/orgs/${segment(org)}/templates`,
+      target: orgGrn,
+    },
     TemplatesParser,
   );
 
-  if (blocker !== null || hosted === null || hosted.delegation === null) {
-    return <ControlNotice>{blocker}</ControlNotice>;
-  }
   if (templates === null || templates.status === "loading") {
     return (
-      <ControlNotice>Reading {hosted.name}&apos;s templates…</ControlNotice>
+      <p role="status" className="text-muted-foreground">
+        Reading {hosted.name}&apos;s templates…
+      </p>
     );
   }
   if (templates.status !== "ok") {
     return (
-      <ControlNotice>
-        {templates.status === "unavailable" ? UNAVAILABLE : templates.message}
-      </ControlNotice>
+      <ControlNotice
+        org={org}
+        reason={
+          templates.status === "unavailable" ? UNAVAILABLE : templates.message
+        }
+      />
     );
   }
   const published = templates.data.templates;
   const delegated = hosted.delegation.controllers;
+  if (published.length === 0) {
+    return (
+      <Banner
+        tone="info"
+        title="No template is published yet"
+        action={
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/console/orgs/${org}/agents/templates`}>
+              Open templates
+            </Link>
+          </Button>
+        }
+      >
+        An agent starts from a template version {hosted.name} published. Publish
+        one under Templates, then come back here.
+      </Banner>
+    );
+  }
 
   async function create(form: FormData) {
     const chosen = published.find((t) => t.name === form.get("template"));
     const controller = String(form.get("controller") ?? "");
-    if (!chosen || !delegated.includes(controller) || hosted === null) {
-      setOutcome({
-        status: "error",
-        message: "Choose a template and a controller.",
-      });
+    if (!chosen || !delegated.includes(controller)) {
+      setOutcome({ status: "invalid" });
       return;
     }
     setPending(true);
@@ -116,75 +143,69 @@ export function CreateFromTemplate({
       mintOperationAuthority,
     );
     setPending(false);
-    setOutcome(
-      result.status === "ok"
-        ? { status: "created", ...result.data }
-        : {
-            status: "error",
-            message:
-              result.status === "unavailable" ? UNAVAILABLE : result.message,
-          },
-    );
+    if (result.status === "ok") {
+      onCreated(result.data);
+      return;
+    }
+    setOutcome({
+      status: "refused",
+      message: result.status === "unavailable" ? UNAVAILABLE : result.message,
+    });
   }
 
-  if (outcome.status === "created") {
-    const identifier = outcome.agent.split(":").at(-1) ?? outcome.agent;
-    return (
-      <p role="status" className="text-sm">
-        Created{" "}
-        <Link
-          href={`/console/orgs/${org}/agents/${identifier}`}
-          className="font-mono underline-offset-4 hover:underline"
-        >
-          {identifier}
-        </Link>{" "}
-        at revision {outcome.revision}. It keeps the template version it copied.
-      </p>
-    );
-  }
   return (
-    <form action={create} className="flex max-w-2xl flex-col gap-3">
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="create-template">Template</Label>
-        <KeptSelect
-          id="create-template"
-          name="template"
-          value={templateChoice ?? published[0]?.name ?? ""}
-          onChange={(event) => setTemplateChoice(event.target.value)}
-          className="max-w-sm"
-        >
-          {published.map((t) => (
-            <option key={t.name} value={t.name}>
-              {t.name} version {t.version}
-            </option>
-          ))}
-        </KeptSelect>
-      </div>
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="create-controller">Controller</Label>
-        <KeptSelect
-          id="create-controller"
-          name="controller"
-          value={controllerChoice ?? delegated[0] ?? ""}
-          onChange={(event) => setControllerChoice(event.target.value)}
-          className="max-w-sm"
-        >
-          {delegated.map((c) => (
-            <option key={c} value={c}>
-              {controllers[c] ?? c}
-            </option>
-          ))}
-        </KeptSelect>
-      </div>
-      {outcome.status === "error" && (
-        <p role="alert" className="text-sm text-destructive">
-          {outcome.message}
-        </p>
-      )}
-      <div>
-        <Button type="submit" disabled={pending || published.length === 0}>
+    <form action={create} className="flex max-w-md flex-col gap-4">
+      <FormField
+        label="Template"
+        hint="The version is copied once; a later version never changes the agent."
+        error={outcome.status === "invalid" ? "Choose a template." : undefined}
+      >
+        {(control) => (
+          <KeptSelect
+            {...control}
+            name="template"
+            value={templateChoice ?? published[0]?.name ?? ""}
+            onChange={(event) => setTemplateChoice(event.target.value)}
+          >
+            {published.map((t) => (
+              <option key={t.name} value={t.name}>
+                {t.name} version {t.version}
+              </option>
+            ))}
+          </KeptSelect>
+        )}
+      </FormField>
+      <FormField
+        label="Controller"
+        hint={`The operators ${hosted.name}'s delegation lets it place an agent on.`}
+        error={
+          outcome.status === "invalid" ? "Choose a controller." : undefined
+        }
+      >
+        {(control) => (
+          <KeptSelect
+            {...control}
+            name="controller"
+            value={controllerChoice ?? delegated[0] ?? ""}
+            onChange={(event) => setControllerChoice(event.target.value)}
+          >
+            {delegated.map((c) => (
+              <option key={c} value={c}>
+                {controllers[c] ?? identifierOf(c)}
+              </option>
+            ))}
+          </KeptSelect>
+        )}
+      </FormField>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button type="submit" disabled={pending}>
           {pending ? "Creating…" : "Create from template"}
         </Button>
+        {outcome.status === "refused" && (
+          <p role="alert" className="text-danger">
+            {outcome.message}
+          </p>
+        )}
       </div>
     </form>
   );

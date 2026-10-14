@@ -299,9 +299,10 @@ test.describe("control service, as contract tests against the agreed Operator wi
     );
 
     await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/templates`);
+    const published = page.getByRole("table", { name: "Published templates" });
     await expect(
-      page.getByText("version 1, profile small version 1", { exact: true }),
-    ).toBeVisible();
+      published.getByRole("row", { name: /web agent/ }),
+    ).toContainText("small version 1");
     await expect(
       page.getByText(
         /small version 1\. Profiles are published by the deployment/,
@@ -314,18 +315,29 @@ test.describe("control service, as contract tests against the agreed Operator wi
       page.getByText("reference model-keys/web", { exact: true }),
     ).toBeVisible();
 
+    // The next version starts from the one on screen.
     await page
+      .getByRole("button", { name: "Start a new version from this" })
+      .click();
+    const dialog = page.getByRole("dialog", {
+      name: "Publish a template version",
+    });
+    await dialog
       .getByLabel("Ego", { exact: true })
       .fill("Answers web questions briefly.");
-    await page
+    await dialog
       .getByRole("button", { name: "Publish version", exact: true })
       .click();
     await expect(
       page.getByText(/^Published web agent version 2\./),
     ).toBeVisible();
+    await expect(dialog).toBeHidden();
     await expect(
-      page.getByText("version 2, profile small version 1", { exact: true }),
-    ).toBeVisible();
+      published
+        .getByRole("row", { name: /web agent/ })
+        .getByRole("cell")
+        .nth(1),
+    ).toHaveText("2");
 
     const orgGrn = `grn:root:default:org:${signedIn.orgSlug}`;
     const list = received.find((r) => r.url.pathname === `${base}/templates`)!;
@@ -405,6 +417,12 @@ test.describe("control service, as contract tests against the agreed Operator wi
     await expect(
       page.getByText("No template is published.", { exact: true }),
     ).toBeVisible();
+    await page
+      .getByRole("button", { name: "Publish version", exact: true })
+      .click();
+    const dialog = page.getByRole("dialog", {
+      name: "Publish a template version",
+    });
     const fields: [string, string][] = [
       ["Template", "minimax"],
       ["Profile", "small"],
@@ -415,9 +433,9 @@ test.describe("control service, as contract tests against the agreed Operator wi
       ["API key reference", "minimax/key"],
     ];
     for (const [label, value] of fields) {
-      await page.getByLabel(label, { exact: true }).fill(value);
+      await dialog.getByLabel(label, { exact: true }).fill(value);
     }
-    const publish = page.getByRole("button", {
+    const publish = dialog.getByRole("button", {
       name: "Publish version",
       exact: true,
     });
@@ -438,10 +456,10 @@ test.describe("control service, as contract tests against the agreed Operator wi
 
     // The control: the same model, naming the embedding, is published.
     // Only the embedding is typed: the refusal left the rest as typed.
-    await page
+    await dialog
       .getByLabel("Embedding base URL", { exact: true })
       .fill(EMBEDDING.baseUrl);
-    await page
+    await dialog
       .getByLabel("Embedding model name", { exact: true })
       .fill(EMBEDDING.name);
     await publish.click();
@@ -537,9 +555,17 @@ test.describe("control service, as contract tests against the agreed Operator wi
       profile: { name: "small", version: 1 },
     });
 
+    await expect(
+      page.getByRole("group", { name: "Agent identifier" }),
+    ).toContainText(signedIn.agentIdentifier);
     await page
-      .getByRole("link", { name: signedIn.agentIdentifier, exact: true })
+      .getByRole("link", { name: "Open the agent", exact: true })
       .click();
+    const executionTab = page.getByRole("tab", {
+      name: "Execution",
+      exact: true,
+    });
+    await executionTab.click();
     await expect(
       page.getByText("Revision 1 (pending)", { exact: true }),
     ).toBeVisible();
@@ -556,6 +582,7 @@ test.describe("control service, as contract tests against the agreed Operator wi
 
     reported = true;
     await page.reload();
+    await executionTab.click();
     await expect(page.getByText("Revision 1 (pending)")).toBeHidden();
     await expect(
       page.getByText("0123456789abcdef0123456789abcdef", { exact: true }),
@@ -589,19 +616,17 @@ test.describe("control service, as contract tests against the agreed Operator wi
       page.getByRole("button", { name: "Create from template" }),
     ).toBeHidden();
     await expect(
-      page.getByRole("heading", {
-        level: 2,
-        name: "From the control service",
-      }),
+      page.getByRole("heading", { level: 2, name: "Template", exact: true }),
     ).toBeVisible();
 
     await page.goto(
       `/console/orgs/${signedIn.orgSlug}/agents/${signedIn.agentIdentifier}`,
     );
-    await expect(unavailable).toBeVisible();
     await expect(
-      page.getByText(signedIn.agentProvisioningState, { exact: true }),
+      page.getByText("Provisioning failed", { exact: true }).first(),
     ).toBeVisible();
+    await page.getByRole("tab", { name: "Execution", exact: true }).click();
+    await expect(unavailable).toBeVisible();
 
     await page.goto(`/console/orgs/${signedIn.orgSlug}/teams`);
     await expect(
@@ -629,6 +654,7 @@ test.describe("control service, as contract tests against the agreed Operator wi
 
     // The control: the owner, whom nothing denies, meets no refusal on
     // the same page.
+    const execution = page.getByRole("tab", { name: "Execution", exact: true });
     await page.goto(agentPage);
     await expect(
       // A control service's agent has no definition, so no name.
@@ -637,6 +663,10 @@ test.describe("control service, as contract tests against the agreed Operator wi
         name: "Unnamed agent",
         exact: true,
       }),
+    ).toBeVisible();
+    await execution.click();
+    await expect(
+      page.getByText("The control service is unavailable", { exact: false }),
     ).toBeVisible();
     await expect(page.getByText(refused, { exact: true })).toBeHidden();
 
@@ -659,6 +689,8 @@ test.describe("control service, as contract tests against the agreed Operator wi
     // without the deny, so the page is read again until it is in force.
     await expect(async () => {
       await page.goto(agentPage);
+      // The refusal is the Execution tab's, which a reload closes.
+      await execution.click();
       await expect(page.getByText(refused, { exact: true })).toBeVisible({
         timeout: 1_000,
       });
@@ -672,7 +704,7 @@ test.describe("control service, as contract tests against the agreed Operator wi
       }),
     ).toBeVisible();
     await expect(
-      page.getByText(signedIn.agentProvisioningState, { exact: true }),
+      page.getByText("Provisioning failed", { exact: true }).first(),
     ).toBeVisible();
 
     await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/templates`);
@@ -685,7 +717,8 @@ test.describe("control service, as contract tests against the agreed Operator wi
     await expect(
       page.getByRole("heading", {
         level: 2,
-        name: "From the control service",
+        name: "Control service",
+        exact: true,
       }),
     ).toBeVisible();
     await expect(page.getByText(refused, { exact: true })).toBeVisible();
@@ -725,6 +758,7 @@ test.describe("control service, as contract tests against the agreed Operator wi
         exact: true,
       }),
     ).toBeVisible();
+    await page.getByRole("tab", { name: "Execution", exact: true }).click();
     await expect(page.getByText(failed, { exact: true })).toBeVisible();
 
     await page.goto(`/console/orgs/${signedIn.orgSlug}/agents/templates`);
@@ -737,7 +771,8 @@ test.describe("control service, as contract tests against the agreed Operator wi
     await expect(
       page.getByRole("heading", {
         level: 2,
-        name: "From the control service",
+        name: "Control service",
+        exact: true,
       }),
     ).toBeVisible();
     await expect(page.getByText(failed, { exact: true })).toBeVisible();

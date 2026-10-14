@@ -2,9 +2,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { CopyId } from "@/components/copy-id";
+import { Banner } from "@/components/banner";
+import { DescriptionList } from "@/components/description-list";
+import { StageTrack } from "@/components/stage-track";
+import { StatusDot } from "@/components/status-dot";
+import { Time } from "@/components/time";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import {
   UNNAMED_AGENT,
   getAgentDefinition,
@@ -14,18 +17,24 @@ import {
   lookupAgents,
   lookupOperators,
   slugFromGrn,
+  type Agent,
   type AgentDefinition,
 } from "@/features/orgs";
+import { checkPermissions } from "@/lib/permission-check";
 
 import { ApiUnreachable } from "../../../../_components/api-unreachable";
-import { ArchivalNotice } from "../../../../_components/cutover-marker";
+import { CUTOVER_STAGE_LABEL } from "../../../../_components/cutover-marker";
 import { ItemCrumb } from "../../../../_components/item-crumb";
 import { orgHref } from "../../../../_components/navigation";
 import { PageHeader } from "../../../../_components/page-header";
+import {
+  DetailPage,
+  type DetailTab,
+} from "../../../../_components/templates/detail-page";
 import { DesiredValues, OperatorName } from "../_components/agent-facts";
+import { reportedDots, type AgentDot } from "../_components/agent-status";
 import { ControlNotice } from "../_components/control-notice";
 import { ExecutionPanel } from "../_components/execution-panel";
-import { ReportedState } from "../_components/reported-state";
 import { RenameAgentForm } from "./_components/rename-agent-form";
 
 /** Head metadata for an agent's route; Next.js reads it by name. */
@@ -33,28 +42,46 @@ export const metadata: Metadata = { title: "Agent — garam" };
 
 type Params = { params: Promise<{ org: string; agent: string }> };
 
+/** A cutover's stages in the order an agent passes them (ADR-0086). */
+const CUTOVER_STAGES = [
+  { id: "legacy", label: "Defined in garam" },
+  { id: "frozen", label: CUTOVER_STAGE_LABEL.frozen },
+  { id: "switched", label: CUTOVER_STAGE_LABEL.switched },
+] as const;
+
 /**
  * One agent: what the organization asked for where garam holds a
  * definition, what operators have reported (ADR-0075), and the
- * execution its hosted operator's control service holds (#1170). An
- * agent a control service created has no definition in garam, so its
- * page carries the report and the execution alone; an identifier
- * neither names answers 404. The organization is read for itself, so
- * one the caller cannot read answers 404 (ADR-0011); inside it, a
- * refused definition says so. A control service that is missing or
- * unavailable disables only the execution section.
+ * execution its hosted operator's control service holds (#1170), each
+ * under a tab of its own, with the rename under Settings. An agent a
+ * control service created has no definition in garam, so its page
+ * carries the report and the execution alone; an identifier neither
+ * names answers 404. The organization is read for itself, so one the
+ * caller cannot read answers 404 (ADR-0011); inside it, a refused
+ * definition says so. A control service that is missing or unavailable
+ * disables only the Execution tab. The rename is asked of the server
+ * and left out only where it says no (ADR-0103).
  */
 export default async function AgentPage({ params }: Params) {
   const { org, agent } = await params;
-  const [organization, definition, agents, operators, hosted] =
+  const [organization, definition, agents, operators, hosted, permissions] =
     await Promise.all([
       getOrg(org),
       getAgentDefinition(org, agent),
       lookupAgents(org),
       lookupOperators(org),
       listHostedOperators(org),
+      checkPermissions(org, {
+        rename: {
+          action: "agent:rename",
+          resource: { type: "agent", id: agent },
+        },
+      }),
     ]);
 
+  const fallback = (
+    <PageHeader title="Agent" description="An agent of this organization." />
+  );
   if (
     organization.status === "unreachable" ||
     definition.status === "unreachable" ||
@@ -63,10 +90,7 @@ export default async function AgentPage({ params }: Params) {
   ) {
     return (
       <>
-        <PageHeader
-          title="Agent"
-          description="An agent of this organization."
-        />
+        {fallback}
         <ApiUnreachable subject="this agent" />
       </>
     );
@@ -74,13 +98,11 @@ export default async function AgentPage({ params }: Params) {
   if (definition.status === "forbidden") {
     return (
       <>
-        <PageHeader
-          title="Agent"
-          description="An agent of this organization."
-        />
-        <p role="alert" className="text-sm text-muted-foreground">
-          garam refused to show this agent to you.
-        </p>
+        {fallback}
+        <Banner tone="warn" title="This agent is not shown to you">
+          garam refused to show this agent to you. An owner or admin of the
+          organization can grant it.
+        </Banner>
       </>
     );
   }
@@ -96,24 +118,105 @@ export default async function AgentPage({ params }: Params) {
   if (definition.data === null && reported === undefined) notFound();
   const agentGrn = definition.data?.agentGrn ?? reported?.grn ?? "";
   // An agent a control service created carries no name in garam, and
-  // its identifier is never put in a name's place: it is offered to copy
-  // beside the title instead.
+  // its identifier is never put in a name's place: the header offers
+  // it to copy beside the name instead.
   const name = definition.data?.name || UNNAMED_AGENT;
-  const assignee = reported?.assignment?.assigneeGrn;
+  const dots = reportedDots(
+    agents.status === "forbidden"
+      ? "unchecked"
+      : reported
+        ? "reported"
+        : "awaiting",
+    reported,
+  );
+
+  const tabs: DetailTab[] = [
+    {
+      value: "overview",
+      label: "Overview",
+      content: (
+        <>
+          <Reported dots={dots} agent={reported} />
+          {definition.data === null ? (
+            <Banner tone="info" title="No definition in garam">
+              A control service created this agent. garam holds what its
+              operator reports, and no definition.
+            </Banner>
+          ) : (
+            <Requested
+              org={org}
+              definition={definition.data}
+              operatorName={
+                operators.status === "ok"
+                  ? operators.data.find(
+                      (operator) =>
+                        operator.grn === definition.data?.operatorGrn,
+                    )?.name
+                  : undefined
+              }
+            />
+          )}
+        </>
+      ),
+    },
+    {
+      value: "execution",
+      label: "Execution",
+      content: (
+        <Section
+          title="Execution"
+          description="What the hosted operator's control service holds for this agent."
+        >
+          {hosted.status === "ok" ? (
+            <ExecutionPanel
+              org={org}
+              agentGrn={agentGrn}
+              hosted={hostedFor(
+                hosted.data,
+                "agent:execution-read",
+                reported?.assignment?.assigneeGrn,
+              )}
+            />
+          ) : (
+            <ControlNotice org={org} reason={hosted.reason} fixAt={null} />
+          )}
+        </Section>
+      ),
+    },
+  ];
+  if (definition.data !== null && permissions.get("rename") !== "denied") {
+    tabs.push({
+      value: "settings",
+      label: "Settings",
+      content: (
+        <Section
+          title="Name"
+          description="The organization's word for this agent. Its identifier, operator and values stay as they are."
+        >
+          <RenameAgentForm
+            org={org}
+            agent={agent}
+            name={definition.data.name}
+          />
+        </Section>
+      ),
+    });
+  }
 
   return (
     <>
       <ItemCrumb label={name} />
-      <PageHeader
-        title={name}
-        description={
-          definition.data === null
-            ? "Created by a control service. garam holds what its operator reports, and no definition."
-            : "An agent this organization defined."
+      <DetailPage
+        name={name}
+        idLabel="Agent identifier"
+        id={agent}
+        status={
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <StatusDot {...dots.provisioning} />
+            <StatusDot {...dots.runtime} />
+          </span>
         }
-      >
-        <div className="flex flex-wrap items-center gap-3">
-          <CopyId value={agent} label={name} />
+        actions={
           <Button asChild variant="outline">
             <Link
               href={`${orgHref(org, "permissions")}/attachments?subject=${encodeURIComponent(`agent:${agent}`)}`}
@@ -121,105 +224,132 @@ export default async function AgentPage({ params }: Params) {
               Manage policies
             </Link>
           </Button>
-        </div>
-      </PageHeader>
-
-      <section className="flex flex-col gap-3">
-        <h2 className="font-heading text-lg font-semibold">Reported</h2>
-        <ReportedState
-          reported={
-            agents.status === "forbidden"
-              ? "unchecked"
-              : reported
-                ? "reported"
-                : "awaiting"
-          }
-          agent={reported}
-        />
-      </section>
-
-      <section className="flex flex-col gap-3">
-        <h2 className="font-heading text-lg font-semibold">Execution</h2>
-        {hosted.status === "ok" ? (
-          <ExecutionPanel
-            org={org}
-            agentGrn={agentGrn}
-            hosted={hostedFor(hosted.data, "agent:execution-read", assignee)}
-          />
-        ) : (
-          <ControlNotice>{hosted.reason}</ControlNotice>
-        )}
-      </section>
-
-      {definition.data !== null && (
-        <Requested
-          org={org}
-          agent={agent}
-          definition={definition.data}
-          operatorName={
-            operators.status === "ok"
-              ? operators.data.find(
-                  (operator) => operator.grn === definition.data?.operatorGrn,
-                )?.name
-              : undefined
-          }
-        />
-      )}
+        }
+        tabs={tabs}
+      />
     </>
   );
 }
 
+/** A titled card holding one part of a tab. */
+function Section({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="flex flex-col gap-3 rounded-xl border bg-card p-4">
+      <div className="flex flex-col gap-1">
+        <h2 className="text-base">{title}</h2>
+        <p className="text-muted-foreground">{description}</p>
+      </div>
+      {children}
+    </section>
+  );
+}
+
 /**
- * What the organization asked for, and renaming it. A definition whose
- * agent is cutting over or cut over to the Operator keeps its values as
- * an archive no one edits, and its name alone still changes (ADR-0086).
+ * What operators and the agent itself reported, apart from what the
+ * organization asked for (ADR-0053). `Last report` is when one last
+ * landed — nothing expires one.
+ */
+function Reported({
+  dots,
+  agent,
+}: {
+  dots: { provisioning: AgentDot; runtime: AgentDot };
+  agent: Agent | undefined;
+}) {
+  return (
+    <Section
+      title="Reported"
+      description="What the operator and the agent itself last reported."
+    >
+      <DescriptionList
+        items={[
+          {
+            term: "Provisioning",
+            description: <StatusDot {...dots.provisioning} />,
+          },
+          { term: "Runtime", description: <StatusDot {...dots.runtime} /> },
+          {
+            term: "Last report",
+            description:
+              agent === undefined ? (
+                <span className="text-muted-foreground">None</span>
+              ) : (
+                <Time value={agent.updatedAt} />
+              ),
+          },
+        ]}
+      />
+    </Section>
+  );
+}
+
+/**
+ * What the organization asked for. A definition whose agent is cutting
+ * over or cut over to the Operator keeps its values as an archive no
+ * one edits, and only its name still changes (ADR-0086); where its
+ * cutover stands is shown as a track with no control on it.
  */
 function Requested({
   org,
-  agent,
   definition,
   operatorName,
 }: {
   org: string;
-  agent: string;
   definition: AgentDefinition;
   operatorName: string | undefined;
 }) {
-  const { name, operatorGrn, values, createdAt, cutover } = definition;
+  const { operatorGrn, values, createdAt, cutover } = definition;
   return (
-    <>
-      <section className="flex flex-col gap-3">
-        <h2 className="font-heading text-lg font-semibold">Requested</h2>
-        <dl className="grid max-w-2xl grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
-          <dt className="text-muted-foreground">Operator</dt>
-          <dd>
-            <OperatorName
-              org={org}
-              identifier={slugFromGrn(operatorGrn)}
-              name={operatorName}
-            />
-          </dd>
-          <dt className="text-muted-foreground">Created</dt>
-          <dd>
-            <time dateTime={createdAt}>{createdAt.slice(0, 10)}</time>
-          </dd>
-        </dl>
-        <h3 className="text-sm font-medium">Settings</h3>
-        <DesiredValues values={values} />
-        {cutover === null ? (
-          <p className="max-w-2xl text-sm text-muted-foreground">
-            Saved values; application is not reported.
-          </p>
-        ) : (
-          <ArchivalNotice cutover={cutover} />
-        )}
-      </section>
-
-      <Separator />
-      <section className="flex flex-col gap-3">
-        <h2 className="font-heading text-lg font-semibold">Rename</h2>
-        <RenameAgentForm org={org} agent={agent} name={name} />
-      </section>
-    </>
+    <Section
+      title="Requested"
+      description="What this organization defined for the agent."
+    >
+      <DescriptionList
+        items={[
+          {
+            term: "Operator",
+            description: (
+              <OperatorName
+                org={org}
+                identifier={slugFromGrn(operatorGrn)}
+                name={operatorName}
+              />
+            ),
+          },
+          { term: "Defined", description: <Time value={createdAt} /> },
+        ]}
+      />
+      {cutover !== null && (
+        <>
+          <StageTrack
+            label="Cut-over"
+            stages={CUTOVER_STAGES}
+            current={cutover.stage}
+          />
+          <Banner
+            tone="info"
+            title="These settings are archival and read-only in garam"
+          >
+            {CUTOVER_STAGE_LABEL[cutover.stage]}. Only the name still changes
+            here.
+          </Banner>
+        </>
+      )}
+      <h3 className="font-medium">Values</h3>
+      <DesiredValues values={values} />
+      {cutover === null && (
+        <p className="text-muted-foreground">
+          Saved values; application is not reported.
+        </p>
+      )}
+    </Section>
   );
 }

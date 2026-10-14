@@ -40,9 +40,11 @@ describe("rename agent form", () => {
     await enter(user, name, "Ranger");
     await user.click(form.getByRole("button", { name: "Save name" }));
 
-    expect(await form.findByRole("alert")).toHaveTextContent(
-      REFUSAL_COPY.permissionDenied,
+    // The refusal is the name field's error, read with it.
+    await vi.waitFor(() =>
+      expect(name).toHaveAccessibleDescription(REFUSAL_COPY.permissionDenied),
     );
+    expect(name).toHaveAttribute("aria-invalid", "true");
     expect(name).toHaveValue("Ranger");
 
     // The control: accepted, the same name is saved and said to be.
@@ -52,7 +54,8 @@ describe("rename agent form", () => {
     expect(await form.findByRole("status")).toHaveTextContent(
       "Renamed to Ranger.",
     );
-    expect(form.queryByRole("alert")).not.toBeInTheDocument();
+    expect(name).not.toHaveAttribute("aria-invalid");
+    expect(form.queryByText(REFUSAL_COPY.permissionDenied)).toBeNull();
     // Both attempts carried the name as typed.
     expect(posted).toEqual([{ name: "Ranger" }, { name: "Ranger" }]);
   });

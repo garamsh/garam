@@ -5,7 +5,7 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import { PublishTemplateForm } from "@/app/console/orgs/[org]/agents/_components/publish-template-form";
-import type { HostedOperator } from "@/features/orgs";
+import type { DelegatedOperator } from "@/app/console/orgs/[org]/agents/_components/control-notice";
 import { enter } from "@/testing/enter";
 import { server } from "@/testing/setup";
 
@@ -20,12 +20,20 @@ vi.mock("@/features/orgs/actions", () => ({
 
 const ENDPOINT = "https://control.example.test/garam";
 
-const hosted: HostedOperator = {
+const hosted: DelegatedOperator = {
   grn: "grn:acme:default:operator:hosted",
   identifier: "hosted",
   name: "Hosted",
   endpoint: ENDPOINT,
-  delegation: null,
+  delegation: {
+    grantId: "grant-1",
+    operatorGrn: "grn:acme:default:operator:hosted",
+    controllers: [],
+    operations: ["agent-template:publish"],
+    expiresAt: "2099-01-01T00:00:00Z",
+    grantedBy: "grn:acme:default:user:alice",
+    grantedAt: "2026-10-01T00:00:00Z",
+  },
   problem: null,
 };
 
@@ -90,7 +98,7 @@ describe("publish template form", () => {
       ["API key reference", "minimax/key"],
       ["Embedding API key reference", "minimax/embedding-key"],
       ["Ego", "A careful reader."],
-      ["Tools, one tool=pin per line", "search=v1"],
+      ["Tools", "search=v1"],
     ];
     for (const [label, value] of typed) {
       await enter(user, form.getByLabelText(label), value);
@@ -105,5 +113,40 @@ describe("publish template form", () => {
     for (const [label, value] of typed) {
       expect(form.getByLabelText(label)).toHaveValue(value);
     }
+  });
+
+  it("attaches what it can check to the field it is about, and sends nothing", async () => {
+    const posted: unknown[] = [];
+    server.use(
+      http.post(`${ENDPOINT}/v1/orgs/acme/*`, async ({ request }) => {
+        posted.push(await request.json());
+        return HttpResponse.json({ name: "x", version: 1 });
+      }),
+    );
+    const user = userEvent.setup();
+    const form = within(renderForm().container);
+
+    await enter(user, form.getByLabelText("Profile version"), "one");
+    await enter(user, form.getByLabelText("Tools"), "search");
+    await user.click(form.getByRole("button", { name: "Publish version" }));
+
+    // The form action sets the errors after the click resolves.
+    await vi.waitFor(() =>
+      expect(form.getByLabelText("Template")).toHaveAccessibleDescription(
+        "Name the template.",
+      ),
+    );
+    expect(form.getByLabelText("Profile version")).toHaveAttribute(
+      "aria-invalid",
+      "true",
+    );
+    expect(form.getByLabelText("Tools")).toHaveAccessibleDescription(
+      "One tool=pin per line. Write each tool as tool=pin.",
+    );
+    // The control: a field it found nothing wrong in carries no error.
+    expect(form.getByLabelText("Model name")).not.toHaveAttribute(
+      "aria-invalid",
+    );
+    expect(posted).toEqual([]);
   });
 });

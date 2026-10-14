@@ -4,7 +4,8 @@ import type { AgentDefinition } from "@/features/orgs";
 /** Where a definition's cutover stands, null where none is open. */
 type Cutover = AgentDefinition["cutover"];
 
-const STATE = {
+/** What each open cutover stage is called wherever it is shown. */
+export const CUTOVER_STAGE_LABEL = {
   switched: "Managed by the Operator",
   frozen: "Cut-over in progress",
 } as const;
@@ -16,19 +17,5 @@ const STATE = {
  */
 export function CutoverBadge({ cutover }: { cutover: Cutover }) {
   if (cutover === null) return null;
-  return <Badge variant="outline">{STATE[cutover.stage]}</Badge>;
-}
-
-/**
- * What a definition page says of values its operator no longer reads
- * (ADR-0086): garam keeps them as they were frozen and changes nothing
- * but the name.
- */
-export function ArchivalNotice({ cutover }: { cutover: NonNullable<Cutover> }) {
-  return (
-    <p className="max-w-2xl rounded-md border px-3 py-2 text-sm">
-      {STATE[cutover.stage]}. These settings are archival and read-only in
-      garam; only the name still changes here.
-    </p>
-  );
+  return <Badge variant="outline">{CUTOVER_STAGE_LABEL[cutover.stage]}</Badge>;
 }

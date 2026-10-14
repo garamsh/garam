@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Bot } from "lucide-react";
+import { Bot, Plus } from "lucide-react";
 
+import { Banner } from "@/components/banner";
 import { Button } from "@/components/ui/button";
 import {
+  UNNAMED_AGENT,
   directoryAgents,
   getOrg,
   lookupAgentDefinitions,
@@ -11,17 +13,26 @@ import {
   lookupOperators,
   slugFromGrn,
 } from "@/features/orgs";
+import { checkPermissions } from "@/lib/permission-check";
 
 import { ApiUnreachable } from "../../../_components/api-unreachable";
 import { EmptyState } from "../../../_components/empty-state";
-import { PageHeader } from "../../../_components/page-header";
-import { AgentRoster, type RosterEntry } from "./_components/agent-roster";
-import { AgentsTabs } from "./_components/agents-tabs";
+import { ListPage } from "../../../_components/templates/list-page";
+import {
+  isFailing,
+  reportedDots,
+  requestedDot,
+} from "./_components/agent-status";
+import { AgentTable, type AgentRow } from "./_components/agent-table";
 
 /** Head metadata for the agents route; Next.js reads it by name. */
 export const metadata: Metadata = { title: "Agents — garam" };
 
 type Params = { params: Promise<{ org: string }> };
+
+const TITLE = "Agents";
+const DESCRIPTION =
+  "Agents this organization defined, and what operators report about them.";
 
 /**
  * The organization's agents: each one it defined, whether or not an
@@ -29,33 +40,33 @@ type Params = { params: Promise<{ org: string }> };
  * (ADR-0075). What the organization asked for and what was reported
  * are read from different lists and shown apart (ADR-0033); a defined
  * agent no operator has reported is said to be awaiting one rather
- * than drawn with a state nobody reported.
+ * than drawn with a state nobody reported. Failing agents lead.
  *
  * The organization is read for itself, so one the caller cannot read
  * answers 404 (ADR-0011); a refused list inside it is said as such.
+ * "New agent" is asked of the server and left out only where it says
+ * no (ADR-0103).
  */
 export default async function AgentsPage({ params }: Params) {
   const { org } = await params;
-  const [organization, agents, definitions, operators] = await Promise.all([
-    getOrg(org),
-    lookupAgents(org),
-    lookupAgentDefinitions(org),
-    lookupOperators(org),
-  ]);
+  const [organization, agents, definitions, operators, permissions] =
+    await Promise.all([
+      getOrg(org),
+      lookupAgents(org),
+      lookupAgentDefinitions(org),
+      lookupOperators(org),
+      checkPermissions(org, { create: { action: "agent:create" } }),
+    ]);
 
-  const header = (
-    <>
-      <PageHeader
-        title="Agents"
-        description="Agents this organization defined, and what operators report about them."
-      >
-        <Button asChild>
-          <Link href={`/console/orgs/${org}/agents/new`}>New agent</Link>
-        </Button>
-      </PageHeader>
-      <AgentsTabs org={org} current="agents" />
-    </>
-  );
+  const newAgent =
+    permissions.get("create") === "denied" ? undefined : (
+      <Button asChild>
+        <Link href={`/console/orgs/${org}/agents/new`}>
+          <Plus aria-hidden />
+          New agent
+        </Link>
+      </Button>
+    );
   if (
     organization.status === "unreachable" ||
     agents.status === "unreachable" ||
@@ -63,14 +74,17 @@ export default async function AgentsPage({ params }: Params) {
     operators.status === "unreachable"
   ) {
     return (
-      <>
-        {header}
+      <ListPage
+        title={TITLE}
+        description={DESCRIPTION}
+        primaryAction={newAgent}
+      >
         <ApiUnreachable subject="this organization's agents" />
-      </>
+      </ListPage>
     );
   }
 
-  const directory = { agents, definitions };
+  const definitionsRead = definitions.status === "ok";
   const reported = new Map(
     (agents.status === "ok" ? agents.data : []).map((agent) => [
       agent.grn,
@@ -89,57 +103,89 @@ export default async function AgentsPage({ params }: Params) {
       operator.name,
     ]),
   );
-  const entries: RosterEntry[] = directoryAgents(directory).map((entry) => {
+  const rows = directoryAgents({ agents, definitions }).map((entry) => {
     const definition = definitionOf.get(entry.grn);
+    const agent = reported.get(entry.grn);
     const operatorGrn = definition?.operatorGrn;
-    return {
-      directory: entry,
-      agent: reported.get(entry.grn),
+    const row: AgentRow = {
+      identifier: entry.identifier,
+      // A reported agent's name is its definition's, so where the
+      // definitions were not read its name is unknown, not absent.
+      name:
+        entry.name ?? (definitionsRead ? UNNAMED_AGENT : "Name not available"),
+      nameNote:
+        entry.name !== null
+          ? null
+          : definitionsRead
+            ? "Reported by an operator without a definition here."
+            : "Reported by an operator. Its definition is not checked.",
       operator:
         operatorGrn === undefined
-          ? undefined
+          ? null
           : {
               identifier: slugFromGrn(operatorGrn),
               name: operatorNames.get(operatorGrn),
             },
-      cutover: definition?.cutover ?? null,
+      requested: requestedDot(definition, definitionsRead),
+      ...reportedDots(entry.reported, agent),
+      updatedAt: agent?.updatedAt ?? null,
     };
+    return { row, failing: isFailing(agent) };
   });
+  // Failing first, each group keeping the order the lists gave it.
+  const failing = rows.filter((entry) => entry.failing).map((e) => e.row);
+  const ordered = [
+    ...failing,
+    ...rows.filter((entry) => !entry.failing).map((e) => e.row),
+  ];
+  const partial =
+    definitions.status === "forbidden" || agents.status === "forbidden";
 
   return (
-    <>
-      {header}
+    <ListPage
+      title={TITLE}
+      description={DESCRIPTION}
+      count={partial ? undefined : ordered.length}
+      primaryAction={newAgent}
+    >
+      {failing.length > 0 && (
+        <Banner
+          tone="danger"
+          title={
+            failing.length === 1
+              ? "1 agent is failing"
+              : `${failing.length} agents are failing`
+          }
+        >
+          {failing.map((row) => row.name).join(", ")}: provisioning failed or
+          the agent disconnected. Failing agents are listed first.
+        </Banner>
+      )}
       {definitions.status === "forbidden" && (
-        <p role="status" className="text-sm text-muted-foreground">
-          Agent definitions are not listed to you, so agents awaiting an
-          operator are not shown.
-        </p>
+        <Banner tone="info" title="Agent definitions are not listed to you">
+          Agents awaiting an operator are not shown.
+        </Banner>
       )}
       {agents.status === "forbidden" && (
-        <p role="status" className="text-sm text-muted-foreground">
-          Reported agents are not listed to you, so no reported state is shown.
-        </p>
+        <Banner tone="info" title="Reported agents are not listed to you">
+          No reported state is shown.
+        </Banner>
       )}
-      <section id="definitions" className="scroll-mt-4">
-        {entries.length === 0 ? (
+      <AgentTable
+        org={org}
+        rows={ordered}
+        empty={
           <EmptyState
             icon={Bot}
             title="No agents"
             description={
-              definitions.status === "forbidden" ||
-              agents.status === "forbidden"
+              partial
                 ? "None you can list."
                 : "This organization has no agents."
             }
           />
-        ) : (
-          <AgentRoster
-            org={org}
-            entries={entries}
-            definitionsRead={definitions.status === "ok"}
-          />
-        )}
-      </section>
-    </>
+        }
+      />
+    </ListPage>
   );
 }

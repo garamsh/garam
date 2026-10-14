@@ -19,8 +19,10 @@ const COLUMNS: ColumnDef<PolicyRow, unknown>[] = [
     id: "name",
     header: "Policy",
     accessorFn: (row) => row.policy.name,
+    // The gap keeps the name link and the CopyId under it each a 24px
+    // target apart.
     cell: ({ row }) => (
-      <div className="flex min-w-0 flex-col items-start">
+      <div className="flex min-w-0 flex-col items-start gap-2">
         <Link
           href={row.original.href}
           className="font-medium underline-offset-4 hover:underline focus-visible:underline"

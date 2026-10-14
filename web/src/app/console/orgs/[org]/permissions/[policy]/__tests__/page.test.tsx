@@ -147,9 +147,12 @@ describe("policy page", () => {
     );
 
     await renderPolicy();
-    // Presence: the reach is a sentence that goes on to say why.
+    // Presence: the reach is a sentence that goes on to say why. The
+    // Attachments panel is mounted too and says it again.
     expect(
-      screen.getByText(/may apply to everyone in this organization\.$/),
+      within(screen.getByRole("tabpanel", { name: "Document" })).getByText(
+        /may apply to everyone in this organization\.$/,
+      ),
     ).toBeInTheDocument();
     await openTab(/^Attachments/);
 

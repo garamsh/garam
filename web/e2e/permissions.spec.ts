@@ -528,10 +528,10 @@ test.describe("permissions", () => {
 });
 
 test.describe("permissions accessibility", () => {
-  // The policy table stacks each policy's link directly over its
-  // identifier, the crowded case where axe's target-size fails a CopyId
-  // under 24px. A target spaced off its neighbours passes that rule at
-  // any size, so the size is measured too.
+  // The policy table stacks each policy's link over its identifier.
+  // axe's target-size passes a target under 24px spaced off its
+  // neighbours, as the table's gap spaces it, so the size is measured
+  // as well as scanned.
   test("the policy table's identifiers are 24px targets", async ({
     page,
     signedIn,

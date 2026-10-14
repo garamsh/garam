@@ -107,10 +107,19 @@ and the server still enforces every write.
   Font License (`github.com/orioncactus/pretendard`, v1.3.9, read
   2026-10-14). Geist has no Hangul, so Korean text today falls back to
   whatever the platform has, with different metrics.
+- **Pretendard is self-hosted through the `pretendard` package's
+  dynamic-subset CSS**, at a pinned version. It uses `font-display:
+  swap` and a system fallback stack that names a Korean face. The
+  foundation work under #1368 found that `next/font/local` cannot
+  express Pretendard's dynamic subsets: 92 woff2 files, each with its
+  own `unicode-range`. Loading the whole Hangul face as one file would
+  make every page pay for glyphs it never shows. The subsets let a
+  browser fetch only the ranges a page uses. Swap and the fallback keep
+  text readable while a subset loads.
 - **Geist Mono is used for ids, keys, JSON and timestamps**, with
   `tabular-nums` so that columns of digits align. It is the mono face
   the console already loads, under the same licence (`vercel.com/font`,
-  read 2026-10-14).
+  read 2026-10-14). It stays on `next/font`.
 - **Poppins is dropped.** A second display face serves the marketing
   voice and not the console. It is also a third font download on every
   page.

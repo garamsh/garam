@@ -166,9 +166,14 @@ describe("create from template", () => {
       screen.getByRole("button", { name: "Create from template" }),
     );
 
+    // The console's sentence for a refused create, never the control
+    // service's own text.
     expect(await screen.findByRole("alert")).toHaveTextContent(
-      "the controller is at capacity",
+      /^The control service holds an agent or request that conflicts with this one\./,
     );
+    expect(
+      screen.queryByText(/the controller is at capacity/),
+    ).not.toBeInTheDocument();
     // What was sent is what was chosen, so the refusal answered it.
     expect(posted).toEqual([
       expect.objectContaining({

@@ -53,10 +53,22 @@ export type MintResult =
   | { status: "refused"; message: string }
   | { status: "unavailable" };
 
+/**
+ * Why a control call was refused: garam refused the mint, in the
+ * sentence `refusal-copy.ts` wrote for it; the control service refused
+ * the call, with its HTTP status and the `kind` it named, or null where
+ * it named none; or it answered outside the agreed wire. The control
+ * service's own `message` is not kept, so no consumer can show it.
+ */
+export type ControlRefusal =
+  | { source: "mint"; sentence: string }
+  | { source: "control"; status: number; kind: string | null }
+  | { source: "unreadable" };
+
 /** What a control call answered. */
 export type ControlResult<T> =
   | { status: "ok"; data: T }
-  | { status: "refused"; message: string }
+  | { status: "refused"; refusal: ControlRefusal }
   | { status: "unavailable" };
 
 /** Lowercase hexadecimal SHA-256 of text's UTF-8 bytes. */
@@ -69,6 +81,17 @@ export async function sha256Hex(text: string): Promise<string> {
     b.toString(16).padStart(2, "0"),
   ).join("");
 }
+
+/**
+ * The `kind` a control refusal names, where it names one. The wire
+ * omits an empty kind, so an empty one is read as none.
+ */
+const RefusalKindParser = z.object({
+  kind: z
+    .string()
+    .optional()
+    .transform((kind) => (kind === "" ? undefined : kind)),
+});
 
 /** Whether an operation's authority binds its request target. */
 function bindsRequestTarget(operation: ControlOperation): boolean {
@@ -116,7 +139,13 @@ export async function callControl<T>(
       ? { requestTarget: url.pathname + url.search }
       : {}),
   }).catch(() => ({ status: "unavailable" as const }));
-  if (minted.status !== "ok") return minted;
+  if (minted.status === "unavailable") return minted;
+  if (minted.status === "refused") {
+    return {
+      status: "refused",
+      refusal: { source: "mint", sentence: minted.message },
+    };
+  }
 
   const response = await fetch(url, {
     method: call.method,
@@ -135,20 +164,19 @@ export async function callControl<T>(
   }
   const answer: unknown = await response.json().catch(() => null);
   if (!response.ok) {
-    const refusal = z.object({ message: z.string() }).safeParse(answer);
+    const named = RefusalKindParser.safeParse(answer);
     return {
       status: "refused",
-      message: refusal.success
-        ? refusal.data.message
-        : `The control service refused (${response.status}).`,
+      refusal: {
+        source: "control",
+        status: response.status,
+        kind: named.success ? (named.data.kind ?? null) : null,
+      },
     };
   }
   const parsed = call.parser.safeParse(answer);
   if (!parsed.success) {
-    return {
-      status: "refused",
-      message: "The control service answered outside the agreed contract.",
-    };
+    return { status: "refused", refusal: { source: "unreadable" } };
   }
   return { status: "ok", data: parsed.data };
 }

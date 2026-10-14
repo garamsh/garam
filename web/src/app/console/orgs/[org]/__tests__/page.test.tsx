@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
@@ -38,6 +38,8 @@ describe("organization overview page", () => {
     ["Operators", "/console/orgs/acme/operators"],
     ["Agents", "/console/orgs/acme/agents"],
     ["People", "/console/orgs/acme/people"],
+    ["Consents", "/console/orgs/acme/consents"],
+    ["Permissions", "/console/orgs/acme/permissions"],
   ])("summarises %s and links to it", async (label, href) => {
     await renderServerComponent(OrgPage(params("acme")));
 
@@ -46,22 +48,71 @@ describe("organization overview page", () => {
     ).toHaveAttribute("href", href);
   });
 
-  it("says why the two sections it does not summarise are absent", async () => {
+  it.each([
+    ["Consents", "/console/orgs/acme/consents", 1],
+    ["Permissions", "/console/orgs/acme/permissions", 2],
+  ])(
+    "counts %s for a caller the server lets read it, with no footnote",
+    async (label, href, count) => {
+      await renderServerComponent(OrgPage(params("acme")));
+
+      // Identity: the card's whole name is its label and its count, so
+      // a note about access on it would break this.
+      expect(
+        screen.getByRole("link", { name: `${label} ${count}` }),
+      ).toHaveAttribute("href", href);
+      expect(screen.queryByText(/admin role/)).not.toBeInTheDocument();
+    },
+  );
+
+  it.each([
+    ["Consents", "consents"],
+    ["Permissions", "policies"],
+  ])(
+    "says %s is not counted when the server refuses the read, and still counts the rest",
+    async (label, segment) => {
+      server.use(
+        http.get(`${API_URL}/orgs/acme/${segment}`, () =>
+          HttpResponse.json(
+            { kind: "permission_denied", message: "no" },
+            { status: 403 },
+          ),
+        ),
+      );
+
+      await renderServerComponent(OrgPage(params("acme")));
+
+      expect(
+        screen.getByRole("link", { name: new RegExp(`^${label}\\b`) }),
+      ).toHaveTextContent("Not counted: the server did not let you read them.");
+      // The control: the sections every member reads are still counted.
+      expect(screen.getByRole("link", { name: "Teams 1" })).toBeInTheDocument();
+    },
+  );
+
+  it("leads with nothing failing when no section holds a failing state", async () => {
+    server.use(
+      http.get(`${API_URL}/orgs/acme/agents`, () => HttpResponse.json([])),
+    );
+
     await renderServerComponent(OrgPage(params("acme")));
 
-    // Presence: were either card rendered, its name would open with the
-    // label and carry a count after it.
+    expect(screen.getByText("Nothing is failing")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("leads with the failing states, each linked to its section", async () => {
+    await renderServerComponent(OrgPage(params("acme")));
+
+    // The fixture's single agent is failed and disconnected.
+    const banner = screen.getByRole("alert");
+    expect(banner).toHaveTextContent("2 states need attention");
+    expect(banner).toHaveTextContent("1 failed");
+    expect(banner).toHaveTextContent("1 disconnected");
     expect(
-      screen.queryByRole("link", { name: /^Consents\b/ }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("link", { name: /^Permissions\b/ }),
-    ).not.toBeInTheDocument();
-    // Presence: the note is one sentence and each reason is a clause of
-    // it, so neither reason is the whole string.
-    const note = screen.getByText(/not counted here/);
-    expect(note).toHaveTextContent("Consents and Permissions");
-    expect(note).toHaveTextContent("requires the admin role");
+      within(banner).getByRole("link", { name: "1 failed in Agents" }),
+    ).toHaveAttribute("href", "/console/orgs/acme/agents");
+    expect(screen.queryByText("Nothing is failing")).not.toBeInTheDocument();
   });
 
   it("names the failing states a count on its own hides", async () => {

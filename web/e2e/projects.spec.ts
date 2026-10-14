@@ -1,0 +1,75 @@
+import { axeViolations, expectHydrated, useTheme } from "./axe";
+import { expect, test } from "./fixtures";
+import { seedMember } from "./seed";
+
+test.describe("projects", () => {
+  test("creates a project from the list's dialog and lists it", async ({
+    page,
+    signedIn,
+  }) => {
+    await page.goto(`/console/orgs/${signedIn.orgSlug}/projects`);
+    const table = page.getByRole("table", { name: "Projects" });
+    await expect(
+      table.getByText(signedIn.projectName, { exact: true }),
+    ).toBeVisible();
+
+    await expectHydrated(page);
+    await page.getByRole("button", { name: "Create project" }).click();
+    const dialog = page.getByRole("dialog", { name: "Create a project" });
+    await dialog.getByLabel("Project name", { exact: true }).fill("Backend");
+    await dialog.getByRole("button", { name: "Create project" }).click();
+
+    await expect(dialog).toBeHidden();
+    await expect(
+      page.getByRole("status").getByText("Created Backend."),
+    ).toBeVisible();
+    await expect(table.getByText("Backend", { exact: true })).toBeVisible();
+  });
+
+  test("offers a member no create action and still lists", async ({
+    page,
+    context,
+    baseURL,
+    signedIn,
+  }) => {
+    const projects = `/console/orgs/${signedIn.orgSlug}/projects`;
+    // The control: the owner is offered the action on the same page.
+    await page.goto(projects);
+    await expect(
+      page.getByRole("button", { name: "Create project", exact: true }),
+    ).toBeVisible();
+
+    const member = await seedMember(signedIn);
+    await context.clearCookies();
+    await context.addCookies([
+      {
+        name: "garam_session",
+        value: member.sessionToken,
+        url: baseURL!,
+        httpOnly: true,
+        sameSite: "Lax",
+      },
+    ]);
+    await page.goto(projects);
+
+    await expect(
+      page
+        .getByRole("table", { name: "Projects" })
+        .getByText(signedIn.projectName, { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Create project", exact: true }),
+    ).toBeHidden();
+  });
+
+  for (const theme of ["light", "dark"] as const) {
+    test(`passes axe in the ${theme} theme`, async ({ page, signedIn }) => {
+      await useTheme(page, theme);
+      await page.goto(`/console/orgs/${signedIn.orgSlug}/projects`);
+      await expect(page.getByRole("table", { name: "Projects" })).toBeVisible();
+
+      await expectHydrated(page);
+      expect(await axeViolations(page)).toEqual([]);
+    });
+  }
+});

@@ -1,10 +1,15 @@
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import ConsentsPage from "@/app/console/orgs/[org]/consents/page";
 import { renderServerComponent } from "@/testing/render";
-import { API_URL, globexConsent, signedOut } from "@/testing/mocks/handlers";
+import {
+  API_URL,
+  answerPermissionChecks,
+  globexConsent,
+  signedOut,
+} from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
 vi.mock("next/navigation", () => ({
@@ -29,118 +34,147 @@ function serveConsents(...consents: unknown[]) {
   );
 }
 
+const refused = (status: number) =>
+  HttpResponse.json({ kind: "permission_denied", message: "no" }, { status });
+
+/** The card for the pair with `other`. */
+function card(other: string) {
+  return within(screen.getByRole("group", { name: `Consent with ${other}` }));
+}
+
 describe("consents section", () => {
-  it("names the other organization and both halves of the pair", async () => {
+  it("names the other organization, where the pair stands, and both halves", async () => {
     const { container } = await renderServerComponent(
       ConsentsPage(params("acme")),
     );
 
-    expect(
-      screen.getByRole("heading", { name: "Consents" }),
-    ).toBeInTheDocument();
-    expect(screen.getByText("globex")).toBeInTheDocument();
-    expect(screen.getByText("Messages cross")).toBeInTheDocument();
+    const globex = card("globex");
+    expect(globex.getByText("globex")).toBeInTheDocument();
+    expect(globex.getByText("Messages cross")).toBeInTheDocument();
     // Both halves stand, and each is named on its own: the relation is
     // a pair and not one organization's switch (ADR-0035).
-    expect(screen.getAllByText("Granted")).toHaveLength(2);
+    expect(globex.getAllByText("Granted")).toHaveLength(2);
     // ADR-0011: the console addresses a resource by the GRN's last
     // segment and prints no GRN.
     expect(container.textContent).not.toContain("grn:");
   });
 
-  it("says which half is missing when the other organization has not granted", async () => {
-    serveConsents({
-      ...globexConsent,
-      grantedThere: false,
-      stands: false,
-    });
+  it("grants from the card of a pair waiting on this organization", async () => {
+    serveConsents({ ...globexConsent, grantedHere: false, stands: false });
 
     await renderServerComponent(ConsentsPage(params("acme")));
 
+    const globex = card("globex");
     expect(
-      screen.getByText(
-        "This organization has granted its half. Messages stay refused until globex grants its own.",
-      ),
+      globex.getByText("Waiting for this organization"),
     ).toBeInTheDocument();
-    expect(screen.getByText("Not granted")).toBeInTheDocument();
-  });
-
-  it("says which half is missing when this organization has not granted", async () => {
-    serveConsents({
-      ...globexConsent,
-      grantedHere: false,
-      stands: false,
-    });
-
-    await renderServerComponent(ConsentsPage(params("acme")));
-
     expect(
-      screen.getByText(
+      globex.getByText(
         "globex has granted its half. Messages stay refused until this organization grants its own.",
       ),
     ).toBeInTheDocument();
-    // Withdrawing clears this organization's own half, and there is
-    // none to clear.
     expect(
-      screen.queryByRole("button", { name: "Withdraw" }),
+      globex.getByRole("button", { name: "Grant consent" }),
+    ).toBeInTheDocument();
+    // Nothing of this organization's stands, so there is nothing of its
+    // own to withdraw.
+    expect(
+      globex.queryByRole("button", { name: "Withdraw consent" }),
     ).not.toBeInTheDocument();
   });
 
-  it("marks a standing relation apart from a waiting one", async () => {
-    serveConsents(globexConsent, {
-      orgGrn: "grn:root:default:org:initech",
-      grantedHere: true,
-      grantedThere: false,
-      stands: false,
-    });
+  it("offers only the withdrawal on a pair waiting on the other organization", async () => {
+    serveConsents({ ...globexConsent, grantedThere: false, stands: false });
 
     await renderServerComponent(ConsentsPage(params("acme")));
 
-    // The property is that the two are told apart without reading the
-    // words, so what is asserted is that their markings differ — not
-    // which one either takes.
-    expect(screen.getByText("Messages cross").dataset.variant).not.toEqual(
-      screen.getByText("Waiting").dataset.variant,
-    );
+    const globex = card("globex");
+    expect(globex.getByText("Waiting for globex")).toBeInTheDocument();
+    expect(
+      globex.getByText(
+        "This organization has granted its half. Messages stay refused until globex grants its own.",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      globex.getByRole("button", { name: "Withdraw consent" }),
+    ).toBeInTheDocument();
+    expect(
+      globex.queryByRole("button", { name: "Grant consent" }),
+    ).not.toBeInTheDocument();
   });
 
-  it("offers the withdrawal only for the half this organization holds", async () => {
+  it("leaves out each control the server denies, and only those", async () => {
+    serveConsents(
+      { ...globexConsent, grantedHere: false, stands: false },
+      {
+        orgGrn: "grn:root:default:org:initech",
+        grantedHere: true,
+        grantedThere: true,
+        stands: true,
+      },
+    );
+    server.use(
+      answerPermissionChecks((action) =>
+        action === "consent:grant" ? "deny" : "allow",
+      ),
+    );
+
     await renderServerComponent(ConsentsPage(params("acme")));
 
     expect(
-      screen.getByRole("button", { name: "Withdraw" }),
+      screen.queryByRole("button", { name: "New consent" }),
+    ).not.toBeInTheDocument();
+    expect(
+      card("globex").queryByRole("button", { name: "Grant consent" }),
+    ).not.toBeInTheDocument();
+    // The control: the withdrawal the server allows is still offered.
+    expect(
+      card("initech").getByRole("button", { name: "Withdraw consent" }),
     ).toBeInTheDocument();
   });
 
-  it("says the organization holds no relation rather than leaving the area blank", async () => {
+  it("renders every control when the check could not be answered", async () => {
+    serveConsents({ ...globexConsent, grantedHere: false, stands: false });
+    server.use(
+      http.post(`${API_URL}/orgs/acme/permission-checks`, () =>
+        HttpResponse.error(),
+      ),
+    );
+
+    await renderServerComponent(ConsentsPage(params("acme")));
+
+    expect(
+      screen.getByRole("button", { name: "New consent" }),
+    ).toBeInTheDocument();
+    expect(
+      card("globex").getByRole("button", { name: "Grant consent" }),
+    ).toBeInTheDocument();
+  });
+
+  it("shows an empty state when the organization holds no relation", async () => {
     serveConsents();
 
     await renderServerComponent(ConsentsPage(params("acme")));
 
+    expect(screen.getByText("No consent relations")).toBeInTheDocument();
     expect(
-      screen.getByText(
-        "This organization holds no relation with another, so a message between one of its agents and an agent outside it is refused back to the sender.",
-      ),
+      screen.getByRole("button", { name: "New consent" }),
     ).toBeInTheDocument();
   });
 
-  it("offers the grant form beside the list", async () => {
+  it("says a refused list is not shown, rather than reporting none", async () => {
+    server.use(http.get(`${API_URL}/orgs/acme/consents`, () => refused(403)));
+
     await renderServerComponent(ConsentsPage(params("acme")));
 
-    expect(screen.getByLabelText("Other organization")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Grant consent" }),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Consents not shown")).toBeInTheDocument();
+    expect(screen.queryByText("No consent relations")).not.toBeInTheDocument();
   });
 
   it.each([403, 404])(
-    "renders not-found on the read answering %i",
+    "renders not-found when the organization read answers %i",
     async (status) => {
-      server.use(
-        http.get(`${API_URL}/orgs/acme/consents`, () =>
-          HttpResponse.json({ kind: "denied", message: "no" }, { status }),
-        ),
-      );
+      server.use(http.get(`${API_URL}/orgs/acme`, () => refused(status)));
 
       await expect(
         renderServerComponent(ConsentsPage(params("acme"))),
@@ -156,11 +190,7 @@ describe("consents section", () => {
     expect(
       screen.getByRole("heading", { name: "Cannot reach the API" }),
     ).toBeInTheDocument();
-    expect(
-      screen.queryByText(
-        "This organization holds no relation with another, so a message between one of its agents and an agent outside it is refused back to the sender.",
-      ),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByText("No consent relations")).not.toBeInTheDocument();
   });
 
   it("sends a rejected session to the login page, not to the notice", async () => {

@@ -51,7 +51,6 @@ export {
   listGroupMembers,
   listGroups,
   listOperators,
-  listOrgConsents,
   listOrgMembers,
   listOrgs,
   listProjects,
@@ -59,7 +58,9 @@ export {
   lookupAgents,
   lookupGroups,
   lookupOperators,
+  lookupOrgConsents,
   lookupOrgMembers,
+  lookupProjects,
   type Agent,
   type AgentDefinition,
   type Group,
@@ -69,6 +70,7 @@ export {
   type OrgConsent,
   type Organization,
   type Project,
+  type RefusableRead,
   type RegisteredOperator,
 } from "./api/orgs";
 export {

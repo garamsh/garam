@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -89,6 +90,13 @@ func (e *stubEngine) notify() {
 // await blocks until cond holds, read under the engine's lock after
 // each change, or fails after a bound no correct run comes near.
 func (e *stubEngine) await(cond func() bool) error {
+	return e.awaitUnless(cond, nil)
+}
+
+// awaitUnless is await that also gives up once stopped closes with
+// cond still false: whatever was to make it hold has returned, and
+// nothing else will.
+func (e *stubEngine) awaitUnless(cond func() bool, stopped <-chan struct{}) error {
 	deadline := time.After(10 * time.Second)
 	for {
 		e.mu.Lock()
@@ -99,11 +107,22 @@ func (e *stubEngine) await(cond func() bool) error {
 		}
 		select {
 		case <-changed:
+		case <-stopped:
+			e.mu.Lock()
+			ok = cond()
+			e.mu.Unlock()
+			if ok {
+				return nil
+			}
+			return errStopped
 		case <-deadline:
 			return fmt.Errorf("stub engine: condition not met")
 		}
 	}
 }
+
+// errStopped is awaitUnless giving up on a run that returned.
+var errStopped = errors.New("stub engine: the run returned with the condition unmet")
 
 // named answers every container of role the engine holds, in the
 // order they were created. The caller holds mu.

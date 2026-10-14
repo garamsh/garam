@@ -33,6 +33,8 @@ function columns(org: string): ColumnDef<AgentRow, unknown>[] {
       // The identifier is searched too: names repeat and it does not.
       accessorFn: (row) => `${row.name} ${row.identifier}`,
       cell: ({ row: { original: row } }) => (
+        // The gap keeps the name link and the CopyId each a 24px
+        // target apart.
         <div className="flex min-w-0 flex-col items-start gap-1.5">
           <Link
             href={`/console/orgs/${org}/agents/${row.identifier}`}

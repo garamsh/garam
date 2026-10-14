@@ -438,10 +438,14 @@ The boundary is as much of the responsibility as the contents.
   engine ([ADR-0002](./adr/0002-iam-style-policy-model.md),
   [authz.md](./authz.md)).
   - **The console asks the server whether the caller may take an
-    action.** It asks through a permission-check API backed by authz
-    `Check`, and hides or disables what the answer denies. The server
-    still enforces every write, so a refusal that is reached still
-    renders.
+    action.** It asks through a permission-check API that answers
+    from the check enforcement runs: authz `Check`, or `CheckCurrent`
+    for an action a mint or a delegation write decides. It answers
+    unknown where a mint's check allows and the grant is left to
+    decide, and where it asks neither
+    ([api-surface.md](./api-surface.md) §What decides the rest). It
+    hides or disables what the answer denies. The server still
+    enforces every write, so a refusal that is reached still renders.
   - **An unanswered check shows the control.** The console infers no
     permission from a role it read
     ([ADR-0103](./adr/0103-the-console-has-one-design-system-and-asks-the-server-what-a-caller-may-do.md)

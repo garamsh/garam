@@ -440,18 +440,22 @@ paths:
         `agent:create`, `agent:configure`, `agent:recover`,
         `agent:cutover`, `agent-template:publish`,
         `execution-profile:read` and `agent:execution-read` are minted
-        through `mintOperationAuthority`, which decides the caller's
-        authority and then reads a delegation grant to the operator
-        (ADR-0078). Each is put to the check that mint runs, with the
-        same caller, action and resource, on the organization's current
-        policy read past the engine's cache. Where that check denies,
-        the answer is `deny`, and the mint would refuse. Where it
-        allows, the answer is `unknown`: this operation reads no grant,
-        so the grant is left to decide. `operator:delegate` and
-        `agent:enroll` are decided on the organization's current
-        policy, read past the engine's cache, and answered `unknown`.
-        A caller renders the control for `unknown` and lets the
-        operation decide.
+        through `mintOperationAuthority`, which reads a delegation grant
+        to the operator (ADR-0078), holds the operation against it, and
+        decides the caller's authority last. Each is put to that last
+        check, with the same caller, action and resource, on the
+        organization's current policy read past the engine's cache.
+        Where it denies, the answer is `deny`, and the mint would
+        refuse. Where it allows, the answer is `unknown`: this operation
+        reads no grant, so the grant is left to decide.
+        `operator:delegate` is put to the check
+        `writeOperatorDelegation`, `endOperatorDelegation`,
+        `setOperatorControlEndpoint` and `clearOperatorControlEndpoint`
+        run, on the same current policy, and that check is all of their
+        authority, so it is answered `allow` or `deny`. `agent:enroll`
+        is decided on the organization's current policy and answered
+        `unknown`. A caller renders the control for `unknown` and lets
+        the operation decide.
 
 
         A pair without `resource` asks about the organization itself.
@@ -2779,8 +2783,10 @@ components:
       type: string
       description: >-
         `allow` and `deny` are what enforcement would decide now.
-        `unknown` is an action this operation cannot decide, because its
-        enforcement reads more than the engine's `Check`: render the
+        `unknown` is an action this operation cannot decide: a minted
+        action whose caller check allows, leaving the delegation grant
+        this operation does not read to decide, or an action whose
+        enforcement this operation does not ask at all. Render the
         control and let the operation answer.
       enum: [allow, deny, unknown]
       x-enum-varnames: [DecisionAllow, DecisionDeny, DecisionUnknown]

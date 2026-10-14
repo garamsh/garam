@@ -507,9 +507,15 @@ and not in the same place on every surface.
     A deny there is the mint's refusal, so it is answered deny. An
     allow leaves the grant, which `checkPermissions` does not read, so
     it is answered unknown.
-  - **unknown**, where enforcement reads current policy past the
-    engine's cache: `operator:delegate` and `agent:enroll`. A cached
-    deny there could hide a control the operation would allow.
+  - **allow or deny** for `operator:delegate`. It is put to the check
+    every write of a delegation and of a control endpoint runs, through
+    the one function they all call
+    (`internal/operator/authority_service.go`, `AuthorizeDelegation`),
+    and that check is all of their authority.
+  - **unknown** for `agent:enroll`, whose enforcement reads current
+    policy past the engine's cache and which this operation does not
+    put to that read. A cached deny could hide a control the operation
+    would allow.
   - **deny** for an action garam does not define, because a role's
     wildcard such as `org:*` would otherwise allow a name no operation
     checks.

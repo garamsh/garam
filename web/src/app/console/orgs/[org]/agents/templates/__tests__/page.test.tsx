@@ -178,7 +178,7 @@ describe("agent templates view", () => {
     expect(asked).toEqual(["agent-template:publish"]);
   });
 
-  it("leaves Publish out where the server denies publishing, and offers it otherwise", async () => {
+  it("leaves Publish out where the server denies publishing, and offers it where it allows or cannot answer", async () => {
     const endpoint = "https://control.example.test/garam";
     const hosted = "grn:acme:default:operator:hosted";
     server.use(
@@ -214,6 +214,14 @@ describe("agent templates view", () => {
       await screen.findByRole("button", { name: "Publish version" }),
     ).toBeInTheDocument();
     allowed.unmount();
+
+    // Unanswered, the page still offers it and the server decides.
+    server.use(answerPermissionChecks(() => "unknown"));
+    const unanswered = await renderPage();
+    expect(
+      await screen.findByRole("button", { name: "Publish version" }),
+    ).toBeInTheDocument();
+    unanswered.unmount();
 
     server.use(
       answerPermissionChecks((action) =>

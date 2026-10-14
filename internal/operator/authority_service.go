@@ -51,6 +51,11 @@ type AuthorityService interface {
 	// recheck of its binding ask exactly this. It reads no grant, so an
 	// allow leaves the grant to decide the rest.
 	AuthorizeOperation(ctx context.Context, actor, org, object grn.GRN, op Operation) error
+	// AuthorizeDelegation decides whether the actor currently holds
+	// operator:delegate on the organization. WriteGrant, EndGrant and
+	// SetControlEndpoint ask exactly this, and it is the whole of their
+	// authority.
+	AuthorizeDelegation(ctx context.Context, actor, org grn.GRN) error
 	// Introspect answers what an authority binds, to its audience only,
 	// once current state still authorizes it. It consumes nothing.
 	Introspect(ctx context.Context, caller grn.GRN, authority string) (Introspected, error)
@@ -86,7 +91,7 @@ func NewAuthorityService(grants GrantStore, authorities AuthorityStore, operator
 }
 
 func (s *authorityService) WriteGrant(ctx context.Context, w GrantWrite) (*Grant, bool, error) {
-	if err := s.authorize(ctx, w.Actor, w.Org, w.Org, actionDelegate); err != nil {
+	if err := s.AuthorizeDelegation(ctx, w.Actor, w.Org); err != nil {
 		return nil, false, err
 	}
 	if err := s.registered(ctx, w.Org, w.Operator); err != nil {
@@ -97,7 +102,7 @@ func (s *authorityService) WriteGrant(ctx context.Context, w GrantWrite) (*Grant
 }
 
 func (s *authorityService) EndGrant(ctx context.Context, actor, org, operator grn.GRN, id GrantID) error {
-	if err := s.authorize(ctx, actor, org, org, actionDelegate); err != nil {
+	if err := s.AuthorizeDelegation(ctx, actor, org); err != nil {
 		return err
 	}
 	return s.grants.EndGrant(ctx, org, operator, id, s.now())
@@ -108,7 +113,7 @@ func (s *authorityService) CurrentGrant(ctx context.Context, org, operator grn.G
 }
 
 func (s *authorityService) SetControlEndpoint(ctx context.Context, actor, org, operator grn.GRN, endpoint *ControlEndpoint) (*Operator, error) {
-	if err := s.authorize(ctx, actor, org, org, actionDelegate); err != nil {
+	if err := s.AuthorizeDelegation(ctx, actor, org); err != nil {
 		return nil, err
 	}
 	if err := validateOwnership(operator, org); err != nil {
@@ -170,6 +175,10 @@ func (s *authorityService) Mint(ctx context.Context, r MintRequest) (*Minted, er
 
 func (s *authorityService) AuthorizeOperation(ctx context.Context, actor, org, object grn.GRN, op Operation) error {
 	return s.authorize(ctx, actor, org, object, string(op))
+}
+
+func (s *authorityService) AuthorizeDelegation(ctx context.Context, actor, org grn.GRN) error {
+	return s.authorize(ctx, actor, org, org, actionDelegate)
 }
 
 // placement reads what b acts on. A creation targets the controller

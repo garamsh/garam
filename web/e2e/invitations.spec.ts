@@ -162,6 +162,14 @@ test.describe("organization mutations", () => {
     const registerPage = await registering.newPage();
     await registerPage.goto(first);
     await registerPage.getByRole("link", { name: "Create one" }).click();
+    // The login page holds a Username field too, so the register page's
+    // heading is what says the fields below are the register form's.
+    await expect(
+      registerPage.getByRole("heading", {
+        name: `Create an account to join ${signedIn.orgName}`,
+        exact: true,
+      }),
+    ).toBeVisible();
     await registerPage.getByLabel("Username").fill(username);
     await registerPage.getByLabel("Password").fill(password);
     await registerPage.getByRole("button", { name: "Create account" }).click();

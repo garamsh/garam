@@ -48,7 +48,7 @@ describe("create policy form", () => {
     server.use(
       http.post(`${API_URL}/orgs/acme/policies`, async ({ request }) => {
         const { document } = PolicyCreate.parse(await request.json());
-        return "Statement" in document
+        return JSON.stringify(document).includes("nope:nope")
           ? HttpResponse.json(
               {
                 kind: "invalid_argument",
@@ -68,24 +68,29 @@ describe("create policy form", () => {
       ).container,
     );
     const name = form.getByLabelText("Policy name");
-    const document = form.getByLabelText("Document");
+    const action = form.getByRole("textbox", { name: "Statement 1 action 1" });
 
     await enter(user, name, "Deny deletes");
-    await user.clear(document);
-    await enter(user, document, '{"Statement":[]}');
+    await user.clear(action);
+    await enter(user, action, "nope:nope");
     await user.click(form.getByRole("button", { name: "Create draft" }));
 
-    expect(await form.findByRole("alert")).toHaveTextContent(
+    // The refusal is the document's, so it stands under the editor.
+    const editor = form.getByRole("group", { name: "Document" });
+    expect(await within(editor).findByRole("alert")).toHaveTextContent(
       REFUSAL_COPY.policyDocumentRefused,
     );
     expect(name).toHaveValue("Deny deletes");
-    expect(document).toHaveValue('{"Statement":[]}');
+    expect(action).toHaveValue("nope:nope");
     expect(redirected).toEqual([]);
+
+    // Editing the text the refusal was about takes the refusal away.
+    await user.clear(action);
+    await enter(user, action, "project:delete");
+    expect(within(editor).queryByRole("alert")).not.toBeInTheDocument();
 
     // The control: the document garam takes, sent from the same form,
     // opens the policy, so the refusal above was the document's.
-    await user.clear(document);
-    await enter(user, document, '{"Version":"2026-07-25"}');
     await user.click(form.getByRole("button", { name: "Create draft" }));
     expect(
       await form.findByText(
@@ -102,11 +107,50 @@ describe("create policy form", () => {
     // sent.
     expect(submit).toBeEnabled();
 
-    await enter(user, form.getByLabelText("Document"), "oops");
+    await user.click(form.getByRole("tab", { name: "JSON" }));
+    // CodeMirror loads in the browser only, after the first render.
+    const json = await form.findByRole("textbox", { name: "Document JSON" });
+    await user.click(json);
+    await user.keyboard("{Control>}a{/Control}{Backspace}");
+    await user.paste("oops");
 
-    expect(form.getByRole("alert")).toHaveTextContent(
+    expect(await form.findByRole("alert")).toHaveTextContent(
       "The document is not valid JSON.",
     );
     expect(submit).toBeDisabled();
+  });
+
+  it("marks the control at the place garam's refusal names", async () => {
+    server.use(
+      http.post(`${API_URL}/orgs/acme/policies`, () =>
+        HttpResponse.json(
+          {
+            kind: "invalid_argument",
+            message: "policy document: statement 0: Action is required",
+            reason: "policy_document_action_missing",
+            path: "/Statement/0/Action",
+          },
+          { status: 400 },
+        ),
+      ),
+    );
+    const user = userEvent.setup();
+    const form = within(render(<CreatePolicyForm org="acme" />).container);
+
+    await enter(user, form.getByLabelText("Policy name"), "Deny deletes");
+    await user.click(form.getByRole("button", { name: "Create draft" }));
+
+    // The sentence is the reason's, keyed on the code, not the message.
+    const editor = form.getByRole("group", { name: "Document" });
+    expect(await within(editor).findByRole("alert")).toHaveTextContent(
+      "Statement 1 needs at least one Action.",
+    );
+    expect(
+      form.getByRole("textbox", { name: "Statement 1 action 1" }),
+    ).toHaveAttribute("aria-invalid", "true");
+    // The control: the Resource beside it is not the place named.
+    expect(
+      form.getByRole("textbox", { name: "Statement 1 resource 1" }),
+    ).not.toHaveAttribute("aria-invalid");
   });
 });

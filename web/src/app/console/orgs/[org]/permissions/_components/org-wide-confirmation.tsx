@@ -1,3 +1,4 @@
+import { Banner } from "@/components/banner";
 import { Label } from "@/components/ui/label";
 
 /**
@@ -8,14 +9,14 @@ import { Label } from "@/components/ui/label";
  */
 export function OrgWideConfirmation({ id }: { id: string }) {
   return (
-    <div className="flex items-start gap-2">
+    <div className="flex items-start gap-2 rounded-lg border border-warn/40 bg-warn/10 px-3 py-2.5">
       <input
         id={id}
         type="checkbox"
         name="orgWide"
         value="confirmed"
         required
-        className="mt-0.5 size-4 accent-primary"
+        className="mt-0.5 size-4 shrink-0 accent-primary"
       />
       <Label htmlFor={id} className="leading-snug font-normal">
         Apply it to everyone in this organization
@@ -37,17 +38,17 @@ export function ScopeConfirmationNotice({
   switch (state.status) {
     case "confirm-org-wide":
       return (
-        <p role="alert" className="text-sm text-destructive">
+        <Banner tone="danger" title="This reaches everyone">
           It has no attachments now, so it applies to everyone in this
           organization.
-        </p>
+        </Banner>
       );
     case "confirm-unknown-scope":
       return (
-        <p role="alert" className="text-sm text-destructive">
+        <Banner tone="danger" title="This may reach everyone">
           Its attachments are not listed to you, so it may apply to everyone in
           this organization.
-        </p>
+        </Banner>
       );
     default:
       return null;

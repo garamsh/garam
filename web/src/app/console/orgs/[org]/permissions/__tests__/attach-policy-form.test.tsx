@@ -38,7 +38,7 @@ describe("attach policy form", () => {
     render(
       <AttachPolicyForm
         org="acme"
-        fixed={{ name: "policy", value: POLICY }}
+        fixed={{ name: "policy", value: POLICY, label: "Deny renames" }}
         choose={{
           label: "Team, person or agent",
           placeholder: "Choose whom to attach it to",
@@ -59,16 +59,71 @@ describe("attach policy form", () => {
 
     // Not the first offered, so a reset to it would show as well as a
     // reset to the prompt.
-    await user.selectOptions(
-      screen.getByLabelText("Team, person or agent"),
-      "Alice · Person",
+    const choice = screen.getByRole("combobox", {
+      name: "Team, person or agent",
+    });
+    await user.click(choice);
+    await user.click(
+      await screen.findByRole("option", { name: "Alice · Person" }),
     );
     await user.click(screen.getByRole("button", { name: "Attach" }));
 
+    // The refusal is the choice's, so it stands under it.
     expect(await screen.findByRole("alert")).toHaveTextContent(
       REFUSAL_COPY.permissionDenied,
     );
+    expect(choice).toHaveAccessibleDescription(REFUSAL_COPY.permissionDenied);
     expect(posted).toEqual([{ subjectGrn: ALICE }]);
-    expect(screen.getByLabelText("Team, person or agent")).toHaveValue(ALICE);
+    expect(choice).toHaveTextContent("Alice · Person");
+  });
+
+  it("names the subject a chosen policy was attached to", async () => {
+    server.use(
+      http.post(`${API_URL}/orgs/acme/policies/deny-renames/attachments`, () =>
+        HttpResponse.json(
+          {
+            policyGrn: POLICY,
+            subjectGrn: ALICE,
+            createdAt: "2026-01-02T03:04:05Z",
+          },
+          { status: 201 },
+        ),
+      ),
+    );
+    const user = userEvent.setup();
+    render(
+      <AttachPolicyForm
+        org="acme"
+        fixed={{ name: "subject", value: ALICE, label: "Alice" }}
+        choose={{
+          label: "Attach a policy",
+          placeholder: "Choose a policy to attach",
+          groups: [
+            {
+              label: "Policies",
+              options: [
+                {
+                  value: "deny-renames",
+                  label: "Deny renames · Draft",
+                  name: "Deny renames",
+                },
+              ],
+            },
+          ],
+        }}
+        empty="Nothing to attach."
+      />,
+    );
+
+    await user.click(screen.getByRole("combobox", { name: "Attach a policy" }));
+    await user.click(
+      await screen.findByRole("option", { name: "Deny renames · Draft" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Attach" }));
+
+    // The policy went to Alice: the sentence names her as the target.
+    expect(
+      await screen.findByText("Attached Deny renames to Alice."),
+    ).toBeInTheDocument();
   });
 });

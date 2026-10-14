@@ -1,5 +1,18 @@
+"use client";
+
+import { useState } from "react";
+
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 import type { ChoiceGroup } from "../../_components/attach-policy-form";
 
@@ -18,10 +31,11 @@ export function SubjectPicker({
   groups: ChoiceGroup[];
   current: string;
 }) {
+  const [chosen, setChosen] = useState(current);
   const offered = groups.filter((group) => group.options.length > 0);
   if (offered.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground">
+      <p className="text-muted-foreground">
         No team, person or agent is listed to you.
       </p>
     );
@@ -30,32 +44,37 @@ export function SubjectPicker({
     <form
       method="get"
       action={action}
-      className="flex max-w-2xl flex-col gap-3 sm:flex-row sm:items-end"
+      className="flex flex-col gap-3 sm:flex-row sm:items-end"
     >
-      <div className="flex min-w-0 flex-1 flex-col gap-2">
+      <input type="hidden" name="subject" value={chosen} />
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5 sm:max-w-md">
         <Label htmlFor="subject">Team, person or agent</Label>
-        <select
-          id="subject"
-          name="subject"
-          required
-          defaultValue={current}
-          className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+        <Select
+          value={chosen}
+          onValueChange={(value) => {
+            // A form reset answers with the empty default, not a
+            // choice.
+            if (value !== "") setChosen(value);
+          }}
         >
-          <option value="" disabled>
-            Choose whose policies to show
-          </option>
-          {offered.map((group) => (
-            <optgroup key={group.label} label={group.label}>
-              {group.options.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
+          <SelectTrigger id="subject" className="w-full min-w-0">
+            <SelectValue placeholder="Choose whose policies to show" />
+          </SelectTrigger>
+          <SelectContent position="popper">
+            {offered.map((group) => (
+              <SelectGroup key={group.label}>
+                <SelectLabel>{group.label}</SelectLabel>
+                {group.options.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
-      <Button type="submit" variant="outline">
+      <Button type="submit" variant="outline" disabled={chosen === ""}>
         Show policies
       </Button>
     </form>

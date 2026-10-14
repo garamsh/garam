@@ -3,8 +3,9 @@ import { HttpResponse, http } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
 import PermissionsPage from "@/app/console/orgs/[org]/permissions/page";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { renderServerComponent } from "@/testing/render";
-import { API_URL } from "@/testing/mocks/handlers";
+import { API_URL, answerPermissionChecks } from "@/testing/mocks/handlers";
 import { server } from "@/testing/setup";
 
 vi.mock("next/navigation", () => ({
@@ -18,9 +19,11 @@ vi.mock("next/navigation", () => ({
 
 const POLICIES = `${API_URL}/orgs/acme/policies`;
 
+// The console layout mounts the provider a `<Time>` needs.
 function renderPolicies() {
   return renderServerComponent(
     PermissionsPage({ params: Promise.resolve({ org: "acme" }) }),
+    { wrapper: TooltipProvider },
   );
 }
 
@@ -37,7 +40,13 @@ describe("permissions page", () => {
       name: /Deny project deletion/,
     });
     expect(within(row).getByText("Active")).toBeInTheDocument();
-    expect(within(row).getByText("Version 1")).toBeInTheDocument();
+    expect(within(row).getByText("v1")).toBeInTheDocument();
+    // The count stands beside the title, read from the list.
+    // Presence: the count is its own text node, so the accessible name
+    // joins it to the title with no space a string could name.
+    expect(
+      screen.getByRole("heading", { level: 1, name: /^Permissions\s*2$/ }),
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("link", { name: "Deny project deletion" }),
     ).toHaveAttribute(
@@ -75,9 +84,7 @@ describe("permissions page", () => {
     await renderPolicies();
 
     expect(
-      screen.getByRole("heading", {
-        name: "You cannot view this organization's policies",
-      }),
+      screen.getByText("You can't view this organization's policies"),
     ).toBeInTheDocument();
     expect(
       screen.queryByText("This organization has no policies."),
@@ -87,8 +94,10 @@ describe("permissions page", () => {
   it("renders not-found when the organization is not the caller's", async () => {
     // The control: the same page, the organization read, renders.
     const allowed = await renderPolicies();
+    // Presence: the count is its own text node, so the accessible name
+    // joins it to the title with no space a string could name.
     expect(
-      screen.getByRole("heading", { level: 1, name: "Permissions" }),
+      screen.getByRole("heading", { level: 1, name: /^Permissions\s*2$/ }),
     ).toBeInTheDocument();
     allowed.unmount();
 
@@ -118,5 +127,33 @@ describe("permissions page", () => {
     expect(
       screen.queryByText("This organization has no policies."),
     ).not.toBeInTheDocument();
+  });
+
+  it("withdraws Create policy only where the server denies it", async () => {
+    // The control: allowed, the action is offered.
+    const allowed = await renderPolicies();
+    expect(screen.getByRole("link", { name: "Create policy" })).toHaveAttribute(
+      "href",
+      "/console/orgs/acme/permissions/new",
+    );
+    allowed.unmount();
+
+    // An unanswered check renders the control; the server decides.
+    server.use(answerPermissionChecks(() => "unknown"));
+    const unknown = await renderPolicies();
+    expect(
+      screen.getByRole("link", { name: "Create policy" }),
+    ).toBeInTheDocument();
+    unknown.unmount();
+
+    server.use(answerPermissionChecks(() => "deny"));
+    await renderPolicies();
+    expect(
+      screen.queryByRole("link", { name: "Create policy" }),
+    ).not.toBeInTheDocument();
+    // The list itself still reads.
+    expect(
+      screen.getByRole("link", { name: "Deny project deletion" }),
+    ).toBeInTheDocument();
   });
 });

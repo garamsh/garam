@@ -87,11 +87,13 @@ export function subjectChoices(
   }));
 }
 
-/** A person's name, or what stands in for one. */
+/**
+ * A person's name, or what stands in for one. The identifier is not
+ * it: an identifier is offered to copy beside a name, never read as one
+ * (ADR-0103).
+ */
 function personLabel(member: Member): string {
-  return (
-    member.nickname ?? `No name on record (${slugFromGrn(member.userGrn)})`
-  );
+  return member.nickname ?? "No name on record";
 }
 
 /**

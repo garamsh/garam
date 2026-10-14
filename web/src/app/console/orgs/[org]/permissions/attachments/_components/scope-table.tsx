@@ -1,22 +1,110 @@
+"use client";
+
 import Link from "next/link";
+import { ShieldCheck } from "lucide-react";
 
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { KIND_LABEL, slugFromGrn } from "@/features/orgs";
+import { DataTable, type ColumnDef } from "@/components/data-table";
+import type { PolicyStatus as Status } from "@/features/orgs";
 
-import { PolicyStatusBadge } from "../../_components/policy-status-badge";
+import { EmptyState } from "../../../../../_components/empty-state";
 import {
-  reachOf,
-  subjectLabel,
-  type Catalogs,
-  type PolicyScope,
-} from "../../_components/subjects";
+  POLICY_STATUS_LABEL,
+  PolicyStatus,
+} from "../../_components/policy-status";
+
+/** One subject a policy is attached to, as a link where it can open. */
+export type ScopeSubject = { key: string; text: string; href: string | null };
+
+/** A policy and whom it reaches, worded on the server. */
+export type ScopeRow = {
+  identifier: string;
+  name: string;
+  href: string;
+  status: Status;
+  reach:
+    | { kind: "attached"; subjects: ScopeSubject[] }
+    | { kind: "everyone" }
+    | { kind: "none" }
+    | { kind: "unknown" };
+};
+
+/** The reach as plain text, which the table searches and sorts by. */
+function reachText(row: ScopeRow): string {
+  switch (row.reach.kind) {
+    case "attached":
+      return row.reach.subjects.map((subject) => subject.text).join(", ");
+    case "everyone":
+      return "Everyone in this organization";
+    case "none":
+      return "No attachments";
+    case "unknown":
+      return "Not checked";
+  }
+}
+
+const COLUMNS: ColumnDef<ScopeRow, unknown>[] = [
+  {
+    id: "policy",
+    header: "Policy",
+    accessorFn: (row) => row.name,
+    cell: ({ row }) => (
+      <Link
+        href={row.original.href}
+        className="font-medium underline-offset-4 hover:underline focus-visible:underline"
+      >
+        {row.original.name}
+      </Link>
+    ),
+  },
+  {
+    id: "status",
+    header: "Status",
+    accessorFn: (row) => POLICY_STATUS_LABEL[row.status],
+    cell: ({ row }) => <PolicyStatus status={row.original.status} />,
+  },
+  {
+    id: "reach",
+    header: "Attached to",
+    accessorFn: reachText,
+    enableSorting: false,
+    cell: ({ row: { original: row } }) => {
+      switch (row.reach.kind) {
+        case "unknown":
+          return (
+            <span className="text-muted-foreground">
+              Not checked: not listed to you
+            </span>
+          );
+        case "everyone":
+          return (
+            <span className="font-medium">Everyone in this organization</span>
+          );
+        case "none":
+          return <span className="text-muted-foreground">No attachments</span>;
+        case "attached":
+          return (
+            <ul className="flex flex-wrap gap-x-1 whitespace-normal">
+              {row.reach.subjects.map((subject, index, all) => (
+                <li key={subject.key}>
+                  {subject.href === null ? (
+                    subject.text
+                  ) : (
+                    <Link
+                      href={subject.href}
+                      className="underline-offset-4 hover:underline focus-visible:underline"
+                    >
+                      {subject.text}
+                    </Link>
+                  )}
+                  {index < all.length - 1 && ","}
+                </li>
+              ))}
+            </ul>
+          );
+      }
+    },
+  },
+];
 
 /**
  * Every policy of the organization with whom it is attached to. An
@@ -24,83 +112,21 @@ import {
  * attachments were refused says its scope is unknown rather than
  * claiming either.
  */
-export function ScopeTable({
-  policyHref,
-  subjectHref,
-  scopes,
-  catalogs,
-}: {
-  policyHref: (policy: string) => string;
-  subjectHref: (query: string) => string;
-  scopes: PolicyScope[];
-  catalogs: Catalogs;
-}) {
+export function ScopeTable({ rows }: { rows: ScopeRow[] }) {
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Policy</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead>Attached to</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {scopes.map(({ policy, attachments }) => {
-          const reach = reachOf(attachments, catalogs);
-          return (
-            <TableRow key={policy.grn}>
-              <TableCell className="align-top">
-                <Link
-                  href={policyHref(slugFromGrn(policy.grn))}
-                  className="font-medium underline-offset-4 hover:underline focus-visible:underline"
-                >
-                  {policy.name}
-                </Link>
-              </TableCell>
-              <TableCell className="align-top">
-                <PolicyStatusBadge status={policy.status} />
-              </TableCell>
-              <TableCell className="align-top whitespace-normal">
-                {reach.kind === "unknown" ? (
-                  <span className="text-muted-foreground">
-                    Not checked: not listed to you
-                  </span>
-                ) : reach.kind === "org-wide" ? (
-                  policy.status === "active" ? (
-                    "Everyone in this organization"
-                  ) : (
-                    <span className="text-muted-foreground">
-                      No attachments
-                    </span>
-                  )
-                ) : (
-                  reach.subjects.map((subject, index) => {
-                    const text = `${subjectLabel(subject)} (${KIND_LABEL[subject.kind]})`;
-                    return (
-                      <span key={subject.grn}>
-                        {index > 0 && ", "}
-                        {subject.lookup === "found" &&
-                        subject.kind !== "unknown" ? (
-                          <Link
-                            href={subjectHref(
-                              `${subject.kind}:${subject.identifier}`,
-                            )}
-                            className="underline-offset-4 hover:underline focus-visible:underline"
-                          >
-                            {text}
-                          </Link>
-                        ) : (
-                          text
-                        )}
-                      </span>
-                    );
-                  })
-                )}
-              </TableCell>
-            </TableRow>
-          );
-        })}
-      </TableBody>
-    </Table>
+    <DataTable
+      label="Policies and their attachments"
+      columns={COLUMNS}
+      data={rows}
+      getRowId={(row) => row.identifier}
+      search={{ placeholder: "Search policies or subjects" }}
+      empty={
+        <EmptyState
+          icon={ShieldCheck}
+          title="No policies"
+          description="This organization has no policies to attach."
+        />
+      }
+    />
   );
 }

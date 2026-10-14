@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
-import { ShieldCheck } from "lucide-react";
 
+import { Banner } from "@/components/banner";
 import {
+  KIND_LABEL,
   getOrg,
   listGroupMembers,
   listPolicies,
@@ -12,17 +13,24 @@ import {
   lookupOrgMembers,
   slugFromGrn,
   type Catalog,
+  type Policy,
 } from "@/features/orgs";
+import {
+  MAX_PERMISSION_CHECKS,
+  checkPermissions,
+  type PermissionCheck,
+} from "@/lib/permission-check";
 
 import { ApiUnreachable } from "../../../../_components/api-unreachable";
-import { EmptyState } from "../../../../_components/empty-state";
 import { orgHref } from "../../../../_components/navigation";
-import { PageHeader } from "../../../../_components/page-header";
+import { ListPage } from "../../../../_components/templates/list-page";
 import { PermissionsViews } from "../_components/permissions-views";
 import { PoliciesRefused } from "../_components/policies-refused";
 import {
   KIND_PLURAL,
   inspectSubject,
+  reachOf,
+  subjectLabel,
   listSubjects,
   partlyListedAgents,
   resolveSubjectQuery,
@@ -32,7 +40,7 @@ import {
   type PolicyScope,
   type TeamMembership,
 } from "../_components/subjects";
-import { ScopeTable } from "./_components/scope-table";
+import { ScopeTable, type ScopeRow } from "./_components/scope-table";
 import { SubjectInspection } from "./_components/subject-inspection";
 import { SubjectPicker } from "./_components/subject-picker";
 
@@ -43,6 +51,27 @@ type Props = {
   params: Promise<{ org: string }>;
   searchParams: Promise<{ subject?: string | string[] }>;
 };
+
+/** The checks the subject view asks: attach and detach, per policy. */
+type PolicyAction = "attach" | "detach";
+
+/**
+ * The page's one permission check, for the subject view's writes. A
+ * request holds at most `MAX_PERMISSION_CHECKS` pairs, so past that
+ * the policies beyond it are not asked and render their controls,
+ * which the server still decides (ADR-0103).
+ */
+function policyChecks(
+  policies: readonly Policy[],
+): Record<string, PermissionCheck> {
+  const checks: Record<string, PermissionCheck> = {};
+  for (const policy of policies.slice(0, MAX_PERMISSION_CHECKS / 2)) {
+    const resource = { type: "policy", id: slugFromGrn(policy.grn) } as const;
+    checks[`attach ${policy.grn}`] = { action: "policy:attach", resource };
+    checks[`detach ${policy.grn}`] = { action: "policy:detach", resource };
+  }
+  return checks;
+}
 
 /**
  * The Attachments view of Permissions: whom each policy is attached
@@ -67,14 +96,15 @@ export default async function AttachmentsPage({ params, searchParams }: Props) {
       lookupAgents(org),
       lookupAgentDefinitions(org),
     ]);
-  const header = (
-    <>
-      <PageHeader
-        title="Permissions"
-        description="Which policies are attached to which teams, people and agents."
-      />
-      <PermissionsViews org={org} current="attachments" />
-    </>
+  const page = (children: React.ReactNode, count?: number) => (
+    <ListPage
+      title="Permissions"
+      description="Which policies are attached to which teams, people and agents."
+      count={count}
+      filters={<PermissionsViews org={org} current="attachments" />}
+    >
+      {children}
+    </ListPage>
   );
 
   if (
@@ -85,21 +115,9 @@ export default async function AttachmentsPage({ params, searchParams }: Props) {
     agents.status === "unreachable" ||
     definitions.status === "unreachable"
   ) {
-    return (
-      <>
-        {header}
-        <ApiUnreachable subject="this organization's attachments" />
-      </>
-    );
+    return page(<ApiUnreachable subject="this organization's attachments" />);
   }
-  if (policies.status === "forbidden") {
-    return (
-      <>
-        {header}
-        <PoliciesRefused />
-      </>
-    );
-  }
+  if (policies.status === "forbidden") return page(<PoliciesRefused />);
 
   const catalogs: Catalogs = { teams, people, agents, definitions };
   const partlyListed = partlyListedAgents(catalogs);
@@ -109,7 +127,7 @@ export default async function AttachmentsPage({ params, searchParams }: Props) {
   );
   const inspectsMembership =
     lookup.status === "found" && lookup.subject.kind !== "team";
-  const [scopeReads, membershipReads] = await Promise.all([
+  const [scopeReads, membershipReads, permissions] = await Promise.all([
     Promise.all(
       policies.data.map((policy) =>
         listPolicyAttachments(org, slugFromGrn(policy.grn)),
@@ -122,17 +140,16 @@ export default async function AttachmentsPage({ params, searchParams }: Props) {
           ),
         )
       : Promise.resolve([]),
+    checkPermissions(
+      org,
+      lookup.status === "found" ? policyChecks(policies.data) : {},
+    ),
   ]);
   if (
     scopeReads.some((read) => read.status === "unreachable") ||
     membershipReads.some((read) => read.status === "unreachable")
   ) {
-    return (
-      <>
-        {header}
-        <ApiUnreachable subject="this organization's attachments" />
-      </>
-    );
+    return page(<ApiUnreachable subject="this organization's attachments" />);
   }
 
   const scopes: PolicyScope[] = policies.data.map((policy, index) => {
@@ -163,15 +180,40 @@ export default async function AttachmentsPage({ params, searchParams }: Props) {
   const policyHref = (policy: string) => `${base}/${policy}`;
   const subjectHref = (value: string) =>
     `${base}/attachments?subject=${encodeURIComponent(value)}`;
+  const rows: ScopeRow[] = scopes.map(({ policy, attachments }) => {
+    const reach = reachOf(attachments, catalogs);
+    const identifier = slugFromGrn(policy.grn);
+    return {
+      identifier,
+      name: policy.name,
+      href: policyHref(identifier),
+      status: policy.status,
+      reach:
+        reach.kind === "unknown"
+          ? { kind: "unknown" }
+          : reach.kind === "org-wide"
+            ? { kind: policy.status === "active" ? "everyone" : "none" }
+            : {
+                kind: "attached",
+                subjects: reach.subjects.map((subject) => ({
+                  key: subject.grn,
+                  text: `${subjectLabel(subject)} (${KIND_LABEL[subject.kind]})`,
+                  href:
+                    subject.lookup === "found" && subject.kind !== "unknown"
+                      ? subjectHref(`${subject.kind}:${subject.identifier}`)
+                      : null,
+                })),
+              },
+    };
+  });
 
-  return (
+  return page(
     <>
-      {header}
       {partlyListed.length > 0 && (
-        <p className="text-sm text-muted-foreground">
+        <Banner tone="info" title="Some agents may be missing">
           This organization&apos;s {partlyListed.join(" and ")} are not listed
-          to you, so some agents may be missing here.
-        </p>
+          to you.
+        </Banner>
       )}
       <SubjectPicker
         action={`${base}/attachments`}
@@ -193,30 +235,23 @@ export default async function AttachmentsPage({ params, searchParams }: Props) {
           )}
           policyHref={policyHref}
           subjectHref={subjectHref}
+          may={(action: PolicyAction, policy) =>
+            permissions.get(`${action} ${policy.grn}`) !== "denied"
+          }
         />
       ) : lookup.status === "missing" ? (
-        <p role="alert" className="text-sm text-destructive">
+        <Banner tone="danger" title="Not found">
           No team, person or agent of this organization matches this address.
-        </p>
+        </Banner>
       ) : lookup.status === "refused" ? (
-        <p role="alert" className="text-sm text-muted-foreground">
+        <Banner tone="info" title="Not shown">
           This organization&apos;s {KIND_PLURAL[lookup.kind]} are not listed to
           you, so this one cannot be shown.
-        </p>
-      ) : scopes.length === 0 ? (
-        <EmptyState
-          icon={ShieldCheck}
-          title="No policies"
-          description="This organization has no policies to attach."
-        />
+        </Banner>
       ) : (
-        <ScopeTable
-          policyHref={policyHref}
-          subjectHref={subjectHref}
-          scopes={scopes}
-          catalogs={catalogs}
-        />
+        <ScopeTable rows={rows} />
       )}
-    </>
+    </>,
+    policies.data.length,
   );
 }

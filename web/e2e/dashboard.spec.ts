@@ -210,8 +210,9 @@ test.describe("signed in", () => {
 
     // The session is revoked server-side, not merely dropped by the
     // browser: replacing the cookie does not get back in.
+    // The rejected session is sent to sign in carrying where it was.
     await addSessionCookie(page, baseURL, signedIn.sessionToken);
     await page.goto("/console/orgs");
-    await expect(page).toHaveURL("/login");
+    await expect(page).toHaveURL("/login?next=%2Fconsole%2Forgs");
   });
 });

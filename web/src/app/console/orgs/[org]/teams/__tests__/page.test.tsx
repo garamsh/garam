@@ -164,4 +164,31 @@ describe("teams section", () => {
       renderServerComponent(TeamsPage(params("acme"))),
     ).rejects.toThrow("NEXT_REDIRECT:/login");
   });
+  it("leaves out the create action on a refused list only when denied", async () => {
+    server.use(
+      http.get(`${API_URL}/orgs/acme/groups`, () =>
+        HttpResponse.json({ kind: "denied", message: "no" }, { status: 403 }),
+      ),
+    );
+    // The control: refused the list but allowed to create, the action
+    // stays beside the notice.
+    const allowed = await renderServerComponent(TeamsPage(params("acme")));
+    expect(screen.getByRole("link", { name: "Create team" })).toBeVisible();
+    allowed.unmount();
+
+    server.use(
+      answerPermissionChecks((action) =>
+        action === "group:create" ? "deny" : "allow",
+      ),
+    );
+    await renderServerComponent(TeamsPage(params("acme")));
+
+    expect(screen.getByRole("status")).toHaveTextContent(
+      // Presence: the notice goes on to say where access comes from.
+      /^You cannot list this organization's teams/,
+    );
+    expect(
+      screen.queryByRole("link", { name: "Create team" }),
+    ).not.toBeInTheDocument();
+  });
 });

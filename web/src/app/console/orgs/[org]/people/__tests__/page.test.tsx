@@ -201,4 +201,33 @@ describe("people section", () => {
 
     await expect(renderPeople()).rejects.toThrow("NEXT_REDIRECT:/login");
   });
+  it("leaves out the invitation on a refused list only when denied", async () => {
+    server.use(
+      http.get(`${API_URL}/orgs/acme/members`, () =>
+        HttpResponse.json({ kind: "denied", message: "no" }, { status: 403 }),
+      ),
+    );
+    // The control: refused the list but allowed to invite, the action
+    // stays beside the notice.
+    const allowed = await renderPeople();
+    expect(
+      screen.getByRole("button", { name: "Invite people" }),
+    ).toBeInTheDocument();
+    allowed.unmount();
+
+    server.use(
+      answerPermissionChecks((action) =>
+        action === "org:invite" ? "deny" : "allow",
+      ),
+    );
+    await renderPeople();
+
+    expect(screen.getByRole("status")).toHaveTextContent(
+      // Presence: the notice goes on to say where access comes from.
+      /^You cannot list this organization's people/,
+    );
+    expect(
+      screen.queryByRole("button", { name: "Invite people" }),
+    ).not.toBeInTheDocument();
+  });
 });

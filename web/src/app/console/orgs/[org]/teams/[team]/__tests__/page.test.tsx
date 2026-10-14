@@ -532,4 +532,39 @@ describe("team page", () => {
       },
     ]);
   });
+  it("hides the rename alone when only renaming is denied", async () => {
+    server.use(
+      answerPermissionChecks((action) =>
+        action === "group:update" ? "deny" : "allow",
+      ),
+    );
+    const user = userEvent.setup();
+    await renderTeam();
+
+    await user.click(screen.getByRole("tab", { name: "Settings" }));
+
+    expect(screen.queryByLabelText("Team name")).not.toBeInTheDocument();
+    // The control: the delete, answered apart, stays.
+    expect(
+      screen.getByRole("region", { name: "Danger zone" }),
+    ).toBeInTheDocument();
+  });
+
+  it("hides the delete alone when only deleting is denied", async () => {
+    server.use(
+      answerPermissionChecks((action) =>
+        action === "group:delete" ? "deny" : "allow",
+      ),
+    );
+    const user = userEvent.setup();
+    await renderTeam();
+
+    await user.click(screen.getByRole("tab", { name: "Settings" }));
+
+    expect(
+      screen.queryByRole("region", { name: "Danger zone" }),
+    ).not.toBeInTheDocument();
+    // The control: the rename, answered apart, stays.
+    expect(screen.getByLabelText("Team name")).toBeInTheDocument();
+  });
 });

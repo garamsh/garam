@@ -571,6 +571,13 @@ test.describe("permissions accessibility", () => {
           page.getByRole("heading", { level: 1, name: title }),
         ).toBeVisible();
         await expectHydrated(page);
+        // The shell hydrates before this page's form, whose submit stays
+        // disabled until its own part does; the scan reads it enabled.
+        if (path.endsWith("/new")) {
+          await expect(
+            page.getByRole("button", { name: "Create draft" }),
+          ).toBeEnabled();
+        }
         expect(await axeViolations(page), path).toEqual([]);
       }
 

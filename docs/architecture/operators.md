@@ -465,6 +465,19 @@ and no operation here grants it. The role defaults are the one
 `machineActions` table in `internal/org/role.go`, which is
 authoritative for which role holds what.
 
+**Reading what the Operator reports about the organization's
+operators is `operator:read`, and the read itself is unbuilt** until
+garam-agent-operator#357 ships it (#1374). garam's half is built: the
+operation is delegable and mintable like `agent-template:read`, targets
+the organization, names no controller, binds the exact request target
+and is held by every role, because it is the action that lists the
+operators garam holds. The status belongs to the control service
+(ADR-0077), and the answer the console will read is recorded in that
+service's contract as one entry per operator: its GRN, its images
+(each a name, a reference and, where known, a digest), and
+`reportedAt` and `lastContactAt`. An absent `reportedAt` or
+`lastContactAt` means never reported or never contacted, never now.
+
 **The registered control endpoint is where the console sends an
 authority, and only the delegating act moves it.** Each operator may
 carry one `https` base URL with a host, an optional port and path

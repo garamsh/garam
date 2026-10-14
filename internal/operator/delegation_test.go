@@ -124,11 +124,12 @@ func TestGrantCovers_ReadsNoControllerForAnOrganizationOperation(t *testing.T) {
 }
 
 // TestOperation_BindsRequestTargetExactlyForTheReadsAndPublication
-// holds which operations bind a request target: the four #1170 added,
-// and none of the operations that bind only their body.
+// holds which operations bind a request target: the four #1170 added
+// and operator:read (#1374), and none of the operations that bind only
+// their body.
 func TestOperation_BindsRequestTargetExactlyForTheReadsAndPublication(t *testing.T) {
 	for _, op := range []operator.Operation{operator.OperationTemplateRead, operator.OperationTemplatePublish,
-		operator.OperationProfileRead, operator.OperationExecutionRead} {
+		operator.OperationProfileRead, operator.OperationExecutionRead, operator.OperationOperatorRead} {
 		assert.True(t, op.BindsRequestTarget(), op)
 		assert.True(t, op.IsMintable(), op)
 		parsed, err := operator.ParseOperation(string(op))

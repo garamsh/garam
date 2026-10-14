@@ -82,6 +82,10 @@ const (
 	// one cutover route it is carried to, so it authorizes one stage
 	// (ADR-0086).
 	OperationAgentCutover Operation = "agent:cutover"
+	// OperationOperatorRead reads what the Operator reports for every
+	// operator of the organization: its images and its last contact
+	// (#1374). It is the action a member already holds to list them.
+	OperationOperatorRead Operation = "operator:read"
 )
 
 // ParseOperation parses an operation a grant may carry.
@@ -89,7 +93,7 @@ func ParseOperation(s string) (Operation, error) {
 	switch o := Operation(s); o {
 	case OperationAgentCreate, OperationAgentConfigure, OperationAgentActivate, OperationAgentRecover,
 		OperationTemplateRead, OperationTemplatePublish, OperationProfileRead, OperationExecutionRead,
-		OperationAgentCutover:
+		OperationAgentCutover, OperationOperatorRead:
 		return o, nil
 	}
 	return "", errorx.New(errorx.KindInvalidArgument, "unknown operation "+s)
@@ -113,7 +117,8 @@ func (o Operation) TargetsAgent() bool {
 // holds for the whole organization: it is authorized on the
 // organization and names no controller.
 func (o Operation) TargetsOrg() bool {
-	return o == OperationTemplateRead || o == OperationTemplatePublish || o == OperationProfileRead
+	return o == OperationTemplateRead || o == OperationTemplatePublish || o == OperationProfileRead ||
+		o == OperationOperatorRead
 }
 
 // BindsRequestTarget reports whether an authority for the operation

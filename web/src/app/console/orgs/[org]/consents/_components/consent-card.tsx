@@ -7,9 +7,11 @@ import { GrantFromCard } from "./grant-from-card";
 import { WithdrawConsentDialog } from "./withdraw-consent-dialog";
 
 /**
- * Where a pair stands, as one of the three states garam can serve. A
- * relation with neither half standing is deleted (ADR-0035), so the
- * two halves leave exactly these.
+ * Where a pair stands, as one of the three states garam can serve.
+ * Nothing about a waiting pair is failing: the one waiting on this
+ * organization, which it can act on, reads as info and the other as
+ * neutral. A relation with neither half standing is deleted
+ * (ADR-0035), so the two halves leave exactly these.
  */
 type Pair = "crossing" | "awaiting-here" | "awaiting-there";
 
@@ -24,10 +26,13 @@ const PAIR: Record<
 > = {
   crossing: { tone: "ok", label: () => "Messages cross" },
   "awaiting-here": {
-    tone: "warn",
+    tone: "info",
     label: () => "Waiting for this organization",
   },
-  "awaiting-there": { tone: "info", label: (other) => `Waiting for ${other}` },
+  "awaiting-there": {
+    tone: "neutral",
+    label: (other) => `Waiting for ${other}`,
+  },
 };
 
 /** What the pair's state means for messages, in one sentence. */

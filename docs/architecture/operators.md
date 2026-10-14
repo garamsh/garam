@@ -478,10 +478,10 @@ Allowed browser origins, CORS and what the control service answers are
 the Operator's (`garamsh/garam-agent-operator#220`).
 
 **Recovery from the console is unbuilt.** The `agent:recover` handoff
-garam mints is built; the Operator route an administrator would
-finalize a prepared recovery through is not
-(`garamsh/garam-agent-operator#218`), and the console offers no
-recovery control.
+garam mints is built, and so is the Operator route an administrator
+finalizes a prepared recovery through (`garamsh/garam-agent-operator`
+`ad444ed`, `docs/architecture/control.md`, its ADR 0057); the console
+offers no recovery control.
 
 The same binding under the same grant mints a fresh token for the same
 reference, which is how a handoff that expired or whose answer was lost

@@ -238,9 +238,11 @@ until G3.
 carries the execution token its lifecycle authority obtained
 ([adapter.md](./adapter.md) §Activation and runtime status). A
 standalone host's supervisor serves that adapter-facing contract
-(ADR-0085) and the Operator control service does not yet; acceptance
-with either, joined to garam and Sherlock, is unverified (#1157,
-#1180). Until a
+(ADR-0085), and so does the Operator control service
+(`garamsh/garam-agent-operator` `ad444ed`, `internal/execution`).
+Acceptance with each, joined to garam and Sherlock, is recorded as
+verified on #1157 and #1180; #1157 left scenario 5's managed move to
+`garamsh/garam-agent-operator#296`. Until a
 GRN's first activation it is in the legacy cohort: its calls carry no
 token, and the certificate check below still applies to each of them.
 A legacy GRN's first activation waits for its cutover's switch

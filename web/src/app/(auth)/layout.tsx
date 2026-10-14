@@ -16,8 +16,8 @@ export default function AuthLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <div className="flex flex-1 lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-      <aside className="hidden flex-col gap-12 bg-sidebar p-12 text-sidebar-foreground lg:flex">
+    <div className="flex flex-1 lg:grid lg:grid-cols-12">
+      <aside className="hidden flex-col gap-12 bg-sidebar p-12 text-sidebar-foreground lg:col-span-5 lg:flex">
         <BrandMark className="text-xl text-sidebar-accent-foreground" />
         <div className="my-auto flex flex-col gap-6">
           <p className="max-w-sm text-2xl font-semibold tracking-tight text-balance text-sidebar-accent-foreground">
@@ -36,7 +36,7 @@ export default function AuthLayout({
           </ul>
         </div>
       </aside>
-      <main className="flex flex-1 flex-col items-center justify-center gap-8 px-4 py-10 sm:p-6">
+      <main className="flex flex-1 flex-col items-center justify-center gap-8 px-4 py-10 sm:p-6 lg:col-span-7">
         <BrandMark className="text-xl lg:hidden" />
         {children}
       </main>

@@ -223,12 +223,18 @@ export function ConnectWizard({
               only the public half, so save the key when it appears.
             </p>
           </div>
+          {state.status === "unconfigured" && (
+            <Banner tone="info" title="This garam doesn't issue operator keys">
+              A key needs the machine token URL,{" "}
+              <code>GARAM_MACHINE_TOKEN_URL</code>, and it isn&apos;t set.
+              Whoever runs garam sets it; until then no operator can be given a
+              key.
+            </Banner>
+          )}
           {state.status === "unavailable" && (
             <Banner tone="warn" title="garam couldn't issue a key">
-              Either garam can&apos;t be reached right now, or it isn&apos;t
-              configured to issue keys because its token endpoint isn&apos;t
-              set. Try again in a moment; if it keeps happening, ask whoever
-              runs garam.
+              garam can&apos;t be reached right now. Try again in a moment; if
+              it keeps happening, ask whoever runs garam.
             </Banner>
           )}
           <form action={formAction} className="flex flex-col gap-5">

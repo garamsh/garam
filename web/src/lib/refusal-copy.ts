@@ -186,6 +186,8 @@ const BY_REASON: Record<string, (path: string | undefined) => string> = {
     "This invitation has already been used. Ask an admin of the organization for a new one.",
   invitation_expired: () =>
     "This invitation has expired. Ask an admin of the organization to send you a new one.",
+  key_issuance_unconfigured: () =>
+    "This garam doesn't issue operator keys: its machine token URL isn't set. Whoever runs garam sets it.",
   policy_document_malformed: () =>
     "This policy document isn't valid JSON. Check for a missing quote, comma or bracket.",
   policy_document_trailing_data: () =>
